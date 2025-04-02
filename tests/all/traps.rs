@@ -1515,7 +1515,7 @@ fn dont_see_stale_stack_walking_registers() -> Result<()> {
                 (export "get_trap" (func $host_get_trap))
 
                 ;; We enter and exit Wasm, which saves registers in the
-                ;; `VMRuntimeLimits`. Later, when we call a re-exported host
+                ;; `VMStoreContext`. Later, when we call a re-exported host
                 ;; function, we should not accidentally reuse those saved
                 ;; registers.
                 (start $start)

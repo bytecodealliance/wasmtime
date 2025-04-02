@@ -91,7 +91,7 @@ impl Types {
             }
         }
         let mut live = LiveTypes::default();
-        for ty in func.results.iter_types() {
+        if let Some(ty) = &func.result {
             self.type_info(resolve, ty);
             live.add_type(resolve, ty);
         }
@@ -101,16 +101,12 @@ impl Types {
             }
         }
 
-        for ty in func.results.iter_types() {
-            let id = match ty {
-                Type::Id(id) => *id,
-                _ => continue,
-            };
-            let err = match &resolve.types[id].kind {
-                TypeDefKind::Result(Result_ { err, .. }) => err,
-                _ => continue,
-            };
-            if let Some(Type::Id(id)) = err {
+        if let Some(Type::Id(id)) = func.result {
+            if let TypeDefKind::Result(Result_ {
+                err: Some(Type::Id(id)),
+                ..
+            }) = &resolve.types[id].kind
+            {
                 let id = super::resolve_type_definition_id(resolve, *id);
                 self.type_info.get_mut(&id).unwrap().error = true;
             }
@@ -148,19 +144,16 @@ impl Types {
                 info = self.type_info(resolve, ty);
                 info.has_list = true;
             }
-            TypeDefKind::Type(ty) => {
-                info = self.type_info(resolve, ty);
-            }
-            TypeDefKind::Option(ty) => {
+            TypeDefKind::Type(ty) | TypeDefKind::Option(ty) => {
                 info = self.type_info(resolve, ty);
             }
             TypeDefKind::Result(r) => {
                 info = self.optional_type_info(resolve, r.ok.as_ref());
                 info |= self.optional_type_info(resolve, r.err.as_ref());
             }
-            TypeDefKind::Future(_) => todo!(),
-            TypeDefKind::Stream(_) => todo!(),
-            TypeDefKind::ErrorContext => todo!(),
+            TypeDefKind::Future(ty) | TypeDefKind::Stream(ty) => {
+                info = self.optional_type_info(resolve, ty.as_ref());
+            }
             TypeDefKind::Handle(_) => info.has_handle = true,
             TypeDefKind::Resource => {}
             TypeDefKind::Unknown => unreachable!(),

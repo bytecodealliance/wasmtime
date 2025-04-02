@@ -14,14 +14,10 @@ impl WasmiEngine {
     pub(crate) fn new(config: &mut Config) -> Self {
         let config = &mut config.module_config.config;
         // Force generated Wasm modules to never have features that Wasmi doesn't support.
-        config.simd_enabled = false;
         config.relaxed_simd_enabled = false;
-        config.memory64_enabled = false;
         config.threads_enabled = false;
         config.exceptions_enabled = false;
         config.gc_enabled = false;
-        config.custom_page_sizes_enabled = false;
-        config.wide_arithmetic_enabled = false;
 
         let mut wasmi_config = wasmi::Config::default();
         wasmi_config
@@ -35,7 +31,11 @@ impl WasmiEngine {
             .wasm_reference_types(config.reference_types_enabled)
             .wasm_tail_call(config.tail_call_enabled)
             .wasm_multi_memory(config.max_memories > 1)
-            .wasm_extended_const(config.extended_const_enabled);
+            .wasm_extended_const(config.extended_const_enabled)
+            .wasm_custom_page_sizes(config.custom_page_sizes_enabled)
+            .wasm_memory64(config.memory64_enabled)
+            .wasm_simd(config.simd_enabled)
+            .wasm_wide_arithmetic(config.wide_arithmetic_enabled);
         Self {
             engine: wasmi::Engine::new(&wasmi_config),
         }
@@ -85,7 +85,7 @@ impl DiffEngine for WasmiEngine {
         }
     }
 
-    fn is_stack_overflow(&self, err: &Error) -> bool {
+    fn is_non_deterministic_error(&self, err: &Error) -> bool {
         matches!(
             self.trap_code(err),
             Some(wasmi::core::TrapCode::StackOverflow)
@@ -175,7 +175,7 @@ impl From<&DiffValue> for wasmi::Val {
             DiffValue::I64(n) => WasmiValue::I64(n),
             DiffValue::F32(n) => WasmiValue::F32(wasmi::core::F32::from_bits(n)),
             DiffValue::F64(n) => WasmiValue::F64(wasmi::core::F64::from_bits(n)),
-            DiffValue::V128(_) => unimplemented!(),
+            DiffValue::V128(n) => WasmiValue::V128(wasmi::core::V128::from(n)),
             DiffValue::FuncRef { null } => {
                 assert!(null);
                 WasmiValue::FuncRef(wasmi::FuncRef::null())
@@ -197,6 +197,7 @@ impl From<wasmi::Val> for DiffValue {
             WasmiValue::I64(n) => DiffValue::I64(n),
             WasmiValue::F32(n) => DiffValue::F32(n.to_bits()),
             WasmiValue::F64(n) => DiffValue::F64(n.to_bits()),
+            WasmiValue::V128(n) => DiffValue::V128(n.as_u128()),
             WasmiValue::FuncRef(f) => DiffValue::FuncRef { null: f.is_null() },
             WasmiValue::ExternRef(e) => DiffValue::ExternRef { null: e.is_null() },
         }

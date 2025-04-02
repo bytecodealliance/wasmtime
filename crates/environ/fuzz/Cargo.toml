@@ -17,7 +17,7 @@ wasmparser = { workspace = true }
 wasmprinter = { workspace = true }
 wat = { workspace = true }
 wasmtime-environ = { workspace = true }
-component-fuzz-util = { workspace = true, optional = true }
+wasmtime-test-util = { workspace = true, optional = true, features = ['component-fuzz'] }
 
 [[bin]]
 name = "fact-valid-module"
@@ -30,5 +30,5 @@ required-features = ["component-model"]
 component-model = [
   "wasmtime-environ/component-model",
   "wasmtime-environ/compile",
-  "dep:component-fuzz-util",
+  "dep:wasmtime-test-util",
 ]

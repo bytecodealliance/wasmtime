@@ -262,6 +262,48 @@ impl<R: Reg + Disas> Disas for UpperRegSet<R> {
     }
 }
 
+impl Disas for AddrO32 {
+    fn disas(&self, position: usize, disas: &mut String) {
+        self.addr.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.offset.disas(position, disas);
+    }
+}
+
+impl Disas for AddrZ {
+    fn disas(&self, position: usize, disas: &mut String) {
+        self.addr.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.offset.disas(position, disas);
+    }
+}
+
+impl Disas for AddrG32 {
+    fn disas(&self, position: usize, disas: &mut String) {
+        self.host_heap_base.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.host_heap_bound.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.wasm_addr.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.offset.disas(position, disas);
+    }
+}
+
+impl Disas for AddrG32Bne {
+    fn disas(&self, position: usize, disas: &mut String) {
+        self.host_heap_base.disas(position, disas);
+        write!(disas, ", *[").unwrap();
+        self.host_heap_bound_addr.disas(position, disas);
+        write!(disas, " + ").unwrap();
+        self.host_heap_bound_offset.disas(position, disas);
+        write!(disas, "], ").unwrap();
+        self.wasm_addr.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.offset.disas(position, disas);
+    }
+}
+
 macro_rules! impl_disas {
     (
         $(

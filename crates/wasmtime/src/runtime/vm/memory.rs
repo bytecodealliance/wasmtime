@@ -78,11 +78,13 @@ use crate::prelude::*;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 #[cfg(has_virtual_memory)]
 use crate::runtime::vm::{HostAlignedByteCount, MmapOffset};
-use crate::runtime::vm::{MemoryImage, MemoryImageSlot, SendSyncPtr, VMStore, WaitResult};
+use crate::runtime::vm::{MemoryImage, MemoryImageSlot, SendSyncPtr, VMStore};
 use alloc::sync::Arc;
-use core::time::Duration;
 use core::{ops::Range, ptr::NonNull};
-use wasmtime_environ::{Trap, Tunables};
+use wasmtime_environ::Tunables;
+
+#[cfg(feature = "threads")]
+use wasmtime_environ::Trap;
 
 #[cfg(has_virtual_memory)]
 mod mmap;
@@ -92,7 +94,9 @@ pub use self::mmap::MmapMemory;
 mod malloc;
 pub use self::malloc::MallocMemory;
 
+#[cfg(feature = "pooling-allocator")]
 mod static_;
+#[cfg(feature = "pooling-allocator")]
 use self::static_::StaticMemory;
 
 #[cfg(feature = "threads")]
@@ -199,13 +203,19 @@ impl MemoryBase {
         Self::Raw(NonNull::new(ptr).expect("pointer is non-null").into())
     }
 
-    /// Returns the actual memory address in memory that is represented by this base.
-    pub fn as_mut_ptr(&self) -> *mut u8 {
+    /// Returns the actual memory address in memory that is represented by this
+    /// base.
+    pub fn as_non_null(&self) -> NonNull<u8> {
         match self {
-            Self::Raw(ptr) => ptr.as_ptr(),
+            Self::Raw(ptr) => ptr.as_non_null(),
             #[cfg(has_virtual_memory)]
-            Self::Mmap(mmap_offset) => mmap_offset.as_mut_ptr(),
+            Self::Mmap(mmap_offset) => mmap_offset.as_non_null(),
         }
+    }
+
+    /// Same as `as_non_null`, but different return type.
+    pub fn as_mut_ptr(&self) -> *mut u8 {
+        self.as_non_null().as_ptr()
     }
 }
 
@@ -236,6 +246,7 @@ impl Memory {
     }
 
     /// Create a new static (immovable) memory instance for the specified plan.
+    #[cfg(feature = "pooling-allocator")]
     pub fn new_static(
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
@@ -428,6 +439,7 @@ impl Memory {
     }
 
     /// Implementation of `memory.atomic.notify` for all memories.
+    #[cfg(feature = "threads")]
     pub fn atomic_notify(&mut self, addr: u64, count: u32) -> Result<u32, Trap> {
         match self.as_shared_memory() {
             Some(m) => m.atomic_notify(addr, count),
@@ -439,12 +451,13 @@ impl Memory {
     }
 
     /// Implementation of `memory.atomic.wait32` for all memories.
+    #[cfg(feature = "threads")]
     pub fn atomic_wait32(
         &mut self,
         addr: u64,
         expected: u32,
-        timeout: Option<Duration>,
-    ) -> Result<WaitResult, Trap> {
+        timeout: Option<core::time::Duration>,
+    ) -> Result<crate::WaitResult, Trap> {
         match self.as_shared_memory() {
             Some(m) => m.atomic_wait32(addr, expected, timeout),
             None => {
@@ -455,12 +468,13 @@ impl Memory {
     }
 
     /// Implementation of `memory.atomic.wait64` for all memories.
+    #[cfg(feature = "threads")]
     pub fn atomic_wait64(
         &mut self,
         addr: u64,
         expected: u64,
-        timeout: Option<Duration>,
-    ) -> Result<WaitResult, Trap> {
+        timeout: Option<core::time::Duration>,
+    ) -> Result<crate::WaitResult, Trap> {
         match self.as_shared_memory() {
             Some(m) => m.atomic_wait64(addr, expected, timeout),
             None => {
@@ -689,7 +703,7 @@ impl LocalMemory {
 
     pub fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
-            base: self.alloc.base().as_mut_ptr(),
+            base: self.alloc.base().as_non_null().into(),
             current_length: self.alloc.byte_size().into(),
         }
     }
@@ -721,6 +735,7 @@ impl LocalMemory {
         base..end
     }
 
+    #[cfg(feature = "pooling-allocator")]
     pub fn unwrap_static_image(self) -> MemoryImageSlot {
         self.memory_image.unwrap()
     }
@@ -730,6 +745,7 @@ impl LocalMemory {
 /// we are using static memories with virtual memory guard pages) this manual
 /// check is here so we don't segfault from Rust. For other configurations,
 /// these checks are required anyways.
+#[cfg(feature = "threads")]
 pub fn validate_atomic_addr(
     def: &VMMemoryDefinition,
     addr: u64,
@@ -747,5 +763,5 @@ pub fn validate_atomic_addr(
     }
 
     let addr = usize::try_from(addr).unwrap();
-    Ok(def.base.wrapping_add(addr))
+    Ok(def.base.as_ptr().wrapping_add(addr))
 }

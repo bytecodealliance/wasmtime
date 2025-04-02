@@ -22,9 +22,9 @@ pub use i31::*;
 
 use crate::prelude::*;
 use crate::runtime::vm::GcHeapAllocationIndex;
-use core::alloc::Layout;
 use core::any::Any;
 use core::mem::MaybeUninit;
+use core::{alloc::Layout, num::NonZeroU32};
 use wasmtime_environ::{GcArrayLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
 /// GC-related data that is one-to-one with a `wasmtime::Store`.
@@ -134,11 +134,17 @@ impl GcStore {
     }
 
     /// Hook to call whenever a GC reference is about to be exposed to Wasm.
-    pub fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) {
+    ///
+    /// Returns the raw representation of this GC ref, ready to be passed to
+    /// Wasm.
+    #[must_use]
+    pub fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) -> NonZeroU32 {
+        let raw = gc_ref.as_raw_non_zero_u32();
         if !gc_ref.is_i31() {
             log::trace!("exposing GC ref to Wasm: {gc_ref:p}");
             self.gc_heap.expose_gc_ref_to_wasm(gc_ref);
         }
+        raw
     }
 
     /// Allocate a new `externref`.
@@ -214,8 +220,8 @@ impl GcStore {
     /// Get the data for the given object reference.
     ///
     /// Panics when the structref and its size is out of the GC heap bounds.
-    pub fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> VMGcObjectDataMut<'_> {
-        self.gc_heap.gc_object_data(gc_ref)
+    pub fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> &mut VMGcObjectData {
+        self.gc_heap.gc_object_data_mut(gc_ref)
     }
 
     /// Get the object datas for the given pair of object references.
@@ -225,7 +231,7 @@ impl GcStore {
         &mut self,
         a: &VMGcRef,
         b: &VMGcRef,
-    ) -> (VMGcObjectDataMut<'_>, VMGcObjectDataMut<'_>) {
+    ) -> (&mut VMGcObjectData, &mut VMGcObjectData) {
         assert_ne!(a, b);
         self.gc_heap.gc_object_data_pair(a, b)
     }

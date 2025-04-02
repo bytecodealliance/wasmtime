@@ -315,7 +315,7 @@ impl PrettyPrint for MemLabel {
     fn pretty_print(&self, _: u8) -> String {
         match self {
             MemLabel::PCRel(off) => format!("pc+{off}"),
-            MemLabel::Mach(off) => format!("label({})", off.get()),
+            MemLabel::Mach(off) => format!("label({})", off.as_u32()),
         }
     }
 }
@@ -443,7 +443,7 @@ impl PrettyPrint for Cond {
 impl PrettyPrint for BranchTarget {
     fn pretty_print(&self, _: u8) -> String {
         match self {
-            &BranchTarget::Label(label) => format!("label{:?}", label.get()),
+            &BranchTarget::Label(label) => format!("label{:?}", label.as_u32()),
             &BranchTarget::ResolvedOffset(off) => format!("{off}"),
         }
     }

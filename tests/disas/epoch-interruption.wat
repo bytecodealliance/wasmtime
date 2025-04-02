@@ -14,9 +14,9 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;; @0016                               v3 = load.i64 notrap aligned v0+8
 ;; @0016                               v5 = load.i64 notrap aligned v0+32
 ;; @0016                               v6 = load.i64 notrap aligned v5
+;; @0016                               v3 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0016                               v7 = load.i64 notrap aligned v3+8
 ;; @0016                               v8 = icmp uge v6, v7
 ;; @0016                               brif v8, block3, block2(v7)

@@ -8,6 +8,7 @@ use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use alloc::borrow::Cow;
 use alloc::sync::Arc;
 use core::fmt;
+use core::iter;
 use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
@@ -16,6 +17,9 @@ use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, StringEncoding, VariantInfo, MAX_FLAT_PARAMS,
     MAX_FLAT_RESULTS,
 };
+
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent::Promise;
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -188,6 +192,31 @@ where
         store
             .on_fiber(|store| self.call_impl(store, params))
             .await?
+    }
+
+    /// Start concurrent call to this function.
+    ///
+    /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
+    /// exclusive access to the store until the completion of the call), calls
+    /// made using this method may run concurrently with other calls to the same
+    /// instance.
+    #[cfg(feature = "component-model-async")]
+    pub async fn call_concurrent<T: Send>(
+        self,
+        mut store: impl AsContextMut<Data = T>,
+        params: Params,
+    ) -> Result<Promise<Return>>
+    where
+        Params: Send + Sync + 'static,
+        Return: Send + Sync + 'static,
+    {
+        let store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `call_concurrent` when async support is not enabled on the config"
+        );
+        _ = params;
+        todo!()
     }
 
     fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
@@ -914,6 +943,39 @@ macro_rules! floats {
                 *ptr = self.to_bits().to_le_bytes();
                 Ok(())
             }
+
+            fn store_list<T>(
+                cx: &mut LowerContext<'_, T>,
+                ty: InterfaceType,
+                offset: usize,
+                items: &[Self],
+            ) -> Result<()> {
+                debug_assert!(matches!(ty, InterfaceType::$ty));
+
+                // Double-check that the CM alignment is at least the host's
+                // alignment for this type which should be true for all
+                // platforms.
+                assert!((Self::ALIGN32 as usize) >= mem::align_of::<Self>());
+
+                // Slice `cx`'s memory to the window that we'll be modifying.
+                // This should all have already been verified in terms of
+                // alignment and sizing meaning that these assertions here are
+                // not truly necessary but are instead double-checks.
+                let dst = &mut cx.as_slice_mut()[offset..][..items.len() * Self::SIZE32];
+                assert!(dst.as_ptr().cast::<Self>().is_aligned());
+
+                // And with all that out of the way perform the copying loop.
+                // This is not a `copy_from_slice` because endianness needs to
+                // be handled here, but LLVM should pretty easily transform this
+                // into a memcpy on little-endian platforms.
+                // TODO use `as_chunks` when https://github.com/rust-lang/rust/issues/74985
+                // is stabilized
+                for (dst, src) in iter::zip(dst.chunks_exact_mut(Self::SIZE32), items) {
+                    let dst: &mut [u8; Self::SIZE32] = dst.try_into().unwrap();
+                    *dst = src.to_le_bytes();
+                }
+                Ok(())
+            }
         }
 
         unsafe impl Lift for $float {
@@ -928,6 +990,27 @@ macro_rules! floats {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 debug_assert!((bytes.as_ptr() as usize) % Self::SIZE32 == 0);
                 Ok($float::from_le_bytes(bytes.try_into().unwrap()))
+            }
+
+            fn load_list(cx: &mut LiftContext<'_>, list: &WasmList<Self>) -> Result<Vec<Self>> where Self: Sized {
+                // See comments in `WasmList::get` for the panicking indexing
+                let byte_size = list.len * mem::size_of::<Self>();
+                let bytes = &cx.memory()[list.ptr..][..byte_size];
+
+                // The canonical ABI requires that everything is aligned to its
+                // own size, so this should be an aligned array.
+                assert!(bytes.as_ptr().cast::<Self>().is_aligned());
+
+                // Copy the resulting slice to a new Vec, handling endianness
+                // in the process
+                // TODO use `as_chunks` when https://github.com/rust-lang/rust/issues/74985
+                // is stabilized
+                Ok(
+                    bytes
+                        .chunks_exact(Self::SIZE32)
+                        .map(|i| $float::from_le_bytes(i.try_into().unwrap()))
+                        .collect()
+                )
             }
         }
     };)*)
@@ -1880,7 +1963,7 @@ unsafe impl<T> ComponentType for Option<T>
 where
     T: ComponentType,
 {
-    type Lower = TupleLower2<<u32 as ComponentType>::Lower, T::Lower>;
+    type Lower = TupleLower<<u32 as ComponentType>::Lower, T::Lower>;
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::variant_static(&[None, Some(T::ABI)]);
 
@@ -2302,22 +2385,61 @@ where
     unsafe { MaybeUninit::uninit().assume_init() }
 }
 
-macro_rules! impl_component_ty_for_tuples {
-    ($n:tt $($t:ident)*) => {paste::paste!{
-        #[allow(non_snake_case)]
-        #[doc(hidden)]
-        #[derive(Clone, Copy)]
-        #[repr(C)]
-        pub struct [<TupleLower$n>]<$($t),*> {
-            $($t: $t,)*
-            _align_tuple_lower0_correctly: [ValRaw; 0],
-        }
+/// Helper structure to define `Lower` for tuples below.
+///
+/// Uses default type parameters to have fields be zero-sized and not present
+/// in memory for smaller tuple values.
+#[allow(non_snake_case)]
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct TupleLower<
+    T1 = (),
+    T2 = (),
+    T3 = (),
+    T4 = (),
+    T5 = (),
+    T6 = (),
+    T7 = (),
+    T8 = (),
+    T9 = (),
+    T10 = (),
+    T11 = (),
+    T12 = (),
+    T13 = (),
+    T14 = (),
+    T15 = (),
+    T16 = (),
+    T17 = (),
+> {
+    // NB: these names match the names in `for_each_function_signature!`
+    A1: T1,
+    A2: T2,
+    A3: T3,
+    A4: T4,
+    A5: T5,
+    A6: T6,
+    A7: T7,
+    A8: T8,
+    A9: T9,
+    A10: T10,
+    A11: T11,
+    A12: T12,
+    A13: T13,
+    A14: T14,
+    A15: T15,
+    A16: T16,
+    A17: T17,
+    _align_tuple_lower0_correctly: [ValRaw; 0],
+}
 
+macro_rules! impl_component_ty_for_tuples {
+    ($n:tt $($t:ident)*) => {
         #[allow(non_snake_case)]
         unsafe impl<$($t,)*> ComponentType for ($($t,)*)
             where $($t: ComponentType),*
         {
-            type Lower = [<TupleLower$n>]<$($t::Lower),*>;
+            type Lower = TupleLower<$($t::Lower),*>;
 
             const ABI: CanonicalAbiInfo = CanonicalAbiInfo::record_static(&[
                 $($t::ABI),*
@@ -2425,7 +2547,7 @@ macro_rules! impl_component_ty_for_tuples {
         unsafe impl<$($t,)*> ComponentNamedList for ($($t,)*)
             where $($t: ComponentType),*
         {}
-    }};
+    };
 }
 
 for_each_function_signature!(impl_component_ty_for_tuples);
@@ -2456,6 +2578,9 @@ pub fn desc(ty: &InterfaceType) -> &'static str {
         InterfaceType::Enum(_) => "enum",
         InterfaceType::Own(_) => "owned resource",
         InterfaceType::Borrow(_) => "borrowed resource",
+        InterfaceType::Future(_) => "future",
+        InterfaceType::Stream(_) => "stream",
+        InterfaceType::ErrorContext(_) => "error-context",
     }
 }
 

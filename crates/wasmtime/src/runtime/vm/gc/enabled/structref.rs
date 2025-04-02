@@ -139,7 +139,7 @@ impl VMStructRef {
         ty: &StorageType,
         field: usize,
     ) -> Val {
-        let offset = layout.fields[field];
+        let offset = layout.fields[field].offset;
         let data = store.unwrap_gc_store_mut().gc_object_data(self.as_gc_ref());
         match ty {
             StorageType::I8 => Val::I32(data.read_u8(offset).into()),
@@ -195,8 +195,8 @@ impl VMStructRef {
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
 
-        let offset = layout.fields[field];
-        let mut data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
+        let offset = layout.fields[field].offset;
+        let data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
         match val {
             Val::I32(i) if ty.is_i8() => data.write_i8(offset, truncate_i32_to_i8(i)),
             Val::I32(i) if ty.is_i16() => data.write_i16(offset, truncate_i32_to_i16(i)),
@@ -226,7 +226,7 @@ impl VMStructRef {
                     None => None,
                 };
                 store.gc_store_mut()?.write_gc_ref(&mut gc_ref, e.as_ref());
-                let mut data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
+                let data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
             }
             Val::AnyRef(a) => {
@@ -237,7 +237,7 @@ impl VMStructRef {
                     None => None,
                 };
                 store.gc_store_mut()?.write_gc_ref(&mut gc_ref, a.as_ref());
-                let mut data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
+                let data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
                 data.write_u32(offset, gc_ref.map_or(0, |r| r.as_raw_u32()));
             }
 
@@ -286,7 +286,7 @@ impl VMStructRef {
         val: Val,
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
-        let offset = layout.fields[field];
+        let offset = layout.fields[field].offset;
         match val {
             Val::I32(i) if ty.is_i8() => store
                 .gc_store_mut()?

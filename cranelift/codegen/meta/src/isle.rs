@@ -127,7 +127,7 @@ pub fn get_isle_compilations(
                     src_isa_x64.join("inst.isle"),
                     src_isa_x64.join("lower.isle"),
                 ],
-                untracked_inputs: vec![clif_lower_isle.clone()],
+                untracked_inputs: vec![clif_lower_isle.clone(), gen_dir.join("assembler.isle")],
             },
             // The aarch64 instruction selector.
             IsleCompilation {

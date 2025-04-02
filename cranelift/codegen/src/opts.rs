@@ -64,6 +64,7 @@ impl Default for InstDataEtorIter<'_, '_, '_> {
 impl<'a, 'b, 'c> InstDataEtorIter<'a, 'b, 'c> {
     fn new(root: Value) -> Self {
         debug_assert_ne!(root, Value::reserved_value());
+        trace!("new iter from root {root}");
         Self {
             stack: smallvec![root],
             _phantom1: PhantomData,
@@ -196,6 +197,7 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     }
 
     fn make_inst_ctor(&mut self, ty: Type, op: &InstructionData) -> Value {
+        trace!("make_inst_ctor: creating {:?}", op);
         let value = self.ctx.insert_pure_enode(NewOrExistingInst::New(*op, ty));
         trace!("make_inst_ctor: {:?} -> {}", op, value);
         value

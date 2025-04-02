@@ -259,7 +259,32 @@ fn get_fuel_clamps_at_zero(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(Cranelift)))]
+#[wasmtime_test]
+#[cfg_attr(miri, ignore)]
+fn immediate_trap_with_fuel1(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (func (export "main"))
+            )
+        "#,
+    )?;
+
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let main = instance.get_typed_func::<(), ()>(&mut store, "main")?;
+    store.set_fuel(1)?;
+
+    assert!(main.call(&mut store, ()).is_err());
+
+    Ok(())
+}
+
+#[wasmtime_test(strategies(only(Winch)))]
 #[cfg_attr(miri, ignore)]
 fn ensure_stack_alignment(config: &mut Config) -> Result<()> {
     config.consume_fuel(true);

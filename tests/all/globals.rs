@@ -350,3 +350,81 @@ fn i31ref_as_anyref_global_ty() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+fn instantiate_global_with_subtype() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    let engine = Engine::new(&config)?;
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $func_ty (sub (func)))
+                (import "" "" (global (ref null $func_ty)))
+            )
+        "#,
+    )?;
+
+    {
+        let func_ty =
+            FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, None, [], [])?;
+        let sub_func_ty = FuncType::with_finality_and_supertype(
+            &engine,
+            Finality::NonFinal,
+            Some(&func_ty),
+            [],
+            [],
+        )?;
+        let global_ty = GlobalType::new(
+            RefType::new(true, HeapType::ConcreteFunc(sub_func_ty.clone())).into(),
+            Mutability::Const,
+        );
+        assert!(global_ty.content().matches(
+            module
+                .imports()
+                .nth(0)
+                .unwrap()
+                .ty()
+                .unwrap_global()
+                .content()
+        ));
+
+        let mut store = Store::new(&engine, ());
+        let func = Func::new(&mut store, sub_func_ty, |_caller, _args, _rets| Ok(()));
+        let global = Global::new(&mut store, global_ty, func.into())?;
+
+        // This instantiation should succeed: the given global's type is a subtype
+        // of the import's global type.
+        let _ = Instance::new(&mut store, &module, &[global.into()])?;
+    }
+
+    {
+        let func_ty = FuncType::new(&engine, [], []);
+        let global_ty = GlobalType::new(
+            RefType::new(true, HeapType::ConcreteFunc(func_ty.clone())).into(),
+            Mutability::Const,
+        );
+        assert!(!global_ty.content().matches(
+            module
+                .imports()
+                .nth(0)
+                .unwrap()
+                .ty()
+                .unwrap_global()
+                .content()
+        ));
+
+        let mut store = Store::new(&engine, ());
+        let func = Func::new(&mut store, func_ty, |_caller, _args, _rets| Ok(()));
+        let global = Global::new(&mut store, global_ty, func.into())?;
+
+        // This instantiation should fail: the given global's type is *not* a
+        // subtype of the import's global type.
+        assert!(Instance::new(&mut store, &module, &[global.into()]).is_err());
+    }
+
+    Ok(())
+}

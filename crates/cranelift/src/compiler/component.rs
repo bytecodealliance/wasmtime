@@ -3,12 +3,15 @@
 use crate::{compiler::Compiler, TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT};
 use anyhow::Result;
 use cranelift_codegen::ir::condcodes::IntCC;
-use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
+use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
 use std::any::Any;
 use wasmtime_environ::component::*;
-use wasmtime_environ::{HostCall, ModuleInternedTypeIndex, PtrSize, Tunables, WasmValType};
+use wasmtime_environ::fact::SYNC_ENTER_FIXED_PARAMS;
+use wasmtime_environ::{
+    HostCall, ModuleInternedTypeIndex, PtrSize, TrapSentinel, Tunables, WasmFuncType, WasmValType,
+};
 
 struct TrampolineCompiler<'a> {
     compiler: &'a Compiler,
@@ -28,6 +31,9 @@ enum Abi {
     Wasm,
     Array,
 }
+
+type GetLibcallFn =
+    fn(&dyn TargetIsa, &mut ir::Function) -> (ir::SigRef, ComponentBuiltinFunctionIndex);
 
 impl<'a> TrampolineCompiler<'a> {
     fn new(
@@ -97,25 +103,589 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::ResourceNew(ty) => self.translate_resource_new(*ty),
             Trampoline::ResourceRep(ty) => self.translate_resource_rep(*ty),
             Trampoline::ResourceDrop(ty) => self.translate_resource_drop(*ty),
+            Trampoline::BackpressureSet { instance } => {
+                self.translate_backpressure_set_call(*instance)
+            }
+            Trampoline::TaskReturn { results, options } => {
+                self.translate_task_return_call(*results, options)
+            }
+            Trampoline::WaitableSetNew { instance } => self.translate_waitable_set_new(*instance),
+            Trampoline::WaitableSetWait {
+                instance,
+                async_,
+                memory,
+            } => self.translate_task_wait_or_poll_call(
+                *instance,
+                *async_,
+                *memory,
+                host::waitable_set_wait,
+            ),
+            Trampoline::WaitableSetPoll {
+                instance,
+                async_,
+                memory,
+            } => self.translate_task_wait_or_poll_call(
+                *instance,
+                *async_,
+                *memory,
+                host::waitable_set_poll,
+            ),
+            Trampoline::WaitableSetDrop { instance } => self.translate_waitable_set_drop(*instance),
+            Trampoline::WaitableJoin { instance } => self.translate_waitable_join(*instance),
+            Trampoline::Yield { async_ } => self.translate_yield_call(*async_),
+            Trampoline::SubtaskDrop { instance } => self.translate_subtask_drop_call(*instance),
+            Trampoline::StreamNew { ty } => self.translate_future_or_stream_call(
+                &[ty.as_u32()],
+                None,
+                host::stream_new,
+                TrapSentinel::NegativeOne,
+            ),
+            Trampoline::StreamRead {
+                ty,
+                err_ctx_ty,
+                options,
+            } => {
+                let tys = &[ty.as_u32(), err_ctx_ty.as_u32()];
+                if let Some(info) = self.flat_stream_element_info(*ty).cloned() {
+                    self.translate_flat_stream_call(tys, options, host::flat_stream_read, &info)
+                } else {
+                    self.translate_future_or_stream_call(
+                        tys,
+                        Some(options),
+                        host::stream_read,
+                        TrapSentinel::NegativeOne,
+                    )
+                }
+            }
+            Trampoline::StreamWrite { ty, options } => {
+                let tys = &[ty.as_u32()];
+                if let Some(info) = self.flat_stream_element_info(*ty).cloned() {
+                    self.translate_flat_stream_call(tys, options, host::flat_stream_write, &info)
+                } else {
+                    self.translate_future_or_stream_call(
+                        tys,
+                        Some(options),
+                        host::stream_write,
+                        TrapSentinel::NegativeOne,
+                    )
+                }
+            }
+            Trampoline::StreamCancelRead { ty, async_ } => {
+                self.translate_cancel_call(ty.as_u32(), *async_, host::stream_cancel_read)
+            }
+            Trampoline::StreamCancelWrite { ty, async_ } => {
+                self.translate_cancel_call(ty.as_u32(), *async_, host::stream_cancel_write)
+            }
+            Trampoline::StreamCloseReadable { ty } => self.translate_future_or_stream_call(
+                &[ty.as_u32()],
+                None,
+                host::stream_close_readable,
+                TrapSentinel::Falsy,
+            ),
+            Trampoline::StreamCloseWritable { ty, err_ctx_ty } => self
+                .translate_future_or_stream_call(
+                    &[ty.as_u32(), err_ctx_ty.as_u32()],
+                    None,
+                    host::stream_close_writable,
+                    TrapSentinel::Falsy,
+                ),
+            Trampoline::FutureNew { ty } => self.translate_future_or_stream_call(
+                &[ty.as_u32()],
+                None,
+                host::future_new,
+                TrapSentinel::NegativeOne,
+            ),
+            Trampoline::FutureRead {
+                ty,
+                err_ctx_ty,
+                options,
+            } => self.translate_future_or_stream_call(
+                &[ty.as_u32(), err_ctx_ty.as_u32()],
+                Some(&options),
+                host::future_read,
+                TrapSentinel::NegativeOne,
+            ),
+            Trampoline::FutureWrite { ty, options } => self.translate_future_or_stream_call(
+                &[ty.as_u32()],
+                Some(options),
+                host::future_write,
+                TrapSentinel::NegativeOne,
+            ),
+            Trampoline::FutureCancelRead { ty, async_ } => {
+                self.translate_cancel_call(ty.as_u32(), *async_, host::future_cancel_read)
+            }
+            Trampoline::FutureCancelWrite { ty, async_ } => {
+                self.translate_cancel_call(ty.as_u32(), *async_, host::future_cancel_write)
+            }
+            Trampoline::FutureCloseReadable { ty } => self.translate_future_or_stream_call(
+                &[ty.as_u32()],
+                None,
+                host::future_close_readable,
+                TrapSentinel::Falsy,
+            ),
+            Trampoline::FutureCloseWritable { ty, err_ctx_ty } => self
+                .translate_future_or_stream_call(
+                    &[ty.as_u32(), err_ctx_ty.as_u32()],
+                    None,
+                    host::future_close_writable,
+                    TrapSentinel::Falsy,
+                ),
+            Trampoline::ErrorContextNew { ty, options } => self.translate_error_context_call(
+                *ty,
+                options,
+                host::error_context_new,
+                TrapSentinel::NegativeOne,
+            ),
+            Trampoline::ErrorContextDebugMessage { ty, options } => self
+                .translate_error_context_call(
+                    *ty,
+                    options,
+                    host::error_context_debug_message,
+                    TrapSentinel::Falsy,
+                ),
+            Trampoline::ErrorContextDrop { ty } => self.translate_error_context_drop_call(*ty),
             Trampoline::ResourceTransferOwn => {
-                self.translate_resource_libcall(host::resource_transfer_own, |me, rets| {
-                    rets[0] = me.raise_if_resource_trapped(rets[0]);
+                self.translate_host_libcall(host::resource_transfer_own, |me, rets| {
+                    rets[0] = me.raise_if_negative_one(rets[0]);
                 })
             }
             Trampoline::ResourceTransferBorrow => {
-                self.translate_resource_libcall(host::resource_transfer_borrow, |me, rets| {
-                    rets[0] = me.raise_if_resource_trapped(rets[0]);
+                self.translate_host_libcall(host::resource_transfer_borrow, |me, rets| {
+                    rets[0] = me.raise_if_negative_one(rets[0]);
                 })
             }
             Trampoline::ResourceEnterCall => {
-                self.translate_resource_libcall(host::resource_enter_call, |_, _| {})
+                self.translate_host_libcall(host::resource_enter_call, |_, _| {})
             }
             Trampoline::ResourceExitCall => {
-                self.translate_resource_libcall(host::resource_exit_call, |me, rets| {
+                self.translate_host_libcall(host::resource_exit_call, |me, rets| {
                     me.raise_if_host_trapped(rets.pop().unwrap());
                 })
             }
+            Trampoline::SyncEnterCall => self.translate_sync_enter(),
+            Trampoline::SyncExitCall { callback } => self.translate_sync_exit(*callback),
+            Trampoline::AsyncEnterCall => {
+                self.translate_async_enter_or_exit(host::async_enter, None, TrapSentinel::Falsy)
+            }
+            Trampoline::AsyncExitCall {
+                callback,
+                post_return,
+            } => self.translate_async_enter_or_exit(
+                host::async_exit,
+                Some((*callback, *post_return)),
+                TrapSentinel::NegativeOne,
+            ),
+            Trampoline::FutureTransfer => {
+                self.translate_host_libcall(host::future_transfer, |me, rets| {
+                    rets[0] = me.raise_if_negative_one(rets[0]);
+                })
+            }
+            Trampoline::StreamTransfer => {
+                self.translate_host_libcall(host::stream_transfer, |me, rets| {
+                    rets[0] = me.raise_if_negative_one(rets[0]);
+                })
+            }
+            Trampoline::ErrorContextTransfer => {
+                self.translate_host_libcall(host::error_context_transfer, |me, rets| {
+                    rets[0] = me.raise_if_negative_one(rets[0]);
+                })
+            }
         }
+    }
+
+    /// Determine whether the specified type can be optimized as a stream
+    /// payload by lifting and lowering with a simple `memcpy`.
+    ///
+    /// Any type containing only "flat", primitive data (i.e. no pointers or
+    /// handles) should qualify for this optimization, but it's also okay to
+    /// conservatively return `None` here; the fallback slow path will always
+    /// work -- it just won't be as efficient.
+    fn flat_stream_element_info(&self, ty: TypeStreamTableIndex) -> Option<&CanonicalAbiInfo> {
+        let payload = self.types[self.types[ty].ty].payload;
+        match payload {
+            None => Some(&CanonicalAbiInfo::ZERO),
+            Some(
+                payload @ (InterfaceType::Bool
+                | InterfaceType::S8
+                | InterfaceType::U8
+                | InterfaceType::S16
+                | InterfaceType::U16
+                | InterfaceType::S32
+                | InterfaceType::U32
+                | InterfaceType::S64
+                | InterfaceType::U64
+                | InterfaceType::Float32
+                | InterfaceType::Float64
+                | InterfaceType::Char),
+            ) => Some(self.types.canonical_abi(&payload)),
+            // TODO: Recursively check for other "flat" types (i.e. those without pointers or handles),
+            // e.g. `record`s, `variant`s, etc. which contain only flat types.
+            _ => None,
+        }
+    }
+
+    fn store_wasm_arguments(&mut self, args: &[Value]) -> (Value, Value) {
+        let pointer_type = self.isa.pointer_type();
+        let wasm_func_ty = &self.types[self.signature].unwrap_func();
+
+        // Start off by spilling all the wasm arguments into a stack slot to be
+        // passed to the host function.
+        match self.abi {
+            Abi::Wasm => {
+                let (ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
+                    wasm_func_ty,
+                    &mut self.builder,
+                    args,
+                );
+                let len = self.builder.ins().iconst(pointer_type, i64::from(len));
+                (ptr, len)
+            }
+            Abi::Array => {
+                let params = self.builder.func.dfg.block_params(self.block0);
+                (params[2], params[3])
+            }
+        }
+    }
+
+    fn translate_intrinsic_libcall(
+        &mut self,
+        vmctx: ir::Value,
+        get_libcall: GetLibcallFn,
+        args: &[ir::Value],
+        sentinel: TrapSentinel,
+    ) {
+        match self.abi {
+            Abi::Wasm => {}
+
+            Abi::Array => {
+                // TODO: A guest could hypothetically export the same intrinsic
+                // it imported, allowing the host to call it directly.  We need
+                // to support that here (except for `sync-enter`, `sync-exit`,
+                // `async-enter`, and `async-exit`, which are only ever called
+                // from FACT-generated Wasm code and never exported).
+                //
+                // https://github.com/bytecodealliance/wasmtime/issues/10143
+                self.builder.ins().trap(TRAP_INTERNAL_ASSERT);
+                return;
+            }
+        }
+
+        let call = self.call_libcall(vmctx, get_libcall, args);
+
+        let result = self.builder.func.dfg.inst_results(call)[0];
+        match sentinel {
+            TrapSentinel::NegativeOne => {
+                let result = self.raise_if_negative_one(result);
+                self.abi_store_results(&[result]);
+            }
+            TrapSentinel::Falsy => {
+                self.raise_if_host_trapped(result);
+                self.builder.ins().return_(&[]);
+            }
+            _ => todo!("support additional return types if/when necessary"),
+        }
+    }
+
+    fn translate_task_return_call(&mut self, results: TypeTupleIndex, options: &CanonicalOptions) {
+        // FIXME(#10338) shouldn't ignore options here.
+        let _ = options;
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+
+        let (values_vec_ptr, values_vec_len) = self.store_wasm_arguments(&args[2..]);
+
+        let ty = self
+            .builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(results.as_u32()));
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            host::task_return,
+            &[vmctx, ty, values_vec_ptr, values_vec_len],
+            TrapSentinel::Falsy,
+        );
+    }
+
+    fn translate_waitable_set_new(&mut self, instance: RuntimeComponentInstanceIndex) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+
+        let instance = self
+            .builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(instance.as_u32()));
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            host::waitable_set_new,
+            &[vmctx, instance],
+            TrapSentinel::NegativeOne,
+        );
+    }
+
+    fn translate_waitable_set_drop(&mut self, instance: RuntimeComponentInstanceIndex) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+        let set = args[2];
+
+        let instance = self
+            .builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(instance.as_u32()));
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            host::waitable_set_drop,
+            &[vmctx, instance, set],
+            TrapSentinel::Falsy,
+        );
+    }
+
+    fn translate_waitable_join(&mut self, instance: RuntimeComponentInstanceIndex) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+        let set = args[2];
+        let waitable = args[3];
+
+        let instance = self
+            .builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(instance.as_u32()));
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            host::waitable_join,
+            &[vmctx, instance, set, waitable],
+            TrapSentinel::Falsy,
+        );
+    }
+
+    fn translate_sync_enter(&mut self) {
+        match self.abi {
+            Abi::Wasm => {}
+
+            Abi::Array => {
+                // This code can only be called from (FACT-generated) Wasm, so
+                // we don't need to support the array ABI.
+                self.builder.ins().trap(TRAP_INTERNAL_ASSERT);
+                return;
+            }
+        }
+
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+
+        let pointer_type = self.isa.pointer_type();
+        let wasm_func_ty = &self.types[self.signature].unwrap_func();
+
+        let param_offset = SYNC_ENTER_FIXED_PARAMS.len();
+        let spill_offset = param_offset + 2;
+
+        let (values_vec_ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
+            &WasmFuncType::new(
+                wasm_func_ty
+                    .params()
+                    .iter()
+                    .skip(param_offset)
+                    .copied()
+                    .collect(),
+                Box::new([]),
+            ),
+            &mut self.builder,
+            &args[spill_offset..],
+        );
+        let values_vec_len = self.builder.ins().iconst(pointer_type, i64::from(len));
+
+        let mut callee_args = vec![vmctx];
+
+        // remaining non-Wasm parameters
+        callee_args.extend(args[2..spill_offset].iter().copied());
+
+        callee_args.push(values_vec_ptr);
+        callee_args.push(values_vec_len);
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            host::sync_enter,
+            &callee_args,
+            TrapSentinel::Falsy,
+        );
+    }
+
+    fn translate_sync_exit(&mut self, callback: Option<RuntimeCallbackIndex>) {
+        match self.abi {
+            Abi::Wasm => {}
+
+            Abi::Array => {
+                // This code can only be called from (FACT-generated) Wasm, so
+                // we don't need to support the array ABI.
+                self.builder.ins().trap(TRAP_INTERNAL_ASSERT);
+                return;
+            }
+        }
+
+        let pointer_type = self.isa.pointer_type();
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+        let wasm_func_ty = &self.types[self.signature].unwrap_func();
+
+        let mut callee_args = vec![vmctx, self.load_callback(vmctx, callback)];
+
+        // remaining non-Wasm parameters
+        callee_args.extend(args[2..].iter().copied());
+
+        let (values_vec_ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
+            &WasmFuncType::new(
+                Box::new([]),
+                wasm_func_ty.returns().iter().copied().collect(),
+            ),
+            &mut self.builder,
+            &[],
+        );
+        let values_vec_len = self.builder.ins().iconst(pointer_type, i64::from(len));
+
+        callee_args.push(values_vec_ptr);
+        callee_args.push(values_vec_len);
+
+        let call = self.call_libcall(vmctx, host::sync_exit, &callee_args);
+
+        let succeeded = self.builder.func.dfg.inst_results(call)[0];
+        self.raise_if_host_trapped(succeeded);
+        // After the host function has returned the results are loaded from
+        // `values_vec_ptr` and then returned.
+        let results = self.compiler.load_values_from_array(
+            wasm_func_ty.returns(),
+            &mut self.builder,
+            values_vec_ptr,
+            values_vec_len,
+        );
+        self.builder.ins().return_(&results);
+    }
+
+    fn translate_async_enter_or_exit(
+        &mut self,
+        get_libcall: GetLibcallFn,
+        callback_and_post_return: Option<(
+            Option<RuntimeCallbackIndex>,
+            Option<RuntimePostReturnIndex>,
+        )>,
+        sentinel: TrapSentinel,
+    ) {
+        match self.abi {
+            Abi::Wasm => {}
+
+            Abi::Array => {
+                // This code can only be called from (FACT-generated) Wasm, so
+                // we don't need to support the array ABI.
+                self.builder.ins().trap(TRAP_INTERNAL_ASSERT);
+                return;
+            }
+        }
+
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+
+        let mut callee_args = vec![vmctx];
+
+        if let Some((callback, post_return)) = callback_and_post_return {
+            // callback: *mut VMFuncRef
+            callee_args.push(self.load_callback(vmctx, callback));
+            // post_return: *mut VMFuncRef
+            callee_args.push(self.load_post_return(vmctx, post_return));
+        }
+
+        // remaining parameters
+        callee_args.extend(args[2..].iter().copied());
+
+        self.translate_intrinsic_libcall(vmctx, get_libcall, &callee_args, sentinel);
+    }
+
+    fn translate_backpressure_set_call(&mut self, caller_instance: RuntimeComponentInstanceIndex) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+
+        let mut callee_args = vec![
+            vmctx,
+            self.builder
+                .ins()
+                .iconst(ir::types::I32, i64::from(caller_instance.as_u32())),
+        ];
+
+        callee_args.extend(args[2..].iter().copied());
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            host::backpressure_set,
+            &callee_args,
+            TrapSentinel::Falsy,
+        );
+    }
+
+    fn translate_task_wait_or_poll_call(
+        &mut self,
+        caller_instance: RuntimeComponentInstanceIndex,
+        async_: bool,
+        memory: RuntimeMemoryIndex,
+        get_libcall: GetLibcallFn,
+    ) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+
+        let mut callee_args = vec![
+            vmctx,
+            self.builder
+                .ins()
+                .iconst(ir::types::I32, i64::from(caller_instance.as_u32())),
+            self.builder
+                .ins()
+                .iconst(ir::types::I8, if async_ { 1 } else { 0 }),
+            self.load_memory(vmctx, memory),
+        ];
+
+        callee_args.extend(args[2..].iter().copied());
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            get_libcall,
+            &callee_args,
+            TrapSentinel::NegativeOne,
+        );
+    }
+
+    fn translate_yield_call(&mut self, async_: bool) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+
+        let callee_args = [
+            vmctx,
+            self.builder
+                .ins()
+                .iconst(ir::types::I8, if async_ { 1 } else { 0 }),
+        ];
+
+        self.translate_intrinsic_libcall(vmctx, host::yield_, &callee_args, TrapSentinel::Falsy);
+    }
+
+    fn translate_subtask_drop_call(&mut self, caller_instance: RuntimeComponentInstanceIndex) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+
+        let mut callee_args = vec![
+            vmctx,
+            self.builder
+                .ins()
+                .iconst(ir::types::I32, i64::from(caller_instance.as_u32())),
+        ];
+
+        callee_args.extend(args[2..].iter().copied());
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            host::subtask_drop,
+            &callee_args,
+            TrapSentinel::Falsy,
+        );
     }
 
     fn translate_lower_import(
@@ -129,23 +699,7 @@ impl<'a> TrampolineCompiler<'a> {
         let vmctx = args[0];
         let wasm_func_ty = self.types[self.signature].unwrap_func();
 
-        // Start off by spilling all the wasm arguments into a stack slot to be
-        // passed to the host function.
-        let (values_vec_ptr, values_vec_len) = match self.abi {
-            Abi::Wasm => {
-                let (ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
-                    wasm_func_ty,
-                    &mut self.builder,
-                    &args[2..],
-                );
-                let len = self.builder.ins().iconst(pointer_type, i64::from(len));
-                (ptr, len)
-            }
-            Abi::Array => {
-                let params = self.builder.func.dfg.block_params(self.block0);
-                (params[2], params[3])
-            }
-        };
+        let (values_vec_ptr, values_vec_len) = self.store_wasm_arguments(&args[2..]);
 
         // Below this will incrementally build both the signature of the host
         // function we're calling as well as the list of arguments since the
@@ -157,9 +711,13 @@ impl<'a> TrampolineCompiler<'a> {
             instance,
             memory,
             realloc,
+            callback,
             post_return,
             string_encoding,
+            async_,
         } = *options;
+
+        assert!(callback.is_none());
 
         // vmctx: *mut VMComponentContext
         host_sig.params.push(ir::AbiParam::new(pointer_type));
@@ -182,6 +740,14 @@ impl<'a> TrampolineCompiler<'a> {
                 .iconst(ir::types::I32, i64::from(lower_ty.as_u32())),
         );
 
+        // caller_instance: RuntimeComponentInstanceIndex
+        host_sig.params.push(ir::AbiParam::new(ir::types::I32));
+        callee_args.push(
+            self.builder
+                .ins()
+                .iconst(ir::types::I32, i64::from(instance.as_u32())),
+        );
+
         // flags: *mut VMGlobalDefinition
         host_sig.params.push(ir::AbiParam::new(pointer_type));
         callee_args.push(
@@ -193,26 +759,13 @@ impl<'a> TrampolineCompiler<'a> {
         // memory: *mut VMMemoryDefinition
         host_sig.params.push(ir::AbiParam::new(pointer_type));
         callee_args.push(match memory {
-            Some(idx) => self.builder.ins().load(
-                pointer_type,
-                MemFlags::trusted(),
-                vmctx,
-                i32::try_from(self.offsets.runtime_memory(idx)).unwrap(),
-            ),
+            Some(idx) => self.load_memory(vmctx, idx),
             None => self.builder.ins().iconst(pointer_type, 0),
         });
 
         // realloc: *mut VMFuncRef
         host_sig.params.push(ir::AbiParam::new(pointer_type));
-        callee_args.push(match realloc {
-            Some(idx) => self.builder.ins().load(
-                pointer_type,
-                MemFlags::trusted(),
-                vmctx,
-                i32::try_from(self.offsets.runtime_realloc(idx)).unwrap(),
-            ),
-            None => self.builder.ins().iconst(pointer_type, 0),
-        });
+        callee_args.push(self.load_realloc(vmctx, realloc));
 
         // A post-return option is only valid on `canon.lift`'d functions so no
         // valid component should have this specified for a lowering which this
@@ -221,10 +774,14 @@ impl<'a> TrampolineCompiler<'a> {
 
         // string_encoding: StringEncoding
         host_sig.params.push(ir::AbiParam::new(ir::types::I8));
+        callee_args.push(self.string_encoding(string_encoding));
+
+        // async_: bool
+        host_sig.params.push(ir::AbiParam::new(ir::types::I8));
         callee_args.push(
             self.builder
                 .ins()
-                .iconst(ir::types::I8, i64::from(string_encoding as u8)),
+                .iconst(ir::types::I8, if async_ { 1 } else { 0 }),
         );
 
         // storage: *mut ValRaw
@@ -330,7 +887,7 @@ impl<'a> TrampolineCompiler<'a> {
         );
         let call = self.call_libcall(vmctx, host::resource_new32, &host_args);
         let result = self.builder.func.dfg.inst_results(call)[0];
-        let result = self.raise_if_resource_trapped(result);
+        let result = self.raise_if_negative_one(result);
         self.abi_store_results(&[result]);
     }
 
@@ -359,7 +916,7 @@ impl<'a> TrampolineCompiler<'a> {
         );
         let call = self.call_libcall(vmctx, host::resource_rep32, &host_args);
         let result = self.builder.func.dfg.inst_results(call)[0];
-        let result = self.raise_if_resource_trapped(result);
+        let result = self.raise_if_negative_one(result);
         self.abi_store_results(&[result]);
     }
 
@@ -550,12 +1107,9 @@ impl<'a> TrampolineCompiler<'a> {
     ///
     /// Only intended for simple trampolines and effectively acts as a bridge
     /// from the wasm abi to host.
-    fn translate_resource_libcall(
+    fn translate_host_libcall(
         &mut self,
-        get_libcall: fn(
-            &dyn TargetIsa,
-            &mut ir::Function,
-        ) -> (ir::SigRef, ComponentBuiltinFunctionIndex),
+        get_libcall: GetLibcallFn,
         handle_results: fn(&mut Self, &mut Vec<ir::Value>),
     ) {
         match self.abi {
@@ -578,6 +1132,203 @@ impl<'a> TrampolineCompiler<'a> {
         let mut results = self.builder.func.dfg.inst_results(call).to_vec();
         handle_results(self, &mut results);
         self.builder.ins().return_(&results);
+    }
+
+    fn translate_cancel_call(&mut self, ty: u32, async_: bool, get_libcall: GetLibcallFn) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+        let mut callee_args = vec![
+            vmctx,
+            self.builder.ins().iconst(ir::types::I32, i64::from(ty)),
+            self.builder
+                .ins()
+                .iconst(ir::types::I8, if async_ { 1 } else { 0 }),
+        ];
+
+        callee_args.extend(args[2..].iter().copied());
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            get_libcall,
+            &callee_args,
+            TrapSentinel::NegativeOne,
+        );
+    }
+
+    fn load_memory(&mut self, vmctx: ir::Value, memory: RuntimeMemoryIndex) -> ir::Value {
+        self.builder.ins().load(
+            self.isa.pointer_type(),
+            MemFlags::trusted(),
+            vmctx,
+            i32::try_from(self.offsets.runtime_memory(memory)).unwrap(),
+        )
+    }
+
+    fn load_realloc(
+        &mut self,
+        vmctx: ir::Value,
+        realloc: Option<RuntimeReallocIndex>,
+    ) -> ir::Value {
+        let pointer_type = self.isa.pointer_type();
+        match realloc {
+            Some(idx) => self.builder.ins().load(
+                pointer_type,
+                MemFlags::trusted(),
+                vmctx,
+                i32::try_from(self.offsets.runtime_realloc(idx)).unwrap(),
+            ),
+            None => self.builder.ins().iconst(pointer_type, 0),
+        }
+    }
+
+    fn load_callback(
+        &mut self,
+        vmctx: ir::Value,
+        callback: Option<RuntimeCallbackIndex>,
+    ) -> ir::Value {
+        let pointer_type = self.isa.pointer_type();
+        match callback {
+            Some(idx) => self.builder.ins().load(
+                pointer_type,
+                MemFlags::trusted(),
+                vmctx,
+                i32::try_from(self.offsets.runtime_callback(idx)).unwrap(),
+            ),
+            None => self.builder.ins().iconst(pointer_type, 0),
+        }
+    }
+
+    fn load_post_return(
+        &mut self,
+        vmctx: ir::Value,
+        post_return: Option<RuntimePostReturnIndex>,
+    ) -> ir::Value {
+        let pointer_type = self.isa.pointer_type();
+        match post_return {
+            Some(idx) => self.builder.ins().load(
+                pointer_type,
+                MemFlags::trusted(),
+                vmctx,
+                i32::try_from(self.offsets.runtime_post_return(idx)).unwrap(),
+            ),
+            None => self.builder.ins().iconst(pointer_type, 0),
+        }
+    }
+
+    fn string_encoding(&mut self, string_encoding: StringEncoding) -> ir::Value {
+        self.builder
+            .ins()
+            .iconst(ir::types::I8, i64::from(string_encoding as u8))
+    }
+
+    fn translate_future_or_stream_call(
+        &mut self,
+        tys: &[u32],
+        options: Option<&CanonicalOptions>,
+        get_libcall: GetLibcallFn,
+        sentinel: TrapSentinel,
+    ) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+        let mut callee_args = vec![vmctx];
+
+        if let Some(options) = options {
+            // memory: *mut VMMemoryDefinition
+            callee_args.push(self.load_memory(vmctx, options.memory.unwrap()));
+            // realloc: *mut VMFuncRef
+            callee_args.push(self.load_realloc(vmctx, options.realloc));
+            // string_encoding: StringEncoding
+            callee_args.push(self.string_encoding(options.string_encoding))
+        }
+
+        for ty in tys {
+            callee_args.push(self.builder.ins().iconst(ir::types::I32, i64::from(*ty)));
+        }
+
+        callee_args.extend(args[2..].iter().copied());
+
+        self.translate_intrinsic_libcall(vmctx, get_libcall, &callee_args, sentinel);
+    }
+
+    fn translate_flat_stream_call(
+        &mut self,
+        tys: &[u32],
+        options: &CanonicalOptions,
+        get_libcall: GetLibcallFn,
+        info: &CanonicalAbiInfo,
+    ) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+        let mut callee_args = vec![
+            vmctx,
+            self.load_memory(vmctx, options.memory.unwrap()),
+            self.load_realloc(vmctx, options.realloc),
+        ];
+        for ty in tys {
+            callee_args.push(self.builder.ins().iconst(ir::types::I32, i64::from(*ty)));
+        }
+
+        callee_args.extend([
+            self.builder
+                .ins()
+                .iconst(ir::types::I32, i64::from(info.size32)),
+            self.builder
+                .ins()
+                .iconst(ir::types::I32, i64::from(info.align32)),
+        ]);
+
+        callee_args.extend(args[2..].iter().copied());
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            get_libcall,
+            &callee_args,
+            TrapSentinel::NegativeOne,
+        );
+    }
+
+    fn translate_error_context_call(
+        &mut self,
+        ty: TypeComponentLocalErrorContextTableIndex,
+        options: &CanonicalOptions,
+        get_libcall: GetLibcallFn,
+        sentinel: TrapSentinel,
+    ) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+        let mut callee_args = vec![
+            vmctx,
+            self.load_memory(vmctx, options.memory.unwrap()),
+            self.load_realloc(vmctx, options.realloc),
+            self.string_encoding(options.string_encoding),
+            self.builder
+                .ins()
+                .iconst(ir::types::I32, i64::from(ty.as_u32())),
+        ];
+
+        callee_args.extend(args[2..].iter().copied());
+
+        self.translate_intrinsic_libcall(vmctx, get_libcall, &callee_args, sentinel);
+    }
+
+    fn translate_error_context_drop_call(&mut self, ty: TypeComponentLocalErrorContextTableIndex) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+        let mut callee_args = vec![
+            vmctx,
+            self.builder
+                .ins()
+                .iconst(ir::types::I32, i64::from(ty.as_u32())),
+        ];
+
+        callee_args.extend(args[2..].iter().copied());
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            host::error_context_drop,
+            &callee_args,
+            TrapSentinel::Falsy,
+        );
     }
 
     /// Loads a host function pointer for a libcall stored at the `offset`
@@ -672,7 +1423,7 @@ impl<'a> TrampolineCompiler<'a> {
         self.raise_if_host_trapped(succeeded);
     }
 
-    fn raise_if_resource_trapped(&mut self, ret: ir::Value) -> ir::Value {
+    fn raise_if_negative_one(&mut self, ret: ir::Value) -> ir::Value {
         let minus_one = self.builder.ins().iconst(ir::types::I64, -1);
         let succeeded = self.builder.ins().icmp(IntCC::NotEqual, ret, minus_one);
         self.raise_if_host_trapped(succeeded);
@@ -682,10 +1433,7 @@ impl<'a> TrampolineCompiler<'a> {
     fn call_libcall(
         &mut self,
         vmctx: ir::Value,
-        get_libcall: fn(
-            &dyn TargetIsa,
-            &mut ir::Function,
-        ) -> (ir::SigRef, ComponentBuiltinFunctionIndex),
+        get_libcall: GetLibcallFn,
         args: &[ir::Value],
     ) -> ir::Inst {
         let (host_sig, index) = get_libcall(self.isa, &mut self.builder.func);
@@ -729,17 +1477,17 @@ impl ComponentCompiler for Compiler {
                 wasmtime_environ::component::VMCOMPONENT_MAGIC,
             );
             if let Abi::Wasm = abi {
-                let limits = c.builder.ins().load(
+                let vm_store_context = c.builder.ins().load(
                     pointer_type,
                     MemFlags::trusted(),
                     vmctx,
-                    i32::try_from(c.offsets.limits()).unwrap(),
+                    i32::try_from(c.offsets.vm_store_context()).unwrap(),
                 );
                 super::save_last_wasm_exit_fp_and_pc(
                     &mut c.builder,
                     pointer_type,
                     &c.offsets.ptr,
-                    limits,
+                    vm_store_context,
                 );
             }
 
@@ -932,12 +1680,7 @@ impl TrampolineCompiler<'_> {
 
     fn load_runtime_memory_base(&mut self, vmctx: ir::Value, mem: RuntimeMemoryIndex) -> ir::Value {
         let pointer_type = self.isa.pointer_type();
-        let from_vmmemory_definition = self.builder.ins().load(
-            pointer_type,
-            MemFlags::trusted(),
-            vmctx,
-            i32::try_from(self.offsets.runtime_memory(mem)).unwrap(),
-        );
+        let from_vmmemory_definition = self.load_memory(vmctx, mem);
         self.builder.ins().load(
             pointer_type,
             MemFlags::trusted(),

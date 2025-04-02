@@ -1,10 +1,10 @@
 use crate::prelude::*;
 use crate::runtime::vm::memory::{validate_atomic_addr, LocalMemory, MmapMemory};
 use crate::runtime::vm::parking_spot::{ParkingSpot, Waiter};
-use crate::runtime::vm::vmcontext::VMMemoryDefinition;
-use crate::runtime::vm::{Memory, VMStore, WaitResult};
+use crate::runtime::vm::{Memory, VMMemoryDefinition, VMStore, WaitResult};
 use std::cell::RefCell;
 use std::ops::Range;
+use std::ptr::NonNull;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
@@ -63,8 +63,8 @@ impl SharedMemory {
     }
 
     /// Return a pointer to the shared memory's [VMMemoryDefinition].
-    pub fn vmmemory_ptr(&self) -> *const VMMemoryDefinition {
-        &self.0.def.0
+    pub fn vmmemory_ptr(&self) -> NonNull<VMMemoryDefinition> {
+        NonNull::from(&self.0.def.0)
     }
 
     /// Same as `RuntimeLinearMemory::grow`, except with `&self`.

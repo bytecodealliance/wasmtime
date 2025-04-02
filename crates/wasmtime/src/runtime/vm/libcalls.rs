@@ -57,7 +57,9 @@
 use crate::prelude::*;
 use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::VMFuncRef;
-use crate::runtime::vm::{HostResultHasUnwindSentinel, Instance, TrapReason, VMGcRef, VMStore};
+#[cfg(feature = "gc")]
+use crate::runtime::vm::VMGcRef;
+use crate::runtime::vm::{HostResultHasUnwindSentinel, Instance, TrapReason, VMStore};
 use core::convert::Infallible;
 use core::ptr::NonNull;
 #[cfg(feature = "threads")]
@@ -91,6 +93,7 @@ pub mod raw {
     #![allow(unused_doc_comments, unused_attributes)]
 
     use crate::runtime::vm::{InstanceAndStore, VMContext};
+    use core::ptr::NonNull;
 
     macro_rules! libcall {
         (
@@ -108,7 +111,7 @@ pub mod raw {
                 // with conversion of the return value in the face of traps.
                 #[allow(unused_variables, missing_docs)]
                 pub unsafe extern "C" fn $name(
-                    vmctx: *mut VMContext,
+                    vmctx: NonNull<VMContext>,
                     $( $pname : libcall!(@ty $param), )*
                 ) $(-> libcall!(@ty $result))? {
                     $(#[cfg($attr)])?
@@ -133,15 +136,15 @@ pub mod raw {
                 const _: () = {
                     #[used]
                     static I_AM_USED: unsafe extern "C" fn(
-                        *mut VMContext,
+                        NonNull<VMContext>,
                         $( $pname : libcall!(@ty $param), )*
                     ) $( -> libcall!(@ty $result))? = $name;
                 };
             )*
         };
 
-        (@ty i32) => (u32);
-        (@ty i64) => (u64);
+        (@ty u32) => (u32);
+        (@ty u64) => (u64);
         (@ty u8) => (u8);
         (@ty bool) => (bool);
         (@ty pointer) => (*mut u8);
@@ -457,18 +460,17 @@ unsafe fn gc(store: &mut dyn VMStore, _instance: &mut Instance, gc_ref: u32) -> 
         // GC.
         let gc_store = store.store_opaque_mut().unwrap_gc_store_mut();
         let gc_ref = gc_store.clone_gc_ref(gc_ref);
-        gc_store.expose_gc_ref_to_wasm(gc_ref);
+        let _ = gc_store.expose_gc_ref_to_wasm(gc_ref);
     }
 
     match store.maybe_async_gc(gc_ref)? {
         None => Ok(0),
         Some(r) => {
-            let raw = r.as_raw_u32();
-            store
+            let raw = store
                 .store_opaque_mut()
                 .unwrap_gc_store_mut()
                 .expose_gc_ref_to_wasm(r);
-            Ok(raw)
+            Ok(raw.get())
         }
     }
 }
@@ -480,16 +482,16 @@ unsafe fn gc(store: &mut dyn VMStore, _instance: &mut Instance, gc_ref: u32) -> 
 unsafe fn gc_alloc_raw(
     store: &mut dyn VMStore,
     instance: &mut Instance,
-    kind: u32,
+    kind_and_reserved: u32,
     module_interned_type_index: u32,
     size: u32,
     align: u32,
-) -> Result<u32> {
+) -> Result<core::num::NonZeroU32> {
     use crate::{vm::VMGcHeader, GcHeapOutOfMemory};
     use core::alloc::Layout;
     use wasmtime_environ::{ModuleInternedTypeIndex, VMGcKind};
 
-    let kind = VMGcKind::from_high_bits_of_u32(kind);
+    let kind = VMGcKind::from_high_bits_of_u32(kind_and_reserved);
     log::trace!("gc_alloc_raw(kind={kind:?}, size={size}, align={align})",);
 
     let module = instance
@@ -502,11 +504,16 @@ unsafe fn gc_alloc_raw(
         .shared_type(module_interned_type_index)
         .expect("should have engine type index for module type index");
 
-    let header = VMGcHeader::from_kind_and_index(kind, shared_type_index);
+    let mut header = VMGcHeader::from_kind_and_index(kind, shared_type_index);
+    header.set_reserved_u27(kind_and_reserved & VMGcKind::UNUSED_MASK);
 
     let size = usize::try_from(size).unwrap();
     let align = usize::try_from(align).unwrap();
-    let layout = Layout::from_size_align(size, align).unwrap();
+    assert!(align.is_power_of_two());
+    let layout = Layout::from_size_align(size, align).map_err(|e| {
+        let err = Error::from(crate::Trap::AllocationTooLarge);
+        err.context(e)
+    })?;
 
     let gc_ref = match store
         .store_opaque_mut()
@@ -526,7 +533,12 @@ unsafe fn gc_alloc_raw(
         }
     };
 
-    Ok(gc_ref.as_raw_u32())
+    let raw = store
+        .store_opaque_mut()
+        .unwrap_gc_store_mut()
+        .expose_gc_ref_to_wasm(gc_ref);
+
+    Ok(raw)
 }
 
 // Intern a `funcref` into the GC heap, returning its `FuncRefTableId`.
@@ -596,7 +608,7 @@ unsafe fn array_new_data(
     data_index: u32,
     src: u32,
     len: u32,
-) -> Result<u32> {
+) -> Result<core::num::NonZeroU32> {
     use crate::{ArrayType, GcHeapOutOfMemory};
     use wasmtime_environ::ModuleInternedTypeIndex;
 
@@ -659,8 +671,7 @@ unsafe fn array_new_data(
         .copy_from_slice(array_layout.base_size, data);
 
     // Return the array to Wasm!
-    let raw = array_ref.as_gc_ref().as_raw_u32();
-    store
+    let raw = store
         .store_opaque_mut()
         .unwrap_gc_store_mut()
         .expose_gc_ref_to_wasm(array_ref.into());
@@ -757,7 +768,7 @@ unsafe fn array_new_elem(
     elem_index: u32,
     src: u32,
     len: u32,
-) -> Result<u32> {
+) -> Result<core::num::NonZeroU32> {
     use crate::{
         store::AutoAssertNoGc,
         vm::const_expr::{ConstEvalContext, ConstExprEvaluator},
@@ -829,8 +840,7 @@ unsafe fn array_new_elem(
 
         let mut store = AutoAssertNoGc::new(store);
         let gc_ref = array.try_clone_gc_ref(&mut store)?;
-        let raw = gc_ref.as_raw_u32();
-        store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
+        let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
         Ok(raw)
     })
 }
@@ -1073,6 +1083,7 @@ fn out_of_gas(store: &mut dyn VMStore, _instance: &mut Instance) -> Result<()> {
 }
 
 // Hook for when an instance observes that the epoch has changed.
+#[cfg(target_has_atomic = "64")]
 fn new_epoch(store: &mut dyn VMStore, _instance: &mut Instance) -> Result<NextEpoch> {
     store.new_epoch().map(NextEpoch)
 }
@@ -1243,7 +1254,15 @@ fn raise(_store: &mut dyn VMStore, _instance: &mut Instance) {
     // SAFETY: this is only called from compiled wasm so we know that wasm has
     // already been entered. It's a dynamic safety precondition that the trap
     // information has already been arranged to be present.
-    unsafe { crate::runtime::vm::traphandlers::raise_preexisting_trap() }
+    #[cfg(has_host_compiler_backend)]
+    unsafe {
+        crate::runtime::vm::traphandlers::raise_preexisting_trap()
+    }
+
+    // When Cranelift isn't in use then this is an unused libcall for Pulley, so
+    // just insert a stub to catch bugs if it's accidentally called.
+    #[cfg(not(has_host_compiler_backend))]
+    unreachable!()
 }
 
 /// This module contains functions which are used for resolving relocations at

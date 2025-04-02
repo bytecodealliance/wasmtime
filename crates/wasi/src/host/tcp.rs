@@ -1,16 +1,20 @@
 use crate::network::SocketAddrUse;
 use crate::{
     bindings::{
-        io::streams::{InputStream, OutputStream},
         sockets::network::{IpAddressFamily, IpSocketAddress, Network},
         sockets::tcp::{self, ShutdownType},
     },
     network::SocketAddressFamily,
 };
-use crate::{IoView, Pollable, SocketResult, WasiImpl, WasiView};
+use crate::{SocketResult, WasiImpl, WasiView};
 use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
+use wasmtime_wasi_io::{
+    poll::DynPollable,
+    streams::{DynInputStream, DynOutputStream},
+    IoView,
+};
 
 impl<T> tcp::Host for WasiImpl<T> where T: WasiView {}
 
@@ -72,7 +76,7 @@ where
     fn finish_connect(
         &mut self,
         this: Resource<tcp::TcpSocket>,
-    ) -> SocketResult<(Resource<InputStream>, Resource<OutputStream>)> {
+    ) -> SocketResult<(Resource<DynInputStream>, Resource<DynOutputStream>)> {
         let table = self.table();
         let socket = table.get_mut(&this)?;
 
@@ -103,8 +107,8 @@ where
         this: Resource<tcp::TcpSocket>,
     ) -> SocketResult<(
         Resource<tcp::TcpSocket>,
-        Resource<InputStream>,
-        Resource<OutputStream>,
+        Resource<DynInputStream>,
+        Resource<DynOutputStream>,
     )> {
         self.ctx().allowed_network_uses.check_allowed_tcp()?;
         let table = self.table();
@@ -280,8 +284,11 @@ where
         socket.set_send_buffer_size(value)
     }
 
-    fn subscribe(&mut self, this: Resource<tcp::TcpSocket>) -> anyhow::Result<Resource<Pollable>> {
-        crate::poll::subscribe(self.table(), this)
+    fn subscribe(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+    ) -> anyhow::Result<Resource<DynPollable>> {
+        wasmtime_wasi_io::poll::subscribe(self.table(), this)
     }
 
     fn shutdown(

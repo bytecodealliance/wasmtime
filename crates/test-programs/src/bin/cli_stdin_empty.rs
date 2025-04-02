@@ -4,9 +4,9 @@ fn main() {
     let mut buffer = [0_u8; 0];
 
     unsafe {
-        wasi::fd_read(
+        wasip1::fd_read(
             STDIN_FD,
-            &[wasi::Iovec {
+            &[wasip1::Iovec {
                 buf: buffer.as_mut_ptr(),
                 buf_len: 0,
             }],

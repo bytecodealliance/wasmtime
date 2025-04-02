@@ -20,16 +20,17 @@ test = false
 doctest = false
 
 [dependencies]
-anyhow = "1.0"
-proc-macro2 = "1.0"
-quote = "1.0"
+anyhow = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
 syn = { workspace = true, features = ["extra-traits"] }
 wasmtime-component-util = { workspace = true }
 wasmtime-wit-bindgen = { workspace = true }
 wit-parser = { workspace = true }
 
 [dev-dependencies]
-wasmtime = { path = '../wasmtime', features = ['component-model'] }
+wasmtime = { path = '../wasmtime', features = ['component-model', 'component-model-async'] }
+wasmtime-wit-bindgen = { workspace = true, features = ['component-model-async'] }
 component-macro-test-helpers = { path = 'test-helpers' }
 tracing = { workspace = true }
 # For use with the custom attributes test
@@ -40,4 +41,4 @@ similar = { workspace = true }
 
 [features]
 async = []
-std = ['wasmtime-wit-bindgen/std']
+component-model-async = ['async', 'wasmtime-wit-bindgen/component-model-async']

@@ -8,6 +8,7 @@ use core::cell::Cell;
 #[cfg(has_virtual_memory)]
 pub mod mmap;
 pub mod traphandlers;
+#[cfg(has_host_compiler_backend)]
 pub mod unwind;
 #[cfg(has_virtual_memory)]
 pub mod vm;

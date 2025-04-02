@@ -36,6 +36,10 @@ make_vendor() {
 
 cache_dir=$(mktemp -d)
 
+make_vendor "wasi-io" "
+  io@v0.2.3
+"
+
 make_vendor "wasi" "
   cli@v0.2.3
   clocks@v0.2.3
@@ -53,6 +57,11 @@ make_vendor "wasi-http" "
   random@v0.2.3
   sockets@v0.2.3
   http@v0.2.3
+"
+
+make_vendor "wasi-tls" "
+  io@v0.2.3
+  tls@v0.2.0-draft+d6fbdc7
 "
 
 make_vendor "wasi-config" "config@f4d699b"

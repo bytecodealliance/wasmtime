@@ -32,18 +32,20 @@ pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
     let ready = loop {
         let poll_timeout = if let Some(t) = poll.earliest_clock_deadline() {
             let duration = t.duration_until().unwrap_or(Duration::from_secs(0));
-            (duration.as_millis() + 1) // XXX try always rounding up?
-                .try_into()
-                .map_err(|_| Error::overflow().context("poll timeout"))?
+            Some(
+                duration
+                    .try_into()
+                    .map_err(|_| Error::overflow().context("poll timeout"))?,
+            )
         } else {
-            std::os::raw::c_int::max_value()
+            None
         };
         tracing::debug!(
             poll_timeout = tracing::field::debug(poll_timeout),
             poll_fds = tracing::field::debug(&pollfds),
             "poll"
         );
-        match rustix::event::poll(&mut pollfds, poll_timeout) {
+        match rustix::event::poll(&mut pollfds, poll_timeout.as_ref()) {
             Ok(ready) => break ready,
             Err(rustix::io::Errno::INTR) => continue,
             Err(err) => return Err(std::io::Error::from(err).into()),

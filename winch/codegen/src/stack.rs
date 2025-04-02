@@ -236,6 +236,28 @@ impl Val {
         }
     }
 
+    /// Get the float representation of the value.
+    ///
+    /// # Panics
+    /// This method will panic if the value is not an f32.
+    pub fn unwrap_f32(&self) -> Ieee32 {
+        match self {
+            Self::F32(v) => *v,
+            v => panic!("expected value {v:?} to be f32"),
+        }
+    }
+
+    /// Get the float representation of the value.
+    ///
+    /// # Panics
+    /// This method will panic if the value is not an f64.
+    pub fn unwrap_f64(&self) -> Ieee64 {
+        match self {
+            Self::F64(v) => *v,
+            v => panic!("expected value {v:?} to be f64"),
+        }
+    }
+
     /// Returns the underlying memory value if it is one, panics otherwise.
     pub fn unwrap_mem(&self) -> Memory {
         match self {
@@ -256,6 +278,22 @@ impl Val {
     pub fn is_i64_const(&self) -> bool {
         match *self {
             Self::I64(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Check whether the value is an f32 constant.
+    pub fn is_f32_const(&self) -> bool {
+        match *self {
+            Self::F32(_) => true,
+            _ => false,
+        }
+    }
+
+    /// Check whether the value is an f64 constant.
+    pub fn is_f64_const(&self) -> bool {
+        match *self {
+            Self::F64(_) => true,
             _ => false,
         }
     }
@@ -377,6 +415,24 @@ impl Stack {
     pub fn pop_i64_const(&mut self) -> Option<i64> {
         match self.peek() {
             Some(v) => v.is_i64_const().then(|| self.pop().unwrap().unwrap_i64()),
+            _ => None,
+        }
+    }
+
+    /// Pops the element at the top of the stack if it is an f32 const;
+    /// returns `None` otherwise.
+    pub fn pop_f32_const(&mut self) -> Option<Ieee32> {
+        match self.peek() {
+            Some(v) => v.is_f32_const().then(|| self.pop().unwrap().unwrap_f32()),
+            _ => None,
+        }
+    }
+
+    /// Pops the element at the top of the stack if it is an f64 const;
+    /// returns `None` otherwise.
+    pub fn pop_f64_const(&mut self) -> Option<Ieee64> {
+        match self.peek() {
+            Some(v) => v.is_f64_const().then(|| self.pop().unwrap().unwrap_f64()),
             _ => None,
         }
     }

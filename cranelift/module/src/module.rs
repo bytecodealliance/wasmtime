@@ -220,7 +220,7 @@ impl From<FuncOrDataId> for ModuleRelocTarget {
     feature = "enable-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct FunctionDeclaration {
     pub name: Option<String>,
     pub linkage: Linkage,
@@ -377,7 +377,7 @@ pub type ModuleResult<T> = Result<T, ModuleError>;
     feature = "enable-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct DataDeclaration {
     pub name: Option<String>,
     pub linkage: Linkage,
@@ -974,10 +974,9 @@ pub trait Module {
     fn define_function_bytes(
         &mut self,
         func_id: FuncId,
-        func: &ir::Function,
         alignment: u64,
         bytes: &[u8],
-        relocs: &[FinalizedMachReloc],
+        relocs: &[ModuleReloc],
     ) -> ModuleResult<()>;
 
     /// Define a data object, producing the data contents from the given `DataContext`.
@@ -1076,12 +1075,11 @@ impl<M: Module + ?Sized> Module for &mut M {
     fn define_function_bytes(
         &mut self,
         func_id: FuncId,
-        func: &ir::Function,
         alignment: u64,
         bytes: &[u8],
-        relocs: &[FinalizedMachReloc],
+        relocs: &[ModuleReloc],
     ) -> ModuleResult<()> {
-        (**self).define_function_bytes(func_id, func, alignment, bytes, relocs)
+        (**self).define_function_bytes(func_id, alignment, bytes, relocs)
     }
 
     fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()> {
@@ -1181,12 +1179,11 @@ impl<M: Module + ?Sized> Module for Box<M> {
     fn define_function_bytes(
         &mut self,
         func_id: FuncId,
-        func: &ir::Function,
         alignment: u64,
         bytes: &[u8],
-        relocs: &[FinalizedMachReloc],
+        relocs: &[ModuleReloc],
     ) -> ModuleResult<()> {
-        (**self).define_function_bytes(func_id, func, alignment, bytes, relocs)
+        (**self).define_function_bytes(func_id, alignment, bytes, relocs)
     }
 
     fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()> {

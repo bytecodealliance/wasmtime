@@ -1,13 +1,12 @@
 use crate::prelude::*;
+use crate::{type_registry::RegisteredType, Engine};
 use core::fmt::{self, Display, Write};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes, Table,
-    TypeTrace, VMSharedTypeIndex, WasmArrayType, WasmCompositeInnerType, WasmCompositeType,
+    Tag, TypeTrace, VMSharedTypeIndex, WasmArrayType, WasmCompositeInnerType, WasmCompositeType,
     WasmFieldType, WasmFuncType, WasmHeapType, WasmRefType, WasmStorageType, WasmStructType,
     WasmSubType, WasmValType,
 };
-
-use crate::{type_registry::RegisteredType, Engine};
 
 pub(crate) mod matching;
 
@@ -1097,6 +1096,8 @@ impl HeapType {
             | WasmHeapType::ConcreteStruct(EngineOrModuleTypeIndex::RecGroup(_)) => {
                 panic!("HeapType::from_wasm_type on non-canonicalized-for-runtime-usage heap type")
             }
+
+            WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => todo!(), // FIXME: #10248 stack switching support.
         }
     }
 
@@ -1157,6 +1158,8 @@ pub enum ExternType {
     Table(TableType),
     /// This external type is the type of a WebAssembly memory.
     Memory(MemoryType),
+    /// This external type is the type of a WebAssembly tag.
+    Tag(TagType),
 }
 
 macro_rules! extern_type_accessors {
@@ -1189,6 +1192,7 @@ impl ExternType {
         (Global(GlobalType) global unwrap_global)
         (Table(TableType) table unwrap_table)
         (Memory(MemoryType) memory unwrap_memory)
+        (Tag(TagType) tag unwrap_tag)
     }
 
     pub(crate) fn from_wasmtime(
@@ -1203,6 +1207,10 @@ impl ExternType {
                 }
                 EngineOrModuleTypeIndex::Module(m) => {
                     let subty = &types[*m];
+                    debug_assert!(subty.is_canonicalized_for_runtime_usage());
+                    // subty.canonicalize_for_runtime_usage(&mut |idx| {
+                    //     signatures.shared_type(idx).unwrap()
+                    // });
                     FuncType::from_wasm_func_type(
                         engine,
                         subty.is_final,
@@ -1216,7 +1224,7 @@ impl ExternType {
             EntityType::Global(ty) => GlobalType::from_wasmtime_global(engine, ty).into(),
             EntityType::Memory(ty) => MemoryType::from_wasmtime_memory(ty).into(),
             EntityType::Table(ty) => TableType::from_wasmtime_table(engine, ty).into(),
-            EntityType::Tag(_) => unimplemented!("wasm tag support"),
+            EntityType::Tag(ty) => TagType::from_wasmtime_tag(engine, ty).into(),
         }
     }
 }
@@ -1242,6 +1250,12 @@ impl From<MemoryType> for ExternType {
 impl From<TableType> for ExternType {
     fn from(ty: TableType) -> ExternType {
         ExternType::Table(ty)
+    }
+}
+
+impl From<TagType> for ExternType {
+    fn from(ty: TagType) -> ExternType {
+        ExternType::Tag(ty)
     }
 }
 
@@ -1401,6 +1415,7 @@ impl StorageType {
     /// https://webassembly.github.io/gc/core/syntax/types.html#bitwidth-fieldtype
     /// and
     /// https://webassembly.github.io/gc/core/syntax/types.html#bitwidth-valtype
+    #[cfg(feature = "gc")]
     pub(crate) fn data_byte_size(&self) -> Option<u32> {
         match self {
             StorageType::I8 => Some(1),
@@ -1781,10 +1796,7 @@ impl StructType {
     }
 
     pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> StructType {
-        let ty = RegisteredType::root(engine, index).expect(
-            "VMSharedTypeIndex is not registered in the Engine! Wrong \
-             engine? Didn't root the index somewhere?",
-        );
+        let ty = RegisteredType::root(engine, index);
         Self::from_registered_type(ty)
     }
 
@@ -1979,6 +1991,7 @@ impl ArrayType {
         Engine::same(self.registered_type.engine(), engine)
     }
 
+    #[cfg(feature = "gc")]
     pub(crate) fn registered_type(&self) -> &RegisteredType {
         &self.registered_type
     }
@@ -2024,10 +2037,7 @@ impl ArrayType {
     }
 
     pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> ArrayType {
-        let ty = RegisteredType::root(engine, index).expect(
-            "VMSharedTypeIndex is not registered in the Engine! Wrong \
-             engine? Didn't root the index somewhere?",
-        );
+        let ty = RegisteredType::root(engine, index);
         Self::from_registered_type(ty)
     }
 
@@ -2342,6 +2352,7 @@ impl FuncType {
         self.registered_type.index()
     }
 
+    #[cfg(feature = "gc")]
     pub(crate) fn as_wasm_func_type(&self) -> &WasmFuncType {
         self.registered_type.unwrap_func()
     }
@@ -2383,10 +2394,7 @@ impl FuncType {
     }
 
     pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> FuncType {
-        let ty = RegisteredType::root(engine, index).expect(
-            "VMSharedTypeIndex is not registered in the Engine! Wrong \
-             engine? Didn't root the index somewhere?",
-        );
+        let ty = RegisteredType::root(engine, index);
         Self::from_registered_type(ty)
     }
 
@@ -2448,6 +2456,34 @@ impl GlobalType {
             Mutability::Const
         };
         GlobalType::new(ty, mutability)
+    }
+}
+
+// Tag Types
+
+/// A descriptor for a tag in a WebAssembly module.
+///
+/// This type describes an instance of a tag in a WebAssembly
+/// module. Tags are local to an [`Instance`](crate::Instance).
+#[derive(Debug, Clone, Hash)]
+pub struct TagType {
+    ty: FuncType,
+}
+
+impl TagType {
+    /// Creates a new global descriptor of the specified type.
+    pub fn new(ty: FuncType) -> TagType {
+        TagType { ty }
+    }
+
+    /// Returns the underlying function type of this tag descriptor.
+    pub fn ty(&self) -> &FuncType {
+        &self.ty
+    }
+
+    pub(crate) fn from_wasmtime_tag(engine: &Engine, tag: &Tag) -> TagType {
+        let ty = FuncType::from_shared_type_index(engine, tag.signature.unwrap_engine_type_index());
+        TagType { ty }
     }
 }
 
@@ -2608,7 +2644,7 @@ impl MemoryTypeBuilder {
     /// * Memories use 32-bit indexes.
     /// * The page size is 64KiB.
     ///
-    /// Each option can be configued through the methods on the returned
+    /// Each option can be configured through the methods on the returned
     /// builder.
     pub fn new() -> MemoryTypeBuilder {
         MemoryTypeBuilder::default()

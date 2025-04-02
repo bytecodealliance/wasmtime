@@ -40,10 +40,11 @@
 ;; wasm[0]::function[0]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
+;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
 ;;       mov     x9, x0
-;;       sub     sp, sp, #0x18
-;;       mov     x28, sp
+;;       sub     x28, x28, #0x18
+;;       mov     sp, x28
 ;;       stur    x0, [x28, #0x10]
 ;;       stur    x1, [x28, #8]
 ;;       stur    w2, [x28, #4]
@@ -51,11 +52,11 @@
 ;;       ldur    w0, [x28, #4]
 ;;       ldur    w1, [x28]
 ;;       add     w1, w1, w0, uxtx
-;;       sub     sp, sp, #4
-;;       mov     x28, sp
+;;       sub     x28, x28, #4
+;;       mov     sp, x28
 ;;       stur    w1, [x28]
-;;       sub     sp, sp, #0x24
-;;       mov     x28, sp
+;;       sub     x28, x28, #0x24
+;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       mov     x1, x9
 ;;       ldur    w2, [x28, #0x24]
@@ -78,23 +79,23 @@
 ;;       mov     x16, #8
 ;;       mov     w16, w16
 ;;       stur    w16, [x28, #0x10]
-;;       bl      #0x160
-;;   a4: add     sp, sp, #0x24
-;;       mov     x28, sp
-;;       add     sp, sp, #4
-;;       mov     x28, sp
+;;       bl      #0x180
+;;   a8: add     x28, x28, #0x24
+;;       mov     sp, x28
+;;       add     x28, x28, #4
+;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
 ;;       ldur    w1, [x28, #4]
 ;;       ldur    w2, [x28]
 ;;       add     w2, w2, w1, uxtx
-;;       sub     sp, sp, #4
-;;       mov     x28, sp
+;;       sub     x28, x28, #4
+;;       mov     sp, x28
 ;;       stur    w0, [x28]
-;;       sub     sp, sp, #4
-;;       mov     x28, sp
+;;       sub     x28, x28, #4
+;;       mov     sp, x28
 ;;       stur    w2, [x28]
-;;       sub     sp, sp, #0x20
-;;       mov     x28, sp
+;;       sub     x28, x28, #0x20
+;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       mov     x1, x9
 ;;       ldur    w2, [x28, #0x24]
@@ -116,24 +117,27 @@
 ;;       mov     x16, #8
 ;;       mov     w16, w16
 ;;       stur    w16, [x28, #0x10]
-;;       bl      #0x160
-;;  13c: add     sp, sp, #0x20
-;;       mov     x28, sp
-;;       add     sp, sp, #8
-;;       mov     x28, sp
+;;       bl      #0x180
+;;  140: add     x28, x28, #0x20
+;;       mov     sp, x28
+;;       add     x28, x28, #8
+;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
-;;       add     sp, sp, #0x18
-;;       mov     x28, sp
+;;       add     x28, x28, #0x18
+;;       mov     sp, x28
+;;       mov     sp, x28
+;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;; 
+;;
 ;; wasm[0]::function[1]::add:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
+;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
 ;;       mov     x9, x0
-;;       sub     sp, sp, #0x28
-;;       mov     x28, sp
+;;       sub     x28, x28, #0x28
+;;       mov     sp, x28
 ;;       stur    x0, [x28, #0x20]
 ;;       stur    x1, [x28, #0x18]
 ;;       stur    w2, [x28, #0x14]
@@ -160,7 +164,9 @@
 ;;       ldur    w0, [x29, #0x20]
 ;;       add     w1, w1, w0, uxtx
 ;;       mov     w0, w1
-;;       add     sp, sp, #0x28
-;;       mov     x28, sp
+;;       add     x28, x28, #0x28
+;;       mov     sp, x28
+;;       mov     sp, x28
+;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

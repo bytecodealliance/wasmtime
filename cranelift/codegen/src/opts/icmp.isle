@@ -13,6 +13,36 @@
 (rule (simplify (slt (ty_int ty) x x)) (subsume (iconst_u ty 0)))
 (rule (simplify (sle (ty_int ty) x x)) (subsume (iconst_u ty 1)))
 
+;; For integers, adding the same thing on both sides of an equality check
+;; (or an inequality check) doesn't change the result.
+;; This applies for arbitrary expressions, not just constants, so we need to
+;; check all possible orderings since nothing normalizes it.
+
+(rule (simplify (eq ty (iadd _ a k) (iadd _ b k)))
+      (subsume (eq ty a b)))
+(rule (simplify (eq ty (iadd _ a k) (iadd _ k b)))
+      (subsume (eq ty a b)))
+(rule (simplify (eq ty (iadd _ k a) (iadd _ b k)))
+      (subsume (eq ty a b)))
+(rule (simplify (eq ty (iadd _ k a) (iadd _ k b)))
+      (subsume (eq ty a b)))
+(rule (simplify (ne ty (iadd _ a k) (iadd _ b k)))
+      (subsume (ne ty a b)))
+(rule (simplify (ne ty (iadd _ a k) (iadd _ k b)))
+      (subsume (ne ty a b)))
+(rule (simplify (ne ty (iadd _ k a) (iadd _ b k)))
+      (subsume (ne ty a b)))
+(rule (simplify (ne ty (iadd _ k a) (iadd _ k b)))
+      (subsume (ne ty a b)))
+
+;; To avoid repeating all the above rules again, normalize isub to iadd
+;; (a - b) == (c - d) ⟹ (a + d) == (c + b)
+
+(rule (simplify (eq ty1 (isub ty2 a b) (isub ty3 c d)))
+      (eq ty1 (iadd ty2 a d) (iadd ty3 c b)))
+(rule (simplify (ne ty1 (isub ty2 a b) (isub ty3 c d)))
+      (ne ty1 (iadd ty2 a d) (iadd ty3 c b)))
+
 ;; Optimize icmp-of-icmp.
 ;; ne(icmp(ty, cc, x, y), 0) == icmp(ty, cc, x, y)
 ;; e.g. neq(ugt(x, y), 0) == ugt(x, y)

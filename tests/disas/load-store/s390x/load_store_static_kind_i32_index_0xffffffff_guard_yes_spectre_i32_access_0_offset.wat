@@ -27,7 +27,7 @@
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
-;;       lg      %r7, 0x60(%r2)
+;;       lg      %r7, 0x50(%r2)
 ;;       llgfr   %r2, %r4
 ;;       strv    %r5, 0(%r2, %r7)
 ;;       lmg     %r14, %r15, 0x110(%r15)
@@ -42,7 +42,7 @@
 ;;       lgr     %r1, %r15
 ;;       aghi    %r15, -0xa0
 ;;       stg     %r1, 0(%r15)
-;;       lg      %r7, 0x60(%r2)
+;;       lg      %r7, 0x50(%r2)
 ;;       llgfr   %r2, %r4
 ;;       lrv     %r2, 0(%r2, %r7)
 ;;       lmg     %r14, %r15, 0x110(%r15)

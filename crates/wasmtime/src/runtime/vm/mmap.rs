@@ -6,6 +6,7 @@ use crate::prelude::*;
 use crate::runtime::vm::sys::{mmap, vm::MemoryImageSource};
 use alloc::sync::Arc;
 use core::ops::Range;
+use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::fs::File;
 
@@ -261,6 +262,12 @@ impl<T> Mmap<T> {
         self.sys.as_send_sync_ptr().as_ptr()
     }
 
+    /// Return the allocated memory as a mutable pointer to u8.
+    #[inline]
+    pub fn as_non_null(&self) -> NonNull<u8> {
+        self.sys.as_send_sync_ptr().as_non_null()
+    }
+
     /// Return the length of the allocated memory.
     ///
     /// This is the byte length of this entire mapping which includes both
@@ -383,8 +390,14 @@ impl MmapOffset {
     /// Returns the raw pointer in memory represented by this offset.
     #[inline]
     pub fn as_mut_ptr(&self) -> *mut u8 {
+        self.as_non_null().as_ptr()
+    }
+
+    /// Returns the raw pointer in memory represented by this offset.
+    #[inline]
+    pub fn as_non_null(&self) -> NonNull<u8> {
         // SAFETY: constructor checks that offset is within this allocation.
-        unsafe { self.mmap().as_mut_ptr().byte_add(self.offset.byte_count()) }
+        unsafe { self.mmap().as_non_null().byte_add(self.offset.byte_count()) }
     }
 
     /// Maps an image into the mmap with read/write permissions.

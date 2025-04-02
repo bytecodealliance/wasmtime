@@ -78,6 +78,18 @@ pub fn bounds_check_and_compute_addr(
         &mut builder.cursor(),
     );
 
+    let oob_behavior = if spectre_mitigations_enabled {
+        OobBehavior::ConditionallyLoadFromZero {
+            select_spectre_guard: true,
+        }
+    } else if env.load_from_zero_allowed() {
+        OobBehavior::ConditionallyLoadFromZero {
+            select_spectre_guard: false,
+        }
+    } else {
+        OobBehavior::ExplicitTrap
+    };
+
     let make_compare = |builder: &mut FunctionBuilder,
                         compare_kind: IntCC,
                         lhs: ir::Value,
@@ -282,7 +294,7 @@ pub fn bounds_check_and_compute_addr(
             index,
             offset,
             access_size,
-            spectre_mitigations_enabled,
+            oob_behavior,
             AddrPcc::static32(heap.pcc_memory_type, memory_reservation),
             oob,
         )));
@@ -292,7 +304,13 @@ pub fn bounds_check_and_compute_addr(
     //
     //         index + 1 > bound
     //     ==> index >= bound
-    if offset_and_size == 1 {
+    //
+    // Note that this special case is skipped for Pulley targets to assist with
+    // pattern-matching bounds checks into single instructions. Otherwise more
+    // patterns/instructions would have to be added to match this. In the end
+    // the goal is to emit one instruction anyway, so this optimization is
+    // largely only applicable for native platforms.
+    if offset_and_size == 1 && !env.is_pulley() {
         let bound = get_dynamic_heap_bound(builder, env, heap);
         let oob = make_compare(
             builder,
@@ -309,7 +327,7 @@ pub fn bounds_check_and_compute_addr(
             index,
             offset,
             access_size,
-            spectre_mitigations_enabled,
+            oob_behavior,
             AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
             oob,
         )));
@@ -357,7 +375,7 @@ pub fn bounds_check_and_compute_addr(
             index,
             offset,
             access_size,
-            spectre_mitigations_enabled,
+            oob_behavior,
             AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
             oob,
         )));
@@ -401,7 +419,7 @@ pub fn bounds_check_and_compute_addr(
             index,
             offset,
             access_size,
-            spectre_mitigations_enabled,
+            oob_behavior,
             AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
             oob,
         )));
@@ -450,7 +468,7 @@ pub fn bounds_check_and_compute_addr(
         index,
         offset,
         access_size,
-        spectre_mitigations_enabled,
+        oob_behavior,
         AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
         oob,
     )))
@@ -573,6 +591,19 @@ impl AddrPcc {
     }
 }
 
+/// What to do on out-of-bounds for the
+/// `explicit_check_oob_condition_and_compute_addr` function below.
+enum OobBehavior {
+    /// An explicit `trapnz` instruction should be used.
+    ExplicitTrap,
+    /// A load from NULL should be issued if the address is out-of-bounds.
+    ConditionallyLoadFromZero {
+        /// Whether or not to use `select_spectre_guard` to choose the address
+        /// to load from. If `false` then a normal `select` is used.
+        select_spectre_guard: bool,
+    },
+}
+
 /// Emit explicit checks on the given out-of-bounds condition for the Wasm
 /// address and return the native address.
 ///
@@ -585,8 +616,7 @@ fn explicit_check_oob_condition_and_compute_addr(
     index: ir::Value,
     offset: u32,
     access_size: u8,
-    // Whether Spectre mitigations are enabled for heap accesses.
-    spectre_mitigations_enabled: bool,
+    oob_behavior: OobBehavior,
     // Whether we're emitting PCC facts.
     pcc: Option<AddrPcc>,
     // The `i8` boolean value that is non-zero when the heap access is out of
@@ -594,22 +624,29 @@ fn explicit_check_oob_condition_and_compute_addr(
     // in bounds (and therefore we can proceed).
     oob_condition: ir::Value,
 ) -> ir::Value {
-    if !spectre_mitigations_enabled {
+    if let OobBehavior::ExplicitTrap = oob_behavior {
         env.trapnz(builder, oob_condition, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
     }
     let addr_ty = env.pointer_type();
 
     let mut addr = compute_addr(&mut builder.cursor(), heap, addr_ty, index, offset, pcc);
 
-    if spectre_mitigations_enabled {
+    if let OobBehavior::ConditionallyLoadFromZero {
+        select_spectre_guard,
+    } = oob_behavior
+    {
         // These mitigations rely on trapping when loading from NULL so
         // CLIF memory instruction traps must be allowed for this to be
         // generated.
-        assert!(env.clif_memory_traps_enabled());
+        assert!(env.load_from_zero_allowed());
         let null = builder.ins().iconst(addr_ty, 0);
-        addr = builder
-            .ins()
-            .select_spectre_guard(oob_condition, null, addr);
+        addr = if select_spectre_guard {
+            builder
+                .ins()
+                .select_spectre_guard(oob_condition, null, addr)
+        } else {
+            builder.ins().select(oob_condition, null, addr)
+        };
 
         match pcc {
             None => {}

@@ -4,8 +4,8 @@ use std::sync::{Condvar, LazyLock, Mutex};
 use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, MpkEnabled, PoolingAllocationConfig, Store,
 };
-use wasmtime_wast::{SpectestConfig, WastContext};
-use wasmtime_wast_util::{limits, Collector, Compiler, WastConfig, WastTest};
+use wasmtime_test_util::wast::{limits, Collector, Compiler, WastConfig, WastTest};
+use wasmtime_wast::{Async, SpectestConfig, WastContext};
 
 fn main() {
     env_logger::init();
@@ -13,7 +13,7 @@ fn main() {
     let tests = if cfg!(miri) {
         Vec::new()
     } else {
-        wasmtime_wast_util::find_tests(".".as_ref()).unwrap()
+        wasmtime_test_util::wast::find_tests(".".as_ref()).unwrap()
     };
 
     let mut trials = Vec::new();
@@ -123,8 +123,9 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
     };
 
     let mut cfg = Config::new();
-    component_test_util::apply_test_config(&mut cfg, &test_config);
-    component_test_util::apply_wast_config(&mut cfg, &config);
+    cfg.async_support(true);
+    wasmtime_test_util::wasmtime_wast::apply_test_config(&mut cfg, &test_config);
+    wasmtime_test_util::wasmtime_wast::apply_wast_config(&mut cfg, &config);
 
     if is_cranelift {
         cfg.cranelift_debug_verifier(true);
@@ -229,7 +230,7 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
     for (engine, desc) in engines {
         let result = engine.and_then(|engine| {
             let store = Store::new(&engine, ());
-            let mut wast_context = WastContext::new(store);
+            let mut wast_context = WastContext::new(store, Async::Yes);
             wast_context.register_spectest(&SpectestConfig {
                 use_shared_memory: true,
                 suppress_prints: true,

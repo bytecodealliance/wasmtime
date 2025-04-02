@@ -1,0 +1,53 @@
+name: "Cron triggers for CI"
+on:
+  schedule:
+    # “At 02:34 on Monday.”
+    #
+    # https://crontab.guru/#34_2_*_*_1
+    #
+    # This is used to perform a weekly run of CI for all release branches,
+    # ideally in off-work-hours to not clog up the queue.
+    - cron: '34 2 * * 1'
+
+    # "At 02:34 on Sunday and every day-of-week from Tuesday through Saturday"
+    #
+    # https://crontab.guru/#34_2_*_*_0,2-6
+    #
+    # This is used to perform a daily run of CI for the `main` branch to prime
+    # caches for github actions and the merge queue. Note that this frequency
+    # doesn't overlap the above schedule to avoid triggering two builds on the
+    # same day.
+    - cron: '34 2 * * 0,2-6'
+
+  # Allow manually triggering this request via a button
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  actions: write
+
+jobs:
+  run:
+    if: "github.repository == 'bytecodealliance/wasmtime' || !github.event.schedule"
+    name: Trigger release branch CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+
+      # Always trigger a CI run on the `main` branch to prime GHA caches.
+      - run: gh workflow run main.yml --ref main
+        name: Trigger main branch CI daily
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      # If this is a once-a-week run then additionally trigger CI for release
+      # branches to ensure that the CI there is kept up-to-date.
+      - run: rustc ci/trigger-release-branch-ci.rs
+      - run: ./trigger-release-branch-ci
+        name: Trigger release branch CI weekly
+        env:
+          GH_TOKEN: ${{ github.token }}
+        if: "github.event.schedule == '34 2 * * 1' || !github.event.schedule"

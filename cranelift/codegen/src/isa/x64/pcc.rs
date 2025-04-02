@@ -158,17 +158,6 @@ pub(crate) fn check(
             }
         },
 
-        Inst::AluRM {
-            size,
-            op: _,
-            ref src1_dst,
-            src2: _,
-            lock: _,
-        } => {
-            check_load(ctx, None, src1_dst, vcode, size.to_type(), 64)?;
-            check_store(ctx, None, src1_dst, vcode, size.to_type())
-        }
-
         Inst::AluRmRVex {
             size,
             ref src2,
@@ -840,8 +829,9 @@ pub(crate) fn check(
         | Inst::ReturnCallKnown { .. }
         | Inst::JmpKnown { .. }
         | Inst::Ret { .. }
-        | Inst::JmpIf { .. }
+        | Inst::WinchJmpIf { .. }
         | Inst::JmpCond { .. }
+        | Inst::JmpCondOr { .. }
         | Inst::TrapIf { .. }
         | Inst::TrapIfAnd { .. }
         | Inst::TrapIfOr { .. }
@@ -979,6 +969,8 @@ pub(crate) fn check(
         Inst::Unwind { .. } | Inst::DummyUse { .. } => Ok(()),
 
         Inst::StackSwitchBasic { .. } => Err(PccError::UnimplementedInst),
+
+        Inst::External { .. } => Ok(()), // TODO: unsure what to do about this!
     }
 }
 

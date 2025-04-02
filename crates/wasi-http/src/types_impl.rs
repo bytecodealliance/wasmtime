@@ -13,11 +13,8 @@ use crate::{
 use anyhow::Context;
 use std::any::Any;
 use std::str::FromStr;
-use wasmtime::component::{Resource, ResourceTable};
-use wasmtime_wasi::{
-    bindings::io::streams::{InputStream, OutputStream},
-    IoView, Pollable, ResourceTableError,
-};
+use wasmtime::component::{Resource, ResourceTable, ResourceTableError};
+use wasmtime_wasi::{DynInputStream, DynOutputStream, DynPollable, IoView};
 
 impl<T> crate::bindings::http::types::Host for WasiHttpImpl<T>
 where
@@ -662,7 +659,7 @@ where
     fn subscribe(
         &mut self,
         index: Resource<HostFutureTrailers>,
-    ) -> wasmtime::Result<Resource<Pollable>> {
+    ) -> wasmtime::Result<Resource<DynPollable>> {
         wasmtime_wasi::subscribe(self.table(), index)
     }
 
@@ -704,11 +701,11 @@ where
     fn stream(
         &mut self,
         id: Resource<HostIncomingBody>,
-    ) -> wasmtime::Result<Result<Resource<InputStream>, ()>> {
+    ) -> wasmtime::Result<Result<Resource<DynInputStream>, ()>> {
         let body = self.table().get_mut(&id)?;
 
         if let Some(stream) = body.take_stream() {
-            let stream: InputStream = Box::new(stream);
+            let stream: DynInputStream = Box::new(stream);
             let stream = self.table().push_child(stream, &id)?;
             return Ok(Ok(stream));
         }
@@ -883,7 +880,7 @@ where
     fn subscribe(
         &mut self,
         id: Resource<HostFutureIncomingResponse>,
-    ) -> wasmtime::Result<Resource<Pollable>> {
+    ) -> wasmtime::Result<Resource<DynPollable>> {
         wasmtime_wasi::subscribe(self.table(), id)
     }
 }
@@ -895,7 +892,7 @@ where
     fn write(
         &mut self,
         id: Resource<HostOutgoingBody>,
-    ) -> wasmtime::Result<Result<Resource<OutputStream>, ()>> {
+    ) -> wasmtime::Result<Result<Resource<DynOutputStream>, ()>> {
         let body = self.table().get_mut(&id)?;
         if let Some(stream) = body.take_output_stream() {
             let id = self.table().push_child(stream, &id)?;

@@ -16,7 +16,6 @@
 //! will probably need tweaks to make it more performant.
 
 use super::*;
-use crate::decode::unwrap_uninhabited;
 
 impl Interpreter<'_> {
     pub fn run(self) -> Done {
@@ -30,9 +29,9 @@ impl Interpreter<'_> {
             //
             // This will then continue indefinitely until the bytecode says it's
             // done. Note that only trusted bytecode is interpreted here.
-            match unwrap_uninhabited(decoder.decode_one(&mut visitor)) {
-                ControlFlow::Continue(()) => {}
-                ControlFlow::Break(done) => break done,
+            match decoder.decode_one(&mut visitor) {
+                Ok(ControlFlow::Continue(())) => {}
+                Ok(ControlFlow::Break(done)) => break done,
             }
         }
     }

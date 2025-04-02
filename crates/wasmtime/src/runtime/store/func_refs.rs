@@ -57,7 +57,7 @@ impl FuncRefs {
         debug_assert!(func_ref.wasm_call.is_none());
         // Debug assert that the vmctx is a `VMArrayCallHostFuncContext` as
         // that is the only kind that can have holes.
-        let _ = unsafe { VMArrayCallHostFuncContext::from_opaque(func_ref.vmctx) };
+        let _ = unsafe { VMArrayCallHostFuncContext::from_opaque(func_ref.vmctx.as_non_null()) };
 
         let func_ref = self.bump.alloc(func_ref);
         let unpatched = SendSyncPtr::from(func_ref);
@@ -75,9 +75,11 @@ impl FuncRefs {
 
                 // Debug assert that the vmctx is a `VMArrayCallHostFuncContext` as
                 // that is the only kind that can have holes.
-                let _ = VMArrayCallHostFuncContext::from_opaque(func_ref.vmctx);
+                let _ = VMArrayCallHostFuncContext::from_opaque(func_ref.vmctx.as_non_null());
 
-                func_ref.wasm_call = modules.wasm_to_array_trampoline(func_ref.type_index);
+                func_ref.wasm_call = modules
+                    .wasm_to_array_trampoline(func_ref.type_index)
+                    .map(|f| f.into());
                 func_ref.wasm_call.is_none()
             }
         });

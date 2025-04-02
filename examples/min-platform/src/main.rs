@@ -154,6 +154,36 @@ fn main() -> Result<()> {
         error_buf.set_len(len);
 
         std::io::stderr().write_all(&error_buf).unwrap();
+
+        #[cfg(feature = "wasi")]
+        {
+            let wasi_component_path = args
+                .next()
+                .ok_or_else(|| anyhow!("missing argument 4: path to wasi component"))?;
+            let wasi_component = std::fs::read(&wasi_component_path)?;
+            let wasi_component = engine.precompile_component(&wasi_component)?;
+
+            let run_wasi: Symbol<extern "C" fn(*mut u8, *mut usize, *const u8, usize) -> usize> =
+                lib.get(b"run_wasi")
+                    .context("failed to find the `run_wasi` symbol in the library")?;
+
+            const PRINT_CAPACITY: usize = 1024 * 1024;
+            let mut print_buf = Vec::with_capacity(PRINT_CAPACITY);
+            let mut print_len = PRINT_CAPACITY;
+            let status = run_wasi(
+                print_buf.as_mut_ptr(),
+                std::ptr::from_mut(&mut print_len),
+                wasi_component.as_ptr(),
+                wasi_component.len(),
+            );
+            print_buf.set_len(print_len);
+
+            if status > 0 {
+                std::io::stderr().write_all(&print_buf).unwrap();
+            } else {
+                std::io::stdout().write_all(&print_buf).unwrap();
+            }
+        }
     }
     Ok(())
 }

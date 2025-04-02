@@ -5,7 +5,7 @@
 // targets/platforms once and then duplicate them all with a "min" build.
 
 const ubuntu = 'ubuntu-24.04';
-const windows = 'windows-2022';
+const windows = 'windows-2025';
 const macos = 'macos-14';
 
 const array = [

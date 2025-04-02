@@ -22,7 +22,7 @@ pub struct TrapInformation {
 // These need to be kept in sync.
 #[non_exhaustive]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
-#[allow(missing_docs, reason = "self-describing variants")]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub enum Trap {
     /// The current stack space was exhausted.
     StackOverflow,
@@ -88,6 +88,10 @@ pub enum Trap {
     /// would have violated the reentrance rules of the component model,
     /// triggering a trap instead.
     CannotEnterComponent,
+
+    /// Async-lifted export failed to produce a result by calling `task.return`
+    /// before returning `STATUS_DONE` and/or after all host tasks completed.
+    NoAsyncResult,
     // if adding a variant here be sure to update the `check!` macro below
 }
 
@@ -124,6 +128,7 @@ impl Trap {
             AllocationTooLarge
             CastFailure
             CannotEnterComponent
+            NoAsyncResult
         }
 
         None
@@ -154,6 +159,7 @@ impl fmt::Display for Trap {
             AllocationTooLarge => "allocation size too large",
             CastFailure => "cast failure",
             CannotEnterComponent => "cannot enter component instance",
+            NoAsyncResult => "async-lifted export failed to produce a result",
         };
         write!(f, "wasm trap: {desc}")
     }
@@ -168,13 +174,7 @@ impl core::error::Error for Trap {}
 /// `TrapEncodingBuilder` above. Additionally the `offset` should be a relative
 /// offset within the text section of the compilation image.
 pub fn lookup_trap_code(section: &[u8], offset: usize) -> Option<Trap> {
-    let mut section = Bytes(section);
-    // NB: this matches the encoding written by `append_to` above.
-    let count = section.read::<U32Bytes<LittleEndian>>().ok()?;
-    let count = usize::try_from(count.get(LittleEndian)).ok()?;
-    let (offsets, traps) =
-        object::slice_from_bytes::<U32Bytes<LittleEndian>>(section.0, count).ok()?;
-    debug_assert_eq!(traps.len(), count);
+    let (offsets, traps) = parse(section)?;
 
     // The `offsets` table is sorted in the trap section so perform a binary
     // search of the contents of this section to find whether `offset` is an
@@ -195,4 +195,27 @@ pub fn lookup_trap_code(section: &[u8], offset: usize) -> Option<Trap> {
     let trap = Trap::from_u8(byte);
     debug_assert!(trap.is_some(), "missing mapping for {byte}");
     trap
+}
+
+fn parse(section: &[u8]) -> Option<(&[U32Bytes<LittleEndian>], &[u8])> {
+    let mut section = Bytes(section);
+    // NB: this matches the encoding written by `append_to` above.
+    let count = section.read::<U32Bytes<LittleEndian>>().ok()?;
+    let count = usize::try_from(count.get(LittleEndian)).ok()?;
+    let (offsets, traps) =
+        object::slice_from_bytes::<U32Bytes<LittleEndian>>(section.0, count).ok()?;
+    debug_assert_eq!(traps.len(), count);
+    Some((offsets, traps))
+}
+
+/// Returns an iterator over all of the traps encoded in `section`, which should
+/// have been produced by `TrapEncodingBuilder`.
+pub fn iterate_traps(section: &[u8]) -> Option<impl Iterator<Item = (u32, Trap)> + '_> {
+    let (offsets, traps) = parse(section)?;
+    Some(
+        offsets
+            .iter()
+            .zip(traps)
+            .map(|(offset, trap)| (offset.get(LittleEndian), Trap::from_u8(*trap).unwrap())),
+    )
 }

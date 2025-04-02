@@ -108,35 +108,74 @@ impl Debug for TypeCollection {
     }
 }
 
-impl TypeCollection {
-    /// Creates a type collection for a module given the module's types.
-    pub fn new_for_module(engine: &Engine, module_types: &ModuleTypes) -> Self {
-        let engine = engine.clone();
+impl Engine {
+    /// Registers the given types in this engine, re-canonicalizing them for
+    /// runtime usage.
+    #[must_use = "types are only registered as long as the `TypeCollection` is live"]
+    pub(crate) fn register_and_canonicalize_types<'a, I>(
+        &self,
+        module_types: &mut ModuleTypes,
+        env_modules: I,
+    ) -> TypeCollection
+    where
+        I: IntoIterator<Item = &'a mut wasmtime_environ::Module>,
+        I::IntoIter: ExactSizeIterator,
+    {
+        if cfg!(debug_assertions) {
+            module_types
+                .trace(&mut |idx| match idx {
+                    EngineOrModuleTypeIndex::Module(_) => Ok(()),
+                    EngineOrModuleTypeIndex::Engine(_) | EngineOrModuleTypeIndex::RecGroup(_) => {
+                        Err(idx)
+                    }
+                })
+                .expect("should only have module type indices");
+        }
+
+        let engine = self.clone();
         let registry = engine.signatures();
         let gc_runtime = engine.gc_runtime().ok().map(|rt| &**rt);
+
+        // First, register these types in this engine's registry.
         let (rec_groups, types) = registry
             .0
             .write()
             .register_module_types(gc_runtime, module_types);
 
-        log::trace!("Begin building module's shared-to-module-trampoline-types map");
+        // Then build our map from each function type's engine index to the
+        // module-index of its trampoline. Trampoline functions are queried by
+        // module-index in a compiled module, and doing this engine-to-module
+        // resolution now means we don't need to do it on the function call hot
+        // path.
         let mut trampolines = SecondaryMap::with_capacity(types.len());
         for (module_ty, module_trampoline_ty) in module_types.trampoline_types() {
             let shared_ty = types[module_ty];
             let trampoline_shared_ty = registry.trampoline_type(shared_ty);
             trampolines[trampoline_shared_ty] = Some(module_trampoline_ty).into();
-            log::trace!("--> shared_to_module_trampolines[{trampoline_shared_ty:?}] = {module_trampoline_ty:?}");
         }
-        log::trace!("Done building module's shared-to-module-trampoline-types map");
 
-        Self {
+        // Finally, to ensure that no matter which API from which layer
+        // (`wasmtime::runtime::vm` vs `wasmtime_environ`, etc...) we use to
+        // grab an entity's type, we will always end up with a type that has
+        // `VMSharedTypeIndex` rather than `ModuleInternedTypeIndex` type
+        // references, we canonicalize both the `ModuleTypes` and
+        // `wasmtime_environ::Module`s for runtime usage. All our type-of-X APIs
+        // ultimately use one of these two structures.
+        module_types.canonicalize_for_runtime_usage(&mut |idx| types[idx]);
+        for module in env_modules {
+            module.canonicalize_for_runtime_usage(&mut |idx| types[idx]);
+        }
+
+        TypeCollection {
             engine,
             rec_groups,
             types,
             trampolines,
         }
     }
+}
 
+impl TypeCollection {
     /// Treats the type collection as a map from a module type index to
     /// registered shared type indexes.
     ///
@@ -230,7 +269,8 @@ impl Debug for RegisteredType {
 
 impl Clone for RegisteredType {
     fn clone(&self) -> Self {
-        self.entry.incref("cloning RegisteredType");
+        self.engine.signatures().debug_assert_contains(self.index);
+        self.entry.incref("RegisteredType::clone");
         RegisteredType {
             engine: self.engine.clone(),
             entry: self.entry.clone(),
@@ -243,7 +283,8 @@ impl Clone for RegisteredType {
 
 impl Drop for RegisteredType {
     fn drop(&mut self) {
-        if self.entry.decref("dropping RegisteredType") {
+        self.engine.signatures().debug_assert_contains(self.index);
+        if self.entry.decref("RegisteredType::drop") {
             self.engine
                 .signatures()
                 .0
@@ -263,15 +304,16 @@ impl core::ops::Deref for RegisteredType {
 
 impl PartialEq for RegisteredType {
     fn eq(&self, other: &Self) -> bool {
-        let eq = Arc::ptr_eq(&self.entry.0, &other.entry.0);
+        self.engine.signatures().debug_assert_contains(self.index);
+        other.engine.signatures().debug_assert_contains(other.index);
 
-        if cfg!(debug_assertions) {
-            if eq {
-                assert!(Engine::same(&self.engine, &other.engine));
-                assert_eq!(self.ty, other.ty);
-            } else {
-                assert!(self.ty != other.ty || !Engine::same(&self.engine, &other.engine));
-            }
+        let eq = self.index == other.index && Engine::same(&self.engine, &other.engine);
+
+        if cfg!(debug_assertions) && eq {
+            // If they are the same, then their rec group entries and
+            // `WasmSubType`s had better also be the same.
+            assert!(Arc::ptr_eq(&self.entry.0, &other.entry.0));
+            assert_eq!(self.ty, other.ty);
         }
 
         eq
@@ -282,6 +324,7 @@ impl Eq for RegisteredType {}
 
 impl Hash for RegisteredType {
     fn hash<H: Hasher>(&self, state: &mut H) {
+        self.engine.signatures().debug_assert_contains(self.index);
         let ptr = Arc::as_ptr(&self.entry.0);
         ptr.hash(state);
     }
@@ -309,7 +352,7 @@ impl RegisteredType {
 
             let index = entry.0.shared_type_indices[0];
             let id = shared_type_index_to_slab_id(index);
-            let ty = inner.types[id].clone();
+            let ty = inner.types[id].clone().unwrap();
             let layout = inner.type_to_gc_layout.get(index).and_then(|l| l.clone());
 
             (entry, index, ty, layout)
@@ -322,15 +365,14 @@ impl RegisteredType {
     ///
     /// This will prevent the associated type from being unregistered as long as
     /// the returned `RegisteredType` is kept alive.
-    ///
-    /// Returns `None` if `index` is not registered in the given engine's
-    /// registry.
-    pub fn root(engine: &Engine, index: VMSharedTypeIndex) -> Option<RegisteredType> {
+    pub fn root(engine: &Engine, index: VMSharedTypeIndex) -> RegisteredType {
+        engine.signatures().debug_assert_contains(index);
+
         let (entry, ty, layout) = {
             let id = shared_type_index_to_slab_id(index);
             let inner = engine.signatures().0.read();
 
-            let ty = inner.types.get(id)?.clone();
+            let ty = inner.types[id].clone().unwrap();
             let entry = inner.type_to_rec_group[index].clone().unwrap();
             let layout = inner.type_to_gc_layout.get(index).and_then(|l| l.clone());
 
@@ -345,13 +387,7 @@ impl RegisteredType {
             (entry, ty, layout)
         };
 
-        Some(RegisteredType::from_parts(
-            engine.clone(),
-            entry,
-            index,
-            ty,
-            layout,
-        ))
+        RegisteredType::from_parts(engine.clone(), entry, index, ty, layout)
     }
 
     /// Construct a new `RegisteredType`.
@@ -365,7 +401,14 @@ impl RegisteredType {
         ty: Arc<WasmSubType>,
         layout: Option<GcLayout>,
     ) -> Self {
-        debug_assert!(entry.0.registrations.load(Acquire) != 0);
+        log::trace!(
+            "RegisteredType::from_parts({engine:?}, {entry:?}, {index:?}, {ty:?}, {layout:?})"
+        );
+        engine.signatures().debug_assert_contains(index);
+        debug_assert!(
+            entry.0.registrations.load(Acquire) != 0,
+            "entry should have a non-zero registration count"
+        );
         RegisteredType {
             engine,
             entry,
@@ -389,6 +432,7 @@ impl RegisteredType {
     ///
     /// Only struct and array types have GC layouts; function types do not have
     /// layouts.
+    #[cfg(feature = "gc")]
     pub fn layout(&self) -> Option<&GcLayout> {
         self.layout.as_ref()
     }
@@ -405,18 +449,15 @@ struct RecGroupEntry(Arc<RecGroupEntryInner>);
 
 impl Debug for RecGroupEntry {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        struct Ptr<'a, P>(&'a P);
-        impl<P: fmt::Pointer> Debug for Ptr<'_, P> {
+        struct FormatAsPtr<'a, P>(&'a P);
+        impl<P: fmt::Pointer> Debug for FormatAsPtr<'_, P> {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 write!(f, "{:#p}", *self.0)
             }
         }
 
-        f.debug_struct("RecGroupEntry")
-            .field("ptr", &Ptr(&self.0))
-            .field("shared_type_indices", &self.0.shared_type_indices)
-            .field("hash_consing_key", &self.0.hash_consing_key)
-            .field("registrations", &self.0.registrations.load(Acquire))
+        f.debug_tuple("RecGroupEntry")
+            .field(&FormatAsPtr(&self.0))
             .finish()
     }
 }
@@ -469,10 +510,7 @@ impl RecGroupEntry {
     /// Increment the registration count.
     fn incref(&self, why: &str) {
         let old_count = self.0.registrations.fetch_add(1, AcqRel);
-        log::trace!(
-            "increment registration count for {self:?} (registrations -> {}): {why}",
-            old_count + 1
-        );
+        log::trace!("incref({self:?}) -> count {}: {why}", old_count + 1);
     }
 
     /// Decrement the registration count and return `true` if the registration
@@ -481,10 +519,7 @@ impl RecGroupEntry {
     fn decref(&self, why: &str) -> bool {
         let old_count = self.0.registrations.fetch_sub(1, AcqRel);
         debug_assert_ne!(old_count, 0);
-        log::trace!(
-            "decrement registration count for {self:?} (registrations -> {}): {why}",
-            old_count - 1
-        );
+        log::trace!("decref({self:?}) -> count {}: {why}", old_count - 1);
         old_count == 1
     }
 }
@@ -504,7 +539,12 @@ struct TypeRegistryInner {
     // Wasm type.
     //
     // These types are always canonicalized for runtime usage.
-    types: Slab<Arc<WasmSubType>>,
+    //
+    // These are only `None` during the process of inserting a new rec group
+    // into the registry, where we need registered `VMSharedTypeIndex`es for
+    // forward type references within the rec group, but have not actually
+    // inserted all the types within the rec group yet.
+    types: Slab<Option<Arc<WasmSubType>>>,
 
     // A map that lets you walk backwards from a `VMSharedTypeIndex` to its
     // `RecGroupEntry`.
@@ -545,6 +585,37 @@ struct TypeRegistryInner {
 }
 
 impl TypeRegistryInner {
+    #[inline]
+    #[track_caller]
+    fn debug_assert_registered(&self, index: VMSharedTypeIndex) {
+        debug_assert!(
+            !index.is_reserved_value(),
+            "should have an actual VMSharedTypeIndex, not the reserved value"
+        );
+        debug_assert!(
+            self.types.contains(shared_type_index_to_slab_id(index)),
+            "registry's slab should contain {index:?}",
+        );
+        debug_assert!(
+            self.types[shared_type_index_to_slab_id(index)].is_some(),
+            "registry's slab should actually contain a type for {index:?}",
+        );
+        debug_assert!(
+            self.type_to_rec_group[index].is_some(),
+            "{index:?} should have an associated rec group entry"
+        );
+    }
+
+    #[inline]
+    #[track_caller]
+    fn debug_assert_all_registered(&self, indices: impl IntoIterator<Item = VMSharedTypeIndex>) {
+        if cfg!(debug_assertions) {
+            for index in indices {
+                self.debug_assert_registered(index);
+            }
+        }
+    }
+
     fn register_module_types(
         &mut self,
         gc_runtime: Option<&dyn GcRuntime>,
@@ -555,7 +626,11 @@ impl TypeRegistryInner {
     ) {
         log::trace!("Start registering module types");
 
+        // The engine's type registry entries for these module types.
         let mut entries = Vec::with_capacity(types.rec_groups().len());
+
+        // The map from a module type index to an engine type index for these
+        // module types.
         let mut map = PrimaryMap::<ModuleInternedTypeIndex, VMSharedTypeIndex>::with_capacity(
             types.wasm_types().len(),
         );
@@ -568,6 +643,8 @@ impl TypeRegistryInner {
                 iter_entity_range(module_group.clone()).map(|ty| types[ty].clone()),
             );
 
+            // Update the module-to-engine map with this rec group's
+            // newly-registered types.
             for (module_ty, engine_ty) in
                 iter_entity_range(module_group).zip(entry.0.shared_type_indices.iter())
             {
@@ -616,8 +693,17 @@ impl TypeRegistryInner {
         range: Range<ModuleInternedTypeIndex>,
         types: impl ExactSizeIterator<Item = WasmSubType>,
     ) -> RecGroupEntry {
+        log::trace!("registering rec group of length {}", types.len());
         debug_assert_eq!(iter_entity_range(range.clone()).len(), types.len());
 
+        // We need two different canonicalizations of this rec group: one for
+        // hash-consing and another for runtime usage within this
+        // engine. However, we only need the latter if this is a new rec group
+        // that hasn't been registered before. Therefore, we only eagerly create
+        // the hash-consing canonicalized version, and while we lazily
+        // canonicalize for runtime usage in this engine, we must still eagerly
+        // clone and set aside the original, non-canonicalized types for that
+        // potential engine canonicalization eventuality.
         let mut non_canon_types = Vec::with_capacity(types.len());
         let hash_consing_key = WasmRecGroup {
             types: types
@@ -633,25 +719,34 @@ impl TypeRegistryInner {
                 .collect::<Box<[_]>>(),
         };
 
+        // Any references in the hash-consing key to types outside of this rec
+        // group may only be to fully-registered types.
+        if cfg!(debug_assertions) {
+            hash_consing_key
+                .trace_engine_indices::<_, ()>(&mut |index| Ok(self.debug_assert_registered(index)))
+                .unwrap();
+        }
+
         // If we've already registered this rec group before, reuse it.
         if let Some(entry) = self.hash_consing_map.get(&hash_consing_key) {
+            log::trace!("hash-consing map hit: reusing {entry:?}");
             assert_eq!(entry.0.unregistered.load(Acquire), false);
-            entry.incref(
-                "hash consed to already-registered type in `TypeRegistryInner::register_rec_group`",
-            );
+            self.debug_assert_all_registered(entry.0.shared_type_indices.iter().copied());
+            entry.incref("hash-consing map hit");
             return entry.clone();
         }
+
+        log::trace!("hash-consing map miss: making new registration");
 
         // Inter-group edges: increment the referenced group's ref
         // count, because these other rec groups shouldn't be dropped
         // while this rec group is still alive.
         hash_consing_key
             .trace_engine_indices::<_, ()>(&mut |index| {
-                let other_entry = &self.type_to_rec_group[index].as_ref().unwrap();
+                self.debug_assert_registered(index);
+                let other_entry = self.type_to_rec_group[index].as_ref().unwrap();
                 assert_eq!(other_entry.0.unregistered.load(Acquire), false);
-                other_entry.incref(
-                    "new cross-group type reference to existing type in `register_rec_group`",
-                );
+                other_entry.incref("new rec group's type references");
                 Ok(())
             })
             .unwrap();
@@ -659,34 +754,59 @@ impl TypeRegistryInner {
         // Register the individual types.
         //
         // Note that we can't update the reverse type-to-rec-group map until
-        // after we've constructed the `RecGroupEntry`, since that map needs to
-        // the fully-constructed entry for its values.
+        // after we've constructed the `RecGroupEntry`, since that map needs the
+        // fully-constructed entry for its values.
         let module_rec_group_start = range.start;
-        let engine_rec_group_start = u32::try_from(self.types.len()).unwrap();
         let shared_type_indices: Box<[_]> = non_canon_types
-            .into_iter()
-            .map(|(module_index, mut ty)| {
-                ty.canonicalize_for_runtime_usage(&mut |idx| {
-                    if idx < module_rec_group_start {
-                        map[idx]
-                    } else {
-                        let rec_group_offset = idx.as_u32() - module_rec_group_start.as_u32();
-                        let index =
-                            VMSharedTypeIndex::from_u32(engine_rec_group_start + rec_group_offset);
-                        assert!(!index.is_reserved_value());
-                        index
-                    }
-                });
-                self.insert_one_type_from_rec_group(gc_runtime, module_index, ty)
+            .iter()
+            .map(|(module_index, ty)| {
+                let engine_index = slab_id_to_shared_type_index(self.types.alloc(None));
+                log::trace!(
+                    "reserved {engine_index:?} for {module_index:?} = non-canonical {ty:?}"
+                );
+                engine_index
             })
             .collect();
+        for (engine_index, (module_index, mut ty)) in
+            shared_type_indices.iter().copied().zip(non_canon_types)
+        {
+            log::trace!("canonicalizing {engine_index:?} for runtime usage");
+            ty.canonicalize_for_runtime_usage(&mut |module_index| {
+                if module_index < module_rec_group_start {
+                    let engine_index = map[module_index];
+                    log::trace!("    cross-group {module_index:?} becomes {engine_index:?}");
+                    self.debug_assert_registered(engine_index);
+                    engine_index
+                } else {
+                    assert!(module_index < range.end);
+                    let rec_group_offset = module_index.as_u32() - module_rec_group_start.as_u32();
+                    let rec_group_offset = usize::try_from(rec_group_offset).unwrap();
+                    let engine_index = shared_type_indices[rec_group_offset];
+                    log::trace!("    intra-group {module_index:?} becomes {engine_index:?}");
+                    assert!(!engine_index.is_reserved_value());
+                    assert!(self
+                        .types
+                        .contains(shared_type_index_to_slab_id(engine_index)));
+                    engine_index
+                }
+            });
+            self.insert_one_type_from_rec_group(gc_runtime, module_index, engine_index, ty);
+        }
 
+        // Although we haven't finished registering all their metadata, the
+        // types themselves should all be filled in now.
+        if cfg!(debug_assertions) {
+            for index in &shared_type_indices {
+                let id = shared_type_index_to_slab_id(*index);
+                debug_assert!(self.types.contains(id));
+                debug_assert!(self.types[id].is_some());
+            }
+        }
         debug_assert_eq!(
             shared_type_indices.len(),
             shared_type_indices
                 .iter()
                 .copied()
-                .inspect(|ty| assert!(!ty.is_reserved_value()))
                 .collect::<crate::hash_set::HashSet<_>>()
                 .len(),
             "should not have any duplicate type indices",
@@ -698,7 +818,7 @@ impl TypeRegistryInner {
             registrations: AtomicUsize::new(1),
             unregistered: AtomicBool::new(false),
         }));
-        log::trace!("create new entry {entry:?} (registrations -> 1)");
+        log::trace!("new {entry:?} -> count 1");
 
         let is_new_entry = self.hash_consing_map.insert(entry.clone());
         debug_assert!(is_new_entry);
@@ -709,12 +829,13 @@ impl TypeRegistryInner {
             debug_assert!(self.type_to_rec_group[ty].is_none());
             self.type_to_rec_group[ty] = Some(entry.clone());
         }
+        self.debug_assert_all_registered(entry.0.shared_type_indices.iter().copied());
 
         // Finally, make sure to register the trampoline type for each function
         // type in the rec group.
         for shared_type_index in entry.0.shared_type_indices.iter().copied() {
             let slab_id = shared_type_index_to_slab_id(shared_type_index);
-            let sub_ty = &self.types[slab_id];
+            let sub_ty = self.types[slab_id].as_ref().unwrap();
             if let Some(f) = sub_ty.as_func() {
                 let trampoline = f.trampoline_type();
                 match &trampoline {
@@ -723,9 +844,7 @@ impl TypeRegistryInner {
                         // its entry in `type_to_trampoline` empty to signal
                         // this.
                         log::trace!(
-                            "function type is its own trampoline type: \n\
-                             --> trampoline_type[{shared_type_index:?}] = {shared_type_index:?}\n\
-                             --> trampoline_type[{f}] = {f}"
+                            "trampoline_type({shared_type_index:?}) = {shared_type_index:?}",
                         );
                     }
                     Cow::Borrowed(_) | Cow::Owned(_) => {
@@ -745,20 +864,12 @@ impl TypeRegistryInner {
                                 },
                             },
                         );
+                        assert_eq!(trampoline_entry.0.shared_type_indices.len(), 1);
                         let trampoline_index = trampoline_entry.0.shared_type_indices[0];
                         log::trace!(
-                            "Registering trampoline type:\n\
-                             --> trampoline_type[{shared_type_index:?}] = {trampoline_index:?}\n\
-                             --> trampoline_type[{f}] = {g}",
-                            f = {
-                                let slab_id = shared_type_index_to_slab_id(shared_type_index);
-                                self.types[slab_id].unwrap_func()
-                            },
-                            g = {
-                                let slab_id = shared_type_index_to_slab_id(trampoline_index);
-                                self.types[slab_id].unwrap_func()
-                            }
+                            "trampoline_type({shared_type_index:?}) = {trampoline_index:?}",
                         );
+                        self.debug_assert_registered(trampoline_index);
                         debug_assert_ne!(shared_type_index, trampoline_index);
                         self.type_to_trampoline[shared_type_index] = Some(trampoline_index).into();
                     }
@@ -776,11 +887,7 @@ impl TypeRegistryInner {
                 panic!("not canonicalized for runtime usage: {ty:?}")
             }
             EngineOrModuleTypeIndex::Engine(idx) => {
-                let id = shared_type_index_to_slab_id(idx);
-                assert!(
-                    self.types.contains(id),
-                    "canonicalized in a different engine? {ty:?}"
-                );
+                self.debug_assert_registered(idx);
                 Ok(())
             }
         })
@@ -796,8 +903,9 @@ impl TypeRegistryInner {
         &mut self,
         gc_runtime: Option<&dyn GcRuntime>,
         module_index: ModuleInternedTypeIndex,
+        engine_index: VMSharedTypeIndex,
         ty: WasmSubType,
-    ) -> VMSharedTypeIndex {
+    ) {
         // Despite being canonicalized for runtime usage, this type may still
         // have forward references to other types in the rec group we haven't
         // yet registered. Therefore, we can't use our usual
@@ -826,18 +934,17 @@ impl TypeRegistryInner {
                     .struct_layout(s)
                     .into(),
             ),
+            wasmtime_environ::WasmCompositeInnerType::Cont(_) => todo!(), // FIXME: #10248 stack switching support.
         };
 
         // Add the type to our slab.
-        let id = self.types.alloc(Arc::new(ty));
-        let engine_index = slab_id_to_shared_type_index(id);
-        log::trace!(
-            "registered type {module_index:?} as {engine_index:?} = {:?}",
-            &self.types[id]
-        );
+        let id = shared_type_index_to_slab_id(engine_index);
+        assert!(self.types.contains(id));
+        assert!(self.types[id].is_none());
+        self.types[id] = Some(Arc::new(ty));
 
         // Create the supertypes list for this type.
-        if let Some(supertype) = self.types[id].supertype {
+        if let Some(supertype) = self.types[id].as_ref().unwrap().supertype {
             let supertype = supertype.unwrap_engine_type_index();
             let supers_supertypes = self.supertypes(supertype);
             let mut supertypes = Vec::with_capacity(supers_supertypes.len() + 1);
@@ -857,7 +964,10 @@ impl TypeRegistryInner {
             self.type_to_gc_layout[engine_index] = Some(layout);
         }
 
-        engine_index
+        log::trace!(
+            "finished registering type {module_index:?} as {engine_index:?} = runtime-canonical {:?}",
+            self.types[id].as_ref().unwrap()
+        );
     }
 
     /// Get the supertypes list for the given type.
@@ -901,11 +1011,14 @@ impl TypeRegistryInner {
 
     /// Unregister all of a type collection's rec groups.
     fn unregister_type_collection(&mut self, collection: &TypeCollection) {
+        log::trace!("Begin unregistering `TypeCollection`");
         for entry in &collection.rec_groups {
+            self.debug_assert_all_registered(entry.0.shared_type_indices.iter().copied());
             if entry.decref("TypeRegistryInner::unregister_type_collection") {
                 self.unregister_entry(entry.clone());
             }
         }
+        log::trace!("Finished unregistering `TypeCollection`");
     }
 
     /// Remove a zero-refcount entry from the registry.
@@ -914,6 +1027,7 @@ impl TypeRegistryInner {
     /// instead be invoked only after a previous decrement operation observed
     /// zero remaining registrations.
     fn unregister_entry(&mut self, entry: RecGroupEntry) {
+        log::trace!("Attempting to unregister {entry:?}");
         debug_assert!(self.drop_stack.is_empty());
 
         // There are two races to guard against before we can unregister the
@@ -1004,7 +1118,7 @@ impl TypeRegistryInner {
         let registrations = entry.0.registrations.load(Acquire);
         if registrations != 0 {
             log::trace!(
-                "{entry:?} was concurrently resurrected and no longer has \
+                "    {entry:?} was concurrently resurrected and no longer has \
                  zero registrations (registrations -> {registrations})",
             );
             assert_eq!(entry.0.unregistered.load(Acquire), false);
@@ -1014,7 +1128,7 @@ impl TypeRegistryInner {
         // Handle scenario (2) from above.
         if entry.0.unregistered.load(Acquire) {
             log::trace!(
-                "{entry:?} was concurrently resurrected, dropped again, \
+                "    {entry:?} was concurrently resurrected, dropped again, \
                  and already unregistered"
             );
             return;
@@ -1031,7 +1145,8 @@ impl TypeRegistryInner {
         // drop stack to avoid recursion and the potential stack overflows that
         // recursion implies.
         while let Some(entry) = self.drop_stack.pop() {
-            log::trace!("Start unregistering {entry:?}");
+            log::trace!("Begin unregistering {entry:?}");
+            self.debug_assert_all_registered(entry.0.shared_type_indices.iter().copied());
 
             // All entries on the drop stack should *really* be ready for
             // unregistration, since no one can resurrect entries once we've
@@ -1052,11 +1167,9 @@ impl TypeRegistryInner {
                 .0
                 .hash_consing_key
                 .trace_engine_indices::<_, ()>(&mut |other_index| {
+                    self.debug_assert_registered(other_index);
                     let other_entry = self.type_to_rec_group[other_index].as_ref().unwrap();
-                    if other_entry.decref(
-                        "referenced by dropped entry in \
-                         `TypeCollection::unregister_entry`",
-                    ) {
+                    if other_entry.decref("dropping rec group's type references") {
                         self.drop_stack.push(other_entry.clone());
                     }
                     Ok(())
@@ -1068,7 +1181,8 @@ impl TypeRegistryInner {
             // will be as if it is the first time it has ever been registered,
             // and it will be inserted into the hash-consing map again at that
             // time.
-            self.hash_consing_map.remove(&entry);
+            let was_in_map = self.hash_consing_map.remove(&entry);
+            debug_assert!(was_in_map);
 
             // Similarly, remove the rec group's types from the registry, as
             // well as their entries from the reverse type-to-rec-group
@@ -1082,7 +1196,6 @@ impl TypeRegistryInner {
                     .shared_type_indices
                     .iter()
                     .copied()
-                    .inspect(|ty| assert!(!ty.is_reserved_value()))
                     .collect::<crate::hash_set::HashSet<_>>()
                     .len(),
                 "should not have any duplicate type indices",
@@ -1097,11 +1210,10 @@ impl TypeRegistryInner {
                 if let Some(trampoline_ty) =
                     self.type_to_trampoline.get(ty).and_then(|x| x.expand())
                 {
+                    self.debug_assert_registered(trampoline_ty);
                     self.type_to_trampoline[ty] = None.into();
                     let trampoline_entry = self.type_to_rec_group[trampoline_ty].as_ref().unwrap();
-                    if trampoline_entry
-                        .decref("removing reference from a function type to its trampoline type")
-                    {
+                    if trampoline_entry.decref("dropping rec group's trampoline-type references") {
                         self.drop_stack.push(trampoline_entry.clone());
                     }
                 }
@@ -1120,7 +1232,8 @@ impl TypeRegistryInner {
                 }
 
                 let id = shared_type_index_to_slab_id(ty);
-                self.types.dealloc(id);
+                let deallocated_ty = self.types.dealloc(id);
+                assert!(deallocated_ty.is_some());
             }
 
             log::trace!("End unregistering {entry:?}");
@@ -1133,7 +1246,6 @@ impl TypeRegistryInner {
 #[cfg(debug_assertions)]
 impl Drop for TypeRegistryInner {
     fn drop(&mut self) {
-        log::trace!("Dropping type registry: {self:#?}");
         let TypeRegistryInner {
             hash_consing_map,
             types,
@@ -1189,6 +1301,13 @@ impl TypeRegistry {
         Self(RwLock::new(TypeRegistryInner::default()))
     }
 
+    #[inline]
+    pub fn debug_assert_contains(&self, index: VMSharedTypeIndex) {
+        if cfg!(debug_assertions) {
+            self.0.read().debug_assert_registered(index);
+        }
+    }
+
     /// Looks up a function type from a shared type index.
     ///
     /// This does *NOT* prevent the type from being unregistered while you are
@@ -1198,7 +1317,7 @@ impl TypeRegistry {
     pub fn borrow(&self, index: VMSharedTypeIndex) -> Option<Arc<WasmSubType>> {
         let id = shared_type_index_to_slab_id(index);
         let inner = self.0.read();
-        inner.types.get(id).cloned()
+        inner.types.get(id).and_then(|ty| ty.clone())
     }
 
     /// Get the GC layout for the given index's type.
@@ -1216,27 +1335,31 @@ impl TypeRegistry {
     pub fn trampoline_type(&self, index: VMSharedTypeIndex) -> VMSharedTypeIndex {
         let slab_id = shared_type_index_to_slab_id(index);
         let inner = self.0.read();
+        inner.debug_assert_registered(index);
 
-        let ty = &inner.types[slab_id];
+        let ty = inner.types[slab_id].as_ref().unwrap();
         debug_assert!(
             ty.is_func(),
             "cannot get the trampoline type of a non-function type: {index:?} = {ty:?}"
         );
 
-        let trampoline_ty = match inner.type_to_trampoline.get(index).and_then(|x| x.expand()) {
+        match inner.type_to_trampoline.get(index).and_then(|x| x.expand()) {
             Some(ty) => ty,
             None => {
                 // The function type is its own trampoline type.
                 index
             }
-        };
-        log::trace!("TypeRegistry::trampoline_type({index:?}) -> {trampoline_ty:?}");
-        trampoline_ty
+        }
     }
 
     /// Is type `sub` a subtype of `sup`?
     #[inline]
     pub fn is_subtype(&self, sub: VMSharedTypeIndex, sup: VMSharedTypeIndex) -> bool {
+        if cfg!(debug_assertions) {
+            self.0.read().debug_assert_registered(sub);
+            self.0.read().debug_assert_registered(sup);
+        }
+
         if sub == sup {
             return true;
         }

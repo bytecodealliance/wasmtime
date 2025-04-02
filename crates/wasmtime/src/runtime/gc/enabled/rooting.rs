@@ -437,8 +437,8 @@ impl RootSet {
         for root in lifo_roots.drain(scope..) {
             // Only drop the GC reference if we actually have a GC store. How
             // can we have a GC reference but not a GC store? If we've only
-            // create `i31refs`, we never force a GC store's allocation. This is
-            // fine because `i31ref`s never need drop barriers.
+            // created `i31refs`, we never force a GC store's allocation. This
+            // is fine because `i31ref`s never need drop barriers.
             if let Some(gc_store) = &mut gc_store {
                 gc_store.drop_gc_ref(root.gc_ref);
             }
@@ -968,10 +968,8 @@ impl<T: GcRef> Rooted<T> {
         val_raw: impl Fn(u32) -> ValRaw,
     ) -> Result<()> {
         let gc_ref = self.inner.try_clone_gc_ref(store)?;
-        let raw = gc_ref.as_raw_u32();
-        debug_assert_ne!(raw, 0);
-        store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
-        ptr.write(val_raw(raw));
+        let raw = store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+        ptr.write(val_raw(raw.get()));
         Ok(())
     }
 
@@ -1758,10 +1756,8 @@ where
         val_raw: impl Fn(u32) -> ValRaw,
     ) -> Result<()> {
         let gc_ref = self.try_clone_gc_ref(store)?;
-        let raw = gc_ref.as_raw_u32();
-        debug_assert_ne!(raw, 0);
-        store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
-        ptr.write(val_raw(raw));
+        let raw = store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+        ptr.write(val_raw(raw.get()));
         Ok(())
     }
 

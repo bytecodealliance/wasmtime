@@ -27,7 +27,7 @@
 ;;       ld      a1, 0x30(a1)
 ;;       bgeu    a1, a2, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a1, 0x60(a0)
+;;       ld      a1, 0x50(a0)
 ;;       add     a1, a1, a2
 ;;       sb      a3, 0(a1)
 ;;       ld      ra, 8(sp)
@@ -47,7 +47,7 @@
 ;;       ld      a1, 0x30(a1)
 ;;       bgeu    a1, a2, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a1, 0x60(a0)
+;;       ld      a1, 0x50(a0)
 ;;       add     a1, a1, a2
 ;;       lbu     a0, 0(a1)
 ;;       ld      ra, 8(sp)

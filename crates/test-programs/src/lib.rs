@@ -2,6 +2,7 @@ pub mod http;
 pub mod nn;
 pub mod preview1;
 pub mod sockets;
+pub mod tls;
 
 wit_bindgen::generate!({
     inline: "
@@ -12,15 +13,17 @@ wit_bindgen::generate!({
             include wasi:http/imports@0.2.3;
             include wasi:config/imports@0.2.0-draft;
             include wasi:keyvalue/imports@0.2.0-draft;
+            include wasi:tls/imports@0.2.0-draft;
         }
     ",
     path: [
         "../wasi-http/wit",
         "../wasi-config/wit",
         "../wasi-keyvalue/wit",
+        "../wasi-tls/wit/deps/tls",
     ],
     world: "wasmtime:test/test",
-    features: ["cli-exit-with-code"],
+    features: ["cli-exit-with-code", "tls"],
     generate_all,
 });
 
@@ -45,3 +48,11 @@ pub mod proxy {
         },
     });
 }
+
+impl std::fmt::Display for wasi::io::error::Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.to_debug_string())
+    }
+}
+
+impl std::error::Error for wasi::io::error::Error {}

@@ -319,7 +319,7 @@ pub struct Module {
     pub passive_data_map: BTreeMap<DataIndex, Range<u32>>,
 
     /// Types declared in the wasm module.
-    pub types: PrimaryMap<TypeIndex, ModuleInternedTypeIndex>,
+    pub types: PrimaryMap<TypeIndex, EngineOrModuleTypeIndex>,
 
     /// Number of imported or aliased functions in the module.
     pub num_imported_funcs: usize,
@@ -333,15 +333,15 @@ pub struct Module {
     /// Number of imported or aliased globals in the module.
     pub num_imported_globals: usize,
 
+    /// Number of imported or aliased tags in the module.
+    pub num_imported_tags: usize,
+
     /// Number of functions that "escape" from this module may need to have a
     /// `VMFuncRef` constructed for them.
     ///
     /// This is also the number of functions in the `functions` array below with
     /// an `func_ref` index (and is the maximum func_ref index).
     pub num_escaped_funcs: usize,
-
-    /// Number of call-indirect caches.
-    pub num_call_indirect_caches: usize,
 
     /// Types of functions, imported and local.
     pub functions: PrimaryMap<FuncIndex, FunctionType>,
@@ -357,6 +357,9 @@ pub struct Module {
 
     /// WebAssembly global initializers for locally-defined globals.
     pub global_initializers: PrimaryMap<DefinedGlobalIndex, ConstExpr>,
+
+    /// WebAssembly exception and control tags.
+    pub tags: PrimaryMap<TagIndex, Tag>,
 }
 
 /// Initialization routines for creating an instance, encompassing imports,
@@ -503,6 +506,29 @@ impl Module {
         index.index() < self.num_imported_globals
     }
 
+    /// Test whether the given tag index is for an imported tag.
+    #[inline]
+    pub fn is_imported_tag(&self, index: TagIndex) -> bool {
+        index.index() < self.num_imported_tags
+    }
+
+    /// Convert a `DefinedTagIndex` into a `TagIndex`.
+    #[inline]
+    pub fn tag_index(&self, defined_tag: DefinedTagIndex) -> TagIndex {
+        TagIndex::new(self.num_imported_tags + defined_tag.index())
+    }
+
+    /// Convert a `TagIndex` into a `DefinedTagIndex`. Returns None if the
+    /// index is an imported tag.
+    #[inline]
+    pub fn defined_tag_index(&self, tag: TagIndex) -> Option<DefinedTagIndex> {
+        if tag.index() < self.num_imported_tags {
+            None
+        } else {
+            Some(DefinedTagIndex::new(tag.index() - self.num_imported_tags))
+        }
+    }
+
     /// Returns an iterator of all the imports in this module, along with their
     /// module name, field name, and type that's being imported.
     pub fn imports(&self) -> impl ExactSizeIterator<Item = (&str, &str, EntityType)> {
@@ -519,16 +545,22 @@ impl Module {
             EntityIndex::Global(i) => EntityType::Global(self.globals[i]),
             EntityIndex::Table(i) => EntityType::Table(self.tables[i]),
             EntityIndex::Memory(i) => EntityType::Memory(self.memories[i]),
-            EntityIndex::Function(i) => {
-                EntityType::Function(EngineOrModuleTypeIndex::Module(self.functions[i].signature))
-            }
+            EntityIndex::Function(i) => EntityType::Function(self.functions[i].signature),
+            EntityIndex::Tag(i) => EntityType::Tag(self.tags[i]),
         }
+    }
+
+    /// Appends a new tag to this module with the given type information.
+    pub fn push_tag(&mut self, signature: impl Into<EngineOrModuleTypeIndex>) -> TagIndex {
+        let signature = signature.into();
+        self.tags.push(Tag { signature })
     }
 
     /// Appends a new function to this module with the given type information,
     /// used for functions that either don't escape or aren't certain whether
     /// they escape yet.
-    pub fn push_function(&mut self, signature: ModuleInternedTypeIndex) -> FuncIndex {
+    pub fn push_function(&mut self, signature: impl Into<EngineOrModuleTypeIndex>) -> FuncIndex {
+        let signature = signature.into();
         self.functions.push(FunctionType {
             signature,
             func_ref: FuncRefIndex::reserved_value(),
@@ -552,6 +584,112 @@ impl Module {
     pub fn num_defined_memories(&self) -> usize {
         self.memories.len() - self.num_imported_memories
     }
+
+    /// Returns the number of tags defined by this module itself: all tags
+    /// minus imported tags.
+    pub fn num_defined_tags(&self) -> usize {
+        self.tags.len() - self.num_imported_tags
+    }
+}
+
+impl TypeTrace for Module {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        // NB: Do not `..` elide unmodified fields so that we get compile errors
+        // when adding new fields that might need re-canonicalization.
+        let Self {
+            name: _,
+            initializers: _,
+            exports: _,
+            start_func: _,
+            table_initialization: _,
+            memory_initialization: _,
+            passive_elements: _,
+            passive_elements_map: _,
+            passive_data_map: _,
+            types,
+            num_imported_funcs: _,
+            num_imported_tables: _,
+            num_imported_memories: _,
+            num_imported_globals: _,
+            num_imported_tags: _,
+            num_escaped_funcs: _,
+            functions,
+            tables,
+            memories: _,
+            globals,
+            global_initializers: _,
+            tags,
+        } = self;
+
+        for t in types.values().copied() {
+            func(t)?;
+        }
+        for f in functions.values() {
+            f.trace(func)?;
+        }
+        for t in tables.values() {
+            t.trace(func)?;
+        }
+        for g in globals.values() {
+            g.trace(func)?;
+        }
+        for t in tags.values() {
+            t.trace(func)?;
+        }
+        Ok(())
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        // NB: Do not `..` elide unmodified fields so that we get compile errors
+        // when adding new fields that might need re-canonicalization.
+        let Self {
+            name: _,
+            initializers: _,
+            exports: _,
+            start_func: _,
+            table_initialization: _,
+            memory_initialization: _,
+            passive_elements: _,
+            passive_elements_map: _,
+            passive_data_map: _,
+            types,
+            num_imported_funcs: _,
+            num_imported_tables: _,
+            num_imported_memories: _,
+            num_imported_globals: _,
+            num_imported_tags: _,
+            num_escaped_funcs: _,
+            functions,
+            tables,
+            memories: _,
+            globals,
+            global_initializers: _,
+            tags,
+        } = self;
+
+        for t in types.values_mut() {
+            func(t)?;
+        }
+        for f in functions.values_mut() {
+            f.trace_mut(func)?;
+        }
+        for t in tables.values_mut() {
+            t.trace_mut(func)?;
+        }
+        for g in globals.values_mut() {
+            g.trace_mut(func)?;
+        }
+        for t in tags.values_mut() {
+            t.trace_mut(func)?;
+        }
+        Ok(())
+    }
 }
 
 /// Type information about functions in a wasm module.
@@ -559,10 +697,26 @@ impl Module {
 pub struct FunctionType {
     /// The type of this function, indexed into the module-wide type tables for
     /// a module compilation.
-    pub signature: ModuleInternedTypeIndex,
+    pub signature: EngineOrModuleTypeIndex,
     /// The index into the funcref table, if present. Note that this is
     /// `reserved_value()` if the function does not escape from a module.
     pub func_ref: FuncRefIndex,
+}
+
+impl TypeTrace for FunctionType {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        func(self.signature)
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        func(&mut self.signature)
+    }
 }
 
 impl FunctionType {

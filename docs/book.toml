@@ -5,4 +5,7 @@ src = "."
 title = "Wasmtime"
 
 [output.html]
+additional-js = ["js/moment.min.2.30.1.js", "js/mermaid.min.11.6.0.js", "js/index.js"]
 cname = "docs.wasmtime.dev"
+git-repository-url = "https://github.com/bytecodealliance/wasmtime"
+edit-url-template = "https://github.com/bytecodealliance/wasmtime/edit/main/docs/{path}"

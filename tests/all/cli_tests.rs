@@ -3,7 +3,7 @@
 use anyhow::{bail, Result};
 use std::fs::File;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, ExitStatus, Output, Stdio};
 use tempfile::{NamedTempFile, TempDir};
 
@@ -20,26 +20,7 @@ pub fn run_wasmtime_for_output(args: &[&str], stdin: Option<&Path>) -> Result<Ou
 
 /// Get the Wasmtime CLI as a [Command].
 pub fn get_wasmtime_command() -> Result<Command> {
-    // Figure out the Wasmtime binary from the current executable.
-    let bin = get_wasmtime_path()?;
-    let runner = std::env::vars()
-        .filter(|(k, _v)| k.starts_with("CARGO_TARGET") && k.ends_with("RUNNER"))
-        .next();
-
-    // If we're running tests with a "runner" then we might be doing something
-    // like cross-emulation, so spin up the emulator rather than the tests
-    // itself, which may not be natively executable.
-    let mut cmd = if let Some((_, runner)) = runner {
-        let mut parts = runner.split_whitespace();
-        let mut cmd = Command::new(parts.next().unwrap());
-        for arg in parts {
-            cmd.arg(arg);
-        }
-        cmd.arg(&bin);
-        cmd
-    } else {
-        Command::new(&bin)
-    };
+    let mut cmd = wasmtime_test_util::command(get_wasmtime_path());
 
     // Ignore this if it's specified in the environment to allow tests to run in
     // "default mode" by default.
@@ -48,12 +29,8 @@ pub fn get_wasmtime_command() -> Result<Command> {
     Ok(cmd)
 }
 
-fn get_wasmtime_path() -> Result<PathBuf> {
-    let mut path = std::env::current_exe()?;
-    path.pop(); // chop off the file name
-    path.pop(); // chop off `deps`
-    path.push("wasmtime");
-    Ok(path)
+fn get_wasmtime_path() -> &'static str {
+    env!("CARGO_BIN_EXE_wasmtime")
 }
 
 // Run the wasmtime CLI with the provided args and, if it succeeds, return
@@ -1523,6 +1500,7 @@ mod test_programs {
     struct WasmtimeServe {
         child: Option<Child>,
         addr: SocketAddr,
+        shutdown_addr: SocketAddr,
     }
 
     impl WasmtimeServe {
@@ -1541,61 +1519,79 @@ mod test_programs {
         }
 
         fn spawn(cmd: &mut Command) -> Result<WasmtimeServe> {
+            cmd.arg("--shutdown-addr=127.0.0.1:0");
             cmd.stdin(Stdio::null());
             cmd.stdout(Stdio::piped());
             cmd.stderr(Stdio::piped());
             let mut child = cmd.spawn()?;
 
-            // Read the first line of stderr which will say which address it's
-            // listening on.
-            //
-            // NB: this intentionally discards any extra buffered data in the
-            // `BufReader` once the newline is found. The server shouldn't print
-            // anything interesting other than the address so once we get a line
-            // all remaining output is left to be captured by future requests
-            // send to the server.
+            // Read the first few lines of stderr which will say which address
+            // it's listening on. The first line is the shutdown line (with
+            // `--shutdown-addr`) and the second is what `--addr` was bound to.
+            // This is done to figure out what `:0` was bound to in the child
+            // process.
             let mut line = String::new();
             let mut reader = BufReader::new(child.stderr.take().unwrap());
-            reader.read_line(&mut line)?;
+            let mut read_addr_from_line = |prefix: &str| -> Result<SocketAddr> {
+                reader.read_line(&mut line)?;
 
-            match line.find("127.0.0.1").and_then(|addr_start| {
-                let addr = &line[addr_start..];
-                let addr_end = addr.find("/")?;
-                addr[..addr_end].parse().ok()
-            }) {
-                Some(addr) => {
-                    assert!(reader.buffer().is_empty());
-                    child.stderr = Some(reader.into_inner());
-                    Ok(WasmtimeServe {
-                        child: Some(child),
-                        addr,
-                    })
+                if !line.starts_with(prefix) {
+                    bail!("input line `{line}` didn't start with `{prefix}`");
                 }
-                None => {
+                match line.find("127.0.0.1").and_then(|addr_start| {
+                    let addr = &line[addr_start..];
+                    let addr_end = addr.find("/")?;
+                    addr[..addr_end].parse().ok()
+                }) {
+                    Some(addr) => {
+                        line.truncate(0);
+                        Ok(addr)
+                    }
+                    None => bail!("failed to address from: {line}"),
+                }
+            };
+            let shutdown_addr = read_addr_from_line("Listening for shutdown");
+            let addr = read_addr_from_line("Serving HTTP on");
+            let (shutdown_addr, addr) = match (shutdown_addr, addr) {
+                (Ok(a), Ok(b)) => (a, b),
+                // If either failed kill the child and otherwise try to shepherd
+                // along any contextual information we have.
+                (Err(a), _) | (_, Err(a)) => {
                     child.kill()?;
                     child.wait()?;
                     reader.read_to_string(&mut line)?;
-                    bail!("failed to start child: {line}")
+                    return Err(a.context(line));
                 }
-            }
+            };
+            assert!(reader.buffer().is_empty());
+            child.stderr = Some(reader.into_inner());
+            Ok(WasmtimeServe {
+                child: Some(child),
+                addr,
+                shutdown_addr,
+            })
         }
 
         /// Completes this server gracefully by printing the output on failure.
         fn finish(mut self) -> Result<(String, String)> {
             let mut child = self.child.take().unwrap();
 
-            // If the child process has already exited then collect the output
-            // and test if it succeeded. Otherwise it's still running so kill it
-            // and then reap it. Assume that if it's still running then the test
-            // has otherwise passed so no need to print the output.
-            let known_failure = if child.try_wait()?.is_some() {
-                false
-            } else {
-                child.kill()?;
-                true
-            };
+            // If the child process has already exited, then great! Otherwise
+            // the server is still running and it shouldn't be possible to exit
+            // until a shutdown signal is sent, so do that here. Make a TCP
+            // connection to the shutdown port which is used as a shutdown
+            // signal.
+            if child.try_wait()?.is_none() {
+                std::net::TcpStream::connect(&self.shutdown_addr)
+                    .context("failed to initiate graceful shutdown")?;
+            }
+
+            // Regardless of whether we just shut the server down or whether it
+            // was already shut down (e.g. panicked or similar), wait for the
+            // result here. The result should succeed (e.g. 0 exit status), and
+            // if it did then the stdout/stderr are the caller's problem.
             let output = child.wait_with_output()?;
-            if !known_failure && !output.status.success() {
+            if !output.status.success() {
                 bail!("child failed {output:?}");
             }
 
@@ -1898,9 +1894,9 @@ stdout [1] :: \n\
 stdout [1] :: after empty
 "
         );
-        assert_eq!(
-            err,
-            "\
+        assert!(
+            err.contains(
+                "\
 stderr [0] :: this is half a print to stderr
 stderr [0] :: \n\
 stderr [0] :: after empty
@@ -1908,6 +1904,8 @@ stderr [1] :: this is half a print to stderr
 stderr [1] :: \n\
 stderr [1] :: after empty
 "
+            ),
+            "bad stderr: {err}"
         );
 
         Ok(())
@@ -1944,9 +1942,9 @@ this is half a print to stdout
 after empty
 "
         );
-        assert_eq!(
-            err,
-            "\
+        assert!(
+            err.contains(
+                "\
 this is half a print to stderr
 \n\
 after empty
@@ -1954,6 +1952,8 @@ this is half a print to stderr
 \n\
 after empty
 "
+            ),
+            "bad stderr {err}",
         );
 
         Ok(())
@@ -2064,6 +2064,53 @@ after empty
         Ok(())
     }
 
+    #[test]
+    fn cli_multiple_preopens() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "--dir=/::/a",
+            "--dir=/::/b",
+            "--dir=/::/c",
+            CLI_MULTIPLE_PREOPENS_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    async fn cli_serve_guest_never_invoked_set(wasm: &str) -> Result<()> {
+        let server = WasmtimeServe::new(wasm, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        for _ in 0..2 {
+            let res = server
+                .send_request(
+                    hyper::Request::builder()
+                        .uri("http://localhost/")
+                        .body(String::new())
+                        .context("failed to make request")?,
+                )
+                .await;
+            assert!(res.is_err());
+        }
+
+        let (stdout, stderr) = server.finish()?;
+        println!("stdout: {stdout}");
+        println!("stderr: {stderr}");
+        assert!(stderr.contains("guest never invoked `response-outparam::set` method"));
+        assert!(!stderr.contains("panicked"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_return_before_set() -> Result<()> {
+        cli_serve_guest_never_invoked_set(CLI_SERVE_RETURN_BEFORE_SET_COMPONENT).await
+    }
+
+    #[tokio::test]
+    async fn cli_serve_trap_before_set() -> Result<()> {
+        cli_serve_guest_never_invoked_set(CLI_SERVE_TRAP_BEFORE_SET_COMPONENT).await
+    }
+
     mod invoke {
         use super::*;
 
@@ -2113,7 +2160,7 @@ fn profile_with_vtune() -> Result<()> {
         "-user-data-dir",
         &std::env::temp_dir().to_string_lossy(),
         // ...then run Wasmtime with profiling enabled:
-        &get_wasmtime_path()?.to_string_lossy(),
+        get_wasmtime_path(),
         "--profile=vtune",
         "tests/all/cli_tests/simple.wat",
     ]);
@@ -2150,5 +2197,254 @@ fn unreachable_without_wasi() -> Result<()> {
     assert_ne!(output.stderr, b"");
     assert_eq!(output.stdout, b"");
     assert_trap_code(&output.status);
+    Ok(())
+}
+
+#[test]
+fn config_cli_flag() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/simple.wat")?;
+
+    // Test some valid TOML values
+    let (mut cfg, cfg_path) = tempfile::NamedTempFile::new()?.into_parts();
+    cfg.write_all(
+        br#"
+        [optimize]
+        opt-level = 2
+        regalloc-algorithm = "single-pass"
+        signals-based-traps = false
+
+        [codegen]
+        collector = "null"
+
+        [debug]
+        debug-info = true
+
+        [wasm]
+        max-wasm-stack = 65536
+
+        [wasi]
+        cli = true
+        "#,
+    )?;
+    let output = run_wasmtime(&[
+        "run",
+        "--config",
+        cfg_path.to_str().unwrap(),
+        "--invoke",
+        "get_f64",
+        wasm.path().to_str().unwrap(),
+    ])?;
+    assert_eq!(output, "100\n");
+
+    // Make sure CLI flags overrides TOML values
+    let output = run_wasmtime(&[
+        "run",
+        "--config",
+        cfg_path.to_str().unwrap(),
+        "--invoke",
+        "get_f64",
+        "-W",
+        "max-wasm-stack=0", // should override TOML value 65536 specified above and execution should fail
+        wasm.path().to_str().unwrap(),
+    ]);
+    assert!(
+        output
+            .as_ref()
+            .unwrap_err()
+            .to_string()
+            .contains("max_wasm_stack size cannot be zero"),
+        "'{output:?}' did not contain expected error message",
+    );
+
+    // Test invalid TOML key
+    let (mut cfg, cfg_path) = tempfile::NamedTempFile::new()?.into_parts();
+    cfg.write_all(
+        br#"
+        [optimize]
+        this-key-does-not-exist = true
+        "#,
+    )?;
+    let output = run_wasmtime(&[
+        "run",
+        "--config",
+        cfg_path.to_str().unwrap(),
+        wasm.path().to_str().unwrap(),
+    ]);
+    assert!(
+        output
+            .as_ref()
+            .unwrap_err()
+            .to_string()
+            .contains("unknown field `this-key-does-not-exist`"),
+        "'{output:?}' did not contain expected error message"
+    );
+
+    // Test invalid TOML table
+    let (mut cfg, cfg_path) = tempfile::NamedTempFile::new()?.into_parts();
+    cfg.write_all(
+        br#"
+        [invalid_table]
+        "#,
+    )?;
+    let output = run_wasmtime(&[
+        "run",
+        "--config",
+        cfg_path.to_str().unwrap(),
+        wasm.path().to_str().unwrap(),
+    ]);
+    assert!(
+        output
+            .as_ref()
+            .unwrap_err()
+            .to_string()
+            .contains("unknown field `invalid_table`, expected one of `optimize`, `codegen`, `debug`, `wasm`, `wasi`"),
+        "'{output:?}' did not contain expected error message",
+    );
+
+    Ok(())
+}
+
+#[test]
+fn invalid_subcommand() -> Result<()> {
+    let output = run_wasmtime_for_output(&["invalid-subcommand"], None)?;
+    dbg!(&output);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid-subcommand"));
+    Ok(())
+}
+
+#[test]
+fn numeric_args() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/numeric_args.wat")?;
+    // Test decimal i32
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i32_test",
+            wasm.path().to_str().unwrap(),
+            "42",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    // Test hexadecimal i32 with lowercase prefix
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i32_test",
+            wasm.path().to_str().unwrap(),
+            "0x2A",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    // Test hexadecimal i32 with uppercase prefix
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i32_test",
+            wasm.path().to_str().unwrap(),
+            "0X2a",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    // Test that non-prefixed hex strings are not interpreted as hex
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i32_test",
+            wasm.path().to_str().unwrap(),
+            "ff",
+        ],
+        None,
+    )?;
+    assert!(!output.status.success()); // Should fail as "ff" is not a valid decimal number
+
+    // Test decimal i64
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i64_test",
+            wasm.path().to_str().unwrap(),
+            "42",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    // Test hexadecimal i64
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i64_test",
+            wasm.path().to_str().unwrap(),
+            "0x2A",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    Ok(())
+}
+
+#[test]
+fn compilation_logs() -> Result<()> {
+    let temp = tempfile::NamedTempFile::new()?;
+    let output = get_wasmtime_command()?
+        .args(&[
+            "compile",
+            "-Wgc",
+            "tests/all/cli_tests/issue-10353.wat",
+            "--output",
+            &temp.path().display().to_string(),
+        ])
+        .env("WASMTIME_LOG", "trace")
+        .env("RUST_BACKTRACE", "1")
+        .output()?;
+    if !output.status.success() {
+        println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        panic!("wasmtime compilation failed when logs requested");
+    }
+    Ok(())
+}
+
+#[test]
+fn big_table_in_pooling_allocator() -> Result<()> {
+    // Works by default
+    run_wasmtime(&["tests/all/cli_tests/big_table.wat"])?;
+
+    // Does not work by default in the pooling allocator, and the error message
+    // should mention something about the pooling allocator.
+    let output = run_wasmtime_for_output(
+        &["-Opooling-allocator", "tests/all/cli_tests/big_table.wat"],
+        None,
+    )?;
+    assert!(!output.status.success());
+    println!("{}", String::from_utf8_lossy(&output.stderr));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("pooling allocator"));
+
+    // Does work with `-Wmax-table-elements`
+    run_wasmtime(&[
+        "-Opooling-allocator",
+        "-Wmax-table-elements=25000",
+        "tests/all/cli_tests/big_table.wat",
+    ])?;
+    // Also works with `-Opooling-table-elements`
+    run_wasmtime(&[
+        "-Opooling-allocator",
+        "-Opooling-table-elements=25000",
+        "tests/all/cli_tests/big_table.wat",
+    ])?;
     Ok(())
 }

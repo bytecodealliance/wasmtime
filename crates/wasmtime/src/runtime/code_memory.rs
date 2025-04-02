@@ -1,7 +1,7 @@
 //! Memory management for executable code.
 
 use crate::prelude::*;
-use crate::runtime::vm::{libcalls, MmapVec, UnwindRegistration};
+use crate::runtime::vm::{libcalls, MmapVec};
 use crate::Engine;
 use alloc::sync::Arc;
 use core::ops::Range;
@@ -16,7 +16,8 @@ use wasmtime_environ::{lookup_trap_code, obj, Trap};
 /// executable permissions of the contained JIT code as necessary.
 pub struct CodeMemory {
     mmap: MmapVec,
-    unwind_registration: Option<UnwindRegistration>,
+    #[cfg(has_host_compiler_backend)]
+    unwind_registration: Option<crate::runtime::vm::UnwindRegistration>,
     #[cfg(feature = "debug-builtins")]
     debug_registration: Option<crate::runtime::vm::GdbJitImageRegistration>,
     published: bool,
@@ -34,6 +35,7 @@ pub struct CodeMemory {
     trap_data: Range<usize>,
     wasm_data: Range<usize>,
     address_map_data: Range<usize>,
+    stack_map_data: Range<usize>,
     func_name_data: Range<usize>,
     info_data: Range<usize>,
     wasm_dwarf: Range<usize>,
@@ -44,12 +46,15 @@ impl Drop for CodeMemory {
         // If there is a custom code memory handler, restore the
         // original (non-executable) state of the memory.
         if let Some(mem) = self.custom_code_memory.as_ref() {
-            let text = self.text();
-            mem.unpublish_executable(text.as_ptr(), text.len())
-                .expect("Executable memory unpublish failed");
+            if self.published && self.needs_executable {
+                let text = self.text();
+                mem.unpublish_executable(text.as_ptr(), text.len())
+                    .expect("Executable memory unpublish failed");
+            }
         }
 
         // Drop the registrations before `self.mmap` since they (implicitly) refer to it.
+        #[cfg(has_host_compiler_backend)]
         let _ = self.unwind_registration.take();
         #[cfg(feature = "debug-builtins")]
         let _ = self.debug_registration.take();
@@ -119,6 +124,7 @@ impl CodeMemory {
         let mut trap_data = 0..0;
         let mut wasm_data = 0..0;
         let mut address_map_data = 0..0;
+        let mut stack_map_data = 0..0;
         let mut func_name_data = 0..0;
         let mut info_data = 0..0;
         let mut wasm_dwarf = 0..0;
@@ -175,9 +181,11 @@ impl CodeMemory {
                         relocations.push((offset, libcall));
                     }
                 }
-                UnwindRegistration::SECTION_NAME => unwind = range,
+                #[cfg(has_host_compiler_backend)]
+                crate::runtime::vm::UnwindRegistration::SECTION_NAME => unwind = range,
                 obj::ELF_WASM_DATA => wasm_data = range,
                 obj::ELF_WASMTIME_ADDRMAP => address_map_data = range,
+                obj::ELF_WASMTIME_STACK_MAP => stack_map_data = range,
                 obj::ELF_WASMTIME_TRAPS => trap_data = range,
                 obj::ELF_NAME_DATA => func_name_data = range,
                 obj::ELF_WASMTIME_INFO => info_data = range,
@@ -189,8 +197,13 @@ impl CodeMemory {
             }
         }
 
+        // require mutability even when this is turned off
+        #[cfg(not(has_host_compiler_backend))]
+        let _ = &mut unwind;
+
         Ok(Self {
             mmap,
+            #[cfg(has_host_compiler_backend)]
             unwind_registration: None,
             #[cfg(feature = "debug-builtins")]
             debug_registration: None,
@@ -205,6 +218,7 @@ impl CodeMemory {
             unwind,
             trap_data,
             address_map_data,
+            stack_map_data,
             func_name_data,
             wasm_dwarf,
             info_data,
@@ -253,6 +267,12 @@ impl CodeMemory {
     #[inline]
     pub fn address_map_data(&self) -> &[u8] {
         &self.mmap[self.address_map_data.clone()]
+    }
+
+    /// Returns the encoded stack map section used to pass to
+    /// `wasmtime_environ::StackMap::lookup`.
+    pub fn stack_map_data(&self) -> &[u8] {
+        &self.mmap[self.stack_map_data.clone()]
     }
 
     /// Returns the contents of the `ELF_WASMTIME_INFO` section, or an empty
@@ -316,11 +336,17 @@ impl CodeMemory {
             // we aren't able to make it readonly, but this is just a
             // defense-in-depth measure and isn't required for correctness.
             #[cfg(has_virtual_memory)]
-            self.mmap.make_readonly(0..self.mmap.len())?;
+            if self.mmap.supports_virtual_memory() {
+                self.mmap.make_readonly(0..self.mmap.len())?;
+            }
 
             // Switch the executable portion from readonly to read/execute.
             if self.needs_executable {
                 if !self.custom_publish()? {
+                    if !self.mmap.supports_virtual_memory() {
+                        bail!("this target requires virtual memory to be enabled");
+                    }
+
                     #[cfg(has_virtual_memory)]
                     {
                         let text = self.text();
@@ -341,8 +367,6 @@ impl CodeMemory {
                         // Flush any in-flight instructions from the pipeline
                         icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
                     }
-                    #[cfg(not(has_virtual_memory))]
-                    bail!("this target requires virtual memory to be enabled");
                 }
             }
 
@@ -387,6 +411,10 @@ impl CodeMemory {
             return Ok(());
         }
 
+        if self.mmap.is_always_readonly() {
+            bail!("Unable to apply relocations to readonly MmapVec");
+        }
+
         for (offset, libcall) in self.relocations.iter() {
             let offset = self.text.start + offset;
             let libcall = match libcall {
@@ -405,6 +433,7 @@ impl CodeMemory {
                 #[cfg(not(target_arch = "x86_64"))]
                 obj::LibCall::X86Pshufb => unreachable!(),
             };
+
             self.mmap
                 .as_mut_slice()
                 .as_mut_ptr()
@@ -419,13 +448,23 @@ impl CodeMemory {
         if self.unwind.len() == 0 {
             return Ok(());
         }
-        let text = self.text();
-        let unwind_info = &self.mmap[self.unwind.clone()];
-        let registration =
-            UnwindRegistration::new(text.as_ptr(), unwind_info.as_ptr(), unwind_info.len())
-                .context("failed to create unwind info registration")?;
-        self.unwind_registration = Some(registration);
-        Ok(())
+        #[cfg(has_host_compiler_backend)]
+        {
+            let text = self.text();
+            let unwind_info = &self.mmap[self.unwind.clone()];
+            let registration = crate::runtime::vm::UnwindRegistration::new(
+                text.as_ptr(),
+                unwind_info.as_ptr(),
+                unwind_info.len(),
+            )
+            .context("failed to create unwind info registration")?;
+            self.unwind_registration = Some(registration);
+            return Ok(());
+        }
+        #[cfg(not(has_host_compiler_backend))]
+        {
+            bail!("should not have unwind info for non-native backend")
+        }
     }
 
     #[cfg(feature = "debug-builtins")]

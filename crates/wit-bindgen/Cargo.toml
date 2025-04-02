@@ -19,4 +19,4 @@ wit-parser = { workspace = true }
 indexmap = { workspace = true }
 
 [features]
-std = []
+component-model-async = []

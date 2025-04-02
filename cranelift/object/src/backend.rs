@@ -3,8 +3,8 @@
 use anyhow::anyhow;
 use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::SecondaryMap;
+use cranelift_codegen::ir;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
-use cranelift_codegen::{ir, FinalizedMachReloc};
 use cranelift_control::ControlPlane;
 use cranelift_module::{
     DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations, ModuleError,
@@ -345,65 +345,29 @@ impl Module for ObjectModule {
         let res = ctx.compile(self.isa(), ctrl_plane)?;
         let alignment = res.buffer.alignment as u64;
 
-        self.define_function_bytes(
-            func_id,
-            &ctx.func,
-            alignment,
-            ctx.compiled_code().unwrap().code_buffer(),
-            ctx.compiled_code().unwrap().buffer.relocs(),
-        )
+        let buffer = &ctx.compiled_code().unwrap().buffer;
+        let relocs = buffer
+            .relocs()
+            .iter()
+            .map(|reloc| {
+                self.process_reloc(&ModuleReloc::from_mach_reloc(&reloc, &ctx.func, func_id))
+            })
+            .collect::<Vec<_>>();
+        self.define_function_inner(func_id, alignment, buffer.data(), relocs)
     }
 
     fn define_function_bytes(
         &mut self,
         func_id: FuncId,
-        func: &ir::Function,
         alignment: u64,
         bytes: &[u8],
-        relocs: &[FinalizedMachReloc],
+        relocs: &[ModuleReloc],
     ) -> ModuleResult<()> {
-        info!("defining function {} with bytes", func_id);
-        let decl = self.declarations.get_function_decl(func_id);
-        let decl_name = decl.linkage_name(func_id);
-        if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(decl_name.into_owned()));
-        }
-
-        let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
-        if *defined {
-            return Err(ModuleError::DuplicateDefinition(decl_name.into_owned()));
-        }
-        *defined = true;
-
-        let align = alignment
-            .max(self.isa.function_alignment().minimum.into())
-            .max(self.isa.symbol_alignment());
-        let section = if self.per_function_section {
-            // FIXME pass empty symbol name once add_subsection produces `.text` as section name
-            // instead of `.text.` when passed an empty symbol name. (object#748) Until then pass
-            // `subsection` to produce `.text.subsection` as section name to reduce confusion.
-            self.object
-                .add_subsection(StandardSection::Text, b"subsection")
-        } else {
-            self.object.section_id(StandardSection::Text)
-        };
-        let offset = self.object.add_symbol_data(symbol, section, bytes, align);
-
-        if !relocs.is_empty() {
-            let relocs = relocs
-                .iter()
-                .map(|record| {
-                    self.process_reloc(&ModuleReloc::from_mach_reloc(&record, func, func_id))
-                })
-                .collect();
-            self.relocs.push(SymbolRelocs {
-                section,
-                offset,
-                relocs,
-            });
-        }
-
-        Ok(())
+        let relocs = relocs
+            .iter()
+            .map(|reloc| self.process_reloc(reloc))
+            .collect();
+        self.define_function_inner(func_id, alignment, bytes, relocs)
     }
 
     fn define_data(&mut self, data_id: DataId, data: &DataDescription) -> ModuleResult<()> {
@@ -511,6 +475,49 @@ impl Module for ObjectModule {
 }
 
 impl ObjectModule {
+    fn define_function_inner(
+        &mut self,
+        func_id: FuncId,
+        alignment: u64,
+        bytes: &[u8],
+        relocs: Vec<ObjectRelocRecord>,
+    ) -> Result<(), ModuleError> {
+        info!("defining function {} with bytes", func_id);
+        let decl = self.declarations.get_function_decl(func_id);
+        let decl_name = decl.linkage_name(func_id);
+        if !decl.linkage.is_definable() {
+            return Err(ModuleError::InvalidImportDefinition(decl_name.into_owned()));
+        }
+
+        let &mut (symbol, ref mut defined) = self.functions[func_id].as_mut().unwrap();
+        if *defined {
+            return Err(ModuleError::DuplicateDefinition(decl_name.into_owned()));
+        }
+        *defined = true;
+
+        let align = alignment.max(self.isa.symbol_alignment());
+        let section = if self.per_function_section {
+            // FIXME pass empty symbol name once add_subsection produces `.text` as section name
+            // instead of `.text.` when passed an empty symbol name. (object#748) Until then pass
+            // `subsection` to produce `.text.subsection` as section name to reduce confusion.
+            self.object
+                .add_subsection(StandardSection::Text, b"subsection")
+        } else {
+            self.object.section_id(StandardSection::Text)
+        };
+        let offset = self.object.add_symbol_data(symbol, section, bytes, align);
+
+        if !relocs.is_empty() {
+            self.relocs.push(SymbolRelocs {
+                section,
+                offset,
+                relocs,
+            });
+        }
+
+        Ok(())
+    }
+
     /// Finalize all relocations and output an object.
     pub fn finish(mut self) -> ObjectProduct {
         let symbol_relocs = mem::take(&mut self.relocs);

@@ -1,7 +1,9 @@
 use anyhow::Context;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use std::sync::Arc;
+use target_lexicon::Triple;
 use wasmtime::*;
+use wasmtime_environ::TripleExt;
 use wasmtime_test_macros::wasmtime_test;
 
 #[test]
@@ -579,4 +581,71 @@ fn validate_deterministic() {
         .unwrap_err()
         .to_string();
     assert_eq!(result_parallel, result_sequential);
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn deserialize_raw_avoids_copy() {
+    // target pulley; executing code directly requires virtual memory
+    let mut config = Config::new();
+    let target = format!("{}", Triple::pulley_host());
+    config.target(&target).unwrap();
+    let engine = Engine::new(&config).unwrap();
+    let wat = String::from(
+        r#"
+        (module
+            (func (export "add") (param $lhs i32) (param $rhs i32) (result i32)
+                (i32.add (local.get $lhs) (local.get $rhs))
+            )
+        )
+        "#,
+    );
+    let module = Module::new(&engine, &wat).unwrap();
+    let mut serialized = module.serialize().expect("Serialize failed");
+    let serialized_ptr = std::ptr::slice_from_raw_parts(serialized.as_mut_ptr(), serialized.len());
+    let module_memory = std::ptr::NonNull::new(serialized_ptr.cast_mut()).unwrap();
+    let deserialized_module =
+        unsafe { Module::deserialize_raw(&engine, module_memory).expect("Deserialize Failed") };
+
+    // assert that addresses haven't changed, no full copy
+    // TODO: haven't been able to find a pub way of doing this
+
+    // basic verification that the loaded module works
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &deserialized_module, &[]).unwrap();
+    let f = instance
+        .get_typed_func::<(i32, i32), i32>(&mut store, "add")
+        .unwrap();
+    assert_eq!(f.call(&mut store, (26, 50)).unwrap(), 76);
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn deserialize_raw_fails_for_native() {
+    // target pulley
+    let engine = Engine::default();
+    let wat = String::from(
+        r#"
+        (module
+            (func (export "add") (param $lhs i32) (param $rhs i32) (result i32)
+                (i32.add (local.get $lhs) (local.get $rhs))
+            )
+        )
+        "#,
+    );
+    let module = Module::new(&engine, &wat).unwrap();
+    let mut serialized = module.serialize().expect("Serialize failed");
+    let serialized_ptr = std::ptr::slice_from_raw_parts(serialized.as_mut_ptr(), serialized.len());
+    let module_memory = std::ptr::NonNull::new(serialized_ptr.cast_mut()).unwrap();
+    let deserialize_res = unsafe { Module::deserialize_raw(&engine, module_memory) };
+
+    if engine.is_pulley() {
+        let _mod = deserialize_res.expect("Module should deserialize fine for pulley");
+    } else {
+        let err = deserialize_res.expect_err("Deserialization should fail for host target");
+        assert_eq!(
+            format!("{err}"),
+            "this target requires virtual memory to be enabled"
+        );
+    }
 }

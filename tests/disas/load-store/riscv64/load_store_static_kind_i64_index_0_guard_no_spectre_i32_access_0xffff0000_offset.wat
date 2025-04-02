@@ -27,7 +27,7 @@
 ;;       addi    a5, a4, -4
 ;;       bgeu    a5, a2, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a5, 0x60(a0)
+;;       ld      a5, 0x50(a0)
 ;;       add     a5, a5, a2
 ;;       lui     a4, 0xffff
 ;;       slli    a0, a4, 4
@@ -47,7 +47,7 @@
 ;;       addi    a5, a3, -4
 ;;       bgeu    a5, a2, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a5, 0x60(a0)
+;;       ld      a5, 0x50(a0)
 ;;       add     a5, a5, a2
 ;;       lui     a4, 0xffff
 ;;       slli    a0, a4, 4

@@ -216,6 +216,19 @@ impl TargetIsa for Riscv64Backend {
     fn has_x86_pmaddubsw_lowering(&self) -> bool {
         false
     }
+
+    fn default_argument_extension(&self) -> ir::ArgumentExtension {
+        // According to https://riscv.org/wp-content/uploads/2024/12/riscv-calling.pdf
+        // it says:
+        //
+        // > In RV64, 32-bit types, such as int, are stored in integer
+        // > registers as proper sign extensions of their 32-bit values; that
+        // > is, bits 63..31 are all equal. This restriction holds even for
+        // > unsigned 32-bit types.
+        //
+        // leading to `sext` here.
+        ir::ArgumentExtension::Sext
+    }
 }
 
 impl fmt::Display for Riscv64Backend {

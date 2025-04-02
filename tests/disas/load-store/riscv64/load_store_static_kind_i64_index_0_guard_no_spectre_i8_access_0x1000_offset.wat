@@ -27,7 +27,7 @@
 ;;       ld      a1, 0x38(a1)
 ;;       bgeu    a1, a2, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a1, 0x60(a0)
+;;       ld      a1, 0x50(a0)
 ;;       add     a1, a1, a2
 ;;       lui     t6, 1
 ;;       add     t6, t6, a1
@@ -49,7 +49,7 @@
 ;;       ld      a1, 0x38(a1)
 ;;       bgeu    a1, a2, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a1, 0x60(a0)
+;;       ld      a1, 0x50(a0)
 ;;       add     a1, a1, a2
 ;;       lui     t6, 1
 ;;       add     t6, t6, a1

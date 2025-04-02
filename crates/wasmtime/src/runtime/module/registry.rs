@@ -66,6 +66,7 @@ impl ModuleRegistry {
     }
 
     /// Fetches a registered module given a program counter value.
+    #[cfg(feature = "gc")]
     pub fn lookup_module_by_pc(&self, pc: usize) -> Option<&Module> {
         let (module, _) = self.module_and_offset(pc)?;
         Some(module)
@@ -85,6 +86,7 @@ impl ModuleRegistry {
     }
 
     /// Gets an iterator over all modules in the registry.
+    #[cfg(feature = "coredump")]
     pub fn all_modules(&self) -> impl Iterator<Item = &'_ Module> + '_ {
         self.loaded_code
             .values()

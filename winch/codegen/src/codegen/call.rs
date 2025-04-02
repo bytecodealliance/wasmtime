@@ -32,16 +32,18 @@
 //! The machine stack throughout the function call is as follows:
 //! ┌──────────────────────────────────────────────────┐
 //! │                                                  │
-//! │                  1                               │
 //! │  Stack space created by any previous spills      │
 //! │  from the value stack; and which memory values   │
 //! │  are used as function arguments.                 │
 //! │                                                  │
 //! ├──────────────────────────────────────────────────┤ ---> The Wasm value stack at this point in time would look like:
-//! │                                                  │      [ Mem(offset) | Mem(offset) | Local(index) | Local(index) ]
-//! │                   2                              │
+//! │                                                  │      
 //! │   Stack space created by spilling locals and     |
 //! │   registers at the callsite.                     │
+//! │                                                  │
+//! ├─────────────────────────────────────────────────┬┤
+//! │                                                  │
+//! │   Return Area (Multi-value results)              │
 //! │                                                  │
 //! │                                                  │
 //! ├─────────────────────────────────────────────────┬┤ ---> The Wasm value stack at this point in time would look like:
@@ -328,14 +330,14 @@ impl FnCall {
 
             match operand {
                 &ABIOperand::Reg { ty, reg, .. } => {
-                    masm.load_addr(addr, writable!(reg), ty.try_into()?)?;
+                    masm.compute_addr(addr, writable!(reg), ty.try_into()?)?;
                 }
                 &ABIOperand::Stack { ty, offset, .. } => {
                     let slot = masm.address_at_sp(SPOffset::from_u32(offset))?;
                     // Don't rely on `ABI::scratch_for` as we always use
                     // an int register as the return pointer.
                     let scratch = scratch!(M);
-                    masm.load_addr(addr, writable!(scratch), ty.try_into()?)?;
+                    masm.compute_addr(addr, writable!(scratch), ty.try_into()?)?;
                     masm.store(scratch.into(), slot, ty.try_into()?)?;
                 }
             }

@@ -2,11 +2,11 @@
 
 use super::{make_echo_component, make_echo_component_with_params, Param, Type};
 use anyhow::Result;
-use component_test_util::FuncExt;
 use wasmtime::component::types::{self, Case, ComponentItem, Field};
 use wasmtime::component::{Component, Linker, ResourceType, Val};
 use wasmtime::{Module, Store};
 use wasmtime_component_util::REALLOC_AND_FREE;
+use wasmtime_test_util::component::FuncExt;
 
 #[test]
 fn primitives() -> Result<()> {

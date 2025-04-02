@@ -23,14 +23,16 @@
 //! This module is one that's likely to change over time though as new systems
 //! are encountered along with preexisting bugs.
 
-use crate::poll::Subscribe;
 use crate::stdio::StdinStream;
-use crate::{HostInputStream, StreamError};
 use bytes::{Bytes, BytesMut};
 use std::io::{IsTerminal, Read};
 use std::mem;
 use std::sync::{Condvar, Mutex, OnceLock};
 use tokio::sync::Notify;
+use wasmtime_wasi_io::{
+    poll::Pollable,
+    streams::{InputStream, StreamError},
+};
 
 #[derive(Default)]
 struct GlobalStdin {
@@ -96,7 +98,7 @@ fn create() -> GlobalStdin {
     GlobalStdin::default()
 }
 
-/// Only public interface is the [`HostInputStream`] impl.
+/// Only public interface is the [`InputStream`] impl.
 #[derive(Clone)]
 pub struct Stdin;
 
@@ -109,7 +111,7 @@ pub fn stdin() -> Stdin {
 }
 
 impl StdinStream for Stdin {
-    fn stream(&self) -> Box<dyn HostInputStream> {
+    fn stream(&self) -> Box<dyn InputStream> {
         Box::new(Stdin)
     }
 
@@ -119,7 +121,7 @@ impl StdinStream for Stdin {
 }
 
 #[async_trait::async_trait]
-impl HostInputStream for Stdin {
+impl InputStream for Stdin {
     fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
         let g = GlobalStdin::get();
         let mut locked = g.state.lock().unwrap();
@@ -152,7 +154,7 @@ impl HostInputStream for Stdin {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for Stdin {
+impl Pollable for Stdin {
     async fn ready(&mut self) {
         let g = GlobalStdin::get();
 

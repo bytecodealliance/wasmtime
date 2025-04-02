@@ -57,6 +57,9 @@ pub struct ComponentDfg {
     /// used by the host)
     pub reallocs: Intern<ReallocId, CoreDef>,
 
+    /// Same as `reallocs`, but for async-lifted functions.
+    pub callbacks: Intern<CallbackId, CoreDef>,
+
     /// Same as `reallocs`, but for post-return.
     pub post_returns: Intern<PostReturnId, CoreDef>,
 
@@ -103,7 +106,7 @@ pub struct ComponentDfg {
     /// The values here are the module that the adapter is present within along
     /// as the core wasm index of the export corresponding to the lowered
     /// version of the adapter.
-    pub adapter_paritionings: PrimaryMap<AdapterId, (AdapterModuleId, EntityIndex)>,
+    pub adapter_partitionings: PrimaryMap<AdapterId, (AdapterModuleId, EntityIndex)>,
 
     /// Defined resources in this component sorted by index with metadata about
     /// each resource.
@@ -121,6 +124,16 @@ pub struct ComponentDfg {
     /// currently the number of unique `TypeResourceTableIndex` allocations for
     /// this component.
     pub num_resource_tables: usize,
+
+    /// The total number of future tables that will be used by this component.
+    pub num_future_tables: usize,
+
+    /// The total number of stream tables that will be used by this component.
+    pub num_stream_tables: usize,
+
+    /// The total number of error-context tables that will be used by this
+    /// component.
+    pub num_error_context_tables: usize,
 
     /// An ordered list of side effects induced by instantiating this component.
     ///
@@ -153,7 +166,7 @@ pub enum SideEffect {
 macro_rules! id {
     ($(pub struct $name:ident(u32);)*) => ($(
         #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
-        #[allow(missing_docs, reason = "tedious to document")]
+        #[expect(missing_docs, reason = "tedious to document")]
         pub struct $name(u32);
         cranelift_entity::entity_impl!($name);
     )*)
@@ -162,14 +175,16 @@ macro_rules! id {
 id! {
     pub struct InstanceId(u32);
     pub struct MemoryId(u32);
+    pub struct TableId(u32);
     pub struct ReallocId(u32);
+    pub struct CallbackId(u32);
     pub struct AdapterId(u32);
     pub struct PostReturnId(u32);
     pub struct AdapterModuleId(u32);
 }
 
 /// Same as `info::InstantiateModule`
-#[allow(missing_docs, reason = "tedious to document variants")]
+#[expect(missing_docs, reason = "tedious to document variants")]
 pub enum Instance {
     Static(StaticModuleIndex, Box<[CoreDef]>),
     Import(
@@ -179,7 +194,7 @@ pub enum Instance {
 }
 
 /// Same as `info::Export`
-#[allow(missing_docs, reason = "tedious to document variants")]
+#[expect(missing_docs, reason = "tedious to document variants")]
 pub enum Export {
     LiftedFunction {
         ty: TypeFuncIndex,
@@ -203,7 +218,7 @@ pub enum Export {
 
 /// Same as `info::CoreDef`, except has an extra `Adapter` variant.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-#[allow(missing_docs, reason = "tedious to document variants")]
+#[expect(missing_docs, reason = "tedious to document variants")]
 pub enum CoreDef {
     Export(CoreExport<EntityIndex>),
     InstanceFlags(RuntimeComponentInstanceIndex),
@@ -211,7 +226,7 @@ pub enum CoreDef {
     /// This is a special variant not present in `info::CoreDef` which
     /// represents that this definition refers to a fused adapter function. This
     /// adapter is fully processed after the initial translation and
-    /// identificatino of adapters.
+    /// identification of adapters.
     ///
     /// During translation into `info::CoreDef` this variant is erased and
     /// replaced by `info::CoreDef::Export` since adapters are always
@@ -230,14 +245,14 @@ where
 
 /// Same as `info::CoreExport`
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct CoreExport<T> {
     pub instance: InstanceId,
     pub item: ExportItem<T>,
 }
 
 impl<T> CoreExport<T> {
-    #[allow(missing_docs, reason = "self-describing function")]
+    #[expect(missing_docs, reason = "self-describing function")]
     pub fn map_index<U>(self, f: impl FnOnce(T) -> U) -> CoreExport<U> {
         CoreExport {
             instance: self.instance,
@@ -251,7 +266,7 @@ impl<T> CoreExport<T> {
 
 /// Same as `info::Trampoline`
 #[derive(Clone, PartialEq, Eq, Hash)]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub enum Trampoline {
     LowerImport {
         import: RuntimeImportIndex,
@@ -269,25 +284,150 @@ pub enum Trampoline {
     ResourceNew(TypeResourceTableIndex),
     ResourceRep(TypeResourceTableIndex),
     ResourceDrop(TypeResourceTableIndex),
+    BackpressureSet {
+        instance: RuntimeComponentInstanceIndex,
+    },
+    TaskReturn {
+        results: TypeTupleIndex,
+        options: CanonicalOptions,
+    },
+    WaitableSetNew {
+        instance: RuntimeComponentInstanceIndex,
+    },
+    WaitableSetWait {
+        instance: RuntimeComponentInstanceIndex,
+        async_: bool,
+        memory: MemoryId,
+    },
+    WaitableSetPoll {
+        instance: RuntimeComponentInstanceIndex,
+        async_: bool,
+        memory: MemoryId,
+    },
+    WaitableSetDrop {
+        instance: RuntimeComponentInstanceIndex,
+    },
+    WaitableJoin {
+        instance: RuntimeComponentInstanceIndex,
+    },
+    Yield {
+        async_: bool,
+    },
+    SubtaskDrop {
+        instance: RuntimeComponentInstanceIndex,
+    },
+    StreamNew {
+        ty: TypeStreamTableIndex,
+    },
+    StreamRead {
+        ty: TypeStreamTableIndex,
+        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
+        options: CanonicalOptions,
+    },
+    StreamWrite {
+        ty: TypeStreamTableIndex,
+        options: CanonicalOptions,
+    },
+    StreamCancelRead {
+        ty: TypeStreamTableIndex,
+        async_: bool,
+    },
+    StreamCancelWrite {
+        ty: TypeStreamTableIndex,
+        async_: bool,
+    },
+    StreamCloseReadable {
+        ty: TypeStreamTableIndex,
+    },
+    StreamCloseWritable {
+        ty: TypeStreamTableIndex,
+        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
+    },
+    FutureNew {
+        ty: TypeFutureTableIndex,
+    },
+    FutureRead {
+        ty: TypeFutureTableIndex,
+        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
+        options: CanonicalOptions,
+    },
+    FutureWrite {
+        ty: TypeFutureTableIndex,
+        options: CanonicalOptions,
+    },
+    FutureCancelRead {
+        ty: TypeFutureTableIndex,
+        async_: bool,
+    },
+    FutureCancelWrite {
+        ty: TypeFutureTableIndex,
+        async_: bool,
+    },
+    FutureCloseReadable {
+        ty: TypeFutureTableIndex,
+    },
+    FutureCloseWritable {
+        ty: TypeFutureTableIndex,
+        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
+    },
+    ErrorContextNew {
+        ty: TypeComponentLocalErrorContextTableIndex,
+        options: CanonicalOptions,
+    },
+    ErrorContextDebugMessage {
+        ty: TypeComponentLocalErrorContextTableIndex,
+        options: CanonicalOptions,
+    },
+    ErrorContextDrop {
+        ty: TypeComponentLocalErrorContextTableIndex,
+    },
     ResourceTransferOwn,
     ResourceTransferBorrow,
     ResourceEnterCall,
     ResourceExitCall,
+    SyncEnterCall,
+    SyncExitCall {
+        callback: Option<CallbackId>,
+    },
+    AsyncEnterCall,
+    AsyncExitCall {
+        callback: Option<CallbackId>,
+        post_return: Option<PostReturnId>,
+    },
+    FutureTransfer,
+    StreamTransfer,
+    ErrorContextTransfer,
+}
+
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
+#[expect(missing_docs, reason = "self-describing fields")]
+pub struct FutureInfo {
+    pub instance: RuntimeComponentInstanceIndex,
+    pub payload_type: Option<InterfaceType>,
+}
+
+#[derive(Copy, Clone, Hash, Eq, PartialEq)]
+#[expect(missing_docs, reason = "self-describing fields")]
+pub struct StreamInfo {
+    pub instance: RuntimeComponentInstanceIndex,
+    pub payload_type: InterfaceType,
 }
 
 /// Same as `info::CanonicalOptions`
 #[derive(Clone, Hash, Eq, PartialEq)]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct CanonicalOptions {
     pub instance: RuntimeComponentInstanceIndex,
     pub string_encoding: StringEncoding,
     pub memory: Option<MemoryId>,
     pub realloc: Option<ReallocId>,
+    pub callback: Option<CallbackId>,
     pub post_return: Option<PostReturnId>,
+    pub async_: bool,
 }
 
 /// Same as `info::Resource`
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct Resource {
     pub rep: WasmValType,
     pub dtor: Option<CoreDef>,
@@ -348,7 +488,7 @@ impl<K: EntityRef, V> Default for Intern<K, V> {
 
 impl ComponentDfg {
     /// Consumes the intermediate `ComponentDfg` to produce a final `Component`
-    /// with a linear innitializer list.
+    /// with a linear initializer list.
     pub fn finish(
         self,
         wasmtime_types: &mut ComponentTypesBuilder,
@@ -358,8 +498,10 @@ impl ComponentDfg {
             dfg: &self,
             initializers: Vec::new(),
             runtime_memories: Default::default(),
+            runtime_tables: Default::default(),
             runtime_post_return: Default::default(),
             runtime_reallocs: Default::default(),
+            runtime_callbacks: Default::default(),
             runtime_instances: Default::default(),
             num_lowerings: 0,
             trampolines: Default::default(),
@@ -398,13 +540,18 @@ impl ComponentDfg {
                 num_lowerings: linearize.num_lowerings,
 
                 num_runtime_memories: linearize.runtime_memories.len() as u32,
+                num_runtime_tables: linearize.runtime_tables.len() as u32,
                 num_runtime_post_returns: linearize.runtime_post_return.len() as u32,
                 num_runtime_reallocs: linearize.runtime_reallocs.len() as u32,
+                num_runtime_callbacks: linearize.runtime_callbacks.len() as u32,
                 num_runtime_instances: linearize.runtime_instances.len() as u32,
                 imports: self.imports,
                 import_types: self.import_types,
                 num_runtime_component_instances: self.num_runtime_component_instances,
                 num_resource_tables: self.num_resource_tables,
+                num_future_tables: self.num_future_tables,
+                num_stream_tables: self.num_stream_tables,
+                num_error_context_tables: self.num_error_context_tables,
                 num_resources: (self.resources.len() + self.imported_resources.len()) as u32,
                 imported_resources: self.imported_resources,
                 defined_resource_instances: self
@@ -430,7 +577,9 @@ struct LinearizeDfg<'a> {
     trampoline_defs: PrimaryMap<TrampolineIndex, info::Trampoline>,
     trampoline_map: HashMap<TrampolineIndex, TrampolineIndex>,
     runtime_memories: HashMap<MemoryId, RuntimeMemoryIndex>,
+    runtime_tables: HashMap<TableId, RuntimeTableIndex>,
     runtime_reallocs: HashMap<ReallocId, RuntimeReallocIndex>,
+    runtime_callbacks: HashMap<CallbackId, RuntimeCallbackIndex>,
     runtime_post_return: HashMap<PostReturnId, RuntimePostReturnIndex>,
     runtime_instances: HashMap<RuntimeInstance, RuntimeInstanceIndex>,
     num_lowerings: u32,
@@ -539,13 +688,16 @@ impl LinearizeDfg<'_> {
     fn options(&mut self, options: &CanonicalOptions) -> info::CanonicalOptions {
         let memory = options.memory.map(|mem| self.runtime_memory(mem));
         let realloc = options.realloc.map(|mem| self.runtime_realloc(mem));
+        let callback = options.callback.map(|mem| self.runtime_callback(mem));
         let post_return = options.post_return.map(|mem| self.runtime_post_return(mem));
         info::CanonicalOptions {
             instance: options.instance,
             string_encoding: options.string_encoding,
             memory,
             realloc,
+            callback,
             post_return,
+            async_: options.async_,
         }
     }
 
@@ -564,6 +716,15 @@ impl LinearizeDfg<'_> {
             |me| &mut me.runtime_reallocs,
             |me, realloc| me.core_def(&me.dfg.reallocs[realloc]),
             |index, def| GlobalInitializer::ExtractRealloc(ExtractRealloc { index, def }),
+        )
+    }
+
+    fn runtime_callback(&mut self, callback: CallbackId) -> RuntimeCallbackIndex {
+        self.intern(
+            callback,
+            |me| &mut me.runtime_callbacks,
+            |me, callback| me.core_def(&me.dfg.callbacks[callback]),
+            |index, def| GlobalInitializer::ExtractCallback(ExtractCallback { index, def }),
         )
     }
 
@@ -625,10 +786,136 @@ impl LinearizeDfg<'_> {
             Trampoline::ResourceNew(ty) => info::Trampoline::ResourceNew(*ty),
             Trampoline::ResourceDrop(ty) => info::Trampoline::ResourceDrop(*ty),
             Trampoline::ResourceRep(ty) => info::Trampoline::ResourceRep(*ty),
+            Trampoline::BackpressureSet { instance } => info::Trampoline::BackpressureSet {
+                instance: *instance,
+            },
+            Trampoline::TaskReturn { results, options } => info::Trampoline::TaskReturn {
+                results: *results,
+                options: self.options(options),
+            },
+            Trampoline::WaitableSetNew { instance } => info::Trampoline::WaitableSetNew {
+                instance: *instance,
+            },
+            Trampoline::WaitableSetWait {
+                instance,
+                async_,
+                memory,
+            } => info::Trampoline::WaitableSetWait {
+                instance: *instance,
+                async_: *async_,
+                memory: self.runtime_memory(*memory),
+            },
+            Trampoline::WaitableSetPoll {
+                instance,
+                async_,
+                memory,
+            } => info::Trampoline::WaitableSetPoll {
+                instance: *instance,
+                async_: *async_,
+                memory: self.runtime_memory(*memory),
+            },
+            Trampoline::WaitableSetDrop { instance } => info::Trampoline::WaitableSetDrop {
+                instance: *instance,
+            },
+            Trampoline::WaitableJoin { instance } => info::Trampoline::WaitableJoin {
+                instance: *instance,
+            },
+            Trampoline::Yield { async_ } => info::Trampoline::Yield { async_: *async_ },
+            Trampoline::SubtaskDrop { instance } => info::Trampoline::SubtaskDrop {
+                instance: *instance,
+            },
+            Trampoline::StreamNew { ty } => info::Trampoline::StreamNew { ty: *ty },
+            Trampoline::StreamRead {
+                ty,
+                err_ctx_ty,
+                options,
+            } => info::Trampoline::StreamRead {
+                ty: *ty,
+                err_ctx_ty: *err_ctx_ty,
+                options: self.options(options),
+            },
+            Trampoline::StreamWrite { ty, options } => info::Trampoline::StreamWrite {
+                ty: *ty,
+                options: self.options(options),
+            },
+            Trampoline::StreamCancelRead { ty, async_ } => info::Trampoline::StreamCancelRead {
+                ty: *ty,
+                async_: *async_,
+            },
+            Trampoline::StreamCancelWrite { ty, async_ } => info::Trampoline::StreamCancelWrite {
+                ty: *ty,
+                async_: *async_,
+            },
+            Trampoline::StreamCloseReadable { ty } => {
+                info::Trampoline::StreamCloseReadable { ty: *ty }
+            }
+            Trampoline::StreamCloseWritable { ty, err_ctx_ty } => {
+                info::Trampoline::StreamCloseWritable {
+                    ty: *ty,
+                    err_ctx_ty: *err_ctx_ty,
+                }
+            }
+            Trampoline::FutureNew { ty } => info::Trampoline::FutureNew { ty: *ty },
+            Trampoline::FutureRead {
+                ty,
+                err_ctx_ty,
+                options,
+            } => info::Trampoline::FutureRead {
+                ty: *ty,
+                err_ctx_ty: *err_ctx_ty,
+                options: self.options(options),
+            },
+            Trampoline::FutureWrite { ty, options } => info::Trampoline::FutureWrite {
+                ty: *ty,
+                options: self.options(options),
+            },
+            Trampoline::FutureCancelRead { ty, async_ } => info::Trampoline::FutureCancelRead {
+                ty: *ty,
+                async_: *async_,
+            },
+            Trampoline::FutureCancelWrite { ty, async_ } => info::Trampoline::FutureCancelWrite {
+                ty: *ty,
+                async_: *async_,
+            },
+            Trampoline::FutureCloseReadable { ty } => {
+                info::Trampoline::FutureCloseReadable { ty: *ty }
+            }
+            Trampoline::FutureCloseWritable { ty, err_ctx_ty } => {
+                info::Trampoline::FutureCloseWritable {
+                    ty: *ty,
+                    err_ctx_ty: *err_ctx_ty,
+                }
+            }
+            Trampoline::ErrorContextNew { ty, options } => info::Trampoline::ErrorContextNew {
+                ty: *ty,
+                options: self.options(options),
+            },
+            Trampoline::ErrorContextDebugMessage { ty, options } => {
+                info::Trampoline::ErrorContextDebugMessage {
+                    ty: *ty,
+                    options: self.options(options),
+                }
+            }
+            Trampoline::ErrorContextDrop { ty } => info::Trampoline::ErrorContextDrop { ty: *ty },
             Trampoline::ResourceTransferOwn => info::Trampoline::ResourceTransferOwn,
             Trampoline::ResourceTransferBorrow => info::Trampoline::ResourceTransferBorrow,
             Trampoline::ResourceEnterCall => info::Trampoline::ResourceEnterCall,
             Trampoline::ResourceExitCall => info::Trampoline::ResourceExitCall,
+            Trampoline::SyncEnterCall => info::Trampoline::SyncEnterCall,
+            Trampoline::SyncExitCall { callback } => info::Trampoline::SyncExitCall {
+                callback: callback.map(|v| self.runtime_callback(v)),
+            },
+            Trampoline::AsyncEnterCall => info::Trampoline::AsyncEnterCall,
+            Trampoline::AsyncExitCall {
+                callback,
+                post_return,
+            } => info::Trampoline::AsyncExitCall {
+                callback: callback.map(|v| self.runtime_callback(v)),
+                post_return: post_return.map(|v| self.runtime_post_return(v)),
+            },
+            Trampoline::FutureTransfer => info::Trampoline::FutureTransfer,
+            Trampoline::StreamTransfer => info::Trampoline::StreamTransfer,
+            Trampoline::ErrorContextTransfer => info::Trampoline::ErrorContextTransfer,
         };
         let i1 = self.trampolines.push(*signature);
         let i2 = self.trampoline_defs.push(trampoline);
@@ -650,7 +937,7 @@ impl LinearizeDfg<'_> {
     }
 
     fn adapter(&mut self, adapter: AdapterId) -> info::CoreExport<EntityIndex> {
-        let (adapter_module, entity_index) = self.dfg.adapter_paritionings[adapter];
+        let (adapter_module, entity_index) = self.dfg.adapter_partitionings[adapter];
 
         // Instantiates the adapter module if it hasn't already been
         // instantiated or otherwise returns the index that the module was

@@ -1,86 +1,86 @@
 use std::{env, process};
 use test_programs::preview1::{create_file, open_scratch_directory};
 
-unsafe fn test_path_open_lots(dir_fd: wasi::Fd) {
+unsafe fn test_path_open_lots(dir_fd: wasip1::Fd) {
     create_file(dir_fd, "file");
 
     for _ in 0..2000 {
-        let f_readonly = wasi::path_open(dir_fd, 0, "file", 0, wasi::RIGHTS_FD_READ, 0, 0)
+        let f_readonly = wasip1::path_open(dir_fd, 0, "file", 0, wasip1::RIGHTS_FD_READ, 0, 0)
             .expect("open file readonly");
 
         let buffer = &mut [0u8; 100];
-        let iovec = wasi::Iovec {
+        let iovec = wasip1::Iovec {
             buf: buffer.as_mut_ptr(),
             buf_len: buffer.len(),
         };
-        let nread = wasi::fd_read(f_readonly, &[iovec]).expect("reading readonly file");
+        let nread = wasip1::fd_read(f_readonly, &[iovec]).expect("reading readonly file");
         assert_eq!(nread, 0, "readonly file is empty");
 
-        wasi::fd_close(f_readonly).expect("close readonly");
+        wasip1::fd_close(f_readonly).expect("close readonly");
     }
 
     for _ in 0..2000 {
-        let f_readonly = wasi::path_open(dir_fd, 0, "file", 0, wasi::RIGHTS_FD_READ, 0, 0)
+        let f_readonly = wasip1::path_open(dir_fd, 0, "file", 0, wasip1::RIGHTS_FD_READ, 0, 0)
             .expect("open file readonly");
 
         let buffer = &mut [0u8; 100];
-        let iovec = wasi::Iovec {
+        let iovec = wasip1::Iovec {
             buf: buffer.as_mut_ptr(),
             buf_len: buffer.len(),
         };
-        let nread = wasi::fd_pread(f_readonly, &[iovec], 0).expect("reading readonly file");
+        let nread = wasip1::fd_pread(f_readonly, &[iovec], 0).expect("reading readonly file");
         assert_eq!(nread, 0, "readonly file is empty");
 
-        wasi::fd_close(f_readonly).expect("close readonly");
+        wasip1::fd_close(f_readonly).expect("close readonly");
     }
 
     for _ in 0..2000 {
-        let f = wasi::path_open(
+        let f = wasip1::path_open(
             dir_fd,
             0,
             "file",
             0,
-            wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
             0,
             0,
         )
         .unwrap();
 
         let buffer = &[0u8; 100];
-        let ciovec = wasi::Ciovec {
+        let ciovec = wasip1::Ciovec {
             buf: buffer.as_ptr(),
             buf_len: buffer.len(),
         };
-        let nwritten = wasi::fd_write(f, &[ciovec]).expect("write failed");
+        let nwritten = wasip1::fd_write(f, &[ciovec]).expect("write failed");
         assert_eq!(nwritten, 100);
 
-        wasi::fd_close(f).unwrap();
+        wasip1::fd_close(f).unwrap();
     }
 
     for _ in 0..2000 {
-        let f = wasi::path_open(
+        let f = wasip1::path_open(
             dir_fd,
             0,
             "file",
             0,
-            wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
             0,
             0,
         )
         .unwrap();
 
         let buffer = &[0u8; 100];
-        let ciovec = wasi::Ciovec {
+        let ciovec = wasip1::Ciovec {
             buf: buffer.as_ptr(),
             buf_len: buffer.len(),
         };
-        let nwritten = wasi::fd_pwrite(f, &[ciovec], 0).expect("write failed");
+        let nwritten = wasip1::fd_pwrite(f, &[ciovec], 0).expect("write failed");
         assert_eq!(nwritten, 100);
 
-        wasi::fd_close(f).unwrap();
+        wasip1::fd_close(f).unwrap();
     }
 
-    wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
+    wasip1::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
 
 fn main() {

@@ -10,12 +10,12 @@
 #![no_main]
 
 use arbitrary::Unstructured;
-use component_fuzz_util::{TestCase, Type, MAX_TYPE_DEPTH};
 use libfuzzer_sys::fuzz_target;
 use wasmparser::component_types::ComponentAnyTypeId;
 use wasmparser::{Parser, Payload, Validator, WasmFeatures};
 use wasmtime_environ::component::*;
 use wasmtime_environ::fact::Module;
+use wasmtime_test_util::component_fuzz::{TestCase, Type, MAX_TYPE_DEPTH};
 
 const TYPE_COUNT: usize = 50;
 const MAX_ARITY: u32 = 5;
@@ -61,17 +61,17 @@ fn target(data: &[u8]) -> arbitrary::Result<()> {
     };
     for _ in 0..u.int_in_range(1..=TEST_CASE_COUNT)? {
         let mut params = Vec::new();
-        let mut results = Vec::new();
+        let mut result = None;
         for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
             params.push(u.choose(&types)?);
         }
-        for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
-            results.push(u.choose(&types)?);
+        if u.arbitrary()? {
+            result = Some(u.choose(&types)?);
         }
 
         let test = TestCase {
             params,
-            results,
+            result,
             encoding1: u.arbitrary()?,
             encoding2: u.arbitrary()?,
         };
@@ -168,6 +168,10 @@ fn target(data: &[u8]) -> arbitrary::Result<()> {
                         realloc: Some(dummy_def()),
                         // Lowering never allows `post-return`
                         post_return: None,
+                        // Lowering never allows `callback`
+                        callback: None,
+                        // TODO: support async lowers
+                        async_: false,
                     },
                     lift_options: AdapterOptions {
                         instance: RuntimeComponentInstanceIndex::from_u32(1),
@@ -180,6 +184,9 @@ fn target(data: &[u8]) -> arbitrary::Result<()> {
                         } else {
                             None
                         },
+                        // TODO: support async lowers
+                        callback: None,
+                        async_: false,
                     },
                     func: dummy_def(),
                 });
@@ -213,10 +220,14 @@ fn target(data: &[u8]) -> arbitrary::Result<()> {
     panic!()
 }
 
-fn convert_encoding(encoding: component_fuzz_util::StringEncoding) -> StringEncoding {
+fn convert_encoding(
+    encoding: wasmtime_test_util::component_fuzz::StringEncoding,
+) -> StringEncoding {
     match encoding {
-        component_fuzz_util::StringEncoding::Utf8 => StringEncoding::Utf8,
-        component_fuzz_util::StringEncoding::Utf16 => StringEncoding::Utf16,
-        component_fuzz_util::StringEncoding::Latin1OrUtf16 => StringEncoding::CompactUtf16,
+        wasmtime_test_util::component_fuzz::StringEncoding::Utf8 => StringEncoding::Utf8,
+        wasmtime_test_util::component_fuzz::StringEncoding::Utf16 => StringEncoding::Utf16,
+        wasmtime_test_util::component_fuzz::StringEncoding::Latin1OrUtf16 => {
+            StringEncoding::CompactUtf16
+        }
     }
 }

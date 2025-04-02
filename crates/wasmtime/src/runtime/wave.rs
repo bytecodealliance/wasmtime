@@ -1,4 +1,4 @@
-//! Integation with wasm-wave: string representations of values and types
+//! Integration with wasm-wave: string representations of values and types
 
 #[cfg(feature = "component-model")]
 mod component;

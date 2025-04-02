@@ -71,7 +71,10 @@ pub struct SideEffects {
 
 impl SideEffects {
     fn is_empty(&self) -> bool {
-        self.instructions_added_to_blocks.is_empty()
+        let Self {
+            instructions_added_to_blocks,
+        } = self;
+        instructions_added_to_blocks.is_empty()
     }
 }
 
@@ -185,6 +188,12 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
 /// Phi functions.
 ///
 impl SSABuilder {
+    /// Get all of the values associated with the given variable that we have
+    /// inserted in the function thus far.
+    pub fn values_for_var(&self, var: Variable) -> impl Iterator<Item = Value> + '_ {
+        self.variables[var].values().filter_map(|v| v.expand())
+    }
+
     /// Declares a new definition of a variable in a given basic block.
     /// The SSA value is passed as an argument because it should be created with
     /// `ir::DataFlowGraph::append_result`.

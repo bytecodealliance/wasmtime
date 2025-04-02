@@ -18,43 +18,47 @@
 ;; wasm[0]::function[0]::main:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
+;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
 ;;       mov     x9, x0
-;;       sub     sp, sp, #0x18
-;;       mov     x28, sp
+;;       sub     x28, x28, #0x18
+;;       mov     sp, x28
 ;;       stur    x0, [x28, #0x10]
 ;;       stur    x1, [x28, #8]
 ;;       mov     x16, #0
 ;;       stur    x16, [x28]
-;;       sub     sp, sp, #8
-;;       mov     x28, sp
+;;       sub     x28, x28, #8
+;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       mov     x1, x9
 ;;       mov     x16, #0x14
 ;;       mov     w2, w16
 ;;       mov     x16, #0x50
 ;;       mov     w3, w16
-;;       bl      #0x80
-;;   4c: add     sp, sp, #8
-;;       mov     x28, sp
+;;       bl      #0xa0
+;;   50: add     x28, x28, #8
+;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
 ;;       mov     x16, #2
 ;;       mov     w1, w16
 ;;       stur    w1, [x28, #4]
 ;;       ldur    w1, [x28, #4]
 ;;       add     w0, w0, w1, uxtx
-;;       add     sp, sp, #0x18
-;;       mov     x28, sp
+;;       add     x28, x28, #0x18
+;;       mov     sp, x28
+;;       mov     sp, x28
+;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;; 
+;;
 ;; wasm[0]::function[1]::add:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
+;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
 ;;       mov     x9, x0
-;;       sub     sp, sp, #0x18
-;;       mov     x28, sp
+;;       sub     x28, x28, #0x18
+;;       mov     sp, x28
 ;;       stur    x0, [x28, #0x10]
 ;;       stur    x1, [x28, #8]
 ;;       stur    w2, [x28, #4]
@@ -63,7 +67,9 @@
 ;;       ldur    w1, [x28, #4]
 ;;       add     w1, w1, w0, uxtx
 ;;       mov     w0, w1
-;;       add     sp, sp, #0x18
-;;       mov     x28, sp
+;;       add     x28, x28, #0x18
+;;       mov     sp, x28
+;;       mov     sp, x28
+;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

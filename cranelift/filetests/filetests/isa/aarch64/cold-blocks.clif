@@ -16,8 +16,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   mov w5, w0
-;   cbnz x5, label1 ; b label2
+;   mov w4, w0
+;   cbnz x4, label1 ; b label2
 ; block1:
 ;   b label3
 ; block2:
@@ -28,8 +28,8 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w5, w0
-;   cbnz x5, #0xc
+;   mov w4, w0
+;   cbnz x4, #0xc
 ; block1: ; offset 0x8
 ;   mov w0, #0x61
 ; block2: ; offset 0xc
@@ -49,8 +49,8 @@ block2 cold:
 
 ; VCode:
 ; block0:
-;   mov w5, w0
-;   cbnz x5, label1 ; b label2
+;   mov w4, w0
+;   cbnz x4, label1 ; b label2
 ; block1:
 ;   b label3
 ; block3:
@@ -61,8 +61,8 @@ block2 cold:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov w5, w0
-;   cbz x5, #0xc
+;   mov w4, w0
+;   cbz x4, #0xc
 ; block1: ; offset 0x8
 ;   ret
 ; block2: ; offset 0xc

@@ -56,7 +56,7 @@ Wasmtime are:
 [Secure]: https://docs.wasmtime.dev/security.html
 [Configurable]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html
 [WASI]: https://docs.rs/wasmtime-wasi/latest/wasmtime_wasi/
-[Standards Compliant]: https://docs.wasmtime.dev/stability-wasm-proposals-support.html
+[Standards Compliant]: https://docs.wasmtime.dev/stability-wasm-proposals.html
 
 ## Example
 
@@ -114,6 +114,9 @@ The [wasmtime guide][guide] is the best starting point to learn about what
 Wasmtime can do for you or help answer your questions about Wasmtime. If you're
 curious in contributing to Wasmtime, [it can also help you do
 that][contributing]!
+
+For information on supported versions of Wasmtime see [the corresponding online book
+documentation](https://docs.wasmtime.dev/stability-release.html#current-versions).
 
 [contributing]: https://bytecodealliance.github.io/wasmtime/contributing.html
 [guide]: https://bytecodealliance.github.io/wasmtime

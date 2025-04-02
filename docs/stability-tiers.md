@@ -38,6 +38,7 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`multi-memory`]                           |
 | WebAssembly Proposal | [`threads`]                                |
 | WebAssembly Proposal | [`tail-call`]                              |
+| WebAssembly Proposal | [`memory64`]                               |
 | WASI Proposal        | [`wasi-io`]                                |
 | WASI Proposal        | [`wasi-clocks`]                            |
 | WASI Proposal        | [`wasi-filesystem`]                        |
@@ -71,9 +72,9 @@ For explanations of what each tier means see below.
 | Target               | `s390x-unknown-linux-gnu`  | Continuous fuzzing          |
 | Target               | `x86_64-pc-windows-gnu`    | Clear owner of the target   |
 | Target               | Support for `#![no_std]`   | Support beyond CI checks    |
-| WebAssembly Proposal | [`memory64`]               | Unstable wasm proposal      |
 | WebAssembly Proposal | [`function-references`]    | Unstable wasm proposal      |
 | WebAssembly Proposal | [`wide-arithmetic`]        | Unstable wasm proposal      |
+| Execution Backend    | Pulley                     | More time fuzzing/baking    |
 
 [`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
 [`multi-memory`]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
@@ -94,20 +95,23 @@ For explanations of what each tier means see below.
 | Target               | `armv7-unknown-linux-gnueabihf`   | full-time maintainer |
 | Target               | `i686-pc-windows-msvc`            | CI testing, full-time maintainer |
 | Target               | `i686-unknown-linux-gnu`          | full-time maintainer |
+| Target               | `powerpc64le-unknown-linux-gnu`   | CI testing, full-time maintainer |
+| Target               | `riscv32imac-unknown-none-elf`[^5]| CI testing, full-time maintainer |
 | Target               | `riscv64gc-unknown-linux-gnu`     | full-time maintainer        |
 | Target               | `wasm32-wasip1` [^3]              | Supported but not tested    |
 | Target               | `x86_64-linux-android`            | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-freebsd`          | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-illumos`          | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-linux-musl` [^4]  | CI testing, full-time maintainer |
+| Target               | `x86_64-unknown-none` [^5]        | CI testing, full-time maintainer |
 | Compiler Backend     | Winch on x86\_64                  | WebAssembly proposals (`simd`, `relaxed-simd`, `tail-call`, `reference-types`, `threads`)     |
 | Compiler Backend     | Winch on aarch64                  | Complete implementation     |
-| Execution Backend    | Pulley                            | fuzzing                     |
 | WebAssembly Proposal | [`gc`]                            | Complete implementation     |
 | WASI Proposal        | [`wasi-nn`]                       | More expansive CI testing   |
 | WASI Proposal        | [`wasi-threads`]                  | More CI, unstable proposal  |
 | WASI Proposal        | [`wasi-config`]                   | unstable proposal           |
 | WASI Proposal        | [`wasi-keyvalue`]                 | unstable proposal           |
+| WASI Proposal        | [`wasi-tls`]                      | unstable proposal           |
 | *misc*               | Non-Wasmtime Cranelift usage [^1] | CI testing, full-time maintainer |
 | *misc*               | DWARF debugging [^2]              | CI testing, full-time maintainer, improved quality |
 
@@ -115,6 +119,7 @@ For explanations of what each tier means see below.
 [`wasi-threads`]: https://github.com/WebAssembly/wasi-threads
 [`wasi-config`]: https://github.com/WebAssembly/wasi-config
 [`wasi-keyvalue`]: https://github.com/WebAssembly/wasi-keyvalue
+[`wasi-tls`]: https://github.com/WebAssembly/wasi-tls
 [`gc`]: https://github.com/WebAssembly/gc
 
 [^1]: This is intended to encompass features that Cranelift supports as a
@@ -138,6 +143,15 @@ Wasmtime-compiled-to-wasm can itself compile wasm but cannot execute wasm.
 linked, meaning that they are not suitable for "run on any linux distribution"
 style use cases. Wasmtime does not have static binary artifacts at this time and
 that will require building from source.
+
+[^5]: Rust targets that are `#![no_std]` don't support the entire feature set of
+Wasmtime. For example the `threads` Cargo feature requires the standard library.
+For more information see the [`no_std` documentation][nostd]. Additionally these
+targets are sound in the presence of multiple threads but will panic on
+contention of data structures. If you're doing multithreaded things in `no_std`
+please file an issue so we can help solve your use case.
+
+[nostd]: ./stability-platform-support.md
 
 #### Unsupported features and platforms
 

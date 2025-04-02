@@ -35,5 +35,5 @@ clap = { workspace = true }
 wat = { workspace = true }
 
 [features]
-default = ["shuffling-allocator", "wasi-nn"]
+default = ["wasi-nn"]
 wasi-nn = ["wasmtime-wasi-nn"]

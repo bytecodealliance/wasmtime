@@ -7,12 +7,14 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::poll::Subscribe;
-use crate::{HostInputStream, HostOutputStream, StreamError};
 use anyhow::anyhow;
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
+use wasmtime_wasi_io::{
+    poll::Pollable,
+    streams::{InputStream, OutputStream, StreamError},
+};
 
 pub use crate::write_stream::AsyncWriteStream;
 
@@ -34,7 +36,7 @@ impl MemoryInputPipe {
 }
 
 #[async_trait::async_trait]
-impl HostInputStream for MemoryInputPipe {
+impl InputStream for MemoryInputPipe {
     fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
         let mut buffer = self.buffer.lock().unwrap();
         if buffer.is_empty() {
@@ -48,7 +50,7 @@ impl HostInputStream for MemoryInputPipe {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for MemoryInputPipe {
+impl Pollable for MemoryInputPipe {
     async fn ready(&mut self) {}
 }
 
@@ -76,7 +78,7 @@ impl MemoryOutputPipe {
 }
 
 #[async_trait::async_trait]
-impl HostOutputStream for MemoryOutputPipe {
+impl OutputStream for MemoryOutputPipe {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
         let mut buf = self.buffer.lock().unwrap();
         if bytes.len() > self.capacity - buf.len() {
@@ -104,11 +106,11 @@ impl HostOutputStream for MemoryOutputPipe {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for MemoryOutputPipe {
+impl Pollable for MemoryOutputPipe {
     async fn ready(&mut self) {}
 }
 
-/// Provides a [`HostInputStream`] impl from a [`tokio::io::AsyncRead`] impl
+/// Provides a [`InputStream`] impl from a [`tokio::io::AsyncRead`] impl
 pub struct AsyncReadStream {
     closed: bool,
     buffer: Option<Result<Bytes, StreamError>>,
@@ -117,7 +119,7 @@ pub struct AsyncReadStream {
 }
 
 impl AsyncReadStream {
-    /// Create a [`AsyncReadStream`]. In order to use the [`HostInputStream`] impl
+    /// Create a [`AsyncReadStream`]. In order to use the [`InputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncRead`].
     pub fn new<T: tokio::io::AsyncRead + Send + Unpin + 'static>(mut reader: T) -> Self {
         let (sender, receiver) = mpsc::channel(1);
@@ -150,7 +152,7 @@ impl AsyncReadStream {
 }
 
 #[async_trait::async_trait]
-impl HostInputStream for AsyncReadStream {
+impl InputStream for AsyncReadStream {
     fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
         use mpsc::error::TryRecvError;
 
@@ -200,7 +202,7 @@ impl HostInputStream for AsyncReadStream {
     }
 }
 #[async_trait::async_trait]
-impl Subscribe for AsyncReadStream {
+impl Pollable for AsyncReadStream {
     async fn ready(&mut self) {
         if self.buffer.is_some() || self.closed {
             return;
@@ -219,7 +221,7 @@ impl Subscribe for AsyncReadStream {
 pub struct SinkOutputStream;
 
 #[async_trait::async_trait]
-impl HostOutputStream for SinkOutputStream {
+impl OutputStream for SinkOutputStream {
     fn write(&mut self, _buf: Bytes) -> Result<(), StreamError> {
         Ok(())
     }
@@ -235,7 +237,7 @@ impl HostOutputStream for SinkOutputStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for SinkOutputStream {
+impl Pollable for SinkOutputStream {
     async fn ready(&mut self) {}
 }
 
@@ -244,14 +246,14 @@ impl Subscribe for SinkOutputStream {
 pub struct ClosedInputStream;
 
 #[async_trait::async_trait]
-impl HostInputStream for ClosedInputStream {
+impl InputStream for ClosedInputStream {
     fn read(&mut self, _size: usize) -> Result<Bytes, StreamError> {
         Err(StreamError::Closed)
     }
 }
 
 #[async_trait::async_trait]
-impl Subscribe for ClosedInputStream {
+impl Pollable for ClosedInputStream {
     async fn ready(&mut self) {}
 }
 
@@ -260,7 +262,7 @@ impl Subscribe for ClosedInputStream {
 pub struct ClosedOutputStream;
 
 #[async_trait::async_trait]
-impl HostOutputStream for ClosedOutputStream {
+impl OutputStream for ClosedOutputStream {
     fn write(&mut self, _: Bytes) -> Result<(), StreamError> {
         Err(StreamError::Closed)
     }
@@ -274,7 +276,7 @@ impl HostOutputStream for ClosedOutputStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for ClosedOutputStream {
+impl Pollable for ClosedOutputStream {
     async fn ready(&mut self) {}
 }
 

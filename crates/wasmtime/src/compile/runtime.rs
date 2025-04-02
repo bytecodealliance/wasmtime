@@ -1,4 +1,3 @@
-use crate::compile::HashedEngineCompileEnv;
 #[cfg(feature = "component-model")]
 use crate::component::Component;
 use crate::prelude::*;
@@ -6,7 +5,7 @@ use crate::runtime::vm::MmapVec;
 use crate::{CodeBuilder, CodeMemory, Engine, Module};
 use object::write::WritableBuffer;
 use std::sync::Arc;
-use wasmtime_environ::{FinishedObject, ObjectBuilder, ObjectKind};
+use wasmtime_environ::{FinishedObject, ObjectBuilder};
 
 impl<'a> CodeBuilder<'a> {
     fn compile_cached<T, S>(
@@ -29,7 +28,7 @@ impl<'a> CodeBuilder<'a> {
         #[cfg(feature = "cache")]
         {
             let state = (
-                HashedEngineCompileEnv(self.engine),
+                crate::compile::HashedEngineCompileEnv(self.engine),
                 &wasm,
                 &dwarf_package,
                 // Don't hash this as it's just its own "pure" function pointer.
@@ -61,15 +60,21 @@ impl<'a> CodeBuilder<'a> {
                         // Cache hit, deserialize the provided artifacts
                         |(engine, wasm, _, _, _), serialized_bytes| {
                             let kind = if wasmparser::Parser::is_component(&wasm) {
-                                ObjectKind::Component
+                                wasmtime_environ::ObjectKind::Component
                             } else {
-                                ObjectKind::Module
+                                wasmtime_environ::ObjectKind::Module
                             };
                             let code = engine.0.load_code_bytes(&serialized_bytes, kind).ok()?;
                             Some((code, None))
                         },
                     )?;
             return Ok((code, info_and_types));
+
+            struct NotHashed<T>(T);
+
+            impl<T> std::hash::Hash for NotHashed<T> {
+                fn hash<H: std::hash::Hasher>(&self, _hasher: &mut H) {}
+            }
         }
 
         #[cfg(not(feature = "cache"))]
@@ -78,12 +83,6 @@ impl<'a> CodeBuilder<'a> {
                 build_artifacts(self.engine, &wasm, dwarf_package.as_deref(), state)?;
             let code = publish_mmap(self.engine, mmap.0)?;
             return Ok((code, info_and_types));
-        }
-
-        struct NotHashed<T>(T);
-
-        impl<T> std::hash::Hash for NotHashed<T> {
-            fn hash<H: std::hash::Hasher>(&self, _hasher: &mut H) {}
         }
     }
 

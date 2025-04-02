@@ -22,6 +22,9 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-math",
     "pulley-interpreter",
     // cranelift
+    "cranelift-srcgen",
+    "cranelift-assembler-x64-meta",
+    "cranelift-assembler-x64",
     "cranelift-isle",
     "cranelift-entity",
     "cranelift-bforest",
@@ -65,12 +68,14 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wiggle",
     "wasi-common",
     // other misc wasmtime crates
+    "wasmtime-wasi-io",
     "wasmtime-wasi",
     "wasmtime-wasi-http",
     "wasmtime-wasi-nn",
     "wasmtime-wasi-config",
     "wasmtime-wasi-keyvalue",
     "wasmtime-wasi-threads",
+    "wasmtime-wasi-tls",
     "wasmtime-wast",
     "wasmtime-c-api-macros",
     "wasmtime-c-api-impl",
@@ -84,17 +89,23 @@ const CRATES_TO_PUBLISH: &[&str] = &[
 // releases since everything not mentioned here is just an organizational detail
 // that no one else should rely on.
 const PUBLIC_CRATES: &[&str] = &[
-    // these are actually public crates which we cannot break the API of in
+    // These are actually public crates which we cannot break the API of in
     // patch releases.
     "wasmtime",
+    "wasmtime-wasi-io",
     "wasmtime-wasi",
+    "wasmtime-wasi-tls",
+    "wasmtime-wasi-http",
     "wasmtime-wasi-nn",
     "wasmtime-wasi-config",
     "wasmtime-wasi-keyvalue",
     "wasmtime-wasi-threads",
     "wasmtime-cli",
-    // all cranelift crates are considered "public" in that they can't
-    // have breaking API changes in patch releases
+    // All cranelift crates are considered "public" in that they can't have
+    // breaking API changes in patch releases.
+    "cranelift-srcgen",
+    "cranelift-assembler-x64-meta",
+    "cranelift-assembler-x64",
     "cranelift-entity",
     "cranelift-bforest",
     "cranelift-bitset",

@@ -143,7 +143,6 @@ pub(crate) fn emit(
             "Cannot emit inst '{inst:?}' for target; failed to match ISA requirements: {isa_requirements:?}"
         )
     }
-
     match inst {
         Inst::AluRmiR {
             size,
@@ -249,47 +248,6 @@ pub(crate) fn emit(
                 info,
                 state,
             );
-        }
-
-        Inst::AluRM {
-            size,
-            src1_dst,
-            src2,
-            op,
-            lock,
-        } => {
-            let src2 = src2.to_reg();
-            let src1_dst = src1_dst.finalize(state.frame_layout(), sink).clone();
-
-            let opcode = match op {
-                AluRmiROpcode::Add => 0x01,
-                AluRmiROpcode::Sub => 0x29,
-                AluRmiROpcode::And => 0x21,
-                AluRmiROpcode::Or => 0x09,
-                AluRmiROpcode::Xor => 0x31,
-                _ => panic!("Unsupported read-modify-write ALU opcode"),
-            };
-
-            let prefix = match (size, lock) {
-                (OperandSize::Size16, false) => LegacyPrefixes::_66,
-                (OperandSize::Size16, true) => LegacyPrefixes::_66F0,
-                (_, false) => LegacyPrefixes::None,
-                (_, true) => LegacyPrefixes::_F0,
-            };
-            let opcode = if *size == OperandSize::Size8 {
-                opcode - 1
-            } else {
-                opcode
-            };
-
-            let mut rex = RexFlags::from(*size);
-            if *size == OperandSize::Size8 {
-                debug_assert!(src2.is_real());
-                rex.always_emit_if_8bit_needed(src2);
-            }
-
-            let enc_g = int_reg_enc(src2);
-            emit_std_enc_mem(sink, prefix, opcode, 1, enc_g, &src1_dst, rex, 0);
         }
 
         Inst::AluRmRVex {
@@ -1622,7 +1580,8 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
 
             // jne  .loop_start
-            // TODO: Encoding the JmpIf as a short jump saves us 4 bytes here.
+            // TODO: Encoding the conditional jump as a short jump
+            // could save us us 4 bytes here.
             one_way_jmp(sink, CC::NZ, loop_start);
 
             // The regular prologue code is going to emit a `sub` after this, so we need to
@@ -1891,7 +1850,7 @@ pub(crate) fn emit(
             sink.put4(0x0);
         }
 
-        Inst::JmpIf { cc, taken } => {
+        Inst::WinchJmpIf { cc, taken } => {
             let cond_start = sink.cur_offset();
             let cond_disp_off = cond_start + 2;
 
@@ -1933,6 +1892,76 @@ pub(crate) fn emit(
 
             sink.put1(0xE9);
             // Placeholder for the label value.
+            sink.put4(0x0);
+        }
+
+        Inst::JmpCondOr {
+            cc1,
+            cc2,
+            taken,
+            not_taken,
+        } => {
+            // Emit:
+            //   jcc1 taken
+            //   jcc2 taken
+            //   jmp not_taken
+            //
+            // Note that we enroll both conditionals in the
+            // branch-chomping mechanism because MachBuffer
+            // simplification can continue upward as long as it keeps
+            // chomping branches. In the best case, if taken ==
+            // not_taken and that one block is the fallthrough block,
+            // all three branches can disappear.
+
+            // jcc1 taken
+            let cond_1_start = sink.cur_offset();
+            let cond_1_disp_off = cond_1_start + 2;
+            let cond_1_end = cond_1_start + 6;
+
+            sink.use_label_at_offset(cond_1_disp_off, *taken, LabelUse::JmpRel32);
+            let inverted: [u8; 6] = [
+                0x0F,
+                0x80 + (cc1.invert().get_enc()),
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+            ];
+            sink.add_cond_branch(cond_1_start, cond_1_end, *taken, &inverted[..]);
+
+            sink.put1(0x0F);
+            sink.put1(0x80 + cc1.get_enc());
+            sink.put4(0x0);
+
+            // jcc2 taken
+            let cond_2_start = sink.cur_offset();
+            let cond_2_disp_off = cond_2_start + 2;
+            let cond_2_end = cond_2_start + 6;
+
+            sink.use_label_at_offset(cond_2_disp_off, *taken, LabelUse::JmpRel32);
+            let inverted: [u8; 6] = [
+                0x0F,
+                0x80 + (cc2.invert().get_enc()),
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+            ];
+            sink.add_cond_branch(cond_2_start, cond_2_end, *taken, &inverted[..]);
+
+            sink.put1(0x0F);
+            sink.put1(0x80 + cc2.get_enc());
+            sink.put4(0x0);
+
+            // jmp not_taken
+            let uncond_start = sink.cur_offset();
+            let uncond_disp_off = uncond_start + 1;
+            let uncond_end = uncond_start + 5;
+
+            sink.use_label_at_offset(uncond_disp_off, *not_taken, LabelUse::JmpRel32);
+            sink.add_uncond_branch(uncond_start, uncond_end, *not_taken);
+
+            sink.put1(0xE9);
             sink.put4(0x0);
         }
 
@@ -4621,6 +4650,22 @@ pub(crate) fn emit(
 
         Inst::DummyUse { .. } => {
             // Nothing.
+        }
+
+        Inst::External { inst } => {
+            let mut known_offsets = [0, 0];
+            // These values are transcribed from what is happening in
+            // `SyntheticAmode::finalize`. This, plus the `Into` logic
+            // converting a `SyntheticAmode` to its external counterpart, are
+            // necessary to communicate Cranelift's internal offsets to the
+            // assembler; due to when Cranelift determines these offsets, this
+            // happens quite late (i.e., here during emission).
+            let frame = state.frame_layout();
+            known_offsets[external::offsets::KEY_INCOMING_ARG] =
+                i32::try_from(frame.tail_args_size + frame.setup_area_size).unwrap();
+            known_offsets[external::offsets::KEY_SLOT_OFFSET] =
+                i32::try_from(frame.outgoing_args_size).unwrap();
+            inst.encode(sink, &known_offsets);
         }
     }
 

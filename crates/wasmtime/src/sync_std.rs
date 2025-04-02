@@ -30,6 +30,12 @@ impl<T> OnceLock<T> {
     }
 }
 
+impl<T> Default for OnceLock<T> {
+    fn default() -> OnceLock<T> {
+        OnceLock::new()
+    }
+}
+
 /// Small wrapper around `std::sync::RwLock` which undoes poisoning.
 #[derive(Debug, Default)]
 pub struct RwLock<T>(std::sync::RwLock<T>);

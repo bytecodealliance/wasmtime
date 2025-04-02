@@ -20,8 +20,7 @@ block2:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vucomiss %xmm1, %xmm0
-;   jp      label1
-;   jnz     label1; j label2
+;   jp,nz   label1; j label2
 ; block1:
 ;   movl    $2, %eax
 ;   movq    %rbp, %rsp
@@ -71,8 +70,7 @@ block2:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vucomisd %xmm1, %xmm0
-;   jp      label1
-;   jnz     label1; j label2
+;   jp,nz   label1; j label2
 ; block1:
 ;   movl    $2, %eax
 ;   movq    %rbp, %rsp

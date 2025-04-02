@@ -8,11 +8,10 @@
 //! type numbering.
 
 use crate::cdsl::types as cdsl_types;
-use crate::error;
-use crate::srcgen;
+use cranelift_srcgen::{error, fmtln, Formatter, Language};
 
 /// Emit a constant definition of a single value type.
-fn emit_type(ty: &cdsl_types::ValueType, fmt: &mut srcgen::Formatter) {
+fn emit_type(ty: &cdsl_types::ValueType, fmt: &mut Formatter) {
     let name = ty.to_string().to_uppercase();
     let number = ty.number();
 
@@ -21,7 +20,7 @@ fn emit_type(ty: &cdsl_types::ValueType, fmt: &mut srcgen::Formatter) {
 }
 
 /// Emit definition for all vector types with `bits` total size.
-fn emit_vectors(bits: u64, fmt: &mut srcgen::Formatter) {
+fn emit_vectors(bits: u64, fmt: &mut Formatter) {
     let vec_size: u64 = bits / 8;
     for vec in cdsl_types::ValueType::all_lane_types()
         .map(|ty| (ty, cdsl_types::ValueType::from(ty).membytes()))
@@ -34,7 +33,7 @@ fn emit_vectors(bits: u64, fmt: &mut srcgen::Formatter) {
 }
 
 /// Emit definition for all dynamic vector types with `bits` total size.
-fn emit_dynamic_vectors(bits: u64, fmt: &mut srcgen::Formatter) {
+fn emit_dynamic_vectors(bits: u64, fmt: &mut Formatter) {
     let vec_size: u64 = bits / 8;
     for vec in cdsl_types::ValueType::all_lane_types()
         .map(|ty| (ty, cdsl_types::ValueType::from(ty).membytes()))
@@ -47,7 +46,7 @@ fn emit_dynamic_vectors(bits: u64, fmt: &mut srcgen::Formatter) {
 }
 
 /// Emit types using the given formatter object.
-fn emit_types(fmt: &mut srcgen::Formatter) {
+fn emit_types(fmt: &mut Formatter) {
     // Emit all of the lane types, such integers, floats, and booleans.
     for ty in cdsl_types::ValueType::all_lane_types().map(cdsl_types::ValueType::from) {
         emit_type(&ty, fmt);
@@ -63,8 +62,8 @@ fn emit_types(fmt: &mut srcgen::Formatter) {
 
 /// Generate the types file.
 pub(crate) fn generate(filename: &str, out_dir: &std::path::Path) -> Result<(), error::Error> {
-    let mut fmt = srcgen::Formatter::new();
+    let mut fmt = Formatter::new(Language::Rust);
     emit_types(&mut fmt);
-    fmt.update_file(filename, out_dir)?;
+    fmt.write(filename, out_dir)?;
     Ok(())
 }

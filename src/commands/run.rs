@@ -32,6 +32,9 @@ use wasmtime_wasi_http::{
 #[cfg(feature = "wasi-keyvalue")]
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 
+#[cfg(feature = "wasi-tls")]
+use wasmtime_wasi_tls::WasiTlsCtx;
+
 fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
     if parts.len() != 2 {
@@ -44,7 +47,7 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
 #[derive(Parser)]
 pub struct RunCommand {
     #[command(flatten)]
-    #[allow(missing_docs)]
+    #[expect(missing_docs, reason = "don't want to mess with clap doc-strings")]
     pub run: RunCommon,
 
     /// The name of the function to run
@@ -600,11 +603,17 @@ impl RunCommand {
                 .to_str()
                 .ok_or_else(|| anyhow!("argument is not valid utf-8: {val:?}"))?;
             values.push(match ty {
-                // TODO: integer parsing here should handle hexadecimal notation
-                // like `0x0...`, but the Rust standard library currently only
-                // parses base-10 representations.
-                ValType::I32 => Val::I32(val.parse()?),
-                ValType::I64 => Val::I64(val.parse()?),
+                // Supports both decimal and hexadecimal notation (with 0x prefix)
+                ValType::I32 => Val::I32(if val.starts_with("0x") || val.starts_with("0X") {
+                    i32::from_str_radix(&val[2..], 16)?
+                } else {
+                    val.parse::<i32>()?
+                }),
+                ValType::I64 => Val::I64(if val.starts_with("0x") || val.starts_with("0X") {
+                    i64::from_str_radix(&val[2..], 16)?
+                } else {
+                    val.parse::<i64>()?
+                }),
                 ValType::F32 => Val::F32(val.parse::<f32>()?.to_bits()),
                 ValType::F64 => Val::F64(val.parse::<f64>()?.to_bits()),
                 t => bail!("unsupported argument type {:?}", t),
@@ -899,6 +908,32 @@ impl RunCommand {
                 }
 
                 store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
+            }
+        }
+
+        if self.run.common.wasi.tls == Some(true) {
+            #[cfg(all(not(all(feature = "wasi-tls", feature = "component-model"))))]
+            {
+                bail!("Cannot enable wasi-tls when the binary is not compiled with this feature.");
+            }
+            #[cfg(all(feature = "wasi-tls", feature = "component-model",))]
+            {
+                match linker {
+                    CliLinker::Core(_) => {
+                        bail!("Cannot enable wasi-tls for core wasm modules");
+                    }
+                    CliLinker::Component(linker) => {
+                        let mut opts = wasmtime_wasi_tls::LinkOptions::default();
+                        opts.tls(true);
+                        wasmtime_wasi_tls::add_to_linker(linker, &mut opts, |h| {
+                            let preview2_ctx =
+                                h.preview2_ctx.as_mut().expect("wasip2 is not configured");
+                            let preview2_ctx =
+                                Arc::get_mut(preview2_ctx).unwrap().get_mut().unwrap();
+                            WasiTlsCtx::new(preview2_ctx.table())
+                        })?;
+                    }
+                }
             }
         }
 

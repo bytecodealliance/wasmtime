@@ -9,11 +9,6 @@ on:
     - main
     - 'release-*'
 
-  # Run full CI on the `main` branch once a day to prime the GitHub Actions
-  # caches used by PRs and the merge queue.
-  schedule:
-  - cron: '13 4 * * *'
-
   # This is the CI that runs for PRs-to-merge.
   merge_group:
 
@@ -25,6 +20,9 @@ on:
     # tag at the end of CI if successful and the tag will trigger the artifact
     # uploads as well as publication to crates.io.
     - 'release-*'
+
+  # Allow manually triggering this request via a button or another workflow.
+  workflow_dispatch:
 
 defaults:
   run:
@@ -218,6 +216,8 @@ jobs:
             echo run-dwarf=true >> $GITHUB_OUTPUT
           elif grep -q 'prtest:platform-checks' commits.log; then
             echo platform-checks=true >> $GITHUB_OUTPUT
+          elif grep -q 'prtest:miri' commits.log; then
+            echo test-miri=true >> $GITHUB_OUTPUT
           fi
           if grep -q crates.c-api names.log; then
             echo test-capi=true >> $GITHUB_OUTPUT
@@ -391,6 +391,7 @@ jobs:
               -p wasmtime-cli --no-default-features --features compile
               -p wasmtime-cli --no-default-features --features compile,cranelift
               -p wasmtime-cli --no-default-features --features compile,cranelift,component-model
+              -p wasmtime-cli --no-default-features --features objdump
               -p wasmtime-cli --all-features
               -p wasmtime-cli --features component-model
 
@@ -398,6 +399,11 @@ jobs:
             checks: |
               -p cranelift-codegen --benches
               -p cranelift-codegen --no-default-features --features std,unwind,pulley
+
+          - name: cranelift-entity
+            checks: |
+              -p cranelift-entity --no-default-features
+              -p cranelift-entity --no-default-features --features enable-serde
 
           - name: wasmtime-bench-api
             checks: |
@@ -539,9 +545,10 @@ jobs:
           os: ubuntu-latest
           test: >
             cargo check -p wasmtime --no-default-features --features runtime,component-model &&
-            cargo check -p wasmtime --no-default-features --features runtime,gc,component-model &&
+            cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,async &&
             cargo check -p cranelift-control --no-default-features &&
-            cargo check -p pulley-interpreter --features encode,decode,disas,interp
+            cargo check -p pulley-interpreter --features encode,decode,disas,interp &&
+            cargo check -p wasmtime-wasi-io --no-default-features
         # Use `cross` for illumos to have a C compiler/linker available.
         - target: x86_64-unknown-illumos
           os: ubuntu-latest
@@ -555,6 +562,22 @@ jobs:
           test: cargo build
           env:
             IPHONEOS_DEPLOYMENT_TARGET: 13.0
+        # Test that when Cranelift has no support for an architecture, even a
+        # 64-bit one, that Wasmtime still compiles. Note that this is also
+        # intended to test various fallbacks in the codebase where we have no
+        # support at all for a particular architecture. In theory if someone
+        # adds powerpc64 support to Wasmtime this should get switched to some
+        # other architecture.
+        - target: powerpc64le-unknown-linux-gnu
+          os: ubuntu-latest
+          test: cargo build
+          apt_packages: gcc-powerpc64le-linux-gnu
+          env:
+            CARGO_TARGET_POWERPC64LE_UNKNOWN_LINUX_GNU_LINKER: powerpc64le-linux-gnu-gcc
+        # A no_std target without 64-bit atomics
+        - target: riscv32imac-unknown-none-elf
+          os: ubuntu-latest
+          test: cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,async
     env: ${{ matrix.env || fromJSON('{}') }}
     steps:
     - uses: actions/checkout@v4
@@ -567,6 +590,9 @@ jobs:
         curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
         cargo binstall --no-confirm cross
       if: ${{ matrix.cross }}
+    - name: Install apt packages
+      if: ${{ matrix.apt_packages }}
+      run: sudo apt-get update && sudo apt-get install -y ${{ matrix.apt_packages }}
     - run: ${{ matrix.test }}
       env:
         CARGO_BUILD_TARGET: ${{ matrix.target }}
@@ -612,6 +638,7 @@ jobs:
     - run: cargo fuzz build --dev
     - run: cargo fuzz build --dev --fuzz-dir ./cranelift/isle/fuzz
     - run: cargo fuzz build --dev --fuzz-dir ./crates/environ/fuzz --features component-model
+    - run: cargo fuzz build --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
 
     # common logic to cancel the entire run if this job fails
     - uses: ./.github/actions/cancel-on-failure
@@ -627,7 +654,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-24.04, macos-14, windows-2025]
 
     steps:
     - uses: actions/checkout@v4
@@ -751,7 +778,7 @@ jobs:
       run: sysctl hw
       if: runner.os == 'macOS'
     - name: CPU information
-      run: wmic cpu list /format:list
+      run: Get-WmiObject Win32_Processor
       shell: pwsh
       if: runner.os == 'Windows'
 
@@ -785,10 +812,10 @@ jobs:
   test_wasi_nn:
     strategy:
       matrix:
-        feature: ["openvino", "onnx"]
-        os: ["ubuntu-latest", "windows-latest"]
+        feature: ["openvino"]
+        os: ["ubuntu-24.04", "windows-2025"]
         include:
-          - os: windows-latest
+          - os: windows-2025
             feature: winml
     name: Test wasi-nn (${{ matrix.feature }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -856,7 +883,12 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
+    - run: |
+        rustup target add wasm32-wasip1 wasm32-unknown-unknown
+        cd /tmp
+        curl -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-24/wasi-sdk-24.0-x86_64-linux.tar.gz
+        tar -xzf wasi-sdk-24.0-x86_64-linux.tar.gz
+        mv wasi-sdk-24.0-x86_64-linux wasi-sdk
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb lldb-15 llvm
         # workaround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
@@ -866,6 +898,7 @@ jobs:
         cargo test --release --test all -- --ignored --test-threads 1 debug::
       env:
         LLDB: lldb-15 # override default version, 14
+        WASI_SDK_PATH: /tmp/wasi-sdk
 
     # common logic to cancel the entire run if this job fails
     - uses: ./.github/actions/cancel-on-failure
@@ -933,8 +966,9 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: cargo install cbindgen --vers "^0.27" --locked
+    - run: cargo install cbindgen --vers "^0.28" --locked
     - run: rustup target add x86_64-unknown-none
+    - run: rustup target add wasm32-wasip2
     - run: ./build.sh x86_64-unknown-none
       working-directory: ./examples/min-platform
 
@@ -947,6 +981,12 @@ jobs:
       working-directory: ./examples/min-platform
       env:
         WASMTIME_SIGNALS_BASED_TRAPS: 1
+
+    - run: ./build.sh x86_64-unknown-none
+      working-directory: ./examples/min-platform
+      env:
+        WASMTIME_SIGNALS_BASED_TRAPS: 1
+        MIN_PLATFORM_TEST_DISABLE_WASI: 1
 
     # Add the `wasmtime-platform.h` file as a release artifact
     - uses: actions/upload-artifact@v4
@@ -1029,17 +1069,19 @@ jobs:
   miri:
     strategy:
       matrix:
-        crate:
-          - "wasmtime --features pulley"
-          - "wasmtime-cli"
-          - "wasmtime-environ --all-features"
-          - "pulley-interpreter --all-features"
+        include:
+          - crate: "wasmtime --features pulley"
+          - crate: "wasmtime-cli"
+          - crate: "wasmtime-environ --all-features"
+          - crate: "pulley-interpreter --all-features"
+          - script: ./ci/miri-provenance-test.sh
     needs: determine
     if: needs.determine.outputs.test-miri && github.repository == 'bytecodealliance/wasmtime'
     name: Miri
     runs-on: ubuntu-latest
     env:
-      CARGO_NEXTEST_VERSION: 0.9.67
+      CARGO_NEXTEST_VERSION: 0.9.88
+      MIRIFLAGS: -Zmiri-permissive-provenance
     steps:
     - uses: actions/checkout@v4
       with:
@@ -1056,8 +1098,9 @@ jobs:
     - run: cargo install --root ${{ runner.tool_cache }}/cargo-nextest --version ${{ env.CARGO_NEXTEST_VERSION }} cargo-nextest --locked
     - run: |
         cargo miri nextest run -j4 --no-fail-fast -p ${{ matrix.crate }}
-      env:
-        MIRIFLAGS: -Zmiri-strict-provenance
+      if: ${{ matrix.crate }}
+    - run: ${{ matrix.script }}
+      if: ${{ matrix.script }}
 
     # common logic to cancel the entire run if this job fails
     - uses: ./.github/actions/cancel-on-failure
@@ -1229,3 +1272,29 @@ jobs:
         }
         EOF
       if: steps.tag.outputs.push_tag == 'yes'
+
+  # File an issue on the repo if this run failed and was triggered via
+  # `workflow_dispatch`, which mostly means that
+  # `.github/workflows/trigger-release-branch-ci.yml` will file issues on
+  # failure so we get to see a notification when a build fails for a historical
+  # release branch.
+  file-issue-on-error:
+    name: File an issue if this build failed and was cron-triggered
+    runs-on: ubuntu-latest
+    needs: ci-status
+    if: |
+      always()
+      && needs.ci-status.result != 'success'
+      && github.event_name == 'workflow_dispatch'
+    permissions:
+      issues: write
+    steps:
+    - uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `Failed CI build for ${context.ref}`,
+            body: `See https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+          })

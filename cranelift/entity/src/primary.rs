@@ -214,6 +214,25 @@ where
             .map(|i| K::new(i))
             .map_err(|i| K::new(i))
     }
+
+    /// Analog of `get_raw` except that a raw pointer is returned rather than a
+    /// mutable reference.
+    ///
+    /// The default accessors of items in [`PrimaryMap`] will invalidate all
+    /// previous borrows obtained from the map according to miri. This function
+    /// can be used to acquire a pointer and then subsequently acquire a second
+    /// pointer later on without invalidating the first one. In other words
+    /// this is only here to help borrow two elements simultaneously with miri.
+    pub fn get_raw_mut(&mut self, k: K) -> Option<*mut V> {
+        if k.index() < self.elems.len() {
+            // SAFETY: the `add` function requires that the index is in-bounds
+            // with respect to the allocation which is satisfied here due to
+            // the bounds-check above.
+            unsafe { Some(self.elems.as_mut_ptr().add(k.index())) }
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]

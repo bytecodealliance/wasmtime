@@ -13,12 +13,10 @@ pub(crate) struct FreeList {
 }
 
 /// Our minimum and maximum supported alignment. Every allocation is aligned to
-/// this.
-const ALIGN_U32: u32 = 8;
+/// this. Additionally, this is the minimum allocation size, and every
+/// allocation is rounded up to this size.
+const ALIGN_U32: u32 = 16;
 const ALIGN_USIZE: usize = ALIGN_U32 as usize;
-
-/// Our minimum allocation size.
-const MIN_BLOCK_SIZE: u32 = 24;
 
 impl FreeList {
     /// Create a new `Layout` from the given `size` with an alignment that is
@@ -30,6 +28,7 @@ impl FreeList {
     /// Create a new `FreeList` for a contiguous region of memory of the given
     /// size.
     pub fn new(capacity: usize) -> Self {
+        log::trace!("FreeList::new({capacity})");
         let mut free_list = FreeList {
             capacity,
             free_block_index_to_len: BTreeMap::new(),
@@ -52,22 +51,33 @@ impl FreeList {
             layout.align(),
         );
 
-        ensure!(
-            layout.size() <= self.max_size(),
-            "requested allocation's size of {} is greater than the max supported size of {}",
-            layout.size(),
-            self.max_size(),
-        );
+        if layout.size() > self.max_size() {
+            let trap = crate::Trap::AllocationTooLarge;
+            let err = anyhow::Error::from(trap);
+            let err = err.context(format!(
+                "requested allocation's size of {} is greater than the max supported size of {}",
+                layout.size(),
+                self.max_size(),
+            ));
+            return Err(err);
+        }
 
-        let alloc_size = u32::try_from(layout.size())
-            .context("requested allocation's size does not fit in a u32")?;
+        let alloc_size = u32::try_from(layout.size()).map_err(|e| {
+            let trap = crate::Trap::AllocationTooLarge;
+            let err = anyhow::Error::from(trap);
+            err.context(e)
+                .context("requested allocation's size does not fit in a u32")
+        })?;
         alloc_size
             .checked_next_multiple_of(ALIGN_U32)
             .ok_or_else(|| {
-                anyhow!(
+                let trap = crate::Trap::AllocationTooLarge;
+                let err = anyhow::Error::from(trap);
+                let err = err.context(format!(
                     "failed to round allocation size of {alloc_size} up to next \
                      multiple of {ALIGN_USIZE}"
-                )
+                ));
+                err
             })
     }
 
@@ -99,7 +109,7 @@ impl FreeList {
         debug_assert_eq!(block_index % ALIGN_U32, 0);
         debug_assert_eq!(block_len % ALIGN_U32, 0);
 
-        if block_len - alloc_size < MIN_BLOCK_SIZE {
+        if block_len - alloc_size < ALIGN_U32 {
             // The block is not large enough to split.
             return block_len;
         }
@@ -130,6 +140,7 @@ impl FreeList {
     ///
     /// * `Err(_)`:
     pub fn alloc(&mut self, layout: Layout) -> Result<Option<NonZeroU32>> {
+        log::trace!("FreeList::alloc({layout:?})");
         let alloc_size = self.check_layout(layout)?;
         debug_assert_eq!(alloc_size % ALIGN_U32, 0);
 
@@ -150,11 +161,14 @@ impl FreeList {
         #[cfg(debug_assertions)]
         self.check_integrity();
 
+        log::trace!("FreeList::alloc({layout:?}) -> {block_index:#x}");
         Ok(Some(unsafe { NonZeroU32::new_unchecked(block_index) }))
     }
 
     /// Deallocate an object with the given layout.
     pub fn dealloc(&mut self, index: NonZeroU32, layout: Layout) {
+        log::trace!("FreeList::dealloc({index:#x}, {layout:?})");
+
         let index = index.get();
         debug_assert_eq!(index % ALIGN_U32, 0);
 
@@ -182,6 +196,12 @@ impl FreeList {
                 if blocks_are_contiguous(prev_index, prev_len, index)
                     && blocks_are_contiguous(index, alloc_size, next_index) =>
             {
+                log::trace!(
+                    "merging blocks {prev_index:#x}..{prev_len:#x}, {index:#x}..{index_end:#x}, {next_index:#x}..{next_end:#x}",
+                    prev_len = prev_index + prev_len,
+                    index_end = index + u32::try_from(layout.size()).unwrap(),
+                    next_end = next_index + next_len,
+                );
                 self.free_block_index_to_len.remove(&next_index);
                 let merged_block_len = next_index + next_len - prev_index;
                 debug_assert_eq!(merged_block_len % ALIGN_U32, 0);
@@ -192,6 +212,11 @@ impl FreeList {
             (Some((prev_index, prev_len)), _)
                 if blocks_are_contiguous(prev_index, prev_len, index) =>
             {
+                log::trace!(
+                    "merging blocks {prev_index:#x}..{prev_len:#x}, {index:#x}..{index_end:#x}",
+                    prev_len = prev_index + prev_len,
+                    index_end = index + u32::try_from(layout.size()).unwrap(),
+                );
                 let merged_block_len = index + alloc_size - prev_index;
                 debug_assert_eq!(merged_block_len % ALIGN_U32, 0);
                 *self.free_block_index_to_len.get_mut(&prev_index).unwrap() = merged_block_len;
@@ -201,6 +226,11 @@ impl FreeList {
             (_, Some((next_index, next_len)))
                 if blocks_are_contiguous(index, alloc_size, next_index) =>
             {
+                log::trace!(
+                    "merging blocks {index:#x}..{index_end:#x}, {next_index:#x}..{next_end:#x}",
+                    index_end = index + u32::try_from(layout.size()).unwrap(),
+                    next_end = next_index + next_len,
+                );
                 self.free_block_index_to_len.remove(&next_index);
                 let merged_block_len = next_index + next_len - index;
                 debug_assert_eq!(merged_block_len % ALIGN_U32, 0);
@@ -210,6 +240,7 @@ impl FreeList {
             // None of the blocks are contiguous: insert this block into the
             // free list.
             (_, _) => {
+                log::trace!("cannot merge blocks");
                 self.free_block_index_to_len.insert(index, alloc_size);
             }
         }
@@ -271,7 +302,7 @@ impl FreeList {
 
         let len = round_u32_down_to_pow2(end.saturating_sub(start), ALIGN_U32);
 
-        let entire_range = if len >= MIN_BLOCK_SIZE {
+        let entire_range = if len >= ALIGN_U32 {
             Some((start, len))
         } else {
             None
@@ -290,9 +321,17 @@ fn blocks_are_contiguous(prev_index: u32, prev_len: u32, next_index: u32) -> boo
     // the size of the `Layout` given to us upon deallocation (aka `prev_len`)
     // is smaller than the actual size of the block we allocated.
     let end_of_prev = prev_index + prev_len;
-    debug_assert!(next_index >= end_of_prev);
+    debug_assert!(
+        next_index >= end_of_prev,
+        "overlapping blocks: \n\
+         \t prev_index = {prev_index:#x}\n\
+         \t   prev_len = {prev_len:#x}\n\
+         \tend_of_prev = {end_of_prev:#x}\n\
+         \t next_index = {next_index:#x}\n\
+         `next_index` should be >= `end_of_prev`"
+    );
     let delta_to_next = next_index - end_of_prev;
-    delta_to_next < MIN_BLOCK_SIZE
+    delta_to_next < ALIGN_U32
 }
 
 #[inline]
@@ -479,21 +518,20 @@ mod tests {
     #[test]
     fn allocate_no_split() {
         // Create a free list with the capacity to allocate two blocks of size
-        // `MIN_BLOCK_SIZE`.
-        let mut free_list =
-            FreeList::new(ALIGN_USIZE + usize::try_from(MIN_BLOCK_SIZE).unwrap() * 2);
+        // `ALIGN_U32`.
+        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 2);
 
         assert_eq!(free_list.free_block_index_to_len.len(), 1);
         assert_eq!(
             free_list.max_size(),
-            usize::try_from(MIN_BLOCK_SIZE).unwrap() * 2
+            usize::try_from(ALIGN_U32).unwrap() * 2
         );
 
         // Allocate a block such that the remainder is not worth splitting.
         free_list
             .alloc(
                 Layout::from_size_align(
-                    usize::try_from(MIN_BLOCK_SIZE).unwrap() + ALIGN_USIZE,
+                    usize::try_from(ALIGN_U32).unwrap() + ALIGN_USIZE,
                     ALIGN_USIZE,
                 )
                 .unwrap(),
@@ -508,21 +546,20 @@ mod tests {
     #[test]
     fn allocate_and_split() {
         // Create a free list with the capacity to allocate three blocks of size
-        // `MIN_BLOCK_SIZE`.
-        let mut free_list =
-            FreeList::new(ALIGN_USIZE + usize::try_from(MIN_BLOCK_SIZE).unwrap() * 3);
+        // `ALIGN_U32`.
+        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 3);
 
         assert_eq!(free_list.free_block_index_to_len.len(), 1);
         assert_eq!(
             free_list.max_size(),
-            usize::try_from(MIN_BLOCK_SIZE).unwrap() * 3
+            usize::try_from(ALIGN_U32).unwrap() * 3
         );
 
         // Allocate a block such that the remainder is not worth splitting.
         free_list
             .alloc(
                 Layout::from_size_align(
-                    usize::try_from(MIN_BLOCK_SIZE).unwrap() + ALIGN_USIZE,
+                    usize::try_from(ALIGN_U32).unwrap() + ALIGN_USIZE,
                     ALIGN_USIZE,
                 )
                 .unwrap(),
@@ -537,10 +574,9 @@ mod tests {
     #[test]
     fn dealloc_merge_prev_and_next() {
         let layout =
-            Layout::from_size_align(usize::try_from(MIN_BLOCK_SIZE).unwrap(), ALIGN_USIZE).unwrap();
+            Layout::from_size_align(usize::try_from(ALIGN_U32).unwrap(), ALIGN_USIZE).unwrap();
 
-        let mut free_list =
-            FreeList::new(ALIGN_USIZE + usize::try_from(MIN_BLOCK_SIZE).unwrap() * 100);
+        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 100);
         assert_eq!(
             free_list.free_block_index_to_len.len(),
             1,
@@ -586,10 +622,9 @@ mod tests {
     #[test]
     fn dealloc_merge_with_prev_and_not_next() {
         let layout =
-            Layout::from_size_align(usize::try_from(MIN_BLOCK_SIZE).unwrap(), ALIGN_USIZE).unwrap();
+            Layout::from_size_align(usize::try_from(ALIGN_U32).unwrap(), ALIGN_USIZE).unwrap();
 
-        let mut free_list =
-            FreeList::new(ALIGN_USIZE + usize::try_from(MIN_BLOCK_SIZE).unwrap() * 100);
+        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 100);
         assert_eq!(
             free_list.free_block_index_to_len.len(),
             1,
@@ -635,10 +670,9 @@ mod tests {
     #[test]
     fn dealloc_merge_with_next_and_not_prev() {
         let layout =
-            Layout::from_size_align(usize::try_from(MIN_BLOCK_SIZE).unwrap(), ALIGN_USIZE).unwrap();
+            Layout::from_size_align(usize::try_from(ALIGN_U32).unwrap(), ALIGN_USIZE).unwrap();
 
-        let mut free_list =
-            FreeList::new(ALIGN_USIZE + usize::try_from(MIN_BLOCK_SIZE).unwrap() * 100);
+        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 100);
         assert_eq!(
             free_list.free_block_index_to_len.len(),
             1,
@@ -684,10 +718,9 @@ mod tests {
     #[test]
     fn dealloc_no_merge() {
         let layout =
-            Layout::from_size_align(usize::try_from(MIN_BLOCK_SIZE).unwrap(), ALIGN_USIZE).unwrap();
+            Layout::from_size_align(usize::try_from(ALIGN_U32).unwrap(), ALIGN_USIZE).unwrap();
 
-        let mut free_list =
-            FreeList::new(ALIGN_USIZE + usize::try_from(MIN_BLOCK_SIZE).unwrap() * 100);
+        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 100);
         assert_eq!(
             free_list.free_block_index_to_len.len(),
             1,
@@ -737,18 +770,17 @@ mod tests {
     #[test]
     fn alloc_size_too_large() {
         // Free list with room for 10 min-sized blocks.
-        let mut free_list =
-            FreeList::new(ALIGN_USIZE + usize::try_from(MIN_BLOCK_SIZE).unwrap() * 10);
+        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 10);
         assert_eq!(
             free_list.max_size(),
-            usize::try_from(MIN_BLOCK_SIZE).unwrap() * 10
+            usize::try_from(ALIGN_U32).unwrap() * 10
         );
 
         // Attempt to allocate something that is 20 times the size of our
         // min-sized block.
         assert!(free_list
             .alloc(
-                Layout::from_size_align(usize::try_from(MIN_BLOCK_SIZE).unwrap() * 20, ALIGN_USIZE)
+                Layout::from_size_align(usize::try_from(ALIGN_U32).unwrap() * 20, ALIGN_USIZE)
                     .unwrap(),
             )
             .is_err());
@@ -757,20 +789,49 @@ mod tests {
     #[test]
     fn alloc_align_too_large() {
         // Free list with room for 10 min-sized blocks.
-        let mut free_list =
-            FreeList::new(ALIGN_USIZE + usize::try_from(MIN_BLOCK_SIZE).unwrap() * 10);
+        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 10);
         assert_eq!(
             free_list.max_size(),
-            usize::try_from(MIN_BLOCK_SIZE).unwrap() * 10
+            usize::try_from(ALIGN_U32).unwrap() * 10
         );
 
         // Attempt to allocate something that requires larger alignment than
         // `FreeList` supports.
         assert!(free_list
             .alloc(
-                Layout::from_size_align(usize::try_from(MIN_BLOCK_SIZE).unwrap(), ALIGN_USIZE * 2)
+                Layout::from_size_align(usize::try_from(ALIGN_U32).unwrap(), ALIGN_USIZE * 2)
                     .unwrap(),
             )
             .is_err());
+    }
+
+    #[test]
+    fn all_pairwise_alloc_dealloc_orderings() {
+        let tests: &[fn(&mut FreeList, Layout)] = &[
+            |f, l| {
+                let a = f.alloc(l).unwrap().unwrap();
+                let b = f.alloc(l).unwrap().unwrap();
+                f.dealloc(a, l);
+                f.dealloc(b, l);
+            },
+            |f, l| {
+                let a = f.alloc(l).unwrap().unwrap();
+                let b = f.alloc(l).unwrap().unwrap();
+                f.dealloc(b, l);
+                f.dealloc(a, l);
+            },
+            |f, l| {
+                let a = f.alloc(l).unwrap().unwrap();
+                f.dealloc(a, l);
+                let b = f.alloc(l).unwrap().unwrap();
+                f.dealloc(b, l);
+            },
+        ];
+
+        let l = Layout::from_size_align(16, 8).unwrap();
+        for test in tests {
+            let mut f = FreeList::new(0x100);
+            test(&mut f, l);
+        }
     }
 }

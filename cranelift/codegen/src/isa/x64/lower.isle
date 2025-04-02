@@ -112,6 +112,23 @@
           (iadd128 (value_regs_get_gpr x 0) (value_regs_get_gpr x 1)
                    y (RegMemImm.Imm 0))))
 
+;; Specialized lowering rule for `iadd` of two 64-bit unsigned integers, meaning
+;; that we can skip the `adc` and instead use `setb`. This is in some sense a
+;; way of modeling `uadd_overflow`.
+(rule 4 (lower (has_type $I128 (iadd (uextend x) (uextend y @ (value_type $I64)))))
+        (let (
+            (x Gpr (extend_to_gpr x $I64 (ExtendKind.Zero)))
+            (ret ValueRegs (with_flags (x64_add_with_flags_paired $I64 x y)
+                                       (x64_setcc_paired (CC.B))))
+          )
+          ;; FIXME: this `movzx` ideally would happen before the `add` itself to
+          ;; zero out the destination register with `xor %dst,%dst` and then
+          ;; the `setb` would just write to the lower bytes. That would probably
+          ;; require modeling this as a pseudo-inst which isn't quite worth it
+          ;; at this time.
+          (value_regs (value_regs_get ret 0)
+                      (x64_movzx (ExtMode.BQ) (value_regs_get ret 1)))))
+
 ;; Helper for lowering 128-bit addition with the 64-bit halves of the lhs/rhs
 ;; already split. The first two arguments are lo/hi for the lhs and the second
 ;; two are lo/hi for the rhs.
@@ -471,6 +488,21 @@
 
 (rule 7 (lower (has_type $I128 (bor x y)))
       (or_i128 x y))
+
+;; Specialized lowerings to generate the `shld` instruction.
+;;
+;; The `shld` instruction will shift a value left and shift-in bits from a
+;; different register. Pattern-match doing this with bit-ops and shifts to
+;; generate a `shld` instruction.
+(rule 8 (lower (has_type (ty_int_ref_16_to_64 ty)
+  (bor (ishl x (u8_from_iconst xs)) (ushr y (u8_from_iconst ys)))))
+  (if-let true (u64_eq (ty_bits ty) (u64_add xs ys)))
+  (x64_shld ty x y xs))
+(rule 8 (lower (has_type (ty_int_ref_16_to_64 ty)
+  (bor (ushr y (u8_from_iconst ys)) (ishl x (u8_from_iconst xs)))))
+  (if-let true (u64_eq (ty_bits ty) (u64_add xs ys)))
+  (x64_shld ty x y xs))
+
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3417,27 +3449,27 @@
                   (atomic_rmw flags (AtomicRmwOp.Add) address input)))
       (if-let (first_result res) i)
       (if-let true (value_is_unused res))
-      (x64_lock_add (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+      (side_effect_as_invalid (x64_lock_add (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input)))
 (rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
                   (atomic_rmw flags (AtomicRmwOp.Sub) address input)))
       (if-let (first_result res) i)
       (if-let true (value_is_unused res))
-      (x64_lock_sub (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+      (side_effect_as_invalid (x64_lock_sub (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input)))
 (rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
                   (atomic_rmw flags (AtomicRmwOp.And) address input)))
       (if-let (first_result res) i)
       (if-let true (value_is_unused res))
-      (x64_lock_and (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+      (side_effect_as_invalid (x64_lock_and (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input)))
 (rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
                   (atomic_rmw flags (AtomicRmwOp.Or) address input)))
       (if-let (first_result res) i)
       (if-let true (value_is_unused res))
-      (x64_lock_or (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+      (side_effect_as_invalid (x64_lock_or (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input)))
 (rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
                   (atomic_rmw flags (AtomicRmwOp.Xor) address input)))
       (if-let (first_result res) i)
       (if-let true (value_is_unused res))
-      (x64_lock_xor (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+      (side_effect_as_invalid (x64_lock_xor (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input)))
 
 ;; 128-bit integers always use a `lock cmpxchg16b` loop.
 (rule 3 (lower (has_type $I128 (atomic_rmw flags op address input)))

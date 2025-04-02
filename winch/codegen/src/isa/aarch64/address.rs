@@ -83,6 +83,17 @@ impl Address {
         );
         Self::Offset { base, offset }
     }
+
+    /// Returns the register base and immediate offset of the given [`Address`].
+    ///
+    /// # Panics
+    /// This function panics if the [`Address`] is not [`Address::Offset`].
+    pub fn unwrap_offset(&self) -> (Reg, i64) {
+        match self {
+            Self::Offset { base, offset } => (*base, *offset),
+            _ => panic!("Expected register and offset addressing mode"),
+        }
+    }
 }
 
 // Conversions between `winch-codegen`'s addressing mode representation

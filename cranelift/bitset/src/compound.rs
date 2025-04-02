@@ -1,6 +1,6 @@
 //! Compound bit sets.
 
-use crate::scalar::{self, ScalarBitSet};
+use crate::scalar::{self, ScalarBitSet, ScalarBitSetStorage};
 use alloc::boxed::Box;
 use core::{cmp, iter, mem};
 
@@ -45,8 +45,8 @@ use core::{cmp, iter, mem};
     feature = "enable-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
-pub struct CompoundBitSet {
-    elems: Box<[ScalarBitSet<usize>]>,
+pub struct CompoundBitSet<T = usize> {
+    elems: Box<[ScalarBitSet<T>]>,
     max: Option<u32>,
 }
 
@@ -56,8 +56,6 @@ impl core::fmt::Debug for CompoundBitSet {
         f.debug_set().entries(self.iter()).finish()
     }
 }
-
-const BITS_PER_WORD: usize = mem::size_of::<usize>() * 8;
 
 impl CompoundBitSet {
     /// Construct a new, empty bit set.
@@ -75,6 +73,10 @@ impl CompoundBitSet {
     pub fn new() -> Self {
         CompoundBitSet::default()
     }
+}
+
+impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
+    const BITS_PER_SCALAR: usize = mem::size_of::<T>() * 8;
 
     /// Construct a new, empty bit set with space reserved to store any element
     /// `x` such that `x < capacity`.
@@ -86,14 +88,14 @@ impl CompoundBitSet {
     /// ```
     /// use cranelift_bitset::CompoundBitSet;
     ///
-    /// let bitset = CompoundBitSet::with_capacity(4096);
+    /// let bitset = CompoundBitSet::<u32>::with_capacity(4096);
     ///
     /// assert!(bitset.is_empty());
     /// assert!(bitset.capacity() >= 4096);
     /// ```
     #[inline]
     pub fn with_capacity(capacity: usize) -> Self {
-        let mut bitset = Self::new();
+        let mut bitset = Self::default();
         bitset.ensure_capacity(capacity);
         bitset
     }
@@ -144,7 +146,7 @@ impl CompoundBitSet {
     /// assert!(bitset.capacity() >= 999);
     ///```
     pub fn capacity(&self) -> usize {
-        self.elems.len() * BITS_PER_WORD
+        self.elems.len() * Self::BITS_PER_SCALAR
     }
 
     /// Is this bitset empty?
@@ -172,8 +174,8 @@ impl CompoundBitSet {
     /// `ScalarBitSet<usize>` at `self.elems[word]`.
     #[inline]
     fn word_and_bit(i: usize) -> (usize, u8) {
-        let word = i / BITS_PER_WORD;
-        let bit = i % BITS_PER_WORD;
+        let word = i / Self::BITS_PER_SCALAR;
+        let bit = i % Self::BITS_PER_SCALAR;
         let bit = u8::try_from(bit).unwrap();
         (word, bit)
     }
@@ -183,8 +185,8 @@ impl CompoundBitSet {
     #[inline]
     fn elem(word: usize, bit: u8) -> usize {
         let bit = usize::from(bit);
-        debug_assert!(bit < BITS_PER_WORD);
-        word * BITS_PER_WORD + bit
+        debug_assert!(bit < Self::BITS_PER_SCALAR);
+        word * Self::BITS_PER_SCALAR + bit
     }
 
     /// Is `i` contained in this bitset?
@@ -241,7 +243,13 @@ impl CompoundBitSet {
     /// ```
     #[inline]
     pub fn ensure_capacity(&mut self, n: usize) {
-        let (word, _bit) = Self::word_and_bit(n);
+        // Subtract one from the capacity to get the maximum bit that we might
+        // set. If `n` is 0 then nothing need be done as no capacity needs to be
+        // allocated.
+        let (word, _bit) = Self::word_and_bit(match n.checked_sub(1) {
+            None => return,
+            Some(n) => n,
+        });
         if word >= self.elems.len() {
             assert!(word < usize::try_from(isize::MAX).unwrap());
 
@@ -461,19 +469,63 @@ impl CompoundBitSet {
     /// );
     /// ```
     #[inline]
-    pub fn iter(&self) -> Iter<'_> {
+    pub fn iter(&self) -> Iter<'_, T> {
         Iter {
             bitset: self,
             word: 0,
             sub: None,
         }
     }
+
+    /// Returns an iterator over the words of this bit-set or the in-memory
+    /// representation of the bit set.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use cranelift_bitset::{CompoundBitSet, ScalarBitSet};
+    ///
+    /// let mut bitset = CompoundBitSet::<u32>::default();
+    ///
+    /// assert_eq!(
+    ///     bitset.iter_scalars().collect::<Vec<_>>(),
+    ///     [],
+    /// );
+    ///
+    /// bitset.insert(0);
+    ///
+    /// assert_eq!(
+    ///     bitset.iter_scalars().collect::<Vec<_>>(),
+    ///     [ScalarBitSet(0x1)],
+    /// );
+    ///
+    /// bitset.insert(1);
+    ///
+    /// assert_eq!(
+    ///     bitset.iter_scalars().collect::<Vec<_>>(),
+    ///     [ScalarBitSet(0x3)],
+    /// );
+    ///
+    /// bitset.insert(32);
+    ///
+    /// assert_eq!(
+    ///     bitset.iter_scalars().collect::<Vec<_>>(),
+    ///     [ScalarBitSet(0x3), ScalarBitSet(0x1)],
+    /// );
+    /// ```
+    pub fn iter_scalars(&self) -> impl Iterator<Item = ScalarBitSet<T>> + '_ {
+        let nwords = match self.max {
+            Some(n) => 1 + (n as usize / Self::BITS_PER_SCALAR),
+            None => 0,
+        };
+        self.elems.iter().copied().take(nwords)
+    }
 }
 
-impl<'a> IntoIterator for &'a CompoundBitSet {
+impl<'a, T: ScalarBitSetStorage> IntoIterator for &'a CompoundBitSet<T> {
     type Item = usize;
 
-    type IntoIter = Iter<'a>;
+    type IntoIter = Iter<'a, T>;
 
     #[inline]
     fn into_iter(self) -> Self::IntoIter {
@@ -482,13 +534,13 @@ impl<'a> IntoIterator for &'a CompoundBitSet {
 }
 
 /// An iterator over the elements in a [`CompoundBitSet`].
-pub struct Iter<'a> {
-    bitset: &'a CompoundBitSet,
+pub struct Iter<'a, T = usize> {
+    bitset: &'a CompoundBitSet<T>,
     word: usize,
-    sub: Option<scalar::Iter<usize>>,
+    sub: Option<scalar::Iter<T>>,
 }
 
-impl Iterator for Iter<'_> {
+impl<T: ScalarBitSetStorage> Iterator for Iter<'_, T> {
     type Item = usize;
 
     #[inline]
@@ -496,7 +548,7 @@ impl Iterator for Iter<'_> {
         loop {
             if let Some(sub) = &mut self.sub {
                 if let Some(bit) = sub.next() {
-                    return Some(CompoundBitSet::elem(self.word, bit));
+                    return Some(CompoundBitSet::<T>::elem(self.word, bit));
                 } else {
                     self.word += 1;
                 }
@@ -504,5 +556,18 @@ impl Iterator for Iter<'_> {
 
             self.sub = Some(self.bitset.elems.get(self.word)?.iter());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zero_capacity_no_allocs() {
+        let set = CompoundBitSet::<u32>::with_capacity(0);
+        assert_eq!(set.capacity(), 0);
+        let set = CompoundBitSet::new();
+        assert_eq!(set.capacity(), 0);
     }
 }

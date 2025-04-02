@@ -51,6 +51,7 @@ fn test_tail_call_default() -> Result<()> {
                 .target("x86_64")?,
         ),
     ] {
+        cfg.signals_based_traps(true);
         let engine = Engine::new(cfg)?;
 
         let wat = r#"

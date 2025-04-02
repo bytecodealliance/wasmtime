@@ -2085,18 +2085,25 @@ fn typed_v128_imports(config: &mut Config) -> anyhow::Result<()> {
 #[cfg_attr(miri, ignore)]
 fn wrap_and_typed_i31ref(config: &mut Config) -> Result<()> {
     let engine = Engine::new(&config)?;
-    let mut store = Store::new(&engine, ());
+    let mut store = Store::<AtomicUsize>::new(&engine, AtomicUsize::new(0));
 
-    static HITS: AtomicUsize = AtomicUsize::new(0);
     let mut linker = Linker::new(&engine);
-    linker.func_wrap("env", "i31ref", |x: Option<I31>| -> Option<I31> {
-        assert_eq!(HITS.fetch_add(1, Ordering::SeqCst), 0);
-        x
-    })?;
-    linker.func_wrap("env", "ref-i31", |x: I31| -> I31 {
-        assert_eq!(HITS.fetch_add(1, Ordering::SeqCst), 1);
-        x
-    })?;
+    linker.func_wrap(
+        "env",
+        "i31ref",
+        |caller: Caller<'_, AtomicUsize>, x: Option<I31>| -> Option<I31> {
+            assert_eq!(caller.data().fetch_add(1, Ordering::SeqCst), 0);
+            x
+        },
+    )?;
+    linker.func_wrap(
+        "env",
+        "ref-i31",
+        |caller: Caller<'_, AtomicUsize>, x: I31| -> I31 {
+            assert_eq!(caller.data().fetch_add(1, Ordering::SeqCst), 1);
+            x
+        },
+    )?;
 
     let module = Module::new(
         &engine,
@@ -2128,7 +2135,7 @@ fn wrap_and_typed_i31ref(config: &mut Config) -> Result<()> {
     let x = ref_i31.call(&mut store, I31::wrapping_u32(0x1234))?;
     assert_eq!(x, I31::wrapping_u32(0x1234));
 
-    assert_eq!(HITS.load(Ordering::SeqCst), 2);
+    assert_eq!(store.data().load(Ordering::SeqCst), 2);
     Ok(())
 }
 

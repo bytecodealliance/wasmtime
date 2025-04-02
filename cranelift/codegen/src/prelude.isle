@@ -112,6 +112,9 @@
 (decl pure partial u8_try_from_u64 (u64) u8)
 (extern constructor u8_try_from_u64 u8_try_from_u64)
 
+(decl pure partial u8_try_from_u16 (u16) u8)
+(extern constructor u8_try_from_u16 u8_try_from_u16)
+
 (decl pure partial u8_try_from_i32 (i32) u8)
 (extern constructor u8_try_from_i32 u8_try_from_i32)
 
@@ -517,36 +520,6 @@
 (extern constructor floatcc_unordered floatcc_unordered)
 
 ;;;; Helper Clif Extractors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl eq (Type Value Value) Value)
-(extractor (eq ty x y) (icmp ty (IntCC.Equal) x y))
-
-(decl ne (Type Value Value) Value)
-(extractor (ne ty x y) (icmp ty (IntCC.NotEqual) x y))
-
-(decl ult (Type Value Value) Value)
-(extractor (ult ty x y) (icmp ty (IntCC.UnsignedLessThan) x y))
-
-(decl ule (Type Value Value) Value)
-(extractor (ule ty x y) (icmp ty (IntCC.UnsignedLessThanOrEqual) x y))
-
-(decl ugt (Type Value Value) Value)
-(extractor (ugt ty x y) (icmp ty (IntCC.UnsignedGreaterThan) x y))
-
-(decl uge (Type Value Value) Value)
-(extractor (uge ty x y) (icmp ty (IntCC.UnsignedGreaterThanOrEqual) x y))
-
-(decl slt (Type Value Value) Value)
-(extractor (slt ty x y) (icmp ty (IntCC.SignedLessThan) x y))
-
-(decl sle (Type Value Value) Value)
-(extractor (sle ty x y) (icmp ty (IntCC.SignedLessThanOrEqual) x y))
-
-(decl sgt (Type Value Value) Value)
-(extractor (sgt ty x y) (icmp ty (IntCC.SignedGreaterThan) x y))
-
-(decl sge (Type Value Value) Value)
-(extractor (sge ty x y) (icmp ty (IntCC.SignedGreaterThanOrEqual) x y))
 
 ;; An extractor that only matches types that can fit in 16 bits.
 (spec (fits_in_16 arg)

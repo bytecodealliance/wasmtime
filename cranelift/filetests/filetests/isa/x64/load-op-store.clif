@@ -13,7 +13,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addl    %esi, 32(%rdi)
+;   addl %esi, 0x20(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -40,7 +40,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addl    %esi, 32(%rdi)
+;   addl %esi, 0x20(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -67,7 +67,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   subl    %esi, 32(%rdi)
+;   subl %esi, 0x20(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -94,7 +94,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   andl    %esi, 32(%rdi)
+;   andl %esi, 0x20(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -121,7 +121,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   andl    %esi, 32(%rdi)
+;   andl %esi, 0x20(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -148,7 +148,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   orl     %esi, 32(%rdi)
+;   orl %esi, 0x20(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -175,7 +175,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   orl     %esi, 32(%rdi)
+;   orl %esi, 0x20(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -202,7 +202,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   xorl    %esi, 32(%rdi)
+;   xorl %esi, 0x20(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -229,7 +229,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   xorl    %esi, 32(%rdi)
+;   xorl %esi, 0x20(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

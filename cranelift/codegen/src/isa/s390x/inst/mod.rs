@@ -221,7 +221,6 @@ impl Inst {
             | Inst::Jump { .. }
             | Inst::CondBr { .. }
             | Inst::TrapIf { .. }
-            | Inst::OneWayCondBr { .. }
             | Inst::IndirectBr { .. }
             | Inst::Debugtrap
             | Inst::Trap { .. }
@@ -952,7 +951,7 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
         Inst::IndirectBr { rn, .. } => {
             collector.reg_use(rn);
         }
-        Inst::CondBr { .. } | Inst::OneWayCondBr { .. } => {}
+        Inst::CondBr { .. } => {}
         Inst::Nop0 | Inst::Nop2 => {}
         Inst::Debugtrap => {}
         Inst::Trap { .. } => {}
@@ -1087,10 +1086,6 @@ impl MachInst for Inst {
             &Inst::ReturnCall { .. } | &Inst::ReturnCallInd { .. } => MachTerminator::RetCall,
             &Inst::Jump { .. } => MachTerminator::Uncond,
             &Inst::CondBr { .. } => MachTerminator::Cond,
-            &Inst::OneWayCondBr { .. } => {
-                // Explicitly invisible to CFG processing.
-                MachTerminator::None
-            }
             &Inst::IndirectBr { .. } => MachTerminator::Indirect,
             &Inst::JTSequence { .. } => MachTerminator::Indirect,
             _ => MachTerminator::None,
@@ -3212,11 +3207,6 @@ impl Inst {
                 let cond = cond.pretty_print_default();
                 format!("jg{cond} {taken} ; jg {not_taken}")
             }
-            &Inst::OneWayCondBr { target, cond } => {
-                let target = target.to_string();
-                let cond = cond.pretty_print_default();
-                format!("jg{cond} {target}")
-            }
             &Inst::Debugtrap => ".word 0x0001 # debugtrap".to_string(),
             &Inst::Trap { trap_code } => {
                 format!(".word 0x0000 # trap={trap_code}")
@@ -3225,25 +3215,34 @@ impl Inst {
                 let cond = cond.pretty_print_default();
                 format!("jg{cond} .+2 # trap={trap_code}")
             }
-            &Inst::JTSequence { ridx, ref targets } => {
+            &Inst::JTSequence {
+                ridx,
+                default,
+                default_cond,
+                ref targets,
+            } => {
                 let ridx = pretty_print_reg(ridx);
                 let rtmp = pretty_print_reg(writable_spilltmp_reg().to_reg());
-                // The first entry is the default target, which is not emitted
-                // into the jump table, so we skip it here.  It is only in the
-                // list so MachTerminator will see the potential target.
                 let jt_entries: String = targets
                     .iter()
-                    .skip(1)
                     .map(|label| format!(" {}", label.to_string()))
                     .collect();
                 format!(
                     concat!(
+                        "jg{} {} ; ",
                         "larl {}, 14 ; ",
                         "agf {}, 0({}, {}) ; ",
                         "br {} ; ",
                         "jt_entries{}"
                     ),
-                    rtmp, rtmp, rtmp, ridx, rtmp, jt_entries,
+                    default_cond.pretty_print_default(),
+                    default.to_string(),
+                    rtmp,
+                    rtmp,
+                    rtmp,
+                    ridx,
+                    rtmp,
+                    jt_entries,
                 )
             }
             &Inst::LoadSymbolReloc {

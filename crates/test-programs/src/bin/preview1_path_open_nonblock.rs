@@ -1,9 +1,9 @@
 use std::{env, process};
 use test_programs::preview1::open_scratch_directory;
 
-unsafe fn try_path_open(dir_fd: wasi::Fd) {
-    let _fd =
-        wasi::path_open(dir_fd, 0, ".", 0, 0, 0, wasi::FDFLAGS_NONBLOCK).expect("opening the dir");
+unsafe fn try_path_open(dir_fd: wasip1::Fd) {
+    let _fd = wasip1::path_open(dir_fd, 0, ".", 0, 0, 0, wasip1::FDFLAGS_NONBLOCK)
+        .expect("opening the dir");
 }
 
 fn main() {

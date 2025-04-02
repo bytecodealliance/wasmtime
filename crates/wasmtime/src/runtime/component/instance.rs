@@ -12,7 +12,7 @@ use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
-use core::ptr::{self, NonNull};
+use core::ptr::NonNull;
 use wasmtime_environ::{component::*, EngineOrModuleTypeIndex};
 use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
 
@@ -376,7 +376,7 @@ impl InstanceData {
             CoreDef::InstanceFlags(idx) => {
                 crate::runtime::vm::Export::Global(crate::runtime::vm::ExportGlobal {
                     definition: self.state.instance_flags(*idx).as_raw(),
-                    vmctx: ptr::null_mut(),
+                    vmctx: None,
                     global: Global {
                         wasm_ty: WasmValType::I32,
                         mutability: true,
@@ -601,10 +601,16 @@ impl<'a> Instantiator<'a> {
                     self.data.state.set_lowering(*index, func.lowering());
                 }
 
+                GlobalInitializer::ExtractTable(table) => self.extract_table(store.0, table),
+
                 GlobalInitializer::ExtractMemory(mem) => self.extract_memory(store.0, mem),
 
                 GlobalInitializer::ExtractRealloc(realloc) => {
                     self.extract_realloc(store.0, realloc)
+                }
+
+                GlobalInitializer::ExtractCallback(callback) => {
+                    self.extract_callback(store.0, callback)
                 }
 
                 GlobalInitializer::ExtractPostReturn(post_return) => {
@@ -654,6 +660,16 @@ impl<'a> Instantiator<'a> {
         self.data.state.set_runtime_realloc(realloc.index, func_ref);
     }
 
+    fn extract_callback(&mut self, store: &mut StoreOpaque, callback: &ExtractCallback) {
+        let func_ref = match self.data.lookup_def(store, &callback.def) {
+            crate::runtime::vm::Export::Function(f) => f.func_ref,
+            _ => unreachable!(),
+        };
+        self.data
+            .state
+            .set_runtime_callback(callback.index, func_ref);
+    }
+
     fn extract_post_return(&mut self, store: &mut StoreOpaque, post_return: &ExtractPostReturn) {
         let func_ref = match self.data.lookup_def(store, &post_return.def) {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
@@ -662,6 +678,16 @@ impl<'a> Instantiator<'a> {
         self.data
             .state
             .set_runtime_post_return(post_return.index, func_ref);
+    }
+
+    fn extract_table(&mut self, store: &mut StoreOpaque, table: &ExtractTable) {
+        let export = match self.data.lookup_export(store, &table.export) {
+            crate::runtime::vm::Export::Table(t) => t,
+            _ => unreachable!(),
+        };
+        self.data
+            .state
+            .set_runtime_table(table.index, export.definition);
     }
 
     fn build_imports<'b>(

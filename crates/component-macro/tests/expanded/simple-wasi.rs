@@ -230,7 +230,7 @@ pub mod foo {
                     write!(f, "{} (error {})", self.name(), * self as i32)
                 }
             }
-            impl std::error::Error for Errno {}
+            impl core::error::Error for Errno {}
             const _: () = {
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::ALIGN32);
@@ -241,19 +241,23 @@ pub mod foo {
             }
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                D,
+            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
                 type Host: Host;
             }
-            impl<F, T, O> GetHost<T> for F
+            impl<F, T, D, O> GetHost<T, D> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host,
             {
                 type Host = O;
             }
-            pub fn add_to_linker_get_host<T>(
+            pub fn add_to_linker_get_host<
+                T,
+                G: for<'a> GetHost<&'a mut T, T, Host: Host>,
+            >(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl for<'a> GetHost<&'a mut T>,
+                host_getter: G,
             ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/wasi-filesystem")?;
                 inst.func_wrap(
@@ -296,22 +300,45 @@ pub mod foo {
         pub mod wall_clock {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
+            #[derive(wasmtime::component::ComponentType)]
+            #[derive(wasmtime::component::Lift)]
+            #[derive(wasmtime::component::Lower)]
+            #[component(record)]
+            #[derive(Clone, Copy)]
+            pub struct WallClock {}
+            impl core::fmt::Debug for WallClock {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    f.debug_struct("WallClock").finish()
+                }
+            }
+            const _: () = {
+                assert!(
+                    0 == < WallClock as wasmtime::component::ComponentType >::SIZE32
+                );
+                assert!(
+                    1 == < WallClock as wasmtime::component::ComponentType >::ALIGN32
+                );
+            };
             pub trait Host {}
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                D,
+            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
                 type Host: Host;
             }
-            impl<F, T, O> GetHost<T> for F
+            impl<F, T, D, O> GetHost<T, D> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host,
             {
                 type Host = O;
             }
-            pub fn add_to_linker_get_host<T>(
+            pub fn add_to_linker_get_host<
+                T,
+                G: for<'a> GetHost<&'a mut T, T, Host: Host>,
+            >(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl for<'a> GetHost<&'a mut T>,
+                host_getter: G,
             ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/wall-clock")?;
                 Ok(())

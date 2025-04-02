@@ -54,7 +54,7 @@ Alliance RFC for Baseline Compilation in Wasmtime.][rfc].
 
 Winch's aim is to support all the backends officially supported by Wasmtime:
 
-* x64\_64
+* x86\_64
 * arm64
 * riscv64
 * s390x

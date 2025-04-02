@@ -17,6 +17,14 @@ pub const EF_WASMTIME_MODULE: u32 = 1 << 0;
 /// component.
 pub const EF_WASMTIME_COMPONENT: u32 = 1 << 1;
 
+/// Flag for the `e_flags` field in the ELF header indicating compiled code for
+/// pulley32
+pub const EF_WASMTIME_PULLEY32: u32 = 1 << 2;
+
+/// Flag for the `e_flags` field in the ELF header indicating compiled code for
+/// pulley64
+pub const EF_WASMTIME_PULLEY64: u32 = 1 << 3;
+
 /// Flag for the `sh_flags` field in the ELF text section that indicates that
 /// the text section does not itself need to be executable. This is used for the
 /// Pulley target, for example, to indicate that it does not need to be made
@@ -51,6 +59,17 @@ pub const SH_WASMTIME_NOT_EXECUTED: u64 = 1 << 0;
 /// are unaligned. Additionally at this time the 32-bit encodings chosen here
 /// mean that >=4gb text sections are not supported.
 pub const ELF_WASMTIME_ADDRMAP: &str = ".wasmtime.addrmap";
+
+/// A custom Wasmtime-specific section of compilation which store information
+/// about live gc references at various locations in the text section (stack
+/// maps).
+///
+/// This section has a custom binary encoding described in `stack_maps.rs` which
+/// is used to implement the single query we want to satisy of: where are the
+/// live GC references at this pc? Like the addrmap section this has an
+/// alignment of 1 with unaligned reads, and it additionally doesn't support
+/// >=4gb text sections.
+pub const ELF_WASMTIME_STACK_MAP: &str = ".wasmtime.stackmap";
 
 /// A custom binary-encoded section of wasmtime compilation artifacts which
 /// encodes the ability to map an offset in the text section to the trap code
@@ -140,7 +159,7 @@ pub const ELF_WASMTIME_DWARF: &str = ".wasmtime.dwarf";
 macro_rules! libcalls {
     ($($rust:ident = $sym:tt)*) => (
         #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
-        #[allow(missing_docs, reason = "self-describing variants")]
+        #[expect(missing_docs, reason = "self-describing variants")]
         pub enum LibCall {
             $($rust,)*
         }

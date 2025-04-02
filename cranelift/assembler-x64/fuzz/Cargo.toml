@@ -1,0 +1,20 @@
+[package]
+name = "cranelift-assembler-x64-fuzz"
+version = "0.0.0"
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = { workspace = true }
+cranelift-assembler-x64 = { path = "..", features = ['fuzz'] }
+
+[[bin]]
+name = "roundtrip"
+path = "fuzz_targets/roundtrip.rs"
+test = false
+doc = false
+bench = false

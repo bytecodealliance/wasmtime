@@ -104,7 +104,7 @@ async fn smoke_func_wrap() -> Result<()> {
 // situation" with respect to the runtime.
 #[tokio::test]
 async fn resume_separate_thread() -> Result<()> {
-    let mut config = component_test_util::config();
+    let mut config = wasmtime_test_util::component::config();
     config.async_support(true);
     config.consume_fuel(true);
     let engine = Engine::new(&config)?;
@@ -180,7 +180,7 @@ async fn resume_separate_thread() -> Result<()> {
 // situation" with respect to the runtime.
 #[tokio::test]
 async fn poll_through_wasm_activation() -> Result<()> {
-    let mut config = component_test_util::config();
+    let mut config = wasmtime_test_util::component::config();
     config.async_support(true);
     config.consume_fuel(true);
     let engine = Engine::new(&config)?;

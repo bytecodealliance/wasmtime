@@ -52,7 +52,7 @@ multiple pull requests.
 [`wast`]: https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wast
 [`wasmprinter`]: https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasmprinter
 [`wasm-encoder`]: https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-encoder
-[`wasm-smith`]: https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wams-smith
+[`wasm-smith`]: https://github.com/bytecodealliance/wasm-tools/tree/main/crates/wasm-smith
 
 For information about the status of implementation of various proposals in
 Wasmtime see the [associated documentation](./stability-wasm-proposals.md).

@@ -1,41 +1,41 @@
 use std::{env, process};
 use test_programs::preview1::open_scratch_directory;
 
-unsafe fn test_file_allocate(dir_fd: wasi::Fd) {
+unsafe fn test_file_allocate(dir_fd: wasip1::Fd) {
     // Create a file in the scratch directory.
-    let file_fd = wasi::path_open(
+    let file_fd = wasip1::path_open(
         dir_fd,
         0,
         "file",
-        wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        wasip1::OFLAGS_CREAT,
+        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
         0,
         0,
     )
     .expect("opening a file");
     assert!(
-        file_fd > libc::STDERR_FILENO as wasi::Fd,
+        file_fd > libc::STDERR_FILENO as wasip1::Fd,
         "file descriptor range check",
     );
 
     // Check file size
-    let mut stat = wasi::fd_filestat_get(file_fd).expect("reading file stats");
+    let mut stat = wasip1::fd_filestat_get(file_fd).expect("reading file stats");
     assert_eq!(stat.size, 0, "file size should be 0");
 
-    let err = wasi::fd_allocate(file_fd, 0, 100)
+    let err = wasip1::fd_allocate(file_fd, 0, 100)
         .err()
         .expect("fd_allocate must fail");
     assert_eq!(
         err,
-        wasi::ERRNO_NOTSUP,
+        wasip1::ERRNO_NOTSUP,
         "fd_allocate should fail with NOTSUP"
     );
 
-    stat = wasi::fd_filestat_get(file_fd).expect("reading file stats");
+    stat = wasip1::fd_filestat_get(file_fd).expect("reading file stats");
     assert_eq!(stat.size, 0, "file size should still be 0");
 
-    wasi::fd_close(file_fd).expect("closing a file");
-    wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
+    wasip1::fd_close(file_fd).expect("closing a file");
+    wasip1::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
 
 fn main() {

@@ -1,14 +1,15 @@
 use proc_macro2::{Span, TokenStream};
 use quote::ToTokens;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
 use syn::{braced, token, Token};
-use wasmtime_wit_bindgen::{AsyncConfig, Opts, Ownership, TrappableError, TrappableImports};
+use wasmtime_wit_bindgen::{
+    AsyncConfig, CallStyle, Opts, Ownership, TrappableError, TrappableImports,
+};
 use wit_parser::{PackageId, Resolve, UnresolvedPackageGroup, WorldId};
 
 pub struct Config {
@@ -20,10 +21,19 @@ pub struct Config {
 }
 
 pub fn expand(input: &Config) -> Result<TokenStream> {
-    if !cfg!(feature = "async") && input.opts.async_.maybe_async() {
+    if let (CallStyle::Async | CallStyle::Concurrent, false) =
+        (input.opts.call_style(), cfg!(feature = "async"))
+    {
         return Err(Error::new(
             Span::call_site(),
             "cannot enable async bindings unless `async` crate feature is active",
+        ));
+    }
+
+    if input.opts.concurrent_imports && !cfg!(feature = "component-model-async") {
+        return Err(Error::new(
+            Span::call_site(),
+            "cannot enable `concurrent_imports` option unless `component-model-async` crate feature is active",
         ));
     }
 
@@ -40,7 +50,10 @@ pub fn expand(input: &Config) -> Result<TokenStream> {
     // place a formatted version of the expanded code into a file. This file
     // will then show up in rustc error messages for any codegen issues and can
     // be inspected manually.
-    if input.include_generated_code_from_file || std::env::var("WASMTIME_DEBUG_BINDGEN").is_ok() {
+    if input.include_generated_code_from_file
+        || input.opts.debug
+        || std::env::var("WASMTIME_DEBUG_BINDGEN").is_ok()
+    {
         static INVOCATION: AtomicUsize = AtomicUsize::new(0);
         let root = Path::new(env!("DEBUG_OUTPUT_DIR"));
         let world_name = &input.resolve.worlds[input.world].name;
@@ -107,6 +120,7 @@ impl Parse for Config {
                     }
                     Opt::Tracing(val) => opts.tracing = val,
                     Opt::VerboseTracing(val) => opts.verbose_tracing = val,
+                    Opt::Debug(val) => opts.debug = val,
                     Opt::Async(val, span) => {
                         if async_configured {
                             return Err(Error::new(span, "cannot specify second async config"));
@@ -114,6 +128,8 @@ impl Parse for Config {
                         async_configured = true;
                         opts.async_ = val;
                     }
+                    Opt::ConcurrentImports(val) => opts.concurrent_imports = val,
+                    Opt::ConcurrentExports(val) => opts.concurrent_exports = val,
                     Opt::TrappableErrorType(val) => opts.trappable_error_type = val,
                     Opt::TrappableImports(val) => opts.trappable_imports = val,
                     Opt::Ownership(val) => opts.ownership = val,
@@ -138,7 +154,7 @@ impl Parse for Config {
                                 "cannot specify a world with `interfaces`",
                             ));
                         }
-                        world = Some("interfaces".to_string());
+                        world = Some("wasmtime:component-macro-synthesized/interfaces".to_string());
 
                         opts.only_interfaces = true;
                     }
@@ -281,6 +297,9 @@ mod kw {
     syn::custom_keyword!(require_store_data_send);
     syn::custom_keyword!(wasmtime_crate);
     syn::custom_keyword!(include_generated_code_from_file);
+    syn::custom_keyword!(concurrent_imports);
+    syn::custom_keyword!(concurrent_exports);
+    syn::custom_keyword!(debug);
 }
 
 enum Opt {
@@ -301,12 +320,19 @@ enum Opt {
     RequireStoreDataSend(bool),
     WasmtimeCrate(syn::Path),
     IncludeGeneratedCodeFromFile(bool),
+    ConcurrentImports(bool),
+    ConcurrentExports(bool),
+    Debug(bool),
 }
 
 impl Parse for Opt {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let l = input.lookahead1();
-        if l.peek(kw::path) {
+        if l.peek(kw::debug) {
+            input.parse::<kw::debug>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::Debug(input.parse::<syn::LitBool>()?.value))
+        } else if l.peek(kw::path) {
             input.parse::<kw::path>()?;
             input.parse::<Token![:]>()?;
 
@@ -380,6 +406,14 @@ impl Parse for Opt {
                     span,
                 ))
             }
+        } else if l.peek(kw::concurrent_imports) {
+            input.parse::<kw::concurrent_imports>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::ConcurrentImports(input.parse::<syn::LitBool>()?.value))
+        } else if l.peek(kw::concurrent_exports) {
+            input.parse::<kw::concurrent_exports>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::ConcurrentExports(input.parse::<syn::LitBool>()?.value))
         } else if l.peek(kw::ownership) {
             input.parse::<kw::ownership>()?;
             input.parse::<Token![:]>()?;

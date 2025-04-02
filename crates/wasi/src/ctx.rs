@@ -524,7 +524,18 @@ impl WasiCtxBuilder {
     }
 }
 
-/// A struct which provides access to internal WASI state.
+/// Per-[`Store`] state which holds state necessary to implement WASI from this
+/// crate.
+///
+/// This structure is created through [`WasiCtxBuilder`] and is stored within
+/// the `T` of [`Store<T>`][`Store`]. Access to the structure is provided
+/// through the [`WasiView`](crate::WasiView) trait as an implementation on `T`.
+///
+/// Note that this structure itself does not have any accessors, it's here for
+/// internal use within the `wasmtime-wasi` crate's implementation of
+/// bindgen-generated traits.
+///
+/// [`Store`]: wasmtime::Store
 ///
 /// # Example
 ///
@@ -557,18 +568,6 @@ impl WasiCtxBuilder {
 ///     }
 /// }
 /// ```
-/// Per-[`Store`] state which holds state necessary to implement WASI from this
-/// crate.
-///
-/// This structure is created through [`WasiCtxBuilder`] and is stored within
-/// the `T` of [`Store<T>`][`Store`]. Access to the structure is provided
-/// through the [`WasiView`] trait as an implementation on `T`.
-///
-/// Note that this structure itself does not have any accessors, it's here for
-/// internal use within the `wasmtime-wasi` crate's implementation of
-/// bindgen-generated traits.
-///
-/// [`Store`]: wasmtime::Store
 pub struct WasiCtx {
     pub(crate) random: Box<dyn RngCore + Send>,
     pub(crate) insecure_random: Box<dyn RngCore + Send>,

@@ -1,7 +1,7 @@
 use super::index_allocator::{SimpleIndexAllocator, SlotId};
 use super::GcHeapAllocationIndex;
-use crate::prelude::*;
 use crate::runtime::vm::{GcHeap, GcRuntime, PoolingInstanceAllocatorConfig, Result};
+use crate::{prelude::*, Engine};
 use std::sync::Mutex;
 
 /// A pool of reusable GC heaps.
@@ -47,6 +47,7 @@ impl GcHeapPool {
     /// Allocate a single table for the given instance allocation request.
     pub fn allocate(
         &self,
+        engine: &Engine,
         gc_runtime: &dyn GcRuntime,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
         let allocation_index = self
@@ -69,7 +70,7 @@ impl GcHeapPool {
             Some(heap) => heap,
             // Otherwise, we haven't forced this slot's lazily allocated heap
             // yet. So do that now.
-            None => gc_runtime.new_gc_heap()?,
+            None => gc_runtime.new_gc_heap(engine)?,
         };
 
         Ok((allocation_index, heap))

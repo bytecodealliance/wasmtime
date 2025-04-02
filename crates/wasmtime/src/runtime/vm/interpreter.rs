@@ -20,7 +20,7 @@ impl Interpreter {
     /// Creates a new interpreter ready to interpret code.
     pub fn new(engine: &Engine) -> Interpreter {
         let ret = Interpreter {
-            pulley: Box::new(Vm::with_stack(vec![0; engine.config().max_wasm_stack])),
+            pulley: Box::new(Vm::with_stack(engine.config().max_wasm_stack)),
         };
         engine.profiler().register_interpreter(&ret);
         ret
@@ -85,15 +85,15 @@ impl InterpreterRef<'_> {
     pub unsafe fn call(
         mut self,
         mut bytecode: NonNull<u8>,
-        callee: *mut VMOpaqueContext,
-        caller: *mut VMOpaqueContext,
-        args_and_results: *mut [ValRaw],
+        callee: NonNull<VMOpaqueContext>,
+        caller: NonNull<VMOpaqueContext>,
+        args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         // Initialize argument registers with the ABI arguments.
         let args = [
-            XRegVal::new_ptr(callee).into(),
-            XRegVal::new_ptr(caller).into(),
-            XRegVal::new_ptr(args_and_results.cast::<u8>()).into(),
+            XRegVal::new_ptr(callee.as_ptr()).into(),
+            XRegVal::new_ptr(caller.as_ptr()).into(),
+            XRegVal::new_ptr(args_and_results.cast::<u8>().as_ptr()).into(),
             XRegVal::new_u64(args_and_results.len() as u64).into(),
         ];
 
@@ -175,6 +175,7 @@ impl InterpreterRef<'_> {
                         TrapKind::IntegerOverflow => Trap::IntegerOverflow,
                         TrapKind::DivideByZero => Trap::IntegerDivisionByZero,
                         TrapKind::BadConversionToInteger => Trap::BadConversionToInteger,
+                        TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds,
                     };
                     s.set_jit_trap(regs, None, trap);
                 }
@@ -187,10 +188,11 @@ impl InterpreterRef<'_> {
                         }
 
                         // Not possible with our closure above returning `false`.
+                        #[cfg(has_host_compiler_backend)]
                         TrapTest::HandledByEmbedder => unreachable!(),
 
                         // Trap was handled, yay! We don't use `jmp_buf`.
-                        TrapTest::Trap { jmp_buf: _ } => {}
+                        TrapTest::Trap { .. } => {}
                     }
                 }
             }
@@ -251,7 +253,7 @@ impl InterpreterRef<'_> {
     )]
     unsafe fn call_indirect_host(&mut self, id: u8) {
         let id = u32::from(id);
-        let fnptr = self.0[XReg::x0].get_ptr::<u8>();
+        let fnptr = self.0[XReg::x0].get_ptr();
         let mut arg_reg = 1;
 
         /// Helper macro to invoke a builtin.
@@ -316,11 +318,11 @@ impl InterpreterRef<'_> {
             // type.
             (@get u8 $reg:ident) => (self.0[$reg].get_i32() as u8);
             (@get u32 $reg:ident) => (self.0[$reg].get_u32());
-            (@get i32 $reg:ident) => (self.0[$reg].get_i32());
-            (@get i64 $reg:ident) => (self.0[$reg].get_i64());
+            (@get u64 $reg:ident) => (self.0[$reg].get_u64());
             (@get vmctx $reg:ident) => (self.0[$reg].get_ptr());
             (@get pointer $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr $reg:ident) => (self.0[$reg].get_ptr());
+            (@get nonnull $reg:ident) => (NonNull::new(self.0[$reg].get_ptr()).unwrap());
             (@get ptr_u8 $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr_u16 $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr_size $reg:ident) => (self.0[$reg].get_ptr());
@@ -329,9 +331,8 @@ impl InterpreterRef<'_> {
             // Conversion from a Rust value back into a macro-defined type,
             // stored in a pulley register.
             (@set bool $reg:ident $val:ident) => (self.0[$reg].set_i32(i32::from($val)));
-            (@set i32 $reg:ident $val:ident) => (self.0[$reg].set_i32($val));
+            (@set u32 $reg:ident $val:ident) => (self.0[$reg].set_u32($val));
             (@set u64 $reg:ident $val:ident) => (self.0[$reg].set_u64($val));
-            (@set i64 $reg:ident $val:ident) => (self.0[$reg].set_i64($val));
             (@set pointer $reg:ident $val:ident) => (self.0[$reg].set_ptr($val));
             (@set size $reg:ident $val:ident) => (self.0[$reg].set_ptr($val as *mut u8));
         }
@@ -352,7 +353,7 @@ impl InterpreterRef<'_> {
         //
 
         if id == const { HostCall::ArrayCall.index() } {
-            call!(@host VMArrayCallNative(ptr, ptr, ptr, size) -> bool);
+            call!(@host VMArrayCallNative(nonnull, nonnull, nonnull, size) -> bool);
         }
 
         macro_rules! core {
@@ -378,16 +379,18 @@ impl InterpreterRef<'_> {
             use wasmtime_environ::component::ComponentBuiltinFunctionIndex;
 
             if id == const { HostCall::ComponentLowerImport.index() } {
-                call!(@host VMLoweringCallee(ptr, ptr, u32, ptr, ptr, ptr, u8, ptr, size) -> bool);
+                call!(@host VMLoweringCallee(nonnull, nonnull, u32, u32, nonnull, ptr, ptr, u8, u8, nonnull, size) -> bool);
             }
 
             macro_rules! component {
                 (
                     $(
+                        $( #[cfg($attr:meta)] )?
                         $name:ident($($pname:ident: $param:ident ),* ) $(-> $result:ident)?;
                     )*
                 ) => {
                     $(
+                        $( #[cfg($attr)] )?
                         if id == const { HostCall::ComponentBuiltin(ComponentBuiltinFunctionIndex::$name()).index() } {
                             call!(@builtin($($param),*) $(-> $result)?);
                         }

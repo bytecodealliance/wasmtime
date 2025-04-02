@@ -170,7 +170,10 @@ const _: () = {
         pub fn call_y<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
-        ) -> wasmtime::Result<()> {
+        ) -> wasmtime::Result<()>
+        where
+            <S as wasmtime::AsContext>::Data: Send,
+        {
             let callee = unsafe {
                 wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
             };

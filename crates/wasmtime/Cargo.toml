@@ -47,7 +47,6 @@ serde_json = { workspace = true, optional = true }
 sptr = { workspace = true }
 postcard = { workspace = true }
 indexmap = { workspace = true }
-paste = "1.0.3"
 once_cell = { version = "1.12.0", optional = true }
 rayon = { version = "1.0", optional = true }
 object = { workspace = true }
@@ -62,6 +61,7 @@ semver = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true }
 hashbrown = { workspace = true, features = ["default-hasher"] }
 bitflags = { workspace = true }
+futures = { workspace = true, features = ["alloc"], optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
@@ -104,10 +104,17 @@ proptest = { workspace = true }
 rand = { workspace = true }
 tempfile = { workspace = true }
 wasi-common = { path = "../wasi-common", default-features = true }
+libtest-mimic = { workspace = true }
+cranelift-native = { workspace = true }
+wasmtime-test-util = { workspace = true }
 
 [build-dependencies]
 cc = { workspace = true, optional = true }
 wasmtime-versioned-export-macros = { workspace = true, optional = true }
+
+[[test]]
+name = "host_segfault"
+harness = false
 
 # =============================================================================
 #
@@ -314,13 +321,13 @@ addr2line = ["dep:addr2line", "dep:gimli", "std"]
 # This will be automatically enabled if necessary.
 std = [
   'postcard/use-std',
-  'wasmtime-component-macro?/std',
   'wasmtime-environ/std',
   'object/std',
   'once_cell',
   'wasmtime-fiber?/std',
   'pulley-interpreter/std',
   'wasmtime-math/std',
+  'addr2line?/std',
 ]
 
 # Enables support for the `Store::call_hook` API which enables injecting custom
@@ -350,7 +357,7 @@ reexport-wasmparser = []
 
 # Enables instances of the traits defined in the wasm-wave crate, which
 # provides a human-readable text format for component values.
-wave = ["dep:wasm-wave"]
+wave = ["dep:wasm-wave", 'component-model']
 
 # For platforms that Wasmtime does not have support for Wasmtime will disable
 # the use of virtual memory by default, for example allocating linear memories
@@ -371,3 +378,13 @@ custom-native-signals = []
 # performance hit, even when not profiling, so it's disabled by default at
 # compile time.
 profile-pulley = ['pulley', 'profiling', 'pulley-interpreter/profile']
+
+# Enables support for the Component Model Async ABI, along with `future`,
+# `stream`, and `error-context` types.
+component-model-async = [
+  "async",
+  "component-model",
+  "std",
+  "wasmtime-component-macro?/component-model-async",
+  "dep:futures"
+]

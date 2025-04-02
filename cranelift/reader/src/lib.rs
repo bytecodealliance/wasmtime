@@ -29,7 +29,7 @@ use std::str::FromStr;
 use target_lexicon::Triple;
 
 /// Like `FlagsOrIsa`, but holds ownership.
-#[allow(missing_docs, reason = "self-describing variants")]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub enum OwnedFlagsOrIsa {
     Flags(settings::Flags),
     Isa(OwnedTargetIsa),

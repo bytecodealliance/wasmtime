@@ -281,7 +281,12 @@
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
-#![cfg_attr(not(feature = "default"), allow(dead_code, unused_imports))]
+// NB: this list is currently being burned down to remove all features listed
+// here to get warnings in all configurations of Wasmtime.
+#![cfg_attr(
+    any(not(feature = "runtime"), not(feature = "std")),
+    allow(dead_code, unused_imports)
+)]
 // Allow broken links when the default features is disabled because most of our
 // documentation is written for the "one build" of the `main` branch which has
 // most features enabled. This will present warnings in stripped-down doc builds

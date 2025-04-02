@@ -42,19 +42,16 @@
 use anyhow::{bail, Context, Result};
 use clap::Parser;
 use cranelift_codegen::ir::{Function, UserExternalName, UserFuncName};
-use cranelift_codegen::isa::{lookup_by_name, TargetIsa};
-use cranelift_codegen::settings::{Configurable, Flags, SetError};
 use libtest_mimic::{Arguments, Trial};
-use pulley_interpreter::decode::OpVisitor;
 use serde_derive::Deserialize;
 use similar::TextDiff;
-use std::fmt::Write;
+use std::fmt::Write as _;
+use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::process::Stdio;
 use tempfile::TempDir;
 use wasmtime::{Engine, OptLevel, Strategy};
 use wasmtime_cli_flags::CommonOptions;
-use wasmtime_environ::TripleExt;
 
 fn main() -> Result<()> {
     if cfg!(miri) {
@@ -102,9 +99,8 @@ fn find_tests(path: &Path, dst: &mut Vec<PathBuf>) -> Result<()> {
 fn run_test(path: &Path) -> Result<()> {
     let mut test = Test::new(path)?;
     let output = test.compile()?;
-    let isa = test.build_target_isa()?;
 
-    assert_output(&test.path, &test.contents, &*isa, test.config.test, output)?;
+    assert_output(&test, output)?;
 
     Ok(())
 }
@@ -115,6 +111,7 @@ struct TestConfig {
     #[serde(default)]
     test: TestKind,
     flags: Option<TestConfigFlags>,
+    objdump: Option<TestConfigFlags>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -122,6 +119,15 @@ struct TestConfig {
 enum TestConfigFlags {
     SpaceSeparated(String),
     List(Vec<String>),
+}
+
+impl TestConfigFlags {
+    fn to_vec(&self) -> Vec<&str> {
+        match self {
+            TestConfigFlags::SpaceSeparated(s) => s.split_whitespace().collect(),
+            TestConfigFlags::List(s) => s.iter().map(|s| s.as_str()).collect(),
+        }
+    }
 }
 
 struct Test {
@@ -152,13 +158,11 @@ impl Test {
     fn new(path: &Path) -> Result<Test> {
         let contents =
             std::fs::read_to_string(path).with_context(|| format!("failed to read {path:?}"))?;
-        let config: TestConfig = wasmtime_wast_util::parse_test_config(&contents)
+        let config: TestConfig = wasmtime_test_util::wast::parse_test_config(&contents)
             .context("failed to parse test configuration as TOML")?;
         let mut flags = vec!["wasmtime"];
-        match &config.flags {
-            Some(TestConfigFlags::SpaceSeparated(s)) => flags.extend(s.split_whitespace()),
-            Some(TestConfigFlags::List(s)) => flags.extend(s.iter().map(|s| s.as_str())),
-            None => {}
+        if let Some(config) = &config.flags {
+            flags.extend(config.to_vec());
         }
         let opts = wasmtime_cli_flags::CommonOptions::try_parse_from(&flags)?;
 
@@ -239,39 +243,6 @@ impl Test {
             TestKind::Compile | TestKind::Winch => Ok(CompileOutput::Elf(elf)),
         }
     }
-
-    /// Use the test configuration present with CLI flags to build a
-    /// `TargetIsa` to compile/optimize the CLIF.
-    fn build_target_isa(&self) -> Result<Arc<dyn TargetIsa>> {
-        let mut builder = lookup_by_name(&self.config.target)?;
-        let mut flags = cranelift_codegen::settings::builder();
-        let opt_level = match self.opts.opts.opt_level {
-            None | Some(OptLevel::Speed) => "speed",
-            Some(OptLevel::SpeedAndSize) => "speed_and_size",
-            Some(OptLevel::None) => "none",
-            _ => unreachable!(),
-        };
-        flags.set("opt_level", opt_level)?;
-        flags.set("preserve_frame_pointers", "true")?;
-        for (key, val) in self.opts.codegen.cranelift.iter() {
-            let key = &key.replace("-", "_");
-            let target_res = match val {
-                Some(val) => builder.set(key, val),
-                None => builder.enable(key),
-            };
-            match target_res {
-                Ok(()) => continue,
-                Err(SetError::BadName(_)) => {}
-                Err(e) => bail!(e),
-            }
-            match val {
-                Some(val) => flags.set(key, val)?,
-                None => flags.enable(key)?,
-            }
-        }
-        let isa = builder.finish(Flags::new(flags))?;
-        Ok(isa)
-    }
 }
 
 enum CompileOutput {
@@ -280,199 +251,54 @@ enum CompileOutput {
 }
 
 /// Assert that `wat` contains the test expectations necessary for `funcs`.
-fn assert_output(
-    path: &Path,
-    wat: &str,
-    isa: &dyn TargetIsa,
-    kind: TestKind,
-    output: CompileOutput,
-) -> Result<()> {
+fn assert_output(test: &Test, output: CompileOutput) -> Result<()> {
     let mut actual = String::new();
     match output {
         CompileOutput::Clif(funcs) => {
             for mut func in funcs {
-                match kind {
-                    TestKind::Compile | TestKind::Winch => unreachable!(),
-                    TestKind::Optimize | TestKind::Clif => {
-                        func.dfg.resolve_all_aliases();
-                        writeln!(&mut actual, "{}", func.display()).unwrap();
-                    }
-                }
+                func.dfg.resolve_all_aliases();
+                writeln!(&mut actual, "{}", func.display()).unwrap();
             }
         }
-        CompileOutput::Elf(bytes) => match isa.to_capstone() {
-            Ok(disas) => disas_insts(&mut actual, &bytes, |bytes, addr| {
-                Ok(disas
-                    .disasm_all(bytes, addr)?
-                    .into_iter()
-                    .map(|inst| {
-                        use capstone::InsnGroupType::{CS_GRP_JUMP, CS_GRP_RET};
-
-                        let detail = disas.insn_detail(&inst).ok();
-                        let detail = detail.as_ref();
-                        let is_jump = detail
-                            .map(|d| {
-                                d.groups()
-                                    .iter()
-                                    .find(|g| g.0 as u32 == CS_GRP_JUMP)
-                                    .is_some()
-                            })
-                            .unwrap_or(false);
-
-                        let is_return = detail
-                            .map(|d| {
-                                d.groups()
-                                    .iter()
-                                    .find(|g| g.0 as u32 == CS_GRP_RET)
-                                    .is_some()
-                            })
-                            .unwrap_or(false);
-
-                        let disassembly = match (inst.mnemonic(), inst.op_str()) {
-                            (Some(i), Some(o)) => {
-                                if o.is_empty() {
-                                    format!("{i}")
-                                } else {
-                                    format!("{i:7} {o}")
-                                }
-                            }
-                            (Some(i), None) => format!("{i}"),
-                            _ => unreachable!(),
-                        };
-
-                        let address = inst.address();
-                        DisasInst {
-                            address,
-                            is_jump,
-                            is_return,
-                            disassembly,
-                        }
-                    })
-                    .collect::<Vec<_>>())
-            })?,
-            Err(_) => {
-                assert!(isa.triple().is_pulley());
-                disas_insts(&mut actual, &bytes, |bytes, _addr| {
-                    let mut result = vec![];
-
-                    let mut disas = pulley_interpreter::disas::Disassembler::new(bytes);
-                    disas.offsets(false);
-                    disas.hexdump(false);
-                    let mut decoder = pulley_interpreter::decode::Decoder::new();
-                    let mut last_disas_pos = 0;
-                    loop {
-                        let addr = disas.bytecode().position();
-
-                        match decoder.decode_one(&mut disas) {
-                            // If we got EOF at the initial position, then we're done disassembling.
-                            Err(pulley_interpreter::decode::DecodingError::UnexpectedEof {
-                                position,
-                            }) if position == addr => break,
-
-                            // Otherwise, propagate the error.
-                            Err(e) => {
-                                return Err(anyhow::Error::from(e))
-                                    .context("failed to disassembly pulley bytecode");
-                            }
-
-                            Ok(()) => {
-                                let disassembly = disas.disas()[last_disas_pos..].trim();
-                                last_disas_pos = disas.disas().len();
-                                let address = u64::try_from(addr).unwrap();
-                                let is_jump =
-                                    disassembly.contains("jump") || disassembly.contains("br_");
-                                let is_return = disassembly == "ret";
-                                result.push(DisasInst {
-                                    address,
-                                    is_jump,
-                                    is_return,
-                                    disassembly: disassembly.to_string(),
-                                });
-                            }
-                        }
-                    }
-
-                    Ok(result)
-                })?
+        CompileOutput::Elf(bytes) => {
+            let mut cmd = wasmtime_test_util::command(env!("CARGO_BIN_EXE_wasmtime"));
+            cmd.arg("objdump")
+                .arg("--address-width=4")
+                .arg("--address-jumps")
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped());
+            match &test.config.objdump {
+                Some(args) => {
+                    cmd.args(args.to_vec());
+                }
+                None => {
+                    cmd.arg("--traps=false");
+                }
             }
-        },
+
+            let mut child = cmd.spawn().context("failed to run wasmtime")?;
+            child
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(&bytes)
+                .context("failed to write stdin")?;
+            let output = child
+                .wait_with_output()
+                .context("failed to wait for child")?;
+            if !output.status.success() {
+                bail!(
+                    "objdump failed: {}\nstderr: {}",
+                    output.status,
+                    String::from_utf8_lossy(&output.stderr),
+                );
+            }
+            actual = String::from_utf8(output.stdout).unwrap();
+        }
     }
     let actual = actual.trim();
-    assert_or_bless_output(path, wat, actual)
-}
-
-struct DisasInst {
-    address: u64,
-    is_jump: bool,
-    is_return: bool,
-    disassembly: String,
-}
-
-fn disas_insts<I>(
-    result: &mut String,
-    elf: &[u8],
-    disas: impl Fn(&[u8], u64) -> Result<I>,
-) -> Result<()>
-where
-    I: IntoIterator<Item = DisasInst>,
-{
-    use object::{Endianness, Object, ObjectSection, ObjectSymbol};
-
-    let elf = object::read::elf::ElfFile64::<Endianness>::parse(elf)?;
-    let text = elf.section_by_name(".text").unwrap();
-    let text = text.data()?;
-    let mut first = true;
-    for sym in elf.symbols() {
-        let name = match sym.name() {
-            Ok(name) => name,
-            Err(_) => continue,
-        };
-        if !name.contains("wasm") || !name.contains("function") {
-            continue;
-        }
-
-        let bytes = &text[sym.address() as usize..][..sym.size() as usize];
-
-        if first {
-            first = false;
-        } else {
-            result.push_str("\n");
-        }
-        writeln!(result, "{name}:")?;
-
-        // By default don't write all the offsets of all the instructions. That
-        // means that small changes in the instruction sequence cause large
-        // diffs which aren't always the most readable. As a rough balance,
-        // print offset of instructions-after-jumps and anything-after-ret as
-        // that's a decent-enough heuristic for jump targets.
-        let mut prev_jump = false;
-        let mut write_offsets = false;
-
-        for DisasInst {
-            address,
-            is_jump,
-            is_return,
-            disassembly: disas,
-        } in disas(bytes, sym.address())?.into_iter()
-        {
-            for (i, line) in disas.lines().enumerate() {
-                if i == 0 && (write_offsets || (prev_jump && !is_jump)) {
-                    write!(result, "{address:>4x}: ")?;
-                } else {
-                    write!(result, "      ")?;
-                }
-                writeln!(result, "{line}")?;
-            }
-
-            prev_jump = is_jump;
-
-            // Flip write_offsets to true once we've seen a `ret`, as
-            // instructions that follow the return are often related to trap
-            // tables.
-            write_offsets |= is_return;
-        }
-    }
-    Ok(())
+    assert_or_bless_output(&test.path, &test.contents, actual)
 }
 
 fn assert_or_bless_output(path: &Path, wat: &str, actual: &str) -> Result<()> {

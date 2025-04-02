@@ -7,8 +7,8 @@ use crate::{
     ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
     EntityIndex, EntityType, FuncIndex, GlobalIndex, IndexType, InitMemory, MemoryIndex,
     ModuleInternedTypeIndex, ModuleTypesBuilder, PrimaryMap, SizeOverflow, StaticMemoryInitializer,
-    TableIndex, TableInitialValue, Tunables, TypeConvert, TypeIndex, Unsigned, WasmError,
-    WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
+    TableIndex, TableInitialValue, Tag, TagIndex, Tunables, TypeConvert, TypeIndex, Unsigned,
+    WasmError, WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
 };
 use anyhow::{bail, Result};
 use cranelift_entity::packed_option::ReservedValue;
@@ -118,7 +118,7 @@ pub struct FunctionBodyData<'a> {
 }
 
 #[derive(Debug, Default)]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct DebugInfoData<'a> {
     pub dwarf: Dwarf<'a>,
     pub name_section: NameSection<'a>,
@@ -131,13 +131,13 @@ pub struct DebugInfoData<'a> {
     pub debug_tu_index: gimli::DebugTuIndex<Reader<'a>>,
 }
 
-#[allow(missing_docs, reason = "self-describing")]
+#[expect(missing_docs, reason = "self-describing")]
 pub type Dwarf<'input> = gimli::Dwarf<Reader<'input>>;
 
 type Reader<'input> = gimli::EndianSlice<'input, gimli::LittleEndian>;
 
 #[derive(Debug, Default)]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct NameSection<'a> {
     pub module_name: Option<&'a str>,
     pub func_names: HashMap<FuncIndex, &'a str>,
@@ -145,7 +145,7 @@ pub struct NameSection<'a> {
 }
 
 #[derive(Debug, Default)]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct WasmFileInfo {
     pub path: Option<PathBuf>,
     pub code_section_offset: u64,
@@ -154,7 +154,7 @@ pub struct WasmFileInfo {
 }
 
 #[derive(Debug)]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct FunctionMetadata {
     pub params: Box<[WasmValType]>,
     pub locals: Box<[(u32, WasmValType)]>,
@@ -226,7 +226,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     .iter()
                     .filter_map(|(_, func)| {
                         if func.is_escaping() {
-                            Some(func.signature)
+                            Some(func.signature.unwrap_module_type_index())
                         } else {
                             None
                         }
@@ -282,7 +282,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     let len = elems.len();
                     self.result.module.types.reserve(len);
                     for ty in elems {
-                        self.result.module.types.push(ty);
+                        self.result.module.types.push(ty.into());
                     }
 
                     // Advance `type_index` to the start of the next rec group.
@@ -304,7 +304,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let interned_index = self.result.module.types[index];
                             self.result.module.num_imported_funcs += 1;
                             self.result.debuginfo.wasm_file.imported_func_count += 1;
-                            EntityType::Function(EngineOrModuleTypeIndex::Module(interned_index))
+                            EntityType::Function(interned_index)
                         }
                         TypeRef::Memory(ty) => {
                             self.result.module.num_imported_memories += 1;
@@ -318,9 +318,13 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             self.result.module.num_imported_tables += 1;
                             EntityType::Table(self.convert_table_type(&ty)?)
                         }
-
-                        // doesn't get past validation
-                        TypeRef::Tag(_) => unreachable!(),
+                        TypeRef::Tag(ty) => {
+                            let index = TypeIndex::from_u32(ty.func_type_idx);
+                            let signature = self.result.module.types[index];
+                            let tag = Tag { signature };
+                            self.result.module.num_imported_tags += 1;
+                            EntityType::Tag(tag)
+                        }
                     };
                     self.declare_import(import.module, import.name, ty);
                 }
@@ -384,9 +388,12 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::TagSection(tags) => {
                 self.validator.tag_section(&tags)?;
 
-                // This feature isn't enabled at this time, so we should
-                // never get here.
-                unreachable!();
+                for entry in tags {
+                    let sigindex = entry?.func_type_idx;
+                    let ty = TypeIndex::from_u32(sigindex);
+                    let interned_index = self.result.module.types[ty];
+                    self.result.module.push_tag(interned_index);
+                }
             }
 
             Payload::GlobalSection(globals) => {
@@ -424,9 +431,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         ExternalKind::Table => EntityIndex::Table(TableIndex::from_u32(index)),
                         ExternalKind::Memory => EntityIndex::Memory(MemoryIndex::from_u32(index)),
                         ExternalKind::Global => EntityIndex::Global(GlobalIndex::from_u32(index)),
-
-                        // this never gets past validation
-                        ExternalKind::Tag => unreachable!(),
+                        ExternalKind::Tag => EntityIndex::Tag(TagIndex::from_u32(index)),
                     };
                     self.result
                         .module
@@ -533,7 +538,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 let func_index = FuncIndex::from_u32(func_index);
 
                 if self.tunables.generate_native_debuginfo {
-                    let sig_index = self.result.module.functions[func_index].signature;
+                    let sig_index = self.result.module.functions[func_index]
+                        .signature
+                        .unwrap_module_type_index();
                     let sig = self.types[sig_index].unwrap_func();
                     let mut locals = Vec::new();
                     for pair in body.get_locals_reader()? {
@@ -768,7 +775,7 @@ and for re-adding support for interface types you can see this issue:
             EntityType::Table(ty) => EntityIndex::Table(self.result.module.tables.push(ty)),
             EntityType::Memory(ty) => EntityIndex::Memory(self.result.module.memories.push(ty)),
             EntityType::Global(ty) => EntityIndex::Global(self.result.module.globals.push(ty)),
-            EntityType::Tag(_) => unimplemented!(),
+            EntityType::Tag(ty) => EntityIndex::Tag(self.result.module.tags.push(ty)),
         }
     }
 
@@ -856,13 +863,17 @@ and for re-adding support for interface types you can see this issue:
 
 impl TypeConvert for ModuleEnvironment<'_, '_> {
     fn lookup_heap_type(&self, index: wasmparser::UnpackedIndex) -> WasmHeapType {
-        WasmparserTypeConverter::new(&self.types, |idx| self.result.module.types[idx])
-            .lookup_heap_type(index)
+        WasmparserTypeConverter::new(&self.types, |idx| {
+            self.result.module.types[idx].unwrap_module_type_index()
+        })
+        .lookup_heap_type(index)
     }
 
     fn lookup_type_index(&self, index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
-        WasmparserTypeConverter::new(&self.types, |idx| self.result.module.types[idx])
-            .lookup_type_index(index)
+        WasmparserTypeConverter::new(&self.types, |idx| {
+            self.result.module.types[idx].unwrap_module_type_index()
+        })
+        .lookup_type_index(index)
     }
 }
 
@@ -1209,7 +1220,7 @@ impl ModuleTranslation<'_> {
                 // initializer won't trap so we could continue processing
                 // segments, but that's left as a future optimization if
                 // necessary.
-                WasmHeapTopType::Any | WasmHeapTopType::Extern => break,
+                WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Cont => break,
             }
 
             // Function indices can be optimized here, but fully general

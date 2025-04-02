@@ -5,7 +5,7 @@ mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
-use crate::runtime::vm::{GcStore, InterpreterRef, VMGcRef};
+use crate::runtime::vm::{GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe};
 use crate::store::StoreOpaque;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
@@ -42,8 +42,12 @@ use wasmtime_environ::{
 ///
 /// * `true` if this call succeeded.
 /// * `false` if this call failed and a trap was recorded in TLS.
-pub type VMArrayCallNative =
-    unsafe extern "C" fn(*mut VMOpaqueContext, *mut VMOpaqueContext, *mut ValRaw, usize) -> bool;
+pub type VMArrayCallNative = unsafe extern "C" fn(
+    NonNull<VMOpaqueContext>,
+    NonNull<VMOpaqueContext>,
+    NonNull<ValRaw>,
+    usize,
+) -> bool;
 
 /// An opaque function pointer which might be `VMArrayCallNative` or it might be
 /// pulley bytecode. Requires external knowledge to determine what kind of
@@ -67,11 +71,11 @@ pub struct VMWasmCallFunction(VMFunctionBody);
 #[repr(C)]
 pub struct VMFunctionImport {
     /// Function pointer to use when calling this imported function from Wasm.
-    pub wasm_call: NonNull<VMWasmCallFunction>,
+    pub wasm_call: VmPtr<VMWasmCallFunction>,
 
     /// Function pointer to use when calling this imported function with the
     /// "array" calling convention that `Func::new` et al use.
-    pub array_call: NonNull<VMArrayCallFunction>,
+    pub array_call: VmPtr<VMArrayCallFunction>,
 
     /// The VM state associated with this function.
     ///
@@ -79,13 +83,11 @@ pub struct VMFunctionImport {
     /// VMContext`, but for lifted/lowered component model functions this will
     /// be a `VMComponentContext`, and for a host function it will be a
     /// `VMHostFuncContext`, etc.
-    pub vmctx: *mut VMOpaqueContext,
+    pub vmctx: VmPtr<VMOpaqueContext>,
 }
 
-// Declare that this type is send/sync, it's the responsibility of users of
-// `VMFunctionImport` to uphold this guarantee.
-unsafe impl Send for VMFunctionImport {}
-unsafe impl Sync for VMFunctionImport {}
+// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+unsafe impl VmSafe for VMFunctionImport {}
 
 #[cfg(test)]
 mod test_vmfunction_import {
@@ -124,6 +126,9 @@ mod test_vmfunction_import {
 #[repr(C)]
 pub struct VMFunctionBody(u8);
 
+// SAFETY: this structure is never read and is safe to pass to jit code.
+unsafe impl VmSafe for VMFunctionBody {}
+
 #[cfg(test)]
 mod test_vmfunction_body {
     use super::VMFunctionBody;
@@ -141,16 +146,14 @@ mod test_vmfunction_body {
 #[repr(C)]
 pub struct VMTableImport {
     /// A pointer to the imported table description.
-    pub from: *mut VMTableDefinition,
+    pub from: VmPtr<VMTableDefinition>,
 
     /// A pointer to the `VMContext` that owns the table description.
-    pub vmctx: *mut VMContext,
+    pub vmctx: VmPtr<VMContext>,
 }
 
-// Declare that this type is send/sync, it's the responsibility of users of
-// `VMTableImport` to uphold this guarantee.
-unsafe impl Send for VMTableImport {}
-unsafe impl Sync for VMTableImport {}
+// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+unsafe impl VmSafe for VMTableImport {}
 
 #[cfg(test)]
 mod test_vmtable_import {
@@ -184,19 +187,17 @@ mod test_vmtable_import {
 #[repr(C)]
 pub struct VMMemoryImport {
     /// A pointer to the imported memory description.
-    pub from: *mut VMMemoryDefinition,
+    pub from: VmPtr<VMMemoryDefinition>,
 
     /// A pointer to the `VMContext` that owns the memory description.
-    pub vmctx: *mut VMContext,
+    pub vmctx: VmPtr<VMContext>,
 
     /// The index of the memory in the containing `vmctx`.
     pub index: DefinedMemoryIndex,
 }
 
-// Declare that this type is send/sync, it's the responsibility of users of
-// `VMMemoryImport` to uphold this guarantee.
-unsafe impl Send for VMMemoryImport {}
-unsafe impl Sync for VMMemoryImport {}
+// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+unsafe impl VmSafe for VMMemoryImport {}
 
 #[cfg(test)]
 mod test_vmmemory_import {
@@ -234,13 +235,11 @@ mod test_vmmemory_import {
 #[repr(C)]
 pub struct VMGlobalImport {
     /// A pointer to the imported global variable description.
-    pub from: *mut VMGlobalDefinition,
+    pub from: VmPtr<VMGlobalDefinition>,
 }
 
-// Declare that this type is send/sync, it's the responsibility of users of
-// `VMGlobalImport` to uphold this guarantee.
-unsafe impl Send for VMGlobalImport {}
-unsafe impl Sync for VMGlobalImport {}
+// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+unsafe impl VmSafe for VMGlobalImport {}
 
 #[cfg(test)]
 mod test_vmglobal_import {
@@ -264,6 +263,39 @@ mod test_vmglobal_import {
     }
 }
 
+/// The fields compiled code needs to access to utilize a WebAssembly
+/// tag imported from another instance.
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+pub struct VMTagImport {
+    /// A pointer to the imported tag description.
+    pub from: VmPtr<VMTagDefinition>,
+}
+
+// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+unsafe impl VmSafe for VMTagImport {}
+
+#[cfg(test)]
+mod test_vmtag_import {
+    use super::VMTagImport;
+    use core::mem::{offset_of, size_of};
+    use wasmtime_environ::{HostPtr, Module, VMOffsets};
+
+    #[test]
+    fn check_vmtag_import_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(
+            size_of::<VMTagImport>(),
+            usize::from(offsets.size_of_vmtag_import())
+        );
+        assert_eq!(
+            offset_of!(VMTagImport, from),
+            usize::from(offsets.vmtag_import_from())
+        );
+    }
+}
+
 /// The fields compiled code needs to access to utilize a WebAssembly linear
 /// memory defined within the instance, namely the start address and the
 /// size in bytes.
@@ -271,7 +303,7 @@ mod test_vmglobal_import {
 #[repr(C)]
 pub struct VMMemoryDefinition {
     /// The start address.
-    pub base: *mut u8,
+    pub base: VmPtr<u8>,
 
     /// The current logical size of this linear memory in bytes.
     ///
@@ -280,6 +312,10 @@ pub struct VMMemoryDefinition {
     /// [`VMMemoryDefinition::current_length()`].
     pub current_length: AtomicUsize,
 }
+
+// SAFETY: the above definition has `repr(C)` and each field individually
+// implements `VmSafe`, which satisfies the requirements of this trait.
+unsafe impl VmSafe for VMMemoryDefinition {}
 
 impl VMMemoryDefinition {
     /// Return the current length (in bytes) of the [`VMMemoryDefinition`] by
@@ -343,11 +379,14 @@ mod test_vmmemory_definition {
 #[repr(C)]
 pub struct VMTableDefinition {
     /// Pointer to the table data.
-    pub base: *mut u8,
+    pub base: VmPtr<u8>,
 
     /// The current number of elements in the table.
     pub current_elements: usize,
 }
+
+// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+unsafe impl VmSafe for VMTableDefinition {}
 
 #[cfg(test)]
 mod test_vmtable_definition {
@@ -385,6 +424,9 @@ pub struct VMGlobalDefinition {
     storage: [u8; 16],
     // If more elements are added here, remember to add offset_of tests below!
 }
+
+// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+unsafe impl VmSafe for VMGlobalDefinition {}
 
 #[cfg(test)]
 mod test_vmglobal_definition {
@@ -458,6 +500,7 @@ impl VMGlobalDefinition {
                     global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
                 }
                 WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
+                WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
             },
         }
         Ok(global)
@@ -491,6 +534,7 @@ impl VMGlobalDefinition {
                     }
                 }),
                 WasmHeapTopType::Func => ValRaw::funcref(self.as_func_ref().cast()),
+                WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
             },
         })
     }
@@ -660,6 +704,49 @@ mod test_vmshared_type_index {
     }
 }
 
+/// A WebAssembly tag defined within the instance.
+///
+#[derive(Debug)]
+#[repr(C)]
+pub struct VMTagDefinition {
+    /// Function signature's type id.
+    pub type_index: VMSharedTypeIndex,
+}
+
+impl VMTagDefinition {
+    pub fn new(type_index: VMSharedTypeIndex) -> Self {
+        Self { type_index }
+    }
+}
+
+// SAFETY: the above structure is repr(C) and only contains VmSafe
+// fields.
+unsafe impl VmSafe for VMTagDefinition {}
+
+#[cfg(test)]
+mod test_vmtag_definition {
+    use super::VMTagDefinition;
+    use std::mem::size_of;
+    use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
+
+    #[test]
+    fn check_vmtag_definition_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(
+            size_of::<VMTagDefinition>(),
+            usize::from(offsets.ptr.size_of_vmtag_definition())
+        );
+    }
+
+    #[test]
+    fn check_vmtag_begins_aligned() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(offsets.vmctx_tags_begin() % 16, 0);
+    }
+}
+
 /// The VM caller-checked "funcref" record, for caller-side signature checking.
 ///
 /// It consists of function pointer(s), a type id to be checked by the
@@ -669,7 +756,7 @@ mod test_vmshared_type_index {
 pub struct VMFuncRef {
     /// Function pointer for this funcref if being called via the "array"
     /// calling convention that `Func::new` et al use.
-    pub array_call: NonNull<VMArrayCallFunction>,
+    pub array_call: VmPtr<VMArrayCallFunction>,
 
     /// Function pointer for this funcref if being called via the calling
     /// convention we use when compiling Wasm.
@@ -689,7 +776,7 @@ pub struct VMFuncRef {
     /// it means that the Wasm cannot actually call this function. But it does
     /// mean that this field needs to be an `Option` even though it is non-null
     /// the vast vast vast majority of the time.
-    pub wasm_call: Option<NonNull<VMWasmCallFunction>>,
+    pub wasm_call: Option<VmPtr<VMWasmCallFunction>>,
 
     /// Function signature's type id.
     pub type_index: VMSharedTypeIndex,
@@ -700,12 +787,12 @@ pub struct VMFuncRef {
     /// function being referenced: for core Wasm functions, this is a `*mut
     /// VMContext`, for host functions it is a `*mut VMHostFuncContext`, and for
     /// component functions it is a `*mut VMComponentContext`.
-    pub vmctx: *mut VMOpaqueContext,
+    pub vmctx: VmPtr<VMOpaqueContext>,
     // If more elements are added here, remember to add offset_of tests below!
 }
 
-unsafe impl Send for VMFuncRef {}
-unsafe impl Sync for VMFuncRef {}
+// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+unsafe impl VmSafe for VMFuncRef {}
 
 impl VMFuncRef {
     /// Invokes the `array_call` field of this `VMFuncRef` with the supplied
@@ -736,8 +823,8 @@ impl VMFuncRef {
     pub unsafe fn array_call(
         &self,
         pulley: Option<InterpreterRef<'_>>,
-        caller: *mut VMOpaqueContext,
-        args_and_results: *mut [ValRaw],
+        caller: NonNull<VMOpaqueContext>,
+        args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         match pulley {
             Some(vm) => self.array_call_interpreted(vm, caller, args_and_results),
@@ -748,33 +835,40 @@ impl VMFuncRef {
     unsafe fn array_call_interpreted(
         &self,
         vm: InterpreterRef<'_>,
-        caller: *mut VMOpaqueContext,
-        args_and_results: *mut [ValRaw],
+        caller: NonNull<VMOpaqueContext>,
+        args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         // If `caller` is actually a `VMArrayCallHostFuncContext` then skip the
         // interpreter, even though it's available, as `array_call` will be
         // native code.
-        if (*self.vmctx).magic == wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC {
+        if self.vmctx.as_non_null().as_ref().magic
+            == wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC
+        {
             return self.array_call_native(caller, args_and_results);
         }
-        vm.call(self.array_call.cast(), self.vmctx, caller, args_and_results)
+        vm.call(
+            self.array_call.as_non_null().cast(),
+            self.vmctx.as_non_null(),
+            caller,
+            args_and_results,
+        )
     }
 
     unsafe fn array_call_native(
         &self,
-        caller: *mut VMOpaqueContext,
-        args_and_results: *mut [ValRaw],
+        caller: NonNull<VMOpaqueContext>,
+        args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         union GetNativePointer {
             native: VMArrayCallNative,
             ptr: NonNull<VMArrayCallFunction>,
         }
         let native = GetNativePointer {
-            ptr: self.array_call,
+            ptr: self.array_call.as_non_null(),
         }
         .native;
         native(
-            self.vmctx,
+            self.vmctx.as_non_null(),
             caller,
             args_and_results.cast(),
             args_and_results.len(),
@@ -841,16 +935,36 @@ macro_rules! define_builtin_array {
                     $name: crate::runtime::vm::libcalls::raw::$name,
                 )*
             };
+
+            /// Helper to call `expose_provenance()` on all contained pointers.
+            ///
+            /// This is required to be called at least once before entering wasm
+            /// to inform the compiler that these function pointers may all be
+            /// loaded/stored and used on the "other end" to reacquire
+            /// provenance in Pulley. Pulley models hostcalls with a host
+            /// pointer as the first parameter that's a function pointer under
+            /// the hood, and this call ensures that the use of the function
+            /// pointer is considered valid.
+            pub fn expose_provenance(&self) -> NonNull<Self>{
+                $(
+                    #[cfg(has_provenance_apis)]
+                    (self.$name as *mut u8).expose_provenance();
+                )*
+                NonNull::from(self)
+            }
         }
     };
 
-    (@ty i32) => (u32);
-    (@ty i64) => (u64);
+    (@ty u32) => (u32);
+    (@ty u64) => (u64);
     (@ty u8) => (u8);
     (@ty bool) => (bool);
     (@ty pointer) => (*mut u8);
-    (@ty vmctx) => (*mut VMContext);
+    (@ty vmctx) => (NonNull<VMContext>);
 }
+
+// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+unsafe impl VmSafe for VMBuiltinFunctionsArray {}
 
 wasmtime_environ::foreach_builtin_function!(define_builtin_array);
 
@@ -861,10 +975,17 @@ const _: () = {
     )
 };
 
-/// Structure used to control interrupting wasm code.
+/// Structure that holds all mutable context that is shared across all instances
+/// in a store, for example data related to fuel or epochs.
+///
+/// `VMStoreContext`s are one-to-one with `wasmtime::Store`s, the same way that
+/// `VMContext`s are one-to-one with `wasmtime::Instance`s. And the same way
+/// that multiple `wasmtime::Instance`s may be associated with the same
+/// `wasmtime::Store`, multiple `VMContext`s hold a pointer to the same
+/// `VMStoreContext` when they are associated with the same `wasmtime::Store`.
 #[derive(Debug)]
 #[repr(C)]
-pub struct VMRuntimeLimits {
+pub struct VMStoreContext {
     // NB: 64-bit integer fields are located first with pointer-sized fields
     // trailing afterwards. That makes the offsets in this structure easier to
     // calculate on 32-bit platforms as we don't have to worry about the
@@ -932,16 +1053,19 @@ pub struct VMRuntimeLimits {
     pub last_wasm_entry_fp: UnsafeCell<usize>,
 }
 
-// The `VMRuntimeLimits` type is a pod-type with no destructor, and we don't
+// The `VMStoreContext` type is a pod-type with no destructor, and we don't
 // access any fields from other threads, so add in these trait impls which are
 // otherwise not available due to the `fuel_consumed` and `epoch_deadline`
-// variables in `VMRuntimeLimits`.
-unsafe impl Send for VMRuntimeLimits {}
-unsafe impl Sync for VMRuntimeLimits {}
+// variables in `VMStoreContext`.
+unsafe impl Send for VMStoreContext {}
+unsafe impl Sync for VMStoreContext {}
 
-impl Default for VMRuntimeLimits {
-    fn default() -> VMRuntimeLimits {
-        VMRuntimeLimits {
+// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+unsafe impl VmSafe for VMStoreContext {}
+
+impl Default for VMStoreContext {
+    fn default() -> VMStoreContext {
+        VMStoreContext {
             stack_limit: UnsafeCell::new(usize::max_value()),
             fuel_consumed: UnsafeCell::new(0),
             epoch_deadline: UnsafeCell::new(0),
@@ -953,8 +1077,8 @@ impl Default for VMRuntimeLimits {
 }
 
 #[cfg(test)]
-mod test_vmruntime_limits {
-    use super::VMRuntimeLimits;
+mod test_vmstore_context {
+    use super::VMStoreContext;
     use core::mem::offset_of;
     use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
 
@@ -963,28 +1087,28 @@ mod test_vmruntime_limits {
         let module = Module::new();
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
-            offset_of!(VMRuntimeLimits, stack_limit),
-            usize::from(offsets.ptr.vmruntime_limits_stack_limit())
+            offset_of!(VMStoreContext, stack_limit),
+            usize::from(offsets.ptr.vmstore_context_stack_limit())
         );
         assert_eq!(
-            offset_of!(VMRuntimeLimits, fuel_consumed),
-            usize::from(offsets.ptr.vmruntime_limits_fuel_consumed())
+            offset_of!(VMStoreContext, fuel_consumed),
+            usize::from(offsets.ptr.vmstore_context_fuel_consumed())
         );
         assert_eq!(
-            offset_of!(VMRuntimeLimits, epoch_deadline),
-            usize::from(offsets.ptr.vmruntime_limits_epoch_deadline())
+            offset_of!(VMStoreContext, epoch_deadline),
+            usize::from(offsets.ptr.vmstore_context_epoch_deadline())
         );
         assert_eq!(
-            offset_of!(VMRuntimeLimits, last_wasm_exit_fp),
-            usize::from(offsets.ptr.vmruntime_limits_last_wasm_exit_fp())
+            offset_of!(VMStoreContext, last_wasm_exit_fp),
+            usize::from(offsets.ptr.vmstore_context_last_wasm_exit_fp())
         );
         assert_eq!(
-            offset_of!(VMRuntimeLimits, last_wasm_exit_pc),
-            usize::from(offsets.ptr.vmruntime_limits_last_wasm_exit_pc())
+            offset_of!(VMStoreContext, last_wasm_exit_pc),
+            usize::from(offsets.ptr.vmstore_context_last_wasm_exit_pc())
         );
         assert_eq!(
-            offset_of!(VMRuntimeLimits, last_wasm_entry_fp),
-            usize::from(offsets.ptr.vmruntime_limits_last_wasm_entry_fp())
+            offset_of!(VMStoreContext, last_wasm_entry_fp),
+            usize::from(offsets.ptr.vmstore_context_last_wasm_entry_fp())
         );
     }
 }
@@ -1014,7 +1138,7 @@ impl VMContext {
     /// Helper function to cast between context types using a debug assertion to
     /// protect against some mistakes.
     #[inline]
-    pub unsafe fn from_opaque(opaque: *mut VMOpaqueContext) -> *mut VMContext {
+    pub unsafe fn from_opaque(opaque: NonNull<VMOpaqueContext>) -> NonNull<VMContext> {
         // Note that in general the offset of the "magic" field is stored in
         // `VMOffsets::vmctx_magic`. Given though that this is a sanity check
         // about converting this pointer to another type we ideally don't want
@@ -1030,7 +1154,7 @@ impl VMContext {
         // bugs, meaning we don't actually read the magic and act differently
         // at runtime depending what it is, so this is a debug assertion as
         // opposed to a regular assertion.
-        debug_assert_eq!((*opaque).magic, VMCONTEXT_MAGIC);
+        debug_assert_eq!(opaque.as_ref().magic, VMCONTEXT_MAGIC);
         opaque.cast()
     }
 }
@@ -1350,15 +1474,15 @@ pub struct VMOpaqueContext {
 impl VMOpaqueContext {
     /// Helper function to clearly indicate that casts are desired.
     #[inline]
-    pub fn from_vmcontext(ptr: *mut VMContext) -> *mut VMOpaqueContext {
+    pub fn from_vmcontext(ptr: NonNull<VMContext>) -> NonNull<VMOpaqueContext> {
         ptr.cast()
     }
 
     /// Helper function to clearly indicate that casts are desired.
     #[inline]
     pub fn from_vm_array_call_host_func_context(
-        ptr: *mut VMArrayCallHostFuncContext,
-    ) -> *mut VMOpaqueContext {
+        ptr: NonNull<VMArrayCallHostFuncContext>,
+    ) -> NonNull<VMOpaqueContext> {
         ptr.cast()
     }
 }

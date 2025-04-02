@@ -73,7 +73,7 @@
 
 mod bounds_checks;
 
-use crate::func_environ::FuncEnvironment;
+use crate::func_environ::{Extension, FuncEnvironment};
 use crate::translate::environ::{GlobalVariable, StructFieldsVec};
 use crate::translate::state::{ControlStackFrame, ElseData, FuncTranslationState};
 use crate::translate::translation_utils::{
@@ -132,6 +132,7 @@ pub fn translate_operator(
     debug_assert!(!builder.is_unreachable());
 
     // This big match treats all Wasm code operators.
+    log::trace!("Translating Wasm opcode: {op:?}");
     match op {
         /********************************** Locals ****************************************
          *  `get_local` and `set_local` are treated as non-SSA variables and will completely
@@ -2538,11 +2539,12 @@ pub fn translate_operator(
         } => {
             let struct_type_index = TypeIndex::from_u32(*struct_type_index);
             let struct_ref = state.pop1();
-            let val = environ.translate_struct_get_s(
+            let val = environ.translate_struct_get(
                 builder,
                 struct_type_index,
                 *field_index,
                 struct_ref,
+                Some(Extension::Sign),
             )?;
             state.push1(val);
         }
@@ -2553,11 +2555,12 @@ pub fn translate_operator(
         } => {
             let struct_type_index = TypeIndex::from_u32(*struct_type_index);
             let struct_ref = state.pop1();
-            let val = environ.translate_struct_get_u(
+            let val = environ.translate_struct_get(
                 builder,
                 struct_type_index,
                 *field_index,
                 struct_ref,
+                Some(Extension::Zero),
             )?;
             state.push1(val);
         }
@@ -2573,6 +2576,7 @@ pub fn translate_operator(
                 struct_type_index,
                 *field_index,
                 struct_ref,
+                None,
             )?;
             state.push1(val);
         }
@@ -2703,19 +2707,32 @@ pub fn translate_operator(
         Operator::ArrayGet { array_type_index } => {
             let array_type_index = TypeIndex::from_u32(*array_type_index);
             let (array, index) = state.pop2();
-            let elem = environ.translate_array_get(builder, array_type_index, array, index)?;
+            let elem =
+                environ.translate_array_get(builder, array_type_index, array, index, None)?;
             state.push1(elem);
         }
         Operator::ArrayGetS { array_type_index } => {
             let array_type_index = TypeIndex::from_u32(*array_type_index);
             let (array, index) = state.pop2();
-            let elem = environ.translate_array_get_s(builder, array_type_index, array, index)?;
+            let elem = environ.translate_array_get(
+                builder,
+                array_type_index,
+                array,
+                index,
+                Some(Extension::Sign),
+            )?;
             state.push1(elem);
         }
         Operator::ArrayGetU { array_type_index } => {
             let array_type_index = TypeIndex::from_u32(*array_type_index);
             let (array, index) = state.pop2();
-            let elem = environ.translate_array_get_u(builder, array_type_index, array, index)?;
+            let elem = environ.translate_array_get(
+                builder,
+                array_type_index,
+                array,
+                index,
+                Some(Extension::Zero),
+            )?;
             state.push1(elem);
         }
         Operator::ArraySet { array_type_index } => {

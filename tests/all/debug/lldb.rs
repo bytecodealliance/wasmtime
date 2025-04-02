@@ -6,6 +6,7 @@ use std::env;
 use std::io::Write;
 use std::process::Command;
 use tempfile::NamedTempFile;
+use test_programs_artifacts as assets;
 
 fn lldb_with_script(args: &[&str], script: &str) -> Result<String> {
     let lldb_path = env::var("LLDB").unwrap_or("lldb".to_string());
@@ -70,7 +71,7 @@ pub fn test_debug_dwarf_lldb() -> Result<()> {
             "-Ddebug-info",
             "--invoke",
             "fib",
-            "tests/all/debug/testsuite/fib-wasm.wasm",
+            assets::FIB_WASM_WASM_PATH,
             "3",
         ],
         r#"b fib
@@ -107,7 +108,7 @@ pub fn test_debug_dwarf5_lldb() -> Result<()> {
             "-Ddebug-info",
             "--invoke",
             "fib",
-            "tests/all/debug/testsuite/fib-wasm-dwarf5.wasm",
+            assets::FIB_WASM_DWARF5_WASM_PATH,
             "3",
         ],
         r#"b fib
@@ -144,7 +145,7 @@ pub fn test_debug_split_dwarf4_lldb() -> Result<()> {
             "-Ddebug-info",
             "--invoke",
             "fib",
-            "tests/all/debug/testsuite/fib-wasm-split4.wasm",
+            assets::FIB_WASM_SPLIT4_WASM_PATH,
             "3",
         ],
         r#"b fib
@@ -180,7 +181,7 @@ pub fn test_debug_dwarf_generic_lldb() -> Result<()> {
             "-Ccache=n",
             "-Ddebug-info",
             "-Oopt-level=0",
-            "tests/all/debug/testsuite/generic.wasm",
+            assets::GENERIC_WASM_PATH,
         ],
         r#"br set -n debug_break -C up
 r
@@ -227,13 +228,48 @@ check: exited with status = 0
 
 #[test]
 #[ignore]
+pub fn test_debug_codegen_optimized_lldb() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "-Ccache=n",
+            "-Ddebug-info",
+            "-Oopt-level=2",
+            assets::CODEGEN_OPTIMIZED_WASM_PATH,
+        ],
+        r#"b InitializeTest
+r
+b codegen-optimized.cpp:25
+b codegen-optimized.cpp:26
+c
+v x
+c
+v x
+c"#,
+    )?;
+
+    check_lldb_output(
+        &output,
+        r#"
+check: stop reason = breakpoint 1.1
+check: stop reason = breakpoint 2.1
+check: x = 42
+check: stop reason = breakpoint 3.1
+check: x = <variable not available>
+check: exited with status = 0
+"#,
+    )?;
+    Ok(())
+}
+
+#[test]
+#[ignore]
 pub fn test_debug_dwarf_ref() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
             "-Oopt-level=0",
             "-Ddebug-info",
-            "tests/all/debug/testsuite/fraction-norm.wasm",
+            assets::FRACTION_NORM_WASM_PATH,
         ],
         r#"b fraction-norm.cc:26
 r
@@ -263,7 +299,7 @@ pub fn test_debug_inst_offsets_are_correct_when_branches_are_removed() -> Result
             "-Ccache=n",
             "-Oopt-level=0",
             "-Ddebug-info",
-            "tests/all/debug/testsuite/two_removed_branches.wasm",
+            assets::TWO_REMOVED_BRANCHES_WASM_PATH,
         ],
         r#"r"#,
     )?;
@@ -286,7 +322,7 @@ pub fn test_spilled_frame_base_is_accessible() -> Result<()> {
             "-Ccache=n",
             "-Oopt-level=0",
             "-Ddebug-info",
-            "tests/all/debug/testsuite/spilled_frame_base.wasm",
+            assets::SPILLED_FRAME_BASE_WASM_PATH,
         ],
         r#"b spilled_frame_base.c:8
 r
@@ -336,11 +372,7 @@ int main()
 #[ignore]
 pub fn test_debug_dwarf5_fission_lldb() -> Result<()> {
     let output = lldb_with_script(
-        &[
-            "-Ccache=n",
-            "-Ddebug-info",
-            "tests/all/debug/testsuite/dwarf_fission.wasm",
-        ],
+        &["-Ccache=n", "-Ddebug-info", assets::DWARF_FISSION_WASM_PATH],
         r#"breakpoint set --file dwarf_fission.c --line 6
 r
 fr v

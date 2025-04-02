@@ -230,7 +230,12 @@ fn lower_to_amode(ctx: &mut Lower<Inst>, spec: InsnInput, offset: i32) -> Amode 
     // We now either have an add that we must materialize, or some other input; as well as the
     // final offset.
     if let Some(add) = matches_input(ctx, spec, Opcode::Iadd) {
-        debug_assert_eq!(ctx.output_ty(add, 0), types::I64);
+        let output_ty = ctx.output_ty(add, 0);
+        debug_assert_eq!(
+            output_ty,
+            types::I64,
+            "Address width of 64 expected, got {output_ty}"
+        );
         let add_inputs = &[
             InsnInput {
                 insn: add,

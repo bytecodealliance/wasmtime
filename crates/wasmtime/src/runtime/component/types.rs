@@ -145,6 +145,9 @@ impl TypeChecker<'_> {
             (InterfaceType::String, _) => false,
             (InterfaceType::Char, InterfaceType::Char) => true,
             (InterfaceType::Char, _) => false,
+            (InterfaceType::Future(_), _)
+            | (InterfaceType::Stream(_), _)
+            | (InterfaceType::ErrorContext(_), _) => todo!(),
         }
     }
 
@@ -660,6 +663,9 @@ impl Type {
             InterfaceType::Flags(index) => Type::Flags(Flags::from(*index, instance)),
             InterfaceType::Own(index) => Type::Own(instance.resource_type(*index)),
             InterfaceType::Borrow(index) => Type::Borrow(instance.resource_type(*index)),
+            InterfaceType::Future(_)
+            | InterfaceType::Stream(_)
+            | InterfaceType::ErrorContext(_) => todo!(),
         }
     }
 

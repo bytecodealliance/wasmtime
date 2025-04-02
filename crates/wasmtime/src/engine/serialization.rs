@@ -27,7 +27,7 @@ use core::str::FromStr;
 use object::endian::Endianness;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
-use object::{read::elf::ElfFile64, FileFlags, Object as _, ObjectSection, SectionKind};
+use object::{read::elf::ElfFile64, FileFlags, Object as _, ObjectSection};
 use serde_derive::{Deserialize, Serialize};
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
@@ -68,7 +68,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
             os_abi: obj::ELFOSABI_WASMTIME,
             abi_version: 0,
             e_flags,
-        } if e_flags == expected_e_flags => {}
+        } if e_flags & expected_e_flags == expected_e_flags => {}
         _ => bail!("incompatible object file format"),
     }
 
@@ -122,7 +122,7 @@ pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>, metadata: &Me
     let section = obj.add_section(
         obj.segment_name(StandardSegment::Data).to_vec(),
         obj::ELF_WASM_ENGINE.as_bytes().to_vec(),
-        SectionKind::ReadOnlyData,
+        object::SectionKind::ReadOnlyData,
     );
     let mut data = Vec::new();
     data.push(VERSION);
@@ -149,13 +149,13 @@ fn detect_precompiled<'data, R: object::ReadRef<'data>>(
         FileFlags::Elf {
             os_abi: obj::ELFOSABI_WASMTIME,
             abi_version: 0,
-            e_flags: obj::EF_WASMTIME_MODULE,
-        } => Some(Precompiled::Module),
+            e_flags,
+        } if e_flags & obj::EF_WASMTIME_MODULE != 0 => Some(Precompiled::Module),
         FileFlags::Elf {
             os_abi: obj::ELFOSABI_WASMTIME,
             abi_version: 0,
-            e_flags: obj::EF_WASMTIME_COMPONENT,
-        } => Some(Precompiled::Component),
+            e_flags,
+        } if e_flags & obj::EF_WASMTIME_COMPONENT != 0 => Some(Precompiled::Component),
         _ => None,
     }
 }
@@ -200,10 +200,10 @@ struct WasmFeatures {
     function_references: bool,
     gc: bool,
     custom_page_sizes: bool,
-    component_model_more_flags: bool,
-    component_model_multiple_returns: bool,
+    component_model_async: bool,
     gc_types: bool,
     wide_arithmetic: bool,
+    stack_switching: bool,
 }
 
 impl Metadata<'_> {
@@ -229,8 +229,6 @@ impl Metadata<'_> {
             shared_everything_threads,
             component_model_values,
             component_model_nested_names,
-            component_model_more_flags,
-            component_model_multiple_returns,
             component_model_async,
             legacy_exceptions,
             gc_types,
@@ -252,8 +250,6 @@ impl Metadata<'_> {
         assert!(!component_model_nested_names);
         assert!(!shared_everything_threads);
         assert!(!legacy_exceptions);
-        assert!(!stack_switching);
-        assert!(!component_model_async);
 
         Metadata {
             target: engine.compiler().triple().to_string(),
@@ -276,10 +272,10 @@ impl Metadata<'_> {
                 function_references,
                 gc,
                 custom_page_sizes,
-                component_model_more_flags,
-                component_model_multiple_returns,
+                component_model_async,
                 gc_types,
                 wide_arithmetic,
+                stack_switching,
             },
         }
     }
@@ -486,10 +482,10 @@ impl Metadata<'_> {
             function_references,
             gc,
             custom_page_sizes,
-            component_model_more_flags,
-            component_model_multiple_returns,
+            component_model_async,
             gc_types,
             wide_arithmetic,
+            stack_switching,
         } = self.features;
 
         use wasmparser::WasmFeatures as F;
@@ -565,14 +561,9 @@ impl Metadata<'_> {
             "WebAssembly custom-page-sizes support",
         )?;
         Self::check_bool(
-            component_model_more_flags,
-            other.contains(F::COMPONENT_MODEL_MORE_FLAGS),
-            "WebAssembly component model support for more than 32 flags",
-        )?;
-        Self::check_bool(
-            component_model_multiple_returns,
-            other.contains(F::COMPONENT_MODEL_MULTIPLE_RETURNS),
-            "WebAssembly component model support for multiple returns",
+            component_model_async,
+            other.contains(F::COMPONENT_MODEL_ASYNC),
+            "WebAssembly component model support for async lifts/lowers, futures, streams, and errors",
         )?;
         Self::check_cfg_bool(
             cfg!(feature = "gc"),
@@ -586,7 +577,11 @@ impl Metadata<'_> {
             other.contains(F::WIDE_ARITHMETIC),
             "WebAssembly wide-arithmetic support",
         )?;
-
+        Self::check_bool(
+            stack_switching,
+            other.contains(F::STACK_SWITCHING),
+            "WebAssembly stack switching support",
+        )?;
         Ok(())
     }
 

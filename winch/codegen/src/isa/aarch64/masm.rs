@@ -3,18 +3,24 @@ use super::{
     address::Address,
     asm::Assembler,
     regs::{self, scratch},
+    ABI,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, local::LocalSlot, vmctx},
     codegen::{ptr_type_from_ptr_size, CodeGenContext, CodeGenError, Emission, FuncEnv},
     isa::{
+        aarch64::abi::SHADOW_STACK_POINTER_SLOT_SIZE,
         reg::{writable, Reg, WritableReg},
         CallingConvention,
     },
     masm::{
-        CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind,
-        MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp,
-        RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, TrapCode, TruncKind,
+        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I,
+        IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind,
+        ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, StoreKind,
+        TrapCode, TruncKind, V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind,
+        V128ExtMulKind, V128ExtendKind, V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind,
+        V128NegKind, V128SubKind, V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
+        TRUSTED_FLAGS, UNTRUSTED_FLAGS,
     },
     stack::TypedReg,
 };
@@ -47,6 +53,49 @@ impl MacroAssembler {
             ptr_size: ptr_type_from_ptr_size(ptr_size.size()).try_into()?,
         })
     }
+
+    /// Ensures that the stack pointer remains 16-byte aligned for the duration
+    /// of the provided function. This alignment is necessary for AArch64
+    /// compliance, particularly for signal handlers that may be invoked
+    /// during execution. While the compiler doesn't directly use the stack
+    /// pointer for memory addressing, maintaining this alignment is crucial
+    /// to prevent issues when handling signals.
+    pub fn with_aligned_sp<F, T>(&mut self, mut f: F) -> Result<T>
+    where
+        F: FnMut(&mut Self) -> Result<T>,
+    {
+        let mut aligned = false;
+        let alignment: u32 = <Aarch64ABI as ABI>::call_stack_align().into();
+        let addend: u32 = <Aarch64ABI as ABI>::initial_frame_size().into();
+        let delta = calculate_frame_adjustment(self.sp_offset()?.as_u32(), addend, alignment);
+        if delta != 0 {
+            self.asm.sub_ir(
+                u64::from(delta),
+                // Since we don't need to synchronize the shadow stack pointer
+                // when freeing stack space [^1], the stack pointer may become
+                // out of sync with the primary shadow stack pointer. Therefore,
+                // we use the shadow stack pointer as the reference for
+                // calculating any alignment delta (self.sp_offset).
+                //
+                // [1]: This approach avoids an unnecessary move instruction and
+                // maintains the invariant of not accessing memory below the
+                // current stack pointer, preventing issues with signal handlers
+                // and interrupts.
+                regs::shadow_sp(),
+                writable!(regs::sp()),
+                OperandSize::S64,
+            );
+            aligned = true;
+        }
+
+        let res = f(self)?;
+
+        if aligned {
+            self.move_shadow_sp_to_sp();
+        }
+
+        Ok(res)
+    }
 }
 
 impl Masm for MacroAssembler {
@@ -58,10 +107,15 @@ impl Masm for MacroAssembler {
         let lr = regs::lr();
         let fp = regs::fp();
         let sp = regs::sp();
-        let addr = Address::pre_indexed_from_sp(-16);
 
+        let addr = Address::pre_indexed_from_sp(-16);
         self.asm.stp(fp, lr, addr);
         self.asm.mov_rr(sp, writable!(fp), OperandSize::S64);
+
+        let addr = Address::pre_indexed_from_sp(-(SHADOW_STACK_POINTER_SLOT_SIZE as i64));
+        self.asm
+            .str(regs::shadow_sp(), addr, OperandSize::S64, TRUSTED_FLAGS);
+
         self.move_sp_to_shadow_sp();
         Ok(())
     }
@@ -74,6 +128,22 @@ impl Masm for MacroAssembler {
     fn frame_restore(&mut self) -> Result<()> {
         debug_assert_eq!(self.sp_offset, 0);
 
+        // Sync the real stack pointer with the value of the shadow stack
+        // pointer.
+        self.move_shadow_sp_to_sp();
+
+        // Pop the shadow stack pointer. It's assumed that at this point
+        // `sp_offset` is 0 and therefore the real stack pointer should be
+        // 16-byte aligned.
+        let addr = Address::post_indexed_from_sp(SHADOW_STACK_POINTER_SLOT_SIZE as i64);
+        self.asm.uload(
+            addr,
+            writable!(regs::shadow_sp()),
+            OperandSize::S64,
+            TRUSTED_FLAGS,
+        );
+
+        // Restore the link register and frame pointer.
         let lr = regs::lr();
         let fp = regs::fp();
         let addr = Address::post_indexed_from_sp(16);
@@ -88,10 +158,15 @@ impl Masm for MacroAssembler {
             return Ok(());
         }
 
-        let sp = regs::sp();
+        let ssp = regs::shadow_sp();
         self.asm
-            .sub_ir(bytes as u64, sp, writable!(sp), OperandSize::S64);
-        self.move_sp_to_shadow_sp();
+            .sub_ir(bytes as u64, ssp, writable!(ssp), OperandSize::S64);
+
+        // Even though we're using the shadow stack pointer to reserve stack, we
+        // must ensure that the real stack pointer reflects the stack claimed so
+        // far; we can't use stack memory below the real stack pointer as it
+        // could be clobbered by interrupts or signal handlers.
+        self.move_shadow_sp_to_sp();
 
         self.increment_sp(bytes);
         Ok(())
@@ -102,10 +177,20 @@ impl Masm for MacroAssembler {
             return Ok(());
         }
 
-        let sp = regs::sp();
+        let ssp = regs::shadow_sp();
         self.asm
-            .add_ir(bytes as u64, sp, writable!(sp), OperandSize::S64);
-        self.move_sp_to_shadow_sp();
+            .add_ir(bytes as u64, ssp, writable!(ssp), OperandSize::S64);
+
+        // We must ensure that the real stack pointer reflects the offset
+        // tracked by `self.sp_offset`, we use such value to calculate
+        // alignment, which is crucial for calls.
+        //
+        // As an optimization: this synchronization doesn't need to happen all
+        // the time, in theory we could ensure to sync the shadow stack pointer
+        // with the stack pointer when alignment is required, like at callsites.
+        // This is the simplest approach at the time of writing, which
+        // integrates well with the rest of the aarch64 infrastructure.
+        self.move_shadow_sp_to_sp();
 
         self.decrement_sp(bytes);
         Ok(())
@@ -171,24 +256,23 @@ impl Masm for MacroAssembler {
             RegImm::Reg(reg) => reg,
         };
 
-        self.asm.str(src, dst, size);
+        self.asm.str(src, dst, size, TRUSTED_FLAGS);
         Ok(())
     }
 
-    fn wasm_store(
-        &mut self,
-        src: Reg,
-        dst: Self::Address,
-        size: OperandSize,
-        op_kind: MemOpKind,
-    ) -> Result<()> {
-        match op_kind {
-            MemOpKind::Atomic => Err(anyhow!(CodeGenError::unimplemented_masm_instruction())),
-            MemOpKind::Normal => {
-                self.asm.str(src, dst, size);
+    fn wasm_store(&mut self, src: Reg, dst: Self::Address, op_kind: StoreKind) -> Result<()> {
+        self.with_aligned_sp(|masm| match op_kind {
+            StoreKind::Operand(size) => {
+                masm.asm.str(src, dst, size, UNTRUSTED_FLAGS);
                 Ok(())
             }
-        }
+            StoreKind::Atomic(_size) => {
+                Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+            }
+            StoreKind::VectorLane(_selector) => {
+                Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+            }
+        })
     }
 
     fn call(
@@ -197,7 +281,7 @@ impl Masm for MacroAssembler {
         mut load_callee: impl FnMut(&mut Self) -> Result<(CalleeKind, CallingConvention)>,
     ) -> Result<u32> {
         let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
-        let addend: u32 = <Self::ABI as abi::ABI>::arg_base_offset().into();
+        let addend: u32 = <Self::ABI as abi::ABI>::initial_frame_size().into();
         let delta = calculate_frame_adjustment(self.sp_offset()?.as_u32(), addend, alignment);
         let aligned_args_size = align_to(stack_args_size, alignment);
         let total_stack = delta + aligned_args_size;
@@ -213,7 +297,7 @@ impl Masm for MacroAssembler {
     }
 
     fn load(&mut self, src: Address, dst: WritableReg, size: OperandSize) -> Result<()> {
-        self.asm.uload(src, dst, size);
+        self.asm.uload(src, dst, size, TRUSTED_FLAGS);
         Ok(())
     }
 
@@ -221,43 +305,49 @@ impl Masm for MacroAssembler {
         self.load(src, dst, self.ptr_size)
     }
 
-    fn wasm_load(
+    fn wasm_load(&mut self, src: Self::Address, dst: WritableReg, kind: LoadKind) -> Result<()> {
+        let size = kind.derive_operand_size();
+        self.with_aligned_sp(|masm| match &kind {
+            LoadKind::Operand(_) => Ok(masm.asm.uload(src, dst, size, UNTRUSTED_FLAGS)),
+            LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
+            LoadKind::ScalarExtend(extend_kind) => {
+                if extend_kind.signed() {
+                    masm.asm.sload(src, dst, size, UNTRUSTED_FLAGS);
+                } else {
+                    // unlike x64, unused bits are set to zero so we don't need to extend
+                    masm.asm.uload(src, dst, size, UNTRUSTED_FLAGS);
+                }
+
+                Ok(())
+            }
+            LoadKind::VectorExtend(_vector_extend_kind) => {
+                bail!(CodeGenError::UnimplementedWasmLoadKind)
+            }
+            LoadKind::VectorLane(_selector) => {
+                bail!(CodeGenError::unimplemented_masm_instruction())
+            }
+            LoadKind::Atomic(_, _) => bail!(CodeGenError::unimplemented_masm_instruction()),
+            LoadKind::VectorZero(_size) => {
+                bail!(CodeGenError::UnimplementedWasmLoadKind)
+            }
+        })
+    }
+
+    fn compute_addr(
         &mut self,
         src: Self::Address,
         dst: WritableReg,
-        kind: LoadKind,
-        op_kind: MemOpKind,
+        size: OperandSize,
     ) -> Result<()> {
-        let size = kind.derive_operand_size();
-        match op_kind {
-            MemOpKind::Normal => match kind {
-                LoadKind::Operand(_) => self.asm.uload(src, dst, size),
-                LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
-                LoadKind::ScalarExtend(extend_kind) => {
-                    if extend_kind.signed() {
-                        self.asm.sload(src, dst, size)
-                    } else {
-                        // unlike x64, unused bits are set to zero so we don't need to extend
-                        self.asm.uload(src, dst, size)
-                    }
-                }
-                LoadKind::VectorExtend(_vector_extend_kind) => {
-                    bail!(CodeGenError::UnimplementedWasmLoadKind)
-                }
-            },
-            MemOpKind::Atomic => bail!(CodeGenError::unimplemented_masm_instruction()),
-        }
-        Ok(())
-    }
-
-    fn load_addr(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize) -> Result<()> {
-        self.asm.uload(src, dst, size);
+        let (base, offset) = src.unwrap_offset();
+        self.asm
+            .add_ir(u64::try_from(offset).unwrap(), base, dst, size);
         Ok(())
     }
 
     fn pop(&mut self, dst: WritableReg, size: OperandSize) -> Result<()> {
         let addr = self.address_from_sp(SPOffset::from_u32(self.sp_offset))?;
-        self.asm.uload(addr, dst, size);
+        self.asm.uload(addr, dst, size, TRUSTED_FLAGS);
         self.free_stack(size.bytes())
     }
 
@@ -336,9 +426,14 @@ impl Masm for MacroAssembler {
         size: OperandSize,
         trap: TrapCode,
     ) -> Result<()> {
-        self.add(dst, lhs, rhs, size)?;
-        self.asm.trapif(Cond::Hs, trap);
-        Ok(())
+        // Similar to all the other potentially-trapping operations, we need to
+        // ensure that the real SP is 16-byte aligned in case control flow is
+        // transferred to a signal handler.
+        self.with_aligned_sp(|masm| {
+            masm.add(dst, lhs, rhs, size)?;
+            masm.asm.trapif(Cond::Hs, trap);
+            Ok(())
+        })
     }
 
     fn sub(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
@@ -694,7 +789,7 @@ impl Masm for MacroAssembler {
     fn push(&mut self, reg: Reg, size: OperandSize) -> Result<StackSlot> {
         self.reserve_stack(size.bytes())?;
         let address = self.address_from_sp(SPOffset::from_u32(self.sp_offset))?;
-        self.asm.str(reg, address, size);
+        self.asm.str(reg, address, size, TRUSTED_FLAGS);
 
         Ok(StackSlot {
             offset: SPOffset::from_u32(self.sp_offset),
@@ -832,18 +927,24 @@ impl Masm for MacroAssembler {
     }
 
     fn trap(&mut self, code: TrapCode) -> Result<()> {
-        self.asm.udf(code);
-        Ok(())
+        self.with_aligned_sp(|masm| {
+            masm.asm.udf(code);
+            Ok(())
+        })
     }
 
     fn trapz(&mut self, src: Reg, code: TrapCode) -> Result<()> {
-        self.asm.trapz(src, code, OperandSize::S64);
-        Ok(())
+        self.with_aligned_sp(|masm| {
+            masm.asm.trapz(src, code, OperandSize::S64);
+            Ok(())
+        })
     }
 
     fn trapif(&mut self, cc: IntCmpKind, code: TrapCode) -> Result<()> {
-        self.asm.trapif(cc.into(), code);
-        Ok(())
+        self.with_aligned_sp(|masm| {
+            masm.asm.trapif(cc.into(), code);
+            Ok(())
+        })
     }
 
     fn start_source_loc(&mut self, loc: RelSourceLoc) -> Result<(CodeOffset, RelSourceLoc)> {
@@ -902,16 +1003,347 @@ impl Masm for MacroAssembler {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
+    fn swizzle(&mut self, _dst: WritableReg, _lhs: Reg, _rhs: Reg) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
     fn atomic_rmw(
         &mut self,
+        _context: &mut CodeGenContext<Emission>,
         _addr: Self::Address,
-        _operand: WritableReg,
         _size: OperandSize,
         _op: RmwOp,
         _flags: MemFlags,
-        _extend: Option<ExtendKind>,
+        _extend: Option<Extend<Zero>>,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn extract_lane(
+        &mut self,
+        _src: Reg,
+        _dst: WritableReg,
+        _lane: u8,
+        _kind: ExtractLaneKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn replace_lane(
+        &mut self,
+        _src: RegImm,
+        _dst: WritableReg,
+        _lane: u8,
+        _kind: ReplaceLaneKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn atomic_cas(
+        &mut self,
+        _context: &mut CodeGenContext<Emission>,
+        _addr: Self::Address,
+        _size: OperandSize,
+        _flags: MemFlags,
+        _extend: Option<Extend<Zero>>,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_eq(
+        &mut self,
+        _dst: WritableReg,
+        _lhs: Reg,
+        _rhs: Reg,
+        _kind: VectorEqualityKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_ne(
+        &mut self,
+        _dst: WritableReg,
+        _lhs: Reg,
+        _rhs: Reg,
+        _kind: VectorEqualityKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_lt(
+        &mut self,
+        _dst: WritableReg,
+        _lhs: Reg,
+        _rhs: Reg,
+        _kind: VectorCompareKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_le(
+        &mut self,
+        _dst: WritableReg,
+        _lhs: Reg,
+        _rhs: Reg,
+        _kind: VectorCompareKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_gt(
+        &mut self,
+        _dst: WritableReg,
+        _lhs: Reg,
+        _rhs: Reg,
+        _kind: VectorCompareKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_ge(
+        &mut self,
+        _dst: WritableReg,
+        _lhs: Reg,
+        _rhs: Reg,
+        _kind: VectorCompareKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_not(&mut self, _dst: WritableReg) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn fence(&mut self) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_and(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_and_not(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_or(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_xor(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_bitselect(
+        &mut self,
+        _src1: Reg,
+        _src2: Reg,
+        _mask: Reg,
+        _dst: WritableReg,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_any_true(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_convert(&mut self, _src: Reg, _dst: WritableReg, _kind: V128ConvertKind) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_narrow(
+        &mut self,
+        _src1: Reg,
+        _src2: Reg,
+        _dst: WritableReg,
+        _kind: V128NarrowKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_demote(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_promote(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_extend(&mut self, _src: Reg, _dst: WritableReg, _kind: V128ExtendKind) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_add(
+        &mut self,
+        _lhs: Reg,
+        _rhs: Reg,
+        _dst: WritableReg,
+        _kind: V128AddKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_sub(
+        &mut self,
+        _lhs: Reg,
+        _rhs: Reg,
+        _dst: WritableReg,
+        _kind: V128SubKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_mul(
+        &mut self,
+        _context: &mut CodeGenContext<Emission>,
+        _kind: V128MulKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_abs(&mut self, _src: Reg, _dst: WritableReg, _kind: V128AbsKind) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_neg(&mut self, _op: WritableReg, _kind: V128NegKind) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_shift(
+        &mut self,
+        _context: &mut CodeGenContext<Emission>,
+        _lane_width: OperandSize,
+        _shift_kind: ShiftKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_q15mulr_sat_s(
+        &mut self,
+        _lhs: Reg,
+        _rhs: Reg,
+        _dst: WritableReg,
+        _size: OperandSize,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_all_true(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_bitmask(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_trunc(
+        &mut self,
+        _context: &mut CodeGenContext<Emission>,
+        _kind: V128TruncKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_min(
+        &mut self,
+        _src1: Reg,
+        _src2: Reg,
+        _dst: WritableReg,
+        _kind: V128MinKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_max(
+        &mut self,
+        _src1: Reg,
+        _src2: Reg,
+        _dst: WritableReg,
+        _kind: V128MaxKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_extmul(
+        &mut self,
+        _context: &mut CodeGenContext<Emission>,
+        _kind: V128ExtMulKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_extadd_pairwise(
+        &mut self,
+        _src: Reg,
+        _dst: WritableReg,
+        _kind: V128ExtAddKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_dot(&mut self, _lhs: Reg, _rhs: Reg, _dst: WritableReg) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_popcnt(&mut self, _context: &mut CodeGenContext<Emission>) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_avgr(
+        &mut self,
+        _lhs: Reg,
+        _rhs: Reg,
+        _dst: WritableReg,
+        _size: OperandSize,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_div(
+        &mut self,
+        _lhs: Reg,
+        _rhs: Reg,
+        _dst: WritableReg,
+        _size: OperandSize,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_sqrt(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_ceil(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_floor(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_nearest(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_pmin(
+        &mut self,
+        _lhs: Reg,
+        _rhs: Reg,
+        _dst: WritableReg,
+        _size: OperandSize,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_pmax(
+        &mut self,
+        _lhs: Reg,
+        _rhs: Reg,
+        _dst: WritableReg,
+        _size: OperandSize,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
     }
 }
 
@@ -927,14 +1359,30 @@ impl MacroAssembler {
     // Copies the value of the stack pointer to the shadow stack
     // pointer: mov x28, sp
 
-    // This function is usually called whenever the real stack pointer
-    // changes, for example after allocating or deallocating stack
-    // space, or after performing a push or pop.
-    // For more details around the stack pointer and shadow stack
-    // pointer see the docs at regs::shadow_sp().
+    // This function is called at the epilogue.
     fn move_sp_to_shadow_sp(&mut self) {
         let sp = regs::sp();
         let shadow_sp = regs::shadow_sp();
         self.asm.mov_rr(sp, writable!(shadow_sp), OperandSize::S64);
+    }
+
+    // Copies the value of the shadow stack pointer to the stack pointer: mov
+    // sp, x28.
+    //
+    // This function is usually called when the space is claimed, e.g., via
+    // a push, when stack space is reserved explicitly or after emitting code
+    // that requires explicit stack pointer alignment (code that could result in
+    // signal handling).
+    //
+    // This ensures the stack pointer always reflects the allocated stack space,
+    // otherwise any space below the stack pointer could get clobbered with
+    // interrupts and signal handlers.
+    //
+    // This function must also be called at the function epilogue, since the
+    // stack pointer is used to restore the current function frame.
+    fn move_shadow_sp_to_sp(&mut self) {
+        let shadow_sp = regs::shadow_sp();
+        let sp = writable!(regs::sp());
+        self.asm.add_ir(0, shadow_sp, sp, OperandSize::S64);
     }
 }

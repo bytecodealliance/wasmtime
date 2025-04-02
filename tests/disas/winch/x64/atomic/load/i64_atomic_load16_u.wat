@@ -24,7 +24,7 @@
 ;;       cmpw    $0, %ax
 ;;       jne     0x57
 ;;   3f: movl    $0, %eax
-;;       movq    0x60(%r14), %rcx
+;;       movq    0x50(%r14), %rcx
 ;;       addq    %rax, %rcx
 ;;       movzwq  (%rcx), %rax
 ;;       addq    $0x10, %rsp

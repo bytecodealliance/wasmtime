@@ -14,6 +14,7 @@ cargo-fuzz = true
 [dependencies]
 anyhow = { workspace = true }
 env_logger = { workspace = true }
+cranelift-assembler-x64 = { workspace = true, features = ["fuzz"] }
 cranelift-codegen = { workspace = true, features = ["incremental-cache", "x86", "arm64", "s390x", "riscv64"] }
 cranelift-reader = { workspace = true }
 cranelift-filetests = { workspace = true }
@@ -28,17 +29,16 @@ smallvec = { workspace = true }
 wasmparser = { workspace = true }
 wasmtime = { workspace = true, features = ["winch"] }
 wasmtime-fuzzing = { workspace = true }
-component-test-util = { workspace = true }
-component-fuzz-util = { workspace = true }
+wasmtime-test-util = { workspace = true }
 log = { workspace = true }
 
 [build-dependencies]
 anyhow = { workspace = true }
-proc-macro2 = "1.0"
+proc-macro2 = { workspace = true }
 arbitrary = { workspace = true, features = ["derive"] }
 rand = { version = "0.8.0" }
-quote = "1.0"
-component-fuzz-util = { workspace = true }
+quote = { workspace = true }
+wasmtime-test-util = { workspace = true, features = ['component-fuzz'] }
 
 [features]
 default = ['fuzz-spec-interpreter']
@@ -58,12 +58,6 @@ test = false
 doc = false
 
 [[bin]]
-name = "api_calls"
-path = "fuzz_targets/api_calls.rs"
-test = false
-doc = false
-
-[[bin]]
 name = "differential"
 path = "fuzz_targets/differential.rs"
 test = false
@@ -72,18 +66,6 @@ doc = false
 [[bin]]
 name = "wast_tests"
 path = "fuzz_targets/wast_tests.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "table_ops"
-path = "fuzz_targets/table_ops.rs"
-test = false
-doc = false
-
-[[bin]]
-name = "stacks"
-path = "fuzz_targets/stacks.rs"
 test = false
 doc = false
 
@@ -118,22 +100,8 @@ test = false
 doc = false
 
 [[bin]]
-name = "memory_accesses"
-path = "fuzz_targets/memory_accesses.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "pulley"
-path = "fuzz_targets/pulley.rs"
-test = false
-doc = false
-bench = false
-
-[[bin]]
-name = "dominator_tree"
-path = "fuzz_targets/dominator_tree.rs"
+name = "misc"
+path = "fuzz_targets/misc.rs"
 test = false
 doc = false
 bench = false

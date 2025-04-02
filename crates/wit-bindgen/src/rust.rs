@@ -57,6 +57,9 @@ pub trait RustGenerator<'a> {
                     self.push_str(&format!("{wt}::component::__internal::String"))
                 }
             },
+            Type::ErrorContext => {
+                self.push_str("wasmtime::component::ErrorContext");
+            }
         }
     }
 
@@ -115,8 +118,7 @@ pub trait RustGenerator<'a> {
                     | TypeDefKind::Enum(_)
                     | TypeDefKind::Tuple(_)
                     | TypeDefKind::Handle(_)
-                    | TypeDefKind::Resource
-                    | TypeDefKind::ErrorContext => true,
+                    | TypeDefKind::Resource => true,
                     TypeDefKind::Type(Type::Id(t)) => {
                         needs_generics(resolve, &resolve.types[*t].kind)
                     }
@@ -166,10 +168,16 @@ pub trait RustGenerator<'a> {
             TypeDefKind::Enum(_) => {
                 panic!("unsupported anonymous type reference: enum")
             }
-            TypeDefKind::Future(_) => todo!(),
-            TypeDefKind::Stream(_) => todo!(),
-            TypeDefKind::ErrorContext => todo!(),
-
+            TypeDefKind::Future(ty) => {
+                self.push_str("wasmtime::component::FutureReader<");
+                self.print_optional_ty(ty.as_ref(), TypeMode::Owned);
+                self.push_str(">");
+            }
+            TypeDefKind::Stream(ty) => {
+                self.push_str("wasmtime::component::StreamReader<");
+                self.print_optional_ty(ty.as_ref(), TypeMode::Owned);
+                self.push_str(">");
+            }
             TypeDefKind::Handle(handle) => {
                 self.print_handle(handle);
             }
@@ -214,6 +222,20 @@ pub trait RustGenerator<'a> {
                 self.push_str(">");
             }
         }
+    }
+
+    fn print_stream(&mut self, ty: Option<&Type>) {
+        let wt = self.wasmtime_path();
+        self.push_str(&format!("{wt}::component::StreamReader<"));
+        self.print_optional_ty(ty, TypeMode::Owned);
+        self.push_str(">");
+    }
+
+    fn print_future(&mut self, ty: Option<&Type>) {
+        let wt = self.wasmtime_path();
+        self.push_str(&format!("{wt}::component::FutureReader<"));
+        self.print_optional_ty(ty, TypeMode::Owned);
+        self.push_str(">");
     }
 
     fn print_handle(&mut self, handle: &Handle) {
@@ -266,8 +288,16 @@ pub trait RustGenerator<'a> {
 
     fn modes_of(&self, ty: TypeId) -> Vec<(String, TypeMode)> {
         let info = self.info(ty);
+        // Info only populated for types that are passed to and from functions. For
+        // types which are not, default to the ownership setting.
         if !info.owned && !info.borrowed {
-            return Vec::new();
+            return vec![(
+                self.param_name(ty),
+                match self.ownership() {
+                    Ownership::Owning => TypeMode::Owned,
+                    Ownership::Borrowing { .. } => TypeMode::AllBorrowed("'a"),
+                },
+            )];
         }
         let mut result = Vec::new();
         let first_mode =
@@ -404,6 +434,7 @@ pub fn to_rust_ident(name: &str) -> String {
         "virtual" => "virtual_".into(),
         "yield" => "yield_".into(),
         "try" => "try_".into(),
+        "gen" => "gen_".into(),
         s => s.to_snake_case(),
     }
 }

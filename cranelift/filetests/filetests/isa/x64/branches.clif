@@ -167,8 +167,7 @@ block2:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm1, %xmm0
-;   jp      label1
-;   jnz     label1; j label2
+;   jp,nz   label1; j label2
 ; block1:
 ;   movl    $2, %eax
 ;   movq    %rbp, %rsp
@@ -216,8 +215,7 @@ block2:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm1, %xmm0
-;   jp      label1
-;   jnz     label1; j label2
+;   jp,nz   label1; j label2
 ; block1:
 ;   movl    $1, %eax
 ;   movq    %rbp, %rsp
@@ -265,8 +263,7 @@ block2:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm1, %xmm0
-;   jp      label2
-;   jnz     label2; j label1
+;   jp,nz   label2; j label1
 ; block1:
 ;   movl    $1, %eax
 ;   movq    %rbp, %rsp
@@ -631,8 +628,7 @@ block202:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   ucomiss const(1), %xmm0
-;   jp      label2
-;   jnz     label2; j label1
+;   jp,nz   label2; j label1
 ; block1:
 ;   jmp     label5
 ; block2:
@@ -753,8 +749,7 @@ block2:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm1, %xmm0
-;   jp      label1
-;   jnz     label1; j label2
+;   jp,nz   label1; j label2
 ; block1:
 ;   movl    $2, %eax
 ;   movq    %rbp, %rsp
@@ -855,8 +850,7 @@ block2:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm1, %xmm0
-;   jp      label1
-;   jnz     label1; j label2
+;   jp,nz   label1; j label2
 ; block1:
 ;   movl    $2, %eax
 ;   movq    %rbp, %rsp
@@ -882,6 +876,52 @@ block2:
 ;   popq %rbp
 ;   retq
 ; block3: ; offset 0x1d
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %brif_i8_fcmp_same_target(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+  v2 = fcmp eq v0, v1
+  v3 = uextend.i32 v2
+  ;; This test should demonstrate branch-chomping work on the combo
+  ;; two-condition branch lowered from `fcmp`; in fact this case is
+  ;; even more interesting because critical-edge splitting will create
+  ;; edge blocks (block1 and block2 in lowered VCode below), since
+  ;; otherwise we have multiple outs from first block and multiple ins
+  ;; to second block; and then branch-chomping elides five (!)
+  ;; cascading branches in a row.
+  brif v3, block1, block1
+
+block1:
+  v4 = iconst.i32 1
+  return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomiss %xmm1, %xmm0
+;   jp,nz   label2; j label1
+; block1:
+;   jmp     label3
+; block2:
+;   jmp     label3
+; block3:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   ucomiss %xmm1, %xmm0
+; block2: ; offset 0x7
 ;   movl $1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -999,28 +1039,28 @@ block1(v5: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    $1, %r10d
-;   movl    $2, %r11d
-;   movl    $3, %esi
+;   movl    $1, %r8d
+;   movl    $2, %ecx
+;   movl    $3, %edx
 ;   movl    $4, %eax
-;   movl    $4, %r8d
-;   movl    %edi, %r9d
-;   cmpl    %r8d, %r9d
-;   cmovbl  %r9d, %r8d, %r8d
-;   br_table %r8, %rdi, %rcx
+;   movl    $4, %esi
+;   movl    %edi, %edi
+;   cmpl    %esi, %edi
+;   cmovbl  %edi, %esi, %esi
+;   br_table %rsi, %r10, %r9
 ; block1:
 ;   jmp     label6
 ; block2:
-;   movq    %r10, %rax
+;   movq    %r8, %rax
 ;   jmp     label6
 ; block3:
-;   movq    %r11, %rax
+;   movq    %rcx, %rax
 ;   jmp     label6
 ; block4:
-;   movq    %r11, %rax
+;   movq    %rcx, %rax
 ;   jmp     label6
 ; block5:
-;   movq    %rsi, %rax
+;   movq    %rdx, %rax
 ;   jmp     label6
 ; block6:
 ;   movq    %rbp, %rsp
@@ -1032,18 +1072,18 @@ block1(v5: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movl $1, %r10d
-;   movl $2, %r11d
-;   movl $3, %esi
+;   movl $1, %r8d
+;   movl $2, %ecx
+;   movl $3, %edx
 ;   movl $4, %eax
-;   movl $4, %r8d
-;   movl %edi, %r9d
-;   cmpl %r8d, %r9d
-;   cmovbl %r9d, %r8d
-;   leaq 9(%rip), %rdi
-;   movslq (%rdi, %r8, 4), %rcx
-;   addq %rcx, %rdi
-;   jmpq *%rdi
+;   movl $4, %esi
+;   movl %edi, %edi
+;   cmpl %esi, %edi
+;   cmovbl %edi, %esi
+;   leaq 0xa(%rip), %r10
+;   movslq (%r10, %rsi, 4), %r9
+;   addq %r9, %r10
+;   jmpq *%r10
 ;   sbbl %eax, (%rax)
 ;   addb %al, (%rax)
 ;   andl %eax, (%rax)
@@ -1054,20 +1094,20 @@ block1(v5: i32):
 ;   addb %al, (%rax)
 ;   xorb $0, %al
 ;   addb %al, (%rax)
-; block2: ; offset 0x4e
-;   jmp 0x6e
-; block3: ; offset 0x53
-;   movq %r10, %rax
-;   jmp 0x6e
-; block4: ; offset 0x5b
-;   movq %r11, %rax
-;   jmp 0x6e
-; block5: ; offset 0x63
-;   movq %r11, %rax
-;   jmp 0x6e
-; block6: ; offset 0x6b
-;   movq %rsi, %rax
-; block7: ; offset 0x6e
+; block2: ; offset 0x4a
+;   jmp 0x6a
+; block3: ; offset 0x4f
+;   movq %r8, %rax
+;   jmp 0x6a
+; block4: ; offset 0x57
+;   movq %rcx, %rax
+;   jmp 0x6a
+; block5: ; offset 0x5f
+;   movq %rcx, %rax
+;   jmp 0x6a
+; block6: ; offset 0x67
+;   movq %rdx, %rax
+; block7: ; offset 0x6a
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

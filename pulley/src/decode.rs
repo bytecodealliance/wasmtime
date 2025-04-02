@@ -458,6 +458,48 @@ impl<R: Reg + Decode> Decode for UpperRegSet<R> {
     }
 }
 
+impl Decode for AddrO32 {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        Ok(AddrO32 {
+            addr: XReg::decode(bytecode)?,
+            offset: i32::decode(bytecode)?,
+        })
+    }
+}
+
+impl Decode for AddrZ {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        Ok(AddrZ {
+            addr: XReg::decode(bytecode)?,
+            offset: i32::decode(bytecode)?,
+        })
+    }
+}
+
+impl Decode for AddrG32 {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        Ok(AddrG32::from_bits(u32::decode(bytecode)?))
+    }
+}
+
+impl Decode for AddrG32Bne {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        Ok(AddrG32Bne::from_bits(u32::decode(bytecode)?))
+    }
+}
+
 /// A Pulley bytecode decoder.
 ///
 /// Does not materialize bytecode instructions, instead all decoding methods are
@@ -710,19 +752,6 @@ macro_rules! define_extended_decoder {
 }
 for_each_extended_op!(define_extended_decoder);
 
-/// Unwrap a `Result<T, Uninhabited>`.
-/// Always succeeds, since `Uninhabited` is uninhabited.
-pub fn unwrap_uninhabited<T>(res: Result<T, Uninhabited>) -> T {
-    match res {
-        Ok(ok) => ok,
-
-        // Nightly rust warns that this pattern is unreachable, but stable rust
-        // doesn't.
-        #[allow(unreachable_patterns)]
-        Err(err) => match err {},
-    }
-}
-
 /// Functions for decoding the operands of an instruction, assuming the opcode
 /// has already been decoded.
 pub mod operands {
@@ -741,8 +770,8 @@ pub mod operands {
             )*
         ) => {
             $(
-                #[allow(unused_variables)]
-                #[allow(missing_docs)]
+                #[allow(unused_variables, reason = "macro-generated")]
+                #[expect(missing_docs, reason = "macro-generated")]
                 pub fn $snake_name<T: BytecodeStream>(pc: &mut T) -> Result<($($($field_ty,)*)?), T::Error> {
                     Ok((($($((<$field_ty>::decode(pc))?,)*)?)))
                 }
@@ -752,7 +781,8 @@ pub mod operands {
 
     for_each_op!(define_operands_decoder);
 
-    #[allow(missing_docs)]
+    /// Decode an extended opcode from `pc` to match the payload of the
+    /// "extended" opcode.
     pub fn extended<T: BytecodeStream>(pc: &mut T) -> Result<(ExtendedOpcode,), T::Error> {
         Ok((ExtendedOpcode::decode(pc)?,))
     }

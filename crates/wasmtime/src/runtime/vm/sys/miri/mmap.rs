@@ -10,12 +10,14 @@ use crate::runtime::vm::sys::vm::MemoryImageSource;
 use crate::runtime::vm::{HostAlignedByteCount, SendSyncPtr};
 use std::alloc::{self, Layout};
 use std::fs::File;
+use std::io::Read;
 use std::ops::Range;
 use std::path::Path;
 use std::ptr::NonNull;
 
-pub fn open_file_for_mmap(_path: &Path) -> Result<File> {
-    bail!("not supported on miri");
+pub fn open_file_for_mmap(path: &Path) -> Result<File> {
+    let file = File::open(path)?;
+    Ok(file)
 }
 
 #[derive(Debug)]
@@ -40,7 +42,10 @@ impl Mmap {
     }
 
     pub fn reserve(size: HostAlignedByteCount) -> Result<Self> {
-        if size.byte_count() > 1 << 32 {
+        // Miri will abort execution on OOM instead of returning null from
+        // `alloc::alloc` so detect "definitely too large" requests that the
+        // test suite does and fail accordingly.
+        if (size.byte_count() as u64) > 1 << 32 {
             bail!("failed to allocate memory");
         }
         let layout = make_layout(size.byte_count());
@@ -54,8 +59,21 @@ impl Mmap {
         Ok(Mmap { memory })
     }
 
-    pub fn from_file(_file: &File) -> Result<Self> {
-        bail!("not supported on miri");
+    pub fn from_file(mut file: &File) -> Result<Self> {
+        // Read the file and copy it in to a fresh "mmap" to have allocation for
+        // an mmap only in one location.
+        let mut dst = Vec::new();
+        file.read_to_end(&mut dst)?;
+        let count = HostAlignedByteCount::new_rounded_up(dst.len())?;
+        let result = Mmap::new(count)?;
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                dst.as_ptr(),
+                result.as_send_sync_ptr().as_ptr(),
+                dst.len(),
+            );
+        }
+        Ok(result)
     }
 
     pub unsafe fn make_accessible(

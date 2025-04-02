@@ -25,6 +25,7 @@ impl CExternType {
             ExternType::Global(f) => CExternType::Global(CGlobalType::new(f)),
             ExternType::Memory(f) => CExternType::Memory(CMemoryType::new(f)),
             ExternType::Table(f) => CExternType::Table(CTableType::new(f)),
+            ExternType::Tag(_) => todo!(), // FIXME: #10252 C embedder API for exceptions and control tags.
         }
     }
 }

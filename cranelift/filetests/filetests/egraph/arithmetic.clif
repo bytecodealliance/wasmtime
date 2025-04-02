@@ -124,6 +124,17 @@ block0(v0: i32):
     ; check: return v6
 }
 
+function %mul2_ne_add(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v2 = iconst.i32 2
+    v3 = imul v0, v2
+    v4 = iadd v1, v0
+    v5 = icmp ne v3, v4
+    return v5
+    ; check: v11 = icmp ne v0, v1
+    ; check: return v11
+}
+
 function %mul_minus_one(i32) -> i32 {
 block0(v0: i32):
     v1 = iconst.i32 0xffff_ffff ; -1

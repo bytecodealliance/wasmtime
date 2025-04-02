@@ -28,12 +28,9 @@ http-body-util = { workspace = true }
 tracing = { workspace = true }
 wasmtime-wasi = { workspace = true }
 wasmtime = { workspace = true, features = ['component-model'] }
-
-# The `ring` crate, used to implement TLS, does not build on riscv64 or s390x
-[target.'cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))'.dependencies]
-tokio-rustls = { version = "0.25.0" }
-rustls = { version = "0.22.0" }
-webpki-roots = { version = "0.26.0" }
+tokio-rustls = { workspace = true }
+rustls = { workspace = true }
+webpki-roots = { workspace = true }
 
 [dev-dependencies]
 test-programs-artifacts = { workspace = true }
@@ -43,4 +40,4 @@ wasmtime = { workspace = true, features = ['cranelift'] }
 tokio = { workspace = true, features = ['macros'] }
 futures = { workspace = true, default-features = false, features = ['alloc'] }
 sha2 = "0.10.2"
-base64 = "0.21.0"
+base64 = { workspace = true }

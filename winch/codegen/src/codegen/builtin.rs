@@ -127,11 +127,15 @@ macro_rules! declare_function_sig {
                 self.ptr_type
             }
 
+            fn size(&self) -> WasmValType {
+                self.ptr_type
+            }
+
             fn vmctx(&self) -> WasmValType {
                 self.pointer()
             }
 
-            fn i32(&self) -> WasmValType {
+            fn u32(&self) -> WasmValType {
                 WasmValType::I32
             }
 
@@ -147,7 +151,7 @@ macro_rules! declare_function_sig {
                 WasmValType::F64
             }
 
-            fn i64(&self) -> WasmValType {
+            fn u64(&self) -> WasmValType {
                 WasmValType::I64
             }
 

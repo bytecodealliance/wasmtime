@@ -3,14 +3,14 @@
 // struct VMComponentContext {
 //      magic: u32,
 //      builtins: &'static VMComponentBuiltins,
-//      store: *mut dyn Store,
-//      limits: *const VMRuntimeLimits,
+//      limits: *const VMStoreContext,
 //      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
 //      trampoline_func_refs: [VMFuncRef; component.num_trampolines],
 //      lowerings: [VMLowering; component.num_lowerings],
-//      memories: [*mut VMMemoryDefinition; component.num_memories],
-//      reallocs: [*mut VMFuncRef; component.num_reallocs],
-//      post_returns: [*mut VMFuncRef; component.num_post_returns],
+//      memories: [*mut VMMemoryDefinition; component.num_runtime_memories],
+//      tables: [*mut VMTableDefinition; component.num_runtime_tables],
+//      reallocs: [*mut VMFuncRef; component.num_runtime_reallocs],
+//      post_returns: [*mut VMFuncRef; component.num_runtime_post_returns],
 //      resource_destructors: [*mut VMFuncRef; component.num_resources],
 // }
 
@@ -45,8 +45,12 @@ pub struct VMComponentOffsets<P> {
     pub num_lowerings: u32,
     /// The number of memories which are recorded in this component for options.
     pub num_runtime_memories: u32,
+    /// The number of tables which are recorded in this component for options.
+    pub num_runtime_tables: u32,
     /// The number of reallocs which are recorded in this component for options.
     pub num_runtime_reallocs: u32,
+    /// The number of callbacks which are recorded in this component for options.
+    pub num_runtime_callbacks: u32,
     /// The number of post-returns which are recorded in this component for options.
     pub num_runtime_post_returns: u32,
     /// Number of component instances internally in the component (always at
@@ -60,13 +64,14 @@ pub struct VMComponentOffsets<P> {
     // precalculated offsets of various member fields
     magic: u32,
     builtins: u32,
-    store: u32,
-    limits: u32,
+    vm_store_context: u32,
     flags: u32,
     trampoline_func_refs: u32,
     lowerings: u32,
     memories: u32,
+    tables: u32,
     reallocs: u32,
+    callbacks: u32,
     post_returns: u32,
     resource_destructors: u32,
     size: u32,
@@ -86,7 +91,9 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             ptr,
             num_lowerings: component.num_lowerings,
             num_runtime_memories: component.num_runtime_memories.try_into().unwrap(),
+            num_runtime_tables: component.num_runtime_tables.try_into().unwrap(),
             num_runtime_reallocs: component.num_runtime_reallocs.try_into().unwrap(),
+            num_runtime_callbacks: component.num_runtime_callbacks.try_into().unwrap(),
             num_runtime_post_returns: component.num_runtime_post_returns.try_into().unwrap(),
             num_runtime_component_instances: component
                 .num_runtime_component_instances
@@ -96,13 +103,14 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             num_resources: component.num_resources,
             magic: 0,
             builtins: 0,
-            store: 0,
-            limits: 0,
+            vm_store_context: 0,
             flags: 0,
             trampoline_func_refs: 0,
             lowerings: 0,
             memories: 0,
+            tables: 0,
             reallocs: 0,
+            callbacks: 0,
             post_returns: 0,
             resource_destructors: 0,
             size: 0,
@@ -136,15 +144,16 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(magic) = 4u32,
             align(u32::from(ret.ptr.size())),
             size(builtins) = ret.ptr.size(),
-            size(store) = cmul(2, ret.ptr.size()),
-            size(limits) = ret.ptr.size(),
+            size(vm_store_context) = ret.ptr.size(),
             align(16),
             size(flags) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
             align(u32::from(ret.ptr.size())),
             size(trampoline_func_refs) = cmul(ret.num_trampolines, ret.ptr.size_of_vm_func_ref()),
             size(lowerings) = cmul(ret.num_lowerings, ret.ptr.size() * 2),
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
+            size(tables) = cmul(ret.num_runtime_tables, ret.ptr.size()),
             size(reallocs) = cmul(ret.num_runtime_reallocs, ret.ptr.size()),
+            size(callbacks) = cmul(ret.num_runtime_callbacks, ret.ptr.size()),
             size(post_returns) = cmul(ret.num_runtime_post_returns, ret.ptr.size()),
             size(resource_destructors) = cmul(ret.num_resources, ret.ptr.size()),
         }
@@ -184,16 +193,10 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.flags + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
     }
 
-    /// The offset of the `store` field.
+    /// The offset of the `vm_store_context` field.
     #[inline]
-    pub fn store(&self) -> u32 {
-        self.store
-    }
-
-    /// The offset of the `limits` field.
-    #[inline]
-    pub fn limits(&self) -> u32 {
-        self.limits
+    pub fn vm_store_context(&self) -> u32 {
+        self.vm_store_context
     }
 
     /// The offset of the `trampoline_func_refs` field.
@@ -266,6 +269,20 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.runtime_memories() + index.as_u32() * u32::from(self.ptr.size())
     }
 
+    /// The offset of the base of the `runtime_tables` field
+    #[inline]
+    pub fn runtime_tables(&self) -> u32 {
+        self.tables
+    }
+
+    /// The offset of the `*mut VMTableDefinition` for the runtime index
+    /// provided.
+    #[inline]
+    pub fn runtime_table(&self, index: RuntimeTableIndex) -> u32 {
+        assert!(index.as_u32() < self.num_runtime_tables);
+        self.runtime_tables() + index.as_u32() * u32::from(self.ptr.size())
+    }
+
     /// The offset of the base of the `runtime_reallocs` field
     #[inline]
     pub fn runtime_reallocs(&self) -> u32 {
@@ -278,6 +295,20 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     pub fn runtime_realloc(&self, index: RuntimeReallocIndex) -> u32 {
         assert!(index.as_u32() < self.num_runtime_reallocs);
         self.runtime_reallocs() + index.as_u32() * u32::from(self.ptr.size())
+    }
+
+    /// The offset of the base of the `runtime_callbacks` field
+    #[inline]
+    pub fn runtime_callbacks(&self) -> u32 {
+        self.callbacks
+    }
+
+    /// The offset of the `*mut VMFuncRef` for the runtime index
+    /// provided.
+    #[inline]
+    pub fn runtime_callback(&self, index: RuntimeCallbackIndex) -> u32 {
+        assert!(index.as_u32() < self.num_runtime_callbacks);
+        self.runtime_callbacks() + index.as_u32() * u32::from(self.ptr.size())
     }
 
     /// The offset of the base of the `runtime_post_returns` field

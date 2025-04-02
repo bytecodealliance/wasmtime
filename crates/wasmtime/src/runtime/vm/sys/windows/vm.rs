@@ -37,6 +37,7 @@ pub unsafe fn commit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
     expose_existing_mapping(addr, len)
 }
 
+#[cfg(feature = "pooling-allocator")]
 pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
     erase_existing_mapping(addr, len)
 }

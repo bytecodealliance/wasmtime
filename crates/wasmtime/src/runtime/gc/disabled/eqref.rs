@@ -1,7 +1,5 @@
-use crate::runtime::vm::VMGcRef;
 use crate::{
-    store::{AutoAssertNoGc, StoreOpaque},
-    ArrayRef, AsContext, AsContextMut, GcRefImpl, HeapType, ManuallyRooted, Result, Rooted,
+    store::StoreOpaque, ArrayRef, AsContext, GcRefImpl, HeapType, ManuallyRooted, Result, Rooted,
     StructRef, I31,
 };
 
@@ -40,13 +38,6 @@ impl From<ManuallyRooted<ArrayRef>> for ManuallyRooted<EqRef> {
 impl GcRefImpl for EqRef {}
 
 impl EqRef {
-    pub(crate) fn from_cloned_gc_ref(
-        _store: &mut AutoAssertNoGc<'_>,
-        _gc_ref: VMGcRef,
-    ) -> Rooted<Self> {
-        unreachable!()
-    }
-
     pub fn ty(&self, _store: impl AsContext) -> Result<HeapType> {
         match *self {}
     }

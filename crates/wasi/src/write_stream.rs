@@ -1,4 +1,4 @@
-use crate::{HostOutputStream, StreamError, Subscribe};
+use crate::{OutputStream, Pollable, StreamError};
 use anyhow::anyhow;
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};
@@ -136,14 +136,14 @@ impl Worker {
     }
 }
 
-/// Provides a [`HostOutputStream`] impl from a [`tokio::io::AsyncWrite`] impl
+/// Provides a [`OutputStream`] impl from a [`tokio::io::AsyncWrite`] impl
 pub struct AsyncWriteStream {
     worker: Arc<Worker>,
     join_handle: Option<crate::runtime::AbortOnDropJoinHandle<()>>,
 }
 
 impl AsyncWriteStream {
-    /// Create a [`AsyncWriteStream`]. In order to use the [`HostOutputStream`] impl
+    /// Create a [`AsyncWriteStream`]. In order to use the [`OutputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncWrite`].
     pub fn new<T: tokio::io::AsyncWrite + Send + Unpin + 'static>(
         write_budget: usize,
@@ -162,7 +162,7 @@ impl AsyncWriteStream {
 }
 
 #[async_trait::async_trait]
-impl HostOutputStream for AsyncWriteStream {
+impl OutputStream for AsyncWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
         let mut state = self.worker.state();
         state.check_error()?;
@@ -204,7 +204,7 @@ impl HostOutputStream for AsyncWriteStream {
     }
 }
 #[async_trait::async_trait]
-impl Subscribe for AsyncWriteStream {
+impl Pollable for AsyncWriteStream {
     async fn ready(&mut self) {
         self.worker.ready().await;
     }

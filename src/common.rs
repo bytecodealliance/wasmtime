@@ -160,7 +160,8 @@ impl RunCommon {
             Some("-") => "/dev/stdin".as_ref(),
             _ => path,
         };
-        let file = File::open(path)?;
+        let file =
+            File::open(path).with_context(|| format!("failed to open wasm module {path:?}"))?;
 
         // First attempt to load the module as an mmap. If this succeeds then
         // detection can be done with the contents of the mmap and if a
@@ -212,7 +213,7 @@ impl RunCommon {
         deserialize_module: impl FnOnce() -> Result<Module>,
         #[cfg(feature = "component-model")] deserialize_component: impl FnOnce() -> Result<Component>,
     ) -> Result<RunTarget> {
-        Ok(match engine.detect_precompiled(bytes) {
+        Ok(match Engine::detect_precompiled(bytes) {
             Some(Precompiled::Module) => {
                 self.ensure_allow_precompiled()?;
                 RunTarget::Core(deserialize_module()?)
@@ -251,7 +252,7 @@ impl RunCommon {
 
             #[cfg(not(any(feature = "cranelift", feature = "winch")))]
             None => {
-                let _ = path;
+                let _ = (path, engine);
                 bail!("support for compiling modules was disabled at compile time");
             }
         })

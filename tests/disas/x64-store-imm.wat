@@ -16,12 +16,12 @@
 ;; wasm[0]::function[0]::foo:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movl    $0, 0x60(%rdi)
-;;       movl    $1, 0x60(%rdi)
-;;       movl    $0xffffffff, 0x60(%rdi)
-;;       movl    $0xfffffff6, 0x60(%rdi)
-;;       movl    $0x186a0, 0x60(%rdi)
-;;       movl    $0x8fffffff, 0x60(%rdi)
+;;       movl    $0, 0x50(%rdi)
+;;       movl    $1, 0x50(%rdi)
+;;       movl    $0xffffffff, 0x50(%rdi)
+;;       movl    $0xfffffff6, 0x50(%rdi)
+;;       movl    $0x186a0, 0x50(%rdi)
+;;       movl    $0x8fffffff, 0x50(%rdi)
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq

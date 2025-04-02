@@ -41,15 +41,15 @@ fn has_side_effect(func: &Function, inst: Inst) -> bool {
 /// Does the given instruction behave as a "pure" node with respect to
 /// aegraph semantics?
 ///
-/// - Actual pure nodes (arithmetic, etc)
-/// - Loads with the `readonly` flag set
+/// - Trivially pure nodes (bitwise arithmetic, etc)
+/// - Loads with the `readonly`, `notrap`, and `can_move` flags set
 pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
-    let is_readonly_load = match func.dfg.insts[inst] {
+    let is_pure_load = match func.dfg.insts[inst] {
         InstructionData::Load {
             opcode: Opcode::Load,
             flags,
             ..
-        } => flags.readonly() && flags.notrap(),
+        } => flags.readonly() && flags.notrap() && flags.can_move(),
         _ => false,
     };
 
@@ -65,7 +65,7 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
 
     let op = func.dfg.insts[inst].opcode();
 
-    has_one_result && (is_readonly_load || (!op.can_load() && !trivially_has_side_effects(op)))
+    has_one_result && (is_pure_load || (!op.can_load() && !trivially_has_side_effects(op)))
 }
 
 /// Can the given instruction be merged into another copy of itself?

@@ -1,9 +1,8 @@
-use std::rc::Rc;
-
 use crate::cdsl::formats::InstructionFormat;
 use crate::cdsl::instructions::AllInstructions;
 use crate::error;
-use crate::srcgen::Formatter;
+use cranelift_srcgen::{fmtln, Formatter, Language};
+use std::rc::Rc;
 
 /// Which ISLE target are we generating code for?
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -506,14 +505,14 @@ pub(crate) fn generate(
     isle_dir: &std::path::Path,
 ) -> Result<(), error::Error> {
     // ISLE DSL: mid-end ("opt") generated bindings.
-    let mut fmt = Formatter::new();
+    let mut fmt = Formatter::new(Language::Isle);
     gen_opt_isle(&formats, all_inst, &mut fmt);
-    fmt.update_file(isle_opt_filename, isle_dir)?;
+    fmt.write(isle_opt_filename, isle_dir)?;
 
     // ISLE DSL: lowering generated bindings.
-    let mut fmt = Formatter::new();
+    let mut fmt = Formatter::new(Language::Isle);
     gen_lower_isle(&formats, all_inst, &mut fmt);
-    fmt.update_file(isle_lower_filename, isle_dir)?;
+    fmt.write(isle_lower_filename, isle_dir)?;
 
     Ok(())
 }

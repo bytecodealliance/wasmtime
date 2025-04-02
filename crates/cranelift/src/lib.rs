@@ -34,7 +34,6 @@ mod builder;
 mod compiler;
 mod debug;
 mod func_environ;
-mod gc;
 mod translate;
 
 use self::compiler::Compiler;
@@ -202,6 +201,7 @@ fn reference_type(wasm_ht: WasmHeapType, pointer_type: ir::Type) -> ir::Type {
     match wasm_ht.top() {
         WasmHeapTopType::Func => pointer_type,
         WasmHeapTopType::Any | WasmHeapTopType::Extern => ir::types::I32,
+        WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
     }
 }
 
@@ -343,6 +343,7 @@ struct BuiltinFunctionSignatures {
 
     host_call_conv: CallConv,
     wasm_call_conv: CallConv,
+    argument_extension: ir::ArgumentExtension,
 }
 
 impl BuiltinFunctionSignatures {
@@ -351,6 +352,7 @@ impl BuiltinFunctionSignatures {
             pointer_type: compiler.isa().pointer_type(),
             host_call_conv: CallConv::triple_default(compiler.isa().triple()),
             wasm_call_conv: wasm_call_conv(compiler.isa(), compiler.tunables()),
+            argument_extension: compiler.isa().default_argument_extension(),
         }
     }
 
@@ -362,20 +364,11 @@ impl BuiltinFunctionSignatures {
         AbiParam::new(self.pointer_type)
     }
 
-    fn i32(&self) -> AbiParam {
-        // Some platform ABIs require i32 values to be zero- or sign-
-        // extended to the full register width.  We need to indicate
-        // this here by using the appropriate .uext or .sext attribute.
-        // The attribute can be added unconditionally; platforms whose
-        // ABI does not require such extensions will simply ignore it.
-        // Note that currently all i32 arguments or return values used
-        // by builtin functions are unsigned, so we always use .uext.
-        // If that ever changes, we will have to add a second type
-        // marker here.
-        AbiParam::new(ir::types::I32).uext()
+    fn u32(&self) -> AbiParam {
+        AbiParam::new(ir::types::I32)
     }
 
-    fn i64(&self) -> AbiParam {
+    fn u64(&self) -> AbiParam {
         AbiParam::new(ir::types::I64)
     }
 
@@ -418,6 +411,16 @@ impl BuiltinFunctionSignatures {
     fn host_signature(&self, builtin: BuiltinFunctionIndex) -> Signature {
         let mut sig = self.wasm_signature(builtin);
         sig.call_conv = self.host_call_conv;
+
+        // Once we're declaring the signature of a host function we must
+        // respect the default ABI of the platform which is where argument
+        // extension of params/results may come into play.
+        for arg in sig.params.iter_mut().chain(sig.returns.iter_mut()) {
+            if arg.value_type.is_int() {
+                arg.extension = self.argument_extension;
+            }
+        }
+
         sig
     }
 }

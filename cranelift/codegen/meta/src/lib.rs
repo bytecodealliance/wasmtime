@@ -1,16 +1,16 @@
 //! This crate generates Rust sources for use by
 //! [`cranelift_codegen`](../cranelift_codegen/index.html).
 
+use cranelift_srcgen::{error, Formatter, Language};
 use shared::Definitions;
 
 #[macro_use]
 mod cdsl;
-mod srcgen;
 
-pub mod error;
 pub mod isa;
 pub mod isle;
 
+mod gen_asm;
 mod gen_inst;
 mod gen_isle;
 mod gen_settings;
@@ -98,6 +98,29 @@ fn generate_isle_for_shared_defs(
     Ok(())
 }
 
+/// Generate the ISLE definitions; this provides ISLE glue to access the
+/// assembler instructions in [cranelift_assembler_x64_meta].
+fn generate_isle_for_assembler(
+    insts: &[cranelift_assembler_x64_meta::dsl::Inst],
+    isle_dir: &std::path::Path,
+) -> Result<(), error::Error> {
+    let mut fmt = Formatter::new(Language::Isle);
+    gen_asm::generate_isle(&mut fmt, insts);
+    fmt.write("assembler.isle", isle_dir)
+}
+
+/// Generate a macro containing builder functions for the assembler's ISLE
+/// constructors; this provides Rust implementations backing up the ISLE
+/// definitions in [generate_isle_for_assembler].
+fn generate_rust_macro_for_assembler(
+    insts: &[cranelift_assembler_x64_meta::dsl::Inst],
+    out_dir: &std::path::Path,
+) -> Result<(), error::Error> {
+    let mut fmt = Formatter::new(Language::Rust);
+    gen_asm::generate_rust_macro(&mut fmt, insts);
+    fmt.write("assembler-isle-macro.rs", out_dir)
+}
+
 /// Generates all the source files used in Cranelift from the meta-language.
 pub fn generate(
     isas: &[isa::Isa],
@@ -107,5 +130,10 @@ pub fn generate(
     let shared_defs = shared::define();
     generate_rust_for_shared_defs(&shared_defs, isas, out_dir)?;
     generate_isle_for_shared_defs(&shared_defs, isle_dir)?;
+
+    let insts = cranelift_assembler_x64_meta::instructions::list();
+    generate_isle_for_assembler(&insts, isle_dir)?;
+    generate_rust_macro_for_assembler(&insts, out_dir)?;
+
     Ok(())
 }

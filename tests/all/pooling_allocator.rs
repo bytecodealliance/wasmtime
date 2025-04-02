@@ -1,4 +1,4 @@
-use super::skip_pooling_allocator_tests;
+use super::{skip_pooling_allocator_tests, ErrorExt};
 use wasmtime::*;
 
 #[test]
@@ -35,18 +35,17 @@ fn memory_limit() -> Result<()> {
     // Module should fail to instantiate because it has too many memories
     match Module::new(&engine, r#"(module (memory 1) (memory 1))"#) {
         Ok(_) => panic!("module instantiation should fail"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            "defined memories count of 2 exceeds the per-instance limit of 1",
-        ),
+        Err(e) => {
+            e.assert_contains("defined memories count of 2 exceeds the per-instance limit of 1")
+        }
     }
 
     // Module should fail to instantiate because the minimum is greater than
     // the configured limit
     match Module::new(&engine, r#"(module (memory 4))"#) {
         Ok(_) => panic!("module instantiation should fail"),
-        Err(e) => assert_eq!(
-            e.to_string(),
+        Err(e) =>
+            e.assert_contains(
             "memory index 0 has a minimum byte size of 262144 which exceeds the limit of 0x30000 bytes",
         ),
     }
@@ -244,18 +243,16 @@ fn table_limit() -> Result<()> {
     // Module should fail to instantiate because it has too many tables
     match Module::new(&engine, r#"(module (table 1 funcref) (table 1 funcref))"#) {
         Ok(_) => panic!("module compilation should fail"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            "defined tables count of 2 exceeds the per-instance limit of 1",
-        ),
+        Err(e) => {
+            e.assert_contains("defined tables count of 2 exceeds the per-instance limit of 1")
+        }
     }
 
     // Module should fail to instantiate because the minimum is greater than
     // the configured limit
     match Module::new(&engine, r#"(module (table 31 funcref))"#) {
         Ok(_) => panic!("module compilation should fail"),
-        Err(e) => assert_eq!(
-            e.to_string(),
+        Err(e) => e.assert_contains(
             "table index 0 has a minimum element size of 31 which exceeds the limit of 10",
         ),
     }
@@ -634,26 +631,14 @@ fn instance_too_large() -> Result<()> {
     config.allocation_strategy(pool);
 
     let engine = Engine::new(&config)?;
-    let expected = if cfg!(feature = "wmemcheck") {
-        "\
-        instance allocation for this module requires 336 bytes which exceeds the \
-configured maximum of 16 bytes; breakdown of allocation requirement:
-
- * 71.43% - 240 bytes - instance state management
- * 26.19% - 88 bytes - static vmctx data
-"
-    } else {
-        "\
-        instance allocation for this module requires 240 bytes which exceeds the \
-configured maximum of 16 bytes; breakdown of allocation requirement:
-
- * 60.00% - 144 bytes - instance state management
- * 36.67% - 88 bytes - static vmctx data
-"
-    };
     match Module::new(&engine, "(module)") {
         Ok(_) => panic!("should have failed to compile"),
-        Err(e) => assert_eq!(e.to_string(), expected),
+        Err(e) => {
+            e.assert_contains("exceeds the configured maximum of 16 bytes");
+            e.assert_contains("breakdown of allocation requirement");
+            e.assert_contains("instance state management");
+            e.assert_contains("static vmctx data");
+        }
     }
 
     let mut lots_of_globals = format!("(module");
@@ -662,26 +647,14 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
     }
     lots_of_globals.push_str(")");
 
-    let expected = if cfg!(feature = "wmemcheck") {
-        "\
-instance allocation for this module requires 1936 bytes which exceeds the \
-configured maximum of 16 bytes; breakdown of allocation requirement:
-
- * 12.40% - 240 bytes - instance state management
- * 82.64% - 1600 bytes - defined globals
-"
-    } else {
-        "\
-instance allocation for this module requires 1840 bytes which exceeds the \
-configured maximum of 16 bytes; breakdown of allocation requirement:
-
- * 7.83% - 144 bytes - instance state management
- * 86.96% - 1600 bytes - defined globals
-"
-    };
     match Module::new(&engine, &lots_of_globals) {
         Ok(_) => panic!("should have failed to compile"),
-        Err(e) => assert_eq!(e.to_string(), expected),
+        Err(e) => {
+            e.assert_contains("exceeds the configured maximum of 16 bytes");
+            e.assert_contains("breakdown of allocation requirement");
+            e.assert_contains("defined globals");
+            e.assert_contains("instance state management");
+        }
     }
 
     Ok(())
@@ -879,10 +852,9 @@ fn component_instance_size_limit() -> Result<()> {
 
     match wasmtime::component::Component::new(&engine, "(component)") {
         Ok(_) => panic!("should have hit limit"),
-        Err(e) => assert_eq!(
-            e.to_string(),
-            "instance allocation for this component requires 64 bytes of `VMComponentContext` space \
-             which exceeds the configured maximum of 1 bytes"
+        Err(e) => e.assert_contains(
+            "instance allocation for this component requires 48 bytes of \
+            `VMComponentContext` space which exceeds the configured maximum of 1 bytes",
         ),
     }
 
@@ -1047,10 +1019,9 @@ fn component_core_instances_limit() -> Result<()> {
         "#,
     ) {
         Ok(_) => panic!("should have hit limit"),
-        Err(e) => assert_eq!(
-            e.to_string(),
+        Err(e) => e.assert_contains(
             "The component transitively contains 2 core module instances, which exceeds the \
-             configured maximum of 1"
+             configured maximum of 1",
         ),
     }
 
@@ -1090,10 +1061,9 @@ fn component_memories_limit() -> Result<()> {
         "#,
     ) {
         Ok(_) => panic!("should have hit limit"),
-        Err(e) => assert_eq!(
-            e.to_string(),
+        Err(e) => e.assert_contains(
             "The component transitively contains 2 Wasm linear memories, which exceeds the \
-             configured maximum of 1"
+             configured maximum of 1",
         ),
     }
 
@@ -1133,10 +1103,9 @@ fn component_tables_limit() -> Result<()> {
         "#,
     ) {
         Ok(_) => panic!("should have hit limit"),
-        Err(e) => assert_eq!(
-            e.to_string(),
+        Err(e) => e.assert_contains(
             "The component transitively contains 2 tables, which exceeds the \
-             configured maximum of 1"
+             configured maximum of 1",
         ),
     }
 
@@ -1281,13 +1250,9 @@ fn shared_memory_unsupported() -> Result<()> {
         "#,
     )
     .unwrap_err();
-    let err = err.to_string();
-    assert!(
-        err.contains(
-            "memory index 0 is shared which is not supported \
-             in the pooling allocator"
-        ),
-        "bad error: {err}"
+    err.assert_contains(
+        "memory index 0 is shared which is not supported \
+         in the pooling allocator",
     );
     Ok(())
 }

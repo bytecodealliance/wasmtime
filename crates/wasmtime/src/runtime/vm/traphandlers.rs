@@ -17,17 +17,20 @@ pub use self::signals::*;
 
 use crate::prelude::*;
 use crate::runtime::module::lookup_code;
-use crate::runtime::store::StoreOpaque;
+use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
-use crate::runtime::vm::{Instance, InterpreterRef, VMContext, VMRuntimeLimits};
+use crate::runtime::vm::{Instance, InterpreterRef, VMContext, VMStoreContext};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
+use core::num::NonZeroU32;
 use core::ops::Range;
 use core::ptr::{self, NonNull};
 
 pub use self::backtrace::Backtrace;
 pub use self::coredump::CoreDumpStack;
-pub use self::tls::{tls_eager_initialize, AsyncWasmCallState, PreviousAsyncWasmCallState};
+pub use self::tls::tls_eager_initialize;
+#[cfg(feature = "async")]
+pub use self::tls::{AsyncWasmCallState, PreviousAsyncWasmCallState};
 
 pub use traphandlers::SignalHandler;
 
@@ -41,12 +44,14 @@ pub(crate) enum TrapTest {
     /// Not a wasm trap, need to delegate to whatever process handler is next.
     NotWasm,
     /// This trap was handled by the embedder via custom embedding APIs.
+    #[cfg(has_host_compiler_backend)]
     #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
     HandledByEmbedder,
     /// This is a wasm trap, it needs to be handled.
     #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
     Trap {
         /// How to longjmp back to the original wasm frame.
+        #[cfg(has_host_compiler_backend)]
         jmp_buf: *const u8,
     },
 }
@@ -75,6 +80,7 @@ fn lazy_per_thread_init() {
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
+#[cfg(has_host_compiler_backend)]
 pub(super) unsafe fn raise_preexisting_trap() -> ! {
     tls::with(|info| info.unwrap().unwind())
 }
@@ -264,6 +270,14 @@ unsafe impl HostResultHasUnwindSentinel for () {
     }
 }
 
+unsafe impl HostResultHasUnwindSentinel for NonZeroU32 {
+    type Abi = u32;
+    const SENTINEL: Self::Abi = 0;
+    fn into_abi(self) -> Self::Abi {
+        self.get()
+    }
+}
+
 /// A 32-bit return value can be inflated to a 64-bit return value in the ABI.
 /// In this manner a successful result is a zero-extended 32-bit value and the
 /// failure sentinel is `u64::MAX` or -1 as a signed integer.
@@ -354,14 +368,14 @@ pub unsafe fn catch_traps<T, F>(
     mut closure: F,
 ) -> Result<(), Box<Trap>>
 where
-    F: FnMut(*mut VMContext, Option<InterpreterRef<'_>>) -> bool,
+    F: FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 {
     let caller = store.0.default_caller();
-    let result = CallThreadState::new(store.0, caller).with(|cx| match store.0.interpreter() {
+    let result = CallThreadState::new(store.0, caller).with(|cx| match store.0.executor() {
         // In interpreted mode directly invoke the host closure since we won't
         // be using host-based `setjmp`/`longjmp` as that's not going to save
         // the context we want.
-        Some(r) => {
+        ExecutorRef::Interpreter(r) => {
             cx.jmp_buf
                 .set(CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
             closure(caller, Some(r))
@@ -374,12 +388,13 @@ where
         // within, here it's `call_closure`, and that passes `None` for the
         // interpreter since this branch is only ever taken if the interpreter
         // isn't present.
-        None => traphandlers::wasmtime_setjmp(
+        #[cfg(has_host_compiler_backend)]
+        ExecutorRef::Native => traphandlers::wasmtime_setjmp(
             cx.jmp_buf.as_ptr(),
             {
-                extern "C" fn call_closure<F>(payload: *mut u8, caller: *mut VMContext) -> bool
+                extern "C" fn call_closure<F>(payload: *mut u8, caller: NonNull<VMContext>) -> bool
                 where
-                    F: FnMut(*mut VMContext, Option<InterpreterRef<'_>>) -> bool,
+                    F: FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
                 {
                     unsafe { (*(payload as *mut F))(caller, None) }
                 }
@@ -420,20 +435,20 @@ mod call_thread_state {
         #[cfg(feature = "coredump")]
         pub(super) capture_coredump: bool,
 
-        pub(crate) limits: *const VMRuntimeLimits,
+        pub(crate) vm_store_context: NonNull<VMStoreContext>,
         pub(crate) unwinder: &'static dyn Unwind,
 
         pub(super) prev: Cell<tls::Ptr>,
         #[cfg(all(has_native_signals, unix))]
         pub(crate) async_guard_range: Range<*mut u8>,
 
-        // The values of `VMRuntimeLimits::last_wasm_{exit_{pc,fp},entry_sp}`
-        // for the *previous* `CallThreadState` for this same store/limits. Our
-        // *current* last wasm PC/FP/SP are saved in `self.limits`. We save a
-        // copy of the old registers here because the `VMRuntimeLimits`
+        // The values of `VMStoreContext::last_wasm_{exit_{pc,fp},entry_sp}` for
+        // the *previous* `CallThreadState` for this same store/limits. Our
+        // *current* last wasm PC/FP/SP are saved in `self.vm_store_context`. We
+        // save a copy of the old registers here because the `VMStoreContext`
         // typically doesn't change across nested calls into Wasm (i.e. they are
-        // typically calls back into the same store and `self.limits ==
-        // self.prev.limits`) and we must to maintain the list of
+        // typically calls back into the same store and `self.vm_store_context
+        // == self.prev.vm_store_context`) and we must to maintain the list of
         // contiguous-Wasm-frames stack regions for backtracing purposes.
         old_last_wasm_exit_fp: Cell<usize>,
         old_last_wasm_exit_pc: Cell<usize>,
@@ -447,9 +462,10 @@ mod call_thread_state {
             debug_assert!(self.unwind.replace(None).is_none());
 
             unsafe {
-                *(*self.limits).last_wasm_exit_fp.get() = self.old_last_wasm_exit_fp.get();
-                *(*self.limits).last_wasm_exit_pc.get() = self.old_last_wasm_exit_pc.get();
-                *(*self.limits).last_wasm_entry_fp.get() = self.old_last_wasm_entry_fp.get();
+                let cx = self.vm_store_context.as_ref();
+                *cx.last_wasm_exit_fp.get() = self.old_last_wasm_exit_fp.get();
+                *cx.last_wasm_exit_pc.get() = self.old_last_wasm_exit_pc.get();
+                *cx.last_wasm_entry_fp.get() = self.old_last_wasm_entry_fp.get();
             }
         }
     }
@@ -458,8 +474,13 @@ mod call_thread_state {
         pub const JMP_BUF_INTERPRETER_SENTINEL: *mut u8 = 1 as *mut u8;
 
         #[inline]
-        pub(super) fn new(store: &mut StoreOpaque, caller: *mut VMContext) -> CallThreadState {
-            let limits = unsafe { *Instance::from_vmctx(caller, |i| i.runtime_limits()) };
+        pub(super) fn new(store: &mut StoreOpaque, caller: NonNull<VMContext>) -> CallThreadState {
+            let vm_store_context = unsafe {
+                Instance::from_vmctx(caller, |i| i.vm_store_context())
+                    .read()
+                    .unwrap()
+                    .as_non_null()
+            };
 
             // Don't try to plumb #[cfg] everywhere for this field, just pretend
             // we're using it on miri/windows to silence compiler warnings.
@@ -474,13 +495,19 @@ mod call_thread_state {
                 capture_backtrace: store.engine().config().wasm_backtrace,
                 #[cfg(feature = "coredump")]
                 capture_coredump: store.engine().config().coredump_on_trap,
-                limits,
+                vm_store_context,
                 #[cfg(all(has_native_signals, unix))]
                 async_guard_range: store.async_guard_range(),
                 prev: Cell::new(ptr::null()),
-                old_last_wasm_exit_fp: Cell::new(unsafe { *(*limits).last_wasm_exit_fp.get() }),
-                old_last_wasm_exit_pc: Cell::new(unsafe { *(*limits).last_wasm_exit_pc.get() }),
-                old_last_wasm_entry_fp: Cell::new(unsafe { *(*limits).last_wasm_entry_fp.get() }),
+                old_last_wasm_exit_fp: Cell::new(unsafe {
+                    *vm_store_context.as_ref().last_wasm_exit_fp.get()
+                }),
+                old_last_wasm_exit_pc: Cell::new(unsafe {
+                    *vm_store_context.as_ref().last_wasm_exit_pc.get()
+                }),
+                old_last_wasm_entry_fp: Cell::new(unsafe {
+                    *vm_store_context.as_ref().last_wasm_entry_fp.get()
+                }),
             }
         }
 
@@ -580,8 +607,8 @@ impl CallThreadState {
                 (None, None)
             }
             UnwindReason::Trap(_) => (
-                self.capture_backtrace(self.limits, None),
-                self.capture_coredump(self.limits, None),
+                self.capture_backtrace(self.vm_store_context.as_ptr(), None),
+                self.capture_coredump(self.vm_store_context.as_ptr(), None),
             ),
         };
         self.unwind.set(Some((reason, backtrace, coredump)));
@@ -597,6 +624,7 @@ impl CallThreadState {
     /// This function is not safe if the corresponding setjmp wasn't already
     /// called. Additionally this isn't safe as it will skip all Rust
     /// destructors on the stack, if there are any.
+    #[cfg(has_host_compiler_backend)]
     unsafe fn unwind(&self) -> ! {
         debug_assert!(!self.jmp_buf.get().is_null());
         debug_assert!(self.jmp_buf.get() != CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
@@ -605,7 +633,7 @@ impl CallThreadState {
 
     fn capture_backtrace(
         &self,
-        limits: *const VMRuntimeLimits,
+        limits: *const VMStoreContext,
         trap_pc_and_fp: Option<(usize, usize)>,
     ) -> Option<Backtrace> {
         if !self.capture_backtrace {
@@ -682,10 +710,12 @@ impl CallThreadState {
         // `jmp_buf` passed to `wasmtime_longjmp` to resume.
         self.set_jit_trap(regs, faulting_addr, trap);
         TrapTest::Trap {
+            #[cfg(has_host_compiler_backend)]
             jmp_buf: self.take_jmp_buf(),
         }
     }
 
+    #[cfg(has_host_compiler_backend)]
     pub(crate) fn take_jmp_buf(&self) -> *const u8 {
         self.jmp_buf.replace(ptr::null())
     }
@@ -696,8 +726,8 @@ impl CallThreadState {
         faulting_addr: Option<usize>,
         trap: wasmtime_environ::Trap,
     ) {
-        let backtrace = self.capture_backtrace(self.limits, Some((pc, fp)));
-        let coredump = self.capture_coredump(self.limits, Some((pc, fp)));
+        let backtrace = self.capture_backtrace(self.vm_store_context.as_ptr(), Some((pc, fp)));
+        let coredump = self.capture_coredump(self.vm_store_context.as_ptr(), Some((pc, fp)));
         self.unwind.set(Some((
             UnwindReason::Trap(TrapReason::Jit {
                 pc,
@@ -717,8 +747,6 @@ impl CallThreadState {
 // the caller to the trap site.
 pub(crate) mod tls {
     use super::CallThreadState;
-    use core::mem;
-    use core::ops::Range;
 
     pub use raw::Ptr;
 
@@ -799,6 +827,7 @@ pub(crate) mod tls {
     /// Opaque state used to persist the state of the `CallThreadState`
     /// activations associated with a fiber stack that's used as part of an
     /// async wasm call.
+    #[cfg(feature = "async")]
     pub struct AsyncWasmCallState {
         // The head of a linked list of activations that are currently present
         // on an async call's fiber stack. This pointer points to the oldest
@@ -810,6 +839,7 @@ pub(crate) mod tls {
         state: raw::Ptr,
     }
 
+    #[cfg(feature = "async")]
     impl AsyncWasmCallState {
         /// Creates new state that initially starts as null.
         pub fn new() -> AsyncWasmCallState {
@@ -860,7 +890,7 @@ pub(crate) mod tls {
         /// This is used when exiting a future in Wasmtime to assert that the
         /// current CallThreadState pointer does not point within the stack
         /// we're leaving (e.g.  allocated for a fiber).
-        pub fn assert_current_state_not_in_range(range: Range<usize>) {
+        pub fn assert_current_state_not_in_range(range: core::ops::Range<usize>) {
             let p = raw::get() as usize;
             assert!(p < range.start || range.end < p);
         }
@@ -868,6 +898,7 @@ pub(crate) mod tls {
 
     /// Opaque state used to help control TLS state across stack switches for
     /// async support.
+    #[cfg(feature = "async")]
     pub struct PreviousAsyncWasmCallState {
         // The head of a linked list, similar to the TLS state. Note though that
         // this list is stored in reverse order to assist with `push` and `pop`
@@ -878,6 +909,7 @@ pub(crate) mod tls {
         state: raw::Ptr,
     }
 
+    #[cfg(feature = "async")]
     impl PreviousAsyncWasmCallState {
         /// Pops a fiber's linked list of activations and stores them in
         /// `AsyncWasmCallState`.
@@ -892,7 +924,7 @@ pub(crate) mod tls {
         /// fiber is being suspended.
         pub unsafe fn restore(self) -> AsyncWasmCallState {
             let thread_head = self.state;
-            mem::forget(self);
+            core::mem::forget(self);
             let mut ret = AsyncWasmCallState::new();
             loop {
                 // If the current TLS state is as we originally found it, then
@@ -916,6 +948,7 @@ pub(crate) mod tls {
         }
     }
 
+    #[cfg(feature = "async")]
     impl Drop for PreviousAsyncWasmCallState {
         fn drop(&mut self) {
             panic!("must be consumed with `restore`");

@@ -1,7 +1,7 @@
 use crate::runtime::vm::{StoreBox, VMGlobalDefinition};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{GlobalType, Mutability, Result, RootedGcRefImpl, Val};
-use core::ptr;
+use core::ptr::{self, NonNull};
 
 #[repr(C)]
 pub struct VMHostGlobalContext {
@@ -28,7 +28,7 @@ pub fn generate_global_export(
 
     let mut store = AutoAssertNoGc::new(store);
     let definition = unsafe {
-        let global = &mut (*ctx.get()).global;
+        let global = &mut ctx.get().as_mut().global;
         match val {
             Val::I32(x) => *global.as_i32_mut() = x,
             Val::I64(x) => *global.as_i64_mut() = x,
@@ -63,8 +63,8 @@ pub fn generate_global_export(
 
     store.host_globals().push(ctx);
     Ok(crate::runtime::vm::ExportGlobal {
-        definition,
-        vmctx: ptr::null_mut(),
+        definition: NonNull::from(definition),
+        vmctx: None,
         global,
     })
 }

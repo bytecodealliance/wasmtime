@@ -467,19 +467,23 @@ pub mod foo {
             }
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                D,
+            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
                 type Host: Host;
             }
-            impl<F, T, O> GetHost<T> for F
+            impl<F, T, D, O> GetHost<T, D> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host,
             {
                 type Host = O;
             }
-            pub fn add_to_linker_get_host<T>(
+            pub fn add_to_linker_get_host<
+                T,
+                G: for<'a> GetHost<&'a mut T, T, Host: Host>,
+            >(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl for<'a> GetHost<&'a mut T>,
+                host_getter: G,
             ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/lists")?;
                 inst.func_wrap(
@@ -1573,7 +1577,10 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[u8],
-                    ) -> wasmtime::Result<()> {
+                    ) -> wasmtime::Result<()>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[u8],),
@@ -1588,7 +1595,10 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[u16],
-                    ) -> wasmtime::Result<()> {
+                    ) -> wasmtime::Result<()>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[u16],),
@@ -1603,7 +1613,10 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[u32],
-                    ) -> wasmtime::Result<()> {
+                    ) -> wasmtime::Result<()>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[u32],),
@@ -1618,7 +1631,10 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[u64],
-                    ) -> wasmtime::Result<()> {
+                    ) -> wasmtime::Result<()>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[u64],),
@@ -1633,7 +1649,10 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[i8],
-                    ) -> wasmtime::Result<()> {
+                    ) -> wasmtime::Result<()>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[i8],),
@@ -1648,7 +1667,10 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[i16],
-                    ) -> wasmtime::Result<()> {
+                    ) -> wasmtime::Result<()>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[i16],),
@@ -1663,7 +1685,10 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[i32],
-                    ) -> wasmtime::Result<()> {
+                    ) -> wasmtime::Result<()>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[i32],),
@@ -1678,7 +1703,10 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[i64],
-                    ) -> wasmtime::Result<()> {
+                    ) -> wasmtime::Result<()>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[i64],),
@@ -1693,7 +1721,10 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[f32],
-                    ) -> wasmtime::Result<()> {
+                    ) -> wasmtime::Result<()>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[f32],),
@@ -1708,7 +1739,10 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[f64],
-                    ) -> wasmtime::Result<()> {
+                    ) -> wasmtime::Result<()>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[f64],),
@@ -1722,7 +1756,10 @@ pub mod exports {
                     pub fn call_list_u8_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u8>> {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u8>>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1736,7 +1773,10 @@ pub mod exports {
                     pub fn call_list_u16_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u16>> {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u16>>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1750,7 +1790,10 @@ pub mod exports {
                     pub fn call_list_u32_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u32>> {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u32>>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1764,7 +1807,10 @@ pub mod exports {
                     pub fn call_list_u64_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u64>> {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u64>>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1778,7 +1824,10 @@ pub mod exports {
                     pub fn call_list_s8_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i8>> {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i8>>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1792,7 +1841,10 @@ pub mod exports {
                     pub fn call_list_s16_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i16>> {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i16>>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1806,7 +1858,10 @@ pub mod exports {
                     pub fn call_list_s32_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i32>> {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i32>>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1820,7 +1875,10 @@ pub mod exports {
                     pub fn call_list_s64_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i64>> {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i64>>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1834,7 +1892,10 @@ pub mod exports {
                     pub fn call_list_f32_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<f32>> {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<f32>>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1848,7 +1909,10 @@ pub mod exports {
                     pub fn call_list_f64_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<f64>> {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<f64>>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1865,7 +1929,10 @@ pub mod exports {
                         arg0: &[(u8, i8)],
                     ) -> wasmtime::Result<
                         wasmtime::component::__internal::Vec<(i64, u32)>,
-                    > {
+                    >
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[(u8, i8)],),
@@ -1880,7 +1947,10 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[wasmtime::component::__internal::String],
-                    ) -> wasmtime::Result<()> {
+                    ) -> wasmtime::Result<()>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[wasmtime::component::__internal::String],),
@@ -1898,7 +1968,10 @@ pub mod exports {
                         wasmtime::component::__internal::Vec<
                             wasmtime::component::__internal::String,
                         >,
-                    > {
+                    >
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1921,7 +1994,10 @@ pub mod exports {
                         wasmtime::component::__internal::Vec<
                             (wasmtime::component::__internal::String, u8),
                         >,
-                    > {
+                    >
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[(u8, wasmtime::component::__internal::String)],),
@@ -1944,7 +2020,10 @@ pub mod exports {
                         wasmtime::component::__internal::Vec<
                             wasmtime::component::__internal::String,
                         >,
-                    > {
+                    >
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[wasmtime::component::__internal::String],),
@@ -1965,7 +2044,10 @@ pub mod exports {
                         arg0: &[SomeRecord],
                     ) -> wasmtime::Result<
                         wasmtime::component::__internal::Vec<OtherRecord>,
-                    > {
+                    >
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[SomeRecord],),
@@ -1982,7 +2064,10 @@ pub mod exports {
                         arg0: &[OtherRecord],
                     ) -> wasmtime::Result<
                         wasmtime::component::__internal::Vec<SomeRecord>,
-                    > {
+                    >
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[OtherRecord],),
@@ -1999,7 +2084,10 @@ pub mod exports {
                         arg0: &[SomeVariant],
                     ) -> wasmtime::Result<
                         wasmtime::component::__internal::Vec<OtherVariant>,
-                    > {
+                    >
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[SomeVariant],),
@@ -2014,7 +2102,10 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &LoadStoreAllSizes,
-                    ) -> wasmtime::Result<LoadStoreAllSizes> {
+                    ) -> wasmtime::Result<LoadStoreAllSizes>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&LoadStoreAllSizes,),

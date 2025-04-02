@@ -241,6 +241,7 @@ pub(crate) fn clone_die_attributes<'a>(
                                 frame_info,
                                 isa,
                             )
+                            .expressions
                             .filter(|i| {
                                 // Ignore empty range
                                 if let Ok((_, 0, _)) = i {
@@ -296,28 +297,29 @@ pub(crate) fn clone_die_attributes<'a>(
                     } else {
                         // Conversion to loclist is required.
                         if let Some(scope_ranges) = scope_ranges {
-                            let exprs = expr
-                                .build_with_locals(scope_ranges, addr_tr, frame_info, isa)
+                            let built_expression =
+                                expr.build_with_locals(scope_ranges, addr_tr, frame_info, isa);
+                            let exprs = built_expression
+                                .expressions
                                 .collect::<Result<Vec<_>, _>>()?;
                             if exprs.is_empty() {
                                 continue;
                             }
-                            let found_single_expr = {
-                                // Micro-optimization all expressions alike, use one exprloc.
-                                let mut found_expr: Option<write::Expression> = None;
+                            // Micro-optimization all expressions alike, use one exprloc.
+                            let mut single_expr: Option<write::Expression> = None;
+                            if built_expression.covers_entire_scope {
                                 for (_, _, expr) in &exprs {
-                                    if let Some(ref prev_expr) = found_expr {
+                                    if let Some(ref prev_expr) = single_expr {
                                         if expr == prev_expr {
                                             continue; // the same expression
                                         }
-                                        found_expr = None;
+                                        single_expr = None;
                                         break;
                                     }
-                                    found_expr = Some(expr.clone())
+                                    single_expr = Some(expr.clone())
                                 }
-                                found_expr
-                            };
-                            if let Some(expr) = found_single_expr {
+                            }
+                            if let Some(expr) = single_expr {
                                 write::AttributeValue::Exprloc(expr)
                             } else if is_exprloc_to_loclist_allowed(attr.name()) {
                                 // Converting exprloc to loclist.

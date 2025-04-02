@@ -5,15 +5,13 @@ use crate::store::StoreOpaque;
 use crate::{prelude::*, IntoFunc};
 use crate::{
     AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType,
-    Instance, Module, StoreContextMut, Val, ValRaw, ValType, WasmTyList,
+    Instance, Module, StoreContextMut, Val, ValRaw, ValType,
 };
 use alloc::sync::Arc;
-use core::fmt;
-#[cfg(feature = "async")]
-use core::future::Future;
+use core::fmt::{self, Debug};
 use core::marker;
 #[cfg(feature = "async")]
-use core::pin::Pin;
+use core::{future::Future, pin::Pin};
 use log::warn;
 
 /// Structure used to link wasm modules/instances together.
@@ -92,6 +90,12 @@ pub struct Linker<T> {
     _marker: marker::PhantomData<fn() -> T>,
 }
 
+impl<T> Debug for Linker<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Linker").finish_non_exhaustive()
+    }
+}
+
 impl<T> Clone for Linker<T> {
     fn clone(&self) -> Linker<T> {
         Linker {
@@ -131,6 +135,7 @@ pub(crate) enum DefinitionType {
     // no longer be the current size of the table/memory.
     Table(wasmtime_environ::Table, u64),
     Memory(wasmtime_environ::Memory, u64),
+    Tag(wasmtime_environ::Tag),
 }
 
 impl<T> Linker<T> {
@@ -465,8 +470,8 @@ impl<T> Linker<T> {
                 .0
                 .async_cx()
                 .expect("Attempt to spawn new function on dying fiber");
-            let mut future = Pin::from(func(caller, params, results));
-            match unsafe { async_cx.block_on(future.as_mut()) } {
+            let future = func(caller, params, results);
+            match unsafe { async_cx.block_on(Pin::from(future)) } {
                 Ok(Ok(())) => Ok(()),
                 Ok(Err(trap)) | Err(trap) => Err(trap),
             }
@@ -543,7 +548,7 @@ impl<T> Linker<T> {
 
     /// Asynchronous analog of [`Linker::func_wrap`].
     #[cfg(feature = "async")]
-    pub fn func_wrap_async<F, Params: WasmTyList, Args: crate::WasmRet>(
+    pub fn func_wrap_async<F, Params: crate::WasmTyList, Args: crate::WasmRet>(
         &mut self,
         module: &str,
         name: &str,
@@ -568,8 +573,8 @@ impl<T> Linker<T> {
                     .0
                     .async_cx()
                     .expect("Attempt to start async function on dying fiber");
-                let mut future = Pin::from(func(caller, args));
-                match unsafe { async_cx.block_on(future.as_mut()) } {
+                let future = func(caller, args);
+                match unsafe { async_cx.block_on(Pin::from(future)) } {
                     Ok(ret) => ret.into_fallible(),
                     Err(e) => Args::fallible_from_error(e),
                 }
@@ -1390,6 +1395,7 @@ impl DefinitionType {
                 DefinitionType::Memory(*t.wasmtime_ty(data), t.internal_size(store))
             }
             Extern::SharedMemory(t) => DefinitionType::Memory(*t.ty().wasmtime_memory(), t.size()),
+            Extern::Tag(t) => DefinitionType::Tag(*t.wasmtime_ty(data)),
         }
     }
 
@@ -1399,6 +1405,7 @@ impl DefinitionType {
             DefinitionType::Table(..) => "table",
             DefinitionType::Memory(..) => "memory",
             DefinitionType::Global(_) => "global",
+            DefinitionType::Tag(_) => "tag",
         }
     }
 }

@@ -3,9 +3,11 @@ use crate::{AsContext, Engine, ExternType, Func, Memory, SharedMemory};
 
 mod global;
 mod table;
+mod tag;
 
 pub use global::Global;
 pub use table::Table;
+pub use tag::Tag;
 
 // Externals
 
@@ -30,6 +32,9 @@ pub enum Extern {
     /// A WebAssembly shared memory; these are handled separately from
     /// [`Memory`].
     SharedMemory(SharedMemory),
+    /// A WebAssembly exception or control tag which can be referenced
+    /// when raising an exception or stack switching.
+    Tag(Tag),
 }
 
 impl Extern {
@@ -84,6 +89,16 @@ impl Extern {
         }
     }
 
+    /// Returns the underlying `Tag`, if this external is a tag.
+    ///
+    /// Returns `None` if this is not a tag.
+    pub fn into_tag(self) -> Option<Tag> {
+        match self {
+            Extern::Tag(tag) => Some(tag),
+            _ => None,
+        }
+    }
+
     /// Returns the type associated with this `Extern`.
     ///
     /// The `store` argument provided must own this `Extern` and is used to look
@@ -100,6 +115,7 @@ impl Extern {
             Extern::SharedMemory(ft) => ExternType::Memory(ft.ty()),
             Extern::Table(tt) => ExternType::Table(tt.ty(store)),
             Extern::Global(gt) => ExternType::Global(gt.ty(store)),
+            Extern::Tag(tt) => ExternType::Tag(tt.ty(store)),
         }
     }
 
@@ -124,6 +140,7 @@ impl Extern {
             crate::runtime::vm::Export::Table(t) => {
                 Extern::Table(Table::from_wasmtime_table(t, store))
             }
+            crate::runtime::vm::Export::Tag(t) => Extern::Tag(Tag::from_wasmtime_tag(t, store)),
         }
     }
 
@@ -134,6 +151,7 @@ impl Extern {
             Extern::Memory(m) => m.comes_from_same_store(store),
             Extern::SharedMemory(m) => Engine::same(m.engine(), store.engine()),
             Extern::Table(t) => store.store_data().contains(t.0),
+            Extern::Tag(t) => store.store_data().contains(t.0),
         }
     }
 }
@@ -165,6 +183,12 @@ impl From<SharedMemory> for Extern {
 impl From<Table> for Extern {
     fn from(r: Table) -> Self {
         Extern::Table(r)
+    }
+}
+
+impl From<Tag> for Extern {
+    fn from(t: Tag) -> Self {
+        Extern::Tag(t)
     }
 }
 
@@ -232,5 +256,11 @@ impl<'instance> Export<'instance> {
     /// or `None` otherwise.
     pub fn into_global(self) -> Option<Global> {
         self.definition.into_global()
+    }
+
+    /// Consume this `Export` and return the contained `Tag`, if it's a tag,
+    /// or `None` otherwise.
+    pub fn into_tag(self) -> Option<Tag> {
+        self.definition.into_tag()
     }
 }

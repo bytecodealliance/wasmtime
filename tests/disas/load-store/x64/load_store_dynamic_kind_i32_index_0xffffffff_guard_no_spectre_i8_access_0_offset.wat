@@ -22,9 +22,9 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movl    %edx, %r8d
-;;       cmpq    0x68(%rdi), %r8
+;;       cmpq    0x58(%rdi), %r8
 ;;       jae     0x1e
-;;   11: movq    0x60(%rdi), %r10
+;;   11: movq    0x50(%rdi), %r10
 ;;       movb    %cl, (%r10, %r8)
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
@@ -35,9 +35,9 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movl    %edx, %r8d
-;;       cmpq    0x68(%rdi), %r8
+;;       cmpq    0x58(%rdi), %r8
 ;;       jae     0x3f
-;;   31: movq    0x60(%rdi), %r10
+;;   31: movq    0x50(%rdi), %r10
 ;;       movzbq  (%r10, %r8), %rax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp

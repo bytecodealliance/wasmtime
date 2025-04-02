@@ -1,5 +1,5 @@
 use crate::runtime::vm::vmcontext::{
-    VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport,
+    VMFunctionImport, VMGlobalImport, VMMemoryImport, VMTableImport, VMTagImport,
 };
 
 /// Resolved import pointers.
@@ -26,4 +26,7 @@ pub struct Imports<'a> {
 
     /// Resolved addresses for imported globals.
     pub globals: &'a [VMGlobalImport],
+
+    /// Resolved addresses for imported tags.
+    pub tags: &'a [VMTagImport],
 }

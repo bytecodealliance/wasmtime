@@ -59,9 +59,11 @@ pub mod sync {
             tracing: true,
             async: false,
             with: {
-                "wasi:http": crate::bindings::http, // http is in this crate
-                "wasi:io": wasmtime_wasi::bindings::sync::io, // io is sync
-                "wasi": wasmtime_wasi::bindings, // everything else
+                // http is in this crate
+                "wasi:http": crate::bindings::http,
+                // sync requires the wrapper in the wasmtime_wasi crate, in
+                // order to have in_tokio
+                "wasi:io": wasmtime_wasi::bindings::sync::io,
             },
             require_store_data_send: true,
         });

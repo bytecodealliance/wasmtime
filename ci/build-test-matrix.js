@@ -16,7 +16,7 @@ const GENERIC_BUCKETS = 3;
 const SINGLE_CRATE_BUCKETS = ["wasmtime", "wasmtime-cli", "wasmtime-wasi"];
 
 const ubuntu = 'ubuntu-24.04';
-const windows = 'windows-2022';
+const windows = 'windows-2025';
 const macos = 'macos-14';
 
 // This is the small, fast-to-execute matrix we use for PRs before they enter
@@ -95,12 +95,8 @@ const FULL_MATRIX = [
     "filter": "mingw-x64"
   },
   {
-    "os": ubuntu,
+    "os": ubuntu + '-arm',
     "target": "aarch64-unknown-linux-gnu",
-    "gcc_package": "gcc-aarch64-linux-gnu",
-    "gcc": "aarch64-linux-gnu-gcc",
-    "qemu": "qemu-aarch64 -L /usr/aarch64-linux-gnu",
-    "qemu_target": "aarch64-linux-user",
     "name": "Test Linux arm64",
     "filter": "linux-arm64",
     "isa": "aarch64",

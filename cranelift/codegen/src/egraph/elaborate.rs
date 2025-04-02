@@ -3,6 +3,7 @@
 
 use super::cost::Cost;
 use super::Stats;
+use crate::ctxhash::NullCtx;
 use crate::dominator_tree::DominatorTreePreorder;
 use crate::hash_map::Entry as HashEntry;
 use crate::inst_predicates::is_pure_for_egraph;
@@ -428,7 +429,9 @@ impl<'a> Elaborator<'a> {
                     trace!("elaborate: value {} -> best {}", value, best_value);
                     debug_assert_ne!(best_value, Value::reserved_value());
 
-                    if let Some(elab_val) = self.value_to_elaborated_value.get(&best_value) {
+                    if let Some(elab_val) =
+                        self.value_to_elaborated_value.get(&NullCtx, &best_value)
+                    {
                         // Value is available; use it.
                         trace!("elaborate: value {} -> {:?}", value, elab_val);
                         self.stats.elaborate_memoize_hit += 1;
@@ -652,6 +655,7 @@ impl<'a> Elaborator<'a> {
                             };
                             let best_result = self.value_to_best_value[result];
                             self.value_to_elaborated_value.insert_if_absent_with_depth(
+                                &NullCtx,
                                 best_result.1,
                                 elab_value,
                                 scope_depth,
@@ -678,6 +682,7 @@ impl<'a> Elaborator<'a> {
                             };
                             let best_result = self.value_to_best_value[result];
                             self.value_to_elaborated_value.insert_if_absent_with_depth(
+                                &NullCtx,
                                 best_result.1,
                                 elab_value,
                                 scope_depth,
@@ -772,6 +777,7 @@ impl<'a> Elaborator<'a> {
                 trace!(" -> result {}", result);
                 let best_result = self.value_to_best_value[result];
                 self.value_to_elaborated_value.insert_if_absent(
+                    &NullCtx,
                     best_result.1,
                     ElaboratedValue {
                         in_block: block,

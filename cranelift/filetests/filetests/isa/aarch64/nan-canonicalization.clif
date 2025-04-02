@@ -12,7 +12,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addps   %xmm0, %xmm1, %xmm0
+;   addps %xmm1, %xmm0
 ;   movl    $2143289344, %r10d
 ;   movd    %r10d, %xmm7
 ;   shufps  $0, %xmm7, const(0), %xmm7

@@ -81,11 +81,11 @@
 ;;
 ;; Note that the shift is required to be >0 to ensure this doesn't accidentally
 ;; try to `ireduce` a type to itself, which isn't a valid use of `ireduce`.
-(rule (simplify (sshr ty (ishl ty x (iconst _ shift)) (iconst _ shift)))
+(rule (simplify (sshr (ty_int ty) (ishl ty x (iconst _ shift)) (iconst _ shift)))
       (if-let (u64_from_imm64 (u64_nonzero shift_u64)) shift)
       (if-let ty_small (shift_amt_to_type (u64_sub (ty_bits ty) shift_u64)))
       (sextend ty (ireduce ty_small x)))
-(rule (simplify (ushr ty (ishl ty x (iconst _ shift)) (iconst _ shift)))
+(rule (simplify (ushr (ty_int ty) (ishl ty x (iconst _ shift)) (iconst _ shift)))
       (if-let (u64_from_imm64 (u64_nonzero shift_u64)) shift)
       (if-let ty_small (shift_amt_to_type (u64_sub (ty_bits ty) shift_u64)))
       (uextend ty (ireduce ty_small x)))

@@ -11,7 +11,7 @@
 //! pointer (FP) and program counter (PC) each time we call into Wasm and Wasm
 //! calls into the host via trampolines (see
 //! `crates/wasmtime/src/runtime/vm/trampolines`). The most recent entry is
-//! stored in `VMRuntimeLimits` and older entries are saved in
+//! stored in `VMStoreContext` and older entries are saved in
 //! `CallThreadState`. This lets us identify ranges of contiguous Wasm frames on
 //! the stack.
 //!
@@ -25,7 +25,7 @@ use crate::prelude::*;
 use crate::runtime::store::StoreOpaque;
 use crate::runtime::vm::{
     traphandlers::{tls, CallThreadState},
-    Unwind, VMRuntimeLimits,
+    Unwind, VMStoreContext,
 };
 use core::ops::ControlFlow;
 
@@ -37,6 +37,10 @@ pub struct Backtrace(Vec<Frame>);
 #[derive(Debug)]
 pub struct Frame {
     pc: usize,
+    #[cfg_attr(
+        not(feature = "gc"),
+        expect(dead_code, reason = "not worth #[cfg] annotations to remove")
+    )]
     fp: usize,
 }
 
@@ -47,6 +51,7 @@ impl Frame {
     }
 
     /// Get this frame's frame pointer.
+    #[cfg(feature = "gc")]
     pub fn fp(&self) -> usize {
         self.fp
     }
@@ -60,10 +65,12 @@ impl Backtrace {
 
     /// Capture the current Wasm stack in a backtrace.
     pub fn new(store: &StoreOpaque) -> Backtrace {
-        let limits = store.runtime_limits();
+        let vm_store_context = store.vm_store_context();
         let unwind = store.unwinder();
         tls::with(|state| match state {
-            Some(state) => unsafe { Self::new_with_trap_state(limits, unwind, state, None) },
+            Some(state) => unsafe {
+                Self::new_with_trap_state(vm_store_context, unwind, state, None)
+            },
             None => Backtrace(vec![]),
         })
     }
@@ -72,15 +79,15 @@ impl Backtrace {
     ///
     /// If Wasm hit a trap, and we calling this from the trap handler, then the
     /// Wasm exit trampoline didn't run, and we use the provided PC and FP
-    /// instead of looking them up in `VMRuntimeLimits`.
+    /// instead of looking them up in `VMStoreContext`.
     pub(crate) unsafe fn new_with_trap_state(
-        limits: *const VMRuntimeLimits,
+        vm_store_context: *const VMStoreContext,
         unwind: &dyn Unwind,
         state: &CallThreadState,
         trap_pc_and_fp: Option<(usize, usize)>,
     ) -> Backtrace {
         let mut frames = vec![];
-        Self::trace_with_trap_state(limits, unwind, state, trap_pc_and_fp, |frame| {
+        Self::trace_with_trap_state(vm_store_context, unwind, state, trap_pc_and_fp, |frame| {
             frames.push(frame);
             ControlFlow::Continue(())
         });
@@ -88,11 +95,14 @@ impl Backtrace {
     }
 
     /// Walk the current Wasm stack, calling `f` for each frame we walk.
+    #[cfg(feature = "gc")]
     pub fn trace(store: &StoreOpaque, f: impl FnMut(Frame) -> ControlFlow<()>) {
-        let limits = store.runtime_limits();
+        let vm_store_context = store.vm_store_context();
         let unwind = store.unwinder();
         tls::with(|state| match state {
-            Some(state) => unsafe { Self::trace_with_trap_state(limits, unwind, state, None, f) },
+            Some(state) => unsafe {
+                Self::trace_with_trap_state(vm_store_context, unwind, state, None, f)
+            },
             None => {}
         });
     }
@@ -101,9 +111,9 @@ impl Backtrace {
     ///
     /// If Wasm hit a trap, and we calling this from the trap handler, then the
     /// Wasm exit trampoline didn't run, and we use the provided PC and FP
-    /// instead of looking them up in `VMRuntimeLimits`.
+    /// instead of looking them up in `VMStoreContext`.
     pub(crate) unsafe fn trace_with_trap_state(
-        limits: *const VMRuntimeLimits,
+        vm_store_context: *const VMStoreContext,
         unwind: &dyn Unwind,
         state: &CallThreadState,
         trap_pc_and_fp: Option<(usize, usize)>,
@@ -116,14 +126,17 @@ impl Backtrace {
             // trampoline did not get a chance to save the last Wasm PC and FP,
             // and we need to use the plumbed-through values instead.
             Some((pc, fp)) => {
-                assert!(core::ptr::eq(limits, state.limits));
+                assert!(core::ptr::eq(
+                    vm_store_context,
+                    state.vm_store_context.as_ptr()
+                ));
                 (pc, fp)
             }
             // Either there is no Wasm currently on the stack, or we exited Wasm
             // through the Wasm-to-host trampoline.
             None => {
-                let pc = *(*limits).last_wasm_exit_pc.get();
-                let fp = *(*limits).last_wasm_exit_fp.get();
+                let pc = *(*vm_store_context).last_wasm_exit_pc.get();
+                let fp = *(*vm_store_context).last_wasm_exit_fp.get();
                 (pc, fp)
             }
         };
@@ -131,12 +144,12 @@ impl Backtrace {
         let activations = core::iter::once((
             last_wasm_exit_pc,
             last_wasm_exit_fp,
-            *(*limits).last_wasm_entry_fp.get(),
+            *(*vm_store_context).last_wasm_entry_fp.get(),
         ))
         .chain(
             state
                 .iter()
-                .filter(|state| core::ptr::eq(limits, state.limits))
+                .filter(|state| core::ptr::eq(vm_store_context, state.vm_store_context.as_ptr()))
                 .map(|state| {
                     (
                         state.old_last_wasm_exit_pc(),

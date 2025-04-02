@@ -1,8 +1,9 @@
 use crate::runtime::vm::vmcontext::{
     VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMTableDefinition,
+    VMTagDefinition,
 };
 use core::ptr::NonNull;
-use wasmtime_environ::{DefinedMemoryIndex, Global, Memory, Table};
+use wasmtime_environ::{DefinedMemoryIndex, Global, Memory, Table, Tag};
 
 /// The value of an export passed from one instance to another.
 pub enum Export {
@@ -17,6 +18,9 @@ pub enum Export {
 
     /// A global export value.
     Global(ExportGlobal),
+
+    /// A tag export value.
+    Tag(ExportTag),
 }
 
 /// A function export value.
@@ -45,9 +49,9 @@ impl From<ExportFunction> for Export {
 #[derive(Debug, Clone)]
 pub struct ExportTable {
     /// The address of the table descriptor.
-    pub definition: *mut VMTableDefinition,
+    pub definition: NonNull<VMTableDefinition>,
     /// Pointer to the containing `VMContext`.
-    pub vmctx: *mut VMContext,
+    pub vmctx: NonNull<VMContext>,
     /// The table declaration, used for compatibility checking.
     pub table: Table,
 }
@@ -66,9 +70,9 @@ impl From<ExportTable> for Export {
 #[derive(Debug, Clone)]
 pub struct ExportMemory {
     /// The address of the memory descriptor.
-    pub definition: *mut VMMemoryDefinition,
+    pub definition: NonNull<VMMemoryDefinition>,
     /// Pointer to the containing `VMContext`.
-    pub vmctx: *mut VMContext,
+    pub vmctx: NonNull<VMContext>,
     /// The memory declaration, used for compatibility checking.
     pub memory: Memory,
     /// The index at which the memory is defined within the `vmctx`.
@@ -89,10 +93,10 @@ impl From<ExportMemory> for Export {
 #[derive(Debug, Clone)]
 pub struct ExportGlobal {
     /// The address of the global storage.
-    pub definition: *mut VMGlobalDefinition,
+    pub definition: NonNull<VMGlobalDefinition>,
     /// Pointer to the containing `VMContext`. May be null for host-created
     /// globals.
-    pub vmctx: *mut VMContext,
+    pub vmctx: Option<NonNull<VMContext>>,
     /// The global declaration, used for compatibility checking.
     pub global: Global,
 }
@@ -104,5 +108,24 @@ unsafe impl Sync for ExportGlobal {}
 impl From<ExportGlobal> for Export {
     fn from(func: ExportGlobal) -> Export {
         Export::Global(func)
+    }
+}
+
+/// A tag export value.
+#[derive(Debug, Clone)]
+pub struct ExportTag {
+    /// The address of the global storage.
+    pub definition: NonNull<VMTagDefinition>,
+    /// The global declaration, used for compatibility checking.
+    pub tag: Tag,
+}
+
+// See docs on send/sync for `ExportFunction` above.
+unsafe impl Send for ExportTag {}
+unsafe impl Sync for ExportTag {}
+
+impl From<ExportTag> for Export {
+    fn from(func: ExportTag) -> Export {
+        Export::Tag(func)
     }
 }

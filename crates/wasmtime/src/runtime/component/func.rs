@@ -470,10 +470,11 @@ impl Func {
             crate::Func::call_unchecked_raw(
                 store,
                 export.func_ref,
-                core::ptr::slice_from_raw_parts_mut(
+                NonNull::new(core::ptr::slice_from_raw_parts_mut(
                     space.as_mut_ptr().cast(),
                     mem::size_of_val(space) / mem::size_of::<ValRaw>(),
-                ),
+                ))
+                .unwrap(),
             )?;
 
             // Note that `.assume_init_ref()` here is unsafe but we're relying
@@ -622,7 +623,8 @@ impl Func {
                 crate::Func::call_unchecked_raw(
                     &mut store,
                     func.func_ref,
-                    core::ptr::slice_from_raw_parts(&post_return_arg, 1).cast_mut(),
+                    NonNull::new(core::ptr::slice_from_raw_parts(&post_return_arg, 1).cast_mut())
+                        .unwrap(),
                 )?;
             }
 

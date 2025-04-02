@@ -38,38 +38,34 @@ pub struct PoolingAllocationConfig {
 
 impl PoolingAllocationConfig {
     /// Convert the generated limits to Wasmtime limits.
-    pub fn to_wasmtime(&self) -> wasmtime::PoolingAllocationConfig {
-        let mut cfg = wasmtime::PoolingAllocationConfig::default();
+    pub fn configure(&self, cfg: &mut wasmtime_cli_flags::CommonOptions) {
+        cfg.opts.pooling_total_component_instances = Some(self.total_component_instances);
+        cfg.opts.pooling_total_core_instances = Some(self.total_core_instances);
+        cfg.opts.pooling_total_memories = Some(self.total_memories);
+        cfg.opts.pooling_total_tables = Some(self.total_tables);
+        cfg.opts.pooling_total_stacks = Some(self.total_stacks);
 
-        cfg.total_component_instances(self.total_component_instances);
-        cfg.total_core_instances(self.total_core_instances);
-        cfg.total_memories(self.total_memories);
-        cfg.total_tables(self.total_tables);
-        cfg.total_stacks(self.total_stacks);
+        cfg.opts.pooling_max_memory_size = Some(self.max_memory_size);
+        cfg.opts.pooling_table_elements = Some(self.table_elements);
 
-        cfg.max_memory_size(self.max_memory_size);
-        cfg.table_elements(self.table_elements);
+        cfg.opts.pooling_max_component_instance_size = Some(self.component_instance_size);
+        cfg.opts.pooling_max_memories_per_component = Some(self.max_memories_per_component);
+        cfg.opts.pooling_max_tables_per_component = Some(self.max_tables_per_component);
 
-        cfg.max_component_instance_size(self.component_instance_size);
-        cfg.max_memories_per_component(self.max_memories_per_component);
-        cfg.max_tables_per_component(self.max_tables_per_component);
+        cfg.opts.pooling_max_core_instance_size = Some(self.core_instance_size);
+        cfg.opts.pooling_max_memories_per_module = Some(self.max_memories_per_module);
+        cfg.opts.pooling_max_tables_per_module = Some(self.max_tables_per_module);
 
-        cfg.max_core_instance_size(self.core_instance_size);
-        cfg.max_memories_per_module(self.max_memories_per_module);
-        cfg.max_tables_per_module(self.max_tables_per_module);
+        cfg.opts.pooling_table_keep_resident = Some(self.table_keep_resident);
+        cfg.opts.pooling_memory_keep_resident = Some(self.linear_memory_keep_resident);
 
-        cfg.table_keep_resident(self.table_keep_resident);
-        cfg.linear_memory_keep_resident(self.linear_memory_keep_resident);
+        cfg.opts.pooling_decommit_batch_size = Some(self.decommit_batch_size);
+        cfg.opts.pooling_max_unused_warm_slots = Some(self.max_unused_warm_slots);
 
-        cfg.decommit_batch_size(self.decommit_batch_size);
-        cfg.max_unused_warm_slots(self.max_unused_warm_slots);
+        cfg.opts.pooling_async_stack_keep_resident = Some(self.async_stack_keep_resident);
 
-        cfg.async_stack_keep_resident(self.async_stack_keep_resident);
-
-        cfg.memory_protection_keys(self.memory_protection_keys);
-        cfg.max_memory_protection_keys(self.max_memory_protection_keys);
-
-        cfg
+        cfg.opts.pooling_memory_protection_keys = Some(self.memory_protection_keys);
+        cfg.opts.pooling_max_memory_protection_keys = Some(self.max_memory_protection_keys);
     }
 }
 

@@ -1,8 +1,6 @@
 use crate::bindings::filesystem::types;
 use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
-use crate::{
-    HostInputStream, HostOutputStream, StreamError, StreamResult, Subscribe, TrappableError,
-};
+use crate::{InputStream, OutputStream, Pollable, StreamError, StreamResult, TrappableError};
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use std::io;
@@ -300,7 +298,7 @@ impl FileInputStream {
     }
 }
 #[async_trait::async_trait]
-impl HostInputStream for FileInputStream {
+impl InputStream for FileInputStream {
     fn read(&mut self, size: usize) -> StreamResult<Bytes> {
         match &mut self.state {
             ReadState::Idle => {
@@ -368,7 +366,7 @@ impl HostInputStream for FileInputStream {
     }
 }
 #[async_trait::async_trait]
-impl Subscribe for FileInputStream {
+impl Pollable for FileInputStream {
     async fn ready(&mut self) {
         if let ReadState::Idle = self.state {
             // The guest hasn't initiated any read, but is nonetheless waiting
@@ -467,7 +465,7 @@ impl FileOutputStream {
 const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
 
 #[async_trait::async_trait]
-impl HostOutputStream for FileOutputStream {
+impl OutputStream for FileOutputStream {
     fn write(&mut self, buf: Bytes) -> Result<(), StreamError> {
         match self.state {
             OutputState::Ready => {}
@@ -566,7 +564,7 @@ impl HostOutputStream for FileOutputStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for FileOutputStream {
+impl Pollable for FileOutputStream {
     async fn ready(&mut self) {
         if let OutputState::Waiting(task) = &mut self.state {
             self.state = match task.await {

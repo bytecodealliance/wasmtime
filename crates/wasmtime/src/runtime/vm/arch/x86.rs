@@ -6,15 +6,8 @@
 pub fn get_stack_pointer() -> usize {
     let stack_pointer: usize;
     unsafe {
-        #[cfg(target_pointer_width = "64")]
         core::arch::asm!(
             "mov {}, rsp",
-            out(reg) stack_pointer,
-            options(nostack,nomem),
-        );
-        #[cfg(target_pointer_width = "32")]
-        core::arch::asm!(
-            "mov {}, esp",
             out(reg) stack_pointer,
             options(nostack,nomem),
         );

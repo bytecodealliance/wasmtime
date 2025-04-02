@@ -16,7 +16,7 @@ use wasmparser::component_types::{
 };
 use wasmparser::names::KebabString;
 use wasmparser::types::TypesRef;
-use wasmparser::Validator;
+use wasmparser::{PrimitiveValType, Validator};
 use wasmtime_component_util::FlagsSize;
 
 mod resources;
@@ -31,7 +31,7 @@ pub use resources::ResourcesBuilder;
 /// Some more information about this can be found in #4814
 const MAX_TYPE_DEPTH: u32 = 100;
 
-/// Structured used to build a [`ComponentTypes`] during translation.
+/// Structure used to build a [`ComponentTypes`] during translation.
 ///
 /// This contains tables to intern any component types found as well as
 /// managing building up core wasm [`ModuleTypes`] as well.
@@ -45,6 +45,11 @@ pub struct ComponentTypesBuilder {
     flags: HashMap<TypeFlags, TypeFlagsIndex>,
     options: HashMap<TypeOption, TypeOptionIndex>,
     results: HashMap<TypeResult, TypeResultIndex>,
+    futures: HashMap<TypeFuture, TypeFutureIndex>,
+    streams: HashMap<TypeStream, TypeStreamIndex>,
+    future_tables: HashMap<TypeFutureTable, TypeFutureTableIndex>,
+    stream_tables: HashMap<TypeStreamTable, TypeStreamTableIndex>,
+    error_context_tables: HashMap<TypeErrorContextTable, TypeComponentLocalErrorContextTableIndex>,
 
     component_types: ComponentTypes,
     module_types: ModuleTypesBuilder,
@@ -70,15 +75,16 @@ where
 macro_rules! intern_and_fill_flat_types {
     ($me:ident, $name:ident, $val:ident) => {{
         if let Some(idx) = $me.$name.get(&$val) {
-            return *idx;
+            *idx
+        } else {
+            let idx = $me.component_types.$name.push($val.clone());
+            let mut info = TypeInformation::new();
+            info.$name($me, &$val);
+            let idx2 = $me.type_info.$name.push(info);
+            assert_eq!(idx, idx2);
+            $me.$name.insert($val, idx);
+            idx
         }
-        let idx = $me.component_types.$name.push($val.clone());
-        let mut info = TypeInformation::new();
-        info.$name($me, &$val);
-        let idx2 = $me.type_info.$name.push(info);
-        assert_eq!(idx, idx2);
-        $me.$name.insert($val, idx);
-        return idx;
     }};
 }
 
@@ -97,6 +103,11 @@ impl ComponentTypesBuilder {
             flags: HashMap::default(),
             options: HashMap::default(),
             results: HashMap::default(),
+            futures: HashMap::default(),
+            streams: HashMap::default(),
+            future_tables: HashMap::default(),
+            stream_tables: HashMap::default(),
+            error_context_tables: HashMap::default(),
             component_types: ComponentTypes::default(),
             type_info: TypeInformationCache::default(),
             resources: ResourcesBuilder::default(),
@@ -184,6 +195,24 @@ impl ComponentTypesBuilder {
         self.component_types.resource_tables.len()
     }
 
+    /// Returns the number of future tables allocated so far, or the maximum
+    /// `TypeFutureTableIndex`.
+    pub fn num_future_tables(&self) -> usize {
+        self.component_types.future_tables.len()
+    }
+
+    /// Returns the number of stream tables allocated so far, or the maximum
+    /// `TypeStreamTableIndex`.
+    pub fn num_stream_tables(&self) -> usize {
+        self.component_types.stream_tables.len()
+    }
+
+    /// Returns the number of error-context tables allocated so far, or the maximum
+    /// `TypeComponentLocalErrorContextTableIndex`.
+    pub fn num_error_context_tables(&self) -> usize {
+        self.component_types.error_context_tables.len()
+    }
+
     /// Returns a mutable reference to the underlying `ResourcesBuilder`.
     pub fn resources_mut(&mut self) -> &mut ResourcesBuilder {
         &mut self.resources
@@ -211,14 +240,16 @@ impl ComponentTypesBuilder {
             .map(|(_name, ty)| self.valtype(types, ty))
             .collect::<Result<_>>()?;
         let results = ty
-            .results
+            .result
             .iter()
-            .map(|(_name, ty)| self.valtype(types, ty))
+            .map(|ty| self.valtype(types, ty))
             .collect::<Result<_>>()?;
+        let params = self.new_tuple_type(params);
+        let results = self.new_tuple_type(results);
         let ty = TypeFunc {
             param_names,
-            params: self.new_tuple_type(params),
-            results: self.new_tuple_type(results),
+            params,
+            results,
         };
         Ok(self.add_func_type(ty))
     }
@@ -356,14 +387,15 @@ impl ComponentTypesBuilder {
         })
     }
 
-    fn defined_type(
+    /// Convert a wasmparser `ComponentDefinedTypeId` into Wasmtime's type representation.
+    pub fn defined_type(
         &mut self,
         types: TypesRef<'_>,
         id: ComponentDefinedTypeId,
     ) -> Result<InterfaceType> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ret = match &types[id] {
-            ComponentDefinedType::Primitive(ty) => ty.into(),
+            ComponentDefinedType::Primitive(ty) => self.primitive_type(ty)?,
             ComponentDefinedType::Record(e) => InterfaceType::Record(self.record_type(types, e)?),
             ComponentDefinedType::Variant(e) => {
                 InterfaceType::Variant(self.variant_type(types, e)?)
@@ -380,9 +412,12 @@ impl ComponentTypesBuilder {
             ComponentDefinedType::Borrow(r) => {
                 InterfaceType::Borrow(self.resource_id(r.resource()))
             }
-            ComponentDefinedType::Future(_)
-            | ComponentDefinedType::Stream(_)
-            | ComponentDefinedType::ErrorContext => bail!("unsupported async type"),
+            ComponentDefinedType::Future(ty) => {
+                InterfaceType::Future(self.future_table_type(types, ty)?)
+            }
+            ComponentDefinedType::Stream(ty) => {
+                InterfaceType::Stream(self.stream_table_type(types, ty)?)
+            }
         };
         let info = self.type_information(&ret);
         if info.depth > MAX_TYPE_DEPTH {
@@ -391,11 +426,41 @@ impl ComponentTypesBuilder {
         Ok(ret)
     }
 
-    fn valtype(&mut self, types: TypesRef<'_>, ty: &ComponentValType) -> Result<InterfaceType> {
+    /// Retrieve Wasmtime's type representation of the `error-context` type.
+    pub fn error_context_type(&mut self) -> Result<TypeComponentLocalErrorContextTableIndex> {
+        self.error_context_table_type()
+    }
+
+    pub(crate) fn valtype(
+        &mut self,
+        types: TypesRef<'_>,
+        ty: &ComponentValType,
+    ) -> Result<InterfaceType> {
         assert_eq!(types.id(), self.module_types.validator_id());
         match ty {
-            ComponentValType::Primitive(p) => Ok(p.into()),
+            ComponentValType::Primitive(p) => self.primitive_type(p),
             ComponentValType::Type(id) => self.defined_type(types, *id),
+        }
+    }
+
+    fn primitive_type(&mut self, ty: &PrimitiveValType) -> Result<InterfaceType> {
+        match ty {
+            wasmparser::PrimitiveValType::Bool => Ok(InterfaceType::Bool),
+            wasmparser::PrimitiveValType::S8 => Ok(InterfaceType::S8),
+            wasmparser::PrimitiveValType::U8 => Ok(InterfaceType::U8),
+            wasmparser::PrimitiveValType::S16 => Ok(InterfaceType::S16),
+            wasmparser::PrimitiveValType::U16 => Ok(InterfaceType::U16),
+            wasmparser::PrimitiveValType::S32 => Ok(InterfaceType::S32),
+            wasmparser::PrimitiveValType::U32 => Ok(InterfaceType::U32),
+            wasmparser::PrimitiveValType::S64 => Ok(InterfaceType::S64),
+            wasmparser::PrimitiveValType::U64 => Ok(InterfaceType::U64),
+            wasmparser::PrimitiveValType::F32 => Ok(InterfaceType::Float32),
+            wasmparser::PrimitiveValType::F64 => Ok(InterfaceType::Float64),
+            wasmparser::PrimitiveValType::Char => Ok(InterfaceType::Char),
+            wasmparser::PrimitiveValType::String => Ok(InterfaceType::String),
+            wasmparser::PrimitiveValType::ErrorContext => Ok(InterfaceType::ErrorContext(
+                self.error_context_table_type()?,
+            )),
         }
     }
 
@@ -457,7 +522,7 @@ impl ComponentTypesBuilder {
         Ok(self.new_tuple_type(types))
     }
 
-    fn new_tuple_type(&mut self, types: Box<[InterfaceType]>) -> TypeTupleIndex {
+    pub(crate) fn new_tuple_type(&mut self, types: Box<[InterfaceType]>) -> TypeTupleIndex {
         let abi = CanonicalAbiInfo::record(
             types
                 .iter()
@@ -516,6 +581,40 @@ impl ComponentTypesBuilder {
         Ok(self.add_result_type(TypeResult { ok, err, abi, info }))
     }
 
+    fn future_table_type(
+        &mut self,
+        types: TypesRef<'_>,
+        ty: &Option<ComponentValType>,
+    ) -> Result<TypeFutureTableIndex> {
+        let payload = ty.as_ref().map(|ty| self.valtype(types, ty)).transpose()?;
+        let ty = self.add_future_type(TypeFuture { payload });
+        Ok(self.add_future_table_type(TypeFutureTable {
+            ty,
+            instance: self.resources.get_current_instance().unwrap(),
+        }))
+    }
+
+    fn stream_table_type(
+        &mut self,
+        types: TypesRef<'_>,
+        ty: &Option<ComponentValType>,
+    ) -> Result<TypeStreamTableIndex> {
+        let payload = ty.as_ref().map(|ty| self.valtype(types, ty)).transpose()?;
+        let ty = self.add_stream_type(TypeStream { payload });
+        Ok(self.add_stream_table_type(TypeStreamTable {
+            ty,
+            instance: self.resources.get_current_instance().unwrap(),
+        }))
+    }
+
+    /// Retrieve Wasmtime's type representation of the `error-context` type from
+    /// the point of view of the current component instance.
+    pub fn error_context_table_type(&mut self) -> Result<TypeComponentLocalErrorContextTableIndex> {
+        Ok(self.add_error_context_table_type(TypeErrorContextTable {
+            instance: self.resources.get_current_instance().unwrap(),
+        }))
+    }
+
     fn list_type(&mut self, types: TypesRef<'_>, ty: &ComponentValType) -> Result<TypeListIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let element = self.valtype(types, ty)?;
@@ -568,9 +667,49 @@ impl ComponentTypesBuilder {
         intern_and_fill_flat_types!(self, results, ty)
     }
 
-    /// Interns a new type within this type information.
+    /// Interns a new list type within this type information.
     pub fn add_list_type(&mut self, ty: TypeList) -> TypeListIndex {
         intern_and_fill_flat_types!(self, lists, ty)
+    }
+
+    /// Interns a new future type within this type information.
+    pub fn add_future_type(&mut self, ty: TypeFuture) -> TypeFutureIndex {
+        intern(&mut self.futures, &mut self.component_types.futures, ty)
+    }
+
+    /// Interns a new future table type within this type information.
+    pub fn add_future_table_type(&mut self, ty: TypeFutureTable) -> TypeFutureTableIndex {
+        intern(
+            &mut self.future_tables,
+            &mut self.component_types.future_tables,
+            ty,
+        )
+    }
+
+    /// Interns a new stream type within this type information.
+    pub fn add_stream_type(&mut self, ty: TypeStream) -> TypeStreamIndex {
+        intern(&mut self.streams, &mut self.component_types.streams, ty)
+    }
+
+    /// Interns a new stream table type within this type information.
+    pub fn add_stream_table_type(&mut self, ty: TypeStreamTable) -> TypeStreamTableIndex {
+        intern(
+            &mut self.stream_tables,
+            &mut self.component_types.stream_tables,
+            ty,
+        )
+    }
+
+    /// Interns a new error context table type within this type information.
+    pub fn add_error_context_table_type(
+        &mut self,
+        ty: TypeErrorContextTable,
+    ) -> TypeComponentLocalErrorContextTableIndex {
+        intern(
+            &mut self.error_context_tables,
+            &mut self.component_types.error_context_tables,
+            ty,
+        )
     }
 
     /// Returns the canonical ABI information about the specified type.
@@ -603,7 +742,10 @@ impl ComponentTypesBuilder {
             | InterfaceType::U32
             | InterfaceType::S32
             | InterfaceType::Char
-            | InterfaceType::Own(_) => {
+            | InterfaceType::Own(_)
+            | InterfaceType::Future(_)
+            | InterfaceType::Stream(_)
+            | InterfaceType::ErrorContext(_) => {
                 static INFO: TypeInformation = TypeInformation::primitive(FlatType::I32);
                 &INFO
             }

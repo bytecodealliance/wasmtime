@@ -13,7 +13,7 @@ use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
 use wasmtime_wasi::{
     runtime::{poll_noop, AbortOnDropJoinHandle},
-    HostInputStream, HostOutputStream, StreamError, Subscribe,
+    InputStream, OutputStream, Pollable, StreamError,
 };
 
 /// Common type for incoming bodies.
@@ -234,7 +234,7 @@ enum IncomingBodyStreamState {
 }
 
 #[async_trait::async_trait]
-impl HostInputStream for HostIncomingBodyStream {
+impl InputStream for HostIncomingBodyStream {
     fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
         loop {
             // Handle buffered data/errors if any
@@ -271,7 +271,7 @@ impl HostInputStream for HostIncomingBodyStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for HostIncomingBodyStream {
+impl Pollable for HostIncomingBodyStream {
     async fn ready(&mut self) {
         if !self.buffer.is_empty() || self.error.is_some() {
             return;
@@ -327,7 +327,7 @@ pub enum HostFutureTrailers {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for HostFutureTrailers {
+impl Pollable for HostFutureTrailers {
     async fn ready(&mut self) {
         let body = match self {
             HostFutureTrailers::Waiting(body) => body,
@@ -415,7 +415,7 @@ impl WrittenState {
 /// The concrete type behind a `wasi:http/types/outgoing-body` resource.
 pub struct HostOutgoingBody {
     /// The output stream that the body is written to.
-    body_output_stream: Option<Box<dyn HostOutputStream>>,
+    body_output_stream: Option<Box<dyn OutputStream>>,
     context: StreamContext,
     written: Option<WrittenState>,
     finish_sender: Option<tokio::sync::oneshot::Sender<FinishMessage>>,
@@ -499,7 +499,7 @@ impl HostOutgoingBody {
     }
 
     /// Take the output stream, if it's available.
-    pub fn take_output_stream(&mut self) -> Option<Box<dyn HostOutputStream>> {
+    pub fn take_output_stream(&mut self) -> Option<Box<dyn OutputStream>> {
         self.body_output_stream.take()
     }
 
@@ -605,7 +605,7 @@ impl BodyWriteStream {
 }
 
 #[async_trait::async_trait]
-impl HostOutputStream for BodyWriteStream {
+impl OutputStream for BodyWriteStream {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
         let len = bytes.len();
         match self.writer.try_send(bytes) {
@@ -665,7 +665,7 @@ impl HostOutputStream for BodyWriteStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for BodyWriteStream {
+impl Pollable for BodyWriteStream {
     async fn ready(&mut self) {
         // Attempt to perform a reservation for a send. If there's capacity in
         // the channel or it's already closed then this will return immediately.

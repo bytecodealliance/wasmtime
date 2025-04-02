@@ -149,7 +149,7 @@ pub struct Descriptors {
 }
 
 #[cfg(not(feature = "proxy"))]
-#[link(wasm_import_module = "wasi:filesystem/preopens@0.2.2")]
+#[link(wasm_import_module = "wasi:filesystem/preopens@0.2.3")]
 unsafe extern "C" {
     #[link_name = "get-directories"]
     fn wasi_filesystem_get_directories(rval: *mut PreopenList);

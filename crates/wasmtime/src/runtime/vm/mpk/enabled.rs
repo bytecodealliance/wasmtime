@@ -60,6 +60,7 @@ pub fn allow(mask: ProtectionMask) {
 }
 
 /// Retrieve the current protection mask.
+#[cfg(feature = "async")]
 pub fn current_mask() -> ProtectionMask {
     ProtectionMask(pkru::read())
 }

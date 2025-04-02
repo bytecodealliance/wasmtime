@@ -55,7 +55,8 @@ fn parse_address_map(
     section: &[u8],
 ) -> Option<(&[U32Bytes<LittleEndian>], &[U32Bytes<LittleEndian>])> {
     let mut section = Bytes(section);
-    // NB: this matches the encoding written by `append_to` above.
+    // NB: this matches the encoding written by `append_to` in the
+    // `compile::address_map` module.
     let count = section.read::<U32Bytes<LittleEndian>>().ok()?;
     let count = usize::try_from(count.get(LittleEndian)).ok()?;
     let (offsets, section) =

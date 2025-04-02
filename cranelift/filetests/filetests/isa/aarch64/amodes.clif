@@ -784,3 +784,33 @@ block0(v0: i64, v1: i32):
 ;   ldr x0, [x0, w1, sxtw #3] ; trap: heap_oob
 ;   ret
 
+function %no_panic(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v8 = ishl_imm v1, 100
+  v9 = iadd v0, v8
+  v10 = load.i64 v9
+
+  v5 = ishl_imm v1, 100
+  v6 = iadd v5, v0
+  v7 = load.i64 v6
+  return v10
+}
+
+; VCode:
+; block0:
+;   lsl x6, x1, #36
+;   ldr x6, [x0, x6]
+;   lsl x7, x1, #36
+;   ldr x7, [x7, x0]
+;   mov x0, x6
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lsl x6, x1, #0x24
+;   ldr x6, [x0, x6] ; trap: heap_oob
+;   lsl x7, x1, #0x24
+;   ldr x7, [x7, x0] ; trap: heap_oob
+;   mov x0, x6
+;   ret
+

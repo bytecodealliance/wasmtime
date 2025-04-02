@@ -1,15 +1,14 @@
 //! Evaluating const expressions.
 
+use crate::prelude::*;
 use crate::runtime::vm::{Instance, VMGcRef, ValRaw, I31};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
-use crate::{
-    prelude::*, ArrayRef, ArrayRefPre, ArrayType, StructRef, StructRefPre, StructType, Val,
-};
+#[cfg(feature = "gc")]
+use crate::{ArrayRef, ArrayRefPre, ArrayType, StructRef, StructRefPre, StructType, Val};
 use smallvec::SmallVec;
-use wasmtime_environ::{
-    ConstExpr, ConstOp, FuncIndex, GlobalIndex, ModuleInternedTypeIndex, WasmCompositeInnerType,
-    WasmCompositeType, WasmSubType,
-};
+use wasmtime_environ::{ConstExpr, ConstOp, FuncIndex, GlobalIndex};
+#[cfg(feature = "gc")]
+use wasmtime_environ::{VMSharedTypeIndex, WasmCompositeInnerType, WasmCompositeType, WasmSubType};
 
 /// An interpreter for const expressions.
 ///
@@ -33,11 +32,7 @@ impl<'a> ConstEvalContext<'a> {
 
     fn global_get(&mut self, store: &mut AutoAssertNoGc<'_>, index: GlobalIndex) -> Result<ValRaw> {
         unsafe {
-            let global = self
-                .instance
-                .defined_or_imported_global_ptr(index)
-                .as_ref()
-                .unwrap();
+            let global = self.instance.defined_or_imported_global_ptr(index).as_ref();
             global.to_val_raw(store, self.instance.env_module().globals[index].wasm_ty)
         }
     }
@@ -49,18 +44,14 @@ impl<'a> ConstEvalContext<'a> {
     }
 
     #[cfg(feature = "gc")]
-    fn struct_fields_len(&self, struct_type_index: ModuleInternedTypeIndex) -> usize {
-        let module = self
-            .instance
-            .runtime_module()
-            .expect("should never be allocating a struct type defined in a dummy module");
-
-        let struct_ty = match &module.types()[struct_type_index].composite_type.inner {
-            WasmCompositeInnerType::Struct(s) => s,
-            _ => unreachable!(),
-        };
-
-        struct_ty.fields.len()
+    fn struct_fields_len(
+        &self,
+        store: &mut AutoAssertNoGc<'_>,
+        shared_ty: VMSharedTypeIndex,
+    ) -> usize {
+        let struct_ty = StructType::from_shared_type_index(store.engine(), shared_ty);
+        let fields = struct_ty.fields();
+        fields.len()
     }
 
     /// Safety: field values must be of the correct types.
@@ -68,18 +59,9 @@ impl<'a> ConstEvalContext<'a> {
     unsafe fn struct_new(
         &mut self,
         store: &mut AutoAssertNoGc<'_>,
-        struct_type_index: ModuleInternedTypeIndex,
+        shared_ty: VMSharedTypeIndex,
         fields: &[ValRaw],
     ) -> Result<ValRaw> {
-        let module = self
-            .instance
-            .runtime_module()
-            .expect("should never be allocating a struct type defined in a dummy module");
-        let shared_ty = module
-            .signatures()
-            .shared_type(struct_type_index)
-            .expect("should have an engine type for module type");
-
         let struct_ty = StructType::from_shared_type_index(store.engine(), shared_ty);
         let fields = fields
             .iter()
@@ -100,17 +82,12 @@ impl<'a> ConstEvalContext<'a> {
     fn struct_new_default(
         &mut self,
         store: &mut AutoAssertNoGc<'_>,
-        struct_type_index: ModuleInternedTypeIndex,
+        shared_ty: VMSharedTypeIndex,
     ) -> Result<ValRaw> {
         let module = self
             .instance
             .runtime_module()
             .expect("should never be allocating a struct type defined in a dummy module");
-
-        let shared_ty = module
-            .signatures()
-            .shared_type(struct_type_index)
-            .expect("should have an engine type for module type");
 
         let borrowed = module
             .engine()
@@ -150,7 +127,7 @@ impl<'a> ConstEvalContext<'a> {
             })
             .collect::<SmallVec<[_; 8]>>();
 
-        unsafe { self.struct_new(store, struct_type_index, &fields) }
+        unsafe { self.struct_new(store, shared_ty, &fields) }
     }
 }
 
@@ -190,6 +167,7 @@ impl ConstExprEvaluator {
         let mut store = AutoAssertNoGc::new(&mut store);
 
         for op in expr.ops() {
+            log::trace!("const-evaluating op: {op:?}");
             match op {
                 ConstOp::I32Const(i) => self.stack.push(ValRaw::i32(*i)),
                 ConstOp::I64Const(i) => self.stack.push(ValRaw::i64(*i)),
@@ -250,9 +228,10 @@ impl ConstExprEvaluator {
 
                 #[cfg(feature = "gc")]
                 ConstOp::StructNew { struct_type_index } => {
-                    let interned_type_index =
-                        context.instance.env_module().types[*struct_type_index];
-                    let len = context.struct_fields_len(interned_type_index);
+                    let interned_type_index = context.instance.env_module().types
+                        [*struct_type_index]
+                        .unwrap_engine_type_index();
+                    let len = context.struct_fields_len(&mut store, interned_type_index);
 
                     if self.stack.len() < len {
                         bail!(
@@ -273,24 +252,16 @@ impl ConstExprEvaluator {
 
                 #[cfg(feature = "gc")]
                 ConstOp::StructNewDefault { struct_type_index } => {
-                    let interned_type_index =
-                        context.instance.env_module().types[*struct_type_index];
-                    self.stack
-                        .push(context.struct_new_default(&mut store, interned_type_index)?);
+                    let ty = context.instance.env_module().types[*struct_type_index]
+                        .unwrap_engine_type_index();
+                    self.stack.push(context.struct_new_default(&mut store, ty)?);
                 }
 
                 #[cfg(feature = "gc")]
                 ConstOp::ArrayNew { array_type_index } => {
-                    let interned_type_index =
-                        context.instance.env_module().types[*array_type_index];
-                    let module = context.instance.runtime_module().expect(
-                        "should never be allocating a struct type defined in a dummy module",
-                    );
-                    let shared_ty = module
-                        .signatures()
-                        .shared_type(interned_type_index)
-                        .expect("should have an engine type for module type");
-                    let ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
+                    let ty = context.instance.env_module().types[*array_type_index]
+                        .unwrap_engine_type_index();
+                    let ty = ArrayType::from_shared_type_index(store.engine(), ty);
 
                     #[allow(clippy::cast_sign_loss)]
                     let len = self.pop()?.get_i32() as u32;
@@ -306,16 +277,9 @@ impl ConstExprEvaluator {
 
                 #[cfg(feature = "gc")]
                 ConstOp::ArrayNewDefault { array_type_index } => {
-                    let interned_type_index =
-                        context.instance.env_module().types[*array_type_index];
-                    let module = context.instance.runtime_module().expect(
-                        "should never be allocating a struct type defined in a dummy module",
-                    );
-                    let shared_ty = module
-                        .signatures()
-                        .shared_type(interned_type_index)
-                        .expect("should have an engine type for module type");
-                    let ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
+                    let ty = context.instance.env_module().types[*array_type_index]
+                        .unwrap_engine_type_index();
+                    let ty = ArrayType::from_shared_type_index(store.engine(), ty);
 
                     #[allow(clippy::cast_sign_loss)]
                     let len = self.pop()?.get_i32() as u32;
@@ -335,16 +299,9 @@ impl ConstExprEvaluator {
                     array_type_index,
                     array_size,
                 } => {
-                    let interned_type_index =
-                        context.instance.env_module().types[*array_type_index];
-                    let module = context.instance.runtime_module().expect(
-                        "should never be allocating a struct type defined in a dummy module",
-                    );
-                    let shared_ty = module
-                        .signatures()
-                        .shared_type(interned_type_index)
-                        .expect("should have an engine type for module type");
-                    let ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
+                    let ty = context.instance.env_module().types[*array_type_index]
+                        .unwrap_engine_type_index();
+                    let ty = ArrayType::from_shared_type_index(store.engine(), ty);
 
                     let array_size = usize::try_from(*array_size).unwrap();
                     if self.stack.len() < array_size {

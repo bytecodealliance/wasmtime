@@ -145,10 +145,10 @@ fn detect_precompiled() -> Result<()> {
         &engine,
         "(module (func (export \"run\") (result i32) i32.const 42))",
     )?;
-    assert_eq!(engine.detect_precompiled(&[]), None);
-    assert_eq!(engine.detect_precompiled(&buffer[..5]), None);
+    assert_eq!(Engine::detect_precompiled(&[]), None);
+    assert_eq!(Engine::detect_precompiled(&buffer[..5]), None);
     assert_eq!(
-        engine.detect_precompiled(&buffer),
+        Engine::detect_precompiled(&buffer),
         Some(Precompiled::Module)
     );
     Ok(())

@@ -63,7 +63,12 @@ unsafe impl GlobalAlloc for MyGlobalDmalloc {
     }
 }
 
+#[cfg(not(feature = "wasi"))]
 const INITIAL_HEAP_SIZE: usize = 64 * 1024;
+// The wasi component requires a larger heap than the module tests
+#[cfg(feature = "wasi")]
+const INITIAL_HEAP_SIZE: usize = 4 * 1024 * 1024;
+
 static mut INITIAL_HEAP: [u8; INITIAL_HEAP_SIZE] = [0; INITIAL_HEAP_SIZE];
 static mut INITIAL_HEAP_ALLOCATED: bool = false;
 

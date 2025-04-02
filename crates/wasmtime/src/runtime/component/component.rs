@@ -24,6 +24,7 @@ use wasmtime_environ::component::{
     GlobalInitializer, InstantiateModule, NameMapNoIntern, StaticModuleIndex, TrampolineIndex,
     TypeComponentIndex, TypeDef, VMComponentOffsets,
 };
+use wasmtime_environ::TypeTrace;
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
 
 /// A compiled WebAssembly Component.
@@ -213,6 +214,23 @@ impl Component {
         Component::from_parts(engine, code, None)
     }
 
+    /// Same as [`Module::deserialize_raw`], but for components.
+    ///
+    /// See [`Component::deserialize`] for additional information; this method
+    /// works identically except that it will not create a copy of the provided
+    /// memory but will use it directly.
+    ///
+    /// # Unsafety
+    ///
+    /// All of the safety notes from [`Component::deserialize`] apply here as well
+    /// with the additional constraint that the code memory provide by `memory`
+    /// lives for as long as the module and is nevery externally modified for
+    /// the lifetime of the deserialized module.
+    pub unsafe fn deserialize_raw(engine: &Engine, memory: NonNull<[u8]>) -> Result<Component> {
+        let code = engine.load_code_raw(memory, ObjectKind::Component)?;
+        Component::from_parts(engine, code, None)
+    }
+
     /// Same as [`Module::deserialize_file`], but for components.
     ///
     /// Note that the file referenced here must contain contents previously
@@ -384,8 +402,8 @@ impl Component {
         let ComponentArtifacts {
             ty,
             info,
-            types,
-            static_modules,
+            mut types,
+            mut static_modules,
         } = match artifacts {
             Some(artifacts) => artifacts,
             None => postcard::from_bytes(code_memory.wasmtime_info())?,
@@ -402,7 +420,11 @@ impl Component {
         // Create a signature registration with the `Engine` for all trampolines
         // and core wasm types found within this component, both for the
         // component and for all included core wasm modules.
-        let signatures = TypeCollection::new_for_module(engine, types.module_types());
+        let signatures = engine.register_and_canonicalize_types(
+            types.module_types_mut(),
+            static_modules.iter_mut().map(|(_, m)| &mut m.module),
+        );
+        types.canonicalize_for_runtime_usage(&mut |idx| signatures.shared_type(idx).unwrap());
 
         // Assemble the `CodeObject` artifact which is shared by all core wasm
         // modules as well as the final component.
@@ -516,7 +538,7 @@ impl Component {
             .info
             .resource_drop_wasm_to_array_trampoline
             .as_ref()
-            .map(|i| self.func(i).cast());
+            .map(|i| self.func(i).cast().into());
         VMFuncRef {
             wasm_call,
             ..*dtor.func_ref()
@@ -601,7 +623,9 @@ impl Component {
                 },
                 GlobalInitializer::LowerImport { .. }
                 | GlobalInitializer::ExtractMemory(_)
+                | GlobalInitializer::ExtractTable(_)
                 | GlobalInitializer::ExtractRealloc(_)
+                | GlobalInitializer::ExtractCallback(_)
                 | GlobalInitializer::ExtractPostReturn(_)
                 | GlobalInitializer::Resource(_) => {}
             }
