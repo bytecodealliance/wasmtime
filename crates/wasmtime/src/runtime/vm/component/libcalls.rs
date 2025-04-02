@@ -1267,3 +1267,15 @@ unsafe fn error_context_drop(
             )
     })
 }
+
+#[cfg(feature = "threads")]
+unsafe fn thread_spawn_indirect(
+    vmctx: NonNull<VMComponentContext>,
+    table: u32,
+    element: u32,
+    context: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        instance.thread_spawn_indirect(table, element, context)
+    })
+}
