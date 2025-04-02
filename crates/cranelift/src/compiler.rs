@@ -227,7 +227,7 @@ impl wasmtime_environ::Compiler for Compiler {
             // The way that stack overflow is handled here is by adding a prologue
             // check to all functions for how much native stack is remaining. The
             // `VMContext` pointer is the first argument to all functions, and the
-            // first field of this structure is `*const VMRuntimeLimits` and the
+            // first field of this structure is `*const VMStoreContext` and the
             // first field of that is the stack limit. Note that the stack limit in
             // this case means "if the stack pointer goes below this, trap". Each
             // function which consumes stack space or isn't a leaf function starts
@@ -252,13 +252,13 @@ impl wasmtime_environ::Compiler for Compiler {
                     .create_global_value(ir::GlobalValueData::VMContext);
                 let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
                     base: vmctx,
-                    offset: i32::from(func_env.offsets.ptr.vmctx_runtime_limits()).into(),
+                    offset: i32::from(func_env.offsets.ptr.vmctx_store_context()).into(),
                     global_type: isa.pointer_type(),
                     flags: MemFlags::trusted().with_readonly(),
                 });
                 let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
                     base: interrupts_ptr,
-                    offset: i32::from(func_env.offsets.ptr.vmruntime_limits_stack_limit()).into(),
+                    offset: i32::from(func_env.offsets.ptr.vmstore_context_stack_limit()).into(),
                     global_type: isa.pointer_type(),
                     flags: MemFlags::trusted(),
                 });
@@ -1208,7 +1208,7 @@ fn save_last_wasm_exit_fp_and_pc(
         // currently share the same call stack, so Wasmtime needs to make sure that
         // host-provided code will have enough call-stack available to it.
         //
-        // The first field of `VMRuntimeLimits` is the stack limit. If the stack
+        // The first field of `VMStoreContext` is the stack limit. If the stack
         // pointer is below this limit when we're about to call out of guest code,
         // trap. But we don't check this limit as long as we stay within guest or
         // trampoline code. Instead, we rely on the guest hitting a guard page,
@@ -1220,7 +1220,7 @@ fn save_last_wasm_exit_fp_and_pc(
             pointer_type,
             MemFlags::trusted(),
             limits,
-            ptr.vmruntime_limits_stack_limit(),
+            ptr.vmstore_context_stack_limit(),
         );
         let is_overflow = builder.ins().icmp(
             ir::condcodes::IntCC::UnsignedLessThan,
