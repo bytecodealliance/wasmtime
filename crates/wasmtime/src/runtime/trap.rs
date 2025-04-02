@@ -100,10 +100,11 @@ pub(crate) fn from_runtime_box(
         } => {
             let mut err: Error = trap.into();
 
-            // If a fault address was present, for example with segfaults,
-            // then simultaneously assert that it's within a known linear memory
-            // and additionally translate it to a wasm-local address to be added
-            // as context to the error.
+            // If a fault address was present, and if it isn't a stack-overflow
+            // guard page fault, for example with segfaults, then simultaneously
+            // assert that it's within a known linear memory and additionally
+            // translate it to a wasm-local address to be added as context to
+            // the error.
             if trap != Trap::StackOverflow {
                 if let Some(fault) = faulting_addr.and_then(|addr| store.wasm_fault(pc, addr)) {
                     err = err.context(fault);
