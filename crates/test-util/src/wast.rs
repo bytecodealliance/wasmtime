@@ -185,6 +185,8 @@ macro_rules! foreach_config_option {
             hogs_memory
             nan_canonicalization
             component_model_async
+            component_model_async_builtins
+            component_model_async_stackful
             simd
             gc_types
         }

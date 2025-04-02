@@ -1,9 +1,10 @@
 ;;! component_model_async = true
+;;! component_model_async_builtins = true
 
 ;; future.new
 (component
   (core module $m
-    (import "" "future.new" (func $future-new (result i32)))
+    (import "" "future.new" (func $future-new (result i64)))
   )
   (type $future-type (future u8))
   (core func $future-new (canon future.new $future-type))
@@ -72,7 +73,7 @@
 ;; future.close-readable
 (component
   (core module $m
-    (import "" "future.close-readable" (func $future-close-readable (param i32 i32)))
+    (import "" "future.close-readable" (func $future-close-readable (param i32)))
   )
   (type $future-type (future u8))
   (core func $future-close-readable (canon future.close-readable $future-type))
@@ -82,7 +83,7 @@
 ;; future.close-writable
 (component
   (core module $m
-    (import "" "future.close-writable" (func $future-close-writable (param i32 i32)))
+    (import "" "future.close-writable" (func $future-close-writable (param i32)))
   )
   (type $future-type (future u8))
   (core func $future-close-writable (canon future.close-writable $future-type))

@@ -201,6 +201,8 @@ struct WasmFeatures {
     gc: bool,
     custom_page_sizes: bool,
     component_model_async: bool,
+    component_model_async_builtins: bool,
+    component_model_async_stackful: bool,
     gc_types: bool,
     wide_arithmetic: bool,
     stack_switching: bool,
@@ -227,9 +229,11 @@ impl Metadata<'_> {
             gc,
             custom_page_sizes,
             shared_everything_threads,
-            component_model_values,
-            component_model_nested_names,
-            component_model_async,
+            cm_async,
+            cm_async_builtins,
+            cm_async_stackful,
+            cm_nested_names,
+            cm_values,
             legacy_exceptions,
             gc_types,
             stack_switching,
@@ -246,8 +250,8 @@ impl Metadata<'_> {
         // above so that once we do implement support for them, we won't
         // silently ignore them during serialization.
         assert!(!memory_control);
-        assert!(!component_model_values);
-        assert!(!component_model_nested_names);
+        assert!(!cm_nested_names);
+        assert!(!cm_values);
         assert!(!shared_everything_threads);
         assert!(!legacy_exceptions);
 
@@ -272,10 +276,12 @@ impl Metadata<'_> {
                 function_references,
                 gc,
                 custom_page_sizes,
-                component_model_async,
                 gc_types,
                 wide_arithmetic,
                 stack_switching,
+                component_model_async: cm_async,
+                component_model_async_builtins: cm_async_builtins,
+                component_model_async_stackful: cm_async_stackful,
             },
         }
     }
@@ -483,6 +489,8 @@ impl Metadata<'_> {
             gc,
             custom_page_sizes,
             component_model_async,
+            component_model_async_builtins,
+            component_model_async_stackful,
             gc_types,
             wide_arithmetic,
             stack_switching,
@@ -562,8 +570,18 @@ impl Metadata<'_> {
         )?;
         Self::check_bool(
             component_model_async,
-            other.contains(F::COMPONENT_MODEL_ASYNC),
+            other.contains(F::CM_ASYNC),
             "WebAssembly component model support for async lifts/lowers, futures, streams, and errors",
+        )?;
+        Self::check_bool(
+            component_model_async_builtins,
+            other.contains(F::CM_ASYNC_BUILTINS),
+            "WebAssembly component model support for async builtins",
+        )?;
+        Self::check_bool(
+            component_model_async_stackful,
+            other.contains(F::CM_ASYNC_STACKFUL),
+            "WebAssembly component model support for async stackful",
         )?;
         Self::check_cfg_bool(
             cfg!(feature = "gc"),

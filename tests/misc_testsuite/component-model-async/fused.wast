@@ -1,4 +1,5 @@
 ;;! component_model_async = true
+;;! component_model_async_stackful = true
 ;;! reference_types = true
 ;;! gc_types = true
 ;;! multi_memory = true
@@ -58,7 +59,7 @@
   (component $lifter
     (core module $m
       (import "" "task.return" (func $task-return (param i32)))
-      (func (export "callback") (param i32 i32 i32 i32) (result i32) unreachable)
+      (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
       (func (export "foo") (param i32) (result i32)
         (call $task-return (local.get 0))
         i32.const 0
@@ -203,7 +204,7 @@
   (component $lifter
     (core module $m
       (import "" "task.return" (func $task-return (param i32)))
-      (func (export "callback") (param i32 i32 i32 i32) (result i32) unreachable)
+      (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
       (func (export "foo") (param i32) (result i32)
         (call $task-return (local.get 0))
         i32.const 0

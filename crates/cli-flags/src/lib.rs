@@ -364,6 +364,12 @@ wasmtime_option_group! {
         pub component_model: Option<bool>,
         /// Component model support for async lifting/lowering.
         pub component_model_async: Option<bool>,
+        /// Component model support for async lifting/lowering: this corresponds
+        /// to the 🚝 emoji in the component model specification.
+        pub component_model_async_builtins: Option<bool>,
+        /// Component model support for async lifting/lowering: this corresponds
+        /// to the 🚟 emoji in the component model specification.
+        pub component_model_async_stackful: Option<bool>,
         /// Configure support for the function-references proposal.
         pub function_references: Option<bool>,
         /// Configure support for the GC proposal.
@@ -994,6 +1000,8 @@ impl CommonOptions {
         handle_conditionally_compiled! {
             ("component-model", component_model, wasm_component_model)
             ("component-model-async", component_model_async, wasm_component_model_async)
+            ("component-model-async", component_model_async_builtins, wasm_component_model_async_builtins)
+            ("component-model-async", component_model_async_stackful, wasm_component_model_async_stackful)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)
