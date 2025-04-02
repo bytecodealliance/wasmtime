@@ -212,9 +212,7 @@ macro_rules! foreach_builtin_function {
             trunc_f64(vmctx: vmctx, x: f64) -> f64;
             nearest_f32(vmctx: vmctx, x: f32) -> f32;
             nearest_f64(vmctx: vmctx, x: f64) -> f64;
-            #[cfg(target_arch = "x86_64")]
             i8x16_swizzle(vmctx: vmctx, a: i8x16, b: i8x16) -> i8x16;
-            #[cfg(target_arch = "x86_64")]
             i8x16_shuffle(vmctx: vmctx, a: i8x16, b: i8x16, c: i8x16) -> i8x16;
 
             // Raises an unconditional trap with the specified code.
