@@ -249,7 +249,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 .create_global_value(ir::GlobalValueData::VMContext);
             let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
-                offset: i32::from(func_env.offsets.ptr.vmctx_runtime_limits()).into(),
+                offset: i32::from(func_env.offsets.ptr.vmctx_store_context()).into(),
                 global_type: isa.pointer_type(),
                 flags: MemFlags::trusted().with_readonly(),
             });
@@ -329,12 +329,12 @@ impl wasmtime_environ::Compiler for Compiler {
         // what we are assuming with our offsets below.
         debug_assert_vmctx_kind(isa, &mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
         let offsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
-        let vm_runtime_limits_offset = offsets.ptr.vmctx_runtime_limits();
+        let vm_store_context_offset = offsets.ptr.vmctx_store_context();
         save_last_wasm_entry_fp(
             &mut builder,
             pointer_type,
             &offsets.ptr,
-            vm_runtime_limits_offset.into(),
+            vm_store_context_offset.into(),
             vmctx,
         );
 

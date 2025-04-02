@@ -583,7 +583,7 @@ impl Instance {
     /// Return a pointer to the interrupts structure
     #[inline]
     pub fn vm_store_context(&mut self) -> NonNull<Option<VmPtr<VMStoreContext>>> {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_runtime_limits()) }
+        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_store_context()) }
     }
 
     /// Return a pointer to the global epoch counter used by this instance.
