@@ -616,7 +616,15 @@ impl Instance {
             #[cfg(target_has_atomic = "64")]
             self.epoch_ptr()
                 .write(Some(NonNull::from(store.engine().epoch_counter()).into()));
-            self.set_gc_heap(store.gc_store_mut().ok());
+
+            if self.env_module().needs_gc_heap {
+                self.set_gc_heap(Some(store.gc_store_mut().expect(
+                    "if we need a GC heap, then `Instance::new_raw` should have already \
+                     allocated it for us",
+                )));
+            } else {
+                self.set_gc_heap(None);
+            }
         } else {
             self.vm_store_context().write(None);
             #[cfg(target_has_atomic = "64")]

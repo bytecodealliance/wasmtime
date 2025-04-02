@@ -232,6 +232,14 @@ impl VMGcRef {
         VMGcRef(self.0)
     }
 
+    /// Copy this `i31` GC reference, which never requires any GC barriers.
+    ///
+    /// Panics if this is not an `i31`.
+    pub fn copy_i31(&self) -> Self {
+        assert!(self.is_i31());
+        self.unchecked_copy()
+    }
+
     /// Get this GC reference as a u32 index into its GC heap.
     ///
     /// Returns `None` for `i31ref`s.

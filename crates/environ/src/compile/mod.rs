@@ -178,6 +178,16 @@ pub enum SettingKind {
     Preset,
 }
 
+/// The result of compiling a single function body.
+pub struct CompiledFunctionBody {
+    /// The code. This is whatever type the `Compiler` implementation wants it
+    /// to be, we just shepherd it around.
+    pub code: Box<dyn Any + Send>,
+    /// Whether the compiled function needs a GC heap to run; that is, whether
+    /// it reads a struct field, allocates, an array, or etc...
+    pub needs_gc_heap: bool,
+}
+
 /// An implementation of a compiler which can compile WebAssembly functions to
 /// machine code and perform other miscellaneous tasks needed by the JIT runtime.
 pub trait Compiler: Send + Sync {
@@ -186,19 +196,13 @@ pub trait Compiler: Send + Sync {
     /// The body of the function is available in `data` and configuration
     /// values are also passed in via `tunables`. Type information in
     /// `translation` is all relative to `types`.
-    ///
-    /// This function returns a tuple:
-    ///
-    /// 1. Metadata about the wasm function itself.
-    /// 2. The function itself, as an `Any` to get downcasted later when passed
-    ///    to `append_code`.
     fn compile_function(
         &self,
         translation: &ModuleTranslation<'_>,
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
-    ) -> Result<Box<dyn Any + Send>, CompileError>;
+    ) -> Result<CompiledFunctionBody, CompileError>;
 
     /// Compile a trampoline for an array-call host function caller calling the
     /// `index`th Wasm function.
@@ -210,7 +214,7 @@ pub trait Compiler: Send + Sync {
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
         index: DefinedFuncIndex,
-    ) -> Result<Box<dyn Any + Send>, CompileError>;
+    ) -> Result<CompiledFunctionBody, CompileError>;
 
     /// Compile a trampoline for a Wasm caller calling a array callee with the
     /// given signature.
@@ -220,7 +224,7 @@ pub trait Compiler: Send + Sync {
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &WasmFuncType,
-    ) -> Result<Box<dyn Any + Send>, CompileError>;
+    ) -> Result<CompiledFunctionBody, CompileError>;
 
     /// Creates a trampoline that can be used to call Wasmtime's implementation
     /// of the builtin function specified by `index`.
@@ -234,7 +238,7 @@ pub trait Compiler: Send + Sync {
     fn compile_wasm_to_builtin(
         &self,
         index: BuiltinFunctionIndex,
-    ) -> Result<Box<dyn Any + Send>, CompileError>;
+    ) -> Result<CompiledFunctionBody, CompileError>;
 
     /// Returns the list of relocations required for a function from one of the
     /// previous `compile_*` functions above.

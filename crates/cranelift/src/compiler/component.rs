@@ -6,9 +6,8 @@ use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
-use std::any::Any;
-use wasmtime_environ::component::*;
 use wasmtime_environ::fact::SYNC_ENTER_FIXED_PARAMS;
+use wasmtime_environ::{component::*, CompiledFunctionBody};
 use wasmtime_environ::{
     HostCall, ModuleInternedTypeIndex, PtrSize, TrapSentinel, Tunables, WasmFuncType, WasmValType,
 };
@@ -1455,7 +1454,7 @@ impl ComponentCompiler for Compiler {
         types: &ComponentTypesBuilder,
         index: TrampolineIndex,
         tunables: &Tunables,
-    ) -> Result<AllCallFunc<Box<dyn Any + Send>>> {
+    ) -> Result<AllCallFunc<CompiledFunctionBody>> {
         let compile = |abi: Abi| -> Result<_> {
             let mut compiler = self.function_compiler();
             let mut c = TrampolineCompiler::new(
@@ -1499,10 +1498,12 @@ impl ComponentCompiler for Compiler {
             c.translate(&component.trampolines[index]);
             c.builder.finalize();
 
-            Ok(Box::new(compiler.finish(&format!(
-                "component_trampoline_{}_{abi:?}",
-                index.as_u32(),
-            ))?))
+            Ok(CompiledFunctionBody {
+                code: Box::new(
+                    compiler.finish(&format!("component_trampoline_{}_{abi:?}", index.as_u32()))?,
+                ),
+                needs_gc_heap: false,
+            })
         };
         Ok(AllCallFunc {
             wasm_call: compile(Abi::Wasm)?,
