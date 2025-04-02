@@ -1137,9 +1137,6 @@ impl Inst {
 
                 // Load any stack-carried return values.
                 info.emit_retval_loads::<Riscv64MachineDeps, _, _>(
-                    // Use x12 as a temp if needed: clobbered, not a
-                    // retval.
-                    Writable::from_reg(regs::x_reg(12)),
                     state.frame_layout().stackslots_size,
                     |inst| inst.emit(sink, emit_info, state),
                     |needed_space| Some(Inst::EmitIsland { needed_space }),
@@ -1171,9 +1168,6 @@ impl Inst {
 
                 // Load any stack-carried return values.
                 info.emit_retval_loads::<Riscv64MachineDeps, _, _>(
-                    // Use x12 as a temp if needed: clobbered, not a
-                    // retval.
-                    Writable::from_reg(regs::x_reg(12)),
                     state.frame_layout().stackslots_size,
                     |inst| inst.emit(sink, emit_info, state),
                     |needed_space| Some(Inst::EmitIsland { needed_space }),

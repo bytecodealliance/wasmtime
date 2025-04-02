@@ -991,6 +991,10 @@ impl ABIMachineSpec for S390xMachineDeps {
             clobbered_callee_saves: regs,
         }
     }
+
+    fn retval_temp_reg(_call_conv_of_callee: isa::CallConv) -> Writable<Reg> {
+        panic!("Should not be called");
+    }
 }
 
 impl S390xMachineDeps {

@@ -2954,9 +2954,6 @@ impl MachInstEmit for Inst {
 
                 // Load any stack-carried return values.
                 info.emit_retval_loads::<AArch64MachineDeps, _, _>(
-                    // Use x9 as a temp if needed: clobbered, not a
-                    // retval.
-                    regs::writable_xreg(9),
                     state.frame_layout().stackslots_size,
                     |inst| inst.emit(sink, emit_info, state),
                     |needed_space| Some(Inst::EmitIsland { needed_space }),
@@ -2987,9 +2984,6 @@ impl MachInstEmit for Inst {
 
                 // Load any stack-carried return values.
                 info.emit_retval_loads::<AArch64MachineDeps, _, _>(
-                    // Use x9 as a temp if needed: clobbered, not a
-                    // retval.
-                    regs::writable_xreg(9),
                     state.frame_layout().stackslots_size,
                     |inst| inst.emit(sink, emit_info, state),
                     |needed_space| Some(Inst::EmitIsland { needed_space }),

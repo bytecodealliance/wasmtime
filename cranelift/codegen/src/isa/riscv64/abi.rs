@@ -722,6 +722,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             });
         }
     }
+
+    fn retval_temp_reg(_call_conv_of_callee: isa::CallConv) -> Writable<Reg> {
+        // Use x12 as a temp if needed: clobbered, not a
+        // retval.
+        Writable::from_reg(regs::x_reg(12))
+    }
 }
 
 impl Riscv64ABICallSite {

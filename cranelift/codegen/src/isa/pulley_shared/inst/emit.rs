@@ -191,9 +191,6 @@ fn pulley_emit<P>(
 
             // Load any stack-carried return values.
             info.emit_retval_loads::<PulleyMachineDeps<P>, _, _>(
-                // Use x15 as a temp if needed: clobbered, not a
-                // retval.
-                Writable::from_reg(regs::x_reg(15)),
                 state.frame_layout().stackslots_size,
                 |inst| inst.emit(sink, emit_info, state),
                 |space_needed| Some(<InstAndKind<P>>::from(Inst::EmitIsland { space_needed })),
@@ -221,9 +218,6 @@ fn pulley_emit<P>(
 
             // Load any stack-carried return values.
             info.emit_retval_loads::<PulleyMachineDeps<P>, _, _>(
-                // Use x15 as a temp if needed: clobbered, not a
-                // retval.
-                Writable::from_reg(regs::x_reg(15)),
                 state.frame_layout().stackslots_size,
                 |inst| inst.emit(sink, emit_info, state),
                 |space_needed| Some(<InstAndKind<P>>::from(Inst::EmitIsland { space_needed })),

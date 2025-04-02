@@ -975,6 +975,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             clobbered_callee_saves: regs,
         }
     }
+
+    fn retval_temp_reg(_call_conv_of_callee: isa::CallConv) -> Writable<Reg> {
+        // Use r11 as a temp: clobbered anyway, and
+        // not otherwise used as a return value in any of our
+        // supported calling conventions.
+        Writable::from_reg(regs::r11())
+    }
 }
 
 impl X64CallSite {

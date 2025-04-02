@@ -594,6 +594,12 @@ where
         // Pulley doesn't need inline probestacks because it always checks stack
         // decrements.
     }
+
+    fn retval_temp_reg(_call_conv_of_callee: isa::CallConv) -> Writable<Reg> {
+        // Use x15 as a temp if needed: clobbered, not a
+        // retval.
+        Writable::from_reg(regs::x_reg(15))
+    }
 }
 
 /// Different styles of management of fp/lr and clobbered registers.

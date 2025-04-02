@@ -593,6 +593,12 @@ pub trait ABIMachineSpec {
         call_conv: isa::CallConv,
         specified: ir::ArgumentExtension,
     ) -> ir::ArgumentExtension;
+
+    /// Get a temporary register that is available to use after a call
+    /// completes and that does not interfere with register-carried
+    /// return values. This is used to move stack-carried return
+    /// values directly into spillslots if needed.
+    fn retval_temp_reg(call_conv_of_callee: isa::CallConv) -> Writable<Reg>;
 }
 
 /// Out-of-line data for calls, to keep the size of `Inst` down.
@@ -2487,7 +2493,6 @@ impl<T> CallInfo<T> {
         IslandFn: Fn(u32) -> Option<M::I>,
     >(
         &self,
-        temp: Writable<Reg>,
         stackslots_size: u32,
         mut emit: EmitFn,
         emit_island: IslandFn,
@@ -2509,39 +2514,51 @@ impl<T> CallInfo<T> {
             }
         }
 
+        let temp = M::retval_temp_reg(self.callee_conv);
+        // The temporary must be noted as clobbered.
+        debug_assert!(M::get_regs_clobbered_by_call(self.callee_conv)
+            .contains(PReg::from(temp.to_reg().to_real_reg().unwrap())));
+
         for CallRetPair { vreg, location } in &self.defs {
-            if let RetLocation::Stack(amode, ty) = location {
-                if let Some(spillslot) = vreg.to_reg().to_spillslot() {
-                    // `temp` is an integer register of machine word
-                    // width, but `ty` may be floating-point/vector,
-                    // which (i) may not be loadable directly into an
-                    // int reg, and (ii) may be wider than a machine
-                    // word. For simplicity, and because there are not
-                    // always easy choices for volatile float/vec regs
-                    // (see e.g. x86-64, where fastcall clobbers only
-                    // xmm0-xmm5, but tail uses xmm0-xmm7 for
-                    // returns), we use the integer temp register in
-                    // steps.
-                    let parts = (ty.bytes() + M::word_bytes() - 1) / M::word_bytes();
-                    for part in 0..parts {
-                        emit(M::gen_load_stack(
-                            amode.offset_by(part * M::word_bytes()),
-                            temp,
-                            M::word_type(),
-                        ));
-                        emit(M::gen_store_stack(
-                            StackAMode::Slot(
-                                i64::from(stackslots_size)
-                                    + i64::from(M::word_bytes())
-                                        * ((spillslot.index() as i64) + (part as i64)),
-                            ),
-                            temp.to_reg(),
-                            M::word_type(),
-                        ));
+            match location {
+                RetLocation::Reg(preg) => {
+                    // The temporary must not also be an actual return
+                    // value register.
+                    debug_assert!(*preg != temp.to_reg());
+                }
+                RetLocation::Stack(amode, ty) => {
+                    if let Some(spillslot) = vreg.to_reg().to_spillslot() {
+                        // `temp` is an integer register of machine word
+                        // width, but `ty` may be floating-point/vector,
+                        // which (i) may not be loadable directly into an
+                        // int reg, and (ii) may be wider than a machine
+                        // word. For simplicity, and because there are not
+                        // always easy choices for volatile float/vec regs
+                        // (see e.g. x86-64, where fastcall clobbers only
+                        // xmm0-xmm5, but tail uses xmm0-xmm7 for
+                        // returns), we use the integer temp register in
+                        // steps.
+                        let parts = (ty.bytes() + M::word_bytes() - 1) / M::word_bytes();
+                        for part in 0..parts {
+                            emit(M::gen_load_stack(
+                                amode.offset_by(part * M::word_bytes()),
+                                temp,
+                                M::word_type(),
+                            ));
+                            emit(M::gen_store_stack(
+                                StackAMode::Slot(
+                                    i64::from(stackslots_size)
+                                        + i64::from(M::word_bytes())
+                                            * ((spillslot.index() as i64) + (part as i64)),
+                                ),
+                                temp.to_reg(),
+                                M::word_type(),
+                            ));
+                        }
+                    } else {
+                        assert_ne!(*vreg, temp);
+                        emit(M::gen_load_stack(*amode, *vreg, *ty));
                     }
-                } else {
-                    assert_ne!(*vreg, temp);
-                    emit(M::gen_load_stack(*amode, *vreg, *ty));
                 }
             }
         }

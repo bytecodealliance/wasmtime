@@ -1195,6 +1195,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
             clobbered_callee_saves: regs,
         }
     }
+
+    fn retval_temp_reg(_call_conv_of_callee: isa::CallConv) -> Writable<Reg> {
+        // Use x9 as a temp if needed: clobbered, not a
+        // retval.
+        regs::writable_xreg(9)
+    }
 }
 
 impl AArch64MachineDeps {
