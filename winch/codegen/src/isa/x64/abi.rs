@@ -169,30 +169,31 @@ impl X64ABI {
 
         let ty_size = <Self as ABI>::sizeof(wasm_arg);
         let default = || {
-            let arg = ABIOperand::stack_offset(stack_offset, *ty, ty_size as u32);
             let slot_size = Self::stack_slot_size();
-            // Stack slots for parameters are aligned to a fixed slot size,
-            // in the case of x64, 8 bytes. Except if they are v128 values,
-            // in which case they use 16 bytes.
-            // Stack slots for returns are type-size aligned.
-            let next_stack = if params_or_returns == ParamsOrReturns::Params {
-                let alignment = if *ty == WasmValType::V128 {
-                    ty_size
-                } else {
-                    slot_size
-                };
-                align_to(stack_offset, alignment as u32) + (alignment as u32)
+            if params_or_returns == ParamsOrReturns::Params {
+                // Stack slots for parameters are aligned to a fixed slot size,
+                // 8 bytes if the type size is 8 or less and type-sized aligned
+                // if the type size is greater than 8 bytes.
+                let alignment = std::cmp::max(ty_size, slot_size);
+                let offset = align_to(stack_offset, u32::from(alignment));
+                let arg = ABIOperand::stack_offset(offset, *ty, u32::from(ty_size));
+                (arg, offset + u32::from(alignment))
             } else {
                 // For the default calling convention, we don't type-size align,
                 // given that results on the stack must match spills generated
                 // from within the compiler, which are not type-size aligned.
+                // In all other cases the results are type-sized aligned.
                 if call_conv.is_default() {
-                    stack_offset + (ty_size as u32)
+                    let arg = ABIOperand::stack_offset(stack_offset, *ty, u32::from(ty_size));
+                    (arg, stack_offset + (ty_size as u32))
                 } else {
-                    align_to(stack_offset, ty_size as u32) + (ty_size as u32)
+                    let offset = align_to(stack_offset, u32::from(ty_size));
+                    (
+                        ABIOperand::stack_offset(offset, *ty, u32::from(ty_size)),
+                        offset + u32::from(ty_size),
+                    )
                 }
-            };
-            (arg, next_stack)
+            }
         };
 
         Ok(reg.map_or_else(default, |reg| {
@@ -418,6 +419,17 @@ mod tests {
         match_reg_arg(params.get(6).unwrap(), F64, regs::xmm3());
         match_reg_arg(params.get(7).unwrap(), F32, regs::xmm4());
         match_reg_arg(params.get(8).unwrap(), F64, regs::xmm5());
+
+        let wasm_sig = WasmFuncType::new(
+            [F32, F32, F32, F32, F32, F32, F32, F32, F32, V128].into(),
+            [V128].into(),
+        );
+
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
+        let params = sig.params;
+
+        match_stack_arg(params.get(8).unwrap(), F32, 0);
+        match_stack_arg(params.get(9).unwrap(), V128, 16);
         Ok(())
     }
 
@@ -486,7 +498,7 @@ mod tests {
         match_stack_arg(results.get(1).unwrap(), F32, 0);
         match_stack_arg(results.get(2).unwrap(), I32, 4);
         match_stack_arg(results.get(3).unwrap(), F32, 8);
-        match_stack_arg(results.get(4).unwrap(), I64, 12);
+        match_stack_arg(results.get(4).unwrap(), I64, 16);
         Ok(())
     }
 
