@@ -259,8 +259,8 @@ impl Instance {
         store.bump_resource_counts(module)?;
 
         // Allocate the GC heap, if necessary.
-        if store.engine().features().gc_types() {
-            let _ = store.gc_store_mut()?;
+        if module.env_module().needs_gc_heap {
+            let _ = store.optional_gc_store_mut()?;
         }
 
         let compiled_module = module.compiled_module();

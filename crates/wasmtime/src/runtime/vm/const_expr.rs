@@ -73,7 +73,19 @@ impl<'a> ConstEvalContext<'a> {
             .collect::<Vec<_>>();
 
         let allocator = StructRefPre::_new(store, struct_ty);
-        let struct_ref = StructRef::_new(store, &allocator, &fields)?;
+        let struct_ref = match StructRef::_new(store, &allocator, &fields) {
+            Ok(s) => s,
+            Err(e) => {
+                if let Some(oom) = e.downcast_ref::<crate::GcHeapOutOfMemory<()>>() {
+                    store
+                        .traitobj_mut()
+                        .maybe_async_grow_or_collect_gc_heap(oom.bytes_needed())?;
+                    StructRef::_new(store, &allocator, &fields)?
+                } else {
+                    return Err(e);
+                }
+            }
+        };
         let raw = struct_ref.to_anyref()._to_raw(store)?;
         Ok(ValRaw::anyref(raw))
     }
@@ -135,6 +147,8 @@ impl ConstExprEvaluator {
     /// Evaluate the given const expression in the given context.
     ///
     /// # Unsafety
+    ///
+    /// When async is enabled, this may only be executed on a fiber stack.
     ///
     /// The given const expression must be valid within the given context,
     /// e.g. the const expression must be well-typed and the context must return
@@ -269,7 +283,19 @@ impl ConstExprEvaluator {
                     let elem = Val::_from_raw(&mut store, self.pop()?, ty.element_type().unpack());
 
                     let pre = ArrayRefPre::_new(&mut store, ty);
-                    let array = ArrayRef::_new(&mut store, &pre, &elem, len)?;
+                    let array = match ArrayRef::_new(&mut store, &pre, &elem, len) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            if let Some(oom) = e.downcast_ref::<crate::GcHeapOutOfMemory<()>>() {
+                                store
+                                    .traitobj_mut()
+                                    .maybe_async_grow_or_collect_gc_heap(oom.bytes_needed())?;
+                                ArrayRef::_new(&mut store, &pre, &elem, len)?
+                            } else {
+                                return Err(e);
+                            }
+                        }
+                    };
 
                     self.stack
                         .push(ValRaw::anyref(array.to_anyref()._to_raw(&mut store)?));
@@ -288,7 +314,19 @@ impl ConstExprEvaluator {
                         .expect("type should have a default value");
 
                     let pre = ArrayRefPre::_new(&mut store, ty);
-                    let array = ArrayRef::_new(&mut store, &pre, &elem, len)?;
+                    let array = match ArrayRef::_new(&mut store, &pre, &elem, len) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            if let Some(oom) = e.downcast_ref::<crate::GcHeapOutOfMemory<()>>() {
+                                store
+                                    .traitobj_mut()
+                                    .maybe_async_grow_or_collect_gc_heap(oom.bytes_needed())?;
+                                ArrayRef::_new(&mut store, &pre, &elem, len)?
+                            } else {
+                                return Err(e);
+                            }
+                        }
+                    };
 
                     self.stack
                         .push(ValRaw::anyref(array.to_anyref()._to_raw(&mut store)?));
@@ -323,7 +361,19 @@ impl ConstExprEvaluator {
                         .collect::<SmallVec<[_; 8]>>();
 
                     let pre = ArrayRefPre::_new(&mut store, ty);
-                    let array = ArrayRef::_new_fixed(&mut store, &pre, &elems)?;
+                    let array = match ArrayRef::_new_fixed(&mut store, &pre, &elems) {
+                        Ok(a) => a,
+                        Err(e) => {
+                            if let Some(oom) = e.downcast_ref::<crate::GcHeapOutOfMemory<()>>() {
+                                store
+                                    .traitobj_mut()
+                                    .maybe_async_grow_or_collect_gc_heap(oom.bytes_needed())?;
+                                ArrayRef::_new_fixed(&mut store, &pre, &elems)?
+                            } else {
+                                return Err(e);
+                            }
+                        }
+                    };
 
                     self.stack
                         .push(ValRaw::anyref(array.to_anyref()._to_raw(&mut store)?));

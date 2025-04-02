@@ -47,17 +47,17 @@
 ;;       movsd   %xmm3, 0x20(%rsp)
 ;;       movss   %xmm4, 0x1c(%rsp)
 ;;       movq    %rdi, 8(%rsp)
-;;       movl    0x70(%r14), %eax
+;;       movl    0x60(%r14), %eax
 ;;       cmpl    $0, %eax
 ;;       movl    $0, %eax
 ;;       sete    %al
 ;;       testl   %eax, %eax
 ;;       je      0x74
 ;;   72: ud2
-;;       movl    0x70(%r14), %eax
+;;       movl    0x60(%r14), %eax
 ;;       subl    $1, %eax
-;;       movl    %eax, 0x70(%r14)
-;;       movq    0x58(%r14), %rax
+;;       movl    %eax, 0x60(%r14)
+;;       movq    0x48(%r14), %rax
 ;;       shrl    $0x10, %eax
 ;;       subq    $4, %rsp
 ;;       movl    %eax, (%rsp)
@@ -70,7 +70,7 @@
 ;;       addq    $4, %rsp
 ;;       movq    0x58(%rsp), %r14
 ;;       movl    %eax, %eax
-;;       movq    0x50(%r14), %rcx
+;;       movq    0x40(%r14), %rcx
 ;;       addq    %rax, %rcx
 ;;       addq    $0x23024, %rcx
 ;;       movsbq  (%rcx), %rax

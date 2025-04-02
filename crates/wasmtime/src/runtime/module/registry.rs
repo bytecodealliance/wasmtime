@@ -44,7 +44,7 @@ struct LoadedCode {
 
 /// An identifier of a module that has previously been inserted into a
 /// `ModuleRegistry`.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum RegisteredModuleId {
     /// Index into `ModuleRegistry::modules_without_code`.
     WithoutCode(usize),

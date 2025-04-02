@@ -367,6 +367,11 @@ pub enum VMGcKind {
     StructRef      = 0b10110 << 27,
 }
 
+/// The size of the `VMGcKind` in bytes.
+pub const VM_GC_KIND_SIZE: u8 = 4;
+
+const _: () = assert!(VM_GC_KIND_SIZE as usize == core::mem::size_of::<VMGcKind>());
+
 impl VMGcKind {
     /// Mask this value with a `u32` to get just the bits that `VMGcKind` uses.
     pub const MASK: u32 = 0b11111 << 27;

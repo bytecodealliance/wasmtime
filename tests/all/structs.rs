@@ -7,7 +7,7 @@ fn struct_new_empty() -> Result<()> {
     let mut store = gc_store()?;
     let struct_ty = StructType::new(store.engine(), [])?;
     let pre = StructRefPre::new(&mut store, struct_ty);
-    StructRef::new(store, &pre, &[])?;
+    crate::new_struct(&mut store, &pre, &[])?;
     Ok(())
 }
 
@@ -23,8 +23,8 @@ fn struct_new_with_fields() -> Result<()> {
         ],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty);
-    StructRef::new(
-        store,
+    crate::new_struct(
+        &mut store,
         &pre,
         &[Val::I32(1), Val::I32(2), Val::null_any_ref()],
     )?;
@@ -48,7 +48,7 @@ fn struct_new_unrooted_field() -> Result<()> {
     };
     assert!(anyref.is_i31(&store).is_err());
     let pre = StructRefPre::new(&mut store, struct_ty);
-    assert!(StructRef::new(store, &pre, &[anyref.into()]).is_err());
+    assert!(crate::new_struct(&mut store, &pre, &[anyref.into()]).is_err());
     Ok(())
 }
 
@@ -71,7 +71,7 @@ fn struct_new_cross_store_field() {
     let pre = StructRefPre::new(&mut store, struct_ty);
 
     // This should panic.
-    let _ = StructRef::new(store, &pre, &[anyref.into()]);
+    let _ = crate::new_struct(&mut store, &pre, &[anyref.into()]);
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn struct_new_cross_store_pre() {
     let pre = StructRefPre::new(&mut other_store, struct_ty);
 
     // This should panic.
-    let _ = StructRef::new(&mut store, &pre, &[]);
+    let _ = crate::new_struct(&mut store, &pre, &[]);
 }
 
 #[test]
@@ -96,7 +96,7 @@ fn anyref_as_struct() -> Result<()> {
         [FieldType::new(Mutability::Const, StorageType::I8)],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
-    let s0 = StructRef::new(&mut store, &pre, &[Val::I32(42)])?;
+    let s0 = crate::new_struct(&mut store, &pre, &[Val::I32(42)])?;
 
     let anyref: Rooted<AnyRef> = s0.into();
     assert!(anyref.is_struct(&store)?);
@@ -122,7 +122,7 @@ fn struct_field_simple() -> Result<()> {
         )],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty);
-    let s = StructRef::new(&mut store, &pre, &[Val::I32(1234)])?;
+    let s = crate::new_struct(&mut store, &pre, &[Val::I32(1234)])?;
     let val = s.field(&mut store, 0)?;
     assert_eq!(val.unwrap_i32(), 1234);
     Ok(())
@@ -139,7 +139,7 @@ fn struct_field_out_of_bounds() -> Result<()> {
         )],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty);
-    let s = StructRef::new(&mut store, &pre, &[Val::I32(1234)])?;
+    let s = crate::new_struct(&mut store, &pre, &[Val::I32(1234)])?;
     assert!(s.field(&mut store, 1).is_err());
     Ok(())
 }
@@ -157,7 +157,7 @@ fn struct_field_on_unrooted() -> Result<()> {
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = {
         let mut scope = RootScope::new(&mut store);
-        StructRef::new(&mut scope, &pre, &[Val::I32(1234)])?
+        crate::new_struct(&mut scope, &pre, &[Val::I32(1234)])?
     };
     // The root scope ended and unrooted `s`.
     assert!(s.field(&mut store, 0).is_err());
@@ -175,7 +175,7 @@ fn struct_set_field_simple() -> Result<()> {
         )],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty);
-    let s = StructRef::new(&mut store, &pre, &[Val::I32(1234)])?;
+    let s = crate::new_struct(&mut store, &pre, &[Val::I32(1234)])?;
     s.set_field(&mut store, 0, Val::I32(5678))?;
     let val = s.field(&mut store, 0)?;
     assert_eq!(val.unwrap_i32(), 5678);
@@ -193,7 +193,7 @@ fn struct_set_field_out_of_bounds() -> Result<()> {
         )],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty);
-    let s = StructRef::new(&mut store, &pre, &[Val::I32(1234)])?;
+    let s = crate::new_struct(&mut store, &pre, &[Val::I32(1234)])?;
     assert!(s.set_field(&mut store, 1, Val::I32(1)).is_err());
     Ok(())
 }
@@ -211,7 +211,7 @@ fn struct_set_field_on_unrooted() -> Result<()> {
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = {
         let mut scope = RootScope::new(&mut store);
-        StructRef::new(&mut scope, &pre, &[Val::I32(1234)])?
+        crate::new_struct(&mut scope, &pre, &[Val::I32(1234)])?
     };
     // The root scope ended and unrooted `s`.
     assert!(s.set_field(&mut store, 0, Val::I32(1)).is_err());
@@ -229,7 +229,7 @@ fn struct_set_field_with_unrooted() -> Result<()> {
         )],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty);
-    let s = StructRef::new(&mut store, &pre, &[Val::null_any_ref()])?;
+    let s = crate::new_struct(&mut store, &pre, &[Val::null_any_ref()])?;
     let anyref = {
         let mut scope = RootScope::new(&mut store);
         AnyRef::from_i31(&mut scope, I31::wrapping_i32(42))
@@ -250,10 +250,10 @@ fn struct_set_field_cross_store_value() -> Result<()> {
         )],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty);
-    let s = StructRef::new(&mut store, &pre, &[Val::null_extern_ref()])?;
+    let s = crate::new_struct(&mut store, &pre, &[Val::null_extern_ref()])?;
 
     let mut other_store = gc_store()?;
-    let externref = ExternRef::new(&mut other_store, "blah")?;
+    let externref = crate::new_externref(&mut other_store, "blah")?;
 
     assert!(s.set_field(&mut store, 0, externref.into()).is_err());
     Ok(())
@@ -270,7 +270,7 @@ fn struct_set_field_immutable() -> Result<()> {
         )],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty);
-    let s = StructRef::new(&mut store, &pre, &[Val::I32(1234)])?;
+    let s = crate::new_struct(&mut store, &pre, &[Val::I32(1234)])?;
     assert!(s.set_field(&mut store, 0, Val::I32(5678)).is_err());
     Ok(())
 }
@@ -286,7 +286,7 @@ fn struct_set_field_wrong_type() -> Result<()> {
         )],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty);
-    let s = StructRef::new(&mut store, &pre, &[Val::I32(1234)])?;
+    let s = crate::new_struct(&mut store, &pre, &[Val::I32(1234)])?;
     assert!(s.set_field(&mut store, 0, Val::I64(5678)).is_err());
     Ok(())
 }
@@ -296,7 +296,7 @@ fn struct_ty() -> Result<()> {
     let mut store = gc_store()?;
     let struct_ty = StructType::new(store.engine(), [])?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
-    let s = StructRef::new(&mut store, &pre, &[])?;
+    let s = crate::new_struct(&mut store, &pre, &[])?;
     assert!(StructType::eq(&struct_ty, &s.ty(&store)?));
     Ok(())
 }
@@ -308,7 +308,7 @@ fn struct_ty_unrooted() -> Result<()> {
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = {
         let mut scope = RootScope::new(&mut store);
-        StructRef::new(&mut scope, &pre, &[])?
+        crate::new_struct(&mut scope, &pre, &[])?
     };
     // The root scope ended and `s` is unrooted.
     assert!(s.ty(&mut store).is_err());
@@ -320,7 +320,7 @@ fn struct_fields_empty() -> Result<()> {
     let mut store = gc_store()?;
     let struct_ty = StructType::new(store.engine(), [])?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
-    let s = StructRef::new(&mut store, &pre, &[])?;
+    let s = crate::new_struct(&mut store, &pre, &[])?;
     let fields = s.fields(&mut store)?;
     assert_eq!(fields.len(), 0);
     assert!(fields.collect::<Vec<_>>().is_empty());
@@ -338,7 +338,7 @@ fn struct_fields_non_empty() -> Result<()> {
         ],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
-    let s = StructRef::new(&mut store, &pre, &[Val::I32(36), Val::null_any_ref()])?;
+    let s = crate::new_struct(&mut store, &pre, &[Val::I32(36), Val::null_any_ref()])?;
     let mut fields = s.fields(&mut store)?;
     assert_eq!(fields.len(), 2);
     assert_eq!(fields.next().unwrap().unwrap_i32(), 36);
@@ -354,7 +354,7 @@ fn struct_fields_unrooted() -> Result<()> {
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = {
         let mut scope = RootScope::new(&mut store);
-        StructRef::new(&mut scope, &pre, &[])?
+        crate::new_struct(&mut scope, &pre, &[])?
     };
     // The root scope ended and `s` is unrooted.
     assert!(s.fields(&mut store).is_err());
@@ -399,7 +399,7 @@ fn passing_structs_through_wasm_with_untyped_calls() -> Result<()> {
     let run = instance.get_func(&mut store, "run").unwrap();
 
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
-    let s = StructRef::new(&mut store, &pre, &[Val::I32(42)])?;
+    let s = crate::new_struct(&mut store, &pre, &[Val::I32(42)])?;
 
     let mut results = vec![Val::null_any_ref()];
     run.call(&mut store, &[s.into()], &mut results)?;
@@ -447,7 +447,7 @@ fn passing_structs_through_wasm_with_typed_calls() -> Result<()> {
     let run = instance.get_typed_func::<Rooted<StructRef>, Rooted<StructRef>>(&mut store, "run")?;
 
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
-    let s = StructRef::new(&mut store, &pre, &[Val::I32(42)])?;
+    let s = crate::new_struct(&mut store, &pre, &[Val::I32(42)])?;
 
     let t = run.call(&mut store, s)?;
 
@@ -483,7 +483,7 @@ fn host_sets_struct_global() -> Result<()> {
         [FieldType::new(Mutability::Const, StorageType::I8)],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
-    let s0 = StructRef::new(&mut store, &pre, &[Val::I32(42)])?;
+    let s0 = crate::new_struct(&mut store, &pre, &[Val::I32(42)])?;
     g.set(&mut store, s0.into())?;
 
     // Get the global from the host.
@@ -529,7 +529,7 @@ fn wasm_sets_struct_global() -> Result<()> {
         [FieldType::new(Mutability::Const, StorageType::I8)],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
-    let s0 = StructRef::new(&mut store, &pre, &[Val::I32(42)])?;
+    let s0 = crate::new_struct(&mut store, &pre, &[Val::I32(42)])?;
 
     let instance = Instance::new(&mut store, &module, &[])?;
     let set = instance.get_func(&mut store, "set").unwrap();
@@ -579,7 +579,7 @@ fn host_sets_struct_in_table() -> Result<()> {
         [FieldType::new(Mutability::Const, StorageType::I8)],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
-    let s0 = StructRef::new(&mut store, &pre, &[Val::I32(42)])?;
+    let s0 = crate::new_struct(&mut store, &pre, &[Val::I32(42)])?;
     t.set(&mut store, 0, s0.into())?;
 
     // Get the global from the host.
@@ -627,7 +627,7 @@ fn wasm_sets_struct_in_table() -> Result<()> {
         [FieldType::new(Mutability::Const, StorageType::I8)],
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
-    let s0 = StructRef::new(&mut store, &pre, &[Val::I32(42)])?;
+    let s0 = crate::new_struct(&mut store, &pre, &[Val::I32(42)])?;
 
     let instance = Instance::new(&mut store, &module, &[])?;
     let set = instance.get_func(&mut store, "set").unwrap();
@@ -686,7 +686,7 @@ fn instantiate_with_struct_global() -> Result<()> {
 
     // Instantiate with a non-null-ref global.
     let pre = StructRefPre::new(&mut store, struct_ty);
-    let s0 = StructRef::new(&mut store, &pre, &[Val::I32(42)])?;
+    let s0 = crate::new_struct(&mut store, &pre, &[Val::I32(42)])?;
     let g = Global::new(&mut store, global_ty, s0.into())?;
     let instance = Instance::new(&mut store, &module, &[g.into()])?;
     let g = instance.get_global(&mut store, "g").expect("export exists");
@@ -712,7 +712,7 @@ fn can_put_funcrefs_in_structs() -> Result<()> {
     let f1 = Func::wrap(&mut store, |_caller: Caller<()>| -> u32 { 0x5678 });
 
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
-    let s = StructRef::new(&mut store, &pre, &[f0.into()])?;
+    let s = crate::new_struct(&mut store, &pre, &[f0.into()])?;
 
     let f = s.field(&mut store, 0)?;
     let f = f.unwrap_funcref().unwrap();

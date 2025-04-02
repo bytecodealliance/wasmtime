@@ -40,7 +40,7 @@ impl SharedMemory {
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].
-    pub fn wrap(ty: &wasmtime_environ::Memory, mut memory: LocalMemory) -> Result<Self> {
+    pub fn wrap(ty: &wasmtime_environ::Memory, memory: LocalMemory) -> Result<Self> {
         if !ty.shared {
             bail!("shared memory must have a `shared` memory type");
         }
