@@ -311,7 +311,7 @@ impl RunCommand {
             ));
             #[cfg(not(feature = "profiling"))]
             {
-                let _ = (profiled_modules, path, interval);
+                let _ = (profiled_modules, path, interval, main_target);
                 bail!("support for profiling disabled at compile time");
             }
         }
