@@ -846,4 +846,50 @@ mod tests {
             test(&mut f, l);
         }
     }
+
+    #[test]
+    fn add_capacity() {
+        let layout = Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE).unwrap();
+
+        let mut free_list = FreeList::new(0);
+        assert!(free_list.alloc(layout).unwrap().is_none(), "no capacity");
+
+        free_list.add_capacity(ALIGN_USIZE);
+        assert!(
+            free_list.alloc(layout).unwrap().is_none(),
+            "still not enough capacity because we won't allocate the zero index"
+        );
+
+        free_list.add_capacity(ALIGN_USIZE);
+        let a = free_list
+            .alloc(layout)
+            .unwrap()
+            .expect("now we have enough capacity for one");
+        assert!(
+            free_list.alloc(layout).unwrap().is_none(),
+            "but not enough capacity for two"
+        );
+
+        free_list.add_capacity(ALIGN_USIZE);
+        let b = free_list
+            .alloc(layout)
+            .unwrap()
+            .expect("now we have enough capacity for two");
+
+        free_list.dealloc(a, layout);
+        free_list.dealloc(b, layout);
+        assert_eq!(
+            free_list.free_block_index_to_len.len(),
+            1,
+            "`dealloc` should merge blocks from different `add_capacity` calls together"
+        );
+
+        free_list.add_capacity(ALIGN_USIZE);
+        assert_eq!(
+            free_list.free_block_index_to_len.len(),
+            1,
+            "`add_capacity` should eagerly merge new capacity into the last block \
+             in the free list, when possible"
+        );
+    }
 }
