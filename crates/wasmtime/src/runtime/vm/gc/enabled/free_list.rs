@@ -860,7 +860,13 @@ mod tests {
             "still not enough capacity because we won't allocate the zero index"
         );
 
-        free_list.add_capacity(ALIGN_USIZE);
+        free_list.add_capacity(1);
+        assert!(
+            free_list.alloc(layout).unwrap().is_none(),
+            "still not enough capacity because allocations are multiples of the alignment"
+        );
+
+        free_list.add_capacity(ALIGN_USIZE - 1);
         let a = free_list
             .alloc(layout)
             .unwrap()
