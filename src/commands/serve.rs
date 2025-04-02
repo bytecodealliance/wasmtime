@@ -2,16 +2,18 @@ use crate::common::{Profile, RunCommon, RunTarget};
 use anyhow::{anyhow, bail, Result};
 use clap::Parser;
 use std::net::SocketAddr;
+use std::time::Instant;
 use std::{
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
+    time::Duration,
 };
 use tokio::sync::Notify;
-use wasmtime::component::Linker;
-use wasmtime::{Engine, Store, StoreLimits};
+use wasmtime::component::{Component, Linker};
+use wasmtime::{Engine, Store, StoreLimits, UpdateDeadline};
 use wasmtime_wasi::{IoView, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::bindings::http::types::Scheme;
 use wasmtime_wasi_http::bindings::ProxyPre;
@@ -45,6 +47,9 @@ struct Host {
 
     #[cfg(feature = "wasi-keyvalue")]
     wasi_keyvalue: Option<WasiKeyValueCtx>,
+
+    #[cfg(feature = "profiling")]
+    guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
 }
 
 impl IoView for Host {
@@ -113,9 +118,6 @@ impl ServeCommand {
 
         // We force cli errors before starting to listen for connections so then
         // we don't accidentally delay them to the first request.
-        if let Some(Profile::Guest { .. }) = &self.run.profile {
-            bail!("Cannot use the guest profiler with components");
-        }
 
         if self.run.common.wasi.nn == Some(true) {
             #[cfg(not(feature = "wasi-nn"))]
@@ -180,6 +182,8 @@ impl ServeCommand {
             wasi_config: None,
             #[cfg(feature = "wasi-keyvalue")]
             wasi_keyvalue: None,
+            #[cfg(feature = "profiling")]
+            guest_profiler: None,
         };
 
         if self.run.common.wasi.nn == Some(true) {
@@ -231,10 +235,6 @@ impl ServeCommand {
         }
 
         let mut store = Store::new(engine, host);
-
-        if self.run.common.wasm.timeout.is_some() {
-            store.set_epoch_deadline(u64::from(EPOCH_PRECISION) + 1);
-        }
 
         store.data_mut().limits = self.run.store_limits();
         store.limiter(|t| &mut t.limits);
@@ -349,10 +349,9 @@ impl ServeCommand {
             Some(Profile::Native(s)) => {
                 config.profiler(s);
             }
-
-            // We bail early in `execute` if the guest profiler is configured.
-            Some(Profile::Guest { .. }) => unreachable!(),
-
+            Some(Profile::Guest { .. }) => {
+                config.epoch_interruption(true);
+            }
             None => {}
         }
 
@@ -411,15 +410,6 @@ impl ServeCommand {
 
         eprintln!("Serving HTTP on http://{}/", listener.local_addr()?);
 
-        let _epoch_thread = if let Some(timeout) = self.run.common.wasm.timeout {
-            Some(EpochThread::spawn(
-                timeout / EPOCH_PRECISION,
-                engine.clone(),
-            ))
-        } else {
-            None
-        };
-
         log::info!("Listening on {}", self.addr);
 
         let handler = ProxyHandler::new(self, engine, instance);
@@ -432,15 +422,18 @@ impl ServeCommand {
                 _ = shutdown.requested.notified() => break,
                 v = listener.accept() => v?,
             };
+            let comp = component.clone();
             let stream = TokioIo::new(stream);
             let h = handler.clone();
             let shutdown_guard = shutdown.clone().increment();
-            tokio::task::spawn(async {
+            tokio::task::spawn(async move {
                 if let Err(e) = http1::Builder::new()
                     .keep_alive(true)
                     .serve_connection(
                         stream,
-                        hyper::service::service_fn(move |req| handle_request(h.clone(), req)),
+                        hyper::service::service_fn(move |req| {
+                            handle_request(h.clone(), req, comp.clone())
+                        }),
                     )
                     .await
                 {
@@ -518,11 +511,10 @@ impl GracefulShutdown {
     }
 }
 
-/// This is the number of epochs that we will observe before expiring a request handler. As
-/// instances may be started at any point within an epoch, and epochs are counted globally per
-/// engine, we expire after `EPOCH_PRECISION + 1` epochs have been observed. This gives a maximum
-/// overshoot of `timeout / EPOCH_PRECISION`, which is more desirable than expiring early.
-const EPOCH_PRECISION: u32 = 10;
+/// When executing with a timeout enabled, this is how frequently epoch
+/// interrupts will be executed to check for timeouts. If guest profiling
+/// is enabled, the guest epoch period will be used.
+const EPOCH_INTERRUPT_PERIOD: Duration = Duration::from_millis(50);
 
 struct EpochThread {
     shutdown: Arc<AtomicBool>,
@@ -530,13 +522,13 @@ struct EpochThread {
 }
 
 impl EpochThread {
-    fn spawn(timeout: std::time::Duration, engine: Engine) -> Self {
+    fn spawn(interval: std::time::Duration, engine: Engine) -> Self {
         let shutdown = Arc::new(AtomicBool::new(false));
         let handle = {
             let shutdown = Arc::clone(&shutdown);
             let handle = std::thread::spawn(move || {
                 while !shutdown.load(Ordering::Relaxed) {
-                    std::thread::sleep(timeout);
+                    std::thread::sleep(interval);
                     engine.increment_epoch();
                 }
             });
@@ -554,6 +546,121 @@ impl Drop for EpochThread {
             handle.join().unwrap();
         }
     }
+}
+
+type WriteProfile = Box<dyn FnOnce(&mut Store<Host>) + Send>;
+
+fn setup_epoch_handler(
+    cmd: &ServeCommand,
+    store: &mut Store<Host>,
+    component: Component,
+) -> Result<(WriteProfile, Option<EpochThread>)> {
+    // Profiling Enabled
+    if let Some(Profile::Guest { interval, path }) = &cmd.run.profile {
+        #[cfg(feature = "profiling")]
+        return setup_guest_profiler(cmd, store, path.clone(), *interval, component.clone());
+        #[cfg(not(feature = "profiling"))]
+        {
+            let _ = (path, interval);
+            bail!("support for profiling disabled at compile time!");
+        }
+    }
+
+    // Profiling disabled but there's a global request timeout
+    let epoch_thread = if let Some(timeout) = cmd.run.common.wasm.timeout {
+        let start = Instant::now();
+        store.epoch_deadline_callback(move |_store| {
+            if start.elapsed() > timeout {
+                bail!("Timeout expired");
+            }
+            Ok(UpdateDeadline::Continue(1))
+        });
+        store.set_epoch_deadline(1);
+        let engine = store.engine().clone();
+        Some(EpochThread::spawn(EPOCH_INTERRUPT_PERIOD, engine))
+    } else {
+        None
+    };
+
+    Ok((Box::new(|_store| {}), epoch_thread))
+}
+
+#[cfg(feature = "profiling")]
+fn setup_guest_profiler(
+    cmd: &ServeCommand,
+    store: &mut Store<Host>,
+    path: String,
+    interval: Duration,
+    component: Component,
+) -> Result<(WriteProfile, Option<EpochThread>)> {
+    use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut};
+
+    let module_name = "<main>";
+
+    store.data_mut().guest_profiler = Some(Arc::new(GuestProfiler::new_component(
+        module_name,
+        interval,
+        component,
+        std::iter::empty(),
+    )));
+
+    fn sample(
+        mut store: StoreContextMut<Host>,
+        f: impl FnOnce(&mut GuestProfiler, StoreContext<Host>),
+    ) {
+        let mut profiler = store.data_mut().guest_profiler.take().unwrap();
+        f(
+            Arc::get_mut(&mut profiler).expect("profiling doesn't support threads yet"),
+            store.as_context(),
+        );
+        store.data_mut().guest_profiler = Some(profiler);
+    }
+
+    // Hostcall entry/exit, etc.
+    store.call_hook(|store, kind| {
+        sample(store, |profiler, store| profiler.call_hook(store, kind));
+        Ok(())
+    });
+
+    let start = Instant::now();
+    let timeout = cmd.run.common.wasm.timeout;
+    store.epoch_deadline_callback(move |store| {
+        sample(store, |profiler, store| {
+            profiler.sample(store, std::time::Duration::ZERO)
+        });
+
+        // Originally epoch counting was used here; this is problematic in
+        // a lot of cases due to there being a lot of time (e.g. in hostcalls)
+        // when we are not expected to get sample hits.
+        if let Some(timeout) = timeout {
+            if start.elapsed() > timeout {
+                bail!("Timeout expired");
+            }
+        }
+
+        Ok(UpdateDeadline::Continue(1))
+    });
+
+    store.set_epoch_deadline(1);
+    let engine = store.engine().clone();
+    let epoch_thread = Some(EpochThread::spawn(interval, engine));
+
+    let write_profile = Box::new(move |store: &mut Store<Host>| {
+        let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
+            .expect("profiling doesn't support threads yet");
+        if let Err(e) = std::fs::File::create(&path)
+            .map_err(anyhow::Error::new)
+            .and_then(|output| profiler.finish(std::io::BufWriter::new(output)))
+        {
+            eprintln!("failed writing profile at {path}: {e:#}");
+        } else {
+            eprintln!();
+            eprintln!("Profile written to: {path}");
+            eprintln!("View this profile at https://profiler.firefox.com/.");
+        }
+    });
+
+    Ok((write_profile, epoch_thread))
 }
 
 struct ProxyHandlerInner {
@@ -588,6 +695,7 @@ type Request = hyper::Request<hyper::body::Incoming>;
 async fn handle_request(
     ProxyHandler(inner): ProxyHandler,
     req: Request,
+    component: Component,
 ) -> Result<hyper::Response<HyperOutgoingBody>> {
     let (sender, receiver) = tokio::sync::oneshot::channel();
 
@@ -605,20 +713,26 @@ async fn handle_request(
     let out = store.data_mut().new_response_outparam(sender)?;
     let proxy = inner.instance_pre.instantiate_async(&mut store).await?;
 
+    let comp = component.clone();
     let task = tokio::task::spawn(async move {
+        let (write_profile, epoch_thread) = setup_epoch_handler(&inner.cmd, &mut store, comp)?;
+
         if let Err(e) = proxy
             .wasi_http_incoming_handler()
-            .call_handle(store, req, out)
+            .call_handle(&mut store, req, out)
             .await
         {
             log::error!("[{req_id}] :: {:?}", e);
             return Err(e);
         }
 
+        write_profile(&mut store);
+        drop(epoch_thread);
+
         Ok(())
     });
 
-    match receiver.await {
+    let result = match receiver.await {
         Ok(Ok(resp)) => Ok(resp),
         Ok(Err(e)) => Err(e.into()),
         Err(_) => {
@@ -636,9 +750,11 @@ async fn handle_request(
                 Ok(Err(e)) => e,
                 Err(e) => e.into(),
             };
-            return Err(e.context("guest never invoked `response-outparam::set` method"));
+            Err(e.context("guest never invoked `response-outparam::set` method"))
         }
-    }
+    };
+
+    result
 }
 
 #[derive(Clone)]
