@@ -532,11 +532,13 @@ impl RunCommand {
         let string_argument_suggestion = format!(r#""{}(\"hello\")""#, invoke.trim_matches('"'));
 
         let untyped_call = UntypedFuncCall::parse(invoke).with_context(|| {
-            if (lacks_quotes || lacks_parentheses) {
+            if lacks_quotes || lacks_parentheses {
                 format!(
                     "Failed to parse invoke '{invoke}': function calls must be enveloped in double quotes and must include parentheses (e.g., {empty_argument_suggestion}).\n
                     String arguments must be enveloped in escaped double quotes (e.g., {string_argument_suggestion}).\n"
                 )
+            } else {
+                format!("Failed to parse invoke '{invoke}': invalid function call syntax")
             }
         })?;
 
