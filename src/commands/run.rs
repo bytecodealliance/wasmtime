@@ -516,22 +516,23 @@ impl RunCommand {
 
         let invoke: &String = self.invoke.as_ref().unwrap();
 
-        // Check if the input lacks parentheses
-        let lacks_parens = !invoke.contains("()");
-        
-        // Construct the suggestion
-        let suggestion = format!(r#""{}()""#, invoke.trim_matches('"'));
-        
+        // Check if input is wrapped in double quotes
+        let lacks_quotes = !invoke.starts_with('"') && !invoke.ends_with('"');
+
+        // Check if parentheses are present and in the correct order ()
+        let lacks_parentheses = (invoke.contains('(') && invoke.contains(')')) && (invoke.find('(').unwrap() < invoke.find(')').unwrap());
+
+        // Construct a properly formatted suggestion
+        let empty_argument_suggestion = format!(r#""{}()""#, invoke.trim_matches('"'));
+
+        // Construct a properly formatted suggestion for string arguments
+        let string_argument_suggestion = format!(r#""{}(\"hello\")""#, invoke.trim_matches('"'));
+
         let untyped_call = UntypedFuncCall::parse(invoke).with_context(|| {
-            if lacks_parens {
+            if (lacks_quotes || lacks_parentheses) {
                 format!(
-                    "failed to parse invoke '{invoke}': invoked function calls must include parentheses after the function name in quoted wave syntax (e.g., {suggestion}).\n\
-                    Note: If your function takes a string argument, ensure that double quotes inside the argument are escaped using \\\" (e.g., \"compress(\\\"hello\\\")\")."
-                )
-            } else {
-                format!(
-                    "failed to parse invoke '{invoke}'.\n\
-                    Note: If your function takes a string argument, ensure that double quotes inside the argument are escaped using \\\" (e.g., \"compress(\\\"hello\\\")\")."
+                    "Failed to parse invoke '{invoke}': function calls must be enveloped in double quotes and must include parentheses (e.g., {empty_argument_suggestion}).\n
+                    String arguments must be enveloped in escaped double quotes (e.g., {string_argument_suggestion}).\n"
                 )
             }
         })?;
