@@ -421,7 +421,7 @@ impl RunCommand {
         if self.run.common.wasm.unknown_imports_default == Some(true) {
             match linker {
                 CliLinker::Core(linker) => {
-                    linker.define_unknown_imports_as_default_values(module.unwrap_core())?;
+                    linker.define_unknown_imports_as_default_values(store, module.unwrap_core())?;
                 }
                 _ => bail!("cannot use `--default-values-unknown-imports` with components"),
             }

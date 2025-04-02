@@ -1,5 +1,9 @@
 use crate::prelude::*;
+use crate::runtime::externals::Global as RuntimeGlobal;
+use crate::runtime::externals::Table as RuntimeTable;
+use crate::runtime::Memory as RuntimeMemory;
 use crate::{type_registry::RegisteredType, Engine};
+use crate::{AsContextMut, Extern, Func, Val};
 use core::fmt::{self, Display, Write};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes, Table,
@@ -339,6 +343,23 @@ impl ValType {
             WasmValType::F64 => Self::F64,
             WasmValType::V128 => Self::V128,
             WasmValType::Ref(r) => Self::Ref(RefType::from_wasm_type(engine, r)),
+        }
+    }
+    /// Construct a default value. Returns None for non-nullable Ref types, which have no default.
+    pub fn default_value(&self) -> Option<Val> {
+        match self {
+            ValType::I32 => Some(Val::I32(0)),
+            ValType::I64 => Some(Val::I64(0)),
+            ValType::F32 => Some(Val::F32(0)),
+            ValType::F64 => Some(Val::F64(0)),
+            ValType::V128 => Some(Val::V128(0.into())),
+            ValType::Ref(r) => {
+                if r.is_nullable() {
+                    Some(Val::null_ref(r.heap_type()))
+                } else {
+                    None
+                }
+            }
         }
     }
 }
@@ -1225,6 +1246,16 @@ impl ExternType {
             EntityType::Memory(ty) => MemoryType::from_wasmtime_memory(ty).into(),
             EntityType::Table(ty) => TableType::from_wasmtime_table(engine, ty).into(),
             EntityType::Tag(ty) => TagType::from_wasmtime_tag(engine, ty).into(),
+        }
+    }
+    /// Construct a default value, if possible for the underlying type. Tags do not have a default value.
+    pub fn default_value(&self, store: impl AsContextMut) -> Option<Extern> {
+        match self {
+            ExternType::Func(func_ty) => func_ty.default_value(store).map(Extern::Func),
+            ExternType::Global(global_ty) => global_ty.default_value(store).map(Extern::Global),
+            ExternType::Table(table_ty) => table_ty.default_value(store).map(Extern::Table),
+            ExternType::Memory(mem_ty) => mem_ty.default_value(store).map(Extern::Memory),
+            ExternType::Tag(_) => None, // FIXME: #10252
         }
     }
 }
@@ -2402,6 +2433,19 @@ impl FuncType {
         debug_assert!(registered_type.is_func());
         Self { registered_type }
     }
+    /// Construct a func which returns results of default value, if each result type has a default value.
+    pub fn default_value(&self, mut store: impl AsContextMut) -> Option<Func> {
+        let dummy_results = self
+            .results()
+            .map(|ty| ty.default_value())
+            .collect::<Option<Vec<_>>>()?;
+        Some(Func::new(&mut store, self.clone(), move |_, _, results| {
+            for (slot, dummy) in results.iter_mut().zip(dummy_results.iter()) {
+                *slot = *dummy;
+            }
+            Ok(())
+        }))
+    }
 }
 
 // Global Types
@@ -2456,6 +2500,11 @@ impl GlobalType {
             Mutability::Const
         };
         GlobalType::new(ty, mutability)
+    }
+    ///
+    pub fn default_value(&self, store: impl AsContextMut) -> Option<RuntimeGlobal> {
+        let val = self.content().default_value()?;
+        RuntimeGlobal::new(store, self.clone(), val).ok()
     }
 }
 
@@ -2586,6 +2635,12 @@ impl TableType {
 
     pub(crate) fn wasmtime_table(&self) -> &Table {
         &self.ty
+    }
+    ///
+    pub fn default_value(&self, store: impl AsContextMut) -> Option<RuntimeTable> {
+        let val: ValType = self.element().clone().into();
+        let init_val = val.default_value()?.ref_()?;
+        RuntimeTable::new(store, self.clone(), init_val).ok()
     }
 }
 
@@ -2917,6 +2972,10 @@ impl MemoryType {
 
     pub(crate) fn wasmtime_memory(&self) -> &Memory {
         &self.ty
+    }
+    ///
+    pub fn default_value(&self, store: impl AsContextMut) -> Option<RuntimeMemory> {
+        RuntimeMemory::new(store, self.clone()).ok()
     }
 }
 
