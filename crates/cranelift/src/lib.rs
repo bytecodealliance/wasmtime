@@ -30,6 +30,7 @@ pub use obj::*;
 mod compiled_function;
 pub use compiled_function::*;
 
+mod bounds_checks;
 mod builder;
 mod compiler;
 mod debug;
@@ -431,3 +432,19 @@ impl BuiltinFunctionSignatures {
 /// Must be kept in sync with
 /// `crate::runtime::vm::gc::VMGcRef::I31_REF_DISCRIMINANT`.
 const I31_REF_DISCRIMINANT: u32 = 1;
+
+/// Like `Option<T>` but specifically for passing information about transitions
+/// from reachable to unreachable state and the like from callees to callers.
+///
+/// Marked `must_use` to force callers to update
+/// `FuncTranslationState::reachable` as necessary.
+#[derive(PartialEq, Eq)]
+#[must_use]
+enum Reachability<T> {
+    /// The Wasm execution state is reachable, here is a `T`.
+    Reachable(T),
+    /// The Wasm execution state has been determined to be statically
+    /// unreachable. It is the receiver of this value's responsibility to update
+    /// `FuncTranslationState::reachable` as necessary.
+    Unreachable,
+}

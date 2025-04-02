@@ -71,14 +71,14 @@
 //!   <https://github.com/bytecodealliance/cranelift/pull/1236>
 //!     ("Relax verification to allow I8X16 to act as a default vector type")
 
-mod bounds_checks;
-
+use crate::bounds_checks::bounds_check_and_compute_addr;
 use crate::func_environ::{Extension, FuncEnvironment};
 use crate::translate::environ::{GlobalVariable, StructFieldsVec};
 use crate::translate::state::{ControlStackFrame, ElseData, FuncTranslationState};
 use crate::translate::translation_utils::{
     block_with_params, blocktype_params_results, f32_translation, f64_translation,
 };
+use crate::Reachability;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::types::*;
@@ -3202,14 +3202,9 @@ fn prepare_addr(
     let addr = match u32::try_from(memarg.offset) {
         // If our offset fits within a u32, then we can place the it into the
         // offset immediate of the `heap_addr` instruction.
-        Ok(offset) => bounds_checks::bounds_check_and_compute_addr(
-            builder,
-            environ,
-            &heap,
-            index,
-            offset,
-            access_size,
-        )?,
+        Ok(offset) => {
+            bounds_check_and_compute_addr(builder, environ, &heap, index, offset, access_size)?
+        }
 
         // If the offset doesn't fit within a u32, then we can't pass it
         // directly into `heap_addr`.
@@ -3247,14 +3242,7 @@ fn prepare_addr(
                 offset,
                 ir::TrapCode::HEAP_OUT_OF_BOUNDS,
             );
-            bounds_checks::bounds_check_and_compute_addr(
-                builder,
-                environ,
-                &heap,
-                adjusted_index,
-                0,
-                access_size,
-            )?
+            bounds_check_and_compute_addr(builder, environ, &heap, adjusted_index, 0, access_size)?
         }
     };
     let addr = match addr {
@@ -3329,22 +3317,6 @@ fn prepare_atomic_addr(
 ) -> WasmResult<Reachability<(MemFlags, Value, Value)>> {
     align_atomic_addr(memarg, loaded_bytes, builder, state, environ);
     prepare_addr(memarg, loaded_bytes, builder, state, environ)
-}
-
-/// Like `Option<T>` but specifically for passing information about transitions
-/// from reachable to unreachable state and the like from callees to callers.
-///
-/// Marked `must_use` to force callers to update
-/// `FuncTranslationState::reachable` as necessary.
-#[derive(PartialEq, Eq)]
-#[must_use]
-pub enum Reachability<T> {
-    /// The Wasm execution state is reachable, here is a `T`.
-    Reachable(T),
-    /// The Wasm execution state has been determined to be statically
-    /// unreachable. It is the receiver of this value's responsibility to update
-    /// `FuncTranslationState::reachable` as necessary.
-    Unreachable,
 }
 
 /// Translate a load instruction.
