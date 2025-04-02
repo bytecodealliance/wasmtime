@@ -807,7 +807,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 .unwrap();
                 (vmctx, base_offset, current_elements_offset)
             } else {
-                let from_offset = self.offsets.vmctx_vmtable_import_from(index);
+                let from_offset = self.offsets.vmctx_vmtable_from(index);
                 let table = func.create_global_value(ir::GlobalValueData::Load {
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),

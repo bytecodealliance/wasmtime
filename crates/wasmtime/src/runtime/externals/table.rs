@@ -414,9 +414,9 @@ impl Table {
         &data[self.0].table
     }
 
-    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMTableImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMTable {
         let export = &store[self.0];
-        crate::runtime::vm::VMTableImport {
+        crate::runtime::vm::VMTable {
             from: export.definition.into(),
             vmctx: export.vmctx.into(),
         }
