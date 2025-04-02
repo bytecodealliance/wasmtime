@@ -213,7 +213,7 @@ impl wasmtime_environ::Compiler for Compiler {
 
         // If we're not catching traps with signals, insert checks at the
         // beginnings of functions.
-        if !self.tunables.signals_based_traps {
+        if !self.tunables.signals_based_traps && !isa.triple().is_pulley() {
             // The `stack_limit` global value below is the implementation of stack
             // overflow checks in Wasmtime.
             //
@@ -246,24 +246,22 @@ impl wasmtime_environ::Compiler for Compiler {
             // abort for the whole program since the runtime limits configured by
             // the embedder should cause wasm to trap before it reaches that
             // (ensuring the host has enough space as well for its functionality).
-            if !isa.triple().is_pulley() {
-                let vmctx = context
-                    .func
-                    .create_global_value(ir::GlobalValueData::VMContext);
-                let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
-                    base: vmctx,
-                    offset: i32::from(func_env.offsets.ptr.vmctx_store_context()).into(),
-                    global_type: isa.pointer_type(),
-                    flags: MemFlags::trusted().with_readonly(),
-                });
-                let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
-                    base: interrupts_ptr,
-                    offset: i32::from(func_env.offsets.ptr.vmstore_context_stack_limit()).into(),
-                    global_type: isa.pointer_type(),
-                    flags: MemFlags::trusted(),
-                });
-                func_env.stack_limit_at_function_entry = Some(stack_limit);
-            }
+            let vmctx = context
+                .func
+                .create_global_value(ir::GlobalValueData::VMContext);
+            let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
+                base: vmctx,
+                offset: i32::from(func_env.offsets.ptr.vmctx_store_context()).into(),
+                global_type: isa.pointer_type(),
+                flags: MemFlags::trusted().with_readonly(),
+            });
+            let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
+                base: interrupts_ptr,
+                offset: i32::from(func_env.offsets.ptr.vmstore_context_stack_limit()).into(),
+                global_type: isa.pointer_type(),
+                flags: MemFlags::trusted(),
+            });
+            func_env.stack_limit_at_function_entry = Some(stack_limit);
         }
         let FunctionBodyData { validator, body } = input;
         let mut validator =
