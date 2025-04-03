@@ -65,8 +65,8 @@ $ wasmtime run --invoke "initialize(\"hello\")" foo.wasm
 Each individual argument within the parentheses must be separated by a comma:
 
 ```sh
-$ wasmtime run --invoke "initialize(\"Pi\", 3.14)"
-$ wasmtime run --invoke "add(1, 2)"
+$ wasmtime run --invoke "initialize(\"Pi\", 3.14)" foo.wasm
+$ wasmtime run --invoke "add(1, 2)" foo.wasm
 ```
 
 ## `serve`
