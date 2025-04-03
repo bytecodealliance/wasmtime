@@ -27,11 +27,10 @@ module. This means that the module will be compiled to native code,
 instantiated, and then optionally have an export executed.
 
 The `wasmtime` CLI will automatically hook up any WASI-related imported
-functionality, but at this time if your module imports anything else it will
+functionality, but at this time, if your module imports anything else, it will
 fail instantiation.
 
-The `run` command takes one positional argument which is the name of the module
-to run:
+The `run` command takes one positional argument, which is the name of the module to run:
 
 ```sh
 $ wasmtime run foo.wasm
@@ -45,24 +44,29 @@ as well as the text format for WebAssembly (`*.wat`):
 $ wasmtime foo.wat
 ```
 
-The `run` command accepts an optional `--invoke` argument which is the name of
+The `run` command accepts an optional `--invoke` argument, which is the name of
 an exported function of the module to run.
 
 ```sh
 $ wasmtime run --invoke "initialize()" foo.wasm
 ```
 
-The function name is enclosed in double quotes. This ensures the function name 
-is treated as a single argument by the CLI, preventing issues with shell interpretation.
-The presence of the `()` parenthesis signifies that the function is being invoked.
-As apposed to the function name just being referenced.
+The exported function's name and exported function's parentheses must both be enclosed in one set of double quotes, i.e. `"initialize()"`. 
+This treats the exported function as a single argument and prevents issues with shell interpretation.
+The presence of the parenthesis `()` signifies function invocation, as apposed to the function name just being referenced.
 This convention helps to distinguish function calls from other kinds of string arguments.
 
-**Note:** If your function takes a string argument, ensure that double quotes inside the 
-argument are escaped:
+**Note:** If your function takes a string argument, ensure that you use escaped double quotes inside the parentheses. For example:
 
 ```sh
 $ wasmtime run --invoke "initialize(\"hello\")" foo.wasm
+```
+
+Each individual argument within the parentheses must be separated by a comma:
+
+```sh
+$ wasmtime run --invoke "initialize(\"Pi\", 3.14)"
+$ wasmtime run --invoke "add(1, 2)"
 ```
 
 ## `serve`
