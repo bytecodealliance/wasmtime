@@ -174,10 +174,7 @@ authors = ["The Wasmtime Project Developers"]
 edition = "2021"
 # Wasmtime's current policy is that this number can be no larger than the
 # current stable release of Rust minus 2.
-#
-# NB: once this is 1.84+ delete `pulley/build.rs` and the similar code in
-# `crate/wasmtime/build.rs`
-rust-version = "1.83.0"
+rust-version = "1.84.0"
 
 [workspace.lints.rust]
 # Turn on some lints which are otherwise allow-by-default in rustc.
