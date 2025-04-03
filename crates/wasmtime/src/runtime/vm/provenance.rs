@@ -107,11 +107,7 @@ impl<T> VmPtr<T> {
 
     /// Similar to `as_send_sync`, but returns a `NonNull<T>`.
     pub fn as_non_null(&self) -> NonNull<T> {
-        #[cfg(has_provenance_apis)]
         let ptr = core::ptr::with_exposed_provenance_mut(self.ptr.get());
-        #[cfg(not(has_provenance_apis))]
-        let ptr = self.ptr.get() as *mut T;
-
         unsafe { NonNull::new_unchecked(ptr) }
     }
 
@@ -141,10 +137,7 @@ impl<T> fmt::Debug for VmPtr<T> {
 impl<T> From<NonNull<T>> for VmPtr<T> {
     fn from(ptr: NonNull<T>) -> VmPtr<T> {
         VmPtr {
-            #[cfg(has_provenance_apis)]
             ptr: unsafe { NonZeroUsize::new_unchecked(ptr.as_ptr().expose_provenance()) },
-            #[cfg(not(has_provenance_apis))]
-            ptr: unsafe { NonZeroUsize::new_unchecked(ptr.as_ptr() as usize) },
             _marker: marker::PhantomData,
         }
     }

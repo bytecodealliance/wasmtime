@@ -960,7 +960,6 @@ macro_rules! define_builtin_array {
             /// pointer is considered valid.
             pub fn expose_provenance(&self) -> NonNull<Self>{
                 $(
-                    #[cfg(has_provenance_apis)]
                     (self.$name as *mut u8).expose_provenance();
                 )*
                 NonNull::from(self)
