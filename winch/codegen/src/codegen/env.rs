@@ -230,7 +230,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                                 .vmctx_vmtable_definition_current_elements(defined),
                         ),
                         None => (
-                            Some(self.vmoffsets.vmctx_vmtable_import_from(index)),
+                            Some(self.vmoffsets.vmctx_vmtable_from(index)),
                             self.vmoffsets.vmtable_definition_base().into(),
                             self.vmoffsets.vmtable_definition_current_elements().into(),
                         ),
