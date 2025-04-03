@@ -93,7 +93,7 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
                 let regs = TrapRegisters {
                     pc: context.Pc as usize,
                     fp: context.Anonymous.Anonymous.Fp as usize,
-                    sp: context.Anonymous.Anonymous.Sp as usize,
+                    sp: context.Sp as usize,
                 };
             } else if #[cfg(target_arch = "x86")] {
                 let regs = TrapRegisters {
