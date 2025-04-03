@@ -523,7 +523,8 @@ impl RunCommand {
         let lacks_quotes = !invoke.starts_with('"') && !invoke.ends_with('"');
 
         // Check if parentheses are present and in the correct order ()
-        let lacks_parentheses = (invoke.contains('(') && invoke.contains(')')) && (invoke.find('(').unwrap() < invoke.find(')').unwrap());
+        let lacks_parentheses = (invoke.contains('(') && invoke.contains(')'))
+            && (invoke.find('(').unwrap() < invoke.find(')').unwrap());
 
         // Construct a properly formatted suggestion
         let empty_argument_suggestion = format!(r#""{}()""#, invoke.trim_matches('"'));
