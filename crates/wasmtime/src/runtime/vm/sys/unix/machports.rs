@@ -368,9 +368,10 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 // it looks like a call to unwind.
                 state.__x[0] = pc as u64;
                 state.__x[1] = fp as u64;
-                state.__x[2] = fault1 as u64;
-                state.__x[3] = fault2 as u64;
-                state.__x[4] = trap as u64;
+                state.__x[2] = sp as u64;
+                state.__x[3] = fault1 as u64;
+                state.__x[4] = fault2 as u64;
+                state.__x[5] = trap as u64;
                 state.__pc = unwind as u64;
             };
             let mut thread_state = mem::zeroed::<ThreadState>();
