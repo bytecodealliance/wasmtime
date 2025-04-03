@@ -97,11 +97,11 @@ impl WasmValue for crate::Val {
         let val = f64::from_bits(*unwrap_val!(self, Self::F64, "f64"));
         canonicalize_nan64(val)
     }
-
+    #[allow(clippy::cast_possible_truncation)]
     fn unwrap_tuple(&self) -> Box<dyn Iterator<Item = Cow<Self>> + '_> {
         let v = unwrap_val!(self, Self::V128, "tuple").as_u128();
-        let low = i64::try_from(v).expect("128-bit value too large to fit in i64");
-        let high = i64::try_from(v >> 64).expect("Upper 64 bits of 128-bit value too large for i64");
+        let low = v as i64;
+        let high = (v >> 64) as i64;
         Box::new(
             [Self::I64(low), Self::I64(high)]
                 .into_iter()
