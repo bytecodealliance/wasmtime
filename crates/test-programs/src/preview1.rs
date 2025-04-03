@@ -129,6 +129,7 @@ pub struct TestConfig {
     fs_time_precision: u64,
     no_dangling_filesystem: bool,
     no_rename_dir_to_empty_dir: bool,
+    rename_dir_onto_file: bool,
 }
 
 enum ErrnoMode {
@@ -160,6 +161,7 @@ impl TestConfig {
             fs_time_precision,
             no_dangling_filesystem,
             no_rename_dir_to_empty_dir,
+            rename_dir_onto_file: std::env::var("RENAME_DIR_ONTO_FILE").is_ok(),
         }
     }
     pub fn errno_expect_unix(&self) -> bool {
@@ -188,5 +190,8 @@ impl TestConfig {
     }
     pub fn support_rename_dir_to_empty_dir(&self) -> bool {
         !self.no_rename_dir_to_empty_dir
+    }
+    pub fn support_rename_dir_onto_file(&self) -> bool {
+        self.rename_dir_onto_file
     }
 }

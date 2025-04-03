@@ -1,5 +1,5 @@
 use std::{env, process};
-use test_programs::preview1::{assert_errno, create_file, open_scratch_directory};
+use test_programs::preview1::{assert_errno, create_file, open_scratch_directory, TestConfig};
 
 unsafe fn test_path_rename(dir_fd: wasip1::Fd) {
     // First, try renaming a dir to nonexistent path
@@ -62,13 +62,18 @@ unsafe fn test_path_rename(dir_fd: wasip1::Fd) {
     );
 
     // Try renaming dir to a file
-    assert_errno!(
-        wasip1::path_rename(dir_fd, "source", dir_fd, "target/file")
-            .expect_err("renaming a directory to a file"),
-        wasip1::ERRNO_NOTDIR
-    );
-    wasip1::path_unlink_file(dir_fd, "target/file").expect("removing a file");
-    wasip1::path_remove_directory(dir_fd, "source").expect("removing a directory");
+    if TestConfig::from_env().support_rename_dir_onto_file() {
+        wasip1::path_rename(dir_fd, "source", dir_fd, "target/file").unwrap();
+        wasip1::path_remove_directory(dir_fd, "target/file").expect("removing a directory");
+    } else {
+        assert_errno!(
+            wasip1::path_rename(dir_fd, "source", dir_fd, "target/file")
+                .expect_err("renaming a directory to a file"),
+            wasip1::ERRNO_NOTDIR
+        );
+        wasip1::path_unlink_file(dir_fd, "target/file").expect("removing a file");
+        wasip1::path_remove_directory(dir_fd, "source").expect("removing a directory");
+    }
     wasip1::path_remove_directory(dir_fd, "target").expect("removing a directory");
 
     // Now, try renaming a file to a nonexistent path
