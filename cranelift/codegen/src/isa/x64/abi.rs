@@ -877,7 +877,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             defs: smallvec![],
             clobbers: Self::get_regs_clobbered_by_call(call_conv),
             callee_pop_size,
-            has_non_abi_defs: false,
             callee_conv: call_conv,
             caller_conv: call_conv,
         })));

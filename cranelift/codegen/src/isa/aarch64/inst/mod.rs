@@ -979,8 +979,6 @@ impl MachInst for Inst {
     fn is_included_in_clobbers(&self) -> bool {
         let (caller, callee) = match self {
             Inst::Args { .. } => return false,
-            Inst::Call { info } if info.has_non_abi_defs => return true,
-            Inst::CallInd { info } if info.has_non_abi_defs => return true,
             Inst::Call { info } => (info.caller_conv, info.callee_conv),
             Inst::CallInd { info } => (info.caller_conv, info.callee_conv),
             _ => return true,

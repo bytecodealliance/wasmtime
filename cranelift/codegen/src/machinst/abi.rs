@@ -620,10 +620,6 @@ pub struct CallInfo<T> {
     /// caller, if any. (Used for popping stack arguments with the `tail`
     /// calling convention.)
     pub callee_pop_size: u32,
-    /// Do the defs have any definitions outside of the ABI-implied
-    /// clobbers? If so, this instruction needs to be considered when
-    /// computing the function body's clobbered registers.
-    pub has_non_abi_defs: bool,
 }
 
 impl<T> CallInfo<T> {
@@ -638,7 +634,6 @@ impl<T> CallInfo<T> {
             caller_conv: call_conv,
             callee_conv: call_conv,
             callee_pop_size: 0,
-            has_non_abi_defs: false,
         }
     }
 
@@ -652,7 +647,6 @@ impl<T> CallInfo<T> {
             caller_conv: self.caller_conv,
             callee_conv: self.callee_conv,
             callee_pop_size: self.callee_pop_size,
-            has_non_abi_defs: self.has_non_abi_defs,
         }
     }
 }
@@ -2036,9 +2030,6 @@ pub struct CallSite<M: ABIMachineSpec> {
     caller_conv: isa::CallConv,
     /// The settings controlling this compilation.
     flags: settings::Flags,
-    /// Has any defs that are not constrained to ABI-specified
-    /// registers.
-    has_non_abi_defs: bool,
 
     _mach: PhantomData<M>,
 }
@@ -2072,7 +2063,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
             is_tail_call,
             caller_conv,
             flags,
-            has_non_abi_defs: false,
             _mach: PhantomData,
         }
     }
@@ -2096,7 +2086,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
             is_tail_call: IsTailCall::No,
             caller_conv,
             flags,
-            has_non_abi_defs: false,
             _mach: PhantomData,
         }
     }
@@ -2120,7 +2109,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
             is_tail_call,
             caller_conv,
             flags,
-            has_non_abi_defs: false,
             _mach: PhantomData,
         }
     }
@@ -2373,7 +2361,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
                                 vreg: into_reg,
                                 location: RetLocation::Stack(amode, ty),
                             });
-                            self.has_non_abi_defs = true;
                             into_regs.push(into_reg.to_reg());
                         }
                     }
@@ -2474,7 +2461,6 @@ impl<M: ABIMachineSpec> CallSite<M> {
                 callee_conv: call_conv,
                 caller_conv: self.caller_conv,
                 callee_pop_size,
-                has_non_abi_defs: self.has_non_abi_defs,
             },
         )
         .into_iter()
