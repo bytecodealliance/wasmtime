@@ -1,5 +1,6 @@
 #![cfg(not(miri))]
 
+use crate::ErrorExt;
 use anyhow::bail;
 use std::panic::{self, AssertUnwindSafe};
 use std::process::Command;
@@ -25,7 +26,7 @@ fn test_trap_return() -> Result<()> {
     let run_func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
-    assert!(format!("{e:?}").contains("test 123"));
+    e.assert_contains("test 123");
 
     assert!(
         e.downcast_ref::<WasmBacktrace>().is_some(),
@@ -55,8 +56,7 @@ fn test_anyhow_error_return() -> Result<()> {
     let run_func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
-    assert!(!e.to_string().contains("test 1234"));
-    assert!(format!("{e:?}").contains("Caused by:\n    test 1234"));
+    e.assert_contains("test 1234");
 
     assert!(e.downcast_ref::<Trap>().is_none());
     assert!(e.downcast_ref::<WasmBacktrace>().is_some());
@@ -96,11 +96,9 @@ fn test_trap_return_downcast() -> Result<()> {
         .call(&mut store, ())
         .err()
         .expect("error calling function");
-    let dbg = format!("{e:?}");
-    println!("{dbg}");
 
     assert!(!e.to_string().contains("my trap"));
-    assert!(dbg.contains("Caused by:\n    my trap"));
+    e.assert_contains("my trap");
 
     e.downcast_ref::<MyTrap>()
         .expect("error downcasts to MyTrap");
@@ -259,7 +257,7 @@ fn test_trap_trace_cb() -> Result<()> {
     assert_eq!(trace[0].func_index(), 2);
     assert_eq!(trace[1].module().name().unwrap(), "hello_mod");
     assert_eq!(trace[1].func_index(), 1);
-    assert!(format!("{e:?}").contains("cb throw"));
+    e.assert_contains("cb throw");
 
     Ok(())
 }
@@ -308,19 +306,16 @@ fn trap_display_pretty() -> Result<()> {
     let run_func = instance.get_typed_func::<(), ()>(&mut store, "bar")?;
 
     let e = run_func.call(&mut store, ()).unwrap_err();
-    let e = format!("{e:?}");
-    assert!(e.contains(
+    e.assert_contains(
         "\
 error while executing at wasm backtrace:
-    0:   0x23 - m!die
-    1:   0x27 - m!<wasm function 1>
-    2:   0x2c - m!foo
-    3:   0x31 - m!<wasm function 3>
+    0:     0x23 - m!die
+    1:     0x27 - m!<wasm function 1>
+    2:     0x2c - m!foo
+    3:     0x31 - m!<wasm function 3>",
+    );
 
-Caused by:
-    wasm trap: wasm `unreachable` instruction executed\
-"
-    ));
+    e.assert_contains("wasm trap: wasm `unreachable` instruction executed");
     Ok(())
 }
 
@@ -352,21 +347,17 @@ fn trap_display_multi_module() -> Result<()> {
     let bar2 = instance.get_typed_func::<(), ()>(&mut store, "bar2")?;
 
     let e = bar2.call(&mut store, ()).unwrap_err();
-    let e = format!("{e:?}");
-    assert!(e.contains(
+    e.assert_contains(
         "\
 error while executing at wasm backtrace:
-    0:   0x23 - a!die
-    1:   0x27 - a!<wasm function 1>
-    2:   0x2c - a!foo
-    3:   0x31 - a!<wasm function 3>
-    4:   0x29 - b!middle
-    5:   0x2e - b!<wasm function 2>
-
-Caused by:
-    wasm trap: wasm `unreachable` instruction executed\
-"
-    ));
+    0:     0x23 - a!die
+    1:     0x27 - a!<wasm function 1>
+    2:     0x2c - a!foo
+    3:     0x31 - a!<wasm function 3>
+    4:     0x29 - b!middle
+    5:     0x2e - b!<wasm function 2>",
+    );
+    e.assert_contains("wasm trap: wasm `unreachable` instruction executed");
     Ok(())
 }
 
@@ -386,7 +377,7 @@ fn trap_start_function_import() -> Result<()> {
     let sig = FuncType::new(store.engine(), None, None);
     let func = Func::new(&mut store, sig, |_, _, _| bail!("user trap"));
     let err = Instance::new(&mut store, &module, &[func.into()]).unwrap_err();
-    assert!(format!("{err:?}").contains("user trap"));
+    err.assert_contains("user trap");
     Ok(())
 }
 
@@ -533,9 +524,8 @@ fn mismatched_arguments() -> Result<()> {
         "expected 1 arguments, got 0"
     );
     let e = func.call(&mut store, &[Val::F32(0)], &mut []).unwrap_err();
-    let e = format!("{e:?}");
-    assert!(e.contains("argument type mismatch"));
-    assert!(e.contains("expected i32, found f32"));
+    e.assert_contains("argument type mismatch");
+    e.assert_contains("expected i32, found f32");
     assert_eq!(
         func.call(&mut store, &[Val::I32(0), Val::I32(1)], &mut [])
             .unwrap_err()
@@ -564,14 +554,9 @@ fn call_signature_mismatch() -> Result<()> {
     )?;
 
     let module = Module::new(store.engine(), &binary)?;
-    let err = Instance::new(&mut store, &module, &[])
-        .err()
-        .unwrap()
-        .downcast::<Trap>()
-        .unwrap();
-    assert!(err
-        .to_string()
-        .contains("wasm trap: indirect call type mismatch"));
+    let err = Instance::new(&mut store, &module, &[]).err().unwrap();
+    err.downcast_ref::<Trap>().unwrap();
+    err.assert_contains("wasm trap: indirect call type mismatch");
     Ok(())
 }
 
@@ -591,21 +576,19 @@ fn start_trap_pretty() -> Result<()> {
     let module = Module::new(store.engine(), wat)?;
     let e = match Instance::new(&mut store, &module, &[]) {
         Ok(_) => panic!("expected failure"),
-        Err(e) => format!("{e:?}"),
+        Err(e) => e,
     };
 
-    assert!(e.contains(
+    e.assert_contains(
         "\
 error while executing at wasm backtrace:
-    0:   0x1d - m!die
-    1:   0x21 - m!<wasm function 1>
-    2:   0x26 - m!foo
-    3:   0x2b - m!start
+    0:     0x1d - m!die
+    1:     0x21 - m!<wasm function 1>
+    2:     0x26 - m!foo
+    3:     0x2b - m!start",
+    );
 
-Caused by:
-    wasm trap: wasm `unreachable` instruction executed\
-"
-    ));
+    e.assert_contains("wasm trap: wasm `unreachable` instruction executed");
     Ok(())
 }
 
@@ -793,17 +776,14 @@ fn no_hint_even_with_dwarf_info() -> Result<()> {
         "#,
     )?;
     let trap = Instance::new(&mut store, &module, &[]).unwrap_err();
-    let trap = format!("{trap:?}");
-    assert!(trap.contains(
+    trap.assert_contains(
         "\
 error while executing at wasm backtrace:
-    0:   0x1a - <unknown>!start
+    0:     0x1a - <unknown>!start",
+    );
 
-Caused by:
-    wasm trap: wasm `unreachable` instruction executed\
-"
-    ));
-    assert!(!trap.contains("WASM_BACKTRACE_DETAILS"));
+    trap.assert_contains("wasm trap: wasm `unreachable` instruction executed");
+    assert!(!format!("{trap:?}").contains("WASM_BACKTRACE_DETAILS"));
     Ok(())
 }
 
@@ -827,16 +807,12 @@ fn hint_with_dwarf_info() -> Result<()> {
         "#,
     )?;
     let trap = Instance::new(&mut store, &module, &[]).unwrap_err();
-    let trap = format!("{trap:?}");
-    assert!(trap.contains(
+    trap.assert_contains(
         "\
 error while executing at wasm backtrace:
-    0:   0x1a - <unknown>!start
-note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information
-
-Caused by:
-    wasm trap: wasm `unreachable` instruction executed"
-    ));
+    0:     0x1a - <unknown>!start
+note: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information");
+    trap.assert_contains("wasm trap: wasm `unreachable` instruction executed");
     Ok(())
 }
 
@@ -936,10 +912,7 @@ fn catch_trap_calling_across_stores() -> Result<()> {
                 .expect("trap function should be exported");
 
             let trap = func.call(&mut data.child_store, ()).unwrap_err();
-            assert!(
-                format!("{trap:?}").contains("unreachable"),
-                "trap should contain 'unreachable', got: {trap:?}"
-            );
+            trap.assert_contains("unreachable");
 
             let trace = trap.downcast_ref::<WasmBacktrace>().unwrap().frames();
 
@@ -1394,8 +1367,7 @@ fn wasm_fault_address_reported_from_mpk_protected_memory() -> Result<()> {
     // We expect an error here, not an abort; but we also check that the store
     // can now calculate the correct Wasm address. If this test is failing with
     // an abort, use `--nocapture` to see more details.
-    let err = format!("{err:?}");
-    assert!(err.contains("0xdeadbeef"), "bad error: {err}");
+    err.assert_contains("0xdeadbeef");
     Ok(())
 }
 
@@ -1547,7 +1519,7 @@ fn dont_see_stale_stack_walking_registers() -> Result<()> {
     let get_trap = instance.get_func(&mut store, "get_trap").unwrap();
 
     let err = get_trap.call(&mut store, &[], &mut []).unwrap_err();
-    assert!(err.to_string().contains("trap!!!"));
+    err.assert_contains("trap!!!");
 
     Ok(())
 }
@@ -1707,7 +1679,7 @@ fn tail_call_to_imported_function(config: &mut Config) -> Result<()> {
 
     let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
     let err = run.call(&mut store, ()).unwrap_err();
-    assert!(err.to_string().contains("whoopsie"));
+    err.assert_contains("whoopsie");
 
     Ok(())
 }
@@ -1734,7 +1706,7 @@ fn tail_call_to_imported_function_in_start_function(config: &mut Config) -> Resu
     let mut store = Store::new(&engine, ());
     let host_func = Func::wrap(&mut store, || -> Result<()> { bail!("whoopsie") });
     let err = Instance::new(&mut store, &module, &[host_func.into()]).unwrap_err();
-    assert!(err.to_string().contains("whoopsie"));
+    err.assert_contains("whoopsie");
 
     Ok(())
 }
@@ -1761,7 +1733,7 @@ fn return_call_ref_to_imported_function(config: &mut Config) -> Result<()> {
 
     let run = instance.get_typed_func::<Func, i32>(&mut store, "run")?;
     let err = run.call(&mut store, host_func).unwrap_err();
-    assert!(err.to_string().contains("whoopsie"));
+    err.assert_contains("whoopsie");
 
     Ok(())
 }
@@ -1789,7 +1761,7 @@ fn return_call_indirect_to_imported_function(config: &mut Config) -> Result<()> 
 
     let run = instance.get_typed_func::<(), i32>(&mut store, "run")?;
     let err = run.call(&mut store, ()).unwrap_err();
-    assert!(err.to_string().contains("whoopsie"));
+    err.assert_contains("whoopsie");
 
     Ok(())
 }

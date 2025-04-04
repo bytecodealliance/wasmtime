@@ -129,6 +129,6 @@ impl ErrorExt for anyhow::Error {
             return;
         }
 
-        panic!("failed to find {msg:?} within error message {self:?}")
+        panic!("failed to find:\n{msg}\n\nwithin error message:\n{self:?}")
     }
 }
