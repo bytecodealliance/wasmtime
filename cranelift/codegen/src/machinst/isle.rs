@@ -211,13 +211,8 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
-        fn inst_data(&mut self, inst: Inst) -> InstructionData {
+        fn inst_data_value(&mut self, inst: Inst) -> InstructionData {
             self.lower_ctx.dfg().insts[inst]
-        }
-
-        #[inline]
-        fn def_inst(&mut self, val: Value) -> Option<Inst> {
-            self.lower_ctx.dfg().value_def(val).inst()
         }
 
         #[inline]
@@ -914,4 +909,14 @@ where
 {
     pub lower_ctx: &'a mut Lower<'b, I>,
     pub backend: &'a B,
+}
+
+impl<I, B> IsleContext<'_, '_, I, B>
+where
+    I: VCodeInst,
+    B: LowerBackend,
+{
+    pub(crate) fn dfg(&self) -> &crate::ir::DataFlowGraph {
+        &self.lower_ctx.f.dfg
+    }
 }

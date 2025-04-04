@@ -76,14 +76,8 @@
       (ineg ty x))
 
 ;; x/1 == x.
-(rule (simplify (sdiv ty
-                      x
-                      (iconst_u ty 1)))
-      (subsume x))
-(rule (simplify (udiv ty
-                      x
-                      (iconst_u ty 1)))
-      (subsume x))
+(rule (simplify_skeleton (sdiv x (iconst_s ty 1))) x)
+(rule (simplify_skeleton (udiv x (iconst_u ty 1))) x)
 
 ;; TODO: strength reduction: div to shifts
 ;; TODO: div/rem by constants -> magic multiplications

@@ -33,7 +33,7 @@
 ;;       movq    0x18(%rsp), %rdx
 ;;       movq    0x10(%rsp), %rcx
 ;;       movq    8(%rsp), %r8
-;;       callq   0x19c
+;;       callq   0x177
 ;;       addq    $8, %rsp
 ;;       addq    $0x18, %rsp
 ;;       movq    8(%rsp), %r14

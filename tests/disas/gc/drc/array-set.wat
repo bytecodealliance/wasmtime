@@ -41,15 +41,15 @@
 ;;                                     v51 = ishl v16, v50  ; v50 = 3
 ;; @0024                               v23 = iconst.i32 24
 ;; @0024                               v24 = uadd_overflow_trap v51, v23, user1  ; v23 = 24
+;; @0024                               v35 = uextend.i64 v24
+;;                                     v61 = iadd v9, v35
+;; @0024                               v37 = icmp ule v61, v8
+;; @0024                               trapz v37, user1
 ;;                                     v58 = ishl v3, v50  ; v50 = 3
 ;; @0024                               v27 = iadd v58, v23  ; v23 = 24
 ;; @0024                               v33 = uextend.i64 v27
-;; @0024                               v34 = uadd_overflow_trap v9, v33, user1
-;; @0024                               v35 = uextend.i64 v24
-;; @0024                               v36 = uadd_overflow_trap v9, v35, user1
-;; @0024                               v37 = icmp ule v36, v8
-;; @0024                               trapz v37, user1
-;; @0024                               v38 = iadd v6, v34
+;;                                     v60 = iadd v9, v33
+;; @0024                               v38 = iadd v6, v60
 ;; @0024                               store notrap aligned little v4, v38
 ;; @0027                               jump block1
 ;;

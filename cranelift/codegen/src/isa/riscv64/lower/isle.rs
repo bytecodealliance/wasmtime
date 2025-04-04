@@ -56,6 +56,10 @@ impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
             min_vec_reg_size: backend.isa_flags.min_vec_reg_size(),
         }
     }
+
+    pub(crate) fn dfg(&self) -> &crate::ir::DataFlowGraph {
+        &self.lower_ctx.f.dfg
+    }
 }
 
 impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> {

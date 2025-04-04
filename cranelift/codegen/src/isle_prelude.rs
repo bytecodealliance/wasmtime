@@ -74,6 +74,22 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn checked_add_with_type(&mut self, ty: Type, a: u64, b: u64) -> Option<u64> {
+            let c = a.checked_add(b)?;
+            let ty_mask = self.ty_mask(ty);
+            if (c & !ty_mask) == 0 {
+                Some(c)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn add_overflows_with_type(&mut self, ty: Type, a: u64, b: u64) -> bool {
+            self.checked_add_with_type(ty, a, b).is_none()
+        }
+
+        #[inline]
         fn u64_add(&mut self, x: u64, y: u64) -> u64 {
             x.wrapping_add(y)
         }
@@ -1159,6 +1175,11 @@ macro_rules! isle_common_prelude_methods {
 
         fn f128_copysign(&mut self, a: Ieee128, b: Ieee128) -> Ieee128 {
             a.copysign(b)
+        }
+
+        #[inline]
+        fn def_inst(&mut self, val: Value) -> Option<Inst> {
+            self.dfg().value_def(val).inst()
         }
     };
 }
