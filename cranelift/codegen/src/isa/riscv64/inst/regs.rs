@@ -10,14 +10,14 @@ use regalloc2::{PReg, RegClass, VReg};
 
 // first argument of function call
 #[inline]
-pub fn a0() -> Reg {
+pub const fn a0() -> Reg {
     x_reg(10)
 }
 
 // second argument of function call
 #[inline]
 #[allow(dead_code)]
-pub fn a1() -> Reg {
+pub const fn a1() -> Reg {
     x_reg(11)
 }
 
@@ -135,10 +135,10 @@ pub fn writable_spilltmp_reg2() -> Writable<Reg> {
 }
 
 #[inline]
-pub fn x_reg(enc: usize) -> Reg {
+pub const fn x_reg(enc: usize) -> Reg {
     let p_reg = PReg::new(enc, RegClass::Int);
     let v_reg = VReg::new(p_reg.index(), p_reg.class());
-    Reg::from(v_reg)
+    Reg::from_virtual_reg(v_reg)
 }
 pub const fn px_reg(enc: usize) -> PReg {
     PReg::new(enc, RegClass::Int)

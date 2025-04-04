@@ -1,3 +1,5 @@
+use crate::ir::types;
+use crate::ir::Type;
 use crate::settings::{self, LibcallCallConv};
 use core::fmt;
 use core::str;
@@ -14,7 +16,16 @@ pub enum CallConv {
     Fast,
     /// Smallest caller code size, not ABI-stable.
     Cold,
-    /// Supports tail calls, not ABI-stable.
+    /// Supports tail calls, not ABI-stable except for exception
+    /// payload registers.
+    ///
+    /// On exception resume, a caller to a `tail`-convention function
+    /// assumes that the exception payload values are in the following
+    /// registers (per platform):
+    /// - x86-64: rax, rdx
+    /// - aarch64: x0, x1
+    /// - riscv64: a0, a1
+    /// - pulley{32,64}: x0, x1
     //
     // Currently, this is basically sys-v except that callees pop stack
     // arguments, rather than callers. Expected to change even more in the
@@ -67,6 +78,26 @@ impl CallConv {
         match self {
             CallConv::Tail => true,
             _ => false,
+        }
+    }
+
+    /// Does this calling convention support exceptions?
+    pub fn supports_exceptions(&self) -> bool {
+        match self {
+            CallConv::Tail => true,
+            _ => false,
+        }
+    }
+
+    /// What types do the exception payload value(s) have?
+    pub fn exception_payload_types(&self, pointer_ty: Type) -> &[Type] {
+        match self {
+            CallConv::Tail => match pointer_ty {
+                types::I32 => &[types::I32, types::I32],
+                types::I64 => &[types::I64, types::I64],
+                _ => unreachable!(),
+            },
+            _ => &[],
         }
     }
 }

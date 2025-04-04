@@ -2477,6 +2477,12 @@
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
 
+(decl gen_try_call (SigRef ExternalName RelocDistance ExceptionTable ValueSlice MachLabelSlice) Unit)
+(extern constructor gen_try_call gen_try_call)
+
+(decl gen_try_call_indirect (SigRef Value ExceptionTable ValueSlice MachLabelSlice) Unit)
+(extern constructor gen_try_call_indirect gen_try_call_indirect)
+
 ;;;; Helpers for emitting stack switches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl x64_stack_switch_basic (Gpr Gpr Gpr) Gpr)

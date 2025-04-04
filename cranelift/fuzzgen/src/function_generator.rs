@@ -9,8 +9,9 @@ use cranelift::codegen::ir::instructions::{InstructionFormat, ResolvedConstraint
 use cranelift::codegen::ir::stackslot::StackSize;
 
 use cranelift::codegen::ir::{
-    types::*, AliasRegion, AtomicRmwOp, Block, ConstantData, Endianness, ExternalName, FuncRef,
-    Function, LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName, UserFuncName, Value,
+    types::*, AliasRegion, AtomicRmwOp, Block, BlockArg, ConstantData, Endianness, ExternalName,
+    FuncRef, Function, LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName,
+    UserFuncName, Value,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -818,7 +819,9 @@ static OPCODE_SIGNATURES: LazyLock<Vec<OpcodeSignature>> = LazyLock::new(|| {
                 | Opcode::Jump
                 | Opcode::Return
                 | Opcode::ReturnCall
-                | Opcode::ReturnCallIndirect => false,
+                | Opcode::ReturnCallIndirect
+                | Opcode::TryCall
+                | Opcode::TryCallIndirect => false,
 
                 // Constants are generated outside of `generate_instructions`
                 Opcode::Iconst => false,
@@ -1106,7 +1109,9 @@ fn inserter_for_format(fmt: InstructionFormat) -> OpcodeInserter {
         InstructionFormat::BranchTable
         | InstructionFormat::Brif
         | InstructionFormat::Jump
-        | InstructionFormat::MultiAry => {
+        | InstructionFormat::MultiAry
+        | InstructionFormat::TryCall
+        | InstructionFormat::TryCallIndirect => {
             panic!("Control-flow instructions should be handled by 'insert_terminator': {fmt:?}")
         }
     }
@@ -1447,9 +1452,13 @@ where
         &mut self,
         builder: &mut FunctionBuilder,
         block: Block,
-    ) -> Result<Vec<Value>> {
+    ) -> Result<Vec<BlockArg>> {
         let (_, sig) = self.resources.blocks[block.as_u32() as usize].clone();
-        self.generate_values_for_signature(builder, sig.iter().copied())
+        Ok(self
+            .generate_values_for_signature(builder, sig.iter().copied())?
+            .into_iter()
+            .map(|val| BlockArg::Value(val))
+            .collect::<Vec<_>>())
     }
 
     fn generate_values_for_signature<I: Iterator<Item = Type>>(

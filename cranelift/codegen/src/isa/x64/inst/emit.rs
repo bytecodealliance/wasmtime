@@ -1613,6 +1613,14 @@ pub(crate) fn emit(
             sink.put4(0);
             sink.add_call_site();
 
+            // Add exception info, if any, at this point (which will
+            // be the return address on stack).
+            if let Some(try_call) = call_info.try_call_info.as_ref() {
+                for &(tag, label) in &try_call.exception_dests {
+                    sink.add_exception_handler(tag, label);
+                }
+            }
+
             // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.
             if call_info.callee_pop_size > 0 {
@@ -1631,6 +1639,15 @@ pub(crate) fn emit(
                 |inst| inst.emit(sink, info, state),
                 |_space_needed| None,
             );
+
+            // If this is a try-call, jump to the continuation
+            // (normal-return) block.
+            if let Some(try_call) = call_info.try_call_info.as_ref() {
+                let jmp = Inst::JmpKnown {
+                    dst: try_call.continuation,
+                };
+                jmp.emit(sink, info, state);
+            }
         }
 
         Inst::ReturnCallKnown { info: call_info } => {
@@ -1702,6 +1719,14 @@ pub(crate) fn emit(
 
             sink.add_call_site();
 
+            // Add exception info, if any, at this point (which will
+            // be the return address on stack).
+            if let Some(try_call) = call_info.try_call_info.as_ref() {
+                for &(tag, label) in &try_call.exception_dests {
+                    sink.add_exception_handler(tag, label);
+                }
+            }
+
             // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.
             if call_info.callee_pop_size > 0 {
@@ -1720,6 +1745,13 @@ pub(crate) fn emit(
                 |inst| inst.emit(sink, info, state),
                 |_space_needed| None,
             );
+
+            if let Some(try_call) = call_info.try_call_info.as_ref() {
+                let jmp = Inst::JmpKnown {
+                    dst: try_call.continuation,
+                };
+                jmp.emit(sink, info, state);
+            }
         }
 
         Inst::Args { .. } => {}

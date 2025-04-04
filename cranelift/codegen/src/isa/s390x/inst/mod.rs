@@ -914,7 +914,8 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_fixed_use(got_offset, gpr(2));
             collector.reg_fixed_def(tls_offset, gpr(2));
 
-            let mut clobbers = S390xMachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
+            let mut clobbers =
+                S390xMachineDeps::get_regs_clobbered_by_call(CallConv::SystemV, false);
             clobbers.add(gpr_preg(14));
             clobbers.remove(gpr_preg(2));
             collector.reg_clobbers(clobbers);
@@ -1045,7 +1046,9 @@ impl MachInst for Inst {
         // registers.
         match self {
             &Inst::Args { .. } => false,
-            &Inst::Call { ref info, .. } => info.caller_conv != info.callee_conv,
+            &Inst::Call { ref info, .. } => {
+                info.caller_conv != info.callee_conv || info.try_call_info.is_some()
+            }
             &Inst::ElfTlsGetOffset { .. } => false,
             _ => true,
         }
@@ -1069,10 +1072,10 @@ impl MachInst for Inst {
         match self {
             &Inst::Rets { .. } => MachTerminator::Ret,
             &Inst::ReturnCall { .. } => MachTerminator::RetCall,
-            &Inst::Jump { .. } => MachTerminator::Uncond,
-            &Inst::CondBr { .. } => MachTerminator::Cond,
-            &Inst::IndirectBr { .. } => MachTerminator::Indirect,
-            &Inst::JTSequence { .. } => MachTerminator::Indirect,
+            &Inst::Jump { .. } => MachTerminator::Branch,
+            &Inst::CondBr { .. } => MachTerminator::Branch,
+            &Inst::IndirectBr { .. } => MachTerminator::Branch,
+            &Inst::JTSequence { .. } => MachTerminator::Branch,
             _ => MachTerminator::None,
         }
     }

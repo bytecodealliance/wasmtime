@@ -916,9 +916,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let result_param = builder.append_block_param(continuation_block, pointer_type);
         builder.set_cold_block(null_block);
 
-        builder
-            .ins()
-            .brif(value, continuation_block, &[value_masked], null_block, &[]);
+        builder.ins().brif(
+            value,
+            continuation_block,
+            &[value_masked.into()],
+            null_block,
+            &[],
+        );
         builder.seal_block(null_block);
 
         builder.switch_to_block(null_block);
@@ -931,7 +935,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let index = self.cast_index_to_i64(&mut builder.cursor(), index, index_type);
         let call_inst = builder.ins().call(lazy_init, &[vmctx, table_index, index]);
         let returned_entry = builder.func.dfg.inst_results(call_inst)[0];
-        builder.ins().jump(continuation_block, &[returned_entry]);
+        builder
+            .ins()
+            .jump(continuation_block, &[returned_entry.into()]);
         builder.seal_block(continuation_block);
 
         builder.switch_to_block(continuation_block);

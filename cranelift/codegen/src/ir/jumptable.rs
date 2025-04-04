@@ -113,13 +113,14 @@ mod tests {
     use super::JumpTableData;
     use crate::entity::EntityRef;
     use crate::ir::instructions::ValueListPool;
-    use crate::ir::{Block, BlockCall, Value};
+    use crate::ir::{Block, BlockArg, BlockCall, Value};
+    use alloc::vec::Vec;
     use std::string::ToString;
 
     #[test]
     fn empty() {
         let mut pool = ValueListPool::default();
-        let def = BlockCall::new(Block::new(0), &[], &mut pool);
+        let def = BlockCall::new(Block::new(0), core::iter::empty(), &mut pool);
 
         let jt = JumpTableData::new(def, &[]);
 
@@ -145,10 +146,10 @@ mod tests {
         let e1 = Block::new(1);
         let e2 = Block::new(2);
 
-        let def = BlockCall::new(e0, &[], &mut pool);
-        let b1 = BlockCall::new(e1, &[v0], &mut pool);
-        let b2 = BlockCall::new(e2, &[], &mut pool);
-        let b3 = BlockCall::new(e1, &[v1], &mut pool);
+        let def = BlockCall::new(e0, core::iter::empty(), &mut pool);
+        let b1 = BlockCall::new(e1, core::iter::once(v0.into()), &mut pool);
+        let b2 = BlockCall::new(e2, core::iter::empty(), &mut pool);
+        let b3 = BlockCall::new(e1, core::iter::once(v1.into()), &mut pool);
 
         let jt = JumpTableData::new(def, &[b1, b2, b3]);
 
@@ -161,8 +162,14 @@ mod tests {
         assert_eq!(jt.all_branches(), [def, b1, b2, b3]);
         assert_eq!(jt.as_slice(), [b1, b2, b3]);
 
-        assert_eq!(jt.as_slice()[0].args_slice(&pool), [v0]);
-        assert_eq!(jt.as_slice()[1].args_slice(&pool), []);
-        assert_eq!(jt.as_slice()[2].args_slice(&pool), [v1]);
+        assert_eq!(
+            jt.as_slice()[0].args(&pool).collect::<Vec<_>>(),
+            [BlockArg::Value(v0)]
+        );
+        assert_eq!(jt.as_slice()[1].args(&pool).collect::<Vec<_>>(), []);
+        assert_eq!(
+            jt.as_slice()[2].args(&pool).collect::<Vec<_>>(),
+            [BlockArg::Value(v1)]
+        );
     }
 }

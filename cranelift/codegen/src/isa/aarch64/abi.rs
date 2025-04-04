@@ -1090,10 +1090,11 @@ impl ABIMachineSpec for AArch64MachineDeps {
                     }
                 ],
                 defs: smallvec![],
-                clobbers: Self::get_regs_clobbered_by_call(call_conv),
+                clobbers: Self::get_regs_clobbered_by_call(call_conv, false),
                 caller_conv: call_conv,
                 callee_conv: call_conv,
                 callee_pop_size: 0,
+                try_call_info: None,
             }),
         });
         insts
@@ -1123,9 +1124,10 @@ impl ABIMachineSpec for AArch64MachineDeps {
         }
     }
 
-    fn get_regs_clobbered_by_call(call_conv: isa::CallConv) -> PRegSet {
+    fn get_regs_clobbered_by_call(call_conv: isa::CallConv, is_exception: bool) -> PRegSet {
         match call_conv {
             isa::CallConv::Winch => WINCH_CLOBBERS,
+            _ if is_exception => ALL_CLOBBERS,
             _ => DEFAULT_AAPCS_CLOBBERS,
         }
     }
@@ -1199,6 +1201,14 @@ impl ABIMachineSpec for AArch64MachineDeps {
         // Use x9 as a temp if needed: clobbered, not a
         // retval.
         regs::writable_xreg(9)
+    }
+
+    fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
+        const PAYLOAD_REGS: &'static [Reg] = &[regs::xreg(0), regs::xreg(1)];
+        match call_conv {
+            isa::CallConv::SystemV | isa::CallConv::Tail => PAYLOAD_REGS,
+            _ => &[],
+        }
     }
 }
 
@@ -1519,8 +1529,77 @@ const fn winch_clobbers() -> PRegSet {
         .with(vreg_preg(31))
 }
 
+const fn all_clobbers() -> PRegSet {
+    PRegSet::empty()
+        // integer registers: x0 to x28 inclusive. (x29 is FP, x30 is
+        // LR, x31 is SP/ZR.)
+        .with(xreg_preg(0))
+        .with(xreg_preg(1))
+        .with(xreg_preg(2))
+        .with(xreg_preg(3))
+        .with(xreg_preg(4))
+        .with(xreg_preg(5))
+        .with(xreg_preg(6))
+        .with(xreg_preg(7))
+        .with(xreg_preg(8))
+        .with(xreg_preg(9))
+        .with(xreg_preg(10))
+        .with(xreg_preg(11))
+        .with(xreg_preg(12))
+        .with(xreg_preg(13))
+        .with(xreg_preg(14))
+        .with(xreg_preg(15))
+        .with(xreg_preg(16))
+        .with(xreg_preg(17))
+        .with(xreg_preg(18))
+        .with(xreg_preg(19))
+        .with(xreg_preg(20))
+        .with(xreg_preg(21))
+        .with(xreg_preg(22))
+        .with(xreg_preg(23))
+        .with(xreg_preg(24))
+        .with(xreg_preg(25))
+        .with(xreg_preg(26))
+        .with(xreg_preg(27))
+        .with(xreg_preg(28))
+        // vector registers: v0 to v31 inclusive.
+        .with(vreg_preg(0))
+        .with(vreg_preg(1))
+        .with(vreg_preg(2))
+        .with(vreg_preg(3))
+        .with(vreg_preg(4))
+        .with(vreg_preg(5))
+        .with(vreg_preg(6))
+        .with(vreg_preg(7))
+        .with(vreg_preg(8))
+        .with(vreg_preg(9))
+        .with(vreg_preg(10))
+        .with(vreg_preg(11))
+        .with(vreg_preg(12))
+        .with(vreg_preg(13))
+        .with(vreg_preg(14))
+        .with(vreg_preg(15))
+        .with(vreg_preg(16))
+        .with(vreg_preg(17))
+        .with(vreg_preg(18))
+        .with(vreg_preg(19))
+        .with(vreg_preg(20))
+        .with(vreg_preg(21))
+        .with(vreg_preg(22))
+        .with(vreg_preg(23))
+        .with(vreg_preg(24))
+        .with(vreg_preg(25))
+        .with(vreg_preg(26))
+        .with(vreg_preg(27))
+        .with(vreg_preg(28))
+        .with(vreg_preg(29))
+        .with(vreg_preg(30))
+        .with(vreg_preg(31))
+}
+
 const DEFAULT_AAPCS_CLOBBERS: PRegSet = default_aapcs_clobbers();
 const WINCH_CLOBBERS: PRegSet = winch_clobbers();
+const ALL_CLOBBERS: PRegSet = all_clobbers();
 
 fn create_reg_env(enable_pinned_reg: bool) -> MachineEnv {
     fn preg(r: Reg) -> PReg {

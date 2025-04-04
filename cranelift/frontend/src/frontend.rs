@@ -778,7 +778,9 @@ impl<'a> FunctionBuilder<'a> {
     /// other jump instructions.
     pub fn change_jump_destination(&mut self, inst: Inst, old_block: Block, new_block: Block) {
         let dfg = &mut self.func.dfg;
-        for block in dfg.insts[inst].branch_destination_mut(&mut dfg.jump_tables) {
+        for block in
+            dfg.insts[inst].branch_destination_mut(&mut dfg.jump_tables, &mut dfg.exception_tables)
+        {
             if block.block(&dfg.value_lists) == old_block {
                 self.func_ctx.ssa.remove_block_predecessor(old_block, inst);
                 block.set_block(new_block, &mut dfg.value_lists);

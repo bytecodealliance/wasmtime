@@ -902,7 +902,11 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
     }
 
-    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
+    fn get_regs_clobbered_by_call(
+        call_conv_of_callee: isa::CallConv,
+        is_exception: bool,
+    ) -> PRegSet {
+        assert!(!is_exception);
         match call_conv_of_callee {
             isa::CallConv::Tail => TAIL_CLOBBERS,
             _ => SYSV_CLOBBERS,

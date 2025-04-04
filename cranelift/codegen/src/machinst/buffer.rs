@@ -181,6 +181,7 @@ use crate::trace;
 use crate::{ir, MachInstEmitState};
 use crate::{timing, VCodeConstantData};
 use cranelift_control::ControlPlane;
+use cranelift_entity::packed_option::PackedOption;
 use cranelift_entity::{entity_impl, PrimaryMap};
 use smallvec::SmallVec;
 use std::cmp::Ordering;
@@ -258,6 +259,8 @@ pub struct MachBuffer<I: VCodeInst> {
     user_stack_maps: SmallVec<[(CodeOffset, u32, ir::UserStackMap); 8]>,
     /// Any unwind info at a given location.
     unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
+    /// Any exception handler targets at a given location.
+    exception_handlers: SmallVec<[(CodeOffset, PackedOption<ir::ExceptionTag>, MachLabel); 8]>,
     /// The current source location in progress (after `start_srcloc()` and
     /// before `end_srcloc()`).  This is a (start_offset, src_loc) tuple.
     cur_srcloc: Option<(CodeOffset, RelSourceLoc)>,
@@ -336,6 +339,7 @@ impl MachBufferFinalized<Stencil> {
                 .collect(),
             user_stack_maps: self.user_stack_maps,
             unwind_info: self.unwind_info,
+            exception_handlers: self.exception_handlers,
             alignment: self.alignment,
         }
     }
@@ -368,6 +372,8 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     pub(crate) user_stack_maps: SmallVec<[(CodeOffset, u32, ir::UserStackMap); 8]>,
     /// Any unwind info at a given location.
     pub unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
+    /// Any exception handler targets at a given location.
+    pub exception_handlers: SmallVec<[(CodeOffset, PackedOption<ir::ExceptionTag>, CodeOffset); 8]>,
     /// The required alignment of this buffer.
     pub alignment: u32,
 }
@@ -442,6 +448,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             srclocs: SmallVec::new(),
             user_stack_maps: SmallVec::new(),
             unwind_info: SmallVec::new(),
+            exception_handlers: SmallVec::new(),
             cur_srcloc: None,
             label_offsets: SmallVec::new(),
             label_aliases: SmallVec::new(),
@@ -1519,6 +1526,12 @@ impl<I: VCodeInst> MachBuffer<I> {
             })
             .collect();
 
+        let exception_handlers = self
+            .exception_handlers
+            .iter()
+            .map(|&(off, tag, target)| (off, tag, self.resolve_label_offset(target)))
+            .collect();
+
         let mut srclocs = self.srclocs;
         srclocs.sort_by_key(|entry| entry.start);
 
@@ -1530,6 +1543,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             srclocs,
             user_stack_maps: self.user_stack_maps,
             unwind_info: self.unwind_info,
+            exception_handlers,
             alignment,
         }
     }
@@ -1612,6 +1626,16 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// Add an unwind record at the current offset.
     pub fn add_unwind(&mut self, unwind: UnwindInst) {
         self.unwind_info.push((self.cur_offset(), unwind));
+    }
+
+    /// Add an exception handler record at the current offset.
+    pub fn add_exception_handler(
+        &mut self,
+        tag: PackedOption<ir::ExceptionTag>,
+        target: MachLabel,
+    ) {
+        self.exception_handlers
+            .push((self.cur_offset(), tag, target));
     }
 
     /// Set the `SourceLoc` for code from this offset until the offset at the

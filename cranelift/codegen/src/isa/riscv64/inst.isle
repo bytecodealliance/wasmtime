@@ -2913,6 +2913,13 @@
 (rule (lower_branch (br_table index _) targets)
   (lower_br_table index targets))
 
+(rule (lower_branch (try_call (func_ref_data sig_ref extname dist) inputs et) targets)
+      (gen_try_call sig_ref extname dist et inputs targets))
+
+(rule (lower_branch (try_call_indirect val inputs et) targets)
+      (if-let (exception_sig sig_ref) et)
+      (gen_try_call_indirect sig_ref val et inputs targets))
+
 (decl load_ra () Reg)
 (extern constructor load_ra load_ra)
 
@@ -3016,6 +3023,12 @@
 
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
+
+(decl gen_try_call (SigRef ExternalName RelocDistance ExceptionTable ValueSlice MachLabelSlice) Unit)
+(extern constructor gen_try_call gen_try_call)
+
+(decl gen_try_call_indirect (SigRef Value ExceptionTable ValueSlice MachLabelSlice) Unit)
+(extern constructor gen_try_call_indirect gen_try_call_indirect)
 
 ;;; this is trying to imitate aarch64 `madd` instruction.
 (decl madd (XReg XReg XReg) XReg)

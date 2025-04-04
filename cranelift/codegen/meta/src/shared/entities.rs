@@ -43,6 +43,9 @@ pub(crate) struct EntityRefs {
     /// A reference to a jump table declared in the function preamble.
     pub(crate) jump_table: OperandKind,
 
+    /// A reference to an exception table declared in the function preamble.
+    pub(crate) exception_table: OperandKind,
+
     /// A variable-sized list of value operands. Use for Block and function call arguments.
     pub(crate) varargs: OperandKind,
 }
@@ -83,6 +86,8 @@ impl EntityRefs {
             func_ref: new("func_ref", "ir::FuncRef", "An external function."),
 
             jump_table: new("table", "ir::JumpTable", "A jump table."),
+
+            exception_table: new("exception", "ir::ExceptionTable", "An exception table."),
 
             varargs: OperandKind::new(
                 "",

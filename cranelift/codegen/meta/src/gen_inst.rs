@@ -336,7 +336,7 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                             fmtln!(fmt, "::core::hash::Hash::hash(&{len}, state);");
                             fmt.add_block(&format!("for &block in {blocks}"), |fmt| {
                                 fmtln!(fmt, "::core::hash::Hash::hash(&block.block(pool), state);");
-                                fmt.add_block("for &arg in block.args_slice(pool)", |fmt| {
+                                fmt.add_block("for arg in block.args(pool)", |fmt| {
                                     fmtln!(fmt, "::core::hash::Hash::hash(&arg, state);");
                                 });
                             });
@@ -964,6 +964,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
     let mut tmpl_types = Vec::new();
     let mut into_args = Vec::new();
     let mut block_args = Vec::new();
+    let mut lifetime_param = None;
     for op in &inst.operands_in {
         if op.kind.is_block() {
             args.push(format!("{}_label: {}", op.name, "ir::Block"));
@@ -972,7 +973,14 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
                 op.name, "Destination basic block"
             ));
 
-            args.push(format!("{}_args: {}", op.name, "&[Value]"));
+            let lifetime = *lifetime_param.get_or_insert_with(|| {
+                tmpl_types.insert(0, "'a".to_string());
+                "'a"
+            });
+            args.push(format!(
+                "{}_args: impl IntoIterator<Item = &{} BlockArg>",
+                op.name, lifetime,
+            ));
             args_doc.push(format!("- {}_args: {}", op.name, "Block arguments"));
 
             block_args.push(op);
