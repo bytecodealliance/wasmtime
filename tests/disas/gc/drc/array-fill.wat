@@ -42,17 +42,17 @@
 ;;                                     v60 = ishl v17, v59  ; v59 = 3
 ;; @0027                               v25 = iconst.i32 24
 ;; @0027                               v26 = uadd_overflow_trap v60, v25, user1  ; v25 = 24
+;; @0027                               v37 = uextend.i64 v26
+;;                                     v72 = iadd v10, v37
+;; @0027                               v39 = icmp ule v72, v9
+;; @0027                               trapz v39, user1
 ;;                                     v67 = ishl v3, v59  ; v59 = 3
 ;;                                     v69 = iadd v67, v25  ; v25 = 24
 ;; @0027                               v35 = uextend.i64 v69
-;; @0027                               v36 = uadd_overflow_trap v10, v35, user1
-;; @0027                               v37 = uextend.i64 v26
-;; @0027                               v38 = uadd_overflow_trap v10, v37, user1
-;; @0027                               v39 = icmp ule v38, v9
-;; @0027                               trapz v39, user1
-;; @0027                               v40 = iadd v7, v36
-;;                                     v71 = ishl v5, v59  ; v59 = 3
-;; @0027                               v42 = uextend.i64 v71
+;;                                     v71 = iadd v10, v35
+;; @0027                               v40 = iadd v7, v71
+;;                                     v73 = ishl v5, v59  ; v59 = 3
+;; @0027                               v42 = uextend.i64 v73
 ;; @0027                               v43 = iadd v40, v42
 ;; @0027                               v20 = iconst.i64 8
 ;; @0027                               jump block2(v40)
@@ -63,9 +63,9 @@
 ;;
 ;;                                 block3:
 ;; @0027                               store.i64 notrap aligned little v4, v45
-;;                                     v73 = iconst.i64 8
-;;                                     v74 = iadd.i64 v45, v73  ; v73 = 8
-;; @0027                               jump block2(v74)
+;;                                     v75 = iconst.i64 8
+;;                                     v76 = iadd.i64 v45, v75  ; v75 = 8
+;; @0027                               jump block2(v76)
 ;;
 ;;                                 block4:
 ;; @002a                               jump block1

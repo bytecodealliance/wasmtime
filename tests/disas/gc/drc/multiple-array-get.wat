@@ -42,23 +42,23 @@
 ;;                                     v90 = ishl v18, v89  ; v89 = 3
 ;; @0024                               v25 = iconst.i32 24
 ;; @0024                               v26 = uadd_overflow_trap v90, v25, user1  ; v25 = 24
+;; @0024                               v37 = uextend.i64 v26
+;;                                     v100 = iadd v11, v37
+;; @0024                               v39 = icmp ule v100, v10
+;; @0024                               trapz v39, user1
 ;;                                     v97 = ishl v3, v89  ; v89 = 3
 ;; @0024                               v29 = iadd v97, v25  ; v25 = 24
 ;; @0024                               v35 = uextend.i64 v29
-;; @0024                               v36 = uadd_overflow_trap v11, v35, user1
-;; @0024                               v37 = uextend.i64 v26
-;; @0024                               v38 = uadd_overflow_trap v11, v37, user1
-;; @0024                               v39 = icmp ule v38, v10
-;; @0024                               trapz v39, user1
-;; @0024                               v40 = iadd v8, v36
+;;                                     v99 = iadd v11, v35
+;; @0024                               v40 = iadd v8, v99
 ;; @0024                               v41 = load.i64 notrap aligned little v40
 ;; @002b                               v54 = icmp ult v4, v18
 ;; @002b                               trapz v54, user17
-;;                                     v99 = ishl v4, v89  ; v89 = 3
-;; @002b                               v64 = iadd v99, v25  ; v25 = 24
+;;                                     v101 = ishl v4, v89  ; v89 = 3
+;; @002b                               v64 = iadd v101, v25  ; v25 = 24
 ;; @002b                               v70 = uextend.i64 v64
-;; @002b                               v71 = uadd_overflow_trap v11, v70, user1
-;; @002b                               v75 = iadd v8, v71
+;;                                     v103 = iadd v11, v70
+;; @002b                               v75 = iadd v8, v103
 ;; @002b                               v76 = load.i64 notrap aligned little v75
 ;; @002e                               jump block1
 ;;
