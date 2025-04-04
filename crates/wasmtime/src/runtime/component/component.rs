@@ -929,7 +929,7 @@ impl Component {
         self.exports(instance).map(|i| {
             i.flat_map(|(name, item, index)| {
                 let name = vec![name.to_owned()];
-                let base = std::iter::once((name.clone(), item.clone(), index.clone()));
+                let base = std::iter::once((name.clone(), item.clone(), index));
                 match item {
                     types::ComponentItem::ComponentInstance(_) => {
                         Box::new(base.chain(self.exports_rec(Some(&index)).unwrap().map(
