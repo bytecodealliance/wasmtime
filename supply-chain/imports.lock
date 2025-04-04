@@ -702,8 +702,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.prettyplease]]
-version = "0.2.20"
-when = "2024-05-07"
+version = "0.2.31"
+when = "2025-03-13"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -847,8 +847,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.syn]]
-version = "2.0.90"
-when = "2024-11-29"
+version = "2.0.100"
+when = "2025-03-09"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"

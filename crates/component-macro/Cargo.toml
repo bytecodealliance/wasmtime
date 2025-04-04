@@ -36,7 +36,7 @@ tracing = { workspace = true }
 # For use with the custom attributes test
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-prettyplease = "0.2.19"
+prettyplease = "0.2.31"
 similar = { workspace = true }
 
 [features]
