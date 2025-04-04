@@ -1049,7 +1049,7 @@ impl DataFlowGraph {
     pub fn first_result(&self, inst: Inst) -> Value {
         self.results[inst]
             .first(&self.value_lists)
-            .expect("Instruction has no results")
+            .unwrap_or_else(|| panic!("{inst} has no results"))
     }
 
     /// Test if `inst` has any result values currently.
@@ -1360,6 +1360,15 @@ impl DataFlowGraph {
     /// with `change_to_alias()`.
     pub fn detach_block_params(&mut self, block: Block) -> ValueList {
         self.blocks[block].params.take()
+    }
+
+    /// Detach all of an instruction's result values.
+    ///
+    /// This is a quite low-level operation. A sensible thing to do with the
+    /// detached results is to change them into aliases with
+    /// `change_to_alias()`.
+    pub fn detach_inst_results(&mut self, inst: Inst) {
+        self.results[inst].clear(&mut self.value_lists);
     }
 
     /// Merge the facts for two values. If both values have facts and

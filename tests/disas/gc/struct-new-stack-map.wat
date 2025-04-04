@@ -32,7 +32,7 @@
 ;;       movl    $0x20, %ecx
 ;;       movl    $8, %r8d
 ;;       movq    %rdi, %r13
-;;       callq   0x195
+;;       callq   0x183
 ;;       movq    0x28(%r13), %r9
 ;;       ╰─╼ stack_map: frame_size=64, frame_offsets=[0]
 ;;       movq    %rax, %r8

@@ -531,6 +531,17 @@ pub trait Cursor {
         inst
     }
 
+    /// Replace the instruction under the cursor with `new_inst`.
+    ///
+    /// The cursor is left pointing at the new instruction.
+    ///
+    /// The old instruction that was replaced is returned.
+    fn replace_inst(&mut self, new_inst: ir::Inst) -> ir::Inst {
+        let prev_inst = self.remove_inst();
+        self.insert_inst(new_inst);
+        prev_inst
+    }
+
     /// Insert a block at the current position and switch to it.
     ///
     /// As far as possible, this method behaves as if the block header were an instruction inserted

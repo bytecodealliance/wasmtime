@@ -208,25 +208,26 @@ fn gen_common_isle(
         ";;;; Extracting Opcode, Operands, and Immediates from `InstructionData` ;;;;;;;;",
     );
     fmt.empty_line();
-    let ret_ty = match isle_target {
-        IsleTarget::Lower => "Inst",
-        IsleTarget::Opt => "Value",
-    };
     for inst in instructions {
-        if isle_target == IsleTarget::Opt
-            && (inst.format.has_value_list || inst.value_results.len() != 1)
-        {
-            continue;
-        }
+        let results_len = inst.value_results.len();
+        let is_var_args = inst.format.has_value_list;
+        let has_side_effects = inst.can_trap || inst.other_side_effects;
+
+        let (ret_ty, ty_in_decl, make_inst_ctor, inst_data_etor) =
+            match (isle_target, is_var_args, results_len, has_side_effects) {
+                // The mid-end does not deal with instructions that have var-args right now.
+                (IsleTarget::Opt, true, _, _) => continue,
+
+                (IsleTarget::Opt, _, 1, false) => ("Value", true, "make_inst", "inst_data_value"),
+                (IsleTarget::Opt, _, _, _) => ("Inst", false, "make_skeleton_inst", "inst_data"),
+                (IsleTarget::Lower, _, _, _) => ("Inst", false, "make_inst", "inst_data_value"),
+            };
 
         fmtln!(
             fmt,
             "(decl {} ({}{}) {})",
             inst.name,
-            match isle_target {
-                IsleTarget::Lower => "",
-                IsleTarget::Opt => "Type ",
-            },
+            if ty_in_decl { "Type " } else { "" },
             inst.operands_in
                 .iter()
                 .map(|o| {
@@ -247,10 +248,7 @@ fn gen_common_isle(
                 fmt,
                 "({} {}{})",
                 inst.name,
-                match isle_target {
-                    IsleTarget::Lower => "",
-                    IsleTarget::Opt => "ty ",
-                },
+                if ty_in_decl { "ty " } else { "" },
                 inst.operands_in
                     .iter()
                     .map(|o| { o.name })
@@ -259,11 +257,8 @@ fn gen_common_isle(
             );
 
             let mut s = format!(
-                "(inst_data{} (InstructionData.{} (Opcode.{})",
-                match isle_target {
-                    IsleTarget::Lower => "",
-                    IsleTarget::Opt => " ty",
-                },
+                "({inst_data_etor} {}(InstructionData.{} (Opcode.{})",
+                if ty_in_decl { "ty " } else { "" },
                 inst.format.name,
                 inst.camel_name
             );
@@ -367,8 +362,9 @@ fn gen_common_isle(
         if isle_target == IsleTarget::Opt {
             fmtln!(
                 fmt,
-                "(rule ({} ty {})",
+                "(rule ({}{} {})",
                 inst.name,
+                if ty_in_decl { " ty" } else { "" },
                 inst.operands_in
                     .iter()
                     .map(|o| o.name)
@@ -377,8 +373,10 @@ fn gen_common_isle(
             );
             fmt.indent(|fmt| {
                 let mut s = format!(
-                    "(make_inst ty (InstructionData.{} (Opcode.{})",
-                    inst.format.name, inst.camel_name
+                    "({make_inst_ctor}{} (InstructionData.{} (Opcode.{})",
+                    if ty_in_decl { " ty" } else { "" },
+                    inst.format.name,
+                    inst.camel_name
                 );
 
                 // Handle values. Note that we skip generating

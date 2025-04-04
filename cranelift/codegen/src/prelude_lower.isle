@@ -3,9 +3,6 @@
 
 ;;;; Primitive and External Types ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; `cranelift-entity`-based identifiers.
-(type Inst (primitive Inst))
-
 ;; ISLE representation of `Vec<u8>`
 (type VecMask extern (enum))
 
@@ -283,8 +280,8 @@
 (extern extractor first_result first_result)
 
 ;; Extract the `InstructionData` for an `Inst`.
-(decl inst_data (InstructionData) Inst)
-(extern extractor infallible inst_data inst_data)
+(decl inst_data_value (InstructionData) Inst)
+(extern extractor infallible inst_data_value inst_data_value)
 
 ;; Extract the type of the instruction's first result.
 (decl result_type (Type) Inst)
@@ -300,11 +297,6 @@
 (extractor (has_type ty inst)
            (and (result_type ty)
                 inst))
-
-;; Match the instruction that defines the given value, if any.
-(spec (def_inst arg) (provide (= result arg)))
-(decl def_inst (Inst) Value)
-(extern extractor def_inst def_inst)
 
 (decl u8_from_iconst (u8) Value)
 (extractor (u8_from_iconst x)
