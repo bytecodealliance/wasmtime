@@ -15,7 +15,6 @@
 
 use crate::{CompiledFunction, RelocationTarget};
 use anyhow::Result;
-use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::unwind::{systemv, UnwindInfo};
 use cranelift_codegen::TextSectionBuilder;
 use cranelift_control::ControlPlane;
@@ -23,9 +22,8 @@ use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use gimli::RunTimeEndian;
 use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, SymbolSection};
 use object::{Architecture, SectionFlags, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
-use std::collections::HashMap;
 use std::ops::Range;
-use wasmtime_environ::obj::{self, LibCall};
+use wasmtime_environ::obj;
 use wasmtime_environ::{Compiler, TripleExt, Unsigned};
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
@@ -62,13 +60,6 @@ pub struct ModuleTextBuilder<'a> {
     /// In-progress text section that we're using cranelift's `MachBuffer` to
     /// build to resolve relocations (calls) between functions.
     text: Box<dyn TextSectionBuilder>,
-
-    /// Symbols defined in the object for libcalls that relocations are applied
-    /// against.
-    ///
-    /// Note that this isn't typically used. It's only used for SSE-disabled
-    /// builds without SIMD on x86_64 right now.
-    libcall_symbols: HashMap<LibCall, SymbolId>,
 
     ctrl_plane: ControlPlane,
 }
@@ -111,7 +102,6 @@ impl<'a> ModuleTextBuilder<'a> {
             text_section,
             unwind_info: Default::default(),
             text,
-            libcall_symbols: HashMap::default(),
             ctrl_plane: ControlPlane::default(),
         }
     }
@@ -183,49 +173,6 @@ impl<'a> ModuleTextBuilder<'a> {
                          {:?}: {r:?}",
                         r.reloc_target,
                     );
-                }
-
-                // Relocations against libcalls are not common at this time and
-                // are only used in non-default configurations that disable wasm
-                // SIMD, disable SSE features, and for wasm modules that still
-                // use floating point operations.
-                //
-                // Currently these relocations are all expected to be absolute
-                // 8-byte relocations so that's asserted here and then encoded
-                // directly into the object as a normal object relocation. This
-                // is processed at module load time to resolve the relocations.
-                RelocationTarget::HostLibcall(call) => {
-                    let symbol = *self.libcall_symbols.entry(call).or_insert_with(|| {
-                        self.obj.add_symbol(Symbol {
-                            name: call.symbol().as_bytes().to_vec(),
-                            value: 0,
-                            size: 0,
-                            kind: SymbolKind::Text,
-                            scope: SymbolScope::Linkage,
-                            weak: false,
-                            section: SymbolSection::Undefined,
-                            flags: SymbolFlags::None,
-                        })
-                    });
-                    let flags = match r.reloc {
-                        Reloc::Abs8 => object::RelocationFlags::Generic {
-                            encoding: object::RelocationEncoding::Generic,
-                            kind: object::RelocationKind::Absolute,
-                            size: 64,
-                        },
-                        other => unimplemented!("unimplemented relocation kind {other:?}"),
-                    };
-                    self.obj
-                        .add_relocation(
-                            self.text_section,
-                            object::write::Relocation {
-                                symbol,
-                                flags,
-                                offset: reloc_offset,
-                                addend: r.addend,
-                            },
-                        )
-                        .unwrap();
                 }
 
                 // This relocation is used to fill in which hostcall id is

@@ -1,10 +1,4 @@
-use super::{
-    abi::Aarch64ABI,
-    address::Address,
-    asm::Assembler,
-    regs::{self, scratch},
-    ABI,
-};
+use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs, ABI};
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, local::LocalSlot, vmctx},
     codegen::{ptr_type_from_ptr_size, CodeGenContext, CodeGenError, Emission, FuncEnv},
@@ -290,7 +284,6 @@ impl Masm for MacroAssembler {
         match callee {
             CalleeKind::Indirect(reg) => self.asm.call_with_reg(reg, call_conv),
             CalleeKind::Direct(idx) => self.asm.call_with_name(idx, call_conv),
-            CalleeKind::LibCall(lib) => self.asm.call_with_lib(lib, scratch(), call_conv),
         }
 
         Ok(total_stack)
