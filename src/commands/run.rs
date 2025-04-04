@@ -542,9 +542,32 @@ impl RunCommand {
             Val,
         };
 
-        let invoke = self.invoke.as_ref().unwrap();
-        let untyped_call = UntypedFuncCall::parse(invoke)
-            .with_context(|| format!("parsing invoke \"{invoke}\""))?;
+        let invoke: &String = self.invoke.as_ref().unwrap();
+
+        // Check if input is wrapped in double quotes
+        let lacks_quotes = !invoke.starts_with('"') && !invoke.ends_with('"');
+
+        // Check if parentheses are present and in the correct order ()
+        let lacks_parentheses = (invoke.contains('(') && invoke.contains(')'))
+            && (invoke.find('(').unwrap() < invoke.find(')').unwrap());
+
+        // Construct a properly formatted suggestion
+        let empty_argument_suggestion = format!(r#""{}()""#, invoke.trim_matches('"'));
+
+        // Construct a properly formatted suggestion for string arguments
+        let string_argument_suggestion = format!(r#""{}(\"hello\")""#, invoke.trim_matches('"'));
+
+        let untyped_call = UntypedFuncCall::parse(invoke).with_context(|| {
+            if lacks_quotes || lacks_parentheses {
+                format!(
+                    "Failed to parse invoke '{invoke}': function calls must be enveloped in double quotes and must include parentheses (e.g., {empty_argument_suggestion}).\n
+                    String arguments must be enveloped in escaped double quotes (e.g., {string_argument_suggestion}).\n"
+                )
+            } else {
+                format!("Failed to parse invoke '{invoke}': invalid function call syntax")
+            }
+        })?;
+
         let name = untyped_call.name();
         let matches = component
             .exports_rec(None)
