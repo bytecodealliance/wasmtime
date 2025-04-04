@@ -174,10 +174,7 @@ authors = ["The Wasmtime Project Developers"]
 edition = "2021"
 # Wasmtime's current policy is that this number can be no larger than the
 # current stable release of Rust minus 2.
-#
-# NB: once this is 1.84+ delete `pulley/build.rs` and the similar code in
-# `crate/wasmtime/build.rs`
-rust-version = "1.83.0"
+rust-version = "1.84.0"
 
 [workspace.lints.rust]
 # Turn on some lints which are otherwise allow-by-default in rustc.
@@ -309,16 +306,16 @@ wit-bindgen = { version = "0.41.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.41.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.227.0", default-features = false, features = ['simd'] }
-wat = "1.227.0"
-wast = "227.0.0"
-wasmprinter = "0.227.0"
-wasm-encoder = "0.227.0"
-wasm-smith = "0.227.0"
-wasm-mutate = "0.227.0"
-wit-parser = "0.227.0"
-wit-component = "0.227.0"
-wasm-wave = "0.227.0"
+wasmparser = { version = "0.228.0", default-features = false, features = ['simd'] }
+wat = "1.228.0"
+wast = "228.0.0"
+wasmprinter = "0.228.0"
+wasm-encoder = "0.228.0"
+wasm-smith = "0.228.0"
+wasm-mutate = "0.228.0"
+wit-parser = "0.228.0"
+wit-component = "0.228.0"
+wasm-wave = "0.228.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------

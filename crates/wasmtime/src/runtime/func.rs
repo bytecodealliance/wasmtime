@@ -1211,9 +1211,8 @@ impl Func {
             let num_gc_refs = ty.as_wasm_func_type().non_i31_gc_ref_params_count();
             if let Some(num_gc_refs) = core::num::NonZeroUsize::new(num_gc_refs) {
                 return Ok(opaque
-                    .gc_store()?
-                    .gc_heap
-                    .need_gc_before_entering_wasm(num_gc_refs));
+                    .optional_gc_store()
+                    .is_some_and(|s| s.gc_heap.need_gc_before_entering_wasm(num_gc_refs)));
             }
         }
 

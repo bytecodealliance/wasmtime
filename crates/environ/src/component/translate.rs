@@ -639,10 +639,6 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::ResourceRep(resource, ty)
                         }
-                        wasmparser::CanonicalFunction::ThreadSpawn { .. }
-                        | wasmparser::CanonicalFunction::ThreadAvailableParallelism => {
-                            bail!("unsupported intrinsic")
-                        }
                         wasmparser::CanonicalFunction::BackpressureSet => {
                             let core_type = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
@@ -813,6 +809,13 @@ impl<'a, 'data> Translator<'a, 'data> {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::ErrorContextDrop { func }
+                        }
+                        wasmparser::CanonicalFunction::ContextGet(..)
+                        | wasmparser::CanonicalFunction::ContextSet(..)
+                        | wasmparser::CanonicalFunction::ThreadSpawnRef { .. }
+                        | wasmparser::CanonicalFunction::ThreadSpawnIndirect { .. }
+                        | wasmparser::CanonicalFunction::ThreadAvailableParallelism => {
+                            bail!("unsupported intrinsic")
                         }
                     };
                     self.result.initializers.push(init);

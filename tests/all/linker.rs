@@ -420,7 +420,7 @@ fn test_default_value_unknown_import() -> Result<()> {
     let module = Module::new(store.engine(), WAT).expect("failed to create module");
     let mut linker = Linker::new(store.engine());
 
-    linker.define_unknown_imports_as_default_values(&module)?;
+    linker.define_unknown_imports_as_default_values(&mut store, &module)?;
     let instance = linker.instantiate(&mut store, &module)?;
 
     // "run" calls an import function which will not be defined, so it should

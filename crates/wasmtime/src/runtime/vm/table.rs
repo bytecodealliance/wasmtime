@@ -533,7 +533,7 @@ impl Table {
     /// `gc_store.is_none()` and this is a table of GC references.
     pub fn fill(
         &mut self,
-        gc_store: Option<&mut GcStore>,
+        mut gc_store: Option<&mut GcStore>,
         dst: u64,
         val: TableElement,
         len: u64,
@@ -554,18 +554,25 @@ impl Table {
                 funcrefs[start..end].fill(TaggedFuncRef::from(f, lazy_init));
             }
             TableElement::GcRef(r) => {
-                let gc_store =
-                    gc_store.expect("must provide a GcStore for tables of GC references");
-
                 // Clone the init GC reference into each table slot.
                 for slot in &mut self.gc_refs_mut()[start..end] {
-                    gc_store.write_gc_ref(slot, r.as_ref());
+                    match gc_store.as_deref_mut() {
+                        Some(s) => s.write_gc_ref(slot, r.as_ref()),
+                        None => {
+                            debug_assert!(slot.as_ref().is_none_or(|x| x.is_i31()));
+                            debug_assert!(r.as_ref().is_none_or(|r| r.is_i31()));
+                            *slot = r.as_ref().map(|r| r.copy_i31());
+                        }
+                    }
                 }
 
                 // Drop the init GC reference, since we aren't holding onto this
                 // reference anymore, only the clones in the table.
                 if let Some(r) = r {
-                    gc_store.drop_gc_ref(r);
+                    match gc_store {
+                        Some(s) => s.drop_gc_ref(r),
+                        None => debug_assert!(r.is_i31()),
+                    }
                 }
             }
             TableElement::UninitFunc => {
@@ -669,7 +676,7 @@ impl Table {
         }
 
         self.fill(
-            store.store_opaque_mut().optional_gc_store_mut()?,
+            store.store_opaque_mut().optional_gc_store_mut(),
             u64::try_from(old_size).unwrap(),
             init_value,
             u64::try_from(delta).unwrap(),
@@ -695,7 +702,11 @@ impl Table {
                     .map(|e| e.into_table_element(lazy_init))
             }
             TableElementType::GcRef => self.gc_refs().get(index).map(|r| {
-                let r = r.as_ref().map(|r| gc_store.unwrap().clone_gc_ref(r));
+                let r = r.as_ref().map(|r| match gc_store {
+                    Some(s) => s.clone_gc_ref(r),
+                    None => r.copy_i31(),
+                });
+
                 TableElement::GcRef(r)
             }),
         }

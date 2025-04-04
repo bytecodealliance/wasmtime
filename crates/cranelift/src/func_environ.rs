@@ -14,7 +14,7 @@ use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, types};
 use cranelift_codegen::ir::{ArgumentPurpose, Function, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
-use cranelift_entity::packed_option::ReservedValue;
+use cranelift_entity::packed_option::ReservedValue as _;
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
@@ -98,6 +98,7 @@ pub struct FuncEnvironment<'module_environment> {
     types: &'module_environment ModuleTypesBuilder,
     wasm_func_ty: &'module_environment WasmFuncType,
     sig_ref_to_ty: SecondaryMap<ir::SigRef, Option<&'module_environment WasmFuncType>>,
+    needs_gc_heap: bool,
 
     #[cfg(feature = "gc")]
     ty_to_gc_layout: std::collections::HashMap<
@@ -187,6 +188,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             types,
             wasm_func_ty,
             sig_ref_to_ty: SecondaryMap::default(),
+            needs_gc_heap: false,
 
             #[cfg(feature = "gc")]
             ty_to_gc_layout: std::collections::HashMap::new(),
@@ -314,7 +316,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(builder.func);
         let base = builder.ins().global_value(pointer_type, vmctx);
-        let offset = i32::from(self.offsets.ptr.vmctx_runtime_limits());
+        let offset = i32::from(self.offsets.ptr.vmctx_store_context());
         debug_assert!(self.vmstore_context_ptr.is_reserved_value());
         self.vmstore_context_ptr = builder.ins().load(
             pointer_type,
@@ -1193,6 +1195,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             funcref,
             i32::from(self.offsets.ptr.vm_func_ref_type_index()),
         )
+    }
+
+    /// Does this function need a GC heap?
+    pub fn needs_gc_heap(&self) -> bool {
+        self.needs_gc_heap
     }
 }
 

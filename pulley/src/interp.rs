@@ -472,11 +472,7 @@ impl XRegVal {
 
     pub fn get_ptr<T>(&self) -> *mut T {
         let ptr = unsafe { self.0.ptr };
-        let ptr = usize::from_le(ptr);
-        #[cfg(has_provenance_apis)]
-        return core::ptr::with_exposed_provenance_mut(ptr);
-        #[cfg(not(has_provenance_apis))]
-        return ptr as *mut T;
+        core::ptr::with_exposed_provenance_mut(usize::from_le(ptr))
     }
 
     pub fn set_i32(&mut self, x: i32) {
@@ -496,11 +492,7 @@ impl XRegVal {
     }
 
     pub fn set_ptr<T>(&mut self, ptr: *mut T) {
-        #[cfg(has_provenance_apis)]
-        let ptr = ptr.expose_provenance();
-        #[cfg(not(has_provenance_apis))]
-        let ptr = ptr as usize;
-        self.0.ptr = ptr.to_le();
+        self.0.ptr = ptr.expose_provenance().to_le();
     }
 }
 

@@ -163,15 +163,19 @@ pub mod builtins {
                     func: &mut ir::Function,
                 ) -> WasmResult<ir::FuncRef> {
                     #[cfg(feature = "gc")]
-                    return Ok(func_env.builtin_functions.$name(func));
+                    {
+                        func_env.needs_gc_heap = true;
+                        return Ok(func_env.builtin_functions.$name(func));
+                    }
 
                     #[cfg(not(feature = "gc"))]
-                    let _ = (func, func_env);
-                    #[cfg(not(feature = "gc"))]
-                    return Err(wasmtime_environ::wasm_unsupported!(
-                        "support for Wasm GC disabled at compile time because the `gc` cargo \
-                         feature was not enabled"
-                    ));
+                    {
+                        let _ = (func, func_env);
+                        return Err(wasmtime_environ::wasm_unsupported!(
+                            "support for Wasm GC disabled at compile time because the `gc` cargo \
+                             feature was not enabled"
+                        ));
+                    }
                 }
             )*
         };
