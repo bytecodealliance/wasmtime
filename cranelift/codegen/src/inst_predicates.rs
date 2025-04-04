@@ -200,6 +200,16 @@ pub(crate) fn visit_block_succs<F: FnMut(Inst, Block, bool)>(
                 }
             }
 
+            ir::InstructionData::TryCall { exception, .. }
+            | ir::InstructionData::TryCallIndirect { exception, .. } => {
+                let pool = &f.dfg.value_lists;
+                let exdata = &f.stencil.dfg.exception_tables[*exception];
+
+                for dest in exdata.all_branches() {
+                    visit(inst, dest.block(pool), false);
+                }
+            }
+
             inst => debug_assert!(!inst.opcode().is_branch()),
         }
     }

@@ -932,7 +932,7 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::MachOTlsGetAddr { rd, .. } => {
             collector.reg_fixed_def(rd, regs::xreg(0));
             let mut clobbers =
-                AArch64MachineDeps::get_regs_clobbered_by_call(CallConv::AppleAarch64);
+                AArch64MachineDeps::get_regs_clobbered_by_call(CallConv::AppleAarch64, false);
             clobbers.remove(regs::xreg_preg(0));
             collector.reg_clobbers(clobbers);
         }
@@ -979,6 +979,8 @@ impl MachInst for Inst {
     fn is_included_in_clobbers(&self) -> bool {
         let (caller, callee) = match self {
             Inst::Args { .. } => return false,
+            Inst::Call { info } if info.try_call_info.is_some() => return true,
+            Inst::CallInd { info } if info.try_call_info.is_some() => return true,
             Inst::Call { info } => (info.caller_conv, info.callee_conv),
             Inst::CallInd { info } => (info.caller_conv, info.callee_conv),
             _ => return true,
@@ -995,8 +997,8 @@ impl MachInst for Inst {
         //
         // See the note in [crate::isa::aarch64::abi::is_caller_save_reg] for
         // more information on this ABI-implementation hack.
-        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(caller);
-        let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(callee);
+        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(caller, false);
+        let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(callee, false);
 
         let mut all_clobbers = caller_clobbers;
         all_clobbers.union_from(callee_clobbers);
@@ -1021,11 +1023,13 @@ impl MachInst for Inst {
         match self {
             &Inst::Rets { .. } => MachTerminator::Ret,
             &Inst::ReturnCall { .. } | &Inst::ReturnCallInd { .. } => MachTerminator::RetCall,
-            &Inst::Jump { .. } => MachTerminator::Uncond,
-            &Inst::CondBr { .. } => MachTerminator::Cond,
-            &Inst::TestBitAndBranch { .. } => MachTerminator::Cond,
-            &Inst::IndirectBr { .. } => MachTerminator::Indirect,
-            &Inst::JTSequence { .. } => MachTerminator::Indirect,
+            &Inst::Jump { .. } => MachTerminator::Branch,
+            &Inst::CondBr { .. } => MachTerminator::Branch,
+            &Inst::TestBitAndBranch { .. } => MachTerminator::Branch,
+            &Inst::IndirectBr { .. } => MachTerminator::Branch,
+            &Inst::JTSequence { .. } => MachTerminator::Branch,
+            &Inst::Call { ref info } if info.try_call_info.is_some() => MachTerminator::Branch,
+            &Inst::CallInd { ref info } if info.try_call_info.is_some() => MachTerminator::Branch,
             _ => MachTerminator::None,
         }
     }
@@ -1198,6 +1202,16 @@ fn mem_finalize_for_show(mem: &AMode, access_ty: Type, state: &EmitState) -> (St
 
     let mem = mem.pretty_print(access_ty.bytes() as u8);
     (mem_str, mem)
+}
+
+fn pretty_print_try_call(info: &TryCallInfo) -> String {
+    let dests = info
+        .exception_dests
+        .iter()
+        .map(|(tag, label)| format!("{tag:?}: {label:?}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("; b {:?}; catch [{dests}]", info.continuation)
 }
 
 impl Inst {
@@ -2565,10 +2579,22 @@ impl Inst {
                     format!("{op} {rd}, {rn}")
                 }
             }
-            &Inst::Call { .. } => format!("bl 0"),
+            &Inst::Call { ref info } => {
+                let try_call = info
+                    .try_call_info
+                    .as_ref()
+                    .map(|tci| pretty_print_try_call(tci))
+                    .unwrap_or_default();
+                format!("bl 0{try_call}")
+            }
             &Inst::CallInd { ref info } => {
                 let rn = pretty_print_reg(info.dest);
-                format!("blr {rn}")
+                let try_call = info
+                    .try_call_info
+                    .as_ref()
+                    .map(|tci| pretty_print_try_call(tci))
+                    .unwrap_or_default();
+                format!("blr {rn}{try_call}")
             }
             &Inst::ReturnCall { ref info } => {
                 let mut s = format!(

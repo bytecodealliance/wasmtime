@@ -535,7 +535,6 @@ block0:
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   jalr a4
-;   j 4
 ;   ld a2, 0(sp)
 ;   sd a2, 0xc0(sp)
 ;   ld a2, 8(sp)
@@ -968,7 +967,6 @@ block0:
 ;   ld a2, 0x1c0(sp)
 ;   jalr t1
 ;   addi sp, sp, -0xa0
-;   j 4
 ;   ld a2, 0xa0(sp)
 ;   sd a2, 0x160(sp)
 ;   ld a2, 0xa8(sp)

@@ -390,7 +390,8 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::ElfTlsGetAddr { rd, .. } => {
             // x10 is a0 which is both the first argument and the first return value.
             collector.reg_fixed_def(rd, a0());
-            let mut clobbers = Riscv64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
+            let mut clobbers =
+                Riscv64MachineDeps::get_regs_clobbered_by_call(CallConv::SystemV, false);
             clobbers.remove(px_reg(10));
             collector.reg_clobbers(clobbers);
         }
@@ -751,12 +752,14 @@ impl MachInst for Inst {
 
     fn is_term(&self) -> MachTerminator {
         match self {
-            &Inst::Jal { .. } => MachTerminator::Uncond,
-            &Inst::CondBr { .. } => MachTerminator::Cond,
-            &Inst::Jalr { .. } => MachTerminator::Uncond,
+            &Inst::Jal { .. } => MachTerminator::Branch,
+            &Inst::CondBr { .. } => MachTerminator::Branch,
+            &Inst::Jalr { .. } => MachTerminator::Branch,
             &Inst::Rets { .. } => MachTerminator::Ret,
-            &Inst::BrTable { .. } => MachTerminator::Indirect,
+            &Inst::BrTable { .. } => MachTerminator::Branch,
             &Inst::ReturnCall { .. } | &Inst::ReturnCallInd { .. } => MachTerminator::RetCall,
+            &Inst::Call { ref info } if info.try_call_info.is_some() => MachTerminator::Branch,
+            &Inst::CallInd { ref info } if info.try_call_info.is_some() => MachTerminator::Branch,
             _ => MachTerminator::None,
         }
     }
@@ -872,6 +875,16 @@ pub fn reg_name(reg: Reg) -> String {
             format!("{reg:?}")
         }
     }
+}
+
+fn pretty_print_try_call(info: &TryCallInfo) -> String {
+    let dests = info
+        .exception_dests
+        .iter()
+        .map(|(tag, label)| format!("{tag:?}: {label:?}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("; j {:?}; catch [{dests}]", info.continuation)
 }
 
 impl Inst {
@@ -1305,10 +1318,22 @@ impl Inst {
                     format!("slli {rd},{rn},{shift_bits}; {op} {rd},{rd},{shift_bits}")
                 };
             }
-            &MInst::Call { ref info } => format!("call {}", info.dest.display(None)),
+            &MInst::Call { ref info } => {
+                let try_call = info
+                    .try_call_info
+                    .as_ref()
+                    .map(|tci| pretty_print_try_call(tci))
+                    .unwrap_or_default();
+                format!("call {}{try_call}", info.dest.display(None))
+            }
             &MInst::CallInd { ref info } => {
                 let rd = format_reg(info.dest);
-                format!("callind {rd}")
+                let try_call = info
+                    .try_call_info
+                    .as_ref()
+                    .map(|tci| pretty_print_try_call(tci))
+                    .unwrap_or_default();
+                format!("callind {rd}{try_call}")
             }
             &MInst::ReturnCall { ref info } => {
                 let mut s = format!(

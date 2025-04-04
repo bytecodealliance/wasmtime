@@ -1128,6 +1128,14 @@ impl Inst {
                     sink.push_user_stack_map(state, offset, s);
                 }
 
+                // Add exception info, if any, at this point (which will
+                // be the return address on stack).
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    for &(tag, label) in &try_call.exception_dests {
+                        sink.add_exception_handler(tag, label);
+                    }
+                }
+
                 let callee_pop_size = i32::try_from(info.callee_pop_size).unwrap();
                 if callee_pop_size > 0 {
                     for inst in Riscv64MachineDeps::gen_sp_reg_adjust(-callee_pop_size) {
@@ -1141,6 +1149,15 @@ impl Inst {
                     |inst| inst.emit(sink, emit_info, state),
                     |needed_space| Some(Inst::EmitIsland { needed_space }),
                 );
+
+                // If this is a try-call, jump to the continuation
+                // (normal-return) block.
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    let jmp = Inst::Jal {
+                        label: try_call.continuation,
+                    };
+                    jmp.emit(sink, emit_info, state);
+                }
 
                 *start_off = sink.cur_offset();
             }
@@ -1159,6 +1176,14 @@ impl Inst {
 
                 sink.add_call_site();
 
+                // Add exception info, if any, at this point (which will
+                // be the return address on stack).
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    for &(tag, label) in &try_call.exception_dests {
+                        sink.add_exception_handler(tag, label);
+                    }
+                }
+
                 let callee_pop_size = i32::try_from(info.callee_pop_size).unwrap();
                 if callee_pop_size > 0 {
                     for inst in Riscv64MachineDeps::gen_sp_reg_adjust(-callee_pop_size) {
@@ -1172,6 +1197,15 @@ impl Inst {
                     |inst| inst.emit(sink, emit_info, state),
                     |needed_space| Some(Inst::EmitIsland { needed_space }),
                 );
+
+                // If this is a try-call, jump to the continuation
+                // (normal-return) block.
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    let jmp = Inst::Jal {
+                        label: try_call.continuation,
+                    };
+                    jmp.emit(sink, emit_info, state);
+                }
 
                 *start_off = sink.cur_offset();
             }
@@ -2598,10 +2632,12 @@ impl Inst {
             }
 
             Inst::EmitIsland { needed_space } => {
-                let jump_around_label = sink.get_label();
-                Inst::gen_jump(jump_around_label).emit(sink, emit_info, state);
-                sink.emit_island(needed_space + 4, &mut state.ctrl_plane);
-                sink.bind_label(jump_around_label, &mut state.ctrl_plane);
+                if sink.island_needed(*needed_space) {
+                    let jump_around_label = sink.get_label();
+                    Inst::gen_jump(jump_around_label).emit(sink, emit_info, state);
+                    sink.emit_island(needed_space + 4, &mut state.ctrl_plane);
+                    sink.bind_label(jump_around_label, &mut state.ctrl_plane);
+                }
             }
         }
     }

@@ -714,6 +714,12 @@
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
 
+(decl gen_try_call (SigRef ExternalName RelocDistance ExceptionTable ValueSlice MachLabelSlice) Unit)
+(extern constructor gen_try_call gen_try_call)
+
+(decl gen_try_call_indirect (SigRef Value ExceptionTable ValueSlice MachLabelSlice) Unit)
+(extern constructor gen_try_call_indirect gen_try_call_indirect)
+
 ;;;; Helpers for Sign extension ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Sign extend a `Value` to at least 32-bit

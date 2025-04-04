@@ -7,6 +7,7 @@ pub mod constant;
 pub mod dfg;
 pub mod dynamic_type;
 pub mod entities;
+mod exception_table;
 mod extfunc;
 mod extname;
 pub mod function;
@@ -38,9 +39,11 @@ pub use crate::ir::constant::{ConstantData, ConstantPool};
 pub use crate::ir::dfg::{BlockData, DataFlowGraph, ValueDef};
 pub use crate::ir::dynamic_type::{dynamic_to_fixed, DynamicTypeData, DynamicTypes};
 pub use crate::ir::entities::{
-    Block, Constant, DynamicStackSlot, DynamicType, FuncRef, GlobalValue, Immediate, Inst,
-    JumpTable, MemoryType, SigRef, StackSlot, UserExternalNameRef, Value,
+    Block, Constant, DynamicStackSlot, DynamicType, ExceptionTable, ExceptionTag, FuncRef,
+    GlobalValue, Immediate, Inst, JumpTable, MemoryType, SigRef, StackSlot, UserExternalNameRef,
+    Value,
 };
+pub use crate::ir::exception_table::ExceptionTableData;
 pub use crate::ir::extfunc::{
     AbiParam, ArgumentExtension, ArgumentPurpose, ExtFuncData, Signature,
 };
@@ -48,7 +51,7 @@ pub use crate::ir::extname::{ExternalName, UserExternalName, UserFuncName};
 pub use crate::ir::function::Function;
 pub use crate::ir::globalvalue::GlobalValueData;
 pub use crate::ir::instructions::{
-    BlockCall, InstructionData, Opcode, ValueList, ValueListPool, VariableArgs,
+    BlockArg, BlockCall, InstructionData, Opcode, ValueList, ValueListPool, VariableArgs,
 };
 pub use crate::ir::jumptable::JumpTableData;
 pub use crate::ir::known_symbol::KnownSymbol;
@@ -71,6 +74,9 @@ use crate::entity::{entity_impl, PrimaryMap, SecondaryMap};
 
 /// Map of jump tables.
 pub type JumpTables = PrimaryMap<JumpTable, JumpTableData>;
+
+/// Map of exception tables.
+pub type ExceptionTables = PrimaryMap<ExceptionTable, ExceptionTableData>;
 
 /// Source locations for instructions.
 pub(crate) type SourceLocs = SecondaryMap<Inst, RelSourceLoc>;
