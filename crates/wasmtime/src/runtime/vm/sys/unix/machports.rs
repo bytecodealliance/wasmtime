@@ -313,7 +313,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__rsp as usize,
             );
 
-            let resume = |state: &mut ThreadState, pc: usize, fp: usize, fp, usize, fault1: usize, fault2: usize, trap: Trap| {
+            let resume = |state: &mut ThreadState, pc: usize, fp: usize, sp: usize, fault1: usize, fault2: usize, trap: Trap| {
                 // The x86_64 ABI requires a 16-byte stack alignment for
                 // functions, so typically we'll be 16-byte aligned. In this
                 // case we simulate a `call` instruction by decrementing the
