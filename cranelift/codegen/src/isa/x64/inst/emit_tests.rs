@@ -5123,7 +5123,7 @@ fn test_x64_emit() {
     for (insn, expected_encoding, expected_printing) in insns {
         // Check the printed text is as expected.
         let actual_printing = insn.pretty_print_inst(&mut Default::default());
-        assert_eq!(expected_printing, actual_printing);
+        assert_eq!(expected_printing, actual_printing.trim());
         let mut buffer = MachBuffer::new();
 
         insn.emit(&mut buffer, &emit_info, &mut Default::default());

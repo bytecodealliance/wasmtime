@@ -420,7 +420,9 @@ impl Mutator for ReplaceBlockParamWithConst {
         // Remove parameters in branching instructions that point to this block
         for pred in cfg.pred_iter(self.block) {
             let dfg = &mut func.dfg;
-            for branch in dfg.insts[pred.inst].branch_destination_mut(&mut dfg.jump_tables) {
+            for branch in dfg.insts[pred.inst]
+                .branch_destination_mut(&mut dfg.jump_tables, &mut dfg.exception_tables)
+            {
                 if branch.block(&dfg.value_lists) == self.block {
                     branch.remove(param_index, &mut dfg.value_lists);
                 }
@@ -708,7 +710,8 @@ impl Mutator for MergeBlocks {
 
         // If the branch instruction that lead us to this block wasn't an unconditional jump, then
         // we have a conditional jump sequence that we should not break.
-        let branch_dests = func.dfg.insts[pred.inst].branch_destination(&func.dfg.jump_tables);
+        let branch_dests = func.dfg.insts[pred.inst]
+            .branch_destination(&func.dfg.jump_tables, &func.dfg.exception_tables);
         if branch_dests.len() != 1 {
             return Some((
                 func,
@@ -717,7 +720,9 @@ impl Mutator for MergeBlocks {
             ));
         }
 
-        let branch_args = branch_dests[0].args_slice(&func.dfg.value_lists).to_vec();
+        let branch_args = branch_dests[0]
+            .args(&func.dfg.value_lists)
+            .collect::<Vec<_>>();
 
         // TODO: should we free the entity list associated with the block params?
         let block_params = func
@@ -731,8 +736,10 @@ impl Mutator for MergeBlocks {
         // If there were any block parameters in block, then the last instruction in pred will
         // fill these parameters. Make the block params aliases of the terminator arguments.
         for (block_param, arg) in block_params.into_iter().zip(branch_args) {
-            if block_param != arg {
-                func.dfg.change_to_alias(block_param, arg);
+            if let Some(arg) = arg.as_value() {
+                if block_param != arg {
+                    func.dfg.change_to_alias(block_param, arg);
+                }
             }
         }
 

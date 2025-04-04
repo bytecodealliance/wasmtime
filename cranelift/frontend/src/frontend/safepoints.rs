@@ -840,7 +840,7 @@ mod tests {
         builder.declare_value_needs_stack_map(b);
         builder.switch_to_block(block0);
         builder.ins().call(func_ref, &[a]);
-        builder.ins().jump(block0, &[a, b]);
+        builder.ins().jump(block0, &[a.into(), b.into()]);
         builder.seal_all_blocks();
         builder.finalize();
 
@@ -1434,7 +1434,7 @@ block2:
         let v2 = builder.ins().iconst(ir::types::I64, 2);
         builder.declare_value_needs_stack_map(v2);
         builder.ins().call(func_ref, &[]);
-        builder.ins().jump(block3, &[v1, v2]);
+        builder.ins().jump(block3, &[v1.into(), v2.into()]);
 
         builder.switch_to_block(block2);
         let v3 = builder.ins().iconst(ir::types::I64, 3);
@@ -1442,7 +1442,7 @@ block2:
         let v4 = builder.ins().iconst(ir::types::I64, 4);
         builder.declare_value_needs_stack_map(v4);
         builder.ins().call(func_ref, &[]);
-        builder.ins().jump(block3, &[v3, v3]);
+        builder.ins().jump(block3, &[v3.into(), v3.into()]);
 
         builder.switch_to_block(block3);
         builder.append_block_param(block3, ir::types::I64);
@@ -2338,7 +2338,7 @@ block4:
         builder.declare_value_needs_stack_map(v2);
         let v3 = builder.func.dfg.block_params(block0)[3];
 
-        builder.ins().jump(block1, &[v3]);
+        builder.ins().jump(block1, &[v3.into()]);
 
         builder.switch_to_block(block1);
         let v4 = builder.append_block_param(block1, ir::types::I32);
@@ -2352,7 +2352,7 @@ block4:
         builder.ins().call(bar_func_ref, &[v1]);
         builder.ins().call(foo_func_ref, &[]);
         let v5 = builder.ins().iadd_imm(v4, -1);
-        builder.ins().brif(v4, block1, &[v5], block3, &[]);
+        builder.ins().brif(v4, block1, &[v5.into()], block3, &[]);
 
         builder.switch_to_block(block3);
         builder.ins().call(foo_func_ref, &[]);
@@ -2573,7 +2573,7 @@ block3:
         let v1 = builder.func.dfg.first_result(call_inst);
         builder.def_var(var_array, v1);
         let v2 = builder.ins().iconst(ir::types::I32, 0);
-        builder.ins().jump(block_array_init_loop_head, &[v2]);
+        builder.ins().jump(block_array_init_loop_head, &[v2.into()]);
 
         builder.switch_to_block(block_array_init_loop_head);
         let v3 = builder.append_block_param(block_array_init_loop_head, ir::types::I32);
@@ -2594,7 +2594,7 @@ block3:
         builder.ins().call(array_init_elem, &[v1, v4]);
         let v6 = builder.ins().iconst(ir::types::I32, 1);
         let v7 = builder.ins().iadd(v4, v6);
-        builder.ins().jump(block_array_init_loop_head, &[v7]);
+        builder.ins().jump(block_array_init_loop_head, &[v7.into()]);
         builder.seal_block(block_array_init_loop_head);
 
         builder.switch_to_block(block_array_init_loop_done);
@@ -2608,7 +2608,7 @@ block3:
         builder.ins().brif(
             v10,
             block_ref_test_done,
-            &[v9],
+            &[v9.into()],
             block_ref_test_non_null,
             &[],
         );
@@ -2620,15 +2620,19 @@ block3:
         let v12 = builder.ins().iconst(ir::types::I32, 0xbeefbeef);
         let v13 = builder.ins().icmp(ir::condcodes::IntCC::Equal, v11, v12);
         let v14 = builder.ins().iconst(ir::types::I32, 1);
-        builder
-            .ins()
-            .brif(v13, block_ref_test_done, &[v14], block_ref_test_slow, &[]);
+        builder.ins().brif(
+            v13,
+            block_ref_test_done,
+            &[v14.into()],
+            block_ref_test_slow,
+            &[],
+        );
 
         builder.switch_to_block(block_ref_test_slow);
         builder.seal_block(block_ref_test_slow);
         let call_inst = builder.ins().call(ref_test, &[v8, v12]);
         let v15 = builder.func.dfg.first_result(call_inst);
-        builder.ins().jump(block_ref_test_done, &[v15]);
+        builder.ins().jump(block_ref_test_done, &[v15.into()]);
 
         builder.switch_to_block(block_ref_test_done);
         let v16 = builder.append_block_param(block_ref_test_done, ir::types::I32);

@@ -2944,6 +2944,14 @@ impl MachInstEmit for Inst {
                 }
                 sink.add_call_site();
 
+                // Add exception info, if any, at this point (which will
+                // be the return address on stack).
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    for &(tag, label) in &try_call.exception_dests {
+                        sink.add_exception_handler(tag, label);
+                    }
+                }
+
                 if info.callee_pop_size > 0 {
                     let callee_pop_size =
                         i32::try_from(info.callee_pop_size).expect("callee popped more than 2GB");
@@ -2951,6 +2959,26 @@ impl MachInstEmit for Inst {
                         inst.emit(sink, emit_info, state);
                     }
                 }
+
+                // Load any stack-carried return values.
+                info.emit_retval_loads::<AArch64MachineDeps, _, _>(
+                    state.frame_layout().stackslots_size,
+                    |inst| inst.emit(sink, emit_info, state),
+                    |needed_space| Some(Inst::EmitIsland { needed_space }),
+                );
+
+                // If this is a try-call, jump to the continuation
+                // (normal-return) block.
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    let jmp = Inst::Jump {
+                        dest: BranchTarget::Label(try_call.continuation),
+                    };
+                    jmp.emit(sink, emit_info, state);
+                }
+
+                // We produce an island above if needed, so disable
+                // the worst-case-size check in this case.
+                start_off = sink.cur_offset();
             }
             &Inst::CallInd { ref info } => {
                 let user_stack_map = state.take_stack_map();
@@ -2963,6 +2991,14 @@ impl MachInstEmit for Inst {
                 }
                 sink.add_call_site();
 
+                // Add exception info, if any, at this point (which will
+                // be the return address on stack).
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    for &(tag, label) in &try_call.exception_dests {
+                        sink.add_exception_handler(tag, label);
+                    }
+                }
+
                 if info.callee_pop_size > 0 {
                     let callee_pop_size =
                         i32::try_from(info.callee_pop_size).expect("callee popped more than 2GB");
@@ -2970,6 +3006,26 @@ impl MachInstEmit for Inst {
                         inst.emit(sink, emit_info, state);
                     }
                 }
+
+                // Load any stack-carried return values.
+                info.emit_retval_loads::<AArch64MachineDeps, _, _>(
+                    state.frame_layout().stackslots_size,
+                    |inst| inst.emit(sink, emit_info, state),
+                    |needed_space| Some(Inst::EmitIsland { needed_space }),
+                );
+
+                // If this is a try-call, jump to the continuation
+                // (normal-return) block.
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    let jmp = Inst::Jump {
+                        dest: BranchTarget::Label(try_call.continuation),
+                    };
+                    jmp.emit(sink, emit_info, state);
+                }
+
+                // We produce an island above if needed, so disable
+                // the worst-case-size check in this case.
+                start_off = sink.cur_offset();
             }
             &Inst::ReturnCall { ref info } => {
                 emit_return_call_common_sequence(sink, emit_info, state, info);

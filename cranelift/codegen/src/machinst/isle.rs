@@ -357,6 +357,11 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn exception_sig(&mut self, et: ExceptionTable) -> SigRef {
+            self.lower_ctx.dfg().exception_tables[et].signature()
+        }
+
+        #[inline]
         fn box_external_name(&mut self, extname: ExternalName) -> BoxExternalName {
             Box::new(extname)
         }
@@ -771,7 +776,13 @@ macro_rules! isle_prelude_caller_methods {
                 sig.params.len()
             );
 
-            crate::machinst::isle::gen_call_common(&mut self.lower_ctx, num_rets, caller, args)
+            crate::machinst::isle::gen_call_common(
+                &mut self.lower_ctx,
+                num_rets,
+                caller,
+                args,
+                None,
+            )
         }
 
         fn gen_call_indirect(
@@ -798,7 +809,13 @@ macro_rules! isle_prelude_caller_methods {
                 sig.params.len()
             );
 
-            crate::machinst::isle::gen_call_common(&mut self.lower_ctx, num_rets, caller, args)
+            crate::machinst::isle::gen_call_common(
+                &mut self.lower_ctx,
+                num_rets,
+                caller,
+                args,
+                None,
+            )
         }
 
         fn gen_return_call(
@@ -856,6 +873,49 @@ macro_rules! isle_prelude_caller_methods {
 
             InstOutput::new()
         }
+
+        fn gen_try_call(
+            &mut self,
+            sig_ref: SigRef,
+            extname: ExternalName,
+            dist: RelocDistance,
+            et: ExceptionTable,
+            args: ValueSlice,
+            targets: &MachLabelSlice,
+        ) -> () {
+            let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
+            let sigref = self.lower_ctx.dfg().exception_tables[et].signature();
+            let sig = &self.lower_ctx.dfg().signatures[sigref];
+            let num_rets = sig.returns.len();
+            let caller = <$abicaller>::from_func(
+                self.lower_ctx.sigs(),
+                sig_ref,
+                &extname,
+                IsTailCall::No,
+                dist,
+                caller_conv,
+                self.backend.flags().clone(),
+            );
+
+            crate::machinst::isle::gen_call_common(
+                &mut self.lower_ctx,
+                num_rets,
+                caller,
+                args,
+                Some((et, targets)),
+            );
+        }
+
+        fn gen_try_call_indirect(
+            &mut self,
+            _sig_ref: SigRef,
+            _callee: Value,
+            _et: ExceptionTable,
+            _args: ValueSlice,
+            _targets: &MachLabelSlice,
+        ) -> () {
+            todo!()
+        }
     };
 }
 
@@ -885,28 +945,35 @@ pub fn gen_call_common<M: ABIMachineSpec>(
     num_rets: usize,
     mut caller: CallSite<M>,
     args: ValueSlice,
+    try_call_info: Option<(ExceptionTable, &MachLabelSlice)>,
 ) -> InstOutput {
     gen_call_common_args(ctx, &mut caller, args);
 
     // Handle retvals prior to emitting call, so the
-    // constraints are on the call instruction; but buffer the
-    // instructions till after the call.
+    // constraints are on the call instruction.
     let mut outputs = InstOutput::new();
-    let mut retval_insts = crate::machinst::abi::SmallInstVec::new();
     // We take the *last* `num_rets` returns of the sig:
     // this skips a StructReturn, if any, that is present.
     let sigdata_num_rets = caller.num_rets(ctx.sigs());
     debug_assert!(num_rets <= sigdata_num_rets);
     for i in (sigdata_num_rets - num_rets)..sigdata_num_rets {
-        let (retval_inst, retval_regs) = caller.gen_retval(ctx, i);
-        retval_insts.extend(retval_inst.into_iter());
+        let retval_regs = caller.gen_retval(ctx, i);
         outputs.push(retval_regs);
     }
 
-    caller.emit_call(ctx);
+    caller.emit_call(ctx, try_call_info);
 
-    for inst in retval_insts {
-        ctx.emit(inst);
+    // If this is a try-call, alias return value vregs to the ones
+    // already allocated for the block-call arg defs.
+    if try_call_info.is_some() {
+        for i in 0..outputs.len() {
+            let result_regs = outputs[i];
+            let def_regs = ctx.try_call_return_defs(ctx.cur_inst())[i];
+            for (result_reg, def_reg) in result_regs.regs().iter().zip(def_regs.regs().iter()) {
+                ctx.vregs_mut()
+                    .set_vreg_alias(def_reg.to_reg(), *result_reg);
+            }
+        }
     }
 
     outputs

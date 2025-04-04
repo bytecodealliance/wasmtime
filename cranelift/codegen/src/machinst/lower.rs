@@ -9,15 +9,15 @@ use crate::entity::SecondaryMap;
 use crate::inst_predicates::{has_lowering_side_effect, is_constant_64bit};
 use crate::ir::pcc::{Fact, FactContext, PccError, PccResult};
 use crate::ir::{
-    ArgumentPurpose, Block, Constant, ConstantData, DataFlowGraph, ExternalName, Function,
-    GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags, RelSourceLoc, Type,
-    Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
+    ArgumentPurpose, Block, BlockArg, Constant, ConstantData, DataFlowGraph, ExternalName,
+    Function, GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags,
+    RelSourceLoc, Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::valueregs::InvalidSentinel;
 use crate::machinst::{
-    writable_value_regs, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder, Callee, InsnIndex,
-    LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData,
-    VCodeConstants, VCodeInst, ValueRegs, Writable,
+    writable_value_regs, ABIMachineSpec, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder,
+    Callee, InsnIndex, LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant,
+    VCodeConstantData, VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
 use crate::settings::Flags;
 use crate::{trace, CodegenError, CodegenResult};
@@ -223,6 +223,14 @@ pub struct Lower<'func, I: VCodeInst> {
     /// Instructions collected for the CLIF inst in progress, in forward order.
     ir_insts: Vec<I>,
 
+    /// Try-call block arg normal-return values, indexed by instruction.
+    try_call_rets: FxHashMap<Inst, SmallVec<[ValueRegs<Writable<Reg>>; 2]>>,
+
+    /// Try-call block arg exceptional-return payloads, indexed by
+    /// instruction. Payloads are carried in registers per the ABI and
+    /// can only be one register each.
+    try_call_payloads: FxHashMap<Inst, SmallVec<[Writable<Reg>; 2]>>,
+
     /// The register to use for GetPinnedReg, if any, on this architecture.
     pinned_reg: Option<Reg>,
 
@@ -390,8 +398,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         let mut vregs = VRegAllocator::with_capacity(f.dfg.num_values() * 2);
 
         let mut value_regs = SecondaryMap::with_default(ValueRegs::invalid());
+        let mut try_call_rets = FxHashMap::default();
+        let mut try_call_payloads = FxHashMap::default();
 
-        // Assign a vreg to each block param and each inst result.
+        // Assign a vreg to each block param, each inst result, and
+        // each edge-defined block-call arg.
         for bb in f.layout.blocks() {
             for &param in f.dfg.block_params(bb) {
                 let ty = f.dfg.value_type(param);
@@ -416,6 +427,26 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                             regs,
                         );
                     }
+                }
+
+                if let Some(et) = f.dfg.insts[inst].exception_table() {
+                    let exdata = &f.dfg.exception_tables[et];
+                    let sig = &f.dfg.signatures[exdata.signature()];
+
+                    let mut rets = smallvec![];
+                    for ty in sig.returns.iter().map(|ret| ret.value_type) {
+                        rets.push(vregs.alloc(ty)?.map(|r| Writable::from_reg(r)));
+                    }
+                    try_call_rets.insert(inst, rets);
+
+                    let mut payloads = smallvec![];
+                    for &ty in sig
+                        .call_conv
+                        .exception_payload_types(I::ABIMachineSpec::word_type())
+                    {
+                        payloads.push(Writable::from_reg(vregs.alloc(ty)?.only_reg().unwrap()));
+                    }
+                    try_call_payloads.insert(inst, payloads);
                 }
             }
         }
@@ -492,6 +523,8 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             cur_scan_entry_color: None,
             cur_inst: None,
             ir_insts: vec![],
+            try_call_rets,
+            try_call_payloads,
             pinned_reg: None,
             flags,
         })
@@ -503,6 +536,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
     pub fn sigs_mut(&mut self) -> &mut SigSet {
         self.vcode.sigs_mut()
+    }
+
+    pub fn vregs_mut(&mut self) -> &mut VRegAllocator<I> {
+        &mut self.vregs
     }
 
     fn gen_arg_setup(&mut self) {
@@ -970,13 +1007,26 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             }
         };
 
-        let block_call =
-            self.f.dfg.insts[branch_inst].branch_destination(&self.f.dfg.jump_tables)[succ_idx];
-        let args = block_call.args_slice(&self.f.dfg.value_lists);
-        for &arg in args {
-            debug_assert!(self.f.dfg.value_is_real(arg));
-            let regs = self.put_value_in_regs(arg);
-            buffer.extend_from_slice(regs.regs());
+        let block_call = self.f.dfg.insts[branch_inst]
+            .branch_destination(&self.f.dfg.jump_tables, &self.f.dfg.exception_tables)[succ_idx];
+        for arg in block_call.args(&self.f.dfg.value_lists) {
+            match arg {
+                BlockArg::Value(arg) => {
+                    debug_assert!(self.f.dfg.value_is_real(arg));
+                    let regs = self.put_value_in_regs(arg);
+                    buffer.extend_from_slice(regs.regs());
+                }
+                BlockArg::TryCallRet(i) => {
+                    let regs = self.try_call_rets.get(&branch_inst).unwrap()[i as usize]
+                        .map(|r| r.to_reg());
+                    buffer.extend_from_slice(regs.regs());
+                }
+                BlockArg::TryCallExn(i) => {
+                    let reg =
+                        self.try_call_payloads.get(&branch_inst).unwrap()[i as usize].to_reg();
+                    buffer.push(reg);
+                }
+            }
         }
         (succ, &buffer[..])
     }
@@ -1489,6 +1539,18 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         regs
     }
+
+    /// Get the ValueRegs for the edge-defined values for special
+    /// try-call-return block arguments.
+    pub fn try_call_return_defs(&mut self, ir_inst: Inst) -> &[ValueRegs<Writable<Reg>>] {
+        &self.try_call_rets.get(&ir_inst).unwrap()[..]
+    }
+
+    /// Get the Regs for the edge-defined values for special
+    /// try-call-return exception payload arguments.
+    pub fn try_call_exception_defs(&mut self, ir_inst: Inst) -> &[Writable<Reg>] {
+        &self.try_call_payloads.get(&ir_inst).unwrap()[..]
+    }
 }
 
 /// Codegen primitives: allocate temps, emit instructions, set result registers,
@@ -1497,6 +1559,11 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     /// Get a new temp.
     pub fn alloc_tmp(&mut self, ty: Type) -> ValueRegs<Writable<Reg>> {
         writable_value_regs(self.vregs.alloc_with_deferred_error(ty))
+    }
+
+    /// Get the current root instruction that we are lowering.
+    pub fn cur_inst(&self) -> Inst {
+        self.cur_inst.unwrap()
     }
 
     /// Emit a machine instruction.

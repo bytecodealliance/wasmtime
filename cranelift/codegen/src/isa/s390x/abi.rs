@@ -892,7 +892,11 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
     }
 
-    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet {
+    fn get_regs_clobbered_by_call(
+        call_conv_of_callee: isa::CallConv,
+        is_exception: bool,
+    ) -> PRegSet {
+        assert!(!is_exception);
         match call_conv_of_callee {
             isa::CallConv::Tail => TAIL_CLOBBERS,
             _ => SYSV_CLOBBERS,
@@ -914,6 +918,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         _is_leaf: bool,
         incoming_args_size: u32,
         tail_args_size: u32,
+        stackslots_size: u32,
         fixed_frame_storage_size: u32,
         mut outgoing_args_size: u32,
     ) -> FrameLayout {
@@ -985,9 +990,14 @@ impl ABIMachineSpec for S390xMachineDeps {
             setup_area_size: 0,
             clobber_size,
             fixed_frame_storage_size,
+            stackslots_size,
             outgoing_args_size,
             clobbered_callee_saves: regs,
         }
+    }
+
+    fn retval_temp_reg(_call_conv_of_callee: isa::CallConv) -> Writable<Reg> {
+        panic!("Should not be called");
     }
 }
 

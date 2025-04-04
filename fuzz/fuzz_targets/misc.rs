@@ -158,7 +158,9 @@ fn dominator_tree(mut data: Unstructured<'_>) -> Result<()> {
             } else {
                 let block_calls = children
                     .iter()
-                    .map(|&block| BlockCall::new(block, &[], &mut cursor.func.dfg.value_lists))
+                    .map(|&block| {
+                        BlockCall::new(block, core::iter::empty(), &mut cursor.func.dfg.value_lists)
+                    })
                     .collect::<Vec<_>>();
 
                 let data = JumpTableData::new(block_calls[0], &block_calls[1..]);

@@ -1,14 +1,15 @@
 //! The [step] function interprets a single Cranelift instruction given its [State] and
 //! [InstructionContext].
 use crate::address::{Address, AddressSize};
+use crate::frame::Frame;
 use crate::instruction::InstructionContext;
 use crate::state::{InterpreterFunctionRef, MemoryError, State};
 use crate::value::{DataValueExt, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, AbiParam, AtomicRmwOp, Block, BlockCall, Endianness, ExternalName, FuncRef, Function,
-    InstructionData, MemFlags, Opcode, TrapCode, Type, Value as ValueRef,
+    types, AbiParam, AtomicRmwOp, Block, BlockArg, BlockCall, Endianness, ExternalName, FuncRef,
+    Function, InstructionData, MemFlags, Opcode, TrapCode, Type, Value as ValueRef,
 };
 use log::trace;
 use smallvec::{smallvec, SmallVec};
@@ -40,6 +41,19 @@ fn sum_unsigned(head: DataValue, tail: SmallVec<[DataValue; 1]>) -> ValueResult<
         acc = DataValueExt::add(acc, t)?;
     }
     acc.into_int_unsigned()
+}
+
+/// Collect a list of block arguments.
+fn collect_block_args(
+    frame: &Frame,
+    args: impl Iterator<Item = BlockArg>,
+) -> SmallVec<[DataValue; 1]> {
+    args.into_iter()
+        .map(|n| match n {
+            BlockArg::Value(n) => frame.get(n).clone(),
+            _ => panic!("exceptions not supported"),
+        })
+        .collect()
 }
 
 /// Interpret a single Cranelift instruction. Note that program traps and interpreter errors are
@@ -234,8 +248,10 @@ where
     // Retrieve an instruction's branch destination; expects the instruction to be a branch.
 
     let continue_at = |block: BlockCall| {
-        let branch_args =
-            state.collect_values(block.args_slice(&state.get_current_function().dfg.value_lists));
+        let branch_args = collect_block_args(
+            state.current_frame(),
+            block.args(&state.get_current_function().dfg.value_lists),
+        );
         Ok(ControlFlow::ContinueAt(
             block.block(&state.get_current_function().dfg.value_lists),
             branch_args,
@@ -1286,6 +1302,9 @@ where
         Opcode::X86Pmaddubsw => unimplemented!("X86Pmaddubsw"),
         Opcode::X86Cvtt2dq => unimplemented!("X86Cvtt2dq"),
         Opcode::StackSwitch => unimplemented!("StackSwitch"),
+
+        Opcode::TryCall => unimplemented!("TryCall"),
+        Opcode::TryCallIndirect => unimplemented!("TryCallIndirect"),
     })
 }
 

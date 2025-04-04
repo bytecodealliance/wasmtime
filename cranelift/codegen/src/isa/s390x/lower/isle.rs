@@ -11,7 +11,7 @@ use crate::isa::s390x::inst::{
     ReturnCallInfo, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted, WritableRegPair,
 };
 use crate::isa::s390x::S390xBackend;
-use crate::machinst::isle::*;
+use crate::machinst::{isle::*, RetLocation};
 use crate::machinst::{CallInfo, MachLabel, Reg};
 use crate::{
     ir::{
@@ -135,7 +135,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
                             let value_regs = self.lower_ctx.alloc_tmp(ty);
                             defs.push(CallRetPair {
                                 vreg: value_regs.only_reg().unwrap(),
-                                preg: reg.into(),
+                                location: RetLocation::Reg(reg.into()),
                             });
                         }
                         _ => {}
@@ -149,8 +149,10 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     fn defs_lookup(&mut self, defs: &CallRetList, reg: RealReg) -> Reg {
         let reg = Reg::from(reg);
         for def in defs {
-            if def.preg == reg {
-                return def.vreg.to_reg();
+            if let RetLocation::Reg(preg) = def.location {
+                if preg == reg {
+                    return def.vreg.to_reg();
+                }
             }
         }
         unreachable!()
@@ -983,7 +985,7 @@ impl IsleContext<'_, '_, MInst, S390xBackend> {
         let sig_data = &self.lower_ctx.sigs()[abi];
         // Get clobbers: all caller-saves. These may include return value
         // regs, which we will remove from the clobber set later.
-        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(sig_data.call_conv());
+        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(sig_data.call_conv(), false);
         let callee_pop_size = if sig_data.call_conv() == CallConv::Tail {
             sig_data.sized_stack_arg_space() as u32
         } else {
@@ -997,6 +999,7 @@ impl IsleContext<'_, '_, MInst, S390xBackend> {
             callee_pop_size,
             caller_conv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
             callee_conv: self.lower_ctx.sigs()[abi].call_conv(),
+            try_call_info: None,
         }
     }
 }

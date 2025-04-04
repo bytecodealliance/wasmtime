@@ -12,6 +12,8 @@ pub(crate) struct Formats {
     pub(crate) brif: Rc<InstructionFormat>,
     pub(crate) call: Rc<InstructionFormat>,
     pub(crate) call_indirect: Rc<InstructionFormat>,
+    pub(crate) try_call: Rc<InstructionFormat>,
+    pub(crate) try_call_indirect: Rc<InstructionFormat>,
     pub(crate) cond_trap: Rc<InstructionFormat>,
     pub(crate) float_compare: Rc<InstructionFormat>,
     pub(crate) func_addr: Rc<InstructionFormat>,
@@ -131,6 +133,18 @@ impl Formats {
                 .imm(&entities.sig_ref)
                 .value()
                 .varargs()
+                .build(),
+
+            try_call: Builder::new("TryCall")
+                .imm(&entities.func_ref)
+                .varargs()
+                .imm(&&entities.exception_table)
+                .build(),
+
+            try_call_indirect: Builder::new("TryCallIndirect")
+                .value()
+                .varargs()
+                .imm(&&entities.exception_table)
                 .build(),
 
             func_addr: Builder::new("FuncAddr").imm(&entities.func_ref).build(),
