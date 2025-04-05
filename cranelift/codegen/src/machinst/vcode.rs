@@ -672,16 +672,6 @@ impl<I: VCodeInst> VCode<I> {
         }
 
         for (i, range) in self.operand_ranges.iter() {
-            // Skip this instruction if not "included in clobbers" as
-            // per the MachInst. (Some backends use this to implement
-            // ABI specifics; e.g., excluding calls of the same ABI as
-            // the current function from clobbers, because by
-            // definition everything clobbered by the call can be
-            // clobbered by this function without saving as well.)
-            if !self.insts[i].is_included_in_clobbers() {
-                continue;
-            }
-
             let operands = &self.operands[range.clone()];
             let allocs = &regalloc.allocs[range];
             for (operand, alloc) in operands.iter().zip(allocs.iter()) {
@@ -693,8 +683,28 @@ impl<I: VCodeInst> VCode<I> {
             }
 
             // Also add explicitly-clobbered registers.
-            if let Some(&inst_clobbered) = self.clobbers.get(&InsnIndex::new(i)) {
-                clobbered.union_from(inst_clobbered);
+            //
+            // Skip merging this instruction's clobber list if not
+            // "included in clobbers" as per the MachInst. (Some
+            // backends use this to implement ABI specifics; e.g.,
+            // excluding calls of the same ABI as the current function
+            // from clobbers, because by definition everything
+            // clobbered by the call can be clobbered by this function
+            // without saving as well.
+            //
+            // This is important for a particular optimization: when
+            // some registers are "half-clobbered", e.g. vector/float
+            // registers on aarch64, we want them to be seen as
+            // clobbered by regalloc so it avoids carrying values
+            // across calls in these registers but not seen as
+            // clobbered by prologue generation here (because the
+            // actual half-clobber implied by the clobber list fits
+            // within the clobbers that we allow without
+            // clobber-saves).
+            if self.insts[i].is_included_in_clobbers() {
+                if let Some(&inst_clobbered) = self.clobbers.get(&InsnIndex::new(i)) {
+                    clobbered.union_from(inst_clobbered);
+                }
             }
         }
 
@@ -933,17 +943,19 @@ impl<I: VCodeInst> VCode<I> {
                             let mut allocs = regalloc.inst_allocs(iix).iter();
                             self.insts[iix.index()].get_operands(
                                 &mut |reg: &mut Reg, constraint, _kind, _pos| {
-                                    let alloc = allocs
-                                        .next()
-                                        .expect("enough allocations for all operands")
-                                        .as_reg()
-                                        .expect("only register allocations, not stack allocations")
-                                        .into();
+                                    let alloc =
+                                        allocs.next().expect("enough allocations for all operands");
 
-                                    if let OperandConstraint::FixedReg(rreg) = constraint {
-                                        debug_assert_eq!(Reg::from(rreg), alloc);
+                                    if let Some(alloc) = alloc.as_reg() {
+                                        let alloc: Reg = alloc.into();
+                                        if let OperandConstraint::FixedReg(rreg) = constraint {
+                                            debug_assert_eq!(Reg::from(rreg), alloc);
+                                        }
+                                        *reg = alloc;
+                                    } else if let Some(alloc) = alloc.as_stack() {
+                                        let alloc: Reg = alloc.into();
+                                        *reg = alloc;
                                     }
-                                    *reg = alloc;
                                 },
                             );
                             debug_assert!(allocs.next().is_none());

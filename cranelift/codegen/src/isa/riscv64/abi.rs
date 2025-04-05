@@ -649,6 +649,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         is_leaf: bool,
         incoming_args_size: u32,
         tail_args_size: u32,
+        stackslots_size: u32,
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> FrameLayout {
@@ -684,6 +685,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
             setup_area_size,
             clobber_size,
             fixed_frame_storage_size,
+            stackslots_size,
             outgoing_args_size,
             clobbered_callee_saves: regs,
         }
@@ -718,6 +720,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
                 tmp,
             });
         }
+    }
+
+    fn retval_temp_reg(_call_conv_of_callee: isa::CallConv) -> Writable<Reg> {
+        // Use x12 as a temp if needed: clobbered, not a
+        // retval.
+        Writable::from_reg(regs::x_reg(12))
     }
 }
 

@@ -2951,6 +2951,17 @@ impl MachInstEmit for Inst {
                         inst.emit(sink, emit_info, state);
                     }
                 }
+
+                // Load any stack-carried return values.
+                info.emit_retval_loads::<AArch64MachineDeps, _, _>(
+                    state.frame_layout().stackslots_size,
+                    |inst| inst.emit(sink, emit_info, state),
+                    |needed_space| Some(Inst::EmitIsland { needed_space }),
+                );
+
+                // We produce an island above if needed, so disable
+                // the worst-case-size check in this case.
+                start_off = sink.cur_offset();
             }
             &Inst::CallInd { ref info } => {
                 let user_stack_map = state.take_stack_map();
@@ -2970,6 +2981,17 @@ impl MachInstEmit for Inst {
                         inst.emit(sink, emit_info, state);
                     }
                 }
+
+                // Load any stack-carried return values.
+                info.emit_retval_loads::<AArch64MachineDeps, _, _>(
+                    state.frame_layout().stackslots_size,
+                    |inst| inst.emit(sink, emit_info, state),
+                    |needed_space| Some(Inst::EmitIsland { needed_space }),
+                );
+
+                // We produce an island above if needed, so disable
+                // the worst-case-size check in this case.
+                start_off = sink.cur_offset();
             }
             &Inst::ReturnCall { ref info } => {
                 emit_return_call_common_sequence(sink, emit_info, state, info);

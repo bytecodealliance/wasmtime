@@ -282,6 +282,20 @@ pub enum StackAMode {
     OutgoingArg(i64),
 }
 
+impl StackAMode {
+    fn offset_by(&self, offset: u32) -> Self {
+        match self {
+            StackAMode::IncomingArg(off, size) => {
+                StackAMode::IncomingArg(off.checked_add(i64::from(offset)).unwrap(), *size)
+            }
+            StackAMode::Slot(off) => StackAMode::Slot(off.checked_add(i64::from(offset)).unwrap()),
+            StackAMode::OutgoingArg(off) => {
+                StackAMode::OutgoingArg(off.checked_add(i64::from(offset)).unwrap())
+            }
+        }
+    }
+}
+
 /// Trait implemented by machine-specific backend to represent ISA flags.
 pub trait IsaFlags: Clone {
     /// Get a flag indicating whether forward-edge CFI is enabled.
@@ -479,6 +493,7 @@ pub trait ABIMachineSpec {
         is_leaf: bool,
         incoming_args_size: u32,
         tail_args_size: u32,
+        stackslots_size: u32,
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> FrameLayout;
@@ -578,6 +593,12 @@ pub trait ABIMachineSpec {
         call_conv: isa::CallConv,
         specified: ir::ArgumentExtension,
     ) -> ir::ArgumentExtension;
+
+    /// Get a temporary register that is available to use after a call
+    /// completes and that does not interfere with register-carried
+    /// return values. This is used to move stack-carried return
+    /// values directly into spillslots if needed.
+    fn retval_temp_reg(call_conv_of_callee: isa::CallConv) -> Writable<Reg>;
 }
 
 /// Out-of-line data for calls, to keep the size of `Inst` down.
@@ -1017,6 +1038,9 @@ pub struct FrameLayout {
     /// Storage allocated for the fixed part of the stack frame.
     /// This contains stack slots and spill slots.
     pub fixed_frame_storage_size: u32,
+
+    /// The size of all stackslots.
+    pub stackslots_size: u32,
 
     /// Stack size to be reserved for outgoing arguments, if used by
     /// the current ABI, or 0 otherwise.  After gen_clobber_save and
@@ -1760,6 +1784,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             self.is_leaf,
             self.stack_args_size(sigs),
             self.tail_args_size,
+            self.stackslots_size,
             total_stacksize,
             self.outgoing_args_size,
         ));
@@ -1962,13 +1987,23 @@ pub struct CallArgPair {
 }
 
 /// An output return value from a call instruction: the vreg that is
-/// defined, and the preg it is constrained to (per the ABI).
+/// defined, and the preg or stack location it is constrained to (per
+/// the ABI).
 #[derive(Clone, Debug)]
 pub struct CallRetPair {
     /// The virtual register to define from this return value.
     pub vreg: Writable<Reg>,
     /// The real register from which the return value is read.
-    pub preg: Reg,
+    pub location: RetLocation,
+}
+
+/// A location to load a return-value from after a call completes.
+#[derive(Clone, Debug)]
+pub enum RetLocation {
+    /// A physical register.
+    Reg(Reg),
+    /// A stack location, identified by a `StackAMode`.
+    Stack(StackAMode, Type),
 }
 
 pub type CallArgList = SmallVec<[CallArgPair; 8]>;
@@ -2297,12 +2332,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
     }
 
     /// Define a return value after the call returns.
-    pub fn gen_retval(
-        &mut self,
-        ctx: &mut Lower<M::I>,
-        idx: usize,
-    ) -> (SmallInstVec<M::I>, ValueRegs<Reg>) {
-        let mut insts = smallvec![];
+    pub fn gen_retval(&mut self, ctx: &mut Lower<M::I>, idx: usize) -> ValueRegs<Reg> {
         let mut into_regs: SmallVec<[Reg; 2]> = smallvec![];
         let ret = ctx.sigs().rets(self.sig)[idx].clone();
         match ret {
@@ -2315,7 +2345,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                             let into_reg = ctx.alloc_tmp(ty).only_reg().unwrap();
                             self.defs.push(CallRetPair {
                                 vreg: into_reg,
-                                preg: reg.into(),
+                                location: RetLocation::Reg(reg.into()),
                             });
                             into_regs.push(into_reg.to_reg());
                         }
@@ -2326,11 +2356,11 @@ impl<M: ABIMachineSpec> CallSite<M> {
                             // ensuring that the return values will be in a consistent place after
                             // any call.
                             let ret_area_base = sig_data.sized_stack_arg_space();
-                            insts.push(M::gen_load_stack(
-                                StackAMode::OutgoingArg(offset + ret_area_base),
-                                into_reg,
-                                ty,
-                            ));
+                            let amode = StackAMode::OutgoingArg(offset + ret_area_base);
+                            self.defs.push(CallRetPair {
+                                vreg: into_reg,
+                                location: RetLocation::Stack(amode, ty),
+                            });
                             into_regs.push(into_reg.to_reg());
                         }
                     }
@@ -2349,7 +2379,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
             [a, b] => ValueRegs::two(a, b),
             _ => panic!("Expected to see one or two slots only from {ret:?}"),
         };
-        (insts, value_regs)
+        value_regs
     }
 
     /// Emit the call itself.
@@ -2386,7 +2416,9 @@ impl<M: ABIMachineSpec> CallSite<M> {
 
             // Remove retval regs from clobbers.
             for def in &defs {
-                clobbers.remove(PReg::from(def.preg.to_real_reg().unwrap()));
+                if let RetLocation::Reg(preg) = def.location {
+                    clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
+                }
             }
 
             clobbers
@@ -2434,6 +2466,87 @@ impl<M: ABIMachineSpec> CallSite<M> {
         .into_iter()
         {
             ctx.emit(inst);
+        }
+    }
+}
+
+impl<T> CallInfo<T> {
+    /// Emit loads for any stack-carried return values using the call
+    /// info and allocations.
+    pub fn emit_retval_loads<
+        M: ABIMachineSpec,
+        EmitFn: FnMut(M::I),
+        IslandFn: Fn(u32) -> Option<M::I>,
+    >(
+        &self,
+        stackslots_size: u32,
+        mut emit: EmitFn,
+        emit_island: IslandFn,
+    ) {
+        // Count stack-ret locations and emit an island to account for
+        // this space usage.
+        let mut space_needed = 0;
+        for CallRetPair { location, .. } in &self.defs {
+            if let RetLocation::Stack(..) = location {
+                // Assume up to ten instructions, semi-arbitrarily:
+                // load from stack, store to spillslot, codegen of
+                // large offsets on RISC ISAs.
+                space_needed += 10 * M::I::worst_case_size();
+            }
+        }
+        if space_needed > 0 {
+            if let Some(island_inst) = emit_island(space_needed) {
+                emit(island_inst);
+            }
+        }
+
+        let temp = M::retval_temp_reg(self.callee_conv);
+        // The temporary must be noted as clobbered.
+        debug_assert!(M::get_regs_clobbered_by_call(self.callee_conv)
+            .contains(PReg::from(temp.to_reg().to_real_reg().unwrap())));
+
+        for CallRetPair { vreg, location } in &self.defs {
+            match location {
+                RetLocation::Reg(preg) => {
+                    // The temporary must not also be an actual return
+                    // value register.
+                    debug_assert!(*preg != temp.to_reg());
+                }
+                RetLocation::Stack(amode, ty) => {
+                    if let Some(spillslot) = vreg.to_reg().to_spillslot() {
+                        // `temp` is an integer register of machine word
+                        // width, but `ty` may be floating-point/vector,
+                        // which (i) may not be loadable directly into an
+                        // int reg, and (ii) may be wider than a machine
+                        // word. For simplicity, and because there are not
+                        // always easy choices for volatile float/vec regs
+                        // (see e.g. x86-64, where fastcall clobbers only
+                        // xmm0-xmm5, but tail uses xmm0-xmm7 for
+                        // returns), we use the integer temp register in
+                        // steps.
+                        let parts = (ty.bytes() + M::word_bytes() - 1) / M::word_bytes();
+                        for part in 0..parts {
+                            emit(M::gen_load_stack(
+                                amode.offset_by(part * M::word_bytes()),
+                                temp,
+                                M::word_type(),
+                            ));
+                            emit(M::gen_store_stack(
+                                StackAMode::Slot(
+                                    i64::from(stackslots_size)
+                                        + i64::from(M::word_bytes())
+                                            * ((spillslot.index() as i64) + (part as i64)),
+                                ),
+                                temp.to_reg(),
+                                M::word_type(),
+                            ));
+                        }
+                    } else {
+                        assert_ne!(*vreg, temp);
+                        emit(M::gen_load_stack(*amode, *vreg, *ty));
+                    }
+                }
+            }
         }
     }
 }

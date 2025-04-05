@@ -179,19 +179,13 @@ fn emit_vm_call(
         abi.gen_arg(ctx, i, ValueRegs::one(*input));
     }
 
-    let mut retval_insts: SmallInstVec<_> = smallvec![];
     let mut outputs: SmallVec<[_; 1]> = smallvec![];
     for i in 0..ctx.sigs().num_rets(ctx.sigs().abi_sig_for_signature(&sig)) {
-        let (retval_inst, retval_regs) = abi.gen_retval(ctx, i);
-        retval_insts.extend(retval_inst.into_iter());
+        let retval_regs = abi.gen_retval(ctx, i);
         outputs.push(retval_regs.only_reg().unwrap());
     }
 
     abi.emit_call(ctx);
-
-    for inst in retval_insts {
-        ctx.emit(inst);
-    }
 
     Ok(outputs)
 }

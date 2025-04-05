@@ -544,6 +544,7 @@ where
         is_leaf: bool,
         incoming_args_size: u32,
         tail_args_size: u32,
+        stackslots_size: u32,
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> FrameLayout {
@@ -578,6 +579,7 @@ where
             setup_area_size: setup_area_size.into(),
             clobber_size,
             fixed_frame_storage_size,
+            stackslots_size,
             outgoing_args_size,
             clobbered_callee_saves: regs,
         }
@@ -591,6 +593,12 @@ where
     ) {
         // Pulley doesn't need inline probestacks because it always checks stack
         // decrements.
+    }
+
+    fn retval_temp_reg(_call_conv_of_callee: isa::CallConv) -> Writable<Reg> {
+        // Use x15 as a temp if needed: clobbered, not a
+        // retval.
+        Writable::from_reg(regs::x_reg(15))
     }
 }
 

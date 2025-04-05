@@ -1624,6 +1624,13 @@ pub(crate) fn emit(
                 )
                 .emit(sink, info, state);
             }
+
+            // Load any stack-carried return values.
+            call_info.emit_retval_loads::<X64ABIMachineSpec, _, _>(
+                state.frame_layout().stackslots_size,
+                |inst| inst.emit(sink, info, state),
+                |_space_needed| None,
+            );
         }
 
         Inst::ReturnCallKnown { info: call_info } => {
@@ -1706,6 +1713,13 @@ pub(crate) fn emit(
                 )
                 .emit(sink, info, state);
             }
+
+            // Load any stack-carried return values.
+            call_info.emit_retval_loads::<X64ABIMachineSpec, _, _>(
+                state.frame_layout().stackslots_size,
+                |inst| inst.emit(sink, info, state),
+                |_space_needed| None,
+            );
         }
 
         Inst::Args { .. } => {}

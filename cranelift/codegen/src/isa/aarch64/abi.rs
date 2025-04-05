@@ -1149,6 +1149,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         is_leaf: bool,
         incoming_args_size: u32,
         tail_args_size: u32,
+        stackslots_size: u32,
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> FrameLayout {
@@ -1188,9 +1189,16 @@ impl ABIMachineSpec for AArch64MachineDeps {
             setup_area_size,
             clobber_size,
             fixed_frame_storage_size,
+            stackslots_size,
             outgoing_args_size,
             clobbered_callee_saves: regs,
         }
+    }
+
+    fn retval_temp_reg(_call_conv_of_callee: isa::CallConv) -> Writable<Reg> {
+        // Use x9 as a temp if needed: clobbered, not a
+        // retval.
+        regs::writable_xreg(9)
     }
 }
 

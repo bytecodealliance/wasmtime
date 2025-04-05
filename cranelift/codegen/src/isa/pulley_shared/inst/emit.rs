@@ -188,6 +188,17 @@ fn pulley_emit<P>(
             for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
                 <InstAndKind<P>>::from(i).emit(sink, emit_info, state);
             }
+
+            // Load any stack-carried return values.
+            info.emit_retval_loads::<PulleyMachineDeps<P>, _, _>(
+                state.frame_layout().stackslots_size,
+                |inst| inst.emit(sink, emit_info, state),
+                |space_needed| Some(<InstAndKind<P>>::from(Inst::EmitIsland { space_needed })),
+            );
+
+            // We produce an island above if needed, so disable
+            // the worst-case-size check in this case.
+            *start_offset = sink.cur_offset();
         }
 
         Inst::IndirectCall { info } => {
@@ -204,6 +215,17 @@ fn pulley_emit<P>(
             for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
                 <InstAndKind<P>>::from(i).emit(sink, emit_info, state);
             }
+
+            // Load any stack-carried return values.
+            info.emit_retval_loads::<PulleyMachineDeps<P>, _, _>(
+                state.frame_layout().stackslots_size,
+                |inst| inst.emit(sink, emit_info, state),
+                |space_needed| Some(<InstAndKind<P>>::from(Inst::EmitIsland { space_needed })),
+            );
+
+            // We produce an island above if needed, so disable
+            // the worst-case-size check in this case.
+            *start_offset = sink.cur_offset();
         }
 
         Inst::ReturnCall { info } => {
@@ -516,6 +538,13 @@ fn pulley_emit<P>(
                 _ => {}
             }
             super::generated::emit(raw, sink)
+        }
+
+        Inst::EmitIsland { space_needed } => {
+            let label = sink.get_label();
+            <InstAndKind<P>>::from(Inst::Jump { label }).emit(sink, emit_info, state);
+            sink.emit_island(space_needed + 8, &mut state.ctrl_plane);
+            sink.bind_label(label, &mut state.ctrl_plane);
         }
     }
 }

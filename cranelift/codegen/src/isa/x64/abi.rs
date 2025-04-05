@@ -929,6 +929,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _is_leaf: bool,
         incoming_args_size: u32,
         tail_args_size: u32,
+        stackslots_size: u32,
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> FrameLayout {
@@ -968,9 +969,17 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             setup_area_size,
             clobber_size,
             fixed_frame_storage_size,
+            stackslots_size,
             outgoing_args_size,
             clobbered_callee_saves: regs,
         }
+    }
+
+    fn retval_temp_reg(_call_conv_of_callee: isa::CallConv) -> Writable<Reg> {
+        // Use r11 as a temp: clobbered anyway, and
+        // not otherwise used as a return value in any of our
+        // supported calling conventions.
+        Writable::from_reg(regs::r11())
     }
 }
 
@@ -1126,7 +1135,8 @@ fn get_intreg_for_retval(
             5 => Some(regs::r8()),
             6 => Some(regs::r9()),
             7 => Some(regs::r10()),
-            8 => Some(regs::r11()),
+            // NB: `r11` is reserved as a scratch register that is
+            // also part of the clobber set.
             // NB: `r15` is reserved as a scratch register.
             _ => None,
         },
