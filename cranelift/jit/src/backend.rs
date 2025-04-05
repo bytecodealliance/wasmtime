@@ -1,6 +1,9 @@
 //! Defines `JITModule`.
 
-use crate::{compiled_blob::CompiledBlob, memory::BranchProtection, memory::Memory};
+use crate::{
+    compiled_blob::CompiledBlob,
+    memory::{BranchProtection, JITMemoryProvider, SystemMemoryProvider},
+};
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::Configurable;
@@ -28,6 +31,7 @@ pub struct JITBuilder {
     symbols: HashMap<String, SendWrapper<*const u8>>,
     lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8> + Send>>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
+    memory: Option<Box<dyn JITMemoryProvider>>,
 }
 
 impl JITBuilder {
@@ -91,6 +95,7 @@ impl JITBuilder {
             symbols,
             lookup_symbols,
             libcall_names,
+            memory: None,
         }
     }
 
@@ -141,6 +146,14 @@ impl JITBuilder {
         self.lookup_symbols.push(symbol_lookup_fn);
         self
     }
+
+    /// Set the memory provider for the module.
+    ///
+    /// If unset, defaults to [`SystemMemoryProvider`].
+    pub fn memory_provider(&mut self, provider: Box<dyn JITMemoryProvider>) -> &mut Self {
+        self.memory = Some(provider);
+        self
+    }
 }
 
 /// A wrapper that impls Send for the contents.
@@ -159,19 +172,12 @@ pub struct JITModule {
     symbols: RefCell<HashMap<String, SendWrapper<*const u8>>>,
     lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8> + Send>>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
-    memory: MemoryHandle,
+    memory: Box<dyn JITMemoryProvider>,
     declarations: ModuleDeclarations,
     compiled_functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
     compiled_data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
     functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
-}
-
-/// A handle to allow freeing memory allocated by the `Module`.
-struct MemoryHandle {
-    code: Memory,
-    readonly: Memory,
-    writable: Memory,
 }
 
 impl JITModule {
@@ -184,9 +190,7 @@ impl JITModule {
     /// from that module are currently executing and none of the `fn` pointers
     /// are called afterwards.
     pub unsafe fn free_memory(mut self) {
-        self.memory.code.free_memory();
-        self.memory.readonly.free_memory();
-        self.memory.writable.free_memory();
+        self.memory.free_memory();
     }
 
     fn lookup_symbol(&self, name: &str) -> Option<*const u8> {
@@ -325,8 +329,12 @@ impl JITModule {
         }
 
         // Now that we're done patching, prepare the memory for execution!
-        self.memory.readonly.set_readonly()?;
-        self.memory.code.set_readable_and_executable()?;
+        let branch_protection = if cfg!(target_arch = "aarch64") && use_bti(&self.isa.isa_flags()) {
+            BranchProtection::BTI
+        } else {
+            BranchProtection::None
+        };
+        self.memory.finalize(branch_protection)?;
 
         Ok(())
     }
@@ -338,23 +346,15 @@ impl JITModule {
             "cranelift-jit needs is_pic=false"
         );
 
-        let branch_protection =
-            if cfg!(target_arch = "aarch64") && use_bti(&builder.isa.isa_flags()) {
-                BranchProtection::BTI
-            } else {
-                BranchProtection::None
-            };
+        let memory = builder
+            .memory
+            .unwrap_or_else(|| Box::new(SystemMemoryProvider::new()));
         Self {
             isa: builder.isa,
             symbols: RefCell::new(builder.symbols),
             lookup_symbols: builder.lookup_symbols,
             libcall_names: builder.libcall_names,
-            memory: MemoryHandle {
-                code: Memory::new(branch_protection),
-                // Branch protection is not applicable to non-executable memory.
-                readonly: Memory::new(BranchProtection::None),
-                writable: Memory::new(BranchProtection::None),
-            },
+            memory,
             declarations: ModuleDeclarations::default(),
             compiled_functions: SecondaryMap::new(),
             compiled_data_objects: SecondaryMap::new(),
@@ -436,15 +436,16 @@ impl Module for JITModule {
         let compiled_code = ctx.compiled_code().unwrap();
 
         let size = compiled_code.code_info().total_size as usize;
-        let align = alignment.max(self.isa.symbol_alignment());
-        let ptr = self
-            .memory
-            .code
-            .allocate(size, align)
-            .map_err(|e| ModuleError::Allocation {
-                message: "unable to alloc function",
-                err: e,
-            })?;
+        let align = alignment
+            .max(self.isa.function_alignment().minimum as u64)
+            .max(self.isa.symbol_alignment());
+        let ptr =
+            self.memory
+                .allocate_readexec(size, align)
+                .map_err(|e| ModuleError::Allocation {
+                    message: "unable to alloc function",
+                    err: e,
+                })?;
 
         {
             let mem = unsafe { std::slice::from_raw_parts_mut(ptr, size) };
@@ -488,15 +489,16 @@ impl Module for JITModule {
         }
 
         let size = bytes.len();
-        let align = alignment.max(self.isa.symbol_alignment());
-        let ptr = self
-            .memory
-            .code
-            .allocate(size, align)
-            .map_err(|e| ModuleError::Allocation {
-                message: "unable to alloc function bytes",
-                err: e,
-            })?;
+        let align = alignment
+            .max(self.isa.function_alignment().minimum as u64)
+            .max(self.isa.symbol_alignment());
+        let ptr =
+            self.memory
+                .allocate_readexec(size, align)
+                .map_err(|e| ModuleError::Allocation {
+                    message: "unable to alloc function bytes",
+                    err: e,
+                })?;
 
         unsafe {
             ptr::copy_nonoverlapping(bytes.as_ptr(), ptr, size);
@@ -548,16 +550,14 @@ impl Module for JITModule {
 
         let ptr = if decl.writable {
             self.memory
-                .writable
-                .allocate(alloc_size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
+                .allocate_readwrite(alloc_size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
                 .map_err(|e| ModuleError::Allocation {
                     message: "unable to alloc writable data",
                     err: e,
                 })?
         } else {
             self.memory
-                .readonly
-                .allocate(alloc_size, align.unwrap_or(READONLY_DATA_ALIGNMENT))
+                .allocate_readonly(alloc_size, align.unwrap_or(READONLY_DATA_ALIGNMENT))
                 .map_err(|e| ModuleError::Allocation {
                     message: "unable to alloc readonly data",
                     err: e,

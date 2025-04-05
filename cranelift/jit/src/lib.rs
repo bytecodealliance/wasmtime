@@ -9,6 +9,8 @@ mod backend;
 mod compiled_blob;
 mod memory;
 
+pub use memory::*;
+
 pub use crate::backend::{JITBuilder, JITModule};
 
 /// Version number of this crate.
