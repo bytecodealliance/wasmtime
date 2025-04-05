@@ -279,6 +279,11 @@ impl<'a> TrampolineCompiler<'a> {
                     rets[0] = me.raise_if_negative_one_and_truncate(rets[0]);
                 })
             }
+            Trampoline::ThreadSpawnIndirect { ty: _, table } => {
+                // TODO: eventually pass through the `ty` argument to check the
+                // table's funcref signature.
+                self.translate_thread_spawn_indirect(*table)
+            }
         }
     }
 
@@ -1326,6 +1331,26 @@ impl<'a> TrampolineCompiler<'a> {
             vmctx,
             host::error_context_drop,
             &callee_args,
+            TrapSentinel::Falsy,
+        );
+    }
+
+    fn translate_thread_spawn_indirect(&mut self, table: RuntimeTableIndex) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+        let element = args[1];
+        let context = args[2];
+
+        // table: u32
+        let table = self
+            .builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(self.offsets.runtime_table(table)));
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            host::thread_spawn_indirect,
+            &[vmctx, table, element, context],
             TrapSentinel::Falsy,
         );
     }
