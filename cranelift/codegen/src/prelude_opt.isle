@@ -154,6 +154,15 @@
     (iconst ty (imm64 c)))
 (rule 1 (iconst_u $I128 c) (uextend $I128 (iconst_u $I64 c)))
 
+;; Constructs a constant value node from a 64-bit immediate, adapting it
+;; to the specified type. For 128-bit integers, the immediate is zero-extended;
+;; for other integer types, a direct iconst is generated; and for vector types,
+;; the constant is splatted across all lanes.
+(decl const (Type Imm64) Value)
+(rule 2 (const $I128 n) (uextend $I128 (iconst $I64 n)))
+(rule 1 (const (ty_int ty) n) (iconst ty n))
+(rule 0 (const (ty_vec ty) n) (splat ty (const (lane_type ty) n)))
+
 ;; These take `Value`, rather than going through `inst_data_value_tupled`,
 ;; because most of the time they want to return the original `Value`, and it
 ;; would be a waste to need to re-GVN the instruction data in those cases.

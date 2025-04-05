@@ -450,6 +450,15 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_vec(&mut self, ty: Type) -> Option<Type> {
+            if ty.is_vector() {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_vec64_int(&mut self, ty: Type) -> Option<Type> {
             if ty.is_vector() && ty.bits() == 64 && ty.lane_type().is_int() {
                 Some(ty)
