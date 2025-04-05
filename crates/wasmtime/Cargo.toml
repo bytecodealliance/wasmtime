@@ -309,6 +309,12 @@ threads = [
   "std",
 ]
 
+# Enable runtime support for the WebAssembly shared-everything-threads proposal.
+shared-everything-threads = [
+  "wasmtime-cranelift?/shared-everything-threads",
+  "std",
+]
+
 # Controls whether backtraces will attempt to parse DWARF information in
 # WebAssembly modules and components to provide filenames and line numbers in
 # stack traces.
