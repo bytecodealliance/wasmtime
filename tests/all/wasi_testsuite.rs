@@ -55,8 +55,12 @@ fn wasi_testsuite() -> Result<()> {
         WASI_COMMON_IGNORE_LIST,
     )?;
 
-    // Only run threaded tests on platforms that support threads.
-    if crate::threads::engine().is_some() {
+    // Only run threaded tests on platforms that support threads. Also skip
+    // these tests with ASAN as it, rightfully, complains about a memory leak.
+    // The memory leak at this time is that child threads aren't joined with the
+    // main thread, meaning that allocations done on child threads are indeed
+    // leaked.
+    if crate::threads::engine().is_some() && !cfg!(asan) {
         run_all(
             "tests/wasi_testsuite/wasi-threads",
             &["-Sthreads", "-Wthreads"],

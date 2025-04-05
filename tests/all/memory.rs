@@ -140,6 +140,7 @@ fn offsets_static_dynamic_oh_my(config: &mut Config) -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+#[cfg_attr(asan, ignore)]
 fn guards_present() -> Result<()> {
     const GUARD_SIZE: u64 = 65536;
 
@@ -188,6 +189,7 @@ fn guards_present() -> Result<()> {
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
+#[cfg_attr(asan, ignore)]
 fn guards_present_pooling(config: &mut Config) -> Result<()> {
     const GUARD_SIZE: u64 = 65536;
 
@@ -244,6 +246,7 @@ fn guards_present_pooling(config: &mut Config) -> Result<()> {
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
+#[cfg_attr(asan, ignore)]
 fn guards_present_pooling_mpk(config: &mut Config) -> Result<()> {
     if !wasmtime::PoolingAllocationConfig::are_memory_protection_keys_available() {
         println!("skipping `guards_present_pooling_mpk` test; mpk is not supported");

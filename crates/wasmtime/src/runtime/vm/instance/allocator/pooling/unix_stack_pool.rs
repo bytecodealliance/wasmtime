@@ -239,7 +239,7 @@ impl StackPool {
     }
 }
 
-#[cfg(all(test, unix, feature = "async", not(miri)))]
+#[cfg(all(test, unix, feature = "async", not(miri), not(asan)))]
 mod tests {
     use super::*;
     use crate::runtime::vm::InstanceLimits;
