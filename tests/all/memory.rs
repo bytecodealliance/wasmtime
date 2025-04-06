@@ -343,7 +343,10 @@ unsafe fn assert_faults(ptr: *mut u8) {
     }
 }
 
+// Disable test on s390x because the large allocation may actually succeed;
+// the whole 64-bit address space is available on this platform.
 #[test]
+#[cfg(not(target_arch = "s390x"))]
 fn massive_64_bit_still_limited() -> Result<()> {
     // Creating a 64-bit memory which exceeds the limits of the address space
     // should still send a request to the `ResourceLimiter` to ensure that it

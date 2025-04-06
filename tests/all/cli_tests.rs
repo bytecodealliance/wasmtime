@@ -857,7 +857,10 @@ fn run_precompiled_component() -> Result<()> {
     Ok(())
 }
 
+// Disable test on s390x because the large allocation may actually succeed;
+// the whole 64-bit address space is available on this platform.
 #[test]
+#[cfg(not(target_arch = "s390x"))]
 fn memory_growth_failure() -> Result<()> {
     let output = get_wasmtime_command()?
         .args(&[
