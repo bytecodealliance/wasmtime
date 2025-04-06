@@ -3865,31 +3865,22 @@
 ;; Direct call to an in-range function.
 (rule 1 (lower (call (func_ref_data sig_ref name (reloc_distance_near)) args))
       (let ((abi Sig (abi_sig sig_ref))
-            (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
-            (defs CallRetList (defs_init abi))
-            (_ InstOutput (side_effect (abi_call abi name uses defs))))
-        (lower_call_rets abi defs (range (abi_first_ret sig_ref abi)
-                                         (abi_num_rets abi)) (output_builder_new))))
+            (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args)))
+        (abi_call abi (CallInstDest.Direct name) uses)))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
 (rule (lower (call (func_ref_data sig_ref name _) args))
       (let ((abi Sig (abi_sig sig_ref))
             (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
-            (defs CallRetList (defs_init abi))
-            (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0)))
-            (_ InstOutput (side_effect (abi_call_ind abi target uses defs))))
-        (lower_call_rets abi defs (range (abi_first_ret sig_ref abi)
-                                         (abi_num_rets abi)) (output_builder_new))))
+            (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0))))
+        (abi_call abi (CallInstDest.Indirect target) uses)))
 
 ;; Indirect call.
 (rule (lower (call_indirect sig_ref ptr args))
       (let ((abi Sig (abi_sig sig_ref))
             (target Reg (put_in_reg ptr))
-            (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
-            (defs CallRetList (defs_init abi))
-            (_ InstOutput (side_effect (abi_call_ind abi target uses defs))))
-        (lower_call_rets abi defs (range (abi_first_ret sig_ref abi)
-                                         (abi_num_rets abi)) (output_builder_new))))
+            (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args)))
+        (abi_call abi (CallInstDest.Indirect target) uses)))
 
 ;; Lower function arguments.
 (decl lower_call_args (Sig Range ValueSlice) CallArgList)
@@ -3901,16 +3892,6 @@
             (_ InstOutput (lower_call_ret_arg abi uses stack)))
         (args_builder_finish uses)))
 
-;; Lower function return values by collecting them from registers / stack slots.
-(decl lower_call_rets (Sig CallRetList Range InstOutputBuilder) InstOutput)
-(rule (lower_call_rets abi _ (range_empty) builder) (output_builder_finish builder))
-(rule (lower_call_rets abi defs (range_unwrap head tail) builder)
-      (let ((ret ValueRegs (copy_from_arg defs (abi_lane_order abi)
-                                          (abi_call_stack_rets abi)
-                                          (abi_get_ret abi head)))
-            (_ Unit (output_builder_push builder ret)))
-        (lower_call_rets abi defs tail builder)))
-
 
 ;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3918,21 +3899,21 @@
 (rule 1 (lower (return_call (func_ref_data sig_ref name (reloc_distance_near)) args))
       (let ((abi Sig (abi_sig sig_ref))
             (uses CallArgList (lower_return_call_args abi (range 0 (abi_num_args abi)) args)))
-        (side_effect (abi_return_call abi name uses))))
+        (side_effect (abi_return_call abi (CallInstDest.Direct name) uses))))
 
 ;; Direct tail call to an out-of-range function (implicitly via pointer).
 (rule (lower (return_call (func_ref_data sig_ref name _) args))
       (let ((abi Sig (abi_sig sig_ref))
             (uses CallArgList (lower_return_call_args abi (range 0 (abi_num_args abi)) args))
             (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0))))
-        (side_effect (abi_return_call_ind abi target uses))))
+        (side_effect (abi_return_call abi (CallInstDest.Indirect target) uses))))
 
 ;; Indirect tail call.
 (rule (lower (return_call_indirect sig_ref ptr args))
       (let ((abi Sig (abi_sig sig_ref))
             (target Reg (put_in_reg ptr))
             (uses CallArgList (lower_return_call_args abi (range 0 (abi_num_args abi)) args)))
-        (side_effect (abi_return_call_ind abi target uses))))
+        (side_effect (abi_return_call abi (CallInstDest.Indirect target) uses))))
 
 ;; Lower tail call function arguments.
 (decl lower_return_call_args (Sig Range ValueSlice) CallArgList)

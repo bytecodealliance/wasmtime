@@ -337,7 +337,7 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
             for CallRetPair { vreg, location } in defs {
                 match location {
-                    RetLocation::Reg(preg) => collector.reg_fixed_def(vreg, *preg),
+                    RetLocation::Reg(preg, ..) => collector.reg_fixed_def(vreg, *preg),
                     RetLocation::Stack(..) => collector.any_def(vreg),
                 }
             }
@@ -353,7 +353,7 @@ fn riscv64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
             for CallRetPair { vreg, location } in defs {
                 match location {
-                    RetLocation::Reg(preg) => collector.reg_fixed_def(vreg, *preg),
+                    RetLocation::Reg(preg, ..) => collector.reg_fixed_def(vreg, *preg),
                     RetLocation::Stack(..) => collector.any_def(vreg),
                 }
             }

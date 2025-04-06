@@ -63,6 +63,9 @@ pub enum MemArg {
     /// adjustment meta-instructions). See the diagram in the documentation
     /// for [crate::isa::aarch64::abi](the ABI module) for more details.
     SlotOffset { off: i64 },
+
+    /// Offset into the spill area of the stack.
+    SpillOffset { off: i64 },
 }
 
 impl MemArg {
@@ -102,6 +105,7 @@ impl MemArg {
             &MemArg::InitialSPOffset { off } => MemArg::InitialSPOffset { off: off + offset },
             &MemArg::NominalSPOffset { off } => MemArg::NominalSPOffset { off: off + offset },
             &MemArg::SlotOffset { off } => MemArg::SlotOffset { off: off + offset },
+            &MemArg::SpillOffset { off } => MemArg::SpillOffset { off: off + offset },
             // This routine is only defined for virtual addressing modes.
             &MemArg::BXD12 { .. }
             | &MemArg::BXD20 { .. }
@@ -120,6 +124,7 @@ impl MemArg {
             MemArg::InitialSPOffset { .. } => MemFlags::trusted(),
             MemArg::NominalSPOffset { .. } => MemFlags::trusted(),
             MemArg::SlotOffset { .. } => MemFlags::trusted(),
+            MemArg::SpillOffset { .. } => MemFlags::trusted(),
         }
     }
 }
@@ -244,6 +249,7 @@ impl PrettyPrint for MemArg {
             &MemArg::InitialSPOffset { .. }
             | &MemArg::NominalSPOffset { .. }
             | &MemArg::SlotOffset { .. }
+            | &MemArg::SpillOffset { .. }
             | &MemArg::RegOffset { .. } => {
                 panic!("Unexpected pseudo mem-arg mode (stack-offset or generic reg-offset)!")
             }
