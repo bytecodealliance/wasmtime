@@ -356,7 +356,7 @@ impl Memory {
         }
     }
 
-    /// Returns the number of allocated wasm pages.
+    /// Returns the size of this memory, in bytes.
     pub fn byte_size(&self) -> usize {
         match self {
             Memory::Local(mem) => mem.byte_size(),
@@ -407,7 +407,7 @@ impl Memory {
     }
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
-    pub fn vmmemory(&mut self) -> VMMemoryDefinition {
+    pub fn vmmemory(&self) -> VMMemoryDefinition {
         match self {
             Memory::Local(mem) => mem.vmmemory(),
             // `vmmemory()` is used for writing the `VMMemoryDefinition` of a
@@ -701,7 +701,7 @@ impl LocalMemory {
         }
     }
 
-    pub fn vmmemory(&mut self) -> VMMemoryDefinition {
+    pub fn vmmemory(&self) -> VMMemoryDefinition {
         VMMemoryDefinition {
             base: self.alloc.base().as_non_null().into(),
             current_length: self.alloc.byte_size().into(),
