@@ -3203,7 +3203,7 @@ fn prepare_addr(
         // If our offset fits within a u32, then we can place the it into the
         // offset immediate of the `heap_addr` instruction.
         Ok(offset) => {
-            bounds_check_and_compute_addr(builder, environ, &heap, index, offset, access_size)?
+            bounds_check_and_compute_addr(builder, environ, &heap, index, offset, access_size)
         }
 
         // If the offset doesn't fit within a u32, then we can't pass it
@@ -3242,7 +3242,7 @@ fn prepare_addr(
                 offset,
                 ir::TrapCode::HEAP_OUT_OF_BOUNDS,
             );
-            bounds_check_and_compute_addr(builder, environ, &heap, adjusted_index, 0, access_size)?
+            bounds_check_and_compute_addr(builder, environ, &heap, adjusted_index, 0, access_size)
         }
     };
     let addr = match addr {

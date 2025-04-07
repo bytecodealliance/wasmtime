@@ -1016,37 +1016,49 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    /// Add one level of indirection to a pointer-and-memtype pair:
-    /// generate a load in the code at the specified offset, and if
-    /// memtypes are in use, add a field to the original struct and
-    /// generate a new memtype for the pointee.
-    fn load_pointer_with_memtypes(
+    /// Create an `ir::Global` that does `load(ptr + offset)` and, when PCC and
+    /// memory types are enabled, adds a field to the pointer's memory type for
+    /// this value we are loading.
+    pub(crate) fn global_load_with_memory_type(
         &mut self,
         func: &mut ir::Function,
+        ptr: ir::GlobalValue,
         offset: u32,
-        readonly: bool,
-        memtype: Option<ir::MemoryType>,
+        flags: ir::MemFlags,
+        ptr_mem_ty: Option<ir::MemoryType>,
     ) -> (ir::GlobalValue, Option<ir::MemoryType>) {
-        let vmctx = self.vmctx(func);
         let pointee = func.create_global_value(ir::GlobalValueData::Load {
-            base: vmctx,
+            base: ptr,
             offset: Offset32::new(i32::try_from(offset).unwrap()),
             global_type: self.pointer_type(),
-            flags: MemFlags::trusted().with_readonly().with_can_move(),
+            flags,
         });
 
-        let mt = memtype.map(|mt| {
-            let pointee_mt = self.create_empty_struct_memtype(func);
-            self.add_field_to_memtype(func, mt, offset, pointee_mt, readonly);
+        let pointee_mem_ty = ptr_mem_ty.map(|ptr_mem_ty| {
+            let pointee_mem_ty = self.create_empty_struct_memtype(func);
+            self.add_field_to_memtype(func, ptr_mem_ty, offset, pointee_mem_ty, flags.readonly());
             func.global_value_facts[pointee] = Some(Fact::Mem {
-                ty: pointee_mt,
+                ty: pointee_mem_ty,
                 min_offset: 0,
                 max_offset: 0,
                 nullable: false,
             });
-            pointee_mt
+            pointee_mem_ty
         });
-        (pointee, mt)
+
+        (pointee, pointee_mem_ty)
+    }
+
+    /// Like `global_load_with_memory_type` but specialized for loads out of the
+    /// `vmctx`.
+    pub(crate) fn global_load_from_vmctx_with_memory_type(
+        &mut self,
+        func: &mut ir::Function,
+        offset: u32,
+        flags: ir::MemFlags,
+    ) -> (ir::GlobalValue, Option<ir::MemoryType>) {
+        let vmctx = self.vmctx(func);
+        self.global_load_with_memory_type(func, vmctx, offset, flags, self.pcc_vmctx_memtype)
     }
 
     /// Helper to emit a conditional trap based on `trap_cond`.
@@ -2330,7 +2342,7 @@ impl FuncEnvironment<'_> {
         let memory = self.module.memories[index];
         let is_shared = memory.shared;
 
-        let (ptr, base_offset, current_length_offset, ptr_memtype) = {
+        let (base_ptr, base_offset, current_length_offset, ptr_memtype) = {
             let vmctx = self.vmctx(func);
             if let Some(def_index) = self.module.defined_memory_index(index) {
                 if is_shared {
@@ -2339,11 +2351,10 @@ impl FuncEnvironment<'_> {
                     // VMMemoryDefinition` to it and dereference that when
                     // atomically growing it.
                     let from_offset = self.offsets.vmctx_vmmemory_pointer(def_index);
-                    let (memory, def_mt) = self.load_pointer_with_memtypes(
+                    let (memory, def_mt) = self.global_load_from_vmctx_with_memory_type(
                         func,
                         from_offset,
-                        true,
-                        self.pcc_vmctx_memtype,
+                        ir::MemFlags::trusted().with_readonly().with_can_move(),
                     );
                     let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                     let current_length_offset =
@@ -2367,11 +2378,10 @@ impl FuncEnvironment<'_> {
                 }
             } else {
                 let from_offset = self.offsets.vmctx_vmmemory_import_from(index);
-                let (memory, def_mt) = self.load_pointer_with_memtypes(
+                let (memory, def_mt) = self.global_load_from_vmctx_with_memory_type(
                     func,
                     from_offset,
-                    true,
-                    self.pcc_vmctx_memtype,
+                    ir::MemFlags::trusted().with_readonly().with_can_move(),
                 );
                 let base_offset = i32::from(self.offsets.ptr.vmmemory_definition_base());
                 let current_length_offset =
@@ -2380,13 +2390,66 @@ impl FuncEnvironment<'_> {
             }
         };
 
-        let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
-            base: ptr,
+        let bound = func.create_global_value(ir::GlobalValueData::Load {
+            base: base_ptr,
             offset: Offset32::new(current_length_offset),
             global_type: pointer_type,
             flags: MemFlags::trusted(),
         });
 
+        let (base_fact, pcc_memory_type) = self.make_pcc_base_fact_and_type_for_memory(
+            func,
+            memory,
+            base_offset,
+            current_length_offset,
+            ptr_memtype,
+            bound,
+        );
+
+        let base = self.make_heap_base(func, memory, base_ptr, base_offset, base_fact);
+
+        Ok(self.heaps.push(HeapData {
+            base,
+            bound,
+            pcc_memory_type,
+            memory,
+        }))
+    }
+
+    pub(crate) fn make_heap_base(
+        &self,
+        func: &mut Function,
+        memory: Memory,
+        ptr: ir::GlobalValue,
+        offset: i32,
+        fact: Option<Fact>,
+    ) -> ir::GlobalValue {
+        let pointer_type = self.pointer_type();
+
+        let mut flags = ir::MemFlags::trusted().with_checked().with_can_move();
+        if !memory.memory_may_move(self.tunables) {
+            flags.set_readonly();
+        }
+
+        let heap_base = func.create_global_value(ir::GlobalValueData::Load {
+            base: ptr,
+            offset: Offset32::new(offset),
+            global_type: pointer_type,
+            flags,
+        });
+        func.global_value_facts[heap_base] = fact;
+        heap_base
+    }
+
+    pub(crate) fn make_pcc_base_fact_and_type_for_memory(
+        &mut self,
+        func: &mut Function,
+        memory: Memory,
+        base_offset: i32,
+        current_length_offset: i32,
+        ptr_memtype: Option<ir::MemoryType>,
+        heap_bound: ir::GlobalValue,
+    ) -> (Option<Fact>, Option<ir::MemoryType>) {
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
         let host_page_size_log2 = self.target_config().page_size_align_log2;
@@ -2493,25 +2556,7 @@ impl FuncEnvironment<'_> {
                 (None, None)
             }
         };
-
-        let mut flags = MemFlags::trusted().with_checked().with_can_move();
-        if !memory.memory_may_move(self.tunables) {
-            flags.set_readonly();
-        }
-        let heap_base = func.create_global_value(ir::GlobalValueData::Load {
-            base: ptr,
-            offset: Offset32::new(base_offset),
-            global_type: pointer_type,
-            flags,
-        });
-        func.global_value_facts[heap_base] = base_fact;
-
-        Ok(self.heaps.push(HeapData {
-            base: heap_base,
-            bound: heap_bound,
-            pcc_memory_type: memory_type,
-            memory,
-        }))
+        (base_fact, memory_type)
     }
 
     pub fn make_global(
@@ -3080,15 +3125,11 @@ impl FuncEnvironment<'_> {
         Ok(())
     }
 
-    pub fn before_unconditionally_trapping_memory_access(
-        &mut self,
-        builder: &mut FunctionBuilder,
-    ) -> WasmResult<()> {
+    pub fn before_unconditionally_trapping_memory_access(&mut self, builder: &mut FunctionBuilder) {
         if self.tunables.consume_fuel {
             self.fuel_increment_var(builder);
             self.fuel_save_from_var(builder);
         }
-        Ok(())
     }
 
     pub fn before_translate_function(
