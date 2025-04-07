@@ -175,6 +175,9 @@ impl Memory {
             super::set_readable_and_executable(ptr, len, branch_protection)?;
         }
 
+        // Flush any in-flight instructions from the pipeline
+        wasmtime_jit_icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
+
         self.already_protected = self.allocations.len();
         Ok(())
     }

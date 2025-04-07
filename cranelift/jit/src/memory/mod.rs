@@ -1,9 +1,8 @@
-mod arena;
-mod system;
-
+use cranelift_module::ModuleResult;
 use std::io;
 
-use cranelift_module::ModuleResult;
+mod arena;
+mod system;
 
 pub use arena::ArenaMemoryProvider;
 pub use system::SystemMemoryProvider;
@@ -32,8 +31,12 @@ pub trait JITMemoryProvider {
     fn finalize(&mut self, branch_protection: BranchProtection) -> ModuleResult<()>;
 }
 
-/// Set all memory allocated in this `Memory` up to now as readable and executable.
-/// This function deals with icache coherence, branch protection, and pipeline flushing.
+/// Marks the memory region as readable and executable.
+///
+/// This function deals with applies branch protection and clears the icache,
+/// but *doesn't* flush the pipeline. Callers have to ensure that
+/// [`wasmtime_jit_icache_coherence::pipeline_flush_mt`] is called before the
+/// mappings are used.
 pub(crate) fn set_readable_and_executable(
     ptr: *mut u8,
     len: usize,
@@ -72,9 +75,6 @@ pub(crate) fn set_readable_and_executable(
             }
         }
     }
-
-    // Flush any in-flight instructions from the pipeline
-    wasmtime_jit_icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
 
     Ok(())
 }

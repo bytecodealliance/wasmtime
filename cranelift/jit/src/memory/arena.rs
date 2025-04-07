@@ -178,6 +178,9 @@ impl ArenaMemoryProvider {
         for segment in &mut self.segments {
             segment.finalize(branch_protection);
         }
+
+        // Flush any in-flight instructions from the pipeline
+        wasmtime_jit_icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
     }
 
     /// Frees the allocated memory region, which would be leaked otherwise.
