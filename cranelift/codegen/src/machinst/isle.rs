@@ -908,13 +908,34 @@ macro_rules! isle_prelude_caller_methods {
 
         fn gen_try_call_indirect(
             &mut self,
-            _sig_ref: SigRef,
-            _callee: Value,
-            _et: ExceptionTable,
-            _args: ValueSlice,
-            _targets: &MachLabelSlice,
+            sigref: SigRef,
+            callee: Value,
+            et: ExceptionTable,
+            args: ValueSlice,
+            targets: &MachLabelSlice,
         ) -> () {
-            todo!()
+            let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
+            let sig = &self.lower_ctx.dfg().signatures[sigref];
+            let num_rets = sig.returns.len();
+
+            let callee = self.put_in_reg(callee);
+
+            let caller = <$abicaller>::from_ptr(
+                self.lower_ctx.sigs(),
+                sigref,
+                callee,
+                IsTailCall::No,
+                caller_conv,
+                self.backend.flags().clone(),
+            );
+
+            crate::machinst::isle::gen_call_common(
+                &mut self.lower_ctx,
+                num_rets,
+                caller,
+                args,
+                Some((et, targets)),
+            );
         }
     };
 }

@@ -595,7 +595,7 @@ impl InstructionData {
                 ..
             } => {
                 let exdata = &exception_tables[exception];
-                CallInfo::Indirect(exdata.signature(), args.as_slice(pool))
+                CallInfo::Indirect(exdata.signature(), &args.as_slice(pool)[1..])
             }
             Self::Ternary {
                 opcode: Opcode::StackSwitch,
