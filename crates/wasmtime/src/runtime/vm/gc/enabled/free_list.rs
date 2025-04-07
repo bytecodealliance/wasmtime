@@ -1,11 +1,26 @@
 use crate::prelude::*;
 use alloc::collections::BTreeMap;
-use core::cmp;
 use core::{alloc::Layout, num::NonZeroU32, ops::Bound};
 
 /// A very simple first-fit free list for use by our garbage collectors.
 pub(crate) struct FreeList {
     /// The total capacity of the contiguous range of memory we are managing.
+    ///
+    /// NB: we keep `self.capacity` unrounded because otherwise we would get
+    /// rounding errors where we lose track of the actual capacity we have when
+    /// repeatedly adding capacity `n` where `n < ALIGN`:
+    ///
+    /// ```ignore
+    /// let mut free_list = FreeList::new(0);
+    /// loop {
+    ///     free_list.add_capacity(1);
+    /// }
+    /// ```
+    ///
+    /// If we eagerly rounded capacity down to our alignment on every call to
+    /// `add_capacity`, the free list would always think it has zero capacity,
+    /// even though it would have enough capacity for many allocations after
+    /// enough iterations of the loop.
     capacity: usize,
     /// Our free blocks, as a map from index to length of the free block at that
     /// index.
@@ -28,7 +43,7 @@ impl FreeList {
     /// Create a new `FreeList` for a contiguous region of memory of the given
     /// size.
     pub fn new(capacity: usize) -> Self {
-        log::trace!("FreeList::new({capacity})");
+        log::debug!("FreeList::new({capacity})");
         let mut free_list = FreeList {
             capacity,
             free_block_index_to_len: BTreeMap::new(),
@@ -37,8 +52,66 @@ impl FreeList {
         free_list
     }
 
+    /// Add additional capacity to this free list.
+    #[allow(dead_code)] // TODO: becomes used in https://github.com/bytecodealliance/wasmtime/pull/10503
+    pub fn add_capacity(&mut self, additional: usize) {
+        let old_cap = self.capacity;
+        self.capacity = self.capacity.saturating_add(additional);
+        log::debug!(
+            "FreeList::add_capacity({additional:#x}): capacity growing from {old_cap:#x} to {:#x}",
+            self.capacity
+        );
+
+        // See the comment on `self.capacity` about why we need to do the
+        // alignment-rounding here, rather than keeping `self.capacity` aligned
+        // at rest.
+        let old_cap_rounded = round_usize_down_to_pow2(old_cap, ALIGN_USIZE);
+
+        // If we are adding capacity beyond what a `u32` can address, then we
+        // can't actually use that capacity, so don't bother adding a new block
+        // to the free list.
+        let Ok(old_cap_rounded) = u32::try_from(old_cap_rounded) else {
+            return;
+        };
+
+        // Our new block's index is the end of the old capacity.
+        let index = NonZeroU32::new(old_cap_rounded).unwrap_or(
+            // But additionally all indices must be non-zero, so start the new
+            // block at the first aligned index if necessary.
+            NonZeroU32::new(ALIGN_U32).unwrap(),
+        );
+
+        // If, after rounding everything to our alignment, we aren't actually
+        // gaining any new capacity, then don't add a new block to the free
+        // list.
+        let new_cap = u32::try_from(self.capacity).unwrap_or(u32::MAX);
+        let new_cap = round_u32_down_to_pow2(new_cap, ALIGN_U32);
+        debug_assert!(new_cap >= index.get());
+        let size = new_cap - index.get();
+        debug_assert_eq!(size % ALIGN_U32, 0);
+        if size == 0 {
+            return;
+        }
+
+        // If we can't represent this block in a `Layout`, then don't add it to
+        // our free list either.
+        let Ok(layout) = Layout::from_size_align(usize::try_from(size).unwrap(), ALIGN_USIZE)
+        else {
+            return;
+        };
+
+        // Okay! Add a block to our free list for the new capacity, potentially
+        // merging it with existing blocks at the end of the free list.
+        log::trace!(
+            "FreeList::add_capacity(..): adding block {index:#x}..{:#x}",
+            index.get() + size
+        );
+        self.dealloc(index, layout);
+    }
+
+    #[cfg(test)]
     fn max_size(&self) -> usize {
-        let cap = cmp::min(self.capacity, usize::try_from(u32::MAX).unwrap());
+        let cap = core::cmp::min(self.capacity, usize::try_from(u32::MAX).unwrap());
         round_usize_down_to_pow2(cap.saturating_sub(ALIGN_USIZE), ALIGN_USIZE)
     }
 
@@ -47,20 +120,10 @@ impl FreeList {
     fn check_layout(&self, layout: Layout) -> Result<u32> {
         ensure!(
             layout.align() <= ALIGN_USIZE,
-            "requested allocation's alignment of {} is greater than max supported alignment of {ALIGN_USIZE}",
+            "requested allocation's alignment of {} is greater than max supported \
+             alignment of {ALIGN_USIZE}",
             layout.align(),
         );
-
-        if layout.size() > self.max_size() {
-            let trap = crate::Trap::AllocationTooLarge;
-            let err = anyhow::Error::from(trap);
-            let err = err.context(format!(
-                "requested allocation's size of {} is greater than the max supported size of {}",
-                layout.size(),
-                self.max_size(),
-            ));
-            return Err(err);
-        }
 
         let alloc_size = u32::try_from(layout.size()).map_err(|e| {
             let trap = crate::Trap::AllocationTooLarge;
@@ -377,6 +440,8 @@ mod tests {
         #[test]
         #[cfg_attr(miri, ignore)]
         fn check_no_fragmentation((capacity, ops) in ops()) {
+            let _ = env_logger::try_init();
+
             // Map from allocation id to ptr.
             let mut live = HashMap::new();
 
@@ -519,23 +584,14 @@ mod tests {
     fn allocate_no_split() {
         // Create a free list with the capacity to allocate two blocks of size
         // `ALIGN_U32`.
-        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 2);
+        let mut free_list = FreeList::new(ALIGN_USIZE + ALIGN_USIZE * 2);
 
         assert_eq!(free_list.free_block_index_to_len.len(), 1);
-        assert_eq!(
-            free_list.max_size(),
-            usize::try_from(ALIGN_U32).unwrap() * 2
-        );
+        assert_eq!(free_list.max_size(), ALIGN_USIZE * 2);
 
         // Allocate a block such that the remainder is not worth splitting.
         free_list
-            .alloc(
-                Layout::from_size_align(
-                    usize::try_from(ALIGN_U32).unwrap() + ALIGN_USIZE,
-                    ALIGN_USIZE,
-                )
-                .unwrap(),
-            )
+            .alloc(Layout::from_size_align(ALIGN_USIZE + ALIGN_USIZE, ALIGN_USIZE).unwrap())
             .expect("allocation within 'static' free list limits")
             .expect("have free space available for allocation");
 
@@ -547,23 +603,14 @@ mod tests {
     fn allocate_and_split() {
         // Create a free list with the capacity to allocate three blocks of size
         // `ALIGN_U32`.
-        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 3);
+        let mut free_list = FreeList::new(ALIGN_USIZE + ALIGN_USIZE * 3);
 
         assert_eq!(free_list.free_block_index_to_len.len(), 1);
-        assert_eq!(
-            free_list.max_size(),
-            usize::try_from(ALIGN_U32).unwrap() * 3
-        );
+        assert_eq!(free_list.max_size(), ALIGN_USIZE * 3);
 
         // Allocate a block such that the remainder is not worth splitting.
         free_list
-            .alloc(
-                Layout::from_size_align(
-                    usize::try_from(ALIGN_U32).unwrap() + ALIGN_USIZE,
-                    ALIGN_USIZE,
-                )
-                .unwrap(),
-            )
+            .alloc(Layout::from_size_align(ALIGN_USIZE + ALIGN_USIZE, ALIGN_USIZE).unwrap())
             .expect("allocation within 'static' free list limits")
             .expect("have free space available for allocation");
 
@@ -573,10 +620,9 @@ mod tests {
 
     #[test]
     fn dealloc_merge_prev_and_next() {
-        let layout =
-            Layout::from_size_align(usize::try_from(ALIGN_U32).unwrap(), ALIGN_USIZE).unwrap();
+        let layout = Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE).unwrap();
 
-        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 100);
+        let mut free_list = FreeList::new(ALIGN_USIZE + ALIGN_USIZE * 100);
         assert_eq!(
             free_list.free_block_index_to_len.len(),
             1,
@@ -621,10 +667,9 @@ mod tests {
 
     #[test]
     fn dealloc_merge_with_prev_and_not_next() {
-        let layout =
-            Layout::from_size_align(usize::try_from(ALIGN_U32).unwrap(), ALIGN_USIZE).unwrap();
+        let layout = Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE).unwrap();
 
-        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 100);
+        let mut free_list = FreeList::new(ALIGN_USIZE + ALIGN_USIZE * 100);
         assert_eq!(
             free_list.free_block_index_to_len.len(),
             1,
@@ -669,10 +714,9 @@ mod tests {
 
     #[test]
     fn dealloc_merge_with_next_and_not_prev() {
-        let layout =
-            Layout::from_size_align(usize::try_from(ALIGN_U32).unwrap(), ALIGN_USIZE).unwrap();
+        let layout = Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE).unwrap();
 
-        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 100);
+        let mut free_list = FreeList::new(ALIGN_USIZE + ALIGN_USIZE * 100);
         assert_eq!(
             free_list.free_block_index_to_len.len(),
             1,
@@ -717,10 +761,9 @@ mod tests {
 
     #[test]
     fn dealloc_no_merge() {
-        let layout =
-            Layout::from_size_align(usize::try_from(ALIGN_U32).unwrap(), ALIGN_USIZE).unwrap();
+        let layout = Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE).unwrap();
 
-        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 100);
+        let mut free_list = FreeList::new(ALIGN_USIZE + ALIGN_USIZE * 100);
         assert_eq!(
             free_list.free_block_index_to_len.len(),
             1,
@@ -770,38 +813,27 @@ mod tests {
     #[test]
     fn alloc_size_too_large() {
         // Free list with room for 10 min-sized blocks.
-        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 10);
-        assert_eq!(
-            free_list.max_size(),
-            usize::try_from(ALIGN_U32).unwrap() * 10
-        );
+        let mut free_list = FreeList::new(ALIGN_USIZE + ALIGN_USIZE * 10);
+        assert_eq!(free_list.max_size(), ALIGN_USIZE * 10);
 
         // Attempt to allocate something that is 20 times the size of our
         // min-sized block.
         assert!(free_list
-            .alloc(
-                Layout::from_size_align(usize::try_from(ALIGN_U32).unwrap() * 20, ALIGN_USIZE)
-                    .unwrap(),
-            )
-            .is_err());
+            .alloc(Layout::from_size_align(ALIGN_USIZE * 20, ALIGN_USIZE).unwrap())
+            .unwrap()
+            .is_none());
     }
 
     #[test]
     fn alloc_align_too_large() {
         // Free list with room for 10 min-sized blocks.
-        let mut free_list = FreeList::new(ALIGN_USIZE + usize::try_from(ALIGN_U32).unwrap() * 10);
-        assert_eq!(
-            free_list.max_size(),
-            usize::try_from(ALIGN_U32).unwrap() * 10
-        );
+        let mut free_list = FreeList::new(ALIGN_USIZE + ALIGN_USIZE * 10);
+        assert_eq!(free_list.max_size(), ALIGN_USIZE * 10);
 
         // Attempt to allocate something that requires larger alignment than
         // `FreeList` supports.
         assert!(free_list
-            .alloc(
-                Layout::from_size_align(usize::try_from(ALIGN_U32).unwrap(), ALIGN_USIZE * 2)
-                    .unwrap(),
-            )
+            .alloc(Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE * 2).unwrap(),)
             .is_err());
     }
 
@@ -833,5 +865,57 @@ mod tests {
             let mut f = FreeList::new(0x100);
             test(&mut f, l);
         }
+    }
+
+    #[test]
+    fn add_capacity() {
+        let layout = Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE).unwrap();
+
+        let mut free_list = FreeList::new(0);
+        assert!(free_list.alloc(layout).unwrap().is_none(), "no capacity");
+
+        free_list.add_capacity(ALIGN_USIZE);
+        assert!(
+            free_list.alloc(layout).unwrap().is_none(),
+            "still not enough capacity because we won't allocate the zero index"
+        );
+
+        free_list.add_capacity(1);
+        assert!(
+            free_list.alloc(layout).unwrap().is_none(),
+            "still not enough capacity because allocations are multiples of the alignment"
+        );
+
+        free_list.add_capacity(ALIGN_USIZE - 1);
+        let a = free_list
+            .alloc(layout)
+            .unwrap()
+            .expect("now we have enough capacity for one");
+        assert!(
+            free_list.alloc(layout).unwrap().is_none(),
+            "but not enough capacity for two"
+        );
+
+        free_list.add_capacity(ALIGN_USIZE);
+        let b = free_list
+            .alloc(layout)
+            .unwrap()
+            .expect("now we have enough capacity for two");
+
+        free_list.dealloc(a, layout);
+        free_list.dealloc(b, layout);
+        assert_eq!(
+            free_list.free_block_index_to_len.len(),
+            1,
+            "`dealloc` should merge blocks from different `add_capacity` calls together"
+        );
+
+        free_list.add_capacity(ALIGN_USIZE);
+        assert_eq!(
+            free_list.free_block_index_to_len.len(),
+            1,
+            "`add_capacity` should eagerly merge new capacity into the last block \
+             in the free list, when possible"
+        );
     }
 }
