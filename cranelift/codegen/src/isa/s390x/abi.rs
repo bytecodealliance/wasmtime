@@ -264,6 +264,16 @@ impl Into<MemArg> for StackAMode {
     }
 }
 
+/// Lane order to be used for a given calling convention.
+impl From<isa::CallConv> for LaneOrder {
+    fn from(call_conv: isa::CallConv) -> Self {
+        match call_conv {
+            isa::CallConv::Tail => LaneOrder::LittleEndian,
+            _ => LaneOrder::BigEndian,
+        }
+    }
+}
+
 /// S390x-specific ABI behavior. This struct just serves as an implementation
 /// point for the trait; it is never actually instantiated.
 pub struct S390xMachineDeps;
@@ -1001,8 +1011,8 @@ impl S390xMachineDeps {
     pub fn gen_tail_epilogue(
         frame_layout: &FrameLayout,
         callee_pop_size: u32,
-        target_reg: Option<&mut Reg>,
-    ) -> SmallVec<[Inst; 16]> {
+        dest: &CallInstDest,
+    ) -> (SmallVec<[Inst; 16]>, Option<Reg>) {
         let mut insts = SmallVec::new();
         let call_conv = isa::CallConv::Tail;
 
@@ -1012,19 +1022,122 @@ impl S390xMachineDeps {
         // If the tail call target is in a callee-saved GPR, we need to move it
         // to %r1 (as the only available temp register) before restoring GPRs
         // (but after restoring FPRs, which might clobber %r1).
-        if let Some(reg) = target_reg {
-            if is_reg_saved_in_prologue(call_conv, reg.to_real_reg().unwrap()) {
+        let temp_dest = match dest {
+            CallInstDest::Indirect { reg }
+                if is_reg_saved_in_prologue(call_conv, reg.to_real_reg().unwrap()) =>
+            {
                 insts.push(Inst::Mov64 {
                     rd: writable_gpr(1),
                     rm: *reg,
                 });
-                *reg = gpr(1);
+                Some(gpr(1))
             }
-        }
+            _ => None,
+        };
 
         // Restore GPRs (including SP).
         insts.extend(gen_restore_gprs(call_conv, frame_layout, callee_pop_size));
 
+        (insts, temp_dest)
+    }
+
+    /// Emit loads for any stack-carried return values using the call
+    /// info and allocations.  In addition, emit lane swaps for all
+    /// vector-types return values if needed.
+    pub fn gen_retval_loads(info: &CallInfo<CallInstDest>) -> SmallInstVec<Inst> {
+        let mut insts = SmallVec::new();
+
+        // Helper routine to lane-swap a register if needed.
+        let lane_swap_if_needed = |insts: &mut SmallInstVec<Inst>, vreg, ty: Type| {
+            if LaneOrder::from(info.caller_conv) != LaneOrder::from(info.callee_conv) {
+                if ty.is_vector() {
+                    if ty.lane_count() >= 2 {
+                        insts.push(Inst::VecPermuteDWImm {
+                            rd: vreg,
+                            rn: vreg.to_reg(),
+                            rm: vreg.to_reg(),
+                            idx1: 1,
+                            idx2: 0,
+                        });
+                    }
+                    if ty.lane_count() >= 4 {
+                        insts.push(Inst::VecShiftRR {
+                            shift_op: VecShiftOp::RotL64x2,
+                            rd: vreg,
+                            rn: vreg.to_reg(),
+                            shift_imm: 32,
+                            shift_reg: zero_reg(),
+                        });
+                    }
+                    if ty.lane_count() >= 8 {
+                        insts.push(Inst::VecShiftRR {
+                            shift_op: VecShiftOp::RotL32x4,
+                            rd: vreg,
+                            rn: vreg.to_reg(),
+                            shift_imm: 16,
+                            shift_reg: zero_reg(),
+                        });
+                    }
+                    if ty.lane_count() >= 16 {
+                        insts.push(Inst::VecShiftRR {
+                            shift_op: VecShiftOp::RotL16x8,
+                            rd: vreg,
+                            rn: vreg.to_reg(),
+                            shift_imm: 8,
+                            shift_reg: zero_reg(),
+                        });
+                    }
+                }
+            }
+        };
+
+        // Helper routine to allocate a temp register for ty.
+        let temp_reg = |ty| match Inst::rc_for_type(ty).unwrap() {
+            (&[RegClass::Int], _) => writable_gpr(0),
+            (&[RegClass::Float], _) => writable_vr(1),
+            _ => unreachable!(),
+        };
+
+        // Do a first pass over the return locations to handle copies that
+        // need temp registers.  These need to be done before regular stack
+        // loads in case the destination of a load happens to be our temp
+        // register.  (The temp registers by choice are distinct from all
+        // real return registers, which we verify here again.)
+        for CallRetPair { vreg, location } in &info.defs {
+            match location {
+                RetLocation::Reg(preg, ty) => {
+                    debug_assert!(*preg != temp_reg(*ty).to_reg());
+                }
+                RetLocation::Stack(amode, ty) => {
+                    if let Some(spillslot) = vreg.to_reg().to_spillslot() {
+                        let temp = temp_reg(*ty);
+                        insts.push(Inst::gen_load(temp, (*amode).into(), *ty));
+                        lane_swap_if_needed(&mut insts, temp, *ty);
+                        insts.push(Inst::gen_store(
+                            MemArg::SpillOffset {
+                                off: 8 * (spillslot.index() as i64),
+                            },
+                            temp.to_reg(),
+                            Inst::canonical_type_for_rc(temp.to_reg().class()),
+                        ));
+                    }
+                }
+            }
+        }
+        // Now handle all remaining return locations.
+        for CallRetPair { vreg, location } in &info.defs {
+            match location {
+                RetLocation::Reg(preg, ty) => {
+                    lane_swap_if_needed(&mut insts, Writable::from_reg(*preg), *ty);
+                }
+                RetLocation::Stack(amode, ty) => {
+                    if vreg.to_reg().to_spillslot().is_none() {
+                        insts.push(Inst::gen_load(*vreg, (*amode).into(), *ty));
+                        lane_swap_if_needed(&mut insts, *vreg, *ty);
+                    }
+                }
+            }
+        }
         insts
     }
 }

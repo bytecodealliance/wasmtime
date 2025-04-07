@@ -885,23 +885,14 @@
     (AllocateArgs
       (size u32))
 
-    ;; A machine call instruction.
+    ;; A machine call instruction (direct or indirect).
     (Call
       (link WritableReg)
       (info BoxCallInfo))
 
-    ;; A machine indirect-call instruction.
-    (CallInd
-      (link WritableReg)
-      (info BoxCallIndInfo))
-
-    ;; A machine tail call instruction.
+    ;; A machine tail call instruction (direct or indirect).
     (ReturnCall
       (info BoxReturnCallInfo))
-
-    ;; A machine indirect tail call instruction.
-    (ReturnCallInd
-      (info BoxReturnCallIndInfo))
 
     ;; A pseudo-instruction that captures register arguments in vregs.
     (Args
@@ -1018,11 +1009,24 @@
 ;; Primitive types used in instruction formats.
 
 (type BoxCallInfo (primitive BoxCallInfo))
-(type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
-(type BoxReturnCallIndInfo (primitive BoxReturnCallIndInfo))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
 (type VecMachLabel extern (enum))
+
+;; Information about a call site.
+(type CallSiteInfo (primitive CallSiteInfo))
+(decl call_site_info (BoxCallInfo InstOutput) CallSiteInfo)
+(extern extractor infallible call_site_info call_site_info_split)
+
+;; The destination of a call instruction.
+(type CallInstDest
+  (enum
+    ;; Direct call.
+    (Direct
+      (name ExternalName))
+    ;; Indirect call.
+    (Indirect
+      (reg Reg))))
 
 ;; A symbol reference carrying relocation information.
 (type SymbolReloc
@@ -2665,24 +2669,15 @@
         dst))
 
 ;; Helper for emitting `MInst.Call` instructions.
-(decl call_impl (WritableReg BoxCallInfo) SideEffectNoResult)
-(rule (call_impl reg info)
-      (SideEffectNoResult.Inst (MInst.Call reg info)))
-
-;; Helper for emitting `MInst.CallInd` instructions.
-(decl call_ind_impl (WritableReg BoxCallIndInfo) SideEffectNoResult)
-(rule (call_ind_impl reg info)
-      (SideEffectNoResult.Inst (MInst.CallInd reg info)))
+(decl call_impl (WritableReg CallSiteInfo) InstOutput)
+(rule (call_impl reg (call_site_info info output))
+      (let ((_ Unit (emit (MInst.Call reg info))))
+        output))
 
 ;; Helper for emitting `MInst.ReturnCall` instructions.
 (decl return_call_impl (BoxReturnCallInfo) SideEffectNoResult)
 (rule (return_call_impl info)
       (SideEffectNoResult.Inst (MInst.ReturnCall info)))
-
-;; Helper for emitting `MInst.ReturnCallInd` instructions.
-(decl return_call_ind_impl (BoxReturnCallIndInfo) SideEffectNoResult)
-(rule (return_call_ind_impl info)
-      (SideEffectNoResult.Inst (MInst.ReturnCallInd info)))
 
 ;; Helper for emitting `MInst.Jump` instructions.
 (decl jump_impl (MachLabel) SideEffectNoResult)
@@ -2846,15 +2841,6 @@
 (rule (arg_store $F64 reg mem) (vec_store_lane $F64X2 reg mem 0))
 (rule -1 (arg_store (vr128_ty ty) reg mem) (vec_store reg mem))
 
-(decl arg_load (Type MemArg) Reg)
-(rule (arg_load $I8 mem) (zext32_mem $I8 mem))
-(rule (arg_load $I16 mem) (zext32_mem $I16 mem))
-(rule (arg_load $I32 mem) (load32 mem))
-(rule (arg_load $I64 mem) (load64 mem))
-(rule (arg_load $F32 mem) (vec_load_lane_undef $F32X4 mem 0))
-(rule (arg_load $F64 mem) (vec_load_lane_undef $F64X2 mem 0))
-(rule -1 (arg_load (vr128_ty ty) mem) (vec_load ty mem))
-
 ;; Helper to perform a lane swap in register.
 (decl vec_elt_rev (Type Reg) Reg)
 (rule (vec_elt_rev (multi_lane 64 2) reg)
@@ -2900,11 +2886,6 @@
       (let ((ptr Reg (load_addr (memarg_offset base offset))))
         (copy_reg_to_arg_slot uses lo base slot ptr)))
 
-;; Copy a single argument/return value from its slots.
-(decl copy_from_arg (CallRetList LaneOrder MemArg ABIArg) ValueRegs)
-(rule (copy_from_arg defs lo base (abi_arg_only_slot slot))
-      (value_reg (copy_reg_from_arg_slot defs lo base slot)))
-
 ;; Place one component of an argument/return value into a register.
 ;; Copy reference values into registers of integer type.
 ;; Zero- or sign-extend as required by the ABI.
@@ -2931,14 +2912,6 @@
 (rule (copy_reg_to_arg_slot _ lo base (ABIArgSlot.Stack offset ty ext) src)
       (side_effect (arg_store (abi_ext_ty ext ty) (abi_vec_elt_rev lo ty src)
                               (memarg_offset base offset))))
-
-;; Copy one component of an argument/return value from its slot.
-(decl copy_reg_from_arg_slot (CallRetList LaneOrder MemArg ABIArgSlot) Reg)
-(rule (copy_reg_from_arg_slot defs lo _ (ABIArgSlot.Reg reg ty ext))
-      (abi_vec_elt_rev lo ty (defs_lookup defs reg)))
-(rule (copy_reg_from_arg_slot _ lo base (ABIArgSlot.Stack offset ty ext))
-      (abi_vec_elt_rev lo ty (arg_load (abi_ext_ty ext ty)
-                                       (memarg_offset base offset))))
 
 ;; Helper to compute the type of an implicitly extended argument/return value.
 (decl abi_ext_ty (ArgumentExtension Type) Type)
@@ -3499,34 +3472,14 @@
 (decl args_builder_finish (CallArgListBuilder) CallArgList)
 (extern constructor args_builder_finish args_builder_finish)
 
-;; List of return registers for a call instnuction.
-(type CallRetList extern (enum))
-
-;; Initialize return register list.
-(decl defs_init (Sig) CallRetList)
-(extern constructor defs_init defs_init)
-
-;; Look up return register in list.
-(decl defs_lookup (CallRetList RealReg) Reg)
-(extern constructor defs_lookup defs_lookup)
-
 (decl abi_sig (SigRef) Sig)
 (extern constructor abi_sig abi_sig)
 
-(decl abi_first_ret (SigRef Sig) usize)
-(extern constructor abi_first_ret abi_first_ret)
+(decl abi_call_site_info (Sig CallInstDest CallArgList) CallSiteInfo)
+(extern constructor abi_call_site_info abi_call_site_info)
 
-(decl abi_call_info (Sig ExternalName CallArgList CallRetList) BoxCallInfo)
-(extern constructor abi_call_info abi_call_info)
-
-(decl abi_call_ind_info (Sig Reg CallArgList CallRetList) BoxCallIndInfo)
-(extern constructor abi_call_ind_info abi_call_ind_info)
-
-(decl abi_return_call_info (Sig ExternalName CallArgList) BoxReturnCallInfo)
+(decl abi_return_call_info (Sig CallInstDest CallArgList) BoxReturnCallInfo)
 (extern constructor abi_return_call_info abi_return_call_info)
-
-(decl abi_return_call_ind_info (Sig Reg CallArgList) BoxReturnCallIndInfo)
-(extern constructor abi_return_call_ind_info abi_return_call_ind_info)
 
 (decl abi_call_stack_args (Sig) MemArg)
 (extern constructor abi_call_stack_args abi_call_stack_args)
@@ -3540,21 +3493,14 @@
 (decl writable_link_reg () WritableReg)
 (rule (writable_link_reg) (writable_gpr 14))
 
-(decl abi_call (Sig ExternalName CallArgList CallRetList) SideEffectNoResult)
-(rule (abi_call abi name uses defs)
-      (call_impl (writable_link_reg) (abi_call_info abi name uses defs)))
+(decl abi_call (Sig CallInstDest CallArgList) InstOutput)
+(rule (abi_call abi dest uses)
+      (let ((info CallSiteInfo (abi_call_site_info abi dest uses)))
+        (call_impl (writable_link_reg) info)))
 
-(decl abi_call_ind (Sig Reg CallArgList CallRetList) SideEffectNoResult)
-(rule (abi_call_ind abi target uses defs)
-      (call_ind_impl (writable_link_reg) (abi_call_ind_info abi target uses defs)))
-
-(decl abi_return_call (Sig ExternalName CallArgList) SideEffectNoResult)
-(rule (abi_return_call abi name uses)
-      (return_call_impl (abi_return_call_info abi name uses)))
-
-(decl abi_return_call_ind (Sig Reg CallArgList) SideEffectNoResult)
-(rule (abi_return_call_ind abi target uses)
-      (return_call_ind_impl (abi_return_call_ind_info abi target uses)))
+(decl abi_return_call (Sig CallInstDest CallArgList) SideEffectNoResult)
+(rule (abi_return_call abi dest uses)
+      (return_call_impl (abi_return_call_info abi dest uses)))
 
 (decl abi_lane_order (Sig) LaneOrder)
 (extern constructor abi_lane_order abi_lane_order)

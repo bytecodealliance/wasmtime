@@ -2001,7 +2001,7 @@ pub struct CallRetPair {
 #[derive(Clone, Debug)]
 pub enum RetLocation {
     /// A physical register.
-    Reg(Reg),
+    Reg(Reg, Type),
     /// A stack location, identified by a `StackAMode`.
     Stack(StackAMode, Type),
 }
@@ -2345,7 +2345,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                             let into_reg = ctx.alloc_tmp(ty).only_reg().unwrap();
                             self.defs.push(CallRetPair {
                                 vreg: into_reg,
-                                location: RetLocation::Reg(reg.into()),
+                                location: RetLocation::Reg(reg.into(), ty),
                             });
                             into_regs.push(into_reg.to_reg());
                         }
@@ -2416,7 +2416,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
 
             // Remove retval regs from clobbers.
             for def in &defs {
-                if let RetLocation::Reg(preg) = def.location {
+                if let RetLocation::Reg(preg, ..) = def.location {
                     clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
                 }
             }
@@ -2507,7 +2507,7 @@ impl<T> CallInfo<T> {
 
         for CallRetPair { vreg, location } in &self.defs {
             match location {
-                RetLocation::Reg(preg) => {
+                RetLocation::Reg(preg, ..) => {
                     // The temporary must not also be an actual return
                     // value register.
                     debug_assert!(*preg != temp.to_reg());

@@ -68,18 +68,25 @@ pub fn mem_finalize(
         &MemArg::RegOffset { off, .. }
         | &MemArg::InitialSPOffset { off }
         | &MemArg::NominalSPOffset { off }
-        | &MemArg::SlotOffset { off } => {
+        | &MemArg::SlotOffset { off }
+        | &MemArg::SpillOffset { off } => {
             let base = match mem {
                 &MemArg::RegOffset { reg, .. } => reg,
                 &MemArg::InitialSPOffset { .. }
                 | &MemArg::NominalSPOffset { .. }
-                | &MemArg::SlotOffset { .. } => stack_reg(),
+                | &MemArg::SlotOffset { .. }
+                | &MemArg::SpillOffset { .. } => stack_reg(),
                 _ => unreachable!(),
             };
             let adj = match mem {
                 &MemArg::InitialSPOffset { .. } => i64::from(
                     state.frame_layout().clobber_size
                         + state.frame_layout().fixed_frame_storage_size
+                        + state.frame_layout().outgoing_args_size
+                        + state.nominal_sp_offset,
+                ),
+                &MemArg::SpillOffset { .. } => i64::from(
+                    state.frame_layout().stackslots_size
                         + state.frame_layout().outgoing_args_size
                         + state.nominal_sp_offset,
                 ),
@@ -1368,13 +1375,6 @@ impl Inst {
                 "Cannot emit inst '{self:?}' for target; failed to match ISA requirements: {isa_requirements:?}"
             )
         }
-
-        // N.B.: we *must* not exceed the "worst-case size" used to compute
-        // where to insert islands, except when islands are explicitly triggered
-        // (with an `EmitIsland`). We check this in debug builds. This is `mut`
-        // to allow disabling the check for `JTSequence`, which is always
-        // emitted following an `EmitIsland`.
-        let mut start_off = sink.cur_offset();
 
         match self {
             &Inst::AluRRR { alu_op, rd, rn, rm } => {
@@ -3199,63 +3199,54 @@ impl Inst {
                 state.nominal_sp_offset += size;
             }
             &Inst::Call { link, ref info } => {
-                let opcode = 0xc05; // BRASL
-
-                // Add relocation for target function.  This has to be done *before*
-                // the S390xTlsGdCall relocation if any, to ensure linker relaxation
-                // works correctly.
-                let offset = sink.cur_offset() + 2;
-                sink.add_reloc_at_offset(offset, Reloc::S390xPLTRel32Dbl, &info.dest, 2);
-
+                let enc: &[u8] = match &info.dest {
+                    CallInstDest::Direct { name } => {
+                        let offset = sink.cur_offset() + 2;
+                        sink.add_reloc_at_offset(offset, Reloc::S390xPLTRel32Dbl, name, 2);
+                        let opcode = 0xc05; // BRASL
+                        &enc_ril_b(opcode, link.to_reg(), 0)
+                    }
+                    CallInstDest::Indirect { reg } => {
+                        let opcode = 0x0d; // BASR
+                        &enc_rr(opcode, link.to_reg(), *reg)
+                    }
+                };
                 if let Some(s) = state.take_stack_map() {
-                    let offset = sink.cur_offset() + 6;
+                    let offset = sink.cur_offset() + enc.len() as u32;
                     sink.push_user_stack_map(state, offset, s);
                 }
-
-                put(sink, &enc_ril_b(opcode, link.to_reg(), 0));
+                put(sink, enc);
                 sink.add_call_site();
 
                 state.nominal_sp_offset -= info.callee_pop_size;
-            }
-            &Inst::CallInd { link, ref info } => {
-                if let Some(s) = state.take_stack_map() {
-                    let offset = sink.cur_offset() + 2;
-                    sink.push_user_stack_map(state, offset, s);
+
+                for inst in S390xMachineDeps::gen_retval_loads(info) {
+                    inst.emit(sink, emit_info, state);
                 }
-
-                let opcode = 0x0d; // BASR
-                put(sink, &enc_rr(opcode, link.to_reg(), info.dest));
-                sink.add_call_site();
-
-                state.nominal_sp_offset -= info.callee_pop_size;
             }
             &Inst::ReturnCall { ref info } => {
-                for inst in S390xMachineDeps::gen_tail_epilogue(
+                let (epilogue_insts, temp_dest) = S390xMachineDeps::gen_tail_epilogue(
                     state.frame_layout(),
                     info.callee_pop_size,
-                    None,
-                ) {
+                    &info.dest,
+                );
+                for inst in epilogue_insts {
                     inst.emit(sink, emit_info, state);
                 }
 
-                let opcode = 0xc04; // BCRL
-                let offset = sink.cur_offset() + 2;
-                sink.add_reloc_at_offset(offset, Reloc::S390xPLTRel32Dbl, &info.dest, 2);
-                put(sink, &enc_ril_c(opcode, 15, 0));
-                sink.add_call_site();
-            }
-            &Inst::ReturnCallInd { ref info } => {
-                let mut rn = info.dest;
-                for inst in S390xMachineDeps::gen_tail_epilogue(
-                    state.frame_layout(),
-                    info.callee_pop_size,
-                    Some(&mut rn),
-                ) {
-                    inst.emit(sink, emit_info, state);
-                }
-
-                let opcode = 0x07; // BCR
-                put(sink, &enc_rr(opcode, gpr(15), rn));
+                let enc: &[u8] = match &info.dest {
+                    CallInstDest::Direct { name } => {
+                        let offset = sink.cur_offset() + 2;
+                        sink.add_reloc_at_offset(offset, Reloc::S390xPLTRel32Dbl, name, 2);
+                        let opcode = 0xc04; // BCRL
+                        &enc_ril_c(opcode, 15, 0)
+                    }
+                    CallInstDest::Indirect { reg } => {
+                        let opcode = 0x07; // BCR
+                        &enc_rr(opcode, gpr(15), temp_dest.unwrap_or(*reg))
+                    }
+                };
+                put(sink, enc);
                 sink.add_call_site();
             }
             &Inst::ElfTlsGetOffset { ref symbol, .. } => {
@@ -3389,10 +3380,6 @@ impl Inst {
                     sink.use_label_at_offset(word_off, target, LabelUse::PCRel32);
                     sink.put4(off_into_table.swap_bytes());
                 }
-
-                // Lowering produces an EmitIsland before using a JTSequence, so we can safely
-                // disable the worst-case-size check in this case.
-                start_off = sink.cur_offset();
             }
 
             Inst::StackProbeLoop {
@@ -3431,9 +3418,6 @@ impl Inst {
 
             &Inst::DummyUse { .. } => {}
         }
-
-        let end_off = sink.cur_offset();
-        debug_assert!((end_off - start_off) <= Inst::worst_case_size());
 
         state.clear_post_insn();
     }
