@@ -554,7 +554,7 @@ impl RunCommand {
                 let single_string_arg = format!("'{trimmed_invoke}(\"hello\")'");
                 let multiple_args = format!("'{trimmed_invoke}(\"Pi\", 3.14)'");
                 format!(
-                    "Failed to parse invoke '{raw_invoke}': function calls must include parentheses and must be enveloped in single quotes. For example,{empty_args}. String arguments must use double quotes {single_string_arg}, and multiple arguments must be separated by commas. For example, {multiple_args}.",
+                    "Failed to parse invoke '{raw_invoke}': function calls must include parentheses and must be enveloped in single quotes. For example, {empty_args}. String arguments must use double quotes {single_string_arg}, and commas must separate multiple arguments. For example, {multiple_args}.",
                 )
         })?;
 
