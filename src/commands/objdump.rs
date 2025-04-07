@@ -154,7 +154,7 @@ impl ObjdumpCommand {
                 Func::Wasm
             } else if name.contains("trampoline") {
                 Func::Trampoline
-            } else if name.contains("libcall") {
+            } else if name.contains("libcall") || name.starts_with("component") {
                 Func::Libcall
             } else {
                 panic!("unknown symbol: {name}")
