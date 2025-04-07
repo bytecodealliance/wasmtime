@@ -346,6 +346,7 @@ pub struct StoreOpaque {
     /// `rooted_host_funcs` below. This structure contains pointers which are
     /// otherwise kept alive by the `Arc` references in `rooted_host_funcs`.
     store_data: ManuallyDrop<StoreData>,
+    traitobj: StorePtr,
     default_caller: InstanceHandle,
 
     /// Used to optimized wasm->host calls when the host function is defined with
@@ -517,65 +518,77 @@ impl<T> Store<T> {
     /// tables created to 10,000. This can be overridden with the
     /// [`Store::limiter`] configuration method.
     pub fn new(engine: &Engine, data: T) -> Self {
+        let store_data = StoreData::new();
+        log::trace!("creating new store {:?}", store_data.id());
+
         let pkey = engine.allocator().next_available_pkey();
 
-        let mut inner = Box::new(StoreInner {
-            inner: StoreOpaque {
-                _marker: marker::PhantomPinned,
-                engine: engine.clone(),
-                vm_store_context: Default::default(),
-                instances: Vec::new(),
-                #[cfg(feature = "component-model")]
-                num_component_instances: 0,
-                signal_handler: None,
-                gc_store: None,
-                gc_roots: RootSet::default(),
-                #[cfg(feature = "gc")]
-                gc_roots_list: GcRootsList::default(),
-                #[cfg(feature = "gc")]
-                gc_host_alloc_types: Default::default(),
-                modules: ModuleRegistry::default(),
-                func_refs: FuncRefs::default(),
-                host_globals: Vec::new(),
-                instance_count: 0,
-                instance_limit: crate::DEFAULT_INSTANCE_LIMIT,
-                memory_count: 0,
-                memory_limit: crate::DEFAULT_MEMORY_LIMIT,
-                table_count: 0,
-                table_limit: crate::DEFAULT_TABLE_LIMIT,
-                #[cfg(feature = "async")]
-                async_state: AsyncState::default(),
-                fuel_reserve: 0,
-                fuel_yield_interval: None,
-                store_data: ManuallyDrop::new(StoreData::new()),
-                default_caller: InstanceHandle::null(),
-                hostcall_val_storage: Vec::new(),
-                wasm_val_raw_storage: Vec::new(),
-                rooted_host_funcs: ManuallyDrop::new(Vec::new()),
-                pkey,
-                #[cfg(feature = "component-model")]
-                component_host_table: Default::default(),
-                #[cfg(feature = "component-model")]
-                component_calls: Default::default(),
-                #[cfg(feature = "component-model")]
-                host_resource_data: Default::default(),
-                #[cfg(has_host_compiler_backend)]
-                executor: if cfg!(feature = "pulley") && engine.target().is_pulley() {
-                    Executor::Interpreter(Interpreter::new(engine))
-                } else {
-                    Executor::Native
-                },
-                #[cfg(not(has_host_compiler_backend))]
-                executor: {
-                    debug_assert!(engine.target().is_pulley());
-                    Executor::Interpreter(Interpreter::new(engine))
-                },
+        let inner = StoreOpaque {
+            _marker: marker::PhantomPinned,
+            engine: engine.clone(),
+            vm_store_context: Default::default(),
+            instances: Vec::new(),
+            #[cfg(feature = "component-model")]
+            num_component_instances: 0,
+            signal_handler: None,
+            gc_store: None,
+            gc_roots: RootSet::default(),
+            #[cfg(feature = "gc")]
+            gc_roots_list: GcRootsList::default(),
+            #[cfg(feature = "gc")]
+            gc_host_alloc_types: Default::default(),
+            modules: ModuleRegistry::default(),
+            func_refs: FuncRefs::default(),
+            host_globals: Vec::new(),
+            instance_count: 0,
+            instance_limit: crate::DEFAULT_INSTANCE_LIMIT,
+            memory_count: 0,
+            memory_limit: crate::DEFAULT_MEMORY_LIMIT,
+            table_count: 0,
+            table_limit: crate::DEFAULT_TABLE_LIMIT,
+            #[cfg(feature = "async")]
+            async_state: AsyncState::default(),
+            fuel_reserve: 0,
+            fuel_yield_interval: None,
+            store_data: ManuallyDrop::new(store_data),
+            traitobj: StorePtr::empty(),
+            default_caller: InstanceHandle::null(),
+            hostcall_val_storage: Vec::new(),
+            wasm_val_raw_storage: Vec::new(),
+            rooted_host_funcs: ManuallyDrop::new(Vec::new()),
+            pkey,
+            #[cfg(feature = "component-model")]
+            component_host_table: Default::default(),
+            #[cfg(feature = "component-model")]
+            component_calls: Default::default(),
+            #[cfg(feature = "component-model")]
+            host_resource_data: Default::default(),
+            #[cfg(has_host_compiler_backend)]
+            executor: if cfg!(feature = "pulley") && engine.target().is_pulley() {
+                Executor::Interpreter(Interpreter::new(engine))
+            } else {
+                Executor::Native
             },
+            #[cfg(not(has_host_compiler_backend))]
+            executor: {
+                debug_assert!(engine.target().is_pulley());
+                Executor::Interpreter(Interpreter::new(engine))
+            },
+        };
+        let mut inner = Box::new(StoreInner {
+            inner,
             limiter: None,
             call_hook: None,
             #[cfg(target_has_atomic = "64")]
             epoch_deadline_behavior: None,
             data: ManuallyDrop::new(data),
+        });
+
+        inner.traitobj = StorePtr::new(unsafe {
+            mem::transmute::<
+                NonNull<dyn crate::runtime::vm::VMStore + '_>,
+                NonNull<dyn crate::runtime::vm::VMStore + 'static>,
+            >(NonNull::from(&mut *inner))
         });
 
         // Wasmtime uses the callee argument to host functions to learn about
@@ -589,9 +602,11 @@ impl<T> Store<T> {
             let module = Arc::new(wasmtime_environ::Module::default());
             let shim = ModuleRuntimeInfo::bare(module);
             let allocator = OnDemandInstanceAllocator::default();
+
             allocator
                 .validate_module(shim.env_module(), shim.offsets())
                 .unwrap();
+
             let mut instance = unsafe {
                 allocator
                     .allocate_module(InstanceAllocationRequest {
@@ -605,19 +620,10 @@ impl<T> Store<T> {
                     })
                     .expect("failed to allocate default callee")
             };
-
-            // Note the erasure of the lifetime here into `'static`, so in
-            // general usage of this trait object must be strictly bounded to
-            // the `Store` itself, and this is an invariant that we have to
-            // maintain throughout Wasmtime.
             unsafe {
-                let traitobj = mem::transmute::<
-                    NonNull<dyn crate::runtime::vm::VMStore + '_>,
-                    NonNull<dyn crate::runtime::vm::VMStore + 'static>,
-                >(NonNull::from(&mut *inner));
-                instance.set_store(traitobj);
-                instance
+                instance.set_store(Some(inner.traitobj()));
             }
+            instance
         };
 
         Self {
@@ -1705,7 +1711,12 @@ impl StoreOpaque {
 
     #[inline]
     pub fn traitobj(&self) -> NonNull<dyn crate::runtime::vm::VMStore> {
-        self.default_caller.traitobj(self)
+        self.traitobj.as_raw().unwrap()
+    }
+
+    #[inline]
+    pub fn traitobj_mut(&mut self) -> &mut dyn crate::runtime::vm::VMStore {
+        unsafe { self.traitobj().as_mut() }
     }
 
     /// Takes the cached `Vec<Val>` stored internally across hostcalls to get

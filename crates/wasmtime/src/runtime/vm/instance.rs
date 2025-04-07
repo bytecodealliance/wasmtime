@@ -1712,8 +1712,8 @@ impl InstanceHandle {
     ///
     /// This is provided for the original `Store` itself to configure the first
     /// self-pointer after the original `Box` has been initialized.
-    pub unsafe fn set_store(&mut self, store: NonNull<dyn VMStore>) {
-        self.instance_mut().set_store(Some(store));
+    pub unsafe fn set_store(&mut self, store: Option<NonNull<dyn VMStore>>) {
+        self.instance_mut().set_store(store);
     }
 
     /// Returns a clone of this instance.

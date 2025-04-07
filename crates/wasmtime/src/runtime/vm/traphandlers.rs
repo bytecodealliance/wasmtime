@@ -19,7 +19,7 @@ use crate::prelude::*;
 use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
-use crate::runtime::vm::{Instance, InterpreterRef, VMContext, VMStoreContext};
+use crate::runtime::vm::{InterpreterRef, VMContext, VMStoreContext};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
@@ -371,7 +371,8 @@ where
     F: FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 {
     let caller = store.0.default_caller();
-    let result = CallThreadState::new(store.0, caller).with(|cx| match store.0.executor() {
+
+    let result = CallThreadState::new(store.0).with(|cx| match store.0.executor() {
         // In interpreted mode directly invoke the host closure since we won't
         // be using host-based `setjmp`/`longjmp` as that's not going to save
         // the context we want.
@@ -474,14 +475,7 @@ mod call_thread_state {
         pub const JMP_BUF_INTERPRETER_SENTINEL: *mut u8 = 1 as *mut u8;
 
         #[inline]
-        pub(super) fn new(store: &mut StoreOpaque, caller: NonNull<VMContext>) -> CallThreadState {
-            let vm_store_context = unsafe {
-                Instance::from_vmctx(caller, |i| i.vm_store_context())
-                    .read()
-                    .unwrap()
-                    .as_non_null()
-            };
-
+        pub(super) fn new(store: &mut StoreOpaque) -> CallThreadState {
             // Don't try to plumb #[cfg] everywhere for this field, just pretend
             // we're using it on miri/windows to silence compiler warnings.
             let _: Range<_> = store.async_guard_range();
@@ -495,18 +489,18 @@ mod call_thread_state {
                 capture_backtrace: store.engine().config().wasm_backtrace,
                 #[cfg(feature = "coredump")]
                 capture_coredump: store.engine().config().coredump_on_trap,
-                vm_store_context,
+                vm_store_context: store.vm_store_context_ptr(),
                 #[cfg(all(has_native_signals, unix))]
                 async_guard_range: store.async_guard_range(),
                 prev: Cell::new(ptr::null()),
                 old_last_wasm_exit_fp: Cell::new(unsafe {
-                    *vm_store_context.as_ref().last_wasm_exit_fp.get()
+                    *store.vm_store_context().last_wasm_exit_fp.get()
                 }),
                 old_last_wasm_exit_pc: Cell::new(unsafe {
-                    *vm_store_context.as_ref().last_wasm_exit_pc.get()
+                    *store.vm_store_context().last_wasm_exit_pc.get()
                 }),
                 old_last_wasm_entry_fp: Cell::new(unsafe {
-                    *vm_store_context.as_ref().last_wasm_entry_fp.get()
+                    *store.vm_store_context().last_wasm_entry_fp.get()
                 }),
             }
         }

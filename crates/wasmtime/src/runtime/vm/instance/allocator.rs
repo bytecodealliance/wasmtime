@@ -94,6 +94,13 @@ pub struct InstanceAllocationRequest<'a> {
 /// InstanceAllocationRequest.
 pub struct StorePtr(Option<NonNull<dyn VMStore>>);
 
+// We can't make `VMStore: Send + Sync` because that requires making all of
+// Wastime's internals generic over the `Store`'s `T`. So instead, we take care
+// in the whole VM layer to only use the `VMStore` in ways that are `Send`- and
+// `Sync`-safe and we have to have these unsafe impls.
+unsafe impl Send for StorePtr {}
+unsafe impl Sync for StorePtr {}
+
 impl StorePtr {
     /// A pointer to no Store.
     pub fn empty() -> Self {
