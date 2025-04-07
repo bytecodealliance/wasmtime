@@ -5,6 +5,20 @@ use core::{alloc::Layout, num::NonZeroU32, ops::Bound};
 /// A very simple first-fit free list for use by our garbage collectors.
 pub(crate) struct FreeList {
     /// The total capacity of the contiguous range of memory we are managing.
+    ///
+    /// NB: we keep `self.capacity` unrounded because otherwise we would get
+    /// rounding errors where we lose track of the actual capacity we have when
+    /// repeatedly adding capacity `n` where `n < ALIGN`:
+    ///
+    ///     let mut free_list = FreeList::new(0);
+    ///     loop {
+    ///         free_list.add_capacity(1);
+    ///     }
+    ///
+    /// If we eagerly rounded capacity down to our alignment on every call to
+    /// `add_capacity`, the free list would always think it has zero capacity,
+    /// even though it would have enough capacity for many allocations after
+    /// enough iterations of the loop.
     capacity: usize,
     /// Our free blocks, as a map from index to length of the free block at that
     /// index.
@@ -46,10 +60,14 @@ impl FreeList {
             self.capacity
         );
 
+        // See the comment on `self.capacity` about why we need to do the
+        // alignment-rounding here, rather than keeping `self.capacity` aligned
+        // at rest.
+        let old_cap_rounded = round_usize_down_to_pow2(old_cap, ALIGN_USIZE);
+
         // If we are adding capacity beyond what a `u32` can address, then we
         // can't actually use that capacity, so don't bother adding a new block
         // to the free list.
-        let old_cap_rounded = round_usize_down_to_pow2(old_cap, ALIGN_USIZE);
         let Ok(old_cap_rounded) = u32::try_from(old_cap_rounded) else {
             return;
         };
