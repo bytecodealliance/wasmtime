@@ -14,7 +14,6 @@ use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, types};
 use cranelift_codegen::ir::{ArgumentPurpose, Function, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
-use cranelift_entity::packed_option::ReservedValue as _;
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
@@ -118,6 +117,9 @@ pub struct FuncEnvironment<'module_environment> {
     /// The Cranelift global holding the vmctx address.
     vmctx: Option<ir::GlobalValue>,
 
+    /// The Cranelift global for our vmctx's `*mut VMStoreContext`.
+    vm_store_context: Option<ir::GlobalValue>,
+
     /// The PCC memory type describing the vmctx layout, if we're
     /// using PCC.
     pcc_vmctx_memtype: Option<ir::MemoryType>,
@@ -135,12 +137,6 @@ pub struct FuncEnvironment<'module_environment> {
     /// stored locally as a variable instead of always referenced from the field
     /// in `*const VMStoreContext`
     fuel_var: cranelift_frontend::Variable,
-
-    /// A function-local variable which caches the value of `*const
-    /// VMStoreContext` for this function's vmctx argument. This pointer is stored
-    /// in the vmctx itself, but never changes for the lifetime of the function,
-    /// so if we load it up front we can continue to use it throughout.
-    vmstore_context_ptr: ir::Value,
 
     /// A cached epoch deadline value, when performing epoch-based
     /// interruption. Loaded from `VMStoreContext` and reloaded after
@@ -196,6 +192,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             heaps: PrimaryMap::default(),
             tables: SecondaryMap::default(),
             vmctx: None,
+            vm_store_context: None,
             pcc_vmctx_memtype: None,
             builtin_functions,
             offsets: VMOffsets::new(compiler.isa().pointer_bytes(), &translation.module),
@@ -203,7 +200,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             fuel_var: Variable::new(0),
             epoch_deadline_var: Variable::new(0),
             epoch_ptr_var: Variable::new(0),
-            vmstore_context_ptr: ir::Value::reserved_value(),
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
@@ -308,22 +304,29 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    fn declare_vmstore_context_ptr(&mut self, builder: &mut FunctionBuilder<'_>) {
-        // We load the `*const VMStoreContext` value stored within vmctx at the
-        // head of the function and reuse the same value across the entire
-        // function. This is possible since we know that the pointer never
-        // changes for the lifetime of the function.
-        let pointer_type = self.pointer_type();
-        let vmctx = self.vmctx(builder.func);
-        let base = builder.ins().global_value(pointer_type, vmctx);
-        let offset = i32::from(self.offsets.ptr.vmctx_store_context());
-        debug_assert!(self.vmstore_context_ptr.is_reserved_value());
-        self.vmstore_context_ptr = builder.ins().load(
-            pointer_type,
-            ir::MemFlags::trusted().with_readonly().with_can_move(),
+    /// Get or create the `ir::Global` for the `*mut VMStoreContext` in our
+    /// `VMContext`.
+    fn get_vmstore_context_ptr_global(&mut self, func: &mut ir::Function) -> ir::GlobalValue {
+        if let Some(ptr) = self.vm_store_context {
+            return ptr;
+        }
+
+        let offset = self.offsets.ptr.vmctx_store_context();
+        let base = self.vmctx(func);
+        let ptr = func.create_global_value(ir::GlobalValueData::Load {
             base,
-            offset,
-        );
+            offset: Offset32::new(offset.into()),
+            global_type: self.pointer_type(),
+            flags: ir::MemFlags::trusted().with_readonly().with_can_move(),
+        });
+        self.vm_store_context = Some(ptr);
+        ptr
+    }
+
+    /// Get the `*mut VMStoreContext` value for our `VMContext`.
+    fn get_vmstore_context_ptr(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
+        let global = self.get_vmstore_context_ptr_global(&mut builder.func);
+        builder.ins().global_value(self.pointer_type(), global)
     }
 
     fn fuel_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
@@ -471,7 +474,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Loads the fuel consumption value from `VMStoreContext` into `self.fuel_var`
     fn fuel_load_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let (addr, offset) = self.fuel_addr_offset();
+        let (addr, offset) = self.fuel_addr_offset(builder);
         let fuel = builder
             .ins()
             .load(ir::types::I64, ir::MemFlags::trusted(), addr, offset);
@@ -481,7 +484,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// Stores the fuel consumption value from `self.fuel_var` into
     /// `VMStoreContext`.
     fn fuel_save_from_var(&mut self, builder: &mut FunctionBuilder<'_>) {
-        let (addr, offset) = self.fuel_addr_offset();
+        let (addr, offset) = self.fuel_addr_offset(builder);
         let fuel_consumed = builder.use_var(self.fuel_var);
         builder
             .ins()
@@ -490,10 +493,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Returns the `(address, offset)` of the fuel consumption within
     /// `VMStoreContext`, used to perform loads/stores later.
-    fn fuel_addr_offset(&mut self) -> (ir::Value, ir::immediates::Offset32) {
-        debug_assert!(!self.vmstore_context_ptr.is_reserved_value());
+    fn fuel_addr_offset(
+        &mut self,
+        builder: &mut FunctionBuilder<'_>,
+    ) -> (ir::Value, ir::immediates::Offset32) {
+        let vmstore_ctx = self.get_vmstore_context_ptr(builder);
         (
-            self.vmstore_context_ptr,
+            vmstore_ctx,
             i32::from(self.offsets.ptr.vmstore_context_fuel_consumed()).into(),
         )
     }
@@ -678,10 +684,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // We keep the deadline cached in a register to speed the checks
         // in the common case (between epoch ticks) but we want to do a
         // precise check here by reloading the cache first.
+        let vmstore_ctx = self.get_vmstore_context_ptr(builder);
         let deadline = builder.ins().load(
             ir::types::I64,
             ir::MemFlags::trusted(),
-            self.vmstore_context_ptr,
+            vmstore_ctx,
             ir::immediates::Offset32::new(self.offsets.ptr.vmstore_context_epoch_deadline() as i32),
         );
         builder.def_var(self.epoch_deadline_var, deadline);
@@ -3098,15 +3105,11 @@ impl FuncEnvironment<'_> {
             self.conditionally_trap(builder, overflow, ir::TrapCode::STACK_OVERFLOW);
         }
 
-        // If the `vmstore_context_ptr` variable will get used then we
-        // initialize it here.
-        if self.tunables.consume_fuel || self.tunables.epoch_interruption {
-            self.declare_vmstore_context_ptr(builder);
-        }
         // Additionally we initialize `fuel_var` if it will get used.
         if self.tunables.consume_fuel {
             self.fuel_function_entry(builder);
         }
+
         // Initialize `epoch_var` with the current epoch.
         if self.tunables.epoch_interruption {
             self.epoch_function_entry(builder);
