@@ -1716,19 +1716,14 @@ mod host {
             $(
                 pub(super) fn $name(isa: &dyn TargetIsa, func: &mut ir::Function) -> (ir::SigRef, ComponentBuiltinFunctionIndex) {
                     let pointer_type = isa.pointer_type();
-                    let params = vec![
-                        $( AbiParam::new(define!(@ty pointer_type $param)) ),*
-                    ];
-                    let returns = vec![
-                        $( AbiParam::new(define!(@ty pointer_type $result)) )?
-                    ];
-                    let sig = func.import_signature(ir::Signature {
-                        params,
-                        returns,
-                        call_conv: CallConv::triple_default(isa.triple()),
-                    });
+                    let sig = build_sig(
+                        isa,
+                        func,
+                        &[$( define!(@ty pointer_type $param) ),*],
+                        &[$( define!(@ty pointer_type $result) ),*],
+                    );
 
-                    (sig, ComponentBuiltinFunctionIndex::$name())
+                    return (sig, ComponentBuiltinFunctionIndex::$name())
                 }
             )*
         };
@@ -1745,4 +1740,28 @@ mod host {
     }
 
     wasmtime_environ::foreach_builtin_component_function!(define);
+
+    fn build_sig(
+        isa: &dyn TargetIsa,
+        func: &mut ir::Function,
+        params: &[ir::Type],
+        returns: &[ir::Type],
+    ) -> ir::SigRef {
+        let mut sig = ir::Signature {
+            params: params.iter().map(|ty| AbiParam::new(*ty)).collect(),
+            returns: returns.iter().map(|ty| AbiParam::new(*ty)).collect(),
+            call_conv: CallConv::triple_default(isa.triple()),
+        };
+
+        // Once we're declaring the signature of a host function we must respect
+        // the default ABI of the platform which is where argument extension of
+        // params/results may come into play.
+        let extension = isa.default_argument_extension();
+        for arg in sig.params.iter_mut().chain(sig.returns.iter_mut()) {
+            if arg.value_type.is_int() {
+                arg.extension = extension;
+            }
+        }
+        func.import_signature(sig)
+    }
 }
