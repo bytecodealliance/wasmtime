@@ -10,10 +10,12 @@ pub(crate) struct FreeList {
     /// rounding errors where we lose track of the actual capacity we have when
     /// repeatedly adding capacity `n` where `n < ALIGN`:
     ///
-    ///     let mut free_list = FreeList::new(0);
-    ///     loop {
-    ///         free_list.add_capacity(1);
-    ///     }
+    /// ```ignore
+    /// let mut free_list = FreeList::new(0);
+    /// loop {
+    ///     free_list.add_capacity(1);
+    /// }
+    /// ```
     ///
     /// If we eagerly rounded capacity down to our alignment on every call to
     /// `add_capacity`, the free list would always think it has zero capacity,
