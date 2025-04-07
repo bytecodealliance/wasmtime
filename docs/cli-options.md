@@ -48,25 +48,30 @@ The `run` command accepts an optional `--invoke` argument, which is the name of
 an exported function of the module to run.
 
 ```sh
-$ wasmtime run --invoke "initialize()" foo.wasm
+$ wasmtime run --invoke 'initialize()' foo.wasm
 ```
 
-The exported function's name and exported function's parentheses must both be enclosed in one set of double quotes, i.e. `"initialize()"`. 
+The exported function's name and exported function's parentheses must both be enclosed in one set of single quotes, i.e. `'initialize()'`. 
 This treats the exported function as a single argument and prevents issues with shell interpretation.
 The presence of the parenthesis `()` signifies function invocation, as apposed to the function name just being referenced.
 This convention helps to distinguish function calls from other kinds of string arguments.
 
-**Note:** If your function takes a string argument, ensure that you use escaped double quotes inside the parentheses. For example:
+**Note:** If your function takes a string argument, ensure that you surround the string argument in double quotes. For example:
 
 ```sh
-$ wasmtime run --invoke "initialize(\"hello\")" foo.wasm
+$ wasmtime run --invoke 'initialize("hello")' foo.wasm
 ```
 
 Each individual argument within the parentheses must be separated by a comma:
 
 ```sh
-$ wasmtime run --invoke "initialize(\"Pi\", 3.14)" foo.wasm
-$ wasmtime run --invoke "add(1, 2)" foo.wasm
+$ wasmtime run --invoke 'initialize("Pi", 3.14)' foo.wasm
+$ wasmtime run --invoke 'add(1, 2)' foo.wasm
+```
+
+**Please note:** If you enclose your whole function call using double quotes, your string argument will require its double quotes to be escaped (escaping quotes is more complicated and harder to read and therefore not ideal). For example:
+```bash
+wasmtime run - invoke "initialize(\"hello\")" foo.wasm
 ```
 
 ## `serve`
