@@ -37,12 +37,12 @@ pub trait WasmFloat {
 impl WasmFloat for f32 {
     #[inline]
     fn wasm_trunc(self) -> f32 {
+        if self.is_nan() {
+            return f32::NAN;
+        }
         #[cfg(feature = "std")]
         if !cfg!(windows) && !cfg!(target_arch = "riscv64") {
             return self.trunc();
-        }
-        if self.is_nan() {
-            return f32::NAN;
         }
         libm::truncf(self)
     }
@@ -56,23 +56,23 @@ impl WasmFloat for f32 {
     }
     #[inline]
     fn wasm_floor(self) -> f32 {
+        if self.is_nan() {
+            return f32::NAN;
+        }
         #[cfg(feature = "std")]
         if !cfg!(target_arch = "riscv64") {
             return self.floor();
-        }
-        if self.is_nan() {
-            return f32::NAN;
         }
         libm::floorf(self)
     }
     #[inline]
     fn wasm_ceil(self) -> f32 {
+        if self.is_nan() {
+            return f32::NAN;
+        }
         #[cfg(feature = "std")]
         if !cfg!(target_arch = "riscv64") {
             return self.ceil();
-        }
-        if self.is_nan() {
-            return f32::NAN;
         }
         libm::ceilf(self)
     }
@@ -94,12 +94,12 @@ impl WasmFloat for f32 {
     }
     #[inline]
     fn wasm_nearest(self) -> f32 {
+        if self.is_nan() {
+            return f32::NAN;
+        }
         #[cfg(feature = "std")]
         if !cfg!(windows) && !cfg!(target_arch = "riscv64") {
             return self.round_ties_even();
-        }
-        if self.is_nan() {
-            return f32::NAN;
         }
         let round = libm::roundf(self);
         if libm::fabsf(self - round) != 0.5 {
@@ -162,12 +162,12 @@ impl WasmFloat for f32 {
 impl WasmFloat for f64 {
     #[inline]
     fn wasm_trunc(self) -> f64 {
+        if self.is_nan() {
+            return f64::NAN;
+        }
         #[cfg(feature = "std")]
         if !cfg!(windows) && !cfg!(target_arch = "riscv64") {
             return self.trunc();
-        }
-        if self.is_nan() {
-            return f64::NAN;
         }
         libm::trunc(self)
     }
@@ -181,23 +181,23 @@ impl WasmFloat for f64 {
     }
     #[inline]
     fn wasm_floor(self) -> f64 {
+        if self.is_nan() {
+            return f64::NAN;
+        }
         #[cfg(feature = "std")]
         if !cfg!(target_arch = "riscv64") {
             return self.floor();
-        }
-        if self.is_nan() {
-            return f64::NAN;
         }
         libm::floor(self)
     }
     #[inline]
     fn wasm_ceil(self) -> f64 {
+        if self.is_nan() {
+            return f64::NAN;
+        }
         #[cfg(feature = "std")]
         if !cfg!(target_arch = "riscv64") {
             return self.ceil();
-        }
-        if self.is_nan() {
-            return f64::NAN;
         }
         libm::ceil(self)
     }
@@ -219,12 +219,12 @@ impl WasmFloat for f64 {
     }
     #[inline]
     fn wasm_nearest(self) -> f64 {
+        if self.is_nan() {
+            return f64::NAN;
+        }
         #[cfg(feature = "std")]
         if !cfg!(windows) && !cfg!(target_arch = "riscv64") {
             return self.round_ties_even();
-        }
-        if self.is_nan() {
-            return f64::NAN;
         }
         let round = libm::round(self);
         if libm::fabs(self - round) != 0.5 {
