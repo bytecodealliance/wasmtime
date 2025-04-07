@@ -22,6 +22,9 @@ struct Segment {
 
 impl Segment {
     fn new(ptr: *mut u8, len: usize, target_prot: region::Protection) -> Self {
+        // Segments are created on page boundaries.
+        debug_assert_eq!(ptr as usize % region::page::size(), 0);
+        debug_assert_eq!(len % region::page::size(), 0);
         let mut segment = Segment {
             ptr,
             len,
@@ -117,14 +120,14 @@ impl ArenaMemoryProvider {
         protection: region::Protection,
     ) -> io::Result<*mut u8> {
         let align = usize::try_from(align).expect("alignment too big");
-        debug_assert!(
+        assert!(
             align <= region::page::size(),
             "alignment over page size is not supported"
         );
 
         // Note: Add a fast path without a linear scan over segments here?
 
-        // Can we fit this allocation into an existing segment.
+        // Can we fit this allocation into an existing segment?
         if let Some(segment) = self.segments.iter_mut().find(|seg| {
             seg.target_prot == protection && !seg.finalized && seg.has_space_for(size, align)
         }) {
