@@ -542,30 +542,20 @@ impl RunCommand {
             Val,
         };
 
+        // Check if the invoke string is present
         let invoke: &String = self.invoke.as_ref().unwrap();
-
-        // Check if input is wrapped in double quotes
-        let lacks_quotes = !invoke.starts_with('"') && !invoke.ends_with('"');
-
-        // Check if parentheses are present and in the correct order ()
-        let lacks_parentheses = (invoke.contains('(') && invoke.contains(')'))
-            && (invoke.find('(').unwrap() < invoke.find(')').unwrap());
-
-        // Construct a properly formatted suggestion
-        let empty_argument_suggestion = format!(r#""{}()""#, invoke.trim_matches('"'));
-
-        // Construct a properly formatted suggestion for string arguments
-        let string_argument_suggestion = format!(r#""{}(\"hello\")""#, invoke.trim_matches('"'));
+        // Create raw version of invoke for error messages
+        let raw_invoke = format!("{invoke:?}");
 
         let untyped_call = UntypedFuncCall::parse(invoke).with_context(|| {
-            if lacks_quotes || lacks_parentheses {
+                let trimmed_invoke = invoke.trim_matches(['"', '\'']);
+                // Construct examples of valid function calls for error messages
+                let empty_args = format!("'{trimmed_invoke}()'");
+                let single_string_arg = format!("'{trimmed_invoke}(\"hello\")'");
+                let multiple_args = format!("'{trimmed_invoke}(\"Pi\", 3.14)'");
                 format!(
-                    "Failed to parse invoke '{invoke}': function calls must be enveloped in double quotes and must include parentheses (e.g., {empty_argument_suggestion}).\n
-                    String arguments must be enveloped in escaped double quotes (e.g., {string_argument_suggestion}).\n"
+                    "Failed to parse invoke '{raw_invoke}': function calls must include parentheses and must be enveloped in single quotes. For example,{empty_args}. String arguments must use double quotes {single_string_arg}, and multiple arguments must be separated by commas. For example, {multiple_args}.",
                 )
-            } else {
-                format!("Failed to parse invoke '{invoke}': invalid function call syntax")
-            }
         })?;
 
         let name = untyped_call.name();
