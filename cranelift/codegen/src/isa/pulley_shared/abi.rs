@@ -405,14 +405,14 @@ where
     }
 
     fn gen_return(
-        _call_conv: isa::CallConv,
+        call_conv: isa::CallConv,
         _isa_flags: &PulleyFlags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
         let mut insts = SmallVec::new();
 
         // Handle final stack adjustments for the tail-call ABI.
-        if frame_layout.tail_args_size > 0 {
+        if call_conv == isa::CallConv::Tail && frame_layout.tail_args_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(
                 frame_layout.tail_args_size.try_into().unwrap(),
             ));
