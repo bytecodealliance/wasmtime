@@ -28,7 +28,7 @@ use cranelift_codegen::{
     ir::{Expr, Fact},
 };
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::{Unsigned, WasmResult};
+use wasmtime_environ::Unsigned;
 use Reachability::*;
 
 /// Helper used to emit bounds checks (as necessary) and compute the native
@@ -46,7 +46,7 @@ pub fn bounds_check_and_compute_addr(
     offset: u32,
     // Static size of the heap access.
     access_size: u8,
-) -> WasmResult<Reachability<ir::Value>> {
+) -> Reachability<ir::Value> {
     let pointer_bit_width = u16::try_from(env.pointer_type().bits()).unwrap();
     let bound_gv = heap.bound;
     let orig_index = index;
@@ -165,9 +165,9 @@ pub fn bounds_check_and_compute_addr(
         // Special case: trap immediately if `offset + access_size >
         // max_memory_size`, since we will end up being out-of-bounds regardless
         // of the given `index`.
-        env.before_unconditionally_trapping_memory_access(builder)?;
+        env.before_unconditionally_trapping_memory_access(builder);
         env.trap(builder, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
-        return Ok(Unreachable);
+        return Unreachable;
     }
 
     // Special case: if this is a 32-bit platform and the `offset_and_size`
@@ -175,9 +175,9 @@ pub fn bounds_check_and_compute_addr(
     // being in-bounds. We can't represent `offset_and_size` in CLIF as the
     // native pointer type anyway, so this is an unconditional trap.
     if pointer_bit_width < 64 && offset_and_size >= (1 << pointer_bit_width) {
-        env.before_unconditionally_trapping_memory_access(builder)?;
+        env.before_unconditionally_trapping_memory_access(builder);
         env.trap(builder, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
-        return Ok(Unreachable);
+        return Unreachable;
     }
 
     // Special case for when we can completely omit explicit
@@ -226,27 +226,27 @@ pub fn bounds_check_and_compute_addr(
             can_use_virtual_memory,
             "static memories require the ability to use virtual memory"
         );
-        return Ok(Reachable(compute_addr(
+        return Reachable(compute_addr(
             &mut builder.cursor(),
             heap,
             env.pointer_type(),
             index,
             offset,
             AddrPcc::static32(heap.pcc_memory_type, memory_reservation + memory_guard_size),
-        )));
+        ));
     }
 
     // Special case when the `index` is a constant and statically known to be
     // in-bounds on this memory, no bounds checks necessary.
     if statically_in_bounds {
-        return Ok(Reachable(compute_addr(
+        return Reachable(compute_addr(
             &mut builder.cursor(),
             heap,
             env.pointer_type(),
             index,
             offset,
             AddrPcc::static32(heap.pcc_memory_type, memory_reservation + memory_guard_size),
-        )));
+        ));
     }
 
     // Special case for when we can rely on virtual memory, the minimum
@@ -287,7 +287,7 @@ pub fn bounds_check_and_compute_addr(
             adjusted_bound_value,
             Some(0),
         );
-        return Ok(Reachable(explicit_check_oob_condition_and_compute_addr(
+        return Reachable(explicit_check_oob_condition_and_compute_addr(
             env,
             builder,
             heap,
@@ -297,7 +297,7 @@ pub fn bounds_check_and_compute_addr(
             oob_behavior,
             AddrPcc::static32(heap.pcc_memory_type, memory_reservation),
             oob,
-        )));
+        ));
     }
 
     // Special case for when `offset + access_size == 1`:
@@ -320,7 +320,7 @@ pub fn bounds_check_and_compute_addr(
             bound,
             Some(0),
         );
-        return Ok(Reachable(explicit_check_oob_condition_and_compute_addr(
+        return Reachable(explicit_check_oob_condition_and_compute_addr(
             env,
             builder,
             heap,
@@ -330,7 +330,7 @@ pub fn bounds_check_and_compute_addr(
             oob_behavior,
             AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
             oob,
-        )));
+        ));
     }
 
     // Special case for when we know that there are enough guard
@@ -368,7 +368,7 @@ pub fn bounds_check_and_compute_addr(
             bound,
             Some(0),
         );
-        return Ok(Reachable(explicit_check_oob_condition_and_compute_addr(
+        return Reachable(explicit_check_oob_condition_and_compute_addr(
             env,
             builder,
             heap,
@@ -378,7 +378,7 @@ pub fn bounds_check_and_compute_addr(
             oob_behavior,
             AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
             oob,
-        )));
+        ));
     }
 
     // Special case for when `offset + access_size <= min_size`.
@@ -412,7 +412,7 @@ pub fn bounds_check_and_compute_addr(
             adjusted_bound,
             Some(adjustment),
         );
-        return Ok(Reachable(explicit_check_oob_condition_and_compute_addr(
+        return Reachable(explicit_check_oob_condition_and_compute_addr(
             env,
             builder,
             heap,
@@ -422,7 +422,7 @@ pub fn bounds_check_and_compute_addr(
             oob_behavior,
             AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
             oob,
-        )));
+        ));
     }
 
     // General case for dynamic bounds checks:
@@ -461,7 +461,7 @@ pub fn bounds_check_and_compute_addr(
         bound,
         Some(0),
     );
-    Ok(Reachable(explicit_check_oob_condition_and_compute_addr(
+    Reachable(explicit_check_oob_condition_and_compute_addr(
         env,
         builder,
         heap,
@@ -471,7 +471,7 @@ pub fn bounds_check_and_compute_addr(
         oob_behavior,
         AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
         oob,
-    )))
+    ))
 }
 
 /// Get the bound of a dynamic heap as an `ir::Value`.
