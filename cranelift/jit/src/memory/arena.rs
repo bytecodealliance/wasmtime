@@ -29,7 +29,8 @@ impl Segment {
             position: 0,
             finalized: false,
         };
-        // set segment to read-write for initialization
+        // Set segment to read-write for initialization. The target permissions
+        // will be applied in `finalize`.
         segment.set_rw();
         segment
     }
@@ -46,6 +47,8 @@ impl Segment {
             return;
         }
 
+        // Executable regions are handled separately to correctly deal with
+        // branch protection and cache coherence.
         if self.target_prot == region::Protection::READ_EXECUTE {
             super::set_readable_and_executable(self.ptr, self.len, branch_protection)
                 .expect("unable to set memory protection for jit memory segment");
@@ -58,6 +61,8 @@ impl Segment {
         self.finalized = true;
     }
 
+    // Note: We do pointer arithmetic on `ptr` passed to `Segment::new` here.
+    // This assumes that `ptr` is valid for `len` bytes, or will result in UB.
     fn allocate(&mut self, size: usize, align: usize) -> *mut u8 {
         assert!(self.has_space_for(size, align));
         self.position = align_up(self.position, align);
@@ -93,7 +98,7 @@ impl ArenaMemoryProvider {
     /// Create a new memory region with the given size.
     pub fn new_with_size(reserve_size: usize) -> Result<Self, region::Error> {
         let size = align_up(reserve_size, region::page::size());
-        let mut alloc = region::alloc(reserve_size, region::Protection::NONE)?;
+        let mut alloc = region::alloc(size, region::Protection::NONE)?;
         let ptr = alloc.as_mut_ptr();
 
         Ok(Self {
@@ -108,26 +113,31 @@ impl ArenaMemoryProvider {
     fn allocate(
         &mut self,
         size: usize,
-        align: usize,
+        align: u64,
         protection: region::Protection,
     ) -> io::Result<*mut u8> {
+        let align = usize::try_from(align).expect("alignment too big");
+        debug_assert!(
+            align <= region::page::size(),
+            "alignment over page size is not supported"
+        );
+
         // Note: Add a fast path without a linear scan over segments here?
 
-        // can we fit this allocation into an existing segment
+        // Can we fit this allocation into an existing segment.
         if let Some(segment) = self.segments.iter_mut().find(|seg| {
             seg.target_prot == protection && !seg.finalized && seg.has_space_for(size, align)
         }) {
             return Ok(segment.allocate(size, align));
         }
 
-        // can we resize the last segment?
+        // Can we resize the last segment?
         if let Some(segment) = self.segments.iter_mut().last() {
             if segment.target_prot == protection && !segment.finalized {
-                let align = align.max(region::page::size());
-                let additional_size = align_up(size, align);
+                let additional_size = align_up(size, region::page::size());
 
-                // if our reserved arena can fit the additional size, extend the
-                // last segment
+                // If our reserved arena can fit the additional size, extend the
+                // last segment.
                 if self.position + additional_size <= self.size {
                     segment.len += additional_size;
                     segment.set_rw();
@@ -137,8 +147,8 @@ impl ArenaMemoryProvider {
             }
         }
 
-        // allocate new segment for given size and alignment
-        self.allocate_segment(align_up(size, align), protection)?;
+        // Allocate new segment for given size and alignment.
+        self.allocate_segment(size, protection)?;
         let i = self.segments.len() - 1;
         Ok(self.segments[i].allocate(size, align))
     }
@@ -174,7 +184,7 @@ impl ArenaMemoryProvider {
             return;
         }
         self.segments.clear();
-        // Drop the allocation, freeing memory
+        // Drop the allocation, freeing memory.
         let _: Option<region::Allocation> = self.alloc.take();
         self.ptr = ptr::null_mut();
     }
@@ -196,15 +206,15 @@ impl Drop for ArenaMemoryProvider {
 
 impl JITMemoryProvider for ArenaMemoryProvider {
     fn allocate_readexec(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
-        self.allocate(size, align as usize, region::Protection::READ_EXECUTE)
+        self.allocate(size, align, region::Protection::READ_EXECUTE)
     }
 
     fn allocate_readwrite(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
-        self.allocate(size, align as usize, region::Protection::READ_WRITE)
+        self.allocate(size, align, region::Protection::READ_WRITE)
     }
 
     fn allocate_readonly(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
-        self.allocate(size, align as usize, region::Protection::READ)
+        self.allocate(size, align, region::Protection::READ)
     }
 
     unsafe fn free_memory(&mut self) {
@@ -214,5 +224,44 @@ impl JITMemoryProvider for ArenaMemoryProvider {
     fn finalize(&mut self, branch_protection: BranchProtection) -> ModuleResult<()> {
         self.finalize(branch_protection);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alignment_ok() {
+        let mut arena = ArenaMemoryProvider::new_with_size(1 << 20).unwrap();
+
+        for align_log2 in 0..8 {
+            let align = 1usize << align_log2;
+            for size in 1..128 {
+                let ptr = arena.allocate_readwrite(size, align as u64).unwrap();
+                // assert!(ptr.is_aligned_to(align));
+                assert_eq!(ptr.addr() % align, 0);
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(target_pointer_width = "64")]
+    fn large_virtual_allocation() {
+        let reserve_size = 1 << 40; // Request 1TB of memory. This should be successful.
+        let mut arena = ArenaMemoryProvider::new_with_size(reserve_size).unwrap();
+        let ptr = arena.allocate_readwrite(1, 1).unwrap();
+        assert_eq!(ptr.addr(), arena.ptr.addr());
+        arena.finalize(BranchProtection::None);
+        unsafe { ptr.write_volatile(42) };
+        unsafe { arena.free_memory() };
+    }
+
+    #[test]
+    fn over_capacity() {
+        let mut arena = ArenaMemoryProvider::new_with_size(1 << 20).unwrap(); // 1 MB
+
+        let _ = arena.allocate_readwrite(900_000, 1).unwrap();
+        let _ = arena.allocate_readwrite(200_000, 1).unwrap_err();
     }
 }
