@@ -992,7 +992,6 @@ impl VMGcRefActivationsTable {
         }
     }
 
-    #[cfg(feature = "pooling-allocator")]
     fn reset(&mut self) {
         let VMGcRefActivationsTable {
             alloc,
