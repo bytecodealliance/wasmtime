@@ -544,17 +544,10 @@ impl RunCommand {
 
         // Check if the invoke string is present
         let invoke: &String = self.invoke.as_ref().unwrap();
-        // Create raw version of invoke for error messages
-        let raw_invoke = format!("{invoke:?}");
 
         let untyped_call = UntypedFuncCall::parse(invoke).with_context(|| {
-                let trimmed_invoke = invoke.trim_matches(['"', '\'']);
-                // Construct examples of valid function calls for error messages
-                let empty_args = format!("'{trimmed_invoke}()'");
-                let single_string_arg = format!("'{trimmed_invoke}(\"hello\")'");
-                let multiple_args = format!("'{trimmed_invoke}(\"Pi\", 3.14)'");
                 format!(
-                    "Failed to parse invoke '{raw_invoke}': function calls must include parentheses and must be enveloped in single quotes. For example, {empty_args}. String arguments must use double quotes {single_string_arg}, and commas must separate multiple arguments. For example, {multiple_args}.",
+                    "Failed to parse invoke '{invoke}': See https://docs.wasmtime.dev/cli-options.html#run for syntax",
                 )
         })?;
 
