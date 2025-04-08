@@ -180,7 +180,7 @@ pub fn decorate_function<FW: FuncWriter>(
     func: &Function,
 ) -> fmt::Result {
     write!(w, "function ")?;
-    write_spec(w, func)?;
+    write_function_spec(w, func)?;
     writeln!(w, " {{")?;
     let aliases = alias_map(func);
     let mut any = func_w.write_preamble(w, func)?;
@@ -198,7 +198,8 @@ pub fn decorate_function<FW: FuncWriter>(
 //
 // Function spec.
 
-fn write_spec(w: &mut dyn Write, func: &Function) -> fmt::Result {
+/// Writes the spec (name and signature) of 'func' to 'w' as text.
+pub fn write_function_spec(w: &mut dyn Write, func: &Function) -> fmt::Result {
     write!(w, "{}{}", func.name, func.signature)
 }
 

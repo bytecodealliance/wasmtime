@@ -11,7 +11,7 @@ use crate::ir::{
     StackSlot, StackSlotData, StackSlots, Type,
 };
 use crate::isa::CallConv;
-use crate::write::write_function;
+use crate::write::{write_function, write_function_spec};
 use crate::HashMap;
 #[cfg(feature = "enable-serde")]
 use alloc::string::String;
@@ -447,6 +447,11 @@ impl Function {
         DisplayFunction(self)
     }
 
+    /// Return an object that can display this function's name and signature.
+    pub fn display_spec(&self) -> DisplayFunctionSpec<'_> {
+        DisplayFunctionSpec(self)
+    }
+
     /// Sets an absolute source location for the given instruction.
     ///
     /// If no base source location has been set yet, records it at the same time.
@@ -493,5 +498,20 @@ impl fmt::Display for Function {
 impl fmt::Debug for Function {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         write_function(fmt, self)
+    }
+}
+
+/// Wrapper type capable of displaying a 'Function's name and signature.
+pub struct DisplayFunctionSpec<'a>(&'a Function);
+
+impl<'a> fmt::Display for DisplayFunctionSpec<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write_function_spec(fmt, self.0)
+    }
+}
+
+impl<'a> fmt::Debug for DisplayFunctionSpec<'a> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        write_function_spec(fmt, self.0)
     }
 }

@@ -129,13 +129,17 @@ impl Context {
         isa: &dyn TargetIsa,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<CompiledCodeStencil> {
-        let _tt = timing::compile();
+        let result;
+        trace!("****** START compiling {}", self.func.display_spec());
+        {
+            let _tt = timing::compile();
 
-        self.verify_if(isa)?;
-
-        self.optimize(isa, ctrl_plane)?;
-
-        isa.compile_function(&self.func, &self.domtree, self.want_disasm, ctrl_plane)
+            self.verify_if(isa)?;
+            self.optimize(isa, ctrl_plane)?;
+            result = isa.compile_function(&self.func, &self.domtree, self.want_disasm, ctrl_plane);
+        }
+        trace!("****** DONE compiling {}\n", self.func.display_spec());
+        result
     }
 
     /// Optimize the function, performing all compilation steps up to

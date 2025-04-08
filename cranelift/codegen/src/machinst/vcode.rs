@@ -19,11 +19,11 @@
 
 use crate::ir::pcc::*;
 use crate::ir::{self, types, Constant, ConstantData, ValueLabel};
-use crate::machinst::*;
 use crate::ranges::Ranges;
 use crate::timing;
 use crate::trace;
 use crate::CodegenError;
+use crate::{machinst::*, trace_log_enabled};
 use crate::{LabelValueLoc, ValueLocRange};
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, MachineEnv, Operand,
@@ -31,11 +31,12 @@ use regalloc2::{
 };
 use rustc_hash::FxHashMap;
 
+use core::cmp::Ordering;
+use core::fmt::{self, Write};
 use core::mem::take;
 use cranelift_entity::{entity_impl, Keys};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::fmt;
 
 /// Index referring to an instruction in VCode.
 pub type InsnIndex = regalloc2::Inst;
@@ -731,9 +732,6 @@ impl<I: VCodeInst> VCode<I> {
     where
         I: VCodeInst,
     {
-        // To write into disasm string.
-        use core::fmt::Write;
-
         let _tt = timing::vcode_emit();
         let mut buffer = MachBuffer::new();
         buffer.set_log2_min_function_alignment(self.log2_min_function_alignment);
@@ -1157,11 +1155,14 @@ impl<I: VCodeInst> VCode<I> {
             return ValueLabelsRanges::default();
         }
 
+        if trace_log_enabled!() {
+            self.log_value_labels_ranges(regalloc, inst_offsets);
+        }
+
         let mut value_labels_ranges: ValueLabelsRanges = HashMap::new();
         for &(label, from, to, alloc) in &regalloc.debug_locations {
-            let ranges = value_labels_ranges
-                .entry(ValueLabel::from_u32(label))
-                .or_insert_with(|| vec![]);
+            let label = ValueLabel::from_u32(label);
+            let ranges = value_labels_ranges.entry(label).or_insert_with(|| vec![]);
             let from_offset = inst_offsets[from.inst().index()];
             let to_offset = if to.inst().index() == inst_offsets.len() {
                 func_body_len
@@ -1214,7 +1215,7 @@ impl<I: VCodeInst> VCode<I> {
             if let Some(last_loc_range) = ranges.last_mut() {
                 if last_loc_range.loc == loc && last_loc_range.end == start {
                     trace!(
-                        "Extending debug range for VL{} in {:?} to {}",
+                        "Extending debug range for {:?} in {:?} to {}",
                         label,
                         loc,
                         end
@@ -1225,7 +1226,7 @@ impl<I: VCodeInst> VCode<I> {
             }
 
             trace!(
-                "Recording debug range for VL{} in {:?}: [Inst {}..Inst {}) [{}..{})",
+                "Recording debug range for {:?} in {:?}: [Inst {}..Inst {}) [{}..{})",
                 label,
                 loc,
                 from.inst().index(),
@@ -1238,6 +1239,200 @@ impl<I: VCodeInst> VCode<I> {
         }
 
         value_labels_ranges
+    }
+
+    fn log_value_labels_ranges(&self, regalloc: &regalloc2::Output, inst_offsets: &[CodeOffset]) {
+        debug_assert!(trace_log_enabled!());
+
+        // What debug labels do we have? Note we'll skip those that have not been
+        // allocated any location at all. They will show up as numeric gaps in the table.
+        let mut labels = vec![];
+        for &(label, _, _, _) in &regalloc.debug_locations {
+            if Some(&label) == labels.last() {
+                continue;
+            }
+            labels.push(label);
+        }
+
+        // Reformat the data on what VRegs were the VLs assigned to by lowering, since
+        // the array we have is sorted by VReg, and we want it sorted by VL for easy
+        // access in the loop below.
+        let mut vregs = vec![];
+        for &(vreg, start, end, label) in &self.debug_value_labels {
+            if matches!(labels.binary_search(&label), Ok(_)) {
+                vregs.push((label, start, end, vreg));
+            }
+        }
+        vregs.sort_unstable_by(
+            |(l_label, l_start, _, _), (r_label, r_start, _, _)| match l_label.cmp(r_label) {
+                Ordering::Equal => l_start.cmp(r_start),
+                cmp => cmp,
+            },
+        );
+
+        #[derive(PartialEq)]
+        enum Mode {
+            Measure,
+            Emit,
+        }
+        #[derive(PartialEq)]
+        enum Row {
+            Head,
+            Line,
+            Inst(usize),
+        }
+
+        let mut widths = vec![0; 2 + 2 * labels.len()];
+        let mut row = String::new();
+        let mut output_row = |row_kind: Row, mode: Mode| {
+            let mut column_index = 0;
+            row.clear();
+
+            macro_rules! output_cell_impl {
+                ($fill:literal, $span:literal, $($cell_fmt:tt)*) => {
+                    let column_start = row.len();
+                    {
+                        row.push('|');
+                        write!(row, $($cell_fmt)*).unwrap();
+                    }
+
+                    let next_column_index = column_index + $span;
+                    let expected_width: usize = widths[column_index..next_column_index].iter().sum();
+                    if mode == Mode::Measure {
+                        let actual_width = row.len() - column_start;
+                        if actual_width > expected_width {
+                            widths[next_column_index - 1] += actual_width - expected_width;
+                        }
+                    } else {
+                        let column_end = column_start + expected_width;
+                        while row.len() != column_end {
+                            row.push($fill);
+                        }
+                    }
+                    column_index = next_column_index;
+                };
+            }
+            macro_rules! output_cell {
+                ($($cell_fmt:tt)*) => {
+                    output_cell_impl!(' ', 1, $($cell_fmt)*);
+                };
+            }
+
+            match row_kind {
+                Row::Head => {
+                    output_cell!("Inst");
+                    output_cell!("IP");
+                    for label in &labels {
+                        output_cell_impl!(' ', 2, "{:?}", ValueLabel::from_u32(*label));
+                    }
+                }
+                Row::Line => {
+                    debug_assert!(mode == Mode::Emit);
+                    output_cell_impl!('-', 1, "");
+                    output_cell_impl!('-', 1, "");
+                    for _ in &labels {
+                        output_cell_impl!('-', 2, "");
+                    }
+                }
+                Row::Inst(inst_index) => {
+                    output_cell!("Inst {inst_index} ");
+                    output_cell!("{} ", inst_offsets[inst_index]);
+
+                    // The ranges which we query below operate on the logic of
+                    // "IP(inst) == IP after inst", while the rows of our table
+                    // represent IPs 'before' "inst", so we need to convert "inst"
+                    // into these "IP after" coordinates.
+                    let inst_ip_index = inst_index.wrapping_sub(1);
+                    for label in &labels {
+                        // First, the VReg.
+                        use regalloc2::Inst;
+                        let vreg_cmp = |inst: usize,
+                                        vreg_label: &u32,
+                                        range_start: &Inst,
+                                        range_end: &Inst| {
+                            match vreg_label.cmp(&label) {
+                                Ordering::Equal => {
+                                    if range_end.index() <= inst {
+                                        Ordering::Less
+                                    } else if range_start.index() > inst {
+                                        Ordering::Greater
+                                    } else {
+                                        Ordering::Equal
+                                    }
+                                }
+                                cmp => cmp,
+                            }
+                        };
+                        let vreg_index =
+                            vregs.binary_search_by(|(l, s, e, _)| vreg_cmp(inst_ip_index, l, s, e));
+                        if let Ok(vreg_index) = vreg_index {
+                            let mut prev_vreg = None;
+                            if inst_ip_index > 0 {
+                                let prev_vreg_index = vregs.binary_search_by(|(l, s, e, _)| {
+                                    vreg_cmp(inst_ip_index - 1, l, s, e)
+                                });
+                                if let Ok(prev_vreg_index) = prev_vreg_index {
+                                    prev_vreg = Some(vregs[prev_vreg_index].3);
+                                }
+                            }
+
+                            let vreg = vregs[vreg_index].3;
+                            if Some(vreg) == prev_vreg {
+                                output_cell!("*");
+                            } else {
+                                output_cell!("{}", vreg);
+                            }
+                        } else {
+                            output_cell!("");
+                        }
+
+                        // Second, the allocated location.
+                        let range_index = regalloc.debug_locations.binary_search_by(
+                            |(range_label, range_start, range_end, _)| match range_label.cmp(label)
+                            {
+                                Ordering::Equal => {
+                                    if range_end.inst().index() <= inst_ip_index {
+                                        Ordering::Less
+                                    } else if range_start.inst().index() > inst_ip_index {
+                                        Ordering::Greater
+                                    } else {
+                                        Ordering::Equal
+                                    }
+                                }
+                                cmp => cmp,
+                            },
+                        );
+                        if let Ok(range_index) = range_index {
+                            // Live at this instruction, print the location.
+                            if let Some(reg) = regalloc.debug_locations[range_index].3.as_reg() {
+                                output_cell!("{:?}", Reg::from(reg));
+                            } else {
+                                output_cell!("Stk");
+                            }
+                        } else {
+                            // Not live at this instruction.
+                            output_cell!("");
+                        }
+                    }
+                }
+            }
+            row.push('|');
+
+            if mode == Mode::Emit {
+                trace!("{}", row.as_str());
+            }
+        };
+
+        for inst_index in 0..inst_offsets.len() {
+            output_row(Row::Inst(inst_index), Mode::Measure);
+        }
+        output_row(Row::Head, Mode::Measure);
+
+        output_row(Row::Head, Mode::Emit);
+        output_row(Row::Line, Mode::Emit);
+        for inst_index in 0..inst_offsets.len() {
+            output_row(Row::Inst(inst_index), Mode::Emit);
+        }
     }
 
     /// Get the IR block for a BlockIndex, if one exists.
