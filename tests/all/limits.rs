@@ -752,7 +752,6 @@ fn custom_limiter_detect_grow_failure() -> Result<()> {
         return Ok(());
     }
     let mut pool = crate::small_pool_config();
-    pool.total_memories(2); // 1 for the test, 1 for the GC heap.
     pool.max_memory_size(10 << 16).table_elements(10);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
@@ -864,7 +863,6 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
         return Ok(());
     }
     let mut pool = crate::small_pool_config();
-    pool.total_memories(2); // 1 for the test, 1 for the GC heap.
     pool.max_memory_size(10 << 16).table_elements(10);
     let mut config = Config::new();
     config.async_support(true);
