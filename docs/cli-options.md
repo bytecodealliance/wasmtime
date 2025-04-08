@@ -44,25 +44,31 @@ as well as the text format for WebAssembly (`*.wat`):
 $ wasmtime foo.wat
 ```
 
-The `run` command accepts an optional `--invoke` argument, which is the name of
-an exported function of the module to run.
+**Wasm Modules**
+
+A Wasm **module** exports raw functions directly. The `run` command accepts an optional `--invoke` argument, which is the name of an exported raw function (of the module) to run:
+
+```sh
+$ wasmtime run --invoke initialize foo.wasm
+```
+
+**Wasm Components**
+
+A Wasm **component** uses typed interfaces defined by [the component model](https://component-model.bytecodealliance.org/design/components.html). The `run` command also accepts the optional `--invoke` argument for calling an exported function of a **component**. However, the calling of an exported function of a component uses [WAVE](https://github.com/bytecodealliance/wasm-tools/tree/a56e8d3d2a0b754e0465c668f8e4b68bad97590f/crates/wasm-wave#readme)(a human-oriented text encoding of Wasm Component Model values). For example:
 
 ```sh
 $ wasmtime run --invoke 'initialize()' foo.wasm
 ```
 
-The exported function's name and exported function's parentheses must both be enclosed in one set of single quotes, i.e. `'initialize()'`. 
-This treats the exported function as a single argument and prevents issues with shell interpretation.
-The presence of the parenthesis `()` signifies function invocation, as apposed to the function name just being referenced.
-This convention helps to distinguish function calls from other kinds of string arguments.
+You will notice that (when using WAVE) the exported function's name and exported function's parentheses are both enclosed in one set of single quotes, i.e. `'initialize()'`. This treats the exported function as a single argument, prevents issues with shell interpretation and signifies function invocation (as apposed to the function name just being referenced). Using WAVE (when calling exported functions of Wasm components) helps to distinguish function calls from other kinds of string arguments. Below are some more examples:
 
-**Note:** If your function takes a string argument, ensure that you surround the string argument in double quotes. For example:
+If your function takes a string argument, you surround the string argument in double quotes:
 
 ```sh
 $ wasmtime run --invoke 'initialize("hello")' foo.wasm
 ```
 
-Each individual argument within the parentheses must be separated by a comma:
+And each individual argument within the parentheses is separated by a comma:
 
 ```sh
 $ wasmtime run --invoke 'initialize("Pi", 3.14)' foo.wasm
