@@ -1152,6 +1152,9 @@ impl Config {
     }
 
     #[doc(hidden)] // FIXME(#3427) - if/when implemented then un-hide this
+    #[deprecated = "This configuration option only exists for internal \
+                    usage with the spec testsuite. It may be removed at \
+                    any time and without warning. Do not rely on it!"]
     pub fn wasm_legacy_exceptions(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::LEGACY_EXCEPTIONS, enable);
         self

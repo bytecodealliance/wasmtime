@@ -382,7 +382,7 @@ wasmtime_option_group! {
         pub extended_const: Option<bool>,
         /// Configure support for the exceptions proposal.
         pub exceptions: Option<bool>,
-        /// Configure support for the legacy exceptions proposal.
+        /// DEPRECATED: Configure support for the legacy exceptions proposal.
         pub legacy_exceptions: Option<bool>,
     }
 
@@ -991,6 +991,7 @@ impl CommonOptions {
             config.wasm_exceptions(enable);
         }
         if let Some(enable) = self.wasm.legacy_exceptions.or(all) {
+            #[expect(deprecated, reason = "forwarding CLI flag")]
             config.wasm_legacy_exceptions(enable);
         }
 

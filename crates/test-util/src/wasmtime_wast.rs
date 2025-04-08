@@ -92,6 +92,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         .wasm_component_model_async_builtins(component_model_async_builtins)
         .wasm_component_model_async_stackful(component_model_async_stackful)
         .wasm_exceptions(exceptions)
-        .wasm_legacy_exceptions(legacy_exceptions)
         .cranelift_nan_canonicalization(nan_canonicalization);
+    #[expect(deprecated, reason = "forwarding legacy-exceptions")]
+    config.wasm_legacy_exceptions(legacy_exceptions);
 }
