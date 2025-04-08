@@ -1256,6 +1256,7 @@ impl FuncEnvironment<'_> {
     }
 
     /// Get the GC heap's base.
+    #[cfg(any(feature = "gc-null", feature = "gc-drc"))]
     fn get_gc_heap_base(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let global = self.get_gc_heap_base_global(&mut builder.func);
         builder.ins().global_value(self.pointer_type(), global)
