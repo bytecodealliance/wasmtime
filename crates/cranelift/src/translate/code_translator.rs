@@ -1237,7 +1237,7 @@ pub fn translate_operator(
             translate_fcmp(FloatCC::LessThanOrEqual, builder, state)
         }
         Operator::RefNull { hty } => {
-            let hty = environ.convert_heap_type(*hty);
+            let hty = environ.convert_heap_type(*hty)?;
             state.push1(environ.translate_ref_null(builder.cursor(), hty)?)
         }
         Operator::RefIsNull => {
@@ -2748,7 +2748,7 @@ pub fn translate_operator(
         }
         Operator::RefTestNonNull { hty } => {
             let r = state.pop1();
-            let heap_type = environ.convert_heap_type(*hty);
+            let heap_type = environ.convert_heap_type(*hty)?;
             let result = environ.translate_ref_test(
                 builder,
                 WasmRefType {
@@ -2761,7 +2761,7 @@ pub fn translate_operator(
         }
         Operator::RefTestNullable { hty } => {
             let r = state.pop1();
-            let heap_type = environ.convert_heap_type(*hty);
+            let heap_type = environ.convert_heap_type(*hty)?;
             let result = environ.translate_ref_test(
                 builder,
                 WasmRefType {
@@ -2774,7 +2774,7 @@ pub fn translate_operator(
         }
         Operator::RefCastNonNull { hty } => {
             let r = state.pop1();
-            let heap_type = environ.convert_heap_type(*hty);
+            let heap_type = environ.convert_heap_type(*hty)?;
             let cast_okay = environ.translate_ref_test(
                 builder,
                 WasmRefType {
@@ -2788,7 +2788,7 @@ pub fn translate_operator(
         }
         Operator::RefCastNullable { hty } => {
             let r = state.pop1();
-            let heap_type = environ.convert_heap_type(*hty);
+            let heap_type = environ.convert_heap_type(*hty)?;
             let cast_okay = environ.translate_ref_test(
                 builder,
                 WasmRefType {
@@ -2809,7 +2809,7 @@ pub fn translate_operator(
         } => {
             let r = state.peek1();
 
-            let to_ref_type = environ.convert_ref_type(*to_ref_type);
+            let to_ref_type = environ.convert_ref_type(*to_ref_type)?;
             let cast_is_okay = environ.translate_ref_test(builder, to_ref_type, r)?;
 
             let (cast_succeeds_block, inputs) = translate_br_if_args(*relative_depth, state);
@@ -2842,7 +2842,7 @@ pub fn translate_operator(
         } => {
             let r = state.peek1();
 
-            let to_ref_type = environ.convert_ref_type(*to_ref_type);
+            let to_ref_type = environ.convert_ref_type(*to_ref_type)?;
             let cast_is_okay = environ.translate_ref_test(builder, to_ref_type, r)?;
 
             let (cast_fails_block, inputs) = translate_br_if_args(*relative_depth, state);

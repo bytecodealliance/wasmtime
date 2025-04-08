@@ -142,6 +142,8 @@ impl Config {
             component_model_async_builtins,
             component_model_async_stackful,
             simd,
+            exceptions,
+            legacy_exceptions,
 
             hogs_memory: _,
             nan_canonicalization: _,
@@ -157,6 +159,7 @@ impl Config {
             component_model_async_builtins.unwrap_or(false);
         self.module_config.component_model_async_stackful =
             component_model_async_stackful.unwrap_or(false);
+        self.module_config.legacy_exceptions = legacy_exceptions.unwrap_or(false);
 
         // Enable/disable proposals that wasm-smith has knobs for which will be
         // read when creating `wasmtime::Config`.
@@ -175,6 +178,7 @@ impl Config {
             || self.module_config.function_references_enabled
             || reference_types.unwrap_or(false);
         config.extended_const_enabled = extended_const.unwrap_or(false);
+        config.exceptions_enabled = exceptions.unwrap_or(false);
         if multi_memory.unwrap_or(false) {
             config.max_memories = limits::MEMORIES_PER_MODULE as usize;
         } else {
@@ -294,6 +298,8 @@ impl Config {
         cfg.wasm.tail_call = Some(self.module_config.config.tail_call_enabled);
         cfg.wasm.threads = Some(self.module_config.config.threads_enabled);
         cfg.wasm.wide_arithmetic = Some(self.module_config.config.wide_arithmetic_enabled);
+        cfg.wasm.exceptions = Some(self.module_config.config.exceptions_enabled);
+        cfg.wasm.legacy_exceptions = Some(self.module_config.legacy_exceptions);
         if !self.module_config.config.simd_enabled {
             cfg.wasm.relaxed_simd = Some(false);
         }

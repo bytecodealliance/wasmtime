@@ -1082,13 +1082,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/stack-switching
     pub fn wasm_stack_switching(&mut self, enable: bool) -> &mut Self {
-        // FIXME(dhil): Once the config provides a handle
-        // for turning on/off exception handling proposal support,
-        // this ought to only enable stack switching.
-        self.wasm_feature(
-            WasmFeatures::EXCEPTIONS | WasmFeatures::STACK_SWITCHING,
-            enable,
-        );
+        self.wasm_feature(WasmFeatures::STACK_SWITCHING, enable);
         self
     }
 
@@ -1148,6 +1142,18 @@ impl Config {
     #[cfg(feature = "component-model-async")]
     pub fn wasm_component_model_async_stackful(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::CM_ASYNC_STACKFUL, enable);
+        self
+    }
+
+    #[doc(hidden)] // FIXME(#3427) - if/when implemented then un-hide this
+    pub fn wasm_exceptions(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::EXCEPTIONS, enable);
+        self
+    }
+
+    #[doc(hidden)] // FIXME(#3427) - if/when implemented then un-hide this
+    pub fn wasm_legacy_exceptions(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::LEGACY_EXCEPTIONS, enable);
         self
     }
 
@@ -2047,23 +2053,25 @@ impl Config {
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         match self.compiler_config.strategy {
             None | Some(Strategy::Cranelift) => {
+                let mut unsupported = WasmFeatures::empty();
+
                 // Pulley at this time fundamentally doesn't support the
                 // `threads` proposal, notably shared memory, because Rust can't
                 // safely implement loads/stores in the face of shared memory.
                 if self.compiler_target().is_pulley() {
-                    return WasmFeatures::THREADS;
+                    unsupported |= WasmFeatures::THREADS;
                 }
 
-                // Other Cranelift backends are either 100% missing or complete
-                // at this time, so no need to further filter.
-                WasmFeatures::empty()
+                unsupported
             }
             Some(Strategy::Winch) => {
                 let mut unsupported = WasmFeatures::GC
                     | WasmFeatures::FUNCTION_REFERENCES
                     | WasmFeatures::RELAXED_SIMD
                     | WasmFeatures::TAIL_CALL
-                    | WasmFeatures::GC_TYPES;
+                    | WasmFeatures::GC_TYPES
+                    | WasmFeatures::EXCEPTIONS
+                    | WasmFeatures::LEGACY_EXCEPTIONS;
                 match self.compiler_target().architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
                         // no support for simd on aarch64

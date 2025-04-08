@@ -2089,11 +2089,11 @@ impl TypeTrace for Tag {
 #[expect(missing_docs, reason = "self-describing functions")]
 pub trait TypeConvert {
     /// Converts a wasmparser table type into a wasmtime type
-    fn convert_global_type(&self, ty: &wasmparser::GlobalType) -> Global {
-        Global {
-            wasm_ty: self.convert_valtype(ty.content_type),
+    fn convert_global_type(&self, ty: &wasmparser::GlobalType) -> WasmResult<Global> {
+        Ok(Global {
+            wasm_ty: self.convert_valtype(ty.content_type)?,
             mutability: ty.mutable,
-        }
+        })
     }
 
     /// Converts a wasmparser table type into a wasmtime type
@@ -2109,37 +2109,40 @@ pub trait TypeConvert {
         Ok(Table {
             idx_type,
             limits,
-            ref_type: self.convert_ref_type(ty.element_type),
+            ref_type: self.convert_ref_type(ty.element_type)?,
         })
     }
 
-    fn convert_sub_type(&self, ty: &wasmparser::SubType) -> WasmSubType {
-        WasmSubType {
+    fn convert_sub_type(&self, ty: &wasmparser::SubType) -> WasmResult<WasmSubType> {
+        Ok(WasmSubType {
             is_final: ty.is_final,
             supertype: ty.supertype_idx.map(|i| self.lookup_type_index(i.unpack())),
-            composite_type: self.convert_composite_type(&ty.composite_type),
-        }
+            composite_type: self.convert_composite_type(&ty.composite_type)?,
+        })
     }
 
-    fn convert_composite_type(&self, ty: &wasmparser::CompositeType) -> WasmCompositeType {
+    fn convert_composite_type(
+        &self,
+        ty: &wasmparser::CompositeType,
+    ) -> WasmResult<WasmCompositeType> {
         let inner = match &ty.inner {
             wasmparser::CompositeInnerType::Func(f) => {
-                WasmCompositeInnerType::Func(self.convert_func_type(f))
+                WasmCompositeInnerType::Func(self.convert_func_type(f)?)
             }
             wasmparser::CompositeInnerType::Array(a) => {
-                WasmCompositeInnerType::Array(self.convert_array_type(a))
+                WasmCompositeInnerType::Array(self.convert_array_type(a)?)
             }
             wasmparser::CompositeInnerType::Struct(s) => {
-                WasmCompositeInnerType::Struct(self.convert_struct_type(s))
+                WasmCompositeInnerType::Struct(self.convert_struct_type(s)?)
             }
             wasmparser::CompositeInnerType::Cont(c) => {
                 WasmCompositeInnerType::Cont(self.convert_cont_type(c))
             }
         };
-        WasmCompositeType {
+        Ok(WasmCompositeType {
             inner,
             shared: ty.shared,
-        }
+        })
     }
 
     /// Converts a wasmparser continuation type to a wasmtime type
@@ -2151,73 +2154,73 @@ pub trait TypeConvert {
         }
     }
 
-    fn convert_struct_type(&self, ty: &wasmparser::StructType) -> WasmStructType {
-        WasmStructType {
+    fn convert_struct_type(&self, ty: &wasmparser::StructType) -> WasmResult<WasmStructType> {
+        Ok(WasmStructType {
             fields: ty
                 .fields
                 .iter()
                 .map(|f| self.convert_field_type(f))
-                .collect(),
-        }
+                .collect::<WasmResult<_>>()?,
+        })
     }
 
-    fn convert_array_type(&self, ty: &wasmparser::ArrayType) -> WasmArrayType {
-        WasmArrayType(self.convert_field_type(&ty.0))
+    fn convert_array_type(&self, ty: &wasmparser::ArrayType) -> WasmResult<WasmArrayType> {
+        Ok(WasmArrayType(self.convert_field_type(&ty.0)?))
     }
 
-    fn convert_field_type(&self, ty: &wasmparser::FieldType) -> WasmFieldType {
-        WasmFieldType {
-            element_type: self.convert_storage_type(&ty.element_type),
+    fn convert_field_type(&self, ty: &wasmparser::FieldType) -> WasmResult<WasmFieldType> {
+        Ok(WasmFieldType {
+            element_type: self.convert_storage_type(&ty.element_type)?,
             mutable: ty.mutable,
-        }
+        })
     }
 
-    fn convert_storage_type(&self, ty: &wasmparser::StorageType) -> WasmStorageType {
-        match ty {
+    fn convert_storage_type(&self, ty: &wasmparser::StorageType) -> WasmResult<WasmStorageType> {
+        Ok(match ty {
             wasmparser::StorageType::I8 => WasmStorageType::I8,
             wasmparser::StorageType::I16 => WasmStorageType::I16,
-            wasmparser::StorageType::Val(v) => WasmStorageType::Val(self.convert_valtype(*v)),
-        }
+            wasmparser::StorageType::Val(v) => WasmStorageType::Val(self.convert_valtype(*v)?),
+        })
     }
 
     /// Converts a wasmparser function type to a wasmtime type
-    fn convert_func_type(&self, ty: &wasmparser::FuncType) -> WasmFuncType {
+    fn convert_func_type(&self, ty: &wasmparser::FuncType) -> WasmResult<WasmFuncType> {
         let params = ty
             .params()
             .iter()
             .map(|t| self.convert_valtype(*t))
-            .collect();
+            .collect::<WasmResult<_>>()?;
         let results = ty
             .results()
             .iter()
             .map(|t| self.convert_valtype(*t))
-            .collect();
-        WasmFuncType::new(params, results)
+            .collect::<WasmResult<_>>()?;
+        Ok(WasmFuncType::new(params, results))
     }
 
     /// Converts a wasmparser value type to a wasmtime type
-    fn convert_valtype(&self, ty: wasmparser::ValType) -> WasmValType {
-        match ty {
+    fn convert_valtype(&self, ty: wasmparser::ValType) -> WasmResult<WasmValType> {
+        Ok(match ty {
             wasmparser::ValType::I32 => WasmValType::I32,
             wasmparser::ValType::I64 => WasmValType::I64,
             wasmparser::ValType::F32 => WasmValType::F32,
             wasmparser::ValType::F64 => WasmValType::F64,
             wasmparser::ValType::V128 => WasmValType::V128,
-            wasmparser::ValType::Ref(t) => WasmValType::Ref(self.convert_ref_type(t)),
-        }
+            wasmparser::ValType::Ref(t) => WasmValType::Ref(self.convert_ref_type(t)?),
+        })
     }
 
     /// Converts a wasmparser reference type to a wasmtime type
-    fn convert_ref_type(&self, ty: wasmparser::RefType) -> WasmRefType {
-        WasmRefType {
+    fn convert_ref_type(&self, ty: wasmparser::RefType) -> WasmResult<WasmRefType> {
+        Ok(WasmRefType {
             nullable: ty.is_nullable(),
-            heap_type: self.convert_heap_type(ty.heap_type()),
-        }
+            heap_type: self.convert_heap_type(ty.heap_type())?,
+        })
     }
 
     /// Converts a wasmparser heap type to a wasmtime type
-    fn convert_heap_type(&self, ty: wasmparser::HeapType) -> WasmHeapType {
-        match ty {
+    fn convert_heap_type(&self, ty: wasmparser::HeapType) -> WasmResult<WasmHeapType> {
+        Ok(match ty {
             wasmparser::HeapType::Concrete(i) => self.lookup_heap_type(i),
             wasmparser::HeapType::Abstract { ty, shared: false } => match ty {
                 wasmparser::AbstractHeapType::Extern => WasmHeapType::Extern,
@@ -2235,11 +2238,11 @@ pub trait TypeConvert {
                 | wasmparser::AbstractHeapType::NoExn
                 | wasmparser::AbstractHeapType::Cont
                 | wasmparser::AbstractHeapType::NoCont => {
-                    unimplemented!("unsupported heap type {ty:?}");
+                    return Err(wasm_unsupported!("unsupported heap type {ty:?}"))
                 }
             },
-            _ => unimplemented!("unsupported heap type {ty:?}"),
-        }
+            _ => return Err(wasm_unsupported!("unsupported heap type {ty:?}")),
+        })
     }
 
     /// Converts the specified type index from a heap type into a canonicalized
