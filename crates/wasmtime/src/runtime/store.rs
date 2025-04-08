@@ -584,6 +584,10 @@ impl<T> Store<T> {
             data: ManuallyDrop::new(data),
         });
 
+        // Note the erasure of the lifetime here into `'static`, so in general
+        // usage of this trait object must be strictly bounded to the `Store`
+        // itself, and this is an invariant that we have to maintain throughout
+        // Wasmtime.
         inner.traitobj = StorePtr::new(unsafe {
             mem::transmute::<
                 NonNull<dyn crate::runtime::vm::VMStore + '_>,
