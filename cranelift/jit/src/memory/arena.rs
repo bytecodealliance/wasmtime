@@ -86,6 +86,10 @@ impl Segment {
 /// updated as the JIT requires more space. This approach allows for stable
 /// addresses throughout the lifetime of the JIT.
 ///
+/// Depending on the underlying platform, requesting large parts of the address
+/// space to be allocated might fail. This implementation currently doesn't do
+/// overcommit on Windows.
+///
 /// Note: Memory will be leaked by default unless
 /// [`JITMemoryProvider::free_memory`] is called to ensure function pointers
 /// remain valid for the remainder of the program's life.
@@ -101,6 +105,10 @@ impl ArenaMemoryProvider {
     /// Create a new memory region with the given size.
     pub fn new_with_size(reserve_size: usize) -> Result<Self, region::Error> {
         let size = align_up(reserve_size, region::page::size());
+        // Note: The region crate uses `MEM_RESERVE | MEM_COMMIT` on Windows.
+        // This means that allocations that exceed the page file plus system
+        // memory will fail here.
+        // https://github.com/darfink/region-rs/pull/34
         let mut alloc = region::alloc(size, region::Protection::NONE)?;
         let ptr = alloc.as_mut_ptr();
 
@@ -252,9 +260,12 @@ mod tests {
     }
 
     #[test]
-    #[cfg(target_pointer_width = "64")]
+    #[cfg(all(target_pointer_width = "64", not(target_os = "windows")))]
+    // Windows: See https://github.com/darfink/region-rs/pull/34
     fn large_virtual_allocation() {
-        let reserve_size = 1 << 40; // Request 1TB of memory. This should be successful.
+        // We should be able to request 1TB of virtual address space on 64-bit
+        // platforms. Physical memory should be committed as we go.
+        let reserve_size = 1 << 40;
         let mut arena = ArenaMemoryProvider::new_with_size(reserve_size).unwrap();
         let ptr = arena.allocate_readwrite(1, 1).unwrap();
         assert_eq!(ptr.addr(), arena.ptr.addr());
