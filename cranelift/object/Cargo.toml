@@ -25,3 +25,4 @@ log = { workspace = true }
 [dev-dependencies]
 cranelift-frontend = { workspace = true }
 cranelift-entity = { workspace = true }
+cranelift-codegen = { workspace = true, features = ["x86"] }
