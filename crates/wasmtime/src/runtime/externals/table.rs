@@ -460,7 +460,17 @@ mod tests {
         // That said, they really point to the same table.
         assert!(t1.get(&mut store, 0).unwrap().unwrap_extern().is_none());
         assert!(t2.get(&mut store, 0).unwrap().unwrap_extern().is_none());
-        let e = ExternRef::new(&mut store, 42)?;
+        let e = match ExternRef::new(&mut store, 42) {
+            Ok(x) => x,
+            Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<i32>>() {
+                Ok(oom) => {
+                    let (value, oom) = oom.take_inner();
+                    store.gc(Some(&oom));
+                    ExternRef::new(&mut store, value)?
+                }
+                Err(e) => return Err(e),
+            },
+        };
         t1.set(&mut store, 0, e.into())?;
         assert!(t1.get(&mut store, 0).unwrap().unwrap_extern().is_some());
         assert!(t2.get(&mut store, 0).unwrap().unwrap_extern().is_some());
