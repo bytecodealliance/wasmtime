@@ -74,6 +74,22 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn checked_add_with_type(&mut self, ty: Type, a: u64, b: u64) -> Option<u64> {
+            let c = a.checked_add(b)?;
+            let ty_mask = self.ty_mask(ty);
+            if (c & !ty_mask) == 0 {
+                Some(c)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn add_overflows_with_type(&mut self, ty: Type, a: u64, b: u64) -> bool {
+            self.checked_add_with_type(ty, a, b).is_none()
+        }
+
+        #[inline]
         fn u64_add(&mut self, x: u64, y: u64) -> u64 {
             x.wrapping_add(y)
         }
@@ -89,10 +105,25 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn u64_sdiv(&mut self, x: u64, y: u64) -> Option<u64> {
-            let x = x as i64;
-            let y = y as i64;
-            x.checked_div(y).map(|d| d as u64)
+        fn imm64_sdiv(&mut self, ty: Type, x: Imm64, y: Imm64) -> Option<Imm64> {
+            // Sign extend `x` and `y`.
+            let shift = u32::checked_sub(64, ty.bits()).unwrap_or(0);
+            let x = (x.bits() << shift) >> shift;
+            let y = (y.bits() << shift) >> shift;
+
+            // NB: We can't rely on `checked_div` to detect `ty::MIN / -1`
+            // (which overflows and should trap) because we are working with
+            // `i64` values here, and `i32::MIN != i64::MIN`, for
+            // example. Therefore, we have to explicitly check for this case
+            // ourselves.
+            let min = ((self.ty_smin(ty) as i64) << shift) >> shift;
+            if x == min && y == -1 {
+                return None;
+            }
+
+            let ty_mask = self.ty_mask(ty) as i64;
+            let result = x.checked_div(y)? & ty_mask;
+            Some(Imm64::new(result))
         }
 
         #[inline]
@@ -1159,6 +1190,11 @@ macro_rules! isle_common_prelude_methods {
 
         fn f128_copysign(&mut self, a: Ieee128, b: Ieee128) -> Ieee128 {
             a.copysign(b)
+        }
+
+        #[inline]
+        fn def_inst(&mut self, val: Value) -> Option<Inst> {
+            self.dfg().value_def(val).inst()
         }
     };
 }

@@ -43,6 +43,12 @@ pub(crate) struct IsleContext<'a, 'b, 'c> {
     pub(crate) ctx: &'a mut OptimizeCtx<'b, 'c>,
 }
 
+impl IsleContext<'_, '_, '_> {
+    pub(crate) fn dfg(&self) -> &crate::ir::DataFlowGraph {
+        &self.ctx.func.dfg
+    }
+}
+
 pub(crate) struct InstDataEtorIter<'a, 'b, 'c> {
     stack: SmallVec<[Value; 8]>,
     _phantom1: PhantomData<&'a ()>,
@@ -183,17 +189,21 @@ where
 impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
     isle_common_prelude_methods!();
 
-    type inst_data_etor_returns = InstDataEtorIter<'a, 'b, 'c>;
+    type inst_data_value_etor_returns = InstDataEtorIter<'a, 'b, 'c>;
 
-    fn inst_data_etor(&mut self, eclass: Value, returns: &mut InstDataEtorIter<'a, 'b, 'c>) {
+    fn inst_data_value_etor(&mut self, eclass: Value, returns: &mut InstDataEtorIter<'a, 'b, 'c>) {
         *returns = InstDataEtorIter::new(eclass);
     }
 
-    type inst_data_tupled_etor_returns = InstDataEtorIter<'a, 'b, 'c>;
+    type inst_data_value_tupled_etor_returns = InstDataEtorIter<'a, 'b, 'c>;
 
-    fn inst_data_tupled_etor(&mut self, eclass: Value, returns: &mut InstDataEtorIter<'a, 'b, 'c>) {
-        // Literally identical to `inst_data_etor`, just a different nominal type in ISLE
-        self.inst_data_etor(eclass, returns);
+    fn inst_data_value_tupled_etor(
+        &mut self,
+        eclass: Value,
+        returns: &mut InstDataEtorIter<'a, 'b, 'c>,
+    ) {
+        // Literally identical to `inst_data_value_etor`, just a different nominal type in ISLE
+        self.inst_data_value_etor(eclass, returns);
     }
 
     fn make_inst_ctor(&mut self, ty: Type, op: &InstructionData) -> Value {
@@ -201,6 +211,19 @@ impl<'a, 'b, 'c> generated_code::Context for IsleContext<'a, 'b, 'c> {
         let value = self.ctx.insert_pure_enode(NewOrExistingInst::New(*op, ty));
         trace!("make_inst_ctor: {:?} -> {}", op, value);
         value
+    }
+
+    fn make_skeleton_inst_ctor(&mut self, data: &InstructionData) -> Inst {
+        let inst = self.ctx.func.dfg.make_inst(*data);
+        self.ctx
+            .func
+            .dfg
+            .make_inst_results(inst, Default::default());
+        inst
+    }
+
+    fn inst_data_etor(&mut self, inst: Inst) -> Option<InstructionData> {
+        Some(self.ctx.func.dfg.insts[inst])
     }
 
     fn value_array_2_ctor(&mut self, arg0: Value, arg1: Value) -> ValueArray2 {

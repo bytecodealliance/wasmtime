@@ -57,6 +57,10 @@ where
     fn new(lower_ctx: &'a mut Lower<'b, InstAndKind<P>>, backend: &'a PulleyBackend<P>) -> Self {
         Self { lower_ctx, backend }
     }
+
+    pub(crate) fn dfg(&self) -> &crate::ir::DataFlowGraph {
+        &self.lower_ctx.f.dfg
+    }
 }
 
 impl<P> generated_code::Context for PulleyIsleContext<'_, '_, InstAndKind<P>, PulleyBackend<P>>

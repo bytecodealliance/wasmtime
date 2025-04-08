@@ -19,8 +19,6 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
-;;                                     v35 = iconst.i32 0
-;; @0020                               trapnz v35, user18  ; v35 = 0
 ;; @0020                               v9 = load.i64 notrap aligned readonly v0+56
 ;; @0020                               v10 = load.i32 notrap aligned v9
 ;;                                     v42 = iconst.i32 7

@@ -170,7 +170,7 @@ pub trait LowerBackend {
 /// from original Inst to MachInsts.
 pub struct Lower<'func, I: VCodeInst> {
     /// The function to lower.
-    f: &'func Function,
+    pub(crate) f: &'func Function,
 
     /// Lowered machine instructions.
     vcode: VCodeBuilder<I>,

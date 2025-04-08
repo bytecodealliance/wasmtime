@@ -14,5 +14,5 @@
 ;;       br_if_xulteq64 x7, x6, 0x9    // target = 0x26
 ;;   24: pop_frame
 ;;       ret
-;;   26: call 0x9e    // target = 0xc4
+;;   26: call 0x8a    // target = 0xb0
 ;;   2b: jump -0x7    // target = 0x24

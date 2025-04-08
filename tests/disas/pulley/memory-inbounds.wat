@@ -86,14 +86,13 @@
 ;;
 ;; wasm[0]::function[8]::maybe_inbounds_v2:
 ;;       push_frame
+;;       xload64le_o32 x9, x0, 88
 ;;       xzero x10
-;;       xconst32 x11, 131072
-;;       xadd64_uoverflow_trap x11, x10, x11
-;;       xload64le_o32 x12, x0, 88
-;;       xload64le_o32 x13, x0, 80
-;;       xadd64_u32 x13, x13, 131068
-;;       xult64 x9, x12, x11
-;;       xselect64 x11, x9, x10, x13
+;;       xload64le_o32 x11, x0, 80
+;;       xadd64_u32 x11, x11, 131068
+;;       xconst32 x7, 131072
+;;       xult64 x9, x9, x7
+;;       xselect64 x11, x9, x10, x11
 ;;       xload32le_z x0, x11, 0
 ;;       pop_frame
 ;;       ret

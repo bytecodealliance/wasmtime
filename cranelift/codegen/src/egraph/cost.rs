@@ -107,13 +107,59 @@ impl Cost {
         (self.0 & Self::OP_COST_MASK) >> Self::DEPTH_BITS
     }
 
+    /// Return the cost of an opcode.
+    fn of_opcode(op: Opcode) -> Cost {
+        match op {
+            // Constants.
+            Opcode::Iconst | Opcode::F32const | Opcode::F64const => Cost::new(1, 0),
+
+            // Extends/reduces.
+            Opcode::Uextend
+            | Opcode::Sextend
+            | Opcode::Ireduce
+            | Opcode::Iconcat
+            | Opcode::Isplit => Cost::new(1, 0),
+
+            // "Simple" arithmetic.
+            Opcode::Iadd
+            | Opcode::Isub
+            | Opcode::Band
+            | Opcode::Bor
+            | Opcode::Bxor
+            | Opcode::Bnot
+            | Opcode::Ishl
+            | Opcode::Ushr
+            | Opcode::Sshr => Cost::new(3, 0),
+
+            // Everything else.
+            _ => {
+                let mut c = Cost::new(4, 0);
+                if op.can_trap() || op.other_side_effects() {
+                    c = c + Cost::new(5, 0);
+                }
+                if op.can_load() {
+                    c = c + Cost::new(10, 0);
+                }
+                if op.can_store() {
+                    c = c + Cost::new(20, 0);
+                }
+                c
+            }
+        }
+    }
+
     /// Compute the cost of the operation and its given operands.
     ///
     /// Caller is responsible for checking that the opcode came from an instruction
     /// that satisfies `inst_predicates::is_pure_for_egraph()`.
     pub(crate) fn of_pure_op(op: Opcode, operand_costs: impl IntoIterator<Item = Self>) -> Self {
-        let c = pure_op_cost(op) + operand_costs.into_iter().sum();
+        let c = Self::of_opcode(op) + operand_costs.into_iter().sum();
         Cost::new(c.op_cost(), c.depth().saturating_add(1))
+    }
+
+    /// Compute the cost of an operation in the side-effectful skeleton.
+    pub(crate) fn of_skeleton_op(op: Opcode, arity: usize) -> Self {
+        Cost::of_opcode(op) + Cost::new(u32::try_from(arity).unwrap(), (arity != 0) as _)
     }
 }
 
@@ -136,36 +182,6 @@ impl std::ops::Add<Cost> for Cost {
         let op_cost = self.op_cost().saturating_add(other.op_cost());
         let depth = std::cmp::max(self.depth(), other.depth());
         Cost::new(op_cost, depth)
-    }
-}
-
-/// Return the cost of a *pure* opcode.
-///
-/// Caller is responsible for checking that the opcode came from an instruction
-/// that satisfies `inst_predicates::is_pure_for_egraph()`.
-fn pure_op_cost(op: Opcode) -> Cost {
-    match op {
-        // Constants.
-        Opcode::Iconst | Opcode::F32const | Opcode::F64const => Cost::new(1, 0),
-
-        // Extends/reduces.
-        Opcode::Uextend | Opcode::Sextend | Opcode::Ireduce | Opcode::Iconcat | Opcode::Isplit => {
-            Cost::new(1, 0)
-        }
-
-        // "Simple" arithmetic.
-        Opcode::Iadd
-        | Opcode::Isub
-        | Opcode::Band
-        | Opcode::Bor
-        | Opcode::Bxor
-        | Opcode::Bnot
-        | Opcode::Ishl
-        | Opcode::Ushr
-        | Opcode::Sshr => Cost::new(3, 0),
-
-        // Everything else (pure.)
-        _ => Cost::new(4, 0),
     }
 }
 
