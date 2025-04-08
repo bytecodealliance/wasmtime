@@ -384,10 +384,10 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ////////////////////////////////////////////////////////////////////////////
     // Accessors for the raw bytes of the GC heap
 
-    /// TODO FITZGEN
+    /// Take the underlying memory storage out of this GC heap.
     fn take_memory(&mut self) -> crate::vm::Memory;
 
-    /// TODO FITZGEN
+    /// Replace this GC heap's underlying memory storage.
     fn replace_memory(&mut self, memory: crate::vm::Memory, delta_bytes_grown: u64);
 
     /// Get a raw `VMMemoryDefinition` for this heap's underlying memory storage.

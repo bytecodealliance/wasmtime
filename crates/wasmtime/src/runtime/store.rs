@@ -1672,9 +1672,12 @@ impl StoreOpaque {
         Ok(root)
     }
 
-    /// TODO FITZGEN
+    /// Attempt to grow the GC heap by `bytes_needed` bytes.
     ///
-    /// FIBER NONSENSE
+    /// Returns an error if growing the GC heap fails.
+    ///
+    /// When async is enabled, it is the caller's responsibility to ensure that
+    /// this is called on a fiber stack.
     pub(crate) fn maybe_async_grow_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
         assert!(bytes_needed > 0);
 
@@ -1714,9 +1717,9 @@ impl StoreOpaque {
             let delta_pages_for_alloc = delta_pages_for_alloc.max(pages_needed);
             assert!(delta_pages_for_alloc > 0);
 
-            // Safety: we must take care to pair growing the GC heap with
-            // updating its associated `VMMemoryDefinition` in the
-            // `VMStoreContext` immediately afterwards.
+            // Safety: we pair growing the GC heap with updating its associated
+            // `VMMemoryDefinition` in the `VMStoreContext` immediately
+            // afterwards.
             unsafe {
                 memory
                     .grow(delta_pages_for_alloc, Some(self.traitobj().as_mut()))?

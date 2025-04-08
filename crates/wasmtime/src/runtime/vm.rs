@@ -202,12 +202,23 @@ pub unsafe trait VMStore {
     /// as a trap to clean up Wasm execution.
     unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>>;
 
-    /// TODO FITZGEN
+    /// Callback invoked whenever an instance needs to grow the GC heap.
+    ///
+    /// Cooperative, async-yielding (if configured) is completely transparent.
+    ///
+    /// If the growth was canceled or fails, returns an error.
     fn maybe_async_grow_gc_heap(&mut self, bytes_needed: u64) -> Result<()>;
 
-    /// TODO FITZGEN
+    /// Attempt to grow the GC heap by `bytes_needed` or, if that fails, perform
+    /// a garbage collection.
     ///
-    /// TODO FITZGEN: not guaranteed to have space after this
+    /// Cooperative, async-yielding (if configured) is completely transparent.
+    ///
+    /// Note that even when this function returns `Ok(())`, it is not guaranteed
+    /// that a GC allocation of size `bytes_needed` will succeed. Growing the GC
+    /// heap could fail, and then performing a collection could succeed but
+    /// might not free up enough space. Therefore, callers should not assume
+    /// that a retried allocation will always succeed.
     fn maybe_async_grow_or_collect_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
         self.maybe_async_grow_gc_heap(bytes_needed)
             .or_else(|err| -> Result<()> {

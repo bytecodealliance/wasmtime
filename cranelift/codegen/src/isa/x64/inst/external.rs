@@ -132,7 +132,6 @@ fn enc_gpr(gpr: &Gpr) -> u8 {
         real.hw_enc()
     } else {
         0
-        // unreachable!() TODO FITZGEN
     }
 }
 
