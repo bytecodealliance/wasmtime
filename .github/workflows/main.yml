@@ -123,7 +123,7 @@ jobs:
   cargo_vet:
     name: Cargo vet
     needs: determine
-    if: needs.determine.outputs.audit
+    if: github.repository == 'bytecodealliance/wasmtime' && needs.determine.outputs.audit
     runs-on: ubuntu-latest
     outputs:
       outcome: ${{ steps.vet.outcome }}
