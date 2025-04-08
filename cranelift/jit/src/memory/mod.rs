@@ -1,4 +1,4 @@
-use cranelift_module::ModuleResult;
+use cranelift_module::{ModuleError, ModuleResult};
 use std::io;
 
 mod arena;
@@ -53,16 +53,16 @@ pub(crate) fn set_readable_and_executable(
 
     unsafe {
         region::protect(ptr, len, region::Protection::READ_EXECUTE).map_err(|e| {
-            cranelift_module::ModuleError::Backend(
+            ModuleError::Backend(
                 anyhow::Error::new(e).context("unable to make memory readable+executable"),
             )
         })?;
     }
 
-    // If BTI is requested, and the architecture supports it, use mprotect to set the PROT_BTI flag
+    // If BTI is requested, and the architecture supports it, use mprotect to set the PROT_BTI flag.
     if branch_protection == BranchProtection::BTI {
         #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-        if is_bti && std::arch::is_aarch64_feature_detected!("bti") {
+        if std::arch::is_aarch64_feature_detected!("bti") {
             let prot = libc::PROT_EXEC | libc::PROT_READ | /* PROT_BTI */ 0x10;
 
             unsafe {
