@@ -82,6 +82,7 @@ mod ranges;
 mod remove_constant_phis;
 mod result;
 mod scoped_hash_map;
+mod take_and_replace;
 mod unreachable_code;
 mod value_label;
 
@@ -89,6 +90,7 @@ mod value_label;
 mod souper_harvest;
 
 pub use crate::result::{CodegenError, CodegenResult, CompileError};
+pub use crate::take_and_replace::TakeAndReplace;
 
 #[cfg(feature = "incremental-cache")]
 pub mod incremental_cache;

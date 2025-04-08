@@ -16,6 +16,7 @@ use crate::opts::generated_code::SkeletonInstSimplification;
 use crate::opts::IsleContext;
 use crate::scoped_hash_map::{Entry as ScopedEntry, ScopedHashMap};
 use crate::settings::Flags;
+use crate::take_and_replace::TakeAndReplace;
 use crate::trace;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
@@ -298,7 +299,8 @@ where
         // A pure node always has exactly one result.
         let orig_value = self.func.dfg.first_result(inst);
 
-        let mut optimized_values = std::mem::take(&mut self.optimized_values);
+        let mut guard = TakeAndReplace::new(self, |x| &mut x.optimized_values);
+        let (ctx, optimized_values) = guard.get();
 
         // Limit rewrite depth. When we apply optimization rules, they
         // may create new nodes (values) and those are, recursively,
@@ -310,28 +312,28 @@ where
         // infinite or problematic recursion, we bound the rewrite
         // depth to a small constant here.
         const REWRITE_LIMIT: usize = 5;
-        if self.rewrite_depth > REWRITE_LIMIT {
-            self.stats.rewrite_depth_limit += 1;
+        if ctx.rewrite_depth > REWRITE_LIMIT {
+            ctx.stats.rewrite_depth_limit += 1;
             return orig_value;
         }
-        self.rewrite_depth += 1;
-        trace!("Incrementing rewrite depth; now {}", self.rewrite_depth);
+        ctx.rewrite_depth += 1;
+        trace!("Incrementing rewrite depth; now {}", ctx.rewrite_depth);
 
         // Invoke the ISLE toplevel constructor, getting all new
         // values produced as equivalents to this value.
         trace!("Calling into ISLE with original value {}", orig_value);
-        self.stats.rewrite_rule_invoked += 1;
+        ctx.stats.rewrite_rule_invoked += 1;
         debug_assert!(optimized_values.is_empty());
         crate::opts::generated_code::constructor_simplify(
-            &mut IsleContext { ctx: self },
+            &mut IsleContext { ctx },
             orig_value,
-            &mut optimized_values,
+            optimized_values,
         );
 
-        self.stats.rewrite_rule_results += optimized_values.len() as u64;
+        ctx.stats.rewrite_rule_results += optimized_values.len() as u64;
 
         // It's not supposed to matter what order `simplify` returns values in.
-        self.ctrl_plane.shuffle(&mut optimized_values);
+        ctx.ctrl_plane.shuffle(optimized_values);
 
         let num_matches = optimized_values.len();
         if num_matches > MATCHES_LIMIT {
@@ -351,10 +353,10 @@ where
         // all returned values.
         let result_value = if let Some(&subsuming_value) = optimized_values
             .iter()
-            .find(|&value| self.subsume_values.contains(value))
+            .find(|&value| ctx.subsume_values.contains(value))
         {
             optimized_values.clear();
-            self.stats.pure_inst_subsume += 1;
+            ctx.stats.pure_inst_subsume += 1;
             subsuming_value
         } else {
             let mut union_value = orig_value;
@@ -366,29 +368,27 @@ where
                 );
                 if optimized_value == orig_value {
                     trace!(" -> same as orig value; skipping");
-                    self.stats.pure_inst_rewrite_to_self += 1;
+                    ctx.stats.pure_inst_rewrite_to_self += 1;
                     continue;
                 }
                 let old_union_value = union_value;
-                union_value = self.func.dfg.union(old_union_value, optimized_value);
-                self.stats.union += 1;
+                union_value = ctx.func.dfg.union(old_union_value, optimized_value);
+                ctx.stats.union += 1;
                 trace!(" -> union: now {}", union_value);
-                self.func.dfg.merge_facts(old_union_value, optimized_value);
-                self.available_block[union_value] =
-                    self.merge_availability(old_union_value, optimized_value);
+                ctx.func.dfg.merge_facts(old_union_value, optimized_value);
+                ctx.available_block[union_value] =
+                    ctx.merge_availability(old_union_value, optimized_value);
             }
             union_value
         };
 
-        self.rewrite_depth -= 1;
-        trace!("Decrementing rewrite depth; now {}", self.rewrite_depth);
-        if self.rewrite_depth == 0 {
-            self.subsume_values.clear();
+        ctx.rewrite_depth -= 1;
+        trace!("Decrementing rewrite depth; now {}", ctx.rewrite_depth);
+        if ctx.rewrite_depth == 0 {
+            ctx.subsume_values.clear();
         }
 
-        debug_assert!(self.optimized_values.is_empty());
-        self.optimized_values = optimized_values;
-
+        debug_assert!(ctx.optimized_values.is_empty());
         result_value
     }
 
@@ -564,36 +564,8 @@ where
             return None;
         }
 
-        /// A small RAII helper for temporarily taking out our `optimized_insts`
-        /// vec and then replacing it upon drop.
-        struct WithOptimizedInsts<'a, 'opt, 'analysis> {
-            ctx: &'a mut OptimizeCtx<'opt, 'analysis>,
-            optimized_insts: SmallVec<[SkeletonInstSimplification; MATCHES_LIMIT]>,
-        }
-
-        impl Drop for WithOptimizedInsts<'_, '_, '_> {
-            fn drop(&mut self) {
-                self.optimized_insts.clear();
-                self.ctx.optimized_insts = std::mem::take(&mut self.optimized_insts);
-            }
-        }
-
-        impl<'a, 'b, 'c> WithOptimizedInsts<'a, 'b, 'c> {
-            fn new(ctx: &'a mut OptimizeCtx<'b, 'c>) -> Self {
-                let optimized_insts = std::mem::take(&mut ctx.optimized_insts);
-                debug_assert!(optimized_insts.is_empty());
-                WithOptimizedInsts {
-                    ctx,
-                    optimized_insts,
-                }
-            }
-        }
-
-        let mut guard = WithOptimizedInsts::new(self);
-        let WithOptimizedInsts {
-            ctx,
-            optimized_insts,
-        } = &mut guard;
+        let mut guard = TakeAndReplace::new(self, |x| &mut x.optimized_insts);
+        let (ctx, optimized_insts) = guard.get();
 
         crate::opts::generated_code::constructor_simplify_skeleton(
             &mut IsleContext { ctx },
