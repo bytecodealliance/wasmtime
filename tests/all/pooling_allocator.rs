@@ -45,16 +45,14 @@ fn memory_limit() -> Result<()> {
     match Module::new(&engine, r#"(module (memory 4))"#) {
         Ok(_) => panic!("module instantiation should fail"),
         Err(e) => {
-            let msg = format!("{e:?}");
-            eprintln!("Got error: {msg}");
-            assert!(msg.contains(
+            e.assert_contains(
                 "memory index 0 is unsupported in this pooling allocator \
-                 configuration"
-            ));
-            assert!(msg.contains(
+                 configuration",
+            );
+            e.assert_contains(
                 "memory has a minimum byte size of 262144 which exceeds \
-                 the limit of 0x30000 bytes"
-            ));
+                 the limit of 0x30000 bytes",
+            );
         }
     }
 
