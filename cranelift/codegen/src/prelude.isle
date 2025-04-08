@@ -228,9 +228,6 @@
 (decl pure u64_mul (u64 u64) u64)
 (extern constructor u64_mul u64_mul)
 
-(decl pure partial u64_sdiv (u64 u64) u64)
-(extern constructor u64_sdiv u64_sdiv)
-
 (decl pure partial u64_udiv (u64 u64) u64)
 (extern constructor u64_udiv u64_udiv)
 
@@ -245,6 +242,9 @@
 
 (decl pure u64_shl (u64 u64) u64)
 (extern constructor u64_shl u64_shl)
+
+(decl pure partial imm64_sdiv (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_sdiv imm64_sdiv)
 
 (decl pure imm64_shl (Type Imm64 Imm64) Imm64)
 (extern constructor imm64_shl imm64_shl)

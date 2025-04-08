@@ -19,10 +19,10 @@
       (subsume (iconst ty (imm64_masked ty (u64_mul k1 k2)))))
 
 (rule (simplify_skeleton
-       (sdiv (iconst_s ty k1)
-             (iconst_s ty k2)))
-      (if-let d (u64_sdiv (i64_as_u64 k1) (i64_as_u64 k2)))
-      (iconst ty (imm64_masked ty d)))
+       (sdiv (iconst ty k1)
+             (iconst _ k2)))
+      (if-let d (imm64_sdiv ty k1 k2))
+      (iconst ty d))
 
 (rule (simplify_skeleton
        (udiv (iconst_u ty k1)

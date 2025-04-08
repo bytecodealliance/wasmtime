@@ -89,3 +89,62 @@ block0(v0: i32):
     return v2
 }
 ; check: return v0
+
+;;;;;;;;;; Tests for `simplify_skeleton` TODOs ;;;;;;;;;;;;
+;;
+;; What follows are tests for patterns that `simplify_skeleton` *should* clean
+;; up, but is unable to at this moment in time.
+
+function %int_min_sdiv_neg_one() -> i32 {
+block0():
+    v0 = iconst.i32 0x80000000
+    v1 = iconst.i32 -1
+    v2 = sdiv v0, v1
+    return v2
+}
+; check:  v2 = sdiv v0, v1
+; nextln: return v2
+
+function %sdiv_zero(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = sdiv v0, v1
+    return v2
+}
+; check:  v2 = sdiv v0, v1
+; nextln: return v2
+
+function %udiv_zero(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = udiv v0, v1
+    return v2
+}
+; check:  v2 = udiv v0, v1
+; nextln: return v2
+
+function %always_trapping_trapz() -> i32 {
+block0:
+    v0 = iconst.i32 0
+    trapz v0, user42
+    return v0
+}
+; check: trapz v0, user42
+
+function %always_trapping_trapnz() -> i32 {
+block0:
+    v0 = iconst.i32 1
+    trapnz v0, user42
+    return v0
+}
+; check: trapnz v0, user42
+
+function %always_trapping_uadd_overflow_trap() -> i32 {
+block0:
+    v0 = iconst.i32 0xffffffff
+    v1 = iconst.i32 1
+    v2 = uadd_overflow_trap v0, v1, user42
+    return v2
+}
+; check:  v2 = uadd_overflow_trap v0, v1, user42
+; nextln: return v2
