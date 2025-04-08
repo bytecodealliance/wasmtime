@@ -1278,6 +1278,7 @@ impl FuncEnvironment<'_> {
     }
 
     /// Get the GC heap's bound.
+    #[cfg(feature = "gc-null")]
     fn get_gc_heap_bound(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let global = self.get_gc_heap_bound_global(&mut builder.func);
         builder.ins().global_value(self.pointer_type(), global)
