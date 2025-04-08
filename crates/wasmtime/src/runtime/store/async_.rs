@@ -231,6 +231,7 @@ impl StoreOpaque {
             let current_poll_cx = self.async_state.current_poll_cx.get();
             let current_suspend = self.async_state.current_suspend.get();
             let stack = self.allocate_fiber_stack()?;
+            let track_pkey_context_switch = self.pkey.is_some();
 
             let engine = self.engine().clone();
             let slot = &mut slot;
@@ -264,7 +265,14 @@ impl StoreOpaque {
                 fiber: Some(fiber),
                 current_poll_cx,
                 engine,
-                state: Some(crate::runtime::vm::AsyncWasmCallState::new()),
+                fiber_resume_state: Some(FiberResumeState {
+                    tls: crate::runtime::vm::AsyncWasmCallState::new(),
+                    mpk: if track_pkey_context_switch {
+                        Some(ProtectionMask::all())
+                    } else {
+                        None
+                    },
+                }),
             }
         };
         (&mut future).await?;
@@ -280,8 +288,8 @@ impl StoreOpaque {
             fiber: Option<wasmtime_fiber::Fiber<'a, Result<()>, (), Result<()>>>,
             current_poll_cx: *mut PollContext,
             engine: Engine,
-            // See comments in `FiberFuture::resume` for this
-            state: Option<crate::runtime::vm::AsyncWasmCallState>,
+            // See comments in `FiberResumeState` for this
+            fiber_resume_state: Option<FiberResumeState>,
         }
 
         // This is surely the most dangerous `unsafe impl Send` in the entire
@@ -353,42 +361,36 @@ impl StoreOpaque {
             }
 
             /// This is a helper function to call `resume` on the underlying
-            /// fiber while correctly managing Wasmtime's thread-local data.
+            /// fiber while correctly managing Wasmtime's state that the fiber
+            /// may clobber.
             ///
-            /// Wasmtime's implementation of traps leverages thread-local data
-            /// to get access to metadata during a signal. This thread-local
-            /// data is a linked list of "activations" where the nodes of the
-            /// linked list are stored on the stack. It would be invalid as a
-            /// result to suspend a computation with the head of the linked list
-            /// on this stack then move the stack to another thread and resume
-            /// it. That means that a different thread would point to our stack
-            /// and our thread doesn't point to our stack at all!
+            /// ## Return Value
             ///
-            /// Basically management of TLS is required here one way or another.
-            /// The strategy currently settled on is to manage the list of
-            /// activations created by this fiber as a unit. When a fiber
-            /// resumes the linked list is prepended to the current thread's
-            /// list. When the fiber is suspended then the fiber's list of
-            /// activations are all removed en-masse and saved within the fiber.
+            /// * `Ok(Ok(()))` - the fiber successfully completed and yielded a
+            ///    successful result.
+            /// * `Ok(Err(e))` - the fiber successfully completed and yielded
+            ///   an error as a result of computation.
+            /// * `Err(())` - the fiber has not finished and it is suspended.
             fn resume(&mut self, val: Result<()>) -> Result<Result<()>, ()> {
                 unsafe {
-                    let prev = self.state.take().unwrap().push();
+                    let prev = self.fiber_resume_state.take().unwrap().replace();
                     let restore = Restore {
                         fiber: self,
-                        state: Some(prev),
+                        prior_fiber_state: Some(prev),
                     };
                     return restore.fiber.fiber().resume(val);
                 }
 
                 struct Restore<'a, 'b> {
                     fiber: &'a mut FiberFuture<'b>,
-                    state: Option<crate::runtime::vm::PreviousAsyncWasmCallState>,
+                    prior_fiber_state: Option<PriorFiberResumeState>,
                 }
 
                 impl Drop for Restore<'_, '_> {
                     fn drop(&mut self) {
                         unsafe {
-                            self.fiber.state = Some(self.state.take().unwrap().restore());
+                            self.fiber.fiber_resume_state =
+                                Some(self.prior_fiber_state.take().unwrap().replace());
                         }
                     }
                 }
@@ -489,13 +491,19 @@ impl StoreOpaque {
                 if !self.fiber().done() {
                     let result = self.resume(Err(anyhow!("future dropped")));
                     // This resumption with an error should always complete the
-                    // fiber. While it's technically possible for host code to catch
-                    // the trap and re-resume, we'd ideally like to signal that to
-                    // callers that they shouldn't be doing that.
+                    // fiber. While it's technically possible for host code to
+                    // catch the trap and re-resume, we'd ideally like to
+                    // signal that to callers that they shouldn't be doing
+                    // that.
                     debug_assert!(result.is_ok());
+
+                    // Note that `result` is `Ok(r)` where `r` is either
+                    // `Ok(())` or `Err(e)`. If it's an error that's disposed of
+                    // here. It's expected to be a propagation of the `future
+                    // dropped` error created above.
                 }
 
-                self.state.take().unwrap().assert_null();
+                self.fiber_resume_state.take().unwrap().dispose();
 
                 unsafe {
                     self.engine
@@ -503,6 +511,70 @@ impl StoreOpaque {
                         .deallocate_fiber_stack(self.fiber.take().unwrap().into_stack());
                 }
             }
+        }
+
+        /// State of the world when a fiber last suspended.
+        ///
+        /// This structure represents global state that a fiber clobbers during
+        /// its execution. For example TLS variables are updated, system
+        /// resources like MPK masks are updated, etc. The purpose of this
+        /// structure is to track all of this state and appropriately
+        /// save/restore it around fiber suspension points.
+        struct FiberResumeState {
+            /// Saved list of `CallThreadState` activations that are stored on a
+            /// fiber stack.
+            ///
+            /// This is a linked list that references stack-stored nodes on the
+            /// fiber stack that is currently suspended. The
+            /// `AsyncWasmCallState` type documents this more thoroughly but the
+            /// general gist is that when we this fiber is resumed this linked
+            /// list needs to be pushed on to the current thread's linked list
+            /// of activations.
+            tls: crate::runtime::vm::AsyncWasmCallState,
+
+            /// Saved MPK protection mask, if enabled.
+            ///
+            /// When MPK is enabled then executing WebAssembly will modify the
+            /// processor's current mask of addressable protection keys. This
+            /// means that our current state may get clobbered when a fiber
+            /// suspends. To ensure that this function preserves context it
+            /// will, when MPK is enabled, save the current mask when this
+            /// function is called and then restore the mask when the function
+            /// returns (aka the fiber suspends).
+            mpk: Option<ProtectionMask>,
+        }
+
+        impl FiberResumeState {
+            unsafe fn replace(self) -> PriorFiberResumeState {
+                let tls = self.tls.push();
+                let mpk = swap_mpk_states(self.mpk);
+                PriorFiberResumeState { tls, mpk }
+            }
+
+            fn dispose(self) {
+                self.tls.assert_null();
+            }
+        }
+
+        struct PriorFiberResumeState {
+            tls: crate::runtime::vm::PreviousAsyncWasmCallState,
+            mpk: Option<ProtectionMask>,
+        }
+
+        impl PriorFiberResumeState {
+            unsafe fn replace(self) -> FiberResumeState {
+                let tls = self.tls.restore();
+                let mpk = swap_mpk_states(self.mpk);
+                FiberResumeState { tls, mpk }
+            }
+        }
+
+        fn swap_mpk_states(mask: Option<ProtectionMask>) -> Option<ProtectionMask> {
+            mask.map(|mask| {
+                let current = mpk::current_mask();
+                mpk::allow(mask);
+                current
+            })
         }
     }
 
@@ -585,7 +657,6 @@ impl StoreOpaque {
         Some(AsyncCx {
             current_suspend: self.async_state.current_suspend.get(),
             current_poll_cx: unsafe { &raw mut (*poll_cx_box_ptr).future_context },
-            track_pkey_context_switch: self.pkey.is_some(),
         })
     }
 
@@ -663,7 +734,6 @@ impl<T> StoreContextMut<'_, T> {
 pub struct AsyncCx {
     current_suspend: *mut *mut wasmtime_fiber::Suspend<Result<()>, (), Result<()>>,
     current_poll_cx: *mut *mut Context<'static>,
-    track_pkey_context_switch: bool,
 }
 
 impl AsyncCx {
@@ -725,21 +795,7 @@ impl AsyncCx {
                 Poll::Pending => {}
             }
 
-            // In order to prevent this fiber's MPK state from being munged by
-            // other fibers while it is suspended, we save and restore it once
-            // once execution resumes. Note that when MPK is not supported,
-            // these are noops.
-            let previous_mask = if self.track_pkey_context_switch {
-                let previous_mask = mpk::current_mask();
-                mpk::allow(ProtectionMask::all());
-                previous_mask
-            } else {
-                ProtectionMask::all()
-            };
             (*suspend).suspend(())?;
-            if self.track_pkey_context_switch {
-                mpk::allow(previous_mask);
-            }
         }
     }
 }
