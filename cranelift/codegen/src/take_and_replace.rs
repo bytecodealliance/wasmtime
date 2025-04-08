@@ -48,34 +48,34 @@
 /// // reuse its capacity and avoid future allocations.  ```
 /// assert!(ctx.items.capacity() >= 3);
 /// ```
-pub struct TakeAndReplace<T, U, F>
+pub struct TakeAndReplace<'a, T, U, F>
 where
     F: Fn(&mut T) -> &mut U,
     U: Default,
 {
-    container: T,
+    container: &'a mut T,
     value: U,
     proj: F,
 }
 
-impl<T, U, F> Drop for TakeAndReplace<T, U, F>
+impl<'a, T, U, F> Drop for TakeAndReplace<'a, T, U, F>
 where
     F: Fn(&mut T) -> &mut U,
     U: Default,
 {
     fn drop(&mut self) {
-        *(self.proj)(&mut self.container) = std::mem::take(&mut self.value);
+        *(self.proj)(self.container) = std::mem::take(&mut self.value);
     }
 }
 
-impl<T, U, F> TakeAndReplace<T, U, F>
+impl<'a, T, U, F> TakeAndReplace<'a, T, U, F>
 where
     F: Fn(&mut T) -> &mut U,
     U: Default,
 {
     /// Create a new `TakeAndReplace` that temporarily takes out
     /// `proj(container)`.
-    pub fn new(mut container: T, proj: F) -> Self {
+    pub fn new(mut container: &'a mut T, proj: F) -> Self {
         let value = std::mem::take(proj(&mut container));
         TakeAndReplace {
             container,
@@ -86,6 +86,6 @@ where
 
     /// Get the underlying container and taken-out value.
     pub fn get(&mut self) -> (&mut T, &mut U) {
-        (&mut self.container, &mut self.value)
+        (&mut *self.container, &mut self.value)
     }
 }
