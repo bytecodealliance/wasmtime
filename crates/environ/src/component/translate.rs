@@ -540,7 +540,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                 for ty in s {
                     match ty? {
                         wasmparser::ComponentType::Resource { rep, dtor } => {
-                            let rep = self.types.convert_valtype(rep);
+                            let rep = self.types.convert_valtype(rep)?;
                             let id = types
                                 .component_any_type_at(component_type_index)
                                 .unwrap_resource();

@@ -63,7 +63,7 @@ pub fn block_with_params<PE: TargetEnvironment + ?Sized>(
                 builder.append_block_param(block, ir::types::F64);
             }
             wasmparser::ValType::Ref(rt) => {
-                let hty = environ.convert_heap_type(rt.heap_type());
+                let hty = environ.convert_heap_type(rt.heap_type())?;
                 let (ty, needs_stack_map) = environ.reference_type(hty);
                 let val = builder.append_block_param(block, ty);
                 if needs_stack_map {

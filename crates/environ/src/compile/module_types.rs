@@ -114,7 +114,7 @@ impl ModuleTypesBuilder {
                 unreachable!("no need to lookup indexes; we already have core type IDs")
             })
             .with_rec_group(validator_types, rec_group_id)
-            .convert_sub_type(ty);
+            .convert_sub_type(ty)?;
             self.wasm_sub_type_in_rec_group(id, wasm_ty);
         }
 

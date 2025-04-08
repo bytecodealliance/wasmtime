@@ -107,9 +107,20 @@ fn spec_test_config(test: &Path) -> TestConfig {
         Some("custom-page-sizes") => {
             ret.custom_page_sizes = Some(true);
             ret.multi_memory = Some(true);
+            ret.memory64 = Some(true);
+
+            // See commentary below in `wasm-3.0` case for why these "hog
+            // memory"
+            if test.ends_with("memory_max.wast") || test.ends_with("memory_max_i64.wast") {
+                ret.hogs_memory = Some(true);
+            }
         }
         Some("exception-handling") => {
             ret.reference_types = Some(true);
+            ret.exceptions = Some(true);
+            if test.parent().unwrap().ends_with("legacy") {
+                ret.legacy_exceptions = Some(true);
+            }
         }
         Some("gc") => {
             ret.gc = Some(true);
@@ -121,6 +132,50 @@ fn spec_test_config(test: &Path) -> TestConfig {
         }
         Some("annotations") => {
             ret.simd = Some(true);
+        }
+        Some("wasm-3.0") => {
+            ret.simd = Some(true);
+            ret.relaxed_simd = Some(true);
+            ret.multi_memory = Some(true);
+            ret.gc = Some(true);
+            ret.reference_types = Some(true);
+            ret.memory64 = Some(true);
+            ret.tail_call = Some(true);
+            ret.extended_const = Some(true);
+
+            // Wasmtime, at the current date, has incomplete support for the
+            // exceptions proposal. Instead of flagging the entire test suite
+            // as needing this proposal try to filter down per-test to what
+            // exactly needs this. Other tests aren't expected to need
+            // exceptions.
+            if test.ends_with("tag.wast")
+                || test.ends_with("instance.wast")
+                || test.ends_with("throw.wast")
+                || test.ends_with("throw_ref.wast")
+                || test.ends_with("try_table.wast")
+                || test.ends_with("ref_null.wast")
+                || test.ends_with("imports.wast")
+            {
+                ret.exceptions = Some(true);
+            }
+            if test.parent().unwrap().ends_with("legacy") {
+                ret.legacy_exceptions = Some(true);
+            }
+
+            // These tests technically don't actually hog any memory but they
+            // do have a module definition with a table/memory that is the
+            // maximum size. These modules fail to compile in the pooling
+            // allocator which has limits on the minimum size of
+            // memories/tables by default.
+            //
+            // Pretend that these hog memory to avoid running the tests in the
+            // pooling allocator.
+            if test.ends_with("memory.wast")
+                || test.ends_with("table.wast")
+                || test.ends_with("memory64.wast")
+            {
+                ret.hogs_memory = Some(true);
+            }
         }
         Some(proposal) => panic!("unsuported proposal {proposal:?}"),
         None => {
@@ -189,6 +244,8 @@ macro_rules! foreach_config_option {
             component_model_async_stackful
             simd
             gc_types
+            exceptions
+            legacy_exceptions
         }
     };
 }
@@ -280,35 +337,21 @@ impl Compiler {
     /// `Config::compiler_panicking_wasm_features`.
     pub fn should_fail(&self, config: &TestConfig) -> bool {
         match self {
-            // Currently Cranelift supports all wasm proposals that wasmtime
-            // tests.
-            Compiler::CraneliftNative => {}
+            Compiler::CraneliftNative => config.legacy_exceptions(),
 
-            // Winch doesn't have quite the full breadth of support that
-            // Cranelift has quite yet.
             Compiler::Winch => {
-                if config.gc()
+                config.gc()
                     || config.tail_call()
                     || config.function_references()
                     || config.gc()
                     || config.relaxed_simd()
                     || config.gc_types()
-                {
-                    return true;
-                }
+                    || config.exceptions()
+                    || config.legacy_exceptions()
             }
 
-            Compiler::CraneliftPulley => {
-                // Pulley at this time fundamentally does not support threads
-                // due to being unable to implement non-atomic loads/stores
-                // safely.
-                if config.threads() {
-                    return true;
-                }
-            }
+            Compiler::CraneliftPulley => config.threads() || config.legacy_exceptions(),
         }
-
-        false
     }
 
     /// Returns whether this compiler configuration supports the current host
@@ -508,28 +551,19 @@ impl WastTest {
             }
         }
 
-        for part in self.path.iter() {
-            // Not implemented in Wasmtime yet
-            if part == "exception-handling" {
-                return !self.path.ends_with("binary.wast") && !self.path.ends_with("exports.wast");
-            }
-
-            if part == "memory64" {
-                if [
-                    // wasmtime doesn't implement exceptions yet
-                    "imports.wast",
-                    "ref_null.wast",
-                    "throw.wast",
-                    "throw_ref.wast",
-                    "try_table.wast",
-                    "tag.wast",
-                    "instance.wast",
-                ]
-                .iter()
-                .any(|i| self.path.ends_with(i))
-                {
-                    return true;
-                }
+        // For the exceptions proposal these tests use instructions and such
+        // which aren't implemented yet so these are expected to fail.
+        if self.config.exceptions() {
+            let unsupported = [
+                "ref_null.wast",
+                "throw.wast",
+                "rethrow.wast",
+                "throw_ref.wast",
+                "try_table.wast",
+                "instance.wast",
+            ];
+            if unsupported.iter().any(|part| self.path.ends_with(part)) {
+                return true;
             }
         }
 

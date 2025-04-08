@@ -312,7 +312,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         }
                         TypeRef::Global(ty) => {
                             self.result.module.num_imported_globals += 1;
-                            EntityType::Global(self.convert_global_type(&ty))
+                            EntityType::Global(self.convert_global_type(&ty)?)
                         }
                         TypeRef::Table(ty) => {
                             self.result.module.num_imported_tables += 1;
@@ -408,7 +408,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     for f in escaped {
                         self.flag_func_escaped(f);
                     }
-                    let ty = self.convert_global_type(&ty);
+                    let ty = self.convert_global_type(&ty)?;
                     self.result.module.globals.push(ty);
                     self.result.module.global_initializers.push(initializer);
                 }
@@ -545,7 +545,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     let mut locals = Vec::new();
                     for pair in body.get_locals_reader()? {
                         let (cnt, ty) = pair?;
-                        let ty = self.convert_valtype(ty);
+                        let ty = self.convert_valtype(ty)?;
                         locals.push((cnt, ty));
                     }
                     self.result

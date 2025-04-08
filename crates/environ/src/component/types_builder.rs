@@ -382,7 +382,7 @@ impl ComponentTypesBuilder {
             }),
             Table(ty) => EntityType::Table(self.convert_table_type(ty)?),
             Memory(ty) => EntityType::Memory((*ty).into()),
-            Global(ty) => EntityType::Global(self.convert_global_type(ty)),
+            Global(ty) => EntityType::Global(self.convert_global_type(ty)?),
             Tag(_) => bail!("exceptions proposal not implemented"),
         })
     }

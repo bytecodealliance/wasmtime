@@ -202,7 +202,7 @@ fn declare_locals(
             )
         }
         Ref(rt) => {
-            let hty = environ.convert_heap_type(rt.heap_type());
+            let hty = environ.convert_heap_type(rt.heap_type())?;
             let (ty, needs_stack_map) = environ.reference_type(hty);
             let init = if rt.is_nullable() {
                 Some(environ.translate_ref_null(builder.cursor(), hty)?)

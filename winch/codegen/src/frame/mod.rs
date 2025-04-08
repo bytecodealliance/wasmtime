@@ -60,7 +60,7 @@ impl DefinedLocals {
             let ty = reader.read()?;
             validator.define_locals(position, count, ty)?;
 
-            let ty = types.convert_valtype(ty);
+            let ty = types.convert_valtype(ty)?;
             for _ in 0..count {
                 let ty_size = <A as ABI>::sizeof(&ty);
                 next_stack = align_to(next_stack, ty_size as u32) + (ty_size as u32);

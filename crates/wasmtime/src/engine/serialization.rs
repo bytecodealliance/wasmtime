@@ -194,6 +194,7 @@ struct WasmFeatures {
     threads: bool,
     multi_memory: bool,
     exceptions: bool,
+    legacy_exceptions: bool,
     memory64: bool,
     relaxed_simd: bool,
     extended_const: bool,
@@ -253,7 +254,6 @@ impl Metadata<'_> {
         assert!(!cm_nested_names);
         assert!(!cm_values);
         assert!(!shared_everything_threads);
-        assert!(!legacy_exceptions);
 
         Metadata {
             target: engine.compiler().triple().to_string(),
@@ -270,6 +270,7 @@ impl Metadata<'_> {
                 tail_call,
                 multi_memory,
                 exceptions,
+                legacy_exceptions,
                 memory64,
                 relaxed_simd,
                 extended_const,
@@ -482,6 +483,7 @@ impl Metadata<'_> {
             threads,
             multi_memory,
             exceptions,
+            legacy_exceptions,
             memory64,
             relaxed_simd,
             extended_const,
@@ -547,6 +549,11 @@ impl Metadata<'_> {
             exceptions,
             other.contains(F::EXCEPTIONS),
             "WebAssembly exceptions support",
+        )?;
+        Self::check_bool(
+            legacy_exceptions,
+            other.contains(F::LEGACY_EXCEPTIONS),
+            "WebAssembly legacy exceptions support",
         )?;
         Self::check_bool(
             memory64,

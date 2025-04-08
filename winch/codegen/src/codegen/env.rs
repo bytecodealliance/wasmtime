@@ -3,6 +3,7 @@ use crate::{
     codegen::{control, BlockSig, BuiltinFunction, BuiltinFunctions, OperandSize},
     isa::TargetIsa,
 };
+use anyhow::Result;
 use cranelift_codegen::ir::{UserExternalName, UserExternalNameRef};
 use std::collections::{
     hash_map::Entry::{Occupied, Vacant},
@@ -15,8 +16,6 @@ use wasmtime_environ::{
     ModuleTranslation, ModuleTypesBuilder, PrimaryMap, PtrSize, Table, TableIndex, TypeConvert,
     TypeIndex, VMOffsets, WasmHeapType, WasmValType,
 };
-
-use anyhow::Result;
 
 #[derive(Debug, Clone, Copy)]
 pub struct GlobalData {
@@ -180,12 +179,12 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     }
 
     /// Converts a [wasmparser::BlockType] into a [BlockSig].
-    pub(crate) fn resolve_block_sig(&self, ty: BlockType) -> BlockSig {
+    pub(crate) fn resolve_block_sig(&self, ty: BlockType) -> Result<BlockSig> {
         use BlockType::*;
-        match ty {
+        Ok(match ty {
             Empty => BlockSig::new(control::BlockType::void()),
             Type(ty) => {
-                let ty = TypeConverter::new(self.translation, self.types).convert_valtype(ty);
+                let ty = TypeConverter::new(self.translation, self.types).convert_valtype(ty)?;
                 BlockSig::new(control::BlockType::single(ty))
             }
             FuncType(idx) => {
@@ -194,7 +193,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                 let sig = self.types[sig_index].unwrap_func();
                 BlockSig::new(control::BlockType::func(sig.clone()))
             }
-        }
+        })
     }
 
     /// Resolves `GlobalData` of a global at the given index.
@@ -329,7 +328,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                     let types = types.as_ref();
                     let ty = types[types.core_function_at(idx.as_u32())].unwrap_func();
                     let converter = TypeConverter::new(self.translation, self.types);
-                    let ty = converter.convert_func_type(&ty);
+                    let ty = converter.convert_func_type(&ty)?;
                     let sig = wasm_sig::<A>(&ty)?;
                     self.resolved_callees.insert(*idx, sig);
                     Ok(self.resolved_callees.get(idx).unwrap())
