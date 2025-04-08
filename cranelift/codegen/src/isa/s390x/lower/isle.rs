@@ -278,7 +278,10 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
         let sig_data = &self.lower_ctx.sigs()[abi];
         // Get clobbers: all caller-saves. These may include return value
         // regs, which we will remove from the clobber set later.
-        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(sig_data.call_conv());
+        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(
+            sig_data.call_conv(),
+            /* is_exception = */ false,
+        );
         let callee_pop_size = if sig_data.call_conv() == CallConv::Tail {
             sig_data.sized_stack_arg_space() as u32
         } else {
@@ -292,6 +295,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
             callee_pop_size,
             caller_conv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
             callee_conv: self.lower_ctx.sigs()[abi].call_conv(),
+            try_call_info: None,
         });
         (info, outputs)
     }

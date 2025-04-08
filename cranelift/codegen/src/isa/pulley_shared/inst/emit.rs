@@ -184,6 +184,14 @@ fn pulley_emit<P>(
             }
             sink.add_call_site();
 
+            // Add exception info, if any, at this point (which will
+            // be the return address on stack).
+            if let Some(try_call) = info.try_call_info.as_ref() {
+                for &(tag, label) in &try_call.exception_dests {
+                    sink.add_exception_handler(tag, label);
+                }
+            }
+
             let adjust = -i32::try_from(info.callee_pop_size).unwrap();
             for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
                 <InstAndKind<P>>::from(i).emit(sink, emit_info, state);
@@ -195,6 +203,15 @@ fn pulley_emit<P>(
                 |inst| inst.emit(sink, emit_info, state),
                 |space_needed| Some(<InstAndKind<P>>::from(Inst::EmitIsland { space_needed })),
             );
+
+            // If this is a try-call, jump to the continuation
+            // (normal-return) block.
+            if let Some(try_call) = info.try_call_info.as_ref() {
+                let jmp = InstAndKind::<P>::from(Inst::Jump {
+                    label: try_call.continuation,
+                });
+                jmp.emit(sink, emit_info, state);
+            }
 
             // We produce an island above if needed, so disable
             // the worst-case-size check in this case.
@@ -211,6 +228,14 @@ fn pulley_emit<P>(
 
             sink.add_call_site();
 
+            // Add exception info, if any, at this point (which will
+            // be the return address on stack).
+            if let Some(try_call) = info.try_call_info.as_ref() {
+                for &(tag, label) in &try_call.exception_dests {
+                    sink.add_exception_handler(tag, label);
+                }
+            }
+
             let adjust = -i32::try_from(info.callee_pop_size).unwrap();
             for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
                 <InstAndKind<P>>::from(i).emit(sink, emit_info, state);
@@ -222,6 +247,15 @@ fn pulley_emit<P>(
                 |inst| inst.emit(sink, emit_info, state),
                 |space_needed| Some(<InstAndKind<P>>::from(Inst::EmitIsland { space_needed })),
             );
+
+            // If this is a try-call, jump to the continuation
+            // (normal-return) block.
+            if let Some(try_call) = info.try_call_info.as_ref() {
+                let jmp = InstAndKind::<P>::from(Inst::Jump {
+                    label: try_call.continuation,
+                });
+                jmp.emit(sink, emit_info, state);
+            }
 
             // We produce an island above if needed, so disable
             // the worst-case-size check in this case.
@@ -541,10 +575,12 @@ fn pulley_emit<P>(
         }
 
         Inst::EmitIsland { space_needed } => {
-            let label = sink.get_label();
-            <InstAndKind<P>>::from(Inst::Jump { label }).emit(sink, emit_info, state);
-            sink.emit_island(space_needed + 8, &mut state.ctrl_plane);
-            sink.bind_label(label, &mut state.ctrl_plane);
+            if sink.island_needed(*space_needed) {
+                let label = sink.get_label();
+                <InstAndKind<P>>::from(Inst::Jump { label }).emit(sink, emit_info, state);
+                sink.emit_island(space_needed + 8, &mut state.ctrl_plane);
+                sink.bind_label(label, &mut state.ctrl_plane);
+            }
         }
     }
 }

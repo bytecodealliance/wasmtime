@@ -571,7 +571,7 @@ fn emit_array_fill_impl(
 
     // Current block: jump to the loop header block with the first element's
     // address.
-    builder.ins().jump(loop_header_block, &[elem_addr]);
+    builder.ins().jump(loop_header_block, &[elem_addr.into()]);
 
     // Loop header block: check if we're done, then jump to either the continue
     // block or the loop body block.
@@ -590,7 +590,9 @@ fn emit_array_fill_impl(
     log::trace!("emit_array_fill_impl: loop body");
     emit_elem_write(func_env, builder, elem_addr)?;
     let next_elem_addr = builder.ins().iadd(elem_addr, elem_size);
-    builder.ins().jump(loop_header_block, &[next_elem_addr]);
+    builder
+        .ins()
+        .jump(loop_header_block, &[next_elem_addr.into()]);
 
     // Continue...
     builder.switch_to_block(continue_block);
@@ -934,7 +936,7 @@ pub fn translate_ref_test(
     builder.ins().brif(
         is_null,
         continue_block,
-        &[result_when_is_null],
+        &[result_when_is_null.into()],
         non_null_block,
         &[],
     );
@@ -961,7 +963,7 @@ pub fn translate_ref_test(
         builder.ins().brif(
             is_i31,
             continue_block,
-            &[result_when_is_i31],
+            &[result_when_is_i31.into()],
             non_null_non_i31_block,
             &[],
         );
@@ -1070,7 +1072,7 @@ pub fn translate_ref_test(
 
         WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => todo!(), // FIXME: #10248 stack switching support.
     };
-    builder.ins().jump(continue_block, &[result]);
+    builder.ins().jump(continue_block, &[result.into()]);
 
     // Control flow join point with the result.
     builder.switch_to_block(continue_block);
@@ -1450,9 +1452,13 @@ impl FuncEnvironment<'_> {
         log::trace!("is_subtype: fast path check for exact same types");
         let same_ty = builder.ins().icmp(IntCC::Equal, a, b);
         let same_ty = builder.ins().uextend(ir::types::I32, same_ty);
-        builder
-            .ins()
-            .brif(same_ty, continue_block, &[same_ty], diff_tys_block, &[]);
+        builder.ins().brif(
+            same_ty,
+            continue_block,
+            &[same_ty.into()],
+            diff_tys_block,
+            &[],
+        );
 
         // Different types block: fall back to the `is_subtype` libcall.
         builder.switch_to_block(diff_tys_block);
@@ -1461,7 +1467,7 @@ impl FuncEnvironment<'_> {
         let vmctx = self.vmctx_val(&mut builder.cursor());
         let call_inst = builder.ins().call(is_subtype, &[vmctx, a, b]);
         let result = builder.func.dfg.first_result(call_inst);
-        builder.ins().jump(continue_block, &[result]);
+        builder.ins().jump(continue_block, &[result.into()]);
 
         // Continue block: join point for the result.
         builder.switch_to_block(continue_block);

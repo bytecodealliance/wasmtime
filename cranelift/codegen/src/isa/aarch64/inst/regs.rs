@@ -20,8 +20,8 @@ pub const PINNED_REG: u8 = 21;
 
 /// Get a reference to an X-register (integer register). Do not use
 /// this for xsp / xzr; we have two special registers for those.
-pub fn xreg(num: u8) -> Reg {
-    Reg::from(xreg_preg(num))
+pub const fn xreg(num: u8) -> Reg {
+    Reg::from_real_reg(xreg_preg(num))
 }
 
 /// Get the given X-register as a PReg.

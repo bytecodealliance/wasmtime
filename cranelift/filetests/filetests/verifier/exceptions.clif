@@ -1,0 +1,133 @@
+test verifier
+target x86_64
+
+function %f0(i32) -> i32 {
+    sig0 = (i32) -> f32 tail
+    fn0 = %g(i32) -> f32 tail
+
+    block0(v1: i32):
+        v2 = f64const 0x1.0
+        try_call fn0(v1), sig0, block1(ret0, v2), [ tag1: block2(exn0), default: block3(v2, exn0) ]
+
+    block1(v3: f32, v4: f64):
+        v5 = iconst.i32 1
+        return v5
+
+    block2(v6: i64):
+        v7 = iconst.i32 2
+        return v7
+
+    block3(v8: f64, v9: i64):
+        v10 = iconst.i32 3
+        return v10
+}
+
+;; Non-matching function return type: v3 on block1.
+function %f1(i32) -> i32 {
+    sig0 = (i32) -> i32 tail
+    fn0 = %g(i32) -> i32 tail
+
+    block0(v1: i32):
+        v2 = f64const 0x1.0
+        try_call fn0(v1), sig0, block1(ret0, v2), [ tag1: block2(exn0), default: block3(exn0, v2) ] ; error: arg ret0 has type i32, expected f32
+
+    block1(v3: f32, v4: f64):
+        v5 = iconst.i32 1
+        return v5
+
+    block2(v6: i64):
+        v7 = iconst.i32 2
+        return v7
+
+    block3(v8: i64, v9: f64):
+        v10 = iconst.i32 3
+        return v10
+}
+
+;; Non-matching exception payload type (not a pointer-width value): v6 on block2.
+function %f2(i32) -> i32 {
+    sig0 = (i32) -> i32 tail
+    fn0 = %g(i32) -> i32 tail
+
+    block0(v1: i32):
+        v2 = f64const 0x1.0
+        try_call fn0(v1), sig0, block1(ret0, v2), [ tag1: block2(exn0), default: block3(exn0, v2) ] ; error: arg exn0 has type i64, expected i32
+
+    block1(v3: i32, v4: f64):
+        v5 = iconst.i32 1
+        return v5
+
+    block2(v6: i32):
+        v7 = iconst.i32 2
+        return v7
+
+    block3(v8: i64, v9: f64):
+        v10 = iconst.i32 3
+        return v10
+}
+
+;; Non-matching signature in exception table.
+function %f3(i32) -> i32 {
+    sig0 = (i32) -> i32 tail
+    fn0 = %g(i64) -> i32 tail
+
+    block0(v1: i32):
+        v2 = f64const 0x1.0
+        try_call fn0(v1), sig0, block1(ret0, v2), [ tag1: block2(exn0), default: block3(exn0, v2) ] ; error: exception table signature sig0 did not match function fn0's signature sig1
+
+    block1(v3: i32, v4: f64):
+        v5 = iconst.i32 1
+        return v5
+
+    block2(v6: i64):
+        v7 = iconst.i32 2
+        return v7
+
+    block3(v8: i64, v9: f64):
+        v10 = iconst.i32 3
+        return v10
+}
+
+;; Too few blockparams (in explicit blockparam part).
+function %f4(i32) -> i32 {
+    sig0 = (i32) -> f32 tail
+    fn0 = %g(i32) -> f32 tail
+
+    block0(v1: i32):
+        v2 = f64const 0x1.0
+        try_call fn0(v1), sig0, block1(ret0, v2), [ tag1: block2(exn0), default: block3(exn0, v2) ] ; error: mismatched argument count
+
+    block1(v3: f32):
+        v5 = iconst.i32 1
+        return v5
+
+    block2(v6: i64):
+        v7 = iconst.i32 2
+        return v7
+
+    block3(v8: i64, v9: f64):
+        v10 = iconst.i32 3
+        return v10
+}
+
+;; Non-supported calling convention.
+function %f5(i32) -> i32 {
+    sig0 = (i32) -> f32 system_v
+    fn0 = %g(i32) -> f32 system_v
+
+    block0(v1: i32):
+        v2 = f64const 0x1.0
+        try_call fn0(v1), sig0, block1(ret0, v2), [ tag1: block2(), default: block3(v2) ] ; error: calling convention `system_v` of callee does not support exceptions
+
+    block1(v3: f32, v4: f64):
+        v5 = iconst.i32 1
+        return v5
+
+    block2():
+        v7 = iconst.i32 2
+        return v7
+
+    block3(v8: f64):
+        v10 = iconst.i32 3
+        return v10
+}

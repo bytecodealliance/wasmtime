@@ -1,0 +1,40 @@
+test run
+target x86_64
+target aarch64
+target aarch64 sign_return_address
+target aarch64 has_pauth sign_return_address
+;; target s390x -- not yet
+target riscv64
+target riscv64 has_c has_zcb
+
+
+function %callee_i64(i64) -> i64 tail {
+block0(v0: i64):
+    v1 = iadd_imm.i64 v0, 10
+    return v1
+}
+
+function %call_i64(i64) -> i64 {
+    sig0 = (i64) -> i64 tail
+    fn0 = %callee_i64(i64) -> i64 tail
+
+block0(v0: i64):
+    try_call fn0(v0), sig0, block1(ret0), []
+
+block1(v1: i64):
+    return v1
+}
+; run: %call_i64(10) == 20
+
+function %call_indirect_i64(i64) -> i64 {
+    sig0 = (i64) -> i64 tail
+    fn0 = %callee_i64(i64) -> i64 tail
+
+block0(v0: i64):
+    v1 = func_addr.i64 fn0
+    try_call_indirect v1(v0), sig0, block1(ret0), []
+
+block1(v2: i64):
+    return v2
+}
+; run: %call_i64(10) == 20

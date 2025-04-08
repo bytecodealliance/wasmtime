@@ -1,0 +1,297 @@
+test compile precise-output
+target pulley32
+
+function %f0(i32) -> i32, f32, f64 {
+    sig0 = (i32) -> f32 tail
+    fn0 = colocated %g(i32) -> f32 tail
+
+    block0(v1: i32):
+        v2 = f64const 0x1.0
+        try_call fn0(v1), sig0, block1(ret0, v2), [ default: block2(exn0) ]
+
+    block1(v3: f32, v4: f64):
+        v5 = iconst.i32 1
+        return v5, v3, v4
+
+    block2(v6: i32):
+        v8 = iadd_imm.i32 v6, 1
+        v9 = f32const 0x0.0        
+        return v8, v9, v2
+}
+
+; VCode:
+;   push_frame_save 272, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
+;   fstore64 sp+136, f16 // flags =  notrap aligned
+;   fstore64 sp+128, f17 // flags =  notrap aligned
+;   fstore64 sp+120, f18 // flags =  notrap aligned
+;   fstore64 sp+112, f19 // flags =  notrap aligned
+;   fstore64 sp+104, f20 // flags =  notrap aligned
+;   fstore64 sp+96, f21 // flags =  notrap aligned
+;   fstore64 sp+88, f22 // flags =  notrap aligned
+;   fstore64 sp+80, f23 // flags =  notrap aligned
+;   fstore64 sp+72, f24 // flags =  notrap aligned
+;   fstore64 sp+64, f25 // flags =  notrap aligned
+;   fstore64 sp+56, f26 // flags =  notrap aligned
+;   fstore64 sp+48, f27 // flags =  notrap aligned
+;   fstore64 sp+40, f28 // flags =  notrap aligned
+;   fstore64 sp+32, f29 // flags =  notrap aligned
+;   fstore64 sp+24, f30 // flags =  notrap aligned
+;   fstore64 sp+16, f31 // flags =  notrap aligned
+; block0:
+;   fconst64 f1, 4607182418800017408
+;   fstore64 Slot(0), f1 // flags =  notrap aligned
+;   call CallInfo { dest: PulleyCall { name: TestCase(%g), args: [XReg(p0i)] }, uses: [], defs: [CallRetPair { vreg: Writable { reg: p0f }, location: Reg(p0f, types::F32) }, CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I32) }, CallRetPair { vreg: Writable { reg: p1i }, location: Reg(p1i, types::I32) }], clobbers: PRegSet { bits: [4294967292, 4294967294, 4294967295, 0] }, callee_conv: Tail, caller_conv: Fast, callee_pop_size: 0, try_call_info: Some(TryCallInfo { continuation: MachLabel(1), exception_dests: [(None, MachLabel(2))] }) }; jump MachLabel(1); catch [None: MachLabel(2)]
+; block1:
+;   xone x0
+;   f1 = fload64 Slot(0) // flags = notrap aligned
+;   f16 = fload64 sp+136 // flags = notrap aligned
+;   f17 = fload64 sp+128 // flags = notrap aligned
+;   f18 = fload64 sp+120 // flags = notrap aligned
+;   f19 = fload64 sp+112 // flags = notrap aligned
+;   f20 = fload64 sp+104 // flags = notrap aligned
+;   f21 = fload64 sp+96 // flags = notrap aligned
+;   f22 = fload64 sp+88 // flags = notrap aligned
+;   f23 = fload64 sp+80 // flags = notrap aligned
+;   f24 = fload64 sp+72 // flags = notrap aligned
+;   f25 = fload64 sp+64 // flags = notrap aligned
+;   f26 = fload64 sp+56 // flags = notrap aligned
+;   f27 = fload64 sp+48 // flags = notrap aligned
+;   f28 = fload64 sp+40 // flags = notrap aligned
+;   f29 = fload64 sp+32 // flags = notrap aligned
+;   f30 = fload64 sp+24 // flags = notrap aligned
+;   f31 = fload64 sp+16 // flags = notrap aligned
+;   pop_frame_restore 272, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
+;   ret
+; block2:
+;   f1 = fload64 Slot(0) // flags = notrap aligned
+;   xadd32_u8 x0, x0, 1
+;   fconst32 f0, 0
+;   f16 = fload64 sp+136 // flags = notrap aligned
+;   f17 = fload64 sp+128 // flags = notrap aligned
+;   f18 = fload64 sp+120 // flags = notrap aligned
+;   f19 = fload64 sp+112 // flags = notrap aligned
+;   f20 = fload64 sp+104 // flags = notrap aligned
+;   f21 = fload64 sp+96 // flags = notrap aligned
+;   f22 = fload64 sp+88 // flags = notrap aligned
+;   f23 = fload64 sp+80 // flags = notrap aligned
+;   f24 = fload64 sp+72 // flags = notrap aligned
+;   f25 = fload64 sp+64 // flags = notrap aligned
+;   f26 = fload64 sp+56 // flags = notrap aligned
+;   f27 = fload64 sp+48 // flags = notrap aligned
+;   f28 = fload64 sp+40 // flags = notrap aligned
+;   f29 = fload64 sp+32 // flags = notrap aligned
+;   f30 = fload64 sp+24 // flags = notrap aligned
+;   f31 = fload64 sp+16 // flags = notrap aligned
+;   pop_frame_restore 272, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
+;   ret
+;
+; Disassembled:
+; push_frame_save 272, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+; fstore64le_o32 sp, 136, f16
+; fstore64le_o32 sp, 128, f17
+; fstore64le_o32 sp, 120, f18
+; fstore64le_o32 sp, 112, f19
+; fstore64le_o32 sp, 104, f20
+; fstore64le_o32 sp, 96, f21
+; fstore64le_o32 sp, 88, f22
+; fstore64le_o32 sp, 80, f23
+; fstore64le_o32 sp, 72, f24
+; fstore64le_o32 sp, 64, f25
+; fstore64le_o32 sp, 56, f26
+; fstore64le_o32 sp, 48, f27
+; fstore64le_o32 sp, 40, f28
+; fstore64le_o32 sp, 32, f29
+; fstore64le_o32 sp, 24, f30
+; fstore64le_o32 sp, 16, f31
+; fconst64 f1, 4607182418800017408
+; fstore64le_o32 sp, 0, f1
+; call 0x0    // target = 0xaa
+; xone x0
+; fload64le_o32 f1, sp, 0
+; fload64le_o32 f16, sp, 136
+; fload64le_o32 f17, sp, 128
+; fload64le_o32 f18, sp, 120
+; fload64le_o32 f19, sp, 112
+; fload64le_o32 f20, sp, 104
+; fload64le_o32 f21, sp, 96
+; fload64le_o32 f22, sp, 88
+; fload64le_o32 f23, sp, 80
+; fload64le_o32 f24, sp, 72
+; fload64le_o32 f25, sp, 64
+; fload64le_o32 f26, sp, 56
+; fload64le_o32 f27, sp, 48
+; fload64le_o32 f28, sp, 40
+; fload64le_o32 f29, sp, 32
+; fload64le_o32 f30, sp, 24
+; fload64le_o32 f31, sp, 16
+; pop_frame_restore 272, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+; ret
+; fload64le_o32 f1, sp, 0
+; xadd32_u8 x0, x0, 1
+; fconst32 f0, 0
+; fload64le_o32 f16, sp, 136
+; fload64le_o32 f17, sp, 128
+; fload64le_o32 f18, sp, 120
+; fload64le_o32 f19, sp, 112
+; fload64le_o32 f20, sp, 104
+; fload64le_o32 f21, sp, 96
+; fload64le_o32 f22, sp, 88
+; fload64le_o32 f23, sp, 80
+; fload64le_o32 f24, sp, 72
+; fload64le_o32 f25, sp, 64
+; fload64le_o32 f26, sp, 56
+; fload64le_o32 f27, sp, 48
+; fload64le_o32 f28, sp, 40
+; fload64le_o32 f29, sp, 32
+; fload64le_o32 f30, sp, 24
+; fload64le_o32 f31, sp, 16
+; pop_frame_restore 272, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+; ret
+
+function %f2(i32, i32) -> i32, f32, f64 {
+    sig0 = (i32) -> f32 tail
+    fn0 = %g(i32) -> f32 tail
+
+    block0(v1: i32, v10: i32):
+        v2 = f64const 0x1.0
+        try_call_indirect v10(v1), sig0, block1(ret0, v2), [ default: block2(exn0) ]
+
+    block1(v3: f32, v4: f64):
+        v5 = iconst.i32 1
+        return v5, v3, v4
+
+    block2(v7: i32):
+        v8 = iadd_imm.i32 v7, 1
+        v9 = f32const 0x0.0        
+        return v8, v9, v2
+}
+
+; VCode:
+;   push_frame_save 272, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
+;   fstore64 sp+136, f16 // flags =  notrap aligned
+;   fstore64 sp+128, f17 // flags =  notrap aligned
+;   fstore64 sp+120, f18 // flags =  notrap aligned
+;   fstore64 sp+112, f19 // flags =  notrap aligned
+;   fstore64 sp+104, f20 // flags =  notrap aligned
+;   fstore64 sp+96, f21 // flags =  notrap aligned
+;   fstore64 sp+88, f22 // flags =  notrap aligned
+;   fstore64 sp+80, f23 // flags =  notrap aligned
+;   fstore64 sp+72, f24 // flags =  notrap aligned
+;   fstore64 sp+64, f25 // flags =  notrap aligned
+;   fstore64 sp+56, f26 // flags =  notrap aligned
+;   fstore64 sp+48, f27 // flags =  notrap aligned
+;   fstore64 sp+40, f28 // flags =  notrap aligned
+;   fstore64 sp+32, f29 // flags =  notrap aligned
+;   fstore64 sp+24, f30 // flags =  notrap aligned
+;   fstore64 sp+16, f31 // flags =  notrap aligned
+; block0:
+;   fconst64 f1, 4607182418800017408
+;   fstore64 Slot(0), f1 // flags =  notrap aligned
+;   indirect_call x1, CallInfo { dest: XReg(p1i), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0f }, location: Reg(p0f, types::F32) }, CallRetPair { vreg: Writable { reg: p0i }, location: Reg(p0i, types::I32) }, CallRetPair { vreg: Writable { reg: p1i }, location: Reg(p1i, types::I32) }], clobbers: PRegSet { bits: [4294967292, 4294967294, 4294967295, 0] }, callee_conv: Tail, caller_conv: Fast, callee_pop_size: 0, try_call_info: Some(TryCallInfo { continuation: MachLabel(1), exception_dests: [(None, MachLabel(2))] }) }; jump MachLabel(1); catch [None: MachLabel(2)]
+; block1:
+;   xone x0
+;   f1 = fload64 Slot(0) // flags = notrap aligned
+;   f16 = fload64 sp+136 // flags = notrap aligned
+;   f17 = fload64 sp+128 // flags = notrap aligned
+;   f18 = fload64 sp+120 // flags = notrap aligned
+;   f19 = fload64 sp+112 // flags = notrap aligned
+;   f20 = fload64 sp+104 // flags = notrap aligned
+;   f21 = fload64 sp+96 // flags = notrap aligned
+;   f22 = fload64 sp+88 // flags = notrap aligned
+;   f23 = fload64 sp+80 // flags = notrap aligned
+;   f24 = fload64 sp+72 // flags = notrap aligned
+;   f25 = fload64 sp+64 // flags = notrap aligned
+;   f26 = fload64 sp+56 // flags = notrap aligned
+;   f27 = fload64 sp+48 // flags = notrap aligned
+;   f28 = fload64 sp+40 // flags = notrap aligned
+;   f29 = fload64 sp+32 // flags = notrap aligned
+;   f30 = fload64 sp+24 // flags = notrap aligned
+;   f31 = fload64 sp+16 // flags = notrap aligned
+;   pop_frame_restore 272, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
+;   ret
+; block2:
+;   f1 = fload64 Slot(0) // flags = notrap aligned
+;   xadd32_u8 x0, x0, 1
+;   fconst32 f0, 0
+;   f16 = fload64 sp+136 // flags = notrap aligned
+;   f17 = fload64 sp+128 // flags = notrap aligned
+;   f18 = fload64 sp+120 // flags = notrap aligned
+;   f19 = fload64 sp+112 // flags = notrap aligned
+;   f20 = fload64 sp+104 // flags = notrap aligned
+;   f21 = fload64 sp+96 // flags = notrap aligned
+;   f22 = fload64 sp+88 // flags = notrap aligned
+;   f23 = fload64 sp+80 // flags = notrap aligned
+;   f24 = fload64 sp+72 // flags = notrap aligned
+;   f25 = fload64 sp+64 // flags = notrap aligned
+;   f26 = fload64 sp+56 // flags = notrap aligned
+;   f27 = fload64 sp+48 // flags = notrap aligned
+;   f28 = fload64 sp+40 // flags = notrap aligned
+;   f29 = fload64 sp+32 // flags = notrap aligned
+;   f30 = fload64 sp+24 // flags = notrap aligned
+;   f31 = fload64 sp+16 // flags = notrap aligned
+;   pop_frame_restore 272, {x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0}
+;   ret
+;
+; Disassembled:
+; push_frame_save 272, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+; fstore64le_o32 sp, 136, f16
+; fstore64le_o32 sp, 128, f17
+; fstore64le_o32 sp, 120, f18
+; fstore64le_o32 sp, 112, f19
+; fstore64le_o32 sp, 104, f20
+; fstore64le_o32 sp, 96, f21
+; fstore64le_o32 sp, 88, f22
+; fstore64le_o32 sp, 80, f23
+; fstore64le_o32 sp, 72, f24
+; fstore64le_o32 sp, 64, f25
+; fstore64le_o32 sp, 56, f26
+; fstore64le_o32 sp, 48, f27
+; fstore64le_o32 sp, 40, f28
+; fstore64le_o32 sp, 32, f29
+; fstore64le_o32 sp, 24, f30
+; fstore64le_o32 sp, 16, f31
+; fconst64 f1, 4607182418800017408
+; fstore64le_o32 sp, 0, f1
+; call_indirect x1
+; xone x0
+; fload64le_o32 f1, sp, 0
+; fload64le_o32 f16, sp, 136
+; fload64le_o32 f17, sp, 128
+; fload64le_o32 f18, sp, 120
+; fload64le_o32 f19, sp, 112
+; fload64le_o32 f20, sp, 104
+; fload64le_o32 f21, sp, 96
+; fload64le_o32 f22, sp, 88
+; fload64le_o32 f23, sp, 80
+; fload64le_o32 f24, sp, 72
+; fload64le_o32 f25, sp, 64
+; fload64le_o32 f26, sp, 56
+; fload64le_o32 f27, sp, 48
+; fload64le_o32 f28, sp, 40
+; fload64le_o32 f29, sp, 32
+; fload64le_o32 f30, sp, 24
+; fload64le_o32 f31, sp, 16
+; pop_frame_restore 272, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+; ret
+; fload64le_o32 f1, sp, 0
+; xadd32_u8 x0, x0, 1
+; fconst32 f0, 0
+; fload64le_o32 f16, sp, 136
+; fload64le_o32 f17, sp, 128
+; fload64le_o32 f18, sp, 120
+; fload64le_o32 f19, sp, 112
+; fload64le_o32 f20, sp, 104
+; fload64le_o32 f21, sp, 96
+; fload64le_o32 f22, sp, 88
+; fload64le_o32 f23, sp, 80
+; fload64le_o32 f24, sp, 72
+; fload64le_o32 f25, sp, 64
+; fload64le_o32 f26, sp, 56
+; fload64le_o32 f27, sp, 48
+; fload64le_o32 f28, sp, 40
+; fload64le_o32 f29, sp, 32
+; fload64le_o32 f30, sp, 24
+; fload64le_o32 f31, sp, 16
+; pop_frame_restore 272, x16, x17, x18, x19, x20, x21, x22, x23, x24, x25, x26, x27, x28, x29, sp, spilltmp0
+; ret
+

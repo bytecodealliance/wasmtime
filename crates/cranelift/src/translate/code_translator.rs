@@ -81,10 +81,10 @@ use crate::translate::translation_utils::{
 use crate::Reachability;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
-use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
     self, AtomicRmwOp, ConstantData, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
 };
+use cranelift_codegen::ir::{types::*, BlockArg};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use itertools::Itertools;
@@ -3897,28 +3897,21 @@ fn is_non_canonical_v128(ty: ir::Type) -> bool {
 /// actually necessary, and if not, the original slice is returned.  Otherwise the cast values
 /// are returned in a slice that belongs to the caller-supplied `SmallVec`.
 fn canonicalise_v128_values<'a>(
-    tmp_canonicalised: &'a mut SmallVec<[ir::Value; 16]>,
+    tmp_canonicalised: &'a mut SmallVec<[BlockArg; 16]>,
     builder: &mut FunctionBuilder,
     values: &'a [ir::Value],
-) -> &'a [ir::Value] {
+) -> &'a [BlockArg] {
     debug_assert!(tmp_canonicalised.is_empty());
-    // First figure out if any of the parameters need to be cast.  Mostly they don't need to be.
-    let any_non_canonical = values
-        .iter()
-        .any(|v| is_non_canonical_v128(builder.func.dfg.value_type(*v)));
-    // Hopefully we take this exit most of the time, hence doing no heap allocation.
-    if !any_non_canonical {
-        return values;
-    }
-    // Otherwise we'll have to cast, and push the resulting `Value`s into `canonicalised`.
+    // Cast, and push the resulting `Value`s into `canonicalised`.
     for v in values {
-        tmp_canonicalised.push(if is_non_canonical_v128(builder.func.dfg.value_type(*v)) {
+        let value = if is_non_canonical_v128(builder.func.dfg.value_type(*v)) {
             let mut flags = MemFlags::new();
             flags.set_endianness(ir::Endianness::Little);
             builder.ins().bitcast(I8X16, flags, *v)
         } else {
             *v
-        });
+        };
+        tmp_canonicalised.push(BlockArg::from(value));
     }
     tmp_canonicalised.as_slice()
 }
@@ -3931,7 +3924,7 @@ fn canonicalise_then_jump(
     destination: ir::Block,
     params: &[ir::Value],
 ) -> ir::Inst {
-    let mut tmp_canonicalised = SmallVec::<[ir::Value; 16]>::new();
+    let mut tmp_canonicalised = SmallVec::<[_; 16]>::new();
     let canonicalised = canonicalise_v128_values(&mut tmp_canonicalised, builder, params);
     builder.ins().jump(destination, canonicalised)
 }
@@ -3945,10 +3938,10 @@ fn canonicalise_brif(
     block_else: ir::Block,
     params_else: &[ir::Value],
 ) -> ir::Inst {
-    let mut tmp_canonicalised_then = SmallVec::<[ir::Value; 16]>::new();
+    let mut tmp_canonicalised_then = SmallVec::<[_; 16]>::new();
     let canonicalised_then =
         canonicalise_v128_values(&mut tmp_canonicalised_then, builder, params_then);
-    let mut tmp_canonicalised_else = SmallVec::<[ir::Value; 16]>::new();
+    let mut tmp_canonicalised_else = SmallVec::<[_; 16]>::new();
     let canonicalised_else =
         canonicalise_v128_values(&mut tmp_canonicalised_else, builder, params_else);
     builder.ins().brif(

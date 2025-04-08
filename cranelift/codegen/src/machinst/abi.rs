@@ -100,12 +100,14 @@
 
 use crate::entity::SecondaryMap;
 use crate::ir::types::*;
-use crate::ir::{ArgumentExtension, ArgumentPurpose, Signature};
+use crate::ir::{ArgumentExtension, ArgumentPurpose, ExceptionTable, ExceptionTag, Signature};
 use crate::isa::TargetIsa;
 use crate::settings::ProbestackStrategy;
 use crate::CodegenError;
 use crate::{ir, isa};
 use crate::{machinst::*, trace};
+use alloc::boxed::Box;
+use cranelift_entity::packed_option::PackedOption;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use rustc_hash::FxHashMap;
 use smallvec::smallvec;
@@ -272,7 +274,7 @@ pub enum ArgsOrRets {
 
 /// Abstract location for a machine-specific ABI impl to translate into the
 /// appropriate addressing mode.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StackAMode {
     /// Offset into the current frame's argument area.
     IncomingArg(i64, u32),
@@ -582,7 +584,10 @@ pub trait ABIMachineSpec {
 
     /// Get all caller-save registers, that is, registers that we expect
     /// not to be saved across a call to a callee with the given ABI.
-    fn get_regs_clobbered_by_call(call_conv_of_callee: isa::CallConv) -> PRegSet;
+    fn get_regs_clobbered_by_call(
+        call_conv_of_callee: isa::CallConv,
+        is_exception: bool,
+    ) -> PRegSet;
 
     /// Get the needed extension mode, given the mode attached to the argument
     /// in the signature and the calling convention. The input (the attribute in
@@ -599,6 +604,12 @@ pub trait ABIMachineSpec {
     /// return values. This is used to move stack-carried return
     /// values directly into spillslots if needed.
     fn retval_temp_reg(call_conv_of_callee: isa::CallConv) -> Writable<Reg>;
+
+    /// Get the exception payload registers, if any, for a calling
+    /// convention.
+    fn exception_payload_regs(_call_conv: isa::CallConv) -> &'static [Reg] {
+        &[]
+    }
 }
 
 /// Out-of-line data for calls, to keep the size of `Inst` down.
@@ -620,6 +631,22 @@ pub struct CallInfo<T> {
     /// caller, if any. (Used for popping stack arguments with the `tail`
     /// calling convention.)
     pub callee_pop_size: u32,
+    /// Information for a try-call, if this is one. We combine
+    /// handling of calls and try-calls as much as possible to share
+    /// argument/return logic; they mostly differ in the metadata that
+    /// they emit, which this information feeds into.
+    pub try_call_info: Option<TryCallInfo>,
+}
+
+/// Out-of-line information present on `try_call` instructions only:
+/// information that is used to generate exception-handling tables and
+/// link up to destination blocks properly.
+#[derive(Clone, Debug)]
+pub struct TryCallInfo {
+    /// The target to jump to on a normal returhn.
+    pub continuation: MachLabel,
+    /// Exception tags to catch and corresponding destination labels.
+    pub exception_dests: Box<[(PackedOption<ExceptionTag>, MachLabel)]>,
 }
 
 impl<T> CallInfo<T> {
@@ -634,6 +661,7 @@ impl<T> CallInfo<T> {
             caller_conv: call_conv,
             callee_conv: call_conv,
             callee_pop_size: 0,
+            try_call_info: None,
         }
     }
 
@@ -647,6 +675,7 @@ impl<T> CallInfo<T> {
             caller_conv: self.caller_conv,
             callee_conv: self.callee_conv,
             callee_pop_size: self.callee_pop_size,
+            try_call_info: self.try_call_info,
         }
     }
 }
@@ -1998,7 +2027,7 @@ pub struct CallRetPair {
 }
 
 /// A location to load a return-value from after a call completes.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RetLocation {
     /// A physical register.
     Reg(Reg, Type),
@@ -2395,7 +2424,11 @@ impl<M: ABIMachineSpec> CallSite<M> {
     ///
     /// This function should only be called once, as it is allowed to re-use
     /// parts of the `CallSite` object in emitting instructions.
-    pub fn emit_call(&mut self, ctx: &mut Lower<M::I>) {
+    pub fn emit_call(
+        &mut self,
+        ctx: &mut Lower<M::I>,
+        try_call_info: Option<(ExceptionTable, &[MachLabel])>,
+    ) {
         let word_type = M::word_type();
         if let Some(i) = ctx.sigs()[self.sig].stack_ret_arg {
             let rd = ctx.alloc_tmp(word_type).only_reg().unwrap();
@@ -2408,21 +2441,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
         }
 
         let uses = mem::take(&mut self.uses);
-        let defs = mem::take(&mut self.defs);
-        let clobbers = {
-            // Get clobbers: all caller-saves. These may include return value
-            // regs, which we will remove from the clobber set below.
-            let mut clobbers = <M>::get_regs_clobbered_by_call(ctx.sigs()[self.sig].call_conv);
-
-            // Remove retval regs from clobbers.
-            for def in &defs {
-                if let RetLocation::Reg(preg, ..) = def.location {
-                    clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
-                }
-            }
-
-            clobbers
-        };
+        let mut defs = mem::take(&mut self.defs);
 
         let sig = &ctx.sigs()[self.sig];
         let callee_pop_size = if sig.call_conv() == isa::CallConv::Tail {
@@ -2440,6 +2459,74 @@ impl<M: ABIMachineSpec> CallSite<M> {
             .accumulate_outgoing_args_size(ret_space + arg_space);
 
         let tmp = ctx.alloc_tmp(word_type).only_reg().unwrap();
+
+        let try_call_info = try_call_info.map(|(et, labels)| {
+            let exception_dests = ctx.dfg().exception_tables[et]
+                .catches()
+                .map(|(tag, _)| tag.into())
+                .zip(labels.iter().cloned())
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
+
+            // We need to update `defs` to contain the exception
+            // payload regs as well. We have two sources of info that
+            // we join:
+            //
+            // - The machine-specific ABI implementation `M`, which
+            //   tells us the particular registers that payload values
+            //   must be in
+            // - The passed-in lowering context, which gives us the
+            //   vregs we must define.
+            //
+            // Note that payload values may need to end up in the same
+            // physical registers as ordinary return values; this is
+            // not a conflict, because we either get one or the
+            // other. For regalloc's purposes, we define both starting
+            // here at the callsite, but we can share one def in the
+            // `defs` list and alias one vreg to another. Thus we
+            // handle the two cases below for each payload register:
+            // overlaps a return value (and we alias to it) or not
+            // (and we add a def).
+            let pregs = M::exception_payload_regs(call_conv);
+            for (i, &preg) in pregs.iter().enumerate() {
+                let vreg = ctx.try_call_exception_defs(ctx.cur_inst())[i];
+                if let Some(existing) = defs.iter().find(|def| match def.location {
+                    RetLocation::Reg(r, _) => r == preg,
+                    _ => false,
+                }) {
+                    ctx.vregs_mut()
+                        .set_vreg_alias(vreg.to_reg(), existing.vreg.to_reg());
+                } else {
+                    defs.push(CallRetPair {
+                        vreg,
+                        location: RetLocation::Reg(preg, M::word_type()),
+                    });
+                }
+            }
+
+            TryCallInfo {
+                continuation: *labels.last().unwrap(),
+                exception_dests,
+            }
+        });
+
+        let clobbers = {
+            // Get clobbers: all caller-saves. These may include return value
+            // regs, which we will remove from the clobber set below.
+            let mut clobbers = <M>::get_regs_clobbered_by_call(
+                ctx.sigs()[self.sig].call_conv,
+                try_call_info.is_some(),
+            );
+
+            // Remove retval regs from clobbers.
+            for def in &defs {
+                if let RetLocation::Reg(preg, _) = def.location {
+                    clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
+                }
+            }
+
+            clobbers
+        };
 
         // Any adjustment to SP to account for required outgoing arguments/stack return values must
         // be done inside of the call pseudo-op, to ensure that SP is always in a consistent
@@ -2461,6 +2548,7 @@ impl<M: ABIMachineSpec> CallSite<M> {
                 callee_conv: call_conv,
                 caller_conv: self.caller_conv,
                 callee_pop_size,
+                try_call_info,
             },
         )
         .into_iter()
@@ -2502,8 +2590,11 @@ impl<T> CallInfo<T> {
 
         let temp = M::retval_temp_reg(self.callee_conv);
         // The temporary must be noted as clobbered.
-        debug_assert!(M::get_regs_clobbered_by_call(self.callee_conv)
-            .contains(PReg::from(temp.to_reg().to_real_reg().unwrap())));
+        debug_assert!(M::get_regs_clobbered_by_call(
+            self.callee_conv,
+            self.try_call_info.is_some()
+        )
+        .contains(PReg::from(temp.to_reg().to_real_reg().unwrap())));
 
         for CallRetPair { vreg, location } in &self.defs {
             match location {

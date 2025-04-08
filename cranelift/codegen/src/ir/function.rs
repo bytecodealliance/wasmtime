@@ -282,7 +282,9 @@ impl FunctionStencil {
     /// Rewrite the branch destination to `new_dest` if the destination matches `old_dest`.
     /// Does nothing if called with a non-jump or non-branch instruction.
     pub fn rewrite_branch_destination(&mut self, inst: Inst, old_dest: Block, new_dest: Block) {
-        for dest in self.dfg.insts[inst].branch_destination_mut(&mut self.dfg.jump_tables) {
+        for dest in self.dfg.insts[inst]
+            .branch_destination_mut(&mut self.dfg.jump_tables, &mut self.dfg.exception_tables)
+        {
             if dest.block(&self.dfg.value_lists) == old_dest {
                 dest.set_block(new_dest, &mut self.dfg.value_lists)
             }
@@ -312,7 +314,7 @@ impl FunctionStencil {
     pub fn block_successors(&self, block: Block) -> impl DoubleEndedIterator<Item = Block> + '_ {
         self.layout.last_inst(block).into_iter().flat_map(|inst| {
             self.dfg.insts[inst]
-                .branch_destination(&self.dfg.jump_tables)
+                .branch_destination(&self.dfg.jump_tables, &self.dfg.exception_tables)
                 .iter()
                 .map(|block| block.block(&self.dfg.value_lists))
         })

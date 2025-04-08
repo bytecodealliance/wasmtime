@@ -975,6 +975,10 @@
 (decl func_ref_data (SigRef ExternalName RelocDistance) FuncRef)
 (extern extractor infallible func_ref_data func_ref_data)
 
+;; Accessor for `ExceptionTable`.
+(decl exception_sig (SigRef) ExceptionTable)
+(extern extractor infallible exception_sig exception_sig)
+
 ;; Accessor for `GlobalValue`.
 
 (decl symbol_value_data (ExternalName RelocDistance i64) GlobalValue)

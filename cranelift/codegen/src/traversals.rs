@@ -194,7 +194,7 @@ mod tests {
         cur.insert_block(block1);
         let v1 = cur.ins().iconst(I32, 1);
         let v2 = cur.ins().iadd(v0, v1);
-        cur.ins().jump(block0, &[v2]);
+        cur.ins().jump(block0, &[v2.into()]);
 
         // block2:
         //   return v0
