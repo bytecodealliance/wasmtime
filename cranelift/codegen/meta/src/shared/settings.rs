@@ -38,10 +38,12 @@ pub(crate) fn define() -> SettingGroup {
 
             - `backtracking`: A backtracking allocator with range splitting; more expensive
                               but generates better code.
-            - `single_pass`: A single-pass algorithm that yields quick compilation but
-                             results in code with more register spills and moves.
+
+            Note that the `single_pass` option is currently disabled because it does not
+            have adequate support for the kinds of allocations required by exception
+            handling (https://github.com/bytecodealliance/regalloc2/issues/217).
         "#,
-        vec!["backtracking", "single_pass"],
+        vec!["backtracking"],
     );
 
     settings.add_enum(

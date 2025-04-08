@@ -66,7 +66,8 @@ pub fn compile<B: LowerBackend + TargetIsa>(
 
         options.algorithm = match b.flags().regalloc_algorithm() {
             RegallocAlgorithm::Backtracking => Algorithm::Ion,
-            RegallocAlgorithm::SinglePass => Algorithm::Fastalloc,
+            // Note: single-pass is currently disabled
+            // (https://github.com/bytecodealliance/regalloc2/issues/217).
         };
 
         regalloc2::run(&vcode, vcode.machine_env(), &options)
