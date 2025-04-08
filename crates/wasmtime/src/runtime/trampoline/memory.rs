@@ -143,6 +143,7 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
         Ok(())
     }
 
+    #[cfg(feature = "gc")]
     fn validate_memory_impl(&self, memory: &wasmtime_environ::Memory) -> Result<()> {
         self.ondemand.validate_memory_impl(memory)
     }

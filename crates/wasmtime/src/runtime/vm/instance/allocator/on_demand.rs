@@ -91,6 +91,7 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         Ok(())
     }
 
+    #[cfg(feature = "gc")]
     fn validate_memory_impl(&self, _memory: &wasmtime_environ::Memory) -> Result<()> {
         Ok(())
     }

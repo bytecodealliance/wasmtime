@@ -574,6 +574,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         Ok(())
     }
 
+    #[cfg(feature = "gc")]
     fn validate_memory_impl(&self, memory: &wasmtime_environ::Memory) -> Result<()> {
         self.memories.validate_memory(memory)
     }

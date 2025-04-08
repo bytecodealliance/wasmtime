@@ -96,6 +96,7 @@ impl<T> GcHeapOutOfMemory<T> {
         }
     }
 
+    #[cfg(feature = "gc")]
     pub(crate) fn bytes_needed(&self) -> u64 {
         self.bytes_needed
     }
@@ -112,6 +113,13 @@ impl<T> GcHeapOutOfMemory<T> {
     /// pass the `GcHeapOutOfMemory` error to [`Store::gc`][crate::Store::gc]
     /// calls.
     pub fn take_inner(self) -> (T, GcHeapOutOfMemory<()>) {
-        (self.inner, GcHeapOutOfMemory::new((), self.bytes_needed))
+        #[cfg(feature = "gc")]
+        {
+            (self.inner, GcHeapOutOfMemory::new((), self.bytes_needed))
+        }
+        #[cfg(not(feature = "gc"))]
+        {
+            unreachable!()
+        }
     }
 }

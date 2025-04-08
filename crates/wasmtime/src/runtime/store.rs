@@ -1511,7 +1511,6 @@ impl StoreOpaque {
     }
 
     #[inline]
-    #[cfg(feature = "gc")]
     pub(crate) fn gc_store(&self) -> Result<&GcStore> {
         match &self.gc_store {
             Some(gc_store) => Ok(gc_store),
@@ -1678,6 +1677,7 @@ impl StoreOpaque {
     ///
     /// When async is enabled, it is the caller's responsibility to ensure that
     /// this is called on a fiber stack.
+    #[cfg(feature = "gc")]
     pub(crate) fn maybe_async_grow_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
         assert!(bytes_needed > 0);
 
@@ -2334,7 +2334,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
     }
 
     #[cfg(not(feature = "gc"))]
-    fn maybe_async_grow_gc_heap(&mut self) -> Result<()> {
+    fn maybe_async_grow_gc_heap(&mut self, _bytes_needed: u64) -> Result<()> {
         unreachable!()
     }
 

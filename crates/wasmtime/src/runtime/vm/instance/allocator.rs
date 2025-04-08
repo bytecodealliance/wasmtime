@@ -211,6 +211,7 @@ pub unsafe trait InstanceAllocatorImpl {
     fn validate_module_impl(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()>;
 
     /// Validate whether a memory is allocatable by this instance allocator.
+    #[cfg(feature = "gc")]
     fn validate_memory_impl(&self, memory: &wasmtime_environ::Memory) -> Result<()>;
 
     /// Increment the count of concurrent component instances that are currently
@@ -391,6 +392,7 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
     }
 
     /// Validate whether a memory is allocatable with this instance allocator.
+    #[cfg(feature = "gc")]
     fn validate_memory(&self, memory: &wasmtime_environ::Memory) -> Result<()> {
         InstanceAllocatorImpl::validate_memory_impl(self, memory)
     }

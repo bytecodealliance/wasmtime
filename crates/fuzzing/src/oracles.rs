@@ -809,7 +809,7 @@ pub fn table_ops(
             move |mut caller: Caller<'_, StoreLimits>, _params, results| {
                 log::info!("table_ops: GC");
                 if num_gcs.fetch_add(1, SeqCst) < MAX_GCS {
-                    caller.gc();
+                    caller.gc(None);
                 }
 
                 let a = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))?;
@@ -938,7 +938,7 @@ pub fn table_ops(
         }
 
         // Do a final GC after running the Wasm.
-        store.gc();
+        store.gc(None);
     }
 
     assert_eq!(num_dropped.load(SeqCst), expected_drops.load(SeqCst));
