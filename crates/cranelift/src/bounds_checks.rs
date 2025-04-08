@@ -54,6 +54,7 @@ pub enum BoundsCheck {
     /// ```ignore
     /// index + object_size <= bound
     /// ```
+    #[cfg(feature = "gc")]
     StaticWholeObject {
         offset: u32,
         access_size: u8,
@@ -64,6 +65,7 @@ pub enum BoundsCheck {
     ///
     /// It is *your* responsibility to ensure that the `offset + access_size <=
     /// object_size` precondition holds.
+    #[cfg(feature = "gc")]
     DynamicWholeObject {
         offset: ir::Value,
         object_size: ir::Value,
@@ -90,6 +92,7 @@ pub fn bounds_check_and_compute_addr(
             access_size,
         } => bounds_check_field_access(builder, env, heap, index, offset, access_size, trap),
 
+        #[cfg(feature = "gc")]
         BoundsCheck::StaticWholeObject {
             offset,
             access_size,
@@ -127,6 +130,7 @@ pub fn bounds_check_and_compute_addr(
         // Compute the index of the end of the object, bounds check that and get
         // a pointer to just after the object, and then reverse offset from that
         // to get the pointer to the field being accessed.
+        #[cfg(feature = "gc")]
         BoundsCheck::DynamicWholeObject {
             offset,
             object_size,
