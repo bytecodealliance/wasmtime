@@ -52,21 +52,23 @@ pub unsafe extern "C" fn run_wasi(
     wasi_component: *const u8,
     wasi_component_size: usize,
 ) -> usize {
-    let buf = core::slice::from_raw_parts_mut(out_buf, *out_size);
-    let wasi_component = core::slice::from_raw_parts(wasi_component, wasi_component_size);
-    match run(wasi_component) {
-        Ok(output) => {
-            let len = buf.len().min(output.len());
-            buf[..len].copy_from_slice(&output.as_bytes()[..len]);
-            *out_size = len;
-            return 0;
-        }
-        Err(e) => {
-            let msg = format!("{e:?}");
-            let len = buf.len().min(msg.len());
-            buf[..len].copy_from_slice(&msg.as_bytes()[..len]);
-            *out_size = len;
-            return 1;
+    unsafe {
+        let buf = core::slice::from_raw_parts_mut(out_buf, *out_size);
+        let wasi_component = core::slice::from_raw_parts(wasi_component, wasi_component_size);
+        match run(wasi_component) {
+            Ok(output) => {
+                let len = buf.len().min(output.len());
+                buf[..len].copy_from_slice(&output.as_bytes()[..len]);
+                *out_size = len;
+                return 0;
+            }
+            Err(e) => {
+                let msg = format!("{e:?}");
+                let len = buf.len().min(msg.len());
+                buf[..len].copy_from_slice(&msg.as_bytes()[..len]);
+                *out_size = len;
+                return 1;
+            }
         }
     }
 }

@@ -1,3 +1,5 @@
+#![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
+
 use std::collections::HashMap;
 use std::mem::MaybeUninit;
 use test_programs::preview1::{assert_errno, STDERR_FD, STDIN_FD, STDOUT_FD};

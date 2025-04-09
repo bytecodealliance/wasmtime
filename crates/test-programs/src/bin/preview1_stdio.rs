@@ -1,3 +1,5 @@
+#![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
+
 use test_programs::preview1::{STDERR_FD, STDIN_FD, STDOUT_FD};
 
 unsafe fn test_stdio() {

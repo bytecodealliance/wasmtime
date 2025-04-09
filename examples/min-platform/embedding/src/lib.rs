@@ -30,17 +30,20 @@ pub unsafe extern "C" fn run(
     simple_host_fn_module: *const u8,
     simple_host_fn_size: usize,
 ) -> usize {
-    let buf = core::slice::from_raw_parts_mut(error_buf, error_size);
-    let smoke = core::slice::from_raw_parts(smoke_module, smoke_size);
-    let simple_add = core::slice::from_raw_parts(simple_add_module, simple_add_size);
-    let simple_host_fn = core::slice::from_raw_parts(simple_host_fn_module, simple_host_fn_size);
-    match run_result(smoke, simple_add, simple_host_fn) {
-        Ok(()) => 0,
-        Err(e) => {
-            let msg = format!("{e:?}");
-            let len = buf.len().min(msg.len());
-            buf[..len].copy_from_slice(&msg.as_bytes()[..len]);
-            len
+    unsafe {
+        let buf = core::slice::from_raw_parts_mut(error_buf, error_size);
+        let smoke = core::slice::from_raw_parts(smoke_module, smoke_size);
+        let simple_add = core::slice::from_raw_parts(simple_add_module, simple_add_size);
+        let simple_host_fn =
+            core::slice::from_raw_parts(simple_host_fn_module, simple_host_fn_size);
+        match run_result(smoke, simple_add, simple_host_fn) {
+            Ok(()) => 0,
+            Err(e) => {
+                let msg = format!("{e:?}");
+                let len = buf.len().min(msg.len());
+                buf[..len].copy_from_slice(&msg.as_bytes()[..len]);
+                len
+            }
         }
     }
 }

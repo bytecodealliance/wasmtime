@@ -41,10 +41,12 @@ pub fn open_scratch_directory(path: &str) -> Result<wasip1::Fd, String> {
 }
 
 pub unsafe fn create_file(dir_fd: wasip1::Fd, filename: &str) {
-    let file_fd = wasip1::path_open(dir_fd, 0, filename, wasip1::OFLAGS_CREAT, 0, 0, 0)
-        .expect("creating a file");
-    assert!(file_fd > STDERR_FD, "file descriptor range check",);
-    wasip1::fd_close(file_fd).expect("closing a file");
+    unsafe {
+        let file_fd = wasip1::path_open(dir_fd, 0, filename, wasip1::OFLAGS_CREAT, 0, 0, 0)
+            .expect("creating a file");
+        assert!(file_fd > STDERR_FD, "file descriptor range check",);
+        wasip1::fd_close(file_fd).expect("closing a file");
+    }
 }
 
 // Small workaround to get the crate's macros, through the

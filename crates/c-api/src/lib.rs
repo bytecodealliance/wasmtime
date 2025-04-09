@@ -13,6 +13,7 @@
 //! specific to Wasmtime and has fewer gymnastics to implement.
 
 #![expect(non_camel_case_types, reason = "matching C style, not Rust")]
+#![expect(unsafe_op_in_unsafe_fn, reason = "crate isn't migrated yet")]
 
 pub use wasmtime;
 

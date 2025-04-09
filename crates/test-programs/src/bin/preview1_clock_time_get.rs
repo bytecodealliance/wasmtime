@@ -1,3 +1,5 @@
+#![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
+
 unsafe fn test_clock_time_get() {
     // Test that clock_time_get succeeds. Even in environments where it's not
     // desirable to expose high-precision timers, it should still succeed.

@@ -78,13 +78,15 @@ impl Vm {
     where
         T: IntoIterator<Item = RegType> + 'a,
     {
-        let lr = self.call_start(args);
+        unsafe {
+            let lr = self.call_start(args);
 
-        match self.call_run(func) {
-            DoneReason::ReturnToHost(()) => DoneReason::ReturnToHost(self.call_end(lr, rets)),
-            DoneReason::Trap { pc, kind } => DoneReason::Trap { pc, kind },
-            DoneReason::CallIndirectHost { id, resume } => {
-                DoneReason::CallIndirectHost { id, resume }
+            match self.call_run(func) {
+                DoneReason::ReturnToHost(()) => DoneReason::ReturnToHost(self.call_end(lr, rets)),
+                DoneReason::Trap { pc, kind } => DoneReason::Trap { pc, kind },
+                DoneReason::CallIndirectHost { id, resume } => {
+                    DoneReason::CallIndirectHost { id, resume }
+                }
             }
         }
     }
@@ -107,9 +109,9 @@ impl Vm {
         // NB: make sure this method stays in sync with
         // `PulleyMachineDeps::compute_arg_locs`!
 
-        let mut x_args = (0..16).map(|x| XReg::new_unchecked(x));
-        let mut f_args = (0..16).map(|f| FReg::new_unchecked(f));
-        let mut v_args = (0..16).map(|v| VReg::new_unchecked(v));
+        let mut x_args = (0..16).map(|x| unsafe { XReg::new_unchecked(x) });
+        let mut f_args = (0..16).map(|f| unsafe { FReg::new_unchecked(f) });
+        let mut v_args = (0..16).map(|v| unsafe { VReg::new_unchecked(v) });
 
         for arg in args {
             match arg {
@@ -143,7 +145,7 @@ impl Vm {
         self.state.debug_assert_done_reason_none();
         let interpreter = Interpreter {
             state: &mut self.state,
-            pc: UnsafeBytecodeStream::new(pc),
+            pc: unsafe { UnsafeBytecodeStream::new(pc) },
             executing_pc: self.executing_pc.as_ref(),
         };
         let done = interpreter.run();
@@ -169,9 +171,9 @@ impl Vm {
         // NB: make sure this method stays in sync with
         // `PulleyMachineDeps::compute_arg_locs`!
 
-        let mut x_rets = (0..15).map(|x| XReg::new_unchecked(x));
-        let mut f_rets = (0..16).map(|f| FReg::new_unchecked(f));
-        let mut v_rets = (0..16).map(|v| VReg::new_unchecked(v));
+        let mut x_rets = (0..15).map(|x| unsafe { XReg::new_unchecked(x) });
+        let mut f_rets = (0..16).map(|f| unsafe { FReg::new_unchecked(f) });
+        let mut v_rets = (0..16).map(|v| unsafe { VReg::new_unchecked(v) });
 
         rets.into_iter().map(move |ty| match ty {
             RegType::XReg => match x_rets.next() {

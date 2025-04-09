@@ -1,3 +1,5 @@
+#![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
+
 const FIRST_PREOPEN: u32 = 3;
 
 unsafe fn path_open_preopen() {

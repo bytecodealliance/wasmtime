@@ -35,31 +35,39 @@ struct MyAllocator;
 
 unsafe impl GlobalAlloc for MyGlobalDmalloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        self.dlmalloc
-            .try_lock()
-            .unwrap()
-            .malloc(layout.size(), layout.align())
+        unsafe {
+            self.dlmalloc
+                .try_lock()
+                .unwrap()
+                .malloc(layout.size(), layout.align())
+        }
     }
 
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        self.dlmalloc
-            .try_lock()
-            .unwrap()
-            .calloc(layout.size(), layout.align())
+        unsafe {
+            self.dlmalloc
+                .try_lock()
+                .unwrap()
+                .calloc(layout.size(), layout.align())
+        }
     }
 
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        self.dlmalloc
-            .try_lock()
-            .unwrap()
-            .realloc(ptr, layout.size(), layout.align(), new_size)
+        unsafe {
+            self.dlmalloc
+                .try_lock()
+                .unwrap()
+                .realloc(ptr, layout.size(), layout.align(), new_size)
+        }
     }
 
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        self.dlmalloc
-            .try_lock()
-            .unwrap()
-            .free(ptr, layout.size(), layout.align())
+        unsafe {
+            self.dlmalloc
+                .try_lock()
+                .unwrap()
+                .free(ptr, layout.size(), layout.align())
+        }
     }
 }
 

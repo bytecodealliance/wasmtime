@@ -294,6 +294,7 @@
 #![cfg_attr(feature = "default", warn(rustdoc::broken_intra_doc_links))]
 #![no_std]
 #![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
+#![expect(unsafe_op_in_unsafe_fn, reason = "crate isn't migrated yet")]
 
 #[cfg(any(feature = "std", unix, windows))]
 #[macro_use]

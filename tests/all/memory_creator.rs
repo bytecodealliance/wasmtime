@@ -23,14 +23,18 @@ mod not_for_windows {
             // We rely on the Wasm page size being multiple of host page size.
             assert_eq!(size % page_size, 0);
 
-            let mem = mmap_anonymous(null_mut(), size, ProtFlags::empty(), MapFlags::PRIVATE)
-                .expect("mmap failed");
+            let mem = unsafe {
+                mmap_anonymous(null_mut(), size, ProtFlags::empty(), MapFlags::PRIVATE)
+                    .expect("mmap failed")
+            };
 
             // NOTE: mmap_anonymous returns zero initialized memory, which is relied upon by this
             // API.
 
-            mprotect(mem, minimum, MprotectFlags::READ | MprotectFlags::WRITE)
-                .expect("mprotect failed");
+            unsafe {
+                mprotect(mem, minimum, MprotectFlags::READ | MprotectFlags::WRITE)
+                    .expect("mprotect failed");
+            }
             *glob_counter.lock().unwrap() += minimum;
 
             Self {

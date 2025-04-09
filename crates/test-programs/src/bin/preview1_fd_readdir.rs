@@ -1,3 +1,5 @@
+#![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
+
 use std::{env, mem, process, slice, str};
 use test_programs::preview1::open_scratch_directory;
 

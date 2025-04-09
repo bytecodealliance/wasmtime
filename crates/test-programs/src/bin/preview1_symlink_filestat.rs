@@ -1,3 +1,5 @@
+#![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
+
 use std::{env, process, time::Duration};
 use test_programs::preview1::{assert_fs_time_eq, open_scratch_directory, TestConfig};
 

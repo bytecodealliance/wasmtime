@@ -4,6 +4,7 @@
 //! which shows how to use some of the features of `cranelift_jit`.
 
 #![deny(missing_docs, unreachable_pub)]
+#![expect(unsafe_op_in_unsafe_fn, reason = "crate isn't migrated yet")]
 
 mod backend;
 mod compiled_blob;

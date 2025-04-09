@@ -51,7 +51,7 @@ macro_rules! impl_reg {
             const RANGE: Range<u8> = $range;
 
             unsafe fn new_unchecked(index: u8) -> Self {
-                core::mem::transmute(index)
+                unsafe { core::mem::transmute(index) }
             }
 
             fn to_u8(self) -> u8 {
