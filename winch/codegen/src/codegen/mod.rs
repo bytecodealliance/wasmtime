@@ -908,12 +908,19 @@ where
             Ok(())
         };
 
+        // Ensure that the destination register is not allocated if
+        // `emit_compute_heap_address` does not return an address.
         match kind {
             LoadKind::VectorLane(_) => {
+                // Destination vector register is at the top of the stack and
+                // `emit_compute_heap_address` expects an integer register
+                // containing the address to load to be at the top of the stack.
                 let dst = self.context.pop_to_reg(self.masm, None)?;
                 let addr = self.emit_compute_heap_address(&arg, kind.derive_operand_size())?;
                 if let Some(addr) = addr {
                     emit_load(self, dst.reg, addr, kind)?;
+                } else {
+                    self.context.free_reg(dst);
                 }
             }
             _ => {
