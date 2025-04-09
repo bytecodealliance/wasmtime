@@ -3926,6 +3926,30 @@
         (args_builder_finish uses)))
 
 
+;;;; Rules for `try_call` and `try_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Direct call to an in-range function.
+(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (reloc_distance_near)) args et) targets)
+      (let ((abi Sig (abi_sig sig_ref))
+            (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args)))
+        (emit_side_effect (abi_try_call abi (CallInstDest.Direct name) uses et targets))))
+
+;; Direct call to an out-of-range function (implicitly via pointer).
+(rule (lower_branch (try_call (func_ref_data sig_ref name _) args et) targets)
+      (let ((abi Sig (abi_sig sig_ref))
+            (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
+            (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0))))
+        (emit_side_effect (abi_try_call abi (CallInstDest.Indirect target) uses et targets))))
+
+;; Indirect call.
+(rule (lower_branch (try_call_indirect ptr args et) targets)
+      (if-let (exception_sig sig_ref) et)
+      (let ((abi Sig (abi_sig sig_ref))
+            (target Reg (put_in_reg ptr))
+            (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args)))
+        (emit_side_effect (abi_try_call abi (CallInstDest.Indirect target) uses et targets))))
+
+
 ;;;; Common helpers for argument lowering ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Lower function arguments (part 1): prepare buffer copies.

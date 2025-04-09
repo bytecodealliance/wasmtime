@@ -3218,10 +3218,27 @@ impl Inst {
                 put(sink, enc);
                 sink.add_call_site();
 
+                // Add exception info, if any, at this point (which will
+                // be the return address on stack).
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    for &(tag, label) in &try_call.exception_dests {
+                        sink.add_exception_handler(tag, label);
+                    }
+                }
+
                 state.nominal_sp_offset -= info.callee_pop_size;
 
                 for inst in S390xMachineDeps::gen_retval_loads(info) {
                     inst.emit(sink, emit_info, state);
+                }
+
+                // If this is a try-call, jump to the continuation
+                // (normal-return) block.
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    let jmp = Inst::Jump {
+                        dest: try_call.continuation,
+                    };
+                    jmp.emit(sink, emit_info, state);
                 }
             }
             &Inst::ReturnCall { ref info } => {

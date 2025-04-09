@@ -906,8 +906,8 @@ impl ABIMachineSpec for S390xMachineDeps {
         call_conv_of_callee: isa::CallConv,
         is_exception: bool,
     ) -> PRegSet {
-        assert!(!is_exception);
         match call_conv_of_callee {
+            _ if is_exception => ALL_CLOBBERS,
             isa::CallConv::Tail => TAIL_CLOBBERS,
             _ => SYSV_CLOBBERS,
         }
@@ -1008,6 +1008,14 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn retval_temp_reg(_call_conv_of_callee: isa::CallConv) -> Writable<Reg> {
         panic!("Should not be called");
+    }
+
+    fn exception_payload_regs(call_conv: isa::CallConv) -> &'static [Reg] {
+        const PAYLOAD_REGS: &'static [Reg] = &[gpr(6), gpr(7)];
+        match call_conv {
+            isa::CallConv::SystemV | isa::CallConv::Tail => PAYLOAD_REGS,
+            _ => &[],
+        }
     }
 }
 
@@ -1377,6 +1385,59 @@ const fn tail_clobbers() -> PRegSet {
         .with(vr_preg(31))
 }
 const TAIL_CLOBBERS: PRegSet = tail_clobbers();
+
+const fn all_clobbers() -> PRegSet {
+    PRegSet::empty()
+        .with(gpr_preg(0))
+        .with(gpr_preg(1))
+        .with(gpr_preg(2))
+        .with(gpr_preg(3))
+        .with(gpr_preg(4))
+        .with(gpr_preg(5))
+        .with(gpr_preg(6))
+        .with(gpr_preg(7))
+        .with(gpr_preg(8))
+        .with(gpr_preg(9))
+        .with(gpr_preg(10))
+        .with(gpr_preg(11))
+        .with(gpr_preg(12))
+        .with(gpr_preg(13))
+        .with(gpr_preg(14))
+        .with(gpr_preg(15))
+        .with(vr_preg(0))
+        .with(vr_preg(1))
+        .with(vr_preg(2))
+        .with(vr_preg(3))
+        .with(vr_preg(4))
+        .with(vr_preg(5))
+        .with(vr_preg(6))
+        .with(vr_preg(7))
+        .with(vr_preg(8))
+        .with(vr_preg(9))
+        .with(vr_preg(10))
+        .with(vr_preg(11))
+        .with(vr_preg(12))
+        .with(vr_preg(13))
+        .with(vr_preg(14))
+        .with(vr_preg(15))
+        .with(vr_preg(16))
+        .with(vr_preg(17))
+        .with(vr_preg(18))
+        .with(vr_preg(19))
+        .with(vr_preg(20))
+        .with(vr_preg(21))
+        .with(vr_preg(22))
+        .with(vr_preg(23))
+        .with(vr_preg(24))
+        .with(vr_preg(25))
+        .with(vr_preg(26))
+        .with(vr_preg(27))
+        .with(vr_preg(28))
+        .with(vr_preg(29))
+        .with(vr_preg(30))
+        .with(vr_preg(31))
+}
+const ALL_CLOBBERS: PRegSet = all_clobbers();
 
 fn sysv_create_machine_env() -> MachineEnv {
     MachineEnv {
