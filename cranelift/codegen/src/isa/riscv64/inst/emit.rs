@@ -246,12 +246,19 @@ impl MachInstEmit for Inst {
             self.emit_uncompressed(sink, emit_info, state, &mut start_off);
         }
 
-        // We exclude br_table and return call from these checks since they emit
-        // their own islands, and thus are allowed to exceed the worst case size.
-        if !matches!(
-            self,
-            Inst::BrTable { .. } | Inst::ReturnCall { .. } | Inst::ReturnCallInd { .. }
-        ) {
+        // We exclude br_table, call, return_call and try_call from
+        // these checks since they emit their own islands, and thus
+        // are allowed to exceed the worst case size.
+        let emits_own_island = match self {
+            Inst::BrTable { .. }
+            | Inst::ReturnCall { .. }
+            | Inst::ReturnCallInd { .. }
+            | Inst::Call { .. }
+            | Inst::CallInd { .. }
+            | Inst::EmitIsland { .. } => true,
+            _ => false,
+        };
+        if !emits_own_island {
             let end_off = sink.cur_offset();
             assert!(
                 (end_off - start_off) <= Inst::worst_case_size(),
