@@ -687,11 +687,8 @@ fn import_works() -> Result<()> {
 
     let instance = Instance::new(&mut store, &module, &imports)?;
     let run = instance.get_func(&mut store, "run").unwrap();
-    let hello = Val::ExternRef(Some(crate::new_externref(&mut store, "hello".to_string())?));
-    let goodbye = Val::ExternRef(Some(crate::new_externref(
-        &mut store,
-        "goodbye".to_string(),
-    )?));
+    let hello = Val::ExternRef(Some(ExternRef::new(&mut store, "hello".to_string())?));
+    let goodbye = Val::ExternRef(Some(ExternRef::new(&mut store, "goodbye".to_string())?));
     let funcref = Val::FuncRef(Some(Func::wrap(&mut store, || -> i32 { 42 })));
     run.call(&mut store, &[hello, goodbye, funcref], &mut [])?;
 
@@ -1509,7 +1506,7 @@ fn calls_with_funcref_and_externref(config: &mut Config) -> anyhow::Result<()> {
     let untyped = typed.func();
 
     let my_funcref = Func::wrap(&mut store, || 100u32);
-    let my_externref = crate::new_externref(&mut store, 99u32)?;
+    let my_externref = ExternRef::new(&mut store, 99u32)?;
     let mut results = [Val::I32(0), Val::I32(0)];
 
     fn assert_my_funcref(mut store: impl AsContextMut, func: Option<&Func>) -> Result<()> {
@@ -2214,7 +2211,7 @@ fn wasm_to_host_trampolines_and_subtyping(config: &mut Config) -> Result<()> {
             store,
             ft1.clone(),
             |mut caller: Caller<'_, ()>, _args, results| {
-                results[0] = crate::new_externref(&mut caller, 200)?.into();
+                results[0] = ExternRef::new(&mut caller, 200)?.into();
                 Ok(())
             },
         )

@@ -1603,8 +1603,8 @@ impl StoreOpaque {
             Ok(x) => Ok(x),
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
                 Ok(oom) => {
-                    let value = oom.into_inner();
-                    self.gc();
+                    let (value, oom) = oom.take_inner();
+                    self.grow_or_collect_gc_heap(Some(oom.bytes_needed()));
                     alloc_func(self, value)
                 }
                 Err(e) => Err(e),

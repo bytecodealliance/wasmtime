@@ -767,24 +767,6 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
     Ok(())
 }
 
-fn alloc_externref<T>(store: &mut impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
-where
-    T: Send + Sync + 'static,
-{
-    let mut store = store.as_context_mut();
-    match ExternRef::new(&mut store, value) {
-        Ok(x) => Ok(x),
-        Err(e) => match e.downcast::<GcHeapOutOfMemory<T>>() {
-            Ok(oom) => {
-                let (value, oom) = oom.take_inner();
-                store.gc(Some(&oom));
-                ExternRef::new(&mut store, value)
-            }
-            Err(e) => Err(e),
-        },
-    }
-}
-
 /// Execute a series of `table.get` and `table.set` operations.
 ///
 /// Returns the number of `gc` operations which occurred throughout the test
@@ -830,9 +812,9 @@ pub fn table_ops(
                     caller.gc(None);
                 }
 
-                let a = alloc_externref(&mut caller, CountDrops(num_dropped.clone()))?;
-                let b = alloc_externref(&mut caller, CountDrops(num_dropped.clone()))?;
-                let c = alloc_externref(&mut caller, CountDrops(num_dropped.clone()))?;
+                let a = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))?;
+                let b = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))?;
+                let c = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))?;
 
                 log::info!("table_ops: gc() -> ({:?}, {:?}, {:?})", a, b, c);
 
@@ -899,9 +881,9 @@ pub fn table_ops(
             move |mut caller, _params, results| {
                 log::info!("table_ops: make_refs");
 
-                let a = alloc_externref(&mut caller, CountDrops(num_dropped.clone()))?;
-                let b = alloc_externref(&mut caller, CountDrops(num_dropped.clone()))?;
-                let c = alloc_externref(&mut caller, CountDrops(num_dropped.clone()))?;
+                let a = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))?;
+                let b = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))?;
+                let c = ExternRef::new(&mut caller, CountDrops(num_dropped.clone()))?;
                 expected_drops.fetch_add(3, SeqCst);
 
                 log::info!("table_ops: make_refs() -> ({:?}, {:?}, {:?})", a, b, c);
@@ -927,7 +909,7 @@ pub fn table_ops(
             );
             let args: Vec<_> = (0..ops.num_params)
                 .map(|_| {
-                    Ok(Val::ExternRef(Some(alloc_externref(
+                    Ok(Val::ExternRef(Some(ExternRef::new(
                         &mut scope,
                         CountDrops(num_dropped.clone()),
                     )?)))

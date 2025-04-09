@@ -9,7 +9,7 @@ fn array_new_empty() -> Result<()> {
         FieldType::new(Mutability::Const, StorageType::I8),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
-    let array = crate::new_array(&mut store, &pre, &Val::I32(0), 0)?;
+    let array = ArrayRef::new(&mut store, &pre, &Val::I32(0), 0)?;
     assert_eq!(array.len(&store)?, 0);
     Ok(())
 }
@@ -22,7 +22,7 @@ fn array_new_with_elems() -> Result<()> {
         FieldType::new(Mutability::Const, ValType::I32.into()),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
-    let array = crate::new_array(&mut store, &pre, &Val::I32(99), 3)?;
+    let array = ArrayRef::new(&mut store, &pre, &Val::I32(99), 3)?;
     assert_eq!(array.len(&store)?, 3);
     for i in 0..3 {
         assert_eq!(array.get(&mut store, i)?.unwrap_i32(), 99);
@@ -45,7 +45,7 @@ fn array_new_unrooted_initial_elem() -> Result<()> {
         AnyRef::from_i31(&mut scope, I31::new_i32(1234).unwrap())
     };
 
-    assert!(crate::new_array(&mut store, &pre, &anyref.into(), 3).is_err());
+    assert!(ArrayRef::new(&mut store, &pre, &anyref.into(), 3).is_err());
     Ok(())
 }
 
@@ -64,7 +64,7 @@ fn array_new_cross_store_initial_elem() {
     // Passing an `anyref` from a different store to `ArrayRef::new` results in
     // a panic.
     let anyref = AnyRef::from_i31(&mut store2, I31::new_i32(1234).unwrap());
-    crate::new_array(&mut store1, &pre, &anyref.into(), 3).unwrap();
+    ArrayRef::new(&mut store1, &pre, &anyref.into(), 3).unwrap();
 }
 
 #[test]
@@ -79,7 +79,7 @@ fn array_new_cross_store_pre() {
     );
     let pre = ArrayRefPre::new(&mut store2, array_ty);
 
-    crate::new_array(&mut store1, &pre, &Val::I32(0), 3).unwrap();
+    ArrayRef::new(&mut store1, &pre, &Val::I32(0), 3).unwrap();
 }
 
 #[test]
@@ -90,7 +90,7 @@ fn array_new_fixed_empty() -> Result<()> {
         FieldType::new(Mutability::Const, ValType::I32.into()),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
-    let array = crate::new_fixed_array(&mut store, &pre, &[])?;
+    let array = ArrayRef::new_fixed(&mut store, &pre, &[])?;
     assert_eq!(array.len(&store)?, 0);
     Ok(())
 }
@@ -103,7 +103,7 @@ fn array_new_fixed_with_elems() -> Result<()> {
         FieldType::new(Mutability::Const, ValType::I32.into()),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
-    let array = crate::new_fixed_array(
+    let array = ArrayRef::new_fixed(
         &mut store,
         &pre,
         &[Val::I32(11), Val::I32(22), Val::I32(33)],
@@ -130,7 +130,7 @@ fn array_new_fixed_unrooted_initial_elem() -> Result<()> {
         AnyRef::from_i31(&mut scope, I31::new_i32(1234).unwrap())
     };
 
-    assert!(crate::new_fixed_array(&mut store, &pre, &[anyref.into()]).is_err());
+    assert!(ArrayRef::new_fixed(&mut store, &pre, &[anyref.into()]).is_err());
     Ok(())
 }
 
@@ -149,7 +149,7 @@ fn array_new_fixed_cross_store_initial_elem() {
     // Passing an `anyref` from a different store to `ArrayRef::new_fixed`
     // results in a panic.
     let anyref = AnyRef::from_i31(&mut store2, I31::new_i32(1234).unwrap());
-    crate::new_fixed_array(&mut store1, &pre, &[anyref.into()]).unwrap();
+    ArrayRef::new_fixed(&mut store1, &pre, &[anyref.into()]).unwrap();
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn array_new_fixed_cross_store_pre() {
     );
     let pre = ArrayRefPre::new(&mut store2, array_ty);
 
-    crate::new_fixed_array(&mut store1, &pre, &[Val::I32(0)]).unwrap();
+    ArrayRef::new_fixed(&mut store1, &pre, &[Val::I32(0)]).unwrap();
 }
 
 #[test]
@@ -176,7 +176,7 @@ fn anyref_as_array() -> Result<()> {
         FieldType::new(Mutability::Const, StorageType::ValType(ValType::I32)),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
-    let a0 = crate::new_fixed_array(&mut store, &pre, &[])?;
+    let a0 = ArrayRef::new_fixed(&mut store, &pre, &[])?;
 
     let anyref: Rooted<AnyRef> = a0.into();
     assert!(anyref.is_array(&store)?);
@@ -200,7 +200,7 @@ fn array_len_empty() -> Result<()> {
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
 
-    let array = crate::new_fixed_array(&mut store, &pre, &[])?;
+    let array = ArrayRef::new_fixed(&mut store, &pre, &[])?;
     assert_eq!(array.len(&store)?, 0);
 
     Ok(())
@@ -216,7 +216,7 @@ fn array_len_non_empty() -> Result<()> {
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
 
-    let array = crate::new_fixed_array(
+    let array = ArrayRef::new_fixed(
         &mut store,
         &pre,
         &[Val::I32(11), Val::I32(22), Val::I32(33)],
@@ -236,7 +236,7 @@ fn array_get_in_bounds() -> Result<()> {
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
 
-    let array = crate::new_fixed_array(
+    let array = ArrayRef::new_fixed(
         &mut store,
         &pre,
         &[Val::I32(11), Val::I32(22), Val::I32(33)],
@@ -259,7 +259,7 @@ fn array_get_out_of_bounds() -> Result<()> {
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
 
-    let array = crate::new_fixed_array(
+    let array = ArrayRef::new_fixed(
         &mut store,
         &pre,
         &[Val::I32(11), Val::I32(22), Val::I32(33)],
@@ -283,7 +283,7 @@ fn array_get_on_unrooted() -> Result<()> {
 
     let array = {
         let mut scope = RootScope::new(&mut store);
-        crate::new_fixed_array(&mut scope, &pre, &[Val::I32(11)])?
+        ArrayRef::new_fixed(&mut scope, &pre, &[Val::I32(11)])?
     };
 
     assert!(array.get(&mut store, 0).is_err());
@@ -302,7 +302,7 @@ fn array_get_wrong_store() {
     );
     let pre = ArrayRefPre::new(&mut store1, array_ty);
 
-    let array = crate::new_fixed_array(&mut store1, &pre, &[Val::I32(11)]).unwrap();
+    let array = ArrayRef::new_fixed(&mut store1, &pre, &[Val::I32(11)]).unwrap();
 
     // Should panic.
     let _ = array.get(&mut store2, 0);
@@ -318,7 +318,7 @@ fn array_set_in_bounds() -> Result<()> {
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
 
-    let array = crate::new_fixed_array(&mut store, &pre, &[Val::I32(11)])?;
+    let array = ArrayRef::new_fixed(&mut store, &pre, &[Val::I32(11)])?;
 
     assert_eq!(array.get(&mut store, 0)?.unwrap_i32(), 11);
     array.set(&mut store, 0, Val::I32(22))?;
@@ -337,7 +337,7 @@ fn array_set_out_of_bounds() -> Result<()> {
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
 
-    let array = crate::new_fixed_array(&mut store, &pre, &[Val::I32(11)])?;
+    let array = ArrayRef::new_fixed(&mut store, &pre, &[Val::I32(11)])?;
 
     assert!(array.set(&mut store, 1, Val::I32(22)).is_err());
     assert!(array.set(&mut store, 2, Val::I32(33)).is_err());
@@ -357,7 +357,7 @@ fn array_set_on_unrooted() -> Result<()> {
 
     let array = {
         let mut scope = RootScope::new(&mut store);
-        crate::new_fixed_array(&mut scope, &pre, &[Val::I32(11)])?
+        ArrayRef::new_fixed(&mut scope, &pre, &[Val::I32(11)])?
     };
 
     assert!(array.set(&mut store, 0, Val::I32(22)).is_err());
@@ -374,7 +374,7 @@ fn array_set_given_unrooted() -> Result<()> {
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
 
-    let array = crate::new_fixed_array(&mut store, &pre, &[Val::AnyRef(None)])?;
+    let array = ArrayRef::new_fixed(&mut store, &pre, &[Val::AnyRef(None)])?;
 
     let anyref = {
         let mut scope = RootScope::new(&mut store);
@@ -397,7 +397,7 @@ fn array_set_cross_store_value() {
     );
     let pre = ArrayRefPre::new(&mut store1, array_ty);
 
-    let array = crate::new_fixed_array(&mut store1, &pre, &[Val::AnyRef(None)]).unwrap();
+    let array = ArrayRef::new_fixed(&mut store1, &pre, &[Val::AnyRef(None)]).unwrap();
 
     let anyref = AnyRef::from_i31(&mut store2, I31::new_i32(1234).unwrap());
 
@@ -415,7 +415,7 @@ fn array_set_immutable_elems() -> Result<()> {
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
 
-    let array = crate::new_fixed_array(
+    let array = ArrayRef::new_fixed(
         &mut store,
         &pre,
         &[Val::I32(11), Val::I32(22), Val::I32(33)],
@@ -438,7 +438,7 @@ fn array_set_wrong_field_type() -> Result<()> {
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
 
-    let array = crate::new_fixed_array(&mut store, &pre, &[Val::I32(11)])?;
+    let array = ArrayRef::new_fixed(&mut store, &pre, &[Val::I32(11)])?;
 
     assert!(array.set(&mut store, 0, Val::I64(22)).is_err());
     Ok(())
@@ -452,7 +452,7 @@ fn array_ty() -> Result<()> {
         FieldType::new(Mutability::Const, ValType::I32.into()),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty.clone());
-    let a = crate::new_fixed_array(&mut store, &pre, &[Val::I32(11)])?;
+    let a = ArrayRef::new_fixed(&mut store, &pre, &[Val::I32(11)])?;
     assert!(ArrayType::eq(&array_ty, &a.ty(&store)?));
     Ok(())
 }
@@ -467,7 +467,7 @@ fn array_ty_unrooted() -> Result<()> {
     let pre = ArrayRefPre::new(&mut store, array_ty);
     let a = {
         let mut scope = RootScope::new(&mut store);
-        crate::new_fixed_array(&mut scope, &pre, &[Val::I32(11)])?
+        ArrayRef::new_fixed(&mut scope, &pre, &[Val::I32(11)])?
     };
     assert!(a.ty(&store).is_err());
     Ok(())
@@ -481,7 +481,7 @@ fn array_elems_empty() -> Result<()> {
         FieldType::new(Mutability::Const, ValType::I32.into()),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
-    let array = crate::new_fixed_array(&mut store, &pre, &[])?;
+    let array = ArrayRef::new_fixed(&mut store, &pre, &[])?;
     let mut elems = array.elems(&mut store)?;
     assert_eq!(elems.len(), 0);
     assert!(elems.next().is_none());
@@ -496,7 +496,7 @@ fn array_elems_non_empty() -> Result<()> {
         FieldType::new(Mutability::Const, ValType::I32.into()),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
-    let array = crate::new_fixed_array(
+    let array = ArrayRef::new_fixed(
         &mut store,
         &pre,
         &[Val::I32(11), Val::I32(22), Val::I32(33)],
@@ -520,7 +520,7 @@ fn array_elems_unrooted() -> Result<()> {
     let pre = ArrayRefPre::new(&mut store, array_ty);
     let array = {
         let mut scope = RootScope::new(&mut store);
-        crate::new_fixed_array(&mut scope, &pre, &[Val::I32(11)])?
+        ArrayRef::new_fixed(&mut scope, &pre, &[Val::I32(11)])?
     };
     assert!(array.elems(&mut store).is_err());
     Ok(())
@@ -565,7 +565,7 @@ fn passing_arrays_through_wasm_with_untyped_calls() -> Result<()> {
     let run = instance.get_func(&mut store, "run").unwrap();
 
     let pre = ArrayRefPre::new(&mut store, array_ty.clone());
-    let a = crate::new_fixed_array(&mut store, &pre, &[Val::I32(42)])?;
+    let a = ArrayRef::new_fixed(&mut store, &pre, &[Val::I32(42)])?;
 
     let mut results = vec![Val::null_any_ref()];
     run.call(&mut store, &[a.into()], &mut results)?;
@@ -615,7 +615,7 @@ fn passing_arrays_through_wasm_with_typed_calls() -> Result<()> {
     let run = instance.get_typed_func::<Rooted<ArrayRef>, Rooted<ArrayRef>>(&mut store, "run")?;
 
     let pre = ArrayRefPre::new(&mut store, array_ty.clone());
-    let a = crate::new_fixed_array(&mut store, &pre, &[Val::I32(42)])?;
+    let a = ArrayRef::new_fixed(&mut store, &pre, &[Val::I32(42)])?;
 
     let a2 = run.call(&mut store, a)?;
 
@@ -652,7 +652,7 @@ fn host_sets_array_global() -> Result<()> {
         FieldType::new(Mutability::Const, StorageType::I8),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty.clone());
-    let a0 = crate::new_fixed_array(&mut store, &pre, &[Val::I32(42)])?;
+    let a0 = ArrayRef::new_fixed(&mut store, &pre, &[Val::I32(42)])?;
     g.set(&mut store, a0.into())?;
 
     // Get the global from the host.
@@ -700,7 +700,7 @@ fn wasm_sets_array_global() -> Result<()> {
         FieldType::new(Mutability::Const, StorageType::I8),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty.clone());
-    let a0 = crate::new_fixed_array(&mut store, &pre, &[Val::I32(42)])?;
+    let a0 = ArrayRef::new_fixed(&mut store, &pre, &[Val::I32(42)])?;
 
     let instance = Instance::new(&mut store, &module, &[])?;
     let set = instance.get_func(&mut store, "set").unwrap();
@@ -752,7 +752,7 @@ fn host_sets_array_in_table() -> Result<()> {
         FieldType::new(Mutability::Const, StorageType::I8),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty.clone());
-    let a0 = crate::new_fixed_array(&mut store, &pre, &[Val::I32(42)])?;
+    let a0 = ArrayRef::new_fixed(&mut store, &pre, &[Val::I32(42)])?;
     t.set(&mut store, 0, a0.into())?;
 
     // Get the global from the host.
@@ -802,7 +802,7 @@ fn wasm_sets_array_in_table() -> Result<()> {
         FieldType::new(Mutability::Const, StorageType::I8),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty.clone());
-    let a0 = crate::new_fixed_array(&mut store, &pre, &[Val::I32(42)])?;
+    let a0 = ArrayRef::new_fixed(&mut store, &pre, &[Val::I32(42)])?;
 
     let instance = Instance::new(&mut store, &module, &[])?;
     let set = instance.get_func(&mut store, "set").unwrap();
@@ -863,7 +863,7 @@ fn instantiate_with_array_global() -> Result<()> {
 
     // Instantiate with a non-null-ref global.
     let pre = ArrayRefPre::new(&mut store, array_ty);
-    let a0 = crate::new_fixed_array(&mut store, &pre, &[Val::I32(42)])?;
+    let a0 = ArrayRef::new_fixed(&mut store, &pre, &[Val::I32(42)])?;
     let g = Global::new(&mut store, global_ty, a0.into())?;
     let instance = Instance::new(&mut store, &module, &[g.into()])?;
     let g = instance.get_global(&mut store, "g").expect("export exists");

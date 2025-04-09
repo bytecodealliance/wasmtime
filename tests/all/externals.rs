@@ -162,7 +162,7 @@ fn get_set_externref_globals_via_api() -> anyhow::Result<()> {
     )?;
     assert!(global.get(&mut store).unwrap_externref().is_none());
 
-    let hello = crate::new_externref(&mut store, "hello".to_string())?;
+    let hello = ExternRef::new(&mut store, "hello".to_string())?;
     global.set(&mut store, hello.into())?;
     let r = global.get(&mut store).unwrap_externref().cloned().unwrap();
     assert!(r
@@ -179,7 +179,7 @@ fn get_set_externref_globals_via_api() -> anyhow::Result<()> {
 
     // Initialize with a non-null externref.
 
-    let externref = crate::new_externref(&mut store, 42_i32)?;
+    let externref = ExternRef::new(&mut store, 42_i32)?;
     let global = Global::new(
         &mut store,
         GlobalType::new(ValType::EXTERNREF, Mutability::Const),
@@ -304,7 +304,7 @@ fn create_get_set_externref_tables_via_api() -> anyhow::Result<()> {
     let mut store = Store::new(&engine, ());
 
     let table_ty = TableType::new(RefType::EXTERNREF, 10, None);
-    let init = crate::new_externref(&mut store, 42_usize)?;
+    let init = ExternRef::new(&mut store, 42_usize)?;
     let table = Table::new(&mut store, table_ty, init.into())?;
 
     assert_eq!(
@@ -339,7 +339,7 @@ fn fill_externref_tables_via_api() -> anyhow::Result<()> {
         assert!(table.get(&mut store, i).unwrap().unwrap_extern().is_none());
     }
 
-    let val = crate::new_externref(&mut store, 42_usize)?;
+    let val = ExternRef::new(&mut store, 42_usize)?;
     table.fill(&mut store, 2, val.into(), 4)?;
 
     for i in (0..2).chain(7..10) {

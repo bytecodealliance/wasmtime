@@ -994,7 +994,7 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
     let func: F = instance.get_typed_func(&mut store, "run")?;
     *store.data_mut() = Some(func.clone());
 
-    let r = Some(crate::new_externref_async(&mut store, 5).await?);
+    let r = Some(ExternRef::new_async(&mut store, 5).await?);
     func.call_async(&mut store, (5, r)).await?;
 
     Ok(())
