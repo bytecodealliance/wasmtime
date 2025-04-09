@@ -121,7 +121,7 @@ impl Mmap {
             let err = io::Error::last_os_error();
             CloseHandle(mapping);
             if ptr.is_null() {
-                return Err(err).context(format!("failed to create map view of {:#x} bytes", len));
+                return Err(err).context(format!("failed to create map view of {len:#x} bytes"));
             }
 
             let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), len);
