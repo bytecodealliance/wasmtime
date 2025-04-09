@@ -696,7 +696,7 @@ impl TypeRegistryInner {
         log::trace!("registering rec group of length {}", types.len());
         debug_assert_eq!(iter_entity_range(range.clone()).len(), types.len());
 
-        // We need two different canonicalizations of this rec group: one for
+        // We need two different canonicalization of this rec group: one for
         // hash-consing and another for runtime usage within this
         // engine. However, we only need the latter if this is a new rec group
         // that hasn't been registered before. Therefore, we only eagerly create
