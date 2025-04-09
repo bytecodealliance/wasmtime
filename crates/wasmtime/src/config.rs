@@ -279,10 +279,9 @@ impl Config {
 
             // When running under MIRI try to optimize for compile time of wasm
             // code itself as much as possible. Disable optimizations by
-            // default and use the fastest regalloc available to us.
+            // default.
             if cfg!(miri) {
                 ret.cranelift_opt_level(OptLevel::None);
-                ret.cranelift_regalloc_algorithm(RegallocAlgorithm::SinglePass);
             }
         }
 
@@ -1255,7 +1254,6 @@ impl Config {
     pub fn cranelift_regalloc_algorithm(&mut self, algo: RegallocAlgorithm) -> &mut Self {
         let val = match algo {
             RegallocAlgorithm::Backtracking => "backtracking",
-            RegallocAlgorithm::SinglePass => "single_pass",
         };
         self.compiler_config
             .settings
@@ -2841,16 +2839,6 @@ pub enum RegallocAlgorithm {
     /// results in better register utilization, producing fewer spills
     /// and moves, but can cause super-linear compile runtime.
     Backtracking,
-    /// Generates acceptable code very quickly.
-    ///
-    /// This algorithm performs a single pass through the code,
-    /// guaranteed to work in linear time.  (Note that the rest of
-    /// Cranelift is not necessarily guaranteed to run in linear time,
-    /// however.) It cannot undo earlier decisions, however, and it
-    /// cannot foresee constraints or issues that may occur further
-    /// ahead in the code, so the code may have more spills and moves as
-    /// a result.
-    SinglePass,
 }
 
 /// Select which profiling technique to support.
