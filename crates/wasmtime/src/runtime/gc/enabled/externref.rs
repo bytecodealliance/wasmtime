@@ -186,11 +186,13 @@ impl ExternRef {
     ///             Ok(oom) => {
     ///                 // Take back ownership of our `String`.
     ///                 let s = oom.into_inner();
-    ///                 // Drop other rooted GC refs to make room for this
-    ///                 // allocation, and try again, passing the string back
-    ///                 // into the second allocation attempt. Alternatively,
-    ///                 // propagate the error up to callers...
-    /// #               return Ok(());
+    ///                 // Drop some rooted GC refs from our system to potentially
+    ///                 // free up space for Wasmtime to make this allocation.
+    /// #               let drop_some_gc_refs = || {};
+    ///                 drop_some_gc_refs();
+    ///                 // Finally, try to allocate again, reusing the original
+    ///                 // string.
+    ///                 ExternRef::new(&mut scope, s)
     ///             }
     ///             Err(e) => return Err(e),
     ///         },
@@ -285,11 +287,13 @@ impl ExternRef {
     ///             Ok(oom) => {
     ///                 // Take back ownership of our `String`.
     ///                 let s = oom.into_inner();
-    ///                 // Drop other rooted GC refs to make room for this
-    ///                 // allocation, and try again, passing the string back
-    ///                 // into the second allocation attempt. Alternatively,
-    ///                 // propagate the error up to callers...
-    /// #               return Ok(());
+    ///                 // Drop some rooted GC refs from our system to potentially
+    ///                 // free up space for Wasmtime to make this allocation.
+    /// #               let drop_some_gc_refs = || {};
+    ///                 drop_some_gc_refs();
+    ///                 // Finally, try to allocate again, reusing the original
+    ///                 // string.
+    ///                 ExternRef::new_async(&mut scope, s).await
     ///             }
     ///             Err(e) => return Err(e),
     ///         },
