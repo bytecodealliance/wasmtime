@@ -92,7 +92,7 @@ pub struct InstanceAllocationRequest<'a> {
 /// InstanceAllocationRequest, rather than on a &mut InstanceAllocationRequest
 /// itself, because several use-sites require a split mut borrow on the
 /// InstanceAllocationRequest.
-pub struct StorePtr(Option<crate::vm::SendSyncPtr<dyn VMStore>>);
+pub struct StorePtr(Option<NonNull<dyn VMStore>>);
 
 // We can't make `VMStore: Send + Sync` because that requires making all of
 // Wastime's internals generic over the `Store`'s `T`. So instead, we take care
@@ -109,12 +109,12 @@ impl StorePtr {
 
     /// A pointer to a Store.
     pub fn new(ptr: NonNull<dyn VMStore>) -> Self {
-        Self(Some(ptr.into()))
+        Self(Some(ptr))
     }
 
     /// The raw contents of this struct
     pub fn as_raw(&self) -> Option<NonNull<dyn VMStore>> {
-        self.0.map(|p| p.as_non_null())
+        self.0
     }
 
     /// Use the StorePtr as a mut ref to the Store.
