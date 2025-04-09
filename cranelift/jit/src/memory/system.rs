@@ -5,11 +5,12 @@ use memmap2::MmapMut;
 
 #[cfg(not(any(feature = "selinux-fix", windows)))]
 use std::alloc;
-use std::ffi::c_void;
 use std::io;
 use std::mem;
 use std::ptr;
-use wasmtime_jit_icache_coherence as icache_coherence;
+
+use super::BranchProtection;
+use super::JITMemoryProvider;
 
 /// A simple struct consisting of a pointer and length.
 struct PtrLen {
@@ -111,15 +112,6 @@ impl Drop for PtrLen {
 
 // TODO: add a `Drop` impl for `cfg(target_os = "windows")`
 
-/// Type of branch protection to apply to executable memory.
-#[derive(Clone, Debug, PartialEq)]
-pub(crate) enum BranchProtection {
-    /// No protection.
-    None,
-    /// Use the Branch Target Identification extension of the Arm architecture.
-    BTI,
-}
-
 /// JIT memory manager. This manages pages of suitably aligned and
 /// accessible memory. Memory will be leaked by default to have
 /// function pointers remain valid for the remainder of the
@@ -129,19 +121,17 @@ pub(crate) struct Memory {
     already_protected: usize,
     current: PtrLen,
     position: usize,
-    branch_protection: BranchProtection,
 }
 
 unsafe impl Send for Memory {}
 
 impl Memory {
-    pub(crate) fn new(branch_protection: BranchProtection) -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             allocations: Vec::new(),
             already_protected: 0,
             current: PtrLen::new(),
             position: 0,
-            branch_protection,
         }
     }
 
@@ -175,55 +165,18 @@ impl Memory {
     }
 
     /// Set all memory allocated in this `Memory` up to now as readable and executable.
-    pub(crate) fn set_readable_and_executable(&mut self) -> ModuleResult<()> {
+    pub(crate) fn set_readable_and_executable(
+        &mut self,
+        branch_protection: BranchProtection,
+    ) -> ModuleResult<()> {
         self.finish_current();
 
-        // Clear all the newly allocated code from cache if the processor requires it
-        //
-        // Do this before marking the memory as R+X, technically we should be able to do it after
-        // but there are some CPU's that have had errata about doing this with read only memory.
         for &PtrLen { ptr, len, .. } in self.non_protected_allocations_iter() {
-            unsafe {
-                icache_coherence::clear_cache(ptr as *const c_void, len)
-                    .expect("Failed cache clear")
-            };
-        }
-
-        let set_region_readable_and_executable = |ptr, len| -> ModuleResult<()> {
-            if self.branch_protection == BranchProtection::BTI {
-                #[cfg(all(target_arch = "aarch64", target_os = "linux"))]
-                if std::arch::is_aarch64_feature_detected!("bti") {
-                    let prot = libc::PROT_EXEC | libc::PROT_READ | /* PROT_BTI */ 0x10;
-
-                    unsafe {
-                        if libc::mprotect(ptr as *mut libc::c_void, len, prot) < 0 {
-                            return Err(ModuleError::Backend(
-                                anyhow::Error::new(io::Error::last_os_error())
-                                    .context("unable to make memory readable+executable"),
-                            ));
-                        }
-                    }
-
-                    return Ok(());
-                }
-            }
-
-            unsafe {
-                region::protect(ptr, len, region::Protection::READ_EXECUTE).map_err(|e| {
-                    ModuleError::Backend(
-                        anyhow::Error::new(e).context("unable to make memory readable+executable"),
-                    )
-                })?;
-            }
-            Ok(())
-        };
-
-        for &PtrLen { ptr, len, .. } in self.non_protected_allocations_iter() {
-            set_region_readable_and_executable(ptr, len)?;
+            super::set_readable_and_executable(ptr, len, branch_protection)?;
         }
 
         // Flush any in-flight instructions from the pipeline
-        icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
+        wasmtime_jit_icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
 
         self.already_protected = self.allocations.len();
         Ok(())
@@ -272,5 +225,53 @@ impl Drop for Memory {
         mem::replace(&mut self.allocations, Vec::new())
             .into_iter()
             .for_each(mem::forget);
+    }
+}
+
+/// A memory provider that allocates memory on-demand using the system
+/// allocator.
+///
+/// Note: Memory will be leaked by default unless
+/// [`JITMemoryProvider::free_memory`] is called to ensure function pointers
+/// remain valid for the remainder of the program's life.
+pub struct SystemMemoryProvider {
+    code: Memory,
+    readonly: Memory,
+    writable: Memory,
+}
+
+impl SystemMemoryProvider {
+    /// Create a new memory handle with the given branch protection.
+    pub fn new() -> Self {
+        Self {
+            code: Memory::new(),
+            readonly: Memory::new(),
+            writable: Memory::new(),
+        }
+    }
+}
+
+impl JITMemoryProvider for SystemMemoryProvider {
+    unsafe fn free_memory(&mut self) {
+        self.code.free_memory();
+        self.readonly.free_memory();
+        self.writable.free_memory();
+    }
+
+    fn finalize(&mut self, branch_protection: BranchProtection) -> ModuleResult<()> {
+        self.readonly.set_readonly()?;
+        self.code.set_readable_and_executable(branch_protection)
+    }
+
+    fn allocate_readexec(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
+        self.code.allocate(size, align)
+    }
+
+    fn allocate_readwrite(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
+        self.writable.allocate(size, align)
+    }
+
+    fn allocate_readonly(&mut self, size: usize, align: u64) -> io::Result<*mut u8> {
+        self.readonly.allocate(size, align)
     }
 }
