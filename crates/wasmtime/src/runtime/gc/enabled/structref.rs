@@ -240,11 +240,6 @@ impl StructRef {
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        assert_eq!(
-            store.id(),
-            allocator.store_id,
-            "attempted to use a `StructRefPre` with the wrong store"
-        );
         assert!(
             !store.async_support(),
             "use `StructRef::new_async` with asynchronous stores"
@@ -296,11 +291,6 @@ impl StructRef {
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        assert_eq!(
-            store.id(),
-            allocator.store_id,
-            "attempted to use a `StructRefPre` with the wrong store"
-        );
         assert!(
             store.async_support(),
             "use `StructRef::new` with synchronous stores"
@@ -311,6 +301,25 @@ impl StructRef {
                 Self::new_unchecked(store, allocator, fields)
             })
             .await
+    }
+
+    /// Like `Self::new` but caller's must ensure that if the store is
+    /// configured for async, this is only ever called from on a fiber stack.
+    pub(crate) unsafe fn new_maybe_async(
+        store: &mut StoreOpaque,
+        allocator: &StructRefPre,
+        fields: &[Val],
+    ) -> Result<Rooted<StructRef>> {
+        assert!(
+            store.async_support(),
+            "use `StructRef::new` with synchronous stores"
+        );
+        Self::type_check_fields(store, allocator, fields)?;
+        unsafe {
+            store.retry_after_gc_maybe_async((), |store, ()| {
+                Self::new_unchecked(store, allocator, fields)
+            })
+        }
     }
 
     /// Type check the field values before allocating a new struct.
@@ -346,6 +355,12 @@ impl StructRef {
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
+        assert_eq!(
+            store.id(),
+            allocator.store_id,
+            "attempted to use a `StructRefPre` with the wrong store"
+        );
+
         // Allocate the struct and write each field value into the appropriate
         // offset.
         let structref = store

@@ -200,7 +200,7 @@ pub unsafe trait VMStore {
     ///
     /// If the async GC was cancelled, returns an error. This should be raised
     /// as a trap to clean up Wasm execution.
-    fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>>;
+    unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>>;
 
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]

@@ -1543,6 +1543,64 @@ impl StoreOpaque {
         }
     }
 
+    /// Like `retry_after_gc` but must be called from a fiber stack if this is
+    /// an async store.
+    #[cfg(feature = "gc")]
+    pub(crate) unsafe fn retry_after_gc_maybe_async<T, U>(
+        &mut self,
+        value: T,
+        alloc_func: impl Fn(&mut Self, T) -> Result<U>,
+    ) -> Result<U>
+    where
+        T: Send + Sync + 'static,
+    {
+        match alloc_func(self, value) {
+            Ok(x) => Ok(x),
+            Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
+                Ok(oom) => {
+                    let value = oom.into_inner();
+                    self.maybe_async_gc(None)?;
+                    alloc_func(self, value)
+                }
+                Err(e) => Err(e),
+            },
+        }
+    }
+
+    /// Like `gc` but must be called from a fiber stack if this is an async
+    /// store.
+    unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
+        let mut scope = crate::OpaqueRootScope::new(self);
+        let store_id = scope.id();
+        let root = root.map(|r| scope.gc_roots_mut().push_lifo_root(store_id, r));
+
+        if scope.async_support() {
+            #[cfg(feature = "async")]
+            unsafe {
+                let async_cx = scope.async_cx();
+                let future = scope.gc_async();
+                async_cx
+                    .expect("attempted to pull async context during shutdown")
+                    .block_on(future)?;
+            }
+        } else {
+            scope.gc();
+        }
+
+        let root = match root {
+            None => None,
+            Some(r) => {
+                let r = r
+                    .get_gc_ref(&scope)
+                    .expect("still in scope")
+                    .unchecked_copy();
+                Some(scope.gc_store_mut()?.clone_gc_ref(&r))
+            }
+        };
+
+        Ok(root)
+    }
+
     #[cfg(feature = "gc")]
     pub fn gc(&mut self) {
         // If the GC heap hasn't been initialized, there is nothing to collect.
@@ -2096,41 +2154,12 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
     }
 
     #[cfg(feature = "gc")]
-    fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
-        let mut scope = crate::RootScope::new(self);
-        let store = scope.as_context_mut().0;
-        let store_id = store.id();
-        let root = root.map(|r| store.gc_roots_mut().push_lifo_root(store_id, r));
-
-        if store.async_support() {
-            #[cfg(feature = "async")]
-            unsafe {
-                let async_cx = store.async_cx();
-                let future = store.gc_async();
-                async_cx
-                    .expect("attempted to pull async context during shutdown")
-                    .block_on(future)?;
-            }
-        } else {
-            (**store).gc();
-        }
-
-        let root = match root {
-            None => None,
-            Some(r) => {
-                let r = r
-                    .get_gc_ref(store)
-                    .expect("still in scope")
-                    .unchecked_copy();
-                Some(store.gc_store_mut()?.clone_gc_ref(&r))
-            }
-        };
-
-        Ok(root)
+    unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
+        (**self).maybe_async_gc(root)
     }
 
     #[cfg(not(feature = "gc"))]
-    fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
+    unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
         Ok(root)
     }
 

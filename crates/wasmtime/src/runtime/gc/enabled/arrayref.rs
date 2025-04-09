@@ -306,11 +306,6 @@ impl ArrayRef {
         elem: &Val,
         len: u32,
     ) -> Result<Rooted<ArrayRef>> {
-        assert_eq!(
-            store.id(),
-            allocator.store_id,
-            "attempted to use a `ArrayRefPre` with the wrong store"
-        );
         assert!(
             !store.async_support(),
             " use `ArrayRef::new_async` with asynchronous stores"
@@ -374,11 +369,6 @@ impl ArrayRef {
         elem: &Val,
         len: u32,
     ) -> Result<Rooted<ArrayRef>> {
-        assert_eq!(
-            store.id(),
-            allocator.store_id,
-            "attempted to use a `ArrayRefPre` with the wrong store"
-        );
         assert!(
             store.async_support(),
             "use `ArrayRef::new` with synchronous stores"
@@ -395,6 +385,25 @@ impl ArrayRef {
             .await
     }
 
+    /// Like `ArrayRef::new` but when async is configured must only ever be
+    /// called from on a fiber stack.
+    pub(crate) unsafe fn new_maybe_async(
+        store: &mut StoreOpaque,
+        allocator: &ArrayRefPre,
+        elem: &Val,
+        len: u32,
+    ) -> Result<Rooted<ArrayRef>> {
+        // Type check the initial element value against the element type.
+        elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
+            .context("element type mismatch")?;
+
+        unsafe {
+            store.retry_after_gc_maybe_async((), |store, ()| {
+                Self::_new_unchecked(store, allocator, RepeatN(elem, len))
+            })
+        }
+    }
+
     /// Allocate a new array of the given elements, without checking that the
     /// elements' types match the array's element type.
     fn _new_unchecked<'a>(
@@ -402,6 +411,12 @@ impl ArrayRef {
         allocator: &ArrayRefPre,
         elems: impl ExactSizeIterator<Item = &'a Val>,
     ) -> Result<Rooted<ArrayRef>> {
+        assert_eq!(
+            store.id(),
+            allocator.store_id,
+            "attempted to use a `ArrayRefPre` with the wrong store"
+        );
+
         let len = u32::try_from(elems.len()).unwrap();
 
         // Allocate the array and write each field value into the appropriate
@@ -570,6 +585,34 @@ impl ArrayRef {
                 Self::_new_unchecked(store, allocator, elems.iter())
             })
             .await
+    }
+
+    /// Like `ArrayRef::new_fixed[_async]` but it is the caller's responsibility
+    /// to ensure that when async is enabled, this is only called from on a
+    /// fiber stack.
+    #[cfg(feature = "async")]
+    pub(crate) unsafe fn _new_fixed_maybe_async(
+        store: &mut StoreOpaque,
+        allocator: &ArrayRefPre,
+        elems: &[Val],
+    ) -> Result<Rooted<ArrayRef>> {
+        assert_eq!(
+            store.id(),
+            allocator.store_id,
+            "attempted to use a `ArrayRefPre` with the wrong store"
+        );
+
+        // Type check the elements against the element type.
+        for elem in elems {
+            elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
+                .context("element type mismatch")?;
+        }
+
+        unsafe {
+            store.retry_after_gc_maybe_async((), |store, ()| {
+                Self::_new_unchecked(store, allocator, elems.iter())
+            })
+        }
     }
 
     #[inline]

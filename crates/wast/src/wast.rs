@@ -22,8 +22,8 @@ pub struct WastContext<T> {
     modules: HashMap<String, ModuleKind>,
     #[cfg(feature = "component-model")]
     component_linker: component::Linker<T>,
-    store: Store<T>,
-    async_runtime: Option<tokio::runtime::Runtime>,
+    pub(crate) store: Store<T>,
+    pub(crate) async_runtime: Option<tokio::runtime::Runtime>,
 }
 
 enum Outcome<T = Results> {
@@ -215,7 +215,7 @@ where
                     .args
                     .iter()
                     .map(|v| match v {
-                        WastArg::Core(v) => core::val(&mut self.store, v),
+                        WastArg::Core(v) => core::val(self, v),
                         _ => bail!("expected core function, found other other argument {v:?}"),
                     })
                     .collect::<Result<Vec<_>>>()?;
