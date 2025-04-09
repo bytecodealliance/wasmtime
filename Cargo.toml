@@ -196,6 +196,7 @@ rust-2024-prelude-collisions = 'warn'
 rust-2024-incompatible-pat = 'warn'
 missing-unsafe-on-extern = 'warn'
 impl-trait-overcaptures = 'warn'
+unsafe-op-in-unsafe-fn = 'warn'
 
 # Don't warn about unknown cfgs for pulley
 [workspace.lints.rust.unexpected_cfgs]

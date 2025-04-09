@@ -1,3 +1,5 @@
+#![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
+
 //! `wit-component` handles modules which export `cabi_realloc` in a special way, using it instead of `memory.grow`
 //! to allocate the adapter stack, hence this test.
 

@@ -8,7 +8,7 @@ fn serialize(engine: &Engine, wat: &str) -> Result<Vec<u8>> {
 }
 
 unsafe fn deserialize_and_instantiate(store: &mut Store<()>, buffer: &[u8]) -> Result<Instance> {
-    let module = Module::deserialize(store.engine(), buffer)?;
+    let module = unsafe { Module::deserialize(store.engine(), buffer)? };
     Ok(Instance::new(store, &module, &[])?)
 }
 

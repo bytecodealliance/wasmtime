@@ -76,19 +76,21 @@ unsafe extern "system" fn fiber_start<F, A, B, C>(data: *mut c_void)
 where
     F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
 {
-    // Set the stack guarantee to be consistent with what Rust expects for threads
-    // This value is taken from:
-    // https://github.com/rust-lang/rust/blob/0d97f7a96877a96015d70ece41ad08bb7af12377/library/std/src/sys/windows/stack_overflow.rs
-    if SetThreadStackGuarantee(&mut 0x5000) == 0 {
-        panic!("failed to set fiber stack guarantee");
-    }
+    unsafe {
+        // Set the stack guarantee to be consistent with what Rust expects for threads
+        // This value is taken from:
+        // https://github.com/rust-lang/rust/blob/0d97f7a96877a96015d70ece41ad08bb7af12377/library/std/src/sys/windows/stack_overflow.rs
+        if SetThreadStackGuarantee(&mut 0x5000) == 0 {
+            panic!("failed to set fiber stack guarantee");
+        }
 
-    let state = data.cast::<StartState>();
-    let func = Box::from_raw((*state).initial_closure.get().cast::<F>());
-    (*state).initial_closure.set(ptr::null_mut());
-    let suspend = Suspend { state };
-    let initial = suspend.take_resume::<A, B, C>();
-    super::Suspend::<A, B, C>::execute(suspend, initial, *func);
+        let state = data.cast::<StartState>();
+        let func = Box::from_raw((*state).initial_closure.get().cast::<F>());
+        (*state).initial_closure.set(ptr::null_mut());
+        let suspend = Suspend { state };
+        let initial = suspend.take_resume::<A, B, C>();
+        super::Suspend::<A, B, C>::execute(suspend, initial, *func);
+    }
 }
 
 impl Fiber {
@@ -167,18 +169,22 @@ impl Suspend {
         }
     }
     unsafe fn take_resume<A, B, C>(&self) -> A {
-        match (*self.result_location::<A, B, C>()).replace(RunResult::Executing) {
-            RunResult::Resuming(val) => val,
-            _ => panic!("not in resuming state"),
+        unsafe {
+            match (*self.result_location::<A, B, C>()).replace(RunResult::Executing) {
+                RunResult::Resuming(val) => val,
+                _ => panic!("not in resuming state"),
+            }
         }
     }
 
     unsafe fn result_location<A, B, C>(&self) -> *const Cell<RunResult<A, B, C>> {
-        let ret = (*self.state)
-            .result_location
-            .get()
-            .cast::<Cell<RunResult<A, B, C>>>();
-        assert!(!ret.is_null());
-        return ret;
+        unsafe {
+            let ret = (*self.state)
+                .result_location
+                .get()
+                .cast::<Cell<RunResult<A, B, C>>>();
+            assert!(!ret.is_null());
+            return ret;
+        }
     }
 }

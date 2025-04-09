@@ -1,3 +1,5 @@
+#![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
+
 use std::{env, mem::MaybeUninit, process};
 use test_programs::preview1::{assert_errno, open_scratch_directory};
 

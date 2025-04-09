@@ -103,7 +103,7 @@ impl<'a> StackMap<'a> {
     /// map is associated with.
     pub unsafe fn sp(&self, fp: *mut usize) -> *mut usize {
         let frame_size = usize::try_from(self.frame_size).unwrap();
-        fp.byte_sub(frame_size)
+        unsafe { fp.byte_sub(frame_size) }
     }
 
     /// Given the stack pointer, get a reference to each live GC reference in
@@ -117,7 +117,7 @@ impl<'a> StackMap<'a> {
         self.offsets().map(move |i| {
             log::trace!("Live GC ref in frame at frame offset {:#x}", i);
             let i = usize::try_from(i).unwrap();
-            let ptr_to_gc_ref = sp.byte_add(i);
+            let ptr_to_gc_ref = unsafe { sp.byte_add(i) };
 
             // Assert that the pointer is inside this stack map's frame.
             assert!({

@@ -1,3 +1,5 @@
+#![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
+
 unsafe fn test_fd_filestat_get() {
     let stat = wasip1::fd_filestat_get(libc::STDIN_FILENO as u32).expect("failed filestat 0");
     assert_eq!(stat.size, 0, "stdio size should be 0");

@@ -236,14 +236,16 @@ impl Descriptors {
         let alloc = ImportAlloc::GetPreopenPath {
             cur: 0,
             nth,
-            alloc: state.temporary_alloc(),
+            alloc: unsafe { state.temporary_alloc() },
         };
         let (preopens, _) = state.with_import_alloc(alloc, || {
             let mut preopens = PreopenList {
                 base: std::ptr::null(),
                 len: 0,
             };
-            wasi_filesystem_get_directories(&mut preopens);
+            unsafe {
+                wasi_filesystem_get_directories(&mut preopens);
+            }
             preopens
         });
 
@@ -252,14 +254,16 @@ impl Descriptors {
         // discard all of the descriptors and close them since we otherwise
         // don't want to leak them.
         for i in 0..preopens.len {
-            let preopen = preopens.base.add(i).read();
+            let preopen = unsafe { preopens.base.add(i).read() };
             drop(preopen.descriptor);
 
             if (i as u32) != nth {
                 continue;
             }
             assert!(preopen.path.len <= len);
-            core::ptr::copy(preopen.path.ptr, path, preopen.path.len);
+            unsafe {
+                core::ptr::copy(preopen.path.ptr, path, preopen.path.len);
+            }
         }
     }
 

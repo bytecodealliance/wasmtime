@@ -217,17 +217,19 @@ fn guards_present_pooling(config: &mut Config) -> Result<()> {
     };
 
     unsafe fn assert_guards(store: &Store<()>, mem: &Memory) {
-        // guards before
-        println!("check pre-mem");
-        assert_faults(mem.data_ptr(&store).offset(-(GUARD_SIZE as isize)));
+        unsafe {
+            // guards before
+            println!("check pre-mem");
+            assert_faults(mem.data_ptr(&store).offset(-(GUARD_SIZE as isize)));
 
-        // unmapped just after memory
-        println!("check mem");
-        assert_faults(mem.data_ptr(&store).add(mem.data_size(&store)));
+            // unmapped just after memory
+            println!("check mem");
+            assert_faults(mem.data_ptr(&store).add(mem.data_size(&store)));
 
-        // guards after memory
-        println!("check post-mem");
-        assert_faults(mem.data_ptr(&store).add(1 << 20));
+            // guards after memory
+            println!("check post-mem");
+            assert_faults(mem.data_ptr(&store).add(1 << 20));
+        }
     }
     unsafe {
         assert_guards(&store, &mem1);
@@ -278,17 +280,19 @@ fn guards_present_pooling_mpk(config: &mut Config) -> Result<()> {
     };
 
     unsafe fn assert_guards(store: &Store<()>, mem: &Memory) {
-        // guards before
-        println!("check pre-mem");
-        assert_faults(mem.data_ptr(&store).offset(-(GUARD_SIZE as isize)));
+        unsafe {
+            // guards before
+            println!("check pre-mem");
+            assert_faults(mem.data_ptr(&store).offset(-(GUARD_SIZE as isize)));
 
-        // unmapped just after memory
-        println!("check mem");
-        assert_faults(mem.data_ptr(&store).add(mem.data_size(&store)));
+            // unmapped just after memory
+            println!("check mem");
+            assert_faults(mem.data_ptr(&store).add(mem.data_size(&store)));
 
-        // guards after memory
-        println!("check post-mem");
-        assert_faults(mem.data_ptr(&store).add(1 << 20));
+            // guards after memory
+            println!("check post-mem");
+            assert_faults(mem.data_ptr(&store).add(1 << 20));
+        }
     }
     unsafe {
         assert_guards(&store, &mem1);
@@ -306,11 +310,12 @@ fn guards_present_pooling_mpk(config: &mut Config) -> Result<()> {
 unsafe fn assert_faults(ptr: *mut u8) {
     use std::io::Error;
     #[cfg(unix)]
-    {
+    unsafe {
         // There's probably a faster way to do this here, but, uh, when in rome?
         match libc::fork() {
             0 => {
                 *ptr = 4;
+
                 std::process::exit(0);
             }
             -1 => panic!("failed to fork: {}", Error::last_os_error()),
@@ -326,7 +331,7 @@ unsafe fn assert_faults(ptr: *mut u8) {
         }
     }
     #[cfg(windows)]
-    {
+    unsafe {
         use windows_sys::Win32::System::Memory::*;
 
         let mut info = std::mem::MaybeUninit::uninit();

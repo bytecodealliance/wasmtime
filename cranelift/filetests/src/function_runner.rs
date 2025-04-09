@@ -394,14 +394,16 @@ impl<'a> Trampoline<'a> {
             | Architecture::Pulley32be
             | Architecture::Pulley64be => {
                 let mut state = pulley::Vm::new();
-                state.call(
-                    NonNull::new(trampoline_ptr.cast_mut()).unwrap(),
-                    &[
-                        pulley::XRegVal::new_ptr(function_ptr.cast_mut()).into(),
-                        pulley::XRegVal::new_ptr(arguments_address).into(),
-                    ],
-                    [],
-                );
+                unsafe {
+                    state.call(
+                        NonNull::new(trampoline_ptr.cast_mut()).unwrap(),
+                        &[
+                            pulley::XRegVal::new_ptr(function_ptr.cast_mut()).into(),
+                            pulley::XRegVal::new_ptr(arguments_address).into(),
+                        ],
+                        [],
+                    );
+                }
             }
 
             // Other targets natively execute this machine code.
