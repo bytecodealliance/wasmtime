@@ -1666,27 +1666,32 @@ where
     /// # fn foo() -> Result<()> {
     /// let mut store = Store::<()>::default();
     ///
-    /// let a = ExternRef::new_manually_rooted(&mut store, "hello")?;
-    /// let b = a.clone(&mut store);
-    ///
-    /// // `a` and `b` are rooting the same object.
-    /// assert!(ManuallyRooted::ref_eq(&store, &a, &b)?);
+    /// let a;
+    /// let b;
+    /// let x;
     ///
     /// {
     ///     let mut scope = RootScope::new(&mut store);
+    ///
+    ///     a = ExternRef::new(&mut scope, "hello")?.to_manually_rooted(&mut scope)?;
+    ///     b = a.clone(&mut scope);
+    ///
+    ///     // `a` and `b` are rooting the same object.
+    ///     assert!(ManuallyRooted::ref_eq(&scope, &a, &b)?);
     ///
     ///     // `c` is a different GC root, is in a different scope, and is a
     ///     // `Rooted<T>` instead of a `ManuallyRooted<T>`, but is still rooting
     ///     // the same object.
     ///     let c = a.to_rooted(&mut scope);
     ///     assert!(ManuallyRooted::ref_eq(&scope, &a, &c)?);
+    ///
+    ///     x = ExternRef::new(&mut scope, "goodbye")?.to_manually_rooted(&mut scope)?;
+    ///
+    ///     // `a` and `x` are rooting different objects.
+    ///     assert!(!ManuallyRooted::ref_eq(&scope, &a, &x)?);
     /// }
     ///
-    /// let x = ExternRef::new_manually_rooted(&mut store, "goodbye")?;
-    ///
-    /// // `a` and `x` are rooting different objects.
-    /// assert!(!ManuallyRooted::ref_eq(&store, &a, &x)?);
-    ///
+    /// // Unroot our manually-rooted GC references.
     /// a.unroot(&mut store);
     /// b.unroot(&mut store);
     /// x.unroot(&mut store);

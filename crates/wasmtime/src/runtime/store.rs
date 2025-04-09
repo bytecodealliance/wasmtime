@@ -1518,6 +1518,31 @@ impl StoreOpaque {
         self.gc_roots.exit_lifo_scope(self.gc_store.as_mut(), scope);
     }
 
+    /// Attempt an allocation, if it fails due to GC OOM, then do a GC and
+    /// retry.
+    #[cfg(feature = "gc")]
+    pub(crate) fn retry_after_gc<T, U>(
+        &mut self,
+        value: T,
+        alloc_func: impl Fn(&mut Self, T) -> Result<U>,
+    ) -> Result<U>
+    where
+        T: Send + Sync + 'static,
+    {
+        debug_assert!(!self.async_support());
+        match alloc_func(self, value) {
+            Ok(x) => Ok(x),
+            Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
+                Ok(oom) => {
+                    let value = oom.into_inner();
+                    self.gc();
+                    alloc_func(self, value)
+                }
+                Err(e) => Err(e),
+            },
+        }
+    }
+
     #[cfg(feature = "gc")]
     pub fn gc(&mut self) {
         // If the GC heap hasn't been initialized, there is nothing to collect.

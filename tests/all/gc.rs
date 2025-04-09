@@ -755,7 +755,10 @@ fn manually_rooted_gets_collected_after_unrooting() -> Result<()> {
     let mut store = Store::<()>::default();
     let flag = Arc::new(AtomicBool::new(false));
 
-    let externref = ExternRef::new_manually_rooted(&mut store, SetFlagOnDrop(flag.clone()))?;
+    let externref = {
+        let mut scope = RootScope::new(&mut store);
+        ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?.to_manually_rooted(&mut scope)?
+    };
 
     store.gc();
     assert!(!flag.load(SeqCst), "not dropped when still rooted");

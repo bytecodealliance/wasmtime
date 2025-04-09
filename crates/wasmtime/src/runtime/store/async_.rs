@@ -506,6 +506,31 @@ impl StoreOpaque {
         }
     }
 
+    /// Attempt an allocation, if it fails due to GC OOM, then do a GC and
+    /// retry.
+    #[cfg(feature = "gc")]
+    pub(crate) async fn retry_after_gc_async<T, U>(
+        &mut self,
+        value: T,
+        alloc_func: impl Fn(&mut Self, T) -> Result<U>,
+    ) -> Result<U>
+    where
+        T: Send + Sync + 'static,
+    {
+        debug_assert!(self.async_support());
+        match alloc_func(self, value) {
+            Ok(x) => Ok(x),
+            Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
+                Ok(oom) => {
+                    let value = oom.into_inner();
+                    self.gc_async().await;
+                    alloc_func(self, value)
+                }
+                Err(e) => Err(e),
+            },
+        }
+    }
+
     #[cfg(feature = "gc")]
     pub async fn gc_async(&mut self) {
         assert!(
