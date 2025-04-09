@@ -81,7 +81,7 @@ impl FiberStack {
     pub unsafe fn from_raw_parts(base: *mut u8, guard_size: usize, len: usize) -> Result<Self> {
         Ok(FiberStack {
             storage: vec![],
-            base: BasePtr(base.offset(isize::try_from(guard_size).unwrap())),
+            base: BasePtr(unsafe { base.offset(isize::try_from(guard_size).unwrap()) }),
             len,
         })
     }
@@ -174,15 +174,19 @@ impl Suspend {
     }
 
     unsafe fn take_resume<A, B, C>(&self) -> A {
-        match (*self.result_location::<A, B, C>()).replace(RunResult::Executing) {
-            RunResult::Resuming(val) => val,
-            _ => panic!("not in resuming state"),
+        unsafe {
+            match (*self.result_location::<A, B, C>()).replace(RunResult::Executing) {
+                RunResult::Resuming(val) => val,
+                _ => panic!("not in resuming state"),
+            }
         }
     }
 
     unsafe fn result_location<A, B, C>(&self) -> *const Cell<RunResult<A, B, C>> {
-        let ret = self.top_of_stack.cast::<*const u8>().offset(-1).read();
-        assert!(!ret.is_null());
-        ret.cast()
+        unsafe {
+            let ret = self.top_of_stack.cast::<*const u8>().offset(-1).read();
+            assert!(!ret.is_null());
+            ret.cast()
+        }
     }
 }
