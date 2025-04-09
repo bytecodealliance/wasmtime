@@ -1569,6 +1569,7 @@ impl StoreOpaque {
 
     /// Like `gc` but must be called from a fiber stack if this is an async
     /// store.
+    #[cfg(feature = "gc")]
     unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
         let mut scope = crate::OpaqueRootScope::new(self);
         let store_id = scope.id();
