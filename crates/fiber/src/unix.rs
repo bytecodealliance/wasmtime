@@ -374,15 +374,19 @@ mod asan {
         // trigger false positives in ASAN. That leads to the design of this
         // module as-is where this function exists to have these three
         // functions very close to one another.
-        __sanitizer_start_switch_fiber(private_asan_pointer_ref, prev.bottom, prev.size);
-        super::wasmtime_fiber_switch(top_of_stack);
-        __sanitizer_finish_switch_fiber(private_asan_pointer, &mut prev.bottom, &mut prev.size);
+        unsafe {
+            __sanitizer_start_switch_fiber(private_asan_pointer_ref, prev.bottom, prev.size);
+            super::wasmtime_fiber_switch(top_of_stack);
+            __sanitizer_finish_switch_fiber(private_asan_pointer, &mut prev.bottom, &mut prev.size);
+        }
     }
 
     /// Hook for when a fiber first starts, used to configure ASAN.
     pub unsafe fn fiber_start_complete() -> PreviousStack {
         let mut ret = PreviousStack::default();
-        __sanitizer_finish_switch_fiber(std::ptr::null_mut(), &mut ret.bottom, &mut ret.size);
+        unsafe {
+            __sanitizer_finish_switch_fiber(std::ptr::null_mut(), &mut ret.bottom, &mut ret.size);
+        }
         ret
     }
 
