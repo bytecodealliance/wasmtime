@@ -232,6 +232,7 @@ impl ManuallyRooted<ArrayRef> {
 ///
 /// NB: We can't use `iter::repeat(elem).take(len)` because that doesn't
 /// implement `ExactSizeIterator`.
+#[derive(Clone)]
 struct RepeatN<'a>(&'a Val, u32);
 
 impl<'a> Iterator for RepeatN<'a> {
@@ -311,12 +312,8 @@ impl ArrayRef {
             " use `ArrayRef::new_async` with asynchronous stores"
         );
 
-        // Type check the initial element value against the element type.
-        elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
-            .context("element type mismatch")?;
-
         store.retry_after_gc((), |store, ()| {
-            Self::_new_unchecked(store, allocator, RepeatN(elem, len))
+            Self::new_from_iter(store, allocator, RepeatN(elem, len))
         })
     }
 
@@ -374,13 +371,9 @@ impl ArrayRef {
             "use `ArrayRef::new` with synchronous stores"
         );
 
-        // Type check the initial element value against the element type.
-        elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
-            .context("element type mismatch")?;
-
         store
             .retry_after_gc_async((), |store, ()| {
-                Self::_new_unchecked(store, allocator, RepeatN(elem, len))
+                Self::new_from_iter(store, allocator, RepeatN(elem, len))
             })
             .await
     }
@@ -399,23 +392,30 @@ impl ArrayRef {
 
         unsafe {
             store.retry_after_gc_maybe_async((), |store, ()| {
-                Self::_new_unchecked(store, allocator, RepeatN(elem, len))
+                Self::new_from_iter(store, allocator, RepeatN(elem, len))
             })
         }
     }
 
-    /// Allocate a new array of the given elements, without checking that the
-    /// elements' types match the array's element type.
-    fn _new_unchecked<'a>(
+    /// Allocate a new array of the given elements.
+    ///
+    /// Does not attempt a GC on OOM; leaves that to callers.
+    fn new_from_iter<'a>(
         store: &mut StoreOpaque,
         allocator: &ArrayRefPre,
-        elems: impl ExactSizeIterator<Item = &'a Val>,
+        elems: impl Clone + ExactSizeIterator<Item = &'a Val>,
     ) -> Result<Rooted<ArrayRef>> {
         assert_eq!(
             store.id(),
             allocator.store_id,
             "attempted to use a `ArrayRefPre` with the wrong store"
         );
+
+        // Type check the elements against the element type.
+        for elem in elems.clone() {
+            elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
+                .context("element type mismatch")?;
+        }
 
         let len = u32::try_from(elems.len()).unwrap();
 
@@ -493,24 +493,13 @@ impl ArrayRef {
         allocator: &ArrayRefPre,
         elems: &[Val],
     ) -> Result<Rooted<ArrayRef>> {
-        assert_eq!(
-            store.id(),
-            allocator.store_id,
-            "attempted to use a `ArrayRefPre` with the wrong store"
-        );
         assert!(
             !store.async_support(),
             "use `ArrayRef::new_fixed_async` with asynchronous stores"
         );
 
-        // Type check the elements against the element type.
-        for elem in elems {
-            elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
-                .context("element type mismatch")?;
-        }
-
         store.retry_after_gc((), |store, ()| {
-            Self::_new_unchecked(store, allocator, elems.iter())
+            Self::new_from_iter(store, allocator, elems.iter())
         })
     }
 
@@ -564,25 +553,14 @@ impl ArrayRef {
         allocator: &ArrayRefPre,
         elems: &[Val],
     ) -> Result<Rooted<ArrayRef>> {
-        assert_eq!(
-            store.id(),
-            allocator.store_id,
-            "attempted to use a `ArrayRefPre` with the wrong store"
-        );
         assert!(
             store.async_support(),
             "use `ArrayRef::new_fixed` with synchronous stores"
         );
 
-        // Type check the elements against the element type.
-        for elem in elems {
-            elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
-                .context("element type mismatch")?;
-        }
-
         store
             .retry_after_gc_async((), |store, ()| {
-                Self::_new_unchecked(store, allocator, elems.iter())
+                Self::new_from_iter(store, allocator, elems.iter())
             })
             .await
     }
@@ -590,27 +568,14 @@ impl ArrayRef {
     /// Like `ArrayRef::new_fixed[_async]` but it is the caller's responsibility
     /// to ensure that when async is enabled, this is only called from on a
     /// fiber stack.
-    #[cfg(feature = "async")]
     pub(crate) unsafe fn _new_fixed_maybe_async(
         store: &mut StoreOpaque,
         allocator: &ArrayRefPre,
         elems: &[Val],
     ) -> Result<Rooted<ArrayRef>> {
-        assert_eq!(
-            store.id(),
-            allocator.store_id,
-            "attempted to use a `ArrayRefPre` with the wrong store"
-        );
-
-        // Type check the elements against the element type.
-        for elem in elems {
-            elem.ensure_matches_ty(store, allocator.ty.element_type().unpack())
-                .context("element type mismatch")?;
-        }
-
         unsafe {
             store.retry_after_gc_maybe_async((), |store, ()| {
-                Self::_new_unchecked(store, allocator, elems.iter())
+                Self::new_from_iter(store, allocator, elems.iter())
             })
         }
     }
