@@ -771,14 +771,14 @@ fn alloc_externref<T>(store: &mut impl AsContextMut, value: T) -> Result<Rooted<
 where
     T: Send + Sync + 'static,
 {
-    let store = store.as_context_mut();
-    match ExternRef::new(store, value) {
+    let mut store = store.as_context_mut();
+    match ExternRef::new(&mut store, value) {
         Ok(x) => Ok(x),
         Err(e) => match e.downcast::<GcHeapOutOfMemory<T>>() {
             Ok(oom) => {
                 let (value, oom) = oom.take_inner();
                 store.gc(Some(&oom));
-                ExternRef::new(store, value)
+                ExternRef::new(&mut store, value)
             }
             Err(e) => Err(e),
         },
