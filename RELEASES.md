@@ -4,7 +4,127 @@ Unreleased.
 
 ### Added
 
+* `{Module,Component}::deserialize_raw` can now be used to deserialize an
+  in-memory module while relying on external management of the memory.
+  [#10321](https://github.com/bytecodealliance/wasmtime/pull/10321)
+
+* An initial implementation of wasi-tls has been added.
+  [#10249](https://github.com/bytecodealliance/wasmtime/pull/10249)
+
+* The `wasmtime` CLI now supports hexadecimal integer CLI arguments.
+  [#10360](https://github.com/bytecodealliance/wasmtime/pull/10360)
+
+* Cranelift now supports a `log2_min_function_alignment` flag.
+  [#10391](https://github.com/bytecodealliance/wasmtime/pull/10391)
+
+* A new `wasmtime objdump` subcommand has been added to help explore and debug
+  `*.cwasm` files.
+  [#10405](https://github.com/bytecodealliance/wasmtime/pull/10405)
+
+* Support for the pooling allocator has been added to the C API.
+  [#10484](https://github.com/bytecodealliance/wasmtime/pull/10484)
+
+* Support for the guest profiler with the component model has been added.
+  [#10507](https://github.com/bytecodealliance/wasmtime/pull/10507)
+
 ### Changed
+
+* Cranelift `MemFlags` now has a `can_move` flag which restricts whether a load
+  or store can be moved.
+  [#10340](https://github.com/bytecodealliance/wasmtime/pull/10340)
+
+* The `.text` size of Pulley `*.cwasm` files should be smaller with less
+  padding.
+  [#10285](https://github.com/bytecodealliance/wasmtime/pull/10285)
+
+* The `wasmtime serve` subcommand now implements a graceful shutdown on ctrl-c.
+  [#10394](https://github.com/bytecodealliance/wasmtime/pull/10394)
+
+* Stack maps used for GC are now stored in a serialized binary format that is
+  faster to deserialize.
+  [#10404](https://github.com/bytecodealliance/wasmtime/pull/10404)
+
+* The aegraph implementation in Cranelift has been simplified to remove the
+  union-find and canonical eclass IDs.
+  [#10471](https://github.com/bytecodealliance/wasmtime/pull/10471)
+
+* The `store_list` and `load_list` helpers have been specialized in components
+  for `f32` and `f64`.
+  [#9892](https://github.com/bytecodealliance/wasmtime/pull/9892)
+
+* Cranelift now removes block params on critical-edge blocks.
+  [#10485](https://github.com/bytecodealliance/wasmtime/pull/10485)
+
+* The `Linker::define_unknown_imports_as_default_values` API now supports
+  defining defaults for more kinds of items.
+  [#10500](https://github.com/bytecodealliance/wasmtime/pull/10500)
+
+* Wasmtime now requires Rust 1.84.0 to compile.
+  [#10520](https://github.com/bytecodealliance/wasmtime/pull/10520)
+
+### Fixed
+
+* Winch compilation of extadd instructions has been fixed.
+  [#10337](https://github.com/bytecodealliance/wasmtime/pull/10337)
+
+* Fix an issue with DRC collector's barriers.
+  [#10371](https://github.com/bytecodealliance/wasmtime/pull/10371)
+
+* Loads on `(ref null none)` that can trap are now performed.
+  [#10372](https://github.com/bytecodealliance/wasmtime/pull/10372)
+
+* Fix reference count management in `AnyRef::from_raw`.
+  [#10374](https://github.com/bytecodealliance/wasmtime/pull/10374)
+
+* An issue with multi-value returns in Winch has been fixed.
+  [#10370](https://github.com/bytecodealliance/wasmtime/pull/10370)
+
+* A panic at compile-time from an overflowing shift has been fixed when
+  targeting aarch64.
+  [#10382](https://github.com/bytecodealliance/wasmtime/pull/10382)
+
+* The `wasmtime serve` command no longer panics when `handle` returns before
+  calling `set`.
+  [#10387](https://github.com/bytecodealliance/wasmtime/pull/10387)
+
+* Winch compilation of `replace_lane` instructions with floats has been fixed.
+  [#10393](https://github.com/bytecodealliance/wasmtime/pull/10393)
+
+* An invalid integer-shift optimization on vector types has been removed.
+  [#10413](https://github.com/bytecodealliance/wasmtime/pull/10413)
+
+* The DWARF loclist to exprloc optimization has been fixed.
+  [#10400](https://github.com/bytecodealliance/wasmtime/pull/10400)
+
+* Objects in the DRC collector are now transitively dec-ref's when collected.
+  [#10401](https://github.com/bytecodealliance/wasmtime/pull/10401)
+
+* A bug with GC rec gropus and registration in an `Engine` has been fixed.
+  [#10435](https://github.com/bytecodealliance/wasmtime/pull/10435)
+
+* A bug related to GC arrays of GC refs misreported their count of GC edges has
+  been fixed.
+  [#10453](https://github.com/bytecodealliance/wasmtime/pull/10453)
+
+* A bug related to appropriately adding stack maps for all GC variables has been
+  fixed.
+  [#10456](https://github.com/bytecodealliance/wasmtime/pull/10456)
+  [#10468](https://github.com/bytecodealliance/wasmtime/pull/10468)
+
+* A bug with `array.fill` has been fixed.
+  [#10470](https://github.com/bytecodealliance/wasmtime/pull/10470)
+
+* GC structs are no longer reordered to optimize their size to fix subtyping.
+  [#10463](https://github.com/bytecodealliance/wasmtime/pull/10463)
+
+* Panics related to exceptions and components being mixed has been fixed.
+  [#10473](https://github.com/bytecodealliance/wasmtime/pull/10473)
+
+* Winch stack parameter alignment has been fixed.
+  [#10513](https://github.com/bytecodealliance/wasmtime/pull/10513)
+
+* Rendering inline function frames in a trap backtrace has been fixed.
+  [#10523](https://github.com/bytecodealliance/wasmtime/pull/10523)
 
 --------------------------------------------------------------------------------
 
