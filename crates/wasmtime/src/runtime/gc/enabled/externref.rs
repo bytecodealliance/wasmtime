@@ -221,10 +221,6 @@ impl ExternRef {
     where
         T: 'static + Any + Send + Sync,
     {
-        assert!(
-            !store.async_support(),
-            "use `ExternRef::new_async` with asynchronous stores"
-        );
         let value: Box<dyn Any + Send + Sync> = Box::new(value);
         let gc_ref = store.retry_after_gc(value, |store, value| {
             store
@@ -329,10 +325,6 @@ impl ExternRef {
     where
         T: 'static + Any + Send + Sync,
     {
-        assert!(
-            store.async_support(),
-            "use `ExternRef::new` with synchronous stores"
-        );
         let value: Box<dyn Any + Send + Sync> = Box::new(value);
         let gc_ref = store
             .retry_after_gc_async(value, |store, value| {

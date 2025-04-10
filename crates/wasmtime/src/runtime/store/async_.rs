@@ -517,7 +517,10 @@ impl StoreOpaque {
     where
         T: Send + Sync + 'static,
     {
-        debug_assert!(self.async_support());
+        assert!(
+            self.async_support(),
+            "you must configure async to use the `*_async` versions of methods"
+        );
         match alloc_func(self, value) {
             Ok(x) => Ok(x),
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {

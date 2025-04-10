@@ -307,11 +307,6 @@ impl ArrayRef {
         elem: &Val,
         len: u32,
     ) -> Result<Rooted<ArrayRef>> {
-        assert!(
-            !store.async_support(),
-            " use `ArrayRef::new_async` with asynchronous stores"
-        );
-
         store.retry_after_gc((), |store, ()| {
             Self::new_from_iter(store, allocator, RepeatN(elem, len))
         })
@@ -366,11 +361,6 @@ impl ArrayRef {
         elem: &Val,
         len: u32,
     ) -> Result<Rooted<ArrayRef>> {
-        assert!(
-            store.async_support(),
-            "use `ArrayRef::new` with synchronous stores"
-        );
-
         store
             .retry_after_gc_async((), |store, ()| {
                 Self::new_from_iter(store, allocator, RepeatN(elem, len))
@@ -493,11 +483,6 @@ impl ArrayRef {
         allocator: &ArrayRefPre,
         elems: &[Val],
     ) -> Result<Rooted<ArrayRef>> {
-        assert!(
-            !store.async_support(),
-            "use `ArrayRef::new_fixed_async` with asynchronous stores"
-        );
-
         store.retry_after_gc((), |store, ()| {
             Self::new_from_iter(store, allocator, elems.iter())
         })
@@ -553,11 +538,6 @@ impl ArrayRef {
         allocator: &ArrayRefPre,
         elems: &[Val],
     ) -> Result<Rooted<ArrayRef>> {
-        assert!(
-            store.async_support(),
-            "use `ArrayRef::new_fixed` with synchronous stores"
-        );
-
         store
             .retry_after_gc_async((), |store, ()| {
                 Self::new_from_iter(store, allocator, elems.iter())
@@ -568,7 +548,7 @@ impl ArrayRef {
     /// Like `ArrayRef::new_fixed[_async]` but it is the caller's responsibility
     /// to ensure that when async is enabled, this is only called from on a
     /// fiber stack.
-    pub(crate) unsafe fn _new_fixed_maybe_async(
+    pub(crate) unsafe fn new_fixed_maybe_async(
         store: &mut StoreOpaque,
         allocator: &ArrayRefPre,
         elems: &[Val],

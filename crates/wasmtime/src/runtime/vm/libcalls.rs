@@ -827,7 +827,7 @@ unsafe fn array_new_elem(
             }
         }
 
-        let array = unsafe { ArrayRef::_new_fixed_maybe_async(store, &pre, &vals)? };
+        let array = unsafe { ArrayRef::new_fixed_maybe_async(store, &pre, &vals)? };
 
         let mut store = AutoAssertNoGc::new(store);
         let gc_ref = array.try_clone_gc_ref(&mut store)?;
