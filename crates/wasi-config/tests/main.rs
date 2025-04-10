@@ -4,7 +4,7 @@ use wasmtime::{
     component::{Component, Linker, ResourceTable},
     Store,
 };
-use wasmtime_wasi::{
+use wasmtime_wasi::p2::{
     add_to_linker_async, bindings::Command, IoView, WasiCtx, WasiCtxBuilder, WasiView,
 };
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};

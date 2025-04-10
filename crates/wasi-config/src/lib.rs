@@ -17,7 +17,7 @@
 //!     component::{Linker, ResourceTable},
 //!     Config, Engine, Result, Store,
 //! };
-//! use wasmtime_wasi::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
+//! use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
 //! use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 //!
 //! #[tokio::main]
@@ -36,7 +36,7 @@
 //!     });
 //!
 //!     let mut linker = Linker::<Ctx>::new(&engine);
-//!     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+//!     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 //!     // add `wasi-config` world's interfaces to the linker
 //!     wasmtime_wasi_config::add_to_linker(&mut linker, |h: &mut Ctx| {
 //!         WasiConfig::from(&h.wasi_config_vars)

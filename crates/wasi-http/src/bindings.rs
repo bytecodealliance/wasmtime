@@ -19,7 +19,7 @@ mod generated {
         require_store_data_send: true,
         with: {
             // Upstream package dependencies
-            "wasi:io": wasmtime_wasi::bindings::io,
+            "wasi:io": wasmtime_wasi::p2::bindings::io,
 
             // Configure all WIT http resources to be defined types in this
             // crate to use the `ResourceTable` helper methods.
@@ -63,7 +63,7 @@ pub mod sync {
                 "wasi:http": crate::bindings::http,
                 // sync requires the wrapper in the wasmtime_wasi crate, in
                 // order to have in_tokio
-                "wasi:io": wasmtime_wasi::bindings::sync::io,
+                "wasi:io": wasmtime_wasi::p2::bindings::sync::io,
             },
             require_store_data_send: true,
         });

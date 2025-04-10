@@ -14,7 +14,7 @@ use std::{
 use tokio::sync::Notify;
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Engine, Store, StoreLimits, UpdateDeadline};
-use wasmtime_wasi::{IoView, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::p2::{IoView, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::bindings::http::types::Scheme;
 use wasmtime_wasi_http::bindings::ProxyPre;
 use wasmtime_wasi_http::io::TokioIo;
@@ -274,7 +274,7 @@ impl ServeCommand {
         // uses.
         if cli == Some(true) {
             let link_options = self.run.compute_wasi_features();
-            wasmtime_wasi::add_to_linker_with_options_async(linker, &link_options)?;
+            wasmtime_wasi::p2::add_to_linker_with_options_async(linker, &link_options)?;
             wasmtime_wasi_http::add_only_http_to_linker_async(linker)?;
         } else {
             wasmtime_wasi_http::add_to_linker_async(linker)?;
@@ -792,8 +792,8 @@ impl LogStream {
     }
 }
 
-impl wasmtime_wasi::StdoutStream for LogStream {
-    fn stream(&self) -> Box<dyn wasmtime_wasi::OutputStream> {
+impl wasmtime_wasi::p2::StdoutStream for LogStream {
+    fn stream(&self) -> Box<dyn wasmtime_wasi::p2::OutputStream> {
         Box::new(self.clone())
     }
 
@@ -807,7 +807,7 @@ impl wasmtime_wasi::StdoutStream for LogStream {
     }
 }
 
-impl wasmtime_wasi::OutputStream for LogStream {
+impl wasmtime_wasi::p2::OutputStream for LogStream {
     fn write(&mut self, bytes: bytes::Bytes) -> StreamResult<()> {
         let mut bytes = &bytes[..];
 
@@ -849,7 +849,7 @@ impl wasmtime_wasi::OutputStream for LogStream {
 }
 
 #[async_trait::async_trait]
-impl wasmtime_wasi::Pollable for LogStream {
+impl wasmtime_wasi::p2::Pollable for LogStream {
     async fn ready(&mut self) {}
 }
 

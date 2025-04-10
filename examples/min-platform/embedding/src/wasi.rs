@@ -150,7 +150,7 @@ fn deserialize(engine: &Engine, component: &[u8]) -> Result<Option<Component>> {
 // Generate bindings for the entire wasi:cli command world. We won't impl and
 // link with all of these generated bindings for the sake of this example.
 wasmtime::component::bindgen!({
-    path: "../../../crates/wasi/wit",
+    path: "../../../crates/wasi/src/p2/wit",
     world: "wasi:cli/command",
     async: { only_imports: [] },
     trappable_imports: true,
