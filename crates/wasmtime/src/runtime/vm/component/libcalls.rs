@@ -1271,11 +1271,16 @@ unsafe fn error_context_drop(
 #[cfg(feature = "threads")]
 unsafe fn thread_spawn_indirect(
     vmctx: NonNull<VMComponentContext>,
+    func_ty: u32,
     table: u32,
     element: u32,
     context: u32,
 ) -> Result<u32> {
+    use wasmtime_environ::component::{RuntimeTableIndex, TypeFuncIndex};
+
+    let func_ty = TypeFuncIndex::from_bits(func_ty);
+    let table = RuntimeTableIndex::from_u32(table);
     ComponentInstance::from_vmctx(vmctx, |instance| {
-        instance.thread_spawn_indirect(table, element, context)
+        instance.thread_spawn_indirect(func_ty, table, element, context)
     })
 }
