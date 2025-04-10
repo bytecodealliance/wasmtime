@@ -11,10 +11,8 @@ use std::mem;
 use std::task::{Context, Poll};
 use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
-use wasmtime_wasi::{
-    runtime::{poll_noop, AbortOnDropJoinHandle},
-    InputStream, OutputStream, Pollable, StreamError,
-};
+use wasmtime_wasi::p2::{InputStream, OutputStream, Pollable, StreamError};
+use wasmtime_wasi::runtime::{poll_noop, AbortOnDropJoinHandle};
 
 /// Common type for incoming bodies.
 pub type HyperIncomingBody = BoxBody<Bytes, types::ErrorCode>;

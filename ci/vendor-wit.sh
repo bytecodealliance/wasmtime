@@ -40,7 +40,7 @@ make_vendor "wasi-io" "
   io@v0.2.3
 "
 
-make_vendor "wasi" "
+make_vendor "wasi/src/p2" "
   cli@v0.2.3
   clocks@v0.2.3
   filesystem@v0.2.3
