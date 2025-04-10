@@ -23,7 +23,7 @@
 //! This module is one that's likely to change over time though as new systems
 //! are encountered along with preexisting bugs.
 
-use crate::stdio::StdinStream;
+use crate::p2::stdio::StdinStream;
 use bytes::{Bytes, BytesMut};
 use std::io::{IsTerminal, Read};
 use std::mem;
@@ -105,7 +105,7 @@ pub struct Stdin;
 /// Returns a stream that represents the host's standard input.
 ///
 /// Suitable for passing to
-/// [`WasiCtxBuilder::stdin`](crate::WasiCtxBuilder::stdin).
+/// [`WasiCtxBuilder::stdin`](crate::p2::WasiCtxBuilder::stdin).
 pub fn stdin() -> Stdin {
     Stdin
 }

@@ -1,5 +1,5 @@
-use crate::bindings::random::{insecure, insecure_seed, random};
-use crate::{WasiImpl, WasiView};
+use crate::p2::bindings::random::{insecure, insecure_seed, random};
+use crate::p2::{WasiImpl, WasiView};
 use cap_rand::{distributions::Standard, Rng};
 
 impl<T> random::Host for WasiImpl<T>

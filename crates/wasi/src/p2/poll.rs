@@ -4,7 +4,7 @@ use wasmtime_wasi_io::{bindings::wasi::io::poll as async_poll, poll::DynPollable
 use anyhow::Result;
 use wasmtime::component::Resource;
 
-impl<T> crate::bindings::sync::io::poll::Host for IoImpl<T>
+impl<T> crate::p2::bindings::sync::io::poll::Host for IoImpl<T>
 where
     T: IoView,
 {
@@ -13,7 +13,7 @@ where
     }
 }
 
-impl<T> crate::bindings::sync::io::poll::HostPollable for IoImpl<T>
+impl<T> crate::p2::bindings::sync::io::poll::HostPollable for IoImpl<T>
 where
     T: IoView,
 {

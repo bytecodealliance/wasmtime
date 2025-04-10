@@ -9,13 +9,13 @@ You can execute this example with:
 
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::*;
-use wasmtime_wasi::bindings::Command;
-use wasmtime_wasi::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::p2::bindings::Command;
+use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
 
 pub struct ComponentRunStates {
     // These two are required basically as a standard way to enable the impl of IoView and
     // WasiView.
-    // impl of WasiView is required by [`wasmtime_wasi::add_to_linker_sync`]
+    // impl of WasiView is required by [`wasmtime_wasi::p2::add_to_linker_sync`]
     pub wasi_ctx: WasiCtx,
     pub resource_table: ResourceTable,
     // You can add other custom host states if needed
@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
     config.async_support(true);
     let engine = Engine::new(&config)?;
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker_async(&mut linker)?;
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 
     // Create a WASI context and put it in a Store; all instances in the store
     // share this context. `WasiCtxBuilder` provides a number of ways to

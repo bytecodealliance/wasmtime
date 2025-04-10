@@ -1,14 +1,9 @@
-use crate::host::network::util;
 use crate::network::{SocketAddrUse, SocketAddressFamily};
-use crate::{
-    bindings::{
-        sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
-        sockets::udp,
-    },
-    udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState},
-    Pollable,
-};
-use crate::{IoView, SocketError, SocketResult, WasiImpl, WasiView};
+use crate::p2::bindings::sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network};
+use crate::p2::bindings::sockets::udp;
+use crate::p2::host::network::util;
+use crate::p2::udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState};
+use crate::p2::{IoView, Pollable, SocketError, SocketResult, WasiImpl, WasiView};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use io_lifetimes::AsSocketlike;
@@ -549,7 +544,7 @@ impl Pollable for OutgoingDatagramStream {
 pub mod sync {
     use wasmtime::component::Resource;
 
-    use crate::{
+    use crate::p2::{
         bindings::{
             sockets::{
                 network::Network,
@@ -567,9 +562,9 @@ pub mod sync {
                 UdpSocket,
             },
         },
-        runtime::in_tokio,
         SocketError, WasiImpl, WasiView,
     };
+    use crate::runtime::in_tokio;
 
     impl<T> udp::Host for WasiImpl<T> where T: WasiView {}
 

@@ -1,9 +1,9 @@
-use crate::bindings::cli::{
+use crate::p2::bindings::cli::{
     stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
     terminal_stdout,
 };
-use crate::pipe;
-use crate::{
+use crate::p2::pipe;
+use crate::p2::{
     InputStream, IoView, OutputStream, Pollable, StreamError, StreamResult, WasiImpl, WasiView,
 };
 use bytes::Bytes;
@@ -58,7 +58,7 @@ impl StdinStream for pipe::ClosedInputStream {
     }
 }
 
-/// An impl of [`StdinStream`] built on top of [`crate::pipe::AsyncReadStream`].
+/// An impl of [`StdinStream`] built on top of [`crate::p2::pipe::AsyncReadStream`].
 //
 // Note the usage of `tokio::sync::Mutex` here as opposed to a
 // `std::sync::Mutex`. This is intentionally done to implement the `Pollable`
@@ -86,10 +86,10 @@ impl StdinStream for pipe::ClosedInputStream {
 // between the two at this time. This may all change in the future with WASI
 // 0.3, but perhaps we'll have a better story for stdio at that time (see the
 // doc block on the `OutputStream` impl below)
-pub struct AsyncStdinStream(Arc<Mutex<crate::pipe::AsyncReadStream>>);
+pub struct AsyncStdinStream(Arc<Mutex<crate::p2::pipe::AsyncReadStream>>);
 
 impl AsyncStdinStream {
-    pub fn new(s: crate::pipe::AsyncReadStream) -> Self {
+    pub fn new(s: crate::p2::pipe::AsyncReadStream) -> Self {
         Self(Arc::new(Mutex::new(s)))
     }
 }
@@ -253,7 +253,7 @@ pub struct Stdout;
 /// Returns a stream that represents the host's standard out.
 ///
 /// Suitable for passing to
-/// [`WasiCtxBuilder::stdout`](crate::WasiCtxBuilder::stdout).
+/// [`WasiCtxBuilder::stdout`](crate::p2::WasiCtxBuilder::stdout).
 pub fn stdout() -> Stdout {
     Stdout
 }
@@ -277,7 +277,7 @@ pub struct Stderr;
 /// Returns a stream that represents the host's standard err.
 ///
 /// Suitable for passing to
-/// [`WasiCtxBuilder::stderr`](crate::WasiCtxBuilder::stderr).
+/// [`WasiCtxBuilder::stderr`](crate::p2::WasiCtxBuilder::stderr).
 pub fn stderr() -> Stderr {
     Stderr
 }
@@ -326,17 +326,17 @@ impl Pollable for StdioOutputStream {
     async fn ready(&mut self) {}
 }
 
-/// A wrapper of [`crate::pipe::AsyncWriteStream`] that implements
+/// A wrapper of [`crate::p2::pipe::AsyncWriteStream`] that implements
 /// [`StdoutStream`]. Note that the [`OutputStream`] impl for this is not
 /// correct when used for interleaved async IO.
 //
 // Note that the use of `tokio::sync::Mutex` here is intentional, in addition to
 // the `try_lock()` calls below in the implementation of `OutputStream`. For
 // more information see the documentation on `AsyncStdinStream`.
-pub struct AsyncStdoutStream(Arc<Mutex<crate::pipe::AsyncWriteStream>>);
+pub struct AsyncStdoutStream(Arc<Mutex<crate::p2::pipe::AsyncWriteStream>>);
 
 impl AsyncStdoutStream {
-    pub fn new(s: crate::pipe::AsyncWriteStream) -> Self {
+    pub fn new(s: crate::p2::pipe::AsyncWriteStream) -> Self {
         Self(Arc::new(Mutex::new(s)))
     }
 }
@@ -504,9 +504,9 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::stdio::StdoutStream;
-    use crate::write_stream::AsyncWriteStream;
-    use crate::{AsyncStdoutStream, OutputStream};
+    use crate::p2::stdio::StdoutStream;
+    use crate::p2::write_stream::AsyncWriteStream;
+    use crate::p2::{AsyncStdoutStream, OutputStream};
     use anyhow::Result;
     use bytes::Bytes;
     use tokio::io::AsyncReadExt;
@@ -560,7 +560,8 @@ mod test {
         let file = tokio::fs::File::open(&path)
             .await
             .expect("open created file");
-        let stdin_stream = super::AsyncStdinStream::new(crate::pipe::AsyncReadStream::new(file));
+        let stdin_stream =
+            super::AsyncStdinStream::new(crate::p2::pipe::AsyncReadStream::new(file));
 
         use super::StdinStream;
 

@@ -1,10 +1,10 @@
 #![allow(unused_variables)]
 
-use crate::bindings::{
+use crate::p2::bindings::{
     clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
     clocks::wall_clock::{self, Datetime},
 };
-use crate::{DynPollable, IoView, WasiImpl, WasiView};
+use crate::p2::{DynPollable, IoView, WasiImpl, WasiView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
 use wasmtime::component::Resource;

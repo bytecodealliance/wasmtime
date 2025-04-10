@@ -16,7 +16,7 @@ use wasmtime_wasi_io::{
     streams::{InputStream, OutputStream, StreamError},
 };
 
-pub use crate::write_stream::AsyncWriteStream;
+pub use crate::p2::write_stream::AsyncWriteStream;
 
 #[derive(Debug, Clone)]
 pub struct MemoryInputPipe {

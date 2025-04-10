@@ -1,12 +1,13 @@
-use crate::bindings::clocks::wall_clock;
-use crate::bindings::filesystem::preopens;
-use crate::bindings::filesystem::types::{
+use crate::p2::bindings::clocks::wall_clock;
+use crate::p2::bindings::filesystem::preopens;
+use crate::p2::bindings::filesystem::types::{
     self, ErrorCode, HostDescriptor, HostDirectoryEntryStream,
 };
-use crate::filesystem::{
-    Descriptor, Dir, File, FileInputStream, FileOutputStream, OpenMode, ReaddirIterator,
+use crate::p2::filesystem::{
+    Descriptor, Dir, File, FileInputStream, FileOutputStream, ReaddirIterator,
 };
-use crate::{DirPerms, FilePerms, FsError, FsResult, IoView, WasiImpl, WasiView};
+use crate::p2::{FsError, FsResult, IoView, WasiImpl, WasiView};
+use crate::{DirPerms, FilePerms, OpenMode};
 use anyhow::Context;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::streams::{DynInputStream, DynOutputStream};

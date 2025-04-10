@@ -11,13 +11,13 @@
 //! # Examples
 //!
 //! If you have a WIT world which refers to WASI interfaces you probably want to
-//! use this crate's bindings rather than generate fresh bindings. That can be
+//! use this modules's bindings rather than generate fresh bindings. That can be
 //! done using the `with` option to [`bindgen!`]:
 //!
 //! ```rust
-//! use wasmtime_wasi::{IoView, WasiCtx, ResourceTable, WasiView};
+//! use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
 //! use wasmtime::{Result, Engine, Config};
-//! use wasmtime::component::Linker;
+//! use wasmtime::component::{Linker, ResourceTable};
 //!
 //! wasmtime::component::bindgen!({
 //!     inline: "
@@ -35,9 +35,9 @@
 //!             my-custom-function: func();
 //!         }
 //!     ",
-//!     path: "wit",
+//!     path: "src/p2/wit",
 //!     with: {
-//!         "wasi": wasmtime_wasi::bindings,
+//!         "wasi": wasmtime_wasi::p2::bindings,
 //!     },
 //!     async: true,
 //! });
@@ -65,7 +65,7 @@
 //!     config.async_support(true);
 //!     let engine = Engine::new(&config)?;
 //!     let mut linker: Linker<MyState> = Linker::new(&engine);
-//!     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+//!     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 //!     example::wasi::custom_host::add_to_linker(&mut linker, |state| state)?;
 //!
 //!     // .. use `Linker` to instantiate component ...
@@ -76,19 +76,19 @@
 
 /// Synchronous-generated bindings for WASI interfaces.
 ///
-/// This is the same as the top-level [`bindings`](crate::bindings) module of
-/// this crate except that it's for synchronous calls.
+/// This is the same as the top-level [`bindings`](crate::p2::bindings) submodule of
+/// this module except that it's for synchronous calls.
 ///
 /// # Examples
 ///
 /// If you have a WIT world which refers to WASI interfaces you probably want to
-/// use this crate's bindings rather than generate fresh bindings. That can be
+/// use this modules's bindings rather than generate fresh bindings. That can be
 /// done using the `with` option to `bindgen!`:
 ///
 /// ```rust
-/// use wasmtime_wasi::{IoView, WasiCtx, ResourceTable, WasiView};
+/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
 /// use wasmtime::{Result, Engine};
-/// use wasmtime::component::Linker;
+/// use wasmtime::component::{Linker, ResourceTable};
 ///
 /// wasmtime::component::bindgen!({
 ///     inline: "
@@ -106,9 +106,9 @@
 ///             my-custom-function: func();
 ///         }
 ///     ",
-///     path: "wit",
+///     path: "src/p2/wit",
 ///     with: {
-///         "wasi": wasmtime_wasi::bindings::sync,
+///         "wasi": wasmtime_wasi::p2::bindings::sync,
 ///     },
 ///     // This is required for bindings using `wasmtime-wasi` and it otherwise
 ///     // isn't the default for non-async bindings.
@@ -136,7 +136,7 @@
 /// fn main() -> Result<()> {
 ///     let engine = Engine::default();
 ///     let mut linker: Linker<MyState> = Linker::new(&engine);
-///     wasmtime_wasi::add_to_linker_sync(&mut linker)?;
+///     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
 ///     example::wasi::custom_host::add_to_linker(&mut linker, |state| state)?;
 ///
 ///     // .. use `Linker` to instantiate component ...
@@ -146,11 +146,11 @@
 /// ```
 pub mod sync {
     mod generated {
-        use crate::{FsError, SocketError};
+        use crate::p2::{FsError, SocketError};
         use wasmtime_wasi_io::streams::StreamError;
 
         wasmtime::component::bindgen!({
-            path: "wit",
+            path: "src/p2/wit",
             world: "wasi:cli/command",
             tracing: true,
             trappable_error_type: {
@@ -162,11 +162,11 @@ pub mod sync {
             with: {
                 // These interfaces contain only synchronous methods, so they
                 // can be aliased directly
-                "wasi:clocks": crate::bindings::clocks,
-                "wasi:random": crate::bindings::random,
-                "wasi:cli": crate::bindings::cli,
-                "wasi:filesystem/preopens": crate::bindings::filesystem::preopens,
-                "wasi:sockets/network": crate::bindings::sockets::network,
+                "wasi:clocks": crate::p2::bindings::clocks,
+                "wasi:random": crate::p2::bindings::random,
+                "wasi:cli": crate::p2::bindings::cli,
+                "wasi:filesystem/preopens": crate::p2::bindings::filesystem::preopens,
+                "wasi:sockets/network": crate::p2::bindings::sockets::network,
 
                 // Configure the resource types of the bound interfaces here
                 // to be the same as the async versions of the resources, that
@@ -204,15 +204,15 @@ pub mod sync {
     /// [`Guest::call_run`](exports::wasi::cli::run::Guest::call_run).
     ///
     /// [async]: wasmtime::Config::async_support
-    /// [`wasmtime_wasi::add_to_linker_sync`]: crate::add_to_linker_sync
+    /// [`wasmtime_wasi::p2::add_to_linker_sync`]: crate::p2::add_to_linker_sync
     ///
     /// # Examples
     ///
     /// ```no_run
     /// use wasmtime::{Engine, Result, Store, Config};
     /// use wasmtime::component::{ResourceTable, Linker, Component};
-    /// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
-    /// use wasmtime_wasi::bindings::sync::Command;
+    /// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
+    /// use wasmtime_wasi::p2::bindings::sync::Command;
     ///
     /// // This example is an example shim of executing a component based on the
     /// // command line arguments provided to this program.
@@ -225,7 +225,7 @@ pub mod sync {
     ///     // Configure a `Linker` with WASI, compile a component based on
     ///     // command line arguments.
     ///     let mut linker = Linker::<MyState>::new(&engine);
-    ///     wasmtime_wasi::add_to_linker_sync(&mut linker)?;
+    ///     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
     ///     let component = Component::from_file(&engine, &args[0])?;
     ///
     ///
@@ -276,8 +276,8 @@ pub mod sync {
     /// ```no_run
     /// use wasmtime::{Engine, Result, Store, Config};
     /// use wasmtime::component::{ResourceTable, Linker, Component};
-    /// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
-    /// use wasmtime_wasi::bindings::sync::CommandPre;
+    /// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
+    /// use wasmtime_wasi::p2::bindings::sync::CommandPre;
     ///
     /// // This example is an example shim of executing a component based on the
     /// // command line arguments provided to this program.
@@ -290,7 +290,7 @@ pub mod sync {
     ///     // Configure a `Linker` with WASI, compile a component based on
     ///     // command line arguments, and then pre-instantiate it.
     ///     let mut linker = Linker::<MyState>::new(&engine);
-    ///     wasmtime_wasi::add_to_linker_sync(&mut linker)?;
+    ///     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
     ///     let component = Component::from_file(&engine, &args[0])?;
     ///     let pre = CommandPre::new(linker.instantiate_pre(&component)?)?;
     ///
@@ -339,7 +339,7 @@ pub mod sync {
 
 mod async_io {
     wasmtime::component::bindgen!({
-        path: "wit",
+        path: "src/p2/wit",
         world: "wasi:cli/command",
         tracing: true,
         trappable_imports: true,
@@ -406,8 +406,8 @@ mod async_io {
         },
         trappable_error_type: {
             "wasi:io/streams/stream-error" => wasmtime_wasi_io::streams::StreamError,
-            "wasi:filesystem/types/error-code" => crate::FsError,
-            "wasi:sockets/network/error-code" => crate::SocketError,
+            "wasi:filesystem/types/error-code" => crate::p2::FsError,
+            "wasi:sockets/network/error-code" => crate::p2::SocketError,
         },
         with: {
             // All interfaces in the wasi:io package should be aliased to
@@ -420,15 +420,15 @@ mod async_io {
             // Configure all other resources to be concrete types defined in
             // this crate
             "wasi:sockets/network/network": crate::network::Network,
-            "wasi:sockets/tcp/tcp-socket": crate::tcp::TcpSocket,
-            "wasi:sockets/udp/udp-socket": crate::udp::UdpSocket,
-            "wasi:sockets/udp/incoming-datagram-stream": crate::udp::IncomingDatagramStream,
-            "wasi:sockets/udp/outgoing-datagram-stream": crate::udp::OutgoingDatagramStream,
-            "wasi:sockets/ip-name-lookup/resolve-address-stream": crate::ip_name_lookup::ResolveAddressStream,
-            "wasi:filesystem/types/directory-entry-stream": crate::filesystem::ReaddirIterator,
-            "wasi:filesystem/types/descriptor": crate::filesystem::Descriptor,
-            "wasi:cli/terminal-input/terminal-input": crate::stdio::TerminalInput,
-            "wasi:cli/terminal-output/terminal-output": crate::stdio::TerminalOutput,
+            "wasi:sockets/tcp/tcp-socket": crate::p2::tcp::TcpSocket,
+            "wasi:sockets/udp/udp-socket": crate::p2::udp::UdpSocket,
+            "wasi:sockets/udp/incoming-datagram-stream": crate::p2::udp::IncomingDatagramStream,
+            "wasi:sockets/udp/outgoing-datagram-stream": crate::p2::udp::OutgoingDatagramStream,
+            "wasi:sockets/ip-name-lookup/resolve-address-stream": crate::p2::ip_name_lookup::ResolveAddressStream,
+            "wasi:filesystem/types/directory-entry-stream": crate::p2::filesystem::ReaddirIterator,
+            "wasi:filesystem/types/descriptor": crate::p2::filesystem::Descriptor,
+            "wasi:cli/terminal-input/terminal-input": crate::p2::stdio::TerminalInput,
+            "wasi:cli/terminal-output/terminal-output": crate::p2::stdio::TerminalOutput,
         },
     });
 }
@@ -448,15 +448,15 @@ pub use self::async_io::LinkOptions;
 /// [`Guest::call_run`](exports::wasi::cli::run::Guest::call_run).
 ///
 /// [async]: wasmtime::Config::async_support
-/// [`wasmtime_wasi::add_to_linker_async`]: crate::add_to_linker_async
+/// [`wasmtime_wasi::p2::add_to_linker_async`]: crate::p2::add_to_linker_async
 ///
 /// # Examples
 ///
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker, Component};
-/// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
-/// use wasmtime_wasi::bindings::Command;
+/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::p2::bindings::Command;
 ///
 /// // This example is an example shim of executing a component based on the
 /// // command line arguments provided to this program.
@@ -472,7 +472,7 @@ pub use self::async_io::LinkOptions;
 ///     // Configure a `Linker` with WASI, compile a component based on
 ///     // command line arguments, and then pre-instantiate it.
 ///     let mut linker = Linker::<MyState>::new(&engine);
-///     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+///     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 ///     let component = Component::from_file(&engine, &args[0])?;
 ///
 ///
@@ -523,8 +523,8 @@ pub use self::async_io::Command;
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker, Component};
-/// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
-/// use wasmtime_wasi::bindings::CommandPre;
+/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::p2::bindings::CommandPre;
 ///
 /// // This example is an example shim of executing a component based on the
 /// // command line arguments provided to this program.
@@ -540,7 +540,7 @@ pub use self::async_io::Command;
 ///     // Configure a `Linker` with WASI, compile a component based on
 ///     // command line arguments, and then pre-instantiate it.
 ///     let mut linker = Linker::<MyState>::new(&engine);
-///     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+///     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 ///     let component = Component::from_file(&engine, &args[0])?;
 ///     let pre = CommandPre::new(linker.instantiate_pre(&component)?)?;
 ///

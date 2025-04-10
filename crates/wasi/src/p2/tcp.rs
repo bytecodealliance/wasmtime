@@ -1,11 +1,11 @@
-use crate::bindings::sockets::tcp::ErrorCode;
-use crate::host::network;
-use crate::network::SocketAddressFamily;
-use crate::runtime::{with_ambient_tokio_runtime, AbortOnDropJoinHandle};
-use crate::{
+use crate::network::{SocketAddressFamily, DEFAULT_TCP_BACKLOG};
+use crate::p2::bindings::sockets::tcp::ErrorCode;
+use crate::p2::host::network;
+use crate::p2::{
     DynInputStream, DynOutputStream, InputStream, OutputStream, Pollable, SocketError,
     SocketResult, StreamError,
 };
+use crate::runtime::{with_ambient_tokio_runtime, AbortOnDropJoinHandle};
 use anyhow::Result;
 use cap_net_ext::AddressFamily;
 use futures::Future;
@@ -20,9 +20,6 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::Poll;
 use tokio::sync::Mutex;
-
-/// Value taken from rust std library.
-const DEFAULT_BACKLOG: u32 = 128;
 
 /// The state of a TCP socket.
 ///
@@ -132,7 +129,7 @@ impl TcpSocket {
     fn from_state(state: TcpState, family: SocketAddressFamily) -> io::Result<Self> {
         Ok(Self {
             tcp_state: state,
-            listen_backlog_size: DEFAULT_BACKLOG,
+            listen_backlog_size: DEFAULT_TCP_BACKLOG,
             family,
             #[cfg(target_os = "macos")]
             receive_buffer_size: None,
@@ -146,7 +143,7 @@ impl TcpSocket {
     }
 
     fn as_std_view(&self) -> SocketResult<SocketlikeView<'_, std::net::TcpStream>> {
-        use crate::bindings::sockets::network::ErrorCode;
+        use crate::p2::bindings::sockets::network::ErrorCode;
 
         match &self.tcp_state {
             TcpState::Default(socket) | TcpState::Bound(socket) => {

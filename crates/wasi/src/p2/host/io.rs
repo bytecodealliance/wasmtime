@@ -1,9 +1,9 @@
-use crate::{
+use crate::p2::{
     bindings::sync::io::poll::Pollable,
     bindings::sync::io::streams::{self, InputStream, OutputStream},
-    runtime::in_tokio,
     IoImpl, IoView, StreamError, StreamResult,
 };
+use crate::runtime::in_tokio;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::bindings::wasi::io::streams::{
     self as async_streams, Host as AsyncHost, HostInputStream as AsyncHostInputStream,

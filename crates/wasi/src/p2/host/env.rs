@@ -1,5 +1,5 @@
-use crate::bindings::cli::environment;
-use crate::{WasiImpl, WasiView};
+use crate::p2::bindings::cli::environment;
+use crate::p2::{WasiImpl, WasiView};
 
 impl<T> environment::Host for WasiImpl<T>
 where

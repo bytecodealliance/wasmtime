@@ -1,12 +1,9 @@
-use crate::network::SocketAddrUse;
-use crate::{
-    bindings::{
-        sockets::network::{IpAddressFamily, IpSocketAddress, Network},
-        sockets::tcp::{self, ShutdownType},
-    },
-    network::SocketAddressFamily,
+use crate::network::{SocketAddrUse, SocketAddressFamily};
+use crate::p2::bindings::{
+    sockets::network::{IpAddressFamily, IpSocketAddress, Network},
+    sockets::tcp::{self, ShutdownType},
 };
-use crate::{SocketResult, WasiImpl, WasiView};
+use crate::p2::{SocketResult, WasiImpl, WasiView};
 use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
@@ -18,7 +15,7 @@ use wasmtime_wasi_io::{
 
 impl<T> tcp::Host for WasiImpl<T> where T: WasiView {}
 
-impl<T> crate::host::tcp::tcp::HostTcpSocket for WasiImpl<T>
+impl<T> crate::p2::host::tcp::tcp::HostTcpSocket for WasiImpl<T>
 where
     T: WasiView,
 {
@@ -322,7 +319,7 @@ where
 pub mod sync {
     use wasmtime::component::Resource;
 
-    use crate::{
+    use crate::p2::{
         bindings::{
             sockets::{
                 network::Network,
@@ -333,9 +330,9 @@ pub mod sync {
                 OutputStream, Pollable, ShutdownType, TcpSocket,
             },
         },
-        runtime::in_tokio,
         SocketError, WasiImpl, WasiView,
     };
+    use crate::runtime::in_tokio;
 
     impl<T> tcp::Host for WasiImpl<T> where T: WasiView {}
 

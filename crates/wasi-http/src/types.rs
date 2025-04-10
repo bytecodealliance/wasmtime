@@ -18,7 +18,8 @@ use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use wasmtime::component::{Resource, ResourceTable};
-use wasmtime_wasi::{runtime::AbortOnDropJoinHandle, IoImpl, IoView, Pollable};
+use wasmtime_wasi::p2::{IoImpl, IoView, Pollable};
+use wasmtime_wasi::runtime::AbortOnDropJoinHandle;
 
 /// Capture the state necessary for use in the wasi-http API implementation.
 #[derive(Debug)]
@@ -39,7 +40,7 @@ impl WasiHttpCtx {
 ///
 /// ```
 /// use wasmtime::component::ResourceTable;
-/// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
 /// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 ///
 /// struct MyState {

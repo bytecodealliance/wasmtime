@@ -4,10 +4,9 @@ use wasmtime::{
     component::{Component, Linker, ResourceTable},
     Engine, Store,
 };
+use wasmtime_wasi::p2::{pipe::MemoryOutputPipe, IoView, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi::preview1::WasiP1Ctx;
-use wasmtime_wasi::{
-    pipe::MemoryOutputPipe, DirPerms, FilePerms, IoView, WasiCtx, WasiCtxBuilder, WasiView,
-};
+use wasmtime_wasi::{DirPerms, FilePerms};
 
 struct Ctx {
     stdout: MemoryOutputPipe,

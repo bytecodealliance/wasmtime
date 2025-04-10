@@ -1,4 +1,4 @@
-use crate::{OutputStream, Pollable, StreamError};
+use crate::p2::{OutputStream, Pollable, StreamError};
 use anyhow::anyhow;
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};

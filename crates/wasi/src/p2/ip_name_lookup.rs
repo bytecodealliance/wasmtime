@@ -1,8 +1,8 @@
-use crate::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
-use crate::bindings::sockets::network::{ErrorCode, IpAddress, Network};
-use crate::host::network::util;
+use crate::p2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
+use crate::p2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
+use crate::p2::host::network::util;
+use crate::p2::{IoView, SocketError, WasiImpl, WasiView};
 use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
-use crate::{IoView, SocketError, WasiImpl, WasiView};
 use anyhow::Result;
 use std::mem;
 use std::net::{Ipv6Addr, ToSocketAddrs};

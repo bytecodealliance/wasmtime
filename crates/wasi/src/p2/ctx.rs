@@ -1,14 +1,14 @@
-use crate::{
-    clocks::{
-        host::{monotonic_clock, wall_clock},
-        HostMonotonicClock, HostWallClock,
-    },
-    filesystem::{Dir, OpenMode},
-    network::{SocketAddrCheck, SocketAddrUse},
-    pipe, random, stdio,
-    stdio::{StdinStream, StdoutStream},
-    DirPerms, FilePerms,
+use crate::clocks::{
+    host::{monotonic_clock, wall_clock},
+    HostMonotonicClock, HostWallClock,
 };
+use crate::network::{SocketAddrCheck, SocketAddrUse};
+use crate::p2::{
+    filesystem::Dir,
+    pipe, stdio,
+    stdio::{StdinStream, StdoutStream},
+};
+use crate::{random, DirPerms, FilePerms, OpenMode};
 use anyhow::Result;
 use cap_rand::{Rng, RngCore, SeedableRng};
 use cap_std::ambient_authority;
@@ -26,7 +26,7 @@ use std::{mem, net::SocketAddr};
 /// # Examples
 ///
 /// ```
-/// use wasmtime_wasi::{WasiCtxBuilder, WasiCtx};
+/// use wasmtime_wasi::p2::{WasiCtxBuilder, WasiCtx};
 ///
 /// let mut wasi = WasiCtxBuilder::new();
 /// wasi.arg("./foo.wasm");
@@ -111,7 +111,7 @@ impl WasiCtxBuilder {
     /// stdin looks like:
     ///
     /// ```
-    /// use wasmtime_wasi::{stdin, WasiCtxBuilder};
+    /// use wasmtime_wasi::p2::{stdin, WasiCtxBuilder};
     ///
     /// let mut wasi = WasiCtxBuilder::new();
     /// wasi.stdin(stdin());
@@ -216,7 +216,7 @@ impl WasiCtxBuilder {
     /// # Examples
     ///
     /// ```
-    /// use wasmtime_wasi::{stdin, WasiCtxBuilder};
+    /// use wasmtime_wasi::p2::{stdin, WasiCtxBuilder};
     ///
     /// let mut wasi = WasiCtxBuilder::new();
     /// wasi.envs(&[
@@ -240,7 +240,7 @@ impl WasiCtxBuilder {
     /// # Examples
     ///
     /// ```
-    /// use wasmtime_wasi::{stdin, WasiCtxBuilder};
+    /// use wasmtime_wasi::p2::{stdin, WasiCtxBuilder};
     ///
     /// let mut wasi = WasiCtxBuilder::new();
     /// wasi.env("FOO", "bar");
@@ -309,7 +309,8 @@ impl WasiCtxBuilder {
     /// # Examples
     ///
     /// ```
-    /// use wasmtime_wasi::{WasiCtxBuilder, DirPerms, FilePerms};
+    /// use wasmtime_wasi::p2::WasiCtxBuilder;
+    /// use wasmtime_wasi::{DirPerms, FilePerms};
     ///
     /// # fn main() {}
     /// # fn foo() -> wasmtime::Result<()> {
@@ -529,7 +530,7 @@ impl WasiCtxBuilder {
 ///
 /// This structure is created through [`WasiCtxBuilder`] and is stored within
 /// the `T` of [`Store<T>`][`Store`]. Access to the structure is provided
-/// through the [`WasiView`](crate::WasiView) trait as an implementation on `T`.
+/// through the [`WasiView`](crate::p2::WasiView) trait as an implementation on `T`.
 ///
 /// Note that this structure itself does not have any accessors, it's here for
 /// internal use within the `wasmtime-wasi` crate's implementation of
@@ -540,7 +541,8 @@ impl WasiCtxBuilder {
 /// # Example
 ///
 /// ```
-/// use wasmtime_wasi::{WasiCtx, ResourceTable, WasiView, IoView, WasiCtxBuilder};
+/// use wasmtime_wasi::ResourceTable;
+/// use wasmtime_wasi::p2::{WasiCtx, WasiView, IoView, WasiCtxBuilder};
 ///
 /// struct MyState {
 ///     ctx: WasiCtx,

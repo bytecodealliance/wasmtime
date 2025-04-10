@@ -1,4 +1,5 @@
-use crate::host::network::util;
+use crate::network::{SocketAddrCheck, SocketAddressFamily};
+use crate::p2::host::network::util;
 use crate::runtime::with_ambient_tokio_runtime;
 use async_trait::async_trait;
 use cap_net_ext::{AddressFamily, Blocking};
@@ -7,8 +8,6 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use wasmtime_wasi_io::poll::Pollable;
-
-use super::network::{SocketAddrCheck, SocketAddressFamily};
 
 /// The state of a UDP socket.
 ///

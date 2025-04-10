@@ -731,7 +731,7 @@ fn wasi_imports() -> Result<()> {
     )?;
 
     let module = Module::new(&engine, wasm)?;
-    let mut store = Store::new(&engine, wasmtime_wasi::WasiCtxBuilder::new().build_p1());
+    let mut store = Store::new(&engine, wasmtime_wasi::p2::WasiCtxBuilder::new().build_p1());
     let instance = linker.instantiate(&mut store, &module)?;
 
     let start = instance.get_typed_func::<(), ()>(&mut store, "_start")?;
