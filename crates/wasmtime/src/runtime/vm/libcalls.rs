@@ -501,9 +501,12 @@ fn retry_alloc_with_maybe_async_gc<T>(
         Err(bytes_needed) => {
             // If the allocation failed, try to grow the GC heap as neccessary,
             // and if that also fails, then do a GC to hopefully clean up space.
-            store
-                .traitobj_mut()
-                .maybe_async_grow_or_collect_gc_heap(bytes_needed)?;
+            unsafe {
+                store
+                    .traitobj_mut()
+                    // Always on a fiber stack in libcalls.
+                    .maybe_async_grow_or_collect_gc_heap(bytes_needed)?
+            };
 
             // And then try again.
             Ok(

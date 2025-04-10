@@ -101,6 +101,14 @@ impl<T> GcHeapOutOfMemory<T> {
         self.bytes_needed
     }
 
+    #[cfg(feature = "gc")]
+    pub(crate) fn map_inner<U>(self, f: impl FnOnce(T) -> U) -> GcHeapOutOfMemory<U> {
+        GcHeapOutOfMemory {
+            inner: f(self.inner),
+            bytes_needed: self.bytes_needed,
+        }
+    }
+
     /// Recover this error's inner host value.
     pub fn into_inner(self) -> T {
         self.inner

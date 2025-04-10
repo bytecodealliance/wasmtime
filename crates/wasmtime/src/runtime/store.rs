@@ -1627,8 +1627,9 @@ impl StoreOpaque {
             Ok(x) => Ok(x),
             Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
                 Ok(oom) => {
-                    let value = oom.into_inner();
-                    self.maybe_async_gc(None)?;
+                    let (value, oom) = oom.take_inner();
+                    self.traitobj_mut()
+                        .maybe_async_grow_or_collect_gc_heap(oom.bytes_needed())?;
                     alloc_func(self, value)
                 }
                 Err(e) => Err(e),
@@ -1679,6 +1680,7 @@ impl StoreOpaque {
     /// this is called on a fiber stack.
     #[cfg(feature = "gc")]
     pub(crate) fn maybe_async_grow_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
+        log::trace!("Attempting to grow the GC heap by {bytes_needed} bytes");
         assert!(bytes_needed > 0);
 
         // Take the GC heap's underlying memory out of the GC heap, attempt to

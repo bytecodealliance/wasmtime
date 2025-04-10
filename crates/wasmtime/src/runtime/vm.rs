@@ -212,17 +212,20 @@ pub unsafe trait VMStore {
     /// Attempt to grow the GC heap by `bytes_needed` or, if that fails, perform
     /// a garbage collection.
     ///
-    /// Cooperative, async-yielding (if configured) is completely transparent.
+    /// Cooperative, async-yielding (if configured) is completely
+    /// transparent. Must be called on a fiber stack, in that case.
     ///
     /// Note that even when this function returns `Ok(())`, it is not guaranteed
     /// that a GC allocation of size `bytes_needed` will succeed. Growing the GC
     /// heap could fail, and then performing a collection could succeed but
     /// might not free up enough space. Therefore, callers should not assume
     /// that a retried allocation will always succeed.
-    fn maybe_async_grow_or_collect_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
+    unsafe fn maybe_async_grow_or_collect_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
         self.maybe_async_grow_gc_heap(bytes_needed)
             .or_else(|err| -> Result<()> {
-                self.maybe_async_gc(None).context(err)?;
+                unsafe {
+                    self.maybe_async_gc(None).context(err)?;
+                }
                 Ok(())
             })?;
         Ok(())
