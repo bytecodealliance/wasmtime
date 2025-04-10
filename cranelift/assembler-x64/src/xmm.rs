@@ -25,8 +25,8 @@ impl<R: AsReg> Xmm<R> {
     }
 
     /// Return the register name.
-    pub fn to_string(&self) -> &str {
-        enc::to_string(self.enc())
+    pub fn to_string(&self) -> String {
+        self.0.to_string(None)
     }
 }
 
