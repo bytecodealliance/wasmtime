@@ -137,28 +137,33 @@ unsafe impl GcRefImpl for ExternRef {
 }
 
 impl ExternRef {
-    /// Creates a new instance of `ExternRef` wrapping the given value.
+    /// Synchronously allocates a new `ExternRef` wrapping the given value.
     ///
     /// The resulting value is automatically unrooted when the given `context`'s
-    /// scope is exited. See [`Rooted<T>`][crate::Rooted]'s documentation for
-    /// more details.
+    /// scope is exited. If you need to hold the reference past the `context`'s
+    /// scope, convert the result into a
+    /// [`ManuallyRooted<T>`][crate::ManuallyRooted]. See the documentation for
+    /// [`Rooted<T>`][crate::Rooted] and
+    /// [`ManuallyRooted<T>`][crate::ManuallyRooted] for more details.
     ///
-    /// This method will *not* automatically trigger a GC to free up space in
-    /// the GC heap; instead it will return an error. This gives you more
-    /// precise control over when collections happen and allows you to choose
-    /// between performing synchronous and asynchronous collections.
+    /// # Automatic Garbage Collection
+    ///
+    /// If the GC heap is at capacity, and there isn't room for allocating a new
+    /// `externref`, this method will automatically trigger a synchronous
+    /// collection in an attempt to free up space in the GC heap.
     ///
     /// # Errors
     ///
     /// If the allocation cannot be satisfied because the GC heap is currently
-    /// out of memory, but performing a garbage collection might free up space
-    /// such that retrying the allocation afterwards might succeed, then a
-    /// `GcHeapOutOfMemory<T>` error is returned.
+    /// out of memory, then a [`GcHeapOutOfMemory<T>`][crate::GcHeapOutOfMemory]
+    /// error is returned. The allocation might succeed on a second attempt if
+    /// you drop some rooted GC references and try again.
     ///
-    /// The `GcHeapOutOfMemory<T>` error contains the host value that the
-    /// `externref` would have wrapped. You can extract that value from this
-    /// error and reuse it when attempting to allocate an `externref` again
-    /// after GC or otherwise do with it whatever you see fit.
+    /// The [`GcHeapOutOfMemory<T>`][crate::GcHeapOutOfMemory] error contains
+    /// the host value that the `externref` would have wrapped. You can extract
+    /// that value from the error and reuse it when attempting to allocate an
+    /// `externref` again after dropping rooted GC references and then
+    /// performing a collection or otherwise do with it whatever you see fit.
     ///
     /// # Example
     ///
@@ -170,26 +175,25 @@ impl ExternRef {
     /// {
     ///     let mut scope = RootScope::new(&mut store);
     ///
-    ///     // Create an `externref` wrapping a `str`.
-    ///     let externref = match ExternRef::new(&mut scope, "hello!") {
+    ///     // Allocate an `externref` wrapping a `String`.
+    ///     let externref = match ExternRef::new(&mut scope, "hello!".to_string()) {
+    ///         // The allocation succeeded.
     ///         Ok(x) => x,
-    ///         // If the heap is out of memory, then do a GC and try again.
-    ///         Err(e) if e.is::<GcHeapOutOfMemory<&'static str>>() => {
-    ///             // Do a GC! Note: in an async context, you'd want to do
-    ///             // `scope.as_context_mut().gc_async().await`.
-    ///             scope.as_context_mut().gc();
-    ///
-    ///             // Extract the original host value from the error.
-    ///             let host_value = e
-    ///                 .downcast::<GcHeapOutOfMemory<&'static str>>()
-    ///                 .unwrap()
-    ///                 .into_inner();
-    ///
-    ///             // Try to allocate the `externref` again, now that the GC
-    ///             // has hopefully freed up some space.
-    ///             ExternRef::new(&mut scope, host_value)?
-    ///         }
-    ///         Err(e) => return Err(e),
+    ///         // The allocation failed.
+    ///         Err(e) => match e.downcast::<GcHeapOutOfMemory<String>>() {
+    ///             // The allocation failed because the GC heap does not have
+    ///             // capacity for this allocation.
+    ///             Ok(oom) => {
+    ///                 // Take back ownership of our `String`.
+    ///                 let s = oom.into_inner();
+    ///                 // Drop other rooted GC refs to make room for this
+    ///                 // allocation, and try again, passing the string back
+    ///                 // into the second allocation attempt. Alternatively,
+    ///                 // propagate the error up to callers...
+    /// #               return Ok(());
+    ///             }
+    ///             Err(e) => return Err(e),
+    ///         },
     ///     };
     ///
     ///     // Use the `externref`, pass it to Wasm, etc...
@@ -199,21 +203,141 @@ impl ExternRef {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `context` is configured for async; use
+    /// [`ExternRef::new_async`][crate::ExternRef::new_async] to perform
+    /// asynchronous allocation instead.
     pub fn new<T>(mut context: impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
     where
         T: 'static + Any + Send + Sync,
     {
         let ctx = context.as_context_mut().0;
+        Self::_new(ctx, value)
+    }
 
+    pub(crate) fn _new<T>(store: &mut StoreOpaque, value: T) -> Result<Rooted<ExternRef>>
+    where
+        T: 'static + Any + Send + Sync,
+    {
         let value: Box<dyn Any + Send + Sync> = Box::new(value);
-        let gc_ref = ctx
-            .gc_store_mut()?
-            .alloc_externref(value)
-            .context("unrecoverable error when allocating new `externref`")?
-            .map_err(|x| GcHeapOutOfMemory::<T>::new(*x.downcast().unwrap()))
-            .context("failed to allocate `externref`")?;
+        let gc_ref = store.retry_after_gc(value, |store, value| {
+            store
+                .gc_store_mut()?
+                .alloc_externref(value)
+                .context("unrecoverable error when allocating new `externref`")?
+                .map_err(|x| GcHeapOutOfMemory::<T>::new(*x.downcast().unwrap()))
+                .context("failed to allocate `externref`")
+        })?;
 
-        let mut ctx = AutoAssertNoGc::new(ctx);
+        let mut ctx = AutoAssertNoGc::new(store);
+        Ok(Self::from_cloned_gc_ref(&mut ctx, gc_ref.into()))
+    }
+
+    /// Asynchronously allocates a new `ExternRef` wrapping the given value.
+    ///
+    /// The resulting value is automatically unrooted when the given `context`'s
+    /// scope is exited. If you need to hold the reference past the `context`'s
+    /// scope, convert the result into a
+    /// [`ManuallyRooted<T>`][crate::ManuallyRooted]. See the documentation for
+    /// [`Rooted<T>`][crate::Rooted] and
+    /// [`ManuallyRooted<T>`][crate::ManuallyRooted] for more details.
+    ///
+    /// # Automatic Garbage Collection
+    ///
+    /// If the GC heap is at capacity, and there isn't room for allocating a new
+    /// `externref`, this method will automatically trigger an asynchronous
+    /// collection in an attempt to free up space in the GC heap.
+    ///
+    /// # Errors
+    ///
+    /// If the allocation cannot be satisfied because the GC heap is currently
+    /// out of memory, then a [`GcHeapOutOfMemory<T>`][crate::GcHeapOutOfMemory]
+    /// error is returned. The allocation might succeed on a second attempt if
+    /// you drop some rooted GC references and try again.
+    ///
+    /// The [`GcHeapOutOfMemory<T>`][crate::GcHeapOutOfMemory] error contains
+    /// the host value that the `externref` would have wrapped. You can extract
+    /// that value from the error and reuse it when attempting to allocate an
+    /// `externref` again after dropping rooted GC references and then
+    /// performing a collection or otherwise do with it whatever you see fit.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use wasmtime::*;
+    ///
+    /// # async fn _foo() -> Result<()> {
+    /// let mut store = Store::<()>::default();
+    ///
+    /// {
+    ///     let mut scope = RootScope::new(&mut store);
+    ///
+    ///     // Create an `externref` wrapping a `String`.
+    ///     let externref = match ExternRef::new_async(&mut scope, "hello!".to_string()).await {
+    ///         // The allocation succeeded.
+    ///         Ok(x) => x,
+    ///         // The allocation failed.
+    ///         Err(e) => match e.downcast::<GcHeapOutOfMemory<String>>() {
+    ///             // The allocation failed because the GC heap does not have
+    ///             // capacity for this allocation.
+    ///             Ok(oom) => {
+    ///                 // Take back ownership of our `String`.
+    ///                 let s = oom.into_inner();
+    ///                 // Drop other rooted GC refs to make room for this
+    ///                 // allocation, and try again, passing the string back
+    ///                 // into the second allocation attempt. Alternatively,
+    ///                 // propagate the error up to callers...
+    /// #               return Ok(());
+    ///             }
+    ///             Err(e) => return Err(e),
+    ///         },
+    ///     };
+    ///
+    ///     // Use the `externref`, pass it to Wasm, etc...
+    /// }
+    ///
+    /// // The `externref` is automatically unrooted when we exit the scope.
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `context` is not configured for async; use
+    /// [`ExternRef::new`][crate::ExternRef::new] to perform synchronous
+    /// allocation instead.
+    #[cfg(feature = "async")]
+    pub async fn new_async<T>(mut context: impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
+    where
+        T: 'static + Any + Send + Sync,
+    {
+        let ctx = context.as_context_mut().0;
+        Self::_new_async(ctx, value).await
+    }
+
+    #[cfg(feature = "async")]
+    pub(crate) async fn _new_async<T>(
+        store: &mut StoreOpaque,
+        value: T,
+    ) -> Result<Rooted<ExternRef>>
+    where
+        T: 'static + Any + Send + Sync,
+    {
+        let value: Box<dyn Any + Send + Sync> = Box::new(value);
+        let gc_ref = store
+            .retry_after_gc_async(value, |store, value| {
+                store
+                    .gc_store_mut()?
+                    .alloc_externref(value)
+                    .context("unrecoverable error when allocating new `externref`")?
+                    .map_err(|x| GcHeapOutOfMemory::<T>::new(*x.downcast().unwrap()))
+                    .context("failed to allocate `externref`")
+            })
+            .await?;
+
+        let mut ctx = AutoAssertNoGc::new(store);
         Ok(Self::from_cloned_gc_ref(&mut ctx, gc_ref.into()))
     }
 
@@ -272,58 +396,6 @@ impl ExternRef {
     ) -> Result<Rooted<ExternRef>> {
         let gc_ref = anyref.try_clone_gc_ref(store)?;
         Ok(Self::from_cloned_gc_ref(store, gc_ref))
-    }
-
-    /// Creates a new, manually-rooted instance of `ExternRef` wrapping the
-    /// given value.
-    ///
-    /// The resulting value must be manually unrooted, or else it will leak for
-    /// the entire duration of the store's lifetime. See
-    /// [`ManuallyRooted<T>`][crate::ManuallyRooted]'s documentation for more
-    /// details.
-    ///
-    /// # Errors
-    ///
-    /// This function returns the same errors in the same scenarios as
-    /// [`ExternRef::new`][crate::ExternRef::new].
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # use wasmtime::*;
-    /// # fn _foo() -> Result<()> {
-    /// let mut store = Store::<()>::default();
-    ///
-    /// // Create a manually-rooted `externref` wrapping a `str`.
-    /// let externref = ExternRef::new_manually_rooted(&mut store, "hello!")?;
-    ///
-    /// // Use `externref` a bunch, pass it to Wasm, etc...
-    ///
-    /// // Don't forget to explicitly unroot the `externref` when you're done
-    /// // using it!
-    /// externref.unroot(&mut store);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub fn new_manually_rooted<T>(
-        mut store: impl AsContextMut,
-        value: T,
-    ) -> Result<ManuallyRooted<ExternRef>>
-    where
-        T: 'static + Any + Send + Sync,
-    {
-        let ctx = store.as_context_mut().0;
-
-        let value: Box<dyn Any + Send + Sync> = Box::new(value);
-        let gc_ref = ctx
-            .gc_store_mut()?
-            .alloc_externref(value)
-            .context("unrecoverable error when allocating new `externref`")?
-            .map_err(|x| GcHeapOutOfMemory::<T>::new(*x.downcast().unwrap()))
-            .context("failed to allocate `externref`")?;
-
-        let mut ctx = AutoAssertNoGc::new(ctx);
-        Ok(ManuallyRooted::new(&mut ctx, gc_ref.into()))
     }
 
     /// Create a new `Rooted<ExternRef>` from the given GC reference.

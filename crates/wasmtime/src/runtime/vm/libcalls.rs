@@ -772,7 +772,7 @@ unsafe fn array_new_elem(
     use crate::{
         store::AutoAssertNoGc,
         vm::const_expr::{ConstEvalContext, ConstExprEvaluator},
-        ArrayRef, ArrayRefPre, ArrayType, Func, GcHeapOutOfMemory, RootSet, RootedGcRefImpl, Val,
+        ArrayRef, ArrayRefPre, ArrayType, Func, RootSet, RootedGcRefImpl, Val,
     };
     use wasmtime_environ::{ModuleInternedTypeIndex, TableSegmentElements};
 
@@ -827,16 +827,7 @@ unsafe fn array_new_elem(
             }
         }
 
-        let array = match ArrayRef::_new_fixed(store, &pre, &vals) {
-            Ok(a) => a,
-            Err(e) if e.is::<GcHeapOutOfMemory<()>>() => {
-                // Collect garbage to hopefully free up space, then try the
-                // allocation again.
-                store.maybe_async_gc(None)?;
-                ArrayRef::_new_fixed(store, &pre, &vals)?
-            }
-            Err(e) => return Err(e),
-        };
+        let array = unsafe { ArrayRef::new_fixed_maybe_async(store, &pre, &vals)? };
 
         let mut store = AutoAssertNoGc::new(store);
         let gc_ref = array.try_clone_gc_ref(&mut store)?;

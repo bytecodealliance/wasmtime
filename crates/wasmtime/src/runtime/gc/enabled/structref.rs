@@ -133,18 +133,7 @@ impl StructRefPre {
 ///     let mut scope = RootScope::new(&mut store);
 ///
 ///     // Allocate an instance of the struct type.
-///     let my_struct = match StructRef::new(&mut scope, &allocator, &[Val::I32(42)]) {
-///         Ok(s) => s,
-///         // If the heap is out of memory, then do a GC and try again.
-///         Err(e) if e.is::<GcHeapOutOfMemory<()>>() => {
-///             // Do a GC! Note: in an async context, you'd want to do
-///             // `scope.as_context_mut().gc_async().await`.
-///             scope.as_context_mut().gc();
-///
-///             StructRef::new(&mut scope, &allocator, &[Val::I32(42)])?
-///         }
-///         Err(e) => return Err(e),
-///     };
+///     let my_struct = StructRef::new(&mut scope, &allocator, &[Val::I32(42)])?;
 ///
 ///     // That instance's field should have the expected value.
 ///     let val = my_struct.field(&mut scope, 0)?.unwrap_i32();
@@ -212,7 +201,13 @@ impl ManuallyRooted<StructRef> {
 }
 
 impl StructRef {
-    /// Allocate a new `struct` and get a reference to it.
+    /// Synchronously allocate a new `struct` and get a reference to it.
+    ///
+    /// # Automatic Garbage Collection
+    ///
+    /// If the GC heap is at capacity, and there isn't room for allocating this
+    /// new struct, then this method will automatically trigger a synchronous
+    /// collection in an attempt to free up space in the GC heap.
     ///
     /// # Errors
     ///
@@ -220,11 +215,15 @@ impl StructRef {
     /// `allocator`'s struct type, an error is returned.
     ///
     /// If the allocation cannot be satisfied because the GC heap is currently
-    /// out of memory, but performing a garbage collection might free up space
-    /// such that retrying the allocation afterwards might succeed, then a
-    /// [`GcHeapOutOfMemory<()>`][crate::GcHeapOutOfMemory] error is returned.
+    /// out of memory, then a [`GcHeapOutOfMemory<()>`][crate::GcHeapOutOfMemory]
+    /// error is returned. The allocation might succeed on a second attempt if
+    /// you drop some rooted GC references and try again.
     ///
     /// # Panics
+    ///
+    /// Panics if your engine is configured for async; use
+    /// [`StructRef::new_async`][crate::StructRef::new_async] to perform
+    /// synchronous allocation instead.
     ///
     /// Panics if the allocator, or any of the field values, is not associated
     /// with the given store.
@@ -241,13 +240,90 @@ impl StructRef {
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        assert_eq!(
-            store.id(),
-            allocator.store_id,
-            "attempted to use a `StructRefPre` with the wrong store"
+        assert!(
+            !store.async_support(),
+            "use `StructRef::new_async` with asynchronous stores"
         );
+        Self::type_check_fields(store, allocator, fields)?;
+        store.retry_after_gc((), |store, ()| {
+            Self::new_unchecked(store, allocator, fields)
+        })
+    }
 
-        // Type check the given values against the field types.
+    /// Asynchronously allocate a new `struct` and get a reference to it.
+    ///
+    /// # Automatic Garbage Collection
+    ///
+    /// If the GC heap is at capacity, and there isn't room for allocating this
+    /// new struct, then this method will automatically trigger a synchronous
+    /// collection in an attempt to free up space in the GC heap.
+    ///
+    /// # Errors
+    ///
+    /// If the given `fields` values' types do not match the field types of the
+    /// `allocator`'s struct type, an error is returned.
+    ///
+    /// If the allocation cannot be satisfied because the GC heap is currently
+    /// out of memory, then a [`GcHeapOutOfMemory<()>`][crate::GcHeapOutOfMemory]
+    /// error is returned. The allocation might succeed on a second attempt if
+    /// you drop some rooted GC references and try again.
+    ///
+    /// # Panics
+    ///
+    /// Panics if your engine is not configured for async; use
+    /// [`StructRef::new`][crate::StructRef::new] to perform synchronous
+    /// allocation instead.
+    ///
+    /// Panics if the allocator, or any of the field values, is not associated
+    /// with the given store.
+    #[cfg(feature = "async")]
+    pub async fn new_async(
+        mut store: impl AsContextMut,
+        allocator: &StructRefPre,
+        fields: &[Val],
+    ) -> Result<Rooted<StructRef>> {
+        Self::_new_async(store.as_context_mut().0, allocator, fields).await
+    }
+
+    #[cfg(feature = "async")]
+    pub(crate) async fn _new_async(
+        store: &mut StoreOpaque,
+        allocator: &StructRefPre,
+        fields: &[Val],
+    ) -> Result<Rooted<StructRef>> {
+        assert!(
+            store.async_support(),
+            "use `StructRef::new` with synchronous stores"
+        );
+        Self::type_check_fields(store, allocator, fields)?;
+        store
+            .retry_after_gc_async((), |store, ()| {
+                Self::new_unchecked(store, allocator, fields)
+            })
+            .await
+    }
+
+    /// Like `Self::new` but caller's must ensure that if the store is
+    /// configured for async, this is only ever called from on a fiber stack.
+    pub(crate) unsafe fn new_maybe_async(
+        store: &mut StoreOpaque,
+        allocator: &StructRefPre,
+        fields: &[Val],
+    ) -> Result<Rooted<StructRef>> {
+        Self::type_check_fields(store, allocator, fields)?;
+        unsafe {
+            store.retry_after_gc_maybe_async((), |store, ()| {
+                Self::new_unchecked(store, allocator, fields)
+            })
+        }
+    }
+
+    /// Type check the field values before allocating a new struct.
+    fn type_check_fields(
+        store: &mut StoreOpaque,
+        allocator: &StructRefPre,
+        fields: &[Val],
+    ) -> Result<(), Error> {
         let expected_len = allocator.ty.fields().len();
         let actual_len = fields.len();
         ensure!(
@@ -263,6 +339,23 @@ impl StructRef {
             val.ensure_matches_ty(store, ty)
                 .context("field type mismatch")?;
         }
+        Ok(())
+    }
+
+    /// Given that the field values have already been type checked, allocate a
+    /// new struct.
+    ///
+    /// Does not attempt GC+retry on OOM, that is the caller's responsibility.
+    fn new_unchecked(
+        store: &mut StoreOpaque,
+        allocator: &StructRefPre,
+        fields: &[Val],
+    ) -> Result<Rooted<StructRef>> {
+        assert_eq!(
+            store.id(),
+            allocator.store_id,
+            "attempted to use a `StructRefPre` with the wrong store"
+        );
 
         // Allocate the struct and write each field value into the appropriate
         // offset.
