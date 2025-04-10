@@ -997,9 +997,10 @@ pub enum Trampoline {
     /// The `thread.spawn_indirect` intrinsic to spawn a thread from a function
     /// of type `ty` stored in a `table`.
     ThreadSpawnIndirect {
-        /// TODO
+        /// The type of the function that is being spawned.
         ty: TypeFuncIndex,
-        /// TODO
+        /// The table from which to indirectly retrieve retrieve the spawn
+        /// function.
         table: RuntimeTableIndex,
     },
 }

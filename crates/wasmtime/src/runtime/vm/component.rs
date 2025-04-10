@@ -749,7 +749,8 @@ impl ComponentInstance {
     #[cfg(feature = "threads")]
     pub(crate) fn thread_spawn_indirect(
         &mut self,
-        table: u32,
+        _func_ty: TypeFuncIndex,
+        table: RuntimeTableIndex,
         element: u32,
         _context: u32,
     ) -> Result<u32> {
@@ -760,7 +761,7 @@ impl ComponentInstance {
         // Retrieve the table referenced by the canonical builtin (i.e.,
         // `table`). By validation this is guaranteed to be a `shared funcref`
         // table.
-        let VMTable { vmctx, from } = self.runtime_table(RuntimeTableIndex::from_u32(table));
+        let VMTable { vmctx, from } = self.runtime_table(table);
         let element = u64::from(element);
         let table = unsafe {
             Instance::from_vmctx(vmctx.as_non_null(), |handle| {

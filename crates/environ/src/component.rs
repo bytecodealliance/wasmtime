@@ -155,7 +155,7 @@ macro_rules! foreach_builtin_component_function {
             error_context_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
 
             #[cfg(feature = "threads")]
-            thread_spawn_indirect(vmctx: vmctx, table: u32, element: u32, context: u32 ) -> u64;
+            thread_spawn_indirect(vmctx: vmctx, func_ty: u32, table: u32, element: u32, context: u32 ) -> u64;
 
             trap(vmctx: vmctx, code: u8);
 
