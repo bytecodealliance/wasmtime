@@ -41,6 +41,9 @@ pub fn dummy_extern(store: &mut crate::Store, ty: ExternType, name: &str) -> Res
         ExternType::Memory(_) => {
             anyhow::bail!("Error: attempted to import unknown memory: {}", name)
         }
+        ExternType::Tag(_) => {
+            anyhow::bail!("Error: attempted to import unknown tag: {}", name)
+        }
     })
 }
 

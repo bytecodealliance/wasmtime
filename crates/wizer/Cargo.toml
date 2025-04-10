@@ -27,14 +27,14 @@ name = "uap"
 harness = false
 
 [dependencies]
-anyhow = "1.0.81"
-cap-std = "3.0.0"
-env_logger = { version = "0.11", optional = true }
-log = "0.4.21"
+anyhow = "1.0.97"
+cap-std = "3.4.3"
+env_logger = { version = "0.11.8", optional = true }
+log = "0.4.27"
 rayon = "1.10.0"
 structopt = { version = "0.3.26", optional = true }
-wasm-encoder = "0.202.0"
-wasmparser = "0.202.0"
+wasm-encoder = "0.228.0"
+wasmparser = "0.228.0"
 wasmtime = { workspace = true }
 wasmtime-wasi = { workspace = true, features = ["preview1"] }
 
@@ -45,15 +45,15 @@ workspace = true
 optional = true
 
 [workspace.dependencies]
-wasmprinter = "0.202.0"
-wasmtime = "29"
-wasmtime-wasi = "29"
+wasmprinter = "0.228.0"
+wasmtime = "31"
+wasmtime-wasi = "31"
 
 [dev-dependencies]
 criterion = "0.5.1"
-env_logger = "0.11.3"
+env_logger = "0.11.8"
 wasmprinter = { workspace = true }
-wat = "1.202.0"
+wat = "1.228.0"
 
 [workspace]
 members = [

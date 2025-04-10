@@ -97,10 +97,10 @@ fn fails_wizening(wat: &str) -> Result<()> {
 
     let wasm = wat_to_wasm(wat)?;
 
-    let mut validator = wasmparser::Validator::new_with_features(wasmparser::WasmFeatures {
-        multi_memory: true,
-        ..Default::default()
-    });
+    let mut features = wasmparser::WasmFeatures::WASM2;
+    features.set(wasmparser::WasmFeatures::MULTI_MEMORY, true);
+
+    let mut validator = wasmparser::Validator::new_with_features(features);
     validator
         .validate_all(&wasm)
         .context("initial Wasm should be valid")?;
@@ -556,6 +556,8 @@ fn rename_functions() -> Result<()> {
 (module
   (type (;0;) (func))
   (type (;1;) (func (result i32)))
+  (export "func_a" (func 2))
+  (export "func_b" (func 3))
   (func (;0;) (type 0))
   (func (;1;) (type 1) (result i32)
     i32.const 1
@@ -566,8 +568,6 @@ fn rename_functions() -> Result<()> {
   (func (;3;) (type 1) (result i32)
     i32.const 3
   )
-  (export "func_a" (func 2))
-  (export "func_b" (func 3))
 )
   "#;
 
@@ -707,8 +707,13 @@ fn accept_bulk_memory_copy() -> Result<()> {
 fn accept_bulk_memory_data_count() -> Result<()> {
     let mut module = wasm_encoder::Module::new();
     let mut types = wasm_encoder::TypeSection::new();
-    types.function(vec![], vec![wasm_encoder::ValType::I32]);
-    types.function(vec![], vec![]);
+    types.ty().func_type(&wasm_encoder::FuncType::new(
+        vec![],
+        vec![wasm_encoder::ValType::I32],
+    ));
+    types
+        .ty()
+        .func_type(&wasm_encoder::FuncType::new(vec![], vec![]));
     module.section(&types);
 
     let mut functions = wasm_encoder::FunctionSection::new();
@@ -722,6 +727,7 @@ fn accept_bulk_memory_data_count() -> Result<()> {
         maximum: Some(1),
         memory64: false,
         shared: false,
+        page_size_log2: None,
     });
     module.section(&memory);
 

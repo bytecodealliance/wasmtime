@@ -102,7 +102,6 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleContext<'a>
                 assert!(stack.is_empty());
                 return Ok(cx);
             }
-
             ComponentTypeSection(_)
             | ComponentImportSection(_)
             | ComponentExportSection(_)
@@ -116,6 +115,7 @@ pub(crate) fn parse<'a>(full_wasm: &'a [u8]) -> anyhow::Result<ModuleContext<'a>
             | ComponentSection { .. } => {
                 unreachable!()
             }
+            _ => anyhow::bail!("unsupported wasmparser payload"),
         }
     }
 }
@@ -133,12 +133,13 @@ fn type_section<'a>(
     // instance imports.
     for group in types {
         for ty in group?.into_types() {
-            match ty.composite_type {
-                ty @ wasmparser::CompositeType::Func(_) => {
-                    module.push_type(cx, ty);
+            match ty.composite_type.inner {
+                wasmparser::CompositeInnerType::Func(_) => {
+                    module.push_type(cx, ty.composite_type);
                 }
-                wasmparser::CompositeType::Array(_) => todo!(),
-                wasmparser::CompositeType::Struct(_) => todo!(),
+                wasmparser::CompositeInnerType::Array(_) => todo!(),
+                wasmparser::CompositeInnerType::Struct(_) => todo!(),
+                wasmparser::CompositeInnerType::Cont(_) => todo!(),
             }
         }
     }

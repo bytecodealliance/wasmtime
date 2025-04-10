@@ -198,7 +198,10 @@ fuzz_target!(|data: &[u8]| {
                             panic!("divergence between snapshot and non-snapshot memories");
                         }
                     }
-                    Extern::SharedMemory(_) | Extern::Func(_) | Extern::Table(_) => continue,
+                    Extern::SharedMemory(_)
+                    | Extern::Func(_)
+                    | Extern::Table(_)
+                    | Extern::Tag(_) => continue,
                 }
             }
         }

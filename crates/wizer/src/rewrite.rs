@@ -166,7 +166,7 @@ impl Wizer {
 
 fn is_name_section(s: &wasm_encoder::RawSection) -> bool {
     s.id == u8::from(SectionId::Custom) && {
-        let mut reader = wasmparser::BinaryReader::new(s.data);
+        let mut reader = wasmparser::BinaryReader::new(s.data, 0);
         matches!(reader.read_string(), Ok("name"))
     }
 }

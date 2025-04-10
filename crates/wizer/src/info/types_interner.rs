@@ -64,10 +64,11 @@ impl TypesInterner {
         ty: wasmparser::CompositeType,
         _types_space: &[TypeId],
     ) -> TypeId {
-        match ty {
-            wasmparser::CompositeType::Func(func_ty) => self.insert(Type::Func(func_ty)),
-            wasmparser::CompositeType::Array(_) => todo!(),
-            wasmparser::CompositeType::Struct(_) => todo!(),
+        match ty.inner {
+            wasmparser::CompositeInnerType::Func(func_ty) => self.insert(Type::Func(func_ty)),
+            wasmparser::CompositeInnerType::Array(_) => todo!(),
+            wasmparser::CompositeInnerType::Struct(_) => todo!(),
+            wasmparser::CompositeInnerType::Cont(_) => todo!(),
         }
     }
 

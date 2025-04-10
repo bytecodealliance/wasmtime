@@ -17,6 +17,7 @@ mod snapshot;
 mod stack_ext;
 mod translate;
 
+use wasmparser::WasmFeatures;
 /// Re-export wasmtime so users can align with our version. This is
 /// especially useful when providing a custom Linker.
 pub use wasmtime;
@@ -665,6 +666,9 @@ impl Wizer {
                 .unwrap_or(DEFAULT_WASM_REFERENCE_TYPES),
         );
 
+        config.wasm_tail_call(true);
+        config.wasm_extended_const(true);
+
         // Proposals that we should add support for.
         config.wasm_threads(false);
 
@@ -673,59 +677,34 @@ impl Wizer {
 
     // NB: keep this in sync with the Wasmtime config.
     fn wasm_features(&self) -> wasmparser::WasmFeatures {
-        wasmparser::WasmFeatures {
-            mutable_global: true,
-            saturating_float_to_int: true,
-            sign_extension: true,
-            floats: true,
-            component_model_values: false,
-            component_model_nested_names: false,
+        let mut features = WasmFeatures::WASM2;
 
-            // Proposals that we support.
-            multi_memory: self.wasm_multi_memory.unwrap_or(DEFAULT_WASM_MULTI_MEMORY),
-            multi_value: self.wasm_multi_value.unwrap_or(DEFAULT_WASM_MULTI_VALUE),
-
-            // Proposals that we should add support for.
-            reference_types: self
-                .wasm_reference_types
+        features.set(
+            WasmFeatures::MULTI_MEMORY,
+            self.wasm_multi_memory.unwrap_or(DEFAULT_WASM_MULTI_MEMORY),
+        );
+        features.set(
+            WasmFeatures::MULTI_VALUE,
+            self.wasm_multi_value.unwrap_or(DEFAULT_WASM_MULTI_VALUE),
+        );
+        features.set(
+            WasmFeatures::BULK_MEMORY,
+            self.wasm_bulk_memory.unwrap_or(DEFAULT_WASM_BULK_MEMORY),
+        );
+        features.set(
+            WasmFeatures::SIMD,
+            self.wasm_simd.unwrap_or(DEFAULT_WASM_SIMD),
+        );
+        features.set(
+            WasmFeatures::REFERENCE_TYPES,
+            self.wasm_reference_types
                 .unwrap_or(DEFAULT_WASM_REFERENCE_TYPES),
-            simd: self.wasm_simd.unwrap_or(DEFAULT_WASM_SIMD),
-            threads: false,
-            tail_call: false,
-            memory64: false,
-            exceptions: false,
-            extended_const: false,
-            relaxed_simd: false,
-            component_model: false,
-            memory_control: false,
-            function_references: false,
-            gc: false,
+        );
 
-            // XXX: Though we don't fully support bulk memory yet, we
-            // unconditionally turn it on.
-            //
-            // Many parsers, notably our own `wasmparser`, assume that which
-            // Wasm features are enabled or disabled cannot affect parsing, only
-            // validation. That assumption is incorrect when it comes to data
-            // segments, the multi-memory proposal, and the bulk memory
-            // proposal. A `0x01` prefix of a data segment can either mean "this
-            // is a passive segment" if bulk memory is enabled or "this segment
-            // is referring to memory index 1" if both bulk memory is disabled
-            // and multi-memory is enabled. `wasmparser` fails to handle this
-            // edge case, which means that everything built on top of it, like
-            // Wasmtime, also fail to handle this edge case. However, because
-            // bulk memory is merged into the spec proper and is no longer
-            // technically a "proposal", and because a fix would require
-            // significant refactoring and API changes to give a
-            // `wasmparser::Parser` a `wasmparser::WasmFeatures`, we won't ever
-            // resolve this discrepancy in `wasmparser`.
-            //
-            // So we enable bulk memory during parsing, validation, and
-            // execution, but we add our own custom validation pass to ensure
-            // that no table-mutating instructions exist in our input modules
-            // until we *actually* support bulk memory.
-            bulk_memory: true,
-        }
+        features.set(WasmFeatures::TAIL_CALL, true);
+        features.set(WasmFeatures::EXTENDED_CONST, true);
+
+        return features;
     }
 
     fn wasm_validate(&self, wasm: &[u8]) -> anyhow::Result<()> {

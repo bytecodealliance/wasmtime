@@ -18,6 +18,7 @@ pub(crate) fn global_type(ty: wasmparser::GlobalType) -> wasm_encoder::GlobalTyp
     wasm_encoder::GlobalType {
         val_type: val_type(ty.content_type),
         mutable: ty.mutable,
+        shared: ty.shared,
     }
 }
 
@@ -27,6 +28,7 @@ pub(crate) fn memory_type(ty: wasmparser::MemoryType) -> wasm_encoder::MemoryTyp
         maximum: ty.maximum.map(|val| val.into()),
         memory64: ty.memory64,
         shared: ty.shared,
+        page_size_log2: None,
     }
 }
 
