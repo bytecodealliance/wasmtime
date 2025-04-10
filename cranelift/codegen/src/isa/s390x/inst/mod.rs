@@ -1076,6 +1076,7 @@ impl MachInst for Inst {
             &Inst::CondBr { .. } => MachTerminator::Branch,
             &Inst::IndirectBr { .. } => MachTerminator::Branch,
             &Inst::JTSequence { .. } => MachTerminator::Branch,
+            &Inst::Call { ref info, .. } if info.try_call_info.is_some() => MachTerminator::Branch,
             _ => MachTerminator::None,
         }
     }
@@ -3119,18 +3120,30 @@ impl Inst {
                 if !retval_loads.is_empty() {
                     retval_loads = " ; ".to_string() + &retval_loads;
                 }
+                let try_call = if let Some(try_call_info) = &info.try_call_info {
+                    let dests = try_call_info
+                        .exception_dests
+                        .iter()
+                        .map(|(tag, label)| format!("{tag:?}: {label:?}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("; jg {:?}; catch [{dests}]", try_call_info.continuation)
+                } else {
+                    "".to_string()
+                };
                 let callee_pop_size = if info.callee_pop_size > 0 {
                     format!(" ; callee_pop_size {}", info.callee_pop_size)
                 } else {
                     "".to_string()
                 };
                 format!(
-                    "{} {}, {}{}{}",
+                    "{} {}, {}{}{}{}",
                     opcode,
                     show_reg(link),
                     dest,
                     callee_pop_size,
-                    retval_loads
+                    retval_loads,
+                    try_call
                 )
             }
             &Inst::ReturnCall { ref info } => {

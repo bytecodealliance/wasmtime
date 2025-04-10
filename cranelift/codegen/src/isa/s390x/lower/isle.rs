@@ -12,7 +12,7 @@ use crate::isa::s390x::inst::{
 };
 use crate::isa::s390x::S390xBackend;
 use crate::machinst::{isle::*, RetLocation};
-use crate::machinst::{CallInfo, MachLabel, Reg, StackAMode};
+use crate::machinst::{CallInfo, MachLabel, Reg, StackAMode, TryCallInfo};
 use crate::{
     ir::{
         condcodes::*, immediates::*, types::*, ArgumentExtension, ArgumentPurpose, AtomicRmwOp,
@@ -226,78 +226,24 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
             &MemArg::NominalSPOffset { off } => off,
             _ => unreachable!(),
         };
-        // Helper routine to compute the type after argument extension.
-        let ext_ty = |ty, extension| match (ty, extension) {
-            (ty, ArgumentExtension::None) => ty,
-            (I8, _) => I64,
-            (I16, _) => I64,
-            (I32, _) => I64,
-            _ => ty,
-        };
-        // Allocate writable registers for all retval regs, except for StructRet args.
-        let mut defs: CallRetList = smallvec![];
-        let mut outputs = InstOutput::new();
-        for i in 0..self.lower_ctx.sigs().num_rets(abi) {
-            if let &ABIArg::Slots {
-                ref slots, purpose, ..
-            } = &self.lower_ctx.sigs().get_ret(abi, i)
-            {
-                if purpose == ArgumentPurpose::StructReturn {
-                    continue;
-                }
-                // Our ABI always uses a single slot.
-                debug_assert_eq!(slots.len(), 1);
-                match &slots[0] {
-                    &ABIArgSlot::Reg { reg, ty, extension } => {
-                        let ty = ext_ty(ty, extension);
-                        let into_reg = self.lower_ctx.alloc_tmp(ty).only_reg().unwrap();
-                        defs.push(CallRetPair {
-                            vreg: into_reg,
-                            location: RetLocation::Reg(reg.into(), ty),
-                        });
-                        outputs.push(ValueRegs::one(into_reg.to_reg()));
-                    }
-                    &ABIArgSlot::Stack {
-                        offset,
-                        ty,
-                        extension,
-                    } => {
-                        let ty = ext_ty(ty, extension);
-                        let into_reg = self.lower_ctx.alloc_tmp(ty).only_reg().unwrap();
-                        let amode = StackAMode::OutgoingArg(offset + ret_area_base);
-                        defs.push(CallRetPair {
-                            vreg: into_reg,
-                            location: RetLocation::Stack(amode, ty),
-                        });
-                        outputs.push(ValueRegs::one(into_reg.to_reg()));
-                    }
-                }
-            }
-        }
+        self.abi_common_call_site_info(abi, dest, uses, ret_area_base, None)
+    }
 
-        let sig_data = &self.lower_ctx.sigs()[abi];
-        // Get clobbers: all caller-saves. These may include return value
-        // regs, which we will remove from the clobber set later.
-        let clobbers = S390xMachineDeps::get_regs_clobbered_by_call(
-            sig_data.call_conv(),
-            /* is_exception = */ false,
-        );
-        let callee_pop_size = if sig_data.call_conv() == CallConv::Tail {
-            sig_data.sized_stack_arg_space() as u32
-        } else {
-            0
+    fn abi_try_call_info(
+        &mut self,
+        abi: Sig,
+        dest: &CallInstDest,
+        uses: &CallArgList,
+        et: ExceptionTable,
+        targets: &MachLabelSlice,
+    ) -> BoxCallInfo {
+        // Determine return buffer address.
+        let ret_area_base = match &self.abi_call_stack_rets(abi) {
+            &MemArg::NominalSPOffset { off } => off,
+            _ => unreachable!(),
         };
-        let info = Box::new(CallInfo {
-            dest: dest.clone(),
-            uses: uses.clone(),
-            defs: defs,
-            clobbers,
-            callee_pop_size,
-            caller_conv: self.lower_ctx.abi().call_conv(self.lower_ctx.sigs()),
-            callee_conv: self.lower_ctx.sigs()[abi].call_conv(),
-            try_call_info: None,
-        });
-        (info, outputs)
+        self.abi_common_call_site_info(abi, dest, uses, ret_area_base, Some((et, targets)))
+            .0
     }
 
     fn abi_return_call_info(
@@ -981,6 +927,140 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn regpair_lo(&mut self, w: RegPair) -> Reg {
         w.lo
+    }
+}
+
+impl IsleContext<'_, '_, MInst, S390xBackend> {
+    fn abi_common_call_site_info(
+        &mut self,
+        abi: Sig,
+        dest: &CallInstDest,
+        uses: &CallArgList,
+        ret_area_base: i64,
+        try_call_info: Option<(ExceptionTable, &MachLabelSlice)>,
+    ) -> CallSiteInfo {
+        let caller_conv = self.lower_ctx.abi().call_conv(self.lower_ctx.sigs());
+        let callee_conv = self.lower_ctx.sigs()[abi].call_conv();
+        // Helper routine to compute the type after argument extension.
+        let ext_ty = |ty, extension| match (ty, extension) {
+            (ty, ArgumentExtension::None) => ty,
+            (I8, _) => I64,
+            (I16, _) => I64,
+            (I32, _) => I64,
+            _ => ty,
+        };
+        // Allocate writable registers for all retval regs, except for StructRet args.
+        let mut defs: CallRetList = smallvec![];
+        let mut outputs = InstOutput::new();
+        for i in 0..self.lower_ctx.sigs().num_rets(abi) {
+            if let &ABIArg::Slots {
+                ref slots, purpose, ..
+            } = &self.lower_ctx.sigs().get_ret(abi, i)
+            {
+                if purpose == ArgumentPurpose::StructReturn {
+                    continue;
+                }
+                // Our ABI always uses a single slot.
+                debug_assert_eq!(slots.len(), 1);
+                match &slots[0] {
+                    &ABIArgSlot::Reg { reg, ty, extension } => {
+                        let ty = ext_ty(ty, extension);
+                        let into_reg = self.lower_ctx.alloc_tmp(ty).only_reg().unwrap();
+                        defs.push(CallRetPair {
+                            vreg: into_reg,
+                            location: RetLocation::Reg(reg.into(), ty),
+                        });
+                        outputs.push(ValueRegs::one(into_reg.to_reg()));
+                    }
+                    &ABIArgSlot::Stack {
+                        offset,
+                        ty,
+                        extension,
+                    } => {
+                        let ty = ext_ty(ty, extension);
+                        let into_reg = self.lower_ctx.alloc_tmp(ty).only_reg().unwrap();
+                        let amode = StackAMode::OutgoingArg(offset + ret_area_base);
+                        defs.push(CallRetPair {
+                            vreg: into_reg,
+                            location: RetLocation::Stack(amode, ty),
+                        });
+                        outputs.push(ValueRegs::one(into_reg.to_reg()));
+                    }
+                }
+            }
+        }
+
+        // Handle exceptions for try_call, in particular set up the exception
+        // payload registers.  This matches the corresponding code in emit_call
+        // and gen_call_common.
+        let try_call_info = try_call_info.map(|(et, labels)| {
+            let exception_dests = self.lower_ctx.dfg().exception_tables[et]
+                .catches()
+                .map(|(tag, _)| tag.into())
+                .zip(labels.iter().cloned())
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
+
+            let pregs = S390xMachineDeps::exception_payload_regs(callee_conv);
+            for (i, &preg) in pregs.iter().enumerate() {
+                let vreg = self
+                    .lower_ctx
+                    .try_call_exception_defs(self.lower_ctx.cur_inst())[i];
+                if let Some(existing) = defs.iter().find(|def| match def.location {
+                    RetLocation::Reg(r, _) => r == preg,
+                    _ => false,
+                }) {
+                    self.lower_ctx
+                        .vregs_mut()
+                        .set_vreg_alias(vreg.to_reg(), existing.vreg.to_reg());
+                } else {
+                    defs.push(CallRetPair {
+                        vreg,
+                        location: RetLocation::Reg(preg, I64),
+                    });
+                }
+            }
+
+            TryCallInfo {
+                continuation: *labels.last().unwrap(),
+                exception_dests,
+            }
+        });
+        if try_call_info.is_some() {
+            for i in 0..outputs.len() {
+                let result_regs = outputs[i];
+                let def_regs = self
+                    .lower_ctx
+                    .try_call_return_defs(self.lower_ctx.cur_inst())[i];
+                for (result_reg, def_reg) in result_regs.regs().iter().zip(def_regs.regs().iter()) {
+                    self.lower_ctx
+                        .vregs_mut()
+                        .set_vreg_alias(def_reg.to_reg(), *result_reg);
+                }
+            }
+        }
+
+        // Get clobbers: all caller-saves. These may include return value
+        // regs, which we will remove from the clobber set later.
+        let clobbers =
+            S390xMachineDeps::get_regs_clobbered_by_call(callee_conv, try_call_info.is_some());
+        let callee_pop_size = if callee_conv == CallConv::Tail {
+            let sig_data = &self.lower_ctx.sigs()[abi];
+            sig_data.sized_stack_arg_space() as u32
+        } else {
+            0
+        };
+        let info = Box::new(CallInfo {
+            dest: dest.clone(),
+            uses: uses.clone(),
+            defs: defs,
+            clobbers,
+            callee_pop_size,
+            caller_conv,
+            callee_conv,
+            try_call_info,
+        });
+        (info, outputs)
     }
 }
 

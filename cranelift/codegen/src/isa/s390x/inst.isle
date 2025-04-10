@@ -2669,10 +2669,9 @@
         dst))
 
 ;; Helper for emitting `MInst.Call` instructions.
-(decl call_impl (WritableReg CallSiteInfo) InstOutput)
-(rule (call_impl reg (call_site_info info output))
-      (let ((_ Unit (emit (MInst.Call reg info))))
-        output))
+(decl call_impl (WritableReg BoxCallInfo) SideEffectNoResult)
+(rule (call_impl reg info)
+      (SideEffectNoResult.Inst (MInst.Call reg info)))
 
 ;; Helper for emitting `MInst.ReturnCall` instructions.
 (decl return_call_impl (BoxReturnCallInfo) SideEffectNoResult)
@@ -3478,6 +3477,9 @@
 (decl abi_call_site_info (Sig CallInstDest CallArgList) CallSiteInfo)
 (extern constructor abi_call_site_info abi_call_site_info)
 
+(decl abi_try_call_info (Sig CallInstDest CallArgList ExceptionTable MachLabelSlice) BoxCallInfo)
+(extern constructor abi_try_call_info abi_try_call_info)
+
 (decl abi_return_call_info (Sig CallInstDest CallArgList) BoxReturnCallInfo)
 (extern constructor abi_return_call_info abi_return_call_info)
 
@@ -3495,12 +3497,19 @@
 
 (decl abi_call (Sig CallInstDest CallArgList) InstOutput)
 (rule (abi_call abi dest uses)
-      (let ((info CallSiteInfo (abi_call_site_info abi dest uses)))
-        (call_impl (writable_link_reg) info)))
+      (abi_call_impl (abi_call_site_info abi dest uses)))
+(decl abi_call_impl (CallSiteInfo) InstOutput)
+(rule (abi_call_impl (call_site_info info output))
+      (let ((_ Unit (emit_side_effect (call_impl (writable_link_reg) info))))
+        output))
 
 (decl abi_return_call (Sig CallInstDest CallArgList) SideEffectNoResult)
 (rule (abi_return_call abi dest uses)
       (return_call_impl (abi_return_call_info abi dest uses)))
+
+(decl abi_try_call (Sig CallInstDest CallArgList ExceptionTable MachLabelSlice) SideEffectNoResult)
+(rule (abi_try_call abi dest uses et targets)
+      (call_impl (writable_link_reg) (abi_try_call_info abi dest uses et targets)))
 
 (decl abi_lane_order (Sig) LaneOrder)
 (extern constructor abi_lane_order abi_lane_order)
