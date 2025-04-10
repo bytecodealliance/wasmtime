@@ -769,6 +769,14 @@ jobs:
         touch ${{ runner.tool_cache }}/qemu/built
       if: matrix.qemu != ''
 
+    - name: Configure ASAN
+      run: |
+        echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
+        echo CARGO_PROFILE_TEST_OPT_LEVEL=2 >> $GITHUB_ENV
+        echo RUSTFLAGS=-Zsanitizer=address >> $GITHUB_ENV
+        echo RUSTDOCFLAGS=-Zsanitizer=address >> $GITHUB_ENV
+      if: ${{ contains(matrix.name, 'ASAN') }}
+
     # Record some CPU details; this is helpful information if tests fail due
     # to CPU-specific features.
     - name: CPU information

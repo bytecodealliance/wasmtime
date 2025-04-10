@@ -89,7 +89,7 @@ enum StackOverflow {
 }
 
 fn main() {
-    if cfg!(miri) {
+    if cfg!(miri) || cfg!(asan) {
         return;
     }
     // Skip this tests if it looks like we're in a cross-compiled situation and

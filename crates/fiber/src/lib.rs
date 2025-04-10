@@ -343,6 +343,8 @@ mod tests {
                 // TODO: see comments in `arm.rs` about how this seems to work
                 // in gdb but not at runtime, unsure why at this time.
                 || cfg!(target_arch = "arm")
+                // asan does weird things
+                || cfg!(asan)
             );
         }
 

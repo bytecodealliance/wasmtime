@@ -72,6 +72,13 @@ const FULL_MATRIX = [
     "isa": "x64"
   },
   {
+    "os": ubuntu,
+    "name": "Test Linux x86_64 with ASAN",
+    "filter": "asan",
+    "rust": "wasmtime-ci-pinned-nightly",
+    "target": "x86_64-unknown-linux-gnu",
+  },
+  {
     "os": macos,
     "name": "Test macOS x86_64",
     "filter": "macos-x64",

@@ -38,6 +38,7 @@ impl ResourceLimiter for MemoryGrowFailureDetector {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+#[cfg_attr(asan, ignore)]
 fn custom_limiter_detect_os_oom_failure() -> Result<()> {
     if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
         return Ok(());

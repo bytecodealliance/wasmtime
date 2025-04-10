@@ -743,7 +743,13 @@ mod test {
         );
     }
 
-    #[cfg(all(unix, target_pointer_width = "64", feature = "async", not(miri)))]
+    #[cfg(all(
+        unix,
+        target_pointer_width = "64",
+        feature = "async",
+        not(miri),
+        not(asan)
+    ))]
     #[test]
     fn test_stack_zeroed() -> Result<()> {
         let config = PoolingInstanceAllocatorConfig {
@@ -777,7 +783,13 @@ mod test {
         Ok(())
     }
 
-    #[cfg(all(unix, target_pointer_width = "64", feature = "async", not(miri)))]
+    #[cfg(all(
+        unix,
+        target_pointer_width = "64",
+        feature = "async",
+        not(miri),
+        not(asan)
+    ))]
     #[test]
     fn test_stack_unzeroed() -> Result<()> {
         let config = PoolingInstanceAllocatorConfig {
