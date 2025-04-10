@@ -310,10 +310,6 @@ impl StructRef {
         allocator: &StructRefPre,
         fields: &[Val],
     ) -> Result<Rooted<StructRef>> {
-        assert!(
-            store.async_support(),
-            "use `StructRef::new` with synchronous stores"
-        );
         Self::type_check_fields(store, allocator, fields)?;
         unsafe {
             store.retry_after_gc_maybe_async((), |store, ()| {
