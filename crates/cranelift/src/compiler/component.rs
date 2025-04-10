@@ -1345,7 +1345,7 @@ impl<'a> TrampolineCompiler<'a> {
         let table = self
             .builder
             .ins()
-            .iconst(ir::types::I32, i64::from(self.offsets.runtime_table(table)));
+            .iconst(ir::types::I32, i64::from(table.as_u32()));
 
         self.translate_intrinsic_libcall(
             vmctx,
