@@ -1546,8 +1546,8 @@ impl Config {
     ///
     /// Memory in the `initial` range is accessible to the instance and can be
     /// read/written by wasm code. Memory in the `guard` regions is never
-    /// accesible to wasm code and memory in `capacity` is initially
-    /// inaccessible but may become accesible through `memory.grow` instructions
+    /// accessible to wasm code and memory in `capacity` is initially
+    /// inaccessible but may become accessible through `memory.grow` instructions
     /// for example.
     ///
     /// This means that this setting is the size of the initial chunk of virtual
@@ -1559,7 +1559,7 @@ impl Config {
     /// during the compilation process of a WebAssembly module. For example if a
     /// 32-bit WebAssembly linear memory has a `memory_reservation` size of 4GiB
     /// then bounds checks can be elided because `capacity` will be guaranteed
-    /// to be unmapped for all addressible bytes that wasm can access (modulo a
+    /// to be unmapped for all addressable bytes that wasm can access (modulo a
     /// few details).
     ///
     /// If `memory_reservation` was something smaller like 256KiB then that
@@ -1571,7 +1571,7 @@ impl Config {
     /// modules by default. Some situations which require explicit bounds checks
     /// though are:
     ///
-    /// * When `memory_reservation` is smaller than the addressible size of the
+    /// * When `memory_reservation` is smaller than the addressable size of the
     ///   linear memory. For example if 64-bit linear memories always need
     ///   bounds checks as they can address the entire virtual address spacce.
     ///   For 32-bit linear memories a `memory_reservation` minimum size of 4GiB
