@@ -1237,7 +1237,7 @@ fn drc_traces_the_correct_number_of_gc_refs_in_arrays() -> Result<()> {
 // exercises growing the GC heap and that we configure compilation tunables and
 // runtime memories backing GC heaps correctly.
 #[test]
-#[cfg_attr(miri, ignore)]
+#[cfg_attr(any(miri, not(target_pointer_width = "64")), ignore)]
 fn gc_heap_oom() -> Result<()> {
     if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
         return Ok(());
