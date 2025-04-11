@@ -71,7 +71,7 @@
 //!   <https://github.com/bytecodealliance/cranelift/pull/1236>
 //!     ("Relax verification to allow I8X16 to act as a default vector type")
 
-use crate::bounds_checks::bounds_check_and_compute_addr;
+use crate::bounds_checks::{bounds_check_and_compute_addr, BoundsCheck};
 use crate::func_environ::{Extension, FuncEnvironment};
 use crate::translate::environ::{GlobalVariable, StructFieldsVec};
 use crate::translate::state::{ControlStackFrame, ElseData, FuncTranslationState};
@@ -3207,7 +3207,7 @@ fn prepare_addr(
             environ,
             &heap,
             index,
-            crate::bounds_checks::BoundsCheck::Field {
+            BoundsCheck::StaticOffset {
                 offset,
                 access_size,
             },
@@ -3255,7 +3255,7 @@ fn prepare_addr(
                 environ,
                 &heap,
                 adjusted_index,
-                crate::bounds_checks::BoundsCheck::Field {
+                BoundsCheck::StaticOffset {
                     offset: 0,
                     access_size,
                 },

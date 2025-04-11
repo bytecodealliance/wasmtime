@@ -328,7 +328,7 @@ pub fn translate_struct_get(
     let field_addr = func_env.prepare_gc_ref_access(
         builder,
         struct_ref,
-        BoundsCheck::StaticWholeObject {
+        BoundsCheck::StaticObjectField {
             offset: field_offset,
             access_size: u8::try_from(field_size).unwrap(),
             object_size: struct_size,
@@ -375,7 +375,7 @@ pub fn translate_struct_set(
     let field_addr = func_env.prepare_gc_ref_access(
         builder,
         struct_ref,
-        BoundsCheck::StaticWholeObject {
+        BoundsCheck::StaticObjectField {
             offset: field_offset,
             access_size: u8::try_from(field_size).unwrap(),
             object_size: struct_size,
@@ -643,7 +643,7 @@ pub fn translate_array_fill(
     let elem_addr = func_env.prepare_gc_ref_access(
         builder,
         array_ref,
-        BoundsCheck::DynamicWholeObject {
+        BoundsCheck::DynamicObjectField {
             offset: obj_offset,
             object_size: obj_size,
         },
@@ -691,7 +691,7 @@ pub fn translate_array_len(
         array_ref,
         // Note: We can't bounds check the whole array object's size because we
         // don't know its length yet. Chicken and egg problem.
-        BoundsCheck::Field {
+        BoundsCheck::StaticOffset {
             offset: len_offset,
             access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
         },
@@ -825,7 +825,7 @@ fn array_elem_addr(
     func_env.prepare_gc_ref_access(
         builder,
         array_ref,
-        BoundsCheck::DynamicWholeObject {
+        BoundsCheck::DynamicObjectField {
             offset: offset_in_array,
             object_size: obj_size,
         },
@@ -999,7 +999,7 @@ pub fn translate_ref_test(
         let kind_addr = func_env.prepare_gc_ref_access(
             builder,
             val,
-            BoundsCheck::StaticWholeObject {
+            BoundsCheck::StaticObjectField {
                 offset: wasmtime_environ::VM_GC_HEADER_KIND_OFFSET,
                 access_size: wasmtime_environ::VM_GC_KIND_SIZE,
                 object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
@@ -1051,7 +1051,7 @@ pub fn translate_ref_test(
             let ty_addr = func_env.prepare_gc_ref_access(
                 builder,
                 val,
-                BoundsCheck::Field {
+                BoundsCheck::StaticOffset {
                     offset: wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET,
                     access_size: func_env.offsets.size_of_vmshared_type_index(),
                 },
