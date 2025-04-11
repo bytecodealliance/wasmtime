@@ -627,17 +627,20 @@ block0(v0: i128, v1: i64):
 ;   mv fp,sp
 ;   addi sp,sp,-32
 ;   sd s1,24(sp)
+;   sd s3,16(sp)
 ; block0:
 ;   sd a1,0(sp)
 ;   load_sym s1,%f14+0
 ;   mv a5,a1
 ;   mv a6,a2
 ;   mv a7,a0
+;   mv s3,a1
 ;   mv a2,a7
 ;   mv a3,a5
 ;   mv a4,a7
 ;   callind s1
 ;   ld s1,24(sp)
+;   ld s3,16(sp)
 ;   addi sp,sp,32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -652,7 +655,8 @@ block0(v0: i128, v1: i64):
 ;   mv s0, sp
 ;   addi sp, sp, -0x20
 ;   sd s1, 0x18(sp)
-; block1: ; offset 0x18
+;   sd s3, 0x10(sp)
+; block1: ; offset 0x1c
 ;   sd a1, 0(sp)
 ;   auipc s1, 0
 ;   ld s1, 0xc(s1)
@@ -662,11 +666,13 @@ block0(v0: i128, v1: i64):
 ;   mv a5, a1
 ;   mv a6, a2
 ;   mv a7, a0
+;   mv s3, a1
 ;   mv a2, a7
 ;   mv a3, a5
 ;   mv a4, a7
 ;   jalr s1
 ;   ld s1, 0x18(sp)
+;   ld s3, 0x10(sp)
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)
@@ -720,17 +726,20 @@ block0(v0: i128, v1: i64):
 ;   mv fp,sp
 ;   addi sp,sp,-32
 ;   sd s1,24(sp)
+;   sd s3,16(sp)
 ; block0:
 ;   sd a1,0(sp)
 ;   load_sym s1,%f15+0
 ;   mv a5,a1
 ;   mv a6,a2
 ;   mv a7,a0
+;   mv s3,a1
 ;   mv a2,a7
 ;   mv a3,a5
 ;   mv a4,a7
 ;   callind s1
 ;   ld s1,24(sp)
+;   ld s3,16(sp)
 ;   addi sp,sp,32
 ;   ld ra,8(sp)
 ;   ld fp,0(sp)
@@ -745,7 +754,8 @@ block0(v0: i128, v1: i64):
 ;   mv s0, sp
 ;   addi sp, sp, -0x20
 ;   sd s1, 0x18(sp)
-; block1: ; offset 0x18
+;   sd s3, 0x10(sp)
+; block1: ; offset 0x1c
 ;   sd a1, 0(sp)
 ;   auipc s1, 0
 ;   ld s1, 0xc(s1)
@@ -755,11 +765,13 @@ block0(v0: i128, v1: i64):
 ;   mv a5, a1
 ;   mv a6, a2
 ;   mv a7, a0
+;   mv s3, a1
 ;   mv a2, a7
 ;   mv a3, a5
 ;   mv a4, a7
 ;   jalr s1
 ;   ld s1, 0x18(sp)
+;   ld s3, 0x10(sp)
 ;   addi sp, sp, 0x20
 ;   ld ra, 8(sp)
 ;   ld s0, 0(sp)

@@ -74,19 +74,19 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   movdqu  rsp(0 + virtual offset), %xmm4
 ;   movdqu  %xmm0, rsp(80 + virtual offset)
 ;   pshufd  $1, %xmm4, %xmm0
-;   movdqu  rsp(16 + virtual offset), %xmm2
-;   pshufd  $1, %xmm2, %xmm1
-;   movdqu  rsp(32 + virtual offset), %xmm5
-;   pshufd  $1, %xmm5, %xmm2
+;   movdqu  rsp(16 + virtual offset), %xmm1
+;   pshufd  $1, %xmm1, %xmm1
+;   movdqu  rsp(32 + virtual offset), %xmm2
+;   pshufd  $1, %xmm2, %xmm2
 ;   load_ext_name %FmaF32+0, %r9
 ;   call    *%r9
 ;   movdqu  rsp(0 + virtual offset), %xmm4
 ;   movdqu  %xmm0, rsp(48 + virtual offset)
 ;   pshufd  $2, %xmm4, %xmm0
-;   movdqu  rsp(16 + virtual offset), %xmm7
-;   pshufd  $2, %xmm7, %xmm1
-;   movdqu  rsp(32 + virtual offset), %xmm3
-;   pshufd  $2, %xmm3, %xmm2
+;   movdqu  rsp(16 + virtual offset), %xmm1
+;   pshufd  $2, %xmm1, %xmm1
+;   movdqu  rsp(32 + virtual offset), %xmm2
+;   pshufd  $2, %xmm2, %xmm2
 ;   load_ext_name %FmaF32+0, %r10
 ;   call    *%r10
 ;   movdqu  rsp(0 + virtual offset), %xmm4
@@ -125,19 +125,19 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   movdqu (%rsp), %xmm4
 ;   movdqu %xmm0, 0x50(%rsp)
 ;   pshufd $1, %xmm4, %xmm0
-;   movdqu 0x10(%rsp), %xmm2
-;   pshufd $1, %xmm2, %xmm1
-;   movdqu 0x20(%rsp), %xmm5
-;   pshufd $1, %xmm5, %xmm2
+;   movdqu 0x10(%rsp), %xmm1
+;   pshufd $1, %xmm1, %xmm1
+;   movdqu 0x20(%rsp), %xmm2
+;   pshufd $1, %xmm2, %xmm2
 ;   movabsq $0, %r9 ; reloc_external Abs8 %FmaF32 0
 ;   callq *%r9
 ;   movdqu (%rsp), %xmm4
 ;   movdqu %xmm0, 0x30(%rsp)
 ;   pshufd $2, %xmm4, %xmm0
-;   movdqu 0x10(%rsp), %xmm7
-;   pshufd $2, %xmm7, %xmm1
-;   movdqu 0x20(%rsp), %xmm3
-;   pshufd $2, %xmm3, %xmm2
+;   movdqu 0x10(%rsp), %xmm1
+;   pshufd $2, %xmm1, %xmm1
+;   movdqu 0x20(%rsp), %xmm2
+;   pshufd $2, %xmm2, %xmm2
 ;   movabsq $0, %r10 ; reloc_external Abs8 %FmaF32 0
 ;   callq *%r10
 ;   movdqu (%rsp), %xmm4

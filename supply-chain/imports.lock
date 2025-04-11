@@ -933,8 +933,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.regalloc2]]
-version = "0.11.3"
-when = "2025-04-07"
+version = "0.12.0"
+when = "2025-04-11"
 user-id = 3726
 user-login = "cfallin"
 user-name = "Chris Fallin"
