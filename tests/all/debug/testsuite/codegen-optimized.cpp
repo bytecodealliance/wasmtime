@@ -26,10 +26,25 @@ void VariableWithSimpleLifetime() {
   BREAKPOINT;
 }
 
+void VariableLiveRangeStartIsCorrect() {
+  // There used to be a bug that live ranges of variables were recorded with
+  // a bias of +1 on the start, which lead to the unavailability of 'a' in
+  // the below code.
+  int a = 43;
+  while (a != 0) {
+    if (a == 0) {
+      return; // Break up the range of "a" to expose the bug.
+    }
+    BREAKPOINT;
+    a = 0;
+  }
+}
+
 void InitializeTest() {}
 
 int main(int argc, char *argv[]) {
   InitializeTest();
   VariableWithSimpleLifetime();
+  VariableLiveRangeStartIsCorrect();
   return 0;
 }
