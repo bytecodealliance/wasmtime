@@ -3272,23 +3272,18 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         self.src.push_str("let callee = unsafe {\n");
-        uwrite!(self.src, "{wt}::component::TypedFunc::<(");
-        for (_, ty) in func.params.iter() {
-            self.print_ty(ty, param_mode);
-            self.push_str(", ");
-        }
-        self.src.push_str("), (");
-        if let Some(ty) = func.result {
-            self.print_ty(&ty, TypeMode::Owned);
-            self.push_str(", ");
-        }
+        uwrite!(
+            self.src,
+            "{wt}::component::TypedFunc::<{}>",
+            self.typedfunc_sig(func, param_mode)
+        );
         let projection_to_func = match &func.kind {
             FunctionKind::Freestanding => "",
             _ => ".funcs",
         };
         uwriteln!(
             self.src,
-            ")>::new_unchecked(self{projection_to_func}.{})",
+            "::new_unchecked(self{projection_to_func}.{})",
             func_field_name(self.resolve, func),
         );
         self.src.push_str("};\n");
