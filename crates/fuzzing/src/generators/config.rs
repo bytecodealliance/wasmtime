@@ -131,6 +131,7 @@ impl Config {
             custom_page_sizes,
             multi_memory,
             threads,
+            shared_everything_threads,
             gc,
             function_references,
             relaxed_simd,
@@ -173,6 +174,7 @@ impl Config {
         config.tail_call_enabled = tail_call.unwrap_or(false);
         config.custom_page_sizes_enabled = custom_page_sizes.unwrap_or(false);
         config.threads_enabled = threads.unwrap_or(false);
+        config.shared_everything_threads_enabled = shared_everything_threads.unwrap_or(false);
         config.gc_enabled = gc.unwrap_or(false);
         config.reference_types_enabled = config.gc_enabled
             || self.module_config.function_references_enabled

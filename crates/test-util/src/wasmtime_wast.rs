@@ -29,6 +29,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         custom_page_sizes,
         multi_memory,
         threads,
+        shared_everything_threads,
         gc,
         function_references,
         relaxed_simd,
@@ -54,6 +55,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     let custom_page_sizes = custom_page_sizes.unwrap_or(false);
     let multi_memory = multi_memory.unwrap_or(false);
     let threads = threads.unwrap_or(false);
+    let shared_everything_threads = shared_everything_threads.unwrap_or(false);
     let gc = gc.unwrap_or(false);
     let tail_call = tail_call.unwrap_or(false);
     let extended_const = extended_const.unwrap_or(false);
@@ -78,6 +80,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     config
         .wasm_multi_memory(multi_memory)
         .wasm_threads(threads)
+        .wasm_shared_everything_threads(shared_everything_threads)
         .wasm_memory64(memory64)
         .wasm_function_references(function_references)
         .wasm_gc(gc)

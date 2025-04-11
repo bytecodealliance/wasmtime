@@ -230,6 +230,7 @@ macro_rules! foreach_config_option {
             custom_page_sizes
             multi_memory
             threads
+            shared_everything_threads
             gc
             function_references
             relaxed_simd
