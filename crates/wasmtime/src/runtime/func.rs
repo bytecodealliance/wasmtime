@@ -1010,12 +1010,11 @@ impl Func {
         );
         let mut store = store.as_context_mut();
 
+        let _need_gc = self.call_impl_check_args(&mut store, params, results)?;
+
         #[cfg(feature = "gc")]
-        {
-            let need_gc = self.call_impl_check_args(&mut store, params, results)?;
-            if need_gc {
-                store.gc(None);
-            }
+        if _need_gc {
+            store.gc(None);
         }
 
         unsafe { self.call_impl_do_call(&mut store, params, results) }
@@ -1156,12 +1155,11 @@ impl Func {
             "cannot use `call_async` without enabling async support in the config",
         );
 
+        let _need_gc = self.call_impl_check_args(&mut store, params, results)?;
+
         #[cfg(feature = "gc")]
-        {
-            let need_gc = self.call_impl_check_args(&mut store, params, results)?;
-            if need_gc {
-                store.gc_async(None).await?;
-            }
+        if _need_gc {
+            store.gc_async(None).await?;
         }
 
         let result = store
