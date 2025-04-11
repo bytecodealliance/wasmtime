@@ -764,6 +764,12 @@ WASM_API_EXTERN void wasmtime_pooling_allocation_strategy_set(
 
 #endif // WASMTIME_FEATURE_POOLING_ALLOCATOR
 
+#ifdef WASMTIME_FEATURE_COMPONENT_MODEL
+
+WASMTIME_CONFIG_PROP(void, component_model, bool)
+
+#endif // WASMTIME_FEATURE_COMPONENT_MODEL
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

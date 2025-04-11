@@ -71,6 +71,11 @@ mod wat2wasm;
 #[cfg(feature = "wat")]
 pub use crate::wat2wasm::*;
 
+#[cfg(feature = "component-model")]
+mod component;
+#[cfg(feature = "component-model")]
+pub use crate::component::*;
+
 /// Initialize a `MaybeUninit<T>`
 ///
 /// TODO: Replace calls to this function with
