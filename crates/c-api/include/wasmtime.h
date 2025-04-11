@@ -200,6 +200,7 @@
 #include <wasmtime/trap.h>
 #include <wasmtime/val.h>
 #include <wasmtime/async.h>
+#include <wasmtime/component.h>
 // IWYU pragma: end_exports
 // clang-format on
 

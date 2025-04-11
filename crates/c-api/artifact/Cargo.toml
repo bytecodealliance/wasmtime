@@ -40,6 +40,7 @@ default = [
   'winch',
   'debug-builtins',
   'pooling-allocator',
+  'component-model',
   # ... if you add a line above this be sure to change the other locations
   # marked WASMTIME_FEATURE_LIST
 ]
@@ -62,5 +63,6 @@ cranelift = ["wasmtime-c-api/cranelift"]
 winch = ["wasmtime-c-api/winch"]
 debug-builtins = ["wasmtime-c-api/debug-builtins"]
 pooling-allocator = ["wasmtime-c-api/pooling-allocator"]
+component-model = ["wasmtime-c-api/component-model"]
 # ... if you add a line above this be sure to read the comment at the end of
 # `default`
