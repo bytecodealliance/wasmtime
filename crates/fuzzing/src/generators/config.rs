@@ -299,6 +299,8 @@ impl Config {
         cfg.wasm.simd = Some(self.module_config.config.simd_enabled);
         cfg.wasm.tail_call = Some(self.module_config.config.tail_call_enabled);
         cfg.wasm.threads = Some(self.module_config.config.threads_enabled);
+        cfg.wasm.shared_everything_threads =
+            Some(self.module_config.config.shared_everything_threads_enabled);
         cfg.wasm.wide_arithmetic = Some(self.module_config.config.wide_arithmetic_enabled);
         cfg.wasm.exceptions = Some(self.module_config.config.exceptions_enabled);
         cfg.wasm.legacy_exceptions = Some(self.module_config.legacy_exceptions);

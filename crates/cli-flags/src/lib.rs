@@ -358,6 +358,8 @@ wasmtime_option_group! {
         pub tail_call: Option<bool>,
         /// Configure support for the threads proposal.
         pub threads: Option<bool>,
+        /// Configure support for the shared-everything-threads proposal.
+        pub shared_everything_threads: Option<bool>,
         /// Configure support for the memory64 proposal.
         pub memory64: Option<bool>,
         /// Configure support for the component-model proposal.
