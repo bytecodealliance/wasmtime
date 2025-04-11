@@ -1279,10 +1279,10 @@ impl<I: VCodeInst> VCode<I> {
         enum Row {
             Head,
             Line,
-            Inst(usize),
+            Inst(usize, usize),
         }
 
-        let mut widths = vec![0; 2 + 2 * labels.len()];
+        let mut widths = vec![0; 3 + 2 * labels.len()];
         let mut row = String::new();
         let mut output_row = |row_kind: Row, mode: Mode| {
             let mut column_index = 0;
@@ -1320,6 +1320,7 @@ impl<I: VCodeInst> VCode<I> {
 
             match row_kind {
                 Row::Head => {
+                    output_cell!("BB");
                     output_cell!("Inst");
                     output_cell!("IP");
                     for label in &labels {
@@ -1328,13 +1329,20 @@ impl<I: VCodeInst> VCode<I> {
                 }
                 Row::Line => {
                     debug_assert!(mode == Mode::Emit);
-                    output_cell_impl!('-', 1, "");
-                    output_cell_impl!('-', 1, "");
+                    for _ in 0..3 {
+                        output_cell_impl!('-', 1, "");
+                    }
                     for _ in &labels {
                         output_cell_impl!('-', 2, "");
                     }
                 }
-                Row::Inst(inst_index) => {
+                Row::Inst(block_index, inst_index) => {
+                    debug_assert!(inst_index < self.num_insts());
+                    if self.block_ranges.get(block_index).start == inst_index {
+                        output_cell!("B{}", block_index);
+                    } else {
+                        output_cell!("");
+                    }
                     output_cell!("Inst {inst_index} ");
                     output_cell!("{} ", inst_offsets[inst_index]);
 
@@ -1423,15 +1431,19 @@ impl<I: VCodeInst> VCode<I> {
             }
         };
 
-        for inst_index in 0..inst_offsets.len() {
-            output_row(Row::Inst(inst_index), Mode::Measure);
+        for block_index in 0..self.num_blocks() {
+            for inst_index in self.block_ranges.get(block_index) {
+                output_row(Row::Inst(block_index, inst_index), Mode::Measure);
+            }
         }
         output_row(Row::Head, Mode::Measure);
 
         output_row(Row::Head, Mode::Emit);
         output_row(Row::Line, Mode::Emit);
-        for inst_index in 0..inst_offsets.len() {
-            output_row(Row::Inst(inst_index), Mode::Emit);
+        for block_index in 0..self.num_blocks() {
+            for inst_index in self.block_ranges.get(block_index) {
+                output_row(Row::Inst(block_index, inst_index), Mode::Emit);
+            }
         }
     }
 
