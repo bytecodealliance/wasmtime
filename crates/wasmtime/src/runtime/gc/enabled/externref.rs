@@ -192,7 +192,7 @@ impl ExternRef {
     ///                 drop_some_gc_refs();
     ///                 // Finally, try to allocate again, reusing the original
     ///                 // string.
-    ///                 ExternRef::new(&mut scope, s)
+    ///                 ExternRef::new(&mut scope, s)?
     ///             }
     ///             Err(e) => return Err(e),
     ///         },
@@ -304,7 +304,7 @@ impl ExternRef {
     ///                 drop_some_gc_refs();
     ///                 // Finally, try to allocate again, reusing the original
     ///                 // string.
-    ///                 ExternRef::new_async(&mut scope, s).await
+    ///                 ExternRef::new_async(&mut scope, s).await?
     ///             }
     ///             Err(e) => return Err(e),
     ///         },
