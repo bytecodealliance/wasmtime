@@ -155,8 +155,8 @@ where
     }
 
     #[inline]
+    #[cfg(feature = "gc")]
     pub(crate) fn need_gc_before_call_raw(_store: &StoreOpaque, _params: &Params) -> bool {
-        #[cfg(feature = "gc")]
         {
             // See the comment in `Func::call_impl_check_args`.
             let num_gc_refs = _params.vmgcref_pointing_to_object_count();
