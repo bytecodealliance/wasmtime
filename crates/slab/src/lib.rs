@@ -131,7 +131,7 @@ use core::fmt;
 use core::num::NonZeroU32;
 
 /// An identifier for an allocated value inside a `slab`.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 pub struct Id(EntryIndex);
 
@@ -193,7 +193,7 @@ enum Entry<T> {
     },
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(transparent)]
 struct EntryIndex(NonZeroU32);
 
