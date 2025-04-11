@@ -88,7 +88,6 @@ impl<T> fmt::Display for GcHeapOutOfMemory<T> {
 impl<T> core::error::Error for GcHeapOutOfMemory<T> {}
 
 impl<T> GcHeapOutOfMemory<T> {
-    #[cfg(feature = "gc")]
     pub(crate) fn new(inner: T, bytes_needed: u64) -> Self {
         Self {
             inner,
@@ -121,13 +120,6 @@ impl<T> GcHeapOutOfMemory<T> {
     /// pass the `GcHeapOutOfMemory` error to [`Store::gc`][crate::Store::gc]
     /// calls.
     pub fn take_inner(self) -> (T, GcHeapOutOfMemory<()>) {
-        #[cfg(feature = "gc")]
-        {
-            (self.inner, GcHeapOutOfMemory::new((), self.bytes_needed))
-        }
-        #[cfg(not(feature = "gc"))]
-        {
-            unreachable!()
-        }
+        (self.inner, GcHeapOutOfMemory::new((), self.bytes_needed))
     }
 }

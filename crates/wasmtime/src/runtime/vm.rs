@@ -191,45 +191,25 @@ pub unsafe trait VMStore {
     #[cfg(target_has_atomic = "64")]
     fn new_epoch(&mut self) -> Result<u64, Error>;
 
-    /// Callback invoked whenever an instance needs to trigger a GC.
+    /// Callback invoked whenever an instance needs to grow-or-collect the GC
+    /// heap.
     ///
     /// Optionally given a GC reference that is rooted for the collection, and
     /// then whose updated GC reference is returned.
     ///
-    /// Cooperative, async-yielding (if configured) is completely transparent.
+    /// Optionally given a number of bytes that are needed for an upcoming
+    /// allocation.
+    ///
+    /// Cooperative, async-yielding (if configured) is completely transparent,
+    /// but must be called from a fiber stack in that case.
     ///
     /// If the async GC was cancelled, returns an error. This should be raised
     /// as a trap to clean up Wasm execution.
-    unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>>;
-
-    /// Callback invoked whenever an instance needs to grow the GC heap.
-    ///
-    /// Cooperative, async-yielding (if configured) is completely transparent.
-    ///
-    /// If the growth was canceled or fails, returns an error.
-    fn maybe_async_grow_gc_heap(&mut self, bytes_needed: u64) -> Result<()>;
-
-    /// Attempt to grow the GC heap by `bytes_needed` or, if that fails, perform
-    /// a garbage collection.
-    ///
-    /// Cooperative, async-yielding (if configured) is completely
-    /// transparent. Must be called on a fiber stack, in that case.
-    ///
-    /// Note that even when this function returns `Ok(())`, it is not guaranteed
-    /// that a GC allocation of size `bytes_needed` will succeed. Growing the GC
-    /// heap could fail, and then performing a collection could succeed but
-    /// might not free up enough space. Therefore, callers should not assume
-    /// that a retried allocation will always succeed.
-    unsafe fn maybe_async_grow_or_collect_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
-        self.maybe_async_grow_gc_heap(bytes_needed)
-            .or_else(|err| -> Result<()> {
-                unsafe {
-                    self.maybe_async_gc(None).context(err)?;
-                }
-                Ok(())
-            })?;
-        Ok(())
-    }
+    unsafe fn maybe_async_grow_or_collect_gc_heap(
+        &mut self,
+        root: Option<VMGcRef>,
+        bytes_needed: Option<u64>,
+    ) -> Result<Option<VMGcRef>>;
 
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]

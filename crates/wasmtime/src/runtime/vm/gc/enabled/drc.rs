@@ -815,12 +815,12 @@ unsafe impl GcHeap for DrcHeap {
         ptr.cast()
     }
 
-    fn take_memory(&mut self) -> crate::vm::Memory {
+    unsafe fn take_memory(&mut self) -> crate::vm::Memory {
         debug_assert!(self.is_attached());
         self.memory.take().unwrap()
     }
 
-    fn replace_memory(&mut self, memory: crate::vm::Memory, delta_bytes_grown: u64) {
+    unsafe fn replace_memory(&mut self, memory: crate::vm::Memory, delta_bytes_grown: u64) {
         debug_assert!(self.memory.is_none());
         self.memory = Some(memory);
 

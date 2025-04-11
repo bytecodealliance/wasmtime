@@ -134,13 +134,11 @@ impl<T> Store<T> {
     ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>)
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()>
     where
         T: Send,
     {
-        self.inner
-            .grow_or_collect_gc_heap_async(why.map(|e| e.bytes_needed()))
-            .await;
+        self.inner.gc_async(why).await
     }
 
     /// Configures epoch-deadline expiration to yield to the async
@@ -179,14 +177,11 @@ impl<'a, T> StoreContextMut<'a, T> {
     ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>)
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()>
     where
         T: Send,
     {
-        assert!(self.0.async_support());
-        self.0
-            .grow_or_collect_gc_heap_async(why.map(|e| e.bytes_needed()))
-            .await;
+        self.0.gc_async(why).await
     }
 
     /// Configures epoch-deadline expiration to yield to the async
@@ -583,53 +578,8 @@ impl StoreOpaque {
         }
     }
 
-    /// Attempt an allocation, if it fails due to GC OOM, then do a GC and
-    /// retry.
     #[cfg(feature = "gc")]
-    pub(crate) async fn retry_after_gc_async<T, U>(
-        &mut self,
-        value: T,
-        alloc_func: impl Fn(&mut Self, T) -> Result<U>,
-    ) -> Result<U>
-    where
-        T: Send + Sync + 'static,
-    {
-        assert!(
-            self.async_support(),
-            "you must configure async to use the `*_async` versions of methods"
-        );
-        match alloc_func(self, value) {
-            Ok(x) => Ok(x),
-            Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
-                Ok(oom) => {
-                    let (value, oom) = oom.take_inner();
-                    self.grow_or_collect_gc_heap_async(Some(oom.bytes_needed()))
-                        .await;
-                    alloc_func(self, value)
-                }
-                Err(e) => Err(e),
-            },
-        }
-    }
-
-    #[cfg(feature = "gc")]
-    pub async fn grow_or_collect_gc_heap_async(&mut self, bytes_needed: Option<u64>) {
-        assert!(self.async_support());
-        if let Some(bytes_needed) = bytes_needed {
-            if self
-                .on_fiber(|store| store.maybe_async_grow_gc_heap(bytes_needed).is_ok())
-                .await
-                .unwrap_or(false)
-            {
-                return;
-            }
-        }
-
-        self.gc_async().await;
-    }
-
-    #[cfg(feature = "gc")]
-    pub async fn gc_async(&mut self) {
+    pub(super) async fn do_gc_async(&mut self) {
         assert!(
             self.async_support(),
             "cannot use `gc_async` without enabling async support in the config",

@@ -445,10 +445,24 @@ unsafe fn grow_gc_heap(
     _instance: &mut Instance,
     bytes_needed: u64,
 ) -> Result<()> {
+    let orig_len = u64::try_from(store.gc_store()?.gc_heap.vmmemory().current_length()).unwrap();
+
     store
-        .maybe_async_grow_gc_heap(bytes_needed)
+        .maybe_async_gc(None, Some(bytes_needed))
         .context("failed to grow the GC heap")
-        .context(crate::Trap::AllocationTooLarge)
+        .context(crate::Trap::AllocationTooLarge)?;
+
+    // JIT code relies on the memory having grown by `bytes_needed` bytes if
+    // this libcall returns successfully, so trap if we didn't grow that much.
+    let new_len = u64::try_from(store.gc_store()?.gc_heap.vmmemory().current_length()).unwrap();
+    if orig_len
+        .checked_add(bytes_needed)
+        .is_none_or(|expected_len| new_len < expected_len)
+    {
+        return Err(crate::Trap::AllocationTooLarge.into());
+    }
+
+    Ok(())
 }
 
 /// Do a GC, keeping `gc_ref` rooted and returning the updated `gc_ref`
@@ -476,7 +490,7 @@ unsafe fn gc(store: &mut dyn VMStore, _instance: &mut Instance, gc_ref: u32) -> 
         let _ = gc_store.expose_gc_ref_to_wasm(gc_ref);
     }
 
-    match store.maybe_async_gc(gc_ref)? {
+    match store.maybe_async_grow_or_collect_gc_heap(gc_ref, None)? {
         None => Ok(0),
         Some(r) => {
             let raw = store
@@ -484,35 +498,6 @@ unsafe fn gc(store: &mut dyn VMStore, _instance: &mut Instance, gc_ref: u32) -> 
                 .unwrap_gc_store_mut()
                 .expose_gc_ref_to_wasm(r);
             Ok(raw.get())
-        }
-    }
-}
-
-/// Attempt to make a GC allocation by calling `f`. If that fails due to GC
-/// out-of-memory, then either do a collection or grow the GC heap, and finally
-/// attemt the allocation again.
-#[cfg(feature = "gc")]
-fn retry_alloc_with_maybe_async_gc<T>(
-    store: &mut crate::store::StoreOpaque,
-    mut f: impl FnMut(&mut crate::store::StoreOpaque) -> Result<Result<T, u64>>,
-) -> Result<T> {
-    match f(store)? {
-        Ok(r) => Ok(r),
-        Err(bytes_needed) => {
-            // If the allocation failed, try to grow the GC heap as neccessary,
-            // and if that also fails, then do a GC to hopefully clean up space.
-            unsafe {
-                store
-                    .traitobj_mut()
-                    // Always on a fiber stack in libcalls.
-                    .maybe_async_grow_or_collect_gc_heap(bytes_needed)?
-            };
-
-            // And then try again.
-            Ok(
-                f(store)?
-                    .map_err(|bytes_needed| crate::GcHeapOutOfMemory::new((), bytes_needed))?,
-            )
         }
     }
 }
@@ -558,9 +543,14 @@ unsafe fn gc_alloc_raw(
     })?;
 
     let store = store.store_opaque_mut();
-    let gc_ref = retry_alloc_with_maybe_async_gc(store, |store| {
-        store.unwrap_gc_store_mut().alloc_raw(header, layout)
-    })?;
+    let gc_ref = unsafe {
+        store.retry_after_gc_maybe_async((), |store, ()| {
+            store
+                .unwrap_gc_store_mut()
+                .alloc_raw(header, layout)?
+                .map_err(|bytes_needed| crate::GcHeapOutOfMemory::new((), bytes_needed).into())
+        })?
+    };
 
     let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
     Ok(raw)
@@ -670,10 +660,11 @@ unsafe fn array_new_data(
         .layout(shared_ty)
         .expect("array types have GC layouts");
     let array_layout = gc_layout.unwrap_array();
-    let array_ref = retry_alloc_with_maybe_async_gc(store, |store| {
+    let array_ref = store.retry_after_gc_maybe_async((), |store, ()| {
         store
             .unwrap_gc_store_mut()
-            .alloc_uninit_array(shared_ty, len, &array_layout)
+            .alloc_uninit_array(shared_ty, len, &array_layout)?
+            .map_err(|bytes_needed| crate::GcHeapOutOfMemory::new((), bytes_needed).into())
     })?;
 
     // Copy the data into the array, initializing it.

@@ -385,10 +385,20 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     // Accessors for the raw bytes of the GC heap
 
     /// Take the underlying memory storage out of this GC heap.
-    fn take_memory(&mut self) -> crate::vm::Memory;
+    ///
+    /// # Safety
+    ///
+    /// You may not use this GC heap again until after you replace the memory.
+    unsafe fn take_memory(&mut self) -> crate::vm::Memory;
 
     /// Replace this GC heap's underlying memory storage.
-    fn replace_memory(&mut self, memory: crate::vm::Memory, delta_bytes_grown: u64);
+    ///
+    /// # Safety
+    ///
+    /// The `memory` must have been taken via `take_memory` and the GC heap must
+    /// not have been used at all since the memory was taken. The memory must be
+    /// the same size or larger than it was.
+    unsafe fn replace_memory(&mut self, memory: crate::vm::Memory, delta_bytes_grown: u64);
 
     /// Get a raw `VMMemoryDefinition` for this heap's underlying memory storage.
     ///

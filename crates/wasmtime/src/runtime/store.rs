@@ -113,6 +113,8 @@ mod async_;
 pub use self::async_::CallHookHandler;
 #[cfg(feature = "async")]
 use self::async_::*;
+#[cfg(feature = "gc")]
+mod gc;
 
 /// A [`Store`] is a collection of WebAssembly instances and host-defined state.
 ///
@@ -795,8 +797,7 @@ impl<T> Store<T> {
     #[cfg(feature = "gc")]
     pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
         assert!(!self.inner.async_support());
-        self.inner
-            .grow_or_collect_gc_heap(why.map(|e| e.bytes_needed()));
+        self.inner.gc(why);
     }
 
     /// Returns the amount fuel in this [`Store`]. When fuel is enabled, it must
@@ -1015,9 +1016,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
     pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
-        assert!(!self.0.async_support());
-        self.0
-            .grow_or_collect_gc_heap(why.map(|e| e.bytes_needed()));
+        self.0.gc(why);
     }
 
     /// Returns remaining fuel in this store.
@@ -1584,186 +1583,8 @@ impl StoreOpaque {
         self.gc_roots.exit_lifo_scope(self.gc_store.as_mut(), scope);
     }
 
-    /// Attempt an allocation, if it fails due to GC OOM, then do a GC and
-    /// retry.
     #[cfg(feature = "gc")]
-    pub(crate) fn retry_after_gc<T, U>(
-        &mut self,
-        value: T,
-        alloc_func: impl Fn(&mut Self, T) -> Result<U>,
-    ) -> Result<U>
-    where
-        T: Send + Sync + 'static,
-    {
-        assert!(
-            !self.async_support(),
-            "use the `*_async` versions of methods when async is configured"
-        );
-        match alloc_func(self, value) {
-            Ok(x) => Ok(x),
-            Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
-                Ok(oom) => {
-                    let (value, oom) = oom.take_inner();
-                    self.grow_or_collect_gc_heap(Some(oom.bytes_needed()));
-                    alloc_func(self, value)
-                }
-                Err(e) => Err(e),
-            },
-        }
-    }
-
-    /// Like `retry_after_gc` but must be called from a fiber stack if this is
-    /// an async store.
-    #[cfg(feature = "gc")]
-    pub(crate) unsafe fn retry_after_gc_maybe_async<T, U>(
-        &mut self,
-        value: T,
-        alloc_func: impl Fn(&mut Self, T) -> Result<U>,
-    ) -> Result<U>
-    where
-        T: Send + Sync + 'static,
-    {
-        match alloc_func(self, value) {
-            Ok(x) => Ok(x),
-            Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
-                Ok(oom) => {
-                    let (value, oom) = oom.take_inner();
-                    self.traitobj_mut()
-                        .maybe_async_grow_or_collect_gc_heap(oom.bytes_needed())?;
-                    alloc_func(self, value)
-                }
-                Err(e) => Err(e),
-            },
-        }
-    }
-
-    /// Like `gc` but must be called from a fiber stack if this is an async
-    /// store.
-    #[cfg(feature = "gc")]
-    unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
-        let mut scope = crate::OpaqueRootScope::new(self);
-        let store_id = scope.id();
-        let root = root.map(|r| scope.gc_roots_mut().push_lifo_root(store_id, r));
-
-        if scope.async_support() {
-            #[cfg(feature = "async")]
-            unsafe {
-                let async_cx = scope.async_cx();
-                let future = scope.gc_async();
-                async_cx
-                    .expect("attempted to pull async context during shutdown")
-                    .block_on(future)?;
-            }
-        } else {
-            scope.gc();
-        }
-
-        let root = match root {
-            None => None,
-            Some(r) => {
-                let r = r
-                    .get_gc_ref(&scope)
-                    .expect("still in scope")
-                    .unchecked_copy();
-                Some(scope.gc_store_mut()?.clone_gc_ref(&r))
-            }
-        };
-
-        Ok(root)
-    }
-
-    /// Attempt to grow the GC heap by `bytes_needed` bytes.
-    ///
-    /// Returns an error if growing the GC heap fails.
-    ///
-    /// When async is enabled, it is the caller's responsibility to ensure that
-    /// this is called on a fiber stack.
-    #[cfg(feature = "gc")]
-    pub(crate) fn maybe_async_grow_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
-        log::trace!("Attempting to grow the GC heap by {bytes_needed} bytes");
-        assert!(bytes_needed > 0);
-
-        // Take the GC heap's underlying memory out of the GC heap, attempt to
-        // grow it, then replace it.
-        let mut memory = self.unwrap_gc_store_mut().gc_heap.take_memory();
-        let mut delta_bytes_grown = 0;
-        let grow_result: Result<()> = (|| {
-            let page_size = self.engine().tunables().gc_heap_memory_type().page_size();
-
-            let current_size_in_bytes = u64::try_from(memory.byte_size()).unwrap();
-            let current_size_in_pages = current_size_in_bytes / page_size;
-
-            // Aim to double the heap size, amortizing the cost of growth.
-            let doubled_size_in_pages = current_size_in_pages.saturating_mul(2);
-            assert!(doubled_size_in_pages >= current_size_in_pages);
-            let delta_pages_for_doubling = doubled_size_in_pages - current_size_in_pages;
-
-            // When doubling our size, saturate at the maximum memory size in pages.
-            //
-            // TODO: we should consult the instance allocator for its configured
-            // maximum memory size, if any, rather than assuming the index
-            // type's maximum size.
-            let max_size_in_bytes = 1 << 32;
-            let max_size_in_pages = max_size_in_bytes / page_size;
-            let delta_to_max_size_in_pages = max_size_in_pages - current_size_in_pages;
-            let delta_pages_for_alloc = delta_pages_for_doubling.min(delta_to_max_size_in_pages);
-
-            // But always make sure we are attempting to grow at least as many pages
-            // as needed by the requested allocation. This must happen *after* the
-            // max-size saturation, so that if we are at the max already, we do not
-            // succeed in growing by zero delta pages, and then return successfully
-            // to our caller, who would be assuming that there is now capacity for
-            // their allocation.
-            let pages_needed = bytes_needed.div_ceil(page_size);
-            assert!(pages_needed > 0);
-            let delta_pages_for_alloc = delta_pages_for_alloc.max(pages_needed);
-            assert!(delta_pages_for_alloc > 0);
-
-            // Safety: we pair growing the GC heap with updating its associated
-            // `VMMemoryDefinition` in the `VMStoreContext` immediately
-            // afterwards.
-            unsafe {
-                memory
-                    .grow(delta_pages_for_alloc, Some(self.traitobj().as_mut()))?
-                    .ok_or_else(|| anyhow!("failed to grow GC heap"))?;
-            }
-            self.vm_store_context.gc_heap = memory.vmmemory();
-
-            let new_size_in_bytes = u64::try_from(memory.byte_size()).unwrap();
-            assert!(new_size_in_bytes > current_size_in_bytes);
-            delta_bytes_grown = new_size_in_bytes - current_size_in_bytes;
-            let delta_bytes_for_alloc = delta_pages_for_alloc.checked_mul(page_size).unwrap();
-            assert!(
-                delta_bytes_grown >= delta_bytes_for_alloc,
-                "{delta_bytes_grown} should be greater than or equal to {delta_bytes_for_alloc}"
-            );
-            Ok(())
-        })();
-
-        // Regardless whether growing succeeded or failed, place the memory back
-        // inside the GC heap.
-        self.unwrap_gc_store_mut()
-            .gc_heap
-            .replace_memory(memory, delta_bytes_grown);
-
-        grow_result
-    }
-
-    #[cfg(feature = "gc")]
-    pub fn grow_or_collect_gc_heap(&mut self, bytes_needed: Option<u64>) {
-        assert!(!self.async_support());
-
-        if let Some(bytes_needed) = bytes_needed {
-            if self.maybe_async_grow_gc_heap(bytes_needed).is_ok() {
-                return;
-            }
-        }
-
-        self.gc();
-    }
-
-    #[cfg(feature = "gc")]
-    pub fn gc(&mut self) {
+    fn do_gc(&mut self) {
         assert!(
             !self.async_support(),
             "must use `store.gc_async()` instead of `store.gc()` for async stores"
@@ -1788,16 +1609,6 @@ impl StoreOpaque {
         self.gc_roots_list = roots;
 
         log::trace!("============ End GC ===========");
-    }
-
-    #[inline]
-    #[cfg(not(feature = "gc"))]
-    pub fn gc(&mut self) {
-        // Nothing to collect.
-        //
-        // Note that this is *not* a public method, this is just defined for the
-        // crate-internal `StoreOpaque` type. This is a convenience so that we
-        // don't have to `cfg` every call site.
     }
 
     #[cfg(feature = "gc")]
@@ -2320,24 +2131,21 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
     }
 
     #[cfg(feature = "gc")]
-    unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
-        (**self).maybe_async_gc(root)
+    unsafe fn maybe_async_grow_or_collect_gc_heap(
+        &mut self,
+        root: Option<VMGcRef>,
+        bytes_needed: Option<u64>,
+    ) -> Result<Option<VMGcRef>> {
+        self.inner.maybe_async_gc(root, bytes_needed)
     }
 
     #[cfg(not(feature = "gc"))]
-    unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
+    unsafe fn maybe_async_grow_or_collect_gc_heap(
+        &mut self,
+        root: Option<VMGcRef>,
+        _bytes_needed: Option<u64>,
+    ) -> Result<Option<VMGcRef>> {
         Ok(root)
-    }
-
-    #[cfg(feature = "gc")]
-    fn maybe_async_grow_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
-        self.store_opaque_mut()
-            .maybe_async_grow_gc_heap(bytes_needed)
-    }
-
-    #[cfg(not(feature = "gc"))]
-    fn maybe_async_grow_gc_heap(&mut self, _bytes_needed: u64) -> Result<()> {
-        unreachable!()
     }
 
     #[cfg(feature = "component-model")]
