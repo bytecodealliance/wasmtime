@@ -391,6 +391,21 @@ pub trait RustGenerator<'a> {
             None
         }
     }
+
+    fn typedfunc_sig(&self, func: &Function, param_mode: TypeMode) -> String {
+        let mut out = "(".to_string();
+        for (_, ty) in func.params.iter() {
+            out.push_str(&self.ty(ty, param_mode));
+            out.push_str(", ");
+        }
+        out.push_str("), (");
+        if let Some(ty) = func.result {
+            out.push_str(&self.ty(&ty, TypeMode::Owned));
+            out.push_str(", ");
+        }
+        out.push_str(")");
+        out
+    }
 }
 
 /// Translate `name` to a Rust `snake_case` identifier.
