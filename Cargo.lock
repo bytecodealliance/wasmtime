@@ -2794,9 +2794,9 @@ dependencies = [
 
 [[package]]
 name = "regalloc2"
-version = "0.11.3"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d4c3c15aa088eccea44550bffea9e9a5d0b14a264635323d23c6e6351acca98"
+checksum = "7f8901022fb3dd7d9fc8e925df91df33e889705a1e3c76901fe5abef917788dc"
 dependencies = [
  "allocator-api2",
  "bumpalo",
