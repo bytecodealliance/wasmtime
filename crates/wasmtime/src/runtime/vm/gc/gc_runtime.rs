@@ -5,7 +5,9 @@ use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GcHeapObject, SendSyncPtr, TypedGcRef, VMArrayRef,
     VMExternRef, VMGcHeader, VMGcObjectData, VMGcRef, VMStructRef,
 };
+use crate::vm::VMMemoryDefinition;
 use core::ptr::NonNull;
+use core::slice;
 use core::{alloc::Layout, any::Any, marker, mem, num::NonZeroUsize, ops::Range, ptr};
 use wasmtime_environ::{GcArrayLayout, GcStructLayout, GcTypeLayouts, VMSharedTypeIndex};
 
@@ -81,6 +83,31 @@ pub unsafe trait GcRuntime: 'static + Send + Sync {
 /// giving us more compact data representations and the improved cache
 /// utilization that implies.
 pub unsafe trait GcHeap: 'static + Send + Sync {
+    ////////////////////////////////////////////////////////////////////////////
+    // Life Cycle GC Heap Methods
+
+    /// Is this GC heap currently attached to a memory?
+    fn is_attached(&self) -> bool;
+
+    /// Attach this GC heap to a memory.
+    ///
+    /// Once attached, this GC heap can be used with Wasm.
+    fn attach(&mut self, memory: crate::vm::Memory);
+
+    /// Reset this heap.
+    ///
+    /// Calling this method unassociates this heap with the store that it has
+    /// been associated with, making it available to be associated with a new
+    /// heap.
+    ///
+    /// This should refill free lists, reset bump pointers, and etc... as if
+    /// nothing were allocated in this heap (because nothing is allocated in
+    /// this heap anymore).
+    ///
+    /// This should retain any allocated memory from the global allocator and
+    /// any virtual memory mappings.
+    fn detach(&mut self) -> crate::vm::Memory;
+
     ////////////////////////////////////////////////////////////////////////////
     // `Any` methods
 
@@ -178,17 +205,19 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///
     /// * `Ok(Some(_))`: The allocation was successful.
     ///
-    /// * `Ok(None)`: There is currently no available space for this
-    ///   allocation. The caller should call `self.gc()`, run the GC to
-    ///   completion so the collector can reclaim space, and then try allocating
-    ///   again.
+    /// * `Ok(Err(n))`: There is currently not enough available space for this
+    ///   allocation of size `n`. The caller should either grow the heap or run
+    ///   a collection to reclaim space, and then try allocating again.
     ///
     /// * `Err(_)`: The collector cannot satisfy this allocation request, and
     ///   would not be able to even after the caller were to trigger a
     ///   collection. This could be because, for example, the requested
     ///   allocation is larger than this collector's implementation limit for
     ///   object size.
-    fn alloc_externref(&mut self, host_data: ExternRefHostDataId) -> Result<Option<VMExternRef>>;
+    fn alloc_externref(
+        &mut self,
+        host_data: ExternRefHostDataId,
+    ) -> Result<Result<VMExternRef, u64>>;
 
     /// Get the host data ID associated with the given `externref`.
     ///
@@ -233,16 +262,15 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///
     /// * `Ok(Some(_))`: The allocation was successful.
     ///
-    /// * `Ok(None)`: There is currently no available space for this
-    ///   allocation. The caller should call `self.gc()`, run the GC to
-    ///   completion so the collector can reclaim space, and then try allocating
-    ///   again.
+    /// * `Ok(Err(n))`: There is currently not enough available space for this
+    ///   allocation of size `n`. The caller should either grow the heap or run
+    ///   a collection to reclaim space, and then try allocating again.
     ///
     /// * `Err(_)`: The collector cannot satisfy this allocation request, and
     ///   would not be able to even after the caller were to trigger a
     ///   collection. This could be because, for example, the requested
     ///   alignment is larger than this collector's implementation limit.
-    fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Option<VMGcRef>>;
+    fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Result<VMGcRef, u64>>;
 
     /// Allocate a GC-managed struct of the given type and layout.
     ///
@@ -259,10 +287,9 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     ///
     /// * `Ok(Some(_))`: The allocation was successful.
     ///
-    /// * `Ok(None)`: There is currently no available space for this
-    ///   allocation. The caller should call `self.gc()`, run the GC to
-    ///   completion so the collector can reclaim space, and then try allocating
-    ///   again.
+    /// * `Ok(Err(n))`: There is currently not enough available space for this
+    ///   allocation of size `n`. The caller should either grow the heap or run
+    ///   a collection to reclaim space, and then try allocating again.
     ///
     /// * `Err(_)`: The collector cannot satisfy this allocation request, and
     ///   would not be able to even after the caller were to trigger a
@@ -273,7 +300,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
         &mut self,
         ty: VMSharedTypeIndex,
         layout: &GcStructLayout,
-    ) -> Result<Option<VMStructRef>>;
+    ) -> Result<Result<VMStructRef, u64>>;
 
     /// Deallocate an uninitialized, GC-managed struct.
     ///
@@ -283,12 +310,11 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// valid GC references, or something like that.
     fn dealloc_uninit_struct(&mut self, structref: VMStructRef);
 
-    /// * `Ok(Some(_))`: The allocation was successful.
+    /// * `Ok(Ok(_))`: The allocation was successful.
     ///
-    /// * `Ok(None)`: There is currently no available space for this
-    ///   allocation. The caller should call `self.gc()`, run the GC to
-    ///   completion so the collector can reclaim space, and then try allocating
-    ///   again.
+    /// * `Ok(Err(n))`: There is currently not enough available space for this
+    ///   allocation of size `n`. The caller should either grow the heap or run
+    ///   a collection to reclaim space, and then try allocating again.
     ///
     /// * `Err(_)`: The collector cannot satisfy this allocation request, and
     ///   would not be able to even after the caller were to trigger a
@@ -300,7 +326,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
         ty: VMSharedTypeIndex,
         len: u32,
         layout: &GcArrayLayout,
-    ) -> Result<Option<VMArrayRef>>;
+    ) -> Result<Result<VMArrayRef, u64>>;
 
     /// Deallocate an uninitialized, GC-managed array.
     ///
@@ -356,45 +382,49 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     unsafe fn vmctx_gc_heap_data(&self) -> NonNull<u8>;
 
     ////////////////////////////////////////////////////////////////////////////
-    // Recycling GC Heap Methods
-
-    /// Reset this heap.
-    ///
-    /// Calling this method unassociates this heap with the store that it has
-    /// been associated with, making it available to be associated with a new
-    /// heap.
-    ///
-    /// This should refill free lists, reset bump pointers, and etc... as if
-    /// nothing were allocated in this heap (because nothing is allocated in
-    /// this heap anymore).
-    ///
-    /// This should retain any allocated memory from the global allocator and
-    /// any virtual memory mappings.
-    ///
-    /// This method is only used with the pooling allocator.
-    #[cfg(feature = "pooling-allocator")]
-    fn reset(&mut self);
-
-    ////////////////////////////////////////////////////////////////////////////
     // Accessors for the raw bytes of the GC heap
 
+    /// Take the underlying memory storage out of this GC heap.
+    ///
+    /// # Safety
+    ///
+    /// You may not use this GC heap again until after you replace the memory.
+    unsafe fn take_memory(&mut self) -> crate::vm::Memory;
+
+    /// Replace this GC heap's underlying memory storage.
+    ///
+    /// # Safety
+    ///
+    /// The `memory` must have been taken via `take_memory` and the GC heap must
+    /// not have been used at all since the memory was taken. The memory must be
+    /// the same size or larger than it was.
+    unsafe fn replace_memory(&mut self, memory: crate::vm::Memory, delta_bytes_grown: u64);
+
+    /// Get a raw `VMMemoryDefinition` for this heap's underlying memory storage.
+    ///
+    /// If/when exposing this `VMMemoryDefinition` to Wasm, it is your
+    /// responsibility to ensure that you do not do that in such a way as to
+    /// violate Rust's borrowing rules (e.g. make sure there is no active
+    /// `heap_slice_mut()` call at the same time) and that if this GC heap is
+    /// resized (and its base potentially moves) then that Wasm gets a new,
+    /// updated `VMMemoryDefinition` record.
+    fn vmmemory(&self) -> VMMemoryDefinition;
+
     /// Get a slice of the raw bytes of the GC heap.
-    ///
-    /// # Implementation Safety
-    ///
-    /// The heap slice must be the GC heap region, and the region must remain
-    /// valid (i.e. not moved or resized) for JIT code until `self` is dropped
-    /// or `self.reset()` is called.
-    fn heap_slice(&self) -> &[u8];
+    fn heap_slice(&self) -> &[u8] {
+        let vmmemory = self.vmmemory();
+        let ptr = vmmemory.base.as_ptr().cast_const();
+        let len = vmmemory.current_length();
+        unsafe { slice::from_raw_parts(ptr, len) }
+    }
 
     /// Get a mutable slice of the raw bytes of the GC heap.
-    ///
-    /// # Implementation Safety
-    ///
-    /// The heap slice must be the GC heap region, and the region must remain
-    /// valid (i.e. not moved or resized) for JIT code until `self` is dropped
-    /// or `self.reset()` is called.
-    fn heap_slice_mut(&mut self) -> &mut [u8];
+    fn heap_slice_mut(&mut self) -> &mut [u8] {
+        let vmmemory = self.vmmemory();
+        let ptr = vmmemory.base.as_ptr();
+        let len = vmmemory.current_length();
+        unsafe { slice::from_raw_parts_mut(ptr, len) }
+    }
 
     ////////////////////////////////////////////////////////////////////////////
     // Provided helper methods.

@@ -91,6 +91,11 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         Ok(())
     }
 
+    #[cfg(feature = "gc")]
+    fn validate_memory_impl(&self, _memory: &wasmtime_environ::Memory) -> Result<()> {
+        Ok(())
+    }
+
     fn increment_component_instance_count(&self) -> Result<()> {
         Ok(())
     }
@@ -108,13 +113,19 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         request: &mut InstanceAllocationRequest,
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
-        memory_index: DefinedMemoryIndex,
+        memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
         let creator = self
             .mem_creator
             .as_deref()
             .unwrap_or_else(|| &DefaultMemoryCreator);
-        let image = request.runtime_info.memory_image(memory_index)?;
+
+        let image = if let Some(memory_index) = memory_index {
+            request.runtime_info.memory_image(memory_index)?
+        } else {
+            None
+        };
+
         let allocation_index = MemoryAllocationIndex::default();
         let memory = Memory::new_dynamic(
             ty,
@@ -131,7 +142,7 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
 
     unsafe fn deallocate_memory(
         &self,
-        _memory_index: DefinedMemoryIndex,
+        _memory_index: Option<DefinedMemoryIndex>,
         allocation_index: MemoryAllocationIndex,
         _memory: Memory,
     ) {
@@ -218,20 +229,22 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         &self,
         engine: &crate::Engine,
         gc_runtime: &dyn GcRuntime,
+        memory_alloc_index: MemoryAllocationIndex,
+        memory: Memory,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
-        Ok((
-            GcHeapAllocationIndex::default(),
-            gc_runtime.new_gc_heap(engine)?,
-        ))
+        debug_assert_eq!(memory_alloc_index, MemoryAllocationIndex::default());
+        let mut heap = gc_runtime.new_gc_heap(engine)?;
+        heap.attach(memory);
+        Ok((GcHeapAllocationIndex::default(), heap))
     }
 
     #[cfg(feature = "gc")]
     fn deallocate_gc_heap(
         &self,
         allocation_index: GcHeapAllocationIndex,
-        gc_heap: Box<dyn crate::runtime::vm::GcHeap>,
-    ) {
+        mut gc_heap: Box<dyn crate::runtime::vm::GcHeap>,
+    ) -> (MemoryAllocationIndex, Memory) {
         debug_assert_eq!(allocation_index, GcHeapAllocationIndex::default());
-        drop(gc_heap);
+        (MemoryAllocationIndex::default(), gc_heap.detach())
     }
 }

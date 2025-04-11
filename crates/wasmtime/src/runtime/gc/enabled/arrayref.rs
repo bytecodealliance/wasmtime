@@ -58,7 +58,7 @@ use wasmtime_environ::{GcArrayLayout, GcLayout, VMGcKind, VMSharedTypeIndex};
 /// }
 /// # Ok(())
 /// # }
-/// # foo().unwrap();
+/// # let _ = foo();
 /// ```
 pub struct ArrayRefPre {
     store_id: StoreId,
@@ -142,22 +142,22 @@ impl ArrayRefPre {
 ///     let elem = Val::I32(42);
 ///     let my_array = match ArrayRef::new(&mut scope, &allocator, &elem, len) {
 ///         Ok(s) => s,
+///         Err(e) => match e.downcast::<GcHeapOutOfMemory<()>>() {
+///             // If the heap is out of memory, then do a GC to free up some
+///             // space and try again.
+///             Ok(oom) => {
+///                 // Do a GC! Note: in an async context, you'd want to do
+///                 // `scope.as_context_mut().gc_async().await`.
+///                 scope.as_context_mut().gc(Some(&oom));
 ///
-///         // If the heap is out of memory, then do a GC to free up some space
-///         // and try again.
-///         Err(e) if e.is::<GcHeapOutOfMemory<()>>() => {
-///             // Do a GC! Note: in an async context, you'd want to do
-///             // `scope.as_context_mut().gc_async().await`.
-///             scope.as_context_mut().gc();
-///
-///             // Try again. If the GC heap is still out of memory, then we
-///             // weren't able to free up resources for this allocation, so
-///             // propagate the error.
-///             ArrayRef::new(&mut scope, &allocator, &elem, len)?
+///                 // Try again. If the GC heap is still out of memory, then we
+///                 // weren't able to free up resources for this allocation, so
+///                 // propagate the error.
+///                 ArrayRef::new(&mut scope, &allocator, &elem, len)?
+///             }
+///             // Propagate any other kind of error.
+///             Err(e) => return Err(e),
 ///         }
-///
-///         // Propagate any other kind of error.
-///         Err(e) => return Err(e),
 ///     };
 ///
 ///     // That instance's elements should have the initial value.
@@ -415,7 +415,7 @@ impl ArrayRef {
             .gc_store_mut()?
             .alloc_uninit_array(allocator.type_index(), len, allocator.layout())
             .context("unrecoverable error when allocating new `arrayref`")?
-            .ok_or_else(|| GcHeapOutOfMemory::new(()))?;
+            .map_err(|n| GcHeapOutOfMemory::new((), n))?;
 
         // From this point on, if we get any errors, then the array is not
         // fully initialized, so we need to eagerly deallocate it before the

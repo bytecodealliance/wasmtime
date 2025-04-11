@@ -105,6 +105,17 @@ pub struct FuncEnvironment<'module_environment> {
         wasmtime_environ::GcLayout,
     >,
 
+    #[cfg(feature = "gc")]
+    gc_heap: Option<Heap>,
+
+    /// The Cranelift global holding the GC heap's base address.
+    #[cfg(feature = "gc")]
+    gc_heap_base: Option<ir::GlobalValue>,
+
+    /// The Cranelift global holding the GC heap's base address.
+    #[cfg(feature = "gc")]
+    gc_heap_bound: Option<ir::GlobalValue>,
+
     #[cfg(feature = "wmemcheck")]
     translation: &'module_environment ModuleTranslation<'module_environment>,
 
@@ -188,6 +199,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
             #[cfg(feature = "gc")]
             ty_to_gc_layout: std::collections::HashMap::new(),
+            #[cfg(feature = "gc")]
+            gc_heap: None,
+            #[cfg(feature = "gc")]
+            gc_heap_base: None,
+            #[cfg(feature = "gc")]
+            gc_heap_bound: None,
 
             heaps: PrimaryMap::default(),
             tables: SecondaryMap::default(),

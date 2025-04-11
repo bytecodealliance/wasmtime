@@ -186,11 +186,13 @@ impl ExternRef {
     ///             Ok(oom) => {
     ///                 // Take back ownership of our `String`.
     ///                 let s = oom.into_inner();
-    ///                 // Drop other rooted GC refs to make room for this
-    ///                 // allocation, and try again, passing the string back
-    ///                 // into the second allocation attempt. Alternatively,
-    ///                 // propagate the error up to callers...
-    /// #               return Ok(());
+    ///                 // Drop some rooted GC refs from our system to potentially
+    ///                 // free up space for Wasmtime to make this allocation.
+    /// #               let drop_some_gc_refs = || {};
+    ///                 drop_some_gc_refs();
+    ///                 // Finally, try to allocate again, reusing the original
+    ///                 // string.
+    ///                 ExternRef::new(&mut scope, s)?
     ///             }
     ///             Err(e) => return Err(e),
     ///         },
@@ -221,15 +223,26 @@ impl ExternRef {
     where
         T: 'static + Any + Send + Sync,
     {
+        // Allocate the box once, regardless how many gc-and-retry attempts we
+        // make.
         let value: Box<dyn Any + Send + Sync> = Box::new(value);
-        let gc_ref = store.retry_after_gc(value, |store, value| {
-            store
-                .gc_store_mut()?
-                .alloc_externref(value)
-                .context("unrecoverable error when allocating new `externref`")?
-                .map_err(|x| GcHeapOutOfMemory::<T>::new(*x.downcast().unwrap()))
-                .context("failed to allocate `externref`")
-        })?;
+
+        let gc_ref = store
+            .retry_after_gc(value, |store, value| {
+                store
+                    .gc_store_mut()?
+                    .alloc_externref(value)
+                    .context("unrecoverable error when allocating new `externref`")?
+                    .map_err(|(x, n)| GcHeapOutOfMemory::new(x, n).into())
+            })
+            // Translate the `GcHeapOutOfMemory`'s inner value from the boxed
+            // trait object into `T`.
+            .map_err(
+                |e| match e.downcast::<GcHeapOutOfMemory<Box<dyn Any + Send + Sync>>>() {
+                    Ok(oom) => oom.map_inner(|x| *x.downcast::<T>().unwrap()).into(),
+                    Err(e) => e,
+                },
+            )?;
 
         let mut ctx = AutoAssertNoGc::new(store);
         Ok(Self::from_cloned_gc_ref(&mut ctx, gc_ref.into()))
@@ -285,11 +298,13 @@ impl ExternRef {
     ///             Ok(oom) => {
     ///                 // Take back ownership of our `String`.
     ///                 let s = oom.into_inner();
-    ///                 // Drop other rooted GC refs to make room for this
-    ///                 // allocation, and try again, passing the string back
-    ///                 // into the second allocation attempt. Alternatively,
-    ///                 // propagate the error up to callers...
-    /// #               return Ok(());
+    ///                 // Drop some rooted GC refs from our system to potentially
+    ///                 // free up space for Wasmtime to make this allocation.
+    /// #               let drop_some_gc_refs = || {};
+    ///                 drop_some_gc_refs();
+    ///                 // Finally, try to allocate again, reusing the original
+    ///                 // string.
+    ///                 ExternRef::new_async(&mut scope, s).await?
     ///             }
     ///             Err(e) => return Err(e),
     ///         },
@@ -325,17 +340,27 @@ impl ExternRef {
     where
         T: 'static + Any + Send + Sync,
     {
+        // Allocate the box once, regardless how many gc-and-retry attempts we
+        // make.
         let value: Box<dyn Any + Send + Sync> = Box::new(value);
+
         let gc_ref = store
             .retry_after_gc_async(value, |store, value| {
                 store
                     .gc_store_mut()?
                     .alloc_externref(value)
                     .context("unrecoverable error when allocating new `externref`")?
-                    .map_err(|x| GcHeapOutOfMemory::<T>::new(*x.downcast().unwrap()))
-                    .context("failed to allocate `externref`")
+                    .map_err(|(x, n)| GcHeapOutOfMemory::new(x, n).into())
             })
-            .await?;
+            .await
+            // Translate the `GcHeapOutOfMemory`'s inner value from the boxed
+            // trait object into `T`.
+            .map_err(
+                |e| match e.downcast::<GcHeapOutOfMemory<Box<dyn Any + Send + Sync>>>() {
+                    Ok(oom) => oom.map_inner(|x| *x.downcast::<T>().unwrap()).into(),
+                    Err(e) => e,
+                },
+            )?;
 
         let mut ctx = AutoAssertNoGc::new(store);
         Ok(Self::from_cloned_gc_ref(&mut ctx, gc_ref.into()))

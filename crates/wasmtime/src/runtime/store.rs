@@ -113,6 +113,8 @@ mod async_;
 pub use self::async_::CallHookHandler;
 #[cfg(feature = "async")]
 use self::async_::*;
+#[cfg(feature = "gc")]
+mod gc;
 
 /// A [`Store`] is a collection of WebAssembly instances and host-defined state.
 ///
@@ -785,10 +787,17 @@ impl<T> Store<T> {
     /// automatically happen according to various internal heuristics. This is
     /// provided if fine-grained control over the GC is desired.
     ///
+    /// If you are calling this method after an attempted allocation failed, you
+    /// may pass in the [`GcHeapOutOfMemory`][crate::GcHeapOutOfMemory] error.
+    /// When you do so, this method will attempt to create enough space in the
+    /// GC heap for that allocation, so that it will succeed on the next
+    /// attempt.
+    ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub fn gc(&mut self) {
-        self.inner.gc()
+    pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
+        assert!(!self.inner.async_support());
+        self.inner.gc(why);
     }
 
     /// Returns the amount fuel in this [`Store`]. When fuel is enabled, it must
@@ -1006,8 +1015,8 @@ impl<'a, T> StoreContextMut<'a, T> {
     ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub fn gc(&mut self) {
-        self.0.gc()
+    pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
+        self.0.gc(why);
     }
 
     /// Returns remaining fuel in this store.
@@ -1260,11 +1269,16 @@ impl StoreOpaque {
         handle: InstanceHandle,
         module_id: RegisteredModuleId,
     ) -> InstanceId {
+        let id = InstanceId(self.instances.len());
+        log::trace!(
+            "Adding instance to store: store={:?}, module={module_id:?}, instance={id:?}",
+            self.id()
+        );
         self.instances.push(StoreInstance {
             handle: handle.clone(),
             kind: StoreInstanceKind::Real { module_id },
         });
-        InstanceId(self.instances.len() - 1)
+        id
     }
 
     /// Add a dummy instance that to the store.
@@ -1273,11 +1287,16 @@ impl StoreOpaque {
     /// else (e.g. host-created memories that are not actually defined in any
     /// Wasm module) and therefore shouldn't show up in things like core dumps.
     pub unsafe fn add_dummy_instance(&mut self, handle: InstanceHandle) -> InstanceId {
+        let id = InstanceId(self.instances.len());
+        log::trace!(
+            "Adding dummy instance to store: store={:?}, instance={id:?}",
+            self.id()
+        );
         self.instances.push(StoreInstance {
             handle: handle.clone(),
             kind: StoreInstanceKind::Dummy,
         });
-        InstanceId(self.instances.len() - 1)
+        id
     }
 
     pub fn instance(&self, id: InstanceId) -> &InstanceHandle {
@@ -1420,31 +1439,77 @@ impl StoreOpaque {
 
     #[inline(never)]
     pub(crate) fn allocate_gc_heap(&mut self) -> Result<()> {
+        log::trace!("allocating GC heap for store {:?}", self.id());
+
         assert!(self.gc_store.is_none());
-        let gc_store = allocate_gc_store(self.engine())?;
+        assert_eq!(
+            self.vm_store_context.gc_heap.base.as_non_null(),
+            NonNull::dangling(),
+        );
+        assert_eq!(self.vm_store_context.gc_heap.current_length(), 0);
+
+        let vmstore = self.traitobj();
+        let gc_store = allocate_gc_store(self.engine(), vmstore, self.get_pkey())?;
+        self.vm_store_context.gc_heap = gc_store.vmmemory_definition();
         self.gc_store = Some(gc_store);
         return Ok(());
 
         #[cfg(feature = "gc")]
-        fn allocate_gc_store(engine: &Engine) -> Result<GcStore> {
+        fn allocate_gc_store(
+            engine: &Engine,
+            vmstore: NonNull<dyn crate::vm::VMStore>,
+            pkey: Option<ProtectionKey>,
+        ) -> Result<GcStore> {
             ensure!(
                 engine.features().gc_types(),
                 "cannot allocate a GC store when GC is disabled at configuration time"
             );
-            let (index, heap) = engine
-                .allocator()
-                .allocate_gc_heap(engine, &**engine.gc_runtime()?)?;
+
+            // First, allocate the memory that will be our GC heap's storage.
+            let mut request = InstanceAllocationRequest {
+                runtime_info: &ModuleRuntimeInfo::bare(Arc::new(
+                    wasmtime_environ::Module::default(),
+                )),
+                imports: crate::vm::Imports::default(),
+                host_state: Box::new(()),
+                store: StorePtr::new(vmstore),
+                wmemcheck: false,
+                pkey,
+                tunables: engine.tunables(),
+            };
+            let mem_ty = engine.tunables().gc_heap_memory_type();
+            let tunables = engine.tunables();
+
+            // SAFETY: We validated the GC heap's memory type during engine creation.
+            let (mem_alloc_index, mem) = unsafe {
+                engine
+                    .allocator()
+                    .allocate_memory(&mut request, &mem_ty, tunables, None)?
+            };
+
+            // Then, allocate the actual GC heap, passing in that memory
+            // storage.
+            let (index, heap) = engine.allocator().allocate_gc_heap(
+                engine,
+                &**engine.gc_runtime()?,
+                mem_alloc_index,
+                mem,
+            )?;
+
             Ok(GcStore::new(index, heap))
         }
 
         #[cfg(not(feature = "gc"))]
-        fn allocate_gc_store(_engine: &Engine) -> Result<GcStore> {
+        fn allocate_gc_store(
+            _engine: &Engine,
+            _vmstore: NonNull<dyn crate::vm::VMStore>,
+            _pkey: Option<ProtectionKey>,
+        ) -> Result<GcStore> {
             bail!("cannot allocate a GC store: the `gc` feature was disabled at compile time")
         }
     }
 
     #[inline]
-    #[cfg(feature = "gc")]
     pub(crate) fn gc_store(&self) -> Result<&GcStore> {
         match &self.gc_store {
             Some(gc_store) => Ok(gc_store),
@@ -1518,95 +1583,13 @@ impl StoreOpaque {
         self.gc_roots.exit_lifo_scope(self.gc_store.as_mut(), scope);
     }
 
-    /// Attempt an allocation, if it fails due to GC OOM, then do a GC and
-    /// retry.
     #[cfg(feature = "gc")]
-    pub(crate) fn retry_after_gc<T, U>(
-        &mut self,
-        value: T,
-        alloc_func: impl Fn(&mut Self, T) -> Result<U>,
-    ) -> Result<U>
-    where
-        T: Send + Sync + 'static,
-    {
+    fn do_gc(&mut self) {
         assert!(
             !self.async_support(),
-            "use the `*_async` versions of methods when async is configured"
+            "must use `store.gc_async()` instead of `store.gc()` for async stores"
         );
-        match alloc_func(self, value) {
-            Ok(x) => Ok(x),
-            Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
-                Ok(oom) => {
-                    let value = oom.into_inner();
-                    self.gc();
-                    alloc_func(self, value)
-                }
-                Err(e) => Err(e),
-            },
-        }
-    }
 
-    /// Like `retry_after_gc` but must be called from a fiber stack if this is
-    /// an async store.
-    #[cfg(feature = "gc")]
-    pub(crate) unsafe fn retry_after_gc_maybe_async<T, U>(
-        &mut self,
-        value: T,
-        alloc_func: impl Fn(&mut Self, T) -> Result<U>,
-    ) -> Result<U>
-    where
-        T: Send + Sync + 'static,
-    {
-        match alloc_func(self, value) {
-            Ok(x) => Ok(x),
-            Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
-                Ok(oom) => {
-                    let value = oom.into_inner();
-                    self.maybe_async_gc(None)?;
-                    alloc_func(self, value)
-                }
-                Err(e) => Err(e),
-            },
-        }
-    }
-
-    /// Like `gc` but must be called from a fiber stack if this is an async
-    /// store.
-    #[cfg(feature = "gc")]
-    unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
-        let mut scope = crate::OpaqueRootScope::new(self);
-        let store_id = scope.id();
-        let root = root.map(|r| scope.gc_roots_mut().push_lifo_root(store_id, r));
-
-        if scope.async_support() {
-            #[cfg(feature = "async")]
-            unsafe {
-                let async_cx = scope.async_cx();
-                let future = scope.gc_async();
-                async_cx
-                    .expect("attempted to pull async context during shutdown")
-                    .block_on(future)?;
-            }
-        } else {
-            scope.gc();
-        }
-
-        let root = match root {
-            None => None,
-            Some(r) => {
-                let r = r
-                    .get_gc_ref(&scope)
-                    .expect("still in scope")
-                    .unchecked_copy();
-                Some(scope.gc_store_mut()?.clone_gc_ref(&r))
-            }
-        };
-
-        Ok(root)
-    }
-
-    #[cfg(feature = "gc")]
-    pub fn gc(&mut self) {
         // If the GC heap hasn't been initialized, there is nothing to collect.
         if self.gc_store.is_none() {
             return;
@@ -1626,16 +1609,6 @@ impl StoreOpaque {
         self.gc_roots_list = roots;
 
         log::trace!("============ End GC ===========");
-    }
-
-    #[inline]
-    #[cfg(not(feature = "gc"))]
-    pub fn gc(&mut self) {
-        // Nothing to collect.
-        //
-        // Note that this is *not* a public method, this is just defined for the
-        // crate-internal `StoreOpaque` type. This is a convenience so that we
-        // don't have to `cfg` every call site.
     }
 
     #[cfg(feature = "gc")]
@@ -2158,12 +2131,20 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
     }
 
     #[cfg(feature = "gc")]
-    unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
-        (**self).maybe_async_gc(root)
+    unsafe fn maybe_async_grow_or_collect_gc_heap(
+        &mut self,
+        root: Option<VMGcRef>,
+        bytes_needed: Option<u64>,
+    ) -> Result<Option<VMGcRef>> {
+        self.inner.maybe_async_gc(root, bytes_needed)
     }
 
     #[cfg(not(feature = "gc"))]
-    unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
+    unsafe fn maybe_async_grow_or_collect_gc_heap(
+        &mut self,
+        root: Option<VMGcRef>,
+        _bytes_needed: Option<u64>,
+    ) -> Result<Option<VMGcRef>> {
         Ok(root)
     }
 
@@ -2257,20 +2238,30 @@ impl Drop for StoreOpaque {
         unsafe {
             let allocator = self.engine.allocator();
             let ondemand = OnDemandInstanceAllocator::default();
-            for instance in self.instances.iter_mut() {
+            let store_id = self.id();
+
+            #[cfg(feature = "gc")]
+            if let Some(gc_store) = self.gc_store.take() {
+                let gc_alloc_index = gc_store.allocation_index;
+                log::trace!("store {store_id:?} is deallocating GC heap {gc_alloc_index:?}");
+                debug_assert!(self.engine.features().gc_types());
+                let (mem_alloc_index, mem) =
+                    allocator.deallocate_gc_heap(gc_alloc_index, gc_store.gc_heap);
+                allocator.deallocate_memory(None, mem_alloc_index, mem);
+            }
+
+            for (idx, instance) in self.instances.iter_mut().enumerate() {
+                let id = InstanceId::from_index(idx);
+                log::trace!("store {store_id:?} is deallocating {id:?}");
                 if let StoreInstanceKind::Dummy = instance.kind {
                     ondemand.deallocate_module(&mut instance.handle);
                 } else {
                     allocator.deallocate_module(&mut instance.handle);
                 }
             }
-            ondemand.deallocate_module(&mut self.default_caller);
 
-            #[cfg(feature = "gc")]
-            if let Some(gc_store) = self.gc_store.take() {
-                debug_assert!(self.engine.features().gc_types());
-                allocator.deallocate_gc_heap(gc_store.allocation_index, gc_store.gc_heap);
-            }
+            log::trace!("store {store_id:?} is deallocating its default caller instance");
+            ondemand.deallocate_module(&mut self.default_caller);
 
             #[cfg(feature = "component-model")]
             {

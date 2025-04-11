@@ -12,8 +12,6 @@
 //      builtin_functions: *mut VMBuiltinFunctionsArray,
 //      callee: *mut VMFunctionBody,
 //      epoch_ptr: *mut AtomicU64,
-//      gc_heap_base: *mut u8,
-//      gc_heap_bound: *mut u8,
 //      gc_heap_data: *mut T, // Collector-specific pointer
 //      type_ids: *const VMSharedTypeIndex,
 //
@@ -184,9 +182,29 @@ pub trait PtrSize {
         self.vmstore_context_epoch_deadline() + 8
     }
 
+    /// Return the offset of the `gc_heap` field of `VMStoreContext`.
+    #[inline]
+    fn vmstore_context_gc_heap(&self) -> u8 {
+        self.vmstore_context_stack_limit() + self.size()
+    }
+
+    /// Return the offset of the `gc_heap.base` field within a `VMStoreContext`.
+    fn vmstore_context_gc_heap_base(&self) -> u8 {
+        let offset = self.vmstore_context_gc_heap() + self.vmmemory_definition_base();
+        debug_assert!(offset < self.vmstore_context_last_wasm_exit_fp());
+        offset
+    }
+
+    /// Return the offset of the `gc_heap.current_length` field within a `VMStoreContext`.
+    fn vmstore_context_gc_heap_current_length(&self) -> u8 {
+        let offset = self.vmstore_context_gc_heap() + self.vmmemory_definition_current_length();
+        debug_assert!(offset < self.vmstore_context_last_wasm_exit_fp());
+        offset
+    }
+
     /// Return the offset of the `last_wasm_exit_fp` field of `VMStoreContext`.
     fn vmstore_context_last_wasm_exit_fp(&self) -> u8 {
-        self.vmstore_context_stack_limit() + self.size()
+        self.vmstore_context_gc_heap() + self.size_of_vmmemory_definition()
     }
 
     /// Return the offset of the `last_wasm_exit_pc` field of `VMStoreContext`.
@@ -270,25 +288,13 @@ pub trait PtrSize {
         self.vmctx_callee() + self.size()
     }
 
-    /// Return the offset to the GC heap base in this `VMContext`.
-    #[inline]
-    fn vmctx_gc_heap_base(&self) -> u8 {
-        self.vmctx_epoch_ptr() + self.size()
-    }
-
-    /// Return the offset to the GC heap bound in this `VMContext`.
-    #[inline]
-    fn vmctx_gc_heap_bound(&self) -> u8 {
-        self.vmctx_gc_heap_base() + self.size()
-    }
-
     /// Return the offset to the `*mut T` collector-specific data.
     ///
     /// This is a pointer that different collectors can use however they see
     /// fit.
     #[inline]
     fn vmctx_gc_heap_data(&self) -> u8 {
-        self.vmctx_gc_heap_bound() + self.size()
+        self.vmctx_epoch_ptr() + self.size()
     }
 
     /// The offset of the `type_ids` array pointer.

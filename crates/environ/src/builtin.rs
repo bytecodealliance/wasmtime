@@ -74,6 +74,12 @@ macro_rules! foreach_builtin_function {
             #[cfg(feature = "gc-drc")]
             drop_gc_ref(vmctx: vmctx, val: u32);
 
+            // Grow the GC heap by `bytes_needed` bytes.
+            //
+            // Traps if growing the GC heap fails.
+            #[cfg(feature = "gc-null")]
+            grow_gc_heap(vmctx: vmctx, bytes_needed: u64) -> bool;
+
             // Do a GC, treating the optional `root` as a GC root and returning
             // the updated `root` (so that, in the case of moving collectors,
             // callers have a valid version of `root` again).

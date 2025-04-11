@@ -8,11 +8,11 @@ use super::*;
 use crate::{
     prelude::*,
     vm::{
-        mmap::AlignedLength, ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection,
-        GcHeap, GcHeapObject, GcProgress, GcRootsIter, GcRuntime, Mmap, SendSyncUnsafeCell,
-        TypedGcRef, VMGcHeader, VMGcRef,
+        ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
+        GcProgress, GcRootsIter, GcRuntime, SendSyncUnsafeCell, TypedGcRef, VMGcHeader, VMGcRef,
+        VMMemoryDefinition,
     },
-    Engine, GcHeapOutOfMemory,
+    Engine,
 };
 use core::ptr::NonNull;
 use core::{
@@ -54,8 +54,8 @@ struct NullHeap {
     /// The number of active no-gc scopes at the current moment.
     no_gc_count: usize,
 
-    /// The actual GC heap.
-    heap: Mmap<AlignedLength>,
+    /// The actual storage for the GC heap.
+    memory: Option<crate::vm::Memory>,
 }
 
 /// The common header for all arrays in the null collector.
@@ -110,27 +110,24 @@ impl VMNullExternRef {
     }
 }
 
-fn oom() -> Error {
-    GcHeapOutOfMemory::new(()).into()
-}
-
 impl NullHeap {
     /// Construct a new, default heap for the null collector.
     fn new() -> Result<Self> {
-        Self::with_capacity(super::DEFAULT_GC_HEAP_CAPACITY)
-    }
-
-    /// Create a new DRC heap with the given capacity.
-    fn with_capacity(capacity: usize) -> Result<Self> {
-        let heap = Mmap::with_at_least(capacity)?;
         Ok(Self {
             no_gc_count: 0,
-            next: SendSyncUnsafeCell::new(NonZeroU32::new(1).unwrap()),
-            heap,
+            next: SendSyncUnsafeCell::new(NonZeroU32::new(u32::MAX).unwrap()),
+            memory: None,
         })
     }
 
-    fn alloc(&mut self, mut header: VMGcHeader, layout: Layout) -> Result<VMGcRef> {
+    /// Attempt to bump-allocate an object with the given layout and
+    /// header.
+    ///
+    /// Returns `Ok(Ok(r))` on success, `Ok(Err(bytes_needed))` when we don't
+    /// have enough heap space but growing the GC heap could make it
+    /// allocatable, and `Err(_)` when we don't have enough space and growing
+    /// the GC heap won't help.
+    fn alloc(&mut self, mut header: VMGcHeader, layout: Layout) -> Result<Result<VMGcRef, u64>> {
         debug_assert!(layout.size() >= core::mem::size_of::<VMGcHeader>());
         debug_assert!(layout.align() >= core::mem::align_of::<VMGcHeader>());
 
@@ -155,19 +152,18 @@ impl NullHeap {
             .and_then(|align| next.get().checked_next_multiple_of(align))
         {
             Some(aligned) => aligned,
-            None => return Err(oom()),
+            None => return Err(crate::Trap::AllocationTooLarge.into()),
         };
 
         // Check whether the allocation fits in the heap space we have left.
         let end_of_object = match aligned.checked_add(size) {
             Some(end) => end,
-            None => return Err(oom()),
+            None => return Err(crate::Trap::AllocationTooLarge.into()),
         };
-        if u32::try_from(self.heap.len())
-            .ok()
-            .map_or(true, |heap_len| end_of_object > heap_len)
-        {
-            return Err(oom());
+        let len = self.memory.as_ref().unwrap().byte_size();
+        let len = u32::try_from(len).unwrap_or(u32::MAX);
+        if end_of_object > len {
+            return Ok(Err(u64::try_from(layout.size()).unwrap()));
         }
 
         // Update the bump pointer, write the header, and return the GC ref.
@@ -180,11 +176,37 @@ impl NullHeap {
         header.set_reserved_u27(size);
         *self.header_mut(&gc_ref) = header;
 
-        Ok(gc_ref)
+        Ok(Ok(gc_ref))
     }
 }
 
 unsafe impl GcHeap for NullHeap {
+    fn is_attached(&self) -> bool {
+        self.memory.is_some()
+    }
+
+    fn attach(&mut self, memory: crate::vm::Memory) {
+        assert!(!self.is_attached());
+        self.memory = Some(memory);
+        self.next = SendSyncUnsafeCell::new(NonZeroU32::new(1).unwrap());
+    }
+
+    fn detach(&mut self) -> crate::vm::Memory {
+        assert!(self.is_attached());
+
+        let NullHeap {
+            next,
+            no_gc_count,
+            memory,
+        } = self;
+
+        *next.get_mut() = NonZeroU32::new(1).unwrap();
+        *no_gc_count = 0;
+
+        self.next = SendSyncUnsafeCell::new(NonZeroU32::new(u32::MAX).unwrap());
+        memory.take().unwrap()
+    }
+
     fn as_any(&self) -> &dyn Any {
         self as _
     }
@@ -201,16 +223,19 @@ unsafe impl GcHeap for NullHeap {
         self.no_gc_count -= 1;
     }
 
-    fn heap_slice(&self) -> &[u8] {
-        let ptr = self.heap.as_ptr();
-        let len = self.heap.len();
-        unsafe { core::slice::from_raw_parts(ptr, len) }
+    unsafe fn take_memory(&mut self) -> crate::vm::Memory {
+        debug_assert!(self.is_attached());
+        self.memory.take().unwrap()
     }
 
-    fn heap_slice_mut(&mut self) -> &mut [u8] {
-        let ptr = self.heap.as_mut_ptr();
-        let len = self.heap.len();
-        unsafe { core::slice::from_raw_parts_mut(ptr, len) }
+    unsafe fn replace_memory(&mut self, memory: crate::vm::Memory, _delta_bytes_grown: u64) {
+        debug_assert!(self.memory.is_none());
+        self.memory = Some(memory);
+    }
+
+    fn vmmemory(&self) -> VMMemoryDefinition {
+        debug_assert!(self.is_attached());
+        self.memory.as_ref().unwrap().vmmemory()
     }
 
     fn clone_gc_ref(&mut self, gc_ref: &VMGcRef) -> VMGcRef {
@@ -235,11 +260,17 @@ unsafe impl GcHeap for NullHeap {
         false
     }
 
-    fn alloc_externref(&mut self, host_data: ExternRefHostDataId) -> Result<Option<VMExternRef>> {
-        let gc_ref = self.alloc(VMGcHeader::externref(), Layout::new::<VMNullExternRef>())?;
+    fn alloc_externref(
+        &mut self,
+        host_data: ExternRefHostDataId,
+    ) -> Result<Result<VMExternRef, u64>> {
+        let gc_ref = match self.alloc(VMGcHeader::externref(), Layout::new::<VMNullExternRef>())? {
+            Ok(r) => r,
+            Err(bytes_needed) => return Ok(Err(bytes_needed)),
+        };
         self.index_mut::<VMNullExternRef>(gc_ref.as_typed_unchecked())
             .host_data = host_data;
-        Ok(Some(gc_ref.into_externref_unchecked()))
+        Ok(Ok(gc_ref.into_externref_unchecked()))
     }
 
     fn externref_host_data(&self, externref: &VMExternRef) -> ExternRefHostDataId {
@@ -260,20 +291,20 @@ unsafe impl GcHeap for NullHeap {
         self.index_mut(gc_ref.as_typed_unchecked())
     }
 
-    fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Option<VMGcRef>> {
-        self.alloc(header, layout).map(Some)
+    fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Result<VMGcRef, u64>> {
+        self.alloc(header, layout)
     }
 
     fn alloc_uninit_struct(
         &mut self,
         ty: VMSharedTypeIndex,
         layout: &GcStructLayout,
-    ) -> Result<Option<VMStructRef>> {
-        let gc_ref = self.alloc(
+    ) -> Result<Result<VMStructRef, u64>> {
+        self.alloc(
             VMGcHeader::from_kind_and_index(VMGcKind::StructRef, ty),
             layout.layout(),
-        )?;
-        Ok(Some(gc_ref.into_structref_unchecked()))
+        )
+        .map(|r| r.map(|r| r.into_structref_unchecked()))
     }
 
     fn dealloc_uninit_struct(&mut self, _struct_ref: VMStructRef) {}
@@ -283,14 +314,18 @@ unsafe impl GcHeap for NullHeap {
         ty: VMSharedTypeIndex,
         length: u32,
         layout: &GcArrayLayout,
-    ) -> Result<Option<VMArrayRef>> {
-        let gc_ref = self.alloc(
+    ) -> Result<Result<VMArrayRef, u64>> {
+        self.alloc(
             VMGcHeader::from_kind_and_index(VMGcKind::ArrayRef, ty),
             layout.layout(length),
-        )?;
-        self.index_mut::<VMNullArrayHeader>(gc_ref.as_typed_unchecked())
-            .length = length;
-        Ok(Some(gc_ref.into_arrayref_unchecked()))
+        )
+        .map(|r| {
+            r.map(|r| {
+                self.index_mut::<VMNullArrayHeader>(r.as_typed_unchecked())
+                    .length = length;
+                r.into_arrayref_unchecked()
+            })
+        })
     }
 
     fn dealloc_uninit_array(&mut self, _array_ref: VMArrayRef) {}
@@ -310,19 +345,8 @@ unsafe impl GcHeap for NullHeap {
     }
 
     unsafe fn vmctx_gc_heap_data(&self) -> NonNull<u8> {
-        NonNull::new(self.next.get()).unwrap().cast()
-    }
-
-    #[cfg(feature = "pooling-allocator")]
-    fn reset(&mut self) {
-        let NullHeap {
-            next,
-            no_gc_count,
-            heap: _,
-        } = self;
-
-        *next.get_mut() = NonZeroU32::new(1).unwrap();
-        *no_gc_count = 0;
+        let ptr_to_next: *mut NonZeroU32 = self.next.get();
+        NonNull::new(ptr_to_next).unwrap().cast()
     }
 }
 

@@ -32,8 +32,10 @@ impl DrcCompiler {
         let pointer = func_env.prepare_gc_ref_access(
             builder,
             gc_ref,
-            Offset::Static(offset),
-            BoundsCheck::Access(ir::types::I64.bytes()),
+            BoundsCheck::StaticOffset {
+                offset,
+                access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
+            },
         );
         builder
             .ins()
@@ -55,8 +57,10 @@ impl DrcCompiler {
         let pointer = func_env.prepare_gc_ref_access(
             builder,
             gc_ref,
-            Offset::Static(offset),
-            BoundsCheck::Access(ir::types::I64.bytes()),
+            BoundsCheck::StaticOffset {
+                offset,
+                access_size: u8::try_from(ir::types::I64.bytes()).unwrap(),
+            },
         );
         builder
             .ins()

@@ -49,7 +49,7 @@ fn smoke_test_gc_impl(use_epochs: bool) -> Result<()> {
 
     let do_gc = Func::wrap(&mut store, |mut caller: Caller<'_, _>| {
         // Do a GC with `externref`s on the stack in Wasm frames.
-        caller.gc();
+        caller.gc(None);
     });
     let instance = Instance::new(&mut store, &module, &[do_gc.into()])?;
     let func = instance.get_func(&mut store, "func").unwrap();
@@ -67,7 +67,7 @@ fn smoke_test_gc_impl(use_epochs: bool) -> Result<()> {
 
         // Doing a GC should see that there aren't any `externref`s on the stack in
         // Wasm frames anymore.
-        scope.as_context_mut().gc();
+        scope.as_context_mut().gc(None);
 
         // But the scope should still be rooting `r`.
         assert!(!inner_dropped.load(SeqCst));
@@ -119,7 +119,7 @@ fn wasm_dropping_refs() -> Result<()> {
     assert!(num_refs_dropped.load(SeqCst) > 0);
 
     // And after doing a final GC, all the refs should have been dropped.
-    store.gc();
+    store.gc(None);
     assert_eq!(num_refs_dropped.load(SeqCst), 4096);
 
     return Ok(());
@@ -196,7 +196,7 @@ fn many_live_refs() -> Result<()> {
 
     many_live_refs.call(&mut store, &[], &mut [])?;
 
-    store.as_context_mut().gc();
+    store.as_context_mut().gc(None);
     assert_eq!(live_refs.load(SeqCst), 0);
 
     return Ok(());
@@ -252,7 +252,7 @@ fn drop_externref_via_table_set() -> Result<()> {
             table_set.call(&mut scope, &args, &mut [])?;
         }
 
-        scope.as_context_mut().gc();
+        scope.as_context_mut().gc(None);
         assert!(!foo_is_dropped.load(SeqCst));
         assert!(!bar_is_dropped.load(SeqCst));
 
@@ -262,7 +262,7 @@ fn drop_externref_via_table_set() -> Result<()> {
         }
     }
 
-    store.gc();
+    store.gc(None);
     assert!(foo_is_dropped.load(SeqCst));
     assert!(!bar_is_dropped.load(SeqCst));
 
@@ -641,7 +641,7 @@ fn gc_and_tail_calls_and_stack_arguments() -> Result<()> {
         },
     )?;
     linker.func_wrap("", "gc", |mut caller: Caller<()>| {
-        caller.gc();
+        caller.gc(None);
     })?;
 
     let instance = linker.instantiate(&mut store, &module)?;
@@ -740,11 +740,11 @@ fn rooted_gets_collected_after_scope_exit() -> Result<()> {
         let mut scope = RootScope::new(&mut store);
         let _externref = ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?;
 
-        scope.as_context_mut().gc();
+        scope.as_context_mut().gc(None);
         assert!(!flag.load(SeqCst), "not dropped when still rooted");
     }
 
-    store.as_context_mut().gc();
+    store.as_context_mut().gc(None);
     assert!(flag.load(SeqCst), "dropped after being unrooted");
 
     Ok(())
@@ -760,11 +760,11 @@ fn manually_rooted_gets_collected_after_unrooting() -> Result<()> {
         ExternRef::new(&mut scope, SetFlagOnDrop(flag.clone()))?.to_manually_rooted(&mut scope)?
     };
 
-    store.gc();
+    store.gc(None);
     assert!(!flag.load(SeqCst), "not dropped when still rooted");
 
     externref.unroot(&mut store);
-    store.gc();
+    store.gc(None);
     assert!(flag.load(SeqCst), "dropped after being unrooted");
 
     Ok(())
@@ -786,7 +786,7 @@ fn round_trip_gc_ref_through_typed_wasm_func() -> Result<()> {
             )
         "#,
     )?;
-    let gc = Func::wrap(&mut store, |mut caller: Caller<'_, _>| caller.gc());
+    let gc = Func::wrap(&mut store, |mut caller: Caller<'_, _>| caller.gc(None));
     let instance = Instance::new(&mut store, &module, &[gc.into()])?;
     let f = instance
         .get_typed_func::<Option<Rooted<ExternRef>>, Option<Rooted<ExternRef>>>(&mut store, "f")?;
@@ -803,7 +803,7 @@ fn round_trip_gc_ref_through_func_wrap() -> Result<()> {
     let f = Func::wrap(
         &mut store,
         |mut caller: Caller<'_, _>, x: Rooted<ExternRef>| {
-            caller.gc();
+            caller.gc(None);
             x
         },
     );
@@ -826,7 +826,7 @@ fn to_raw_from_raw_doesnt_leak() -> Result<()> {
         let _x = unsafe { ExternRef::from_raw(&mut scope, raw) };
     }
 
-    store.gc();
+    store.gc(None);
     assert!(flag.load(SeqCst));
     Ok(())
 }
@@ -849,7 +849,7 @@ fn table_fill_doesnt_leak() -> Result<()> {
         table.fill(&mut scope, 0, Ref::Extern(None), 10)?;
     }
 
-    store.gc();
+    store.gc(None);
     assert!(flag.load(SeqCst));
     Ok(())
 }
@@ -876,7 +876,7 @@ fn table_copy_doesnt_leak() -> Result<()> {
         Table::copy(&mut scope, &table, 0, &table, 5, 5)?;
     }
 
-    store.gc();
+    store.gc(None);
     assert!(flag.load(SeqCst));
     Ok(())
 }
@@ -1109,7 +1109,7 @@ fn drc_transitive_drop_cons_list() -> Result<()> {
 
     // Not holding the cons list alive anymore; should transitively drop
     // everything we created.
-    store.gc();
+    store.gc(None);
     assert_eq!(num_refs_dropped.load(SeqCst), len);
 
     Ok(())
@@ -1169,7 +1169,7 @@ fn drc_transitive_drop_nested_arrays_tree() -> Result<()> {
 
     // Not holding the tree alive anymore; should transitively drop everything
     // we created.
-    store.gc();
+    store.gc(None);
     assert_eq!(num_refs_dropped.load(SeqCst), expected);
 
     Ok(())
@@ -1211,7 +1211,7 @@ fn drc_traces_the_correct_number_of_gc_refs_in_arrays() -> Result<()> {
     }
 
     // Make sure the poison array is collected.
-    store.gc();
+    store.gc(None);
 
     // Allocate and then collect an array of GC refs from Wasm. This should not
     // trick the collector into tracing any poison and panicking.
@@ -1228,7 +1228,89 @@ fn drc_traces_the_correct_number_of_gc_refs_in_arrays() -> Result<()> {
         "#,
     )?;
     let _instance = Instance::new(&mut store, &module, &[])?;
-    store.gc();
+    store.gc(None);
 
+    Ok(())
+}
+
+// Test that we can completely fill the GC heap until we get an OOM. This
+// exercises growing the GC heap and that we configure compilation tunables and
+// runtime memories backing GC heaps correctly.
+#[test]
+#[cfg_attr(any(miri, not(target_pointer_width = "64")), ignore)]
+fn gc_heap_oom() -> Result<()> {
+    if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
+        return Ok(());
+    }
+
+    let _ = env_logger::try_init();
+
+    for heap_size in [
+        // Very small heap.
+        1 << 16,
+        // Bigger heap: 4 GiB
+        1 << 32,
+    ] {
+        for pooling in [true, false] {
+            let mut config = Config::new();
+            config.wasm_function_references(true);
+            config.wasm_gc(true);
+            config.collector(Collector::Null);
+            config.memory_reservation(heap_size);
+            config.memory_reservation_for_growth(0);
+            config.memory_guard_size(0);
+            config.memory_may_move(false);
+
+            if pooling {
+                let mut pooling = crate::small_pool_config();
+                pooling.max_memory_size(heap_size.try_into().unwrap());
+                config.allocation_strategy(InstanceAllocationStrategy::Pooling(pooling));
+            }
+
+            let engine = Engine::new(&config)?;
+
+            let module = Module::new(
+                &engine,
+                r#"
+                (module
+                    (type $s (struct))
+                    (global $g (export "g") (mut i32) (i32.const 0))
+                    (func (export "run")
+                      loop
+                        struct.new $s
+
+                        global.get $g
+                        i32.const 1
+                        i32.add
+                        global.set $g
+
+                        br 0
+                      end
+                    )
+                )
+            "#,
+            )?;
+
+            let mut store = Store::new(&engine, ());
+            let instance = Instance::new(&mut store, &module, &[])?;
+
+            let run = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+            let err = run.call(&mut store, ()).expect_err("should oom");
+            assert!(err.is::<Trap>(), "should get trap, got: {err:?}");
+            let trap = err.downcast::<Trap>().unwrap();
+            assert_eq!(trap, Trap::AllocationTooLarge);
+
+            let g = instance.get_global(&mut store, "g").unwrap();
+            const SIZE_OF_NULL_GC_HEADER: u64 = 8;
+            const FUDGE: u64 = 2;
+            let actual = g.get(&mut store).unwrap_i32() as u64;
+            let expected = heap_size / SIZE_OF_NULL_GC_HEADER;
+            assert!(
+                actual.abs_diff(expected) <= FUDGE,
+                "actual approx= expected failed: \
+                 actual = {actual}, expected = {expected}, FUDGE={FUDGE}"
+            );
+        }
+    }
     Ok(())
 }

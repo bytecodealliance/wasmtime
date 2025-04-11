@@ -1022,6 +1022,9 @@ pub struct VMStoreContext {
     /// For more information see `crates/cranelift/src/lib.rs`.
     pub stack_limit: UnsafeCell<usize>,
 
+    /// The `VMMemoryDefinition` for this store's GC heap.
+    pub gc_heap: VMMemoryDefinition,
+
     /// The value of the frame pointer register when we last called from Wasm to
     /// the host.
     ///
@@ -1078,9 +1081,13 @@ unsafe impl VmSafe for VMStoreContext {}
 impl Default for VMStoreContext {
     fn default() -> VMStoreContext {
         VMStoreContext {
-            stack_limit: UnsafeCell::new(usize::max_value()),
             fuel_consumed: UnsafeCell::new(0),
             epoch_deadline: UnsafeCell::new(0),
+            stack_limit: UnsafeCell::new(usize::max_value()),
+            gc_heap: VMMemoryDefinition {
+                base: NonNull::dangling().into(),
+                current_length: AtomicUsize::new(0),
+            },
             last_wasm_exit_fp: UnsafeCell::new(0),
             last_wasm_exit_pc: UnsafeCell::new(0),
             last_wasm_entry_fp: UnsafeCell::new(0),
@@ -1090,7 +1097,7 @@ impl Default for VMStoreContext {
 
 #[cfg(test)]
 mod test_vmstore_context {
-    use super::VMStoreContext;
+    use super::{VMMemoryDefinition, VMStoreContext};
     use core::mem::offset_of;
     use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
 
@@ -1109,6 +1116,18 @@ mod test_vmstore_context {
         assert_eq!(
             offset_of!(VMStoreContext, epoch_deadline),
             usize::from(offsets.ptr.vmstore_context_epoch_deadline())
+        );
+        assert_eq!(
+            offset_of!(VMStoreContext, gc_heap),
+            usize::from(offsets.ptr.vmstore_context_gc_heap())
+        );
+        assert_eq!(
+            offset_of!(VMStoreContext, gc_heap) + offset_of!(VMMemoryDefinition, base),
+            usize::from(offsets.ptr.vmstore_context_gc_heap_base())
+        );
+        assert_eq!(
+            offset_of!(VMStoreContext, gc_heap) + offset_of!(VMMemoryDefinition, current_length),
+            usize::from(offsets.ptr.vmstore_context_gc_heap_current_length())
         );
         assert_eq!(
             offset_of!(VMStoreContext, last_wasm_exit_fp),

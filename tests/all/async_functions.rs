@@ -963,7 +963,9 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
 
     let mut store = Store::new(&engine, None);
     let mut linker = Linker::<Option<F>>::new(&engine);
-    linker.func_wrap("", "gc", |mut cx: Caller<'_, _>| cx.gc())?;
+    linker.func_wrap_async("", "gc", |mut cx: Caller<'_, _>, ()| {
+        Box::new(async move { cx.gc_async(None).await })
+    })?;
     linker.func_wrap(
         "",
         "test",

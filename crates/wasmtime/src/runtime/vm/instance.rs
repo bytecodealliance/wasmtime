@@ -592,16 +592,6 @@ impl Instance {
         unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_epoch_ptr()) }
     }
 
-    /// Return a pointer to the GC heap base pointer.
-    pub fn gc_heap_base(&mut self) -> NonNull<Option<VmPtr<u8>>> {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_gc_heap_base()) }
-    }
-
-    /// Return a pointer to the GC heap bound.
-    pub fn gc_heap_bound(&mut self) -> NonNull<usize> {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_gc_heap_bound()) }
-    }
-
     /// Return a pointer to the collector-specific heap data.
     pub fn gc_heap_data(&mut self) -> NonNull<Option<VmPtr<u8>>> {
         unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_gc_heap_data()) }
@@ -618,7 +608,7 @@ impl Instance {
                 .write(Some(NonNull::from(store.engine().epoch_counter()).into()));
 
             if self.env_module().needs_gc_heap {
-                self.set_gc_heap(Some(store.gc_store_mut().expect(
+                self.set_gc_heap(Some(store.gc_store().expect(
                     "if we need a GC heap, then `Instance::new_raw` should have already \
                      allocated it for us",
                 )));
@@ -633,17 +623,11 @@ impl Instance {
         }
     }
 
-    unsafe fn set_gc_heap(&mut self, gc_store: Option<&mut GcStore>) {
+    unsafe fn set_gc_heap(&mut self, gc_store: Option<&GcStore>) {
         if let Some(gc_store) = gc_store {
-            let heap = gc_store.gc_heap.heap_slice_mut();
-            self.gc_heap_bound().write(heap.len());
-            self.gc_heap_base()
-                .write(Some(NonNull::from(heap).cast().into()));
             self.gc_heap_data()
                 .write(Some(gc_store.gc_heap.vmctx_gc_heap_data().into()));
         } else {
-            self.gc_heap_bound().write(0);
-            self.gc_heap_base().write(None);
             self.gc_heap_data().write(None);
         }
     }

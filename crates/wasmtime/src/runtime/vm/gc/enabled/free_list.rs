@@ -44,16 +44,36 @@ impl FreeList {
     /// size.
     pub fn new(capacity: usize) -> Self {
         log::debug!("FreeList::new({capacity})");
+
         let mut free_list = FreeList {
             capacity,
             free_block_index_to_len: BTreeMap::new(),
         };
-        free_list.reset();
+
+        let end = u32::try_from(free_list.capacity).unwrap_or_else(|_| {
+            assert!(free_list.capacity > usize::try_from(u32::MAX).unwrap());
+            u32::MAX
+        });
+
+        // Don't start at `0`. Reserve that for "null pointers" and free_list way we
+        // can use `NonZeroU32` as out pointer type, giving us some more
+        // bitpacking opportunities.
+        let start = ALIGN_U32;
+
+        let len = round_u32_down_to_pow2(end.saturating_sub(start), ALIGN_U32);
+
+        let entire_range = if len >= ALIGN_U32 {
+            Some((start, len))
+        } else {
+            None
+        };
+
+        free_list.free_block_index_to_len.extend(entire_range);
+
         free_list
     }
 
     /// Add additional capacity to this free list.
-    #[allow(dead_code)] // TODO: becomes used in https://github.com/bytecodealliance/wasmtime/pull/10503
     pub fn add_capacity(&mut self, additional: usize) {
         let old_cap = self.capacity;
         self.capacity = self.capacity.saturating_add(additional);
@@ -349,30 +369,6 @@ impl FreeList {
 
             prev_end = Some(end);
         }
-    }
-
-    /// Reset this free list, making the whole range available for allocation.
-    pub fn reset(&mut self) {
-        let end = u32::try_from(self.capacity).unwrap_or_else(|_| {
-            assert!(self.capacity > usize::try_from(u32::MAX).unwrap());
-            u32::MAX
-        });
-
-        // Don't start at `0`. Reserve that for "null pointers" and this way we
-        // can use `NonZeroU32` as out pointer type, giving us some more
-        // bitpacking opportunities.
-        let start = ALIGN_U32;
-
-        let len = round_u32_down_to_pow2(end.saturating_sub(start), ALIGN_U32);
-
-        let entire_range = if len >= ALIGN_U32 {
-            Some((start, len))
-        } else {
-            None
-        };
-
-        self.free_block_index_to_len.clear();
-        self.free_block_index_to_len.extend(entire_range);
     }
 }
 

@@ -20,7 +20,7 @@
 ;;       fmov    d0, x16
 ;;       mov     x16, #0
 ;;       mov     w0, w16
-;;       ldur    x1, [x9, #0x50]
+;;       ldur    x1, [x9, #0x40]
 ;;       add     x1, x1, x0, uxtx
 ;;       stur    d0, [x1]
 ;;       add     x28, x28, #0x10

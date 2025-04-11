@@ -1,7 +1,9 @@
 use super::{ArrayInit, GcCompiler};
+use crate::bounds_checks::BoundsCheck;
 use crate::func_environ::{Extension, FuncEnvironment};
-use crate::translate::{StructFieldsVec, TargetEnvironment};
-use crate::TRAP_INTERNAL_ASSERT;
+use crate::translate::{Heap, HeapData, StructFieldsVec, TargetEnvironment};
+use crate::{Reachability, TRAP_INTERNAL_ASSERT};
+use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::{
     cursor::FuncCursor,
     ir::{self, condcodes::IntCC, InstBuilder},
@@ -317,7 +319,6 @@ pub fn translate_struct_get(
 
     let struct_layout = func_env.struct_layout(interned_type_index);
     let struct_size = struct_layout.size;
-    let struct_size_val = builder.ins().iconst(ir::types::I32, i64::from(struct_size));
 
     let field_offset = struct_layout.fields[field_index].offset;
     let field_ty = &func_env.types.unwrap_struct(interned_type_index)?.fields[field_index];
@@ -327,8 +328,11 @@ pub fn translate_struct_get(
     let field_addr = func_env.prepare_gc_ref_access(
         builder,
         struct_ref,
-        Offset::Static(field_offset),
-        BoundsCheck::Object(struct_size_val),
+        BoundsCheck::StaticObjectField {
+            offset: field_offset,
+            access_size: u8::try_from(field_size).unwrap(),
+            object_size: struct_size,
+        },
     );
 
     let result = read_field_at_addr(
@@ -362,7 +366,6 @@ pub fn translate_struct_set(
 
     let struct_layout = func_env.struct_layout(interned_type_index);
     let struct_size = struct_layout.size;
-    let struct_size_val = builder.ins().iconst(ir::types::I32, i64::from(struct_size));
 
     let field_offset = struct_layout.fields[field_index].offset;
     let field_ty = &func_env.types.unwrap_struct(interned_type_index)?.fields[field_index];
@@ -372,8 +375,11 @@ pub fn translate_struct_set(
     let field_addr = func_env.prepare_gc_ref_access(
         builder,
         struct_ref,
-        Offset::Static(field_offset),
-        BoundsCheck::Object(struct_size_val),
+        BoundsCheck::StaticObjectField {
+            offset: field_offset,
+            access_size: u8::try_from(field_size).unwrap(),
+            object_size: struct_size,
+        },
     );
 
     write_field_at_addr(
@@ -637,8 +643,10 @@ pub fn translate_array_fill(
     let elem_addr = func_env.prepare_gc_ref_access(
         builder,
         array_ref,
-        Offset::Dynamic(obj_offset),
-        BoundsCheck::Object(obj_size),
+        BoundsCheck::DynamicObjectField {
+            offset: obj_offset,
+            object_size: obj_size,
+        },
     );
 
     // Calculate the end address, just after the filled region.
@@ -681,10 +689,12 @@ pub fn translate_array_len(
     let len_field = func_env.prepare_gc_ref_access(
         builder,
         array_ref,
-        Offset::Static(len_offset),
         // Note: We can't bounds check the whole array object's size because we
         // don't know its length yet. Chicken and egg problem.
-        BoundsCheck::Access(ir::types::I32.bytes()),
+        BoundsCheck::StaticOffset {
+            offset: len_offset,
+            access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
+        },
     );
     let result = builder.ins().load(
         ir::types::I32,
@@ -815,8 +825,10 @@ fn array_elem_addr(
     func_env.prepare_gc_ref_access(
         builder,
         array_ref,
-        Offset::Dynamic(offset_in_array),
-        BoundsCheck::Object(obj_size),
+        BoundsCheck::DynamicObjectField {
+            offset: offset_in_array,
+            object_size: obj_size,
+        },
     )
 }
 
@@ -984,15 +996,14 @@ pub fn translate_ref_test(
                              val: ir::Value,
                              expected_kind: VMGcKind|
      -> ir::Value {
-        let header_size = builder.ins().iconst(
-            ir::types::I32,
-            i64::from(wasmtime_environ::VM_GC_HEADER_SIZE),
-        );
         let kind_addr = func_env.prepare_gc_ref_access(
             builder,
             val,
-            Offset::Static(wasmtime_environ::VM_GC_HEADER_KIND_OFFSET),
-            BoundsCheck::Object(header_size),
+            BoundsCheck::StaticObjectField {
+                offset: wasmtime_environ::VM_GC_HEADER_KIND_OFFSET,
+                access_size: wasmtime_environ::VM_GC_KIND_SIZE,
+                object_size: wasmtime_environ::VM_GC_HEADER_SIZE,
+            },
         );
         let actual_kind = builder.ins().load(
             ir::types::I32,
@@ -1040,8 +1051,10 @@ pub fn translate_ref_test(
             let ty_addr = func_env.prepare_gc_ref_access(
                 builder,
                 val,
-                Offset::Static(wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET),
-                BoundsCheck::Access(func_env.offsets.size_of_vmshared_type_index().into()),
+                BoundsCheck::StaticOffset {
+                    offset: wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET,
+                    access_size: func_env.offsets.size_of_vmshared_type_index(),
+                },
             );
             let actual_shared_ty = builder.ins().load(
                 ir::types::I32,
@@ -1084,41 +1097,6 @@ pub fn translate_ref_test(
     builder.seal_block(continue_block);
 
     Ok(result)
-}
-
-/// A static or dynamic offset from a GC reference.
-#[derive(Debug)]
-enum Offset {
-    /// A static offset from a GC reference.
-    Static(u32),
-
-    /// A dynamic `i32` offset from a GC reference.
-    Dynamic(ir::Value),
-}
-
-/// The kind of bounds check to perform when accessing a GC object's fields and
-/// elements.
-#[derive(Debug)]
-enum BoundsCheck {
-    /// Check that this whole object is inside the GC heap:
-    ///
-    /// ```ignore
-    /// gc_ref + size <= gc_heap_bound
-    /// ```
-    ///
-    /// The object size must be an `i32` value.
-    Object(ir::Value),
-
-    /// Check that this one access in particular is inside the GC heap:
-    ///
-    /// ```ignore
-    /// gc_ref + offset + access_size <= gc_heap_bound
-    /// ```
-    ///
-    /// Prefer `Bound::Object` over `Bound::Access` when possible, as that
-    /// approach allows the mid-end to deduplicate bounds checks across multiple
-    /// accesses to the same object.
-    Access(u32),
 }
 
 fn uextend_i32_to_pointer_type(
@@ -1247,39 +1225,83 @@ impl FuncEnvironment<'_> {
         self.gc_layout(type_index).unwrap_struct()
     }
 
-    /// Get the GC heap's base pointer.
+    /// Get or create the global for our GC heap's base pointer.
+    fn get_gc_heap_base_global(&mut self, func: &mut ir::Function) -> ir::GlobalValue {
+        if let Some(base) = self.gc_heap_base {
+            return base;
+        }
+
+        let store_context_ptr = self.get_vmstore_context_ptr_global(func);
+        let offset = self.offsets.ptr.vmstore_context_gc_heap_base();
+
+        let mut flags = ir::MemFlags::trusted();
+        if !self
+            .tunables
+            .gc_heap_memory_type()
+            .memory_may_move(self.tunables)
+        {
+            flags.set_readonly();
+            flags.set_can_move();
+        }
+
+        let base = func.create_global_value(ir::GlobalValueData::Load {
+            base: store_context_ptr,
+            offset: Offset32::new(offset.into()),
+            global_type: self.pointer_type(),
+            flags,
+        });
+
+        self.gc_heap_base = Some(base);
+        base
+    }
+
+    /// Get the GC heap's base.
+    #[cfg(any(feature = "gc-null", feature = "gc-drc"))]
     fn get_gc_heap_base(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
-        let ptr_ty = self.pointer_type();
-        let flags = ir::MemFlags::trusted().with_readonly().with_can_move();
+        let global = self.get_gc_heap_base_global(&mut builder.func);
+        builder.ins().global_value(self.pointer_type(), global)
+    }
 
-        let vmctx = self.vmctx(builder.func);
-        let vmctx = builder.ins().global_value(ptr_ty, vmctx);
-
-        let base_offset = self.offsets.ptr.vmctx_gc_heap_base();
-        let base_offset = i32::from(base_offset);
-
-        builder.ins().load(ptr_ty, flags, vmctx, base_offset)
+    fn get_gc_heap_bound_global(&mut self, func: &mut ir::Function) -> ir::GlobalValue {
+        if let Some(bound) = self.gc_heap_bound {
+            return bound;
+        }
+        let store_context_ptr = self.get_vmstore_context_ptr_global(func);
+        let offset = self.offsets.ptr.vmstore_context_gc_heap_current_length();
+        let bound = func.create_global_value(ir::GlobalValueData::Load {
+            base: store_context_ptr,
+            offset: Offset32::new(offset.into()),
+            global_type: self.pointer_type(),
+            flags: ir::MemFlags::trusted(),
+        });
+        self.gc_heap_bound = Some(bound);
+        bound
     }
 
     /// Get the GC heap's bound.
+    #[cfg(feature = "gc-null")]
     fn get_gc_heap_bound(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
-        let ptr_ty = self.pointer_type();
-        let flags = ir::MemFlags::trusted().with_readonly().with_can_move();
-
-        let vmctx = self.vmctx(builder.func);
-        let vmctx = builder.ins().global_value(ptr_ty, vmctx);
-
-        let bound_offset = self.offsets.ptr.vmctx_gc_heap_bound();
-        let bound_offset = i32::from(bound_offset);
-
-        builder.ins().load(ptr_ty, flags, vmctx, bound_offset)
+        let global = self.get_gc_heap_bound_global(&mut builder.func);
+        builder.ins().global_value(self.pointer_type(), global)
     }
 
-    /// Get the GC heap's base pointer and bound.
-    fn get_gc_heap_base_bound(&mut self, builder: &mut FunctionBuilder) -> (ir::Value, ir::Value) {
-        let base = self.get_gc_heap_base(builder);
-        let bound = self.get_gc_heap_bound(builder);
-        (base, bound)
+    /// Get or create the `Heap` for our GC heap.
+    fn get_gc_heap(&mut self, func: &mut ir::Function) -> Heap {
+        if let Some(heap) = self.gc_heap {
+            return heap;
+        }
+
+        let base = self.get_gc_heap_base_global(func);
+        let bound = self.get_gc_heap_bound_global(func);
+        let memory = self.tunables.gc_heap_memory_type();
+        let heap = self.heaps.push(HeapData {
+            base,
+            bound,
+            pcc_memory_type: None,
+            memory,
+        });
+        self.gc_heap = Some(heap);
+        heap
     }
 
     /// Get the raw pointer of `gc_ref[offset]` bounds checked for an access of
@@ -1301,57 +1323,31 @@ impl FuncEnvironment<'_> {
         &mut self,
         builder: &mut FunctionBuilder,
         gc_ref: ir::Value,
-        offset: Offset,
-        check: BoundsCheck,
+        bounds_check: BoundsCheck,
     ) -> ir::Value {
-        log::trace!("prepare_gc_ref_access({gc_ref:?}, {offset:?}, {check:?})");
+        log::trace!("prepare_gc_ref_access({gc_ref:?}, {bounds_check:?})");
         assert_eq!(builder.func.dfg.value_type(gc_ref), ir::types::I32);
 
-        let pointer_type = self.pointer_type();
-        let (base, bound) = self.get_gc_heap_base_bound(builder);
-        let index = uextend_i32_to_pointer_type(builder, pointer_type, gc_ref);
-
-        let offset = match offset {
-            Offset::Dynamic(offset) => uextend_i32_to_pointer_type(builder, pointer_type, offset),
-            Offset::Static(offset) => builder.ins().iconst(pointer_type, i64::from(offset)),
-        };
-
-        let index_and_offset =
-            builder
-                .ins()
-                .uadd_overflow_trap(index, offset, TRAP_INTERNAL_ASSERT);
-
-        let end = match check {
-            BoundsCheck::Object(object_size) => {
-                // Check that `index + object_size` is in bounds. This can be
-                // deduplicated across multiple accesses to different fields
-                // within the same object.
-                let object_size = uextend_i32_to_pointer_type(builder, pointer_type, object_size);
-                builder
-                    .ins()
-                    .uadd_overflow_trap(index, object_size, TRAP_INTERNAL_ASSERT)
-            }
-            BoundsCheck::Access(access_size) => {
-                // Check that `index + offset + access_size` is in bounds.
-                let access_size = builder.ins().iconst(pointer_type, i64::from(access_size));
-                builder.ins().uadd_overflow_trap(
-                    index_and_offset,
-                    access_size,
-                    TRAP_INTERNAL_ASSERT,
-                )
+        let gc_heap = self.get_gc_heap(&mut builder.func);
+        let gc_heap = self.heaps[gc_heap].clone();
+        let result = match crate::bounds_checks::bounds_check_and_compute_addr(
+            builder,
+            self,
+            &gc_heap,
+            gc_ref,
+            bounds_check,
+            crate::TRAP_INTERNAL_ASSERT,
+        ) {
+            Reachability::Reachable(v) => v,
+            Reachability::Unreachable => {
+                // We are now in unreachable code, but we don't want to plumb
+                // through a bunch of `Reachability` through all of our callers,
+                // so just assert we won't reach here and return `null`
+                let null = builder.ins().iconst(self.pointer_type(), 0);
+                builder.ins().trapz(null, crate::TRAP_INTERNAL_ASSERT);
+                null
             }
         };
-
-        let is_in_bounds =
-            builder
-                .ins()
-                .icmp(ir::condcodes::IntCC::UnsignedLessThanOrEqual, end, bound);
-        builder.ins().trapz(is_in_bounds, TRAP_INTERNAL_ASSERT);
-
-        // NB: No need to check for overflow here, as that would mean that the
-        // GC heap is hanging off the end of the address space, which is
-        // impossible.
-        let result = builder.ins().iadd(base, index_and_offset);
         log::trace!("prepare_gc_ref_access(..) -> {result:?}");
         result
     }

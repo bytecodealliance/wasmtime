@@ -1,6 +1,8 @@
 #![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 #![cfg_attr(miri, allow(dead_code, unused_imports))]
 
+use wasmtime::Result;
+
 mod arrays;
 mod async_functions;
 mod call_hook;
@@ -108,7 +110,7 @@ pub(crate) fn small_pool_config() -> wasmtime::PoolingAllocationConfig {
     config
 }
 
-pub(crate) fn gc_store() -> wasmtime::Result<wasmtime::Store<()>> {
+pub(crate) fn gc_store() -> Result<wasmtime::Store<()>> {
     let _ = env_logger::try_init();
 
     let mut config = wasmtime::Config::new();

@@ -221,7 +221,7 @@ pub extern "C" fn wasmtime_context_set_wasi(
 
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_context_gc(mut context: WasmtimeStoreContextMut<'_>) {
-    context.gc();
+    context.gc(None);
 }
 
 #[unsafe(no_mangle)]

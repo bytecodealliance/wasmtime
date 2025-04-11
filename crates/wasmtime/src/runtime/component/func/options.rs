@@ -99,6 +99,7 @@ impl Options {
 
         // This call doesn't take any GC refs, and therefore we shouldn't ever
         // need to GC before entering Wasm.
+        #[cfg(feature = "gc")]
         debug_assert!(!ReallocFunc::need_gc_before_call_raw(store.0, &params));
 
         // Invoke the wasm malloc function using its raw and statically known

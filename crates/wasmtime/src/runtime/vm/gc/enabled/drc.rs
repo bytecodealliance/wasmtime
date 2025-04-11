@@ -46,11 +46,10 @@ use super::{VMArrayRef, VMStructRef};
 use crate::hash_map::HashMap;
 use crate::hash_set::HashSet;
 use crate::runtime::vm::{
-    mmap::AlignedLength, ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap,
-    GcHeapObject, GcProgress, GcRootsIter, GcRuntime, Mmap, TypedGcRef, VMExternRef, VMGcHeader,
-    VMGcRef,
+    ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
+    GcProgress, GcRootsIter, GcRuntime, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
 };
-use crate::vm::SendSyncPtr;
+use crate::vm::{SendSyncPtr, VMMemoryDefinition};
 use crate::{prelude::*, Engine, EngineWeak};
 use core::{
     alloc::Layout,
@@ -129,10 +128,10 @@ struct DrcHeap {
     activations_table: Box<VMGcRefActivationsTable>,
 
     /// The storage for the GC heap itself.
-    heap: Mmap<AlignedLength>,
+    memory: Option<crate::vm::Memory>,
 
     /// A free list describing which ranges of the heap are available for use.
-    free_list: FreeList,
+    free_list: Option<FreeList>,
 
     /// An explicit stack to avoid recursion when deallocating one object needs
     /// to dec-ref another object, which can then be deallocated and dec-refs
@@ -151,21 +150,14 @@ struct DrcHeap {
 impl DrcHeap {
     /// Construct a new, default DRC heap.
     fn new(engine: &Engine) -> Result<Self> {
-        Self::with_capacity(engine, super::DEFAULT_GC_HEAP_CAPACITY)
-    }
-
-    /// Create a new DRC heap with the given capacity.
-    fn with_capacity(engine: &Engine, capacity: usize) -> Result<Self> {
-        log::trace!("allocating new DRC heap with capacity {capacity:#x}");
-        let heap = Mmap::with_at_least(capacity)?;
-        let free_list = FreeList::new(heap.len());
+        log::trace!("allocating new DRC heap");
         Ok(Self {
             engine: engine.weak(),
             trace_infos: HashMap::default(),
             no_gc_count: 0,
             activations_table: Box::new(VMGcRefActivationsTable::default()),
-            heap,
-            free_list,
+            memory: None,
+            free_list: None,
             dec_ref_stack: Some(vec![]),
         })
     }
@@ -179,6 +171,8 @@ impl DrcHeap {
         let size = self.index(drc_ref).object_size();
         let layout = FreeList::layout(size);
         self.free_list
+            .as_mut()
+            .unwrap()
             .dealloc(gc_ref.as_heap_index().unwrap(), layout);
     }
 
@@ -595,6 +589,43 @@ unsafe impl GcHeapObject for VMDrcExternRef {
 }
 
 unsafe impl GcHeap for DrcHeap {
+    fn is_attached(&self) -> bool {
+        debug_assert_eq!(self.memory.is_some(), self.free_list.is_some());
+        self.memory.is_some()
+    }
+
+    fn attach(&mut self, memory: crate::vm::Memory) {
+        assert!(!self.is_attached());
+        let len = memory.vmmemory().current_length();
+        self.free_list = Some(FreeList::new(len));
+        self.memory = Some(memory);
+    }
+
+    fn detach(&mut self) -> crate::vm::Memory {
+        assert!(self.is_attached());
+
+        let DrcHeap {
+            engine: _,
+            no_gc_count,
+            activations_table,
+            free_list,
+            dec_ref_stack,
+            memory,
+
+            // NB: we will only ever be reused with the same engine, so no need
+            // to clear out our tracing info just to fill it back in with the
+            // same exact stuff.
+            trace_infos: _,
+        } = self;
+
+        *no_gc_count = 0;
+        activations_table.reset();
+        *free_list = None;
+        debug_assert!(dec_ref_stack.as_ref().is_some_and(|s| s.is_empty()));
+
+        memory.take().unwrap()
+    }
+
     fn as_any(&self) -> &dyn Any {
         self as _
     }
@@ -645,15 +676,18 @@ unsafe impl GcHeap for DrcHeap {
         num_gc_refs.get() > self.activations_table.bump_capacity_remaining()
     }
 
-    fn alloc_externref(&mut self, host_data: ExternRefHostDataId) -> Result<Option<VMExternRef>> {
+    fn alloc_externref(
+        &mut self,
+        host_data: ExternRefHostDataId,
+    ) -> Result<Result<VMExternRef, u64>> {
         let gc_ref =
             match self.alloc_raw(VMGcHeader::externref(), Layout::new::<VMDrcExternRef>())? {
-                None => return Ok(None),
-                Some(gc_ref) => gc_ref,
+                Err(n) => return Ok(Err(n)),
+                Ok(gc_ref) => gc_ref,
             };
         self.index_mut::<VMDrcExternRef>(gc_ref.as_typed_unchecked())
             .host_data = host_data;
-        Ok(Some(gc_ref.into_externref_unchecked()))
+        Ok(Ok(gc_ref.into_externref_unchecked()))
     }
 
     fn externref_host_data(&self, externref: &VMExternRef) -> ExternRefHostDataId {
@@ -673,7 +707,11 @@ unsafe impl GcHeap for DrcHeap {
         self.index(drc_ref(gc_ref)).object_size()
     }
 
-    fn alloc_raw(&mut self, mut header: VMGcHeader, layout: Layout) -> Result<Option<VMGcRef>> {
+    fn alloc_raw(
+        &mut self,
+        mut header: VMGcHeader,
+        layout: Layout,
+    ) -> Result<Result<VMGcRef, u64>> {
         debug_assert!(layout.size() >= core::mem::size_of::<VMDrcHeader>());
         debug_assert!(layout.align() >= core::mem::align_of::<VMDrcHeader>());
         debug_assert_eq!(header.reserved_u27(), 0);
@@ -695,8 +733,8 @@ unsafe impl GcHeap for DrcHeap {
         }
         header.set_reserved_u27(size);
 
-        let gc_ref = match self.free_list.alloc(layout)? {
-            None => return Ok(None),
+        let gc_ref = match self.free_list.as_mut().unwrap().alloc(layout)? {
+            None => return Ok(Err(u64::try_from(layout.size()).unwrap())),
             Some(index) => VMGcRef::from_heap_index(index).unwrap(),
         };
 
@@ -705,23 +743,23 @@ unsafe impl GcHeap for DrcHeap {
             ref_count: 1,
         };
         log::trace!("new object: increment {gc_ref:#p} ref count -> 1");
-        Ok(Some(gc_ref))
+        Ok(Ok(gc_ref))
     }
 
     fn alloc_uninit_struct(
         &mut self,
         ty: VMSharedTypeIndex,
         layout: &GcStructLayout,
-    ) -> Result<Option<VMStructRef>> {
+    ) -> Result<Result<VMStructRef, u64>> {
         let gc_ref = match self.alloc_raw(
             VMGcHeader::from_kind_and_index(VMGcKind::StructRef, ty),
             layout.layout(),
         )? {
-            None => return Ok(None),
-            Some(gc_ref) => gc_ref,
+            Err(n) => return Ok(Err(n)),
+            Ok(gc_ref) => gc_ref,
         };
 
-        Ok(Some(gc_ref.into_structref_unchecked()))
+        Ok(Ok(gc_ref.into_structref_unchecked()))
     }
 
     fn dealloc_uninit_struct(&mut self, structref: VMStructRef) {
@@ -733,19 +771,19 @@ unsafe impl GcHeap for DrcHeap {
         ty: VMSharedTypeIndex,
         length: u32,
         layout: &GcArrayLayout,
-    ) -> Result<Option<VMArrayRef>> {
+    ) -> Result<Result<VMArrayRef, u64>> {
         let gc_ref = match self.alloc_raw(
             VMGcHeader::from_kind_and_index(VMGcKind::ArrayRef, ty),
             layout.layout(length),
         )? {
-            None => return Ok(None),
-            Some(gc_ref) => gc_ref,
+            Err(n) => return Ok(Err(n)),
+            Ok(gc_ref) => gc_ref,
         };
 
         self.index_mut(gc_ref.as_typed_unchecked::<VMDrcArrayHeader>())
             .length = length;
 
-        Ok(Some(gc_ref.into_arrayref_unchecked()))
+        Ok(Ok(gc_ref.into_arrayref_unchecked()))
     }
 
     fn dealloc_uninit_array(&mut self, arrayref: VMArrayRef) {
@@ -777,36 +815,24 @@ unsafe impl GcHeap for DrcHeap {
         ptr.cast()
     }
 
-    #[cfg(feature = "pooling-allocator")]
-    fn reset(&mut self) {
-        let DrcHeap {
-            engine: _,
-            no_gc_count,
-            activations_table,
-            free_list,
-            dec_ref_stack,
-            heap: _,
-
-            // NB: we will only ever be reused with the same engine, so no need
-            // to clear out our tracing info just to fill it back in with the
-            // same exact stuff.
-            trace_infos: _,
-        } = self;
-
-        *no_gc_count = 0;
-        free_list.reset();
-        activations_table.reset();
-        debug_assert!(dec_ref_stack.as_ref().is_some_and(|s| s.is_empty()));
+    unsafe fn take_memory(&mut self) -> crate::vm::Memory {
+        debug_assert!(self.is_attached());
+        self.memory.take().unwrap()
     }
 
-    fn heap_slice(&self) -> &[u8] {
-        let len = self.heap.len();
-        unsafe { self.heap.slice(0..len) }
+    unsafe fn replace_memory(&mut self, memory: crate::vm::Memory, delta_bytes_grown: u64) {
+        debug_assert!(self.memory.is_none());
+        self.memory = Some(memory);
+
+        self.free_list
+            .as_mut()
+            .unwrap()
+            .add_capacity(usize::try_from(delta_bytes_grown).unwrap())
     }
 
-    fn heap_slice_mut(&mut self) -> &mut [u8] {
-        let len = self.heap.len();
-        unsafe { self.heap.slice_mut(0..len) }
+    fn vmmemory(&self) -> VMMemoryDefinition {
+        debug_assert!(self.is_attached());
+        self.memory.as_ref().unwrap().vmmemory()
     }
 }
 
@@ -966,7 +992,6 @@ impl VMGcRefActivationsTable {
         }
     }
 
-    #[cfg(feature = "pooling-allocator")]
     fn reset(&mut self) {
         let VMGcRefActivationsTable {
             alloc,

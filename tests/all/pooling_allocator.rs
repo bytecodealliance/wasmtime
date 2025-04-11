@@ -44,10 +44,16 @@ fn memory_limit() -> Result<()> {
     // the configured limit
     match Module::new(&engine, r#"(module (memory 4))"#) {
         Ok(_) => panic!("module instantiation should fail"),
-        Err(e) =>
+        Err(e) => {
             e.assert_contains(
-            "memory index 0 has a minimum byte size of 262144 which exceeds the limit of 0x30000 bytes",
-        ),
+                "memory index 0 is unsupported in this pooling allocator \
+                 configuration",
+            );
+            e.assert_contains(
+                "memory has a minimum byte size of 262144 which exceeds \
+                 the limit of 0x30000 bytes",
+            );
+        }
     }
 
     let module = Module::new(
@@ -1251,9 +1257,10 @@ fn shared_memory_unsupported() -> Result<()> {
     )
     .unwrap_err();
     err.assert_contains(
-        "memory index 0 is shared which is not supported \
+        "memory is shared which is not supported \
          in the pooling allocator",
     );
+    err.assert_contains("memory index 0");
     Ok(())
 }
 

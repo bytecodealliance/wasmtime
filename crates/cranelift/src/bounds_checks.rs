@@ -19,9 +19,11 @@
 //! !!!                                                                      !!!
 //! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
-use super::Reachability;
-use crate::func_environ::FuncEnvironment;
-use crate::translate::{HeapData, TargetEnvironment};
+use crate::{
+    func_environ::FuncEnvironment,
+    translate::{HeapData, TargetEnvironment},
+    Reachability,
+};
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
     ir::{self, condcodes::IntCC, InstBuilder, RelSourceLoc},
@@ -31,26 +33,155 @@ use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::Unsigned;
 use Reachability::*;
 
+/// The kind of bounds check to perform when accessing a Wasm linear memory or
+/// GC heap.
+///
+/// Prefer `BoundsCheck::*WholeObject` over `BoundsCheck::Field` when possible,
+/// as that approach allows the mid-end to deduplicate bounds checks across
+/// multiple accesses to the same GC object.
+#[derive(Debug)]
+pub enum BoundsCheck {
+    /// Check that this one access in particular is in bounds:
+    ///
+    /// ```ignore
+    /// index + offset + access_size <= bound
+    /// ```
+    StaticOffset { offset: u32, access_size: u8 },
+
+    /// Assuming the precondition `offset + access_size <= object_size`, check
+    /// that this whole object is in bounds:
+    ///
+    /// ```ignore
+    /// index + object_size <= bound
+    /// ```
+    #[cfg(feature = "gc")]
+    StaticObjectField {
+        offset: u32,
+        access_size: u8,
+        object_size: u32,
+    },
+
+    /// Like `StaticWholeObject` but with dynamic offset and object size.
+    ///
+    /// It is *your* responsibility to ensure that the `offset + access_size <=
+    /// object_size` precondition holds.
+    #[cfg(feature = "gc")]
+    DynamicObjectField {
+        offset: ir::Value,
+        object_size: ir::Value,
+    },
+}
+
 /// Helper used to emit bounds checks (as necessary) and compute the native
 /// address of a heap access.
 ///
 /// Returns the `ir::Value` holding the native address of the heap access, or
-/// `None` if the heap access will unconditionally trap.
+/// `Reachability::Unreachable` if the heap access will unconditionally trap and
+/// any subsequent code in this basic block is unreachable.
 pub fn bounds_check_and_compute_addr(
     builder: &mut FunctionBuilder,
     env: &mut FuncEnvironment<'_>,
     heap: &HeapData,
-    // Dynamic operand indexing into the heap.
     index: ir::Value,
-    // Static immediate added to the index.
+    bounds_check: BoundsCheck,
+    trap: ir::TrapCode,
+) -> Reachability<ir::Value> {
+    match bounds_check {
+        BoundsCheck::StaticOffset {
+            offset,
+            access_size,
+        } => bounds_check_field_access(builder, env, heap, index, offset, access_size, trap),
+
+        #[cfg(feature = "gc")]
+        BoundsCheck::StaticObjectField {
+            offset,
+            access_size,
+            object_size,
+        } => {
+            // Assert that the precondition holds.
+            let offset_and_access_size = offset.checked_add(access_size.into()).unwrap();
+            assert!(offset_and_access_size <= object_size);
+
+            // When we can, pretend that we are doing one big access of the
+            // whole object all at once. This enables better GVN for repeated
+            // accesses of the same object.
+            if let Ok(object_size) = u8::try_from(object_size) {
+                let obj_ptr = match bounds_check_field_access(
+                    builder,
+                    env,
+                    heap,
+                    index,
+                    0,
+                    object_size,
+                    trap,
+                ) {
+                    Reachable(v) => v,
+                    u @ Unreachable => return u,
+                };
+                let offset = builder.ins().iconst(env.pointer_type(), i64::from(offset));
+                let field_ptr = builder.ins().iadd(obj_ptr, offset);
+                return Reachable(field_ptr);
+            }
+
+            // Otherwise, bounds check just this one field's access.
+            bounds_check_field_access(builder, env, heap, index, offset, access_size, trap)
+        }
+
+        // Compute the index of the end of the object, bounds check that and get
+        // a pointer to just after the object, and then reverse offset from that
+        // to get the pointer to the field being accessed.
+        #[cfg(feature = "gc")]
+        BoundsCheck::DynamicObjectField {
+            offset,
+            object_size,
+        } => {
+            assert_eq!(heap.index_type(), ir::types::I32);
+            assert_eq!(builder.func.dfg.value_type(index), ir::types::I32);
+            assert_eq!(builder.func.dfg.value_type(offset), ir::types::I32);
+            assert_eq!(builder.func.dfg.value_type(object_size), ir::types::I32);
+
+            let index_and_object_size = builder.ins().uadd_overflow_trap(index, object_size, trap);
+            let ptr_just_after_obj = match bounds_check_field_access(
+                builder,
+                env,
+                heap,
+                index_and_object_size,
+                0,
+                0,
+                trap,
+            ) {
+                Reachable(v) => v,
+                u @ Unreachable => return u,
+            };
+
+            let backwards_offset = builder.ins().isub(object_size, offset);
+            let backwards_offset = cast_index_to_pointer_ty(
+                backwards_offset,
+                ir::types::I32,
+                env.pointer_type(),
+                false,
+                &mut builder.cursor(),
+                trap,
+            );
+
+            let field_ptr = builder.ins().isub(ptr_just_after_obj, backwards_offset);
+            Reachable(field_ptr)
+        }
+    }
+}
+
+fn bounds_check_field_access(
+    builder: &mut FunctionBuilder,
+    env: &mut FuncEnvironment<'_>,
+    heap: &HeapData,
+    index: ir::Value,
     offset: u32,
-    // Static size of the heap access.
     access_size: u8,
+    trap: ir::TrapCode,
 ) -> Reachability<ir::Value> {
     let pointer_bit_width = u16::try_from(env.pointer_type().bits()).unwrap();
     let bound_gv = heap.bound;
     let orig_index = index;
-    let offset_and_size = offset_plus_size(offset, access_size);
     let clif_memory_traps_enabled = env.clif_memory_traps_enabled();
     let spectre_mitigations_enabled =
         env.heap_access_spectre_mitigation() && clif_memory_traps_enabled;
@@ -68,6 +199,7 @@ pub fn bounds_check_and_compute_addr(
     let memory_guard_size = env.tunables().memory_guard_size;
     let memory_reservation = env.tunables().memory_reservation;
 
+    let offset_and_size = offset_plus_size(offset, access_size);
     let statically_in_bounds = statically_in_bounds(&builder.func, heap, index, offset_and_size);
 
     let index = cast_index_to_pointer_ty(
@@ -76,6 +208,7 @@ pub fn bounds_check_and_compute_addr(
         env.pointer_type(),
         heap.pcc_memory_type.is_some(),
         &mut builder.cursor(),
+        trap,
     );
 
     let oob_behavior = if spectre_mitigations_enabled {
@@ -166,7 +299,7 @@ pub fn bounds_check_and_compute_addr(
         // max_memory_size`, since we will end up being out-of-bounds regardless
         // of the given `index`.
         env.before_unconditionally_trapping_memory_access(builder);
-        env.trap(builder, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+        env.trap(builder, trap);
         return Unreachable;
     }
 
@@ -176,7 +309,7 @@ pub fn bounds_check_and_compute_addr(
     // native pointer type anyway, so this is an unconditional trap.
     if pointer_bit_width < 64 && offset_and_size >= (1 << pointer_bit_width) {
         env.before_unconditionally_trapping_memory_access(builder);
-        env.trap(builder, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+        env.trap(builder, trap);
         return Unreachable;
     }
 
@@ -297,6 +430,7 @@ pub fn bounds_check_and_compute_addr(
             oob_behavior,
             AddrPcc::static32(heap.pcc_memory_type, memory_reservation),
             oob,
+            trap,
         ));
     }
 
@@ -330,6 +464,7 @@ pub fn bounds_check_and_compute_addr(
             oob_behavior,
             AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
             oob,
+            trap,
         ));
     }
 
@@ -378,6 +513,7 @@ pub fn bounds_check_and_compute_addr(
             oob_behavior,
             AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
             oob,
+            trap,
         ));
     }
 
@@ -422,6 +558,7 @@ pub fn bounds_check_and_compute_addr(
             oob_behavior,
             AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
             oob,
+            trap,
         ));
     }
 
@@ -439,12 +576,7 @@ pub fn bounds_check_and_compute_addr(
         builder.func.dfg.facts[access_size_val] =
             Some(Fact::constant(pointer_bit_width, offset_and_size));
     }
-    let adjusted_index = env.uadd_overflow_trap(
-        builder,
-        index,
-        access_size_val,
-        ir::TrapCode::HEAP_OUT_OF_BOUNDS,
-    );
+    let adjusted_index = env.uadd_overflow_trap(builder, index, access_size_val, trap);
     if pcc {
         builder.func.dfg.facts[adjusted_index] = Some(Fact::value_offset(
             pointer_bit_width,
@@ -471,6 +603,7 @@ pub fn bounds_check_and_compute_addr(
         oob_behavior,
         AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
         oob,
+        trap,
     ))
 }
 
@@ -521,6 +654,7 @@ fn cast_index_to_pointer_ty(
     pointer_ty: ir::Type,
     pcc: bool,
     pos: &mut FuncCursor,
+    trap: ir::TrapCode,
 ) -> ir::Value {
     if index_ty == pointer_ty {
         return index;
@@ -544,8 +678,7 @@ fn cast_index_to_pointer_ty(
         let c32 = pos.ins().iconst(pointer_ty, 32);
         let high_bits = pos.ins().ushr(index, c32);
         let high_bits = pos.ins().ireduce(pointer_ty, high_bits);
-        pos.ins()
-            .trapnz(high_bits, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+        pos.ins().trapnz(high_bits, trap);
         return low_bits;
     }
 
@@ -623,9 +756,10 @@ fn explicit_check_oob_condition_and_compute_addr(
     // bounds (and therefore we should trap) and is zero when the heap access is
     // in bounds (and therefore we can proceed).
     oob_condition: ir::Value,
+    trap: ir::TrapCode,
 ) -> ir::Value {
     if let OobBehavior::ExplicitTrap = oob_behavior {
-        env.trapnz(builder, oob_condition, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+        env.trapnz(builder, oob_condition, trap);
     }
     let addr_ty = env.pointer_type();
 

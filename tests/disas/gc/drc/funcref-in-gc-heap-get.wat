@@ -14,27 +14,26 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
+;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv5 = load.i64 notrap aligned readonly can_move gv4+24
+;;     gv6 = load.i64 notrap aligned gv4+32
 ;;     sig0 = (i64 vmctx, i32, i32) -> i64 tail
-;;     fn0 = colocated u1:29 sig0
+;;     fn0 = colocated u1:30 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0020                               trapz v2, user16
-;; @0020                               v9 = uextend.i64 v2
-;; @0020                               v10 = iconst.i64 16
-;; @0020                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 16
-;;                                     v20 = iconst.i64 24
-;; @0020                               v13 = uadd_overflow_trap v9, v20, user1  ; v20 = 24
-;; @0020                               v8 = load.i64 notrap aligned readonly can_move v0+48
-;; @0020                               v14 = icmp ule v13, v8
-;; @0020                               trapz v14, user1
-;; @0020                               v6 = load.i64 notrap aligned readonly can_move v0+40
-;; @0020                               v15 = iadd v6, v11
-;; @0020                               v18 = load.i32 notrap aligned little v15
-;; @0020                               v16 = iconst.i32 -1
-;; @0020                               v19 = call fn0(v0, v18, v16)  ; v16 = -1
+;; @0020                               v13 = load.i64 notrap aligned readonly can_move v0+8
+;; @0020                               v5 = load.i64 notrap aligned readonly can_move v13+24
+;; @0020                               v4 = uextend.i64 v2
+;; @0020                               v6 = iadd v5, v4
+;; @0020                               v7 = iconst.i64 16
+;; @0020                               v8 = iadd v6, v7  ; v7 = 16
+;; @0020                               v11 = load.i32 notrap aligned little v8
+;; @0020                               v9 = iconst.i32 -1
+;; @0020                               v12 = call fn0(v0, v11, v9)  ; v9 = -1
 ;; @0024                               jump block1
 ;;
 ;;                                 block1:
-;; @0024                               return v19
+;; @0024                               return v12
 ;; }

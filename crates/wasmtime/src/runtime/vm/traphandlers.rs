@@ -638,10 +638,13 @@ impl CallThreadState {
             {
                 (None, None)
             }
-            UnwindReason::Trap(_) => (
-                self.capture_backtrace(self.vm_store_context.as_ptr(), None),
-                self.capture_coredump(self.vm_store_context.as_ptr(), None),
-            ),
+            UnwindReason::Trap(trap) => {
+                log::trace!("Capturing backtrace and coredump for {trap:?}");
+                (
+                    self.capture_backtrace(self.vm_store_context.as_ptr(), None),
+                    self.capture_coredump(self.vm_store_context.as_ptr(), None),
+                )
+            }
         };
         self.unwind.set(Some((reason, backtrace, coredump)));
     }

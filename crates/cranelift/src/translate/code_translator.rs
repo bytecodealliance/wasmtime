@@ -71,7 +71,7 @@
 //!   <https://github.com/bytecodealliance/cranelift/pull/1236>
 //!     ("Relax verification to allow I8X16 to act as a default vector type")
 
-use crate::bounds_checks::bounds_check_and_compute_addr;
+use crate::bounds_checks::{bounds_check_and_compute_addr, BoundsCheck};
 use crate::func_environ::{Extension, FuncEnvironment};
 use crate::translate::environ::{GlobalVariable, StructFieldsVec};
 use crate::translate::state::{ControlStackFrame, ElseData, FuncTranslationState};
@@ -3202,9 +3202,17 @@ fn prepare_addr(
     let addr = match u32::try_from(memarg.offset) {
         // If our offset fits within a u32, then we can place the it into the
         // offset immediate of the `heap_addr` instruction.
-        Ok(offset) => {
-            bounds_check_and_compute_addr(builder, environ, &heap, index, offset, access_size)
-        }
+        Ok(offset) => bounds_check_and_compute_addr(
+            builder,
+            environ,
+            &heap,
+            index,
+            BoundsCheck::StaticOffset {
+                offset,
+                access_size,
+            },
+            ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+        ),
 
         // If the offset doesn't fit within a u32, then we can't pass it
         // directly into `heap_addr`.
@@ -3242,7 +3250,17 @@ fn prepare_addr(
                 offset,
                 ir::TrapCode::HEAP_OUT_OF_BOUNDS,
             );
-            bounds_check_and_compute_addr(builder, environ, &heap, adjusted_index, 0, access_size)
+            bounds_check_and_compute_addr(
+                builder,
+                environ,
+                &heap,
+                adjusted_index,
+                BoundsCheck::StaticOffset {
+                    offset: 0,
+                    access_size,
+                },
+                ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+            )
         }
     };
     let addr = match addr {

@@ -134,11 +134,11 @@ impl<T> Store<T> {
     ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub async fn gc_async(&mut self)
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()>
     where
         T: Send,
     {
-        self.inner.gc_async().await;
+        self.inner.gc_async(why).await
     }
 
     /// Configures epoch-deadline expiration to yield to the async
@@ -177,11 +177,11 @@ impl<'a, T> StoreContextMut<'a, T> {
     ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub async fn gc_async(&mut self)
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()>
     where
         T: Send,
     {
-        self.0.gc_async().await;
+        self.0.gc_async(why).await
     }
 
     /// Configures epoch-deadline expiration to yield to the async
@@ -578,36 +578,8 @@ impl StoreOpaque {
         }
     }
 
-    /// Attempt an allocation, if it fails due to GC OOM, then do a GC and
-    /// retry.
     #[cfg(feature = "gc")]
-    pub(crate) async fn retry_after_gc_async<T, U>(
-        &mut self,
-        value: T,
-        alloc_func: impl Fn(&mut Self, T) -> Result<U>,
-    ) -> Result<U>
-    where
-        T: Send + Sync + 'static,
-    {
-        assert!(
-            self.async_support(),
-            "you must configure async to use the `*_async` versions of methods"
-        );
-        match alloc_func(self, value) {
-            Ok(x) => Ok(x),
-            Err(e) => match e.downcast::<crate::GcHeapOutOfMemory<T>>() {
-                Ok(oom) => {
-                    let value = oom.into_inner();
-                    self.gc_async().await;
-                    alloc_func(self, value)
-                }
-                Err(e) => Err(e),
-            },
-        }
-    }
-
-    #[cfg(feature = "gc")]
-    pub async fn gc_async(&mut self) {
+    pub(super) async fn do_gc_async(&mut self) {
         assert!(
             self.async_support(),
             "cannot use `gc_async` without enabling async support in the config",

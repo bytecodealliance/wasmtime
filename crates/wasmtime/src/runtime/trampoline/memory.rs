@@ -143,6 +143,11 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
         Ok(())
     }
 
+    #[cfg(feature = "gc")]
+    fn validate_memory_impl(&self, memory: &wasmtime_environ::Memory) -> Result<()> {
+        self.ondemand.validate_memory_impl(memory)
+    }
+
     fn increment_component_instance_count(&self) -> Result<()> {
         self.ondemand.increment_component_instance_count()
     }
@@ -164,7 +169,7 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
         request: &mut InstanceAllocationRequest,
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
-        memory_index: DefinedMemoryIndex,
+        memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
         #[cfg(debug_assertions)]
         {
@@ -187,7 +192,7 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
 
     unsafe fn deallocate_memory(
         &self,
-        memory_index: DefinedMemoryIndex,
+        memory_index: Option<DefinedMemoryIndex>,
         allocation_index: MemoryAllocationIndex,
         memory: Memory,
     ) {
@@ -245,20 +250,19 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
     fn allocate_gc_heap(
         &self,
         _engine: &crate::Engine,
-        _gc_runtime: &dyn crate::runtime::vm::GcRuntime,
-    ) -> Result<(
-        crate::runtime::vm::GcHeapAllocationIndex,
-        Box<dyn crate::runtime::vm::GcHeap>,
-    )> {
+        _gc_runtime: &dyn crate::vm::GcRuntime,
+        _memory_alloc_index: crate::vm::MemoryAllocationIndex,
+        _memory: Memory,
+    ) -> Result<(crate::vm::GcHeapAllocationIndex, Box<dyn crate::vm::GcHeap>)> {
         unreachable!()
     }
 
     #[cfg(feature = "gc")]
     fn deallocate_gc_heap(
         &self,
-        _allocation_index: crate::runtime::vm::GcHeapAllocationIndex,
-        _gc_heap: Box<dyn crate::runtime::vm::GcHeap>,
-    ) {
+        _allocation_index: crate::vm::GcHeapAllocationIndex,
+        _gc_heap: Box<dyn crate::vm::GcHeap>,
+    ) -> (crate::vm::MemoryAllocationIndex, crate::vm::Memory) {
         unreachable!()
     }
 }

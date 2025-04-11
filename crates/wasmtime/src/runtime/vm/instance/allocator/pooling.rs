@@ -355,7 +355,7 @@ impl PoolingInstanceAllocator {
     }
 
     fn validate_memory_plans(&self, module: &Module) -> Result<()> {
-        self.memories.validate(module)
+        self.memories.validate_memories(module)
     }
 
     fn validate_core_instance_size(&self, offsets: &VMOffsets<HostPtr>) -> Result<()> {
@@ -574,6 +574,11 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         Ok(())
     }
 
+    #[cfg(feature = "gc")]
+    fn validate_memory_impl(&self, memory: &wasmtime_environ::Memory) -> Result<()> {
+        self.memories.validate_memory(memory)
+    }
+
     fn increment_component_instance_count(&self) -> Result<()> {
         let old_count = self.live_component_instances.fetch_add(1, Ordering::AcqRel);
         if old_count >= u64::from(self.limits.total_component_instances) {
@@ -613,14 +618,14 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         request: &mut InstanceAllocationRequest,
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
-        memory_index: DefinedMemoryIndex,
+        memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
         self.with_flush_and_retry(|| self.memories.allocate(request, ty, tunables, memory_index))
     }
 
     unsafe fn deallocate_memory(
         &self,
-        _memory_index: DefinedMemoryIndex,
+        _memory_index: Option<DefinedMemoryIndex>,
         allocation_index: MemoryAllocationIndex,
         memory: Memory,
     ) {
@@ -699,8 +704,11 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         &self,
         engine: &crate::Engine,
         gc_runtime: &dyn GcRuntime,
+        memory_alloc_index: MemoryAllocationIndex,
+        memory: Memory,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
-        self.gc_heaps.allocate(engine, gc_runtime)
+        self.gc_heaps
+            .allocate(engine, gc_runtime, memory_alloc_index, memory)
     }
 
     #[cfg(feature = "gc")]
@@ -708,8 +716,8 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         &self,
         allocation_index: GcHeapAllocationIndex,
         gc_heap: Box<dyn GcHeap>,
-    ) {
-        self.gc_heaps.deallocate(allocation_index, gc_heap);
+    ) -> (MemoryAllocationIndex, Memory) {
+        self.gc_heaps.deallocate(allocation_index, gc_heap)
     }
 }
 

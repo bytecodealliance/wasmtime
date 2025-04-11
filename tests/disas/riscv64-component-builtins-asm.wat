@@ -26,9 +26,9 @@
 ;;       .byte   0x00, 0x00, 0x00, 0x00
 ;;       ld      a1, 0x10(a0)
 ;;       ld      a3, 0(s0)
-;;       sd      a3, 0x18(a1)
+;;       sd      a3, 0x28(a1)
 ;;       ld      a3, 8(s0)
-;;       sd      a3, 0x20(a1)
+;;       sd      a3, 0x30(a1)
 ;;       ld      a3, 8(a0)
 ;;       ld      a3, 0x10(a3)
 ;;       mv      a4, zero
@@ -47,7 +47,7 @@
 ;;       ret
 ;;       mv      a1, s1
 ;;       ld      a4, 0x10(a1)
-;;       ld      a4, 0x138(a4)
+;;       ld      a4, 0x140(a4)
 ;;       mv      a0, a1
 ;;       jalr    a4
 ;;       .byte   0x00, 0x00, 0x00, 0x00
