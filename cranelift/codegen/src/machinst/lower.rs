@@ -710,6 +710,10 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                 continue;
             }
 
+            // Value defined by "inst" becomes live after it in normal
+            // order, and therefore **before** in reversed order.
+            self.emit_value_label_live_range_start_for_inst(inst);
+
             // Normal instruction: codegen if the instruction is side-effecting
             // or any of its outputs is used.
             if has_side_effect || value_needed {
@@ -801,11 +805,6 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     }
                 }
             }
-
-            // Emit value-label markers if needed, to later recover
-            // debug mappings. This must happen before the instruction
-            // (so after we emit, in bottom-to-top pass).
-            self.emit_value_label_markers_for_inst(inst);
         }
 
         // Add the block params to this block.
@@ -869,7 +868,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
     }
 
-    fn emit_value_label_markers_for_inst(&mut self, inst: Inst) {
+    fn emit_value_label_live_range_start_for_inst(&mut self, inst: Inst) {
         if self.f.dfg.values_labels.is_none() {
             return;
         }
@@ -884,7 +883,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         }
     }
 
-    fn emit_value_label_markers_for_block_args(&mut self, block: Block) {
+    fn emit_value_label_live_range_start_for_block_args(&mut self, block: Block) {
         if self.f.dfg.values_labels.is_none() {
             return;
         }
@@ -1088,7 +1087,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // Original block body.
             if let Some(bb) = lb.orig_block() {
                 self.lower_clif_block(backend, bb, ctrl_plane)?;
-                self.emit_value_label_markers_for_block_args(bb);
+                self.emit_value_label_live_range_start_for_block_args(bb);
             }
 
             if bindex.index() == 0 {
