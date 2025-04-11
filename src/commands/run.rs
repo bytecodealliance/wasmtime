@@ -494,36 +494,145 @@ impl RunCommand {
             }
             #[cfg(feature = "component-model")]
             CliLinker::Component(linker) => {
-                if self.invoke.is_some() {
-                    bail!("using `--invoke` with components is not supported");
-                }
-
                 let component = main_target.unwrap_component();
+                if self.invoke.is_some() {
+                    self.invoke_component(&mut *store, component, linker).await
+                } else {
+                    let command = wasmtime_wasi::bindings::Command::instantiate_async(
+                        &mut *store,
+                        component,
+                        linker,
+                    )
+                    .await?;
 
-                let command = wasmtime_wasi::bindings::Command::instantiate_async(
-                    &mut *store,
-                    component,
-                    linker,
-                )
-                .await?;
-                let result = command
-                    .wasi_cli_run()
-                    .call_run(&mut *store)
-                    .await
-                    .context("failed to invoke `run` function")
-                    .map_err(|e| self.handle_core_dump(&mut *store, e));
+                    let result = command
+                        .wasi_cli_run()
+                        .call_run(&mut *store)
+                        .await
+                        .context("failed to invoke `run` function")
+                        .map_err(|e| self.handle_core_dump(&mut *store, e));
 
-                // Translate the `Result<(),()>` produced by wasm into a feigned
-                // explicit exit here with status 1 if `Err(())` is returned.
-                result.and_then(|wasm_result| match wasm_result {
-                    Ok(()) => Ok(()),
-                    Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
-                })
+                    // Translate the `Result<(),()>` produced by wasm into a feigned
+                    // explicit exit here with status 1 if `Err(())` is returned.
+                    result.and_then(|wasm_result| match wasm_result {
+                        Ok(()) => Ok(()),
+                        Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
+                    })
+                }
             }
         };
         finish_epoch_handler(store);
 
         result
+    }
+
+    #[cfg(feature = "component-model")]
+    async fn invoke_component(
+        &self,
+        store: &mut Store<Host>,
+        component: &wasmtime::component::Component,
+        linker: &mut wasmtime::component::Linker<Host>,
+    ) -> Result<()> {
+        use wasmtime::component::{
+            types::ComponentItem,
+            wasm_wave::{
+                untyped::UntypedFuncCall,
+                wasm::{DisplayFuncResults, WasmFunc},
+            },
+            Val,
+        };
+
+        // Check if the invoke string is present
+        let invoke: &String = self.invoke.as_ref().unwrap();
+
+        let untyped_call = UntypedFuncCall::parse(invoke).with_context(|| {
+                format!(
+                    "Failed to parse invoke '{invoke}': See https://docs.wasmtime.dev/cli-options.html#run for syntax",
+                )
+        })?;
+
+        let name = untyped_call.name();
+        let matches = Self::search_component(store.engine(), component.component_type(), name);
+        match matches.len()  {
+                        0 => bail!("No export named `{name}` in component."),
+                        1 => {}
+                        _ => bail!("Multiple exports named `{name}`: {matches:?}. FIXME: support some way to disambiguate names"),
+                    };
+        let (params, result_len, export) = match &matches[0] {
+            (names, ComponentItem::ComponentFunc(func)) => {
+                let param_types = WasmFunc::params(func).collect::<Vec<_>>();
+                let params = untyped_call.to_wasm_params(&param_types).with_context(|| {
+                    format!("while interpreting parameters in invoke \"{invoke}\"")
+                })?;
+                let mut export = None;
+                for name in names {
+                    let (_item, ix) = component
+                        .export_index(export.as_ref(), name)
+                        .expect("export exists");
+                    export = Some(ix);
+                }
+                (
+                    params,
+                    func.results().len(),
+                    export.expect("export has at least one name"),
+                )
+            }
+            (names, ty) => {
+                bail!("Cannot invoke export {names:?}: expected ComponentFunc, got type {ty:?}");
+            }
+        };
+
+        let instance = linker.instantiate_async(&mut *store, component).await?;
+
+        let func = instance
+            .get_func(&mut *store, export)
+            .expect("found export index");
+
+        let mut results = vec![Val::Bool(false); result_len];
+        func.call_async(&mut *store, &params, &mut results).await?;
+
+        println!("{}", DisplayFuncResults(&results));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "component-model")]
+    fn search_component(
+        engine: &Engine,
+        component: wasmtime::component::types::Component,
+        name: &str,
+    ) -> Vec<(Vec<String>, wasmtime::component::types::ComponentItem)> {
+        use wasmtime::component::types::ComponentItem as CItem;
+        fn collect_exports(
+            engine: &Engine,
+            item: CItem,
+            basename: Vec<String>,
+        ) -> Vec<(Vec<String>, CItem)> {
+            match item {
+                CItem::Component(c) => c
+                    .exports(engine)
+                    .flat_map(move |(name, item)| {
+                        let mut names = basename.clone();
+                        names.push(name.to_string());
+                        collect_exports(engine, item, names)
+                    })
+                    .collect::<Vec<_>>(),
+                CItem::ComponentInstance(c) => c
+                    .exports(engine)
+                    .flat_map(move |(name, item)| {
+                        let mut names = basename.clone();
+                        names.push(name.to_string());
+                        collect_exports(engine, item, names)
+                    })
+                    .collect::<Vec<_>>(),
+                _ => vec![(basename, item)],
+            }
+        }
+
+        collect_exports(engine, CItem::Component(component), Vec::new())
+            .into_iter()
+            .filter(|(names, _item)| names.last().expect("at least one name") == name)
+            .collect()
     }
 
     async fn invoke_func(&self, store: &mut Store<Host>, func: Func) -> Result<()> {

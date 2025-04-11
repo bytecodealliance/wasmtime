@@ -1119,14 +1119,7 @@ mod test_programs {
 
     #[test]
     fn cli_hello_stdout() -> Result<()> {
-        run_wasmtime(&[
-            "run",
-            "-Wcomponent-model",
-            CLI_HELLO_STDOUT_COMPONENT,
-            "gussie",
-            "sparky",
-            "willa",
-        ])?;
+        run_wasmtime(&["run", "-Wcomponent-model", CLI_HELLO_STDOUT_COMPONENT])?;
         Ok(())
     }
 
@@ -2119,6 +2112,26 @@ after empty
     #[tokio::test]
     async fn cli_serve_trap_before_set() -> Result<()> {
         cli_serve_guest_never_invoked_set(CLI_SERVE_TRAP_BEFORE_SET_COMPONENT).await
+    }
+
+    mod invoke {
+        use super::*;
+
+        #[test]
+        fn cli_hello_stdout() -> Result<()> {
+            println!("{CLI_HELLO_STDOUT_COMPONENT}");
+            let output = run_wasmtime(&[
+                "run",
+                "-Wcomponent-model",
+                "--invoke",
+                "run()",
+                CLI_HELLO_STDOUT_COMPONENT,
+            ])?;
+            // First this component prints "hello, world", then the invoke
+            // result is printed as "ok".
+            assert_eq!(output, "hello, world\nok\n");
+            Ok(())
+        }
     }
 }
 
