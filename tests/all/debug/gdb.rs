@@ -59,6 +59,7 @@ pub fn test_debug_dwarf_gdb() -> Result<()> {
         &[
             "-Ccache=n",
             "-Ddebug-info",
+            "-Oopt-level=0",
             "--invoke",
             "fib",
             "tests/all/debug/testsuite/fib-wasm.wasm",

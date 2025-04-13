@@ -69,6 +69,7 @@ pub fn test_debug_dwarf_lldb() -> Result<()> {
         &[
             "-Ccache=n",
             "-Ddebug-info",
+            "-Oopt-level=0",
             "--invoke",
             "fib",
             assets::FIB_WASM_WASM_PATH,
@@ -106,6 +107,7 @@ pub fn test_debug_dwarf5_lldb() -> Result<()> {
         &[
             "-Ccache=n",
             "-Ddebug-info",
+            "-Oopt-level=0",
             "--invoke",
             "fib",
             assets::FIB_WASM_DWARF5_WASM_PATH,
@@ -143,6 +145,7 @@ pub fn test_debug_split_dwarf4_lldb() -> Result<()> {
         &[
             "-Ccache=n",
             "-Ddebug-info",
+            "-Oopt-level=0",
             "--invoke",
             "fib",
             assets::FIB_WASM_SPLIT4_WASM_PATH,
