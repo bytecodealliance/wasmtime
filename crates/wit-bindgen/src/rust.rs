@@ -49,7 +49,7 @@ pub trait RustGenerator<'a> {
             Type::String => match mode {
                 TypeMode::AllBorrowed(lt) => {
                     if lt != "'_" {
-                        format!("&{} str", lt)
+                        format!("&{lt} str")
                     } else {
                         format!("&str")
                     }
@@ -90,7 +90,7 @@ pub trait RustGenerator<'a> {
             if info.has_list && lt.is_none() {
                 if let TypeMode::AllBorrowed(lt) = mode {
                     if lt != "'_" {
-                        out.push_str(&format!("&{} ", lt))
+                        out.push_str(&format!("&{lt} "))
                     } else {
                         out.push_str("&")
                     }
@@ -215,14 +215,14 @@ pub trait RustGenerator<'a> {
         match mode {
             TypeMode::AllBorrowed(lt) => {
                 if lt != "'_" {
-                    format!("&{} [{}]", lt, ty)
+                    format!("&{lt} [{ty}]")
                 } else {
-                    format!("&[{}]", ty)
+                    format!("&[{ty}]")
                 }
             }
             TypeMode::Owned => {
                 let wt = self.wasmtime_path();
-                format!("{wt}::component::__internal::Vec<{}>", ty)
+                format!("{wt}::component::__internal::Vec<{ty}>")
             }
         }
     }
@@ -294,7 +294,7 @@ pub trait RustGenerator<'a> {
     }
     fn generics(&self, lifetime: Option<&str>) -> String {
         if let Some(lt) = lifetime {
-            format!("<{},>", lt)
+            format!("<{lt},>")
         } else {
             String::new()
         }
