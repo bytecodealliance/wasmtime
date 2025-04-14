@@ -764,6 +764,19 @@ WASM_API_EXTERN void wasmtime_pooling_allocation_strategy_set(
 
 #endif // WASMTIME_FEATURE_POOLING_ALLOCATOR
 
+#ifdef WASMTIME_FEATURE_COMPONENT_MODEL
+
+/**
+ * \brief Configures whether the WebAssembly component-model proposal will be
+ * enabled for compilation.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model.
+ */
+WASMTIME_CONFIG_PROP(void, component_model, bool)
+
+#endif // WASMTIME_FEATURE_COMPONENT_MODEL
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
