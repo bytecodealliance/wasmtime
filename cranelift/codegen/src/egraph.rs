@@ -72,8 +72,11 @@ pub struct EgraphPass<'a> {
     pub(crate) stats: Stats,
 }
 
-// The maximum number of rewrites we will take from a single call into ISLE.
+/// The maximum number of rewrites we will take from a single call into ISLE.
 const MATCHES_LIMIT: usize = 5;
+
+/// The maximum number of enodes in any given eclass.
+const ECLASS_ENODE_LIMIT: usize = 5;
 
 /// Context passed through node insertion and optimization.
 pub(crate) struct OptimizeCtx<'opt, 'analysis>
@@ -84,6 +87,7 @@ where
     pub(crate) func: &'opt mut Function,
     pub(crate) value_to_opt_value: &'opt mut SecondaryMap<Value, Value>,
     available_block: &'opt mut SecondaryMap<Value, Block>,
+    eclass_size: &'opt mut SecondaryMap<Value, u8>,
     pub(crate) gvn_map: &'opt mut ScopedHashMap<(Type, InstructionData), Option<Value>>,
     pub(crate) gvn_map_blocks: &'opt Vec<Block>,
     pub(crate) remat_values: &'opt mut FxHashSet<Value>,
@@ -344,6 +348,11 @@ where
             optimized_values.truncate(MATCHES_LIMIT);
         }
 
+        // Sort and deduplicate optimized values, in case multiple
+        // rules produced the same simplification.
+        optimized_values.sort_unstable();
+        optimized_values.dedup();
+
         trace!("  -> returned from ISLE: {orig_value} -> {optimized_values:?}");
 
         // Construct a union-node tree representing the new eclass
@@ -360,6 +369,7 @@ where
             subsuming_value
         } else {
             let mut union_value = orig_value;
+            let mut eclass_size = ctx.eclass_size[orig_value] + 1;
             for optimized_value in optimized_values.drain(..) {
                 trace!(
                     "Returned from ISLE for {}, got {:?}",
@@ -371,8 +381,16 @@ where
                     ctx.stats.pure_inst_rewrite_to_self += 1;
                     continue;
                 }
+                let rhs_eclass_size = ctx.eclass_size[optimized_value] + 1;
+                if usize::from(eclass_size) + usize::from(rhs_eclass_size) > ECLASS_ENODE_LIMIT {
+                    trace!(" -> reached eclass size limit");
+                    ctx.stats.eclass_size_limit += 1;
+                    break;
+                }
                 let old_union_value = union_value;
                 union_value = ctx.func.dfg.union(old_union_value, optimized_value);
+                eclass_size += rhs_eclass_size;
+                ctx.eclass_size[union_value] = eclass_size - 1;
                 ctx.stats.union += 1;
                 trace!(" -> union: now {}", union_value);
                 ctx.func.dfg.merge_facts(old_union_value, optimized_value);
@@ -807,6 +825,17 @@ impl<'a> EgraphPass<'a> {
         let mut available_block: SecondaryMap<Value, Block> =
             SecondaryMap::with_default(Block::reserved_value());
 
+        // To avoid blowing up eclasses too much, we track the size of
+        // each eclass reachable by a tree of union nodes from a given
+        // value ID, and we avoid union'ing additional values into an
+        // eclass when it reaches `ECLASS_ENODE_LIMIT`.
+        //
+        // For efficiency, this encodes size minus one: so a value of
+        // zero (which is cheap to bulk-initialize) means a singleton
+        // eclass of size one. This also allows us to avoid explicitly
+        // writing the size for any values that are not union nodes.
+        let mut eclass_size: SecondaryMap<Value, u8> = SecondaryMap::with_default(0);
+
         // This is an initial guess at the size we'll need, but we add
         // more values as we build simplified alternative expressions so
         // this is likely to realloc again later.
@@ -870,6 +899,7 @@ impl<'a> EgraphPass<'a> {
                             gvn_map: &mut gvn_map,
                             gvn_map_blocks: &mut gvn_map_blocks,
                             available_block: &mut available_block,
+                            eclass_size: &mut eclass_size,
                             rewrite_depth: 0,
                             subsume_values: FxHashSet::default(),
                             remat_values: &mut self.remat_values,
@@ -1089,4 +1119,5 @@ pub(crate) struct Stats {
     pub(crate) elaborate_func_pre_insts: u64,
     pub(crate) elaborate_func_post_insts: u64,
     pub(crate) elaborate_best_cost_fixpoint_iters: u64,
+    pub(crate) eclass_size_limit: u64,
 }
