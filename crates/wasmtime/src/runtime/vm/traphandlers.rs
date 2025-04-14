@@ -20,6 +20,7 @@ use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{i8x16, InterpreterRef, VMContext, VMStoreContext};
+use crate::vm::sys::vm::get_page_size;
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
@@ -747,8 +748,9 @@ impl CallThreadState {
         // The largest known redzone of any platform is 232 bytes, on PowerPC
         // on Windows:
         // <https://devblogs.microsoft.com/oldnewthing/20190111-00/?p=100685>
+        let page_size = get_page_size();
         let stack_overflow_trap = if let Some(faulting_address) = faulting_addr {
-            (regs.sp - 512 <= faulting_address && faulting_address <= regs.fp)
+            (regs.sp - 512 <= faulting_address && faulting_address <= regs.sp + page_size)
                 .then_some(wasmtime_environ::Trap::StackOverflow)
         } else {
             None
