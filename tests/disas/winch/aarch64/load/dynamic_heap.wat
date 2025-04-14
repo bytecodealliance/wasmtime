@@ -43,7 +43,7 @@
 ;;       mov     x16, #0
 ;;       mov     x4, x16
 ;;       cmp     x2, x1, uxtx
-;;       csel    x3, x4, x4, hi
+;;       csel    x3, x4, x3, hi
 ;;       ldur    w0, [x3]
 ;;       ldur    w1, [x28, #0xc]
 ;;       ldur    x2, [x9, #0x58]
@@ -58,7 +58,7 @@
 ;;       mov     x16, #0
 ;;       mov     x5, x16
 ;;       cmp     x3, x2, uxtx
-;;       csel    x4, x5, x5, hi
+;;       csel    x4, x5, x4, hi
 ;;       ldur    w1, [x4]
 ;;       ldur    w2, [x28, #0xc]
 ;;       ldur    x3, [x9, #0x58]
@@ -76,7 +76,7 @@
 ;;       mov     x16, #0
 ;;       mov     x6, x16
 ;;       cmp     x4, x3, uxtx
-;;       csel    x5, x6, x6, hi
+;;       csel    x5, x6, x5, hi
 ;;       ldur    w2, [x5]
 ;;       sub     x28, x28, #4
 ;;       mov     sp, x28

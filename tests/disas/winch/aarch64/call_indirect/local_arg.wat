@@ -66,7 +66,7 @@
 ;;       mov     x4, x2
 ;;       add     x2, x2, x16, uxtx
 ;;       cmp     w1, w3, uxtx
-;;       csel    x2, x4, x4, hs
+;;       csel    x2, x4, x2, hs
 ;;       ldur    x0, [x2]
 ;;       tst     x0, x0
 ;;       b.ne    #0xfc
