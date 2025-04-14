@@ -61,9 +61,8 @@ Winch's aim is to support all the backends officially supported by Wasmtime:
 
 The x86\_64 backend offers an almost-complete implementation, it currently
 supports all the instructions that are part of WebAssembly's MVP, plus some of
-the [feature extensions](feature-extensions). Refer to the [Tiers of
-Support](tiers-of-support) for more details.
-
+the [feature extensions][feature-extensions]. Refer to the [Tiers of
+Support][tiers-of-support] for more details.
 
 [feature-extensions]: https://webassembly.org/features/
 [tiers-of-support]: https://docs.wasmtime.dev/stability-tiers.html
