@@ -104,7 +104,7 @@ For explanations of what each tier means see below.
 | Target               | `x86_64-unknown-illumos`          | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-linux-musl` [^4]  | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-none` [^5]        | CI testing, full-time maintainer |
-| Compiler Backend     | Winch on x86\_64                  | WebAssembly proposals (`simd`, `relaxed-simd`, `tail-call`, `reference-types`, `threads`)     |
+| Compiler Backend     | Winch on x86\_64                  | WebAssembly proposals ([`relaxed-simd`], [`tail-call`], [`reference-types`])     |
 | Compiler Backend     | Winch on aarch64                  | Complete implementation     |
 | WebAssembly Proposal | [`gc`]                            | Complete implementation     |
 | WASI Proposal        | [`wasi-nn`]                       | More expansive CI testing   |
