@@ -11,8 +11,7 @@ use crate::{
 };
 use cranelift_codegen::{
     ir::{
-        types, ConstantPool, ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, Type,
-        UserExternalNameRef,
+        types, ConstantPool, ExternalName, MemFlags, SourceLoc, TrapCode, Type, UserExternalNameRef,
     },
     isa::{
         unwind::UnwindInst,
@@ -28,7 +27,7 @@ use cranelift_codegen::{
         },
     },
     settings, CallInfo, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState,
-    MachLabel, PatchRegion, RelocDistance, VCodeConstantData, VCodeConstants, Writable,
+    MachLabel, PatchRegion, VCodeConstantData, VCodeConstants, Writable,
 };
 
 use crate::reg::WritableReg;
@@ -1636,26 +1635,6 @@ impl Assembler {
         self.emit(Inst::CallKnown {
             info: Box::new(CallInfo::empty(ExternalName::user(name), cc.into())),
         });
-    }
-
-    /// Emit a call to a well-known libcall.
-    pub fn call_with_lib(&mut self, cc: CallingConvention, lib: LibCall, dst: Reg) {
-        let dest = ExternalName::LibCall(lib);
-
-        // `use_colocated_libcalls` is never `true` from within Wasmtime,
-        // so always require loading the libcall to a register and use
-        // a `Far` relocation distance to ensure the right relocation when
-        // emitting to binary.
-        //
-        // See [wasmtime::engine::Engine::check_compatible_with_shared_flag] and
-        // [wasmtime_cranelift::obj::ModuleTextBuilder::append_func]
-        self.emit(Inst::LoadExtName {
-            dst: Writable::from_reg(dst.into()),
-            name: Box::new(dest),
-            offset: 0,
-            distance: RelocDistance::Far,
-        });
-        self.call_with_reg(cc, dst);
     }
 
     /// Emits a conditional jump to the given label.

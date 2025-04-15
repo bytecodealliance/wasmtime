@@ -14,12 +14,7 @@
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    8(%rdi), %r10
-;;       movq    0x10(%r10), %r10
-;;       addq    $0x50, %r10
-;;       cmpq    %rsp, %r10
-;;       ja      0xcf
-;;   19: subq    $0x40, %rsp
+;;       subq    $0x40, %rsp
 ;;       movq    %r12, 0x20(%rsp)
 ;;       movq    %r13, 0x28(%rsp)
 ;;       movq    %r14, 0x30(%rsp)
@@ -32,7 +27,7 @@
 ;;       movl    $0x20, %ecx
 ;;       movl    $8, %r8d
 ;;       movq    %rdi, %r12
-;;       callq   0x168
+;;       callq   0x161
 ;;       movq    8(%r12), %r8
 ;;       ╰─╼ stack_map: frame_size=64, frame_offsets=[0]
 ;;       movq    0x18(%r8), %r8
@@ -50,8 +45,8 @@
 ;;       movzbl  %sil, %esi
 ;;       orl     %esi, %edx
 ;;       testl   %edx, %edx
-;;       jne     0xab
-;;   9a: movl    %r11d, %ecx
+;;       jne     0x96
+;;   85: movl    %r11d, %ecx
 ;;       leaq    (%r8, %rcx), %rax
 ;;       movl    $1, %eax
 ;;       addq    %rax, 8(%r8, %rcx)
@@ -65,4 +60,3 @@
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   cf: ud2
