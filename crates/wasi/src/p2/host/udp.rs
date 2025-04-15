@@ -1,4 +1,4 @@
-use crate::network::{SocketAddrUse, SocketAddressFamily};
+use crate::net::{SocketAddrUse, SocketAddressFamily};
 use crate::p2::bindings::sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network};
 use crate::p2::bindings::sockets::udp;
 use crate::p2::host::network::util;

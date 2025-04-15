@@ -245,7 +245,7 @@ pub(crate) mod util {
     use std::net::{IpAddr, Ipv6Addr, SocketAddr};
     use std::time::Duration;
 
-    use crate::network::SocketAddressFamily;
+    use crate::net::SocketAddressFamily;
     use cap_net_ext::{AddressFamily, Blocking, UdpSocketExt};
     use rustix::fd::{AsFd, OwnedFd};
     use rustix::io::Errno;

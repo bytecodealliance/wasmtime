@@ -2,7 +2,7 @@ use crate::clocks::{
     host::{monotonic_clock, wall_clock},
     HostMonotonicClock, HostWallClock,
 };
-use crate::network::{SocketAddrCheck, SocketAddrUse};
+use crate::net::{SocketAddrCheck, SocketAddrUse};
 use crate::p2::{
     filesystem::Dir,
     pipe, stdio,

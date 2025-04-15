@@ -1,4 +1,4 @@
-use crate::network::{SocketAddressFamily, DEFAULT_TCP_BACKLOG};
+use crate::net::{SocketAddressFamily, DEFAULT_TCP_BACKLOG};
 use crate::p2::bindings::sockets::tcp::ErrorCode;
 use crate::p2::host::network;
 use crate::p2::{

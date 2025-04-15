@@ -13,8 +13,8 @@
 
 mod clocks;
 mod error;
-mod filesystem;
-mod network;
+mod fs;
+mod net;
 pub mod p2;
 #[cfg(feature = "preview1")]
 pub mod preview0;
@@ -25,8 +25,8 @@ pub mod runtime;
 
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::error::{I32Exit, TrappableError};
-pub use self::filesystem::{DirPerms, FilePerms, OpenMode};
-pub use self::network::{Network, SocketAddrUse};
+pub use self::fs::{DirPerms, FilePerms, OpenMode};
+pub use self::net::{Network, SocketAddrUse};
 pub use self::random::{thread_rng, Deterministic};
 #[doc(no_inline)]
 pub use async_trait::async_trait;
