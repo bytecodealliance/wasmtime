@@ -254,6 +254,10 @@ where
         // into compilation anywhere, we leave it on unconditionally to make sure the generation doesn't panic.
         builder.enable("machine_code_cfg_info")?;
 
+        // Differential fuzzing between the interpreter and the host will only
+        // really work if NaN payloads are canonicalized, so enable this.
+        builder.enable("cranelift_nan_canonicalization")?;
+
         Ok(Flags::new(builder))
     }
 
