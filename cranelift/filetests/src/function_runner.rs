@@ -112,10 +112,10 @@ impl TestFileCompiler {
         #[cfg(unix)]
         {
             unsafe extern "C" {
-                safe fn ceilf(f: f32) -> f32;
+                safe fn cosf(f: f32) -> f32;
             }
             let f = 1.2_f32;
-            assert_eq!(f.ceil(), ceilf(f));
+            assert_eq!(f.cos(), cosf(f));
         }
 
         let module = JITModule::new(builder);
