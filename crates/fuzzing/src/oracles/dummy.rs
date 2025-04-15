@@ -1,5 +1,6 @@
 //! Dummy implementations of things that a Wasm module can import.
 
+use anyhow::Context;
 use wasmtime::*;
 
 /// Create a set of dummy functions/globals/etc for the given imports.
@@ -7,10 +8,14 @@ pub fn dummy_linker<T>(store: &mut Store<T>, module: &Module) -> Result<Linker<T
     let mut linker = Linker::new(store.engine());
     linker.allow_shadowing(true);
     for import in module.imports() {
-        let extern_ = import
-            .ty()
-            .default_value(&mut *store)
-            .ok_or(anyhow::anyhow!("ERROR"))?;
+        let extern_ = import.ty().default_value(&mut *store).with_context(|| {
+            format!(
+                "failed to create dummy value of `{}::{}` - {:?}",
+                import.module(),
+                import.name(),
+                import.ty(),
+            )
+        })?;
         linker
             .define(&store, import.module(), import.name(), extern_)
             .unwrap();

@@ -1249,13 +1249,13 @@ impl ExternType {
         }
     }
     /// Construct a default value, if possible for the underlying type. Tags do not have a default value.
-    pub fn default_value(&self, store: impl AsContextMut) -> Option<Extern> {
+    pub fn default_value(&self, store: impl AsContextMut) -> Result<Extern> {
         match self {
             ExternType::Func(func_ty) => func_ty.default_value(store).map(Extern::Func),
             ExternType::Global(global_ty) => global_ty.default_value(store).map(Extern::Global),
             ExternType::Table(table_ty) => table_ty.default_value(store).map(Extern::Table),
             ExternType::Memory(mem_ty) => mem_ty.default_value(store).map(Extern::Memory),
-            ExternType::Tag(_) => None, // FIXME: #10252
+            ExternType::Tag(_) => bail!("default tags not supported yet"), // FIXME: #10252
         }
     }
 }
@@ -2434,12 +2434,13 @@ impl FuncType {
         Self { registered_type }
     }
     /// Construct a func which returns results of default value, if each result type has a default value.
-    pub fn default_value(&self, mut store: impl AsContextMut) -> Option<Func> {
+    pub fn default_value(&self, mut store: impl AsContextMut) -> Result<Func> {
         let dummy_results = self
             .results()
             .map(|ty| ty.default_value())
-            .collect::<Option<Vec<_>>>()?;
-        Some(Func::new(&mut store, self.clone(), move |_, _, results| {
+            .collect::<Option<Vec<_>>>()
+            .ok_or_else(|| anyhow!("function results do not have a default value"))?;
+        Ok(Func::new(&mut store, self.clone(), move |_, _, results| {
             for (slot, dummy) in results.iter_mut().zip(dummy_results.iter()) {
                 *slot = *dummy;
             }
@@ -2502,9 +2503,12 @@ impl GlobalType {
         GlobalType::new(ty, mutability)
     }
     ///
-    pub fn default_value(&self, store: impl AsContextMut) -> Option<RuntimeGlobal> {
-        let val = self.content().default_value()?;
-        RuntimeGlobal::new(store, self.clone(), val).ok()
+    pub fn default_value(&self, store: impl AsContextMut) -> Result<RuntimeGlobal> {
+        let val = self
+            .content()
+            .default_value()
+            .ok_or_else(|| anyhow!("global type has no default value"))?;
+        RuntimeGlobal::new(store, self.clone(), val)
     }
 }
 
@@ -2637,10 +2641,14 @@ impl TableType {
         &self.ty
     }
     ///
-    pub fn default_value(&self, store: impl AsContextMut) -> Option<RuntimeTable> {
+    pub fn default_value(&self, store: impl AsContextMut) -> Result<RuntimeTable> {
         let val: ValType = self.element().clone().into();
-        let init_val = val.default_value()?.ref_()?;
-        RuntimeTable::new(store, self.clone(), init_val).ok()
+        let init_val = val
+            .default_value()
+            .context("table element type does not have a default value")?
+            .ref_()
+            .unwrap();
+        RuntimeTable::new(store, self.clone(), init_val)
     }
 }
 
@@ -2974,8 +2982,8 @@ impl MemoryType {
         &self.ty
     }
     ///
-    pub fn default_value(&self, store: impl AsContextMut) -> Option<RuntimeMemory> {
-        RuntimeMemory::new(store, self.clone()).ok()
+    pub fn default_value(&self, store: impl AsContextMut) -> Result<RuntimeMemory> {
+        RuntimeMemory::new(store, self.clone())
     }
 }
 
