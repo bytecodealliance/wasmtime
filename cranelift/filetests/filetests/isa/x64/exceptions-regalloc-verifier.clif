@@ -1,0 +1,14 @@
+test compile
+set regalloc_checker=1
+target x86_64
+
+function u0:0() -> i32 tail {
+    sig0 = () -> i32 tail
+    fn0 = u0:1 sig0
+
+block0:
+    try_call fn0(), sig0, block1(ret0), []
+
+block1(v0: i32):
+    return v0
+}
