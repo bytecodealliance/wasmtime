@@ -3,7 +3,7 @@ project(wasmtime)
 
 set(WASMTIME_USER_CARGO_BUILD_OPTIONS "" CACHE STRING "Additional cargo flags (such as --features) to apply to the build command")
 option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
-option(BUILD_TESTS "Build tests" ON)
+option(BUILD_TESTS "Build tests" OFF)
 option(WASMTIME_ALWAYS_BUILD "If cmake should always invoke cargo to build wasmtime" ON)
 option(WASMTIME_FASTEST_RUNTIME "Set flags designed to optimize runtime performance" OFF)
 set(WASMTIME_TARGET "" CACHE STRING "Rust target to build for")
