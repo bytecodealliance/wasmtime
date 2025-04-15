@@ -333,3 +333,8 @@ fn preview2_adapter_badfd() {
 fn preview2_file_read_write() {
     run(PREVIEW2_FILE_READ_WRITE_COMPONENT, false).unwrap()
 }
+// #[test_log::test]
+// #[cfg_attr(not(unix), ignore)]
+// fn preview1_device_read() {
+//     run(PREVIEW1_DEVICE_READ_COMPONENT, false).unwrap()
+// }

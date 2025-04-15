@@ -399,3 +399,8 @@ async fn preview2_file_read_write() {
         .await
         .unwrap()
 }
+// #[test_log::test(tokio::test(flavor = "multi_thread"))]
+// #[cfg_attr(not(unix), ignore)]
+// async fn preview1_device_read() {
+//     run(PREVIEW1_DEVICE_READ_COMPONENT, false).await.unwrap()
+// }
