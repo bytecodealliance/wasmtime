@@ -113,7 +113,7 @@ impl WasiCtxBuilder {
 }
 
 // Much of this mod is implemented in terms of `async` methods from the
-// wasmtime_wasi::sync module. These methods may be async in signature, however,
+// wasmtime_wasi::p2::sync module. These methods may be async in signature, however,
 // they are synchronous in implementation (always Poll::Ready on first poll)
 // and perform blocking syscalls.
 //

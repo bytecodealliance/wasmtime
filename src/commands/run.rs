@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use wasi_common::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
-use wasmtime_wasi::{IoView, WasiView};
+use wasmtime_wasi::p2::{IoView, WasiView};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::wit::WasiNnView;
@@ -498,7 +498,7 @@ impl RunCommand {
                 if self.invoke.is_some() {
                     self.invoke_component(&mut *store, component, linker).await
                 } else {
-                    let command = wasmtime_wasi::bindings::Command::instantiate_async(
+                    let command = wasmtime_wasi::p2::bindings::Command::instantiate_async(
                         &mut *store,
                         component,
                         linker,
@@ -804,7 +804,7 @@ impl RunCommand {
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
                     let link_options = self.run.compute_wasi_features();
-                    wasmtime_wasi::add_to_linker_with_options_async(linker, &link_options)?;
+                    wasmtime_wasi::p2::add_to_linker_with_options_async(linker, &link_options)?;
                     self.set_preview2_ctx(store)?;
                 }
             }
@@ -1045,7 +1045,7 @@ impl RunCommand {
     }
 
     fn set_preview2_ctx(&self, store: &mut Store<Host>) -> Result<()> {
-        let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
+        let mut builder = wasmtime_wasi::p2::WasiCtxBuilder::new();
         builder.inherit_stdio().args(&self.compute_argv()?);
         self.run.configure_wasip2(&mut builder)?;
         let ctx = builder.build_p1();
@@ -1120,7 +1120,7 @@ impl IoView for Host {
     }
 }
 impl WasiView for Host {
-    fn ctx(&mut self) -> &mut wasmtime_wasi::WasiCtx {
+    fn ctx(&mut self) -> &mut wasmtime_wasi::p2::WasiCtx {
         self.preview2_ctx().ctx()
     }
 }

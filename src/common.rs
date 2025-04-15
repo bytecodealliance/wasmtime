@@ -6,8 +6,8 @@ use std::net::TcpListener;
 use std::{fs::File, path::Path, time::Duration};
 use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
 use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
-use wasmtime_wasi::bindings::LinkOptions;
-use wasmtime_wasi::WasiCtxBuilder;
+use wasmtime_wasi::p2::bindings::LinkOptions;
+use wasmtime_wasi::p2::WasiCtxBuilder;
 
 #[cfg(feature = "component-model")]
 use wasmtime::component::Component;
