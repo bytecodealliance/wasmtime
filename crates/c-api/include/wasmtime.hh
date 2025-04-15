@@ -1,6 +1,4 @@
 /**
- * \mainpage
- *
  * This project is a C++ API for
  * [Wasmtime](https://github.com/bytecodealliance/wasmtime). Support for the
  * C++ API is exclusively built on the [C API of
@@ -11,9 +9,9 @@
  * only need to use the contents of this header file to interact with Wasmtime.
  *
  * Examples can be [found
- * online](https://github.com/bytecodealliance/wasmtime-cpp/tree/main/examples)
+ * online](https://github.com/bytecodealliance/wasmtime/tree/main/examples)
  * and otherwise be sure to check out the
- * [README](https://github.com/bytecodealliance/wasmtime-cpp/blob/main/README.md)
+ * [README](https://github.com/bytecodealliance/wasmtime/blob/main/crates/c-api/README.md)
  * for simple usage instructions. Otherwise you can dive right in to the
  * reference documentation of \ref wasmtime.hh
  *
