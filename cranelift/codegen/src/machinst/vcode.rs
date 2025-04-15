@@ -26,8 +26,8 @@ use crate::CodegenError;
 use crate::{machinst::*, trace_log_enabled};
 use crate::{LabelValueLoc, ValueLocRange};
 use regalloc2::{
-    Edit, Function as RegallocFunction, InstOrEdit, InstRange, MachineEnv, Operand,
-    OperandConstraint, OperandKind, PRegSet, RegClass,
+    Edit, Function as RegallocFunction, InstOrEdit, InstPosition, InstRange, MachineEnv, Operand,
+    OperandConstraint, OperandKind, PRegSet, ProgPoint, RegClass,
 };
 use rustc_hash::FxHashMap;
 
@@ -381,18 +381,37 @@ impl<I: VCodeInst> VCodeBuilder<I> {
 
     /// Add a debug value label to a register.
     pub fn add_value_label(&mut self, reg: Reg, label: ValueLabel) {
-        // We'll fix up labels in reverse(). Because we're generating
-        // code bottom-to-top, the liverange of the label goes *from*
-        // the last index at which was defined (or 0, which is the end
-        // of the eventual function) *to* just this instruction, and
-        // no further.
-        let inst = InsnIndex::new(self.vcode.insts.len());
+        // 1) In the reversed order, we consider the instructions
+        //    that define ranges in the "debug_info" array to refer
+        //    to the IP **after** them (when reversed):
+        //      IP[2]__| Inst 3 |
+        //      IP[1]__| Inst 2 |
+        //      IP[0]__| Inst 1 |
+        //             | Inst 0 |
+        //    This is so that we can represent IP[<function start>],
+        //    done at the cost of not being to represent IP[<function end>],
+        //    which is OK since no values will be live at that point.
+        // 2) The live range for "reg" begins at the current IP
+        //    and continues until the next, in execution order,
+        //    VReg that defines "label". Since the ranges are open
+        //    at the end, the subtraction of 1 cancels out:
+        //      [last..current IP] <=>
+        //      [last..last emitted inst index] <=>
+        //      [last..next_inst_index - 1] <=>
+        //      [last..next_inst_index)
+        //
+        let next_inst_index = self.vcode.insts.len();
+        if next_inst_index == 0 {
+            // This would produce a defective [0..0) range.
+            return;
+        }
+        let next_inst = InsnIndex::new(next_inst_index);
         let labels = self.debug_info.entry(label).or_insert_with(|| vec![]);
         let last = labels
             .last()
             .map(|(_start, end, _vreg)| *end)
             .unwrap_or(InsnIndex::new(0));
-        labels.push((last, inst, reg.into()));
+        labels.push((last, next_inst, reg.into()));
     }
 
     /// Access the constants.
@@ -1163,11 +1182,20 @@ impl<I: VCodeInst> VCode<I> {
         for &(label, from, to, alloc) in &regalloc.debug_locations {
             let label = ValueLabel::from_u32(label);
             let ranges = value_labels_ranges.entry(label).or_insert_with(|| vec![]);
-            let from_offset = inst_offsets[from.inst().index()];
-            let to_offset = if to.inst().index() == inst_offsets.len() {
+            let prog_point_to_inst = |prog_point: ProgPoint| {
+                let mut inst = prog_point.inst();
+                if prog_point.pos() == InstPosition::After {
+                    inst = inst.next();
+                }
+                inst.index()
+            };
+            let from_inst_index = prog_point_to_inst(from);
+            let to_inst_index = prog_point_to_inst(to);
+            let from_offset = inst_offsets[from_inst_index];
+            let to_offset = if to_inst_index == inst_offsets.len() {
                 func_body_len
             } else {
-                inst_offsets[to.inst().index()]
+                inst_offsets[to_inst_index]
             };
 
             // Empty ranges or unavailable offsets can happen
@@ -1193,34 +1221,18 @@ impl<I: VCodeInst> VCode<I> {
                 LabelValueLoc::CFAOffset(cfa_to_sp_offset + slot_offset)
             };
 
-            // ValueLocRanges are recorded by *instruction-end
-            // offset*. `from_offset` is the *start* of the
-            // instruction; that is the same as the end of another
-            // instruction, so we only want to begin coverage once
-            // we are past the previous instruction's end.
-            let start = from_offset + 1;
-
-            // Likewise, `end` is exclusive, but we want to
-            // *include* the end of the last
-            // instruction. `to_offset` is the start of the
-            // `to`-instruction, which is the exclusive end, i.e.,
-            // the first instruction not covered. That
-            // instruction's start is the same as the end of the
-            // last instruction that is included, so we go one
-            // byte further to be sure to include it.
-            let end = to_offset + 1;
-
             // Coalesce adjacent ranges that for the same location
             // to minimize output size here and for the consumers.
             if let Some(last_loc_range) = ranges.last_mut() {
-                if last_loc_range.loc == loc && last_loc_range.end == start {
+                if last_loc_range.loc == loc && last_loc_range.end == from_offset {
                     trace!(
-                        "Extending debug range for {:?} in {:?} to {}",
+                        "Extending debug range for {:?} in {:?} to Inst {} ({})",
                         label,
                         loc,
-                        end
+                        to_inst_index,
+                        to_offset
                     );
-                    last_loc_range.end = end;
+                    last_loc_range.end = to_offset;
                     continue;
                 }
             }
@@ -1229,13 +1241,17 @@ impl<I: VCodeInst> VCode<I> {
                 "Recording debug range for {:?} in {:?}: [Inst {}..Inst {}) [{}..{})",
                 label,
                 loc,
-                from.inst().index(),
-                to.inst().index(),
-                start,
-                end
+                from_inst_index,
+                to_inst_index,
+                from_offset,
+                to_offset
             );
 
-            ranges.push(ValueLocRange { loc, start, end });
+            ranges.push(ValueLocRange {
+                loc,
+                start: from_offset,
+                end: to_offset,
+            });
         }
 
         value_labels_ranges
@@ -1279,10 +1295,10 @@ impl<I: VCodeInst> VCode<I> {
         enum Row {
             Head,
             Line,
-            Inst(usize),
+            Inst(usize, usize),
         }
 
-        let mut widths = vec![0; 2 + 2 * labels.len()];
+        let mut widths = vec![0; 3 + 2 * labels.len()];
         let mut row = String::new();
         let mut output_row = |row_kind: Row, mode: Mode| {
             let mut column_index = 0;
@@ -1320,6 +1336,7 @@ impl<I: VCodeInst> VCode<I> {
 
             match row_kind {
                 Row::Head => {
+                    output_cell!("BB");
                     output_cell!("Inst");
                     output_cell!("IP");
                     for label in &labels {
@@ -1328,21 +1345,23 @@ impl<I: VCodeInst> VCode<I> {
                 }
                 Row::Line => {
                     debug_assert!(mode == Mode::Emit);
-                    output_cell_impl!('-', 1, "");
-                    output_cell_impl!('-', 1, "");
+                    for _ in 0..3 {
+                        output_cell_impl!('-', 1, "");
+                    }
                     for _ in &labels {
                         output_cell_impl!('-', 2, "");
                     }
                 }
-                Row::Inst(inst_index) => {
+                Row::Inst(block_index, inst_index) => {
+                    debug_assert!(inst_index < self.num_insts());
+                    if self.block_ranges.get(block_index).start == inst_index {
+                        output_cell!("B{}", block_index);
+                    } else {
+                        output_cell!("");
+                    }
                     output_cell!("Inst {inst_index} ");
                     output_cell!("{} ", inst_offsets[inst_index]);
 
-                    // The ranges which we query below operate on the logic of
-                    // "IP(inst) == IP after inst", while the rows of our table
-                    // represent IPs 'before' "inst", so we need to convert "inst"
-                    // into these "IP after" coordinates.
-                    let inst_ip_index = inst_index.wrapping_sub(1);
                     for label in &labels {
                         // First, the VReg.
                         use regalloc2::Inst;
@@ -1364,12 +1383,12 @@ impl<I: VCodeInst> VCode<I> {
                             }
                         };
                         let vreg_index =
-                            vregs.binary_search_by(|(l, s, e, _)| vreg_cmp(inst_ip_index, l, s, e));
+                            vregs.binary_search_by(|(l, s, e, _)| vreg_cmp(inst_index, l, s, e));
                         if let Ok(vreg_index) = vreg_index {
                             let mut prev_vreg = None;
-                            if inst_ip_index > 0 {
+                            if inst_index > 0 {
                                 let prev_vreg_index = vregs.binary_search_by(|(l, s, e, _)| {
-                                    vreg_cmp(inst_ip_index - 1, l, s, e)
+                                    vreg_cmp(inst_index - 1, l, s, e)
                                 });
                                 if let Ok(prev_vreg_index) = prev_vreg_index {
                                     prev_vreg = Some(vregs[prev_vreg_index].3);
@@ -1387,13 +1406,14 @@ impl<I: VCodeInst> VCode<I> {
                         }
 
                         // Second, the allocated location.
+                        let inst_prog_point = ProgPoint::before(Inst::new(inst_index));
                         let range_index = regalloc.debug_locations.binary_search_by(
                             |(range_label, range_start, range_end, _)| match range_label.cmp(label)
                             {
                                 Ordering::Equal => {
-                                    if range_end.inst().index() <= inst_ip_index {
+                                    if *range_end <= inst_prog_point {
                                         Ordering::Less
-                                    } else if range_start.inst().index() > inst_ip_index {
+                                    } else if *range_start > inst_prog_point {
                                         Ordering::Greater
                                     } else {
                                         Ordering::Equal
@@ -1423,15 +1443,19 @@ impl<I: VCodeInst> VCode<I> {
             }
         };
 
-        for inst_index in 0..inst_offsets.len() {
-            output_row(Row::Inst(inst_index), Mode::Measure);
+        for block_index in 0..self.num_blocks() {
+            for inst_index in self.block_ranges.get(block_index) {
+                output_row(Row::Inst(block_index, inst_index), Mode::Measure);
+            }
         }
         output_row(Row::Head, Mode::Measure);
 
         output_row(Row::Head, Mode::Emit);
         output_row(Row::Line, Mode::Emit);
-        for inst_index in 0..inst_offsets.len() {
-            output_row(Row::Inst(inst_index), Mode::Emit);
+        for block_index in 0..self.num_blocks() {
+            for inst_index in self.block_ranges.get(block_index) {
+                output_row(Row::Inst(block_index, inst_index), Mode::Emit);
+            }
         }
     }
 

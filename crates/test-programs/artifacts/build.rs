@@ -234,6 +234,18 @@ fn build_debug_info_assets(paths_code: &mut String) {
             ]
             .as_slice(),
         ),
+        (
+            "clang",
+            "codegen-optimized-wasm-optimized.wasm",
+            [
+                "-target",
+                "wasm32-unknown-wasip1",
+                "-g",
+                "-O2",
+                "codegen-optimized-wasm-optimized.cpp",
+            ]
+            .as_slice(),
+        ),
     ];
 
     // The debug tests relying on these assets are ignored by default,
