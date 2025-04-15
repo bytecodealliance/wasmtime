@@ -43,8 +43,8 @@
 ;; @0022                               v22 = uadd_overflow_trap v2, v18, user1
 ;; @0022                               v23 = uextend.i64 v22
 ;; @0022                               v25 = iadd v6, v23
-;;                                     v53 = ishl v3, v45  ; v45 = 3
-;; @0022                               v21 = iadd v53, v17  ; v17 = 24
+;;                                     v52 = ishl v3, v45  ; v45 = 3
+;; @0022                               v21 = iadd v52, v17  ; v17 = 24
 ;; @0022                               v26 = isub v18, v21
 ;; @0022                               v27 = uextend.i64 v26
 ;; @0022                               v28 = isub v25, v27
