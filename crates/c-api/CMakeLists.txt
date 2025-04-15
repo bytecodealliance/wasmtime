@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.12)
-project(wasmtime)
+project(wasmtime C)
 
 set(WASMTIME_USER_CARGO_BUILD_OPTIONS "" CACHE STRING "Additional cargo flags (such as --features) to apply to the build command")
 option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
@@ -166,7 +166,10 @@ target_include_directories(
 
 if (BUILD_TESTS)
   message(STATUS "Building tests")
+
+  enable_language(CXX)
   set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+
   enable_testing()
   add_subdirectory(tests)
 endif()
