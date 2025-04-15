@@ -2019,6 +2019,12 @@ impl Memory {
             return false;
         }
 
+        // If its minimum and maximum are the same, then the memory will never
+        // be resized, and therefore will never move.
+        if self.limits.max.is_some_and(|max| self.limits.min == max) {
+            return false;
+        }
+
         // If the maximum size of this memory is above the threshold of the
         // initial memory reservation then the memory may move.
         let max = self.maximum_byte_size().unwrap_or(u64::MAX);
