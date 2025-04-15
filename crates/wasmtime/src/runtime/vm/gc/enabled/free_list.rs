@@ -106,7 +106,13 @@ impl FreeList {
         // list.
         let new_cap = u32::try_from(self.capacity).unwrap_or(u32::MAX);
         let new_cap = round_u32_down_to_pow2(new_cap, ALIGN_U32);
-        debug_assert!(new_cap >= index.get());
+
+        // If we haven't added enough capacity for our first allocation yet,
+        // then just return and wait for more capacity.
+        if index.get() > new_cap {
+            return;
+        }
+
         let size = new_cap - index.get();
         debug_assert_eq!(size % ALIGN_U32, 0);
         if size == 0 {
@@ -912,6 +918,32 @@ mod tests {
             1,
             "`add_capacity` should eagerly merge new capacity into the last block \
              in the free list, when possible"
+        );
+    }
+
+    #[test]
+    fn add_capacity_not_enough_for_first_alloc() {
+        let layout = Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE).unwrap();
+
+        let mut free_list = FreeList::new(0);
+        assert!(free_list.alloc(layout).unwrap().is_none(), "no capacity");
+
+        for _ in 1..2 * ALIGN_USIZE {
+            free_list.add_capacity(1);
+            assert!(
+                free_list.alloc(layout).unwrap().is_none(),
+                "not enough capacity"
+            );
+        }
+
+        free_list.add_capacity(1);
+        free_list
+            .alloc(layout)
+            .unwrap()
+            .expect("now we have enough capacity for one");
+        assert!(
+            free_list.alloc(layout).unwrap().is_none(),
+            "but not enough capacity for two"
         );
     }
 }
