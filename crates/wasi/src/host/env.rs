@@ -12,7 +12,6 @@ where
         Ok(self.ctx().args.clone())
     }
     fn initial_cwd(&mut self) -> anyhow::Result<Option<String>> {
-        // FIXME: expose cwd in builder and save in ctx
-        Ok(None)
+        Ok(self.ctx().cwd.clone())
     }
 }

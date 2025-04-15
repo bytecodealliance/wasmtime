@@ -32,6 +32,7 @@ use std::{mem, net::SocketAddr};
 /// wasi.arg("./foo.wasm");
 /// wasi.arg("--help");
 /// wasi.env("FOO", "bar");
+/// wasi.cwd("/home/steve/foo");
 ///
 /// let wasi: WasiCtx = wasi.build();
 /// ```
@@ -52,6 +53,7 @@ pub struct WasiCtxBuilder {
     monotonic_clock: Box<dyn HostMonotonicClock + Send>,
     allowed_network_uses: AllowedNetworkUses,
     allow_blocking_current_thread: bool,
+    cwd: Option<String>,
     built: bool,
 }
 
@@ -101,6 +103,7 @@ impl WasiCtxBuilder {
             monotonic_clock: monotonic_clock(),
             allowed_network_uses: AllowedNetworkUses::default(),
             allow_blocking_current_thread: false,
+            cwd: None,
             built: false,
         }
     }
@@ -452,6 +455,12 @@ impl WasiCtxBuilder {
         self
     }
 
+    /// Sets the current working directory
+    pub fn cwd(&mut self, cwd: impl AsRef<str>) -> &mut Self {
+        self.cwd = Some(cwd.as_ref().to_owned());
+        self
+    }
+
     /// Uses the configured context so far to construct the final [`WasiCtx`].
     ///
     /// Note that each `WasiCtxBuilder` can only be used to "build" once, and
@@ -480,6 +489,7 @@ impl WasiCtxBuilder {
             monotonic_clock,
             allowed_network_uses,
             allow_blocking_current_thread,
+            cwd,
             built: _,
         } = mem::replace(self, Self::new());
         self.built = true;
@@ -499,6 +509,7 @@ impl WasiCtxBuilder {
             monotonic_clock,
             allowed_network_uses,
             allow_blocking_current_thread,
+            cwd,
         }
     }
 
@@ -583,6 +594,7 @@ pub struct WasiCtx {
     pub(crate) socket_addr_check: SocketAddrCheck,
     pub(crate) allowed_network_uses: AllowedNetworkUses,
     pub(crate) allow_blocking_current_thread: bool,
+    pub(crate) cwd: Option<String>,
 }
 
 impl WasiCtx {
