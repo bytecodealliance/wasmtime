@@ -7,9 +7,6 @@
 //! operations are implemented in terms of their native platform equivalents by
 //! default.
 //!
-//! For components and WASIp2, continue reading below. For WASIp1 and core
-//! modules, see the [`preview1`](crate::preview1) module documentation.
-//!
 //! # WASIp2 interfaces
 //!
 //! This module contains implementations of the following interfaces:

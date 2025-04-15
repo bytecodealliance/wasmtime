@@ -1,6 +1,16 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
+//! # Wasmtime's WASI Implementation
+//!
+//! This crate provides a Wasmtime host implementations of different versions of WASI.
+//! WASI is implemented with the Rust crates [`tokio`] and [`cap-std`](cap_std) primarily, meaning that
+//! operations are implemented in terms of their native platform equivalents by
+//! default.
+//!
+//! For components and WASIp2, see [`p2`].
+//! For WASIp1 and core modules, see the [`preview1`] module documentation.
+
 mod clocks;
 mod error;
 mod filesystem;
