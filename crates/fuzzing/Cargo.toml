@@ -27,12 +27,13 @@ wasmprinter = { workspace = true }
 wasmtime-wast = { workspace = true, features = ['component-model'] }
 wasmtime = { workspace = true, features = ['default', 'winch'] }
 wasm-encoder = { workspace = true }
-wasm-smith = { workspace = true }
+wasm-smith = { workspace = true, features = ['serde'] }
 wasm-mutate = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
 wasmi = { version = "0.43.1", default-features = false, features = ["std", "simd"] }
 futures = { workspace = true }
 wasmtime-test-util = { workspace = true, features = ['wast', 'component-fuzz', 'component'] }
+serde_json = { workspace = true }
 
 [dependencies.wasmtime-cli-flags]
 workspace = true

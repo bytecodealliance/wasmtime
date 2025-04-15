@@ -1352,6 +1352,9 @@ name = "flagset"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cda653ca797810c02f7ca4b804b40b8b95ae046eb989d356bce17919a8c25499"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "flate2"
@@ -4041,7 +4044,10 @@ dependencies = [
  "anyhow",
  "arbitrary",
  "flagset",
+ "serde",
+ "serde_derive",
  "wasm-encoder 0.229.0",
+ "wat",
 ]
 
 [[package]]
@@ -4533,6 +4539,7 @@ dependencies = [
  "log",
  "rand",
  "rayon",
+ "serde_json",
  "target-lexicon",
  "tempfile",
  "v8",
