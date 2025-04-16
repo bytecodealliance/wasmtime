@@ -853,7 +853,7 @@ impl Assembler {
         });
     }
 
-    // Population Count per byte.
+    /// Population count per byte.
     pub fn cnt(&mut self, rd: WritableReg) {
         self.emit(Inst::VecMisc {
             op: VecMisc2::Cnt,
