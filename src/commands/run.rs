@@ -566,8 +566,8 @@ impl RunCommand {
                 })?;
                 let mut export = None;
                 for name in names {
-                    let (_item, ix) = component
-                        .get_export(export.as_ref(), name)
+                    let ix = component
+                        .get_export_index(export.as_ref(), name)
                         .expect("export exists");
                     export = Some(ix);
                 }
