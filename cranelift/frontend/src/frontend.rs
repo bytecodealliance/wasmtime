@@ -151,8 +151,8 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
             ir::InstructionData::BranchTable { table, .. } => {
                 let pool = &self.builder.func.dfg.value_lists;
 
-                // Unlike all other jumps/branches, jump tables are
-                // capable of having the same successor appear
+                // Unlike most other jumps/branches and like try_call,
+                // jump tables are capable of having the same successor appear
                 // multiple times, so we must deduplicate.
                 let mut unique = EntitySet::<Block>::new();
                 for dest_block in self
@@ -179,7 +179,39 @@ impl<'short, 'long> InstBuilderBase<'short> for FuncInstBuilder<'short, 'long> {
                 }
             }
 
-            inst => debug_assert!(!inst.opcode().is_branch()),
+            ir::InstructionData::TryCall { exception, .. }
+            | ir::InstructionData::TryCallIndirect { exception, .. } => {
+                let pool = &self.builder.func.dfg.value_lists;
+
+                // Unlike most other jumps/branches and like br_table,
+                // exception tables are capable of having the same successor
+                // appear multiple times, so we must deduplicate.
+                let mut unique = EntitySet::<Block>::new();
+                for dest_block in self
+                    .builder
+                    .func
+                    .stencil
+                    .dfg
+                    .exception_tables
+                    .get(*exception)
+                    .expect("you are referencing an undeclared exception table")
+                    .all_branches()
+                {
+                    let block = dest_block.block(pool);
+                    if !unique.insert(block) {
+                        continue;
+                    }
+
+                    // Call `declare_block_predecessor` instead of `declare_successor` for
+                    // avoiding the borrow checker.
+                    self.builder
+                        .func_ctx
+                        .ssa
+                        .declare_block_predecessor(block, inst);
+                }
+            }
+
+            inst => assert!(!inst.opcode().is_branch()),
         }
 
         if data.opcode().is_terminator() {
@@ -1207,8 +1239,10 @@ mod tests {
     use alloc::string::ToString;
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::condcodes::IntCC;
-    use cranelift_codegen::ir::{types::*, UserFuncName};
-    use cranelift_codegen::ir::{AbiParam, Function, InstBuilder, MemFlags, Signature, Value};
+    use cranelift_codegen::ir::{
+        types::*, AbiParam, BlockCall, ExceptionTableData, ExtFuncData, ExternalName, Function,
+        InstBuilder, MemFlags, Signature, UserExternalName, UserFuncName, Value,
+    };
     use cranelift_codegen::isa::{CallConv, TargetFrontendConfig, TargetIsa};
     use cranelift_codegen::settings;
     use cranelift_codegen::verifier::verify_function;
@@ -1969,6 +2003,96 @@ block0:
 block0:
     v0 = iconst.i32 -1
     return
+}",
+        );
+    }
+
+    #[test]
+    fn try_call() {
+        let mut sig = Signature::new(CallConv::SystemV);
+        sig.params.push(AbiParam::new(I8));
+        sig.returns.push(AbiParam::new(I32));
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(UserFuncName::testcase("sample"), sig);
+
+        let sig0 = func.import_signature(Signature::new(CallConv::SystemV));
+        let name = func.declare_imported_user_function(UserExternalName::new(0, 0));
+        let fn0 = func.import_function(ExtFuncData {
+            name: ExternalName::User(name),
+            signature: sig0,
+            colocated: false,
+        });
+
+        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+        let block0 = builder.create_block();
+        let block1 = builder.create_block();
+        let block2 = builder.create_block();
+        let block3 = builder.create_block();
+
+        let my_var = Variable::from_u32(0);
+        builder.declare_var(my_var, I32);
+
+        builder.switch_to_block(block0);
+        let branch_val = builder.append_block_param(block0, I8);
+        builder.ins().brif(branch_val, block1, &[], block2, &[]);
+
+        builder.switch_to_block(block1);
+        let one = builder.ins().iconst(I32, 1);
+        builder.def_var(my_var, one);
+
+        let normal_return =
+            BlockCall::new(block3, [].into_iter(), &mut builder.func.dfg.value_lists);
+        let exception_table = builder
+            .func
+            .dfg
+            .exception_tables
+            .push(ExceptionTableData::new(sig0, normal_return, []));
+        builder.ins().try_call(fn0, &[], exception_table);
+
+        builder.switch_to_block(block2);
+        let two = builder.ins().iconst(I32, 2);
+        builder.def_var(my_var, two);
+
+        let normal_return =
+            BlockCall::new(block3, [].into_iter(), &mut builder.func.dfg.value_lists);
+        let exception_table = builder
+            .func
+            .dfg
+            .exception_tables
+            .push(ExceptionTableData::new(sig0, normal_return, []));
+        builder.ins().try_call(fn0, &[], exception_table);
+
+        builder.switch_to_block(block3);
+        let ret_val = builder.use_var(my_var);
+        builder.ins().return_(&[ret_val]);
+
+        builder.seal_all_blocks();
+        builder.finalize();
+
+        let flags = cranelift_codegen::settings::Flags::new(cranelift_codegen::settings::builder());
+        let ctx = cranelift_codegen::Context::for_function(func);
+        ctx.verify(&flags).expect("should be valid");
+
+        check(
+            &ctx.func,
+            "function %sample(i8) -> i32 system_v {
+    sig0 = () system_v
+    fn0 = u0:0 sig0
+
+block0(v0: i8):
+    brif v0, block1, block2
+
+block1:
+    v1 = iconst.i32 1
+    try_call fn0(), sig0, block3(v1), []  ; v1 = 1
+
+block2:
+    v2 = iconst.i32 2
+    try_call fn0(), sig0, block3(v2), []  ; v2 = 2
+
+block3(v3: i32):
+    return v3
 }",
         );
     }
