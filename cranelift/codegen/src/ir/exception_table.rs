@@ -155,6 +155,12 @@ impl ExceptionTableData {
     pub fn signature(&self) -> SigRef {
         self.sig
     }
+
+    /// Clears all entries in this exception table, but leaves the function signature.
+    pub fn clear(&mut self) {
+        self.tags.clear();
+        self.targets.clear();
+    }
 }
 
 /// A wrapper for the context required to display a
