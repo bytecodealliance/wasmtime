@@ -11,7 +11,7 @@ use std::collections::HashSet;
 use wiggle::{GuestMemory, GuestPtr};
 
 wiggle::from_witx!({
-    witx: ["$CARGO_MANIFEST_DIR/witx/preview0/wasi_unstable.witx"],
+    witx: ["witx/preview0/wasi_unstable.witx"],
     errors: { errno => trappable Error },
     async: *,
     wasmtime: false,

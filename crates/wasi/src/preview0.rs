@@ -24,7 +24,7 @@ pub fn add_to_linker_sync<T: Send>(
 }
 
 wiggle::from_witx!({
-    witx: ["$CARGO_MANIFEST_DIR/witx/preview0/wasi_unstable.witx"],
+    witx: ["witx/preview0/wasi_unstable.witx"],
     async: {
         wasi_unstable::{
             fd_advise, fd_close, fd_datasync, fd_fdstat_get, fd_filestat_get, fd_filestat_set_size,
@@ -42,7 +42,7 @@ mod sync {
     use std::future::Future;
 
     wiggle::wasmtime_integration!({
-        witx: ["$CARGO_MANIFEST_DIR/witx/preview0/wasi_unstable.witx"],
+        witx: ["witx/preview0/wasi_unstable.witx"],
         target: super,
         block_on[in_tokio]: {
             wasi_unstable::{

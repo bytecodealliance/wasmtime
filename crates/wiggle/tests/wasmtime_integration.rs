@@ -3,7 +3,7 @@ use wiggle::GuestMemory;
 
 // from_witx invocation says the func is async. This context doesn't support async!
 wiggle::from_witx!({
-    witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
+    witx: ["tests/atoms.witx"],
     async: {
         atoms::{double_int_return_float}
     }
@@ -13,7 +13,7 @@ pub mod integration {
     //  The integration invocation says the func is blocking, so it will still work.
     wiggle::wasmtime_integration!({
         target: crate,
-        witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
+        witx: ["tests/atoms.witx"],
         block_on: {
             atoms::{double_int_return_float}
         }

@@ -3,7 +3,7 @@ use wiggle::{GuestMemory, GuestPtr};
 use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
 
 wiggle::from_witx!({
-    witx: ["$CARGO_MANIFEST_DIR/tests/ints.witx"],
+    witx: ["tests/ints.witx"],
 });
 
 impl_errno!(types::Errno);

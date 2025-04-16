@@ -22,4 +22,3 @@ proc-macro2 = { workspace = true }
 heck = { workspace = true }
 anyhow = { workspace = true }
 syn = { workspace = true, features = ["full"] }
-shellexpand = "2.0"

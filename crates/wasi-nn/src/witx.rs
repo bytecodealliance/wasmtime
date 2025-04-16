@@ -94,7 +94,7 @@ where
 mod generated {
     use super::*;
     wiggle::from_witx!({
-        witx: ["$WASI_ROOT/wasi-nn.witx"],
+        witx: ["witx/wasi-nn.witx"],
         errors: { nn_errno => WasiNnError }
     });
 
