@@ -2781,6 +2781,8 @@
 (rule (x64_produce_flags (ProduceFlagsOp.Sub) ty src1 src2)
       (x64_sub_with_flags_paired ty src1 src2))
 
+;; This should only be use for instructions that _do_ produce flags that can be
+;; consumed later. It is semantically "unsafe" and must be used correctly.
 (decl asm_produce_flags (AssemblerOutputs) ProducesFlags)
 (rule (asm_produce_flags (AssemblerOutputs.RetGpr inst gpr))
       (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst gpr))
