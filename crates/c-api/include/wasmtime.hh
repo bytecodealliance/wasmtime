@@ -2694,11 +2694,23 @@ public:
     return results;
   }
 
+  /**
+   * \brief Helper function for `call(Store::Context cx, const I &begin, const I
+   * &end)`
+   *
+   * \see call(Store::Context cx, const I &begin, const I &end)
+   */
   TrapResult<std::vector<Val>> call(Store::Context cx,
                                     const std::vector<Val> &params) const {
     return this->call(cx, params.begin(), params.end());
   }
 
+  /**
+   * \brief Helper function for `call(Store::Context cx, const I &begin, const I
+   * &end)`
+   *
+   * \see call(Store::Context cx, const I &begin, const I &end)
+   */
   TrapResult<std::vector<Val>>
   call(Store::Context cx, const std::initializer_list<Val> &params) const {
     return this->call(cx, params.begin(), params.end());

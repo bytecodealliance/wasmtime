@@ -810,7 +810,7 @@ WARNINGS               = YES
 # will automatically be disabled.
 # The default value is: YES.
 
-WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_UNDOCUMENTED   = YES
 
 # If the WARN_IF_DOC_ERROR tag is set to YES, doxygen will generate warnings for
 # potential errors in the documentation, such as not documenting some parameters
@@ -925,7 +925,7 @@ EXCLUDE_SYMLINKS       = NO
 # Note that the wildcards are matched against the file with absolute path, so to
 # exclude all test directories for example use the pattern */test/*
 
-EXCLUDE_PATTERNS       =
+EXCLUDE_PATTERNS       = */wasm.hh
 
 # The EXCLUDE_SYMBOLS tag can be used to specify one or more symbol names
 # (namespaces, classes, functions, etc.) that should be excluded from the
@@ -945,7 +945,11 @@ EXCLUDE_SYMBOLS        = assertions \
                          WASMTIME_CONFIG_PROP \
                          WASMTIME_POOLING_ALLOCATION_CONFIG_PROP \
                          own \
-                         wasm_*_enum
+                         wasm_*_enum \
+                         wasmtime::detail \
+                         CASE_KIND_PRINT_NAME \
+                         CASE_KIND_TO_C \
+                         CASE_C_TO_KIND
 
 # The EXAMPLE_PATH tag can be used to specify one or more files or directories
 # that contain example code fragments that are included (see the \include
