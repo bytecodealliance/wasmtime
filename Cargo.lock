@@ -956,10 +956,10 @@ dependencies = [
  "cranelift-native",
  "cranelift-object",
  "cranelift-reader",
+ "env_logger 0.11.5",
  "filecheck",
  "indicatif",
  "log",
- "pretty_env_logger",
  "pulley-interpreter",
  "rayon",
  "regalloc2",
@@ -2605,16 +2605,6 @@ name = "ppv-lite86"
 version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eb9f9e6e233e5c4a35559a617bf40a4ec447db2e84c20b55a6f83167b7e57872"
-
-[[package]]
-name = "pretty_env_logger"
-version = "0.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "865724d4dbe39d9f3dd3b52b88d859d66bcb2d6a0acfd5ea68a65fb66d4bdc1c"
-dependencies = [
- "env_logger 0.10.0",
- "log",
-]
 
 [[package]]
 name = "prettyplease"
@@ -4301,10 +4291,10 @@ dependencies = [
  "anyhow",
  "base64",
  "directories-next",
+ "env_logger 0.11.5",
  "filetime",
  "log",
  "postcard",
- "pretty_env_logger",
  "rustix 1.0.3",
  "serde",
  "serde_derive",
