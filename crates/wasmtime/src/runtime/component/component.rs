@@ -22,7 +22,7 @@ use std::path::Path;
 use wasmtime_environ::component::{
     AllCallFunc, CompiledComponentInfo, ComponentArtifacts, ComponentTypes, Export, ExportIndex,
     GlobalInitializer, InstantiateModule, NameMapNoIntern, StaticModuleIndex, TrampolineIndex,
-    TypeComponentIndex, TypeDef, VMComponentOffsets,
+    TypeComponentIndex, VMComponentOffsets,
 };
 use wasmtime_environ::TypeTrace;
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
@@ -779,16 +779,12 @@ impl Component {
     ) -> Option<(types::ComponentItem, ComponentExportIndex)> {
         let info = self.env_component();
         let index = self.lookup_export_index(instance, name)?;
-        let ty = match info.export_items[index] {
-            Export::Instance { ty, .. } => TypeDef::ComponentInstance(ty),
-            Export::LiftedFunction { ty, .. } => TypeDef::ComponentFunc(ty),
-            Export::ModuleStatic { ty, .. } | Export::ModuleImport { ty, .. } => {
-                TypeDef::Module(ty)
-            }
-            Export::Type(ty) => ty,
-        };
         let item = self.with_uninstantiated_instance_type(|instance| {
-            types::ComponentItem::from(&self.inner.engine, &ty, instance)
+            types::ComponentItem::from_export(
+                &self.inner.engine,
+                &info.export_items[index],
+                instance,
+            )
         });
         Some((
             item,

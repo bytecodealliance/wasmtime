@@ -308,15 +308,11 @@ impl Instance {
     ) -> Option<(ComponentItem, ComponentExportIndex)> {
         let data = store[self.0].as_ref().unwrap();
         let index = data.component.lookup_export_index(instance, name)?;
-        let ty = match data.component.env_component().export_items[index] {
-            Export::Instance { ty, .. } => TypeDef::ComponentInstance(ty),
-            Export::LiftedFunction { ty, .. } => TypeDef::ComponentFunc(ty),
-            Export::ModuleStatic { ty, .. } | Export::ModuleImport { ty, .. } => {
-                TypeDef::Module(ty)
-            }
-            Export::Type(ty) => ty,
-        };
-        let item = ComponentItem::from(&store.engine(), &ty, &data.ty());
+        let item = ComponentItem::from_export(
+            &store.engine(),
+            &data.component.env_component().export_items[index],
+            &data.ty(),
+        );
         Some((
             item,
             ComponentExportIndex {
