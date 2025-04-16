@@ -113,9 +113,8 @@ const _: () = {
         ) -> wasmtime::Result<Self> {
             let _component = component;
             let y = _component
-                .export_index(None, "y")
-                .ok_or_else(|| anyhow::anyhow!("no function export `y` found"))?
-                .1;
+                .get_export_index(None, "y")
+                .ok_or_else(|| anyhow::anyhow!("no function export `y` found"))?;
             Ok(TheWorldIndices { y })
         }
         /// Creates a new instance of [`TheWorldIndices`] from an
@@ -131,7 +130,7 @@ const _: () = {
         ) -> wasmtime::Result<Self> {
             let _instance = instance;
             let y = _instance
-                .get_export(&mut store, None, "y")
+                .get_export_index(&mut store, None, "y")
                 .ok_or_else(|| anyhow::anyhow!("no function export `y` found"))?;
             Ok(TheWorldIndices { y })
         }

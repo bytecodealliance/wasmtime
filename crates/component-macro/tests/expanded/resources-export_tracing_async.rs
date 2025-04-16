@@ -358,15 +358,15 @@ pub mod exports {
                     pub fn new(
                         component: &wasmtime::component::Component,
                     ) -> wasmtime::Result<GuestIndices> {
-                        let (_, instance) = component
-                            .export_index(None, "foo:foo/simple-export")
+                        let instance = component
+                            .get_export_index(None, "foo:foo/simple-export")
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `foo:foo/simple-export`"
                                 )
                             })?;
                         Self::_new(|name| {
-                            component.export_index(Some(&instance), name).map(|p| p.1)
+                            component.get_export_index(Some(&instance), name)
                         })
                     }
                     /// This constructor is similar to [`GuestIndices::new`] except that it
@@ -376,14 +376,15 @@ pub mod exports {
                         instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance_export = instance
-                            .get_export(&mut store, None, "foo:foo/simple-export")
+                            .get_export_index(&mut store, None, "foo:foo/simple-export")
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `foo:foo/simple-export`"
                                 )
                             })?;
                         Self::_new(|name| {
-                            instance.get_export(&mut store, Some(&instance_export), name)
+                            instance
+                                .get_export_index(&mut store, Some(&instance_export), name)
                         })
                     }
                     fn _new(
@@ -566,15 +567,15 @@ pub mod exports {
                     pub fn new(
                         component: &wasmtime::component::Component,
                     ) -> wasmtime::Result<GuestIndices> {
-                        let (_, instance) = component
-                            .export_index(None, "foo:foo/export-using-import")
+                        let instance = component
+                            .get_export_index(None, "foo:foo/export-using-import")
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `foo:foo/export-using-import`"
                                 )
                             })?;
                         Self::_new(|name| {
-                            component.export_index(Some(&instance), name).map(|p| p.1)
+                            component.get_export_index(Some(&instance), name)
                         })
                     }
                     /// This constructor is similar to [`GuestIndices::new`] except that it
@@ -584,14 +585,19 @@ pub mod exports {
                         instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance_export = instance
-                            .get_export(&mut store, None, "foo:foo/export-using-import")
+                            .get_export_index(
+                                &mut store,
+                                None,
+                                "foo:foo/export-using-import",
+                            )
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `foo:foo/export-using-import`"
                                 )
                             })?;
                         Self::_new(|name| {
-                            instance.get_export(&mut store, Some(&instance_export), name)
+                            instance
+                                .get_export_index(&mut store, Some(&instance_export), name)
                         })
                     }
                     fn _new(
@@ -779,15 +785,15 @@ pub mod exports {
                     pub fn new(
                         component: &wasmtime::component::Component,
                     ) -> wasmtime::Result<GuestIndices> {
-                        let (_, instance) = component
-                            .export_index(None, "foo:foo/export-using-export1")
+                        let instance = component
+                            .get_export_index(None, "foo:foo/export-using-export1")
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `foo:foo/export-using-export1`"
                                 )
                             })?;
                         Self::_new(|name| {
-                            component.export_index(Some(&instance), name).map(|p| p.1)
+                            component.get_export_index(Some(&instance), name)
                         })
                     }
                     /// This constructor is similar to [`GuestIndices::new`] except that it
@@ -797,14 +803,19 @@ pub mod exports {
                         instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance_export = instance
-                            .get_export(&mut store, None, "foo:foo/export-using-export1")
+                            .get_export_index(
+                                &mut store,
+                                None,
+                                "foo:foo/export-using-export1",
+                            )
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `foo:foo/export-using-export1`"
                                 )
                             })?;
                         Self::_new(|name| {
-                            instance.get_export(&mut store, Some(&instance_export), name)
+                            instance
+                                .get_export_index(&mut store, Some(&instance_export), name)
                         })
                     }
                     fn _new(
@@ -906,15 +917,15 @@ pub mod exports {
                     pub fn new(
                         component: &wasmtime::component::Component,
                     ) -> wasmtime::Result<GuestIndices> {
-                        let (_, instance) = component
-                            .export_index(None, "foo:foo/export-using-export2")
+                        let instance = component
+                            .get_export_index(None, "foo:foo/export-using-export2")
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `foo:foo/export-using-export2`"
                                 )
                             })?;
                         Self::_new(|name| {
-                            component.export_index(Some(&instance), name).map(|p| p.1)
+                            component.get_export_index(Some(&instance), name)
                         })
                     }
                     /// This constructor is similar to [`GuestIndices::new`] except that it
@@ -924,14 +935,19 @@ pub mod exports {
                         instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance_export = instance
-                            .get_export(&mut store, None, "foo:foo/export-using-export2")
+                            .get_export_index(
+                                &mut store,
+                                None,
+                                "foo:foo/export-using-export2",
+                            )
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `foo:foo/export-using-export2`"
                                 )
                             })?;
                         Self::_new(|name| {
-                            instance.get_export(&mut store, Some(&instance_export), name)
+                            instance
+                                .get_export_index(&mut store, Some(&instance_export), name)
                         })
                     }
                     fn _new(

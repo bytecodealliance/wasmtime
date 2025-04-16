@@ -198,14 +198,12 @@ pub mod exports {
             pub fn new(
                 component: &wasmtime::component::Component,
             ) -> wasmtime::Result<GuestIndices> {
-                let (_, instance) = component
-                    .export_index(None, "the-name")
+                let instance = component
+                    .get_export_index(None, "the-name")
                     .ok_or_else(|| {
                         anyhow::anyhow!("no exported instance named `the-name`")
                     })?;
-                Self::_new(|name| {
-                    component.export_index(Some(&instance), name).map(|p| p.1)
-                })
+                Self::_new(|name| component.get_export_index(Some(&instance), name))
             }
             /// This constructor is similar to [`GuestIndices::new`] except that it
             /// performs string lookups after instantiation time.
@@ -214,12 +212,12 @@ pub mod exports {
                 instance: &wasmtime::component::Instance,
             ) -> wasmtime::Result<GuestIndices> {
                 let instance_export = instance
-                    .get_export(&mut store, None, "the-name")
+                    .get_export_index(&mut store, None, "the-name")
                     .ok_or_else(|| {
                         anyhow::anyhow!("no exported instance named `the-name`")
                     })?;
                 Self::_new(|name| {
-                    instance.get_export(&mut store, Some(&instance_export), name)
+                    instance.get_export_index(&mut store, Some(&instance_export), name)
                 })
             }
             fn _new(
