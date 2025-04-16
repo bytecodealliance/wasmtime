@@ -1,7 +1,8 @@
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
 use crate::component::{
-    Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower, ResourceType, TypedFunc,
+    types::ComponentItem, Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower,
+    ResourceType, TypedFunc,
 };
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
@@ -279,8 +280,9 @@ impl Instance {
     /// instance.
     ///
     /// This method will lookup the `name` provided within the `instance`
-    /// provided and return a [`ComponentExportIndex`] which can be used to
-    /// pass to other `get_*` functions like [`Instance::get_func`].
+    /// provided and return a [`ComponentItem`] describing the export,
+    /// and [`ComponentExportIndex`] which can be passed other `get_*`
+    /// functions like [`Instance::get_func`].
     ///
     /// # Panics
     ///
@@ -290,7 +292,7 @@ impl Instance {
         mut store: impl AsContextMut,
         instance: Option<&ComponentExportIndex>,
         name: &str,
-    ) -> Option<ComponentExportIndex> {
+    ) -> Option<(ComponentItem, ComponentExportIndex)> {
         self._get_export(store.as_context_mut().0, instance, name)
     }
 
@@ -299,13 +301,25 @@ impl Instance {
         store: &StoreOpaque,
         instance: Option<&ComponentExportIndex>,
         name: &str,
-    ) -> Option<ComponentExportIndex> {
+    ) -> Option<(ComponentItem, ComponentExportIndex)> {
         let data = store[self.0].as_ref().unwrap();
         let index = data.component.lookup_export_index(instance, name)?;
-        Some(ComponentExportIndex {
-            id: data.component_id(),
-            index,
-        })
+        let ty = match data.component.env_component().export_items[index] {
+            Export::Instance { ty, .. } => TypeDef::ComponentInstance(ty),
+            Export::LiftedFunction { ty, .. } => TypeDef::ComponentFunc(ty),
+            Export::ModuleStatic { ty, .. } | Export::ModuleImport { ty, .. } => {
+                TypeDef::Module(ty)
+            }
+            Export::Type(ty) => ty,
+        };
+        let item = ComponentItem::from(&store.engine(), &ty, &data.ty());
+        Some((
+            item,
+            ComponentExportIndex {
+                id: data.component_id(),
+                index,
+            },
+        ))
     }
 
     fn lookup_export<'a>(
