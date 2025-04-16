@@ -130,7 +130,7 @@ macro_rules! define_wasi {
             wiggle::wasmtime_integration!({
                 // The wiggle code to integrate with lives here:
                 target: crate::snapshots::preview_1,
-                witx: ["$CARGO_MANIFEST_DIR/witx/preview1/wasi_snapshot_preview1.witx"],
+                witx: ["witx/preview1/wasi_snapshot_preview1.witx"],
                 errors: { errno => trappable Error },
                 $async_mode: *
             });
@@ -139,7 +139,7 @@ macro_rules! define_wasi {
             wiggle::wasmtime_integration!({
                 // The wiggle code to integrate with lives here:
                 target: crate::snapshots::preview_0,
-                witx: ["$CARGO_MANIFEST_DIR/witx/preview0/wasi_unstable.witx"],
+                witx: ["witx/preview0/wasi_unstable.witx"],
                 errors: { errno => trappable Error },
                 $async_mode: *
             });

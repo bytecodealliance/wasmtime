@@ -825,7 +825,7 @@ pub fn add_to_linker_sync<T: Send>(
 // None of the generated modules, traits, or types should be used externally
 // to this module.
 wiggle::from_witx!({
-    witx: ["$CARGO_MANIFEST_DIR/witx/preview1/wasi_snapshot_preview1.witx"],
+    witx: ["witx/preview1/wasi_snapshot_preview1.witx"],
     async: {
         wasi_snapshot_preview1::{
             fd_advise, fd_close, fd_datasync, fd_fdstat_get, fd_filestat_get, fd_filestat_set_size,
@@ -843,7 +843,7 @@ pub(crate) mod sync {
     use std::future::Future;
 
     wiggle::wasmtime_integration!({
-        witx: ["$CARGO_MANIFEST_DIR/witx/preview1/wasi_snapshot_preview1.witx"],
+        witx: ["witx/preview1/wasi_snapshot_preview1.witx"],
         target: super,
         block_on[in_tokio]: {
             wasi_snapshot_preview1::{
