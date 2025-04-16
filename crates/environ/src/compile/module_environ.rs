@@ -525,7 +525,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             }
 
             Payload::CodeSectionStart { count, range, .. } => {
-                self.validator.code_section_start(count, &range)?;
+                self.validator.code_section_start(&range)?;
                 let cnt = usize::try_from(count).unwrap();
                 self.result.function_body_inputs.reserve_exact(cnt);
                 self.result.debuginfo.wasm_file.code_section_offset = range.start as u64;

@@ -13,7 +13,7 @@ use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
-use wasmparser::{BinaryReader, FuncValidator, FunctionBody, WasmModuleResources};
+use wasmparser::{BinaryReader, FuncValidator, FunctionBody, OperatorsReader, WasmModuleResources};
 use wasmtime_environ::{TypeConvert, WasmResult};
 
 /// WebAssembly to Cranelift IR function translator.
@@ -234,7 +234,7 @@ fn declare_locals(
 /// arguments and locals are declared in the builder.
 fn parse_function_body(
     validator: &mut FuncValidator<impl WasmModuleResources>,
-    mut reader: BinaryReader,
+    reader: BinaryReader,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FuncEnvironment<'_>,
@@ -243,18 +243,18 @@ fn parse_function_body(
     debug_assert_eq!(state.control_stack.len(), 1, "State not initialized");
 
     environ.before_translate_function(builder, state)?;
+    let mut reader = OperatorsReader::new(reader);
     while !reader.eof() {
         let pos = reader.original_position();
-        builder.set_srcloc(cur_srcloc(&reader));
-        let op = reader.read_operator()?;
+        builder.set_srcloc(cur_srcloc(&reader.get_binary_reader()));
+        let op = reader.read()?;
         validator.op(pos, &op)?;
         environ.before_translate_operator(&op, builder, state)?;
         translate_operator(validator, &op, builder, state, environ)?;
         environ.after_translate_operator(&op, builder, state)?;
     }
     environ.after_translate_function(builder, state)?;
-    let pos = reader.original_position();
-    validator.finish(pos)?;
+    reader.finish()?;
 
     // The final `End` operator left us in the exit block where we need to manually add a return
     // instruction.

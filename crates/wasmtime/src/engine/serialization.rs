@@ -205,6 +205,7 @@ struct WasmFeatures {
     component_model_async: bool,
     component_model_async_builtins: bool,
     component_model_async_stackful: bool,
+    component_model_error_context: bool,
     gc_types: bool,
     wide_arithmetic: bool,
     stack_switching: bool,
@@ -236,6 +237,7 @@ impl Metadata<'_> {
             cm_async_stackful,
             cm_nested_names,
             cm_values,
+            cm_error_context,
             legacy_exceptions,
             gc_types,
             stack_switching,
@@ -284,6 +286,7 @@ impl Metadata<'_> {
                 component_model_async: cm_async,
                 component_model_async_builtins: cm_async_builtins,
                 component_model_async_stackful: cm_async_stackful,
+                component_model_error_context: cm_error_context,
             },
         }
     }
@@ -495,6 +498,7 @@ impl Metadata<'_> {
             component_model_async,
             component_model_async_builtins,
             component_model_async_stackful,
+            component_model_error_context,
             gc_types,
             wide_arithmetic,
             stack_switching,
@@ -596,6 +600,11 @@ impl Metadata<'_> {
             component_model_async_stackful,
             other.contains(F::CM_ASYNC_STACKFUL),
             "WebAssembly component model support for async stackful",
+        )?;
+        Self::check_bool(
+            component_model_error_context,
+            other.contains(F::CM_ERROR_CONTEXT),
+            "WebAssembly component model support for error-context",
         )?;
         Self::check_cfg_bool(
             cfg!(feature = "gc"),

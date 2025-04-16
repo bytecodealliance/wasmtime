@@ -126,7 +126,7 @@ impl TargetIsa for Aarch64 {
         let codegen = CodeGen::new(tunables, &mut masm, codegen_context, env, abi_sig);
 
         let mut body_codegen = codegen.emit_prologue()?;
-        body_codegen.emit(&mut body, validator)?;
+        body_codegen.emit(body, validator)?;
         let names = body_codegen.env.take_name_map();
         let base = body_codegen.source_location.base;
         Ok(CompiledFunction::new(

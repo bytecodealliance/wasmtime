@@ -16,8 +16,8 @@ use cranelift_codegen::{
 use smallvec::SmallVec;
 use std::marker::PhantomData;
 use wasmparser::{
-    BinaryReader, FuncValidator, MemArg, Operator, ValidatorResources, VisitOperator,
-    VisitSimdOperator,
+    BinaryReader, FuncValidator, MemArg, Operator, OperatorsReader, ValidatorResources,
+    VisitOperator, VisitSimdOperator,
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_HEAP_MISALIGNED, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
@@ -222,7 +222,7 @@ where
     /// Emit the function body to machine code.
     pub fn emit(
         &mut self,
-        body: &mut BinaryReader<'a>,
+        body: BinaryReader<'a>,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<()> {
         self.emit_body(body, validator)
@@ -293,7 +293,7 @@ where
 
     fn emit_body(
         &mut self,
-        body: &mut BinaryReader<'a>,
+        body: BinaryReader<'a>,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<()> {
         self.maybe_emit_fuel_check()?;
@@ -318,15 +318,16 @@ where
                 .set_ret_area(RetArea::slot(self.context.frame.results_base_slot.unwrap()));
         }
 
-        while !body.eof() {
-            let offset = body.original_position();
-            body.visit_operator(&mut ValidateThenVisit(
+        let mut ops = OperatorsReader::new(body);
+        while !ops.eof() {
+            let offset = ops.original_position();
+            ops.visit_operator(&mut ValidateThenVisit(
                 validator.simd_visitor(offset),
                 self,
                 offset,
             ))??;
         }
-        validator.finish(body.original_position())?;
+        ops.finish()?;
         return Ok(());
 
         struct ValidateThenVisit<'a, T, U>(T, &'a mut U, usize);
