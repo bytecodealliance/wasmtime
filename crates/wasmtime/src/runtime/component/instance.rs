@@ -1,7 +1,8 @@
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
 use crate::component::{
-    Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower, ResourceType, TypedFunc,
+    types::ComponentItem, Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower,
+    ResourceType, TypedFunc,
 };
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
@@ -111,7 +112,7 @@ impl Instance {
     /// let func = instance.get_func(&mut store, "f").unwrap();
     ///
     /// // The function can also be looked up by an index via a precomputed index.
-    /// let (_, export) = component.export_index(None, "f").unwrap();
+    /// let export = component.get_export_index(None, "f").unwrap();
     /// let func = instance.get_func(&mut store, &export).unwrap();
     /// # Ok(())
     /// # }
@@ -145,8 +146,8 @@ impl Instance {
     ///
     /// // First look up the exported instance, then use that to lookup the
     /// // exported function.
-    /// let (_, instance_index) = component.export_index(None, "i").unwrap();
-    /// let (_, func_index) = component.export_index(Some(&instance_index), "f").unwrap();
+    /// let instance_index = component.get_export_index(None, "i").unwrap();
+    /// let func_index = component.get_export_index(Some(&instance_index), "f").unwrap();
     ///
     /// // Then use `func_index` at runtime.
     /// let mut store = Store::new(&engine, ());
@@ -154,9 +155,9 @@ impl Instance {
     /// let func = instance.get_func(&mut store, &func_index).unwrap();
     ///
     /// // Alternatively the `instance` can be used directly in conjunction with
-    /// // the `get_export` method.
-    /// let instance_index = instance.get_export(&mut store, None, "i").unwrap();
-    /// let func_index = instance.get_export(&mut store, Some(&instance_index), "f").unwrap();
+    /// // the `get_export_index` method.
+    /// let instance_index = instance.get_export_index(&mut store, None, "i").unwrap();
+    /// let func_index = instance.get_export_index(&mut store, Some(&instance_index), "f").unwrap();
     /// let func = instance.get_func(&mut store, &func_index).unwrap();
     /// # Ok(())
     /// # }
@@ -275,12 +276,17 @@ impl Instance {
         }
     }
 
-    /// A methods similar to [`Component::export_index`] except for this
+    /// A methods similar to [`Component::get_export`] except for this
     /// instance.
     ///
     /// This method will lookup the `name` provided within the `instance`
-    /// provided and return a [`ComponentExportIndex`] which can be used to
-    /// pass to other `get_*` functions like [`Instance::get_func`].
+    /// provided and return a [`ComponentItem`] describing the export,
+    /// and [`ComponentExportIndex`] which can be passed other `get_*`
+    /// functions like [`Instance::get_func`].
+    ///
+    /// The [`ComponentItem`] is more expensive to compute than the
+    /// [`ComponentExportIndex`]. If you are not consuming the
+    /// [`ComponentItem`], use [`Instance::get_export_index`] instead.
     ///
     /// # Panics
     ///
@@ -290,7 +296,7 @@ impl Instance {
         mut store: impl AsContextMut,
         instance: Option<&ComponentExportIndex>,
         name: &str,
-    ) -> Option<ComponentExportIndex> {
+    ) -> Option<(ComponentItem, ComponentExportIndex)> {
         self._get_export(store.as_context_mut().0, instance, name)
     }
 
@@ -299,8 +305,43 @@ impl Instance {
         store: &StoreOpaque,
         instance: Option<&ComponentExportIndex>,
         name: &str,
-    ) -> Option<ComponentExportIndex> {
+    ) -> Option<(ComponentItem, ComponentExportIndex)> {
         let data = store[self.0].as_ref().unwrap();
+        let index = data.component.lookup_export_index(instance, name)?;
+        let item = ComponentItem::from_export(
+            &store.engine(),
+            &data.component.env_component().export_items[index],
+            &data.ty(),
+        );
+        Some((
+            item,
+            ComponentExportIndex {
+                id: data.component_id(),
+                index,
+            },
+        ))
+    }
+
+    /// A methods similar to [`Component::get_export_index`] except for this
+    /// instance.
+    ///
+    /// This method will lookup the `name` provided within the `instance`
+    /// provided and return a [`ComponentExportIndex`] which can be passed
+    /// other `get_*` functions like [`Instance::get_func`].
+    ///
+    /// If you need the [`ComponentItem`] corresponding to this export, use
+    /// the [`Instance::get_export`] instead.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `store` does not own this instance.
+    pub fn get_export_index(
+        &self,
+        mut store: impl AsContextMut,
+        instance: Option<&ComponentExportIndex>,
+        name: &str,
+    ) -> Option<ComponentExportIndex> {
+        let data = store.as_context_mut().0[self.0].as_ref().unwrap();
         let index = data.component.lookup_export_index(instance, name)?;
         Some(ComponentExportIndex {
             id: data.component_id(),

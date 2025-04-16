@@ -67,12 +67,12 @@ fn main() -> Result<()> {
     let instance = linker.instantiate(&mut store, &component)?;
     // Get the index for the exported interface
     let interface_idx = instance
-        .get_export(&mut store, None, "wasi:cli/run@0.2.0")
+        .get_export_index(&mut store, None, "wasi:cli/run@0.2.0")
         .expect("Cannot get `wasi:cli/run@0.2.0` interface");
     // Get the index for the exported function in the exported interface
     let parent_export_idx = Some(&interface_idx);
     let func_idx = instance
-        .get_export(&mut store, parent_export_idx, "run")
+        .get_export_index(&mut store, parent_export_idx, "run")
         .expect("Cannot get `run` function in `wasi:cli/run@0.2.0` interface");
     let func = instance
         .get_func(&mut store, func_idx)

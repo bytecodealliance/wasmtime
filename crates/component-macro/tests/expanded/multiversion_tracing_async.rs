@@ -381,15 +381,15 @@ pub mod exports {
                     pub fn new(
                         component: &wasmtime::component::Component,
                     ) -> wasmtime::Result<GuestIndices> {
-                        let (_, instance) = component
-                            .export_index(None, "my:dep/a@0.1.0")
+                        let instance = component
+                            .get_export_index(None, "my:dep/a@0.1.0")
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `my:dep/a@0.1.0`"
                                 )
                             })?;
                         Self::_new(|name| {
-                            component.export_index(Some(&instance), name).map(|p| p.1)
+                            component.get_export_index(Some(&instance), name)
                         })
                     }
                     /// This constructor is similar to [`GuestIndices::new`] except that it
@@ -399,14 +399,15 @@ pub mod exports {
                         instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance_export = instance
-                            .get_export(&mut store, None, "my:dep/a@0.1.0")
+                            .get_export_index(&mut store, None, "my:dep/a@0.1.0")
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `my:dep/a@0.1.0`"
                                 )
                             })?;
                         Self::_new(|name| {
-                            instance.get_export(&mut store, Some(&instance_export), name)
+                            instance
+                                .get_export_index(&mut store, Some(&instance_export), name)
                         })
                     }
                     fn _new(
@@ -495,15 +496,15 @@ pub mod exports {
                     pub fn new(
                         component: &wasmtime::component::Component,
                     ) -> wasmtime::Result<GuestIndices> {
-                        let (_, instance) = component
-                            .export_index(None, "my:dep/a@0.2.0")
+                        let instance = component
+                            .get_export_index(None, "my:dep/a@0.2.0")
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `my:dep/a@0.2.0`"
                                 )
                             })?;
                         Self::_new(|name| {
-                            component.export_index(Some(&instance), name).map(|p| p.1)
+                            component.get_export_index(Some(&instance), name)
                         })
                     }
                     /// This constructor is similar to [`GuestIndices::new`] except that it
@@ -513,14 +514,15 @@ pub mod exports {
                         instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance_export = instance
-                            .get_export(&mut store, None, "my:dep/a@0.2.0")
+                            .get_export_index(&mut store, None, "my:dep/a@0.2.0")
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `my:dep/a@0.2.0`"
                                 )
                             })?;
                         Self::_new(|name| {
-                            instance.get_export(&mut store, Some(&instance_export), name)
+                            instance
+                                .get_export_index(&mut store, Some(&instance_export), name)
                         })
                     }
                     fn _new(

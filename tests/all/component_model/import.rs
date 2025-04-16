@@ -219,9 +219,9 @@ fn functions_in_instances() -> Result<()> {
 
     let engine = super::engine();
     let component = Component::new(&engine, component)?;
-    let (_, instance_index) = component.export_index(None, "test:test/foo").unwrap();
-    let (_, func_index) = component
-        .export_index(Some(&instance_index), "call")
+    let instance_index = component.get_export_index(None, "test:test/foo").unwrap();
+    let func_index = component
+        .get_export_index(Some(&instance_index), "call")
         .unwrap();
     let mut store = Store::new(&engine, None);
     assert!(store.data().is_none());

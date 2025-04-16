@@ -240,11 +240,10 @@ const _: () = {
                 _component,
             )?;
             let some_world_func2 = _component
-                .export_index(None, "some-world-func2")
+                .get_export_index(None, "some-world-func2")
                 .ok_or_else(|| {
                     anyhow::anyhow!("no function export `some-world-func2` found")
-                })?
-                .1;
+                })?;
             Ok(TheWorldIndices {
                 interface1,
                 some_world_func2,
@@ -267,7 +266,7 @@ const _: () = {
                 _instance,
             )?;
             let some_world_func2 = _instance
-                .get_export(&mut store, None, "some-world-func2")
+                .get_export_index(&mut store, None, "some-world-func2")
                 .ok_or_else(|| {
                     anyhow::anyhow!("no function export `some-world-func2` found")
                 })?;
@@ -2292,15 +2291,15 @@ pub mod exports {
                     pub fn new(
                         component: &wasmtime::component::Component,
                     ) -> wasmtime::Result<GuestIndices> {
-                        let (_, instance) = component
-                            .export_index(None, "foo:foo/uses-resource-transitively")
+                        let instance = component
+                            .get_export_index(None, "foo:foo/uses-resource-transitively")
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `foo:foo/uses-resource-transitively`"
                                 )
                             })?;
                         Self::_new(|name| {
-                            component.export_index(Some(&instance), name).map(|p| p.1)
+                            component.get_export_index(Some(&instance), name)
                         })
                     }
                     /// This constructor is similar to [`GuestIndices::new`] except that it
@@ -2310,7 +2309,7 @@ pub mod exports {
                         instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance_export = instance
-                            .get_export(
+                            .get_export_index(
                                 &mut store,
                                 None,
                                 "foo:foo/uses-resource-transitively",
@@ -2321,7 +2320,8 @@ pub mod exports {
                                 )
                             })?;
                         Self::_new(|name| {
-                            instance.get_export(&mut store, Some(&instance_export), name)
+                            instance
+                                .get_export_index(&mut store, Some(&instance_export), name)
                         })
                     }
                     fn _new(

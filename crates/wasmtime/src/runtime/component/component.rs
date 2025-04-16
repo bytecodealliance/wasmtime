@@ -22,7 +22,7 @@ use std::path::Path;
 use wasmtime_environ::component::{
     AllCallFunc, CompiledComponentInfo, ComponentArtifacts, ComponentTypes, Export, ExportIndex,
     GlobalInitializer, InstantiateModule, NameMapNoIntern, StaticModuleIndex, TrampolineIndex,
-    TypeComponentIndex, TypeDef, VMComponentOffsets,
+    TypeComponentIndex, VMComponentOffsets,
 };
 use wasmtime_environ::TypeTrace;
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
@@ -674,6 +674,37 @@ impl Component {
     /// Looks up a specific export of this component by `name` optionally nested
     /// within the `instance` provided.
     ///
+    /// See related method [`Self::get_export`] for additional docs and
+    /// examples.
+    ///
+    /// This method is primarily used to acquire a [`ComponentExportIndex`]
+    /// which can be used with [`Instance`](crate::component::Instance) when
+    /// looking up exports. Export lookup with [`ComponentExportIndex`] can
+    /// skip string lookups at runtime and instead use a more efficient
+    /// index-based lookup.
+    ///
+    /// This method only returns the [`ComponentExportIndex`]. If you need the
+    /// corresponding [`types::ComponentItem`], use the related function
+    /// [`Self::get_export`].
+    ///
+    ///
+    /// [`Instance`](crate::component::Instance) has a corresponding method
+    /// [`Instance::get_export_index`](crate::component::Instance::get_export_index).
+    pub fn get_export_index(
+        &self,
+        instance: Option<&ComponentExportIndex>,
+        name: &str,
+    ) -> Option<ComponentExportIndex> {
+        let index = self.lookup_export_index(instance, name)?;
+        Some(ComponentExportIndex {
+            id: self.inner.id,
+            index,
+        })
+    }
+
+    /// Looks up a specific export of this component by `name` optionally nested
+    /// within the `instance` provided.
+    ///
     /// This method is primarily used to acquire a [`ComponentExportIndex`]
     /// which can be used with [`Instance`](crate::component::Instance) when
     /// looking up exports. Export lookup with [`ComponentExportIndex`] can
@@ -696,6 +727,14 @@ impl Component {
     /// implements the [`InstanceExportLookup`] trait which enables using it
     /// with [`Instance::get_func`](crate::component::Instance::get_func) for
     /// example.
+    ///
+    /// The returned [`types::ComponentItem`] is more expensive to calculate
+    /// than the [`ComponentExportIndex`]. If you only consume the
+    /// [`ComponentExportIndex`], use the related method
+    /// [`Self::get_export_index`] instead.
+    ///
+    /// [`Instance`](crate::component::Instance) has a corresponding method
+    /// [`Instance::get_export`](crate::component::Instance::get_export).
     ///
     /// # Examples
     ///
@@ -721,7 +760,7 @@ impl Component {
     /// )?;
     ///
     /// // Perform a lookup of the function "f" before instantiaton.
-    /// let (ty, export) = component.export_index(None, "f").unwrap();
+    /// let (ty, export) = component.get_export(None, "f").unwrap();
     /// assert!(matches!(ty, ComponentItem::ComponentFunc(_)));
     ///
     /// // After instantiation use `export` to lookup the function in question
@@ -733,23 +772,19 @@ impl Component {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn export_index(
+    pub fn get_export(
         &self,
         instance: Option<&ComponentExportIndex>,
         name: &str,
     ) -> Option<(types::ComponentItem, ComponentExportIndex)> {
         let info = self.env_component();
         let index = self.lookup_export_index(instance, name)?;
-        let ty = match info.export_items[index] {
-            Export::Instance { ty, .. } => TypeDef::ComponentInstance(ty),
-            Export::LiftedFunction { ty, .. } => TypeDef::ComponentFunc(ty),
-            Export::ModuleStatic { ty, .. } | Export::ModuleImport { ty, .. } => {
-                TypeDef::Module(ty)
-            }
-            Export::Type(ty) => ty,
-        };
         let item = self.with_uninstantiated_instance_type(|instance| {
-            types::ComponentItem::from(&self.inner.engine, &ty, instance)
+            types::ComponentItem::from_export(
+                &self.inner.engine,
+                &info.export_items[index],
+                instance,
+            )
         });
         Some((
             item,
@@ -793,7 +828,7 @@ impl Component {
 
 /// A value which represents a known export of a component.
 ///
-/// This is the return value of [`Component::export_index`] and implements the
+/// This is the return value of [`Component::get_export`] and implements the
 /// [`InstanceExportLookup`] trait to work with lookups like
 /// [`Instance::get_func`](crate::component::Instance::get_func).
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
