@@ -38,13 +38,10 @@ TEST(component, instantiate) {
 
   wasmtime_component_linker_instance_delete(linker_instance);
 
-  wasmtime_component_instance_t *instance = nullptr;
+  wasmtime_component_instance_t instance = {};
   error = wasmtime_component_linker_instantiate(linker, context, component,
                                                 &instance);
   EXPECT_EQ(error, nullptr);
-  EXPECT_NE(instance, nullptr);
-
-  wasmtime_component_instance_delete(instance);
 
   wasmtime_component_linker_delete(linker);
 

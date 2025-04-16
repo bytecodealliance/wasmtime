@@ -9,16 +9,19 @@
 extern "C" {
 #endif
 
-typedef struct wasmtime_component_instance_t wasmtime_component_instance_t;
-
-/**
- * \brief Deletes a #wasmtime_component_instance_t created by
- * #wasmtime_component_linker_instantiate
- *
- * \param instance the #wasmtime_component_instance_t to delete
- */
-WASM_API_EXTERN void
-wasmtime_component_instance_delete(wasmtime_component_instance_t *instance);
+/// \brief Representation of a instance in Wasmtime.
+///
+/// Instances are represented with a 64-bit identifying integer in Wasmtime.
+/// They do not have any destructor associated with them. Instances cannot
+/// interoperate between #wasmtime_store_t instances and if the wrong instance
+/// is passed to the wrong store then it may trigger an assertion to abort the
+/// process.
+typedef struct wasmtime_component_instance {
+  /// Internal identifier of what store this belongs to, never zero.
+  uint64_t store_id;
+  /// Internal index within the store.
+  size_t index;
+} wasmtime_component_instance_t;
 
 #ifdef __cplusplus
 } // extern "C"

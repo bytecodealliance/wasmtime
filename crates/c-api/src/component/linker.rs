@@ -1,11 +1,11 @@
 use std::ffi::{c_char, CStr};
 
 use anyhow::Context;
-use wasmtime::component::{Linker, LinkerInstance};
+use wasmtime::component::{Instance, Linker, LinkerInstance};
 
 use crate::{wasm_engine_t, wasmtime_error_t, WasmtimeStoreContextMut, WasmtimeStoreData};
 
-use super::{wasmtime_component_instance_t, wasmtime_component_t};
+use super::wasmtime_component_t;
 
 #[repr(transparent)]
 pub struct wasmtime_component_linker_t {
@@ -49,12 +49,10 @@ pub unsafe extern "C" fn wasmtime_component_linker_instantiate(
     linker: &wasmtime_component_linker_t,
     context: WasmtimeStoreContextMut<'_>,
     component: &wasmtime_component_t,
-    instance_out: &mut *mut wasmtime_component_instance_t,
+    instance_out: &mut Instance,
 ) -> Option<Box<wasmtime_error_t>> {
     let result = linker.linker.instantiate(context, &component.component);
-    crate::handle_result(result, |instance| {
-        *instance_out = Box::into_raw(Box::new(wasmtime_component_instance_t { instance }));
-    })
+    crate::handle_result(result, |instance| *instance_out = instance)
 }
 
 #[unsafe(no_mangle)]
