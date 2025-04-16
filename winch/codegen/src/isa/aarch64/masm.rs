@@ -394,7 +394,7 @@ impl Masm for MacroAssembler {
         cc: IntCmpKind,
         _size: OperandSize,
     ) -> Result<()> {
-        self.asm.csel(src, src, dst, Cond::from(cc));
+        self.asm.csel(src, dst.to_reg(), dst, Cond::from(cc));
         Ok(())
     }
 
