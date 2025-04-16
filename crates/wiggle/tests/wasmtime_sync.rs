@@ -2,7 +2,7 @@ use wasmtime::{Engine, Linker, Module, Store, Val};
 use wiggle::GuestMemory;
 
 wiggle::from_witx!({
-    witx: ["$CARGO_MANIFEST_DIR/tests/atoms.witx"],
+    witx: ["tests/atoms.witx"],
     block_on: {
         atoms::double_int_return_float
     }
