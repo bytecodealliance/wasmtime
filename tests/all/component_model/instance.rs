@@ -68,9 +68,9 @@ fn export_old_get_new() -> Result<()> {
     "#;
 
     let component = Component::new(&engine, component)?;
-    component.export_index(None, "a:b/m@1.0.1").unwrap();
-    let (_, i) = component.export_index(None, "a:b/i@1.0.1").unwrap();
-    component.export_index(Some(&i), "m").unwrap();
+    component.get_export(None, "a:b/m@1.0.1").unwrap();
+    let (_, i) = component.get_export(None, "a:b/i@1.0.1").unwrap();
+    component.get_export(Some(&i), "m").unwrap();
 
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
@@ -103,9 +103,9 @@ fn export_new_get_old() -> Result<()> {
     "#;
 
     let component = Component::new(&engine, component)?;
-    component.export_index(None, "a:b/m@1.0.0").unwrap();
-    let (_, i) = component.export_index(None, "a:b/i@1.0.0").unwrap();
-    component.export_index(Some(&i), "m").unwrap();
+    component.get_export(None, "a:b/m@1.0.0").unwrap();
+    let (_, i) = component.get_export(None, "a:b/i@1.0.0").unwrap();
+    component.get_export(Some(&i), "m").unwrap();
 
     let mut store = Store::new(&engine, ());
     let linker = Linker::new(&engine);
@@ -158,7 +158,7 @@ fn export_missing_get_max() -> Result<()> {
 
     for (name, test_fn) in tests {
         println!("test {name}");
-        let (_, m) = component.export_index(None, name).unwrap();
+        let (_, m) = component.get_export(None, name).unwrap();
         let m = instance.get_module(&mut store, &m).unwrap();
         test_fn(&m);
 

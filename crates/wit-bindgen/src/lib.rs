@@ -626,12 +626,12 @@ impl Wasmtime {
                 field = func_field_name(resolve, func);
                 ty = format!("{wt}::component::Func");
                 get_index_from_component = format!(
-                    "_component.export_index(None, \"{}\")
-                        .ok_or_else(|| anyhow::anyhow!(\"no function export `{0}` found\"))?.1",
+                    "_component.get_export_index(None, \"{}\")
+                        .ok_or_else(|| anyhow::anyhow!(\"no function export `{0}` found\"))?",
                     func.name
                 );
                 get_index_from_instance = format!(
-                    "_instance.get_export(&mut store, None, \"{}\")
+                    "_instance.get_export_index(&mut store, None, \"{}\")
                         .ok_or_else(|| anyhow::anyhow!(\"no function export `{0}` found\"))?",
                     func.name
                 );
@@ -686,12 +686,9 @@ impl Wasmtime {
 pub fn new(
     component: &{wt}::component::Component,
 ) -> {wt}::Result<{struct_name}Indices> {{
-    let (_, instance) = component.export_index(None, \"{instance_name}\")
+    let instance = component.get_export_index(None, \"{instance_name}\")
         .ok_or_else(|| anyhow::anyhow!(\"no exported instance named `{instance_name}`\"))?;
-    Self::_new(|name| {{
-        component.export_index(Some(&instance), name)
-            .map(|p| p.1)
-    }})
+    Self::_new(|name| component.get_export_index(Some(&instance), name))
 }}
 
 /// This constructor is similar to [`{struct_name}Indices::new`] except that it
@@ -700,11 +697,9 @@ pub fn new_instance(
     mut store: impl {wt}::AsContextMut,
     instance: &{wt}::component::Instance,
 ) -> {wt}::Result<{struct_name}Indices> {{
-    let instance_export = instance.get_export(&mut store, None, \"{instance_name}\")
+    let instance_export = instance.get_export_index(&mut store, None, \"{instance_name}\")
         .ok_or_else(|| anyhow::anyhow!(\"no exported instance named `{instance_name}`\"))?;
-    Self::_new(|name| {{
-        instance.get_export(&mut store, Some(&instance_export), name)
-    }})
+    Self::_new(|name| instance.get_export_index(&mut store, Some(&instance_export), name))
 }}
 
 fn _new(
