@@ -1,13 +1,14 @@
 #ifndef WASMTIME_COMPONENT_LINKER_H
 #define WASMTIME_COMPONENT_LINKER_H
 
-#ifdef WASMTIME_FEATURE_COMPONENT_MODEL
-
 #include <wasm.h>
 #include <wasmtime/component/component.h>
 #include <wasmtime/component/instance.h>
+#include <wasmtime/conf.h>
 #include <wasmtime/error.h>
 #include <wasmtime/store.h>
+
+#ifdef WASMTIME_FEATURE_COMPONENT_MODEL
 
 #ifdef __cplusplus
 extern "C" {

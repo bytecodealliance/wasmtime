@@ -1,6 +1,8 @@
 #ifndef WASMTIME_COMPONENT_INSTANCE_H
 #define WASMTIME_COMPONENT_INSTANCE_H
 
+#include <wasmtime/conf.h>
+
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
 
 #ifdef __cplusplus
