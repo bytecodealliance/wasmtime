@@ -172,7 +172,7 @@
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
 use crate::ir::function::FunctionParameters;
-use crate::ir::{ExternalName, RelSourceLoc, SourceLoc, TrapCode};
+use crate::ir::{ExceptionTag, ExternalName, RelSourceLoc, SourceLoc, TrapCode};
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::{
     BlockIndex, MachInstLabelUse, TextSectionBuilder, VCodeConstant, VCodeConstants, VCodeInst,
@@ -259,8 +259,6 @@ pub struct MachBuffer<I: VCodeInst> {
     user_stack_maps: SmallVec<[(CodeOffset, u32, ir::UserStackMap); 8]>,
     /// Any unwind info at a given location.
     unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
-    /// Any exception handler targets at a given location.
-    exception_handlers: SmallVec<[(CodeOffset, PackedOption<ir::ExceptionTag>, MachLabel); 8]>,
     /// The current source location in progress (after `start_srcloc()` and
     /// before `end_srcloc()`).  This is a (start_offset, src_loc) tuple.
     cur_srcloc: Option<(CodeOffset, RelSourceLoc)>,
@@ -339,7 +337,6 @@ impl MachBufferFinalized<Stencil> {
                 .collect(),
             user_stack_maps: self.user_stack_maps,
             unwind_info: self.unwind_info,
-            exception_handlers: self.exception_handlers,
             alignment: self.alignment,
         }
     }
@@ -362,7 +359,7 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     /// Any trap records referring to this code.
     pub(crate) traps: SmallVec<[MachTrap; 16]>,
     /// Any call site records referring to this code.
-    pub(crate) call_sites: SmallVec<[MachCallSite; 16]>,
+    pub(crate) call_sites: SmallVec<[FinalizedMachCallSite; 16]>,
     /// Any source location mappings referring to this code.
     pub(crate) srclocs: SmallVec<[T::MachSrcLocType; 64]>,
     /// Any user stack maps for this code.
@@ -372,8 +369,6 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     pub(crate) user_stack_maps: SmallVec<[(CodeOffset, u32, ir::UserStackMap); 8]>,
     /// Any unwind info at a given location.
     pub unwind_info: SmallVec<[(CodeOffset, UnwindInst); 8]>,
-    /// Any exception handler targets at a given location.
-    pub exception_handlers: SmallVec<[(CodeOffset, PackedOption<ir::ExceptionTag>, CodeOffset); 8]>,
     /// The required alignment of this buffer.
     pub alignment: u32,
 }
@@ -448,7 +443,6 @@ impl<I: VCodeInst> MachBuffer<I> {
             srclocs: SmallVec::new(),
             user_stack_maps: SmallVec::new(),
             unwind_info: SmallVec::new(),
-            exception_handlers: SmallVec::new(),
             cur_srcloc: None,
             label_offsets: SmallVec::new(),
             label_aliases: SmallVec::new(),
@@ -1526,10 +1520,17 @@ impl<I: VCodeInst> MachBuffer<I> {
             })
             .collect();
 
-        let exception_handlers = self
-            .exception_handlers
+        let finalized_call_sites = self
+            .call_sites
             .iter()
-            .map(|&(off, tag, target)| (off, tag, self.resolve_label_offset(target)))
+            .map(|call_site| FinalizedMachCallSite {
+                ret_addr: call_site.ret_addr,
+                exception_handlers: call_site
+                    .exception_handlers
+                    .iter()
+                    .map(|(tag, label)| (*tag, self.resolve_label_offset(*label)))
+                    .collect(),
+            })
             .collect();
 
         let mut srclocs = self.srclocs;
@@ -1539,11 +1540,10 @@ impl<I: VCodeInst> MachBuffer<I> {
             data: self.data,
             relocs: finalized_relocs,
             traps: self.traps,
-            call_sites: self.call_sites,
+            call_sites: finalized_call_sites,
             srclocs,
             user_stack_maps: self.user_stack_maps,
             unwind_info: self.unwind_info,
-            exception_handlers,
             alignment,
         }
     }
@@ -1616,26 +1616,20 @@ impl<I: VCodeInst> MachBuffer<I> {
         });
     }
 
-    /// Add a call-site record at the current offset.
-    pub fn add_call_site(&mut self) {
+    /// Add a call-site record at the current offset, optionally with exception handlers.
+    pub fn add_call_site(
+        &mut self,
+        exception_handlers: &[(PackedOption<ExceptionTag>, MachLabel)],
+    ) {
         self.call_sites.push(MachCallSite {
             ret_addr: self.data.len() as CodeOffset,
+            exception_handlers: exception_handlers.into_iter().copied().collect(),
         });
     }
 
     /// Add an unwind record at the current offset.
     pub fn add_unwind(&mut self, unwind: UnwindInst) {
         self.unwind_info.push((self.cur_offset(), unwind));
-    }
-
-    /// Add an exception handler record at the current offset.
-    pub fn add_exception_handler(
-        &mut self,
-        tag: PackedOption<ir::ExceptionTag>,
-        target: MachLabel,
-    ) {
-        self.exception_handlers
-            .push((self.cur_offset(), tag, target));
     }
 
     /// Set the `SourceLoc` for code from this offset until the offset at the
@@ -1770,7 +1764,7 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
     }
 
     /// Get the list of call sites for this code.
-    pub fn call_sites(&self) -> &[MachCallSite] {
+    pub fn call_sites(&self) -> &[FinalizedMachCallSite] {
         &self.call_sites[..]
     }
 }
@@ -1937,6 +1931,23 @@ pub struct MachTrap {
 pub struct MachCallSite {
     /// The offset of the call's return address, *relative to the containing section*.
     pub ret_addr: CodeOffset,
+
+    /// Any exception handler targets at a given location.
+    pub exception_handlers: SmallVec<[(PackedOption<ir::ExceptionTag>, MachLabel); 0]>,
+}
+
+/// A call site record resulting from a compilation.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
+pub struct FinalizedMachCallSite {
+    /// The offset of the call's return address, *relative to the containing section*.
+    pub ret_addr: CodeOffset,
+
+    /// Any exception handler targets at a given location.
+    pub exception_handlers: SmallVec<[(PackedOption<ir::ExceptionTag>, CodeOffset); 0]>,
 }
 
 /// A source-location mapping resulting from a compilation.
@@ -2481,7 +2492,7 @@ mod test {
         buf.put1(2);
         buf.add_trap(TrapCode::INTEGER_OVERFLOW);
         buf.add_trap(TrapCode::INTEGER_DIVISION_BY_ZERO);
-        buf.add_call_site();
+        buf.add_call_site(&[]);
         buf.add_reloc(
             Reloc::Abs4,
             &ExternalName::User(UserExternalNameRef::new(0)),

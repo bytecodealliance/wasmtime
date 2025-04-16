@@ -3216,14 +3216,11 @@ impl Inst {
                     sink.push_user_stack_map(state, offset, s);
                 }
                 put(sink, enc);
-                sink.add_call_site();
 
-                // Add exception info, if any, at this point (which will
-                // be the return address on stack).
                 if let Some(try_call) = info.try_call_info.as_ref() {
-                    for &(tag, label) in &try_call.exception_dests {
-                        sink.add_exception_handler(tag, label);
-                    }
+                    sink.add_call_site(&try_call.exception_dests);
+                } else {
+                    sink.add_call_site(&[]);
                 }
 
                 state.nominal_sp_offset -= info.callee_pop_size;
@@ -3264,7 +3261,7 @@ impl Inst {
                     }
                 };
                 put(sink, enc);
-                sink.add_call_site();
+                sink.add_call_site(&[]);
             }
             &Inst::ElfTlsGetOffset { ref symbol, .. } => {
                 let opcode = 0xc05; // BRASL
@@ -3281,7 +3278,7 @@ impl Inst {
                 }
 
                 put(sink, &enc_ril_b(opcode, gpr(14), 0));
-                sink.add_call_site();
+                sink.add_call_site(&[]);
             }
             &Inst::Args { .. } => {}
             &Inst::Rets { .. } => {}

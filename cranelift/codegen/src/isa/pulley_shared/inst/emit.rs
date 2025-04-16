@@ -182,14 +182,11 @@ fn pulley_emit<P>(
                 let offset = sink.cur_offset();
                 sink.push_user_stack_map(state, offset, s);
             }
-            sink.add_call_site();
 
-            // Add exception info, if any, at this point (which will
-            // be the return address on stack).
             if let Some(try_call) = info.try_call_info.as_ref() {
-                for &(tag, label) in &try_call.exception_dests {
-                    sink.add_exception_handler(tag, label);
-                }
+                sink.add_call_site(&try_call.exception_dests);
+            } else {
+                sink.add_call_site(&[]);
             }
 
             let adjust = -i32::try_from(info.callee_pop_size).unwrap();
@@ -226,14 +223,10 @@ fn pulley_emit<P>(
                 sink.push_user_stack_map(state, offset, s);
             }
 
-            sink.add_call_site();
-
-            // Add exception info, if any, at this point (which will
-            // be the return address on stack).
             if let Some(try_call) = info.try_call_info.as_ref() {
-                for &(tag, label) in &try_call.exception_dests {
-                    sink.add_exception_handler(tag, label);
-                }
+                sink.add_call_site(&try_call.exception_dests);
+            } else {
+                sink.add_call_site(&[]);
             }
 
             let adjust = -i32::try_from(info.callee_pop_size).unwrap();
@@ -295,7 +288,7 @@ fn pulley_emit<P>(
                 let offset = sink.cur_offset();
                 sink.push_user_stack_map(state, offset, s);
             }
-            sink.add_call_site();
+            sink.add_call_site(&[]);
 
             // If a callee pop is happening here that means that something has
             // messed up, these are expected to be "very simple" signatures.
