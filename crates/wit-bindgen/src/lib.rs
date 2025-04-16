@@ -3159,23 +3159,11 @@ impl<'a> InterfaceGenerator<'a> {
     }
 
     fn extract_typed_function(&mut self, func: &Function) -> (String, String) {
-        let prev = mem::take(&mut self.src);
         let snake = func_field_name(self.resolve, func);
-        uwrite!(self.src, "*_instance.get_typed_func::<(");
-        for (_, ty) in func.params.iter() {
-            self.print_ty(ty, TypeMode::AllBorrowed("'_"));
-            self.push_str(", ");
-        }
-        self.src.push_str("), (");
-        if let Some(ty) = func.result {
-            self.print_ty(&ty, TypeMode::Owned);
-            self.push_str(", ");
-        }
-        uwriteln!(self.src, ")>(&mut store, &self.{snake})?.func()");
-
-        let ret = (snake, mem::take(&mut self.src).to_string());
-        self.src = prev;
-        ret
+        let sig = self.typedfunc_sig(func, TypeMode::AllBorrowed("'_"));
+        let extract =
+            format!("*_instance.get_typed_func::<{sig}>(&mut store, &self.{snake})?.func()");
+        (snake, extract)
     }
 
     fn define_rust_guest_export(
