@@ -1461,6 +1461,12 @@ criteria = "safe-to-deploy"
 delta = "1.1.6 -> 1.2.5"
 notes = "Lots of minor updates here and there along with refactorings and such. Everything in line with what `cc` is expected to do."
 
+[[audits.cc]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.2.12 -> 1.2.19"
+notes = "Trusted crate from rust-lang/rust, diff skimmed and generally looks ok as well."
+
 [[audits.cfg-if]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1717,6 +1723,12 @@ notes = """
 This update had a few doc updates but no otherwise-substantial source code
 updates.
 """
+
+[[audits.fastrand]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "2.1.1 -> 2.3.0"
+notes = "Minor refactoring, nothing new."
 
 [[audits.fd-lock]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -3138,6 +3150,12 @@ criteria = "safe-to-deploy"
 delta = "3.5.0 -> 3.6.0"
 notes = "Dependency updates and new optimized trait implementations, but otherwise everything looks normal."
 
+[[audits.tempfile]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "3.16.0 -> 3.19.1"
+notes = "Idiom and platform updates, but nothing major and nothing out of line."
+
 [[audits.terminal_size]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -3149,6 +3167,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.2.6 -> 0.3.0"
 notes = "Minor updates here, nothing major."
+
+[[audits.terminal_size]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.0 -> 0.4.2"
+notes = "Doc/etc updates, along with some Rust updates for new types in libstd, nothing out of line"
 
 [[audits.test-log]]
 who = "Pat Hickey <phickey@fastly.com>"
@@ -4219,7 +4243,7 @@ end = "2024-07-14"
 criteria = "safe-to-deploy"
 user-id = 6743 # Ed Page (epage)
 start = "2023-04-13"
-end = "2024-07-14"
+end = "2026-04-16"
 
 [[trusted.anstyle-wincon]]
 criteria = "safe-to-deploy"
@@ -4322,6 +4346,12 @@ criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2020-09-21"
 end = "2024-07-14"
+
+[[trusted.cc]]
+criteria = "safe-to-deploy"
+user-id = 2915 # Amanieu d'Antras (Amanieu)
+start = "2024-02-20"
+end = "2026-04-16"
 
 [[trusted.clap]]
 criteria = "safe-to-deploy"
