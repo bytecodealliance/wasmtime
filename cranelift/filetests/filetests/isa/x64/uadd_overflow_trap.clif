@@ -13,7 +13,7 @@ block0(v0: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   addl    %eax, $127, %eax
+;   addl $0x7f, %eax
 ;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -44,7 +44,7 @@ block0(v0: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   addl    %eax, $127, %eax
+;   addl $0x7f, %eax
 ;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -74,7 +74,7 @@ block0(v0: i32, v1: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   addl    %eax, %esi, %eax
+;   addl %esi, %eax
 ;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -105,7 +105,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   addq    %rax, $127, %rax
+;   addq $0x7f, %rax
 ;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -136,7 +136,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   addq    %rax, $127, %rax
+;   addq $0x7f, %rax
 ;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -166,7 +166,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   addq    %rax, %rsi, %rax
+;   addq %rsi, %rax
 ;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
