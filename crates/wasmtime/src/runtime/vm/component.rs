@@ -6,6 +6,7 @@
 //! Eventually it's intended that module-to-module calls, which would be
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
+use crate::component::ResourceType;
 use crate::prelude::*;
 use crate::runtime::vm::{
     SendSyncPtr, VMArrayCallFunction, VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
@@ -61,11 +62,7 @@ pub struct ComponentInstance {
 
     /// Storage for the type information about resources within this component
     /// instance.
-    ///
-    /// This is actually `Arc<PrimaryMap<ResourceIndex, ResourceType>>` but that
-    /// can't be in this crate because `ResourceType` isn't here. Not using `dyn
-    /// Any` is left as an exercise for a future refactoring.
-    resource_types: Arc<dyn Any + Send + Sync>,
+    resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
 
     /// Self-pointer back to `Store<T>` and its functions.
     store: VMStoreRawPtr,
@@ -204,7 +201,7 @@ impl ComponentInstance {
         alloc_size: usize,
         offsets: VMComponentOffsets<HostPtr>,
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
-        resource_types: Arc<dyn Any + Send + Sync>,
+        resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
         store: NonNull<dyn VMStore>,
     ) {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
@@ -586,10 +583,8 @@ impl ComponentInstance {
         self.runtime_info.realloc_func_type()
     }
 
-    /// Returns a reference to the resource type information as a `dyn Any`.
-    ///
-    /// Wasmtime is the one which then downcasts this to the appropriate type.
-    pub fn resource_types(&self) -> &Arc<dyn Any + Send + Sync> {
+    /// Returns a reference to the resource type information.
+    pub fn resource_types(&self) -> &Arc<PrimaryMap<ResourceIndex, ResourceType>> {
         &self.resource_types
     }
 
@@ -773,7 +768,7 @@ impl OwnedComponentInstance {
     /// heap with `malloc` and configures it for the `component` specified.
     pub fn new(
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
-        resource_types: Arc<dyn Any + Send + Sync>,
+        resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
         store: NonNull<dyn VMStore>,
     ) -> OwnedComponentInstance {
         let component = runtime_info.component();
@@ -885,7 +880,7 @@ impl OwnedComponentInstance {
     }
 
     /// See `ComponentInstance::resource_types`
-    pub fn resource_types_mut(&mut self) -> &mut Arc<dyn Any + Send + Sync> {
+    pub fn resource_types_mut(&mut self) -> &mut Arc<PrimaryMap<ResourceIndex, ResourceType>> {
         unsafe { &mut (*self.ptr.as_ptr()).resource_types }
     }
 }
