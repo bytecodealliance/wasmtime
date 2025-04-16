@@ -893,7 +893,8 @@ INPUT_ENCODING         = UTF-8
 # *.py, *.pyw, *.f90, *.f95, *.f03, *.f08, *.f18, *.f, *.for, *.vhd, *.vhdl,
 # *.ucf, *.qsf and *.ice.
 
-FILE_PATTERNS          = *.h
+FILE_PATTERNS          = *.h \
+                         *.hh
 
 # The RECURSIVE tag can be used to specify whether or not subdirectories should
 # be searched for input files as well.
@@ -924,7 +925,7 @@ EXCLUDE_SYMLINKS       = NO
 # Note that the wildcards are matched against the file with absolute path, so to
 # exclude all test directories for example use the pattern */test/*
 
-EXCLUDE_PATTERNS       =
+EXCLUDE_PATTERNS       = */wasm.hh
 
 # The EXCLUDE_SYMBOLS tag can be used to specify one or more symbol names
 # (namespaces, classes, functions, etc.) that should be excluded from the
@@ -944,7 +945,11 @@ EXCLUDE_SYMBOLS        = assertions \
                          WASMTIME_CONFIG_PROP \
                          WASMTIME_POOLING_ALLOCATION_CONFIG_PROP \
                          own \
-                         wasm_*_enum
+                         wasm_*_enum \
+                         wasmtime::detail \
+                         CASE_KIND_PRINT_NAME \
+                         CASE_KIND_TO_C \
+                         CASE_C_TO_KIND
 
 # The EXAMPLE_PATH tag can be used to specify one or more files or directories
 # that contain example code fragments that are included (see the \include

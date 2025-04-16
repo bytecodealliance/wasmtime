@@ -38,6 +38,10 @@ These commands will produce the following files:
 
 * `artifacts/include/**.h`: Header files for working with Wasmtime.
 
+## Using in a C++ Project
+
+A header only C++ API is also offered as `wasmtime.hh`, which is built on top of the C API. Its located next to the C headers when you download a pre-built library, or when building from source. C++17 is required.
+
 ## Using in a Rust Project
 
 If you have a Rust crate that contains bindings to a C or C++ library that uses Wasmtime, you can link the Wasmtime C API using Cargo.

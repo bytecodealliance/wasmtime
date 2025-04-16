@@ -666,7 +666,7 @@ jobs:
     # Rust programs. Note that this only executes if the `determine` step told
     # us to test the capi which is off-by-default for PRs.
     - run: rustup target add wasm32-wasip2 # wasip2 target needed by example programs
-    - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF
+    - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=ON
     - run: cmake --build examples/build --config Debug
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
       if: runner.os == 'Windows'
