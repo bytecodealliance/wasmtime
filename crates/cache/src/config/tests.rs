@@ -9,7 +9,7 @@ use tempfile::TempDir;
 // note: tempdir removes directory when being dropped, so we need to return it to the caller,
 //       so the paths are valid
 pub fn test_prolog() -> (TempDir, PathBuf, PathBuf) {
-    let _ = pretty_env_logger::try_init();
+    let _ = env_logger::try_init();
     let temp_dir = tempfile::tempdir().expect("Can't create temporary directory");
     let cache_dir = temp_dir.path().join("cache-dir");
     let config_path = temp_dir.path().join("cache-config.toml");

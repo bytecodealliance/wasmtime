@@ -9,7 +9,7 @@
 /// [#10529]: https://github.com/bytecodealliance/wasmtime/issues/10529
 #[test]
 fn logged_filetests() -> anyhow::Result<()> {
-    let _ = pretty_env_logger::formatted_builder()
+    env_logger::Builder::new()
         .filter_module(
             "cranelift_codegen::machinst::lower",
             log::LevelFilter::Trace,
