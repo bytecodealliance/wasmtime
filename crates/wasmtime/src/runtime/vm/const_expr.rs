@@ -4,7 +4,9 @@ use crate::prelude::*;
 use crate::runtime::vm::{Instance, VMGcRef, ValRaw, I31};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 #[cfg(feature = "gc")]
-use crate::{ArrayRef, ArrayRefPre, ArrayType, StructRef, StructRefPre, StructType, Val};
+use crate::{
+    AnyRef, ArrayRef, ArrayRefPre, ArrayType, ExternRef, StructRef, StructRefPre, StructType, Val,
+};
 use smallvec::SmallVec;
 use wasmtime_environ::{ConstExpr, ConstOp, FuncIndex, GlobalIndex};
 #[cfg(feature = "gc")]
@@ -224,7 +226,9 @@ impl ConstExprEvaluator {
                 | ConstOp::StructNewDefault { .. }
                 | ConstOp::ArrayNew { .. }
                 | ConstOp::ArrayNewDefault { .. }
-                | ConstOp::ArrayNewFixed { .. } => {
+                | ConstOp::ArrayNewFixed { .. }
+                | ConstOp::ExternConvertAny
+                | ConstOp::AnyConvertExtern => {
                     bail!(
                         "const expr evaluation error: struct operations are not \
                          supported without the `gc` feature"
@@ -333,6 +337,28 @@ impl ConstExprEvaluator {
 
                     self.stack
                         .push(ValRaw::anyref(array.to_anyref()._to_raw(&mut store)?));
+                }
+
+                #[cfg(feature = "gc")]
+                ConstOp::ExternConvertAny => {
+                    let result = match AnyRef::_from_raw(&mut store, self.pop()?.get_anyref()) {
+                        Some(anyref) => {
+                            ExternRef::_convert_any(&mut store, anyref)?._to_raw(&mut store)?
+                        }
+                        None => 0,
+                    };
+                    self.stack.push(ValRaw::externref(result));
+                }
+
+                #[cfg(feature = "gc")]
+                ConstOp::AnyConvertExtern => {
+                    let result =
+                        match ExternRef::_from_raw(&mut store, self.pop()?.get_externref()) {
+                            Some(externref) => AnyRef::_convert_extern(&mut store, externref)?
+                                ._to_raw(&mut store)?,
+                            None => 0,
+                        };
+                    self.stack.push(ValRaw::anyref(result));
                 }
             }
         }

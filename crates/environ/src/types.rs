@@ -1742,6 +1742,8 @@ pub enum ConstOp {
         array_type_index: TypeIndex,
         array_size: u32,
     },
+    ExternConvertAny,
+    AnyConvertExtern,
 }
 
 impl ConstOp {
@@ -1783,6 +1785,8 @@ impl ConstOp {
                 array_type_index: TypeIndex::from_u32(array_type_index),
                 array_size,
             },
+            O::ExternConvertAny => Self::ExternConvertAny,
+            O::AnyConvertExtern => Self::AnyConvertExtern,
             op => {
                 return Err(wasm_unsupported!(
                     "unsupported opcode in const expression at offset {offset:#x}: {op:?}",
