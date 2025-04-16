@@ -1036,7 +1036,8 @@ impl S390xMachineDeps {
         // (but after restoring FPRs, which might clobber %r1).
         let temp_dest = match dest {
             CallInstDest::Indirect { reg }
-                if is_reg_saved_in_prologue(call_conv, reg.to_real_reg().unwrap()) =>
+                if reg.to_real_reg().is_some()
+                    && is_reg_saved_in_prologue(call_conv, reg.to_real_reg().unwrap()) =>
             {
                 insts.push(Inst::Mov64 {
                     rd: writable_gpr(1),

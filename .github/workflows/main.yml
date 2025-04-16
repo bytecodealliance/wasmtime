@@ -433,17 +433,18 @@ jobs:
     - uses: ./.github/actions/cancel-on-failure
       if: failure()
 
-  fiber_tests:
-    name: wasmtime-fiber tests
+  special_tests:
+    name: One-off special tests
     runs-on: ubuntu-latest
-    env:
-      CARGO_NDK_VERSION: 2.12.2
+    needs: determine
+    if: needs.determine.outputs.run-full
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
     - run: cargo test -p wasmtime-fiber --no-default-features
+    - run: cargo test -p cranelift-tools --test logged-filetests
 
     # common logic to cancel the entire run if this job fails
     - uses: ./.github/actions/cancel-on-failure
@@ -1200,7 +1201,7 @@ jobs:
       - cargo_vet
       - doc
       - micro_checks
-      - fiber_tests
+      - special_tests
       - clippy
       - monolith_checks
       - platform_checks
