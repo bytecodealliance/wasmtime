@@ -1,12 +1,16 @@
 /**
- * \mainpage Wasmtime C API
+ * \mainpage Wasmtime C/C++ API
  *
- * This documentation is an overview and API reference for the C API of
+ * This documentation is an overview and API reference for the C and C++ API of
  * Wasmtime. The C API is spread between three different header files:
  *
  * * \ref wasmtime.h
  * * \ref wasi.h
  * * \ref wasm.h
+ *
+ * The C++ API builds on the C API and thus is represented in just header files:
+ *
+ * * \ref wasmtime.hh
  *
  * The \ref wasmtime.h header file includes all the other header files and is
  * the main header file you'll likely be using. The \ref wasm.h header file
