@@ -486,10 +486,7 @@ impl InstanceData {
     // though it should be guaranteed that the single owning reference currently
     // lives within the `ComponentInstance` that's being built.
     fn resource_types_mut(&mut self) -> &mut ImportedResources {
-        Arc::get_mut(self.state.resource_types_mut())
-            .unwrap()
-            .downcast_mut()
-            .unwrap()
+        Arc::get_mut(self.state.resource_types_mut()).unwrap()
     }
 }
 
