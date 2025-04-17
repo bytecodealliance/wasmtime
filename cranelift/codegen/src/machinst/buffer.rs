@@ -180,6 +180,7 @@ use crate::machinst::{
 use crate::trace;
 use crate::{ir, MachInstEmitState};
 use crate::{timing, VCodeConstantData};
+use core::ops::Range;
 use cranelift_control::ControlPlane;
 use cranelift_entity::packed_option::PackedOption;
 use cranelift_entity::{entity_impl, PrimaryMap};
@@ -250,6 +251,8 @@ pub struct MachBuffer<I: VCodeInst> {
     traps: SmallVec<[MachTrap; 16]>,
     /// Any call site records referring to this code.
     call_sites: SmallVec<[MachCallSite; 16]>,
+    /// Any exception-handler records referred to at call sites.
+    exception_handlers: SmallVec<[(PackedOption<ir::ExceptionTag>, MachLabel); 16]>,
     /// Any source location mappings referring to this code.
     srclocs: SmallVec<[MachSrcLoc<Stencil>; 64]>,
     /// Any user stack maps for this code.
@@ -330,6 +333,7 @@ impl MachBufferFinalized<Stencil> {
             relocs: self.relocs,
             traps: self.traps,
             call_sites: self.call_sites,
+            exception_handlers: self.exception_handlers,
             srclocs: self
                 .srclocs
                 .into_iter()
@@ -359,7 +363,9 @@ pub struct MachBufferFinalized<T: CompilePhase> {
     /// Any trap records referring to this code.
     pub(crate) traps: SmallVec<[MachTrap; 16]>,
     /// Any call site records referring to this code.
-    pub(crate) call_sites: SmallVec<[FinalizedMachCallSite; 16]>,
+    pub(crate) call_sites: SmallVec<[MachCallSite; 16]>,
+    /// Any exception-handler records referred to at call sites.
+    pub(crate) exception_handlers: SmallVec<[(PackedOption<ir::ExceptionTag>, CodeOffset); 16]>,
     /// Any source location mappings referring to this code.
     pub(crate) srclocs: SmallVec<[T::MachSrcLocType; 64]>,
     /// Any user stack maps for this code.
@@ -420,7 +426,7 @@ pub struct OpenPatchRegion(usize);
 /// the [`PatchRegion::patch`] function can be used to get a mutable buffer to the instruction
 /// bytes, and the constants uses can be updated directly.
 pub struct PatchRegion {
-    range: std::ops::Range<usize>,
+    range: Range<usize>,
 }
 
 impl PatchRegion {
@@ -440,6 +446,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             relocs: SmallVec::new(),
             traps: SmallVec::new(),
             call_sites: SmallVec::new(),
+            exception_handlers: SmallVec::new(),
             srclocs: SmallVec::new(),
             user_stack_maps: SmallVec::new(),
             unwind_info: SmallVec::new(),
@@ -1520,17 +1527,10 @@ impl<I: VCodeInst> MachBuffer<I> {
             })
             .collect();
 
-        let finalized_call_sites = self
-            .call_sites
+        let finalized_exception_handlers = self
+            .exception_handlers
             .iter()
-            .map(|call_site| FinalizedMachCallSite {
-                ret_addr: call_site.ret_addr,
-                exception_handlers: call_site
-                    .exception_handlers
-                    .iter()
-                    .map(|(tag, label)| (*tag, self.resolve_label_offset(*label)))
-                    .collect(),
-            })
+            .map(|(tag, label)| (*tag, self.resolve_label_offset(*label)))
             .collect();
 
         let mut srclocs = self.srclocs;
@@ -1540,7 +1540,8 @@ impl<I: VCodeInst> MachBuffer<I> {
             data: self.data,
             relocs: finalized_relocs,
             traps: self.traps,
-            call_sites: finalized_call_sites,
+            call_sites: self.call_sites,
+            exception_handlers: finalized_exception_handlers,
             srclocs,
             user_stack_maps: self.user_stack_maps,
             unwind_info: self.unwind_info,
@@ -1621,9 +1622,13 @@ impl<I: VCodeInst> MachBuffer<I> {
         &mut self,
         exception_handlers: &[(PackedOption<ExceptionTag>, MachLabel)],
     ) {
+        let start = u32::try_from(self.exception_handlers.len()).unwrap();
+        self.exception_handlers
+            .extend(exception_handlers.into_iter().copied());
+        let end = u32::try_from(self.exception_handlers.len()).unwrap();
         self.call_sites.push(MachCallSite {
             ret_addr: self.data.len() as CodeOffset,
-            exception_handlers: exception_handlers.into_iter().copied().collect(),
+            exception_handler_range: start..end,
         });
     }
 
@@ -1763,9 +1768,26 @@ impl<T: CompilePhase> MachBufferFinalized<T> {
         mem::take(&mut self.user_stack_maps)
     }
 
-    /// Get the list of call sites for this code.
-    pub fn call_sites(&self) -> &[FinalizedMachCallSite] {
-        &self.call_sites[..]
+    /// Get the list of call sites for this code, along with
+    /// associated exception handlers.
+    ///
+    /// Each item yielded by the returned iterator is a struct with:
+    ///
+    /// - The call site metadata record, with a `ret_addr` field
+    ///   directly accessible and denoting the offset of the return
+    ///   address into this buffer's code.
+    /// - The slice of pairs of exception tags and code offsets
+    ///   denoting exception-handler entry points associated with this
+    ///   call site.
+    pub fn call_sites(&self) -> impl Iterator<Item = FinalizedMachCallSite<'_>> + '_ {
+        self.call_sites.iter().map(|call_site| {
+            let range = call_site.exception_handler_range.clone();
+            let range = usize::try_from(range.start).unwrap()..usize::try_from(range.end).unwrap();
+            FinalizedMachCallSite {
+                ret_addr: call_site.ret_addr,
+                exception_handlers: &self.exception_handlers[range],
+            }
+        })
     }
 }
 
@@ -1929,25 +1951,25 @@ pub struct MachTrap {
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
 pub struct MachCallSite {
-    /// The offset of the call's return address, *relative to the containing section*.
+    /// The offset of the call's return address, *relative to the
+    /// start of the buffer*.
     pub ret_addr: CodeOffset,
 
-    /// Any exception handler targets at a given location.
-    pub exception_handlers: SmallVec<[(PackedOption<ir::ExceptionTag>, MachLabel); 0]>,
+    /// Range in `exception_handlers` corresponding to the exception
+    /// handlers for this callsite.
+    exception_handler_range: Range<u32>,
 }
 
 /// A call site record resulting from a compilation.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(
-    feature = "enable-serde",
-    derive(serde_derive::Serialize, serde_derive::Deserialize)
-)]
-pub struct FinalizedMachCallSite {
-    /// The offset of the call's return address, *relative to the containing section*.
+pub struct FinalizedMachCallSite<'a> {
+    /// The offset of the call's return address, *relative to the
+    /// start of the buffer*.
     pub ret_addr: CodeOffset,
 
-    /// Any exception handler targets at a given location.
-    pub exception_handlers: SmallVec<[(PackedOption<ir::ExceptionTag>, CodeOffset); 0]>,
+    /// Exception handlers at this callsite, with target offsets
+    /// *relative to the start of the buffer*.
+    pub exception_handlers: &'a [(PackedOption<ir::ExceptionTag>, CodeOffset)],
 }
 
 /// A source-location mapping resulting from a compilation.
@@ -2484,7 +2506,7 @@ mod test {
         let ctrl_plane = &mut Default::default();
         let constants = Default::default();
 
-        buf.reserve_labels_for_blocks(1);
+        buf.reserve_labels_for_blocks(3);
 
         buf.bind_label(label(0), ctrl_plane);
         buf.put1(1);
@@ -2492,7 +2514,10 @@ mod test {
         buf.put1(2);
         buf.add_trap(TrapCode::INTEGER_OVERFLOW);
         buf.add_trap(TrapCode::INTEGER_DIVISION_BY_ZERO);
-        buf.add_call_site(&[]);
+        buf.add_call_site(&[
+            (None.into(), label(1)),
+            (Some(ExceptionTag::new(42)).into(), label(2)),
+        ]);
         buf.add_reloc(
             Reloc::Abs4,
             &ExternalName::User(UserExternalNameRef::new(0)),
@@ -2505,10 +2530,14 @@ mod test {
             1,
         );
         buf.put1(4);
+        buf.bind_label(label(1), ctrl_plane);
+        buf.put1(0xff);
+        buf.bind_label(label(2), ctrl_plane);
+        buf.put1(0xff);
 
         let buf = buf.finish(&constants, ctrl_plane);
 
-        assert_eq!(buf.data(), &[1, 2, 3, 4]);
+        assert_eq!(buf.data(), &[1, 2, 3, 4, 0xff, 0xff]);
         assert_eq!(
             buf.traps()
                 .iter()
@@ -2520,12 +2549,11 @@ mod test {
                 (2, TrapCode::INTEGER_DIVISION_BY_ZERO)
             ]
         );
+        let call_sites: Vec<_> = buf.call_sites().collect();
+        assert_eq!(call_sites[0].ret_addr, 2);
         assert_eq!(
-            buf.call_sites()
-                .iter()
-                .map(|call_site| call_site.ret_addr)
-                .collect::<Vec<_>>(),
-            vec![2]
+            call_sites[0].exception_handlers,
+            &[(None.into(), 4), (Some(ExceptionTag::new(42)).into(), 5)]
         );
         assert_eq!(
             buf.relocs()
