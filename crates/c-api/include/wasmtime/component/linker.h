@@ -16,9 +16,6 @@ extern "C" {
 
 typedef struct wasmtime_component_linker_t wasmtime_component_linker_t;
 
-typedef struct wasmtime_component_linker_instance_t
-    wasmtime_component_linker_instance_t;
-
 /**
  * \brief Creates a new #wasmtime_component_linker_t for the specified engine.
  *
@@ -28,27 +25,6 @@ typedef struct wasmtime_component_linker_instance_t
  */
 WASM_API_EXTERN wasmtime_component_linker_t *
 wasmtime_component_linker_new(const wasm_engine_t *engine);
-
-/**
- * \brief Creates a builder, #wasmtime_component_linker_instance_t, for the
- * specified named instance
- *
- * \param linker the linker in which to build out the instance in
- * \param name the instance name
- * \param linker_instance_out on success, the
- *        #wasmtime_component_linker_instance_t
- *
- * \return wasmtime_error_t* on success `NULL` is returned, otherwise an error
- *         is returned which describes why the build failed.
- *
- * \note This mutably borrows the provided linker, meaning nothing else should
- * access the linker until the returned #wasmtime_component_linker_instance_t is
- * deleted. The linker also needs to stay alive as long as the returned
- * #wasmtime_component_linker_instance_t is alive.
- */
-WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instance(
-    wasmtime_component_linker_t *linker, const char *name,
-    wasmtime_component_linker_instance_t **linker_instance_out);
 
 /**
  * \brief Instantiates a component instance in a given #wasmtime_context_t
@@ -77,15 +53,6 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instantiate(
  */
 WASM_API_EXTERN void
 wasmtime_component_linker_delete(wasmtime_component_linker_t *linker);
-
-/**
- * \brief Deletes a #wasmtime_component_linker_instance_t created by
- * #wasmtime_component_linker_instance
- *
- * \param linker_instance the #wasmtime_component_linker_instance_t to delete
- */
-WASM_API_EXTERN void wasmtime_component_linker_instance_delete(
-    wasmtime_component_linker_instance_t *linker_instance);
 
 #ifdef __cplusplus
 } // extern "C"

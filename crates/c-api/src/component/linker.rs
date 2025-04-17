@@ -1,7 +1,4 @@
-use std::ffi::{c_char, CStr};
-
-use anyhow::Context;
-use wasmtime::component::{Instance, Linker, LinkerInstance};
+use wasmtime::component::{Instance, Linker};
 
 use crate::{wasm_engine_t, wasmtime_error_t, WasmtimeStoreContextMut, WasmtimeStoreData};
 
@@ -12,35 +9,12 @@ pub struct wasmtime_component_linker_t {
     pub(crate) linker: Linker<WasmtimeStoreData>,
 }
 
-#[repr(transparent)]
-pub struct wasmtime_component_linker_instance_t<'a> {
-    pub(crate) linker_instance: LinkerInstance<'a, WasmtimeStoreData>,
-}
-
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_linker_new(
     engine: &wasm_engine_t,
 ) -> Box<wasmtime_component_linker_t> {
     Box::new(wasmtime_component_linker_t {
         linker: Linker::new(&engine.engine),
-    })
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_linker_instance<'a>(
-    linker: &'a mut wasmtime_component_linker_t,
-    name: *const c_char,
-    linker_instance_out: &mut *mut wasmtime_component_linker_instance_t<'a>,
-) -> Option<Box<wasmtime_error_t>> {
-    let name = unsafe { CStr::from_ptr(name) };
-    let result = name
-        .to_str()
-        .context("input name is not valid utf-8")
-        .and_then(|name| linker.linker.instance(name));
-    crate::handle_result(result, |linker_instance| {
-        *linker_instance_out = Box::into_raw(Box::new(wasmtime_component_linker_instance_t {
-            linker_instance,
-        }));
     })
 }
 
@@ -58,11 +32,5 @@ pub unsafe extern "C" fn wasmtime_component_linker_instantiate(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_linker_delete(
     _linker: Box<wasmtime_component_linker_t>,
-) {
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_linker_instance_delete(
-    _linker_instance: Box<wasmtime_component_linker_instance_t>,
 ) {
 }

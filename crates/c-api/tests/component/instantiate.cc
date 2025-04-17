@@ -30,14 +30,6 @@ TEST(component, instantiate) {
   const auto linker = wasmtime_component_linker_new(engine);
   EXPECT_NE(linker, nullptr);
 
-  wasmtime_component_linker_instance_t *linker_instance = nullptr;
-  error = wasmtime_component_linker_instance(linker, "a:b/c", &linker_instance);
-
-  EXPECT_EQ(error, nullptr);
-  EXPECT_NE(linker_instance, nullptr);
-
-  wasmtime_component_linker_instance_delete(linker_instance);
-
   wasmtime_component_instance_t instance = {};
   error = wasmtime_component_linker_instantiate(linker, context, component,
                                                 &instance);
