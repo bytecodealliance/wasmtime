@@ -112,12 +112,12 @@ function %f4(i32) -> i32 {
 
 ;; Non-supported calling convention.
 function %f5(i32) -> i32 {
-    sig0 = (i32) -> f32 system_v
-    fn0 = %g(i32) -> f32 system_v
+    sig0 = (i32) -> f32 windows_fastcall
+    fn0 = %g(i32) -> f32 windows_fastcall
 
     block0(v1: i32):
         v2 = f64const 0x1.0
-        try_call fn0(v1), sig0, block1(ret0, v2), [ tag1: block2(), default: block3(v2) ] ; error: calling convention `system_v` of callee does not support exceptions
+        try_call fn0(v1), sig0, block1(ret0, v2), [ tag1: block2(), default: block3(v2) ] ; error: calling convention `windows_fastcall` of callee does not support exceptions
 
     block1(v3: f32, v4: f64):
         v5 = iconst.i32 1
