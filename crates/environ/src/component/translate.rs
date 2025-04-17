@@ -812,6 +812,8 @@ impl<'a, 'data> Translator<'a, 'data> {
                         }
                         wasmparser::CanonicalFunction::ContextGet(..)
                         | wasmparser::CanonicalFunction::ContextSet(..)
+                        | wasmparser::CanonicalFunction::TaskCancel
+                        | wasmparser::CanonicalFunction::SubtaskCancel { .. }
                         | wasmparser::CanonicalFunction::ThreadSpawnRef { .. }
                         | wasmparser::CanonicalFunction::ThreadSpawnIndirect { .. }
                         | wasmparser::CanonicalFunction::ThreadAvailableParallelism => {

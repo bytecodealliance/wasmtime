@@ -1252,8 +1252,8 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasm-encoder]]
-version = "0.228.0"
-when = "2025-04-01"
+version = "0.229.0"
+when = "2025-04-17"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1264,14 +1264,14 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasm-metadata]]
-version = "0.228.0"
-when = "2025-04-01"
+version = "0.229.0"
+when = "2025-04-17"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasm-wave]]
-version = "0.228.0"
-when = "2025-04-01"
+version = "0.229.0"
+when = "2025-04-17"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1282,14 +1282,14 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmparser]]
-version = "0.228.0"
-when = "2025-04-01"
+version = "0.229.0"
+when = "2025-04-17"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmprinter]]
-version = "0.228.0"
-when = "2025-04-01"
+version = "0.229.0"
+when = "2025-04-17"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1450,14 +1450,14 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wast]]
-version = "228.0.0"
-when = "2025-04-01"
+version = "229.0.0"
+when = "2025-04-17"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wat]]
-version = "1.228.0"
-when = "2025-04-01"
+version = "1.229.0"
+when = "2025-04-17"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1667,8 +1667,8 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-component]]
-version = "0.228.0"
-when = "2025-04-01"
+version = "0.229.0"
+when = "2025-04-17"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1679,8 +1679,8 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-parser]]
-version = "0.228.0"
-when = "2025-04-01"
+version = "0.229.0"
+when = "2025-04-17"
 user-id = 73222
 user-login = "wasmtime-publish"
 
