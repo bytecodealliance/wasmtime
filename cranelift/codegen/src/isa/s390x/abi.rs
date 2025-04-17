@@ -907,7 +907,7 @@ impl ABIMachineSpec for S390xMachineDeps {
         is_exception: bool,
     ) -> PRegSet {
         match call_conv_of_callee {
-            _ if is_exception => ALL_CLOBBERS,
+            isa::CallConv::Tail if is_exception => ALL_CLOBBERS,
             isa::CallConv::Tail => TAIL_CLOBBERS,
             _ => SYSV_CLOBBERS,
         }

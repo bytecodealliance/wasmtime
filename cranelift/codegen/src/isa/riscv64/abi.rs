@@ -639,13 +639,12 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     }
 
     fn get_regs_clobbered_by_call(
-        _call_conv_of_callee: isa::CallConv,
+        call_conv_of_callee: isa::CallConv,
         is_exception: bool,
     ) -> PRegSet {
-        if is_exception {
-            ALL_CLOBBERS
-        } else {
-            DEFAULT_CLOBBERS
+        match call_conv_of_callee {
+            isa::CallConv::Tail if is_exception => ALL_CLOBBERS,
+            _ => DEFAULT_CLOBBERS,
         }
     }
 

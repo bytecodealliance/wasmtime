@@ -1127,7 +1127,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     fn get_regs_clobbered_by_call(call_conv: isa::CallConv, is_exception: bool) -> PRegSet {
         match call_conv {
             isa::CallConv::Winch => WINCH_CLOBBERS,
-            _ if is_exception => ALL_CLOBBERS,
+            isa::CallConv::Tail if is_exception => ALL_CLOBBERS,
             _ => DEFAULT_AAPCS_CLOBBERS,
         }
     }
