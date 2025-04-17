@@ -914,7 +914,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         match call_conv_of_callee {
             CallConv::Winch => ALL_CLOBBERS,
             CallConv::WindowsFastcall => WINDOWS_CLOBBERS,
-            _ if is_exception => ALL_CLOBBERS,
+            CallConv::Tail if is_exception => ALL_CLOBBERS,
             _ => SYSV_CLOBBERS,
         }
     }

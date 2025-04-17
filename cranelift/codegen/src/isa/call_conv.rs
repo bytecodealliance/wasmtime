@@ -84,7 +84,7 @@ impl CallConv {
     /// Does this calling convention support exceptions?
     pub fn supports_exceptions(&self) -> bool {
         match self {
-            CallConv::Tail => true,
+            CallConv::Tail | CallConv::SystemV => true,
             _ => false,
         }
     }
@@ -92,7 +92,7 @@ impl CallConv {
     /// What types do the exception payload value(s) have?
     pub fn exception_payload_types(&self, pointer_ty: Type) -> &[Type] {
         match self {
-            CallConv::Tail => match pointer_ty {
+            CallConv::Tail | CallConv::SystemV => match pointer_ty {
                 types::I32 => &[types::I32, types::I32],
                 types::I64 => &[types::I64, types::I64],
                 _ => unreachable!(),

@@ -1,0 +1,25 @@
+; Regression test for the alias analysis not considering try_call to be a memory fence
+
+test optimize
+set opt_level=speed_and_size
+target x86_64
+
+function u0:0(i64 sret, i64) system_v {
+    ss0 = explicit_slot 8
+    sig0 = (i64) system_v
+    fn0 = u0:1 sig0
+
+block0(v0: i64, v1: i64):
+    v20 = stack_addr.i64 ss0
+    ; check: v20 = stack_addr.i64 ss0
+    store v1, v20 ; store v1 to ss0
+    try_call fn0(v20), sig0, block1, []
+
+block1:
+    v21 = stack_addr.i64 ss0
+    v2 = load.i64 v21; load v2 from ss0 after the fn0 call potentially changed it
+    ; check: v2 = load.i64 v20
+    store v2, v0 ; v2 used to be incorrectly replaced by v1 in the egraph pass
+    ; nextln: store v2, v0
+    return
+}
