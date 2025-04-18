@@ -503,7 +503,7 @@ pub unsafe trait ComponentType {
     /// Performs a type-check to see whether this component value type matches
     /// the interface type `ty` provided.
     #[doc(hidden)]
-    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()>;
+    fn typecheck(ty: &InterfaceType, types: &InstanceType) -> Result<()>;
 }
 
 #[doc(hidden)]
@@ -687,7 +687,7 @@ macro_rules! forward_type_impls {
             const ABI: CanonicalAbiInfo = <$b as ComponentType>::ABI;
 
             #[inline]
-            fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
+            fn typecheck(ty: &InterfaceType, types: &InstanceType) -> Result<()> {
                 <$b as ComponentType>::typecheck(ty, types)
             }
         }
@@ -791,7 +791,7 @@ macro_rules! integers {
 
             const ABI: CanonicalAbiInfo = CanonicalAbiInfo::$abi;
 
-            fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+            fn typecheck(ty: &InterfaceType, _types: &InstanceType) -> Result<()> {
                 match ty {
                     InterfaceType::$ty => Ok(()),
                     other => bail!("expected `{}` found `{}`", desc(&InterfaceType::$ty), desc(other))
@@ -909,7 +909,7 @@ macro_rules! floats {
 
             const ABI: CanonicalAbiInfo = CanonicalAbiInfo::$abi;
 
-            fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+            fn typecheck(ty: &InterfaceType, _types: &InstanceType) -> Result<()> {
                 match ty {
                     InterfaceType::$ty => Ok(()),
                     other => bail!("expected `{}` found `{}`", desc(&InterfaceType::$ty), desc(other))
@@ -1026,7 +1026,7 @@ unsafe impl ComponentType for bool {
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR1;
 
-    fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, _types: &InstanceType) -> Result<()> {
         match ty {
             InterfaceType::Bool => Ok(()),
             other => bail!("expected `bool` found `{}`", desc(other)),
@@ -1084,7 +1084,7 @@ unsafe impl ComponentType for char {
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
 
-    fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, _types: &InstanceType) -> Result<()> {
         match ty {
             InterfaceType::Char => Ok(()),
             other => bail!("expected `char` found `{}`", desc(other)),
@@ -1146,7 +1146,7 @@ unsafe impl ComponentType for str {
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
-    fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, _types: &InstanceType) -> Result<()> {
         match ty {
             InterfaceType::String => Ok(()),
             other => bail!("expected `string` found `{}`", desc(other)),
@@ -1437,7 +1437,7 @@ unsafe impl ComponentType for WasmStr {
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
-    fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, _types: &InstanceType) -> Result<()> {
         match ty {
             InterfaceType::String => Ok(()),
             other => bail!("expected `string` found `{}`", desc(other)),
@@ -1476,7 +1476,7 @@ where
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
-    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, types: &InstanceType) -> Result<()> {
         match ty {
             InterfaceType::List(t) => T::typecheck(&types.types[*t].element, types),
             other => bail!("expected `list` found `{}`", desc(other)),
@@ -1742,7 +1742,7 @@ unsafe impl<T: ComponentType> ComponentType for WasmList<T> {
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::POINTER_PAIR;
 
-    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, types: &InstanceType) -> Result<()> {
         <[T] as ComponentType>::typecheck(ty, types)
     }
 }
@@ -1777,8 +1777,8 @@ unsafe impl<T: Lift> Lift for WasmList<T> {
 /// Verify that the given wasm type is a tuple with the expected fields in the right order.
 fn typecheck_tuple(
     ty: &InterfaceType,
-    types: &InstanceType<'_>,
-    expected: &[fn(&InterfaceType, &InstanceType<'_>) -> Result<()>],
+    types: &InstanceType,
+    expected: &[fn(&InterfaceType, &InstanceType) -> Result<()>],
 ) -> Result<()> {
     match ty {
         InterfaceType::Tuple(t) => {
@@ -1803,8 +1803,8 @@ fn typecheck_tuple(
 /// names.
 pub fn typecheck_record(
     ty: &InterfaceType,
-    types: &InstanceType<'_>,
-    expected: &[(&str, fn(&InterfaceType, &InstanceType<'_>) -> Result<()>)],
+    types: &InstanceType,
+    expected: &[(&str, fn(&InterfaceType, &InstanceType) -> Result<()>)],
 ) -> Result<()> {
     match ty {
         InterfaceType::Record(index) => {
@@ -1837,10 +1837,10 @@ pub fn typecheck_record(
 /// names.
 pub fn typecheck_variant(
     ty: &InterfaceType,
-    types: &InstanceType<'_>,
+    types: &InstanceType,
     expected: &[(
         &str,
-        Option<fn(&InterfaceType, &InstanceType<'_>) -> Result<()>>,
+        Option<fn(&InterfaceType, &InstanceType) -> Result<()>>,
     )],
 ) -> Result<()> {
     match ty {
@@ -1881,11 +1881,7 @@ pub fn typecheck_variant(
 
 /// Verify that the given wasm type is a enum with the expected cases in the right order and with the right
 /// names.
-pub fn typecheck_enum(
-    ty: &InterfaceType,
-    types: &InstanceType<'_>,
-    expected: &[&str],
-) -> Result<()> {
+pub fn typecheck_enum(ty: &InterfaceType, types: &InstanceType, expected: &[&str]) -> Result<()> {
     match ty {
         InterfaceType::Enum(index) => {
             let names = &types.types[*index].names;
@@ -1912,11 +1908,7 @@ pub fn typecheck_enum(
 
 /// Verify that the given wasm type is a flags type with the expected flags in the right order and with the right
 /// names.
-pub fn typecheck_flags(
-    ty: &InterfaceType,
-    types: &InstanceType<'_>,
-    expected: &[&str],
-) -> Result<()> {
+pub fn typecheck_flags(ty: &InterfaceType, types: &InstanceType, expected: &[&str]) -> Result<()> {
     match ty {
         InterfaceType::Flags(index) => {
             let names = &types.types[*index].names;
@@ -1967,7 +1959,7 @@ where
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::variant_static(&[None, Some(T::ABI)]);
 
-    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, types: &InstanceType) -> Result<()> {
         match ty {
             InterfaceType::Option(t) => T::typecheck(&types.types[*t].ty, types),
             other => bail!("expected `option` found `{}`", desc(other)),
@@ -2096,7 +2088,7 @@ where
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::variant_static(&[Some(T::ABI), Some(E::ABI)]);
 
-    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, types: &InstanceType) -> Result<()> {
         match ty {
             InterfaceType::Result(r) => {
                 let result = &types.types[*r];
@@ -2456,7 +2448,7 @@ macro_rules! impl_component_ty_for_tuples {
 
             fn typecheck(
                 ty: &InterfaceType,
-                types: &InstanceType<'_>,
+                types: &InstanceType,
             ) -> Result<()> {
                 typecheck_tuple(ty, types, &[$($t::typecheck),*])
             }

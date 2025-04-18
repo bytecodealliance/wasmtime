@@ -382,11 +382,11 @@ impl Component {
         self.with_uninstantiated_instance_type(|ty| types::Component::from(self.inner.ty, ty))
     }
 
-    fn with_uninstantiated_instance_type<R>(&self, f: impl FnOnce(&InstanceType<'_>) -> R) -> R {
+    fn with_uninstantiated_instance_type<R>(&self, f: impl FnOnce(&InstanceType) -> R) -> R {
         let resources = Arc::new(PrimaryMap::new());
         f(&InstanceType {
-            types: self.types(),
-            resources: &resources,
+            types: self.types().clone(),
+            resources,
         })
     }
 

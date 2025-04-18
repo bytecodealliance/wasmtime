@@ -19,7 +19,7 @@ use wasmtime_environ::component::{
 
 pub struct HostFunc {
     entrypoint: VMLoweringCallee,
-    typecheck: Box<dyn (Fn(TypeFuncIndex, &InstanceType<'_>) -> Result<()>) + Send + Sync>,
+    typecheck: Box<dyn (Fn(TypeFuncIndex, &InstanceType) -> Result<()>) + Send + Sync>,
     func: Box<dyn Any + Send + Sync>,
 }
 
@@ -96,7 +96,7 @@ impl HostFunc {
         })
     }
 
-    pub fn typecheck(&self, ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()> {
+    pub fn typecheck(&self, ty: TypeFuncIndex, types: &InstanceType) -> Result<()> {
         (self.typecheck)(ty, types)
     }
 
@@ -109,7 +109,7 @@ impl HostFunc {
     }
 }
 
-fn typecheck<P, R>(ty: TypeFuncIndex, types: &InstanceType<'_>) -> Result<()>
+fn typecheck<P, R>(ty: TypeFuncIndex, types: &InstanceType) -> Result<()>
 where
     P: ComponentNamedList + Lift,
     R: ComponentNamedList + Lower,

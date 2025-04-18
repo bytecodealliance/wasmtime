@@ -821,7 +821,7 @@ unsafe impl<T: 'static> ComponentType for Resource<T> {
 
     type Lower = <u32 as ComponentType>::Lower;
 
-    fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, types: &InstanceType) -> Result<()> {
         let resource = match ty {
             InterfaceType::Own(t) | InterfaceType::Borrow(t) => *t,
             other => bail!("expected `own` or `borrow`, found `{}`", desc(other)),
@@ -1108,7 +1108,7 @@ unsafe impl ComponentType for ResourceAny {
 
     type Lower = <u32 as ComponentType>::Lower;
 
-    fn typecheck(ty: &InterfaceType, _types: &InstanceType<'_>) -> Result<()> {
+    fn typecheck(ty: &InterfaceType, _types: &InstanceType) -> Result<()> {
         match ty {
             InterfaceType::Own(_) | InterfaceType::Borrow(_) => Ok(()),
             other => bail!("expected `own` or `borrow`, found `{}`", desc(other)),
