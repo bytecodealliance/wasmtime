@@ -476,7 +476,7 @@ impl InstanceData {
     }
 
     #[inline]
-    pub fn ty(&self) -> InstanceType<'_> {
+    pub fn ty(&self) -> InstanceType {
         InstanceType::new(self.instance())
     }
 

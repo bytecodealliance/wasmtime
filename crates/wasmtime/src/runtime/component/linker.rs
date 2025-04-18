@@ -161,8 +161,8 @@ impl<T> Linker<T> {
     fn typecheck<'a>(&'a self, component: &'a Component) -> Result<TypeChecker<'a>> {
         let mut cx = TypeChecker {
             engine: &self.engine,
-            types: component.types(),
             strings: &self.strings,
+            types: &component.types(),
             imported_resources: Default::default(),
         };
 
@@ -185,8 +185,8 @@ impl<T> Linker<T> {
         Ok(types::Component::from(
             component.ty(),
             &InstanceType {
-                types: cx.types,
-                resources: &cx.imported_resources,
+                types: cx.types.clone(),
+                resources: cx.imported_resources.clone(),
             },
         ))
     }

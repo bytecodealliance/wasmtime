@@ -41,7 +41,7 @@ struct Handle<T> {
 }
 
 impl<T> Handle<T> {
-    fn new(index: T, ty: &InstanceType<'_>) -> Handle<T> {
+    fn new(index: T, ty: &InstanceType) -> Handle<T> {
         Handle {
             index,
             types: ty.types.clone(),
@@ -49,10 +49,10 @@ impl<T> Handle<T> {
         }
     }
 
-    fn instance(&self) -> InstanceType<'_> {
+    fn instance(&self) -> InstanceType {
         InstanceType {
-            types: &self.types,
-            resources: &self.resources,
+            types: self.types.clone(),
+            resources: self.resources.clone(),
         }
     }
 
@@ -262,7 +262,7 @@ impl PartialEq for List {
 impl Eq for List {}
 
 impl List {
-    pub(crate) fn from(index: TypeListIndex, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(index: TypeListIndex, ty: &InstanceType) -> Self {
         List(Handle::new(index, ty))
     }
 
@@ -286,7 +286,7 @@ pub struct Field<'a> {
 pub struct Record(Handle<TypeRecordIndex>);
 
 impl Record {
-    pub(crate) fn from(index: TypeRecordIndex, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(index: TypeRecordIndex, ty: &InstanceType) -> Self {
         Record(Handle::new(index, ty))
     }
 
@@ -312,7 +312,7 @@ impl Eq for Record {}
 pub struct Tuple(Handle<TypeTupleIndex>);
 
 impl Tuple {
-    pub(crate) fn from(index: TypeTupleIndex, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(index: TypeTupleIndex, ty: &InstanceType) -> Self {
         Tuple(Handle::new(index, ty))
     }
 
@@ -346,7 +346,7 @@ pub struct Case<'a> {
 pub struct Variant(Handle<TypeVariantIndex>);
 
 impl Variant {
-    pub(crate) fn from(index: TypeVariantIndex, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(index: TypeVariantIndex, ty: &InstanceType) -> Self {
         Variant(Handle::new(index, ty))
     }
 
@@ -375,7 +375,7 @@ impl Eq for Variant {}
 pub struct Enum(Handle<TypeEnumIndex>);
 
 impl Enum {
-    pub(crate) fn from(index: TypeEnumIndex, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(index: TypeEnumIndex, ty: &InstanceType) -> Self {
         Enum(Handle::new(index, ty))
     }
 
@@ -401,7 +401,7 @@ impl Eq for Enum {}
 pub struct OptionType(Handle<TypeOptionIndex>);
 
 impl OptionType {
-    pub(crate) fn from(index: TypeOptionIndex, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(index: TypeOptionIndex, ty: &InstanceType) -> Self {
         OptionType(Handle::new(index, ty))
     }
 
@@ -424,7 +424,7 @@ impl Eq for OptionType {}
 pub struct ResultType(Handle<TypeResultIndex>);
 
 impl ResultType {
-    pub(crate) fn from(index: TypeResultIndex, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(index: TypeResultIndex, ty: &InstanceType) -> Self {
         ResultType(Handle::new(index, ty))
     }
 
@@ -458,7 +458,7 @@ impl Eq for ResultType {}
 pub struct Flags(Handle<TypeFlagsIndex>);
 
 impl Flags {
-    pub(crate) fn from(index: TypeFlagsIndex, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(index: TypeFlagsIndex, ty: &InstanceType) -> Self {
         Flags(Handle::new(index, ty))
     }
 
@@ -638,7 +638,7 @@ impl Type {
     }
 
     /// Convert the specified `InterfaceType` to a `Type`.
-    pub(crate) fn from(ty: &InterfaceType, instance: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(ty: &InterfaceType, instance: &InstanceType) -> Self {
         match ty {
             InterfaceType::Bool => Type::Bool,
             InterfaceType::S8 => Type::S8,
@@ -703,7 +703,7 @@ impl Type {
 pub struct ComponentFunc(Handle<TypeFuncIndex>);
 
 impl ComponentFunc {
-    pub(crate) fn from(index: TypeFuncIndex, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(index: TypeFuncIndex, ty: &InstanceType) -> Self {
         Self(Handle::new(index, ty))
     }
 
@@ -732,7 +732,7 @@ impl ComponentFunc {
 pub struct Module(Handle<TypeModuleIndex>);
 
 impl Module {
-    pub(crate) fn from(index: TypeModuleIndex, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(index: TypeModuleIndex, ty: &InstanceType) -> Self {
         Self(Handle::new(index, ty))
     }
 
@@ -771,7 +771,7 @@ impl Module {
 pub struct Component(Handle<TypeComponentIndex>);
 
 impl Component {
-    pub(crate) fn from(index: TypeComponentIndex, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(index: TypeComponentIndex, ty: &InstanceType) -> Self {
         Self(Handle::new(index, ty))
     }
 
@@ -823,7 +823,7 @@ impl Component {
 pub struct ComponentInstance(Handle<TypeComponentInstanceIndex>);
 
 impl ComponentInstance {
-    pub(crate) fn from(index: TypeComponentInstanceIndex, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(index: TypeComponentInstanceIndex, ty: &InstanceType) -> Self {
         Self(Handle::new(index, ty))
     }
 
@@ -869,7 +869,7 @@ pub enum ComponentItem {
 }
 
 impl ComponentItem {
-    pub(crate) fn from(engine: &Engine, def: &TypeDef, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from(engine: &Engine, def: &TypeDef, ty: &InstanceType) -> Self {
         match def {
             TypeDef::Component(idx) => Self::Component(Component::from(*idx, ty)),
             TypeDef::ComponentInstance(idx) => {
@@ -901,7 +901,7 @@ impl ComponentItem {
             }
         }
     }
-    pub(crate) fn from_export(engine: &Engine, export: &Export, ty: &InstanceType<'_>) -> Self {
+    pub(crate) fn from_export(engine: &Engine, export: &Export, ty: &InstanceType) -> Self {
         match export {
             Export::Instance { ty: idx, .. } => {
                 Self::ComponentInstance(ComponentInstance::from(*idx, ty))

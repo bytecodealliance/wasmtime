@@ -355,7 +355,7 @@ impl<'a, T> LowerContext<'a, T> {
 
     /// Returns the instance type information corresponding to the instance that
     /// this context is lowering into.
-    pub fn instance_type(&self) -> InstanceType<'_> {
+    pub fn instance_type(&self) -> InstanceType {
         // Note that the unsafety here should be valid given the contract of
         // `LowerContext::new`.
         InstanceType::new(unsafe { &*self.instance })
@@ -520,7 +520,7 @@ impl<'a> LiftContext<'a> {
 
     /// Returns instance type information for the component instance that is
     /// being lifted from.
-    pub fn instance_type(&self) -> InstanceType<'_> {
+    pub fn instance_type(&self) -> InstanceType {
         // Note that the unsafety here should be valid given the contract of
         // `LiftContext::new`.
         InstanceType::new(unsafe { &*self.instance })
