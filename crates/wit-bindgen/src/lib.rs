@@ -621,18 +621,36 @@ impl Wasmtime {
                 let body = mem::take(&mut generator.src).into();
                 load = generator.extract_typed_function(func).1;
                 assert!(generator.src.is_empty());
-                self.exports.funcs.push(body);
+                generator.generator.exports.funcs.push(body);
                 ty_index = format!("{wt}::component::ComponentExportIndex");
                 field = func_field_name(resolve, func);
                 ty = format!("{wt}::component::Func");
+                let sig = generator.typedfunc_sig(func, TypeMode::AllBorrowed("'_"));
+                let typecheck = format!(
+                    "match item {{ 
+                            {wt}::component::types::ComponentItem::ComponentFunc(func) => {{
+                                anyhow::Context::context(
+                                    func.typecheck::<{sig}>(&_instance_type),
+                                    \"type-checking export func `{0}`\"
+                                )?;
+                                index
+                            }}
+                            _ => Err(anyhow::anyhow!(\"export `{0}` is not a function\"))?,
+                        }}",
+                    func.name
+                );
                 get_index_from_component = format!(
-                    "_component.get_export_index(None, \"{}\")
-                        .ok_or_else(|| anyhow::anyhow!(\"no function export `{0}` found\"))?",
+                    "{{ let (item, index) = _component.get_export(None, \"{}\")
+                        .ok_or_else(|| anyhow::anyhow!(\"no export `{0}` found\"))?;
+                        {typecheck}
+                     }}",
                     func.name
                 );
                 get_index_from_instance = format!(
-                    "_instance.get_export_index(&mut store, None, \"{}\")
-                        .ok_or_else(|| anyhow::anyhow!(\"no function export `{0}` found\"))?",
+                    "{{ let (item, index) = _instance.get_export(&mut store, None, \"{}\")
+                        .ok_or_else(|| anyhow::anyhow!(\"no function export `{0}` found\"))?;
+                        {typecheck}
+                     }}",
                     func.name
                 );
             }
@@ -685,10 +703,11 @@ impl Wasmtime {
 /// within a component.
 pub fn new(
     component: &{wt}::component::Component,
+    instance_type: &{wt}::component::__internal::InstanceType,
 ) -> {wt}::Result<{struct_name}Indices> {{
     let instance = component.get_export_index(None, \"{instance_name}\")
         .ok_or_else(|| anyhow::anyhow!(\"no exported instance named `{instance_name}`\"))?;
-    Self::_new(|name| component.get_export_index(Some(&instance), name))
+    Self::_new(instance_type, |name| component.get_export_index(Some(&instance), name))
 }}
 
 /// This constructor is similar to [`{struct_name}Indices::new`] except that it
@@ -699,10 +718,12 @@ pub fn new_instance(
 ) -> {wt}::Result<{struct_name}Indices> {{
     let instance_export = instance.get_export_index(&mut store, None, \"{instance_name}\")
         .ok_or_else(|| anyhow::anyhow!(\"no exported instance named `{instance_name}`\"))?;
-    Self::_new(|name| instance.get_export_index(&mut store, Some(&instance_export), name))
+    let instance_type = instance.instance_type(&mut store);
+    Self::_new(&instance_type, |name| instance.get_export_index(&mut store, Some(&instance_export), name))
 }}
 
 fn _new(
+    _instance_type: &{wt}::component::__internal::InstanceType,
     mut lookup: impl FnMut (&str) -> Option<{wt}::component::ComponentExportIndex>,
 ) -> {wt}::Result<{struct_name}Indices> {{
     let mut lookup = move |name| {{
@@ -740,6 +761,7 @@ fn _new(
                             let mut store = store.as_context_mut();
                             let _ = &mut store;
                             let _instance = instance;
+                            let _instance_type = _instance.instance_type(&mut store);
                     "
                 );
                 let mut fields = Vec::new();
@@ -844,7 +866,7 @@ fn _new(
                 ));
                 ty_index = format!("{path}Indices");
                 ty = path;
-                get_index_from_component = format!("{ty_index}::new(_component)?");
+                get_index_from_component = format!("{ty_index}::new(_component, _instance_type)?");
                 get_index_from_instance =
                     format!("{ty_index}::new_instance(&mut store, _instance)?");
             }
@@ -903,7 +925,7 @@ impl<_T> {camel}Pre<_T> {{
     /// This method may fail if the component behind `instance_pre`
     /// does not have the required exports.
     pub fn new(instance_pre: {wt}::component::InstancePre<_T>) -> {wt}::Result<Self> {{
-        let indices = {camel}Indices::new(instance_pre.component())?;
+        let indices = {camel}Indices::new(instance_pre.component(), instance_pre.instance_type())?;
         Ok(Self {{ instance_pre, indices }})
     }}
 
@@ -1013,8 +1035,11 @@ impl<_T> {camel}Pre<_T> {{
                 ///
                 /// This method may fail if the component does not have the
                 /// required exports.
-                pub fn new(component: &{wt}::component::Component) -> {wt}::Result<Self> {{
+                pub fn new(component: &{wt}::component::Component,
+                           instance_type: &{wt}::component::__internal::InstanceType,
+                    ) -> {wt}::Result<Self> {{
                     let _component = component;
+                    let _instance_type = instance_type;
             ",
         );
         for (name, field) in self.exports.fields.iter() {
@@ -1042,6 +1067,7 @@ impl<_T> {camel}Pre<_T> {{
                     instance: &{wt}::component::Instance,
                 ) -> {wt}::Result<Self> {{
                     let _instance = instance;
+                    let _instance_type = _instance.instance_type(&mut store);
             ",
         );
         for (name, field) in self.exports.fields.iter() {
@@ -1104,7 +1130,7 @@ impl<_T> {camel}Pre<_T> {{
                     instance: &{wt}::component::Instance,
                 ) -> {wt}::Result<{camel}> {{
                     let indices = {camel}Indices::new_instance(&mut store, instance)?;
-                    indices.load(store, instance)
+                    indices.load(&mut store, instance)
                 }}
             ",
         );
