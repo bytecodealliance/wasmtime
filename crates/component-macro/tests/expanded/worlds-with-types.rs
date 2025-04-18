@@ -52,7 +52,10 @@ impl<_T> FooPre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = FooIndices::new(instance_pre.component())?;
+        let indices = FooIndices::new(
+            instance_pre.component(),
+            instance_pre.instance_type(),
+        )?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -132,11 +135,25 @@ const _: () = {
         /// required exports.
         pub fn new(
             component: &wasmtime::component::Component,
+            instance_type: &wasmtime::component::__internal::InstanceType,
         ) -> wasmtime::Result<Self> {
             let _component = component;
-            let f = _component
-                .get_export_index(None, "f")
-                .ok_or_else(|| anyhow::anyhow!("no function export `f` found"))?;
+            let _instance_type = instance_type;
+            let f = {
+                let (item, index) = _component
+                    .get_export(None, "f")
+                    .ok_or_else(|| anyhow::anyhow!("no export `f` found"))?;
+                match item {
+                    wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
+                        anyhow::Context::context(
+                            func.typecheck::<(), ((T, U, R),)>(&_instance_type),
+                            "type-checking export func `f`",
+                        )?;
+                        index
+                    }
+                    _ => Err(anyhow::anyhow!("export `f` is not a function"))?,
+                }
+            };
             Ok(FooIndices { f })
         }
         /// Creates a new instance of [`FooIndices`] from an
@@ -151,9 +168,22 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Self> {
             let _instance = instance;
-            let f = _instance
-                .get_export_index(&mut store, None, "f")
-                .ok_or_else(|| anyhow::anyhow!("no function export `f` found"))?;
+            let _instance_type = _instance.instance_type(&mut store);
+            let f = {
+                let (item, index) = _instance
+                    .get_export(&mut store, None, "f")
+                    .ok_or_else(|| anyhow::anyhow!("no function export `f` found"))?;
+                match item {
+                    wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
+                        anyhow::Context::context(
+                            func.typecheck::<(), ((T, U, R),)>(&_instance_type),
+                            "type-checking export func `f`",
+                        )?;
+                        index
+                    }
+                    _ => Err(anyhow::anyhow!("export `f` is not a function"))?,
+                }
+            };
             Ok(FooIndices { f })
         }
         /// Uses the indices stored in `self` to load an instance
@@ -191,7 +221,7 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Foo> {
             let indices = FooIndices::new_instance(&mut store, instance)?;
-            indices.load(store, instance)
+            indices.load(&mut store, instance)
         }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,

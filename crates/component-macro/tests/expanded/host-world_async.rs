@@ -27,7 +27,10 @@ impl<_T> Host_Pre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = Host_Indices::new(instance_pre.component())?;
+        let indices = Host_Indices::new(
+            instance_pre.component(),
+            instance_pre.instance_type(),
+        )?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -128,8 +131,10 @@ const _: () = {
         /// required exports.
         pub fn new(
             component: &wasmtime::component::Component,
+            instance_type: &wasmtime::component::__internal::InstanceType,
         ) -> wasmtime::Result<Self> {
             let _component = component;
+            let _instance_type = instance_type;
             Ok(Host_Indices {})
         }
         /// Creates a new instance of [`Host_Indices`] from an
@@ -144,6 +149,7 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Self> {
             let _instance = instance;
+            let _instance_type = _instance.instance_type(&mut store);
             Ok(Host_Indices {})
         }
         /// Uses the indices stored in `self` to load an instance
@@ -181,7 +187,7 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Host_> {
             let indices = Host_Indices::new_instance(&mut store, instance)?;
-            indices.load(store, instance)
+            indices.load(&mut store, instance)
         }
         pub fn add_to_linker_imports_get_host<
             T,

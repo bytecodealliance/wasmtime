@@ -27,7 +27,10 @@ impl<_T> EmptyPre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = EmptyIndices::new(instance_pre.component())?;
+        let indices = EmptyIndices::new(
+            instance_pre.component(),
+            instance_pre.instance_type(),
+        )?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -103,8 +106,10 @@ const _: () = {
         /// required exports.
         pub fn new(
             component: &wasmtime::component::Component,
+            instance_type: &wasmtime::component::__internal::InstanceType,
         ) -> wasmtime::Result<Self> {
             let _component = component;
+            let _instance_type = instance_type;
             Ok(EmptyIndices {})
         }
         /// Creates a new instance of [`EmptyIndices`] from an
@@ -119,6 +124,7 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Self> {
             let _instance = instance;
+            let _instance_type = _instance.instance_type(&mut store);
             Ok(EmptyIndices {})
         }
         /// Uses the indices stored in `self` to load an instance
@@ -153,7 +159,7 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Empty> {
             let indices = EmptyIndices::new_instance(&mut store, instance)?;
-            indices.load(store, instance)
+            indices.load(&mut store, instance)
         }
     }
 };

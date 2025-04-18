@@ -27,7 +27,10 @@ impl<_T> Path1Pre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = Path1Indices::new(instance_pre.component())?;
+        let indices = Path1Indices::new(
+            instance_pre.component(),
+            instance_pre.instance_type(),
+        )?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -103,8 +106,10 @@ const _: () = {
         /// required exports.
         pub fn new(
             component: &wasmtime::component::Component,
+            instance_type: &wasmtime::component::__internal::InstanceType,
         ) -> wasmtime::Result<Self> {
             let _component = component;
+            let _instance_type = instance_type;
             Ok(Path1Indices {})
         }
         /// Creates a new instance of [`Path1Indices`] from an
@@ -119,6 +124,7 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Self> {
             let _instance = instance;
+            let _instance_type = _instance.instance_type(&mut store);
             Ok(Path1Indices {})
         }
         /// Uses the indices stored in `self` to load an instance
@@ -153,7 +159,7 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Path1> {
             let indices = Path1Indices::new_instance(&mut store, instance)?;
-            indices.load(store, instance)
+            indices.load(&mut store, instance)
         }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
