@@ -1123,7 +1123,6 @@ impl Inst {
             }
 
             &Inst::Call { ref info } => {
-                sink.add_call_site();
                 sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
 
                 Inst::construct_auipc_and_jalr(Some(writable_link_reg()), writable_link_reg(), 0)
@@ -1135,12 +1134,10 @@ impl Inst {
                     sink.push_user_stack_map(state, offset, s);
                 }
 
-                // Add exception info, if any, at this point (which will
-                // be the return address on stack).
                 if let Some(try_call) = info.try_call_info.as_ref() {
-                    for &(tag, label) in &try_call.exception_dests {
-                        sink.add_exception_handler(tag, label);
-                    }
+                    sink.add_call_site(&try_call.exception_dests);
+                } else {
+                    sink.add_call_site(&[]);
                 }
 
                 let callee_pop_size = i32::try_from(info.callee_pop_size).unwrap();
@@ -1181,14 +1178,10 @@ impl Inst {
                     sink.push_user_stack_map(state, offset, s);
                 }
 
-                sink.add_call_site();
-
-                // Add exception info, if any, at this point (which will
-                // be the return address on stack).
                 if let Some(try_call) = info.try_call_info.as_ref() {
-                    for &(tag, label) in &try_call.exception_dests {
-                        sink.add_exception_handler(tag, label);
-                    }
+                    sink.add_call_site(&try_call.exception_dests);
+                } else {
+                    sink.add_call_site(&[]);
                 }
 
                 let callee_pop_size = i32::try_from(info.callee_pop_size).unwrap();
@@ -1220,7 +1213,7 @@ impl Inst {
             &Inst::ReturnCall { ref info } => {
                 emit_return_call_common_sequence(sink, emit_info, state, info);
 
-                sink.add_call_site();
+                sink.add_call_site(&[]);
                 sink.add_reloc(Reloc::RiscvCallPlt, &info.dest, 0);
                 Inst::construct_auipc_and_jalr(None, writable_spilltmp_reg(), 0)
                     .into_iter()
