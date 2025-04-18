@@ -725,6 +725,18 @@ impl ComponentFunc {
             .iter()
             .map(|ty| Type::from(ty, &self.0.instance()))
     }
+
+    #[doc(hidden)]
+    pub fn typecheck<Params, Return>(&self, cx: &InstanceType) -> anyhow::Result<()>
+    where
+        Params: crate::component::ComponentNamedList + crate::component::Lower,
+        Return: crate::component::ComponentNamedList + crate::component::Lift,
+    {
+        let ty = &self.0.types[self.0.index];
+        Params::typecheck(&InterfaceType::Tuple(ty.params), cx)?;
+        Return::typecheck(&InterfaceType::Tuple(ty.results), cx)?;
+        Ok(())
+    }
 }
 
 /// Core module type
