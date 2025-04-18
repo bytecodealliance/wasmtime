@@ -24,13 +24,10 @@ pub unsafe extern "C" fn wasmtime_component_new(
     len: usize,
     component_out: &mut *mut wasmtime_component_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let binary = unsafe { crate::slice_from_raw_parts(buf, len) };
-    crate::handle_result(
-        Component::from_binary(&engine.engine, binary),
-        |component| {
-            *component_out = Box::into_raw(Box::new(wasmtime_component_t { component }));
-        },
-    )
+    let bytes = unsafe { crate::slice_from_raw_parts(buf, len) };
+    crate::handle_result(Component::new(&engine.engine, bytes), |component| {
+        *component_out = Box::into_raw(Box::new(wasmtime_component_t { component }));
+    })
 }
 
 #[unsafe(no_mangle)]

@@ -1,10 +1,11 @@
 #ifndef WASMTIME_COMPONENT_COMPONENT_H
 #define WASMTIME_COMPONENT_COMPONENT_H
 
-#ifdef WASMTIME_FEATURE_COMPONENT_MODEL
-
 #include <wasm.h>
+#include <wasmtime/conf.h>
 #include <wasmtime/error.h>
+
+#ifdef WASMTIME_FEATURE_COMPONENT_MODEL
 
 #ifdef __cplusplus
 extern "C" {

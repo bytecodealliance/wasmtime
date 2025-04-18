@@ -9,15 +9,16 @@ FetchContent_MakeAvailable(googletest)
 
 include(GoogleTest)
 
-function(add_capi_test name)
-  add_executable(test-${name} ${name}.cc)
+function(add_capi_test name path)
+  add_executable(test-${name} ${path})
   target_link_libraries(test-${name} PRIVATE wasmtime-cpp gtest_main)
   gtest_discover_tests(test-${name})
 endfunction()
 
-add_capi_test(simple)
-add_capi_test(types)
-add_capi_test(func)
+add_capi_test(simple simple.cc)
+add_capi_test(types types.cc)
+add_capi_test(func func.cc)
+add_capi_test(component-instantiate component/instantiate.cc)
 
 # Add a custom test where two files include `wasmtime.hh` and are compiled into
 # the same executable (basically makes sure any defined functions in the header
