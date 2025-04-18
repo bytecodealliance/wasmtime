@@ -87,7 +87,7 @@ macro_rules! forward_impls {
             const ABI: CanonicalAbiInfo = <$b as ComponentType>::ABI;
 
             #[inline]
-            fn typecheck(ty: &InterfaceType, types: &InstanceType<'_>) -> Result<()> {
+            fn typecheck(ty: &InterfaceType, types: &InstanceType) -> Result<()> {
                 <$b as ComponentType>::typecheck(ty, types)
             }
         }
