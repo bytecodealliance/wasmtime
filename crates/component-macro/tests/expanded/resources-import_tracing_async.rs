@@ -55,7 +55,10 @@ impl<_T> TheWorldPre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = TheWorldIndices::new(instance_pre.component())?;
+        let indices = TheWorldIndices::new(
+            instance_pre.component(),
+            instance_pre.instance_type(),
+        )?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -162,16 +165,41 @@ const _: () = {
         /// required exports.
         pub fn new(
             component: &wasmtime::component::Component,
+            instance_type: &wasmtime::component::__internal::InstanceType,
         ) -> wasmtime::Result<Self> {
             let _component = component;
+            let _instance_type = instance_type;
             let interface1 = exports::foo::foo::uses_resource_transitively::GuestIndices::new(
                 _component,
+                _instance_type,
             )?;
-            let some_world_func2 = _component
-                .get_export_index(None, "some-world-func2")
-                .ok_or_else(|| {
-                    anyhow::anyhow!("no function export `some-world-func2` found")
-                })?;
+            let some_world_func2 = {
+                let (item, index) = _component
+                    .get_export(None, "some-world-func2")
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("no export `some-world-func2` found")
+                    })?;
+                match item {
+                    wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
+                        anyhow::Context::context(
+                            func
+                                .typecheck::<
+                                    (),
+                                    (wasmtime::component::Resource<WorldResource>,),
+                                >(&_instance_type),
+                            "type-checking export func `some-world-func2`",
+                        )?;
+                        index
+                    }
+                    _ => {
+                        Err(
+                            anyhow::anyhow!(
+                                "export `some-world-func2` is not a function"
+                            ),
+                        )?
+                    }
+                }
+            };
             Ok(TheWorldIndices {
                 interface1,
                 some_world_func2,
@@ -189,15 +217,38 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Self> {
             let _instance = instance;
+            let _instance_type = _instance.instance_type(&mut store);
             let interface1 = exports::foo::foo::uses_resource_transitively::GuestIndices::new_instance(
                 &mut store,
                 _instance,
             )?;
-            let some_world_func2 = _instance
-                .get_export_index(&mut store, None, "some-world-func2")
-                .ok_or_else(|| {
-                    anyhow::anyhow!("no function export `some-world-func2` found")
-                })?;
+            let some_world_func2 = {
+                let (item, index) = _instance
+                    .get_export(&mut store, None, "some-world-func2")
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("no function export `some-world-func2` found")
+                    })?;
+                match item {
+                    wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
+                        anyhow::Context::context(
+                            func
+                                .typecheck::<
+                                    (),
+                                    (wasmtime::component::Resource<WorldResource>,),
+                                >(&_instance_type),
+                            "type-checking export func `some-world-func2`",
+                        )?;
+                        index
+                    }
+                    _ => {
+                        Err(
+                            anyhow::anyhow!(
+                                "export `some-world-func2` is not a function"
+                            ),
+                        )?
+                    }
+                }
+            };
             Ok(TheWorldIndices {
                 interface1,
                 some_world_func2,
@@ -248,7 +299,7 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<TheWorld> {
             let indices = TheWorldIndices::new_instance(&mut store, instance)?;
-            indices.load(store, instance)
+            indices.load(&mut store, instance)
         }
         pub fn add_to_linker_imports_get_host<
             T,
@@ -1685,6 +1736,7 @@ pub mod exports {
                     /// within a component.
                     pub fn new(
                         component: &wasmtime::component::Component,
+                        instance_type: &wasmtime::component::__internal::InstanceType,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance = component
                             .get_export_index(None, "foo:foo/uses-resource-transitively")
@@ -1693,9 +1745,10 @@ pub mod exports {
                                     "no exported instance named `foo:foo/uses-resource-transitively`"
                                 )
                             })?;
-                        Self::_new(|name| {
-                            component.get_export_index(Some(&instance), name)
-                        })
+                        Self::_new(
+                            instance_type,
+                            |name| component.get_export_index(Some(&instance), name),
+                        )
                     }
                     /// This constructor is similar to [`GuestIndices::new`] except that it
                     /// performs string lookups after instantiation time.
@@ -1714,12 +1767,17 @@ pub mod exports {
                                     "no exported instance named `foo:foo/uses-resource-transitively`"
                                 )
                             })?;
-                        Self::_new(|name| {
-                            instance
-                                .get_export_index(&mut store, Some(&instance_export), name)
-                        })
+                        let instance_type = instance.instance_type(&mut store);
+                        Self::_new(
+                            &instance_type,
+                            |name| {
+                                instance
+                                    .get_export_index(&mut store, Some(&instance_export), name)
+                            },
+                        )
                     }
                     fn _new(
+                        _instance_type: &wasmtime::component::__internal::InstanceType,
                         mut lookup: impl FnMut(
                             &str,
                         ) -> Option<wasmtime::component::ComponentExportIndex>,
@@ -1729,7 +1787,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/uses-resource-transitively` does \
-                        not have export `{name}`"
+                      not have export `{name}`"
                                     )
                                 })
                         };
@@ -1745,6 +1803,7 @@ pub mod exports {
                         let mut store = store.as_context_mut();
                         let _ = &mut store;
                         let _instance = instance;
+                        let _instance_type = _instance.instance_type(&mut store);
                         let handle = *_instance
                             .get_typed_func::<
                                 (wasmtime::component::Resource<Foo>,),

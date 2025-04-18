@@ -362,6 +362,12 @@ impl Instance {
             index,
         ))
     }
+
+    #[doc(hidden)]
+    pub fn instance_type(&self, mut store: impl AsContextMut) -> InstanceType {
+        let data = store.as_context_mut().0[self.0].as_ref().unwrap();
+        data.ty()
+    }
 }
 
 /// Trait used to lookup the export of a component instance.
@@ -476,7 +482,7 @@ impl InstanceData {
     }
 
     #[inline]
-    pub fn ty(&self) -> InstanceType<'_> {
+    pub fn ty(&self) -> InstanceType {
         InstanceType::new(self.instance())
     }
 
@@ -814,6 +820,7 @@ impl<'a> Instantiator<'a> {
 /// method.
 pub struct InstancePre<T> {
     component: Component,
+    instance_type: InstanceType,
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     _marker: marker::PhantomData<fn() -> T>,
 }
@@ -823,6 +830,7 @@ impl<T> Clone for InstancePre<T> {
     fn clone(&self) -> Self {
         Self {
             component: self.component.clone(),
+            instance_type: self.instance_type.clone(),
             imports: self.imports.clone(),
             _marker: self._marker,
         }
@@ -838,10 +846,12 @@ impl<T> InstancePre<T> {
     /// satisfy the imports of the `component` provided.
     pub(crate) unsafe fn new_unchecked(
         component: Component,
+        instance_type: InstanceType,
         imports: PrimaryMap<RuntimeImportIndex, RuntimeImport>,
     ) -> InstancePre<T> {
         InstancePre {
             component,
+            instance_type,
             imports: Arc::new(imports),
             _marker: marker::PhantomData,
         }
@@ -850,6 +860,11 @@ impl<T> InstancePre<T> {
     /// Returns the underlying component that will be instantiated.
     pub fn component(&self) -> &Component {
         &self.component
+    }
+
+    #[doc(hidden)]
+    pub fn instance_type(&self) -> &InstanceType {
+        &self.instance_type
     }
 
     /// Returns the underlying engine.

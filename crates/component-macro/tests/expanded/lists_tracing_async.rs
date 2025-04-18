@@ -27,7 +27,10 @@ impl<_T> TheListsPre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = TheListsIndices::new(instance_pre.component())?;
+        let indices = TheListsIndices::new(
+            instance_pre.component(),
+            instance_pre.instance_type(),
+        )?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -110,9 +113,14 @@ const _: () = {
         /// required exports.
         pub fn new(
             component: &wasmtime::component::Component,
+            instance_type: &wasmtime::component::__internal::InstanceType,
         ) -> wasmtime::Result<Self> {
             let _component = component;
-            let interface0 = exports::foo::foo::lists::GuestIndices::new(_component)?;
+            let _instance_type = instance_type;
+            let interface0 = exports::foo::foo::lists::GuestIndices::new(
+                _component,
+                _instance_type,
+            )?;
             Ok(TheListsIndices { interface0 })
         }
         /// Creates a new instance of [`TheListsIndices`] from an
@@ -127,6 +135,7 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Self> {
             let _instance = instance;
+            let _instance_type = _instance.instance_type(&mut store);
             let interface0 = exports::foo::foo::lists::GuestIndices::new_instance(
                 &mut store,
                 _instance,
@@ -169,7 +178,7 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<TheLists> {
             let indices = TheListsIndices::new_instance(&mut store, instance)?;
-            indices.load(store, instance)
+            indices.load(&mut store, instance)
         }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
@@ -1781,6 +1790,7 @@ pub mod exports {
                     /// within a component.
                     pub fn new(
                         component: &wasmtime::component::Component,
+                        instance_type: &wasmtime::component::__internal::InstanceType,
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance = component
                             .get_export_index(None, "foo:foo/lists")
@@ -1789,9 +1799,10 @@ pub mod exports {
                                     "no exported instance named `foo:foo/lists`"
                                 )
                             })?;
-                        Self::_new(|name| {
-                            component.get_export_index(Some(&instance), name)
-                        })
+                        Self::_new(
+                            instance_type,
+                            |name| component.get_export_index(Some(&instance), name),
+                        )
                     }
                     /// This constructor is similar to [`GuestIndices::new`] except that it
                     /// performs string lookups after instantiation time.
@@ -1806,12 +1817,17 @@ pub mod exports {
                                     "no exported instance named `foo:foo/lists`"
                                 )
                             })?;
-                        Self::_new(|name| {
-                            instance
-                                .get_export_index(&mut store, Some(&instance_export), name)
-                        })
+                        let instance_type = instance.instance_type(&mut store);
+                        Self::_new(
+                            &instance_type,
+                            |name| {
+                                instance
+                                    .get_export_index(&mut store, Some(&instance_export), name)
+                            },
+                        )
                     }
                     fn _new(
+                        _instance_type: &wasmtime::component::__internal::InstanceType,
                         mut lookup: impl FnMut(
                             &str,
                         ) -> Option<wasmtime::component::ComponentExportIndex>,
@@ -1895,6 +1911,7 @@ pub mod exports {
                         let mut store = store.as_context_mut();
                         let _ = &mut store;
                         let _instance = instance;
+                        let _instance_type = _instance.instance_type(&mut store);
                         let list_u8_param = *_instance
                             .get_typed_func::<
                                 (&[u8],),

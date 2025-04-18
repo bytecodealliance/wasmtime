@@ -19,11 +19,11 @@ pub struct TypeChecker<'a> {
     pub imported_resources: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 #[doc(hidden)]
-pub struct InstanceType<'a> {
-    pub types: &'a Arc<ComponentTypes>,
-    pub resources: &'a Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+pub struct InstanceType {
+    pub types: Arc<ComponentTypes>,
+    pub resources: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
 }
 
 impl TypeChecker<'_> {
@@ -164,11 +164,13 @@ impl TypeChecker<'_> {
     }
 
     fn func(&self, expected: TypeFuncIndex, actual: &HostFunc) -> Result<()> {
-        let instance_type = InstanceType {
-            types: self.types,
-            resources: &self.imported_resources,
-        };
-        actual.typecheck(expected, &instance_type)
+        actual.typecheck(
+            expected,
+            &InstanceType {
+                types: self.types.clone(),
+                resources: self.imported_resources.clone(),
+            },
+        )
     }
 }
 
@@ -183,11 +185,11 @@ impl Definition {
     }
 }
 
-impl<'a> InstanceType<'a> {
-    pub fn new(instance: &'a ComponentInstance) -> InstanceType<'a> {
+impl InstanceType {
+    pub fn new(instance: &ComponentInstance) -> InstanceType {
         InstanceType {
-            types: instance.component_types(),
-            resources: instance.resource_types(),
+            types: instance.component_types().clone(),
+            resources: instance.resource_types().clone(),
         }
     }
 
