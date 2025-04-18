@@ -409,9 +409,15 @@ fn unwrap_instance(
         return None;
     }
 
-    // Allow traps which can happen normally with `unreachable` or a
-    // timeout or such
-    if e.is::<Trap>() {
+    // Allow traps which can happen normally with `unreachable` or a timeout or
+    // such.
+    if e.is::<Trap>()
+        // Also allow failures to instantiate as a result of hitting pooling
+        // limits.
+        || e.is::<wasmtime::PoolConcurrencyLimitError>()
+        // And GC heap OOMs.
+        || e.is::<wasmtime::GcHeapOutOfMemory<()>>()
+    {
         return None;
     }
 
@@ -421,11 +427,6 @@ fn unwrap_instance(
     // every single module under the sun due to using name-based resolution
     // rather than positional-based resolution
     if string.contains("incompatible import type") {
-        return None;
-    }
-
-    // Also allow failures to instantiate as a result of hitting pooling limits.
-    if e.is::<wasmtime::PoolConcurrencyLimitError>() {
         return None;
     }
 
