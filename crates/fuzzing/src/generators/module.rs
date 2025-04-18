@@ -1,6 +1,7 @@
 //! Generate a Wasm module and the configuration for generating it.
 
 use arbitrary::{Arbitrary, Unstructured};
+use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 /// Default module-level configuration for fuzzing Wasmtime.
 ///
@@ -87,7 +88,29 @@ impl ModuleConfig {
         input: &mut Unstructured<'_>,
         default_fuel: Option<u32>,
     ) -> arbitrary::Result<wasm_smith::Module> {
+        crate::init_fuzzing();
+
+        // If requested, save `*.{dna,json}` files for recreating this module
+        // in wasm-tools alone.
+        let input_before = if log::log_enabled!(log::Level::Debug) {
+            let len = input.len();
+            Some(input.peek_bytes(len).unwrap().to_vec())
+        } else {
+            None
+        };
+
         let mut module = wasm_smith::Module::new(self.config.clone(), input)?;
+
+        if let Some(before) = input_before {
+            static GEN_CNT: AtomicUsize = AtomicUsize::new(0);
+            let used = before.len() - input.len();
+            let i = GEN_CNT.fetch_add(1, Relaxed);
+            let dna = format!("testcase{i}.dna");
+            let config = format!("testcase{i}.json");
+            log::debug!("writing `{dna}` and `{config}`");
+            std::fs::write(&dna, &before[..used]).unwrap();
+            std::fs::write(&config, serde_json::to_string_pretty(&self.config).unwrap()).unwrap();
+        }
 
         if let Some(default_fuel) = default_fuel {
             module.ensure_termination(default_fuel).unwrap();
