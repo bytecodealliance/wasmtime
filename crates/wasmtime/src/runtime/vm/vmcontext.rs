@@ -1034,7 +1034,7 @@ pub struct VMStoreContext {
     /// This member is `0` when Wasm is actively running and has not called out
     /// to the host.
     ///
-    /// Used to find the start of a a contiguous sequence of Wasm frames when
+    /// Used to find the start of a contiguous sequence of Wasm frames when
     /// walking the stack.
     pub last_wasm_exit_fp: UnsafeCell<usize>,
 

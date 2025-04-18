@@ -89,7 +89,7 @@ impl MemArg {
         }
     }
 
-    /// Memory reference using the sum of a register an an offset as address.
+    /// Memory reference using the sum of a register an offset as address.
     pub fn reg_plus_off(reg: Reg, off: i64, flags: MemFlags) -> MemArg {
         MemArg::RegOffset { reg, off, flags }
     }

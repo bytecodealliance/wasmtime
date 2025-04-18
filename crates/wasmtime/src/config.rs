@@ -379,7 +379,7 @@ impl Config {
     /// arbitrarily long in the worst case, likely blocking all other
     /// asynchronous tasks.
     ///
-    /// To remedy this situation you have a a few possible ways to solve this:
+    /// To remedy this situation you have a few possible ways to solve this:
     ///
     /// * The most efficient solution is to enable
     ///   [`Config::epoch_interruption`] in conjunction with
