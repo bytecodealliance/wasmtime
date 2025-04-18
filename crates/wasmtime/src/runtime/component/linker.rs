@@ -210,7 +210,16 @@ impl<T> Linker<T> {
     /// `component` imports or if a name defined doesn't match the type of the
     /// item imported by the `component` provided.
     pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
-        self.typecheck(&component)?;
+        let cx = self.typecheck(&component)?;
+
+        // The InstanceType contains all of the type information used to
+        // typecheck the component. It is stored in the InstancePre so that
+        // exports can be typechecked, e.g. bindgen can check that exports
+        // match a wit world.
+        let instance_type = InstanceType {
+            types: cx.types.clone(),
+            resources: cx.imported_resources.clone(),
+        };
 
         // Now that all imports are known to be defined and satisfied by this
         // linker a list of "flat" import items (aka no instances) is created
@@ -247,7 +256,7 @@ impl<T> Linker<T> {
             let i = imports.push(import);
             assert_eq!(i, idx);
         }
-        Ok(unsafe { InstancePre::new_unchecked(component.clone(), imports) })
+        Ok(unsafe { InstancePre::new_unchecked(component.clone(), instance_type, imports) })
     }
 
     /// Instantiates the [`Component`] provided into the `store` specified.
