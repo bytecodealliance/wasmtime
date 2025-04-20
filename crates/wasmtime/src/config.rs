@@ -1296,6 +1296,16 @@ impl Config {
         self
     }
 
+    /// This corresponds to the 🔧 emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is _very_
+    /// incomplete.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_fixed_size_lists(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::CM_FIXED_SIZE_LIST, enable);
+        self
+    }
+
     /// Configures whether the [Exception-handling proposal][proposal] is enabled or not.
     ///
     /// [proposal]: https://github.com/WebAssembly/exception-handling
