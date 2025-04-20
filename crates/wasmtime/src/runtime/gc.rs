@@ -66,6 +66,7 @@ where
 /// type `()`.
 pub struct GcHeapOutOfMemory<T> {
     inner: T,
+    bytes_needed: u64,
 }
 
 impl<T> fmt::Debug for GcHeapOutOfMemory<T> {
@@ -76,20 +77,49 @@ impl<T> fmt::Debug for GcHeapOutOfMemory<T> {
 
 impl<T> fmt::Display for GcHeapOutOfMemory<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "GC heap out of memory")
+        write!(
+            f,
+            "GC heap out of memory: no capacity for allocation of {} bytes",
+            self.bytes_needed
+        )
     }
 }
 
 impl<T> core::error::Error for GcHeapOutOfMemory<T> {}
 
 impl<T> GcHeapOutOfMemory<T> {
+    pub(crate) fn new(inner: T, bytes_needed: u64) -> Self {
+        Self {
+            inner,
+            bytes_needed,
+        }
+    }
+
     #[cfg(feature = "gc")]
-    pub(crate) fn new(inner: T) -> Self {
-        Self { inner }
+    pub(crate) fn bytes_needed(&self) -> u64 {
+        self.bytes_needed
+    }
+
+    #[cfg(feature = "gc")]
+    pub(crate) fn map_inner<U>(self, f: impl FnOnce(T) -> U) -> GcHeapOutOfMemory<U> {
+        GcHeapOutOfMemory {
+            inner: f(self.inner),
+            bytes_needed: self.bytes_needed,
+        }
     }
 
     /// Recover this error's inner host value.
     pub fn into_inner(self) -> T {
         self.inner
+    }
+
+    /// Take this error's inner host value, but also retain this
+    /// `GcHeapOutOfMemory` with `T` replaced with `()`.
+    ///
+    /// This allows you to both extract the inner `T` if necessary, and also
+    /// pass the `GcHeapOutOfMemory` error to [`Store::gc`][crate::Store::gc]
+    /// calls.
+    pub fn take_inner(self) -> (T, GcHeapOutOfMemory<()>) {
+        (self.inner, GcHeapOutOfMemory::new((), self.bytes_needed))
     }
 }

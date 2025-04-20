@@ -14,7 +14,7 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true, features = ['std'] }
-base64 = "0.21.0"
+base64 = { workspace = true }
 postcard = { workspace = true }
 directories-next = "2.0"
 log = { workspace = true }
@@ -35,5 +35,5 @@ rustix = { workspace = true, features = ["process"] }
 
 [dev-dependencies]
 filetime = "0.2.7"
-pretty_env_logger = { workspace = true }
+env_logger = { workspace = true }
 tempfile = "3"

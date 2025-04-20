@@ -34,7 +34,7 @@ pub unsafe extern "C" fn wasmtime_guestprofiler_new(
                 entry.module.module.clone(),
             )
         })
-        .collect();
+        .collect::<Vec<_>>();
     Box::new(wasmtime_guestprofiler_t {
         guest_profiler: GuestProfiler::new(module_name, Duration::from_nanos(interval_nanos), list),
     })

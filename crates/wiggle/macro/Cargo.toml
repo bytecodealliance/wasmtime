@@ -20,9 +20,9 @@ doctest = false
 
 [dependencies]
 wiggle-generate = { workspace = true }
-quote = "1.0"
+quote = { workspace = true }
 syn = { workspace = true, features = ["full"] }
-proc-macro2 = "1.0"
+proc-macro2 = { workspace = true }
 
 [dev-dependencies]
 wiggle = { path = ".." }

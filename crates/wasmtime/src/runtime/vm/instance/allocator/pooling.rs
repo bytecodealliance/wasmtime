@@ -147,19 +147,24 @@ pub struct InstanceLimits {
 
 impl Default for InstanceLimits {
     fn default() -> Self {
+        let total = if cfg!(target_pointer_width = "32") {
+            100
+        } else {
+            1000
+        };
         // See doc comments for `wasmtime::PoolingAllocationConfig` for these
         // default values
         Self {
-            total_component_instances: 1000,
+            total_component_instances: total,
             component_instance_size: 1 << 20, // 1 MiB
-            total_core_instances: 1000,
+            total_core_instances: total,
             max_core_instances_per_component: u32::MAX,
             max_memories_per_component: u32::MAX,
             max_tables_per_component: u32::MAX,
-            total_memories: 1000,
-            total_tables: 1000,
+            total_memories: total,
+            total_tables: total,
             #[cfg(feature = "async")]
-            total_stacks: 1000,
+            total_stacks: total,
             core_instance_size: 1 << 20, // 1 MiB
             max_tables_per_module: 1,
             // NB: in #8504 it was seen that a C# module in debug module can
@@ -169,9 +174,9 @@ impl Default for InstanceLimits {
             #[cfg(target_pointer_width = "64")]
             max_memory_size: 1 << 32, // 4G,
             #[cfg(target_pointer_width = "32")]
-            max_memory_size: usize::MAX,
+            max_memory_size: 10 << 20, // 10 MiB
             #[cfg(feature = "gc")]
-            total_gc_heaps: 1000,
+            total_gc_heaps: total,
         }
     }
 }
@@ -350,7 +355,7 @@ impl PoolingInstanceAllocator {
     }
 
     fn validate_memory_plans(&self, module: &Module) -> Result<()> {
-        self.memories.validate(module)
+        self.memories.validate_memories(module)
     }
 
     fn validate_core_instance_size(&self, offsets: &VMOffsets<HostPtr>) -> Result<()> {
@@ -497,7 +502,8 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         offsets: &VMComponentOffsets<HostPtr>,
         get_module: &'a dyn Fn(StaticModuleIndex) -> &'a Module,
     ) -> Result<()> {
-        self.validate_component_instance_size(offsets)?;
+        self.validate_component_instance_size(offsets)
+            .context("component instance size does not fit in pooling allocator requirements")?;
 
         let mut num_core_instances = 0;
         let mut num_memories = 0;
@@ -521,6 +527,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
                 }
                 LowerImport { .. }
                 | ExtractMemory(_)
+                | ExtractTable(_)
                 | ExtractRealloc(_)
                 | ExtractCallback(_)
                 | ExtractPostReturn(_)
@@ -533,7 +540,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         {
             bail!(
                 "The component transitively contains {num_core_instances} core module instances, \
-                 which exceeds the configured maximum of {}",
+                 which exceeds the configured maximum of {} in the pooling allocator",
                 self.limits.max_core_instances_per_component
             );
         }
@@ -541,7 +548,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         if num_memories > usize::try_from(self.limits.max_memories_per_component).unwrap() {
             bail!(
                 "The component transitively contains {num_memories} Wasm linear memories, which \
-                 exceeds the configured maximum of {}",
+                 exceeds the configured maximum of {} in the pooling allocator",
                 self.limits.max_memories_per_component
             );
         }
@@ -549,7 +556,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         if num_tables > usize::try_from(self.limits.max_tables_per_component).unwrap() {
             bail!(
                 "The component transitively contains {num_tables} tables, which exceeds the \
-                 configured maximum of {}",
+                 configured maximum of {} in the pooling allocator",
                 self.limits.max_tables_per_component
             );
         }
@@ -558,10 +565,18 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
     }
 
     fn validate_module_impl(&self, module: &Module, offsets: &VMOffsets<HostPtr>) -> Result<()> {
-        self.validate_memory_plans(module)?;
-        self.validate_table_plans(module)?;
-        self.validate_core_instance_size(offsets)?;
+        self.validate_memory_plans(module)
+            .context("module memory does not fit in pooling allocator requirements")?;
+        self.validate_table_plans(module)
+            .context("module table does not fit in pooling allocator requirements")?;
+        self.validate_core_instance_size(offsets)
+            .context("module instance size does not fit in pooling allocator requirements")?;
         Ok(())
+    }
+
+    #[cfg(feature = "gc")]
+    fn validate_memory_impl(&self, memory: &wasmtime_environ::Memory) -> Result<()> {
+        self.memories.validate_memory(memory)
     }
 
     fn increment_component_instance_count(&self) -> Result<()> {
@@ -603,14 +618,14 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         request: &mut InstanceAllocationRequest,
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
-        memory_index: DefinedMemoryIndex,
+        memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
         self.with_flush_and_retry(|| self.memories.allocate(request, ty, tunables, memory_index))
     }
 
     unsafe fn deallocate_memory(
         &self,
-        _memory_index: DefinedMemoryIndex,
+        _memory_index: Option<DefinedMemoryIndex>,
         allocation_index: MemoryAllocationIndex,
         memory: Memory,
     ) {
@@ -687,9 +702,13 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
     #[cfg(feature = "gc")]
     fn allocate_gc_heap(
         &self,
+        engine: &crate::Engine,
         gc_runtime: &dyn GcRuntime,
+        memory_alloc_index: MemoryAllocationIndex,
+        memory: Memory,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
-        self.gc_heaps.allocate(gc_runtime)
+        self.gc_heaps
+            .allocate(engine, gc_runtime, memory_alloc_index, memory)
     }
 
     #[cfg(feature = "gc")]
@@ -697,8 +716,8 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         &self,
         allocation_index: GcHeapAllocationIndex,
         gc_heap: Box<dyn GcHeap>,
-    ) {
-        self.gc_heaps.deallocate(allocation_index, gc_heap);
+    ) -> (MemoryAllocationIndex, Memory) {
+        self.gc_heaps.deallocate(allocation_index, gc_heap)
     }
 }
 
@@ -732,7 +751,13 @@ mod test {
         );
     }
 
-    #[cfg(all(unix, target_pointer_width = "64", feature = "async", not(miri)))]
+    #[cfg(all(
+        unix,
+        target_pointer_width = "64",
+        feature = "async",
+        not(miri),
+        not(asan)
+    ))]
     #[test]
     fn test_stack_zeroed() -> Result<()> {
         let config = PoolingInstanceAllocatorConfig {
@@ -766,7 +791,13 @@ mod test {
         Ok(())
     }
 
-    #[cfg(all(unix, target_pointer_width = "64", feature = "async", not(miri)))]
+    #[cfg(all(
+        unix,
+        target_pointer_width = "64",
+        feature = "async",
+        not(miri),
+        not(asan)
+    ))]
     #[test]
     fn test_stack_unzeroed() -> Result<()> {
         let config = PoolingInstanceAllocatorConfig {

@@ -71,7 +71,10 @@ pub struct SideEffects {
 
 impl SideEffects {
     fn is_empty(&self) -> bool {
-        self.instructions_added_to_blocks.is_empty()
+        let Self {
+            instructions_added_to_blocks,
+        } = self;
+        instructions_added_to_blocks.is_empty()
     }
 }
 
@@ -185,6 +188,12 @@ fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
 /// Phi functions.
 ///
 impl SSABuilder {
+    /// Get all of the values associated with the given variable that we have
+    /// inserted in the function thus far.
+    pub fn values_for_var(&self, var: Variable) -> impl Iterator<Item = Value> + '_ {
+        self.variables[var].values().filter_map(|v| v.expand())
+    }
+
     /// Declares a new definition of a variable in a given basic block.
     /// The SSA value is passed as an argument because it should be created with
     /// `ir::DataFlowGraph::append_result`.
@@ -542,7 +551,8 @@ impl SSABuilder {
                 let pred = preds.get_mut(idx, &mut self.inst_pool).unwrap();
                 let branch = *pred;
 
-                let dests = dfg.insts[branch].branch_destination_mut(&mut dfg.jump_tables);
+                let dests = dfg.insts[branch]
+                    .branch_destination_mut(&mut dfg.jump_tables, &mut dfg.exception_tables);
                 assert!(
                     !dests.is_empty(),
                     "you have declared a non-branch instruction as a predecessor to a block!"
@@ -759,9 +769,9 @@ mod tests {
                 ..
             } => {
                 assert_eq!(block_then.block(&func.dfg.value_lists), block2);
-                assert_eq!(block_then.args_slice(&func.dfg.value_lists).len(), 0);
+                assert_eq!(block_then.args(&func.dfg.value_lists).len(), 0);
                 assert_eq!(block_else.block(&func.dfg.value_lists), block1);
-                assert_eq!(block_else.args_slice(&func.dfg.value_lists).len(), 0);
+                assert_eq!(block_else.args(&func.dfg.value_lists).len(), 0);
             }
             _ => assert!(false),
         };
@@ -771,9 +781,9 @@ mod tests {
                 ..
             } => {
                 assert_eq!(block_then.block(&func.dfg.value_lists), block2);
-                assert_eq!(block_then.args_slice(&func.dfg.value_lists).len(), 0);
+                assert_eq!(block_then.args(&func.dfg.value_lists).len(), 0);
                 assert_eq!(block_else.block(&func.dfg.value_lists), block1);
-                assert_eq!(block_else.args_slice(&func.dfg.value_lists).len(), 0);
+                assert_eq!(block_else.args(&func.dfg.value_lists).len(), 0);
             }
             _ => assert!(false),
         };
@@ -782,7 +792,7 @@ mod tests {
                 destination: dest, ..
             } => {
                 assert_eq!(dest.block(&func.dfg.value_lists), block2);
-                assert_eq!(dest.args_slice(&func.dfg.value_lists).len(), 0);
+                assert_eq!(dest.args(&func.dfg.value_lists).len(), 0);
             }
             _ => assert!(false),
         };

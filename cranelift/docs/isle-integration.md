@@ -24,18 +24,15 @@ ISLE.
 
 Sometimes, it's desirable to see what code is actually generated. By default,
 the generated code is placed in a Cargo-managed path in `target/`. If you want
-to see the source instead, invoke Cargo with the optional feature
-`isle-in-source-tree` as follows:
+to see the source instead, invoke Cargo with the environment variable
+`ISLE_SOURCE_DIR` set to another directory, as follows:
 
 ```shell
-$ cargo check -p cranelift-codegen --features isle-in-source-tree
+$ ISLE_SOURCE_DIR=`pwd`/isle-sources cargo check -p cranelift-codegen
 ```
 
-This will place the ISLE source in `cranelift/codegen/isle_generated_code/`,
-where you can inspect it, debug by setting breakpoints in it, etc. Note that if
-you later build without this feature, the build system will require you to
-delete the directory. This is to ensure that no out-of-date copies exist, which
-could cause significant confusion.
+This will place the ISLE source in `./isle-sources`, where you can inspect it,
+debug by setting breakpoints in it, etc.
 
 If there are any errors during ISLE compilation (e.g., a type mismatch), you
 will see a basic error message with a file, line number, and one-line error. To

@@ -112,10 +112,10 @@ impl TestFileCompiler {
         #[cfg(unix)]
         {
             unsafe extern "C" {
-                safe fn ceilf(f: f32) -> f32;
+                safe fn cosf(f: f32) -> f32;
             }
             let f = 1.2_f32;
-            assert_eq!(f.ceil(), ceilf(f));
+            assert_eq!(f.cos(), cosf(f));
         }
 
         let module = JITModule::new(builder);
@@ -394,14 +394,16 @@ impl<'a> Trampoline<'a> {
             | Architecture::Pulley32be
             | Architecture::Pulley64be => {
                 let mut state = pulley::Vm::new();
-                state.call(
-                    NonNull::new(trampoline_ptr.cast_mut()).unwrap(),
-                    &[
-                        pulley::XRegVal::new_ptr(function_ptr.cast_mut()).into(),
-                        pulley::XRegVal::new_ptr(arguments_address).into(),
-                    ],
-                    [],
-                );
+                unsafe {
+                    state.call(
+                        NonNull::new(trampoline_ptr.cast_mut()).unwrap(),
+                        &[
+                            pulley::XRegVal::new_ptr(function_ptr.cast_mut()).into(),
+                            pulley::XRegVal::new_ptr(arguments_address).into(),
+                        ],
+                        [],
+                    );
+                }
             }
 
             // Other targets natively execute this machine code.

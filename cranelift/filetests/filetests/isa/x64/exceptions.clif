@@ -1,0 +1,371 @@
+test compile precise-output
+target x86_64
+
+function %f0(i32) -> i32, f32, f64 {
+    sig0 = (i32) -> f32 tail
+    fn0 = %g(i32) -> f32 tail
+
+    block0(v1: i32):
+        v2 = f64const 0x1.0
+        try_call fn0(v1), sig0, block1(ret0, v2), [ default: block2(exn0) ]
+
+    block1(v3: f32, v4: f64):
+        v5 = iconst.i32 1
+        return v5, v3, v4
+
+    block2(v6: i64):
+        v7 = ireduce.i32 v6
+        v8 = iadd_imm.i32 v7, 1
+        v9 = f32const 0x0.0        
+        return v8, v9, v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $64, %rsp
+;   movq    %rbx, 16(%rsp)
+;   movq    %r12, 24(%rsp)
+;   movq    %r13, 32(%rsp)
+;   movq    %r14, 40(%rsp)
+;   movq    %r15, 48(%rsp)
+; block0:
+;   movabsq $4607182418800017408, %rcx
+;   movq    %rcx, %xmm1
+;   movdqu  %xmm1, rsp(0 + virtual offset)
+;   load_ext_name %g+0, %rdx
+;   call    *%rdx; jmp MachLabel(1); catch [None: MachLabel(2)]
+; block1:
+;   movl    $1, %eax
+;   movdqu  rsp(0 + virtual offset), %xmm1
+;   movq    16(%rsp), %rbx
+;   movq    24(%rsp), %r12
+;   movq    32(%rsp), %r13
+;   movq    40(%rsp), %r14
+;   movq    48(%rsp), %r15
+;   addq    %rsp, $64, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movdqu  rsp(0 + virtual offset), %xmm1
+;   lea     1(%rax), %eax
+;   uninit  %xmm0
+;   xorps %xmm0, %xmm0
+;   movq    16(%rsp), %rbx
+;   movq    24(%rsp), %r12
+;   movq    32(%rsp), %r13
+;   movq    40(%rsp), %r14
+;   movq    48(%rsp), %r15
+;   addq    %rsp, $64, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x40, %rsp
+;   movq %rbx, 0x10(%rsp)
+;   movq %r12, 0x18(%rsp)
+;   movq %r13, 0x20(%rsp)
+;   movq %r14, 0x28(%rsp)
+;   movq %r15, 0x30(%rsp)
+; block1: ; offset 0x21
+;   movabsq $0x3ff0000000000000, %rcx
+;   movq %rcx, %xmm1
+;   movdqu %xmm1, (%rsp)
+;   movabsq $0, %rdx ; reloc_external Abs8 %g 0
+;   callq *%rdx
+; block2: ; offset 0x41
+;   movl $1, %eax
+;   movdqu (%rsp), %xmm1
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
+;   addq $0x40, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x6d
+;   movdqu (%rsp), %xmm1
+;   addl $1, %eax
+;   xorps %xmm0, %xmm0
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
+;   addq $0x40, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+
+function %f1(i32) -> i32, f32, f64 {
+    sig0 = (i32) -> f32 tail
+    fn0 = %g(i32) -> f32 tail
+
+    block0(v1: i32):
+        brif v1, block1, block2
+
+    block1:
+        v2 = f64const 0x1.0
+        try_call fn0(v1), sig0, block3(ret0, v2), [ default: block4(exn0) ]
+
+    block2:
+        v3 = iconst.i64 42
+        v4 = f32const 0x1234.0
+        v5 = f64const 0x5678.0
+        brif v1, block4(v3), block3(v4, v5)
+
+    block3(v6: f32, v7: f64):
+        v8 = iconst.i32 1
+        return v8, v6, v7
+
+    block4(v9: i64):
+        v10 = ireduce.i32 v9
+        v11 = iadd_imm.i32 v10, 1
+        v12 = f32const 0x0.0
+        v13 = bitcast.f64 v9
+        return v11, v12, v13
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $64, %rsp
+;   movq    %rbx, 16(%rsp)
+;   movq    %r12, 24(%rsp)
+;   movq    %r13, 32(%rsp)
+;   movq    %r14, 40(%rsp)
+;   movq    %r15, 48(%rsp)
+; block0:
+;   testl   %edi, %edi
+;   jnz     label4; j label1
+; block1:
+;   movl    $42, %eax
+;   movl    $1167171584, %ecx
+;   movd    %ecx, %xmm0
+;   movabsq $4671813911303946240, %rcx
+;   movq    %rcx, %xmm1
+;   testl   %edi, %edi
+;   jnz     label2; j label3
+; block2:
+;   movq    %rax, %r11
+;   jmp     label8
+; block3:
+;   movdqu  %xmm1, rsp(0 + virtual offset)
+;   jmp     label7
+; block4:
+;   movabsq $4607182418800017408, %r10
+;   movq    %r10, %xmm1
+;   movdqu  %xmm1, rsp(0 + virtual offset)
+;   load_ext_name %g+0, %r11
+;   call    *%r11; jmp MachLabel(6); catch [None: MachLabel(5)]
+; block5:
+;   movq    %rax, %rsi
+;   movq    %rsi, %r11
+;   jmp     label8
+; block6:
+;   jmp     label7
+; block7:
+;   movl    $1, %eax
+;   movdqu  rsp(0 + virtual offset), %xmm1
+;   movq    16(%rsp), %rbx
+;   movq    24(%rsp), %r12
+;   movq    32(%rsp), %r13
+;   movq    40(%rsp), %r14
+;   movq    48(%rsp), %r15
+;   addq    %rsp, $64, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block8:
+;   lea     1(%r11), %eax
+;   movq    %r11, %rsi
+;   uninit  %xmm0
+;   xorps %xmm0, %xmm0
+;   movq    %rsi, %xmm1
+;   movq    16(%rsp), %rbx
+;   movq    24(%rsp), %r12
+;   movq    32(%rsp), %r13
+;   movq    40(%rsp), %r14
+;   movq    48(%rsp), %r15
+;   addq    %rsp, $64, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x40, %rsp
+;   movq %rbx, 0x10(%rsp)
+;   movq %r12, 0x18(%rsp)
+;   movq %r13, 0x20(%rsp)
+;   movq %r14, 0x28(%rsp)
+;   movq %r15, 0x30(%rsp)
+; block1: ; offset 0x21
+;   testl %edi, %edi
+;   jne 0x60
+; block2: ; offset 0x29
+;   movl $0x2a, %eax
+;   movl $0x4591a000, %ecx
+;   movd %ecx, %xmm0
+;   movabsq $0x40d59e0000000000, %rcx
+;   movq %rcx, %xmm1
+;   testl %edi, %edi
+;   je 0x56
+; block3: ; offset 0x4e
+;   movq %rax, %r11
+;   jmp 0xbd
+; block4: ; offset 0x56
+;   movdqu %xmm1, (%rsp)
+;   jmp 0x91
+; block5: ; offset 0x60
+;   movabsq $0x3ff0000000000000, %r10
+;   movq %r10, %xmm1
+;   movdqu %xmm1, (%rsp)
+;   movabsq $0, %r11 ; reloc_external Abs8 %g 0
+;   callq *%r11
+;   jmp 0x91
+; block6: ; offset 0x86
+;   movq %rax, %rsi
+;   movq %rsi, %r11
+;   jmp 0xbd
+; block7: ; offset 0x91
+;   movl $1, %eax
+;   movdqu (%rsp), %xmm1
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
+;   addq $0x40, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block8: ; offset 0xbd
+;   leal 1(%r11), %eax
+;   movq %r11, %rsi
+;   xorps %xmm0, %xmm0
+;   movq %rsi, %xmm1
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
+;   addq $0x40, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %f2(i32) -> i32, f32, f64 {
+    sig0 = (i32) -> f32 tail
+    fn0 = %g(i32) -> f32 tail
+
+    block0(v1: i32):
+        v2 = f64const 0x1.0
+        v10 = func_addr.i64 fn0
+        try_call_indirect v10(v1), sig0, block1(ret0, v2), [ default: block2(exn0) ]
+
+    block1(v3: f32, v4: f64):
+        v5 = iconst.i32 1
+        return v5, v3, v4
+
+    block2(v6: i64):
+        v7 = ireduce.i32 v6
+        v8 = iadd_imm.i32 v7, 1
+        v9 = f32const 0x0.0        
+        return v8, v9, v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+;   subq    %rsp, $64, %rsp
+;   movq    %rbx, 16(%rsp)
+;   movq    %r12, 24(%rsp)
+;   movq    %r13, 32(%rsp)
+;   movq    %r14, 40(%rsp)
+;   movq    %r15, 48(%rsp)
+; block0:
+;   movabsq $4607182418800017408, %rcx
+;   movq    %rcx, %xmm1
+;   movdqu  %xmm1, rsp(0 + virtual offset)
+;   load_ext_name %g+0, %rdx
+;   call    *%rdx; jmp MachLabel(1); catch [None: MachLabel(2)]
+; block1:
+;   movl    $1, %eax
+;   movdqu  rsp(0 + virtual offset), %xmm1
+;   movq    16(%rsp), %rbx
+;   movq    24(%rsp), %r12
+;   movq    32(%rsp), %r13
+;   movq    40(%rsp), %r14
+;   movq    48(%rsp), %r15
+;   addq    %rsp, $64, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block2:
+;   movdqu  rsp(0 + virtual offset), %xmm1
+;   lea     1(%rax), %eax
+;   uninit  %xmm0
+;   xorps %xmm0, %xmm0
+;   movq    16(%rsp), %rbx
+;   movq    24(%rsp), %r12
+;   movq    32(%rsp), %r13
+;   movq    40(%rsp), %r14
+;   movq    48(%rsp), %r15
+;   addq    %rsp, $64, %rsp
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x40, %rsp
+;   movq %rbx, 0x10(%rsp)
+;   movq %r12, 0x18(%rsp)
+;   movq %r13, 0x20(%rsp)
+;   movq %r14, 0x28(%rsp)
+;   movq %r15, 0x30(%rsp)
+; block1: ; offset 0x21
+;   movabsq $0x3ff0000000000000, %rcx
+;   movq %rcx, %xmm1
+;   movdqu %xmm1, (%rsp)
+;   movabsq $0, %rdx ; reloc_external Abs8 %g 0
+;   callq *%rdx
+; block2: ; offset 0x41
+;   movl $1, %eax
+;   movdqu (%rsp), %xmm1
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
+;   addq $0x40, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block3: ; offset 0x6d
+;   movdqu (%rsp), %xmm1
+;   addl $1, %eax
+;   xorps %xmm0, %xmm0
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
+;   addq $0x40, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

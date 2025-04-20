@@ -7,7 +7,7 @@ fn struct_new_empty() -> Result<()> {
     let mut store = gc_store()?;
     let struct_ty = StructType::new(store.engine(), [])?;
     let pre = StructRefPre::new(&mut store, struct_ty);
-    StructRef::new(store, &pre, &[])?;
+    StructRef::new(&mut store, &pre, &[])?;
     Ok(())
 }
 
@@ -24,7 +24,7 @@ fn struct_new_with_fields() -> Result<()> {
     )?;
     let pre = StructRefPre::new(&mut store, struct_ty);
     StructRef::new(
-        store,
+        &mut store,
         &pre,
         &[Val::I32(1), Val::I32(2), Val::null_any_ref()],
     )?;
@@ -48,7 +48,7 @@ fn struct_new_unrooted_field() -> Result<()> {
     };
     assert!(anyref.is_i31(&store).is_err());
     let pre = StructRefPre::new(&mut store, struct_ty);
-    assert!(StructRef::new(store, &pre, &[anyref.into()]).is_err());
+    assert!(StructRef::new(&mut store, &pre, &[anyref.into()]).is_err());
     Ok(())
 }
 
@@ -71,7 +71,7 @@ fn struct_new_cross_store_field() {
     let pre = StructRefPre::new(&mut store, struct_ty);
 
     // This should panic.
-    let _ = StructRef::new(store, &pre, &[anyref.into()]);
+    let _ = StructRef::new(&mut store, &pre, &[anyref.into()]);
 }
 
 #[test]

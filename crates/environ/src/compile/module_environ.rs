@@ -118,7 +118,7 @@ pub struct FunctionBodyData<'a> {
 }
 
 #[derive(Debug, Default)]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct DebugInfoData<'a> {
     pub dwarf: Dwarf<'a>,
     pub name_section: NameSection<'a>,
@@ -131,13 +131,13 @@ pub struct DebugInfoData<'a> {
     pub debug_tu_index: gimli::DebugTuIndex<Reader<'a>>,
 }
 
-#[allow(missing_docs, reason = "self-describing")]
+#[expect(missing_docs, reason = "self-describing")]
 pub type Dwarf<'input> = gimli::Dwarf<Reader<'input>>;
 
 type Reader<'input> = gimli::EndianSlice<'input, gimli::LittleEndian>;
 
 #[derive(Debug, Default)]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct NameSection<'a> {
     pub module_name: Option<&'a str>,
     pub func_names: HashMap<FuncIndex, &'a str>,
@@ -145,7 +145,7 @@ pub struct NameSection<'a> {
 }
 
 #[derive(Debug, Default)]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct WasmFileInfo {
     pub path: Option<PathBuf>,
     pub code_section_offset: u64,
@@ -154,7 +154,7 @@ pub struct WasmFileInfo {
 }
 
 #[derive(Debug)]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct FunctionMetadata {
     pub params: Box<[WasmValType]>,
     pub locals: Box<[(u32, WasmValType)]>,
@@ -312,7 +312,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         }
                         TypeRef::Global(ty) => {
                             self.result.module.num_imported_globals += 1;
-                            EntityType::Global(self.convert_global_type(&ty))
+                            EntityType::Global(self.convert_global_type(&ty)?)
                         }
                         TypeRef::Table(ty) => {
                             self.result.module.num_imported_tables += 1;
@@ -408,7 +408,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     for f in escaped {
                         self.flag_func_escaped(f);
                     }
-                    let ty = self.convert_global_type(&ty);
+                    let ty = self.convert_global_type(&ty)?;
                     self.result.module.globals.push(ty);
                     self.result.module.global_initializers.push(initializer);
                 }
@@ -525,7 +525,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             }
 
             Payload::CodeSectionStart { count, range, .. } => {
-                self.validator.code_section_start(count, &range)?;
+                self.validator.code_section_start(&range)?;
                 let cnt = usize::try_from(count).unwrap();
                 self.result.function_body_inputs.reserve_exact(cnt);
                 self.result.debuginfo.wasm_file.code_section_offset = range.start as u64;
@@ -545,7 +545,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     let mut locals = Vec::new();
                     for pair in body.get_locals_reader()? {
                         let (cnt, ty) = pair?;
-                        let ty = self.convert_valtype(ty);
+                        let ty = self.convert_valtype(ty)?;
                         locals.push((cnt, ty));
                     }
                     self.result

@@ -158,17 +158,6 @@ pub(crate) fn check(
             }
         },
 
-        Inst::AluRM {
-            size,
-            op: _,
-            ref src1_dst,
-            src2: _,
-            lock: _,
-        } => {
-            check_load(ctx, None, src1_dst, vcode, size.to_type(), 64)?;
-            check_store(ctx, None, src1_dst, vcode, size.to_type())
-        }
-
         Inst::AluRmRVex {
             size,
             ref src2,

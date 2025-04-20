@@ -145,7 +145,7 @@ mod test_vmfunction_body {
 /// imported from another instance.
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
-pub struct VMTableImport {
+pub struct VMTable {
     /// A pointer to the imported table description.
     pub from: VmPtr<VMTableDefinition>,
 
@@ -154,30 +154,43 @@ pub struct VMTableImport {
 }
 
 // SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
-unsafe impl VmSafe for VMTableImport {}
+unsafe impl VmSafe for VMTable {}
 
 #[cfg(test)]
-mod test_vmtable_import {
-    use super::VMTableImport;
+mod test_vmtable {
+    use super::VMTable;
     use core::mem::offset_of;
     use std::mem::size_of;
+    use wasmtime_environ::component::{Component, VMComponentOffsets};
     use wasmtime_environ::{HostPtr, Module, VMOffsets};
 
     #[test]
-    fn check_vmtable_import_offsets() {
+    fn check_vmtable_offsets() {
         let module = Module::new();
         let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(size_of::<VMTable>(), usize::from(offsets.size_of_vmtable()));
         assert_eq!(
-            size_of::<VMTableImport>(),
-            usize::from(offsets.size_of_vmtable_import())
+            offset_of!(VMTable, from),
+            usize::from(offsets.vmtable_from())
         );
         assert_eq!(
-            offset_of!(VMTableImport, from),
-            usize::from(offsets.vmtable_import_from())
+            offset_of!(VMTable, vmctx),
+            usize::from(offsets.vmtable_vmctx())
         );
+    }
+
+    #[test]
+    fn ensure_sizes_match() {
+        // Because we use `VMTable` for recording tables used by components, we
+        // want to make sure that the size calculations between `VMOffsets` and
+        // `VMComponentOffsets` stay the same.
+        let module = Module::new();
+        let vm_offsets = VMOffsets::new(HostPtr, &module);
+        let component = Component::default();
+        let vm_component_offsets = VMComponentOffsets::new(HostPtr, &component);
         assert_eq!(
-            offset_of!(VMTableImport, vmctx),
-            usize::from(offsets.vmtable_import_vmctx())
+            vm_offsets.size_of_vmtable(),
+            vm_component_offsets.size_of_vmtable()
         );
     }
 }
@@ -948,7 +961,6 @@ macro_rules! define_builtin_array {
             /// pointer is considered valid.
             pub fn expose_provenance(&self) -> NonNull<Self>{
                 $(
-                    #[cfg(has_provenance_apis)]
                     (self.$name as *mut u8).expose_provenance();
                 )*
                 NonNull::from(self)
@@ -1011,6 +1023,9 @@ pub struct VMStoreContext {
     /// For more information see `crates/cranelift/src/lib.rs`.
     pub stack_limit: UnsafeCell<usize>,
 
+    /// The `VMMemoryDefinition` for this store's GC heap.
+    pub gc_heap: VMMemoryDefinition,
+
     /// The value of the frame pointer register when we last called from Wasm to
     /// the host.
     ///
@@ -1020,7 +1035,7 @@ pub struct VMStoreContext {
     /// This member is `0` when Wasm is actively running and has not called out
     /// to the host.
     ///
-    /// Used to find the start of a a contiguous sequence of Wasm frames when
+    /// Used to find the start of a contiguous sequence of Wasm frames when
     /// walking the stack.
     pub last_wasm_exit_fp: UnsafeCell<usize>,
 
@@ -1071,9 +1086,13 @@ unsafe impl VmSafe for VMStoreContext {}
 impl Default for VMStoreContext {
     fn default() -> VMStoreContext {
         VMStoreContext {
-            stack_limit: UnsafeCell::new(usize::max_value()),
             fuel_consumed: UnsafeCell::new(0),
             epoch_deadline: UnsafeCell::new(0),
+            stack_limit: UnsafeCell::new(usize::max_value()),
+            gc_heap: VMMemoryDefinition {
+                base: NonNull::dangling().into(),
+                current_length: AtomicUsize::new(0),
+            },
             last_wasm_exit_fp: UnsafeCell::new(0),
             last_wasm_exit_pc: UnsafeCell::new(0),
             last_wasm_entry_fp: UnsafeCell::new(0),
@@ -1084,7 +1103,7 @@ impl Default for VMStoreContext {
 
 #[cfg(test)]
 mod test_vmstore_context {
-    use super::VMStoreContext;
+    use super::{VMMemoryDefinition, VMStoreContext};
     use core::mem::offset_of;
     use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
 
@@ -1103,6 +1122,18 @@ mod test_vmstore_context {
         assert_eq!(
             offset_of!(VMStoreContext, epoch_deadline),
             usize::from(offsets.ptr.vmstore_context_epoch_deadline())
+        );
+        assert_eq!(
+            offset_of!(VMStoreContext, gc_heap),
+            usize::from(offsets.ptr.vmstore_context_gc_heap())
+        );
+        assert_eq!(
+            offset_of!(VMStoreContext, gc_heap) + offset_of!(VMMemoryDefinition, base),
+            usize::from(offsets.ptr.vmstore_context_gc_heap_base())
+        );
+        assert_eq!(
+            offset_of!(VMStoreContext, gc_heap) + offset_of!(VMMemoryDefinition, current_length),
+            usize::from(offsets.ptr.vmstore_context_gc_heap_current_length())
         );
         assert_eq!(
             offset_of!(VMStoreContext, last_wasm_exit_fp),

@@ -437,8 +437,8 @@ impl RootSet {
         for root in lifo_roots.drain(scope..) {
             // Only drop the GC reference if we actually have a GC store. How
             // can we have a GC reference but not a GC store? If we've only
-            // create `i31refs`, we never force a GC store's allocation. This is
-            // fine because `i31ref`s never need drop barriers.
+            // created `i31refs`, we never force a GC store's allocation. This
+            // is fine because `i31ref`s never need drop barriers.
             if let Some(gc_store) = &mut gc_store {
                 gc_store.drop_gc_ref(root.gc_ref);
             }
@@ -968,8 +968,18 @@ impl<T: GcRef> Rooted<T> {
         val_raw: impl Fn(u32) -> ValRaw,
     ) -> Result<()> {
         let gc_ref = self.inner.try_clone_gc_ref(store)?;
-        let raw = store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
-        ptr.write(val_raw(raw));
+
+        let raw = match store.optional_gc_store_mut() {
+            Some(s) => s.expose_gc_ref_to_wasm(gc_ref),
+            None => {
+                // NB: do not force the allocation of a GC heap just because the
+                // program is using `i31ref`s.
+                debug_assert!(gc_ref.is_i31());
+                gc_ref.as_raw_non_zero_u32()
+            }
+        };
+
+        ptr.write(val_raw(raw.get()));
         Ok(())
     }
 
@@ -982,7 +992,17 @@ impl<T: GcRef> Rooted<T> {
     ) -> Self {
         debug_assert_ne!(raw_gc_ref, 0);
         let gc_ref = VMGcRef::from_raw_u32(raw_gc_ref).expect("non-null");
-        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+
+        let gc_ref = match store.optional_gc_store_mut() {
+            Some(s) => s.clone_gc_ref(&gc_ref),
+            None => {
+                // NB: do not force the allocation of a GC heap just because the
+                // program is using `i31ref`s.
+                debug_assert!(gc_ref.is_i31());
+                gc_ref.unchecked_copy()
+            }
+        };
+
         from_cloned_gc_ref(store, gc_ref)
     }
 
@@ -1646,27 +1666,32 @@ where
     /// # fn foo() -> Result<()> {
     /// let mut store = Store::<()>::default();
     ///
-    /// let a = ExternRef::new_manually_rooted(&mut store, "hello")?;
-    /// let b = a.clone(&mut store);
-    ///
-    /// // `a` and `b` are rooting the same object.
-    /// assert!(ManuallyRooted::ref_eq(&store, &a, &b)?);
+    /// let a;
+    /// let b;
+    /// let x;
     ///
     /// {
     ///     let mut scope = RootScope::new(&mut store);
+    ///
+    ///     a = ExternRef::new(&mut scope, "hello")?.to_manually_rooted(&mut scope)?;
+    ///     b = a.clone(&mut scope);
+    ///
+    ///     // `a` and `b` are rooting the same object.
+    ///     assert!(ManuallyRooted::ref_eq(&scope, &a, &b)?);
     ///
     ///     // `c` is a different GC root, is in a different scope, and is a
     ///     // `Rooted<T>` instead of a `ManuallyRooted<T>`, but is still rooting
     ///     // the same object.
     ///     let c = a.to_rooted(&mut scope);
     ///     assert!(ManuallyRooted::ref_eq(&scope, &a, &c)?);
+    ///
+    ///     x = ExternRef::new(&mut scope, "goodbye")?.to_manually_rooted(&mut scope)?;
+    ///
+    ///     // `a` and `x` are rooting different objects.
+    ///     assert!(!ManuallyRooted::ref_eq(&scope, &a, &x)?);
     /// }
     ///
-    /// let x = ExternRef::new_manually_rooted(&mut store, "goodbye")?;
-    ///
-    /// // `a` and `x` are rooting different objects.
-    /// assert!(!ManuallyRooted::ref_eq(&store, &a, &x)?);
-    ///
+    /// // Unroot our manually-rooted GC references.
     /// a.unroot(&mut store);
     /// b.unroot(&mut store);
     /// x.unroot(&mut store);
@@ -1757,7 +1782,7 @@ where
     ) -> Result<()> {
         let gc_ref = self.try_clone_gc_ref(store)?;
         let raw = store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
-        ptr.write(val_raw(raw));
+        ptr.write(val_raw(raw.get()));
         Ok(())
     }
 

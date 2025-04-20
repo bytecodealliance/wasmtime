@@ -250,47 +250,6 @@ pub(crate) fn emit(
             );
         }
 
-        Inst::AluRM {
-            size,
-            src1_dst,
-            src2,
-            op,
-            lock,
-        } => {
-            let src2 = src2.to_reg();
-            let src1_dst = src1_dst.finalize(state.frame_layout(), sink).clone();
-
-            let opcode = match op {
-                AluRmiROpcode::Add => 0x01,
-                AluRmiROpcode::Sub => 0x29,
-                AluRmiROpcode::And => 0x21,
-                AluRmiROpcode::Or => 0x09,
-                AluRmiROpcode::Xor => 0x31,
-                _ => panic!("Unsupported read-modify-write ALU opcode"),
-            };
-
-            let prefix = match (size, lock) {
-                (OperandSize::Size16, false) => LegacyPrefixes::_66,
-                (OperandSize::Size16, true) => LegacyPrefixes::_66F0,
-                (_, false) => LegacyPrefixes::None,
-                (_, true) => LegacyPrefixes::_F0,
-            };
-            let opcode = if *size == OperandSize::Size8 {
-                opcode - 1
-            } else {
-                opcode
-            };
-
-            let mut rex = RexFlags::from(*size);
-            if *size == OperandSize::Size8 {
-                debug_assert!(src2.is_real());
-                rex.always_emit_if_8bit_needed(src2);
-            }
-
-            let enc_g = int_reg_enc(src2);
-            emit_std_enc_mem(sink, prefix, opcode, 1, enc_g, &src1_dst, rex, 0);
-        }
-
         Inst::AluRmRVex {
             size,
             op,
@@ -1652,7 +1611,12 @@ pub(crate) fn emit(
             // beginning of the immediate field.
             emit_reloc(sink, Reloc::X86CallPCRel4, &call_info.dest, -4);
             sink.put4(0);
-            sink.add_call_site();
+
+            if let Some(try_call) = call_info.try_call_info.as_ref() {
+                sink.add_call_site(&try_call.exception_dests);
+            } else {
+                sink.add_call_site(&[]);
+            }
 
             // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.
@@ -1664,6 +1628,22 @@ pub(crate) fn emit(
                     Writable::from_reg(regs::rsp()),
                 )
                 .emit(sink, info, state);
+            }
+
+            // Load any stack-carried return values.
+            call_info.emit_retval_loads::<X64ABIMachineSpec, _, _>(
+                state.frame_layout().stackslots_size,
+                |inst| inst.emit(sink, info, state),
+                |_space_needed| None,
+            );
+
+            // If this is a try-call, jump to the continuation
+            // (normal-return) block.
+            if let Some(try_call) = call_info.try_call_info.as_ref() {
+                let jmp = Inst::JmpKnown {
+                    dst: try_call.continuation,
+                };
+                jmp.emit(sink, info, state);
             }
         }
 
@@ -1680,7 +1660,7 @@ pub(crate) fn emit(
             // beginning of the immediate field.
             emit_reloc(sink, Reloc::X86CallPCRel4, &call_info.dest, -4);
             sink.put4(0);
-            sink.add_call_site();
+            sink.add_call_site(&[]);
         }
 
         Inst::ReturnCallUnknown { info: call_info } => {
@@ -1692,7 +1672,7 @@ pub(crate) fn emit(
                 target: RegMem::reg(callee),
             }
             .emit(sink, info, state);
-            sink.add_call_site();
+            sink.add_call_site(&[]);
         }
 
         Inst::CallUnknown {
@@ -1734,7 +1714,11 @@ pub(crate) fn emit(
                 sink.push_user_stack_map(state, offset, s);
             }
 
-            sink.add_call_site();
+            if let Some(try_call) = call_info.try_call_info.as_ref() {
+                sink.add_call_site(&try_call.exception_dests);
+            } else {
+                sink.add_call_site(&[]);
+            }
 
             // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.
@@ -1746,6 +1730,20 @@ pub(crate) fn emit(
                     Writable::from_reg(regs::rsp()),
                 )
                 .emit(sink, info, state);
+            }
+
+            // Load any stack-carried return values.
+            call_info.emit_retval_loads::<X64ABIMachineSpec, _, _>(
+                state.frame_layout().stackslots_size,
+                |inst| inst.emit(sink, info, state),
+                |_space_needed| None,
+            );
+
+            if let Some(try_call) = call_info.try_call_info.as_ref() {
+                let jmp = Inst::JmpKnown {
+                    dst: try_call.continuation,
+                };
+                jmp.emit(sink, info, state);
             }
         }
 

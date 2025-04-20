@@ -7,9 +7,9 @@ use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
 use wasmtime_cranelift::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
-    AddressMapSection, BuiltinFunctionIndex, CompileError, DefinedFuncIndex, FunctionBodyData,
-    FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, RelocationTarget,
-    StaticModuleIndex, TrapEncodingBuilder, Tunables, VMOffsets, WasmFunctionInfo,
+    AddressMapSection, BuiltinFunctionIndex, CompileError, CompiledFunctionBody, DefinedFuncIndex,
+    FunctionBodyData, FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PrimaryMap,
+    RelocationTarget, StaticModuleIndex, TrapEncodingBuilder, Tunables, VMOffsets,
 };
 use winch_codegen::{BuiltinFunctions, CallingConvention, TargetIsa};
 
@@ -95,7 +95,7 @@ impl wasmtime_environ::Compiler for Compiler {
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
-    ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
+    ) -> Result<CompiledFunctionBody, CompileError> {
         let index = translation.module.func_index(index);
         let sig = translation.module.functions[index]
             .signature
@@ -132,13 +132,11 @@ impl wasmtime_environ::Compiler for Compiler {
             self.emit_unwind_info(&mut func)?;
         }
 
-        Ok((
-            WasmFunctionInfo {
-                start_srcloc: func.metadata().address_map.start_srcloc,
-                stack_maps: Box::new([]),
-            },
-            Box::new(func),
-        ))
+        Ok(CompiledFunctionBody {
+            code: Box::new(func),
+            // TODO: Winch doesn't support GC objects and stack maps and all that yet.
+            needs_gc_heap: false,
+        })
     }
 
     fn compile_array_to_wasm_trampoline(
@@ -146,7 +144,7 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
         index: DefinedFuncIndex,
-    ) -> Result<Box<dyn Any + Send>, CompileError> {
+    ) -> Result<CompiledFunctionBody, CompileError> {
         self.trampolines
             .compile_array_to_wasm_trampoline(translation, types, index)
     }
@@ -154,7 +152,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &wasmtime_environ::WasmFuncType,
-    ) -> Result<Box<dyn Any + Send>, CompileError> {
+    ) -> Result<CompiledFunctionBody, CompileError> {
         self.trampolines
             .compile_wasm_to_array_trampoline(wasm_func_ty)
     }
@@ -236,7 +234,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_builtin(
         &self,
         index: BuiltinFunctionIndex,
-    ) -> Result<Box<dyn Any + Send>, CompileError> {
+    ) -> Result<CompiledFunctionBody, CompileError> {
         self.trampolines.compile_wasm_to_builtin(index)
     }
 

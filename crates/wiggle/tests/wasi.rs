@@ -7,7 +7,7 @@ use wiggle_test::WasiCtx;
 // witx is exposed with the type signatures that we expect.
 
 wiggle::from_witx!({
-    witx: ["$CARGO_MANIFEST_DIR/tests/wasi.witx"],
+    witx: ["tests/wasi.witx"],
 });
 
 // The only test in this file is to verify that the witx document provided by the

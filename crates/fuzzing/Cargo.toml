@@ -12,13 +12,11 @@ license = "Apache-2.0 WITH LLVM-exception"
 workspace = true
 
 [build-dependencies]
-wasmtime-wast-util = { path = '../wast-util' }
+wasmtime-test-util = { workspace = true, features = ['wast'] }
 
 [dependencies]
 anyhow = { workspace = true }
 arbitrary = { workspace = true, features = ["derive"] }
-component-test-util = { workspace = true }
-component-fuzz-util = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 rayon = "1.2.1"
@@ -29,12 +27,13 @@ wasmprinter = { workspace = true }
 wasmtime-wast = { workspace = true, features = ['component-model'] }
 wasmtime = { workspace = true, features = ['default', 'winch'] }
 wasm-encoder = { workspace = true }
-wasm-smith = { workspace = true }
+wasm-smith = { workspace = true, features = ['serde'] }
 wasm-mutate = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
-wasmi = "0.39.1"
+wasmi = { version = "0.43.1", default-features = false, features = ["std", "simd"] }
 futures = { workspace = true }
-wasmtime-wast-util = { path = '../wast-util' }
+wasmtime-test-util = { workspace = true, features = ['wast', 'component-fuzz', 'component'] }
+serde_json = { workspace = true }
 
 [dependencies.wasmtime-cli-flags]
 workspace = true
@@ -58,7 +57,7 @@ features = [
 # though, so we could use that if we wanted. For now though just simplify a bit
 # and don't depend on this on Windows.  The same applies on s390x and riscv.
 [target.'cfg(not(any(windows, target_arch = "s390x", target_arch = "riscv64")))'.dependencies]
-v8 = "129.0.0"
+v8 = "134.5.0"
 
 [dev-dependencies]
 wat = { workspace = true }

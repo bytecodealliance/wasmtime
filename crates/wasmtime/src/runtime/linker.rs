@@ -5,10 +5,10 @@ use crate::store::StoreOpaque;
 use crate::{prelude::*, IntoFunc};
 use crate::{
     AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType,
-    Instance, Module, StoreContextMut, Val, ValRaw, ValType,
+    Instance, Module, StoreContextMut, Val, ValRaw,
 };
 use alloc::sync::Arc;
-use core::fmt;
+use core::fmt::{self, Debug};
 use core::marker;
 #[cfg(feature = "async")]
 use core::{future::Future, pin::Pin};
@@ -88,6 +88,12 @@ pub struct Linker<T> {
     allow_shadowing: bool,
     allow_unknown_exports: bool,
     _marker: marker::PhantomData<fn() -> T>,
+}
+
+impl<T> Debug for Linker<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Linker").finish_non_exhaustive()
+    }
 }
 
 impl<T> Clone for Linker<T> {
@@ -263,48 +269,36 @@ impl<T> Linker<T> {
     /// # let module = Module::new(&engine, "(module (import \"unknown\" \"import\" (func)))")?;
     /// # let mut store = Store::new(&engine, ());
     /// let mut linker = Linker::new(&engine);
-    /// linker.define_unknown_imports_as_default_values(&module)?;
+    /// linker.define_unknown_imports_as_default_values(&mut store, &module)?;
     /// linker.instantiate(&mut store, &module)?;
     /// # Ok(())
     /// # }
     /// ```
     pub fn define_unknown_imports_as_default_values(
         &mut self,
+        store: &mut impl AsContextMut<Data = T>,
         module: &Module,
     ) -> anyhow::Result<()> {
         for import in module.imports() {
             if let Err(import_err) = self._get_by_import(&import) {
-                if let ExternType::Func(func_ty) = import_err.ty() {
-                    let result_tys: Vec<_> = func_ty.results().collect();
-
-                    for ty in &result_tys {
-                        if ty.as_ref().map_or(false, |r| !r.is_nullable()) {
-                            bail!("no default value exists for type `{ty}`")
-                        }
-                    }
-
-                    self.func_new(
-                        import.module(),
-                        import.name(),
-                        func_ty,
-                        move |_caller, _args, results| {
-                            for (result, ty) in results.iter_mut().zip(&result_tys) {
-                                *result = match ty {
-                                    ValType::I32 => Val::I32(0),
-                                    ValType::I64 => Val::I64(0),
-                                    ValType::F32 => Val::F32(0.0_f32.to_bits()),
-                                    ValType::F64 => Val::F64(0.0_f64.to_bits()),
-                                    ValType::V128 => Val::V128(0_u128.into()),
-                                    ValType::Ref(r) => {
-                                        debug_assert!(r.is_nullable());
-                                        Val::null_ref(r.heap_type())
-                                    }
-                                };
-                            }
-                            Ok(())
-                        },
-                    )?;
-                }
+                let default_extern =
+                    import_err
+                        .ty()
+                        .default_value(&mut *store)
+                        .with_context(|| {
+                            anyhow!(
+                                "no default value exists for `{}::{}` with type `{:?}`",
+                                import.module(),
+                                import.name(),
+                                import_err.ty(),
+                            )
+                        })?;
+                self.define(
+                    store.as_context(),
+                    import.module(),
+                    import.name(),
+                    default_extern,
+                )?;
             }
         }
         Ok(())

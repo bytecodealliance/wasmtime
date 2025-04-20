@@ -8,8 +8,8 @@ use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
 use crate::runtime::vm::table::{Table, TableElement, TableElementType};
 use crate::runtime::vm::vmcontext::{
     VMBuiltinFunctionsArray, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMStoreContext,
-    VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
+    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMStoreContext, VMTable,
+    VMTableDefinition, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, ExportTag, GcStore, Imports,
@@ -171,7 +171,7 @@ impl InstanceAndStore {
 /// A type that roughly corresponds to a WebAssembly instance, but is also used
 /// for host-defined objects.
 ///
-/// This structure is is never allocated directly but is instead managed through
+/// This structure is never allocated directly but is instead managed through
 /// an `InstanceHandle`. This structure ends with a `VMContext` which has a
 /// dynamic size corresponding to the `module` configured within. Memory
 /// management of this structure is always externalized.
@@ -428,8 +428,8 @@ impl Instance {
         unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmfunction_import(index)) }
     }
 
-    /// Return the index `VMTableImport`.
-    fn imported_table(&self, index: TableIndex) -> &VMTableImport {
+    /// Return the index `VMTable`.
+    fn imported_table(&self, index: TableIndex) -> &VMTable {
         unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmtable_import(index)) }
     }
 
@@ -583,23 +583,13 @@ impl Instance {
     /// Return a pointer to the interrupts structure
     #[inline]
     pub fn vm_store_context(&mut self) -> NonNull<Option<VmPtr<VMStoreContext>>> {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_runtime_limits()) }
+        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_store_context()) }
     }
 
     /// Return a pointer to the global epoch counter used by this instance.
     #[cfg(target_has_atomic = "64")]
     pub fn epoch_ptr(&mut self) -> NonNull<Option<VmPtr<AtomicU64>>> {
         unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_epoch_ptr()) }
-    }
-
-    /// Return a pointer to the GC heap base pointer.
-    pub fn gc_heap_base(&mut self) -> NonNull<Option<VmPtr<u8>>> {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_gc_heap_base()) }
-    }
-
-    /// Return a pointer to the GC heap bound.
-    pub fn gc_heap_bound(&mut self) -> NonNull<usize> {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_gc_heap_bound()) }
     }
 
     /// Return a pointer to the collector-specific heap data.
@@ -616,7 +606,15 @@ impl Instance {
             #[cfg(target_has_atomic = "64")]
             self.epoch_ptr()
                 .write(Some(NonNull::from(store.engine().epoch_counter()).into()));
-            self.set_gc_heap(store.gc_store_mut().ok());
+
+            if self.env_module().needs_gc_heap {
+                self.set_gc_heap(Some(store.gc_store().expect(
+                    "if we need a GC heap, then `Instance::new_raw` should have already \
+                     allocated it for us",
+                )));
+            } else {
+                self.set_gc_heap(None);
+            }
         } else {
             self.vm_store_context().write(None);
             #[cfg(target_has_atomic = "64")]
@@ -625,17 +623,11 @@ impl Instance {
         }
     }
 
-    unsafe fn set_gc_heap(&mut self, gc_store: Option<&mut GcStore>) {
+    unsafe fn set_gc_heap(&mut self, gc_store: Option<&GcStore>) {
         if let Some(gc_store) = gc_store {
-            let heap = gc_store.gc_heap.heap_slice_mut();
-            self.gc_heap_bound().write(heap.len());
-            self.gc_heap_base()
-                .write(Some(NonNull::from(heap).cast().into()));
             self.gc_heap_data()
                 .write(Some(gc_store.gc_heap.vmctx_gc_heap_data().into()));
         } else {
-            self.gc_heap_bound().write(0);
-            self.gc_heap_base().write(None);
             self.gc_heap_data().write(None);
         }
     }
@@ -1704,8 +1696,8 @@ impl InstanceHandle {
     ///
     /// This is provided for the original `Store` itself to configure the first
     /// self-pointer after the original `Box` has been initialized.
-    pub unsafe fn set_store(&mut self, store: NonNull<dyn VMStore>) {
-        self.instance_mut().set_store(Some(store));
+    pub unsafe fn set_store(&mut self, store: Option<NonNull<dyn VMStore>>) {
+        self.instance_mut().set_store(store);
     }
 
     /// Returns a clone of this instance.

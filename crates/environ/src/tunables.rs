@@ -1,4 +1,4 @@
-use crate::TripleExt;
+use crate::{IndexType, Limits, Memory, TripleExt};
 use anyhow::{anyhow, bail, Result};
 use core::fmt;
 use serde_derive::{Deserialize, Serialize};
@@ -28,7 +28,7 @@ macro_rules! define_tunables {
 
         /// Optional tunable configuration options used in `wasmtime::Config`
         #[derive(Default, Clone)]
-        #[allow(missing_docs, reason = "macro-generated fields")]
+        #[expect(missing_docs, reason = "macro-generated fields")]
         pub struct $config_tunables {
             $(pub $field: Option<$field_ty>,)*
         }
@@ -232,6 +232,20 @@ impl Tunables {
 
             signals_based_traps: true,
             ..Tunables::default_miri()
+        }
+    }
+
+    /// Get the GC heap's memory type, given our configured tunables.
+    pub fn gc_heap_memory_type(&self) -> Memory {
+        Memory {
+            idx_type: IndexType::I32,
+            limits: Limits { min: 0, max: None },
+            shared: false,
+            // We *could* try to match the target architecture's page size, but that
+            // would require exercising a page size for memories that we don't
+            // otherwise support for Wasm; we conservatively avoid that, and just
+            // use the default Wasm page size, for now.
+            page_size_log2: 16,
         }
     }
 }

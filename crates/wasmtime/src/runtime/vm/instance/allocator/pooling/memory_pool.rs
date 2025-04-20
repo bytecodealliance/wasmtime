@@ -268,7 +268,7 @@ impl MemoryPool {
     }
 
     /// Validate whether this memory pool supports the given module.
-    pub fn validate(&self, module: &Module) -> Result<()> {
+    pub fn validate_memories(&self, module: &Module) -> Result<()> {
         let memories = module.num_defined_memories();
         if memories > usize::try_from(self.memories_per_instance).unwrap() {
             bail!(
@@ -279,31 +279,35 @@ impl MemoryPool {
         }
 
         for (i, memory) in module.memories.iter().skip(module.num_imported_memories) {
-            let min = memory.minimum_byte_size().with_context(|| {
+            self.validate_memory(memory).with_context(|| {
                 format!(
-                    "memory index {} has a minimum byte size that cannot be represented in a u64",
+                    "memory index {} is unsupported in this pooling allocator configuration",
                     i.as_u32()
                 )
             })?;
-            if min > u64::try_from(self.layout.max_memory_bytes.byte_count()).unwrap() {
-                bail!(
-                    "memory index {} has a minimum byte size of {} which exceeds the limit of {} bytes",
-                    i.as_u32(),
-                    min,
-                    self.layout.max_memory_bytes,
-                );
-            }
-            if memory.shared {
-                // FIXME(#4244): since the pooling allocator owns the memory
-                // allocation (which is torn down with the instance), that
-                // can't be used with shared memory where threads or the host
-                // might persist the memory beyond the lifetime of the instance
-                // itself.
-                bail!(
-                    "memory index {} is shared which is not supported in the pooling allocator",
-                    i.as_u32(),
-                );
-            }
+        }
+        Ok(())
+    }
+
+    /// Validate one memory for this pool.
+    pub fn validate_memory(&self, memory: &wasmtime_environ::Memory) -> Result<()> {
+        let min = memory.minimum_byte_size().with_context(|| {
+            format!("memory has a minimum byte size that cannot be represented in a u64",)
+        })?;
+        if min > u64::try_from(self.layout.max_memory_bytes.byte_count()).unwrap() {
+            bail!(
+                "memory has a minimum byte size of {} which exceeds the limit of {} bytes",
+                min,
+                self.layout.max_memory_bytes,
+            );
+        }
+        if memory.shared {
+            // FIXME(#4244): since the pooling allocator owns the memory
+            // allocation (which is torn down with the instance), that
+            // can't be used with shared memory where threads or the host
+            // might persist the memory beyond the lifetime of the instance
+            // itself.
+            bail!("memory is shared which is not supported in the pooling allocator");
         }
         Ok(())
     }
@@ -320,7 +324,7 @@ impl MemoryPool {
         request: &mut InstanceAllocationRequest,
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
-        memory_index: DefinedMemoryIndex,
+        memory_index: Option<DefinedMemoryIndex>,
     ) -> Result<(MemoryAllocationIndex, Memory)> {
         let stripe_index = if let Some(pkey) = &request.pkey {
             pkey.as_stripe()
@@ -331,12 +335,12 @@ impl MemoryPool {
 
         let striped_allocation_index = self.stripes[stripe_index]
             .allocator
-            .alloc(
+            .alloc(memory_index.and_then(|mem_idx| {
                 request
                     .runtime_info
                     .unique_id()
-                    .map(|id| MemoryInModule(id, memory_index)),
-            )
+                    .map(|id| MemoryInModule(id, mem_idx))
+            }))
             .map(|slot| StripedAllocationIndex(u32::try_from(slot.index()).unwrap()))
             .ok_or_else(|| {
                 super::PoolConcurrencyLimitError::new(
@@ -361,7 +365,10 @@ impl MemoryPool {
             let base_capacity = self.layout.max_memory_bytes;
 
             let mut slot = self.take_memory_image_slot(allocation_index);
-            let image = request.runtime_info.memory_image(memory_index)?;
+            let image = match memory_index {
+                Some(memory_index) => request.runtime_info.memory_image(memory_index)?,
+                None => None,
+            };
             let initial_size = ty
                 .minimum_byte_size()
                 .expect("min size checked in validation");

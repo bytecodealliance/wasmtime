@@ -180,7 +180,7 @@ pub fn decorate_function<FW: FuncWriter>(
     func: &Function,
 ) -> fmt::Result {
     write!(w, "function ")?;
-    write_spec(w, func)?;
+    write_function_spec(w, func)?;
     writeln!(w, " {{")?;
     let aliases = alias_map(func);
     let mut any = func_w.write_preamble(w, func)?;
@@ -198,7 +198,8 @@ pub fn decorate_function<FW: FuncWriter>(
 //
 // Function spec.
 
-fn write_spec(w: &mut dyn Write, func: &Function) -> fmt::Result {
+/// Writes the spec (name and signature) of 'func' to 'w' as text.
+pub fn write_function_spec(w: &mut dyn Write, func: &Function) -> fmt::Result {
     write!(w, "{}{}", func.name, func.signature)
 }
 
@@ -389,6 +390,7 @@ fn write_instruction(
 pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt::Result {
     let pool = &dfg.value_lists;
     let jump_tables = &dfg.jump_tables;
+    let exception_tables = &dfg.exception_tables;
     use crate::ir::instructions::InstructionData::*;
     let ctrl_ty = dfg.ctrl_typevar(inst);
     match dfg.insts[inst] {
@@ -478,6 +480,34 @@ pub fn write_operands(w: &mut dyn Write, dfg: &DataFlowGraph, inst: Inst) -> fmt
                 DisplayValues(&args[1..])
             )?;
             write_user_stack_map_entries(w, dfg, inst)
+        }
+        TryCall {
+            func_ref,
+            ref args,
+            exception,
+            ..
+        } => {
+            write!(
+                w,
+                " {}({}), {}",
+                func_ref,
+                DisplayValues(args.as_slice(pool)),
+                exception_tables[exception].display(pool),
+            )
+        }
+        TryCallIndirect {
+            ref args,
+            exception,
+            ..
+        } => {
+            let args = args.as_slice(pool);
+            write!(
+                w,
+                " {}({}), {}",
+                args[0],
+                DisplayValues(&args[1..]),
+                exception_tables[exception].display(pool),
+            )
         }
         FuncAddr { func_ref, .. } => write!(w, " {func_ref}"),
         StackLoad {

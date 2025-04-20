@@ -70,9 +70,9 @@ impl FiberStack {
     /// The caller must properly allocate the stack space with a guard page and
     /// make the pages accessible for correct behavior.
     pub unsafe fn from_raw_parts(bottom: *mut u8, guard_size: usize, len: usize) -> Result<Self> {
-        Ok(Self(imp::FiberStack::from_raw_parts(
-            bottom, guard_size, len,
-        )?))
+        Ok(Self(unsafe {
+            imp::FiberStack::from_raw_parts(bottom, guard_size, len)?
+        }))
     }
 
     /// Gets the top of the stack.
@@ -343,6 +343,8 @@ mod tests {
                 // TODO: see comments in `arm.rs` about how this seems to work
                 // in gdb but not at runtime, unsure why at this time.
                 || cfg!(target_arch = "arm")
+                // asan does weird things
+                || cfg!(asan)
             );
         }
 

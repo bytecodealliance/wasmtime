@@ -9,11 +9,6 @@ on:
     - main
     - 'release-*'
 
-  # Run full CI on the `main` branch once a day to prime the GitHub Actions
-  # caches used by PRs and the merge queue.
-  schedule:
-  - cron: '13 4 * * *'
-
   # This is the CI that runs for PRs-to-merge.
   merge_group:
 
@@ -25,6 +20,9 @@ on:
     # tag at the end of CI if successful and the tag will trigger the artifact
     # uploads as well as publication to crates.io.
     - 'release-*'
+
+  # Allow manually triggering this request via a button or another workflow.
+  workflow_dispatch:
 
 defaults:
   run:
@@ -125,7 +123,7 @@ jobs:
   cargo_vet:
     name: Cargo vet
     needs: determine
-    if: needs.determine.outputs.audit
+    if: github.repository == 'bytecodealliance/wasmtime' && needs.determine.outputs.audit
     runs-on: ubuntu-latest
     outputs:
       outcome: ${{ steps.vet.outcome }}
@@ -393,6 +391,7 @@ jobs:
               -p wasmtime-cli --no-default-features --features compile
               -p wasmtime-cli --no-default-features --features compile,cranelift
               -p wasmtime-cli --no-default-features --features compile,cranelift,component-model
+              -p wasmtime-cli --no-default-features --features objdump
               -p wasmtime-cli --all-features
               -p wasmtime-cli --features component-model
 
@@ -405,7 +404,7 @@ jobs:
             checks: |
               -p cranelift-entity --no-default-features
               -p cranelift-entity --no-default-features --features enable-serde
-              
+
           - name: wasmtime-bench-api
             checks: |
               -p wasmtime-bench-api
@@ -434,17 +433,18 @@ jobs:
     - uses: ./.github/actions/cancel-on-failure
       if: failure()
 
-  fiber_tests:
-    name: wasmtime-fiber tests
+  special_tests:
+    name: One-off special tests
     runs-on: ubuntu-latest
-    env:
-      CARGO_NDK_VERSION: 2.12.2
+    needs: determine
+    if: needs.determine.outputs.run-full
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
     - run: cargo test -p wasmtime-fiber --no-default-features
+    - run: cargo test -p cranelift-tools --test logged-filetests
 
     # common logic to cancel the entire run if this job fails
     - uses: ./.github/actions/cancel-on-failure
@@ -655,7 +655,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-24.04, macos-14, windows-2025]
 
     steps:
     - uses: actions/checkout@v4
@@ -667,7 +667,7 @@ jobs:
     # Rust programs. Note that this only executes if the `determine` step told
     # us to test the capi which is off-by-default for PRs.
     - run: rustup target add wasm32-wasip2 # wasip2 target needed by example programs
-    - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF
+    - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=ON
     - run: cmake --build examples/build --config Debug
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
       if: runner.os == 'Windows'
@@ -770,6 +770,14 @@ jobs:
         touch ${{ runner.tool_cache }}/qemu/built
       if: matrix.qemu != ''
 
+    - name: Configure ASAN
+      run: |
+        echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
+        echo CARGO_PROFILE_TEST_OPT_LEVEL=2 >> $GITHUB_ENV
+        echo RUSTFLAGS=-Zsanitizer=address >> $GITHUB_ENV
+        echo RUSTDOCFLAGS=-Zsanitizer=address >> $GITHUB_ENV
+      if: ${{ contains(matrix.name, 'ASAN') }}
+
     # Record some CPU details; this is helpful information if tests fail due
     # to CPU-specific features.
     - name: CPU information
@@ -813,10 +821,10 @@ jobs:
   test_wasi_nn:
     strategy:
       matrix:
-        feature: ["openvino", "onnx"]
-        os: ["ubuntu-latest", "windows-latest"]
+        feature: ["openvino"]
+        os: ["ubuntu-24.04", "windows-2025"]
         include:
-          - os: windows-latest
+          - os: windows-2025
             feature: winml
     name: Test wasi-nn (${{ matrix.feature }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -1193,7 +1201,7 @@ jobs:
       - cargo_vet
       - doc
       - micro_checks
-      - fiber_tests
+      - special_tests
       - clippy
       - monolith_checks
       - platform_checks
@@ -1273,3 +1281,29 @@ jobs:
         }
         EOF
       if: steps.tag.outputs.push_tag == 'yes'
+
+  # File an issue on the repo if this run failed and was triggered via
+  # `workflow_dispatch`, which mostly means that
+  # `.github/workflows/trigger-release-branch-ci.yml` will file issues on
+  # failure so we get to see a notification when a build fails for a historical
+  # release branch.
+  file-issue-on-error:
+    name: File an issue if this build failed and was cron-triggered
+    runs-on: ubuntu-latest
+    needs: ci-status
+    if: |
+      always()
+      && needs.ci-status.result != 'success'
+      && github.event_name == 'workflow_dispatch'
+    permissions:
+      issues: write
+    steps:
+    - uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `Failed CI build for ${context.ref}`,
+            body: `See https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+          })

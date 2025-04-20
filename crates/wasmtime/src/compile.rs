@@ -35,11 +35,12 @@ use std::{
 
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;
+use wasmtime_environ::CompiledFunctionBody;
 use wasmtime_environ::{
     BuiltinFunctionIndex, CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex,
-    FinishedObject, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex,
+    FilePos, FinishedObject, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex,
     ModuleTranslation, ModuleTypes, ModuleTypesBuilder, ObjectKind, PrimaryMap, RelocationTarget,
-    StaticModuleIndex, WasmFunctionInfo,
+    StaticModuleIndex,
 };
 
 mod code_builder;
@@ -83,7 +84,12 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
 
     let compile_inputs = CompileInputs::for_module(&types, &translation, functions);
     let unlinked_compile_outputs = compile_inputs.compile(engine)?;
-    let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
+    let PreLinkOutput {
+        needs_gc_heap,
+        compiled_funcs,
+        indices,
+    } = unlinked_compile_outputs.pre_link();
+    translation.module.needs_gc_heap |= needs_gc_heap;
 
     // Emplace all compiled functions into the object file with any other
     // sections associated with code as well.
@@ -100,7 +106,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     engine.append_compiler_info(&mut object);
     engine.append_bti(&mut object);
 
-    let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
+    let (mut object, compilation_artifacts) = indices.link_and_append_code(
         &types,
         object,
         engine,
@@ -158,13 +164,20 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     );
     let unlinked_compile_outputs = compile_inputs.compile(&engine)?;
 
-    let (compiled_funcs, function_indices) = unlinked_compile_outputs.pre_link();
+    let PreLinkOutput {
+        needs_gc_heap,
+        compiled_funcs,
+        indices,
+    } = unlinked_compile_outputs.pre_link();
+    for (_, t) in &mut module_translations {
+        t.module.needs_gc_heap |= needs_gc_heap
+    }
 
     let mut object = compiler.object(ObjectKind::Component)?;
     engine.append_compiler_info(&mut object);
     engine.append_bti(&mut object);
 
-    let (mut object, compilation_artifacts) = function_indices.link_and_append_code(
+    let (mut object, compilation_artifacts) = indices.link_and_append_code(
         types.module_types_builder(),
         object,
         engine,
@@ -318,8 +331,8 @@ impl<T> From<wasmtime_environ::component::AllCallFunc<T>> for CompiledFunction<T
 struct CompileOutput {
     key: CompileKey,
     symbol: String,
-    function: CompiledFunction<Box<dyn Any + Send>>,
-    info: Option<WasmFunctionInfo>,
+    function: CompiledFunction<CompiledFunctionBody>,
+    start_srcloc: FilePos,
 }
 
 /// The collection of things we need to compile for a Wasm module or component.
@@ -376,7 +389,7 @@ impl<'a> CompileInputs<'a> {
                         .compile_trampoline(component, types, idx, tunables)
                         .with_context(|| format!("failed to compile {}", trampoline.symbol_name()))?
                         .into(),
-                    info: None,
+                    start_srcloc: FilePos::default(),
                 })
             });
         }
@@ -391,14 +404,14 @@ impl<'a> CompileInputs<'a> {
             if let Some(sig) = types.find_resource_drop_signature() {
                 ret.push_input(move |compiler| {
                     let symbol = "resource_drop_trampoline".to_string();
-                    let trampoline = compiler
+                    let function = compiler
                         .compile_wasm_to_array_trampoline(types[sig].unwrap_func())
                         .with_context(|| format!("failed to compile `{symbol}`"))?;
                     Ok(CompileOutput {
                         key: CompileKey::resource_drop_wasm_to_array_trampoline(),
-                        function: CompiledFunction::Function(trampoline),
+                        function: CompiledFunction::Function(function),
                         symbol,
-                        info: None,
+                        start_srcloc: FilePos::default(),
                     })
                 });
             }
@@ -470,7 +483,10 @@ impl<'a> CompileInputs<'a> {
                             func_index.as_u32()
                         ),
                     };
-                    let (info, function) = compiler
+                    let data = func_body.body.get_binary_reader();
+                    let offset = data.original_position();
+                    let start_srcloc = FilePos::new(u32::try_from(offset).unwrap());
+                    let function = compiler
                         .compile_function(translation, def_func_index, func_body, types)
                         .with_context(|| format!("failed to compile: {symbol}"))?;
 
@@ -478,7 +494,7 @@ impl<'a> CompileInputs<'a> {
                         key: CompileKey::wasm_function(module, def_func_index),
                         symbol,
                         function: CompiledFunction::Function(function),
-                        info: Some(info),
+                        start_srcloc,
                     })
                 });
 
@@ -498,7 +514,7 @@ impl<'a> CompileInputs<'a> {
                             key: CompileKey::array_to_wasm_trampoline(module, def_func_index),
                             symbol,
                             function: CompiledFunction::Function(trampoline),
-                            info: None,
+                            start_srcloc: FilePos::default(),
                         })
                     });
                 }
@@ -524,7 +540,7 @@ impl<'a> CompileInputs<'a> {
                     key: CompileKey::wasm_to_array_trampoline(trampoline_type_index),
                     function: CompiledFunction::Function(trampoline),
                     symbol,
-                    info: None,
+                    start_srcloc: FilePos::default(),
                 })
             });
         }
@@ -562,15 +578,14 @@ fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutpu
     let compile_builtin = |builtin: BuiltinFunctionIndex| {
         Box::new(move |compiler: &dyn Compiler| {
             let symbol = format!("wasmtime_builtin_{}", builtin.name());
+            let trampoline = compiler
+                .compile_wasm_to_builtin(builtin)
+                .with_context(|| format!("failed to compile `{symbol}`"))?;
             Ok(CompileOutput {
                 key: CompileKey::wasm_to_builtin_trampoline(builtin),
-                function: CompiledFunction::Function(
-                    compiler
-                        .compile_wasm_to_builtin(builtin)
-                        .with_context(|| format!("failed to compile `{symbol}`"))?,
-                ),
+                function: CompiledFunction::Function(trampoline),
                 symbol,
-                info: None,
+                start_srcloc: FilePos::default(),
             })
         })
     };
@@ -581,7 +596,7 @@ fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutpu
             #[cfg(feature = "component-model")]
             CompiledFunction::AllCallFunc(_) => continue,
         };
-        for reloc in compiler.compiled_function_relocation_targets(&**f) {
+        for reloc in compiler.compiled_function_relocation_targets(&*f.code) {
             match reloc {
                 RelocationTarget::Builtin(i) => {
                     if builtins.insert(i) {
@@ -605,7 +620,7 @@ struct UnlinkedCompileOutputs {
 impl UnlinkedCompileOutputs {
     /// Flatten all our functions into a single list and remember each of their
     /// indices within it.
-    fn pre_link(self) -> (Vec<(String, Box<dyn Any + Send>)>, FunctionIndices) {
+    fn pre_link(self) -> PreLinkOutput {
         // The order the functions end up within `compiled_funcs` is the order
         // that they will be laid out in the ELF file, so try and group hot and
         // cold functions together as best we can. However, because we bucket by
@@ -613,45 +628,72 @@ impl UnlinkedCompileOutputs {
         // appearing in between hot Wasm functions.
         let mut compiled_funcs = vec![];
         let mut indices = FunctionIndices::default();
-        for x in self.outputs.into_iter().flat_map(|(_kind, xs)| xs) {
-            let index = match x.function {
+        let mut needs_gc_heap = false;
+
+        for output in self.outputs.into_iter().flat_map(|(_kind, outs)| outs) {
+            let index = match output.function {
                 CompiledFunction::Function(f) => {
+                    needs_gc_heap |= f.needs_gc_heap;
                     let index = compiled_funcs.len();
-                    compiled_funcs.push((x.symbol, f));
+                    compiled_funcs.push((output.symbol, f.code));
                     CompiledFunction::Function(index)
                 }
                 #[cfg(feature = "component-model")]
-                CompiledFunction::AllCallFunc(f) => {
-                    let array_call = compiled_funcs.len();
-                    compiled_funcs.push((format!("{}_array_call", x.symbol), f.array_call));
-                    let wasm_call = compiled_funcs.len();
-                    compiled_funcs.push((format!("{}_wasm_call", x.symbol), f.wasm_call));
+                CompiledFunction::AllCallFunc(wasmtime_environ::component::AllCallFunc {
+                    wasm_call,
+                    array_call,
+                }) => {
+                    needs_gc_heap |= array_call.needs_gc_heap;
+                    let array_call_idx = compiled_funcs.len();
+                    compiled_funcs.push((format!("{}_array_call", output.symbol), array_call.code));
+
+                    needs_gc_heap |= wasm_call.needs_gc_heap;
+                    let wasm_call_idx = compiled_funcs.len();
+                    compiled_funcs.push((format!("{}_wasm_call", output.symbol), wasm_call.code));
+
                     CompiledFunction::AllCallFunc(wasmtime_environ::component::AllCallFunc {
-                        array_call,
-                        wasm_call,
+                        array_call: array_call_idx,
+                        wasm_call: wasm_call_idx,
                     })
                 }
             };
 
-            if x.key.kind() == CompileKey::WASM_FUNCTION_KIND
-                || x.key.kind() == CompileKey::ARRAY_TO_WASM_TRAMPOLINE_KIND
+            if output.key.kind() == CompileKey::WASM_FUNCTION_KIND
+                || output.key.kind() == CompileKey::ARRAY_TO_WASM_TRAMPOLINE_KIND
             {
                 indices
                     .compiled_func_index_to_module
-                    .insert(index.unwrap_function(), x.key.module());
-                if let Some(info) = x.info {
-                    indices.wasm_function_infos.insert(x.key, info);
-                }
+                    .insert(index.unwrap_function(), output.key.module());
+                indices
+                    .start_srclocs
+                    .insert(output.key, output.start_srcloc);
             }
 
             indices
                 .indices
-                .entry(x.key.kind())
+                .entry(output.key.kind())
                 .or_default()
-                .insert(x.key, index);
+                .insert(output.key, index);
         }
-        (compiled_funcs, indices)
+
+        PreLinkOutput {
+            needs_gc_heap,
+            compiled_funcs,
+            indices,
+        }
     }
+}
+
+/// Our pre-link functions that have been flattened into a single list.
+struct PreLinkOutput {
+    /// Whether or not any of these functions require a GC heap
+    needs_gc_heap: bool,
+    /// The flattened list of (symbol name, compiled function) pairs, as they
+    /// will be laid out in the object file.
+    compiled_funcs: Vec<(String, Box<dyn Any + Send>)>,
+    /// The `FunctionIndices` mapping our function keys to indices in that flat
+    /// list.
+    indices: FunctionIndices,
 }
 
 #[derive(Default)]
@@ -660,8 +702,8 @@ struct FunctionIndices {
     // `StaticModuleIndex` for that function.
     compiled_func_index_to_module: HashMap<usize, StaticModuleIndex>,
 
-    // A map from Wasm functions' compile keys to their infos.
-    wasm_function_infos: HashMap<CompileKey, WasmFunctionInfo>,
+    // A map of wasm functions and where they're located in the original file.
+    start_srclocs: HashMap<CompileKey, FilePos>,
 
     // The index of each compiled function, bucketed by compile key kind.
     indices: BTreeMap<u32, BTreeMap<CompileKey, CompiledFunction<usize>>>,
@@ -804,7 +846,7 @@ impl FunctionIndices {
                         .map(|(key, wasm_func_index)| {
                             let wasm_func_index = wasm_func_index.unwrap_function();
                             let wasm_func_loc = symbol_ids_and_locs[wasm_func_index].1;
-                            let wasm_func_info = self.wasm_function_infos.remove(&key).unwrap();
+                            let start_srcloc = self.start_srclocs.remove(&key).unwrap();
 
                             let array_to_wasm_trampoline = array_to_wasm_trampolines
                                 .remove(&CompileKey::array_to_wasm_trampoline(
@@ -814,7 +856,7 @@ impl FunctionIndices {
                                 .map(|x| symbol_ids_and_locs[x.unwrap_function()].1);
 
                             CompiledFunctionInfo {
-                                wasm_func_info,
+                                start_srcloc,
                                 wasm_func_loc,
                                 array_to_wasm_trampoline,
                             }

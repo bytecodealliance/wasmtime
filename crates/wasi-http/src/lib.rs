@@ -27,7 +27,7 @@
 //!
 //! All `bindgen!`-generated `Host` traits are implemented in terms of a
 //! [`WasiHttpView`] trait which provides basic access to [`WasiHttpCtx`],
-//! configuration for WASI HTTP, and a [`wasmtime_wasi::ResourceTable`], the
+//! configuration for WASI HTTP, and a [`wasmtime_wasi::p2::ResourceTable`], the
 //! state for all host-defined component model resources.
 //!
 //! The [`WasiHttpView`] trait additionally offers a few other configuration
@@ -53,7 +53,7 @@
 //!      `wasi:http/proxy` together
 //!    * Use [`add_only_http_to_linker_async`] to add only HTTP interfaces but
 //!      no others. This is useful when working with
-//!      [`wasmtime_wasi::add_to_linker_async`] for example.
+//!      [`wasmtime_wasi::p2::add_to_linker_async`] for example.
 //!    * Add individual interfaces such as with the
 //!      [`bindings::http::outgoing_handler::add_to_linker_get_host`] function.
 //! 3. Use [`ProxyPre`](bindings::ProxyPre) to pre-instantiate a component
@@ -71,7 +71,7 @@
 //! use tokio::net::TcpListener;
 //! use wasmtime::component::{Component, Linker, ResourceTable};
 //! use wasmtime::{Config, Engine, Result, Store};
-//! use wasmtime_wasi::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
+//! use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
 //! use wasmtime_wasi_http::bindings::ProxyPre;
 //! use wasmtime_wasi_http::bindings::http::types::Scheme;
 //! use wasmtime_wasi_http::body::HyperOutgoingBody;
@@ -179,10 +179,13 @@
 //!             // inspect the `task` result to see what happened
 //!             Err(_) => {
 //!                 let e = match task.await {
-//!                     Ok(r) => r.unwrap_err(),
+//!                     Ok(Ok(())) => {
+//!                         bail!("guest never invoked `response-outparam::set` method")
+//!                     }
+//!                     Ok(Err(e)) => e,
 //!                     Err(e) => e.into(),
 //!                 };
-//!                 bail!("guest never invoked `response-outparam::set` method: {e:?}")
+//!                 return Err(e.context("guest never invoked `response-outparam::set` method"));
 //!             }
 //!         }
 //!     }
@@ -234,7 +237,7 @@ pub use crate::types::{
     WasiHttpCtx, WasiHttpImpl, WasiHttpView, DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS,
     DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
 };
-use wasmtime_wasi::IoImpl;
+use wasmtime_wasi::p2::IoImpl;
 /// Add all of the `wasi:http/proxy` world's interfaces to a [`wasmtime::component::Linker`].
 ///
 /// This function will add the `async` variant of all interfaces into the
@@ -249,7 +252,7 @@ use wasmtime_wasi::IoImpl;
 /// ```
 /// use wasmtime::{Engine, Result, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::{IoView, WasiCtx, WasiView};
+/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
 /// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 ///
 /// fn main() -> Result<()> {
@@ -282,20 +285,21 @@ use wasmtime_wasi::IoImpl;
 /// ```
 pub fn add_to_linker_async<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
 where
-    T: WasiHttpView + wasmtime_wasi::WasiView,
+    T: WasiHttpView + wasmtime_wasi::p2::WasiView,
 {
-    let io_closure = type_annotate_io::<T, _>(|t| wasmtime_wasi::IoImpl(t));
-    wasmtime_wasi::bindings::io::poll::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::bindings::io::streams::add_to_linker_get_host(l, io_closure)?;
+    let io_closure = type_annotate_io::<T, _>(|t| wasmtime_wasi::p2::IoImpl(t));
+    wasmtime_wasi::p2::bindings::io::poll::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi::p2::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi::p2::bindings::io::streams::add_to_linker_get_host(l, io_closure)?;
 
-    let closure = type_annotate_wasi::<T, _>(|t| wasmtime_wasi::WasiImpl(wasmtime_wasi::IoImpl(t)));
-    wasmtime_wasi::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::random::random::add_to_linker_get_host(l, closure)?;
+    let closure =
+        type_annotate_wasi::<T, _>(|t| wasmtime_wasi::p2::WasiImpl(wasmtime_wasi::p2::IoImpl(t)));
+    wasmtime_wasi::p2::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::random::random::add_to_linker_get_host(l, closure)?;
 
     add_only_http_to_linker_async(l)
 }
@@ -310,13 +314,13 @@ where
 }
 fn type_annotate_wasi<T, F>(val: F) -> F
 where
-    F: Fn(&mut T) -> wasmtime_wasi::WasiImpl<&mut T>,
+    F: Fn(&mut T) -> wasmtime_wasi::p2::WasiImpl<&mut T>,
 {
     val
 }
 fn type_annotate_io<T, F>(val: F) -> F
 where
-    F: Fn(&mut T) -> wasmtime_wasi::IoImpl<&mut T>,
+    F: Fn(&mut T) -> wasmtime_wasi::p2::IoImpl<&mut T>,
 {
     val
 }
@@ -324,7 +328,7 @@ where
 /// A slimmed down version of [`add_to_linker_async`] which only adds
 /// `wasi:http` interfaces to the linker.
 ///
-/// This is useful when using [`wasmtime_wasi::add_to_linker_async`] for
+/// This is useful when using [`wasmtime_wasi::p2::add_to_linker_async`] for
 /// example to avoid re-adding the same interfaces twice.
 pub fn add_only_http_to_linker_async<T>(
     l: &mut wasmtime::component::Linker<T>,
@@ -350,7 +354,7 @@ where
 /// ```
 /// use wasmtime::{Engine, Result, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::{IoView, WasiCtx, WasiView};
+/// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
 /// use wasmtime_wasi_http::{WasiHttpCtx, WasiHttpView};
 ///
 /// fn main() -> Result<()> {
@@ -381,24 +385,25 @@ where
 /// ```
 pub fn add_to_linker_sync<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
 where
-    T: WasiHttpView + wasmtime_wasi::WasiView,
+    T: WasiHttpView + wasmtime_wasi::p2::WasiView,
 {
-    let io_closure = type_annotate_io::<T, _>(|t| wasmtime_wasi::IoImpl(t));
+    let io_closure = type_annotate_io::<T, _>(|t| wasmtime_wasi::p2::IoImpl(t));
     // For the sync linker, use the definitions of poll and streams from the
-    // wasmtime_wasi::bindings::sync space because those are defined using in_tokio.
-    wasmtime_wasi::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
+    // wasmtime_wasi::p2::bindings::sync space because those are defined using in_tokio.
+    wasmtime_wasi::p2::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi::p2::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
     // The error interface in the wasmtime_wasi is synchronous
-    wasmtime_wasi::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi::p2::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
 
-    let closure = type_annotate_wasi::<T, _>(|t| wasmtime_wasi::WasiImpl(wasmtime_wasi::IoImpl(t)));
+    let closure =
+        type_annotate_wasi::<T, _>(|t| wasmtime_wasi::p2::WasiImpl(wasmtime_wasi::p2::IoImpl(t)));
 
-    wasmtime_wasi::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::random::random::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::random::random::add_to_linker_get_host(l, closure)?;
 
     add_only_http_to_linker_sync(l)?;
 
@@ -408,7 +413,7 @@ where
 /// A slimmed down version of [`add_to_linker_sync`] which only adds
 /// `wasi:http` interfaces to the linker.
 ///
-/// This is useful when using [`wasmtime_wasi::add_to_linker_sync`] for
+/// This is useful when using [`wasmtime_wasi::p2::add_to_linker_sync`] for
 /// example to avoid re-adding the same interfaces twice.
 pub fn add_only_http_to_linker_sync<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
 where

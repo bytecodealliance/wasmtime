@@ -20,13 +20,6 @@
                 (src2 GprMemImm)
                 (dst WritableGpr))
 
-       ;; Integer arithmetic read-modify-write on memory.
-       (AluRM (size OperandSize) ;; 1, 2, 4 or 8
-              (op AluRmiROpcode)
-              (src1_dst SyntheticAmode)
-              (src2 Gpr)
-              (lock bool))
-
        ;; Integer arithmetic binary op that relies on the VEX prefix.
        ;; NOTE: we don't currently support emitting VEX instructions with memory
        ;; arguments, so `src2` is artificially constrained to be a Gpr.
@@ -1906,6 +1899,31 @@
 (extractor (is_multi_register_gpr_type ty)
            (and (type_register_class (RegisterClass.Gpr false)) ty))
 
+;;;; Helpers for matching operands ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; These are mainly used for matching operands for the external assembler.
+
+(decl is_imm8 (u8) GprMemImm)
+(extern extractor is_imm8 is_imm8)
+(decl is_simm8 (i8) GprMemImm)
+(extern extractor is_simm8 is_simm8)
+(decl is_imm16 (u16) GprMemImm)
+(extern extractor is_imm16 is_imm16)
+(decl is_simm16 (i16) GprMemImm)
+(extern extractor is_simm16 is_simm16)
+(decl is_imm32 (u32) GprMemImm)
+(extern extractor is_imm32 is_imm32)
+(decl is_simm32 (i32) GprMemImm)
+(extern extractor is_simm32 is_simm32)
+(decl is_gpr (Gpr) GprMemImm)
+(extern extractor is_gpr is_gpr)
+(decl is_gpr_mem (GprMem) GprMemImm)
+(extern extractor is_gpr_mem is_gpr_mem)
+(decl is_xmm_mem (XmmMem) XmmMem)
+(extern extractor is_xmm_mem is_xmm_mem)
+(decl is_xmm (Xmm) XmmMem)
+(extern extractor is_xmm is_xmm)
+
 ;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl pure use_avx512vl () bool)
@@ -2484,6 +2502,12 @@
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
 
+(decl gen_try_call (SigRef ExternalName RelocDistance ExceptionTable ValueSlice MachLabelSlice) Unit)
+(extern constructor gen_try_call gen_try_call)
+
+(decl gen_try_call_indirect (SigRef Value ExceptionTable ValueSlice MachLabelSlice) Unit)
+(extern constructor gen_try_call_indirect gen_try_call_indirect)
+
 ;;;; Helpers for emitting stack switches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl x64_stack_switch_basic (Gpr Gpr Gpr) Gpr)
@@ -2741,141 +2765,215 @@
 (rule (x64_xmm_load_const ty const)
       (x64_load ty (const_to_synthetic_amode const) (ExtKind.None)))
 
+
+;;;; Flag Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; These helpers are used to emit instructions that produce or consume flags.
+;; The operations used here are by no means the only ones possible; they are
+;; simply the ones currently used in Cranelift's lowerings.
+
+;; Some operations produce flags.
+(type ProduceFlagsOp (enum (Add) (Sub)))
+
+(decl x64_produce_flags (ProduceFlagsOp Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_produce_flags (ProduceFlagsOp.Add) ty src1 src2)
+      (x64_add_with_flags_paired ty src1 src2))
+(rule (x64_produce_flags (ProduceFlagsOp.Sub) ty src1 src2)
+      (x64_sub_with_flags_paired ty src1 src2))
+
+;; This should only be use for instructions that _do_ produce flags that can be
+;; consumed later. It is semantically "unsafe" and must be used correctly.
+(decl asm_produce_flags (AssemblerOutputs) ProducesFlags)
+(rule (asm_produce_flags (AssemblerOutputs.RetGpr inst gpr))
+      (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst gpr))
+
+;; Other operations consume _and_ produce flags--"chaining".
+(type ChainFlagsOp (enum (Adc) (Sbb)))
+
+(decl x64_chain_flags (ChainFlagsOp Type Gpr Gpr) ConsumesAndProducesFlags)
+(rule (x64_chain_flags (ChainFlagsOp.Adc) ty src1 src2)
+      (x64_adc_chained ty src1 src2))
+(rule (x64_chain_flags (ChainFlagsOp.Sbb) ty src1 src2)
+      (x64_sbb_chained ty src1 src2))
+
+(decl asm_chain_flags (AssemblerOutputs) ConsumesAndProducesFlags)
+(rule (asm_chain_flags (AssemblerOutputs.RetGpr inst gpr))
+      (ConsumesAndProducesFlags.ReturnsReg inst gpr))
+
+;; Still others produce flags a part of a side-effect operation.
+
+(type ProduceFlagsSideEffectOp (enum (Or) (Sbb)))
+
+(decl x64_produce_flags_side_effect (ProduceFlagsSideEffectOp Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_produce_flags_side_effect (ProduceFlagsSideEffectOp.Or) (fits_in_64 ty) src1 src2)
+      (x64_or_with_flags_paired_side_effect ty src1 src2))
+(rule (x64_produce_flags_side_effect (ProduceFlagsSideEffectOp.Sbb) (fits_in_64 ty) src1 src2)
+      (x64_sbb_paired_side_effect ty src1 src2))
+
+(decl asm_produce_flags_side_effect (AssemblerOutputs) ProducesFlags)
+(rule (asm_produce_flags_side_effect (AssemblerOutputs.RetGpr inst gpr))
+      (ProducesFlags.ProducesFlagsSideEffect inst))
+
+;; Other helpers for instruction emission.
+
+(decl asm_consume_flags (AssemblerOutputs) ConsumesFlags)
+(rule (asm_consume_flags (AssemblerOutputs.RetGpr inst gpr))
+      (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer inst gpr))
+
+
+
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; These constructors create SSA-style `MInst`s. It is their responsibility to
 ;; maintain the invariant that each temporary register they allocate and define
 ;; only gets defined the once.
 
-;; Helper for emitting `add` instructions.
-(decl x64_add (Type Gpr GprMemImm) Gpr)
+;; Helper for creating raw `add` instructions.
+(decl x64_add_raw (Type Gpr GprMemImm) AssemblerOutputs)
 
 ;; Match 8-bit immediates first; allows a smaller instruction encoding.
-(rule 3 (x64_add $I32 src1 (is_simm8 src2))   (x64_addl_mi_sxb src1 src2))
-(rule 3 (x64_add $I64 src1 (is_simm8 src2))   (x64_addq_mi_sxb src1 src2))
+(rule 2 (x64_add_raw $I32 src1 (is_simm8 src2))   (x64_addl_mi_sxb_raw src1 src2))
+(rule 2 (x64_add_raw $I64 src1 (is_simm8 src2))   (x64_addq_mi_sxb_raw src1 src2))
 
 ;; Match the remaining immediates.
-(rule 2 (x64_add $I8  src1 (is_imm8 src2))    (x64_addb_mi src1 src2))
-(rule 2 (x64_add $I16 src1 (is_imm16 src2))   (x64_addw_mi src1 src2))
-(rule 2 (x64_add $I32 src1 (is_imm32 src2))   (x64_addl_mi src1 src2))
-(rule 2 (x64_add $I64 src1 (is_simm32 src2))  (x64_addq_mi_sxl src1 src2))
-
-;; Use wider instructions than necessary for 8/16-bit register-to-register
-;; operations to avoid CPU false dependencies.
-(rule 1 (x64_add $I8  src1 (is_gpr src2))     (x64_addl_rm src1 src2))
-(rule 1 (x64_add $I16 src1 (is_gpr src2))     (x64_addl_rm src1 src2))
+(rule 1 (x64_add_raw $I8  src1 (is_imm8 src2))    (x64_addb_mi_raw src1 src2))
+(rule 1 (x64_add_raw $I16 src1 (is_imm16 src2))   (x64_addw_mi_raw src1 src2))
+(rule 1 (x64_add_raw $I32 src1 (is_imm32 src2))   (x64_addl_mi_raw src1 src2))
+(rule 1 (x64_add_raw $I64 src1 (is_simm32 src2))  (x64_addq_mi_sxl_raw src1 src2))
 
 ;; Match the operand size to the instruction width.
-(rule 0 (x64_add $I8  src1 (is_gpr_mem src2)) (x64_addb_rm src1 src2))
-(rule 0 (x64_add $I16 src1 (is_gpr_mem src2)) (x64_addw_rm src1 src2))
-(rule 0 (x64_add $I32 src1 (is_gpr_mem src2)) (x64_addl_rm src1 src2))
-(rule 0 (x64_add $I64 src1 (is_gpr_mem src2)) (x64_addq_rm src1 src2))
+(rule 0 (x64_add_raw $I8  src1 (is_gpr_mem src2)) (x64_addb_rm_raw src1 src2))
+(rule 0 (x64_add_raw $I16 src1 (is_gpr_mem src2)) (x64_addw_rm_raw src1 src2))
+(rule 0 (x64_add_raw $I32 src1 (is_gpr_mem src2)) (x64_addl_rm_raw src1 src2))
+(rule 0 (x64_add_raw $I64 src1 (is_gpr_mem src2)) (x64_addq_rm_raw src1 src2))
 
-;; Helper for creating `add` instructions whose flags are also used.
+;; When the overflow flag is not considered, we can use wider instructions than
+;; necessary for 8/16-bit register-to-register operations to avoid CPU false
+;; dependencies.
+(decl x64_add_break_deps (Type Gpr GprMemImm) AssemblerOutputs)
+(rule 1 (x64_add_break_deps $I8  src1 (is_gpr src2)) (x64_addl_rm_raw src1 src2))
+(rule 1 (x64_add_break_deps $I16 src1 (is_gpr src2)) (x64_addl_rm_raw src1 src2))
+(rule 0 (x64_add_break_deps ty   src1 src2)          (x64_add_raw ty src1 src2))
+
+;; Normal use of `add` returns a `Gpr` register.
+(decl x64_add (Type Gpr GprMemImm) Gpr)
+(rule (x64_add ty src1 src2)
+      (emit_ret_gpr (x64_add_break_deps ty src1 src2)))
+
+;; When using `add` for its overflow flag (OF), we track that the flags are
+;; changed (and avoid the "dependency-breaking" rules that short-circuit
+;; overflow).
 (decl x64_add_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
 (rule (x64_add_with_flags_paired ty src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr)))
-        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
-         (MInst.AluRmiR (operand_size_of_type_32_64 ty)
-                        (AluRmiROpcode.Add)
-                        src1
-                        src2
-                        dst)
-         dst)))
+      (asm_produce_flags (x64_add_raw ty src1 src2)))
 
-(decl x64_alurmi_with_flags_paired (AluRmiROpcode Type Gpr GprMemImm) ProducesFlags)
-(rule (x64_alurmi_with_flags_paired opc (fits_in_64 ty) src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr)))
-        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
-         (MInst.AluRmiR (raw_operand_size_of_type ty)
-                        opc
-                        src1
-                        src2
-                        dst)
-         dst)))
 
-(decl x64_alurmi_flags_side_effect (AluRmiROpcode Type Gpr GprMemImm) ProducesFlags)
-(rule (x64_alurmi_flags_side_effect opc (fits_in_64 ty) src1 src2)
-      (ProducesFlags.ProducesFlagsSideEffect
-       (MInst.AluRmiR (raw_operand_size_of_type ty)
-                      opc
-                      src1
-                      src2
-                      (temp_writable_gpr))))
 
-;; Should only be used for Adc and Sbb
-(decl x64_alurmi_with_flags_chained (AluRmiROpcode Type Gpr GprMemImm) ConsumesAndProducesFlags)
-(rule (x64_alurmi_with_flags_chained opc (fits_in_64 ty) src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr)))
-        (ConsumesAndProducesFlags.ReturnsReg
-         (MInst.AluRmiR (raw_operand_size_of_type ty)
-                        opc
-                        src1
-                        src2
-                        dst)
-         dst)))
+;; Helper for creating raw `adc` instructions; Cranelift only uses the 64-bit
+;; variant of this instruction. As with `add`, we match 8-bit immediates first;
+;; this allows a smaller instruction encoding.
+(decl x64_adc_raw (Type Gpr GprMemImm) AssemblerOutputs)
+(rule 2 (x64_adc_raw $I64 src1 (is_simm8 src2))   (x64_adcq_mi_sxb_raw src1 src2))
+(rule 1 (x64_adc_raw $I64 src1 (is_simm32 src2))  (x64_adcq_mi_sxl_raw src1 src2))
+(rule 0 (x64_adc_raw $I64 src1 (is_gpr_mem src2)) (x64_adcq_rm_raw src1 src2))
 
-;; Helper for creating `adc` instructions.
+;; Normal use of the `adc` instruction consumes a previously-produced flag.
 (decl x64_adc_paired (Type Gpr GprMemImm) ConsumesFlags)
 (rule (x64_adc_paired ty src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr)))
-        (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer
-         (MInst.AluRmiR (operand_size_of_type_32_64 ty)
-                        (AluRmiROpcode.Adc)
-                        src1
-                        src2
-                        dst)
-         dst)))
+      (asm_consume_flags (x64_adc_raw ty src1 src2)))
+
+;; We also use `adc` to modify flags that are used later.
+(decl x64_adc_chained (Type Gpr GprMemImm) ConsumesAndProducesFlags)
+(rule (x64_adc_chained ty src1 src2)
+      (asm_chain_flags (x64_adc_raw ty src1 src2)))
 
 
 
-;; Helper for emitting `sub` instructions.
-(decl x64_sub (Type Gpr GprMemImm) Gpr)
+;; Helper for emitting raw `sub` instructions.
+(decl x64_sub_raw (Type Gpr GprMemImm) AssemblerOutputs)
 
 ;; Match 8-bit immediates first; allows a smaller instruction encoding.
-(rule 3 (x64_sub $I32 src1 (is_simm8 src2))   (x64_subl_mi_sxb src1 src2))
-(rule 3 (x64_sub $I64 src1 (is_simm8 src2))   (x64_subq_mi_sxb src1 src2))
+(rule 3 (x64_sub_raw $I32 src1 (is_simm8 src2))   (x64_subl_mi_sxb_raw src1 src2))
+(rule 3 (x64_sub_raw $I64 src1 (is_simm8 src2))   (x64_subq_mi_sxb_raw src1 src2))
 
 ;; Match the remaining immediates.
-(rule 2 (x64_sub $I8  src1 (is_imm8 src2))    (x64_subb_mi src1 src2))
-(rule 2 (x64_sub $I16 src1 (is_imm16 src2))   (x64_subw_mi src1 src2))
-(rule 2 (x64_sub $I32 src1 (is_imm32 src2))   (x64_subl_mi src1 src2))
-(rule 2 (x64_sub $I64 src1 (is_simm32 src2))  (x64_subq_mi_sxl src1 src2))
-
-;; Use wider instructions than necessary for 8/16-bit register-to-register
-;; operations to avoid CPU false dependencies.
-(rule 1 (x64_sub $I8  src1 (is_gpr src2))     (x64_subl_rm src1 src2))
-(rule 1 (x64_sub $I16 src1 (is_gpr src2))     (x64_subl_rm src1 src2))
+(rule 2 (x64_sub_raw $I8  src1 (is_imm8 src2))    (x64_subb_mi_raw src1 src2))
+(rule 2 (x64_sub_raw $I16 src1 (is_imm16 src2))   (x64_subw_mi_raw src1 src2))
+(rule 2 (x64_sub_raw $I32 src1 (is_imm32 src2))   (x64_subl_mi_raw src1 src2))
+(rule 2 (x64_sub_raw $I64 src1 (is_simm32 src2))  (x64_subq_mi_sxl_raw src1 src2))
 
 ;; Match the operand size to the instruction width.
-(rule 0 (x64_sub $I8  src1 (is_gpr_mem src2)) (x64_subb_rm src1 src2))
-(rule 0 (x64_sub $I16 src1 (is_gpr_mem src2)) (x64_subw_rm src1 src2))
-(rule 0 (x64_sub $I32 src1 (is_gpr_mem src2)) (x64_subl_rm src1 src2))
-(rule 0 (x64_sub $I64 src1 (is_gpr_mem src2)) (x64_subq_rm src1 src2))
+(rule 0 (x64_sub_raw $I8  src1 (is_gpr_mem src2)) (x64_subb_rm_raw src1 src2))
+(rule 0 (x64_sub_raw $I16 src1 (is_gpr_mem src2)) (x64_subw_rm_raw src1 src2))
+(rule 0 (x64_sub_raw $I32 src1 (is_gpr_mem src2)) (x64_subl_rm_raw src1 src2))
+(rule 0 (x64_sub_raw $I64 src1 (is_gpr_mem src2)) (x64_subq_rm_raw src1 src2))
 
-;; Helper for creating `sub` instructions whose flags are also used.
+;; When the overflow flag is not considered, we can use wider instructions than
+;; necessary for 8/16-bit register-to-register operations to avoid CPU false
+;; dependencies.
+(decl x64_sub_break_deps (Type Gpr GprMemImm) AssemblerOutputs)
+(rule 1 (x64_sub_break_deps $I8  src1 (is_gpr src2)) (x64_subl_rm_raw src1 src2))
+(rule 1 (x64_sub_break_deps $I16 src1 (is_gpr src2)) (x64_subl_rm_raw src1 src2))
+(rule 0 (x64_sub_break_deps ty   src1 src2)          (x64_sub_raw ty src1 src2))
+
+;; Normal use of `sub` returns a `Gpr` register.
+(decl x64_sub (Type Gpr GprMemImm) Gpr)
+(rule (x64_sub ty src1 src2)
+      (emit_ret_gpr (x64_sub_break_deps ty src1 src2)))
+
+;; When using `sub` for its flags (OF, CF, SF), we track that the flags are
+;; changed.
 (decl x64_sub_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
 (rule (x64_sub_with_flags_paired ty src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr)))
-        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
-         (MInst.AluRmiR (operand_size_of_type_32_64 ty)
-                        (AluRmiROpcode.Sub)
-                        src1
-                        src2
-                        dst)
-         dst)))
+      (asm_produce_flags (x64_sub_raw ty src1 src2)))
 
-;; Helper for creating `sbb` instructions.
+
+
+;; Helper for creating raw `sbb` instructions; Cranelift only uses the 64-bit
+;; variant of this instruction.
+(decl x64_sbb_raw (Type Gpr GprMemImm) AssemblerOutputs)
+
+;; Match 8-bit immediates first; allows a smaller instruction encoding.
+(rule 2 (x64_sbb_raw $I32 src1 (is_simm8 src2))   (x64_sbbl_mi_sxb_raw src1 src2))
+(rule 2 (x64_sbb_raw $I64 src1 (is_simm8 src2))   (x64_sbbq_mi_sxb_raw src1 src2))
+
+;; Match the remaining immediates.
+(rule 1 (x64_sbb_raw $I8  src1 (is_imm8 src2))    (x64_sbbb_mi_raw src1 src2))
+(rule 1 (x64_sbb_raw $I16 src1 (is_imm16 src2))   (x64_sbbw_mi_raw src1 src2))
+(rule 1 (x64_sbb_raw $I32 src1 (is_imm32 src2))   (x64_sbbl_mi_raw src1 src2))
+(rule 1 (x64_sbb_raw $I64 src1 (is_simm32 src2))  (x64_sbbq_mi_sxl_raw src1 src2))
+
+;; Match the operand size to the instruction width.
+(rule 0 (x64_sbb_raw $I8  src1 (is_gpr_mem src2)) (x64_sbbb_rm_raw src1 src2))
+(rule 0 (x64_sbb_raw $I16 src1 (is_gpr_mem src2)) (x64_sbbw_rm_raw src1 src2))
+(rule 0 (x64_sbb_raw $I32 src1 (is_gpr_mem src2)) (x64_sbbl_rm_raw src1 src2))
+(rule 0 (x64_sbb_raw $I64 src1 (is_gpr_mem src2)) (x64_sbbq_rm_raw src1 src2))
+
+;; When the overflow flag is not considered, we can use wider instructions than
+;; necessary for 8/16-bit register-to-register operations to avoid CPU false
+;; dependencies.
+(decl x64_sbb_break_deps (Type Gpr GprMemImm) AssemblerOutputs)
+(rule 1 (x64_sbb_break_deps $I8  src1 (is_gpr src2)) (x64_sbbl_rm_raw src1 src2))
+(rule 1 (x64_sbb_break_deps $I16 src1 (is_gpr src2)) (x64_sbbl_rm_raw src1 src2))
+(rule 0 (x64_sbb_break_deps ty   src1 src2)          (x64_sbb_raw ty src1 src2))
+
+;; Normal use of the `sbb` instruction consumes previously-produced flags (OF,
+;; CF, SF).
 (decl x64_sbb_paired (Type Gpr GprMemImm) ConsumesFlags)
 (rule (x64_sbb_paired ty src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr)))
-        (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer
-         (MInst.AluRmiR (operand_size_of_type_32_64 ty)
-                        (AluRmiROpcode.Sbb)
-                        src1
-                        src2
-                        dst)
-         dst)))
+      (asm_consume_flags (x64_sbb_break_deps ty src1 src2)))
+
+;; We also use `sbb` to modify flags that all later used.
+(decl x64_sbb_chained (Type Gpr GprMemImm) ConsumesAndProducesFlags)
+(rule (x64_sbb_chained ty src1 src2)
+      (asm_chain_flags (x64_sbb_raw ty src1 src2)))
+
+;; We also use `sbb` in side-effecting operations.
+(decl x64_sbb_paired_side_effect (Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_sbb_paired_side_effect  ty src1 src2)
+      (asm_produce_flags_side_effect (x64_sbb_raw ty src1 src2)))
+
+
 
 ;; Helper for creating `mul` instructions or `imul` instructions (depending
 ;; on `signed`)
@@ -2947,27 +3045,7 @@
                  (MInst.Mul size signed src1 src2 dst_lo dst_hi)
                  dst_lo)))
 
-;; Helpers for matching operands, extracting them into their assembler types.
-(decl is_imm8 (u8) GprMemImm)
-(extern extractor is_imm8 is_imm8)
-(decl is_simm8 (i8) GprMemImm)
-(extern extractor is_simm8 is_simm8)
-(decl is_imm16 (u16) GprMemImm)
-(extern extractor is_imm16 is_imm16)
-(decl is_simm16 (i16) GprMemImm)
-(extern extractor is_simm16 is_simm16)
-(decl is_imm32 (u32) GprMemImm)
-(extern extractor is_imm32 is_imm32)
-(decl is_simm32 (i32) GprMemImm)
-(extern extractor is_simm32 is_simm32)
-(decl is_gpr (Gpr) GprMemImm)
-(extern extractor is_gpr is_gpr)
-(decl is_gpr_mem (GprMem) GprMemImm)
-(extern extractor is_gpr_mem is_gpr_mem)
-(decl is_xmm_mem (XmmMem) XmmMem)
-(extern extractor is_xmm_mem is_xmm_mem)
-(decl is_xmm (Xmm) XmmMem)
-(extern extractor is_xmm is_xmm)
+
 
 ;; Helper for emitting `and` instructions.
 (decl x64_and (Type Gpr GprMemImm) Gpr)
@@ -3005,29 +3083,42 @@
 
 
 
-;; Helper for emitting `or` instructions.
-(decl x64_or (Type Gpr GprMemImm) Gpr)
+;; Helper for emitting raw `or` instructions.
+(decl x64_or_raw (Type Gpr GprMemImm) AssemblerOutputs)
 
 ;; Match 8-bit immediates first; allows a smaller instruction encoding.
-(rule 3 (x64_or $I32 src1 (is_simm8 src2))   (x64_orl_mi_sxb src1 src2))
-(rule 3 (x64_or $I64 src1 (is_simm8 src2))   (x64_orq_mi_sxb src1 src2))
+(rule 2 (x64_or_raw $I32 src1 (is_simm8 src2))   (x64_orl_mi_sxb_raw src1 src2))
+(rule 2 (x64_or_raw $I64 src1 (is_simm8 src2))   (x64_orq_mi_sxb_raw src1 src2))
 
 ;; Match the remaining immediates.
-(rule 2 (x64_or $I8  src1 (is_imm8 src2))    (x64_orb_mi src1 src2))
-(rule 2 (x64_or $I16 src1 (is_imm16 src2))   (x64_orw_mi src1 src2))
-(rule 2 (x64_or $I32 src1 (is_imm32 src2))   (x64_orl_mi src1 src2))
-(rule 2 (x64_or $I64 src1 (is_simm32 src2))  (x64_orq_mi_sxl src1 src2))
-
-;; Use wider instructions than necessary for 8/16-bit register-to-register
-;; operations to avoid CPU false dependencies.
-(rule 1 (x64_or $I8  src1 (is_gpr src2))     (x64_orl_rm src1 src2))
-(rule 1 (x64_or $I16 src1 (is_gpr src2))     (x64_orl_rm src1 src2))
+(rule 1 (x64_or_raw $I8  src1 (is_imm8 src2))    (x64_orb_mi_raw src1 src2))
+(rule 1 (x64_or_raw $I16 src1 (is_imm16 src2))   (x64_orw_mi_raw src1 src2))
+(rule 1 (x64_or_raw $I32 src1 (is_imm32 src2))   (x64_orl_mi_raw src1 src2))
+(rule 1 (x64_or_raw $I64 src1 (is_simm32 src2))  (x64_orq_mi_sxl_raw src1 src2))
 
 ;; Match the operand size to the instruction width.
-(rule 0 (x64_or $I8  src1 (is_gpr_mem src2)) (x64_orb_rm src1 src2))
-(rule 0 (x64_or $I16 src1 (is_gpr_mem src2)) (x64_orw_rm src1 src2))
-(rule 0 (x64_or $I32 src1 (is_gpr_mem src2)) (x64_orl_rm src1 src2))
-(rule 0 (x64_or $I64 src1 (is_gpr_mem src2)) (x64_orq_rm src1 src2))
+(rule 0 (x64_or_raw $I8  src1 (is_gpr_mem src2)) (x64_orb_rm_raw src1 src2))
+(rule 0 (x64_or_raw $I16 src1 (is_gpr_mem src2)) (x64_orw_rm_raw src1 src2))
+(rule 0 (x64_or_raw $I32 src1 (is_gpr_mem src2)) (x64_orl_rm_raw src1 src2))
+(rule 0 (x64_or_raw $I64 src1 (is_gpr_mem src2)) (x64_orq_rm_raw src1 src2))
+
+;; When flags are not considered, we can use wider instructions than necessary
+;; for 8/16-bit register-to-register operations to avoid CPU false dependencies.
+(decl x64_or_break_deps (Type Gpr GprMemImm) AssemblerOutputs)
+(rule 1 (x64_or_break_deps $I8  src1 (is_gpr src2)) (x64_orl_rm_raw src1 src2))
+(rule 1 (x64_or_break_deps $I16 src1 (is_gpr src2)) (x64_orl_rm_raw src1 src2))
+(rule 0 (x64_or_break_deps ty   src1 src2)          (x64_or_raw ty src1 src2))
+
+;; Normal use of `or` returns a `Gpr` register.
+(decl x64_or (Type Gpr GprMemImm) Gpr)
+(rule (x64_or ty src1 src2)
+      (emit_ret_gpr (x64_or_break_deps ty src1 src2)))
+
+;; When using `or` for its flags (SF, ZF, PF), we track that the flags are
+;; changed. Note t
+(decl x64_or_with_flags_paired_side_effect (Type Gpr GprMemImm) ProducesFlags)
+(rule (x64_or_with_flags_paired_side_effect ty src1 src2)
+      (asm_produce_flags_side_effect (x64_or_raw ty src1 src2)))
 
 
 
@@ -5032,12 +5123,6 @@
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpcmpgtq) x y))
 
-;; Helpers for read-modify-write ALU form (AluRM).
-(decl alu_rm (Type AluRmiROpcode Amode Gpr) SideEffectNoResult)
-(rule (alu_rm ty opcode src1_dst src2)
-      (let ((size OperandSize (operand_size_of_type_32_64 ty)))
-        (SideEffectNoResult.Inst (MInst.AluRM size opcode src1_dst src2 false))))
-
 (decl x64_add_mem (Type Amode Gpr) SideEffectNoResult)
 (spec (x64_add_mem ty addr val)
       (provide (= result (store_effect
@@ -5308,7 +5393,7 @@
         (let ((same_lo Reg (x64_xor $I64 a_lo b_lo))
               (same_hi Reg (x64_xor $I64 a_hi b_hi)))
           (icmp_cond_result
-            (x64_alurmi_flags_side_effect (AluRmiROpcode.Or) $I64 same_lo same_hi)
+            (x64_produce_flags_side_effect (ProduceFlagsSideEffectOp.Or) $I64 same_lo same_hi)
             cc)))
 
 ;; The only cases left are L/NL/B/NB which we can implement with a sub/sbb
@@ -5318,7 +5403,7 @@
         (icmp_cond_result
           (produces_flags_concat
             (x64_cmp (OperandSize.Size64) a_lo b_lo)
-            (x64_alurmi_flags_side_effect (AluRmiROpcode.Sbb) $I64 a_hi b_hi))
+            (x64_produce_flags_side_effect (ProduceFlagsSideEffectOp.Sbb) $I64 a_hi b_hi))
           cc))
 
 (type FcmpCondResult
@@ -5456,30 +5541,35 @@
             (_ Unit (emit (MInst.Xchg size operand addr dst))))
         dst))
 
-(decl lock_alu_rm (OperandSize AluRmiROpcode SyntheticAmode Gpr) Reg)
-(rule (lock_alu_rm size opcode addr operand)
-      (let ((_ Unit (emit (MInst.AluRM size opcode addr operand true))))
-        (invalid_reg)))
+(decl x64_lock_add (OperandSize Amode Gpr) SideEffectNoResult)
+(rule (x64_lock_add (OperandSize.Size8) addr reg)   (x64_lock_addb_mr_mem addr reg))
+(rule (x64_lock_add (OperandSize.Size16) addr reg)  (x64_lock_addw_mr_mem addr reg))
+(rule (x64_lock_add (OperandSize.Size32) addr reg)  (x64_lock_addl_mr_mem addr reg))
+(rule (x64_lock_add (OperandSize.Size64) addr reg)  (x64_lock_addq_mr_mem addr reg))
 
-(decl x64_lock_add (OperandSize SyntheticAmode Gpr) Reg)
-(rule (x64_lock_add size addr operand)
-      (lock_alu_rm size (AluRmiROpcode.Add) addr operand))
+(decl x64_lock_sub (OperandSize Amode Gpr) SideEffectNoResult)
+(rule (x64_lock_sub (OperandSize.Size8) addr reg)   (x64_lock_subb_mr_mem addr reg))
+(rule (x64_lock_sub (OperandSize.Size16) addr reg)  (x64_lock_subw_mr_mem addr reg))
+(rule (x64_lock_sub (OperandSize.Size32) addr reg)  (x64_lock_subl_mr_mem addr reg))
+(rule (x64_lock_sub (OperandSize.Size64) addr reg)  (x64_lock_subq_mr_mem addr reg))
 
-(decl x64_lock_sub (OperandSize SyntheticAmode Gpr) Reg)
-(rule (x64_lock_sub size addr operand)
-      (lock_alu_rm size (AluRmiROpcode.Sub) addr operand))
+(decl x64_lock_and (OperandSize Amode Gpr) SideEffectNoResult)
+(rule (x64_lock_and (OperandSize.Size8) addr reg)   (x64_lock_andb_mr_mem addr reg))
+(rule (x64_lock_and (OperandSize.Size16) addr reg)  (x64_lock_andw_mr_mem addr reg))
+(rule (x64_lock_and (OperandSize.Size32) addr reg)  (x64_lock_andl_mr_mem addr reg))
+(rule (x64_lock_and (OperandSize.Size64) addr reg)  (x64_lock_andq_mr_mem addr reg))
 
-(decl x64_lock_and (OperandSize SyntheticAmode Gpr) Reg)
-(rule (x64_lock_and size addr operand)
-      (lock_alu_rm size (AluRmiROpcode.And) addr operand))
+(decl x64_lock_or (OperandSize Amode Gpr) SideEffectNoResult)
+(rule (x64_lock_or (OperandSize.Size8) addr reg)   (x64_lock_orb_mr_mem addr reg))
+(rule (x64_lock_or (OperandSize.Size16) addr reg)  (x64_lock_orw_mr_mem addr reg))
+(rule (x64_lock_or (OperandSize.Size32) addr reg)  (x64_lock_orl_mr_mem addr reg))
+(rule (x64_lock_or (OperandSize.Size64) addr reg)  (x64_lock_orq_mr_mem addr reg))
 
-(decl x64_lock_or (OperandSize SyntheticAmode Gpr) Reg)
-(rule (x64_lock_or size addr operand)
-      (lock_alu_rm size (AluRmiROpcode.Or) addr operand))
-
-(decl x64_lock_xor (OperandSize SyntheticAmode Gpr) Reg)
-(rule (x64_lock_xor size addr operand)
-      (lock_alu_rm size (AluRmiROpcode.Xor) addr operand))
+(decl x64_lock_xor (OperandSize Amode Gpr) SideEffectNoResult)
+(rule (x64_lock_xor (OperandSize.Size8) addr reg)   (x64_lock_xorb_mr_mem addr reg))
+(rule (x64_lock_xor (OperandSize.Size16) addr reg)  (x64_lock_xorw_mr_mem addr reg))
+(rule (x64_lock_xor (OperandSize.Size32) addr reg)  (x64_lock_xorl_mr_mem addr reg))
+(rule (x64_lock_xor (OperandSize.Size64) addr reg)  (x64_lock_xorq_mr_mem addr reg))
 
 (decl x64_atomic_rmw_seq (Type AtomicRmwSeqOp SyntheticAmode Gpr) Gpr)
 (rule (x64_atomic_rmw_seq ty op mem input)

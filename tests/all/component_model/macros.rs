@@ -2,9 +2,9 @@
 
 use super::{make_echo_component, TypedFuncExt};
 use anyhow::Result;
-use component_macro_test::{add_variants, flags_test};
 use wasmtime::component::{Component, ComponentType, Lift, Linker, Lower};
 use wasmtime::{Engine, Store};
+use wasmtime_test_macros::{add_variants, flags_test};
 
 #[test]
 fn record_derive() -> Result<()> {
@@ -340,7 +340,7 @@ fn enum_derive() -> Result<()> {
 
 #[test]
 fn flags() -> Result<()> {
-    let config = component_test_util::config();
+    let config = wasmtime_test_util::component::config();
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 

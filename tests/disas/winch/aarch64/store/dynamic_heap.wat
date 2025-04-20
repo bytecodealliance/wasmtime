@@ -35,38 +35,38 @@
 ;;       stur    w5, [x28]
 ;;       ldur    w0, [x28, #8]
 ;;       ldur    w1, [x28, #0xc]
-;;       ldur    x2, [x9, #0x58]
+;;       ldur    x2, [x9, #0x48]
 ;;       mov     w3, w1
 ;;       add     x3, x3, #4
 ;;       b.hs    #0x114
 ;;   4c: cmp     x3, x2, uxtx
 ;;       b.hi    #0x118
-;;   54: ldur    x4, [x9, #0x50]
+;;   54: ldur    x4, [x9, #0x40]
 ;;       add     x4, x4, x1, uxtx
 ;;       mov     x16, #0
 ;;       mov     x5, x16
 ;;       cmp     x3, x2, uxtx
-;;       csel    x4, x5, x5, hi
+;;       csel    x4, x5, x4, hi
 ;;       stur    w0, [x4]
 ;;       ldur    w0, [x28, #4]
 ;;       ldur    w1, [x28, #0xc]
-;;       ldur    x2, [x9, #0x58]
+;;       ldur    x2, [x9, #0x48]
 ;;       mov     w3, w1
 ;;       add     x3, x3, #8
 ;;       b.hs    #0x11c
 ;;   88: cmp     x3, x2, uxtx
 ;;       b.hi    #0x120
-;;   90: ldur    x4, [x9, #0x50]
+;;   90: ldur    x4, [x9, #0x40]
 ;;       add     x4, x4, x1, uxtx
 ;;       add     x4, x4, #4
 ;;       mov     x16, #0
 ;;       mov     x5, x16
 ;;       cmp     x3, x2, uxtx
-;;       csel    x4, x5, x5, hi
+;;       csel    x4, x5, x4, hi
 ;;       stur    w0, [x4]
 ;;       ldur    w0, [x28]
 ;;       ldur    w1, [x28, #0xc]
-;;       ldur    x2, [x9, #0x58]
+;;       ldur    x2, [x9, #0x48]
 ;;       mov     w3, w1
 ;;       mov     w16, #3
 ;;       movk    w16, #0x10, lsl #16
@@ -74,14 +74,14 @@
 ;;       b.hs    #0x124
 ;;   d0: cmp     x3, x2, uxtx
 ;;       b.hi    #0x128
-;;   d8: ldur    x4, [x9, #0x50]
+;;   d8: ldur    x4, [x9, #0x40]
 ;;       add     x4, x4, x1, uxtx
 ;;       orr     x16, xzr, #0xfffff
 ;;       add     x4, x4, x16, uxtx
 ;;       mov     x16, #0
 ;;       mov     x5, x16
 ;;       cmp     x3, x2, uxtx
-;;       csel    x4, x5, x5, hi
+;;       csel    x4, x5, x4, hi
 ;;       stur    w0, [x4]
 ;;       add     x28, x28, #0x20
 ;;       mov     sp, x28

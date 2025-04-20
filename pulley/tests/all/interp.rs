@@ -19,7 +19,7 @@ fn encoded(ops: &[Op]) -> Vec<u8> {
 unsafe fn run(vm: &mut Vm, ops: &[Op]) -> Result<(), NonNull<u8>> {
     let _ = env_logger::try_init();
     let ops = encoded(ops);
-    match vm.call(NonNull::from(&ops[..]).cast(), &[], []) {
+    match unsafe { vm.call(NonNull::from(&ops[..]).cast(), &[], []) } {
         DoneReason::ReturnToHost(_) => Ok(()),
         DoneReason::Trap { pc, .. } => Err(pc),
         DoneReason::CallIndirectHost { .. } => unimplemented!(),
@@ -54,7 +54,9 @@ unsafe fn assert_one<R0, R1, V>(
     eprintln!("op = {op:?}");
     let op = op.into();
 
-    run(&mut vm, &[op, Op::Ret(Ret {})]).expect("should not trap");
+    unsafe {
+        run(&mut vm, &[op, Op::Ret(Ret {})]).expect("should not trap");
+    }
 
     eprintln!("expected = {expected:#018x}");
 

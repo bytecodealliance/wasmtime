@@ -842,18 +842,18 @@ impl Assembler {
         });
     }
 
-    // If the condition is true, Conditional Select writes rm to rd. If the condition is false,
-    // it writes rn to rd
-    pub fn csel(&mut self, rm: Reg, rn: Reg, rd: WritableReg, cond: Cond) {
+    /// If the condition is true, `csel` writes rn to rd. If the
+    /// condition is false, it writes rm to rd
+    pub fn csel(&mut self, rn: Reg, rm: Reg, rd: WritableReg, cond: Cond) {
         self.emit(Inst::CSel {
             rd: rd.map(Into::into),
-            rm: rm.into(),
             rn: rn.into(),
+            rm: rm.into(),
             cond,
         });
     }
 
-    // Population Count per byte.
+    /// Population count per byte.
     pub fn cnt(&mut self, rd: WritableReg) {
         self.emit(Inst::VecMisc {
             op: VecMisc2::Cnt,

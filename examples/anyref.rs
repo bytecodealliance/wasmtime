@@ -54,7 +54,7 @@ fn main() -> Result<()> {
     assert_eq!(ret.unwrap().unwrap_i31(&store)?, I31::wrapping_u32(42));
 
     println!("GCing within the store...");
-    store.gc();
+    store.gc(None);
 
     println!("Done.");
     Ok(())

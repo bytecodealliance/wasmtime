@@ -12,8 +12,6 @@
 //      builtin_functions: *mut VMBuiltinFunctionsArray,
 //      callee: *mut VMFunctionBody,
 //      epoch_ptr: *mut AtomicU64,
-//      gc_heap_base: *mut u8,
-//      gc_heap_bound: *mut u8,
 //      gc_heap_data: *mut T, // Collector-specific pointer
 //      type_ids: *const VMSharedTypeIndex,
 //
@@ -27,7 +25,7 @@
 //      memories: [*mut VMMemoryDefinition; module.num_defined_memories],
 //      owned_memories: [VMMemoryDefinition; module.num_owned_memories],
 //      imported_functions: [VMFunctionImport; module.num_imported_functions],
-//      imported_tables: [VMTableImport; module.num_imported_tables],
+//      imported_tables: [VMTable; module.num_imported_tables],
 //      imported_globals: [VMGlobalImport; module.num_imported_globals],
 //      imported_tags: [VMTagImport; module.num_imported_tags],
 //      tables: [VMTableDefinition; module.num_defined_tables],
@@ -107,7 +105,7 @@ pub trait PtrSize {
     /// Returns the pointer size, in bytes, for the target.
     fn size(&self) -> u8;
 
-    /// The offset of the `VMContext::runtime_limits` field
+    /// The offset of the `VMContext::store_context` field
     fn vmcontext_store_context(&self) -> u8 {
         u8::try_from(align(
             u32::try_from(core::mem::size_of::<u32>()).unwrap(),
@@ -190,9 +188,29 @@ pub trait PtrSize {
         self.vmstore_context_epoch_deadline() + 8
     }
 
+    /// Return the offset of the `gc_heap` field of `VMStoreContext`.
+    #[inline]
+    fn vmstore_context_gc_heap(&self) -> u8 {
+        self.vmstore_context_stack_limit() + self.size()
+    }
+
+    /// Return the offset of the `gc_heap.base` field within a `VMStoreContext`.
+    fn vmstore_context_gc_heap_base(&self) -> u8 {
+        let offset = self.vmstore_context_gc_heap() + self.vmmemory_definition_base();
+        debug_assert!(offset < self.vmstore_context_last_wasm_exit_fp());
+        offset
+    }
+
+    /// Return the offset of the `gc_heap.current_length` field within a `VMStoreContext`.
+    fn vmstore_context_gc_heap_current_length(&self) -> u8 {
+        let offset = self.vmstore_context_gc_heap() + self.vmmemory_definition_current_length();
+        debug_assert!(offset < self.vmstore_context_last_wasm_exit_fp());
+        offset
+    }
+
     /// Return the offset of the `last_wasm_exit_fp` field of `VMStoreContext`.
     fn vmstore_context_last_wasm_exit_fp(&self) -> u8 {
-        self.vmstore_context_stack_limit() + self.size()
+        self.vmstore_context_gc_heap() + self.size_of_vmmemory_definition()
     }
 
     /// Return the offset of the `last_wasm_exit_pc` field of `VMStoreContext`.
@@ -374,14 +392,14 @@ pub trait PtrSize {
 
     /// Return the offset to the `VMStoreContext` structure
     #[inline]
-    fn vmctx_runtime_limits(&self) -> u8 {
+    fn vmctx_store_context(&self) -> u8 {
         self.vmctx_magic() + self.size()
     }
 
     /// Return the offset to the `VMBuiltinFunctionsArray` structure
     #[inline]
     fn vmctx_builtin_functions(&self) -> u8 {
-        self.vmctx_runtime_limits() + self.size()
+        self.vmctx_store_context() + self.size()
     }
 
     /// Return the offset to the `callee` member in this `VMContext`.
@@ -397,25 +415,13 @@ pub trait PtrSize {
         self.vmctx_callee() + self.size()
     }
 
-    /// Return the offset to the GC heap base in this `VMContext`.
-    #[inline]
-    fn vmctx_gc_heap_base(&self) -> u8 {
-        self.vmctx_epoch_ptr() + self.size()
-    }
-
-    /// Return the offset to the GC heap bound in this `VMContext`.
-    #[inline]
-    fn vmctx_gc_heap_bound(&self) -> u8 {
-        self.vmctx_gc_heap_base() + self.size()
-    }
-
     /// Return the offset to the `*mut T` collector-specific data.
     ///
     /// This is a pointer that different collectors can use however they see
     /// fit.
     #[inline]
     fn vmctx_gc_heap_data(&self) -> u8 {
-        self.vmctx_gc_heap_bound() + self.size()
+        self.vmctx_epoch_ptr() + self.size()
     }
 
     /// The offset of the `type_ids` array pointer.
@@ -647,7 +653,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size(imported_functions)
                 = cmul(ret.num_imported_functions, ret.size_of_vmfunction_import()),
             size(imported_tables)
-                = cmul(ret.num_imported_tables, ret.size_of_vmtable_import()),
+                = cmul(ret.num_imported_tables, ret.size_of_vmtable()),
             size(imported_globals)
                 = cmul(ret.num_imported_globals, ret.size_of_vmglobal_import()),
             size(imported_tags)
@@ -705,23 +711,23 @@ impl<P: PtrSize> VMOffsets<P> {
     }
 }
 
-/// Offsets for `VMTableImport`.
+/// Offsets for `VMTable`.
 impl<P: PtrSize> VMOffsets<P> {
     /// The offset of the `from` field.
     #[inline]
-    pub fn vmtable_import_from(&self) -> u8 {
+    pub fn vmtable_from(&self) -> u8 {
         0 * self.pointer_size()
     }
 
     /// The offset of the `vmctx` field.
     #[inline]
-    pub fn vmtable_import_vmctx(&self) -> u8 {
+    pub fn vmtable_vmctx(&self) -> u8 {
         1 * self.pointer_size()
     }
 
-    /// Return the size of `VMTableImport`.
+    /// Return the size of `VMTable`.
     #[inline]
-    pub fn size_of_vmtable_import(&self) -> u8 {
+    pub fn size_of_vmtable(&self) -> u8 {
         2 * self.pointer_size()
     }
 }
@@ -894,12 +900,11 @@ impl<P: PtrSize> VMOffsets<P> {
             + index.as_u32() * u32::from(self.size_of_vmfunction_import())
     }
 
-    /// Return the offset to `VMTableImport` index `index`.
+    /// Return the offset to `VMTable` index `index`.
     #[inline]
     pub fn vmctx_vmtable_import(&self, index: TableIndex) -> u32 {
         assert!(index.as_u32() < self.num_imported_tables);
-        self.vmctx_imported_tables_begin()
-            + index.as_u32() * u32::from(self.size_of_vmtable_import())
+        self.vmctx_imported_tables_begin() + index.as_u32() * u32::from(self.size_of_vmtable())
     }
 
     /// Return the offset to `VMMemoryImport` index `index`.
@@ -990,10 +995,11 @@ impl<P: PtrSize> VMOffsets<P> {
         self.vmctx_vmfunction_import(index) + u32::from(self.vmfunction_import_vmctx())
     }
 
-    /// Return the offset to the `from` field in `VMTableImport` index `index`.
+    /// Return the offset to the `from` field in the imported `VMTable` at index
+    /// `index`.
     #[inline]
-    pub fn vmctx_vmtable_import_from(&self, index: TableIndex) -> u32 {
-        self.vmctx_vmtable_import(index) + u32::from(self.vmtable_import_from())
+    pub fn vmctx_vmtable_from(&self, index: TableIndex) -> u32 {
+        self.vmctx_vmtable_import(index) + u32::from(self.vmtable_from())
     }
 
     /// Return the offset to the `base` field in `VMTableDefinition` index `index`.

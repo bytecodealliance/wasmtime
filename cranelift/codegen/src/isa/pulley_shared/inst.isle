@@ -89,6 +89,9 @@
     ;; emit this instruction and auto-generated methods for other various
     ;; bits and pieces of boilerplate in the backend.
     (Raw (raw RawInst))
+
+    ;; Island generation prior to variable-length instructions.
+    (EmitIsland (space_needed u32))
   )
 )
 
@@ -710,6 +713,12 @@
 
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
+
+(decl gen_try_call (SigRef ExternalName RelocDistance ExceptionTable ValueSlice MachLabelSlice) Unit)
+(extern constructor gen_try_call gen_try_call)
+
+(decl gen_try_call_indirect (SigRef Value ExceptionTable ValueSlice MachLabelSlice) Unit)
+(extern constructor gen_try_call_indirect gen_try_call_indirect)
 
 ;;;; Helpers for Sign extension ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

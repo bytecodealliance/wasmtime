@@ -68,7 +68,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
             os_abi: obj::ELFOSABI_WASMTIME,
             abi_version: 0,
             e_flags,
-        } if e_flags == expected_e_flags => {}
+        } if e_flags & expected_e_flags == expected_e_flags => {}
         _ => bail!("incompatible object file format"),
     }
 
@@ -149,13 +149,13 @@ fn detect_precompiled<'data, R: object::ReadRef<'data>>(
         FileFlags::Elf {
             os_abi: obj::ELFOSABI_WASMTIME,
             abi_version: 0,
-            e_flags: obj::EF_WASMTIME_MODULE,
-        } => Some(Precompiled::Module),
+            e_flags,
+        } if e_flags & obj::EF_WASMTIME_MODULE != 0 => Some(Precompiled::Module),
         FileFlags::Elf {
             os_abi: obj::ELFOSABI_WASMTIME,
             abi_version: 0,
-            e_flags: obj::EF_WASMTIME_COMPONENT,
-        } => Some(Precompiled::Component),
+            e_flags,
+        } if e_flags & obj::EF_WASMTIME_COMPONENT != 0 => Some(Precompiled::Component),
         _ => None,
     }
 }
@@ -192,8 +192,10 @@ struct WasmFeatures {
     simd: bool,
     tail_call: bool,
     threads: bool,
+    shared_everything_threads: bool,
     multi_memory: bool,
     exceptions: bool,
+    legacy_exceptions: bool,
     memory64: bool,
     relaxed_simd: bool,
     extended_const: bool,
@@ -201,6 +203,9 @@ struct WasmFeatures {
     gc: bool,
     custom_page_sizes: bool,
     component_model_async: bool,
+    component_model_async_builtins: bool,
+    component_model_async_stackful: bool,
+    component_model_error_context: bool,
     gc_types: bool,
     wide_arithmetic: bool,
     stack_switching: bool,
@@ -216,6 +221,7 @@ impl Metadata<'_> {
             component_model,
             simd,
             threads,
+            shared_everything_threads,
             tail_call,
             multi_memory,
             exceptions,
@@ -226,10 +232,12 @@ impl Metadata<'_> {
             function_references,
             gc,
             custom_page_sizes,
-            shared_everything_threads,
-            component_model_values,
-            component_model_nested_names,
-            component_model_async,
+            cm_async,
+            cm_async_builtins,
+            cm_async_stackful,
+            cm_nested_names,
+            cm_values,
+            cm_error_context,
             legacy_exceptions,
             gc_types,
             stack_switching,
@@ -246,10 +254,8 @@ impl Metadata<'_> {
         // above so that once we do implement support for them, we won't
         // silently ignore them during serialization.
         assert!(!memory_control);
-        assert!(!component_model_values);
-        assert!(!component_model_nested_names);
-        assert!(!shared_everything_threads);
-        assert!(!legacy_exceptions);
+        assert!(!cm_nested_names);
+        assert!(!cm_values);
 
         Metadata {
             target: engine.compiler().triple().to_string(),
@@ -263,19 +269,24 @@ impl Metadata<'_> {
                 component_model,
                 simd,
                 threads,
+                shared_everything_threads,
                 tail_call,
                 multi_memory,
                 exceptions,
+                legacy_exceptions,
                 memory64,
                 relaxed_simd,
                 extended_const,
                 function_references,
                 gc,
                 custom_page_sizes,
-                component_model_async,
                 gc_types,
                 wide_arithmetic,
                 stack_switching,
+                component_model_async: cm_async,
+                component_model_async_builtins: cm_async_builtins,
+                component_model_async_stackful: cm_async_stackful,
+                component_model_error_context: cm_error_context,
             },
         }
     }
@@ -474,8 +485,10 @@ impl Metadata<'_> {
             simd,
             tail_call,
             threads,
+            shared_everything_threads,
             multi_memory,
             exceptions,
+            legacy_exceptions,
             memory64,
             relaxed_simd,
             extended_const,
@@ -483,6 +496,9 @@ impl Metadata<'_> {
             gc,
             custom_page_sizes,
             component_model_async,
+            component_model_async_builtins,
+            component_model_async_stackful,
+            component_model_error_context,
             gc_types,
             wide_arithmetic,
             stack_switching,
@@ -531,6 +547,11 @@ impl Metadata<'_> {
             "WebAssembly threads support",
         )?;
         Self::check_bool(
+            shared_everything_threads,
+            other.contains(F::SHARED_EVERYTHING_THREADS),
+            "WebAssembly shared-everything-threads support",
+        )?;
+        Self::check_bool(
             multi_memory,
             other.contains(F::MULTI_MEMORY),
             "WebAssembly multi-memory support",
@@ -539,6 +560,11 @@ impl Metadata<'_> {
             exceptions,
             other.contains(F::EXCEPTIONS),
             "WebAssembly exceptions support",
+        )?;
+        Self::check_bool(
+            legacy_exceptions,
+            other.contains(F::LEGACY_EXCEPTIONS),
+            "WebAssembly legacy exceptions support",
         )?;
         Self::check_bool(
             memory64,
@@ -562,8 +588,23 @@ impl Metadata<'_> {
         )?;
         Self::check_bool(
             component_model_async,
-            other.contains(F::COMPONENT_MODEL_ASYNC),
+            other.contains(F::CM_ASYNC),
             "WebAssembly component model support for async lifts/lowers, futures, streams, and errors",
+        )?;
+        Self::check_bool(
+            component_model_async_builtins,
+            other.contains(F::CM_ASYNC_BUILTINS),
+            "WebAssembly component model support for async builtins",
+        )?;
+        Self::check_bool(
+            component_model_async_stackful,
+            other.contains(F::CM_ASYNC_STACKFUL),
+            "WebAssembly component model support for async stackful",
+        )?;
+        Self::check_bool(
+            component_model_error_context,
+            other.contains(F::CM_ERROR_CONTEXT),
+            "WebAssembly component model support for error-context",
         )?;
         Self::check_cfg_bool(
             cfg!(feature = "gc"),

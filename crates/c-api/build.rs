@@ -21,6 +21,8 @@ const FEATURES: &[&str] = &[
     "WINCH",
     "DEBUG_BUILTINS",
     "WAT",
+    "POOLING_ALLOCATOR",
+    "COMPONENT_MODEL",
 ];
 // ... if you add a line above this be sure to change the other locations
 // marked WASMTIME_FEATURE_LIST

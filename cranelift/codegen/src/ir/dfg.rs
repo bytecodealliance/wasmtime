@@ -8,9 +8,9 @@ use crate::ir::instructions::{CallInfo, InstructionData};
 use crate::ir::pcc::Fact;
 use crate::ir::user_stack_maps::{UserStackMapEntry, UserStackMapEntryVec};
 use crate::ir::{
-    types, Block, BlockCall, ConstantData, ConstantPool, DynamicType, ExtFuncData, FuncRef,
-    Immediate, Inst, JumpTables, RelSourceLoc, SigRef, Signature, Type, Value,
-    ValueLabelAssignments, ValueList, ValueListPool,
+    types, Block, BlockArg, BlockCall, ConstantData, ConstantPool, DynamicType, ExceptionTables,
+    ExtFuncData, FuncRef, Immediate, Inst, JumpTables, RelSourceLoc, SigRef, Signature, Type,
+    Value, ValueLabelAssignments, ValueList, ValueListPool,
 };
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
@@ -158,6 +158,9 @@ pub struct DataFlowGraph {
 
     /// Jump tables used in this function.
     pub jump_tables: JumpTables,
+
+    /// Exception tables used in this function.
+    pub exception_tables: ExceptionTables,
 }
 
 impl DataFlowGraph {
@@ -178,6 +181,7 @@ impl DataFlowGraph {
             constants: ConstantPool::new(),
             immediates: PrimaryMap::new(),
             jump_tables: JumpTables::new(),
+            exception_tables: ExceptionTables::new(),
         }
     }
 
@@ -226,8 +230,12 @@ impl DataFlowGraph {
     }
 
     /// Make a BlockCall, bundling together the block and its arguments.
-    pub fn block_call(&mut self, block: Block, args: &[Value]) -> BlockCall {
-        BlockCall::new(block, args, &mut self.value_lists)
+    pub fn block_call<'a>(
+        &mut self,
+        block: Block,
+        args: impl IntoIterator<Item = &'a BlockArg>,
+    ) -> BlockCall {
+        BlockCall::new(block, args.into_iter().copied(), &mut self.value_lists)
     }
 
     /// Get the total number of values.
@@ -437,13 +445,18 @@ impl DataFlowGraph {
 
         // Rewrite InstructionData in `self.insts`.
         for inst in self.insts.0.values_mut() {
-            inst.map_values(&mut self.value_lists, &mut self.jump_tables, |arg| {
-                if let ValueData::Alias { original, .. } = self.values[arg].into() {
-                    original
-                } else {
-                    arg
-                }
-            });
+            inst.map_values(
+                &mut self.value_lists,
+                &mut self.jump_tables,
+                &mut self.exception_tables,
+                |arg| {
+                    if let ValueData::Alias { original, .. } = self.values[arg].into() {
+                        original
+                    } else {
+                        arg
+                    }
+                },
+            );
         }
 
         // - `results` and block-params in `blocks` are not aliases, by
@@ -843,15 +856,16 @@ impl DataFlowGraph {
         &'dfg self,
         inst: Inst,
     ) -> impl DoubleEndedIterator<Item = Value> + 'dfg {
-        self.inst_args(inst)
-            .iter()
-            .chain(
-                self.insts[inst]
-                    .branch_destination(&self.jump_tables)
-                    .into_iter()
-                    .flat_map(|branch| branch.args_slice(&self.value_lists).iter()),
-            )
-            .copied()
+        self.inst_args(inst).iter().copied().chain(
+            self.insts[inst]
+                .branch_destination(&self.jump_tables, &self.exception_tables)
+                .into_iter()
+                .flat_map(|branch| {
+                    branch
+                        .args(&self.value_lists)
+                        .filter_map(|arg| arg.as_value())
+                }),
+        )
     }
 
     /// Map a function over the values of the instruction.
@@ -859,7 +873,12 @@ impl DataFlowGraph {
     where
         F: FnMut(Value) -> Value,
     {
-        self.insts[inst].map_values(&mut self.value_lists, &mut self.jump_tables, body);
+        self.insts[inst].map_values(
+            &mut self.value_lists,
+            &mut self.jump_tables,
+            &mut self.exception_tables,
+            body,
+        );
     }
 
     /// Overwrite the instruction's value references with values from the iterator.
@@ -869,9 +888,12 @@ impl DataFlowGraph {
     where
         I: Iterator<Item = Value>,
     {
-        self.insts[inst].map_values(&mut self.value_lists, &mut self.jump_tables, |_| {
-            values.next().unwrap()
-        });
+        self.insts[inst].map_values(
+            &mut self.value_lists,
+            &mut self.jump_tables,
+            &mut self.exception_tables,
+            |_| values.next().unwrap(),
+        );
     }
 
     /// Get all value arguments on `inst` as a slice.
@@ -1049,7 +1071,7 @@ impl DataFlowGraph {
     pub fn first_result(&self, inst: Inst) -> Value {
         self.results[inst]
             .first(&self.value_lists)
-            .expect("Instruction has no results")
+            .unwrap_or_else(|| panic!("{inst} has no results"))
     }
 
     /// Test if `inst` has any result values currently.
@@ -1078,18 +1100,22 @@ impl DataFlowGraph {
     /// Get the call signature of a direct or indirect call instruction.
     /// Returns `None` if `inst` is not a call instruction.
     pub fn call_signature(&self, inst: Inst) -> Option<SigRef> {
-        match self.insts[inst].analyze_call(&self.value_lists) {
+        match self.insts[inst].analyze_call(&self.value_lists, &self.exception_tables) {
             CallInfo::NotACall => None,
             CallInfo::Direct(f, _) => Some(self.ext_funcs[f].signature),
+            CallInfo::DirectWithSig(_, s, _) => Some(s),
             CallInfo::Indirect(s, _) => Some(s),
         }
     }
 
-    /// Like `call_signature` but returns none for tail call instructions.
-    fn non_tail_call_signature(&self, inst: Inst) -> Option<SigRef> {
+    /// Like `call_signature` but returns none for tail call
+    /// instructions and try-call (exception-handling invoke)
+    /// instructions.
+    fn non_tail_call_or_try_call_signature(&self, inst: Inst) -> Option<SigRef> {
         let sig = self.call_signature(inst)?;
         match self.insts[inst].opcode() {
             ir::Opcode::ReturnCall | ir::Opcode::ReturnCallIndirect => None,
+            ir::Opcode::TryCall | ir::Opcode::TryCallIndirect => None,
             _ => Some(sig),
         }
     }
@@ -1097,7 +1123,7 @@ impl DataFlowGraph {
     // Only for use by the verifier. Everyone else should just use
     // `dfg.inst_results(inst).len()`.
     pub(crate) fn num_expected_results_for_verifier(&self, inst: Inst) -> usize {
-        match self.non_tail_call_signature(inst) {
+        match self.non_tail_call_or_try_call_signature(inst) {
             Some(sig) => self.signatures[sig].returns.len(),
             None => {
                 let constraints = self.insts[inst].opcode().constraints();
@@ -1112,7 +1138,7 @@ impl DataFlowGraph {
         inst: Inst,
         ctrl_typevar: Type,
     ) -> impl iter::ExactSizeIterator<Item = Type> + 'a {
-        return match self.non_tail_call_signature(inst) {
+        return match self.non_tail_call_or_try_call_signature(inst) {
             Some(sig) => InstResultTypes::Signature(self, sig, 0),
             None => {
                 let constraints = self.insts[inst].opcode().constraints();
@@ -1360,6 +1386,15 @@ impl DataFlowGraph {
     /// with `change_to_alias()`.
     pub fn detach_block_params(&mut self, block: Block) -> ValueList {
         self.blocks[block].params.take()
+    }
+
+    /// Detach all of an instruction's result values.
+    ///
+    /// This is a quite low-level operation. A sensible thing to do with the
+    /// detached results is to change them into aliases with
+    /// `change_to_alias()`.
+    pub fn detach_inst_results(&mut self, inst: Inst) {
+        self.results[inst].clear(&mut self.value_lists);
     }
 
     /// Merge the facts for two values. If both values have facts and

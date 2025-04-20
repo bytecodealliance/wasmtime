@@ -122,7 +122,17 @@ impl Engine {
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compiler,
                 #[cfg(feature = "runtime")]
-                allocator: config.build_allocator(&tunables)?,
+                allocator: {
+                    let allocator = config.build_allocator(&tunables)?;
+                    #[cfg(feature = "gc")]
+                    {
+                        let mem_ty = tunables.gc_heap_memory_type();
+                        allocator.validate_memory(&mem_ty).context(
+                            "instance allocator cannot support configured GC heap memory",
+                        )?;
+                    }
+                    allocator
+                },
                 #[cfg(feature = "runtime")]
                 gc_runtime: config.build_gc_runtime()?,
                 #[cfg(feature = "runtime")]
@@ -226,13 +236,13 @@ impl Engine {
     /// [`Engine::precompile_module`], or [`Engine::precompile_component`], then
     /// this will return `Some(...)` indicating so. Otherwise `None` is
     /// returned.
-    pub fn detect_precompiled(&self, bytes: &[u8]) -> Option<Precompiled> {
+    pub fn detect_precompiled(bytes: &[u8]) -> Option<Precompiled> {
         serialization::detect_precompiled_bytes(bytes)
     }
 
     /// Like [`Engine::detect_precompiled`], but performs the detection on a file.
     #[cfg(feature = "std")]
-    pub fn detect_precompiled_file(&self, path: impl AsRef<Path>) -> Result<Option<Precompiled>> {
+    pub fn detect_precompiled_file(path: impl AsRef<Path>) -> Result<Option<Precompiled>> {
         serialization::detect_precompiled_file(path)
     }
 
@@ -410,6 +420,7 @@ impl Engine {
             | "regalloc_algorithm"
             | "is_pic"
             | "bb_padding_log2_minus_one"
+            | "log2_min_function_alignment"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
             | "opt_level" // opt level doesn't change semantics

@@ -8,13 +8,13 @@ You can execute this example with:
 
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::*;
-use wasmtime_wasi::bindings::sync::Command;
-use wasmtime_wasi::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::p2::bindings::sync::Command;
+use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
 
 pub struct ComponentRunStates {
     // These two are required basically as a standard way to enable the impl of IoView and
     // WasiView.
-    // impl of WasiView is required by [`wasmtime_wasi::add_to_linker_sync`]
+    // impl of WasiView is required by [`wasmtime_wasi::p2::add_to_linker_sync`]
     pub wasi_ctx: WasiCtx,
     pub resource_table: ResourceTable,
     // You can add other custom host states if needed
@@ -35,7 +35,7 @@ fn main() -> Result<()> {
     // Define the WASI functions globally on the `Config`.
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);
-    wasmtime_wasi::add_to_linker_sync(&mut linker)?;
+    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
 
     // Create a WASI context and put it in a Store; all instances in the store
     // share this context. `WasiCtxBuilder` provides a number of ways to
@@ -67,12 +67,12 @@ fn main() -> Result<()> {
     let instance = linker.instantiate(&mut store, &component)?;
     // Get the index for the exported interface
     let interface_idx = instance
-        .get_export(&mut store, None, "wasi:cli/run@0.2.0")
+        .get_export_index(&mut store, None, "wasi:cli/run@0.2.0")
         .expect("Cannot get `wasi:cli/run@0.2.0` interface");
     // Get the index for the exported function in the exported interface
     let parent_export_idx = Some(&interface_idx);
     let func_idx = instance
-        .get_export(&mut store, parent_export_idx, "run")
+        .get_export_index(&mut store, parent_export_idx, "run")
         .expect("Cannot get `run` function in `wasi:cli/run@0.2.0` interface");
     let func = instance
         .get_func(&mut store, func_idx)

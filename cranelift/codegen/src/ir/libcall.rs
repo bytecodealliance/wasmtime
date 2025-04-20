@@ -33,7 +33,7 @@ pub enum LibCall {
     FloorF64,
     /// trunc.f32
     TruncF32,
-    /// frunc.f64
+    /// trunc.f64
     TruncF64,
     /// nearest.f32
     NearestF32,

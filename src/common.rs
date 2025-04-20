@@ -6,8 +6,8 @@ use std::net::TcpListener;
 use std::{fs::File, path::Path, time::Duration};
 use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
 use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
-use wasmtime_wasi::bindings::LinkOptions;
-use wasmtime_wasi::WasiCtxBuilder;
+use wasmtime_wasi::p2::bindings::LinkOptions;
+use wasmtime_wasi::p2::WasiCtxBuilder;
 
 #[cfg(feature = "component-model")]
 use wasmtime::component::Component;
@@ -213,7 +213,7 @@ impl RunCommon {
         deserialize_module: impl FnOnce() -> Result<Module>,
         #[cfg(feature = "component-model")] deserialize_component: impl FnOnce() -> Result<Component>,
     ) -> Result<RunTarget> {
-        Ok(match engine.detect_precompiled(bytes) {
+        Ok(match Engine::detect_precompiled(bytes) {
             Some(Precompiled::Module) => {
                 self.ensure_allow_precompiled()?;
                 RunTarget::Core(deserialize_module()?)
@@ -252,7 +252,7 @@ impl RunCommon {
 
             #[cfg(not(any(feature = "cranelift", feature = "winch")))]
             None => {
-                let _ = path;
+                let _ = (path, engine);
                 bail!("support for compiling modules was disabled at compile time");
             }
         })

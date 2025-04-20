@@ -52,21 +52,23 @@ pub unsafe extern "C" fn run_wasi(
     wasi_component: *const u8,
     wasi_component_size: usize,
 ) -> usize {
-    let buf = core::slice::from_raw_parts_mut(out_buf, *out_size);
-    let wasi_component = core::slice::from_raw_parts(wasi_component, wasi_component_size);
-    match run(wasi_component) {
-        Ok(output) => {
-            let len = buf.len().min(output.len());
-            buf[..len].copy_from_slice(&output.as_bytes()[..len]);
-            *out_size = len;
-            return 0;
-        }
-        Err(e) => {
-            let msg = format!("{e:?}");
-            let len = buf.len().min(msg.len());
-            buf[..len].copy_from_slice(&msg.as_bytes()[..len]);
-            *out_size = len;
-            return 1;
+    unsafe {
+        let buf = core::slice::from_raw_parts_mut(out_buf, *out_size);
+        let wasi_component = core::slice::from_raw_parts(wasi_component, wasi_component_size);
+        match run(wasi_component) {
+            Ok(output) => {
+                let len = buf.len().min(output.len());
+                buf[..len].copy_from_slice(&output.as_bytes()[..len]);
+                *out_size = len;
+                return 0;
+            }
+            Err(e) => {
+                let msg = format!("{e:?}");
+                let len = buf.len().min(msg.len());
+                buf[..len].copy_from_slice(&msg.as_bytes()[..len]);
+                *out_size = len;
+                return 1;
+            }
         }
     }
 }
@@ -148,7 +150,7 @@ fn deserialize(engine: &Engine, component: &[u8]) -> Result<Option<Component>> {
 // Generate bindings for the entire wasi:cli command world. We won't impl and
 // link with all of these generated bindings for the sake of this example.
 wasmtime::component::bindgen!({
-    path: "../../../crates/wasi/wit",
+    path: "../../../crates/wasi/src/p2/wit",
     world: "wasi:cli/command",
     async: { only_imports: [] },
     trappable_imports: true,

@@ -360,12 +360,20 @@ wasmtime_option_group! {
         pub tail_call: Option<bool>,
         /// Configure support for the threads proposal.
         pub threads: Option<bool>,
+        /// Configure support for the shared-everything-threads proposal.
+        pub shared_everything_threads: Option<bool>,
         /// Configure support for the memory64 proposal.
         pub memory64: Option<bool>,
         /// Configure support for the component-model proposal.
         pub component_model: Option<bool>,
         /// Component model support for async lifting/lowering.
         pub component_model_async: Option<bool>,
+        /// Component model support for async lifting/lowering: this corresponds
+        /// to the 🚝 emoji in the component model specification.
+        pub component_model_async_builtins: Option<bool>,
+        /// Component model support for async lifting/lowering: this corresponds
+        /// to the 🚟 emoji in the component model specification.
+        pub component_model_async_stackful: Option<bool>,
         /// Configure support for the function-references proposal.
         pub function_references: Option<bool>,
         /// Configure support for the stack-switching proposal.
@@ -378,6 +386,10 @@ wasmtime_option_group! {
         pub wide_arithmetic: Option<bool>,
         /// Configure support for the extended-const proposal.
         pub extended_const: Option<bool>,
+        /// Configure support for the exceptions proposal.
+        pub exceptions: Option<bool>,
+        /// DEPRECATED: Configure support for the legacy exceptions proposal.
+        pub legacy_exceptions: Option<bool>,
     }
 
     enum Wasm {
@@ -836,7 +848,9 @@ impl CommonOptions {
                     if let Some(limit) = self.opts.pooling_total_tables {
                         cfg.total_tables(limit);
                     }
-                    if let Some(limit) = self.opts.pooling_table_elements {
+                    if let Some(limit) = self.opts.pooling_table_elements
+                        .or(self.wasm.max_table_elements)
+                    {
                         cfg.table_elements(limit);
                     }
                     if let Some(limit) = self.opts.pooling_max_core_instance_size {
@@ -847,7 +861,9 @@ impl CommonOptions {
                         limit => cfg.total_stacks(limit),
                         _ => err,
                     }
-                    if let Some(max) = self.opts.pooling_max_memory_size {
+                    if let Some(max) = self.opts.pooling_max_memory_size
+                        .or(self.wasm.max_memory_size)
+                    {
                         cfg.max_memory_size(max);
                     }
                     if let Some(size) = self.opts.pooling_decommit_batch_size {
@@ -986,6 +1002,13 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.extended_const.or(all) {
             config.wasm_extended_const(enable);
         }
+        if let Some(enable) = self.wasm.exceptions.or(all) {
+            config.wasm_exceptions(enable);
+        }
+        if let Some(enable) = self.wasm.legacy_exceptions.or(all) {
+            #[expect(deprecated, reason = "forwarding CLI flag")]
+            config.wasm_legacy_exceptions(enable);
+        }
 
         macro_rules! handle_conditionally_compiled {
             ($(($feature:tt, $field:tt, $method:tt))*) => ($(
@@ -1003,6 +1026,8 @@ impl CommonOptions {
         handle_conditionally_compiled! {
             ("component-model", component_model, wasm_component_model)
             ("component-model-async", component_model_async, wasm_component_model_async)
+            ("component-model-async", component_model_async_builtins, wasm_component_model_async_builtins)
+            ("component-model-async", component_model_async_stackful, wasm_component_model_async_stackful)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)
@@ -1073,7 +1098,6 @@ mod tests {
         // Regalloc algorithm
         for (regalloc_value, expected) in [
             ("\"backtracking\"", Some(RegallocAlgorithm::Backtracking)),
-            ("\"single-pass\"", Some(RegallocAlgorithm::SinglePass)),
             ("\"hello\"", None), // should fail
             ("3", None),         // should fail
             ("true", None),      // should fail

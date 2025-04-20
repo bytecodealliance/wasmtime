@@ -74,6 +74,12 @@ macro_rules! foreach_builtin_function {
             #[cfg(feature = "gc-drc")]
             drop_gc_ref(vmctx: vmctx, val: u32);
 
+            // Grow the GC heap by `bytes_needed` bytes.
+            //
+            // Traps if growing the GC heap fails.
+            #[cfg(feature = "gc-null")]
+            grow_gc_heap(vmctx: vmctx, bytes_needed: u64) -> bool;
+
             // Do a GC, treating the optional `root` as a GC root and returning
             // the updated `root` (so that, in the case of moving collectors,
             // callers have a valid version of `root` again).
@@ -89,7 +95,7 @@ macro_rules! foreach_builtin_function {
                 module_interned_type_index: u32,
                 size: u32,
                 align: u32
-            ) -> u64;
+            ) -> u32;
 
             // Intern a `funcref` into the GC heap, returning its
             // `FuncRefTableId`.
@@ -133,7 +139,7 @@ macro_rules! foreach_builtin_function {
                 data_index: u32,
                 data_offset: u32,
                 len: u32
-            ) -> u64;
+            ) -> u32;
 
             // Builtin implementation of the `array.new_elem` instruction.
             #[cfg(feature = "gc")]
@@ -143,7 +149,7 @@ macro_rules! foreach_builtin_function {
                 elem_index: u32,
                 elem_offset: u32,
                 len: u32
-            ) -> u64;
+            ) -> u32;
 
             // Builtin implementation of the `array.copy` instruction.
             #[cfg(feature = "gc")]
@@ -311,7 +317,7 @@ macro_rules! declare_builtin_index_constructors {
              $rest_name:ident;
          )*
     ) => {
-        #[allow(missing_docs, reason = "macro-generated")]
+        #[expect(missing_docs, reason = "macro-generated")]
         pub const fn $this_name() -> Self {
             Self($index)
         }
@@ -381,12 +387,15 @@ impl BuiltinFunctionIndex {
             (@get memory_atomic_wait32 u64) => (TrapSentinel::Negative);
             (@get memory_atomic_wait64 u64) => (TrapSentinel::Negative);
 
-            // GC-related functions return a 64-bit value which is negative to
-            // indicate a trap.
+            // GC returns an optional GC ref, encoded as a `u64` with a negative
+            // value indicating a trap.
             (@get gc u64) => (TrapSentinel::Negative);
-            (@get gc_alloc_raw u64) => (TrapSentinel::Negative);
-            (@get array_new_data u64) => (TrapSentinel::Negative);
-            (@get array_new_elem u64) => (TrapSentinel::Negative);
+
+            // GC allocation functions return a u32 which is zero to indicate a
+            // trap.
+            (@get gc_alloc_raw u32) => (TrapSentinel::Falsy);
+            (@get array_new_data u32) => (TrapSentinel::Falsy);
+            (@get array_new_elem u32) => (TrapSentinel::Falsy);
 
             // The final epoch represents a trap
             (@get new_epoch u64) => (TrapSentinel::NegativeOne);

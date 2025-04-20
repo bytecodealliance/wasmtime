@@ -7,30 +7,32 @@ pub fn config() -> &'static TestConfig {
 
 // The `wasi` crate version 0.9.0 and beyond, doesn't
 // seem to define these constants, so we do it ourselves.
-pub const STDIN_FD: wasi::Fd = 0x0;
-pub const STDOUT_FD: wasi::Fd = 0x1;
-pub const STDERR_FD: wasi::Fd = 0x2;
+pub const STDIN_FD: wasip1::Fd = 0x0;
+pub const STDOUT_FD: wasip1::Fd = 0x1;
+pub const STDERR_FD: wasip1::Fd = 0x2;
 
 /// Opens a fresh file descriptor for `path` where `path` should be a preopened
 /// directory.
-pub fn open_scratch_directory(path: &str) -> Result<wasi::Fd, String> {
+pub fn open_scratch_directory(path: &str) -> Result<wasip1::Fd, String> {
     unsafe {
         for i in 3.. {
-            let stat = match wasi::fd_prestat_get(i) {
+            let stat = match wasip1::fd_prestat_get(i) {
                 Ok(s) => s,
                 Err(_) => break,
             };
-            if stat.tag != wasi::PREOPENTYPE_DIR.raw() {
+            if stat.tag != wasip1::PREOPENTYPE_DIR.raw() {
                 continue;
             }
             let mut dst = Vec::with_capacity(stat.u.dir.pr_name_len);
-            if wasi::fd_prestat_dir_name(i, dst.as_mut_ptr(), dst.capacity()).is_err() {
+            if wasip1::fd_prestat_dir_name(i, dst.as_mut_ptr(), dst.capacity()).is_err() {
                 continue;
             }
             dst.set_len(stat.u.dir.pr_name_len);
             if dst == path.as_bytes() {
-                return Ok(wasi::path_open(i, 0, ".", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
-                    .expect("failed to open dir"));
+                return Ok(
+                    wasip1::path_open(i, 0, ".", wasip1::OFLAGS_DIRECTORY, 0, 0, 0)
+                        .expect("failed to open dir"),
+                );
             }
         }
 
@@ -38,11 +40,13 @@ pub fn open_scratch_directory(path: &str) -> Result<wasi::Fd, String> {
     }
 }
 
-pub unsafe fn create_file(dir_fd: wasi::Fd, filename: &str) {
-    let file_fd =
-        wasi::path_open(dir_fd, 0, filename, wasi::OFLAGS_CREAT, 0, 0, 0).expect("creating a file");
-    assert!(file_fd > STDERR_FD, "file descriptor range check",);
-    wasi::fd_close(file_fd).expect("closing a file");
+pub unsafe fn create_file(dir_fd: wasip1::Fd, filename: &str) {
+    unsafe {
+        let file_fd = wasip1::path_open(dir_fd, 0, filename, wasip1::OFLAGS_CREAT, 0, 0, 0)
+            .expect("creating a file");
+        assert!(file_fd > STDERR_FD, "file descriptor range check",);
+        wasip1::fd_close(file_fd).expect("closing a file");
+    }
 }
 
 // Small workaround to get the crate's macros, through the
@@ -127,6 +131,7 @@ pub struct TestConfig {
     fs_time_precision: u64,
     no_dangling_filesystem: bool,
     no_rename_dir_to_empty_dir: bool,
+    rename_dir_onto_file: bool,
 }
 
 enum ErrnoMode {
@@ -158,6 +163,7 @@ impl TestConfig {
             fs_time_precision,
             no_dangling_filesystem,
             no_rename_dir_to_empty_dir,
+            rename_dir_onto_file: std::env::var("RENAME_DIR_ONTO_FILE").is_ok(),
         }
     }
     pub fn errno_expect_unix(&self) -> bool {
@@ -186,5 +192,8 @@ impl TestConfig {
     }
     pub fn support_rename_dir_to_empty_dir(&self) -> bool {
         !self.no_rename_dir_to_empty_dir
+    }
+    pub fn support_rename_dir_onto_file(&self) -> bool {
+        self.rename_dir_onto_file
     }
 }

@@ -307,6 +307,75 @@ fn define_control_flow(
             .with_doc("function to call, declared by `function`")])
         .operands_out(vec![Operand::new("addr", iAddr)]),
     );
+
+    ig.push(
+        Inst::new(
+            "try_call",
+            r#"
+        Call a function, catching the specified exceptions.
+
+        Call the function pointed to by `callee` with the given arguments. On
+        normal return, branch to the first target, with function returns
+        available as `retN` block arguments. On exceptional return,
+        look up the thrown exception tag in the provided exception table;
+        if the tag matches one of the targets, branch to the matching
+        target with the exception payloads available as `exnN` block arguments.
+        If no tag matches, then propagate the exception up the stack.
+
+        It is the Cranelift embedder's responsibility to define the meaning
+        of tags: they are accepted by this instruction and passed through
+        to unwind metadata tables in Cranelift's output. Actual unwinding is
+        outside the purview of the core Cranelift compiler.
+
+        Payload values on exception are passed in fixed register(s) that are
+        defined by the platform and ABI. See the documentation on `CallConv`
+        for details.
+        "#,
+            &formats.try_call,
+        )
+        .operands_in(vec![
+            Operand::new("callee", &entities.func_ref)
+                .with_doc("function to call, declared by `function`"),
+            Operand::new("args", &entities.varargs).with_doc("call arguments"),
+            Operand::new("ET", &entities.exception_table).with_doc("exception table"),
+        ])
+        .call()
+        .branches(),
+    );
+
+    ig.push(
+        Inst::new(
+            "try_call_indirect",
+            r#"
+        Call a function, catching the specified exceptions.
+
+        Call the function pointed to by `callee` with the given arguments. On
+        normal return, branch to the first target, with function returns
+        available as `retN` block arguments. On exceptional return,
+        look up the thrown exception tag in the provided exception table;
+        if the tag matches one of the targets, branch to the matching
+        target with the exception payloads available as `exnN` block arguments.
+        If no tag matches, then propagate the exception up the stack.
+
+        It is the Cranelift embedder's responsibility to define the meaning
+        of tags: they are accepted by this instruction and passed through
+        to unwind metadata tables in Cranelift's output. Actual unwinding is
+        outside the purview of the core Cranelift compiler.
+
+        Payload values on exception are passed in fixed register(s) that are
+        defined by the platform and ABI. See the documentation on `CallConv`
+        for details.
+        "#,
+            &formats.try_call_indirect,
+        )
+        .operands_in(vec![
+            Operand::new("callee", iAddr).with_doc("address of function to call"),
+            Operand::new("args", &entities.varargs).with_doc("call arguments"),
+            Operand::new("ET", &entities.exception_table).with_doc("exception table"),
+        ])
+        .call()
+        .branches(),
+    );
 }
 
 #[inline(never)]

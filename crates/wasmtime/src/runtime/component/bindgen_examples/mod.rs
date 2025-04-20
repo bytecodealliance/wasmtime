@@ -493,7 +493,7 @@ pub mod _6_exported_resources;
 /// * async functions are used
 /// * enabled async in bindgen! macro
 ///
-/// See [wasi_async_example](https://github.com/bytecodealliance/wasmtime/tree/main/examples/wasi-async) for async function calls on a host.
+/// See [wasi_async_example](https://github.com/bytecodealliance/wasmtime/blob/main/examples/wasip1-async/main.rs) for async function calls on a host.
 ///
 /// ```rust
 /// use wasmtime::Result;

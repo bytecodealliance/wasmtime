@@ -1,6 +1,7 @@
 //! Generate a Wasm module and the configuration for generating it.
 
 use arbitrary::{Arbitrary, Unstructured};
+use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 
 /// Default module-level configuration for fuzzing Wasmtime.
 ///
@@ -16,6 +17,9 @@ pub struct ModuleConfig {
     // config-to-`wasmtime::Config` translation.
     pub function_references_enabled: bool,
     pub component_model_async: bool,
+    pub component_model_async_builtins: bool,
+    pub component_model_async_stackful: bool,
+    pub legacy_exceptions: bool,
 }
 
 impl<'a> Arbitrary<'a> for ModuleConfig {
@@ -41,8 +45,8 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         let _ = config.relaxed_simd_enabled;
         let _ = config.tail_call_enabled;
         let _ = config.extended_const_enabled;
+        let _ = config.gc_enabled;
         config.exceptions_enabled = false;
-        config.gc_enabled = false;
         config.custom_page_sizes_enabled = u.arbitrary()?;
         config.wide_arithmetic_enabled = u.arbitrary()?;
         config.memory64_enabled = u.ratio(1, 20)?;
@@ -62,6 +66,9 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
 
         Ok(ModuleConfig {
             component_model_async: false,
+            component_model_async_builtins: false,
+            component_model_async_stackful: false,
+            legacy_exceptions: false,
             function_references_enabled: config.gc_enabled,
             config,
         })
@@ -81,7 +88,29 @@ impl ModuleConfig {
         input: &mut Unstructured<'_>,
         default_fuel: Option<u32>,
     ) -> arbitrary::Result<wasm_smith::Module> {
+        crate::init_fuzzing();
+
+        // If requested, save `*.{dna,json}` files for recreating this module
+        // in wasm-tools alone.
+        let input_before = if log::log_enabled!(log::Level::Debug) {
+            let len = input.len();
+            Some(input.peek_bytes(len).unwrap().to_vec())
+        } else {
+            None
+        };
+
         let mut module = wasm_smith::Module::new(self.config.clone(), input)?;
+
+        if let Some(before) = input_before {
+            static GEN_CNT: AtomicUsize = AtomicUsize::new(0);
+            let used = before.len() - input.len();
+            let i = GEN_CNT.fetch_add(1, Relaxed);
+            let dna = format!("testcase{i}.dna");
+            let config = format!("testcase{i}.json");
+            log::debug!("writing `{dna}` and `{config}`");
+            std::fs::write(&dna, &before[..used]).unwrap();
+            std::fs::write(&config, serde_json::to_string_pretty(&self.config).unwrap()).unwrap();
+        }
 
         if let Some(default_fuel) = default_fuel {
             module.ensure_termination(default_fuel).unwrap();

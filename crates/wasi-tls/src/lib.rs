@@ -8,7 +8,7 @@
 //! # An example of how to configure [wasi-tls] is the following:
 //!
 //! ```rust
-//! use wasmtime_wasi::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
+//! use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
 //! use wasmtime::{
 //!     component::{Linker, ResourceTable},
 //!     Store, Engine, Result, Config
@@ -50,7 +50,7 @@
 //!     // Set up wasi-cli
 //!     let mut store = Store::new(&engine, ctx);
 //!     let mut linker = Linker::new(&engine);
-//!     wasmtime_wasi::add_to_linker_async(&mut linker)?;
+//!     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 //!
 //!     // Add wasi-tls types and turn on the feature in linker
 //!     let mut opts = LinkOptions::default();
@@ -71,7 +71,7 @@
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use bytes::Bytes;
 use rustls::pki_types::ServerName;
 use std::io;
@@ -82,24 +82,22 @@ use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::sync::Mutex;
 use tokio_rustls::client::TlsStream;
 use wasmtime::component::{Resource, ResourceTable};
-use wasmtime_wasi::pipe::AsyncReadStream;
-use wasmtime_wasi::runtime::AbortOnDropJoinHandle;
-use wasmtime_wasi::OutputStream;
-use wasmtime_wasi::{
-    async_trait,
-    bindings::io::{
-        poll::Pollable as HostPollable,
-        streams::{InputStream as BoxInputStream, OutputStream as BoxOutputStream},
-    },
-    Pollable, StreamError,
+use wasmtime_wasi::async_trait;
+use wasmtime_wasi::p2::bindings::io::{
+    error::Error as HostIoError,
+    poll::Pollable as HostPollable,
+    streams::{InputStream as BoxInputStream, OutputStream as BoxOutputStream},
 };
+use wasmtime_wasi::p2::pipe::AsyncReadStream;
+use wasmtime_wasi::p2::{OutputStream, Pollable, StreamError};
+use wasmtime_wasi::runtime::AbortOnDropJoinHandle;
 
 mod gen_ {
     wasmtime::component::bindgen!({
-        path: "wit/",
-        world: "imports",
+        path: "wit",
+        world: "wasi:tls/imports",
         with: {
-            "wasi:io": wasmtime_wasi::bindings::io,
+            "wasi:io": wasmtime_wasi::p2::bindings::io,
             "wasi:tls/types/client-connection": super::ClientConnection,
             "wasi:tls/types/client-handshake": super::ClientHandShake,
             "wasi:tls/types/future-client-streams": super::FutureClientStreams,
@@ -149,6 +147,57 @@ pub fn add_to_linker<T: Send>(
     generated::types::add_to_linker_get_host(l, &opts, f)?;
     Ok(())
 }
+
+enum TlsError {
+    /// The component should trap. Under normal circumstances, this only occurs
+    /// when the underlying transport stream returns [`StreamError::Trap`].
+    Trap(anyhow::Error),
+
+    /// A failure indicated by the underlying transport stream as
+    /// [`StreamError::LastOperationFailed`].
+    Io(wasmtime_wasi::p2::IoError),
+
+    /// A TLS protocol error occurred.
+    Tls(rustls::Error),
+}
+
+impl TlsError {
+    /// Create a [`TlsError::Tls`] error from a simple message.
+    fn msg(msg: &str) -> Self {
+        // (Ab)using rustls' error type to synthesize our own TLS errors:
+        Self::Tls(rustls::Error::General(msg.to_string()))
+    }
+}
+
+impl From<io::Error> for TlsError {
+    fn from(error: io::Error) -> Self {
+        // Report unexpected EOFs as an error to prevent truncation attacks.
+        // See: https://docs.rs/rustls/latest/rustls/struct.Reader.html#method.read
+        if let io::ErrorKind::WriteZero | io::ErrorKind::UnexpectedEof = error.kind() {
+            return Self::msg("underlying transport closed abruptly");
+        }
+
+        // Errors from underlying transport.
+        // These have been wrapped inside `io::Error`s by our wasi-to-tokio stream transformer below.
+        let error = match error.downcast::<StreamError>() {
+            Ok(StreamError::LastOperationFailed(e)) => return Self::Io(e),
+            Ok(StreamError::Trap(e)) => return Self::Trap(e),
+            Ok(StreamError::Closed) => unreachable!("our wasi-to-tokio stream transformer should have translated this to a 0-sized read"),
+            Err(e) => e,
+        };
+
+        // Errors from `rustls`.
+        // These have been wrapped inside `io::Error`s by `tokio-rustls`.
+        let error = match error.downcast::<rustls::Error>() {
+            Ok(e) => return Self::Tls(e),
+            Err(e) => e,
+        };
+
+        // All errors should have been handled by the clauses above.
+        Self::Trap(anyhow::Error::new(error).context("unknown wasi-tls error"))
+    }
+}
+
 ///  Represents the ClientHandshake which will be used to configure the handshake
 pub struct ClientHandShake {
     server_name: String,
@@ -180,16 +229,17 @@ impl<'a> generated::types::HostClientHandshake for WasiTlsCtx<'a> {
         let handshake = self.table.delete(this)?;
         let server_name = handshake.server_name;
         let streams = handshake.streams;
-        let domain = ServerName::try_from(server_name)?;
 
         Ok(self
             .table
             .push(FutureStreams(StreamState::Pending(Box::pin(async move {
-                let connector = tokio_rustls::TlsConnector::from(default_client_config());
-                connector
+                let domain = ServerName::try_from(server_name)
+                    .map_err(|_| TlsError::msg("invalid server name"))?;
+
+                let stream = tokio_rustls::TlsConnector::from(default_client_config())
                     .connect(domain, streams)
-                    .await
-                    .with_context(|| "connection failed")
+                    .await?;
+                Ok(stream)
             }))))?)
     }
 
@@ -203,7 +253,7 @@ impl<'a> generated::types::HostClientHandshake for WasiTlsCtx<'a> {
 }
 
 /// Future streams provides the tls streams after the handshake is completed
-pub struct FutureStreams<T>(StreamState<Result<T>>);
+pub struct FutureStreams<T>(StreamState<Result<T, TlsError>>);
 
 /// Library specific version of TLS connection after the handshake is completed.
 /// This alias allows it to use with wit-bindgen component generator which won't take generic types
@@ -224,7 +274,7 @@ impl<'a> generated::types::HostFutureClientStreams for WasiTlsCtx<'a> {
         &mut self,
         this: wasmtime::component::Resource<FutureClientStreams>,
     ) -> wasmtime::Result<Resource<HostPollable>> {
-        wasmtime_wasi::subscribe(self.table, this)
+        wasmtime_wasi::p2::subscribe(self.table, this)
     }
 
     fn get(
@@ -239,28 +289,34 @@ impl<'a> generated::types::HostFutureClientStreams for WasiTlsCtx<'a> {
                         Resource<BoxInputStream>,
                         Resource<BoxOutputStream>,
                     ),
-                    (),
+                    Resource<HostIoError>,
                 >,
                 (),
             >,
         >,
     > {
-        {
-            let this = self.table.get(&this)?;
-            match &this.0 {
-                StreamState::Pending(_) => return Ok(None),
-                StreamState::Ready(Ok(_)) => (),
-                StreamState::Ready(Err(_)) => {
-                    return Ok(Some(Ok(Err(()))));
-                }
-                StreamState::Closed => return Ok(Some(Err(()))),
-            }
+        let this = &mut self.table.get_mut(&this)?.0;
+        match this {
+            StreamState::Pending(_) => return Ok(None),
+            StreamState::Closed => return Ok(Some(Err(()))),
+            StreamState::Ready(_) => (),
         }
 
-        let StreamState::Ready(Ok(tls_stream)) =
-            mem::replace(&mut self.table.get_mut(&this)?.0, StreamState::Closed)
-        else {
+        let StreamState::Ready(result) = mem::replace(this, StreamState::Closed) else {
             unreachable!()
+        };
+
+        let tls_stream = match result {
+            Ok(s) => s,
+            Err(TlsError::Trap(e)) => return Err(e),
+            Err(TlsError::Io(e)) => {
+                let error = self.table.push(e)?;
+                return Ok(Some(Ok(Err(error))));
+            }
+            Err(TlsError::Tls(e)) => {
+                let error = self.table.push(wasmtime_wasi::p2::IoError::new(e))?;
+                return Ok(Some(Ok(Err(error))));
+            }
         };
 
         let (rx, tx) = tokio::io::split(tls_stream);
@@ -347,15 +403,15 @@ impl AsyncWrite for WasiStreams {
                             return match output.write(Bytes::copy_from_slice(&buf[..count])) {
                                 Ok(()) => Poll::Ready(Ok(count)),
                                 Err(StreamError::Closed) => Poll::Ready(Ok(0)),
-                                Err(StreamError::LastOperationFailed(e) | StreamError::Trap(e)) => {
-                                    Poll::Ready(Err(std::io::Error::other(e)))
-                                }
+                                Err(e) => Poll::Ready(Err(std::io::Error::other(e))),
                             };
                         }
-                        Err(StreamError::Closed) => return Poll::Ready(Ok(0)),
-                        Err(StreamError::LastOperationFailed(e) | StreamError::Trap(e)) => {
-                            return Poll::Ready(Err(std::io::Error::other(e)))
+                        Err(StreamError::Closed) => {
+                            // Our current version of tokio-rustls does not handle returning `Ok(0)` well.
+                            // See: https://github.com/rustls/tokio-rustls/issues/92
+                            return Poll::Ready(Err(std::io::ErrorKind::WriteZero.into()));
                         }
+                        Err(e) => return Poll::Ready(Err(std::io::Error::other(e))),
                     };
                 }
             }
@@ -621,7 +677,8 @@ mod tests {
         let (tx1, rx1) = oneshot::channel::<()>();
 
         let mut future_streams = FutureStreams(StreamState::Pending(Box::pin(async move {
-            rx1.await.map_err(|_| anyhow::anyhow!("oneshot canceled"))
+            rx1.await
+                .map_err(|_| TlsError::Trap(anyhow::anyhow!("oneshot canceled")))
         })));
 
         let mut fut = future_streams.ready();

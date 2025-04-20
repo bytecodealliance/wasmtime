@@ -30,7 +30,7 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addq    %rdi, %rsi, %rdi
+;   addq %rsi, %rdi
 ;   jb #trap=user1
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

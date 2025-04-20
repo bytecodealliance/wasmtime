@@ -2942,7 +2942,12 @@ impl MachInstEmit for Inst {
                     let offset = sink.cur_offset();
                     sink.push_user_stack_map(state, offset, s);
                 }
-                sink.add_call_site();
+
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    sink.add_call_site(&try_call.exception_dests);
+                } else {
+                    sink.add_call_site(&[]);
+                }
 
                 if info.callee_pop_size > 0 {
                     let callee_pop_size =
@@ -2951,6 +2956,26 @@ impl MachInstEmit for Inst {
                         inst.emit(sink, emit_info, state);
                     }
                 }
+
+                // Load any stack-carried return values.
+                info.emit_retval_loads::<AArch64MachineDeps, _, _>(
+                    state.frame_layout().stackslots_size,
+                    |inst| inst.emit(sink, emit_info, state),
+                    |needed_space| Some(Inst::EmitIsland { needed_space }),
+                );
+
+                // If this is a try-call, jump to the continuation
+                // (normal-return) block.
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    let jmp = Inst::Jump {
+                        dest: BranchTarget::Label(try_call.continuation),
+                    };
+                    jmp.emit(sink, emit_info, state);
+                }
+
+                // We produce an island above if needed, so disable
+                // the worst-case-size check in this case.
+                start_off = sink.cur_offset();
             }
             &Inst::CallInd { ref info } => {
                 let user_stack_map = state.take_stack_map();
@@ -2961,7 +2986,12 @@ impl MachInstEmit for Inst {
                     let offset = sink.cur_offset();
                     sink.push_user_stack_map(state, offset, s);
                 }
-                sink.add_call_site();
+
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    sink.add_call_site(&try_call.exception_dests);
+                } else {
+                    sink.add_call_site(&[]);
+                }
 
                 if info.callee_pop_size > 0 {
                     let callee_pop_size =
@@ -2970,6 +3000,26 @@ impl MachInstEmit for Inst {
                         inst.emit(sink, emit_info, state);
                     }
                 }
+
+                // Load any stack-carried return values.
+                info.emit_retval_loads::<AArch64MachineDeps, _, _>(
+                    state.frame_layout().stackslots_size,
+                    |inst| inst.emit(sink, emit_info, state),
+                    |needed_space| Some(Inst::EmitIsland { needed_space }),
+                );
+
+                // If this is a try-call, jump to the continuation
+                // (normal-return) block.
+                if let Some(try_call) = info.try_call_info.as_ref() {
+                    let jmp = Inst::Jump {
+                        dest: BranchTarget::Label(try_call.continuation),
+                    };
+                    jmp.emit(sink, emit_info, state);
+                }
+
+                // We produce an island above if needed, so disable
+                // the worst-case-size check in this case.
+                start_off = sink.cur_offset();
             }
             &Inst::ReturnCall { ref info } => {
                 emit_return_call_common_sequence(sink, emit_info, state, info);
@@ -2979,7 +3029,7 @@ impl MachInstEmit for Inst {
                 // for the target, but rather a function relocation.
                 sink.add_reloc(Reloc::Arm64Call, &info.dest, 0);
                 sink.put4(enc_jump26(0b000101, 0));
-                sink.add_call_site();
+                sink.add_call_site(&[]);
 
                 // `emit_return_call_common_sequence` emits an island if
                 // necessary, so we can safely disable the worst-case-size check
@@ -2994,7 +3044,7 @@ impl MachInstEmit for Inst {
                     targets: vec![],
                 }
                 .emit(sink, emit_info, state);
-                sink.add_call_site();
+                sink.add_call_site(&[]);
 
                 // `emit_return_call_common_sequence` emits an island if
                 // necessary, so we can safely disable the worst-case-size check

@@ -9,9 +9,8 @@ use crate::{code_memory::CodeMemory, profiling_agent::ProfilingAgent};
 use alloc::sync::Arc;
 use core::str;
 use wasmtime_environ::{
-    CompiledFunctionInfo, CompiledModuleInfo, DefinedFuncIndex, FuncIndex, FunctionLoc,
-    FunctionName, Metadata, Module, ModuleInternedTypeIndex, PrimaryMap, StackMapInformation,
-    WasmFunctionInfo,
+    CompiledFunctionInfo, CompiledModuleInfo, DefinedFuncIndex, FilePos, FuncIndex, FunctionLoc,
+    FunctionName, Metadata, Module, ModuleInternedTypeIndex, PrimaryMap,
 };
 
 /// A compiled wasm module, ready to be instantiated.
@@ -174,19 +173,6 @@ impl CompiledModule {
         &self.text()[loc.start as usize..][..loc.length as usize]
     }
 
-    /// Returns the stack map information for all functions defined in this
-    /// module.
-    ///
-    /// The iterator returned iterates over the span of the compiled function in
-    /// memory with the stack maps associated with those bytes.
-    pub fn stack_maps(&self) -> impl Iterator<Item = (&[u8], &[StackMapInformation])> {
-        self.finished_functions().map(|(_, f)| f).zip(
-            self.funcs
-                .values()
-                .map(|f| &f.wasm_func_info.stack_maps[..]),
-        )
-    }
-
     /// Lookups a defined function by a program counter value.
     ///
     /// Returns the defined function index and the relative address of
@@ -231,13 +217,10 @@ impl CompiledModule {
             .wasm_func_loc
     }
 
-    /// Gets the function information for a given function index.
-    pub fn wasm_func_info(&self, index: DefinedFuncIndex) -> &WasmFunctionInfo {
-        &self
-            .funcs
-            .get(index)
-            .expect("defined function should be present")
-            .wasm_func_info
+    /// Returns the original binary offset in the file that `index` was defined
+    /// at.
+    pub fn func_start_srcloc(&self, index: DefinedFuncIndex) -> FilePos {
+        self.funcs[index].start_srcloc
     }
 
     /// Creates a new symbolication context which can be used to further

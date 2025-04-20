@@ -405,14 +405,14 @@ where
     }
 
     fn gen_return(
-        _call_conv: isa::CallConv,
+        call_conv: isa::CallConv,
         _isa_flags: &PulleyFlags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
         let mut insts = SmallVec::new();
 
         // Handle final stack adjustments for the tail-call ABI.
-        if frame_layout.tail_args_size > 0 {
+        if call_conv == isa::CallConv::Tail && frame_layout.tail_args_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(
                 frame_layout.tail_args_size.try_into().unwrap(),
             ));
@@ -532,8 +532,15 @@ where
         MACHINE_ENV.get_or_init(create_reg_environment)
     }
 
-    fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> PRegSet {
-        DEFAULT_CLOBBERS
+    fn get_regs_clobbered_by_call(
+        _call_conv_of_callee: isa::CallConv,
+        is_exception: bool,
+    ) -> PRegSet {
+        if is_exception {
+            ALL_CLOBBERS
+        } else {
+            DEFAULT_CLOBBERS
+        }
     }
 
     fn compute_frame_layout(
@@ -544,6 +551,7 @@ where
         is_leaf: bool,
         incoming_args_size: u32,
         tail_args_size: u32,
+        stackslots_size: u32,
         fixed_frame_storage_size: u32,
         outgoing_args_size: u32,
     ) -> FrameLayout {
@@ -578,6 +586,7 @@ where
             setup_area_size: setup_area_size.into(),
             clobber_size,
             fixed_frame_storage_size,
+            stackslots_size,
             outgoing_args_size,
             clobbered_callee_saves: regs,
         }
@@ -591,6 +600,20 @@ where
     ) {
         // Pulley doesn't need inline probestacks because it always checks stack
         // decrements.
+    }
+
+    fn retval_temp_reg(_call_conv_of_callee: isa::CallConv) -> Writable<Reg> {
+        // Use x15 as a temp if needed: clobbered, not a
+        // retval.
+        Writable::from_reg(regs::x_reg(15))
+    }
+
+    fn exception_payload_regs(_call_conv: isa::CallConv) -> &'static [Reg] {
+        const PAYLOAD_REGS: &'static [Reg] = &[
+            Reg::from_real_reg(regs::px_reg(0)),
+            Reg::from_real_reg(regs::px_reg(1)),
+        ];
+        PAYLOAD_REGS
     }
 }
 
@@ -893,6 +916,104 @@ const DEFAULT_CLOBBERS: PRegSet = PRegSet::empty()
     .with(pf_reg(14))
     .with(pf_reg(15))
     // All vector registers get clobbered.
+    .with(pv_reg(0))
+    .with(pv_reg(1))
+    .with(pv_reg(2))
+    .with(pv_reg(3))
+    .with(pv_reg(4))
+    .with(pv_reg(5))
+    .with(pv_reg(6))
+    .with(pv_reg(7))
+    .with(pv_reg(8))
+    .with(pv_reg(9))
+    .with(pv_reg(10))
+    .with(pv_reg(11))
+    .with(pv_reg(12))
+    .with(pv_reg(13))
+    .with(pv_reg(14))
+    .with(pv_reg(15))
+    .with(pv_reg(16))
+    .with(pv_reg(17))
+    .with(pv_reg(18))
+    .with(pv_reg(19))
+    .with(pv_reg(20))
+    .with(pv_reg(21))
+    .with(pv_reg(22))
+    .with(pv_reg(23))
+    .with(pv_reg(24))
+    .with(pv_reg(25))
+    .with(pv_reg(26))
+    .with(pv_reg(27))
+    .with(pv_reg(28))
+    .with(pv_reg(29))
+    .with(pv_reg(30))
+    .with(pv_reg(31));
+
+const ALL_CLOBBERS: PRegSet = PRegSet::empty()
+    .with(px_reg(0))
+    .with(px_reg(1))
+    .with(px_reg(2))
+    .with(px_reg(3))
+    .with(px_reg(4))
+    .with(px_reg(5))
+    .with(px_reg(6))
+    .with(px_reg(7))
+    .with(px_reg(8))
+    .with(px_reg(9))
+    .with(px_reg(10))
+    .with(px_reg(11))
+    .with(px_reg(12))
+    .with(px_reg(13))
+    .with(px_reg(14))
+    .with(px_reg(15))
+    .with(px_reg(16))
+    .with(px_reg(17))
+    .with(px_reg(18))
+    .with(px_reg(19))
+    .with(px_reg(20))
+    .with(px_reg(21))
+    .with(px_reg(22))
+    .with(px_reg(23))
+    .with(px_reg(24))
+    .with(px_reg(25))
+    .with(px_reg(26))
+    .with(px_reg(27))
+    .with(px_reg(28))
+    .with(px_reg(29))
+    .with(px_reg(30))
+    .with(px_reg(31))
+    .with(pf_reg(0))
+    .with(pf_reg(1))
+    .with(pf_reg(2))
+    .with(pf_reg(3))
+    .with(pf_reg(4))
+    .with(pf_reg(5))
+    .with(pf_reg(6))
+    .with(pf_reg(7))
+    .with(pf_reg(8))
+    .with(pf_reg(9))
+    .with(pf_reg(10))
+    .with(pf_reg(11))
+    .with(pf_reg(12))
+    .with(pf_reg(13))
+    .with(pf_reg(14))
+    .with(pf_reg(15))
+    .with(pf_reg(16))
+    .with(pf_reg(17))
+    .with(pf_reg(18))
+    .with(pf_reg(19))
+    .with(pf_reg(20))
+    .with(pf_reg(21))
+    .with(pf_reg(22))
+    .with(pf_reg(23))
+    .with(pf_reg(24))
+    .with(pf_reg(25))
+    .with(pf_reg(26))
+    .with(pf_reg(27))
+    .with(pf_reg(28))
+    .with(pf_reg(29))
+    .with(pf_reg(30))
+    .with(pf_reg(31))
     .with(pv_reg(0))
     .with(pv_reg(1))
     .with(pv_reg(2))

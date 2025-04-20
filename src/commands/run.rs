@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use wasi_common::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
-use wasmtime_wasi::{IoView, WasiView};
+use wasmtime_wasi::p2::{IoView, WasiView};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::wit::WasiNnView;
@@ -47,7 +47,7 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
 #[derive(Parser)]
 pub struct RunCommand {
     #[command(flatten)]
-    #[allow(missing_docs, reason = "don't want to mess with clap doc-strings")]
+    #[expect(missing_docs, reason = "don't want to mess with clap doc-strings")]
     pub run: RunCommon,
 
     /// The name of the function to run
@@ -181,28 +181,30 @@ impl RunCommand {
             .unwrap_or(std::time::Duration::MAX);
         let result = runtime.block_on(async {
             tokio::time::timeout(dur, async {
-                // Load the preload wasm modules.
-                let mut modules = Vec::new();
+                let mut profiled_modules: Vec<(String, Module)> = Vec::new();
                 if let RunTarget::Core(m) = &main {
-                    modules.push((String::new(), m.clone()));
+                    profiled_modules.push(("".to_string(), m.clone()));
                 }
+
+                // Load the preload wasm modules.
                 for (name, path) in self.preloads.iter() {
                     // Read the wasm module binary either as `*.wat` or a raw binary
-                    let module = match self.run.load_module(&engine, path)? {
+                    let preload_target = self.run.load_module(&engine, path)?;
+                    let preload_module = match preload_target {
                         RunTarget::Core(m) => m,
                         #[cfg(feature = "component-model")]
                         RunTarget::Component(_) => {
                             bail!("components cannot be loaded with `--preload`")
                         }
                     };
-                    modules.push((name.clone(), module.clone()));
+                    profiled_modules.push((name.to_string(), preload_module.clone()));
 
                     // Add the module's functions to the linker.
                     match &mut linker {
                         #[cfg(feature = "cranelift")]
                         CliLinker::Core(linker) => {
                             linker
-                                .module_async(&mut store, name, &module)
+                                .module_async(&mut store, name, &preload_module)
                                 .await
                                 .context(format!(
                                     "failed to process preload `{}` at `{}`",
@@ -221,7 +223,7 @@ impl RunCommand {
                     }
                 }
 
-                self.load_main_module(&mut store, &mut linker, &main, modules)
+                self.load_main_module(&mut store, &mut linker, &main, profiled_modules)
                     .await
                     .with_context(|| {
                         format!(
@@ -295,14 +297,21 @@ impl RunCommand {
     fn setup_epoch_handler(
         &self,
         store: &mut Store<Host>,
-        modules: Vec<(String, Module)>,
+        main_target: &RunTarget,
+        profiled_modules: Vec<(String, Module)>,
     ) -> Result<Box<dyn FnOnce(&mut Store<Host>)>> {
         if let Some(Profile::Guest { path, interval }) = &self.run.profile {
             #[cfg(feature = "profiling")]
-            return Ok(self.setup_guest_profiler(store, modules, path, *interval));
+            return Ok(self.setup_guest_profiler(
+                store,
+                main_target,
+                profiled_modules,
+                path,
+                *interval,
+            ));
             #[cfg(not(feature = "profiling"))]
             {
-                let _ = (modules, path, interval);
+                let _ = (profiled_modules, path, interval, main_target);
                 bail!("support for profiling disabled at compile time");
             }
         }
@@ -323,15 +332,27 @@ impl RunCommand {
     fn setup_guest_profiler(
         &self,
         store: &mut Store<Host>,
-        modules: Vec<(String, Module)>,
+        main_target: &RunTarget,
+        profiled_modules: Vec<(String, Module)>,
         path: &str,
         interval: std::time::Duration,
     ) -> Box<dyn FnOnce(&mut Store<Host>)> {
         use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut, UpdateDeadline};
 
         let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
-        store.data_mut().guest_profiler =
-            Some(Arc::new(GuestProfiler::new(module_name, interval, modules)));
+        store.data_mut().guest_profiler = match main_target {
+            RunTarget::Core(_m) => Some(Arc::new(GuestProfiler::new(
+                module_name,
+                interval,
+                profiled_modules,
+            ))),
+            RunTarget::Component(component) => Some(Arc::new(GuestProfiler::new_component(
+                module_name,
+                interval,
+                component.clone(),
+                profiled_modules,
+            ))),
+        };
 
         fn sample(
             mut store: StoreContextMut<Host>,
@@ -400,19 +421,19 @@ impl RunCommand {
         &self,
         store: &mut Store<Host>,
         linker: &mut CliLinker,
-        module: &RunTarget,
-        modules: Vec<(String, Module)>,
+        main_target: &RunTarget,
+        profiled_modules: Vec<(String, Module)>,
     ) -> Result<()> {
         // The main module might be allowed to have unknown imports, which
         // should be defined as traps:
         if self.run.common.wasm.unknown_imports_trap == Some(true) {
             match linker {
                 CliLinker::Core(linker) => {
-                    linker.define_unknown_imports_as_traps(module.unwrap_core())?;
+                    linker.define_unknown_imports_as_traps(main_target.unwrap_core())?;
                 }
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
-                    linker.define_unknown_imports_as_traps(module.unwrap_component())?;
+                    linker.define_unknown_imports_as_traps(main_target.unwrap_component())?;
                 }
             }
         }
@@ -421,17 +442,21 @@ impl RunCommand {
         if self.run.common.wasm.unknown_imports_default == Some(true) {
             match linker {
                 CliLinker::Core(linker) => {
-                    linker.define_unknown_imports_as_default_values(module.unwrap_core())?;
+                    linker.define_unknown_imports_as_default_values(
+                        store,
+                        main_target.unwrap_core(),
+                    )?;
                 }
                 _ => bail!("cannot use `--default-values-unknown-imports` with components"),
             }
         }
 
-        let finish_epoch_handler = self.setup_epoch_handler(store, modules)?;
+        let finish_epoch_handler =
+            self.setup_epoch_handler(store, main_target, profiled_modules)?;
 
         let result = match linker {
             CliLinker::Core(linker) => {
-                let module = module.unwrap_core();
+                let module = main_target.unwrap_core();
                 let instance = linker
                     .instantiate_async(&mut *store, &module)
                     .await
@@ -469,36 +494,145 @@ impl RunCommand {
             }
             #[cfg(feature = "component-model")]
             CliLinker::Component(linker) => {
+                let component = main_target.unwrap_component();
                 if self.invoke.is_some() {
-                    bail!("using `--invoke` with components is not supported");
+                    self.invoke_component(&mut *store, component, linker).await
+                } else {
+                    let command = wasmtime_wasi::p2::bindings::Command::instantiate_async(
+                        &mut *store,
+                        component,
+                        linker,
+                    )
+                    .await?;
+
+                    let result = command
+                        .wasi_cli_run()
+                        .call_run(&mut *store)
+                        .await
+                        .context("failed to invoke `run` function")
+                        .map_err(|e| self.handle_core_dump(&mut *store, e));
+
+                    // Translate the `Result<(),()>` produced by wasm into a feigned
+                    // explicit exit here with status 1 if `Err(())` is returned.
+                    result.and_then(|wasm_result| match wasm_result {
+                        Ok(()) => Ok(()),
+                        Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
+                    })
                 }
-
-                let component = module.unwrap_component();
-
-                let command = wasmtime_wasi::bindings::Command::instantiate_async(
-                    &mut *store,
-                    component,
-                    linker,
-                )
-                .await?;
-                let result = command
-                    .wasi_cli_run()
-                    .call_run(&mut *store)
-                    .await
-                    .context("failed to invoke `run` function")
-                    .map_err(|e| self.handle_core_dump(&mut *store, e));
-
-                // Translate the `Result<(),()>` produced by wasm into a feigned
-                // explicit exit here with status 1 if `Err(())` is returned.
-                result.and_then(|wasm_result| match wasm_result {
-                    Ok(()) => Ok(()),
-                    Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
-                })
             }
         };
         finish_epoch_handler(store);
 
         result
+    }
+
+    #[cfg(feature = "component-model")]
+    async fn invoke_component(
+        &self,
+        store: &mut Store<Host>,
+        component: &wasmtime::component::Component,
+        linker: &mut wasmtime::component::Linker<Host>,
+    ) -> Result<()> {
+        use wasmtime::component::{
+            types::ComponentItem,
+            wasm_wave::{
+                untyped::UntypedFuncCall,
+                wasm::{DisplayFuncResults, WasmFunc},
+            },
+            Val,
+        };
+
+        // Check if the invoke string is present
+        let invoke: &String = self.invoke.as_ref().unwrap();
+
+        let untyped_call = UntypedFuncCall::parse(invoke).with_context(|| {
+                format!(
+                    "Failed to parse invoke '{invoke}': See https://docs.wasmtime.dev/cli-options.html#run for syntax",
+                )
+        })?;
+
+        let name = untyped_call.name();
+        let matches = Self::search_component(store.engine(), component.component_type(), name);
+        match matches.len()  {
+                        0 => bail!("No export named `{name}` in component."),
+                        1 => {}
+                        _ => bail!("Multiple exports named `{name}`: {matches:?}. FIXME: support some way to disambiguate names"),
+                    };
+        let (params, result_len, export) = match &matches[0] {
+            (names, ComponentItem::ComponentFunc(func)) => {
+                let param_types = WasmFunc::params(func).collect::<Vec<_>>();
+                let params = untyped_call.to_wasm_params(&param_types).with_context(|| {
+                    format!("while interpreting parameters in invoke \"{invoke}\"")
+                })?;
+                let mut export = None;
+                for name in names {
+                    let ix = component
+                        .get_export_index(export.as_ref(), name)
+                        .expect("export exists");
+                    export = Some(ix);
+                }
+                (
+                    params,
+                    func.results().len(),
+                    export.expect("export has at least one name"),
+                )
+            }
+            (names, ty) => {
+                bail!("Cannot invoke export {names:?}: expected ComponentFunc, got type {ty:?}");
+            }
+        };
+
+        let instance = linker.instantiate_async(&mut *store, component).await?;
+
+        let func = instance
+            .get_func(&mut *store, export)
+            .expect("found export index");
+
+        let mut results = vec![Val::Bool(false); result_len];
+        func.call_async(&mut *store, &params, &mut results).await?;
+
+        println!("{}", DisplayFuncResults(&results));
+
+        Ok(())
+    }
+
+    #[cfg(feature = "component-model")]
+    fn search_component(
+        engine: &Engine,
+        component: wasmtime::component::types::Component,
+        name: &str,
+    ) -> Vec<(Vec<String>, wasmtime::component::types::ComponentItem)> {
+        use wasmtime::component::types::ComponentItem as CItem;
+        fn collect_exports(
+            engine: &Engine,
+            item: CItem,
+            basename: Vec<String>,
+        ) -> Vec<(Vec<String>, CItem)> {
+            match item {
+                CItem::Component(c) => c
+                    .exports(engine)
+                    .flat_map(move |(name, item)| {
+                        let mut names = basename.clone();
+                        names.push(name.to_string());
+                        collect_exports(engine, item, names)
+                    })
+                    .collect::<Vec<_>>(),
+                CItem::ComponentInstance(c) => c
+                    .exports(engine)
+                    .flat_map(move |(name, item)| {
+                        let mut names = basename.clone();
+                        names.push(name.to_string());
+                        collect_exports(engine, item, names)
+                    })
+                    .collect::<Vec<_>>(),
+                _ => vec![(basename, item)],
+            }
+        }
+
+        collect_exports(engine, CItem::Component(component), Vec::new())
+            .into_iter()
+            .filter(|(names, _item)| names.last().expect("at least one name") == name)
+            .collect()
     }
 
     async fn invoke_func(&self, store: &mut Store<Host>, func: Func) -> Result<()> {
@@ -670,7 +804,7 @@ impl RunCommand {
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
                     let link_options = self.run.compute_wasi_features();
-                    wasmtime_wasi::add_to_linker_with_options_async(linker, &link_options)?;
+                    wasmtime_wasi::p2::add_to_linker_with_options_async(linker, &link_options)?;
                     self.set_preview2_ctx(store)?;
                 }
             }
@@ -911,7 +1045,7 @@ impl RunCommand {
     }
 
     fn set_preview2_ctx(&self, store: &mut Store<Host>) -> Result<()> {
-        let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
+        let mut builder = wasmtime_wasi::p2::WasiCtxBuilder::new();
         builder.inherit_stdio().args(&self.compute_argv()?);
         self.run.configure_wasip2(&mut builder)?;
         let ctx = builder.build_p1();
@@ -986,7 +1120,7 @@ impl IoView for Host {
     }
 }
 impl WasiView for Host {
-    fn ctx(&mut self) -> &mut wasmtime_wasi::WasiCtx {
+    fn ctx(&mut self) -> &mut wasmtime_wasi::p2::WasiCtx {
         self.preview2_ctx().ctx()
     }
 }

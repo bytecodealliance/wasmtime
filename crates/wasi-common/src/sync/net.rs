@@ -373,7 +373,9 @@ pub fn get_fd_flags<Socketlike: AsSocketlike>(f: Socketlike) -> io::Result<crate
     // query for the non-blocking flag. We can get a sufficient approximation
     // by testing whether a zero-length `recv` appears to block.
     #[cfg(windows)]
-    match rustix::net::recv(f, &mut [], rustix::net::RecvFlags::empty()) {
+    let buf: &mut [u8] = &mut [];
+    #[cfg(windows)]
+    match rustix::net::recv(f, buf, rustix::net::RecvFlags::empty()) {
         Ok(_) => Ok(crate::file::FdFlags::empty()),
         Err(rustix::io::Errno::WOULDBLOCK) => Ok(crate::file::FdFlags::NONBLOCK),
         Err(e) => Err(e.into()),

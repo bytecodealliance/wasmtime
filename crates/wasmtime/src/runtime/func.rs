@@ -1011,10 +1011,14 @@ impl Func {
             "must use `call_async` when async support is enabled on the config",
         );
         let mut store = store.as_context_mut();
-        let need_gc = self.call_impl_check_args(&mut store, params, results)?;
-        if need_gc {
-            store.0.gc();
+
+        let _need_gc = self.call_impl_check_args(&mut store, params, results)?;
+
+        #[cfg(feature = "gc")]
+        if _need_gc {
+            store.gc(None);
         }
+
         unsafe { self.call_impl_do_call(&mut store, params, results) }
     }
 
@@ -1152,10 +1156,14 @@ impl Func {
             store.0.async_support(),
             "cannot use `call_async` without enabling async support in the config",
         );
-        let need_gc = self.call_impl_check_args(&mut store, params, results)?;
-        if need_gc {
-            store.0.gc_async().await;
+
+        let _need_gc = self.call_impl_check_args(&mut store, params, results)?;
+
+        #[cfg(feature = "gc")]
+        if _need_gc {
+            store.gc_async(None).await?;
         }
+
         let result = store
             .on_fiber(|store| unsafe { self.call_impl_do_call(store, params, results) })
             .await??;
@@ -1214,9 +1222,8 @@ impl Func {
             let num_gc_refs = ty.as_wasm_func_type().non_i31_gc_ref_params_count();
             if let Some(num_gc_refs) = core::num::NonZeroUsize::new(num_gc_refs) {
                 return Ok(opaque
-                    .gc_store()?
-                    .gc_heap
-                    .need_gc_before_entering_wasm(num_gc_refs));
+                    .optional_gc_store()
+                    .is_some_and(|s| s.gc_heap.need_gc_before_entering_wasm(num_gc_refs)));
             }
         }
 
@@ -2278,19 +2285,19 @@ impl<T> Caller<'_, T> {
     ///
     /// Same as [`Store::gc`](crate::Store::gc).
     #[cfg(feature = "gc")]
-    pub fn gc(&mut self) {
-        self.store.gc()
+    pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
+        self.store.gc(why);
     }
 
     /// Perform garbage collection asynchronously.
     ///
     /// Same as [`Store::gc_async`](crate::Store::gc_async).
     #[cfg(all(feature = "async", feature = "gc"))]
-    pub async fn gc_async(&mut self)
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()>
     where
         T: Send,
     {
-        self.store.gc_async().await;
+        self.store.gc_async(why).await
     }
 
     /// Returns the remaining fuel in the store.

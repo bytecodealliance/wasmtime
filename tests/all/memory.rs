@@ -140,6 +140,7 @@ fn offsets_static_dynamic_oh_my(config: &mut Config) -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+#[cfg_attr(asan, ignore)]
 fn guards_present() -> Result<()> {
     const GUARD_SIZE: u64 = 65536;
 
@@ -188,6 +189,7 @@ fn guards_present() -> Result<()> {
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
+#[cfg_attr(asan, ignore)]
 fn guards_present_pooling(config: &mut Config) -> Result<()> {
     const GUARD_SIZE: u64 = 65536;
 
@@ -217,17 +219,19 @@ fn guards_present_pooling(config: &mut Config) -> Result<()> {
     };
 
     unsafe fn assert_guards(store: &Store<()>, mem: &Memory) {
-        // guards before
-        println!("check pre-mem");
-        assert_faults(mem.data_ptr(&store).offset(-(GUARD_SIZE as isize)));
+        unsafe {
+            // guards before
+            println!("check pre-mem");
+            assert_faults(mem.data_ptr(&store).offset(-(GUARD_SIZE as isize)));
 
-        // unmapped just after memory
-        println!("check mem");
-        assert_faults(mem.data_ptr(&store).add(mem.data_size(&store)));
+            // unmapped just after memory
+            println!("check mem");
+            assert_faults(mem.data_ptr(&store).add(mem.data_size(&store)));
 
-        // guards after memory
-        println!("check post-mem");
-        assert_faults(mem.data_ptr(&store).add(1 << 20));
+            // guards after memory
+            println!("check post-mem");
+            assert_faults(mem.data_ptr(&store).add(1 << 20));
+        }
     }
     unsafe {
         assert_guards(&store, &mem1);
@@ -244,6 +248,7 @@ fn guards_present_pooling(config: &mut Config) -> Result<()> {
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
+#[cfg_attr(asan, ignore)]
 fn guards_present_pooling_mpk(config: &mut Config) -> Result<()> {
     if !wasmtime::PoolingAllocationConfig::are_memory_protection_keys_available() {
         println!("skipping `guards_present_pooling_mpk` test; mpk is not supported");
@@ -278,17 +283,19 @@ fn guards_present_pooling_mpk(config: &mut Config) -> Result<()> {
     };
 
     unsafe fn assert_guards(store: &Store<()>, mem: &Memory) {
-        // guards before
-        println!("check pre-mem");
-        assert_faults(mem.data_ptr(&store).offset(-(GUARD_SIZE as isize)));
+        unsafe {
+            // guards before
+            println!("check pre-mem");
+            assert_faults(mem.data_ptr(&store).offset(-(GUARD_SIZE as isize)));
 
-        // unmapped just after memory
-        println!("check mem");
-        assert_faults(mem.data_ptr(&store).add(mem.data_size(&store)));
+            // unmapped just after memory
+            println!("check mem");
+            assert_faults(mem.data_ptr(&store).add(mem.data_size(&store)));
 
-        // guards after memory
-        println!("check post-mem");
-        assert_faults(mem.data_ptr(&store).add(1 << 20));
+            // guards after memory
+            println!("check post-mem");
+            assert_faults(mem.data_ptr(&store).add(1 << 20));
+        }
     }
     unsafe {
         assert_guards(&store, &mem1);
@@ -306,11 +313,12 @@ fn guards_present_pooling_mpk(config: &mut Config) -> Result<()> {
 unsafe fn assert_faults(ptr: *mut u8) {
     use std::io::Error;
     #[cfg(unix)]
-    {
+    unsafe {
         // There's probably a faster way to do this here, but, uh, when in rome?
         match libc::fork() {
             0 => {
                 *ptr = 4;
+
                 std::process::exit(0);
             }
             -1 => panic!("failed to fork: {}", Error::last_os_error()),
@@ -326,7 +334,7 @@ unsafe fn assert_faults(ptr: *mut u8) {
         }
     }
     #[cfg(windows)]
-    {
+    unsafe {
         use windows_sys::Win32::System::Memory::*;
 
         let mut info = std::mem::MaybeUninit::uninit();
@@ -343,7 +351,10 @@ unsafe fn assert_faults(ptr: *mut u8) {
     }
 }
 
+// Disable test on s390x because the large allocation may actually succeed;
+// the whole 64-bit address space is available on this platform.
 #[test]
+#[cfg(not(target_arch = "s390x"))]
 fn massive_64_bit_still_limited() -> Result<()> {
     // Creating a 64-bit memory which exceeds the limits of the address space
     // should still send a request to the `ResourceLimiter` to ensure that it

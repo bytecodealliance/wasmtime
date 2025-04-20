@@ -486,7 +486,6 @@ impl WasmtimeOptionValue for wasmtime::RegallocAlgorithm {
     fn parse(val: Option<&str>) -> Result<Self> {
         match String::parse(val)?.as_str() {
             "backtracking" => Ok(wasmtime::RegallocAlgorithm::Backtracking),
-            "single-pass" => Ok(wasmtime::RegallocAlgorithm::SinglePass),
             other => bail!(
                 "unknown regalloc algorithm`{}`, only backtracking,single-pass accepted",
                 other
@@ -497,7 +496,6 @@ impl WasmtimeOptionValue for wasmtime::RegallocAlgorithm {
     fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             wasmtime::RegallocAlgorithm::Backtracking => f.write_str("backtracking"),
-            wasmtime::RegallocAlgorithm::SinglePass => f.write_str("single-pass"),
             _ => unreachable!(),
         }
     }

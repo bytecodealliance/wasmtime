@@ -86,29 +86,42 @@ fn common_array_layout(
     header_align: u32,
     expected_array_length_offset: u32,
 ) -> GcArrayLayout {
+    use core::mem;
+
     assert!(header_size >= crate::VM_GC_HEADER_SIZE);
     assert!(header_align >= crate::VM_GC_HEADER_ALIGN);
 
     let mut size = header_size;
     let mut align = header_align;
 
-    let length_field_offset = field(&mut size, &mut align, 4);
+    let length_field_size = u32::try_from(mem::size_of::<u32>()).unwrap();
+    let length_field_offset = field(&mut size, &mut align, length_field_size);
     assert_eq!(length_field_offset, expected_array_length_offset);
 
     let elem_size = byte_size_of_wasm_ty_in_gc_heap(&ty.0.element_type);
     let elems_offset = align_up(&mut size, &mut align, elem_size);
     assert_eq!(elems_offset, size);
 
+    let elems_are_gc_refs = ty.0.element_type.is_vmgcref_type_and_not_i31();
+    if elems_are_gc_refs {
+        debug_assert_eq!(
+            length_field_offset + length_field_size,
+            elems_offset,
+            "DRC collector relies on GC ref elements appearing directly after the length field, without any padding",
+        );
+    }
+
     GcArrayLayout {
         base_size: size,
         align,
         elem_size,
+        elems_are_gc_refs,
     }
 }
 
 /// Common code to define a GC struct's layout, given the size and alignment of
 /// the collector's GC header and its expected offset of the array length field.
-#[cfg(any(feature = "gc-drc", feature = "gc-null"))]
+#[cfg(any(feature = "gc-null", feature = "gc-drc"))]
 fn common_struct_layout(
     ty: &WasmStructType,
     header_size: u32,
@@ -119,11 +132,12 @@ fn common_struct_layout(
 
     // Process each field, aligning it to its natural alignment.
     //
-    // We don't try and do any fancy field reordering to minimize padding
-    // (yet?) because (a) the toolchain probably already did that and (b)
-    // we're just doing the simple thing first. We can come back and improve
-    // things here if we find that (a) isn't actually holding true in
-    // practice.
+    // We don't try and do any fancy field reordering to minimize padding (yet?)
+    // because (a) the toolchain probably already did that and (b) we're just
+    // doing the simple thing first, and (c) this is tricky in the presence of
+    // subtyping where we need a subtype's fields to be assigned the same
+    // offsets as its supertype's fields. We can come back and improve things
+    // here if we find that (a) isn't actually holding true in practice.
     let mut size = header_size;
     let mut align = header_align;
 
@@ -132,7 +146,9 @@ fn common_struct_layout(
         .iter()
         .map(|f| {
             let field_size = byte_size_of_wasm_ty_in_gc_heap(&f.element_type);
-            field(&mut size, &mut align, field_size)
+            let offset = field(&mut size, &mut align, field_size);
+            let is_gc_ref = f.element_type.is_vmgcref_type_and_not_i31();
+            GcStructLayoutField { offset, is_gc_ref }
         })
         .collect();
 
@@ -248,6 +264,9 @@ pub struct GcArrayLayout {
 
     /// The size and natural alignment of each element in this array.
     pub elem_size: u32,
+
+    /// Whether or not the elements of this array are GC references or not.
+    pub elems_are_gc_refs: bool,
 }
 
 impl GcArrayLayout {
@@ -290,9 +309,9 @@ pub struct GcStructLayout {
     /// The alignment (in bytes) of this struct.
     pub align: u32,
 
-    /// The fields of this struct. The `i`th entry is the `i`th struct field's
-    /// offset (in bytes) in the struct.
-    pub fields: Vec<u32>,
+    /// The fields of this struct. The `i`th entry contains information about
+    /// the `i`th struct field's layout.
+    pub fields: Vec<GcStructLayoutField>,
 }
 
 impl GcStructLayout {
@@ -302,6 +321,20 @@ impl GcStructLayout {
         let align = usize::try_from(self.align).unwrap();
         Layout::from_size_align(size, align).unwrap()
     }
+}
+
+/// A field in a `GcStructLayout`.
+#[derive(Clone, Copy, Debug)]
+pub struct GcStructLayoutField {
+    /// The offset (in bytes) of this field inside instances of this type.
+    pub offset: u32,
+
+    /// Whether or not this field might contain a reference to another GC
+    /// object.
+    ///
+    /// Note: it is okay for this to be `false` for `i31ref`s, since they never
+    /// actually reference another GC object.
+    pub is_gc_ref: bool,
 }
 
 /// The kind of an object in a GC heap.
@@ -332,7 +365,7 @@ impl GcStructLayout {
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[rustfmt::skip]
-#[allow(missing_docs, reason = "self-describing variants")]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub enum VMGcKind {
     ExternRef      = 0b01000 << 27,
     AnyRef         = 0b10000 << 27,
@@ -340,6 +373,11 @@ pub enum VMGcKind {
     ArrayRef       = 0b10101 << 27,
     StructRef      = 0b10110 << 27,
 }
+
+/// The size of the `VMGcKind` in bytes.
+pub const VM_GC_KIND_SIZE: u8 = 4;
+
+const _: () = assert!(VM_GC_KIND_SIZE as usize == core::mem::size_of::<VMGcKind>());
 
 impl VMGcKind {
     /// Mask this value with a `u32` to get just the bits that `VMGcKind` uses.

@@ -138,7 +138,7 @@ impl TargetIsa for X64 {
 
         let mut body_codegen = codegen.emit_prologue()?;
 
-        body_codegen.emit(&mut body, validator)?;
+        body_codegen.emit(body, validator)?;
         let base = body_codegen.source_location.base;
 
         let names = body_codegen.env.take_name_map();

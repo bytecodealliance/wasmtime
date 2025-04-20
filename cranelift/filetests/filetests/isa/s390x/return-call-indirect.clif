@@ -47,7 +47,7 @@ block0(v0: i64):
 ;   stg %r1, 0(%r15)
 ; block0:
 ;   bras %r1, 12 ; data %callee_i64 + 0 ; lg %r4, 0(%r1)
-;   return_call_ind %r4
+;   lmg %r14, %r15, 272(%r15) ; br %r4
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -83,7 +83,7 @@ block0(v0: i64):
 ;   stg %r1, 0(%r15)
 ; block0:
 ;   larl %r4, %callee_i64 + 0
-;   return_call_ind %r4
+;   lmg %r14, %r15, 272(%r15) ; br %r4
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -148,7 +148,7 @@ block0(v0: f64):
 ;   stg %r1, 0(%r15)
 ; block0:
 ;   bras %r1, 12 ; data %callee_f64 + 0 ; lg %r4, 0(%r1)
-;   return_call_ind %r4
+;   lmg %r14, %r15, 272(%r15) ; br %r4
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -218,7 +218,7 @@ block0(v0: i8):
 ;   stg %r1, 0(%r15)
 ; block0:
 ;   bras %r1, 12 ; data %callee_i8 + 0 ; lg %r4, 0(%r1)
-;   return_call_ind %r4
+;   lmg %r14, %r15, 272(%r15) ; br %r4
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -357,7 +357,7 @@ block0:
 ;   lg %r6, 240(%r15)
 ;   lg %r7, 232(%r15)
 ;   lg %r12, 160(%r15)
-;   return_call_ind %r12 ; callee_pop_size 320
+;   lgr %r1, %r12 ; aghi %r15, 280 ; lmg %r8, %r14, 384(%r15) ; br %r1 ; callee_pop_size 320
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

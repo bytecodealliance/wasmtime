@@ -86,7 +86,7 @@ static ENCODINGS: [&str; 3] = ["utf8", "utf16", "latin1+utf16"];
 #[test]
 fn roundtrip() -> Result<()> {
     for debug in [true, false] {
-        let mut config = component_test_util::config();
+        let mut config = wasmtime_test_util::component::config();
         config.debug_adapter_modules(debug);
         let engine = Engine::new(&config)?;
         for src in ENCODINGS {
@@ -195,7 +195,7 @@ fn test_roundtrip(engine: &Engine, src: &str, dst: &str) -> Result<()> {
 
 #[test]
 fn ptr_out_of_bounds() -> Result<()> {
-    let engine = component_test_util::engine();
+    let engine = wasmtime_test_util::component::engine();
     for src in ENCODINGS {
         for dst in ENCODINGS {
             test_ptr_out_of_bounds(&engine, src, dst)?;
@@ -264,7 +264,7 @@ fn test_ptr_out_of_bounds(engine: &Engine, src: &str, dst: &str) -> Result<()> {
 // happens.
 #[test]
 fn ptr_overflow() -> Result<()> {
-    let engine = component_test_util::engine();
+    let engine = wasmtime_test_util::component::engine();
     for src in ENCODINGS {
         for dst in ENCODINGS {
             test_ptr_overflow(&engine, src, dst)?;
@@ -369,7 +369,7 @@ fn test_ptr_overflow(engine: &Engine, src: &str, dst: &str) -> Result<()> {
 // Test that that the pointer returned from `realloc` is bounds-checked.
 #[test]
 fn realloc_oob() -> Result<()> {
-    let engine = component_test_util::engine();
+    let engine = wasmtime_test_util::component::engine();
     for src in ENCODINGS {
         for dst in ENCODINGS {
             test_realloc_oob(&engine, src, dst)?;
@@ -431,7 +431,7 @@ fn test_realloc_oob(engine: &Engine, src: &str, dst: &str) -> Result<()> {
 // Test that that the pointer returned from `realloc` is bounds-checked.
 #[test]
 fn raw_string_encodings() -> Result<()> {
-    let engine = component_test_util::engine();
+    let engine = wasmtime_test_util::component::engine();
     test_invalid_string_encoding(&engine, "utf8", "utf8", &[0xff], 1)?;
     let array = b"valid string until \xffthen valid again";
     test_invalid_string_encoding(&engine, "utf8", "utf8", array, array.len() as u32)?;

@@ -7,7 +7,6 @@ fn main() -> anyhow::Result<()> {
 mod component {
     use anyhow::{anyhow, Context, Error, Result};
     use arbitrary::Unstructured;
-    use component_fuzz_util::{Declarations, TestCase, Type, MAX_TYPE_DEPTH};
     use proc_macro2::TokenStream;
     use quote::quote;
     use rand::rngs::StdRng;
@@ -18,6 +17,7 @@ mod component {
     use std::iter;
     use std::path::PathBuf;
     use std::process::Command;
+    use wasmtime_test_util::component_fuzz::{Declarations, TestCase, Type, MAX_TYPE_DEPTH};
 
     pub fn generate_static_api_tests() -> Result<()> {
         println!("cargo:rerun-if-changed=build.rs");
@@ -73,7 +73,8 @@ mod component {
                 ret
             })?;
 
-            let name = component_fuzz_util::rust_type(&ty, name_counter, &mut declarations);
+            let name =
+                wasmtime_test_util::component_fuzz::rust_type(&ty, name_counter, &mut declarations);
             types.push((name, ty));
         }
 
@@ -140,8 +141,8 @@ mod component {
             #[allow(unused_imports)]
             fn static_component_api_target(input: &mut libfuzzer_sys::arbitrary::Unstructured) -> libfuzzer_sys::arbitrary::Result<()> {
                 use anyhow::Result;
-                use component_fuzz_util::Declarations;
-                use component_test_util::{self, Float32, Float64};
+                use wasmtime_test_util::component_fuzz::Declarations;
+                use wasmtime_test_util::component::{Float32, Float64};
                 use libfuzzer_sys::arbitrary::{self, Arbitrary};
                 use std::borrow::Cow;
                 use std::sync::{Arc, Once};

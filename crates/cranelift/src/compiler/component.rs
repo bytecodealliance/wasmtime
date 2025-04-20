@@ -6,9 +6,8 @@ use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
-use std::any::Any;
-use wasmtime_environ::component::*;
 use wasmtime_environ::fact::SYNC_ENTER_FIXED_PARAMS;
+use wasmtime_environ::{component::*, CompiledFunctionBody};
 use wasmtime_environ::{
     HostCall, ModuleInternedTypeIndex, PtrSize, TrapSentinel, Tunables, WasmFuncType, WasmValType,
 };
@@ -140,12 +139,8 @@ impl<'a> TrampolineCompiler<'a> {
                 host::stream_new,
                 TrapSentinel::NegativeOne,
             ),
-            Trampoline::StreamRead {
-                ty,
-                err_ctx_ty,
-                options,
-            } => {
-                let tys = &[ty.as_u32(), err_ctx_ty.as_u32()];
+            Trampoline::StreamRead { ty, options } => {
+                let tys = &[ty.as_u32()];
                 if let Some(info) = self.flat_stream_element_info(*ty).cloned() {
                     self.translate_flat_stream_call(tys, options, host::flat_stream_read, &info)
                 } else {
@@ -182,25 +177,20 @@ impl<'a> TrampolineCompiler<'a> {
                 host::stream_close_readable,
                 TrapSentinel::Falsy,
             ),
-            Trampoline::StreamCloseWritable { ty, err_ctx_ty } => self
-                .translate_future_or_stream_call(
-                    &[ty.as_u32(), err_ctx_ty.as_u32()],
-                    None,
-                    host::stream_close_writable,
-                    TrapSentinel::Falsy,
-                ),
+            Trampoline::StreamCloseWritable { ty } => self.translate_future_or_stream_call(
+                &[ty.as_u32()],
+                None,
+                host::stream_close_writable,
+                TrapSentinel::Falsy,
+            ),
             Trampoline::FutureNew { ty } => self.translate_future_or_stream_call(
                 &[ty.as_u32()],
                 None,
                 host::future_new,
                 TrapSentinel::NegativeOne,
             ),
-            Trampoline::FutureRead {
-                ty,
-                err_ctx_ty,
-                options,
-            } => self.translate_future_or_stream_call(
-                &[ty.as_u32(), err_ctx_ty.as_u32()],
+            Trampoline::FutureRead { ty, options } => self.translate_future_or_stream_call(
+                &[ty.as_u32()],
                 Some(&options),
                 host::future_read,
                 TrapSentinel::NegativeOne,
@@ -223,13 +213,12 @@ impl<'a> TrampolineCompiler<'a> {
                 host::future_close_readable,
                 TrapSentinel::Falsy,
             ),
-            Trampoline::FutureCloseWritable { ty, err_ctx_ty } => self
-                .translate_future_or_stream_call(
-                    &[ty.as_u32(), err_ctx_ty.as_u32()],
-                    None,
-                    host::future_close_writable,
-                    TrapSentinel::Falsy,
-                ),
+            Trampoline::FutureCloseWritable { ty } => self.translate_future_or_stream_call(
+                &[ty.as_u32()],
+                None,
+                host::future_close_writable,
+                TrapSentinel::Falsy,
+            ),
             Trampoline::ErrorContextNew { ty, options } => self.translate_error_context_call(
                 *ty,
                 options,
@@ -246,12 +235,12 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::ErrorContextDrop { ty } => self.translate_error_context_drop_call(*ty),
             Trampoline::ResourceTransferOwn => {
                 self.translate_host_libcall(host::resource_transfer_own, |me, rets| {
-                    rets[0] = me.raise_if_negative_one(rets[0]);
+                    rets[0] = me.raise_if_negative_one_and_truncate(rets[0]);
                 })
             }
             Trampoline::ResourceTransferBorrow => {
                 self.translate_host_libcall(host::resource_transfer_borrow, |me, rets| {
-                    rets[0] = me.raise_if_negative_one(rets[0]);
+                    rets[0] = me.raise_if_negative_one_and_truncate(rets[0]);
                 })
             }
             Trampoline::ResourceEnterCall => {
@@ -277,17 +266,17 @@ impl<'a> TrampolineCompiler<'a> {
             ),
             Trampoline::FutureTransfer => {
                 self.translate_host_libcall(host::future_transfer, |me, rets| {
-                    rets[0] = me.raise_if_negative_one(rets[0]);
+                    rets[0] = me.raise_if_negative_one_and_truncate(rets[0]);
                 })
             }
             Trampoline::StreamTransfer => {
                 self.translate_host_libcall(host::stream_transfer, |me, rets| {
-                    rets[0] = me.raise_if_negative_one(rets[0]);
+                    rets[0] = me.raise_if_negative_one_and_truncate(rets[0]);
                 })
             }
             Trampoline::ErrorContextTransfer => {
                 self.translate_host_libcall(host::error_context_transfer, |me, rets| {
-                    rets[0] = me.raise_if_negative_one(rets[0]);
+                    rets[0] = me.raise_if_negative_one_and_truncate(rets[0]);
                 })
             }
         }
@@ -373,12 +362,22 @@ impl<'a> TrampolineCompiler<'a> {
         let call = self.call_libcall(vmctx, get_libcall, args);
 
         let result = self.builder.func.dfg.inst_results(call)[0];
+        let result_ty = self.builder.func.dfg.value_type(result);
+        let expected = &self.builder.func.signature.returns;
         match sentinel {
             TrapSentinel::NegativeOne => {
-                let result = self.raise_if_negative_one(result);
+                assert_eq!(expected.len(), 1);
+                let result = match (result_ty, expected[0].value_type) {
+                    (ir::types::I64, ir::types::I32) => {
+                        self.raise_if_negative_one_and_truncate(result)
+                    }
+                    (ir::types::I64, ir::types::I64) => self.raise_if_negative_one(result),
+                    other => panic!("unsupported NegativeOne combo {other:?}"),
+                };
                 self.abi_store_results(&[result]);
             }
             TrapSentinel::Falsy => {
+                assert_eq!(expected.len(), 0);
                 self.raise_if_host_trapped(result);
                 self.builder.ins().return_(&[]);
             }
@@ -887,7 +886,7 @@ impl<'a> TrampolineCompiler<'a> {
         );
         let call = self.call_libcall(vmctx, host::resource_new32, &host_args);
         let result = self.builder.func.dfg.inst_results(call)[0];
-        let result = self.raise_if_negative_one(result);
+        let result = self.raise_if_negative_one_and_truncate(result);
         self.abi_store_results(&[result]);
     }
 
@@ -916,7 +915,7 @@ impl<'a> TrampolineCompiler<'a> {
         );
         let call = self.call_libcall(vmctx, host::resource_rep32, &host_args);
         let result = self.builder.func.dfg.inst_results(call)[0];
-        let result = self.raise_if_negative_one(result);
+        let result = self.raise_if_negative_one_and_truncate(result);
         self.abi_store_results(&[result]);
     }
 
@@ -1423,11 +1422,16 @@ impl<'a> TrampolineCompiler<'a> {
         self.raise_if_host_trapped(succeeded);
     }
 
+    fn raise_if_negative_one_and_truncate(&mut self, ret: ir::Value) -> ir::Value {
+        let ret = self.raise_if_negative_one(ret);
+        self.builder.ins().ireduce(ir::types::I32, ret)
+    }
+
     fn raise_if_negative_one(&mut self, ret: ir::Value) -> ir::Value {
         let minus_one = self.builder.ins().iconst(ir::types::I64, -1);
         let succeeded = self.builder.ins().icmp(IntCC::NotEqual, ret, minus_one);
         self.raise_if_host_trapped(succeeded);
-        self.builder.ins().ireduce(ir::types::I32, ret)
+        ret
     }
 
     fn call_libcall(
@@ -1450,7 +1454,7 @@ impl ComponentCompiler for Compiler {
         types: &ComponentTypesBuilder,
         index: TrampolineIndex,
         tunables: &Tunables,
-    ) -> Result<AllCallFunc<Box<dyn Any + Send>>> {
+    ) -> Result<AllCallFunc<CompiledFunctionBody>> {
         let compile = |abi: Abi| -> Result<_> {
             let mut compiler = self.function_compiler();
             let mut c = TrampolineCompiler::new(
@@ -1494,10 +1498,12 @@ impl ComponentCompiler for Compiler {
             c.translate(&component.trampolines[index]);
             c.builder.finalize();
 
-            Ok(Box::new(compiler.finish(&format!(
-                "component_trampoline_{}_{abi:?}",
-                index.as_u32(),
-            ))?))
+            Ok(CompiledFunctionBody {
+                code: Box::new(
+                    compiler.finish(&format!("component_trampoline_{}_{abi:?}", index.as_u32()))?,
+                ),
+                needs_gc_heap: false,
+            })
         };
         Ok(AllCallFunc {
             wasm_call: compile(Abi::Wasm)?,
@@ -1710,19 +1716,14 @@ mod host {
             $(
                 pub(super) fn $name(isa: &dyn TargetIsa, func: &mut ir::Function) -> (ir::SigRef, ComponentBuiltinFunctionIndex) {
                     let pointer_type = isa.pointer_type();
-                    let params = vec![
-                        $( AbiParam::new(define!(@ty pointer_type $param)) ),*
-                    ];
-                    let returns = vec![
-                        $( AbiParam::new(define!(@ty pointer_type $result)) )?
-                    ];
-                    let sig = func.import_signature(ir::Signature {
-                        params,
-                        returns,
-                        call_conv: CallConv::triple_default(isa.triple()),
-                    });
+                    let sig = build_sig(
+                        isa,
+                        func,
+                        &[$( define!(@ty pointer_type $param) ),*],
+                        &[$( define!(@ty pointer_type $result) ),*],
+                    );
 
-                    (sig, ComponentBuiltinFunctionIndex::$name())
+                    return (sig, ComponentBuiltinFunctionIndex::$name())
                 }
             )*
         };
@@ -1739,4 +1740,28 @@ mod host {
     }
 
     wasmtime_environ::foreach_builtin_component_function!(define);
+
+    fn build_sig(
+        isa: &dyn TargetIsa,
+        func: &mut ir::Function,
+        params: &[ir::Type],
+        returns: &[ir::Type],
+    ) -> ir::SigRef {
+        let mut sig = ir::Signature {
+            params: params.iter().map(|ty| AbiParam::new(*ty)).collect(),
+            returns: returns.iter().map(|ty| AbiParam::new(*ty)).collect(),
+            call_conv: CallConv::triple_default(isa.triple()),
+        };
+
+        // Once we're declaring the signature of a host function we must respect
+        // the default ABI of the platform which is where argument extension of
+        // params/results may come into play.
+        let extension = isa.default_argument_extension();
+        for arg in sig.params.iter_mut().chain(sig.returns.iter_mut()) {
+            if arg.value_type.is_int() {
+                arg.extension = extension;
+            }
+        }
+        func.import_signature(sig)
+    }
 }

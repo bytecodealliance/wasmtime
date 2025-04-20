@@ -1,0 +1,579 @@
+;; This test has a series of no-op selects (`(select _ x x)`) that can
+;; lead to exponential traversal behavior if not eagerly simplified.
+
+test compile
+set enable_multi_ret_implicit_sret
+set enable_llvm_abi_extensions
+set opt_level=speed_and_size
+target s390x
+
+    function u1:0(i64x2, i128 uext, i16x8, f64, i64, i16, i32x4, f32, f32x4, i8x16, f64x2, i32, i8 sext) -> i8, i8 sext, i8 uext, i8x16, i8 sext, i32 sext, i8 sext, i8 sext, i16 sext, f32x4, i8 sext, i8, i64x2, f64 system_v {
+        ss0 = explicit_slot 81
+        ss1 = explicit_slot 80
+        ss2 = explicit_slot 16, align = 16
+        ss3 = explicit_slot 2, align = 2
+        ss4 = explicit_slot 4, align = 4
+        ss5 = explicit_slot 2, align = 2
+        ss6 = explicit_slot 16, align = 16
+        ss7 = explicit_slot 16, align = 16
+        ss8 = explicit_slot 8, align = 8
+        ss9 = explicit_slot 2, align = 2
+        ss10 = explicit_slot 16, align = 16
+        ss11 = explicit_slot 8, align = 8
+        ss12 = explicit_slot 4, align = 4
+        ss13 = explicit_slot 16, align = 16
+        ss14 = explicit_slot 2, align = 2
+        sig0 = (i8 sext, i64x2, f64, f64, f64x2, i64 uext, i16x8, f64x2, i16 sext) fast
+        sig1 = (f32) -> f32 system_v
+        sig2 = (f64) -> f64 system_v
+        sig3 = (f32) -> f32 system_v
+        sig4 = (f64) -> f64 system_v
+        sig5 = (f32) -> f32 system_v
+        sig6 = (f64) -> f64 system_v
+        sig7 = (f32) -> f32 system_v
+        sig8 = (f64) -> f64 system_v
+        sig9 = (f32, f32, f32) -> f32 system_v
+        sig10 = (f64, f64, f64) -> f64 system_v
+        fn0 = colocated u2:0 sig0
+        fn1 = %CeilF32 sig1
+        fn2 = colocated %CeilF64 sig2
+        fn3 = colocated %FloorF32 sig3
+        fn4 = colocated %FloorF64 sig4
+        fn5 = %TruncF32 sig5
+        fn6 = %TruncF64 sig6
+        fn7 = %NearestF32 sig7
+        fn8 = colocated %NearestF64 sig8
+        fn9 = colocated %FmaF32 sig9
+        fn10 = %FmaF64 sig10
+    
+    block0(v0: i64x2, v1: i128, v2: i16x8, v3: f64, v4: i64, v5: i16, v6: i32x4, v7: f32, v8: f32x4, v9: i8x16, v10: f64x2, v11: i32, v12: i8):
+        v62 = iconst.i16 -11823
+        v63 = iconst.i16 -11823
+        v64 = iconst.i16 0x51d1
+        v65 = iconst.i16 -203
+        v66 = iconst.i16 -11823
+        v67 = iconst.i8 0
+        v68 = iconst.i16 0
+        v69 = iconst.i32 0
+        v70 = iconst.i64 0
+        v71 = uextend.i128 v70  ; v70 = 0
+        v72 = stack_addr.i64 ss1
+        store notrap heap v71, v72
+        v73 = stack_addr.i64 ss1+16
+        store notrap heap v71, v73
+        v74 = stack_addr.i64 ss1+32
+        store notrap heap v71, v74
+        v75 = stack_addr.i64 ss1+48
+        store notrap heap v71, v75
+        v76 = stack_addr.i64 ss1+64
+        store notrap heap v71, v76
+        v77 = stack_addr.i64 ss0
+        store notrap heap v71, v77
+        v78 = stack_addr.i64 ss0+16
+        store notrap heap v71, v78
+        v79 = stack_addr.i64 ss0+32
+        store notrap heap v71, v79
+        v80 = stack_addr.i64 ss0+48
+        store notrap heap v71, v80
+        v81 = stack_addr.i64 ss0+64
+        store notrap heap v71, v81
+        v82 = stack_addr.i64 ss0+80
+        store notrap heap v67, v82  ; v67 = 0
+        v83 = select_spectre_guard v4, v2, v2
+        v84 = vhigh_bits.i64 v8
+        v85 = select v11, v7, v7
+        v86 = select_spectre_guard v84, v11, v11
+        v87 = vhigh_bits.i8 v6
+        v88 = vhigh_bits.i16 v9
+        v89 = select v86, v85, v85
+        v90 = select_spectre_guard v84, v86, v86
+        v91 = vhigh_bits.i8 v6
+        v92 = vhigh_bits.i16 v9
+        v93 = rotl v83, v1
+        v94 = rotl v93, v1
+        v95 = rotl v94, v1
+        v96 = rotl v95, v1
+        v97 = rotl v96, v1
+        v98 = rotl v97, v1
+        v99 = rotl v98, v1
+        v100 = rotl v99, v1
+        v101 = rotl v100, v1
+        v102 = rotl v101, v1
+        v103 = rotl v102, v1
+        v104 = rotl v103, v1
+        v105 = bnot v10
+        v508 = bnot v1
+        v106 = bor v1, v508
+        v107 = ushr v6, v91
+        jump block1(v104, v107, v106, v91, v0, v105, v84, v92, v90, v89, v8, v9, v65)  ; v65 = -203
+    
+    block1(v13: i16x8, v108: i32x4, v109: i128, v111: i8, v124: i64x2, v126: f64x2, v127: i64, v128: i16, v140: i32, v171: f32, v172: f32x4, v173: i8x16, v435: i16) cold:
+        v509 = stack_addr.i64 ss6
+        store notrap v13, v509
+        v510 = stack_addr.i64 ss7
+        store notrap v109, v510
+        v511 = stack_addr.i64 ss11
+        store.f64 notrap v3, v511
+        v512 = stack_addr.i64 ss8
+        store notrap v127, v512
+        v513 = stack_addr.i64 ss14
+        store notrap v128, v513
+        v514 = stack_addr.i64 ss4
+        store notrap v140, v514
+        v515 = stack_addr.i64 ss12
+        store notrap v171, v515
+        v516 = stack_addr.i64 ss10
+        store notrap v172, v516
+        v517 = stack_addr.i64 ss13
+        store notrap v173, v517
+        v518 = stack_addr.i64 ss3
+        store.i16 notrap v66, v518  ; v66 = -11823
+        v519 = stack_addr.i64 ss5
+        store notrap v435, v519
+        v520 = stack_addr.i64 ss7
+        v498 = load.i128 notrap v520
+        v110 = ushr v108, v498
+        v112 = ushr v110, v111
+        v113 = ushr v112, v111
+        v114 = ushr v113, v111
+        v115 = ushr v114, v111
+        v116 = ushr v115, v111
+        v117 = ushr v116, v111
+        v521 = stack_addr.i64 ss7
+        v497 = load.i128 notrap v521
+        v118 = ushr v117, v497
+        v119 = ushr v118, v111
+        v120 = ushr v119, v111
+        v121 = ushr v120, v111
+        v122 = ushr v121, v111
+        v522 = stack_addr.i64 ss7
+        v496 = load.i128 notrap v522
+        v123 = rotr v111, v496
+        v523 = stack_addr.i64 ss11
+        v491 = load.f64 notrap v523
+        v524 = stack_addr.i64 ss11
+        v492 = load.f64 notrap v524
+        v525 = stack_addr.i64 ss8
+        v493 = load.i64 notrap v525
+        v526 = stack_addr.i64 ss6
+        v494 = load.i16x8 notrap v526
+        v527 = stack_addr.i64 ss14
+        v495 = load.i16 notrap v527
+        call fn0(v123, v124, v491, v492, v126, v493, v494, v126, v495), stack_map=[i16x8 @ ss6+0, i128 @ ss7+0, f64 @ ss11+0, i64 @ ss8+0, i16 @ ss14+0, i32 @ ss4+0, f32 @ ss12+0, f32x4 @ ss10+0, i8x16 @ ss13+0, i16 @ ss3+0, i16 @ ss5+0]
+        v528 = stack_addr.i64 ss11
+        v486 = load.f64 notrap v528
+        v529 = stack_addr.i64 ss11
+        v487 = load.f64 notrap v529
+        v530 = stack_addr.i64 ss8
+        v488 = load.i64 notrap v530
+        v531 = stack_addr.i64 ss6
+        v489 = load.i16x8 notrap v531
+        v532 = stack_addr.i64 ss14
+        v490 = load.i16 notrap v532
+        call fn0(v123, v124, v486, v487, v126, v488, v489, v126, v490), stack_map=[i16x8 @ ss6+0, i128 @ ss7+0, f64 @ ss11+0, i64 @ ss8+0, i16 @ ss14+0, i32 @ ss4+0, f32 @ ss12+0, f32x4 @ ss10+0, i8x16 @ ss13+0, i16 @ ss3+0, i16 @ ss5+0]
+        v533 = stack_addr.i64 ss11
+        v481 = load.f64 notrap v533
+        v534 = stack_addr.i64 ss11
+        v482 = load.f64 notrap v534
+        v535 = stack_addr.i64 ss8
+        v483 = load.i64 notrap v535
+        v536 = stack_addr.i64 ss6
+        v484 = load.i16x8 notrap v536
+        v537 = stack_addr.i64 ss14
+        v485 = load.i16 notrap v537
+        call fn0(v123, v124, v481, v482, v126, v483, v484, v126, v485), stack_map=[i16x8 @ ss6+0, i128 @ ss7+0, f64 @ ss11+0, i16 @ ss14+0, i32 @ ss4+0, f32 @ ss12+0, f32x4 @ ss10+0, i8x16 @ ss13+0, i16 @ ss3+0, i16 @ ss5+0]
+        v129 = ushr v122, v123
+        v130 = ushr v129, v123
+        v131 = ushr v130, v123
+        v132 = ushr v131, v123
+        v133 = ushr v132, v123
+        v134 = ushr v133, v123
+        v135 = ushr v134, v123
+        v136 = ushr v135, v123
+        v137 = ushr v136, v123
+        v138 = ushr v137, v123
+        v538 = stack_addr.i64 ss4
+        v480 = load.i32 notrap v538
+        v141 = ushr.i16 v62, v480  ; v62 = -11823
+        v539 = stack_addr.i64 ss9
+        store notrap v141, v539
+        v142 = ushr v138, v123
+        v540 = stack_addr.i64 ss7
+        v479 = load.i128 notrap v540
+        v143 = ushr v142, v479
+        v144 = ushr v143, v123
+        v145 = ushr v144, v123
+        v146 = ushr v145, v123
+        v147 = ushr v146, v123
+        v148 = ushr v147, v123
+        v149 = ushr v148, v123
+        v150 = ushr v149, v123
+        v151 = ushr v150, v123
+        v152 = ushr v151, v123
+        v153 = ushr v152, v123
+        v154 = ushr v153, v123
+        v155 = ushr v154, v123
+        v156 = ushr v155, v123
+        v157 = ushr v156, v123
+        v158 = ushr v157, v123
+        v159 = ushr v158, v123
+        v160 = ushr v159, v123
+        v541 = stack_addr.i64 ss7
+        v478 = load.i128 notrap v541
+        v161 = ushr v160, v478
+        v162 = ushr v161, v123
+        v163 = ushr v162, v123
+        v164 = ushr v163, v123
+        v542 = stack_addr.i64 ss7
+        v477 = load.i128 notrap v542
+        v165 = ushr v164, v477
+        v166 = ushr v165, v123
+        v167 = ushr v166, v123
+        v168 = ushr v167, v123
+        v169 = ushr v168, v123
+        v170 = ushr v169, v123
+        v543 = stack_addr.i64 ss7
+        v472 = load.i128 notrap v543
+        v544 = stack_addr.i64 ss6
+        v473 = load.i16x8 notrap v544
+        v545 = stack_addr.i64 ss12
+        v474 = load.f32 notrap v545
+        v546 = stack_addr.i64 ss10
+        v475 = load.f32x4 notrap v546
+        v547 = stack_addr.i64 ss13
+        v476 = load.i8x16 notrap v547
+        jump block2(v126)
+    
+    block2(v21: f64x2) cold:
+        v548 = stack_addr.i64 ss13
+        store.i128 notrap v472, v548
+        v549 = stack_addr.i64 ss10
+        store.i16x8 notrap v473, v549
+        v550 = stack_addr.i64 ss6
+        store.f32x4 notrap v475, v550
+        v551 = stack_addr.i64 ss7
+        store.i8x16 notrap v476, v551
+        v175 = ushr.i32x4 v170, v123
+        v176 = ushr v175, v123
+        v177 = ushr v176, v123
+        v178 = ushr v177, v123
+        v179 = ushr v178, v123
+        v180 = ushr v179, v123
+        v181 = ushr v180, v123
+        v182 = ushr v181, v123
+        v183 = ushr v182, v123
+        v184 = ushr v183, v123
+        v185 = ushr v184, v123
+        v186 = ushr v185, v123
+        v187 = ushr v186, v123
+        v188 = ushr v187, v123
+        v499 = fcmp.f32 ne v474, v474
+        v500 = f32const -0x1.000000p63
+        v501 = f32const 0x1.000000p63
+        v502 = fcmp.f32 le v474, v500  ; v500 = -0x1.000000p63
+        v503 = fcmp.f32 ge v474, v501  ; v501 = 0x1.000000p63
+        v504 = bor v502, v503
+        v505 = bor v499, v504
+        v506 = f32const 0x1.000000p0
+        v507 = select v505, v506, v474  ; v506 = 0x1.000000p0
+        v189 = fcvt_to_sint.i64 v507
+        v552 = stack_addr.i64 ss8
+        store notrap v189, v552
+        v190 = ushr v188, v123
+        v191 = ushr v190, v123
+        v192 = ushr v191, v123
+        v553 = stack_addr.i64 ss13
+        v471 = load.i128 notrap v553
+        v193 = ushr v192, v471
+        v194 = ushr v193, v123
+        v195 = ushr v194, v123
+        v196 = ushr v195, v123
+        v197 = ushr v196, v123
+        v198 = ushr v197, v123
+        v199 = ushr v198, v123
+        v200 = ushr v199, v123
+        v201 = ushr v200, v123
+        v202 = ushr v201, v123
+        v554 = stack_addr.i64 ss8
+        v469 = load.i64 notrap v554
+        v555 = stack_addr.i64 ss10
+        v470 = load.i16x8 notrap v555
+        call fn0(v123, v124, v3, v3, v21, v469, v470, v21, v128), stack_map=[i128 @ ss13+0, i16x8 @ ss10+0, f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss11+0, i16 @ ss14+0, i32 @ ss4+0, i16 @ ss9+0, i64 @ ss8+0, i16 @ ss3+0, i16 @ ss5+0]
+        v556 = stack_addr.i64 ss8
+        v467 = load.i64 notrap v556
+        v557 = stack_addr.i64 ss10
+        v468 = load.i16x8 notrap v557
+        call fn0(v123, v124, v3, v3, v21, v467, v468, v21, v128), stack_map=[i128 @ ss13+0, i16x8 @ ss10+0, f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss11+0, i32 @ ss4+0, i16 @ ss9+0, i64 @ ss8+0, i16 @ ss3+0, i16 @ ss5+0]
+        v206 = ushr v202, v123
+        v207 = ushr v206, v123
+        v208 = ushr v207, v123
+        v209 = ushr v208, v123
+        v210 = ushr v209, v123
+        v211 = ushr v210, v123
+        v212 = ushr v211, v123
+        v213 = ushr v212, v123
+        v558 = stack_addr.i64 ss13
+        v466 = load.i128 notrap v558
+        v214 = ushr v213, v466
+        v215 = ushr v214, v123
+        v216 = ushr v215, v123
+        v217 = ushr v216, v123
+        v219 = rotr.i32 v140, v62  ; v62 = -11823
+        v220 = ushr v217, v123
+        v221 = ushr v220, v123
+        v222 = ushr v221, v123
+        v223 = ushr v222, v123
+        v224 = select.f32 v219, v474, v474
+        v559 = stack_addr.i64 ss8
+        v465 = load.i64 notrap v559
+        v225 = select_spectre_guard v465, v219, v219
+        v226 = vhigh_bits.i8 v223
+        v560 = stack_addr.i64 ss7
+        v464 = load.i8x16 notrap v560
+        v227 = vhigh_bits.i16 v464
+        v228 = select v225, v224, v224
+        v561 = stack_addr.i64 ss8
+        v463 = load.i64 notrap v561
+        v229 = select_spectre_guard v463, v225, v225
+        v230 = vhigh_bits.i8 v223
+        v562 = stack_addr.i64 ss7
+        v462 = load.i8x16 notrap v562
+        v231 = vhigh_bits.i16 v462
+        v232 = select v229, v228, v228
+        v563 = stack_addr.i64 ss10
+        v458 = load.i16x8 notrap v563
+        v564 = stack_addr.i64 ss10
+        v459 = load.i16x8 notrap v564
+        v565 = stack_addr.i64 ss10
+        v460 = load.i16x8 notrap v565
+        v566 = stack_addr.i64 ss10
+        v461 = load.i16x8 notrap v566
+        jump block3(v21)
+    
+    block3(v30: f64x2) cold:
+        v567 = stack_addr.i64 ss8
+        store.f64 notrap v3, v567
+        v568 = stack_addr.i64 ss9
+        store.i16 notrap v66, v568  ; v66 = -11823
+        v235 = select_spectre_guard.i16x8 v189, v461, v461
+        v237 = vhigh_bits.i64 v475
+        v239 = select.f32 v229, v232, v232
+        v240 = select_spectre_guard.i32 v237, v229, v229
+        v241 = vhigh_bits.i8 v223
+        v243 = vhigh_bits.i16 v476
+        v244 = select v240, v239, v239
+        v245 = select_spectre_guard v237, v240, v240
+        v246 = vhigh_bits.i8 v223
+        v247 = vhigh_bits.i16 v476
+        v248 = select v245, v244, v244
+        v249 = select_spectre_guard v237, v245, v245
+        v250 = vhigh_bits.i8 v223
+        v251 = vhigh_bits.i16 v476
+        v252 = select v249, v248, v248
+        v253 = select_spectre_guard v237, v249, v249
+        v254 = vhigh_bits.i8 v223
+        v255 = vhigh_bits.i16 v476
+        v256 = select v253, v252, v252
+        v257 = select_spectre_guard v237, v253, v253
+        v258 = vhigh_bits.i8 v223
+        v259 = vhigh_bits.i16 v476
+        v260 = select v257, v256, v256
+        v261 = select_spectre_guard v237, v257, v257
+        v262 = vhigh_bits.i8 v223
+        jump block4
+    
+    block4:
+        v569 = stack_addr.i64 ss10
+        store.i128 notrap v472, v569
+        v265 = vhigh_bits.i64 v475
+        v267 = select.f32 v261, v260, v260
+        v268 = select_spectre_guard.i32 v265, v261, v261
+        v270 = vhigh_bits.i8 v223
+        v272 = vhigh_bits.i16 v476
+        v273 = select v268, v267, v267
+        v274 = select_spectre_guard v265, v268, v268
+        v275 = vhigh_bits.i8 v223
+        v276 = vhigh_bits.i16 v476
+        v277 = select v274, v273, v273
+        v278 = select_spectre_guard v265, v274, v274
+        v279 = vhigh_bits.i8 v223
+        v280 = vhigh_bits.i16 v476
+        v281 = select v278, v277, v277
+        v282 = select_spectre_guard v265, v278, v278
+        v283 = vhigh_bits.i8 v223
+        v284 = vhigh_bits.i16 v476
+        v285 = select v282, v281, v281
+        v286 = select_spectre_guard v265, v282, v282
+        v287 = vhigh_bits.i8 v223
+        jump block5
+    
+    block5 cold:
+        v289 = vhigh_bits.i64 v475
+        v570 = stack_addr.i64 ss11
+        store notrap v289, v570
+        v292 = select.f32 v286, v285, v285
+        v571 = stack_addr.i64 ss4
+        store notrap v292, v571
+        v572 = stack_addr.i64 ss11
+        v457 = load.i64 notrap v572
+        v294 = select_spectre_guard.f64x2 v457, v30, v30
+        v297 = ushr.i32x4 v223, v287
+        v298 = ushr v297, v287
+        v299 = ushr v298, v287
+        v300 = ushr v299, v287
+        v301 = ushr v300, v287
+        v302 = ushr v301, v287
+        v303 = ushr v302, v287
+        v304 = ushr v303, v287
+        v305 = ushr v304, v287
+        v306 = ushr v305, v287
+        v307 = ushr v306, v287
+        v308 = ushr v307, v287
+        v309 = ushr v308, v287
+        v311 = sshr.i32 v286, v141
+        v573 = stack_addr.i64 ss12
+        store notrap v311, v573
+        v314 = select_spectre_guard.i16x8 v472, v235, v235
+        v315 = select_spectre_guard v472, v314, v314
+        v316 = select_spectre_guard v472, v315, v315
+        v574 = stack_addr.i64 ss13
+        store notrap v316, v574
+        jump block6
+    
+    block6 cold:
+        v319 = ushr.i32x4 v309, v287
+        v320 = ushr v319, v287
+        v321 = ushr v320, v287
+        v322 = ushr v321, v287
+        v323 = ushr v322, v287
+        v324 = ushr v323, v287
+        v325 = ushr v324, v287
+        v326 = ushr v325, v287
+        v327 = ushr v326, v287
+        v575 = stack_addr.i64 ss2
+        store notrap v327, v575
+        call fn0(v287, v124, v3, v3, v294, v289, v316, v294, v284), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, f32 @ ss4+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0]
+        call fn0(v287, v124, v3, v3, v294, v289, v316, v294, v435), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, f32 @ ss4+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0]
+        v335 = extractlane.i16x8 v316, 0
+        v336 = extractlane.i16x8 v316, 0
+        v337 = extractlane.i16x8 v316, 0
+        v338 = extractlane.i16x8 v316, 0
+        v339 = extractlane.i16x8 v316, 0
+        v340 = extractlane.i16x8 v316, 0
+        v341 = extractlane.i16x8 v316, 0
+        v342 = extractlane.i16x8 v316, 0
+        v343 = extractlane.i16x8 v316, 0
+        v344 = extractlane.i16x8 v316, 0
+        v345 = extractlane.i16x8 v316, 0
+        v346 = extractlane.i16x8 v316, 0
+        v347 = extractlane.i16x8 v316, 0
+        v348 = extractlane.i16x8 v316, 0
+        v349 = extractlane.i16x8 v316, 5
+        v351 = rotr.i64x2 v124, v66  ; v66 = -11823
+        v352 = rotr v351, v66  ; v66 = -11823
+        v353 = rotr v352, v66  ; v66 = -11823
+        v354 = rotr v353, v66  ; v66 = -11823
+        v355 = rotr v354, v348
+        v356 = extractlane.i16x8 v316, 0
+        v357 = extractlane.i16x8 v316, 0
+        v358 = extractlane.i16x8 v316, 0
+        v359 = extractlane.i16x8 v316, 0
+        v360 = extractlane.i16x8 v316, 0
+        v361 = extractlane.i16x8 v316, 0
+        v362 = extractlane.i16x8 v316, 0
+        v363 = extractlane.i16x8 v316, 0
+        v576 = stack_addr.i64 ss5
+        store notrap v363, v576
+        v364 = extractlane.i16x8 v316, 0
+        v577 = stack_addr.i64 ss3
+        store notrap v364, v577
+        v578 = stack_addr.i64 ss3
+        v456 = load.i16 notrap v578
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v456), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, f32 @ ss4+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0]
+        v579 = stack_addr.i64 ss3
+        v455 = load.i16 notrap v579
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v455), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, f32 @ ss4+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0]
+        v580 = stack_addr.i64 ss3
+        v454 = load.i16 notrap v580
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v454), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, f32 @ ss4+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0]
+        v581 = stack_addr.i64 ss3
+        v453 = load.i16 notrap v581
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v453), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, f32 @ ss4+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0]
+        v582 = stack_addr.i64 ss3
+        v452 = load.i16 notrap v582
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v452), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, f32 @ ss4+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0]
+        v583 = stack_addr.i64 ss3
+        v451 = load.i16 notrap v583
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v451), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, f32 @ ss4+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0]
+        v584 = stack_addr.i64 ss3
+        v450 = load.i16 notrap v584
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v450), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, f32 @ ss4+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0]
+        v585 = stack_addr.i64 ss3
+        v449 = load.i16 notrap v585
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v449), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, f32 @ ss4+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0]
+        v366 = select_spectre_guard.f32 v287, v292, v292
+        v586 = stack_addr.i64 ss4
+        store notrap v366, v586
+        v587 = stack_addr.i64 ss3
+        v448 = load.i16 notrap v587
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v448), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0, f32 @ ss4+0]
+        v588 = stack_addr.i64 ss3
+        v447 = load.i16 notrap v588
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v447), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0, f32 @ ss4+0]
+        v589 = stack_addr.i64 ss3
+        v446 = load.i16 notrap v589
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v446), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0, f32 @ ss4+0]
+        v590 = stack_addr.i64 ss3
+        v445 = load.i16 notrap v590
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v445), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0, f32 @ ss4+0]
+        v591 = stack_addr.i64 ss3
+        v444 = load.i16 notrap v591
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v444), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0, f32 @ ss4+0]
+        v592 = stack_addr.i64 ss3
+        v443 = load.i16 notrap v592
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v443), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0, f32 @ ss4+0]
+        v593 = stack_addr.i64 ss3
+        v442 = load.i16 notrap v593
+        call fn0(v287, v355, v3, v3, v294, v289, v316, v294, v442), stack_map=[f32x4 @ ss6+0, i8x16 @ ss7+0, f64 @ ss8+0, i16 @ ss9+0, i128 @ ss10+0, i64 @ ss11+0, i32 @ ss12+0, i16x8 @ ss13+0, i32x4 @ ss2+0, i16 @ ss5+0, i16 @ ss3+0, f32 @ ss4+0]
+        v594 = stack_addr.i64 ss2
+        v438 = load.i32x4 notrap v594
+        v595 = stack_addr.i64 ss3
+        v439 = load.i16 notrap v595
+        v596 = stack_addr.i64 ss4
+        v440 = load.f32 notrap v596
+        v597 = stack_addr.i64 ss5
+        v441 = load.i16 notrap v597
+        brif.i8 v287, block7, block1(v316, v438, v472, v287, v355, v294, v289, v439, v311, v440, v475, v476, v441)
+    
+    block7 cold:
+        jump block8
+    
+    block8 cold:
+        jump block9
+    
+    block9 cold:
+        brif.i8 v287, block10, block10
+    
+    block10:
+        brif.i8 v287, block15, block1(v316, v327, v472, v287, v355, v294, v289, v364, v311, v366, v475, v476, v363)
+    
+    block15:
+        v392 = swiden_low.i16x8 v316
+        v393 = swiden_low.i16x8 v316
+        v394 = swiden_low.i16x8 v316
+        v395 = swiden_low.i16x8 v316
+        v396 = swiden_low.i16x8 v316
+        v397 = swiden_low.i16x8 v316
+        v398 = swiden_low.i16x8 v316
+        v399 = swiden_low.i16x8 v316
+        v400 = swiden_low.i16x8 v316
+        v401 = swiden_low.i16x8 v316
+        v402 = swiden_low.i16x8 v316
+        v403 = swiden_low.i16x8 v316
+        v404 = swiden_low.i16x8 v316
+        v405 = swiden_low.i16x8 v316
+        v406 = swiden_low.i16x8 v316
+        v407 = swiden_low.i16x8 v316
+        v408 = swiden_low.i16x8 v316
+        return v287, v287, v287, v476, v287, v311, v287, v287, v64, v475, v287, v287, v355, v3  ; v64 = 0x51d1
+    }

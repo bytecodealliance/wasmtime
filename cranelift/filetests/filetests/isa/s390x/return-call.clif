@@ -46,7 +46,7 @@ block0(v0: i64):
 ;   stg %r1, 0(%r15)
 ; block0:
 ;   bras %r1, 12 ; data %callee_i64 + 0 ; lg %r4, 0(%r1)
-;   return_call_ind %r4
+;   lmg %r14, %r15, 272(%r15) ; br %r4
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -78,7 +78,7 @@ block0(v0: i64):
 ;   stg %r1, 0(%r15)
 ; block0:
 ;   bras %r1, 12 ; data %callee_i64_multiret + 0 ; lg %r5, 0(%r1)
-;   return_call_ind %r5
+;   lmg %r14, %r15, 272(%r15) ; br %r5
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -112,13 +112,13 @@ block0(v0: i64):
 ;   stg %r1, 0(%r15)
 ; block0:
 ;   lgr %r9, %r2
-;   bras %r1, 12 ; data %callee_i64 + 0 ; lg %r7, 0(%r1)
+;   bras %r1, 12 ; data %callee_i64 + 0 ; lg %r6, 0(%r1)
 ;   lgr %r2, %r3
-;   basr %r14, %r7
+;   basr %r14, %r6
 ;   bras %r1, 12 ; data %callee_i64_multiret + 0 ; lg %r7, 0(%r1)
 ;   lgr %r3, %r2
 ;   lgr %r2, %r9
-;   return_call_ind %r7
+;   lmg %r9, %r15, 232(%r15) ; br %r7
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -133,9 +133,9 @@ block0(v0: i64):
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r7, 0(%r1)
+;   lg %r6, 0(%r1)
 ;   lgr %r2, %r3
-;   basr %r14, %r7
+;   basr %r14, %r6
 ;   bras %r1, 0x3c
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_i64_multiret 0
 ;   .byte 0x00, 0x00
@@ -162,7 +162,7 @@ block0(v0: i64):
 ;   aghi %r15, -160
 ;   stg %r1, 0(%r15)
 ; block0:
-;   return_call %callee_i64
+;   lmg %r14, %r15, 272(%r15) ; jg %callee_i64
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -224,7 +224,7 @@ block0(v0: f64):
 ;   stg %r1, 0(%r15)
 ; block0:
 ;   bras %r1, 12 ; data %callee_f64 + 0 ; lg %r4, 0(%r1)
-;   return_call_ind %r4
+;   lmg %r14, %r15, 272(%r15) ; br %r4
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -292,7 +292,7 @@ block0(v0: i8):
 ;   stg %r1, 0(%r15)
 ; block0:
 ;   bras %r1, 12 ; data %callee_i8 + 0 ; lg %r4, 0(%r1)
-;   return_call_ind %r4
+;   lmg %r14, %r15, 272(%r15) ; br %r4
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -363,7 +363,7 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32, v
 ;   lgr %r5, %r9
 ;   lgr %r2, %r4
 ;   lgr %r4, %r14
-;   return_call %one_stack_arg ; callee_pop_size 168
+;   aghi %r15, 176 ; lmg %r9, %r14, 240(%r15) ; jg %one_stack_arg ; callee_pop_size 168
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -402,7 +402,7 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32, v7: i32, v
 ;   stg %r1, 0(%r15)
 ; block0:
 ;   llgc %r2, 343(%r15)
-;   return_call %callee_i8
+;   aghi %r15, 344 ; lmg %r14, %r14, 112(%r15) ; jg %callee_i8
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -443,7 +443,7 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32):
 ;   lgr %r4, %r5
 ;   lgr %r5, %r6
 ;   lgr %r6, %r8
-;   return_call %call_one_stack_arg ; callee_pop_size 184
+;   aghi %r15, 160 ; lmg %r8, %r14, 248(%r15) ; jg %call_one_stack_arg ; callee_pop_size 184
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -614,7 +614,7 @@ block0:
 ;   lg %r5, 240(%r15)
 ;   lg %r6, 232(%r15)
 ;   lg %r7, 224(%r15)
-;   return_call_ind %r8 ; callee_pop_size 320
+;   lgr %r1, %r8 ; aghi %r15, 272 ; lmg %r8, %r14, 384(%r15) ; br %r1 ; callee_pop_size 320
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

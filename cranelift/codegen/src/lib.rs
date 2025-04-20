@@ -82,7 +82,7 @@ mod ranges;
 mod remove_constant_phis;
 mod result;
 mod scoped_hash_map;
-mod unionfind;
+mod take_and_replace;
 mod unreachable_code;
 mod value_label;
 
@@ -90,6 +90,7 @@ mod value_label;
 mod souper_harvest;
 
 pub use crate::result::{CodegenError, CodegenResult, CompileError};
+pub use crate::take_and_replace::TakeAndReplace;
 
 #[cfg(feature = "incremental-cache")]
 pub mod incremental_cache;
@@ -102,6 +103,15 @@ macro_rules! trace {
         if cfg!(any(feature = "trace-log", debug_assertions)) {
             ::log::trace!($($tt)*);
         }
+    };
+}
+
+/// Dynamic check for whether trace logging is enabled.
+#[macro_export]
+macro_rules! trace_log_enabled {
+    () => {
+        cfg!(any(feature = "trace-log", debug_assertions))
+            && ::log::log_enabled!(::log::Level::Trace)
     };
 }
 

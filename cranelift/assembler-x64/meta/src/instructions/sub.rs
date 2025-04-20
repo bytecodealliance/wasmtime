@@ -1,4 +1,4 @@
-use crate::dsl::{fmt, inst, r, rex, rw, sxl, sxq};
+use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq};
 use crate::dsl::{Feature::*, Inst, Location::*};
 
 pub fn list() -> Vec<Inst> {
@@ -21,9 +21,6 @@ pub fn list() -> Vec<Inst> {
         inst("subw", fmt("RM", [rw(r16), r(rm16)]), rex([0x66, 0x2B]).r(), _64b | compat),
         inst("subl", fmt("RM", [rw(r32), r(rm32)]), rex(0x2B).r(), _64b | compat),
         inst("subq", fmt("RM", [rw(r64), r(rm64)]), rex(0x2B).w().r(), _64b),
-        // SSE vector instructions
-        inst("subps", fmt("A", [rw(xmm), r(rm128)]), rex([0x0F, 0x5C]).r(), _64b),
-        inst("subpd", fmt("A", [rw(xmm), r(rm128)]), rex([0x66, 0x0F, 0x5C]).r(), _64b),
         // Subtract with borrow.
         inst("sbbb", fmt("I", [rw(al), r(imm8)]), rex(0x1C).ib(), _64b | compat),
         inst("sbbw", fmt("I", [rw(ax), r(imm16)]), rex([0x66, 0x1D]).iw(), _64b | compat),
@@ -43,5 +40,29 @@ pub fn list() -> Vec<Inst> {
         inst("sbbw", fmt("RM", [rw(r16), r(rm16)]), rex([0x66, 0x1B]).r(), _64b | compat),
         inst("sbbl", fmt("RM", [rw(r32), r(rm32)]), rex(0x1B).r(), _64b | compat),
         inst("sbbq", fmt("RM", [rw(r64), r(rm64)]), rex(0x1B).w().r(), _64b),
+        // `LOCK`-prefixed memory-writing instructions.
+        inst("lock_subb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(5).ib(), _64b | compat),
+        inst("lock_subw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(5).iw(), _64b | compat),
+        inst("lock_subl", fmt("MI", [rw(m32), r(imm32)]), rex([0xf0, 0x81]).digit(5).id(), _64b | compat),
+        inst("lock_subq", fmt("MI_SXL", [rw(m64), sxq(imm32)]), rex([0xf0, 0x81]).w().digit(5).id(), _64b),
+        inst("lock_subl", fmt("MI_SXB", [rw(m32), sxl(imm8)]), rex([0xf0, 0x83]).digit(5).ib(), _64b | compat),
+        inst("lock_subq", fmt("MI_SXB", [rw(m64), sxq(imm8)]), rex([0xf0, 0x83]).w().digit(5).ib(), _64b),
+        inst("lock_subb", fmt("MR", [rw(m8), r(r8)]), rex([0xf0, 0x28]).r(), _64b | compat),
+        inst("lock_subw", fmt("MR", [rw(m16), r(r16)]), rex([0xf0, 0x66, 0x29]).r(), _64b | compat),
+        inst("lock_subl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x29]).r(), _64b | compat),
+        inst("lock_subq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x29]).w().r(), _64b),
+        inst("lock_sbbb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(3).ib(), _64b | compat),
+        inst("lock_sbbw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(3).iw(), _64b | compat),
+        inst("lock_sbbl", fmt("MI", [rw(m32), r(imm32)]), rex([0xf0, 0x81]).digit(3).id(), _64b | compat),
+        inst("lock_sbbq", fmt("MI_SXL", [rw(m64), sxq(imm32)]), rex([0xf0, 0x81]).w().digit(3).id(), _64b),
+        inst("lock_sbbl", fmt("MI_SXB", [rw(m32), sxl(imm8)]), rex([0xf0, 0x83]).digit(3).ib(), _64b | compat),
+        inst("lock_sbbq", fmt("MI_SXB", [rw(m64), sxq(imm8)]), rex([0xf0, 0x83]).w().digit(3).ib(), _64b),
+        inst("lock_sbbb", fmt("MR", [rw(m8), r(r8)]), rex([0xf0, 0x18]).r(), _64b | compat),
+        inst("lock_sbbw", fmt("MR", [rw(m16), r(r16)]), rex([0xf0, 0x66, 0x19]).r(), _64b | compat),
+        inst("lock_sbbl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x19]).r(), _64b | compat),
+        inst("lock_sbbq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x19]).w().r(), _64b),
+        // Vector instructions.
+        inst("subps", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x0F, 0x5C]).r(), _64b | compat | sse),
+        inst("subpd", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x66, 0x0F, 0x5C]).r(), _64b | compat | sse),
     ]
 }

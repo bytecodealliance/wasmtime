@@ -1,11 +1,11 @@
-# Wasmtime's C API
+# Wasmtime's C/C++ API
 
 ## API Documentation
 
 [The API documentation for the Wasmtime C library is hosted
 here.](https://bytecodealliance.github.io/wasmtime/c-api/).
 
-## Using in a C Project
+## Using in a C/C++ Project
 
 ### Using a Pre-Built Static or Dynamic Library
 
@@ -14,7 +14,7 @@ page](https://github.com/bytecodealliance/wasmtime/releases) has pre-built
 binaries for both static and dynamic libraries for a variety of architectures
 and operating systems attached, as well as header files you can include.
 
-### Building Wasmtime's C API from Source
+### Building Wasmtime's C/C++ API from Source
 
 To use Wasmtime from a C or C++ project, you must have
 [CMake](https://cmake.org/) and [a Rust
@@ -36,7 +36,13 @@ These commands will produce the following files:
 * `artifacts/lib/libwasmtime.{so,dylib,dll}`: Dynamic Wasmtime library. Exact
   extension depends on your operating system.
 
-* `artifacts/include/**.h`: Header files for working with Wasmtime.
+* `artifacts/include/**.{h,hh}`: Header files for working with Wasmtime.
+
+## Using in a C++ Project
+
+A header only C++ API is also offered as `wasmtime.hh`, which is built on top
+of the C API. Its located next to the C headers when you download a pre-built
+library, or when building from source. C++17 is required.
 
 ## Using in a Rust Project
 

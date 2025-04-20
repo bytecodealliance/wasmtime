@@ -35,6 +35,7 @@ pub struct CodeMemory {
     trap_data: Range<usize>,
     wasm_data: Range<usize>,
     address_map_data: Range<usize>,
+    stack_map_data: Range<usize>,
     func_name_data: Range<usize>,
     info_data: Range<usize>,
     wasm_dwarf: Range<usize>,
@@ -45,9 +46,11 @@ impl Drop for CodeMemory {
         // If there is a custom code memory handler, restore the
         // original (non-executable) state of the memory.
         if let Some(mem) = self.custom_code_memory.as_ref() {
-            let text = self.text();
-            mem.unpublish_executable(text.as_ptr(), text.len())
-                .expect("Executable memory unpublish failed");
+            if self.published && self.needs_executable {
+                let text = self.text();
+                mem.unpublish_executable(text.as_ptr(), text.len())
+                    .expect("Executable memory unpublish failed");
+            }
         }
 
         // Drop the registrations before `self.mmap` since they (implicitly) refer to it.
@@ -121,6 +124,7 @@ impl CodeMemory {
         let mut trap_data = 0..0;
         let mut wasm_data = 0..0;
         let mut address_map_data = 0..0;
+        let mut stack_map_data = 0..0;
         let mut func_name_data = 0..0;
         let mut info_data = 0..0;
         let mut wasm_dwarf = 0..0;
@@ -181,6 +185,7 @@ impl CodeMemory {
                 crate::runtime::vm::UnwindRegistration::SECTION_NAME => unwind = range,
                 obj::ELF_WASM_DATA => wasm_data = range,
                 obj::ELF_WASMTIME_ADDRMAP => address_map_data = range,
+                obj::ELF_WASMTIME_STACK_MAP => stack_map_data = range,
                 obj::ELF_WASMTIME_TRAPS => trap_data = range,
                 obj::ELF_NAME_DATA => func_name_data = range,
                 obj::ELF_WASMTIME_INFO => info_data = range,
@@ -213,6 +218,7 @@ impl CodeMemory {
             unwind,
             trap_data,
             address_map_data,
+            stack_map_data,
             func_name_data,
             wasm_dwarf,
             info_data,
@@ -261,6 +267,12 @@ impl CodeMemory {
     #[inline]
     pub fn address_map_data(&self) -> &[u8] {
         &self.mmap[self.address_map_data.clone()]
+    }
+
+    /// Returns the encoded stack map section used to pass to
+    /// `wasmtime_environ::StackMap::lookup`.
+    pub fn stack_map_data(&self) -> &[u8] {
+        &self.mmap[self.stack_map_data.clone()]
     }
 
     /// Returns the contents of the `ELF_WASMTIME_INFO` section, or an empty

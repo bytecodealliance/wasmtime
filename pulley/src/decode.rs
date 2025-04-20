@@ -223,7 +223,7 @@ impl UnsafeBytecodeStream {
     /// that the address at `self._as_ptr() + offset` contains valid Pulley
     /// bytecode.
     pub unsafe fn offset(&self, offset: isize) -> Self {
-        UnsafeBytecodeStream(NonNull::new_unchecked(self.0.as_ptr().offset(offset)))
+        UnsafeBytecodeStream(unsafe { NonNull::new_unchecked(self.0.as_ptr().offset(offset)) })
     }
 
     /// Get this stream's underlying raw pointer.
@@ -771,7 +771,7 @@ pub mod operands {
         ) => {
             $(
                 #[allow(unused_variables, reason = "macro-generated")]
-                #[allow(missing_docs, reason = "macro-generated")]
+                #[expect(missing_docs, reason = "macro-generated")]
                 pub fn $snake_name<T: BytecodeStream>(pc: &mut T) -> Result<($($($field_ty,)*)?), T::Error> {
                     Ok((($($((<$field_ty>::decode(pc))?,)*)?)))
                 }

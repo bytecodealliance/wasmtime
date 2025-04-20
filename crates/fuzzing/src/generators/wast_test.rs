@@ -9,7 +9,7 @@ include!(concat!(env!("OUT_DIR"), "/wasttests.rs"));
 #[derive(Debug)]
 pub struct WastTest {
     #[expect(missing_docs, reason = "self-describing field")]
-    pub test: wasmtime_wast_util::WastTest,
+    pub test: wasmtime_test_util::wast::WastTest,
 }
 
 impl<'a> Arbitrary<'a> for WastTest {

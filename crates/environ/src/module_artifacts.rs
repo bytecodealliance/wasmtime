@@ -2,9 +2,7 @@
 //! with `bincode` as part of a module's compilation process.
 
 use crate::prelude::*;
-use crate::{
-    DefinedFuncIndex, FilePos, FuncIndex, Module, ModuleInternedTypeIndex, PrimaryMap, StackMap,
-};
+use crate::{DefinedFuncIndex, FilePos, FuncIndex, Module, ModuleInternedTypeIndex, PrimaryMap};
 use core::fmt;
 use core::ops::Range;
 use core::str;
@@ -13,22 +11,13 @@ use serde_derive::{Deserialize, Serialize};
 /// Secondary in-memory results of function compilation.
 #[derive(Serialize, Deserialize)]
 pub struct CompiledFunctionInfo {
-    /// The [`WasmFunctionInfo`] for this function.
-    pub wasm_func_info: WasmFunctionInfo,
+    /// Where this function was found in the original wasm file.
+    pub start_srcloc: FilePos,
     /// The [`FunctionLoc`] indicating the location of this function in the text
     /// section of the competition artifact.
     pub wasm_func_loc: FunctionLoc,
     /// A trampoline for array callers (e.g. `Func::new`) calling into this function (if needed).
     pub array_to_wasm_trampoline: Option<FunctionLoc>,
-}
-
-/// Information about a function, such as trap information, address map,
-/// and stack maps.
-#[derive(Serialize, Deserialize, Default)]
-#[allow(missing_docs, reason = "self-describing fields")]
-pub struct WasmFunctionInfo {
-    pub start_srcloc: FilePos,
-    pub stack_maps: Box<[StackMapInformation]>,
 }
 
 /// Description of where a function is located in the text section of a
@@ -40,18 +29,6 @@ pub struct FunctionLoc {
     pub start: u32,
     /// The byte length of this function's function body.
     pub length: u32,
-}
-
-/// The offset within a function of a GC safepoint, and its associated stack
-/// map.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct StackMapInformation {
-    /// The offset of the GC safepoint within the function's native code. It is
-    /// relative to the beginning of the function.
-    pub code_offset: u32,
-
-    /// The stack map for identifying live GC refs at the GC safepoint.
-    pub stack_map: StackMap,
 }
 
 /// Secondary in-memory results of module compilation.

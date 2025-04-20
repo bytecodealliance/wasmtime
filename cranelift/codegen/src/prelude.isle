@@ -33,6 +33,12 @@
 (type Value (primitive Value))
 (type ValueList (primitive ValueList))
 (type BlockCall (primitive BlockCall))
+(type Inst (primitive Inst))
+
+;; Match the instruction that defines the given value, if any.
+(spec (def_inst arg) (provide (= result arg)))
+(decl def_inst (Inst) Value)
+(extern extractor def_inst def_inst)
 
 ;; ISLE representation of `&[Value]`.
 (type ValueSlice (primitive ValueSlice))
@@ -205,6 +211,12 @@
 (decl pure partial s32_add_fallible (i32 i32) i32)
 (extern constructor s32_add_fallible s32_add_fallible)
 
+(decl pure partial checked_add_with_type (Type u64 u64) u64)
+(extern constructor checked_add_with_type checked_add_with_type)
+
+(decl pure add_overflows_with_type (Type u64 u64) bool)
+(extern constructor add_overflows_with_type add_overflows_with_type)
+
 (decl pure u64_add (u64 u64) u64)
 (extern constructor u64_add u64_add)
 
@@ -215,9 +227,6 @@
 
 (decl pure u64_mul (u64 u64) u64)
 (extern constructor u64_mul u64_mul)
-
-(decl pure partial u64_sdiv (u64 u64) u64)
-(extern constructor u64_sdiv u64_sdiv)
 
 (decl pure partial u64_udiv (u64 u64) u64)
 (extern constructor u64_udiv u64_udiv)
@@ -233,6 +242,9 @@
 
 (decl pure u64_shl (u64 u64) u64)
 (extern constructor u64_shl u64_shl)
+
+(decl pure partial imm64_sdiv (Type Imm64 Imm64) Imm64)
+(extern constructor imm64_sdiv imm64_sdiv)
 
 (decl pure imm64_shl (Type Imm64 Imm64) Imm64)
 (extern constructor imm64_shl imm64_shl)

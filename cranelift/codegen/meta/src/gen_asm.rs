@@ -14,10 +14,17 @@ pub fn rust_param_raw(op: &Operand) -> String {
                 format!("u{bits}")
             }
         }
-        OperandKind::RegMem(rm) => match rm.bits() {
-            128 => "&XmmMem".to_string(),
-            _ => "&GprMem".to_string(),
-        },
+        OperandKind::RegMem(rm) => {
+            let reg = match rm.bits() {
+                128 => "Xmm",
+                _ => "Gpr",
+            };
+            let aligned = if op.align { "Aligned" } else { "" };
+            format!("&{reg}Mem{aligned}")
+        }
+        OperandKind::Mem(_) => {
+            format!("&Amode")
+        }
         OperandKind::Reg(r) => match r.bits() {
             128 => "Xmm".to_string(),
             _ => "Gpr".to_string(),
@@ -37,6 +44,7 @@ pub fn rust_convert_isle_to_assembler(op: &Operand) -> Option<&'static str> {
             (_, Mutability::Read) => "cranelift_assembler_x64::Gpr::new",
             (_, Mutability::ReadWrite) => "self.convert_gpr_to_assembler_read_write_gpr",
         }),
+        OperandKind::Mem(_) => Some("self.convert_amode_to_assembler_amode"),
         OperandKind::RegMem(r) => Some(match (r.bits(), op.mutability) {
             (128, Mutability::Read) => "self.convert_xmm_mem_to_assembler_read_xmm_mem",
             (128, Mutability::ReadWrite) => "self.convert_xmm_mem_to_assembler_read_write_xmm_mem",
@@ -117,49 +125,38 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                         OperandKind::FixedReg(_) => fmtln!(f, "todo!()"),
                         // One read/write register output? Output the instruction
                         // and that register.
-                        OperandKind::Reg(r) => match r.bits() {
-                            128 => {
-                                fmtln!(
-                                    f,
-                                    "let xmm = {}.as_ref().write.to_reg();",
-                                    results[0].location
-                                );
-                                fmtln!(f, "AssemblerOutputs::RetXmm {{ inst, xmm }}")
-                            }
-                            _ => {
-                                fmtln!(
-                                    f,
-                                    "let gpr = {}.as_ref().write.to_reg();",
-                                    results[0].location
-                                );
-                                fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }}")
-                            }
+                        OperandKind::Reg(r) => {
+                            let (var, ty) = match r.bits() {
+                                128 => ("xmm", "Xmm"),
+                                _ => ("gpr", "Gpr"),
+                            };
+                            fmtln!(
+                                f,
+                                "let {var} = {r}.as_ref().write.to_reg();",
+                            );
+                            fmtln!(f, "AssemblerOutputs::Ret{ty} {{ inst, {var} }}");
                         },
+                        // One read/write memory operand? Output a side effect.
+                        OperandKind::Mem(_) => {
+                            fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }}")
+                        }
                         // One read/write regmem output? We need to output
                         // everything and it'll internally disambiguate which was
                         // emitted (e.g. the mem variant or the register variant).
-                        OperandKind::RegMem(_) => {
+                        OperandKind::RegMem(rm) => {
                             assert_eq!(results.len(), 1);
-                            let l = results[0].location;
-                            f.add_block(&format!("match {l}"), |f| match l.bits() {
-                                128 => {
-                                    f.add_block("asm::XmmMem::Xmm(reg) => ", |f| {
-                                        fmtln!(f, "let xmm = reg.write.to_reg();");
-                                        fmtln!(f, "AssemblerOutputs::RetXmm {{ inst, xmm }} ");
-                                    });
-                                    f.add_block("asm::XmmMem::Mem(_) => ", |f| {
-                                        fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }} ");
-                                    });
-                                }
-                                _ => {
-                                    f.add_block("asm::GprMem::Gpr(reg) => ", |f| {
-                                        fmtln!(f, "let gpr = reg.write.to_reg();");
-                                        fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }} ")
-                                    });
-                                    f.add_block("asm::GprMem::Mem(_) => ", |f| {
-                                        fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }} ");
-                                    });
-                                }
+                            let (var, ty) = match rm.bits() {
+                                128 => ("xmm", "Xmm"),
+                                _ => ("gpr", "Gpr"),
+                            };
+                            f.add_block(&format!("match {rm}"), |f| {
+                                f.add_block(&format!("asm::{ty}Mem::{ty}(reg) => "), |f| {
+                                    fmtln!(f, "let {var} = reg.write.to_reg();");
+                                    fmtln!(f, "AssemblerOutputs::Ret{ty} {{ inst, {var} }} ");
+                                });
+                                f.add_block(&format!("asm::{ty}Mem::Mem(_) => "), |f| {
+                                    fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }} ");
+                                });
                             });
                         }
                     },
@@ -203,10 +200,21 @@ pub fn isle_param_raw(op: &Operand) -> String {
             _ => "Gpr".to_string(),
         },
         OperandKind::FixedReg(_) => "Gpr".to_string(),
-        OperandKind::RegMem(rm) => match rm.bits() {
-            128 => "XmmMem".to_string(),
-            _ => "GprMem".to_string(),
-        },
+        OperandKind::Mem(_) => {
+            if op.align {
+                unimplemented!("no way yet to mark an Amode as aligned")
+            } else {
+                "Amode".to_string()
+            }
+        }
+        OperandKind::RegMem(rm) => {
+            let reg = match rm.bits() {
+                128 => "Xmm",
+                _ => "Gpr",
+            };
+            let aligned = if op.align { "Aligned" } else { "" };
+            format!("{reg}Mem{aligned}")
+        }
     }
 }
 
@@ -309,6 +317,8 @@ pub fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
                         128 => vec![IsleConstructor::RetXmm],
                         _ => vec![IsleConstructor::RetGpr],
                     },
+                    // One read/write memory operand? Output a side effect.
+                    Mem(_) => vec![IsleConstructor::RetMemorySideEffect],
                     // One read/write reg-mem output? We need constructors for
                     // both variants.
                     RegMem(rm) => match rm.bits() {

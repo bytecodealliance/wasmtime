@@ -1,0 +1,447 @@
+test compile precise-output
+target riscv64
+
+function %f0(i32) -> i32, f32, f64 {
+    sig0 = (i32) -> f32 tail
+    fn0 = colocated %g(i32) -> f32 tail
+
+    block0(v1: i32):
+        v2 = f64const 0x1.0
+        try_call fn0(v1), sig0, block1(ret0, v2), [ default: block2(exn0) ]
+
+    block1(v3: f32, v4: f64):
+        v5 = iconst.i32 1
+        return v5, v3, v4
+
+    block2(v6: i64):
+        v7 = ireduce.i32 v6
+        v8 = iadd_imm.i32 v7, 1
+        v9 = f32const 0x0.0        
+        return v8, v9, v2
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-208
+;   sd fp,200(sp)
+;   sd s1,192(sp)
+;   sd s2,184(sp)
+;   sd s3,176(sp)
+;   sd s4,168(sp)
+;   sd s5,160(sp)
+;   sd s6,152(sp)
+;   sd s7,144(sp)
+;   sd s8,136(sp)
+;   sd s9,128(sp)
+;   sd s10,120(sp)
+;   sd s11,112(sp)
+;   fsd fs0,104(sp)
+;   fsd fs2,96(sp)
+;   fsd fs3,88(sp)
+;   fsd fs4,80(sp)
+;   fsd fs5,72(sp)
+;   fsd fs6,64(sp)
+;   fsd fs7,56(sp)
+;   fsd fs8,48(sp)
+;   fsd fs9,40(sp)
+;   fsd fs10,32(sp)
+;   fsd fs11,24(sp)
+; block0:
+;   lui a4,1023
+;   slli a1,a4,40
+;   fmv.d.x fa1,a1
+;   fsd fa1,0(slot)
+;   call %g; j MachLabel(1); catch [None: MachLabel(2)]
+; block1:
+;   li a0,1
+;   fld fa1,0(slot)
+;   ld fp,200(sp)
+;   ld s1,192(sp)
+;   ld s2,184(sp)
+;   ld s3,176(sp)
+;   ld s4,168(sp)
+;   ld s5,160(sp)
+;   ld s6,152(sp)
+;   ld s7,144(sp)
+;   ld s8,136(sp)
+;   ld s9,128(sp)
+;   ld s10,120(sp)
+;   ld s11,112(sp)
+;   fld fs0,104(sp)
+;   fld fs2,96(sp)
+;   fld fs3,88(sp)
+;   fld fs4,80(sp)
+;   fld fs5,72(sp)
+;   fld fs6,64(sp)
+;   fld fs7,56(sp)
+;   fld fs8,48(sp)
+;   fld fs9,40(sp)
+;   fld fs10,32(sp)
+;   fld fs11,24(sp)
+;   addi sp,sp,208
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+; block2:
+;   fld fa1,0(slot)
+;   addiw a0,a0,1
+;   fmv.w.x fa0,zero
+;   ld fp,200(sp)
+;   ld s1,192(sp)
+;   ld s2,184(sp)
+;   ld s3,176(sp)
+;   ld s4,168(sp)
+;   ld s5,160(sp)
+;   ld s6,152(sp)
+;   ld s7,144(sp)
+;   ld s8,136(sp)
+;   ld s9,128(sp)
+;   ld s10,120(sp)
+;   ld s11,112(sp)
+;   fld fs0,104(sp)
+;   fld fs2,96(sp)
+;   fld fs3,88(sp)
+;   fld fs4,80(sp)
+;   fld fs5,72(sp)
+;   fld fs6,64(sp)
+;   fld fs7,56(sp)
+;   fld fs8,48(sp)
+;   fld fs9,40(sp)
+;   fld fs10,32(sp)
+;   fld fs11,24(sp)
+;   addi sp,sp,208
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0xd0
+;   sd s0, 0xc8(sp)
+;   sd s1, 0xc0(sp)
+;   sd s2, 0xb8(sp)
+;   sd s3, 0xb0(sp)
+;   sd s4, 0xa8(sp)
+;   sd s5, 0xa0(sp)
+;   sd s6, 0x98(sp)
+;   sd s7, 0x90(sp)
+;   sd s8, 0x88(sp)
+;   sd s9, 0x80(sp)
+;   sd s10, 0x78(sp)
+;   sd s11, 0x70(sp)
+;   fsd fs0, 0x68(sp)
+;   fsd fs2, 0x60(sp)
+;   fsd fs3, 0x58(sp)
+;   fsd fs4, 0x50(sp)
+;   fsd fs5, 0x48(sp)
+;   fsd fs6, 0x40(sp)
+;   fsd fs7, 0x38(sp)
+;   fsd fs8, 0x30(sp)
+;   fsd fs9, 0x28(sp)
+;   fsd fs10, 0x20(sp)
+;   fsd fs11, 0x18(sp)
+; block1: ; offset 0x70
+;   lui a4, 0x3ff
+;   slli a1, a4, 0x28
+;   fmv.d.x fa1, a1
+;   fsd fa1, 0(sp)
+;   auipc ra, 0 ; reloc_external RiscvCallPlt %g 0
+;   jalr ra
+; block2: ; offset 0x88
+;   addi a0, zero, 1
+;   fld fa1, 0(sp)
+;   ld s0, 0xc8(sp)
+;   ld s1, 0xc0(sp)
+;   ld s2, 0xb8(sp)
+;   ld s3, 0xb0(sp)
+;   ld s4, 0xa8(sp)
+;   ld s5, 0xa0(sp)
+;   ld s6, 0x98(sp)
+;   ld s7, 0x90(sp)
+;   ld s8, 0x88(sp)
+;   ld s9, 0x80(sp)
+;   ld s10, 0x78(sp)
+;   ld s11, 0x70(sp)
+;   fld fs0, 0x68(sp)
+;   fld fs2, 0x60(sp)
+;   fld fs3, 0x58(sp)
+;   fld fs4, 0x50(sp)
+;   fld fs5, 0x48(sp)
+;   fld fs6, 0x40(sp)
+;   fld fs7, 0x38(sp)
+;   fld fs8, 0x30(sp)
+;   fld fs9, 0x28(sp)
+;   fld fs10, 0x20(sp)
+;   fld fs11, 0x18(sp)
+;   addi sp, sp, 0xd0
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+; block3: ; offset 0x100
+;   fld fa1, 0(sp)
+;   addiw a0, a0, 1
+;   fmv.w.x fa0, zero
+;   ld s0, 0xc8(sp)
+;   ld s1, 0xc0(sp)
+;   ld s2, 0xb8(sp)
+;   ld s3, 0xb0(sp)
+;   ld s4, 0xa8(sp)
+;   ld s5, 0xa0(sp)
+;   ld s6, 0x98(sp)
+;   ld s7, 0x90(sp)
+;   ld s8, 0x88(sp)
+;   ld s9, 0x80(sp)
+;   ld s10, 0x78(sp)
+;   ld s11, 0x70(sp)
+;   fld fs0, 0x68(sp)
+;   fld fs2, 0x60(sp)
+;   fld fs3, 0x58(sp)
+;   fld fs4, 0x50(sp)
+;   fld fs5, 0x48(sp)
+;   fld fs6, 0x40(sp)
+;   fld fs7, 0x38(sp)
+;   fld fs8, 0x30(sp)
+;   fld fs9, 0x28(sp)
+;   fld fs10, 0x20(sp)
+;   fld fs11, 0x18(sp)
+;   addi sp, sp, 0xd0
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %f2(i32) -> i32, f32, f64 {
+    sig0 = (i32) -> f32 tail
+    fn0 = %g(i32) -> f32 tail
+
+    block0(v1: i32):
+        v2 = f64const 0x1.0
+        v10 = func_addr.i64 fn0
+        try_call_indirect v10(v1), sig0, block1(ret0, v2), [ default: block2(exn0) ]
+
+    block1(v3: f32, v4: f64):
+        v5 = iconst.i32 1
+        return v5, v3, v4
+
+    block2(v6: i64):
+        v7 = ireduce.i32 v6
+        v8 = iadd_imm.i32 v7, 1
+        v9 = f32const 0x0.0        
+        return v8, v9, v2
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-208
+;   sd fp,200(sp)
+;   sd s1,192(sp)
+;   sd s2,184(sp)
+;   sd s3,176(sp)
+;   sd s4,168(sp)
+;   sd s5,160(sp)
+;   sd s6,152(sp)
+;   sd s7,144(sp)
+;   sd s8,136(sp)
+;   sd s9,128(sp)
+;   sd s10,120(sp)
+;   sd s11,112(sp)
+;   fsd fs0,104(sp)
+;   fsd fs2,96(sp)
+;   fsd fs3,88(sp)
+;   fsd fs4,80(sp)
+;   fsd fs5,72(sp)
+;   fsd fs6,64(sp)
+;   fsd fs7,56(sp)
+;   fsd fs8,48(sp)
+;   fsd fs9,40(sp)
+;   fsd fs10,32(sp)
+;   fsd fs11,24(sp)
+; block0:
+;   lui a5,1023
+;   slli a1,a5,40
+;   fmv.d.x fa1,a1
+;   fsd fa1,0(slot)
+;   load_sym a1,%g+0
+;   callind a1; j MachLabel(1); catch [None: MachLabel(2)]
+; block1:
+;   li a0,1
+;   fld fa1,0(slot)
+;   ld fp,200(sp)
+;   ld s1,192(sp)
+;   ld s2,184(sp)
+;   ld s3,176(sp)
+;   ld s4,168(sp)
+;   ld s5,160(sp)
+;   ld s6,152(sp)
+;   ld s7,144(sp)
+;   ld s8,136(sp)
+;   ld s9,128(sp)
+;   ld s10,120(sp)
+;   ld s11,112(sp)
+;   fld fs0,104(sp)
+;   fld fs2,96(sp)
+;   fld fs3,88(sp)
+;   fld fs4,80(sp)
+;   fld fs5,72(sp)
+;   fld fs6,64(sp)
+;   fld fs7,56(sp)
+;   fld fs8,48(sp)
+;   fld fs9,40(sp)
+;   fld fs10,32(sp)
+;   fld fs11,24(sp)
+;   addi sp,sp,208
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+; block2:
+;   fld fa1,0(slot)
+;   addiw a0,a0,1
+;   fmv.w.x fa0,zero
+;   ld fp,200(sp)
+;   ld s1,192(sp)
+;   ld s2,184(sp)
+;   ld s3,176(sp)
+;   ld s4,168(sp)
+;   ld s5,160(sp)
+;   ld s6,152(sp)
+;   ld s7,144(sp)
+;   ld s8,136(sp)
+;   ld s9,128(sp)
+;   ld s10,120(sp)
+;   ld s11,112(sp)
+;   fld fs0,104(sp)
+;   fld fs2,96(sp)
+;   fld fs3,88(sp)
+;   fld fs4,80(sp)
+;   fld fs5,72(sp)
+;   fld fs6,64(sp)
+;   fld fs7,56(sp)
+;   fld fs8,48(sp)
+;   fld fs9,40(sp)
+;   fld fs10,32(sp)
+;   fld fs11,24(sp)
+;   addi sp,sp,208
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0xd0
+;   sd s0, 0xc8(sp)
+;   sd s1, 0xc0(sp)
+;   sd s2, 0xb8(sp)
+;   sd s3, 0xb0(sp)
+;   sd s4, 0xa8(sp)
+;   sd s5, 0xa0(sp)
+;   sd s6, 0x98(sp)
+;   sd s7, 0x90(sp)
+;   sd s8, 0x88(sp)
+;   sd s9, 0x80(sp)
+;   sd s10, 0x78(sp)
+;   sd s11, 0x70(sp)
+;   fsd fs0, 0x68(sp)
+;   fsd fs2, 0x60(sp)
+;   fsd fs3, 0x58(sp)
+;   fsd fs4, 0x50(sp)
+;   fsd fs5, 0x48(sp)
+;   fsd fs6, 0x40(sp)
+;   fsd fs7, 0x38(sp)
+;   fsd fs8, 0x30(sp)
+;   fsd fs9, 0x28(sp)
+;   fsd fs10, 0x20(sp)
+;   fsd fs11, 0x18(sp)
+; block1: ; offset 0x70
+;   lui a5, 0x3ff
+;   slli a1, a5, 0x28
+;   fmv.d.x fa1, a1
+;   fsd fa1, 0(sp)
+;   auipc a1, 0
+;   ld a1, 0xc(a1)
+;   j 0xc
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   jalr a1
+; block2: ; offset 0x98
+;   addi a0, zero, 1
+;   fld fa1, 0(sp)
+;   ld s0, 0xc8(sp)
+;   ld s1, 0xc0(sp)
+;   ld s2, 0xb8(sp)
+;   ld s3, 0xb0(sp)
+;   ld s4, 0xa8(sp)
+;   ld s5, 0xa0(sp)
+;   ld s6, 0x98(sp)
+;   ld s7, 0x90(sp)
+;   ld s8, 0x88(sp)
+;   ld s9, 0x80(sp)
+;   ld s10, 0x78(sp)
+;   ld s11, 0x70(sp)
+;   fld fs0, 0x68(sp)
+;   fld fs2, 0x60(sp)
+;   fld fs3, 0x58(sp)
+;   fld fs4, 0x50(sp)
+;   fld fs5, 0x48(sp)
+;   fld fs6, 0x40(sp)
+;   fld fs7, 0x38(sp)
+;   fld fs8, 0x30(sp)
+;   fld fs9, 0x28(sp)
+;   fld fs10, 0x20(sp)
+;   fld fs11, 0x18(sp)
+;   addi sp, sp, 0xd0
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+; block3: ; offset 0x110
+;   fld fa1, 0(sp)
+;   addiw a0, a0, 1
+;   fmv.w.x fa0, zero
+;   ld s0, 0xc8(sp)
+;   ld s1, 0xc0(sp)
+;   ld s2, 0xb8(sp)
+;   ld s3, 0xb0(sp)
+;   ld s4, 0xa8(sp)
+;   ld s5, 0xa0(sp)
+;   ld s6, 0x98(sp)
+;   ld s7, 0x90(sp)
+;   ld s8, 0x88(sp)
+;   ld s9, 0x80(sp)
+;   ld s10, 0x78(sp)
+;   ld s11, 0x70(sp)
+;   fld fs0, 0x68(sp)
+;   fld fs2, 0x60(sp)
+;   fld fs3, 0x58(sp)
+;   fld fs4, 0x50(sp)
+;   fld fs5, 0x48(sp)
+;   fld fs6, 0x40(sp)
+;   fld fs7, 0x38(sp)
+;   fld fs8, 0x30(sp)
+;   fld fs9, 0x28(sp)
+;   fld fs10, 0x20(sp)
+;   fld fs11, 0x18(sp)
+;   addi sp, sp, 0xd0
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+

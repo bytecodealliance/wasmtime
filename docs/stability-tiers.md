@@ -104,13 +104,14 @@ For explanations of what each tier means see below.
 | Target               | `x86_64-unknown-illumos`          | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-linux-musl` [^4]  | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-none` [^5]        | CI testing, full-time maintainer |
-| Compiler Backend     | Winch on x86\_64                  | WebAssembly proposals (`simd`, `relaxed-simd`, `tail-call`, `reference-types`, `threads`)     |
+| Compiler Backend     | Winch on x86\_64                  | WebAssembly proposals ([`relaxed-simd`], [`tail-call`], [`reference-types`])     |
 | Compiler Backend     | Winch on aarch64                  | Complete implementation     |
 | WebAssembly Proposal | [`gc`]                            | Complete implementation     |
 | WASI Proposal        | [`wasi-nn`]                       | More expansive CI testing   |
 | WASI Proposal        | [`wasi-threads`]                  | More CI, unstable proposal  |
 | WASI Proposal        | [`wasi-config`]                   | unstable proposal           |
 | WASI Proposal        | [`wasi-keyvalue`]                 | unstable proposal           |
+| WASI Proposal        | [`wasi-tls`]                      | unstable proposal           |
 | *misc*               | Non-Wasmtime Cranelift usage [^1] | CI testing, full-time maintainer |
 | *misc*               | DWARF debugging [^2]              | CI testing, full-time maintainer, improved quality |
 
@@ -118,6 +119,7 @@ For explanations of what each tier means see below.
 [`wasi-threads`]: https://github.com/WebAssembly/wasi-threads
 [`wasi-config`]: https://github.com/WebAssembly/wasi-config
 [`wasi-keyvalue`]: https://github.com/WebAssembly/wasi-keyvalue
+[`wasi-tls`]: https://github.com/WebAssembly/wasi-tls
 [`gc`]: https://github.com/WebAssembly/gc
 
 [^1]: This is intended to encompass features that Cranelift supports as a

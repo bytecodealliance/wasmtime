@@ -4,8 +4,9 @@ use anyhow::{anyhow, Result};
 use std::path::Path;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::bindings::sync::Command;
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder};
+use wasmtime_wasi::p2::bindings::sync::Command;
+use wasmtime_wasi::p2::{WasiCtx, WasiCtxBuilder};
+use wasmtime_wasi::{DirPerms, FilePerms};
 use wasmtime_wasi_nn::wit::WasiNnView;
 use wasmtime_wasi_nn::{wit::WasiNnCtx, Backend, InMemoryRegistry};
 
@@ -19,7 +20,7 @@ pub fn run(path: &str, backend: Backend, preload_model: bool) -> Result<()> {
     wasmtime_wasi_nn::wit::add_to_linker(&mut linker, |c: &mut Ctx| {
         WasiNnView::new(&mut c.table, &mut c.wasi_nn)
     })?;
-    wasmtime_wasi::add_to_linker_sync(&mut linker)?;
+    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
     let module = Component::from_file(&engine, path)?;
     let mut store = Store::new(&engine, Ctx::new(&artifacts_dir(), preload_model, backend)?);
     let command = Command::instantiate(&mut store, &module, &linker)?;
@@ -62,12 +63,12 @@ impl Ctx {
     }
 }
 
-impl wasmtime_wasi::IoView for Ctx {
+impl wasmtime_wasi::p2::IoView for Ctx {
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
 }
-impl wasmtime_wasi::WasiView for Ctx {
+impl wasmtime_wasi::p2::WasiView for Ctx {
     fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.wasi
     }

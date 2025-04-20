@@ -10,6 +10,7 @@ use crate::isa::FunctionAlignment;
 use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use regalloc2::RegClass;
 use smallvec::SmallVec;
 
@@ -169,8 +170,11 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
-            for CallRetPair { vreg, preg } in defs {
-                collector.reg_fixed_def(vreg, *preg);
+            for CallRetPair { vreg, location } in defs {
+                match location {
+                    RetLocation::Reg(preg, ..) => collector.reg_fixed_def(vreg, *preg),
+                    RetLocation::Stack(..) => collector.any_def(vreg),
+                }
             }
             collector.reg_clobbers(info.clobbers);
         }
@@ -179,8 +183,11 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
-            for CallRetPair { vreg, preg } in defs {
-                collector.reg_fixed_def(vreg, *preg);
+            for CallRetPair { vreg, location } in defs {
+                match location {
+                    RetLocation::Reg(preg, ..) => collector.reg_fixed_def(vreg, *preg),
+                    RetLocation::Stack(..) => collector.any_def(vreg),
+                }
             }
             collector.reg_clobbers(info.clobbers);
         }
@@ -190,8 +197,11 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
-            for CallRetPair { vreg, preg } in defs {
-                collector.reg_fixed_def(vreg, *preg);
+            for CallRetPair { vreg, location } in defs {
+                match location {
+                    RetLocation::Reg(preg, ..) => collector.reg_fixed_def(vreg, *preg),
+                    RetLocation::Stack(..) => collector.any_def(vreg),
+                }
             }
             collector.reg_clobbers(info.clobbers);
         }
@@ -298,6 +308,8 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
 
         Inst::Raw { raw } => generated::get_operands(raw, collector),
+
+        Inst::EmitIsland { .. } => {}
     }
 }
 
@@ -435,15 +447,17 @@ where
     }
 
     fn is_term(&self) -> MachTerminator {
-        match self.inst {
+        match &self.inst {
             Inst::Raw {
                 raw: RawInst::Ret { .. },
             }
             | Inst::Rets { .. } => MachTerminator::Ret,
-            Inst::Jump { .. } => MachTerminator::Uncond,
-            Inst::BrIf { .. } => MachTerminator::Cond,
-            Inst::BrTable { .. } => MachTerminator::Indirect,
-            Inst::ReturnCall { .. } | Inst::ReturnIndirectCall { .. } => MachTerminator::Indirect,
+            Inst::Jump { .. } => MachTerminator::Branch,
+            Inst::BrIf { .. } => MachTerminator::Branch,
+            Inst::BrTable { .. } => MachTerminator::Branch,
+            Inst::ReturnCall { .. } | Inst::ReturnIndirectCall { .. } => MachTerminator::RetCall,
+            Inst::Call { info } if info.try_call_info.is_some() => MachTerminator::Branch,
+            Inst::IndirectCall { info } if info.try_call_info.is_some() => MachTerminator::Branch,
             _ => MachTerminator::None,
         }
     }
@@ -573,6 +587,16 @@ pub fn reg_name(reg: Reg) -> String {
     }
 }
 
+fn pretty_print_try_call(info: &TryCallInfo) -> String {
+    let dests = info
+        .exception_dests
+        .iter()
+        .map(|(tag, label)| format!("{tag:?}: {label:?}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    format!("; jump {:?}; catch [{dests}]", info.continuation)
+}
+
 impl Inst {
     fn print_with_state<P>(&self, _state: &mut EmitState<P>) -> String
     where
@@ -625,12 +649,22 @@ impl Inst {
             }
 
             Inst::Call { info } => {
-                format!("call {info:?}")
+                let try_call = info
+                    .try_call_info
+                    .as_ref()
+                    .map(|tci| pretty_print_try_call(tci))
+                    .unwrap_or_default();
+                format!("call {info:?}{try_call}")
             }
 
             Inst::IndirectCall { info } => {
                 let callee = format_reg(*info.dest);
-                format!("indirect_call {callee}, {info:?}")
+                let try_call = info
+                    .try_call_info
+                    .as_ref()
+                    .map(|tci| pretty_print_try_call(tci))
+                    .unwrap_or_default();
+                format!("indirect_call {callee}, {info:?}{try_call}")
             }
 
             Inst::ReturnCall { info } => {
@@ -745,6 +779,8 @@ impl Inst {
                 format!("br_table {idx} {default:?} {targets:?}")
             }
             Inst::Raw { raw } => generated::print(raw),
+
+            Inst::EmitIsland { space_needed } => format!("emit_island {space_needed}"),
         }
     }
 }

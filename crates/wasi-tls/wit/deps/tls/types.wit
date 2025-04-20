@@ -1,0 +1,33 @@
+@unstable(feature = tls)
+interface types {
+    @unstable(feature = tls)
+    use wasi:io/streams@0.2.3.{input-stream, output-stream};
+    @unstable(feature = tls)
+    use wasi:io/poll@0.2.3.{pollable};
+    @unstable(feature = tls)
+    use wasi:io/error@0.2.3.{error as io-error};
+
+    @unstable(feature = tls)
+    resource client-handshake {
+        @unstable(feature = tls)
+        constructor(server-name: string, input: input-stream, output: output-stream);
+
+        @unstable(feature = tls)
+        finish: static func(this: client-handshake) -> future-client-streams;
+    }
+
+    @unstable(feature = tls)
+    resource client-connection {
+        @unstable(feature = tls)
+        close-output: func();
+    }
+
+    @unstable(feature = tls)
+    resource future-client-streams {
+        @unstable(feature = tls)
+        subscribe: func() -> pollable;
+
+        @unstable(feature = tls)
+        get: func() -> option<result<result<tuple<client-connection, input-stream, output-stream>, io-error>>>;
+    }
+}

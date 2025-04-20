@@ -290,10 +290,9 @@ impl Config {
 
             // When running under MIRI try to optimize for compile time of wasm
             // code itself as much as possible. Disable optimizations by
-            // default and use the fastest regalloc available to us.
+            // default.
             if cfg!(miri) {
                 ret.cranelift_opt_level(OptLevel::None);
-                ret.cranelift_regalloc_algorithm(RegallocAlgorithm::SinglePass);
             }
         }
 
@@ -391,7 +390,7 @@ impl Config {
     /// arbitrarily long in the worst case, likely blocking all other
     /// asynchronous tasks.
     ///
-    /// To remedy this situation you have a a few possible ways to solve this:
+    /// To remedy this situation you have a few possible ways to solve this:
     ///
     /// * The most efficient solution is to enable
     ///   [`Config::epoch_interruption`] in conjunction with
@@ -502,9 +501,9 @@ impl Config {
             WasmBacktraceDetails::Enable => Some(true),
             WasmBacktraceDetails::Disable => Some(false),
             WasmBacktraceDetails::Environment => {
-                self.wasm_backtrace_details_env_used = true;
                 #[cfg(feature = "std")]
                 {
+                    self.wasm_backtrace_details_env_used = true;
                     std::env::var("WASMTIME_BACKTRACE_DETAILS")
                         .map(|s| Some(s == "1"))
                         .unwrap_or(Some(false))
@@ -866,6 +865,21 @@ impl Config {
         self
     }
 
+    /// Configures whether the WebAssembly [shared-everything-threads] proposal
+    /// will be enabled for compilation.
+    ///
+    /// This feature gates extended use of the `shared` attribute on items other
+    /// than memories, extra atomic instructions, and new component model
+    /// intrinsics for spawning threads. It depends on the
+    /// [`wasm_threads`][Self::wasm_threads] being enabled.
+    ///
+    /// [shared-everything-threads]:
+    ///     https://github.com/webassembly/shared-everything-threads
+    pub fn wasm_shared_everything_threads(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::SHARED_EVERYTHING_THREADS, enable);
+        self
+    }
+
     /// Configures whether the [WebAssembly reference types proposal][proposal]
     /// will be enabled for compilation.
     ///
@@ -1099,13 +1113,7 @@ impl Config {
     ///
     /// [proposal]: https://github.com/webassembly/stack-switching
     pub fn wasm_stack_switching(&mut self, enable: bool) -> &mut Self {
-        // FIXME(dhil): Once the config provides a handle
-        // for turning on/off exception handling proposal support,
-        // this ought to only enable stack switching.
-        self.wasm_feature(
-            WasmFeatures::EXCEPTIONS | WasmFeatures::STACK_SWITCHING,
-            enable,
-        );
+        self.wasm_feature(WasmFeatures::STACK_SWITCHING, enable);
         self
     }
 
@@ -1132,12 +1140,54 @@ impl Config {
     /// lifting and lowering functions, as well as `stream`, `future`, and
     /// `error-context` types.
     ///
-    /// Please note that Wasmtime's support for this feature is _very_ incomplete.
+    /// Please note that Wasmtime's support for this feature is _very_
+    /// incomplete.
+    ///
+    /// [proposal]:
+    ///     https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
+    #[cfg(feature = "component-model-async")]
+    pub fn wasm_component_model_async(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::CM_ASYNC, enable);
+        self
+    }
+
+    /// This corresponds to the 🚝 emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is _very_
+    /// incomplete.
+    ///
+    /// [proposal]:
+    ///     https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
+    #[cfg(feature = "component-model-async")]
+    pub fn wasm_component_model_async_builtins(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::CM_ASYNC_BUILTINS, enable);
+        self
+    }
+
+    /// This corresponds to the 🚟 emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is _very_
+    /// incomplete.
     ///
     /// [proposal]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
     #[cfg(feature = "component-model-async")]
-    pub fn wasm_component_model_async(&mut self, enable: bool) -> &mut Self {
-        self.wasm_feature(WasmFeatures::COMPONENT_MODEL_ASYNC, enable);
+    pub fn wasm_component_model_async_stackful(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::CM_ASYNC_STACKFUL, enable);
+        self
+    }
+
+    #[doc(hidden)] // FIXME(#3427) - if/when implemented then un-hide this
+    pub fn wasm_exceptions(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::EXCEPTIONS, enable);
+        self
+    }
+
+    #[doc(hidden)] // FIXME(#3427) - if/when implemented then un-hide this
+    #[deprecated = "This configuration option only exists for internal \
+                    usage with the spec testsuite. It may be removed at \
+                    any time and without warning. Do not rely on it!"]
+    pub fn wasm_legacy_exceptions(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::LEGACY_EXCEPTIONS, enable);
         self
     }
 
@@ -1209,7 +1259,7 @@ impl Config {
     /// optimization level used for generated code in a few various ways. For
     /// more information see the documentation of [`OptLevel`].
     ///
-    /// The default value for this is `OptLevel::None`.
+    /// The default value for this is `OptLevel::Speed`.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_opt_level(&mut self, level: OptLevel) -> &mut Self {
         let val = match level {
@@ -1236,7 +1286,6 @@ impl Config {
     pub fn cranelift_regalloc_algorithm(&mut self, algo: RegallocAlgorithm) -> &mut Self {
         let val = match algo {
             RegallocAlgorithm::Backtracking => "backtracking",
-            RegallocAlgorithm::SinglePass => "single_pass",
         };
         self.compiler_config
             .settings
@@ -1529,8 +1578,8 @@ impl Config {
     ///
     /// Memory in the `initial` range is accessible to the instance and can be
     /// read/written by wasm code. Memory in the `guard` regions is never
-    /// accesible to wasm code and memory in `capacity` is initially
-    /// inaccessible but may become accesible through `memory.grow` instructions
+    /// accessible to wasm code and memory in `capacity` is initially
+    /// inaccessible but may become accessible through `memory.grow` instructions
     /// for example.
     ///
     /// This means that this setting is the size of the initial chunk of virtual
@@ -1542,7 +1591,7 @@ impl Config {
     /// during the compilation process of a WebAssembly module. For example if a
     /// 32-bit WebAssembly linear memory has a `memory_reservation` size of 4GiB
     /// then bounds checks can be elided because `capacity` will be guaranteed
-    /// to be unmapped for all addressible bytes that wasm can access (modulo a
+    /// to be unmapped for all addressable bytes that wasm can access (modulo a
     /// few details).
     ///
     /// If `memory_reservation` was something smaller like 256KiB then that
@@ -1554,7 +1603,7 @@ impl Config {
     /// modules by default. Some situations which require explicit bounds checks
     /// though are:
     ///
-    /// * When `memory_reservation` is smaller than the addressible size of the
+    /// * When `memory_reservation` is smaller than the addressable size of the
     ///   linear memory. For example if 64-bit linear memories always need
     ///   bounds checks as they can address the entire virtual address spacce.
     ///   For 32-bit linear memories a `memory_reservation` minimum size of 4GiB
@@ -2037,11 +2086,15 @@ impl Config {
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         match self.compiler_config.strategy {
             None | Some(Strategy::Cranelift) => {
+                let mut unsupported = WasmFeatures::empty();
+
                 // Pulley at this time fundamentally doesn't support the
                 // `threads` proposal, notably shared memory, because Rust can't
                 // safely implement loads/stores in the face of shared memory.
+                // Stack switching is not implemented, either.
                 if self.compiler_target().is_pulley() {
-                    return WasmFeatures::THREADS | WasmFeatures::STACK_SWITCHING;
+                    unsupported |= WasmFeatures::THREADS;
+                    unsupported |= WasmFeatures::STACK_SWITCHING;
                 }
 
                 use target_lexicon::*;
@@ -2054,25 +2107,26 @@ impl Config {
                             | OperatingSystem::Darwin(_),
                         ..
                     } => {
-                        // Other Cranelift backends are either 100% missing or complete
-                        // at this time, so no need to further filter.
-                        WasmFeatures::empty()
+                        // Stack switching supported on (non-Pulley) Cranelift.
                     }
 
                     _ => {
                         // On platforms other than x64 Unix-like, we don't
                         // support stack switching.
-                        WasmFeatures::STACK_SWITCHING
+                        unsupported |= WasmFeatures::STACK_SWITCHING;
                     }
                 }
+                unsupported
             }
             Some(Strategy::Winch) => {
                 let mut unsupported = WasmFeatures::GC
                     | WasmFeatures::FUNCTION_REFERENCES
                     | WasmFeatures::RELAXED_SIMD
                     | WasmFeatures::TAIL_CALL
-                    | WasmFeatures::STACK_SWITCHING
-                    | WasmFeatures::GC_TYPES;
+                    | WasmFeatures::GC_TYPES
+                    | WasmFeatures::EXCEPTIONS
+                    | WasmFeatures::LEGACY_EXCEPTIONS
+                    | WasmFeatures::STACK_SWITCHING;
                 match self.compiler_target().architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
                         // no support for simd on aarch64
@@ -2860,16 +2914,6 @@ pub enum RegallocAlgorithm {
     /// results in better register utilization, producing fewer spills
     /// and moves, but can cause super-linear compile runtime.
     Backtracking,
-    /// Generates acceptable code very quickly.
-    ///
-    /// This algorithm performs a single pass through the code,
-    /// guaranteed to work in linear time.  (Note that the rest of
-    /// Cranelift is not necessarily guaranteed to run in linear time,
-    /// however.) It cannot undo earlier decisions, however, and it
-    /// cannot foresee constraints or issues that may occur further
-    /// ahead in the code, so the code may have more spills and moves as
-    /// a result.
-    SinglePass,
 }
 
 /// Select which profiling technique to support.

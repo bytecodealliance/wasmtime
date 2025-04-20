@@ -346,10 +346,9 @@ impl<'a> Module<'a> {
             } else {
                 ValType::I32
             };
-            let ty = self.core_types.function(
-                &[ptr, ValType::I32, ValType::I32, ValType::I32],
-                &[ValType::I32],
-            );
+            let ty = self
+                .core_types
+                .function(&[ptr, ValType::I32, ValType::I32], &[ValType::I32]);
             self.import_func(
                 "callback",
                 &format!("f{}", self.imported_funcs.len()),

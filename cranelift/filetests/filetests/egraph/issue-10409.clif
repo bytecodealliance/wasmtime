@@ -1,0 +1,28 @@
+test optimize
+set opt_level=speed_and_size
+target x86_64
+
+function u0:0(i64x2) -> i64x2 system_v {
+    block0(v1: i64x2):
+        v2 = iconst.i8 96
+        v3 = ishl v1, v2
+        v4 = ushr v3, v2
+        return v4
+}
+
+; check: v5 = iconst.i8 32
+; next: v6 = ishl v1, v5
+; next: v8 = ushr v6, v5
+; next: return v8
+
+function u0:1(i64) -> i64 system_v {
+    block0(v1: i64):
+        v2 = iconst.i8 32
+        v3 = ishl v1, v2
+        v4 = ushr v3, v2
+        return v4
+}
+
+; check: v5 = ireduce.i32 v1
+; next: v6 = uextend.i64 v5
+; next: return v6

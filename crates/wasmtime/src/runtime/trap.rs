@@ -323,7 +323,10 @@ impl WasmBacktrace {
                 // `Display` to indicate that more detailed information
                 // in a trap may be available.
                 let has_unparsed_debuginfo = module.compiled_module().has_unparsed_debuginfo();
-                if has_unparsed_debuginfo && wasm_backtrace_details_env_used {
+                if has_unparsed_debuginfo
+                    && wasm_backtrace_details_env_used
+                    && cfg!(feature = "addr2line")
+                {
                     hint_wasm_backtrace_details_env = true;
                 }
             }
@@ -359,7 +362,7 @@ impl fmt::Display for WasmBacktrace {
             write!(f, "  {i:>3}: ")?;
 
             if let Some(offset) = frame.module_offset() {
-                write!(f, "{offset:#6x} - ")?;
+                write!(f, "{offset:#8x} - ")?;
             }
 
             let write_raw_func_name = |f: &mut fmt::Formatter<'_>| {
@@ -371,7 +374,12 @@ impl fmt::Display for WasmBacktrace {
             } else {
                 for (i, symbol) in frame.symbols().iter().enumerate() {
                     if i > 0 {
-                        write!(f, "              - ")?;
+                        if needs_newline {
+                            writeln!(f, "")?;
+                        } else {
+                            needs_newline = true;
+                        }
+                        write!(f, "                - ")?;
                     } else {
                         // ...
                     }
@@ -394,7 +402,11 @@ impl fmt::Display for WasmBacktrace {
             }
         }
         if self.hint_wasm_backtrace_details_env {
-            write!(f, "\nnote: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information")?;
+            write!(
+                f,
+                "\nnote: using the `WASMTIME_BACKTRACE_DETAILS=1` \
+                 environment variable may show more debugging information"
+            )?;
         }
         Ok(())
     }
@@ -423,8 +435,7 @@ impl FrameInfo {
     pub(crate) fn new(module: Module, text_offset: usize) -> Option<FrameInfo> {
         let compiled_module = module.compiled_module();
         let (index, _func_offset) = compiled_module.func_by_text_offset(text_offset)?;
-        let info = compiled_module.wasm_func_info(index);
-        let func_start = info.start_srcloc;
+        let func_start = compiled_module.func_start_srcloc(index);
         let instr = wasmtime_environ::lookup_file_pos(
             compiled_module.code_memory().address_map_data(),
             text_offset,

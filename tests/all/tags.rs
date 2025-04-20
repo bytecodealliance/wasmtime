@@ -12,7 +12,7 @@ fn wasm_export_tags() -> Result<()> {
         "#;
     let _ = env_logger::try_init();
     let mut config = Config::new();
-    config.wasm_stack_switching(true);
+    config.wasm_exceptions(true).wasm_stack_switching(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
     let module = Module::new(&engine, source)?;
@@ -61,7 +61,7 @@ fn wasm_import_tags() -> Result<()> {
         "#;
     let _ = env_logger::try_init();
     let mut config = Config::new();
-    config.wasm_stack_switching(true);
+    config.wasm_exceptions(true).wasm_stack_switching(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
     let m1 = Module::new(&engine, m1_src)?;

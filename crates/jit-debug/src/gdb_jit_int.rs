@@ -86,44 +86,48 @@ unsafe impl Send for GdbJitImageRegistration {}
 unsafe impl Sync for GdbJitImageRegistration {}
 
 unsafe fn register_gdb_jit_image(entry: *mut JITCodeEntry) {
-    let _lock = GDB_REGISTRATION.lock().unwrap();
-    let desc = &mut *wasmtime_jit_debug_descriptor();
+    unsafe {
+        let _lock = GDB_REGISTRATION.lock().unwrap();
+        let desc = &mut *wasmtime_jit_debug_descriptor();
 
-    // Add it to the linked list in the JIT descriptor.
-    (*entry).next_entry = desc.first_entry;
-    if !desc.first_entry.is_null() {
-        (*desc.first_entry).prev_entry = entry;
+        // Add it to the linked list in the JIT descriptor.
+        (*entry).next_entry = desc.first_entry;
+        if !desc.first_entry.is_null() {
+            (*desc.first_entry).prev_entry = entry;
+        }
+        desc.first_entry = entry;
+        // Point the relevant_entry field of the descriptor at the entry.
+        desc.relevant_entry = entry;
+        // Set action_flag to JIT_REGISTER and call __jit_debug_register_code.
+        desc.action_flag = JIT_REGISTER_FN;
+        __jit_debug_register_code();
+
+        desc.action_flag = JIT_NOACTION;
+        desc.relevant_entry = ptr::null_mut();
     }
-    desc.first_entry = entry;
-    // Point the relevant_entry field of the descriptor at the entry.
-    desc.relevant_entry = entry;
-    // Set action_flag to JIT_REGISTER and call __jit_debug_register_code.
-    desc.action_flag = JIT_REGISTER_FN;
-    __jit_debug_register_code();
-
-    desc.action_flag = JIT_NOACTION;
-    desc.relevant_entry = ptr::null_mut();
 }
 
 unsafe fn unregister_gdb_jit_image(entry: *mut JITCodeEntry) {
-    let _lock = GDB_REGISTRATION.lock().unwrap();
-    let desc = &mut *wasmtime_jit_debug_descriptor();
+    unsafe {
+        let _lock = GDB_REGISTRATION.lock().unwrap();
+        let desc = &mut *wasmtime_jit_debug_descriptor();
 
-    // Remove the code entry corresponding to the code from the linked list.
-    if !(*entry).prev_entry.is_null() {
-        (*(*entry).prev_entry).next_entry = (*entry).next_entry;
-    } else {
-        desc.first_entry = (*entry).next_entry;
-    }
-    if !(*entry).next_entry.is_null() {
-        (*(*entry).next_entry).prev_entry = (*entry).prev_entry;
-    }
-    // Point the relevant_entry field of the descriptor at the code entry.
-    desc.relevant_entry = entry;
-    // Set action_flag to JIT_UNREGISTER and call __jit_debug_register_code.
-    desc.action_flag = JIT_UNREGISTER_FN;
-    __jit_debug_register_code();
+        // Remove the code entry corresponding to the code from the linked list.
+        if !(*entry).prev_entry.is_null() {
+            (*(*entry).prev_entry).next_entry = (*entry).next_entry;
+        } else {
+            desc.first_entry = (*entry).next_entry;
+        }
+        if !(*entry).next_entry.is_null() {
+            (*(*entry).next_entry).prev_entry = (*entry).prev_entry;
+        }
+        // Point the relevant_entry field of the descriptor at the code entry.
+        desc.relevant_entry = entry;
+        // Set action_flag to JIT_UNREGISTER and call __jit_debug_register_code.
+        desc.action_flag = JIT_UNREGISTER_FN;
+        __jit_debug_register_code();
 
-    desc.action_flag = JIT_NOACTION;
-    desc.relevant_entry = ptr::null_mut();
+        desc.action_flag = JIT_NOACTION;
+        desc.relevant_entry = ptr::null_mut();
+    }
 }

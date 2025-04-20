@@ -1,0 +1,249 @@
+test compile precise-output
+target aarch64
+
+function %f0(i32) -> i32, f32, f64 {
+    sig0 = (i32) -> f32 tail
+    fn0 = colocated %g(i32) -> f32 tail
+
+    block0(v1: i32):
+        v2 = f64const 0x1.0
+        try_call fn0(v1), sig0, block1(ret0, v2), [ default: block2(exn0) ]
+
+    block1(v3: f32, v4: f64):
+        v5 = iconst.i32 1
+        return v5, v3, v4
+
+    block2(v6: i64):
+        v7 = ireduce.i32 v6
+        v8 = iadd_imm.i32 v7, 1
+        v9 = f32const 0x0.0        
+        return v8, v9, v2
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
+;   sub sp, sp, #16
+; block0:
+;   fmov d1, #1
+;   mov x2, x0
+;   str q1, [sp]
+;   bl 0; b MachLabel(1); catch [None: MachLabel(2)]
+; block1:
+;   movz w0, #1
+;   ldr q1, [sp]
+;   add sp, sp, #16
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+; block2:
+;   ldr q1, [sp]
+;   add w0, w0, #1
+;   movi v0.2s, #0
+;   add sp, sp, #16
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+;   stp x19, x20, [sp, #-0x10]!
+;   stp d14, d15, [sp, #-0x10]!
+;   stp d12, d13, [sp, #-0x10]!
+;   stp d10, d11, [sp, #-0x10]!
+;   stp d8, d9, [sp, #-0x10]!
+;   sub sp, sp, #0x10
+; block1: ; offset 0x30
+;   fmov d1, #1.00000000
+;   mov x2, x0
+;   stur q1, [sp]
+;   bl #0x3c ; reloc_external Call %g 0
+; block2: ; offset 0x40
+;   mov w0, #1
+;   ldur q1, [sp]
+;   add sp, sp, #0x10
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+; block3: ; offset 0x78
+;   ldur q1, [sp]
+;   add w0, w0, #1
+;   movi v0.2s, #0
+;   add sp, sp, #0x10
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function %f2(i32) -> i32, f32, f64 {
+    sig0 = (i32) -> f32 tail
+    fn0 = %g(i32) -> f32 tail
+
+    block0(v1: i32):
+        v2 = f64const 0x1.0
+        v10 = func_addr.i64 fn0
+        try_call_indirect v10(v1), sig0, block1(ret0, v2), [ default: block2(exn0) ]
+
+    block1(v3: f32, v4: f64):
+        v5 = iconst.i32 1
+        return v5, v3, v4
+
+    block2(v6: i64):
+        v7 = ireduce.i32 v6
+        v8 = iadd_imm.i32 v7, 1
+        v9 = f32const 0x0.0        
+        return v8, v9, v2
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
+;   sub sp, sp, #16
+; block0:
+;   fmov d1, #1
+;   str q1, [sp]
+;   load_ext_name x11, TestCase(%g)+0
+;   mov x2, x0
+;   blr x11; b MachLabel(1); catch [None: MachLabel(2)]
+; block1:
+;   movz w0, #1
+;   ldr q1, [sp]
+;   add sp, sp, #16
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+; block2:
+;   ldr q1, [sp]
+;   add w0, w0, #1
+;   movi v0.2s, #0
+;   add sp, sp, #16
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+;   stp x19, x20, [sp, #-0x10]!
+;   stp d14, d15, [sp, #-0x10]!
+;   stp d12, d13, [sp, #-0x10]!
+;   stp d10, d11, [sp, #-0x10]!
+;   stp d8, d9, [sp, #-0x10]!
+;   sub sp, sp, #0x10
+; block1: ; offset 0x30
+;   fmov d1, #1.00000000
+;   stur q1, [sp]
+;   ldr x11, #0x40
+;   b #0x48
+;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %g 0
+;   .byte 0x00, 0x00, 0x00, 0x00
+;   mov x2, x0
+;   blr x11
+; block2: ; offset 0x50
+;   mov w0, #1
+;   ldur q1, [sp]
+;   add sp, sp, #0x10
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+; block3: ; offset 0x88
+;   ldur q1, [sp]
+;   add w0, w0, #1
+;   movi v0.2s, #0
+;   add sp, sp, #0x10
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
+;   ldp x29, x30, [sp], #0x10
+;   ret
+

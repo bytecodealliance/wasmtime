@@ -39,8 +39,7 @@ pub struct DynPollable {
 ///
 /// ```
 /// # // stub out so we don't need a dep to build the doctests:
-/// # mod tokio { pub mod time { pub use std::time::{Duration, Instant}; pub async fn sleep_until(_:
-/// Instant) {} } }
+/// # mod tokio { pub mod time { pub use std::time::{Duration, Instant}; pub async fn sleep_until(_: Instant) {} } }
 /// use tokio::time::{self, Duration, Instant};
 /// use wasmtime_wasi_io::{IoView, poll::{Pollable, subscribe, DynPollable}, async_trait};
 /// use wasmtime::component::Resource;

@@ -10,7 +10,7 @@ use arbitrary::{Arbitrary, Unstructured};
 use std::sync::Arc;
 use std::time::Duration;
 use wasmtime::{Engine, Module, MpkEnabled, Store};
-use wasmtime_wast_util::{limits, WastConfig, WastTest};
+use wasmtime_test_util::wast::{limits, WastConfig, WastTest};
 
 /// Configuration for `wasmtime::Config` and generated modules for a session of
 /// fuzzing.
@@ -126,11 +126,12 @@ impl Config {
     /// This will additionally update limits in the pooling allocator to be able
     /// to execute all tests.
     pub fn make_wast_test_compliant(&mut self, test: &WastTest) -> WastConfig {
-        let wasmtime_wast_util::TestConfig {
+        let wasmtime_test_util::wast::TestConfig {
             memory64,
             custom_page_sizes,
             multi_memory,
             threads,
+            shared_everything_threads,
             gc,
             function_references,
             relaxed_simd,
@@ -139,7 +140,11 @@ impl Config {
             extended_const,
             wide_arithmetic,
             component_model_async,
+            component_model_async_builtins,
+            component_model_async_stackful,
             simd,
+            exceptions,
+            legacy_exceptions,
 
             hogs_memory: _,
             nan_canonicalization: _,
@@ -152,6 +157,11 @@ impl Config {
         self.module_config.function_references_enabled =
             function_references.or(gc).unwrap_or(false);
         self.module_config.component_model_async = component_model_async.unwrap_or(false);
+        self.module_config.component_model_async_builtins =
+            component_model_async_builtins.unwrap_or(false);
+        self.module_config.component_model_async_stackful =
+            component_model_async_stackful.unwrap_or(false);
+        self.module_config.legacy_exceptions = legacy_exceptions.unwrap_or(false);
 
         // Enable/disable proposals that wasm-smith has knobs for which will be
         // read when creating `wasmtime::Config`.
@@ -165,11 +175,13 @@ impl Config {
         config.tail_call_enabled = tail_call.unwrap_or(false);
         config.custom_page_sizes_enabled = custom_page_sizes.unwrap_or(false);
         config.threads_enabled = threads.unwrap_or(false);
+        config.shared_everything_threads_enabled = shared_everything_threads.unwrap_or(false);
         config.gc_enabled = gc.unwrap_or(false);
         config.reference_types_enabled = config.gc_enabled
             || self.module_config.function_references_enabled
             || reference_types.unwrap_or(false);
         config.extended_const_enabled = extended_const.unwrap_or(false);
+        config.exceptions_enabled = exceptions.unwrap_or(false);
         if multi_memory.unwrap_or(false) {
             config.max_memories = limits::MEMORIES_PER_MODULE as usize;
         } else {
@@ -228,9 +240,9 @@ impl Config {
         // fail or not.
         WastConfig {
             collector: match self.wasmtime.collector {
-                Collector::Null => wasmtime_wast_util::Collector::Null,
+                Collector::Null => wasmtime_test_util::wast::Collector::Null,
                 Collector::DeferredReferenceCounting => {
-                    wasmtime_wast_util::Collector::DeferredReferenceCounting
+                    wasmtime_test_util::wast::Collector::DeferredReferenceCounting
                 }
             },
             pooling: matches!(
@@ -238,9 +250,13 @@ impl Config {
                 InstanceAllocationStrategy::Pooling(_)
             ),
             compiler: match self.wasmtime.compiler_strategy {
-                CompilerStrategy::CraneliftNative => wasmtime_wast_util::Compiler::CraneliftNative,
-                CompilerStrategy::CraneliftPulley => wasmtime_wast_util::Compiler::CraneliftPulley,
-                CompilerStrategy::Winch => wasmtime_wast_util::Compiler::Winch,
+                CompilerStrategy::CraneliftNative => {
+                    wasmtime_test_util::wast::Compiler::CraneliftNative
+                }
+                CompilerStrategy::CraneliftPulley => {
+                    wasmtime_test_util::wast::Compiler::CraneliftPulley
+                }
+                CompilerStrategy::Winch => wasmtime_test_util::wast::Compiler::Winch,
             },
         }
     }
@@ -266,6 +282,10 @@ impl Config {
         cfg.wasm.async_stack_zeroing = Some(self.wasmtime.async_stack_zeroing);
         cfg.wasm.bulk_memory = Some(true);
         cfg.wasm.component_model_async = Some(self.module_config.component_model_async);
+        cfg.wasm.component_model_async_builtins =
+            Some(self.module_config.component_model_async_builtins);
+        cfg.wasm.component_model_async_stackful =
+            Some(self.module_config.component_model_async_stackful);
         cfg.wasm.custom_page_sizes = Some(self.module_config.config.custom_page_sizes_enabled);
         cfg.wasm.epoch_interruption = Some(self.wasmtime.epoch_interruption);
         cfg.wasm.extended_const = Some(self.module_config.config.extended_const_enabled);
@@ -280,7 +300,11 @@ impl Config {
         cfg.wasm.simd = Some(self.module_config.config.simd_enabled);
         cfg.wasm.tail_call = Some(self.module_config.config.tail_call_enabled);
         cfg.wasm.threads = Some(self.module_config.config.threads_enabled);
+        cfg.wasm.shared_everything_threads =
+            Some(self.module_config.config.shared_everything_threads_enabled);
         cfg.wasm.wide_arithmetic = Some(self.module_config.config.wide_arithmetic_enabled);
+        cfg.wasm.exceptions = Some(self.module_config.config.exceptions_enabled);
+        cfg.wasm.legacy_exceptions = Some(self.module_config.legacy_exceptions);
         if !self.module_config.config.simd_enabled {
             cfg.wasm.relaxed_simd = Some(false);
         }
@@ -528,7 +552,7 @@ impl<'a> Arbitrary<'a> for Config {
 
         config
             .wasmtime
-            .update_module_config(&mut config.module_config.config, u)?;
+            .update_module_config(&mut config.module_config, u)?;
 
         Ok(config)
     }
@@ -605,7 +629,7 @@ impl WasmtimeConfig {
     /// too.
     pub fn update_module_config(
         &mut self,
-        config: &mut wasm_smith::Config,
+        config: &mut ModuleConfig,
         u: &mut Unstructured<'_>,
     ) -> arbitrary::Result<()> {
         match self.compiler_strategy {
@@ -628,10 +652,11 @@ impl WasmtimeConfig {
                 // at this time, so if winch is selected be sure to disable wasm
                 // proposals in `Config` to ensure that Winch can compile the
                 // module that wasm-smith generates.
-                config.relaxed_simd_enabled = false;
-                config.gc_enabled = false;
-                config.tail_call_enabled = false;
-                config.reference_types_enabled = false;
+                config.config.relaxed_simd_enabled = false;
+                config.config.gc_enabled = false;
+                config.config.tail_call_enabled = false;
+                config.config.reference_types_enabled = false;
+                config.function_references_enabled = false;
 
                 // Winch's SIMD implementations require AVX and AVX2.
                 if self
@@ -641,7 +666,7 @@ impl WasmtimeConfig {
                         .codegen_flag("has_avx2")
                         .is_some_and(|value| value == "false")
                 {
-                    config.simd_enabled = false;
+                    config.config.simd_enabled = false;
                 }
 
                 // Tuning  the following engine options is currently not supported
@@ -652,7 +677,7 @@ impl WasmtimeConfig {
             }
 
             CompilerStrategy::CraneliftPulley => {
-                config.threads_enabled = false;
+                config.config.threads_enabled = false;
             }
         }
 
@@ -662,7 +687,8 @@ impl WasmtimeConfig {
         // and for wasm threads that will require some refactoring of the
         // `LinearMemory` trait to bubble up the request that the linear memory
         // not move. Otherwise that just generates a panic right now.
-        if config.threads_enabled || matches!(self.strategy, InstanceAllocationStrategy::Pooling(_))
+        if config.config.threads_enabled
+            || matches!(self.strategy, InstanceAllocationStrategy::Pooling(_))
         {
             self.avoid_custom_unaligned_memory(u)?;
         }
@@ -673,31 +699,38 @@ impl WasmtimeConfig {
             // If the pooling allocator is used, do not allow shared memory to
             // be created. FIXME: see
             // https://github.com/bytecodealliance/wasmtime/issues/4244.
-            config.threads_enabled = false;
+            config.config.threads_enabled = false;
 
             // Ensure the pooling allocator can support the maximal size of
             // memory, picking the smaller of the two to win.
             let min_bytes = config
+                .config
                 .max_memory32_bytes
                 // memory64_bytes is a u128, but since we are taking the min
                 // we can truncate it down to a u64.
-                .min(config.max_memory64_bytes.try_into().unwrap_or(u64::MAX));
+                .min(
+                    config
+                        .config
+                        .max_memory64_bytes
+                        .try_into()
+                        .unwrap_or(u64::MAX),
+                );
             let mut min = min_bytes.min(pooling.max_memory_size as u64);
             if let MemoryConfig::Normal(cfg) = &self.memory_config {
                 min = min.min(cfg.memory_reservation.unwrap_or(0));
             }
             pooling.max_memory_size = min as usize;
-            config.max_memory32_bytes = min;
-            config.max_memory64_bytes = min as u128;
+            config.config.max_memory32_bytes = min;
+            config.config.max_memory64_bytes = min as u128;
 
             // If traps are disallowed then memories must have at least one page
             // of memory so if we still are only allowing 0 pages of memory then
             // increase that to one here.
-            if config.disallow_traps {
+            if config.config.disallow_traps {
                 if pooling.max_memory_size < (1 << 16) {
                     pooling.max_memory_size = 1 << 16;
-                    config.max_memory32_bytes = 1 << 16;
-                    config.max_memory64_bytes = 1 << 16;
+                    config.config.max_memory32_bytes = 1 << 16;
+                    config.config.max_memory64_bytes = 1 << 16;
                     if let MemoryConfig::Normal(cfg) = &mut self.memory_config {
                         match &mut cfg.memory_reservation {
                             Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
@@ -713,13 +746,13 @@ impl WasmtimeConfig {
 
             // Don't allow too many linear memories per instance since massive
             // virtual mappings can fail to get allocated.
-            config.min_memories = config.min_memories.min(10);
-            config.max_memories = config.max_memories.min(10);
+            config.config.min_memories = config.config.min_memories.min(10);
+            config.config.max_memories = config.config.max_memories.min(10);
 
             // Force this pooling allocator to always be able to accommodate the
             // module that may be generated.
-            pooling.total_memories = config.max_memories as u32;
-            pooling.total_tables = config.max_tables as u32;
+            pooling.total_memories = config.config.max_memories as u32;
+            pooling.total_tables = config.config.max_tables as u32;
         }
 
         if !self.signals_based_traps {
@@ -729,7 +762,7 @@ impl WasmtimeConfig {
             // fixable with some more work on the bounds-checks side of things
             // to do a full bounds check even on static memories, but that's
             // left for a future PR.
-            config.threads_enabled = false;
+            config.config.threads_enabled = false;
 
             // Spectre-based heap mitigations require signal handlers so this
             // must always be disabled if signals-based traps are disabled.
@@ -825,7 +858,13 @@ impl RegallocAlgorithm {
     fn to_wasmtime(&self) -> wasmtime::RegallocAlgorithm {
         match self {
             RegallocAlgorithm::Backtracking => wasmtime::RegallocAlgorithm::Backtracking,
-            RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::SinglePass,
+            // Note: we have disabled `single_pass` for now because of
+            // its limitations w.r.t. exception handling
+            // (https://github.com/bytecodealliance/regalloc2/issues/217). To
+            // avoid breaking all existing fuzzbugs by changing the
+            // `arbitrary` mappings, we keep the `RegallocAlgorithm`
+            // enum as it is and remap here to `Backtracking`.
+            RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::Backtracking,
         }
     }
 }

@@ -29,9 +29,9 @@ mod emit_tests;
 // Instructions (top level): definition
 
 pub use crate::isa::s390x::lower::isle::generated_code::{
-    ALUOp, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuRoundOp, LaneOrder, MInst as Inst,
-    RxSBGOp, ShiftOp, SymbolReloc, UnaryOp, VecBinaryOp, VecFloatCmpOp, VecIntCmpOp, VecShiftOp,
-    VecUnaryOp,
+    ALUOp, CallInstDest, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuRoundOp, LaneOrder,
+    MInst as Inst, RxSBGOp, ShiftOp, SymbolReloc, UnaryOp, VecBinaryOp, VecFloatCmpOp, VecIntCmpOp,
+    VecShiftOp, VecUnaryOp,
 };
 
 /// Additional information for (direct) ReturnCall instructions, left out of line to lower the size of
@@ -212,9 +212,7 @@ impl Inst {
             | Inst::VecReplicateLane { .. }
             | Inst::AllocateArgs { .. }
             | Inst::Call { .. }
-            | Inst::CallInd { .. }
             | Inst::ReturnCall { .. }
-            | Inst::ReturnCallInd { .. }
             | Inst::Args { .. }
             | Inst::Rets { .. }
             | Inst::Ret { .. }
@@ -385,7 +383,8 @@ fn memarg_operands(memarg: &mut MemArg, collector: &mut impl OperandVisitor) {
         }
         MemArg::InitialSPOffset { .. }
         | MemArg::NominalSPOffset { .. }
-        | MemArg::SlotOffset { .. } => {}
+        | MemArg::SlotOffset { .. }
+        | MemArg::SpillOffset { .. } => {}
     }
     // mem_finalize might require %r1 to hold (part of) the address.
     // Conservatively assume this will always be necessary here.
@@ -869,51 +868,38 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
         Inst::AllocateArgs { .. } => {}
         Inst::Call { link, info, .. } => {
             let CallInfo {
-                uses,
-                defs,
-                clobbers,
-                ..
-            } = &mut **info;
-            for CallArgPair { vreg, preg } in uses {
-                collector.reg_fixed_use(vreg, *preg);
-            }
-            let mut clobbers = *clobbers;
-            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
-            for CallRetPair { vreg, preg } in defs {
-                clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
-                collector.reg_fixed_def(vreg, *preg);
-            }
-            collector.reg_clobbers(clobbers);
-        }
-        Inst::CallInd { link, info } => {
-            let CallInfo {
                 dest,
                 uses,
                 defs,
                 clobbers,
                 ..
             } = &mut **info;
-            collector.reg_use(dest);
+            match dest {
+                CallInstDest::Direct { .. } => {}
+                CallInstDest::Indirect { reg } => collector.reg_use(reg),
+            }
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
             let mut clobbers = *clobbers;
             clobbers.add(link.to_reg().to_real_reg().unwrap().into());
-            for CallRetPair { vreg, preg } in defs {
-                clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
-                collector.reg_fixed_def(vreg, *preg);
+            for CallRetPair { vreg, location } in defs {
+                match location {
+                    RetLocation::Reg(preg, ..) => {
+                        clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
+                        collector.reg_fixed_def(vreg, *preg);
+                    }
+                    RetLocation::Stack(..) => collector.any_def(vreg),
+                }
             }
             collector.reg_clobbers(clobbers);
         }
         Inst::ReturnCall { info } => {
-            let ReturnCallInfo { uses, .. } = &mut **info;
-            for CallArgPair { vreg, preg } in uses {
-                collector.reg_fixed_use(vreg, *preg);
-            }
-        }
-        Inst::ReturnCallInd { info } => {
             let ReturnCallInfo { dest, uses, .. } = &mut **info;
-            collector.reg_use(dest);
+            match dest {
+                CallInstDest::Direct { .. } => {}
+                CallInstDest::Indirect { reg } => collector.reg_use(reg),
+            }
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
@@ -928,7 +914,8 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_fixed_use(got_offset, gpr(2));
             collector.reg_fixed_def(tls_offset, gpr(2));
 
-            let mut clobbers = S390xMachineDeps::get_regs_clobbered_by_call(CallConv::SystemV);
+            let mut clobbers =
+                S390xMachineDeps::get_regs_clobbered_by_call(CallConv::SystemV, false);
             clobbers.add(gpr_preg(14));
             clobbers.remove(gpr_preg(2));
             collector.reg_clobbers(clobbers);
@@ -1059,8 +1046,9 @@ impl MachInst for Inst {
         // registers.
         match self {
             &Inst::Args { .. } => false,
-            &Inst::Call { ref info, .. } => info.caller_conv != info.callee_conv,
-            &Inst::CallInd { ref info, .. } => info.caller_conv != info.callee_conv,
+            &Inst::Call { ref info, .. } => {
+                info.caller_conv != info.callee_conv || info.try_call_info.is_some()
+            }
             &Inst::ElfTlsGetOffset { .. } => false,
             _ => true,
         }
@@ -1083,11 +1071,12 @@ impl MachInst for Inst {
     fn is_term(&self) -> MachTerminator {
         match self {
             &Inst::Rets { .. } => MachTerminator::Ret,
-            &Inst::ReturnCall { .. } | &Inst::ReturnCallInd { .. } => MachTerminator::RetCall,
-            &Inst::Jump { .. } => MachTerminator::Uncond,
-            &Inst::CondBr { .. } => MachTerminator::Cond,
-            &Inst::IndirectBr { .. } => MachTerminator::Indirect,
-            &Inst::JTSequence { .. } => MachTerminator::Indirect,
+            &Inst::ReturnCall { .. } => MachTerminator::RetCall,
+            &Inst::Jump { .. } => MachTerminator::Branch,
+            &Inst::CondBr { .. } => MachTerminator::Branch,
+            &Inst::IndirectBr { .. } => MachTerminator::Branch,
+            &Inst::JTSequence { .. } => MachTerminator::Branch,
+            &Inst::Call { ref info, .. } if info.try_call_info.is_some() => MachTerminator::Branch,
             _ => MachTerminator::None,
         }
     }
@@ -1098,7 +1087,7 @@ impl MachInst for Inst {
 
     fn is_safepoint(&self) -> bool {
         match self {
-            Inst::Call { .. } | Inst::CallInd { .. } => true,
+            Inst::Call { .. } => true,
             _ => false,
         }
     }
@@ -3119,44 +3108,70 @@ impl Inst {
             }
             &Inst::Call { link, ref info } => {
                 let link = link.to_reg();
+                let (opcode, dest) = match &info.dest {
+                    CallInstDest::Direct { name } => ("brasl", name.display(None).to_string()),
+                    CallInstDest::Indirect { reg } => ("basr", pretty_print_reg(*reg)),
+                };
+                let mut retval_loads = S390xMachineDeps::gen_retval_loads(info)
+                    .into_iter()
+                    .map(|inst| inst.print_with_state(state))
+                    .collect::<Vec<_>>()
+                    .join(" ; ");
+                if !retval_loads.is_empty() {
+                    retval_loads = " ; ".to_string() + &retval_loads;
+                }
+                let try_call = if let Some(try_call_info) = &info.try_call_info {
+                    let dests = try_call_info
+                        .exception_dests
+                        .iter()
+                        .map(|(tag, label)| format!("{tag:?}: {label:?}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!("; jg {:?}; catch [{dests}]", try_call_info.continuation)
+                } else {
+                    "".to_string()
+                };
                 let callee_pop_size = if info.callee_pop_size > 0 {
                     format!(" ; callee_pop_size {}", info.callee_pop_size)
                 } else {
                     "".to_string()
                 };
                 format!(
-                    "brasl {}, {}{}",
+                    "{} {}, {}{}{}{}",
+                    opcode,
                     show_reg(link),
-                    info.dest.display(None),
-                    callee_pop_size
+                    dest,
+                    callee_pop_size,
+                    retval_loads,
+                    try_call
                 )
             }
-            &Inst::CallInd { link, ref info, .. } => {
-                let link = link.to_reg();
-                let rn = pretty_print_reg(info.dest);
-                let callee_pop_size = if info.callee_pop_size > 0 {
-                    format!(" ; callee_pop_size {}", info.callee_pop_size)
-                } else {
-                    "".to_string()
-                };
-                format!("basr {}, {}{}", show_reg(link), rn, callee_pop_size)
-            }
             &Inst::ReturnCall { ref info } => {
+                let (epilogue_insts, temp_dest) = S390xMachineDeps::gen_tail_epilogue(
+                    state.frame_layout(),
+                    info.callee_pop_size,
+                    &info.dest,
+                );
+                let mut epilogue_str = epilogue_insts
+                    .into_iter()
+                    .map(|inst| inst.print_with_state(state))
+                    .collect::<Vec<_>>()
+                    .join(" ; ");
+                if !epilogue_str.is_empty() {
+                    epilogue_str += " ; ";
+                }
+                let (opcode, dest) = match &info.dest {
+                    CallInstDest::Direct { name } => ("jg", name.display(None).to_string()),
+                    CallInstDest::Indirect { reg } => {
+                        ("br", pretty_print_reg(temp_dest.unwrap_or(*reg)))
+                    }
+                };
                 let callee_pop_size = if info.callee_pop_size > 0 {
                     format!(" ; callee_pop_size {}", info.callee_pop_size)
                 } else {
                     "".to_string()
                 };
-                format!("return_call {}{}", info.dest.display(None), callee_pop_size)
-            }
-            &Inst::ReturnCallInd { ref info } => {
-                let rn = pretty_print_reg(info.dest);
-                let callee_pop_size = if info.callee_pop_size > 0 {
-                    format!(" ; callee_pop_size {}", info.callee_pop_size)
-                } else {
-                    "".to_string()
-                };
-                format!("return_call_ind {rn}{callee_pop_size}")
+                format!("{epilogue_str}{opcode} {dest}{callee_pop_size}")
             }
             &Inst::ElfTlsGetOffset { ref symbol, .. } => {
                 let dest = match &**symbol {

@@ -21,10 +21,10 @@ pub use host_data::*;
 pub use i31::*;
 
 use crate::prelude::*;
-use crate::runtime::vm::GcHeapAllocationIndex;
-use core::alloc::Layout;
+use crate::runtime::vm::{GcHeapAllocationIndex, VMMemoryDefinition};
 use core::any::Any;
 use core::mem::MaybeUninit;
+use core::{alloc::Layout, num::NonZeroU32};
 use wasmtime_environ::{GcArrayLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
 /// GC-related data that is one-to-one with a `wasmtime::Store`.
@@ -60,6 +60,11 @@ impl GcStore {
             host_data_table,
             func_ref_table,
         }
+    }
+
+    /// Get the `VMMemoryDefinition` for this GC heap.
+    pub fn vmmemory_definition(&self) -> VMMemoryDefinition {
+        self.gc_heap.vmmemory()
     }
 
     /// Perform garbage collection within this heap.
@@ -138,9 +143,8 @@ impl GcStore {
     /// Returns the raw representation of this GC ref, ready to be passed to
     /// Wasm.
     #[must_use]
-    pub fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) -> u32 {
-        let raw = gc_ref.as_raw_u32();
-        debug_assert_ne!(raw, 0);
+    pub fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) -> NonZeroU32 {
+        let raw = gc_ref.as_raw_non_zero_u32();
         if !gc_ref.is_i31() {
             log::trace!("exposing GC ref to Wasm: {gc_ref:p}");
             self.gc_heap.expose_gc_ref_to_wasm(gc_ref);
@@ -154,20 +158,20 @@ impl GcStore {
     ///
     /// * `Ok(Ok(_))`: Successfully allocated the `externref`.
     ///
-    /// * `Ok(Err(value))`: Failed to allocate the `externref`, but doing a GC
+    /// * `Ok(Err((value, n)))`: Failed to allocate the `externref`, but doing a GC
     ///   and then trying again may succeed. Returns the given `value` as the
-    ///   error payload.
+    ///   error payload, along with the size of the failed allocation.
     ///
     /// * `Err(_)`: Unrecoverable allocation failure.
     pub fn alloc_externref(
         &mut self,
         value: Box<dyn Any + Send + Sync>,
-    ) -> Result<Result<VMExternRef, Box<dyn Any + Send + Sync>>> {
+    ) -> Result<Result<VMExternRef, (Box<dyn Any + Send + Sync>, u64)>> {
         let host_data_id = self.host_data_table.alloc(value);
         match self.gc_heap.alloc_externref(host_data_id)? {
             #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
-            Some(x) => Ok(Ok(x)),
-            None => Ok(Err(self.host_data_table.dealloc(host_data_id))),
+            Ok(x) => Ok(Ok(x)),
+            Err(n) => Ok(Err((self.host_data_table.dealloc(host_data_id), n))),
         }
     }
 
@@ -195,7 +199,11 @@ impl GcStore {
     }
 
     /// Allocate a raw object with the given header and layout.
-    pub fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Option<VMGcRef>> {
+    pub fn alloc_raw(
+        &mut self,
+        header: VMGcHeader,
+        layout: Layout,
+    ) -> Result<Result<VMGcRef, u64>> {
         self.gc_heap.alloc_raw(header, layout)
     }
 
@@ -209,7 +217,7 @@ impl GcStore {
         &mut self,
         ty: VMSharedTypeIndex,
         layout: &GcStructLayout,
-    ) -> Result<Option<VMStructRef>> {
+    ) -> Result<Result<VMStructRef, u64>> {
         self.gc_heap.alloc_uninit_struct(ty, layout)
     }
 
@@ -221,8 +229,8 @@ impl GcStore {
     /// Get the data for the given object reference.
     ///
     /// Panics when the structref and its size is out of the GC heap bounds.
-    pub fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> VMGcObjectDataMut<'_> {
-        self.gc_heap.gc_object_data(gc_ref)
+    pub fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> &mut VMGcObjectData {
+        self.gc_heap.gc_object_data_mut(gc_ref)
     }
 
     /// Get the object datas for the given pair of object references.
@@ -232,7 +240,7 @@ impl GcStore {
         &mut self,
         a: &VMGcRef,
         b: &VMGcRef,
-    ) -> (VMGcObjectDataMut<'_>, VMGcObjectDataMut<'_>) {
+    ) -> (&mut VMGcObjectData, &mut VMGcObjectData) {
         assert_ne!(a, b);
         self.gc_heap.gc_object_data_pair(a, b)
     }
@@ -248,7 +256,7 @@ impl GcStore {
         ty: VMSharedTypeIndex,
         len: u32,
         layout: &GcArrayLayout,
-    ) -> Result<Option<VMArrayRef>> {
+    ) -> Result<Result<VMArrayRef, u64>> {
         self.gc_heap.alloc_uninit_array(ty, len, layout)
     }
 

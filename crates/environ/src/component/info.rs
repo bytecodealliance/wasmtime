@@ -141,6 +141,10 @@ pub struct Component {
     /// stored in two different locations).
     pub num_runtime_memories: u32,
 
+    /// The number of runtime tables (maximum `RuntimeTableIndex`) needed to
+    /// instantiate this component. See notes on `num_runtime_memories`.
+    pub num_runtime_tables: u32,
+
     /// The number of runtime reallocs (maximum `RuntimeReallocIndex`) needed to
     /// instantiate this component.
     ///
@@ -215,10 +219,11 @@ impl Component {
     }
 }
 
-/// GlobalInitializer instructions to get processed when instantiating a component
+/// GlobalInitializer instructions to get processed when instantiating a
+/// component.
 ///
-/// The variants of this enum are processed during the instantiation phase of
-/// a component in-order from front-to-back. These are otherwise emitted as a
+/// The variants of this enum are processed during the instantiation phase of a
+/// component in-order from front-to-back. These are otherwise emitted as a
 /// component is parsed and read and translated.
 //
 // FIXME(#2639) if processing this list is ever a bottleneck we could
@@ -257,11 +262,10 @@ pub enum GlobalInitializer {
     /// A core wasm linear memory is going to be saved into the
     /// `VMComponentContext`.
     ///
-    /// This instruction indicates that the `index`th core wasm linear memory
-    /// needs to be extracted from the `export` specified, a pointer to a
-    /// previously created module instance, and stored into the
-    /// `VMComponentContext` at the `index` specified. This lowering is then
-    /// used in the future by pointers from `CanonicalOptions`.
+    /// This instruction indicates that a core wasm linear memory needs to be
+    /// extracted from the `export` and stored into the `VMComponentContext` at
+    /// the `index` specified. This lowering is then used in the future by
+    /// pointers from `CanonicalOptions`.
     ExtractMemory(ExtractMemory),
 
     /// Same as `ExtractMemory`, except it's extracting a function pointer to be
@@ -276,14 +280,24 @@ pub enum GlobalInitializer {
     /// used as a `post-return` function.
     ExtractPostReturn(ExtractPostReturn),
 
+    /// A core wasm table is going to be saved into the `VMComponentContext`.
+    ///
+    /// This instruction indicates that s core wasm table needs to be extracted
+    /// from its `export` and stored into the `VMComponentContext` at the
+    /// `index` specified. During this extraction, we will also capture the
+    /// table's containing instance pointer to access the table at runtime. This
+    /// extraction is useful for `thread.spawn_indirect`.
+    ExtractTable(ExtractTable),
+
     /// Declares a new defined resource within this component.
     ///
     /// Contains information about the destructor, for example.
     Resource(Resource),
 }
 
-/// Metadata for extraction of a memory of what's being extracted and where it's
-/// going.
+/// Metadata for extraction of a memory; contains what's being extracted (the
+/// memory at `export`) and where it's going (the `index` within a
+/// `VMComponentContext`).
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExtractMemory {
     /// The index of the memory being defined.
@@ -317,6 +331,15 @@ pub struct ExtractPostReturn {
     pub index: RuntimePostReturnIndex,
     /// Where this post-return is being extracted from.
     pub def: CoreDef,
+}
+
+/// Metadata for extraction of a table.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExtractTable {
+    /// The index of the table being defined in a `VMComponentContext`.
+    pub index: RuntimeTableIndex,
+    /// Where this table is being extracted from.
+    pub export: CoreExport<TableIndex>,
 }
 
 /// Different methods of instantiating a core wasm module.
@@ -488,7 +511,7 @@ pub struct CanonicalOptions {
 
 /// Possible encodings of strings within the component model.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[allow(missing_docs, reason = "self-describing variants")]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub enum StringEncoding {
     Utf8,
     Utf16,
@@ -515,7 +538,7 @@ impl StringEncoding {
 ///
 /// Note that each transcoding operation may have a unique signature depending
 /// on the precise operation.
-#[allow(missing_docs, reason = "self-describing variants")]
+#[expect(missing_docs, reason = "self-describing variants")]
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub enum Transcode {
     Copy(FixedEncoding),
@@ -571,7 +594,7 @@ impl Transcode {
 }
 
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
-#[allow(missing_docs, reason = "self-describing variants")]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub enum FixedEncoding {
     Utf8,
     Utf16,
@@ -764,9 +787,6 @@ pub enum Trampoline {
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
 
-        /// The table index for the `error-context` type in the caller instance.
-        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
-
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
         options: CanonicalOptions,
@@ -813,9 +833,6 @@ pub enum Trampoline {
     StreamCloseWritable {
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
-
-        /// The table index for the `error-context` type in the caller instance.
-        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
     },
 
     /// A `future.new` intrinsic to create a new `future` handle of the
@@ -829,9 +846,6 @@ pub enum Trampoline {
     FutureRead {
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
-
-        /// The table index for the `error-context` type in the caller instance.
-        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
 
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
@@ -879,9 +893,6 @@ pub enum Trampoline {
     FutureCloseWritable {
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
-
-        /// The table index for the `error-context` type in the caller instance.
-        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
     },
 
     /// A `error-context.new` intrinsic to create a new `error-context` with a

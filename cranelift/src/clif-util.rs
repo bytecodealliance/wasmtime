@@ -74,7 +74,7 @@ struct PassOptions {
 struct CompiledWithoutSupportOptions {}
 
 fn main() -> anyhow::Result<()> {
-    pretty_env_logger::init();
+    env_logger::init();
 
     match Commands::parse() {
         Commands::Cat(c) => cat::run(&c)?,

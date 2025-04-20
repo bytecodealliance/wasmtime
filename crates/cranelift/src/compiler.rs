@@ -6,7 +6,6 @@ use crate::{array_call_signature, CompiledFunction, ModuleTextBuilder};
 use crate::{builder::LinkOptions, wasm_call_signature, BuiltinFunctionSignatures};
 use anyhow::{Context as _, Result};
 use cranelift_codegen::binemit::CodeOffset;
-use cranelift_codegen::bitset::CompoundBitSet;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value};
 use cranelift_codegen::isa::{
@@ -23,14 +22,15 @@ use std::any::Any;
 use std::cmp;
 use std::collections::HashMap;
 use std::mem;
+use std::ops::Range;
 use std::path;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
-    AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, DefinedFuncIndex, FlagValue,
-    FunctionBodyData, FunctionLoc, HostCall, ModuleTranslation, ModuleTypesBuilder, PtrSize,
-    RelocationTarget, StackMapInformation, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel,
-    TripleExt, Tunables, VMOffsets, WasmFuncType, WasmFunctionInfo, WasmValType,
+    AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
+    DefinedFuncIndex, FlagValue, FunctionBodyData, FunctionLoc, HostCall, ModuleTranslation,
+    ModuleTypesBuilder, PtrSize, RelocationTarget, StackMapSection, StaticModuleIndex,
+    TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, VMOffsets, WasmFuncType, WasmValType,
 };
 
 #[cfg(feature = "component-model")]
@@ -187,7 +187,7 @@ impl wasmtime_environ::Compiler for Compiler {
         func_index: DefinedFuncIndex,
         input: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
-    ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
+    ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let module = &translation.module;
         let func_index = module.func_index(func_index);
@@ -249,7 +249,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 .create_global_value(ir::GlobalValueData::VMContext);
             let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
                 base: vmctx,
-                offset: i32::from(func_env.offsets.ptr.vmctx_runtime_limits()).into(),
+                offset: i32::from(func_env.offsets.ptr.vmctx_store_context()).into(),
                 global_type: isa.pointer_type(),
                 flags: MemFlags::trusted().with_readonly(),
             });
@@ -275,7 +275,7 @@ impl wasmtime_environ::Compiler for Compiler {
             &mut func_env,
         )?;
 
-        let (info, func) = compiler.finish_with_info(
+        let func = compiler.finish_with_info(
             Some((&body, &self.tunables)),
             &format!("wasm_func_{}", func_index.as_u32()),
         )?;
@@ -284,7 +284,10 @@ impl wasmtime_environ::Compiler for Compiler {
         log::debug!("{:?} translated in {:?}", func_index, timing.total());
         log::trace!("{:?} timing info\n{}", func_index, timing);
 
-        Ok((info, Box::new(func)))
+        Ok(CompiledFunctionBody {
+            code: Box::new(func),
+            needs_gc_heap: func_env.needs_gc_heap(),
+        })
     }
 
     fn compile_array_to_wasm_trampoline(
@@ -292,7 +295,7 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
         def_func_index: DefinedFuncIndex,
-    ) -> Result<Box<dyn Any + Send>, CompileError> {
+    ) -> Result<CompiledFunctionBody, CompileError> {
         let func_index = translation.module.func_index(def_func_index);
         let sig = translation.module.functions[func_index]
             .signature
@@ -329,12 +332,12 @@ impl wasmtime_environ::Compiler for Compiler {
         // what we are assuming with our offsets below.
         debug_assert_vmctx_kind(isa, &mut builder, vmctx, wasmtime_environ::VMCONTEXT_MAGIC);
         let offsets = VMOffsets::new(isa.pointer_bytes(), &translation.module);
-        let vm_runtime_limits_offset = offsets.ptr.vmctx_runtime_limits();
+        let vm_store_context_offset = offsets.ptr.vmctx_store_context();
         save_last_wasm_entry_fp(
             &mut builder,
             pointer_type,
             &offsets.ptr,
-            vm_runtime_limits_offset.into(),
+            vm_store_context_offset.into(),
             vmctx,
         );
 
@@ -359,16 +362,16 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.ins().return_(&[true_return]);
         builder.finalize();
 
-        Ok(Box::new(compiler.finish(&format!(
-            "array_to_wasm_{}",
-            func_index.as_u32(),
-        ))?))
+        Ok(CompiledFunctionBody {
+            code: Box::new(compiler.finish(&format!("array_to_wasm_{}", func_index.as_u32(),))?),
+            needs_gc_heap: false,
+        })
     }
 
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &WasmFuncType,
-    ) -> Result<Box<dyn Any + Send>, CompileError> {
+    ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
         let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
@@ -432,9 +435,10 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.ins().return_(&results);
         builder.finalize();
 
-        Ok(Box::new(compiler.finish(&format!(
-            "wasm_to_array_trampoline_{wasm_func_ty}"
-        ))?))
+        Ok(CompiledFunctionBody {
+            code: Box::new(compiler.finish(&format!("wasm_to_array_trampoline_{wasm_func_ty}"))?),
+            needs_gc_heap: false,
+        })
     }
 
     fn append_code(
@@ -450,6 +454,7 @@ impl wasmtime_environ::Compiler for Compiler {
         }
         let mut addrs = AddressMapSection::default();
         let mut traps = TrapEncodingBuilder::default();
+        let mut stack_maps = StackMapSection::default();
 
         let mut ret = Vec::with_capacity(funcs.len());
         for (i, (sym, func)) in funcs.iter().enumerate() {
@@ -459,6 +464,11 @@ impl wasmtime_environ::Compiler for Compiler {
                 let addr = func.address_map();
                 addrs.push(range.clone(), &addr.instructions);
             }
+            clif_to_env_stack_maps(
+                &mut stack_maps,
+                range.clone(),
+                func.buffer.user_stack_maps(),
+            );
             traps.push(range.clone(), &func.traps().collect::<Vec<_>>());
             builder.append_padding(self.linkopts.padding_between_functions);
             let info = FunctionLoc {
@@ -473,6 +483,7 @@ impl wasmtime_environ::Compiler for Compiler {
         if self.tunables.generate_address_map {
             addrs.append_to(obj);
         }
+        stack_maps.append_to(obj);
         traps.append_to(obj);
 
         Ok(ret)
@@ -575,7 +586,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_builtin(
         &self,
         index: BuiltinFunctionIndex,
-    ) -> Result<Box<dyn Any + Send>, CompileError> {
+    ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let ptr_size = isa.pointer_bytes();
         let pointer_type = isa.pointer_type();
@@ -644,9 +655,10 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.ins().return_(&results);
         builder.finalize();
 
-        Ok(Box::new(
-            compiler.finish(&format!("wasm_to_builtin_{}", index.name()))?,
-        ))
+        Ok(CompiledFunctionBody {
+            code: Box::new(compiler.finish(&format!("wasm_to_builtin_{}", index.name()))?),
+            needs_gc_heap: false,
+        })
     }
 
     fn compiled_function_relocation_targets<'a>(
@@ -963,16 +975,14 @@ impl FunctionCompiler<'_> {
     }
 
     fn finish(self, clif_filename: &str) -> Result<CompiledFunction, CompileError> {
-        let (info, func) = self.finish_with_info(None, clif_filename)?;
-        assert!(info.stack_maps.is_empty());
-        Ok(func)
+        self.finish_with_info(None, clif_filename)
     }
 
     fn finish_with_info(
         mut self,
         body_and_tunables: Option<(&FunctionBody<'_>, &Tunables)>,
         clif_filename: &str,
-    ) -> Result<(WasmFunctionInfo, CompiledFunction), CompileError> {
+    ) -> Result<CompiledFunction, CompileError> {
         let context = &mut self.cx.codegen_context;
         let isa = &*self.compiler.isa;
 
@@ -994,7 +1004,7 @@ impl FunctionCompiler<'_> {
             write!(output, "{}", context.func.display()).unwrap();
         }
 
-        let mut compiled_code = compilation_result?;
+        let compiled_code = compilation_result?;
 
         // Give wasm functions, user defined code, a "preferred" alignment
         // instead of the minimum alignment as this can help perf in niche
@@ -1054,45 +1064,35 @@ impl FunctionCompiler<'_> {
             }
         }
 
-        let stack_maps =
-            clif_to_env_stack_maps(compiled_code.buffer.take_user_stack_maps().into_iter());
         compiled_function
             .set_sized_stack_slots(std::mem::take(&mut context.func.sized_stack_slots));
         self.compiler.contexts.lock().unwrap().push(self.cx);
 
-        Ok((
-            WasmFunctionInfo {
-                start_srcloc: compiled_function.metadata().address_map.start_srcloc,
-                stack_maps: stack_maps.into(),
-            },
-            compiled_function,
-        ))
+        Ok(compiled_function)
     }
 }
 
 /// Convert from Cranelift's representation of a stack map to Wasmtime's
 /// compiler-agnostic representation.
+///
+/// Here `section` is the wasmtime data section being created and `range` is the
+/// range of the function being added. The `clif_stack_maps` entry is the raw
+/// listing of stack maps from Cranelift.
 fn clif_to_env_stack_maps(
-    clif_stack_maps: impl ExactSizeIterator<Item = (CodeOffset, u32, ir::UserStackMap)>,
-) -> Vec<StackMapInformation> {
-    let mut stack_maps = Vec::with_capacity(clif_stack_maps.len());
-    for (code_offset, mapped_bytes, stack_map) in clif_stack_maps {
-        let mut bitset = CompoundBitSet::new();
-        for (ty, offset) in stack_map.entries() {
+    section: &mut StackMapSection,
+    range: Range<u64>,
+    clif_stack_maps: &[(CodeOffset, u32, ir::UserStackMap)],
+) {
+    for (offset, frame_size, stack_map) in clif_stack_maps {
+        let mut frame_offsets = Vec::new();
+        for (ty, frame_offset) in stack_map.entries() {
             assert_eq!(ty, ir::types::I32);
-            bitset.insert(usize::try_from(offset).unwrap());
+            frame_offsets.push(frame_offset);
         }
-        if bitset.is_empty() {
-            continue;
-        }
-        let stack_map = wasmtime_environ::StackMap::new(mapped_bytes, bitset);
-        stack_maps.push(StackMapInformation {
-            code_offset,
-            stack_map,
-        });
+        let code_offset = range.start + u64::from(*offset);
+        assert!(code_offset < range.end);
+        section.push(code_offset, *frame_size, frame_offsets.into_iter());
     }
-    stack_maps.sort_unstable_by_key(|info| info.code_offset);
-    stack_maps
 }
 
 fn declare_and_call(

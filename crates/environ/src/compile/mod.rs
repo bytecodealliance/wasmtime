@@ -5,7 +5,7 @@ use crate::prelude::*;
 use crate::{obj, Tunables};
 use crate::{
     BuiltinFunctionIndex, DefinedFuncIndex, FlagValue, FuncIndex, FunctionLoc, ObjectKind,
-    PrimaryMap, StaticModuleIndex, TripleExt, WasmError, WasmFuncType, WasmFunctionInfo,
+    PrimaryMap, StaticModuleIndex, TripleExt, WasmError, WasmFuncType,
 };
 use anyhow::Result;
 use object::write::{Object, SymbolId};
@@ -20,12 +20,14 @@ mod address_map;
 mod module_artifacts;
 mod module_environ;
 mod module_types;
+mod stack_maps;
 mod trap_encoding;
 
 pub use self::address_map::*;
 pub use self::module_artifacts::*;
 pub use self::module_environ::*;
 pub use self::module_types::*;
+pub use self::stack_maps::*;
 pub use self::trap_encoding::*;
 
 /// An error while compiling WebAssembly to machine code.
@@ -176,6 +178,16 @@ pub enum SettingKind {
     Preset,
 }
 
+/// The result of compiling a single function body.
+pub struct CompiledFunctionBody {
+    /// The code. This is whatever type the `Compiler` implementation wants it
+    /// to be, we just shepherd it around.
+    pub code: Box<dyn Any + Send>,
+    /// Whether the compiled function needs a GC heap to run; that is, whether
+    /// it reads a struct field, allocates, an array, or etc...
+    pub needs_gc_heap: bool,
+}
+
 /// An implementation of a compiler which can compile WebAssembly functions to
 /// machine code and perform other miscellaneous tasks needed by the JIT runtime.
 pub trait Compiler: Send + Sync {
@@ -184,19 +196,13 @@ pub trait Compiler: Send + Sync {
     /// The body of the function is available in `data` and configuration
     /// values are also passed in via `tunables`. Type information in
     /// `translation` is all relative to `types`.
-    ///
-    /// This function returns a tuple:
-    ///
-    /// 1. Metadata about the wasm function itself.
-    /// 2. The function itself, as an `Any` to get downcasted later when passed
-    ///    to `append_code`.
     fn compile_function(
         &self,
         translation: &ModuleTranslation<'_>,
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
-    ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError>;
+    ) -> Result<CompiledFunctionBody, CompileError>;
 
     /// Compile a trampoline for an array-call host function caller calling the
     /// `index`th Wasm function.
@@ -208,7 +214,7 @@ pub trait Compiler: Send + Sync {
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
         index: DefinedFuncIndex,
-    ) -> Result<Box<dyn Any + Send>, CompileError>;
+    ) -> Result<CompiledFunctionBody, CompileError>;
 
     /// Compile a trampoline for a Wasm caller calling a array callee with the
     /// given signature.
@@ -218,9 +224,9 @@ pub trait Compiler: Send + Sync {
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &WasmFuncType,
-    ) -> Result<Box<dyn Any + Send>, CompileError>;
+    ) -> Result<CompiledFunctionBody, CompileError>;
 
-    /// Creates a tramopline that can be used to call Wasmtime's implementation
+    /// Creates a trampoline that can be used to call Wasmtime's implementation
     /// of the builtin function specified by `index`.
     ///
     /// The trampoline created can technically have any ABI but currently has
@@ -232,7 +238,7 @@ pub trait Compiler: Send + Sync {
     fn compile_wasm_to_builtin(
         &self,
         index: BuiltinFunctionIndex,
-    ) -> Result<Box<dyn Any + Send>, CompileError>;
+    ) -> Result<CompiledFunctionBody, CompileError>;
 
     /// Returns the list of relocations required for a function from one of the
     /// previous `compile_*` functions above.
@@ -285,23 +291,29 @@ pub trait Compiler: Send + Sync {
         use target_lexicon::Architecture::*;
 
         let triple = self.triple();
+        let (arch, flags) = match triple.architecture {
+            X86_32(_) => (Architecture::I386, 0),
+            X86_64 => (Architecture::X86_64, 0),
+            Arm(_) => (Architecture::Arm, 0),
+            Aarch64(_) => (Architecture::Aarch64, 0),
+            S390x => (Architecture::S390x, 0),
+            Riscv64(_) => (Architecture::Riscv64, 0),
+            // XXX: the `object` crate won't successfully build an object
+            // with relocations and such if it doesn't know the
+            // architecture, so just pretend we are riscv64. Yolo!
+            //
+            // Also note that we add some flags to `e_flags` in the object file
+            // to indicate that it's pulley, not actually riscv64. This is used
+            // by `wasmtime objdump` for example.
+            Pulley32 | Pulley32be => (Architecture::Riscv64, obj::EF_WASMTIME_PULLEY32),
+            Pulley64 | Pulley64be => (Architecture::Riscv64, obj::EF_WASMTIME_PULLEY64),
+            architecture => {
+                anyhow::bail!("target architecture {:?} is unsupported", architecture,);
+            }
+        };
         let mut obj = Object::new(
             BinaryFormat::Elf,
-            match triple.architecture {
-                X86_32(_) => Architecture::I386,
-                X86_64 => Architecture::X86_64,
-                Arm(_) => Architecture::Arm,
-                Aarch64(_) => Architecture::Aarch64,
-                S390x => Architecture::S390x,
-                Riscv64(_) => Architecture::Riscv64,
-                // XXX: the `object` crate won't successfully build an object
-                // with relocations and such if it doesn't know the
-                // architecture, so just pretend we are riscv64. Yolo!
-                Pulley32 | Pulley64 | Pulley32be | Pulley64be => Architecture::Riscv64,
-                architecture => {
-                    anyhow::bail!("target architecture {:?} is unsupported", architecture,);
-                }
-            },
+            arch,
             match triple.endianness().unwrap() {
                 target_lexicon::Endianness::Little => object::Endianness::Little,
                 target_lexicon::Endianness::Big => object::Endianness::Big,
@@ -309,10 +321,11 @@ pub trait Compiler: Send + Sync {
         );
         obj.flags = FileFlags::Elf {
             os_abi: obj::ELFOSABI_WASMTIME,
-            e_flags: match kind {
-                ObjectKind::Module => obj::EF_WASMTIME_MODULE,
-                ObjectKind::Component => obj::EF_WASMTIME_COMPONENT,
-            },
+            e_flags: flags
+                | match kind {
+                    ObjectKind::Module => obj::EF_WASMTIME_MODULE,
+                    ObjectKind::Component => obj::EF_WASMTIME_COMPONENT,
+                },
             abi_version: 0,
         };
         Ok(obj)

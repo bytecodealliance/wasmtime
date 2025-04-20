@@ -19,7 +19,7 @@ use capstone::{arch::x86, arch::BuildsCapstone, arch::BuildsCapstoneSyntax, Caps
 pub fn roundtrip(inst: &Inst<FuzzRegs>) {
     // Check that we can actually assemble this instruction.
     let assembled = assemble(inst);
-    let expected = disassemble(&assembled);
+    let expected = disassemble(&assembled, inst);
 
     // Check that our pretty-printed output matches the known-good output. Trim
     // off the instruction offset first.
@@ -39,15 +39,15 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
 ///
 /// This will skip any traps or label registrations, but this is fine for the
 /// single-instruction disassembly we're doing here.
-fn assemble(insn: &Inst<FuzzRegs>) -> Vec<u8> {
+fn assemble(inst: &Inst<FuzzRegs>) -> Vec<u8> {
     let mut buffer = Vec::new();
     let offsets: Vec<i32> = Vec::new();
-    insn.encode(&mut buffer, &offsets);
+    inst.encode(&mut buffer, &offsets);
     buffer
 }
 
 /// Building a new `Capstone` each time is suboptimal (TODO).
-fn disassemble(assembled: &[u8]) -> String {
+fn disassemble(assembled: &[u8], original: &Inst<FuzzRegs>) -> String {
     let cs = Capstone::new()
         .x86()
         .mode(x86::ArchMode::Mode64)
@@ -55,21 +55,30 @@ fn disassemble(assembled: &[u8]) -> String {
         .detail(true)
         .build()
         .expect("failed to create Capstone object");
-    let insns = cs
+    let insts = cs
         .disasm_all(assembled, 0x0)
         .expect("failed to disassemble");
-    assert_eq!(insns.len(), 1, "not a single instruction: {assembled:02x?}");
-    let insn = insns.first().expect("at least one instruction");
-    assert_eq!(
-        assembled.len(),
-        insn.len(),
-        "\ncranelift generated {} bytes: {assembled:02x?}\n\
-         capstone  generated {} bytes: {:02x?}",
-        assembled.len(),
-        insn.len(),
-        insn.bytes(),
-    );
-    insn.to_string()
+
+    if insts.len() != 1 {
+        println!("> {original}");
+        println!("  debug: {original:x?}");
+        println!("  assembled: {}", pretty_print_hexadecimal(&assembled));
+        assert_eq!(insts.len(), 1, "not a single instruction");
+    }
+
+    let inst = insts.first().expect("at least one instruction");
+    if assembled.len() != inst.len() {
+        println!("> {original}");
+        println!("  debug: {original:x?}");
+        println!("  assembled: {}", pretty_print_hexadecimal(&assembled));
+        println!(
+            "  capstone-assembled: {}",
+            pretty_print_hexadecimal(inst.bytes())
+        );
+        assert_eq!(assembled.len(), inst.len(), "extra bytes not disassembled");
+    }
+
+    inst.to_string()
 }
 
 fn pretty_print_hexadecimal(hex: &[u8]) -> String {
@@ -198,7 +207,7 @@ impl Arbitrary<'_> for AmodeOffsetPlusKnownOffset {
 }
 impl<R: AsReg> Arbitrary<'_> for NonRspGpr<R> {
     fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-        use crate::reg::enc::*;
+        use crate::gpr::enc::*;
         let gpr = u.choose(&[
             RAX, RCX, RDX, RBX, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15,
         ])?;

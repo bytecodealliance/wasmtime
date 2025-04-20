@@ -90,7 +90,7 @@ impl FiberStack {
             return Self::from_custom(asan::new_fiber_stack(len)?);
         }
         Ok(FiberStack {
-            base: BasePtr(base.add(guard_size)),
+            base: BasePtr(unsafe { base.add(guard_size) }),
             len,
             storage: FiberStackStorage::Unmanaged(guard_size),
         })
@@ -277,16 +277,20 @@ impl Suspend {
     }
 
     unsafe fn take_resume<A, B, C>(&self) -> A {
-        match (*self.result_location::<A, B, C>()).replace(RunResult::Executing) {
-            RunResult::Resuming(val) => val,
-            _ => panic!("not in resuming state"),
+        unsafe {
+            match (*self.result_location::<A, B, C>()).replace(RunResult::Executing) {
+                RunResult::Resuming(val) => val,
+                _ => panic!("not in resuming state"),
+            }
         }
     }
 
     unsafe fn result_location<A, B, C>(&self) -> *const Cell<RunResult<A, B, C>> {
-        let ret = self.top_of_stack.cast::<*const u8>().offset(-1).read();
-        assert!(!ret.is_null());
-        ret.cast()
+        unsafe {
+            let ret = self.top_of_stack.cast::<*const u8>().offset(-1).read();
+            assert!(!ret.is_null());
+            ret.cast()
+        }
     }
 }
 
@@ -370,15 +374,19 @@ mod asan {
         // trigger false positives in ASAN. That leads to the design of this
         // module as-is where this function exists to have these three
         // functions very close to one another.
-        __sanitizer_start_switch_fiber(private_asan_pointer_ref, prev.bottom, prev.size);
-        super::wasmtime_fiber_switch(top_of_stack);
-        __sanitizer_finish_switch_fiber(private_asan_pointer, &mut prev.bottom, &mut prev.size);
+        unsafe {
+            __sanitizer_start_switch_fiber(private_asan_pointer_ref, prev.bottom, prev.size);
+            super::wasmtime_fiber_switch(top_of_stack);
+            __sanitizer_finish_switch_fiber(private_asan_pointer, &mut prev.bottom, &mut prev.size);
+        }
     }
 
     /// Hook for when a fiber first starts, used to configure ASAN.
     pub unsafe fn fiber_start_complete() -> PreviousStack {
         let mut ret = PreviousStack::default();
-        __sanitizer_finish_switch_fiber(std::ptr::null_mut(), &mut ret.bottom, &mut ret.size);
+        unsafe {
+            __sanitizer_finish_switch_fiber(std::ptr::null_mut(), &mut ret.bottom, &mut ret.size);
+        }
         ret
     }
 
@@ -485,7 +493,9 @@ mod asan_disabled {
         _prev: &mut PreviousStack,
     ) {
         assert!(super::SUPPORTED_ARCH);
-        super::wasmtime_fiber_switch(top_of_stack);
+        unsafe {
+            super::wasmtime_fiber_switch(top_of_stack);
+        }
     }
 
     #[inline]

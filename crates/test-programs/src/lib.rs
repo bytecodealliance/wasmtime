@@ -20,7 +20,7 @@ wit_bindgen::generate!({
         "../wasi-http/wit",
         "../wasi-config/wit",
         "../wasi-keyvalue/wit",
-        "../wasi-tls/wit/world.wit",
+        "../wasi-tls/wit/deps/tls",
     ],
     world: "wasmtime:test/test",
     features: ["cli-exit-with-code", "tls"],
@@ -48,3 +48,11 @@ pub mod proxy {
         },
     });
 }
+
+impl std::fmt::Display for wasi::io::error::Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.to_debug_string())
+    }
+}
+
+impl std::error::Error for wasi::io::error::Error {}

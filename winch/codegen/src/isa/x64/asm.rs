@@ -1963,6 +1963,7 @@ impl Assembler {
     }
 
     /// Moves 64-bit float from `src` into lower 64-bits of `dst`.
+    /// Zeroes out the upper 64 bits of `dst`.
     pub fn xmm_vmovsd_rm(&mut self, dst: WritableReg, src: &Address) {
         let src = Self::to_synthetic_amode(
             src,

@@ -78,8 +78,8 @@ function %jump_args() {
     block0:
         v0 = iconst.i16 10
         v3 = iconst.i64 20
-        jump block1(v0, v3) ; error: arg 0 (v0) has type i16, expected i64
-                            ; error: arg 1 (v3) has type i64, expected i16
+        jump block1(v0, v3) ; error: arg v0 has type i16, expected i64
+                            ; error: arg v3 has type i64, expected i16
     block1(v10: i64, v11: i16):
         return
 }
@@ -88,8 +88,8 @@ function %jump_args2() {
     block0:
         v0 = iconst.i16 10
         v3 = iconst.i64 20
-        brif v0, block1(v3, v0), block1(v0, v3) ; error: arg 0 (v0) has type i16, expected i64
-                                                ; error: arg 1 (v3) has type i64, expected i16
+        brif v0, block1(v3, v0), block1(v0, v3) ; error: arg v0 has type i16, expected i64
+                                                ; error: arg v3 has type i64, expected i16
     block1(v10: i64, v11: i16):
         return
 }
@@ -99,9 +99,8 @@ block0:
     v0 = iconst.i16 10
     v1 = iconst.i16 10
     brif v0, block1(v1), block2(v1)
-    ; error: arg 0 (v1) has type i16, expected i64
+    ; error: arg v1 has type i16, expected i64
     ; error: mismatched argument count
-    ; error: arg 0 (v1) has type i16, expected f32
 
 block1(v2: i64):
     return

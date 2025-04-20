@@ -18,7 +18,17 @@ fn main() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
 
     println!("Creating new `externref`...");
-    let externref = ExternRef::new(&mut store, "Hello, World!")?;
+    let externref = match ExternRef::new(&mut store, "Hello, World!") {
+        Ok(x) => x,
+        Err(e) => match e.downcast::<GcHeapOutOfMemory<&str>>() {
+            Ok(oom) => {
+                let (inner, oom) = oom.take_inner();
+                store.gc(Some(&oom));
+                ExternRef::new(&mut store, inner)?
+            }
+            Err(e) => return Err(e),
+        },
+    };
     assert!(externref
         .data(&store)?
         .expect("should have host data")
@@ -58,7 +68,7 @@ fn main() -> Result<()> {
     assert!(Rooted::ref_eq(&store, &ret.unwrap(), &externref)?);
 
     println!("GCing within the store...");
-    store.gc();
+    store.gc(None);
 
     println!("Done.");
     Ok(())

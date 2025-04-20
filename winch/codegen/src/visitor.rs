@@ -1917,7 +1917,7 @@ where
 
     fn visit_if(&mut self, blockty: BlockType) -> Self::Output {
         self.control_frames.push(ControlStackFrame::r#if(
-            self.env.resolve_block_sig(blockty),
+            self.env.resolve_block_sig(blockty)?,
             self.masm,
             &mut self.context,
         )?);
@@ -1939,7 +1939,7 @@ where
 
     fn visit_block(&mut self, blockty: BlockType) -> Self::Output {
         self.control_frames.push(ControlStackFrame::block(
-            self.env.resolve_block_sig(blockty),
+            self.env.resolve_block_sig(blockty)?,
             self.masm,
             &mut self.context,
         )?);
@@ -1949,7 +1949,7 @@ where
 
     fn visit_loop(&mut self, blockty: BlockType) -> Self::Output {
         self.control_frames.push(ControlStackFrame::r#loop(
-            self.env.resolve_block_sig(blockty),
+            self.env.resolve_block_sig(blockty)?,
             self.masm,
             &mut self.context,
         )?);

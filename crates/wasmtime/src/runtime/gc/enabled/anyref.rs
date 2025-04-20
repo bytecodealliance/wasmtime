@@ -332,7 +332,7 @@ impl AnyRef {
     pub(crate) unsafe fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
         let gc_ref = self.inner.try_clone_gc_ref(store)?;
         let raw = store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
-        Ok(raw)
+        Ok(raw.get())
     }
 
     /// Get the type of this reference.

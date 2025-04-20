@@ -33,7 +33,7 @@ where
     /// This relies on `raw` pointing to a valid slice of `V`s.
     pub unsafe fn from_raw(raw: *mut [V]) -> Self {
         Self {
-            elems: Box::from_raw(raw),
+            elems: unsafe { Box::from_raw(raw) },
             unused: PhantomData,
         }
     }

@@ -204,6 +204,7 @@ struct InlinerFrame<'a> {
     memories: PrimaryMap<MemoryIndex, dfg::CoreExport<EntityIndex>>,
     tables: PrimaryMap<TableIndex, dfg::CoreExport<EntityIndex>>,
     globals: PrimaryMap<GlobalIndex, dfg::CoreExport<EntityIndex>>,
+    tags: PrimaryMap<GlobalIndex, dfg::CoreExport<EntityIndex>>,
     modules: PrimaryMap<ModuleIndex, ModuleDef<'a>>,
 
     // component model index spaces
@@ -792,17 +793,12 @@ impl<'a> Inliner<'a> {
                 else {
                     unreachable!()
                 };
-                let err_ctx_ty = types.error_context_table_type()?;
                 let options = self.adapter_options(frame, types, options);
                 let options = self.canonical_options(options);
-                let index = self.result.trampolines.push((
-                    *func,
-                    dfg::Trampoline::StreamRead {
-                        ty,
-                        err_ctx_ty,
-                        options,
-                    },
-                ));
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::StreamRead { ty, options }));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
             StreamWrite { ty, func, options } => {
@@ -867,11 +863,10 @@ impl<'a> Inliner<'a> {
                 else {
                     unreachable!()
                 };
-                let err_ctx_ty = types.error_context_table_type()?;
-                let index = self.result.trampolines.push((
-                    *func,
-                    dfg::Trampoline::StreamCloseWritable { ty, err_ctx_ty },
-                ));
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::StreamCloseWritable { ty }));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
             FutureNew { ty, func } => {
@@ -892,17 +887,12 @@ impl<'a> Inliner<'a> {
                 else {
                     unreachable!()
                 };
-                let err_ctx_ty = types.error_context_table_type()?;
                 let options = self.adapter_options(frame, types, options);
                 let options = self.canonical_options(options);
-                let index = self.result.trampolines.push((
-                    *func,
-                    dfg::Trampoline::FutureRead {
-                        ty,
-                        err_ctx_ty,
-                        options,
-                    },
-                ));
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::FutureRead { ty, options }));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
             FutureWrite { ty, func, options } => {
@@ -967,11 +957,10 @@ impl<'a> Inliner<'a> {
                 else {
                     unreachable!()
                 };
-                let err_ctx_ty = types.error_context_table_type()?;
-                let index = self.result.trampolines.push((
-                    *func,
-                    dfg::Trampoline::FutureCloseWritable { ty, err_ctx_ty },
-                ));
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::FutureCloseWritable { ty }));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
             ErrorContextNew { func, options } => {
@@ -1157,6 +1146,15 @@ impl<'a> Inliner<'a> {
 
             AliasExportMemory(instance, name) => {
                 frame.memories.push(
+                    match self.core_def_of_module_instance_export(frame, *instance, *name) {
+                        dfg::CoreDef::Export(e) => e,
+                        _ => unreachable!(),
+                    },
+                );
+            }
+
+            AliasExportTag(instance, name) => {
+                frame.tags.push(
                     match self.core_def_of_module_instance_export(frame, *instance, *name) {
                         dfg::CoreDef::Export(e) => e,
                         _ => unreachable!(),
@@ -1480,6 +1478,7 @@ impl<'a> InlinerFrame<'a> {
             memories: Default::default(),
             tables: Default::default(),
             globals: Default::default(),
+            tags: Default::default(),
 
             component_instances: Default::default(),
             component_funcs: Default::default(),

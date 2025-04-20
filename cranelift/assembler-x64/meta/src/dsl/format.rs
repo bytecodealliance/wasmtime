@@ -37,16 +37,26 @@ pub fn rw(location: Location) -> Operand {
         location,
         mutability: Mutability::ReadWrite,
         extension: Extension::default(),
+        align: false,
     }
 }
 
 /// An abbreviated constructor for a "read" operand.
 #[must_use]
-pub fn r(location: Location) -> Operand {
+pub fn r(op: impl Into<Operand>) -> Operand {
+    let op = op.into();
+    assert!(op.mutability.is_read());
+    op
+}
+
+/// An abbreviated constructor for a memory operand that requires alignment.
+pub fn align(location: Location) -> Operand {
+    assert!(location.uses_memory());
     Operand {
         location,
         mutability: Mutability::Read,
         extension: Extension::None,
+        align: true,
     }
 }
 
@@ -63,6 +73,7 @@ pub fn sxq(location: Location) -> Operand {
         location,
         mutability: Mutability::Read,
         extension: Extension::SignExtendQuad,
+        align: false,
     }
 }
 
@@ -79,6 +90,7 @@ pub fn sxl(location: Location) -> Operand {
         location,
         mutability: Mutability::Read,
         extension: Extension::SignExtendLong,
+        align: false,
     }
 }
 
@@ -95,6 +107,7 @@ pub fn sxw(location: Location) -> Operand {
         location,
         mutability: Mutability::Read,
         extension: Extension::SignExtendWord,
+        align: false,
     }
 }
 
@@ -153,10 +166,11 @@ impl core::fmt::Display for Format {
 /// _Instruction Set Reference_.
 ///
 /// ```
-/// # use cranelift_assembler_x64_meta::dsl::{Operand, r, rw, sxq, Location::*};
+/// # use cranelift_assembler_x64_meta::dsl::{align, r, rw, sxq, Location::*};
 /// assert_eq!(r(r8).to_string(), "r8");
 /// assert_eq!(rw(rm16).to_string(), "rm16[rw]");
 /// assert_eq!(sxq(imm32).to_string(), "imm32[sxq]");
+/// assert_eq!(align(rm128).to_string(), "rm128[align]");
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub struct Operand {
@@ -166,19 +180,28 @@ pub struct Operand {
     pub mutability: Mutability,
     /// Some operands are sign- or zero-extended.
     pub extension: Extension,
+    /// Some memory operands require alignment; `true` indicates that the memory
+    /// address used in the operand must align to the size of the operand (e.g.,
+    /// `m128` must be 16-byte aligned).
+    pub align: bool,
 }
 
 impl core::fmt::Display for Operand {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let Self { location, mutability, extension } = self;
+        let Self { location, mutability, extension, align } = self;
         write!(f, "{location}")?;
-        let has_default_mutability = matches!(mutability, Mutability::Read);
-        let has_default_extension = matches!(extension, Extension::None);
-        match (has_default_mutability, has_default_extension) {
-            (true, true) => {}
-            (true, false) => write!(f, "[{extension}]")?,
-            (false, true) => write!(f, "[{mutability}]")?,
-            (false, false) => write!(f, "[{mutability},{extension}]")?,
+        let mut flags = vec![];
+        if !matches!(mutability, Mutability::Read) {
+            flags.push(format!("{mutability}"));
+        }
+        if !matches!(extension, Extension::None) {
+            flags.push(format!("{extension}"));
+        }
+        if *align != false {
+            flags.push("align".to_owned());
+        }
+        if !flags.is_empty() {
+            write!(f, "[{}]", flags.join(","))?;
         }
         Ok(())
     }
@@ -188,7 +211,8 @@ impl From<Location> for Operand {
     fn from(location: Location) -> Self {
         let mutability = Mutability::default();
         let extension = Extension::default();
-        Self { location, mutability, extension }
+        let align = false;
+        Self { location, mutability, extension, align }
     }
 }
 
@@ -219,6 +243,11 @@ pub enum Location {
     rm32,
     rm64,
     rm128,
+
+    m8,
+    m16,
+    m32,
+    m64,
 }
 
 impl Location {
@@ -227,10 +256,10 @@ impl Location {
     pub fn bits(&self) -> u8 {
         use Location::*;
         match self {
-            al | cl | imm8 | r8 | rm8 => 8,
-            ax | imm16 | r16 | rm16 => 16,
-            eax | imm32 | r32 | rm32 => 32,
-            rax | r64 | rm64 => 64,
+            al | cl | imm8 | r8 | rm8 | m8 => 8,
+            ax | imm16 | r16 | rm16 | m16 => 16,
+            eax | imm32 | r32 | rm32 | m32 => 32,
+            rax | r64 | rm64 | m64 => 64,
             xmm | rm128 => 128,
         }
     }
@@ -247,7 +276,7 @@ impl Location {
         use Location::*;
         match self {
             al | cl | ax | eax | rax | imm8 | imm16 | imm32 | r8 | r16 | r32 | r64 | xmm => false,
-            rm8 | rm16 | rm32 | rm64 | rm128 => true,
+            rm8 | rm16 | rm32 | rm64 | rm128 | m8 | m16 | m32 | m64 => true,
         }
     }
 
@@ -258,7 +287,7 @@ impl Location {
         use Location::*;
         match self {
             al | ax | eax | rax | cl | imm8 | imm16 | imm32 => false,
-            r8 | r16 | r32 | r64 | xmm | rm8 | rm16 | rm32 | rm64 | rm128 => true,
+            r8 | r16 | r32 | r64 | xmm | rm8 | rm16 | rm32 | rm64 | rm128 | m8 | m16 | m32 | m64 => true,
         }
     }
 
@@ -271,6 +300,7 @@ impl Location {
             imm8 | imm16 | imm32 => OperandKind::Imm(*self),
             r8 | r16 | r32 | r64 | xmm => OperandKind::Reg(*self),
             rm8 | rm16 | rm32 | rm64 | rm128 => OperandKind::RegMem(*self),
+            m8 | m16 | m32 | m64 => OperandKind::Mem(*self),
         }
     }
 }
@@ -302,6 +332,11 @@ impl core::fmt::Display for Location {
             rm32 => write!(f, "rm32"),
             rm64 => write!(f, "rm64"),
             rm128 => write!(f, "rm128"),
+
+            m8 => write!(f, "m8"),
+            m16 => write!(f, "m16"),
+            m32 => write!(f, "m32"),
+            m64 => write!(f, "m64"),
         }
     }
 }
@@ -318,6 +353,7 @@ pub enum OperandKind {
     Imm(Location),
     Reg(Location),
     RegMem(Location),
+    Mem(Location),
 }
 
 /// x64 operands can be mutable or not.

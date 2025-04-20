@@ -91,10 +91,12 @@ pub use crate::runtime::vm::sys::unwind::UnwindRegistration;
 pub use crate::runtime::vm::table::{Table, TableElement};
 pub use crate::runtime::vm::traphandlers::*;
 pub use crate::runtime::vm::unwind::*;
+#[cfg(feature = "component-model")]
+pub use crate::runtime::vm::vmcontext::VMTableDefinition;
 pub use crate::runtime::vm::vmcontext::{
     VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionBody,
     VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport,
-    VMOpaqueContext, VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
+    VMOpaqueContext, VMStoreContext, VMTable, VMTagImport, VMWasmCallFunction, ValRaw,
 };
 
 pub use send_sync_ptr::SendSyncPtr;
@@ -191,16 +193,25 @@ pub unsafe trait VMStore {
     #[cfg(target_has_atomic = "64")]
     fn new_epoch(&mut self) -> Result<u64, Error>;
 
-    /// Callback invoked whenever an instance needs to trigger a GC.
+    /// Callback invoked whenever an instance needs to grow-or-collect the GC
+    /// heap.
     ///
     /// Optionally given a GC reference that is rooted for the collection, and
     /// then whose updated GC reference is returned.
     ///
-    /// Cooperative, async-yielding (if configured) is completely transparent.
+    /// Optionally given a number of bytes that are needed for an upcoming
+    /// allocation.
+    ///
+    /// Cooperative, async-yielding (if configured) is completely transparent,
+    /// but must be called from a fiber stack in that case.
     ///
     /// If the async GC was cancelled, returns an error. This should be raised
     /// as a trap to clean up Wasm execution.
-    fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>>;
+    unsafe fn maybe_async_grow_or_collect_gc_heap(
+        &mut self,
+        root: Option<VMGcRef>,
+        bytes_needed: Option<u64>,
+    ) -> Result<Option<VMGcRef>>;
 
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]

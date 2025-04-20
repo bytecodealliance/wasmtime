@@ -51,7 +51,7 @@ impl Opcode {
     /// It is unsafe to pass a `byte` that is not a valid opcode.
     pub unsafe fn unchecked_new(byte: u8) -> Self {
         debug_assert!(byte <= Self::MAX);
-        core::mem::transmute(byte)
+        unsafe { core::mem::transmute(byte) }
     }
 }
 
@@ -101,6 +101,6 @@ impl ExtendedOpcode {
     /// It is unsafe to pass `bytes` that is not a valid opcode.
     pub unsafe fn unchecked_new(byte: u16) -> Self {
         debug_assert!(byte <= Self::MAX);
-        core::mem::transmute(byte)
+        unsafe { core::mem::transmute(byte) }
     }
 }

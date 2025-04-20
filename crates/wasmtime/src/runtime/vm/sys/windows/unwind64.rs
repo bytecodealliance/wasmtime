@@ -29,7 +29,7 @@ impl UnwindRegistration {
         assert!(unwind_len % unit_len == 0);
         if RtlAddFunctionTable(
             unwind_info as *mut Entry,
-            (unwind_len / unit_len) as u32,
+            (unwind_len / unit_len).try_into().unwrap(),
             base_address as _,
         ) == 0
         {

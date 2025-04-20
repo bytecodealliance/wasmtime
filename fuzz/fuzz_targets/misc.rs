@@ -62,6 +62,7 @@ macro_rules! run_fuzzers {
 
 run_fuzzers! {
     pulley_roundtrip
+    assembler_roundtrip
     memory_accesses
     table_ops
     stacks
@@ -71,6 +72,13 @@ run_fuzzers! {
 
 fn pulley_roundtrip(u: Unstructured<'_>) -> Result<()> {
     pulley_interpreter_fuzz::roundtrip(Arbitrary::arbitrary_take_rest(u)?);
+    Ok(())
+}
+
+fn assembler_roundtrip(u: Unstructured<'_>) -> Result<()> {
+    use cranelift_assembler_x64::{fuzz, Inst};
+    let inst: Inst<fuzz::FuzzRegs> = Arbitrary::arbitrary_take_rest(u)?;
+    fuzz::roundtrip(&inst);
     Ok(())
 }
 
@@ -150,7 +158,9 @@ fn dominator_tree(mut data: Unstructured<'_>) -> Result<()> {
             } else {
                 let block_calls = children
                     .iter()
-                    .map(|&block| BlockCall::new(block, &[], &mut cursor.func.dfg.value_lists))
+                    .map(|&block| {
+                        BlockCall::new(block, core::iter::empty(), &mut cursor.func.dfg.value_lists)
+                    })
                     .collect::<Vec<_>>();
 
                 let data = JumpTableData::new(block_calls[0], &block_calls[1..]);

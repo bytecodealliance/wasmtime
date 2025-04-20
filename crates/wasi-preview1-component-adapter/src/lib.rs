@@ -52,7 +52,7 @@ use crate::descriptors::{Descriptor, Descriptors, StreamType, Streams};
 pub mod bindings {
     #[cfg(feature = "command")]
     wit_bindgen_rust_macro::generate!({
-        path: "../wasi/wit",
+        path: "../wasi/src/p2/wit",
         world: "wasi:cli/command",
         raw_strings,
         runtime_path: "crate::bindings::wit_bindgen_rt_shim",
@@ -69,7 +69,7 @@ pub mod bindings {
 
     #[cfg(feature = "reactor")]
     wit_bindgen_rust_macro::generate!({
-        path: "../wasi/wit",
+        path: "../wasi/src/p2/wit",
         world: "wasi:cli/imports",
         raw_strings,
         runtime_path: "crate::bindings::wit_bindgen_rt_shim",
@@ -168,7 +168,7 @@ impl<T, E> TrappingUnwrap<T> for Result<T, E> {
 /// from WASI Preview 1 to Preview 2.  It will use this function to reserve
 /// descriptors for its own use, valid only for use with libc functions.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn adapter_open_badfd(fd: *mut u32) -> Errno {
+pub unsafe extern "C" fn adapter_open_badfd(fd: &mut u32) -> Errno {
     State::with(|state| {
         *fd = state.descriptors_mut().open(Descriptor::Bad)?;
         Ok(())
@@ -183,9 +183,11 @@ pub unsafe extern "C" fn adapter_close_badfd(fd: u32) -> Errno {
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn reset_adapter_state() {
-    let state = get_state_ptr();
-    if !state.is_null() {
-        State::init(state)
+    unsafe {
+        let state = get_state_ptr();
+        if !state.is_null() {
+            State::init(state)
+        }
     }
 }
 
@@ -199,7 +201,7 @@ pub unsafe extern "C" fn cabi_import_realloc(
     let mut ptr = null_mut::<u8>();
     State::with(|state| {
         let mut alloc = state.import_alloc.replace(ImportAlloc::None);
-        ptr = alloc.alloc(old_ptr, old_size, align, new_size);
+        ptr = unsafe { alloc.alloc(old_ptr, old_size, align, new_size) };
         state.import_alloc.set(alloc);
         Ok(())
     });
@@ -378,30 +380,30 @@ impl ImportAlloc {
             return old_ptr;
         }
         match self {
-            ImportAlloc::OneAlloc(alloc) => {
+            ImportAlloc::OneAlloc(alloc) => unsafe {
                 let ret = alloc.alloc(align, size);
                 *self = ImportAlloc::None;
                 ret
-            }
-            ImportAlloc::SeparateStringsAndPointers { strings, pointers } => {
+            },
+            ImportAlloc::SeparateStringsAndPointers { strings, pointers } => unsafe {
                 if align == 1 {
                     strings.alloc(align, size + 1)
                 } else {
                     pointers.alloc(align, size)
                 }
-            }
+            },
             ImportAlloc::CountAndDiscardStrings {
                 strings_size,
                 alloc,
-            } => {
+            } => unsafe {
                 if align == 1 {
                     *strings_size += size;
                     alloc.clone().alloc(align, size)
                 } else {
                     alloc.alloc(align, size)
                 }
-            }
-            ImportAlloc::GetPreopenPath { cur, nth, alloc } => {
+            },
+            ImportAlloc::GetPreopenPath { cur, nth, alloc } => unsafe {
                 if align == 1 {
                     let real_alloc = *nth == *cur;
                     *cur += 1;
@@ -413,7 +415,7 @@ impl ImportAlloc {
                 } else {
                     alloc.alloc(align, size)
                 }
-            }
+            },
             ImportAlloc::None => {
                 unreachable!("no allocator configured")
             }
@@ -433,13 +435,15 @@ struct BumpAlloc {
 
 impl BumpAlloc {
     unsafe fn alloc(&mut self, align: usize, size: usize) -> *mut u8 {
-        self.align_to(align);
+        unsafe {
+            self.align_to(align);
+        }
         if size > self.len {
             unreachable!("allocation size is too large")
         }
         self.len -= size;
         let ret = self.base;
-        self.base = ret.add(size);
+        self.base = unsafe { ret.add(size) };
         ret
     }
 
@@ -452,7 +456,7 @@ impl BumpAlloc {
             unreachable!("failed to allocate")
         }
         self.len -= align_offset;
-        self.base = self.base.add(align_offset);
+        self.base = unsafe { self.base.add(align_offset) };
     }
 }
 
@@ -477,7 +481,7 @@ pub unsafe extern "C" fn args_get(argv: *mut *mut u8, argv_buf: *mut u8) -> Errn
                     base: argv_buf,
                     len: usize::MAX,
                 },
-                pointers: state.temporary_alloc(),
+                pointers: unsafe { state.temporary_alloc() },
             };
             let (list, _) = state.with_import_alloc(alloc, || unsafe {
                 let mut list = WasmStrList {
@@ -491,10 +495,12 @@ pub unsafe extern "C" fn args_get(argv: *mut *mut u8, argv_buf: *mut u8) -> Errn
             // Fill in `argv` by walking over the returned `list` and then
             // additionally apply the nul-termination for each argument itself
             // here.
-            for i in 0..list.len {
-                let s = list.base.add(i).read();
-                *argv.add(i) = s.ptr.cast_mut();
-                *s.ptr.add(s.len).cast_mut() = 0;
+            unsafe {
+                for i in 0..list.len {
+                    let s = list.base.add(i).read();
+                    *argv.add(i) = s.ptr.cast_mut();
+                    *s.ptr.add(s.len).cast_mut() = 0;
+                }
             }
         }
         Ok(())
@@ -503,7 +509,7 @@ pub unsafe extern "C" fn args_get(argv: *mut *mut u8, argv_buf: *mut u8) -> Errn
 
 /// Return command-line argument data sizes.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Size) -> Errno {
+pub unsafe extern "C" fn args_sizes_get(argc: &mut Size, argv_buf_size: &mut Size) -> Errno {
     State::with(|state| {
         #[cfg(feature = "proxy")]
         {
@@ -514,7 +520,7 @@ pub unsafe extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Siz
         {
             let alloc = ImportAlloc::CountAndDiscardStrings {
                 strings_size: 0,
-                alloc: state.temporary_alloc(),
+                alloc: unsafe { state.temporary_alloc() },
             };
             let (len, alloc) = state.with_import_alloc(alloc, || unsafe {
                 let mut list = WasmStrList {
@@ -553,7 +559,7 @@ pub unsafe extern "C" fn environ_get(environ: *mut *const u8, environ_buf: *mut 
                     base: environ_buf,
                     len: usize::MAX,
                 },
-                pointers: state.temporary_alloc(),
+                pointers: unsafe { state.temporary_alloc() },
             };
             let (list, _) = state.with_import_alloc(alloc, || unsafe {
                 let mut list = StrTupleList {
@@ -568,11 +574,13 @@ pub unsafe extern "C" fn environ_get(environ: *mut *const u8, environ_buf: *mut 
             // are guaranteed to be allocated next to each other with one
             // extra byte at the end, so also insert the `=` between keys and
             // the `\0` at the end of the env var.
-            for i in 0..list.len {
-                let s = list.base.add(i).read();
-                *environ.add(i) = s.key.ptr;
-                *s.key.ptr.add(s.key.len).cast_mut() = b'=';
-                *s.value.ptr.add(s.value.len).cast_mut() = 0;
+            unsafe {
+                for i in 0..list.len {
+                    let s = list.base.add(i).read();
+                    *environ.add(i) = s.key.ptr;
+                    *s.key.ptr.add(s.key.len).cast_mut() = b'=';
+                    *s.value.ptr.add(s.value.len).cast_mut() = 0;
+                }
             }
         }
 
@@ -583,11 +591,11 @@ pub unsafe extern "C" fn environ_get(environ: *mut *const u8, environ_buf: *mut 
 /// Return environment variable data sizes.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn environ_sizes_get(
-    environc: *mut Size,
-    environ_buf_size: *mut Size,
+    environc: &mut Size,
+    environ_buf_size: &mut Size,
 ) -> Errno {
     if !matches!(
-        get_allocation_state(),
+        unsafe { get_allocation_state() },
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
         *environc = 0;
@@ -605,7 +613,7 @@ pub unsafe extern "C" fn environ_sizes_get(
         {
             let alloc = ImportAlloc::CountAndDiscardStrings {
                 strings_size: 0,
-                alloc: state.temporary_alloc(),
+                alloc: unsafe { state.temporary_alloc() },
             };
             let (len, alloc) = state.with_import_alloc(alloc, || unsafe {
                 let mut list = StrTupleList {
@@ -815,12 +823,14 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
                                 | wasi::RIGHTS_FD_FILESTAT_SET_TIMES
                                 | wasi::RIGHTS_POLL_FD_READWRITE;
 
-                            stat.write(Fdstat {
-                                fs_filetype: wasi::FILETYPE_DIRECTORY,
-                                fs_flags: 0,
-                                fs_rights_base,
-                                fs_rights_inheriting,
-                            });
+                            unsafe {
+                                stat.write(Fdstat {
+                                    fs_filetype: wasi::FILETYPE_DIRECTORY,
+                                    fs_flags: 0,
+                                    fs_rights_base,
+                                    fs_rights_inheriting,
+                                });
+                            }
                             Ok(())
                         }
                         _ => {
@@ -852,12 +862,14 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
                             }
                             let fs_rights_inheriting = fs_rights_base;
 
-                            stat.write(Fdstat {
-                                fs_filetype,
-                                fs_flags,
-                                fs_rights_base,
-                                fs_rights_inheriting,
-                            });
+                            unsafe {
+                                stat.write(Fdstat {
+                                    fs_filetype,
+                                    fs_flags,
+                                    fs_rights_base,
+                                    fs_rights_inheriting,
+                                });
+                            }
                             Ok(())
                         }
                     }
@@ -876,12 +888,14 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
                         fs_rights_base |= RIGHTS_FD_WRITE;
                     }
                     let fs_rights_inheriting = fs_rights_base;
-                    stat.write(Fdstat {
-                        fs_filetype: stdio.filetype(),
-                        fs_flags,
-                        fs_rights_base,
-                        fs_rights_inheriting,
-                    });
+                    unsafe {
+                        stat.write(Fdstat {
+                            fs_filetype: stdio.filetype(),
+                            fs_flags,
+                            fs_rights_base,
+                            fs_rights_inheriting,
+                        });
+                    }
                     Ok(())
                 }
                 Descriptor::Closed(_) | Descriptor::Bad => Err(ERRNO_BADF),
@@ -938,7 +952,7 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
 
 /// Return the attributes of an open file.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
+pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: &mut Filestat) -> Errno {
     cfg_filesystem_available! {
         State::with(|state| {
             let ds = state.descriptors();
@@ -1052,22 +1066,23 @@ pub unsafe extern "C" fn fd_pread(
     mut iovs_ptr: *const Iovec,
     mut iovs_len: usize,
     offset: Filesize,
-    nread: *mut Size,
+    nread: &mut Size,
 ) -> Errno {
     cfg_filesystem_available! {
-        // Skip leading non-empty buffers.
-        while iovs_len > 1 && (*iovs_ptr).buf_len == 0 {
-            iovs_ptr = iovs_ptr.add(1);
-            iovs_len -= 1;
-        }
-        if iovs_len == 0 {
-            *nread = 0;
-            return ERRNO_SUCCESS;
-        }
+        let (ptr, len) = unsafe {
+            // Skip leading non-empty buffers.
+            while iovs_len > 1 && (*iovs_ptr).buf_len == 0 {
+                iovs_ptr = iovs_ptr.add(1);
+                iovs_len -= 1;
+            }
+            if iovs_len == 0 {
+                *nread = 0;
+                return ERRNO_SUCCESS;
+            }
+            ((*iovs_ptr).buf, (*iovs_ptr).buf_len)
+        };
 
         State::with(|state| {
-            let ptr = (*iovs_ptr).buf;
-            let len = (*iovs_ptr).buf_len;
 
             let ds = state.descriptors();
             let file = ds.get_file(fd)?;
@@ -1092,7 +1107,7 @@ pub unsafe extern "C" fn fd_pread(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
     if !matches!(
-        get_allocation_state(),
+        unsafe { get_allocation_state() },
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
         return ERRNO_BADF;
@@ -1116,14 +1131,16 @@ pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
                     }),
                     ..
                 }) => {
-                    buf.write(Prestat {
-                        tag: 0,
-                        u: PrestatU {
-                            dir: PrestatDir {
-                                pr_name_len: len.get(),
+                    unsafe {
+                        buf.write(Prestat {
+                            tag: 0,
+                            u: PrestatU {
+                                dir: PrestatDir {
+                                    pr_name_len: len.get(),
+                                },
                             },
-                        },
-                    });
+                        });
+                    }
 
                     Ok(())
                 }
@@ -1153,7 +1170,9 @@ pub unsafe extern "C" fn fd_prestat_dir_name(fd: Fd, path: *mut u8, path_max_len
                 return Err(ERRNO_NAMETOOLONG)
             }
 
-            ds.get_preopen_path(state, fd, path, path_max_len);
+            unsafe {
+                ds.get_preopen_path(state, fd, path, path_max_len);
+            }
             Ok(())
         })
     }
@@ -1167,26 +1186,28 @@ pub unsafe extern "C" fn fd_pwrite(
     mut iovs_ptr: *const Ciovec,
     mut iovs_len: usize,
     offset: Filesize,
-    nwritten: *mut Size,
+    nwritten: &mut Size,
 ) -> Errno {
     cfg_filesystem_available! {
-        // Skip leading non-empty buffers.
-        while iovs_len > 1 && (*iovs_ptr).buf_len == 0 {
-            iovs_ptr = iovs_ptr.add(1);
-            iovs_len -= 1;
-        }
-        if iovs_len == 0 {
-            *nwritten = 0;
-            return ERRNO_SUCCESS;
-        }
+        let bytes = unsafe {
+            // Skip leading non-empty buffers.
+            while iovs_len > 1 && (*iovs_ptr).buf_len == 0 {
+                iovs_ptr = iovs_ptr.add(1);
+                iovs_len -= 1;
+            }
+            if iovs_len == 0 {
+                *nwritten = 0;
+                return ERRNO_SUCCESS;
+            }
 
-        let ptr = (*iovs_ptr).buf;
-        let len = (*iovs_ptr).buf_len;
+            let ptr = (*iovs_ptr).buf;
+            let len = (*iovs_ptr).buf_len;
+            slice::from_raw_parts(ptr, len)
+        };
 
         State::with(|state| {
             let ds = state.descriptors();
             let file = ds.get_seekable_file(fd)?;
-            let bytes = slice::from_raw_parts(ptr, len);
             let bytes = if file.append {
                 match file.fd.append_via_stream()?.blocking_write_and_flush(bytes) {
                     Ok(()) => bytes.len(),
@@ -1211,20 +1232,21 @@ pub unsafe extern "C" fn fd_read(
     fd: Fd,
     mut iovs_ptr: *const Iovec,
     mut iovs_len: usize,
-    nread: *mut Size,
+    nread: &mut Size,
 ) -> Errno {
-    // Skip leading non-empty buffers.
-    while iovs_len > 1 && (*iovs_ptr).buf_len == 0 {
-        iovs_ptr = iovs_ptr.add(1);
-        iovs_len -= 1;
-    }
-    if iovs_len == 0 {
-        *nread = 0;
-        return ERRNO_SUCCESS;
-    }
+    let (ptr, len) = unsafe {
+        // Skip leading non-empty buffers.
+        while iovs_len > 1 && (*iovs_ptr).buf_len == 0 {
+            iovs_ptr = iovs_ptr.add(1);
+            iovs_len -= 1;
+        }
+        if iovs_len == 0 {
+            *nread = 0;
+            return ERRNO_SUCCESS;
+        }
 
-    let ptr = (*iovs_ptr).buf;
-    let len = (*iovs_ptr).buf_len;
+        ((*iovs_ptr).buf, (*iovs_ptr).buf_len)
+    };
 
     State::with(|state| {
         let ds = state.descriptors();
@@ -1312,9 +1334,9 @@ pub unsafe extern "C" fn fd_readdir(
     buf: *mut u8,
     buf_len: Size,
     cookie: Dircookie,
-    bufused: *mut Size,
+    bufused: &mut Size,
 ) -> Errno {
-    let mut buf = slice::from_raw_parts_mut(buf, buf_len);
+    let mut buf = unsafe { slice::from_raw_parts_mut(buf, buf_len) };
     return State::with(|state| {
         // First determine if there's an entry in the dirent cache to use. This
         // is done to optimize the use case where a large directory is being
@@ -1391,10 +1413,12 @@ pub unsafe extern "C" fn fd_readdir(
 
             // Copy a `dirent` describing this entry into the destination `buf`,
             // truncating it if it doesn't fit entirely.
-            let bytes = slice::from_raw_parts(
-                (&dirent as *const wasi::Dirent).cast::<u8>(),
-                size_of::<Dirent>(),
-            );
+            let bytes = unsafe {
+                slice::from_raw_parts(
+                    (&dirent as *const wasi::Dirent).cast::<u8>(),
+                    size_of::<Dirent>(),
+                )
+            };
             let dirent_bytes_to_copy = buf.len().min(bytes.len());
             buf[..dirent_bytes_to_copy].copy_from_slice(&bytes[..dirent_bytes_to_copy]);
             buf = &mut buf[dirent_bytes_to_copy..];
@@ -1405,7 +1429,13 @@ pub unsafe extern "C" fn fd_readdir(
             // Note that this might be a 0-byte copy if the `dirent` was
             // truncated or fit entirely into the destination.
             let name_bytes_to_copy = buf.len().min(name.len());
-            ptr::copy_nonoverlapping(name.as_ptr().cast(), buf.as_mut_ptr(), name_bytes_to_copy);
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    name.as_ptr().cast(),
+                    buf.as_mut_ptr(),
+                    name_bytes_to_copy,
+                );
+            }
 
             buf = &mut buf[name_bytes_to_copy..];
 
@@ -1428,11 +1458,13 @@ pub unsafe extern "C" fn fd_readdir(
                 state.dirent_cache.for_fd.set(fd);
                 state.dirent_cache.cookie.set(cookie - 1);
                 state.dirent_cache.cached_dirent.set(dirent);
-                ptr::copy(
-                    name.as_ptr().cast::<u8>(),
-                    (*state.dirent_cache.path_data.get()).as_mut_ptr() as *mut u8,
-                    name.len(),
-                );
+                unsafe {
+                    ptr::copy(
+                        name.as_ptr().cast::<u8>(),
+                        (*state.dirent_cache.path_data.get()).as_mut_ptr() as *mut u8,
+                        name.len(),
+                    );
+                }
                 break;
             }
         }
@@ -1551,7 +1583,7 @@ pub unsafe extern "C" fn fd_seek(
     fd: Fd,
     offset: Filedelta,
     whence: Whence,
-    newoffset: *mut Filesize,
+    newoffset: &mut Filesize,
 ) -> Errno {
     cfg_filesystem_available! {
         State::with(|state| {
@@ -1606,7 +1638,7 @@ pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
 /// Return the current offset of a file descriptor.
 /// Note: This is similar to `lseek(fd, 0, SEEK_CUR)` in POSIX.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
+pub unsafe extern "C" fn fd_tell(fd: Fd, offset: &mut Filesize) -> Errno {
     cfg_filesystem_available! {
         State::with(|state| {
             let ds = state.descriptors();
@@ -1624,29 +1656,30 @@ pub unsafe extern "C" fn fd_write(
     fd: Fd,
     mut iovs_ptr: *const Ciovec,
     mut iovs_len: usize,
-    nwritten: *mut Size,
+    nwritten: &mut Size,
 ) -> Errno {
     if !matches!(
-        get_allocation_state(),
+        unsafe { get_allocation_state() },
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
         *nwritten = 0;
         return ERRNO_IO;
     }
 
-    // Skip leading empty buffers.
-    while iovs_len > 1 && (*iovs_ptr).buf_len == 0 {
-        iovs_ptr = iovs_ptr.add(1);
-        iovs_len -= 1;
-    }
-    if iovs_len == 0 {
-        *nwritten = 0;
-        return ERRNO_SUCCESS;
-    }
-
-    let ptr = (*iovs_ptr).buf;
-    let len = (*iovs_ptr).buf_len;
-    let bytes = slice::from_raw_parts(ptr, len);
+    let bytes = unsafe {
+        // Skip leading empty buffers.
+        while iovs_len > 1 && (*iovs_ptr).buf_len == 0 {
+            iovs_ptr = iovs_ptr.add(1);
+            iovs_len -= 1;
+        }
+        if iovs_len == 0 {
+            *nwritten = 0;
+            return ERRNO_SUCCESS;
+        }
+        let ptr = (*iovs_ptr).buf;
+        let len = (*iovs_ptr).buf_len;
+        slice::from_raw_parts(ptr, len)
+    };
 
     State::with(|state| {
         let ds = state.descriptors();
@@ -1699,7 +1732,7 @@ pub unsafe extern "C" fn path_create_directory(
     path_len: usize,
 ) -> Errno {
     cfg_filesystem_available! {
-        let path = slice::from_raw_parts(path_ptr, path_len);
+        let path = unsafe { slice::from_raw_parts(path_ptr, path_len) };
 
         State::with(|state| {
             let ds = state.descriptors();
@@ -1718,10 +1751,10 @@ pub unsafe extern "C" fn path_filestat_get(
     flags: Lookupflags,
     path_ptr: *const u8,
     path_len: usize,
-    buf: *mut Filestat,
+    buf: &mut Filestat,
 ) -> Errno {
     cfg_filesystem_available! {
-        let path = slice::from_raw_parts(path_ptr, path_len);
+        let path = unsafe { slice::from_raw_parts(path_ptr, path_len) };
         let at_flags = at_flags_from_lookupflags(flags);
 
         State::with(|state| {
@@ -1758,7 +1791,7 @@ pub unsafe extern "C" fn path_filestat_set_times(
     fst_flags: Fstflags,
 ) -> Errno {
     cfg_filesystem_available! {
-        let path = slice::from_raw_parts(path_ptr, path_len);
+        let path = unsafe { slice::from_raw_parts(path_ptr, path_len) };
         let at_flags = at_flags_from_lookupflags(flags);
 
         State::with(|state| {
@@ -1794,8 +1827,8 @@ pub unsafe extern "C" fn path_link(
     new_path_len: usize,
 ) -> Errno {
     cfg_filesystem_available! {
-        let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
-        let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
+        let old_path = unsafe { slice::from_raw_parts(old_path_ptr, old_path_len) };
+        let new_path = unsafe { slice::from_raw_parts(new_path_ptr, new_path_len) };
         let at_flags = at_flags_from_lookupflags(old_flags);
 
         State::with(|state| {
@@ -1825,12 +1858,12 @@ pub unsafe extern "C" fn path_open(
     fs_rights_base: Rights,
     fs_rights_inheriting: Rights,
     fdflags: Fdflags,
-    opened_fd: *mut Fd,
+    opened_fd: &mut Fd,
 ) -> Errno {
     cfg_filesystem_available! {
         let _ = fs_rights_inheriting;
 
-        let path = slice::from_raw_parts(path_ptr, path_len);
+        let path = unsafe { slice::from_raw_parts(path_ptr, path_len) };
         let at_flags = at_flags_from_lookupflags(dirflags);
         let o_flags = o_flags_from_oflags(oflags);
         let flags = descriptor_flags_from_flags(fs_rights_base, fdflags);
@@ -1880,10 +1913,10 @@ pub unsafe extern "C" fn path_readlink(
     path_len: usize,
     buf: *mut u8,
     buf_len: Size,
-    bufused: *mut Size,
+    bufused: &mut Size,
 ) -> Errno {
     cfg_filesystem_available! {
-        let path = slice::from_raw_parts(path_ptr, path_len);
+        let path = unsafe { slice::from_raw_parts(path_ptr, path_len) };
 
         State::with(|state| {
             // If the user gave us a buffer shorter than `PATH_MAX`, it may not be
@@ -1907,7 +1940,9 @@ pub unsafe extern "C" fn path_readlink(
                 // Preview1 follows POSIX in truncating the returned path if it
                 // doesn't fit.
                 let len = min(path.len(), buf_len);
-                ptr::copy_nonoverlapping(path.as_ptr().cast(), buf, len);
+                unsafe {
+                    ptr::copy_nonoverlapping(path.as_ptr().cast(), buf, len);
+                }
                 *bufused = len;
             } else {
                 *bufused = path.len();
@@ -1932,7 +1967,7 @@ pub unsafe extern "C" fn path_remove_directory(
     path_len: usize,
 ) -> Errno {
     cfg_filesystem_available! {
-        let path = slice::from_raw_parts(path_ptr, path_len);
+        let path = unsafe { slice::from_raw_parts(path_ptr, path_len) };
 
         State::with(|state| {
             let ds = state.descriptors();
@@ -1955,8 +1990,8 @@ pub unsafe extern "C" fn path_rename(
     new_path_len: usize,
 ) -> Errno {
     cfg_filesystem_available! {
-        let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
-        let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
+        let old_path = unsafe { slice::from_raw_parts(old_path_ptr, old_path_len) };
+        let new_path = unsafe { slice::from_raw_parts(new_path_ptr, new_path_len) };
 
         State::with(|state| {
             let ds = state.descriptors();
@@ -1979,8 +2014,8 @@ pub unsafe extern "C" fn path_symlink(
     new_path_len: usize,
 ) -> Errno {
     cfg_filesystem_available! {
-        let old_path = slice::from_raw_parts(old_path_ptr, old_path_len);
-        let new_path = slice::from_raw_parts(new_path_ptr, new_path_len);
+        let old_path = unsafe { slice::from_raw_parts(old_path_ptr, old_path_len) };
+        let new_path = unsafe { slice::from_raw_parts(new_path_ptr, new_path_len) };
 
         State::with(|state| {
             let ds = state.descriptors();
@@ -1997,7 +2032,7 @@ pub unsafe extern "C" fn path_symlink(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_unlink_file(fd: Fd, path_ptr: *const u8, path_len: usize) -> Errno {
     cfg_filesystem_available! {
-        let path = slice::from_raw_parts(path_ptr, path_len);
+        let path = unsafe { slice::from_raw_parts(path_ptr, path_len) };
 
         State::with(|state| {
             let ds = state.descriptors();
@@ -2019,7 +2054,9 @@ impl Pollables {
         assert!(self.index < self.length);
         // Use `ptr::write` instead of `*... = pollable` because `ptr::write`
         // doesn't call drop on the old memory.
-        self.pointer.add(self.index).write(pollable);
+        unsafe {
+            self.pointer.add(self.index).write(pollable);
+        }
         self.index += 1;
     }
 }
@@ -2043,11 +2080,11 @@ pub unsafe extern "C" fn poll_oneoff(
     r#in: *const Subscription,
     out: *mut Event,
     nsubscriptions: Size,
-    nevents: *mut Size,
+    nevents: &mut Size,
 ) -> Errno {
     *nevents = 0;
 
-    let subscriptions = slice::from_raw_parts(r#in, nsubscriptions);
+    let subscriptions = unsafe { slice::from_raw_parts(r#in, nsubscriptions) };
 
     // We're going to split the `nevents` buffer into two non-overlapping
     // buffers: one to store the pollable handles, and the other to store
@@ -2073,7 +2110,7 @@ pub unsafe extern "C" fn poll_oneoff(
     // Store the pollable handles at the beginning, and the bool results at the
     // end, so that we don't clobber the bool results when writing the events.
     let pollables = out as *mut c_void as *mut Pollable;
-    let results = out.add(nsubscriptions).cast::<u32>().sub(nsubscriptions);
+    let results = unsafe { out.add(nsubscriptions).cast::<u32>().sub(nsubscriptions) };
 
     // Indefinite sleeping is not supported in preview1.
     if nsubscriptions == 0 {
@@ -2092,9 +2129,9 @@ pub unsafe extern "C" fn poll_oneoff(
         };
 
         for subscription in subscriptions {
-            pollables.push(match subscription.u.tag {
+            let pollable = match subscription.u.tag {
                 EVENTTYPE_CLOCK => {
-                    let clock = &subscription.u.u.clock;
+                    let clock = unsafe { &subscription.u.u.clock };
                     let absolute = (clock.flags & SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME)
                         == SUBCLOCKFLAGS_SUBSCRIPTION_CLOCK_ABSTIME;
                     match clock.id {
@@ -2144,16 +2181,19 @@ pub unsafe extern "C" fn poll_oneoff(
 
                 EVENTTYPE_FD_READ => state
                     .descriptors()
-                    .get_read_stream(subscription.u.u.fd_read.file_descriptor)
+                    .get_read_stream(unsafe { subscription.u.u.fd_read.file_descriptor })
                     .map(|stream| stream.subscribe())?,
 
                 EVENTTYPE_FD_WRITE => state
                     .descriptors()
-                    .get_write_stream(subscription.u.u.fd_write.file_descriptor)
+                    .get_write_stream(unsafe { subscription.u.u.fd_write.file_descriptor })
                     .map(|stream| stream.subscribe())?,
 
                 _ => return Err(ERRNO_INVAL),
-            });
+            };
+            unsafe {
+                pollables.push(pollable);
+            }
         }
 
         #[link(wasm_import_module = "wasi:io/poll@0.2.3")]
@@ -2171,7 +2211,7 @@ pub unsafe extern "C" fn poll_oneoff(
             nsubscriptions
                 .checked_mul(size_of::<u32>())
                 .trapping_unwrap(),
-            || {
+            || unsafe {
                 poll_import(
                     pollables.pointer,
                     pollables.length,
@@ -2185,12 +2225,12 @@ pub unsafe extern "C" fn poll_oneoff(
 
         drop(pollables);
 
-        let ready = std::slice::from_raw_parts(ready_list.base, ready_list.len);
+        let ready = unsafe { std::slice::from_raw_parts(ready_list.base, ready_list.len) };
 
         let mut count = 0;
 
         for subscription in ready {
-            let subscription = *subscriptions.as_ptr().add(*subscription as usize);
+            let subscription = unsafe { *subscriptions.as_ptr().add(*subscription as usize) };
 
             let type_;
 
@@ -2204,7 +2244,7 @@ pub unsafe extern "C" fn poll_oneoff(
                     type_ = wasi::EVENTTYPE_FD_READ;
                     let ds = state.descriptors();
                     let desc = ds
-                        .get(subscription.u.u.fd_read.file_descriptor)
+                        .get(unsafe { subscription.u.u.fd_read.file_descriptor })
                         .trapping_unwrap();
                     match desc {
                         Descriptor::Streams(streams) => match &streams.type_ {
@@ -2233,7 +2273,7 @@ pub unsafe extern "C" fn poll_oneoff(
                     type_ = wasi::EVENTTYPE_FD_WRITE;
                     let ds = state.descriptors();
                     let desc = ds
-                        .get(subscription.u.u.fd_write.file_descriptor)
+                        .get(unsafe { subscription.u.u.fd_write.file_descriptor })
                         .trapping_unwrap();
                     match desc {
                         Descriptor::Streams(streams) => match &streams.type_ {
@@ -2248,12 +2288,14 @@ pub unsafe extern "C" fn poll_oneoff(
                 _ => unreachable!(),
             };
 
-            *out.add(count) = Event {
-                userdata: subscription.userdata,
-                error,
-                type_,
-                fd_readwrite: EventFdReadwrite { nbytes, flags },
-            };
+            unsafe {
+                *out.add(count) = Event {
+                    userdata: subscription.userdata,
+                    error,
+                    type_,
+                    fd_readwrite: EventFdReadwrite { nbytes, flags },
+                };
+            }
 
             count += 1;
         }
@@ -2306,7 +2348,7 @@ pub unsafe extern "C" fn sched_yield() -> Errno {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
     if matches!(
-        get_allocation_state(),
+        unsafe { get_allocation_state() },
         AllocationState::StackAllocated | AllocationState::StateAllocated
     ) {
         State::with(|state| {
@@ -2801,28 +2843,30 @@ impl State {
 
     #[cold]
     unsafe fn init(state: *mut State) {
-        state.write(State {
-            magic1: MAGIC,
-            magic2: MAGIC,
-            import_alloc: Cell::new(ImportAlloc::None),
-            descriptors: RefCell::new(None),
-            temporary_data: UnsafeCell::new(MaybeUninit::uninit()),
-            #[cfg(not(feature = "proxy"))]
-            dirent_cache: DirentCache {
-                stream: Cell::new(None),
-                for_fd: Cell::new(0),
-                cookie: Cell::new(wasi::DIRCOOKIE_START),
-                cached_dirent: Cell::new(wasi::Dirent {
-                    d_next: 0,
-                    d_ino: 0,
-                    d_type: FILETYPE_UNKNOWN,
-                    d_namlen: 0,
-                }),
-                path_data: UnsafeCell::new(MaybeUninit::uninit()),
-            },
-            #[cfg(not(feature = "proxy"))]
-            dotdot: [UnsafeCell::new(b'.'), UnsafeCell::new(b'.')],
-        });
+        unsafe {
+            state.write(State {
+                magic1: MAGIC,
+                magic2: MAGIC,
+                import_alloc: Cell::new(ImportAlloc::None),
+                descriptors: RefCell::new(None),
+                temporary_data: UnsafeCell::new(MaybeUninit::uninit()),
+                #[cfg(not(feature = "proxy"))]
+                dirent_cache: DirentCache {
+                    stream: Cell::new(None),
+                    for_fd: Cell::new(0),
+                    cookie: Cell::new(wasi::DIRCOOKIE_START),
+                    cached_dirent: Cell::new(wasi::Dirent {
+                        d_next: 0,
+                        d_ino: 0,
+                        d_type: FILETYPE_UNKNOWN,
+                        d_namlen: 0,
+                    }),
+                    path_data: UnsafeCell::new(MaybeUninit::uninit()),
+                },
+                #[cfg(not(feature = "proxy"))]
+                dotdot: [UnsafeCell::new(b'.'), UnsafeCell::new(b'.')],
+            });
+        }
     }
 
     /// Accessor for the descriptors member that ensures it is properly initialized

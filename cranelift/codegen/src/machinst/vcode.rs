@@ -19,23 +19,24 @@
 
 use crate::ir::pcc::*;
 use crate::ir::{self, types, Constant, ConstantData, ValueLabel};
-use crate::machinst::*;
 use crate::ranges::Ranges;
 use crate::timing;
 use crate::trace;
 use crate::CodegenError;
+use crate::{machinst::*, trace_log_enabled};
 use crate::{LabelValueLoc, ValueLocRange};
 use regalloc2::{
-    Edit, Function as RegallocFunction, InstOrEdit, InstRange, MachineEnv, Operand,
-    OperandConstraint, OperandKind, PRegSet, RegClass,
+    Edit, Function as RegallocFunction, InstOrEdit, InstPosition, InstRange, MachineEnv, Operand,
+    OperandConstraint, OperandKind, PRegSet, ProgPoint, RegClass,
 };
 use rustc_hash::FxHashMap;
 
+use core::cmp::Ordering;
+use core::fmt::{self, Write};
 use core::mem::take;
 use cranelift_entity::{entity_impl, Keys};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::fmt;
 
 /// Index referring to an instruction in VCode.
 pub type InsnIndex = regalloc2::Inst;
@@ -195,6 +196,8 @@ pub struct VCode<I: VCodeInst> {
 
     /// Facts on VRegs, for proof-carrying code verification.
     facts: Vec<Option<Fact>>,
+
+    log2_min_function_alignment: u8,
 }
 
 /// The result of `VCode::emit`. Contains all information computed
@@ -281,8 +284,16 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
         direction: VCodeBuildDirection,
+        log2_min_function_alignment: u8,
     ) -> Self {
-        let vcode = VCode::new(sigs, abi, emit_info, block_order, constants);
+        let vcode = VCode::new(
+            sigs,
+            abi,
+            emit_info,
+            block_order,
+            constants,
+            log2_min_function_alignment,
+        );
 
         VCodeBuilder {
             vcode,
@@ -370,18 +381,37 @@ impl<I: VCodeInst> VCodeBuilder<I> {
 
     /// Add a debug value label to a register.
     pub fn add_value_label(&mut self, reg: Reg, label: ValueLabel) {
-        // We'll fix up labels in reverse(). Because we're generating
-        // code bottom-to-top, the liverange of the label goes *from*
-        // the last index at which was defined (or 0, which is the end
-        // of the eventual function) *to* just this instruction, and
-        // no further.
-        let inst = InsnIndex::new(self.vcode.insts.len());
+        // 1) In the reversed order, we consider the instructions
+        //    that define ranges in the "debug_info" array to refer
+        //    to the IP **after** them (when reversed):
+        //      IP[2]__| Inst 3 |
+        //      IP[1]__| Inst 2 |
+        //      IP[0]__| Inst 1 |
+        //             | Inst 0 |
+        //    This is so that we can represent IP[<function start>],
+        //    done at the cost of not being to represent IP[<function end>],
+        //    which is OK since no values will be live at that point.
+        // 2) The live range for "reg" begins at the current IP
+        //    and continues until the next, in execution order,
+        //    VReg that defines "label". Since the ranges are open
+        //    at the end, the subtraction of 1 cancels out:
+        //      [last..current IP] <=>
+        //      [last..last emitted inst index] <=>
+        //      [last..next_inst_index - 1] <=>
+        //      [last..next_inst_index)
+        //
+        let next_inst_index = self.vcode.insts.len();
+        if next_inst_index == 0 {
+            // This would produce a defective [0..0) range.
+            return;
+        }
+        let next_inst = InsnIndex::new(next_inst_index);
         let labels = self.debug_info.entry(label).or_insert_with(|| vec![]);
         let last = labels
             .last()
             .map(|(_start, end, _vreg)| *end)
             .unwrap_or(InsnIndex::new(0));
-        labels.push((last, inst, reg.into()));
+        labels.push((last, next_inst, reg.into()));
     }
 
     /// Access the constants.
@@ -602,6 +632,7 @@ impl<I: VCodeInst> VCode<I> {
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
+        log2_min_function_alignment: u8,
     ) -> Self {
         let n_blocks = block_order.lowered_order().len();
         VCode {
@@ -630,6 +661,7 @@ impl<I: VCodeInst> VCode<I> {
             constants,
             debug_value_labels: vec![],
             facts: vec![],
+            log2_min_function_alignment,
         }
     }
 
@@ -660,16 +692,6 @@ impl<I: VCodeInst> VCode<I> {
         }
 
         for (i, range) in self.operand_ranges.iter() {
-            // Skip this instruction if not "included in clobbers" as
-            // per the MachInst. (Some backends use this to implement
-            // ABI specifics; e.g., excluding calls of the same ABI as
-            // the current function from clobbers, because by
-            // definition everything clobbered by the call can be
-            // clobbered by this function without saving as well.)
-            if !self.insts[i].is_included_in_clobbers() {
-                continue;
-            }
-
             let operands = &self.operands[range.clone()];
             let allocs = &regalloc.allocs[range];
             for (operand, alloc) in operands.iter().zip(allocs.iter()) {
@@ -681,8 +703,28 @@ impl<I: VCodeInst> VCode<I> {
             }
 
             // Also add explicitly-clobbered registers.
-            if let Some(&inst_clobbered) = self.clobbers.get(&InsnIndex::new(i)) {
-                clobbered.union_from(inst_clobbered);
+            //
+            // Skip merging this instruction's clobber list if not
+            // "included in clobbers" as per the MachInst. (Some
+            // backends use this to implement ABI specifics; e.g.,
+            // excluding calls of the same ABI as the current function
+            // from clobbers, because by definition everything
+            // clobbered by the call can be clobbered by this function
+            // without saving as well.
+            //
+            // This is important for a particular optimization: when
+            // some registers are "half-clobbered", e.g. vector/float
+            // registers on aarch64, we want them to be seen as
+            // clobbered by regalloc so it avoids carrying values
+            // across calls in these registers but not seen as
+            // clobbered by prologue generation here (because the
+            // actual half-clobber implied by the clobber list fits
+            // within the clobbers that we allow without
+            // clobber-saves).
+            if self.insts[i].is_included_in_clobbers() {
+                if let Some(&inst_clobbered) = self.clobbers.get(&InsnIndex::new(i)) {
+                    clobbered.union_from(inst_clobbered);
+                }
             }
         }
 
@@ -709,11 +751,9 @@ impl<I: VCodeInst> VCode<I> {
     where
         I: VCodeInst,
     {
-        // To write into disasm string.
-        use core::fmt::Write;
-
         let _tt = timing::vcode_emit();
         let mut buffer = MachBuffer::new();
+        buffer.set_log2_min_function_alignment(self.log2_min_function_alignment);
         let mut bb_starts: Vec<Option<CodeOffset>> = vec![];
 
         // The first M MachLabels are reserved for block indices.
@@ -920,17 +960,19 @@ impl<I: VCodeInst> VCode<I> {
                             let mut allocs = regalloc.inst_allocs(iix).iter();
                             self.insts[iix.index()].get_operands(
                                 &mut |reg: &mut Reg, constraint, _kind, _pos| {
-                                    let alloc = allocs
-                                        .next()
-                                        .expect("enough allocations for all operands")
-                                        .as_reg()
-                                        .expect("only register allocations, not stack allocations")
-                                        .into();
+                                    let alloc =
+                                        allocs.next().expect("enough allocations for all operands");
 
-                                    if let OperandConstraint::FixedReg(rreg) = constraint {
-                                        debug_assert_eq!(Reg::from(rreg), alloc);
+                                    if let Some(alloc) = alloc.as_reg() {
+                                        let alloc: Reg = alloc.into();
+                                        if let OperandConstraint::FixedReg(rreg) = constraint {
+                                            debug_assert_eq!(Reg::from(rreg), alloc);
+                                        }
+                                        *reg = alloc;
+                                    } else if let Some(alloc) = alloc.as_stack() {
+                                        let alloc: Reg = alloc.into();
+                                        *reg = alloc;
                                     }
-                                    *reg = alloc;
                                 },
                             );
                             debug_assert!(allocs.next().is_none());
@@ -1132,16 +1174,28 @@ impl<I: VCodeInst> VCode<I> {
             return ValueLabelsRanges::default();
         }
 
+        if trace_log_enabled!() {
+            self.log_value_labels_ranges(regalloc, inst_offsets);
+        }
+
         let mut value_labels_ranges: ValueLabelsRanges = HashMap::new();
         for &(label, from, to, alloc) in &regalloc.debug_locations {
-            let ranges = value_labels_ranges
-                .entry(ValueLabel::from_u32(label))
-                .or_insert_with(|| vec![]);
-            let from_offset = inst_offsets[from.inst().index()];
-            let to_offset = if to.inst().index() == inst_offsets.len() {
+            let label = ValueLabel::from_u32(label);
+            let ranges = value_labels_ranges.entry(label).or_insert_with(|| vec![]);
+            let prog_point_to_inst = |prog_point: ProgPoint| {
+                let mut inst = prog_point.inst();
+                if prog_point.pos() == InstPosition::After {
+                    inst = inst.next();
+                }
+                inst.index()
+            };
+            let from_inst_index = prog_point_to_inst(from);
+            let to_inst_index = prog_point_to_inst(to);
+            let from_offset = inst_offsets[from_inst_index];
+            let to_offset = if to_inst_index == inst_offsets.len() {
                 func_body_len
             } else {
-                inst_offsets[to.inst().index()]
+                inst_offsets[to_inst_index]
             };
 
             // Empty ranges or unavailable offsets can happen
@@ -1167,52 +1221,242 @@ impl<I: VCodeInst> VCode<I> {
                 LabelValueLoc::CFAOffset(cfa_to_sp_offset + slot_offset)
             };
 
-            // ValueLocRanges are recorded by *instruction-end
-            // offset*. `from_offset` is the *start* of the
-            // instruction; that is the same as the end of another
-            // instruction, so we only want to begin coverage once
-            // we are past the previous instruction's end.
-            let start = from_offset + 1;
-
-            // Likewise, `end` is exclusive, but we want to
-            // *include* the end of the last
-            // instruction. `to_offset` is the start of the
-            // `to`-instruction, which is the exclusive end, i.e.,
-            // the first instruction not covered. That
-            // instruction's start is the same as the end of the
-            // last instruction that is included, so we go one
-            // byte further to be sure to include it.
-            let end = to_offset + 1;
-
             // Coalesce adjacent ranges that for the same location
             // to minimize output size here and for the consumers.
             if let Some(last_loc_range) = ranges.last_mut() {
-                if last_loc_range.loc == loc && last_loc_range.end == start {
+                if last_loc_range.loc == loc && last_loc_range.end == from_offset {
                     trace!(
-                        "Extending debug range for VL{} in {:?} to {}",
+                        "Extending debug range for {:?} in {:?} to Inst {} ({})",
                         label,
                         loc,
-                        end
+                        to_inst_index,
+                        to_offset
                     );
-                    last_loc_range.end = end;
+                    last_loc_range.end = to_offset;
                     continue;
                 }
             }
 
             trace!(
-                "Recording debug range for VL{} in {:?}: [Inst {}..Inst {}) [{}..{})",
+                "Recording debug range for {:?} in {:?}: [Inst {}..Inst {}) [{}..{})",
                 label,
                 loc,
-                from.inst().index(),
-                to.inst().index(),
-                start,
-                end
+                from_inst_index,
+                to_inst_index,
+                from_offset,
+                to_offset
             );
 
-            ranges.push(ValueLocRange { loc, start, end });
+            ranges.push(ValueLocRange {
+                loc,
+                start: from_offset,
+                end: to_offset,
+            });
         }
 
         value_labels_ranges
+    }
+
+    fn log_value_labels_ranges(&self, regalloc: &regalloc2::Output, inst_offsets: &[CodeOffset]) {
+        debug_assert!(trace_log_enabled!());
+
+        // What debug labels do we have? Note we'll skip those that have not been
+        // allocated any location at all. They will show up as numeric gaps in the table.
+        let mut labels = vec![];
+        for &(label, _, _, _) in &regalloc.debug_locations {
+            if Some(&label) == labels.last() {
+                continue;
+            }
+            labels.push(label);
+        }
+
+        // Reformat the data on what VRegs were the VLs assigned to by lowering, since
+        // the array we have is sorted by VReg, and we want it sorted by VL for easy
+        // access in the loop below.
+        let mut vregs = vec![];
+        for &(vreg, start, end, label) in &self.debug_value_labels {
+            if matches!(labels.binary_search(&label), Ok(_)) {
+                vregs.push((label, start, end, vreg));
+            }
+        }
+        vregs.sort_unstable_by(
+            |(l_label, l_start, _, _), (r_label, r_start, _, _)| match l_label.cmp(r_label) {
+                Ordering::Equal => l_start.cmp(r_start),
+                cmp => cmp,
+            },
+        );
+
+        #[derive(PartialEq)]
+        enum Mode {
+            Measure,
+            Emit,
+        }
+        #[derive(PartialEq)]
+        enum Row {
+            Head,
+            Line,
+            Inst(usize, usize),
+        }
+
+        let mut widths = vec![0; 3 + 2 * labels.len()];
+        let mut row = String::new();
+        let mut output_row = |row_kind: Row, mode: Mode| {
+            let mut column_index = 0;
+            row.clear();
+
+            macro_rules! output_cell_impl {
+                ($fill:literal, $span:literal, $($cell_fmt:tt)*) => {
+                    let column_start = row.len();
+                    {
+                        row.push('|');
+                        write!(row, $($cell_fmt)*).unwrap();
+                    }
+
+                    let next_column_index = column_index + $span;
+                    let expected_width: usize = widths[column_index..next_column_index].iter().sum();
+                    if mode == Mode::Measure {
+                        let actual_width = row.len() - column_start;
+                        if actual_width > expected_width {
+                            widths[next_column_index - 1] += actual_width - expected_width;
+                        }
+                    } else {
+                        let column_end = column_start + expected_width;
+                        while row.len() != column_end {
+                            row.push($fill);
+                        }
+                    }
+                    column_index = next_column_index;
+                };
+            }
+            macro_rules! output_cell {
+                ($($cell_fmt:tt)*) => {
+                    output_cell_impl!(' ', 1, $($cell_fmt)*);
+                };
+            }
+
+            match row_kind {
+                Row::Head => {
+                    output_cell!("BB");
+                    output_cell!("Inst");
+                    output_cell!("IP");
+                    for label in &labels {
+                        output_cell_impl!(' ', 2, "{:?}", ValueLabel::from_u32(*label));
+                    }
+                }
+                Row::Line => {
+                    debug_assert!(mode == Mode::Emit);
+                    for _ in 0..3 {
+                        output_cell_impl!('-', 1, "");
+                    }
+                    for _ in &labels {
+                        output_cell_impl!('-', 2, "");
+                    }
+                }
+                Row::Inst(block_index, inst_index) => {
+                    debug_assert!(inst_index < self.num_insts());
+                    if self.block_ranges.get(block_index).start == inst_index {
+                        output_cell!("B{}", block_index);
+                    } else {
+                        output_cell!("");
+                    }
+                    output_cell!("Inst {inst_index} ");
+                    output_cell!("{} ", inst_offsets[inst_index]);
+
+                    for label in &labels {
+                        // First, the VReg.
+                        use regalloc2::Inst;
+                        let vreg_cmp = |inst: usize,
+                                        vreg_label: &u32,
+                                        range_start: &Inst,
+                                        range_end: &Inst| {
+                            match vreg_label.cmp(&label) {
+                                Ordering::Equal => {
+                                    if range_end.index() <= inst {
+                                        Ordering::Less
+                                    } else if range_start.index() > inst {
+                                        Ordering::Greater
+                                    } else {
+                                        Ordering::Equal
+                                    }
+                                }
+                                cmp => cmp,
+                            }
+                        };
+                        let vreg_index =
+                            vregs.binary_search_by(|(l, s, e, _)| vreg_cmp(inst_index, l, s, e));
+                        if let Ok(vreg_index) = vreg_index {
+                            let mut prev_vreg = None;
+                            if inst_index > 0 {
+                                let prev_vreg_index = vregs.binary_search_by(|(l, s, e, _)| {
+                                    vreg_cmp(inst_index - 1, l, s, e)
+                                });
+                                if let Ok(prev_vreg_index) = prev_vreg_index {
+                                    prev_vreg = Some(vregs[prev_vreg_index].3);
+                                }
+                            }
+
+                            let vreg = vregs[vreg_index].3;
+                            if Some(vreg) == prev_vreg {
+                                output_cell!("*");
+                            } else {
+                                output_cell!("{}", vreg);
+                            }
+                        } else {
+                            output_cell!("");
+                        }
+
+                        // Second, the allocated location.
+                        let inst_prog_point = ProgPoint::before(Inst::new(inst_index));
+                        let range_index = regalloc.debug_locations.binary_search_by(
+                            |(range_label, range_start, range_end, _)| match range_label.cmp(label)
+                            {
+                                Ordering::Equal => {
+                                    if *range_end <= inst_prog_point {
+                                        Ordering::Less
+                                    } else if *range_start > inst_prog_point {
+                                        Ordering::Greater
+                                    } else {
+                                        Ordering::Equal
+                                    }
+                                }
+                                cmp => cmp,
+                            },
+                        );
+                        if let Ok(range_index) = range_index {
+                            // Live at this instruction, print the location.
+                            if let Some(reg) = regalloc.debug_locations[range_index].3.as_reg() {
+                                output_cell!("{:?}", Reg::from(reg));
+                            } else {
+                                output_cell!("Stk");
+                            }
+                        } else {
+                            // Not live at this instruction.
+                            output_cell!("");
+                        }
+                    }
+                }
+            }
+            row.push('|');
+
+            if mode == Mode::Emit {
+                trace!("{}", row.as_str());
+            }
+        };
+
+        for block_index in 0..self.num_blocks() {
+            for inst_index in self.block_ranges.get(block_index) {
+                output_row(Row::Inst(block_index, inst_index), Mode::Measure);
+            }
+        }
+        output_row(Row::Head, Mode::Measure);
+
+        output_row(Row::Head, Mode::Emit);
+        output_row(Row::Line, Mode::Emit);
+        for block_index in 0..self.num_blocks() {
+            for inst_index in self.block_ranges.get(block_index) {
+                output_row(Row::Inst(block_index, inst_index), Mode::Emit);
+            }
+        }
     }
 
     /// Get the IR block for a BlockIndex, if one exists.
@@ -1310,13 +1554,13 @@ impl<I: VCodeInst> RegallocFunction for VCode<I> {
             // We treat blocks terminated by an unconditional trap like a return for regalloc.
             MachTerminator::None => self.insts[insn.index()].is_trap(),
             MachTerminator::Ret | MachTerminator::RetCall => true,
-            MachTerminator::Uncond | MachTerminator::Cond | MachTerminator::Indirect => false,
+            MachTerminator::Branch => false,
         }
     }
 
     fn is_branch(&self, insn: InsnIndex) -> bool {
         match self.insts[insn.index()].is_term() {
-            MachTerminator::Cond | MachTerminator::Uncond | MachTerminator::Indirect => true,
+            MachTerminator::Branch => true,
             _ => false,
         }
     }

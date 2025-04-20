@@ -267,6 +267,7 @@ impl PartialEq for DiffValue {
             }
             (Self::FuncRef { null: a }, Self::FuncRef { null: b }) => a == b,
             (Self::ExternRef { null: a }, Self::ExternRef { null: b }) => a == b,
+            (Self::AnyRef { null: a }, Self::AnyRef { null: b }) => a == b,
             _ => false,
         }
     }
@@ -302,7 +303,7 @@ impl TryFrom<wasmtime::ValType> for DiffValueType {
                 (true, HeapType::Any) => Ok(Self::AnyRef),
                 (true, HeapType::I31) => Ok(Self::AnyRef),
                 (true, HeapType::None) => Ok(Self::AnyRef),
-                _ => Err("non-funcref and non-externref reference types are not supported yet"),
+                _ => Err("non-null reference types are not supported yet"),
             },
         }
     }

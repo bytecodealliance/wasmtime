@@ -252,11 +252,7 @@ impl Parse for Paths {
         let expanded_paths = path_lits
             .iter()
             .map(|lit| {
-                PathBuf::from(
-                    shellexpand::env(&lit.value())
-                        .expect("shell expansion")
-                        .as_ref(),
-                )
+                PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap()).join(lit.value())
             })
             .collect::<Vec<PathBuf>>();
 

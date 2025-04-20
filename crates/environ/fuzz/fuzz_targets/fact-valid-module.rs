@@ -10,12 +10,12 @@
 #![no_main]
 
 use arbitrary::Unstructured;
-use component_fuzz_util::{TestCase, Type, MAX_TYPE_DEPTH};
 use libfuzzer_sys::fuzz_target;
 use wasmparser::component_types::ComponentAnyTypeId;
 use wasmparser::{Parser, Payload, Validator, WasmFeatures};
 use wasmtime_environ::component::*;
 use wasmtime_environ::fact::Module;
+use wasmtime_test_util::component_fuzz::{TestCase, Type, MAX_TYPE_DEPTH};
 
 const TYPE_COUNT: usize = 50;
 const MAX_ARITY: u32 = 5;
@@ -220,10 +220,14 @@ fn target(data: &[u8]) -> arbitrary::Result<()> {
     panic!()
 }
 
-fn convert_encoding(encoding: component_fuzz_util::StringEncoding) -> StringEncoding {
+fn convert_encoding(
+    encoding: wasmtime_test_util::component_fuzz::StringEncoding,
+) -> StringEncoding {
     match encoding {
-        component_fuzz_util::StringEncoding::Utf8 => StringEncoding::Utf8,
-        component_fuzz_util::StringEncoding::Utf16 => StringEncoding::Utf16,
-        component_fuzz_util::StringEncoding::Latin1OrUtf16 => StringEncoding::CompactUtf16,
+        wasmtime_test_util::component_fuzz::StringEncoding::Utf8 => StringEncoding::Utf8,
+        wasmtime_test_util::component_fuzz::StringEncoding::Utf16 => StringEncoding::Utf16,
+        wasmtime_test_util::component_fuzz::StringEncoding::Latin1OrUtf16 => {
+            StringEncoding::CompactUtf16
+        }
     }
 }

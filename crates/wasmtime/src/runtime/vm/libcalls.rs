@@ -307,7 +307,7 @@ unsafe fn table_fill_func_ref(
     match table.element_type() {
         TableElementType::Func => {
             let val = NonNull::new(val.cast::<VMFuncRef>());
-            table.fill(store.optional_gc_store_mut()?, dst, val.into(), len)?;
+            table.fill(store.optional_gc_store_mut(), dst, val.into(), len)?;
             Ok(())
         }
         TableElementType::GcRef => unreachable!(),
@@ -363,7 +363,7 @@ unsafe fn table_fill_cont_obj(
                 Some(contobj)
             };
 
-            table.fill(store.optional_gc_store_mut()?, dst, contobj.into(), len)?;
+            table.fill(store.optional_gc_store_mut(), dst, contobj.into(), len)?;
             Ok(())
         }
         _ => panic!("Wrong table filling function"),
@@ -387,7 +387,7 @@ unsafe fn table_copy(
     // Lazy-initialize the whole range in the source table first.
     let src_range = src..(src.checked_add(len).unwrap_or(u64::MAX));
     let src_table = instance.get_table_with_lazy_init(src_table_index, src_range);
-    let gc_store = store.optional_gc_store_mut()?;
+    let gc_store = store.optional_gc_store_mut();
     Table::copy(gc_store, dst_table, src_table, dst, src, len)?;
     Ok(())
 }
@@ -508,6 +508,33 @@ unsafe fn drop_gc_ref(store: &mut dyn VMStore, _instance: &mut Instance, gc_ref:
         .drop_gc_ref(gc_ref);
 }
 
+/// Grow the GC heap.
+#[cfg(feature = "gc-null")]
+unsafe fn grow_gc_heap(
+    store: &mut dyn VMStore,
+    _instance: &mut Instance,
+    bytes_needed: u64,
+) -> Result<()> {
+    let orig_len = u64::try_from(store.gc_store()?.gc_heap.vmmemory().current_length()).unwrap();
+
+    store
+        .maybe_async_gc(None, Some(bytes_needed))
+        .context("failed to grow the GC heap")
+        .context(crate::Trap::AllocationTooLarge)?;
+
+    // JIT code relies on the memory having grown by `bytes_needed` bytes if
+    // this libcall returns successfully, so trap if we didn't grow that much.
+    let new_len = u64::try_from(store.gc_store()?.gc_heap.vmmemory().current_length()).unwrap();
+    if orig_len
+        .checked_add(bytes_needed)
+        .is_none_or(|expected_len| new_len < expected_len)
+    {
+        return Err(crate::Trap::AllocationTooLarge.into());
+    }
+
+    Ok(())
+}
+
 /// Do a GC, keeping `gc_ref` rooted and returning the updated `gc_ref`
 /// reference.
 #[cfg(feature = "gc-drc")]
@@ -533,14 +560,14 @@ unsafe fn gc(store: &mut dyn VMStore, _instance: &mut Instance, gc_ref: u32) -> 
         let _ = gc_store.expose_gc_ref_to_wasm(gc_ref);
     }
 
-    match store.maybe_async_gc(gc_ref)? {
+    match store.maybe_async_grow_or_collect_gc_heap(gc_ref, None)? {
         None => Ok(0),
         Some(r) => {
             let raw = store
                 .store_opaque_mut()
                 .unwrap_gc_store_mut()
                 .expose_gc_ref_to_wasm(r);
-            Ok(raw)
+            Ok(raw.get())
         }
     }
 }
@@ -552,17 +579,17 @@ unsafe fn gc(store: &mut dyn VMStore, _instance: &mut Instance, gc_ref: u32) -> 
 unsafe fn gc_alloc_raw(
     store: &mut dyn VMStore,
     instance: &mut Instance,
-    kind: u32,
+    kind_and_reserved: u32,
     module_interned_type_index: u32,
     size: u32,
     align: u32,
-) -> Result<u32> {
-    use crate::{vm::VMGcHeader, GcHeapOutOfMemory};
+) -> Result<core::num::NonZeroU32> {
+    use crate::vm::VMGcHeader;
     use core::alloc::Layout;
     use wasmtime_environ::{ModuleInternedTypeIndex, VMGcKind};
 
-    let kind = VMGcKind::from_high_bits_of_u32(kind);
-    log::trace!("gc_alloc_raw(kind={kind:?}, size={size}, align={align})",);
+    let kind = VMGcKind::from_high_bits_of_u32(kind_and_reserved);
+    log::trace!("gc_alloc_raw(kind={kind:?}, size={size}, align={align})");
 
     let module = instance
         .runtime_module()
@@ -574,35 +601,28 @@ unsafe fn gc_alloc_raw(
         .shared_type(module_interned_type_index)
         .expect("should have engine type index for module type index");
 
-    let header = VMGcHeader::from_kind_and_index(kind, shared_type_index);
+    let mut header = VMGcHeader::from_kind_and_index(kind, shared_type_index);
+    header.set_reserved_u27(kind_and_reserved & VMGcKind::UNUSED_MASK);
 
     let size = usize::try_from(size).unwrap();
     let align = usize::try_from(align).unwrap();
-    let layout = Layout::from_size_align(size, align).unwrap();
+    assert!(align.is_power_of_two());
+    let layout = Layout::from_size_align(size, align).map_err(|e| {
+        let err = Error::from(crate::Trap::AllocationTooLarge);
+        err.context(e)
+    })?;
 
-    let gc_ref = match store
-        .store_opaque_mut()
-        .unwrap_gc_store_mut()
-        .alloc_raw(header, layout)?
-    {
-        Some(r) => r,
-        None => {
-            // If the allocation failed, do a GC to hopefully clean up space.
-            store.maybe_async_gc(None)?;
-
-            // And then try again.
+    let store = store.store_opaque_mut();
+    let gc_ref = unsafe {
+        store.retry_after_gc_maybe_async((), |store, ()| {
             store
                 .unwrap_gc_store_mut()
                 .alloc_raw(header, layout)?
-                .ok_or_else(|| GcHeapOutOfMemory::new(()))?
-        }
+                .map_err(|bytes_needed| crate::GcHeapOutOfMemory::new((), bytes_needed).into())
+        })?
     };
 
-    let raw = store
-        .store_opaque_mut()
-        .unwrap_gc_store_mut()
-        .expose_gc_ref_to_wasm(gc_ref);
-
+    let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
     Ok(raw)
 }
 
@@ -673,10 +693,11 @@ unsafe fn array_new_data(
     data_index: u32,
     src: u32,
     len: u32,
-) -> Result<u32> {
-    use crate::{ArrayType, GcHeapOutOfMemory};
+) -> Result<core::num::NonZeroU32> {
+    use crate::ArrayType;
     use wasmtime_environ::ModuleInternedTypeIndex;
 
+    let store = store.store_opaque_mut();
     let array_type_index = ModuleInternedTypeIndex::from_u32(array_type_index);
     let data_index = DataIndex::from_u32(data_index);
 
@@ -684,7 +705,7 @@ unsafe fn array_new_data(
     // of the array).
     let data_range = instance.wasm_data_range(data_index);
     let shared_ty = instance.engine_type_index(array_type_index);
-    let array_ty = ArrayType::from_shared_type_index(store.store_opaque_mut().engine(), shared_ty);
+    let array_ty = ArrayType::from_shared_type_index(store.engine(), shared_ty);
     let one_elem_size = array_ty
         .element_type()
         .data_byte_size()
@@ -704,40 +725,26 @@ unsafe fn array_new_data(
 
     // Allocate the (uninitialized) array.
     let gc_layout = store
-        .store_opaque_mut()
         .engine()
         .signatures()
         .layout(shared_ty)
         .expect("array types have GC layouts");
     let array_layout = gc_layout.unwrap_array();
-    let array_ref = match store
-        .store_opaque_mut()
-        .unwrap_gc_store_mut()
-        .alloc_uninit_array(shared_ty, len, &array_layout)?
-    {
-        Some(a) => a,
-        None => {
-            // Collect garbage to hopefully free up space, then try the
-            // allocation again.
-            store.maybe_async_gc(None)?;
-            store
-                .store_opaque_mut()
-                .unwrap_gc_store_mut()
-                .alloc_uninit_array(shared_ty, u32::try_from(byte_len).unwrap(), &array_layout)?
-                .ok_or_else(|| GcHeapOutOfMemory::new(()))?
-        }
-    };
+    let array_ref = store.retry_after_gc_maybe_async((), |store, ()| {
+        store
+            .unwrap_gc_store_mut()
+            .alloc_uninit_array(shared_ty, len, &array_layout)?
+            .map_err(|bytes_needed| crate::GcHeapOutOfMemory::new((), bytes_needed).into())
+    })?;
 
     // Copy the data into the array, initializing it.
     store
-        .store_opaque_mut()
         .unwrap_gc_store_mut()
         .gc_object_data(array_ref.as_gc_ref())
         .copy_from_slice(array_layout.base_size, data);
 
     // Return the array to Wasm!
     let raw = store
-        .store_opaque_mut()
         .unwrap_gc_store_mut()
         .expose_gc_ref_to_wasm(array_ref.into());
     Ok(raw)
@@ -833,11 +840,11 @@ unsafe fn array_new_elem(
     elem_index: u32,
     src: u32,
     len: u32,
-) -> Result<u32> {
+) -> Result<core::num::NonZeroU32> {
     use crate::{
         store::AutoAssertNoGc,
         vm::const_expr::{ConstEvalContext, ConstExprEvaluator},
-        ArrayRef, ArrayRefPre, ArrayType, Func, GcHeapOutOfMemory, RootSet, RootedGcRefImpl, Val,
+        ArrayRef, ArrayRefPre, ArrayType, Func, RootSet, RootedGcRefImpl, Val,
     };
     use wasmtime_environ::{ModuleInternedTypeIndex, TableSegmentElements};
 
@@ -892,16 +899,7 @@ unsafe fn array_new_elem(
             }
         }
 
-        let array = match ArrayRef::_new_fixed(store, &pre, &vals) {
-            Ok(a) => a,
-            Err(e) if e.is::<GcHeapOutOfMemory<()>>() => {
-                // Collect garbage to hopefully free up space, then try the
-                // allocation again.
-                store.maybe_async_gc(None)?;
-                ArrayRef::_new_fixed(store, &pre, &vals)?
-            }
-            Err(e) => return Err(e),
-        };
+        let array = unsafe { ArrayRef::new_fixed_maybe_async(store, &pre, &vals)? };
 
         let mut store = AutoAssertNoGc::new(store);
         let gc_ref = array.try_clone_gc_ref(&mut store)?;

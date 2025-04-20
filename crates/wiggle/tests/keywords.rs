@@ -54,6 +54,6 @@ mod struct_test {
 /// Test that a union variant that conflicts with a Rust keyword can be compiled properly.
 mod union_test {
     wiggle::from_witx!({
-        witx: ["$CARGO_MANIFEST_DIR/tests/keywords_union.witx"],
+        witx: ["tests/keywords_union.witx"],
     });
 }

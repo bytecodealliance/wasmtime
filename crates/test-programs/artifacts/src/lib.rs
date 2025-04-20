@@ -19,6 +19,7 @@ pub fn wasi_tests_environment() -> &'static [(&'static str, &'static str)] {
             // Windows does not support renaming a directory to an empty directory -
             // empty directory must be deleted.
             ("NO_RENAME_DIR_TO_EMPTY_DIR", "1"),
+            ("RENAME_DIR_ONTO_FILE", "1"),
         ]
     }
     #[cfg(all(unix, not(target_os = "macos")))]

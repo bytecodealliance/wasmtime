@@ -1,6 +1,6 @@
 use std::io::{BufRead, Write};
 use std::process::Command;
-use wasmtime_wasi::{InputStream, Pollable};
+use wasmtime_wasi::p2::{InputStream, Pollable};
 
 const VAR_NAME: &str = "__CHILD_PROCESS";
 
@@ -11,11 +11,7 @@ fn main() {
     // Skip this tests if it looks like we're in a cross-compiled situation and
     // we're emulating this test for a different platform. In that scenario
     // emulators (like QEMU) tend to not report signals the same way and such.
-    if std::env::vars()
-        .filter(|(k, _v)| k.starts_with("CARGO_TARGET") && k.ends_with("RUNNER"))
-        .count()
-        > 0
-    {
+    if wasmtime_test_util::cargo_test_runner().is_some() {
         return;
     }
 
@@ -35,7 +31,7 @@ fn main() {
                 .block_on(async {
                     'task: loop {
                         println!("child: creating stdin");
-                        let mut stdin = wasmtime_wasi::stdin();
+                        let mut stdin = wasmtime_wasi::p2::stdin();
 
                         println!("child: checking that stdin is not ready");
                         assert!(

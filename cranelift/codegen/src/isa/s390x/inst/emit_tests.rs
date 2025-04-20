@@ -6853,7 +6853,9 @@ fn test_s390x_binemit() {
         Inst::Call {
             link: writable_gpr(14),
             info: Box::new(CallInfo::empty(
-                ExternalName::testcase("test0"),
+                CallInstDest::Direct {
+                    name: ExternalName::testcase("test0"),
+                },
                 CallConv::SystemV,
             )),
         },
@@ -6862,9 +6864,12 @@ fn test_s390x_binemit() {
     ));
 
     insns.push((
-        Inst::CallInd {
+        Inst::Call {
             link: writable_gpr(14),
-            info: Box::new(CallInfo::empty(gpr(1), CallConv::SystemV)),
+            info: Box::new(CallInfo::empty(
+                CallInstDest::Indirect { reg: gpr(1) },
+                CallConv::SystemV,
+            )),
         },
         "0DE1",
         "basr %r14, %r1",

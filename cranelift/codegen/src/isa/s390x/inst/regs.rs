@@ -10,8 +10,8 @@ use crate::machinst::*;
 // Registers, the Universe thereof, and printing
 
 /// Get a reference to a GPR (integer register).
-pub fn gpr(num: u8) -> Reg {
-    Reg::from(gpr_preg(num))
+pub const fn gpr(num: u8) -> Reg {
+    Reg::from_real_reg(gpr_preg(num))
 }
 
 pub(crate) const fn gpr_preg(num: u8) -> PReg {
@@ -25,8 +25,8 @@ pub fn writable_gpr(num: u8) -> Writable<Reg> {
 }
 
 /// Get a reference to a VR (vector register).
-pub fn vr(num: u8) -> Reg {
-    Reg::from(vr_preg(num))
+pub const fn vr(num: u8) -> Reg {
+    Reg::from_real_reg(vr_preg(num))
 }
 
 pub(crate) const fn vr_preg(num: u8) -> PReg {

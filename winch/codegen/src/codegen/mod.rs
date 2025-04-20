@@ -16,8 +16,8 @@ use cranelift_codegen::{
 use smallvec::SmallVec;
 use std::marker::PhantomData;
 use wasmparser::{
-    BinaryReader, FuncValidator, MemArg, Operator, ValidatorResources, VisitOperator,
-    VisitSimdOperator,
+    BinaryReader, FuncValidator, MemArg, Operator, OperatorsReader, ValidatorResources,
+    VisitOperator, VisitSimdOperator,
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_HEAP_MISALIGNED, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
@@ -222,7 +222,7 @@ where
     /// Emit the function body to machine code.
     pub fn emit(
         &mut self,
-        body: &mut BinaryReader<'a>,
+        body: BinaryReader<'a>,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<()> {
         self.emit_body(body, validator)
@@ -293,7 +293,7 @@ where
 
     fn emit_body(
         &mut self,
-        body: &mut BinaryReader<'a>,
+        body: BinaryReader<'a>,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<()> {
         self.maybe_emit_fuel_check()?;
@@ -318,15 +318,16 @@ where
                 .set_ret_area(RetArea::slot(self.context.frame.results_base_slot.unwrap()));
         }
 
-        while !body.eof() {
-            let offset = body.original_position();
-            body.visit_operator(&mut ValidateThenVisit(
+        let mut ops = OperatorsReader::new(body);
+        while !ops.eof() {
+            let offset = ops.original_position();
+            ops.visit_operator(&mut ValidateThenVisit(
                 validator.simd_visitor(offset),
                 self,
                 offset,
             ))??;
         }
-        validator.finish(body.original_position())?;
+        ops.finish()?;
         return Ok(());
 
         struct ValidateThenVisit<'a, T, U>(T, &'a mut U, usize);
@@ -908,12 +909,19 @@ where
             Ok(())
         };
 
+        // Ensure that the destination register is not allocated if
+        // `emit_compute_heap_address` does not return an address.
         match kind {
             LoadKind::VectorLane(_) => {
+                // Destination vector register is at the top of the stack and
+                // `emit_compute_heap_address` expects an integer register
+                // containing the address to load to be at the top of the stack.
                 let dst = self.context.pop_to_reg(self.masm, None)?;
                 let addr = self.emit_compute_heap_address(&arg, kind.derive_operand_size())?;
                 if let Some(addr) = addr {
                     emit_load(self, dst.reg, addr, kind)?;
+                } else {
+                    self.context.free_reg(dst);
                 }
             }
             _ => {
@@ -1143,10 +1151,11 @@ where
     /// Emits a series of instructions that load the `fuel_consumed` field from
     /// `VMStoreContext`.
     fn emit_load_fuel_consumed(&mut self, fuel_reg: Reg) -> Result<()> {
-        let limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
+        let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
         let fuel_offset = self.env.vmoffsets.ptr.vmstore_context_fuel_consumed();
         self.masm.load_ptr(
-            self.masm.address_at_vmctx(u32::from(limits_offset))?,
+            self.masm
+                .address_at_vmctx(u32::from(store_context_offset))?,
             writable!(fuel_reg),
         )?;
 
@@ -1221,7 +1230,7 @@ where
         epoch_counter_reg: Reg,
     ) -> Result<()> {
         let epoch_ptr_offset = self.env.vmoffsets.ptr.vmctx_epoch_ptr();
-        let runtime_limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
+        let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
         let epoch_deadline_offset = self.env.vmoffsets.ptr.vmstore_context_epoch_deadline();
 
         // Load the current epoch value into `epoch_counter_var`.
@@ -1241,7 +1250,7 @@ where
         // Load the `VMStoreContext`.
         self.masm.load_ptr(
             self.masm
-                .address_at_vmctx(u32::from(runtime_limits_offset))?,
+                .address_at_vmctx(u32::from(store_context_offset))?,
             writable!(epoch_deadline_reg),
         )?;
 
@@ -1262,13 +1271,14 @@ where
             return Ok(());
         }
 
-        let limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
+        let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
         let fuel_offset = self.env.vmoffsets.ptr.vmstore_context_fuel_consumed();
         let limits_reg = self.context.any_gpr(self.masm)?;
 
         // Load `VMStoreContext` into the `limits_reg` reg.
         self.masm.load_ptr(
-            self.masm.address_at_vmctx(u32::from(limits_offset))?,
+            self.masm
+                .address_at_vmctx(u32::from(store_context_offset))?,
             writable!(limits_reg),
         )?;
 

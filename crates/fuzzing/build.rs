@@ -4,7 +4,7 @@
 
 use std::env;
 use std::path::PathBuf;
-use wasmtime_wast_util::WastTest;
+use wasmtime_test_util::wast::WastTest;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
@@ -15,10 +15,10 @@ fn main() {
     root.pop(); // chop off 'fuzzing'
     root.pop(); // chop off 'crates'
 
-    let mut tests = wasmtime_wast_util::find_tests(&root).unwrap();
+    let mut tests = wasmtime_test_util::wast::find_tests(&root).unwrap();
     tests.sort_by_key(|test| test.path.clone());
 
-    let mut code = format!("static FILES: &[fn() -> wasmtime_wast_util::WastTest] = &[\n");
+    let mut code = format!("static FILES: &[fn() -> wasmtime_test_util::wast::WastTest] = &[\n");
 
     for test in tests {
         let WastTest {
@@ -29,10 +29,10 @@ fn main() {
         println!("cargo:rerun-if-changed={}", path.to_str().unwrap());
         code.push_str(&format!(
             "|| {{
-                wasmtime_wast_util::WastTest {{
+                wasmtime_test_util::wast::WastTest {{
                     path: {path:?}.into(),
                     contents: include_str!({path:?}).into(),
-                    config: wasmtime_wast_util::{config:?},
+                    config: wasmtime_test_util::wast::{config:?},
                 }}
             }},"
         ));
