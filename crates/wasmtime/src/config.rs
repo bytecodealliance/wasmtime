@@ -2167,7 +2167,6 @@ impl Config {
     /// Returns the configured compiler target for this `Config`.
     pub(crate) fn compiler_target(&self) -> target_lexicon::Triple {
         // If a target is explicitly configured, always use that.
-        #[cfg(any(feature = "cranelift", feature = "winch"))]
         if let Some(target) = self.target.clone() {
             return target;
         }
