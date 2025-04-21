@@ -341,33 +341,33 @@ dependencies = [
 
 [[package]]
 name = "cap-fs-ext"
-version = "3.4.1"
+version = "3.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e16619ada836f12897a72011fe99b03f0025b87a8dbbea4f3c9f89b458a23bf3"
+checksum = "e41cc18551193fe8fa6f15c1e3c799bc5ec9e2cfbfaa8ed46f37013e3e6c173c"
 dependencies = [
  "cap-primitives",
  "cap-std",
  "io-lifetimes",
- "windows-sys 0.52.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
 name = "cap-net-ext"
-version = "3.4.1"
+version = "3.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "710b0eb776410a22c89a98f2f80b2187c2ac3a8206b99f3412332e63c9b09de0"
+checksum = "9f83833816c66c986e913b22ac887cec216ea09301802054316fc5301809702c"
 dependencies = [
  "cap-primitives",
  "cap-std",
- "rustix 0.38.43",
+ "rustix 1.0.3",
  "smallvec",
 ]
 
 [[package]]
 name = "cap-primitives"
-version = "3.4.1"
+version = "3.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "82fa6c3f9773feab88d844aa50035a33fb6e7e7426105d2f4bb7aadc42a5f89a"
+checksum = "0a1e394ed14f39f8bc26f59d4c0c010dbe7f0a1b9bafff451b1f98b67c8af62a"
 dependencies = [
  "ambient-authority",
  "fs-set-times",
@@ -375,16 +375,17 @@ dependencies = [
  "io-lifetimes",
  "ipnet",
  "maybe-owned",
- "rustix 0.38.43",
- "windows-sys 0.52.0",
+ "rustix 1.0.3",
+ "rustix-linux-procfs",
+ "windows-sys 0.59.0",
  "winx",
 ]
 
 [[package]]
 name = "cap-rand"
-version = "3.4.1"
+version = "3.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53774d49369892b70184f8312e50c1b87edccb376691de4485b0ff554b27c36c"
+checksum = "0acb89ccf798a28683f00089d0630dfaceec087234eae0d308c05ddeaa941b40"
 dependencies = [
  "ambient-authority",
  "rand",
@@ -392,27 +393,27 @@ dependencies = [
 
 [[package]]
 name = "cap-std"
-version = "3.4.1"
+version = "3.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7f71b70818556b4fe2a10c7c30baac3f5f45e973f49fc2673d7c75c39d0baf5b"
+checksum = "07c0355ca583dd58f176c3c12489d684163861ede3c9efa6fd8bba314c984189"
 dependencies = [
  "cap-primitives",
  "io-extras",
  "io-lifetimes",
- "rustix 0.38.43",
+ "rustix 1.0.3",
 ]
 
 [[package]]
 name = "cap-time-ext"
-version = "3.4.1"
+version = "3.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69dd48afa2363f746c93f961c211f6f099fb594a3446b8097bc5f79db51b6816"
+checksum = "491af520b8770085daa0466978c75db90368c71896523f2464214e38359b1a5b"
 dependencies = [
  "ambient-authority",
  "cap-primitives",
  "iana-time-zone",
  "once_cell",
- "rustix 0.38.43",
+ "rustix 1.0.3",
  "winx",
 ]
 
@@ -2895,10 +2896,8 @@ checksum = "a78891ee6bf2340288408954ac787aa063d8e8817e9f53abb37c695c6d834ef6"
 dependencies = [
  "bitflags 2.6.0",
  "errno",
- "itoa",
  "libc",
  "linux-raw-sys 0.4.14",
- "once_cell",
  "windows-sys 0.59.0",
 ]
 
@@ -2913,6 +2912,16 @@ dependencies = [
  "libc",
  "linux-raw-sys 0.9.3",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "rustix-linux-procfs"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fc84bf7e9aa16c4f2c758f27412dc9841341e16aa682d9c7ac308fe3ee12056"
+dependencies = [
+ "once_cell",
+ "rustix 1.0.3",
 ]
 
 [[package]]

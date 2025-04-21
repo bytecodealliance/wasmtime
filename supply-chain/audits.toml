@@ -1224,6 +1224,11 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.4.0 -> 3.4.1"
 
+[[audits.cap-fs-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.4.1 -> 3.4.4"
+
 [[audits.cap-net-ext]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -1238,6 +1243,11 @@ delta = "3.3.0 -> 3.4.0"
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.4.0 -> 3.4.1"
+
+[[audits.cap-net-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.4.1 -> 3.4.4"
 
 [[audits.cap-primitives]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -1277,6 +1287,11 @@ delta = "3.3.0 -> 3.4.0"
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.4.0 -> 3.4.1"
+
+[[audits.cap-primitives]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.4.1 -> 3.4.4"
 
 [[audits.cap-rand]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1311,6 +1326,11 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.4.0 -> 3.4.1"
 
+[[audits.cap-rand]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.4.1 -> 3.4.4"
+
 [[audits.cap-std]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -1349,6 +1369,11 @@ delta = "3.3.0 -> 3.4.0"
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.4.0 -> 3.4.1"
+
+[[audits.cap-std]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.4.1 -> 3.4.4"
 
 [[audits.cap-tempfile]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -1406,6 +1431,11 @@ delta = "3.3.0 -> 3.4.0"
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.4.0 -> 3.4.1"
+
+[[audits.cap-time-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.4.1 -> 3.4.4"
 
 [[audits.capstone]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -2955,6 +2985,11 @@ delta = "0.38.37 -> 0.38.38"
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "0.38.39 -> 0.38.43"
+
+[[audits.rustix-linux-procfs]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+version = "0.1.1"
 
 [[audits.rustls]]
 who = "Pat Hickey <phickey@fastly.com>"
