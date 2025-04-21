@@ -258,7 +258,9 @@ impl<T> Linker<T> {
             let i = imports.push(import);
             assert_eq!(i, idx);
         }
-        Ok(unsafe { InstancePre::new_unchecked(component.clone(), component_type, imports) })
+        Ok(unsafe {
+            InstancePre::new_unchecked(component.clone(), component_type, Arc::new(imports))
+        })
     }
 
     /// Instantiates the [`Component`] provided into the `store` specified.

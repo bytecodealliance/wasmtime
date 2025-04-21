@@ -10,7 +10,7 @@ use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
 use crate::runtime::vm::{CompiledModuleId, VMFuncRef};
 use crate::store::{StoreOpaque, Stored};
-use crate::{AsContextMut, Engine, Module, StoreContextMut};
+use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
 use core::ptr::NonNull;
@@ -361,6 +361,19 @@ impl Instance {
             &data.component.env_component().export_items[index],
             index,
         ))
+    }
+
+    #[doc(hidden)]
+    pub fn instance_pre<T>(&self, store: &impl AsContext<Data = T>) -> InstancePre<T> {
+        // This indexing operation asserts the Store owns the Instance.
+        // Therefore, the InstancePre<T> must match the Store<T>.
+        let data = store.as_context().0[self.0].as_ref().unwrap();
+
+        let component_type =
+            ComponentType::from(data.component.ty(), &InstanceType::new(data.instance()));
+        unsafe {
+            InstancePre::new_unchecked(data.component.clone(), component_type, data.imports.clone())
+        }
     }
 }
 
@@ -841,12 +854,12 @@ impl<T> InstancePre<T> {
     pub(crate) unsafe fn new_unchecked(
         component: Component,
         component_type: ComponentType,
-        imports: PrimaryMap<RuntimeImportIndex, RuntimeImport>,
+        imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     ) -> InstancePre<T> {
         InstancePre {
             component,
             component_type,
-            imports: Arc::new(imports),
+            imports,
             _marker: marker::PhantomData,
         }
     }
