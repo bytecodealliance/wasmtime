@@ -512,6 +512,12 @@ when = "2025-02-25"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.cranelift-srcgen]]
+version = "0.119.0"
+when = "2025-04-21"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.derive_arbitrary]]
 version = "1.4.0"
 when = "2024-11-04"
@@ -1204,6 +1210,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-wasi-threads]]
 version = "30.0.2"
 when = "2025-02-25"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wasi-tls]]
+version = "32.0.0"
+when = "2025-04-21"
 user-id = 73222
 user-login = "wasmtime-publish"
 

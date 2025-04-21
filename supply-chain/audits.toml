@@ -160,6 +160,14 @@ start = "2021-10-29"
 end = "2025-07-30"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.cranelift-srcgen]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2025-04-21"
+end = "2026-04-21"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[wildcard-audits.cranelift-wasm]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
@@ -611,6 +619,14 @@ criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-03-20"
 end = "2025-07-30"
+notes = "The Bytecode Alliance is the author of this crate."
+
+[[wildcard-audits.wasmtime-wasi-tls]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2025-04-21"
+end = "2026-04-21"
 notes = "The Bytecode Alliance is the author of this crate."
 
 [[wildcard-audits.wasmtime-wast]]
