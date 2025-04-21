@@ -213,15 +213,9 @@ impl<T> Linker<T> {
         let cx = self.typecheck(&component)?;
 
         // A successful typecheck resolves all of the imported resources used by
-        // this InstancePre. We keep track of those in types::Component
-        // representation, because we can't keep an interior InstanceType.
-        let component_type = types::Component::from(
-            component.ty(),
-            &InstanceType {
-                types: cx.types,
-                resources: &cx.imported_resources,
-            },
-        );
+        // this InstancePre. We keep a clone of this table in the InstancePre
+        // so that we can construct an InstanceType for typechecking.
+        let imported_resources = cx.imported_resources.clone();
 
         // Now that all imports are known to be defined and satisfied by this
         // linker a list of "flat" import items (aka no instances) is created
@@ -259,7 +253,7 @@ impl<T> Linker<T> {
             assert_eq!(i, idx);
         }
         Ok(unsafe {
-            InstancePre::new_unchecked(component.clone(), component_type, Arc::new(imports))
+            InstancePre::new_unchecked(component.clone(), Arc::new(imports), imported_resources)
         })
     }
 
