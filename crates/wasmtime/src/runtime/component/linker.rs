@@ -210,7 +210,18 @@ impl<T> Linker<T> {
     /// `component` imports or if a name defined doesn't match the type of the
     /// item imported by the `component` provided.
     pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
-        self.typecheck(&component)?;
+        let cx = self.typecheck(&component)?;
+
+        // A successful typecheck resolves all of the imported resources used by
+        // this InstancePre. We keep track of those in types::Component
+        // representation, because we can't keep an interior InstanceType.
+        let component_type = types::Component::from(
+            component.ty(),
+            &InstanceType {
+                types: cx.types,
+                resources: &cx.imported_resources,
+            },
+        );
 
         // Now that all imports are known to be defined and satisfied by this
         // linker a list of "flat" import items (aka no instances) is created
@@ -247,7 +258,7 @@ impl<T> Linker<T> {
             let i = imports.push(import);
             assert_eq!(i, idx);
         }
-        Ok(unsafe { InstancePre::new_unchecked(component.clone(), imports) })
+        Ok(unsafe { InstancePre::new_unchecked(component.clone(), component_type, imports) })
     }
 
     /// Instantiates the [`Component`] provided into the `store` specified.

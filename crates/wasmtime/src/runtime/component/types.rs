@@ -816,6 +816,14 @@ impl Component {
             )
         })
     }
+
+    #[doc(hidden)]
+    pub fn instance_type(&self) -> InstanceType<'_> {
+        InstanceType {
+            types: &self.0.types,
+            resources: &self.0.resources,
+        }
+    }
 }
 
 /// Component instance type

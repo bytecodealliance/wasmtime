@@ -1,8 +1,8 @@
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
 use crate::component::{
-    types::ComponentItem, Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower,
-    ResourceType, TypedFunc,
+    types::Component as ComponentType, types::ComponentItem, Component, ComponentExportIndex,
+    ComponentNamedList, Func, Lift, Lower, ResourceType, TypedFunc,
 };
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
@@ -814,6 +814,7 @@ impl<'a> Instantiator<'a> {
 /// method.
 pub struct InstancePre<T> {
     component: Component,
+    component_type: ComponentType,
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     _marker: marker::PhantomData<fn() -> T>,
 }
@@ -823,6 +824,7 @@ impl<T> Clone for InstancePre<T> {
     fn clone(&self) -> Self {
         Self {
             component: self.component.clone(),
+            component_type: self.component_type.clone(),
             imports: self.imports.clone(),
             _marker: self._marker,
         }
@@ -838,10 +840,12 @@ impl<T> InstancePre<T> {
     /// satisfy the imports of the `component` provided.
     pub(crate) unsafe fn new_unchecked(
         component: Component,
+        component_type: ComponentType,
         imports: PrimaryMap<RuntimeImportIndex, RuntimeImport>,
     ) -> InstancePre<T> {
         InstancePre {
             component,
+            component_type,
             imports: Arc::new(imports),
             _marker: marker::PhantomData,
         }
@@ -850,6 +854,14 @@ impl<T> InstancePre<T> {
     /// Returns the underlying component that will be instantiated.
     pub fn component(&self) -> &Component {
         &self.component
+    }
+
+    /// Returns the type at which the underlying component will be
+    /// instantiated. This contains the instantiated type information which
+    /// was determined by the Linker. This type is a refinement of the one
+    /// given by `self.component().component_type()`.
+    pub fn component_type(&self) -> &ComponentType {
+        &self.component_type
     }
 
     /// Returns the underlying engine.
