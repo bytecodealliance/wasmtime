@@ -117,6 +117,8 @@ impl Backtrace {
         continuation: &VMContRef,
         f: impl FnMut(Frame) -> ControlFlow<()>,
     ) {
+        log::trace!("====== Capturing Backtrace (suspended continuation) ======");
+
         assert_eq!(
             continuation.common_stack_information.state,
             VMStackState::Suspended
@@ -137,8 +139,16 @@ impl Backtrace {
             // here.
             let stack_chain =
                 VMStackChain::Continuation(continuation as *const VMContRef as *mut VMContRef);
-            Self::trace_through_continuations(unwind, stack_chain, pc, fp, trampoline_fp, f);
+
+            if let ControlFlow::Break(()) =
+                Self::trace_through_continuations(unwind, stack_chain, pc, fp, trampoline_fp, f)
+            {
+                log::trace!("====== Done Capturing Backtrace (closure break) ======");
+                return;
+            }
         }
+
+        log::trace!("====== Done Capturing Backtrace (reached end of stack chain) ======");
     }
 
     /// Walk the current Wasm stack, calling `f` for each frame we walk.
