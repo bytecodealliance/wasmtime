@@ -24,7 +24,9 @@ add_capi_test(types FILES
   global_type.cc
   table_type.cc
   func_type.cc
-  import_type.cc)
+  import_type.cc
+  export_type.cc
+)
 add_capi_test(func FILES func.cc)
 add_capi_test(component-instantiate FILES component/instantiate.cc)
 add_capi_test(error FILES error.cc)
