@@ -74,7 +74,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     // To avoid needing to enable all of them at once implicitly enable
     // downstream proposals once the end proposal is enabled (e.g. when enabling
     // gc that also enables function-references and reference-types).
-    let function_references = gc || function_references.unwrap_or(false);
+    let function_references = stack_switching || gc || function_references.unwrap_or(false);
     let reference_types = function_references || reference_types.unwrap_or(false);
     let simd = relaxed_simd || simd.unwrap_or(false);
 
