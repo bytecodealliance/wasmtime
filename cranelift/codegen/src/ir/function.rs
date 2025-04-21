@@ -255,6 +255,13 @@ impl FunctionStencil {
         self.get_dyn_scale(dyn_ty)
     }
 
+    /// Find the data for the given stack slot
+    pub fn get_stack_slot_data(&self, stack_slot: StackSlot) -> &StackSlotData {
+        self.sized_stack_slots
+            .get(stack_slot)
+            .expect("undeclared stack slot: {stack_slot}")
+    }
+
     /// Get a concrete `Type` from a user defined `DynamicType`.
     pub fn get_concrete_dynamic_ty(&self, ty: DynamicType) -> Option<Type> {
         self.dfg
