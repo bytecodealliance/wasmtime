@@ -147,32 +147,3 @@ impl AsReg for u8 {
         *self
     }
 }
-
-/// Describe a visitor for the register operands of an instruction.
-///
-/// Due to how Cranelift's register allocation works, we allow the visitor to
-/// modify the register operands in place. This allows Cranelift to convert
-/// virtual registers (`[128..N)`) to physical registers (`[0..16)`) without
-/// re-allocating the entire instruction object.
-pub trait RegisterVisitor<R: Registers> {
-    /// Visit a read-only register.
-    fn read(&mut self, reg: &mut R::ReadGpr);
-    /// Visit a read-write register.
-    fn read_write(&mut self, reg: &mut R::ReadWriteGpr);
-    /// Visit a read-only fixed register; for safety, this register cannot be
-    /// modified in-place.
-    fn fixed_read(&mut self, reg: &R::ReadGpr);
-    /// Visit a read-write fixed register; for safety, this register cannot be
-    /// modified in-place.
-    fn fixed_read_write(&mut self, reg: &R::ReadWriteGpr);
-    /// Visit a read-only SSE register.
-    fn read_xmm(&mut self, reg: &mut R::ReadXmm);
-    /// Visit a read-write SSE register.
-    fn read_write_xmm(&mut self, reg: &mut R::ReadWriteXmm);
-    /// Visit a read-only fixed SSE register; for safety, this register cannot
-    /// be modified in-place.
-    fn fixed_read_xmm(&mut self, reg: &R::ReadXmm);
-    /// Visit a read-write fixed SSE register; for safety, this register cannot
-    /// be modified in-place.
-    fn fixed_read_write_xmm(&mut self, reg: &R::ReadWriteXmm);
-}

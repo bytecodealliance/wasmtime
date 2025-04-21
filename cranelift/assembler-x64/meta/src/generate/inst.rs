@@ -57,7 +57,7 @@ impl dsl::Inst {
             f.empty_line();
             self.generate_encode_function(f);
             f.empty_line();
-            self.generate_visit_function(f);
+            self.generate_operands_function(f);
             f.empty_line();
             self.generate_features_function(f);
         });
@@ -119,69 +119,52 @@ impl dsl::Inst {
         });
     }
 
-    /// `fn visit(&self, ...) { ... }`
-    fn generate_visit_function(&self, f: &mut Formatter) {
-        use dsl::OperandKind::*;
-        let extra_generic_bound = if self.requires_generic() { "" } else { "<R: Registers>" };
-        f.add_block(
-            &format!("pub fn visit{extra_generic_bound}(&mut self, visitor: &mut impl RegisterVisitor<R>)"),
-            |f| {
-                for o in &self.format.operands {
-                    match o.location.kind() {
-                        Imm(_) => {
-                            // Immediates do not need register allocation.
-                        }
-                        FixedReg(_) => {
-                            let call = o.mutability.generate_regalloc_call();
-                            let ty = o.mutability.generate_type();
-                            let Some(fixed) = o.location.generate_fixed_reg() else {
-                                unreachable!()
-                            };
-                            fmtln!(f, "visitor.fixed_{call}(&R::{ty}Gpr::new({fixed}));");
-                        }
-                        Reg(reg) => {
-                            match reg.bits() {
-                                128 => {
-                                    let call = o.mutability.generate_xmm_regalloc_call();
-                                    fmtln!(f, "visitor.{call}(self.{reg}.as_mut());");
-                                }
-                                _ => {
-                                    let call = o.mutability.generate_regalloc_call();
-                                    fmtln!(f, "visitor.{call}(self.{reg}.as_mut());");
-                                }
-                            };
-                        }
-                        RegMem(rm) => {
-                            match rm.bits() {
-                                128 => {
-                                    let call = o.mutability.generate_xmm_regalloc_call();
-                                    f.add_block(&format!("match &mut self.{rm}"), |f| {
-                                        fmtln!(f, "XmmMem::Xmm(r) => visitor.{call}(r),");
-                                        fmtln!(
-                                        f,
-                                        "XmmMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
-                                    );
-                                    });
-                                }
-                                _ => {
-                                    let call = o.mutability.generate_regalloc_call();
-                                    f.add_block(&format!("match &mut self.{rm}"), |f| {
-                                        fmtln!(f, "GprMem::Gpr(r) => visitor.{call}(r),");
-                                        fmtln!(
-                                        f,
-                                        "GprMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
-                                    );
-                                    });
-                                }
-                            };
-                        }
-                        Mem(m) => {
-                            fmtln!(f, "self.{m}.registers_mut().iter_mut().for_each(|r| visitor.read(r));");
-                        }
+    /// `fn operands(&mut self, ...) { ... }`
+    fn generate_operands_function(&self, f: &mut Formatter) {
+        use dsl::Location::*;
+        use dsl::Mutability::*;
+
+        f.add_block(&format!("pub fn operands<'a>(&'a mut self) -> Vec<Operand<'a, R>>"), |f| {
+            let mut names = vec![];
+            for o in &self.format.operands {
+                let mutability = match o.mutability {
+                    Read => "read",
+                    ReadWrite => "read_write",
+                };
+                let loc = &o.location;
+
+                let constructor = match loc {
+                    al | ax | eax | rax | cl => {
+                        format!("from_{mutability}_fixed_gpr(&mut self.{loc})")
                     }
-                }
-            },
-        );
+                    r8 | r16 | r32 | r64 => {
+                        format!("from_{mutability}_gpr(&mut self.{loc})")
+                    }
+                    xmm => format!("from_{mutability}_xmm(&mut self.{loc})"),
+                    rm8 | rm16 | rm32 | rm64 => {
+                        format!("from_{mutability}_gpr_mem(&mut self.{loc})")
+                    }
+                    rm128 => {
+                        format!("from_{mutability}_xmm_mem(&mut self.{loc})")
+                    }
+                    m8 | m16 | m32 | m64 => {
+                        format!("from_amode(&mut self.{loc})")
+                    }
+                    imm8 | imm16 | imm32 => {
+                        let bits = loc.bits();
+                        let ty = if o.extension.is_sign_extended() {
+                            format!("Simm{bits}")
+                        } else {
+                            format!("Imm{bits}")
+                        };
+                        format!("{ty}(&mut self.{loc})")
+                    }
+                };
+                fmtln!(f, "let {loc} = Operand::{constructor};");
+                names.push(loc.to_string());
+            }
+            fmtln!(f, "vec![{}]", comma_join(names.iter()));
+        });
     }
 
     /// `fn features(&self) -> Vec<Flag> { ... }`

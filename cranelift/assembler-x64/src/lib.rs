@@ -50,6 +50,7 @@ pub mod gpr;
 mod imm;
 pub mod inst;
 mod mem;
+mod op;
 mod rex;
 pub mod xmm;
 
@@ -75,8 +76,7 @@ pub use inst::Inst;
 pub use inst::Feature;
 
 pub use api::{
-    AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, RegisterVisitor, Registers,
-    TrapCode,
+    AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, Registers, TrapCode,
 };
 pub use fixed::Fixed;
 pub use gpr::{Gpr, NonRspGpr, Size};
@@ -84,6 +84,7 @@ pub use imm::{Extension, Imm16, Imm32, Imm8, Simm16, Simm32, Simm8};
 pub use mem::{
     Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, DeferredTarget, GprMem, Scale, XmmMem,
 };
+pub use op::Operand;
 pub use rex::RexFlags;
 pub use xmm::Xmm;
 

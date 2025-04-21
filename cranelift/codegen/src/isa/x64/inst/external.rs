@@ -1,8 +1,8 @@
 //! Interface with the external assembler crate.
 
 use super::{
-    regs, Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor, OperandVisitorImpl,
-    SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm,
+    regs, Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, SyntheticAmode, VCodeConstant,
+    WritableGpr, WritableXmm, Xmm,
 };
 use crate::ir::TrapCode;
 use cranelift_assembler_x64 as asm;
@@ -142,54 +142,6 @@ fn enc_xmm(xmm: &Xmm) -> u8 {
         real.hw_enc()
     } else {
         unreachable!()
-    }
-}
-
-/// A wrapper to implement the `cranelift-assembler-x64` register allocation trait,
-/// `RegallocVisitor`, in terms of the trait used in Cranelift,
-/// `OperandVisitor`.
-pub(crate) struct RegallocVisitor<'a, T>
-where
-    T: OperandVisitorImpl,
-{
-    pub collector: &'a mut T,
-}
-
-impl<'a, T: OperandVisitor> asm::RegisterVisitor<CraneliftRegisters> for RegallocVisitor<'a, T> {
-    fn read(&mut self, reg: &mut Gpr) {
-        self.collector.reg_use(reg);
-    }
-
-    fn read_write(&mut self, reg: &mut PairedGpr) {
-        let PairedGpr { read, write } = reg;
-        self.collector.reg_use(read);
-        self.collector.reg_reuse_def(write, 0);
-    }
-
-    fn fixed_read(&mut self, _reg: &Gpr) {
-        todo!()
-    }
-
-    fn fixed_read_write(&mut self, _reg: &PairedGpr) {
-        todo!()
-    }
-
-    fn read_xmm(&mut self, reg: &mut Xmm) {
-        self.collector.reg_use(reg);
-    }
-
-    fn read_write_xmm(&mut self, reg: &mut PairedXmm) {
-        let PairedXmm { read, write } = reg;
-        self.collector.reg_use(read);
-        self.collector.reg_reuse_def(write, 0);
-    }
-
-    fn fixed_read_xmm(&mut self, _reg: &Xmm) {
-        todo!()
-    }
-
-    fn fixed_read_write_xmm(&mut self, _reg: &PairedXmm) {
-        todo!()
     }
 }
 

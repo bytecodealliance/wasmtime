@@ -17,18 +17,6 @@ impl<R: AsReg> Gpr<R> {
         Self(reg)
     }
 
-    /// Return the register's hardware encoding; the underlying type `R` _must_
-    /// be a real register at this point.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the register is not a valid x64 register.
-    pub fn enc(&self) -> u8 {
-        let enc = self.0.enc();
-        assert!(enc < 16, "invalid register: {enc}");
-        enc
-    }
-
     /// Return the register name at the given `size`.
     pub fn to_string(&self, size: Size) -> String {
         self.0.to_string(Some(size))
@@ -38,6 +26,24 @@ impl<R: AsReg> Gpr<R> {
     /// code.
     pub(crate) fn always_emit_if_8bit_needed(&self, rex: &mut RexFlags) {
         rex.always_emit_if_8bit_needed(self.enc());
+    }
+}
+
+impl<R: AsReg> AsReg for Gpr<R> {
+    fn new(reg: u8) -> Self {
+        Self(R::new(reg))
+    }
+
+    /// Return the register's hardware encoding; the underlying type `R` _must_
+    /// be a real register at this point.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the register is not a valid x64 register.
+    fn enc(&self) -> u8 {
+        let enc = self.0.enc();
+        assert!(enc < 16, "invalid register: {enc}");
+        enc
     }
 }
 

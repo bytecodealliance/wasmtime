@@ -2741,7 +2741,66 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
 
         Inst::External { inst } => {
-            inst.visit(&mut external::RegallocVisitor { collector });
+            use cranelift_assembler_x64::Amode::*;
+            use cranelift_assembler_x64::Operand::*;
+            use external::{PairedGpr, PairedXmm};
+            use regalloc2::{PReg, RegClass::Float, RegClass::Int};
+
+            let fixed_gpr = |enc: u8| Reg::from_real_reg(PReg::new(usize::from(enc), Int));
+            let fixed_xmm = |enc: u8| Reg::from_real_reg(PReg::new(usize::from(enc), Float));
+            for o in inst.operands() {
+                match o {
+                    ReadGpr { gpr, fixed: None } => collector.reg_use(gpr),
+                    ReadGpr {
+                        gpr,
+                        fixed: Some(enc),
+                    } => collector.reg_fixed_use(gpr, fixed_gpr(enc)),
+                    ReadWriteGpr { gpr, fixed: None } => {
+                        let PairedGpr { read, write } = gpr;
+                        collector.reg_use(read);
+                        collector.reg_reuse_def(write, 0);
+                    }
+                    ReadWriteGpr {
+                        gpr,
+                        fixed: Some(enc),
+                    } => {
+                        let PairedGpr { read, write } = gpr;
+                        collector.reg_fixed_use(read, fixed_gpr(enc));
+                        collector.reg_fixed_def(write, fixed_gpr(enc));
+                    }
+                    ReadXmm { xmm, fixed: None } => collector.reg_use(xmm),
+                    ReadXmm {
+                        xmm,
+                        fixed: Some(enc),
+                    } => collector.reg_fixed_use(xmm, fixed_xmm(enc)),
+                    ReadWriteXmm { xmm, fixed: None } => {
+                        let PairedXmm { read, write } = xmm;
+                        collector.reg_use(read);
+                        collector.reg_reuse_def(write, 0);
+                    }
+                    ReadWriteXmm {
+                        xmm,
+                        fixed: Some(enc),
+                    } => {
+                        let PairedXmm { read, write } = xmm;
+                        collector.reg_fixed_use(read, fixed_xmm(enc));
+                        collector.reg_fixed_def(write, fixed_xmm(enc));
+                    }
+                    Amode(amode) => match amode {
+                        ImmReg { base, .. } => collector.reg_use(base),
+                        ImmRegRegShift { base, index, .. } => {
+                            collector.reg_use(base);
+                            collector.reg_use(index.as_mut());
+                        }
+                        RipRelative { .. } => {
+                            // We do not record usage of the `%rip` register.
+                        }
+                    },
+                    Imm8(_) | Imm16(_) | Imm32(_) | Simm8(_) | Simm16(_) | Simm32(_) => {
+                        // No registers used.
+                    }
+                }
+            }
         }
     }
 }

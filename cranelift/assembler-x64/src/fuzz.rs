@@ -198,6 +198,13 @@ impl AsReg for FuzzReg {
     }
 }
 
+impl From<u8> for FuzzReg {
+    fn from(reg: u8) -> Self {
+        // assert!(reg < 16, "invalid register: {reg}");
+        Self(reg)
+    }
+}
+
 impl Arbitrary<'_> for AmodeOffsetPlusKnownOffset {
     fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
         // For now, we don't generate offsets (TODO).
@@ -223,14 +230,14 @@ impl<R: AsReg> Arbitrary<'_> for NonRspGpr<R> {
         Ok(Self::new(R::new(*gpr)))
     }
 }
-impl<'a, R: AsReg> Arbitrary<'a> for Gpr<R> {
+impl<'a, R: AsReg + Arbitrary<'a>> Arbitrary<'a> for Gpr<R> {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-        Ok(Self(R::new(u.int_in_range(0..=15)?)))
+        Ok(Self(u.arbitrary()?))
     }
 }
-impl<'a, R: AsReg> Arbitrary<'a> for Xmm<R> {
+impl<'a, R: AsReg + Arbitrary<'a>> Arbitrary<'a> for Xmm<R> {
     fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
-        Ok(Self(R::new(u.int_in_range(0..=15)?)))
+        Ok(Self(u.arbitrary()?))
     }
 }
 

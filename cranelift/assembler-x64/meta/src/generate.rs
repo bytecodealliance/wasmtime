@@ -14,7 +14,7 @@ pub fn rust_assembler(f: &mut Formatter, insts: &[dsl::Inst]) {
     generate_inst_enum(f, insts);
     generate_inst_display_impl(f, insts);
     generate_inst_encode_impl(f, insts);
-    generate_inst_visit_impl(f, insts);
+    generate_inst_operands_impl(f, insts);
     generate_inst_features_impl(f, insts);
 
     // Generate per-instruction structs.
@@ -102,24 +102,18 @@ fn generate_inst_encode_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
     fmtln!(f, "}}");
 }
 
-/// `impl Inst { fn visit... }`
-fn generate_inst_visit_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
-    fmtln!(f, "impl<R: Registers> Inst<R> {{");
-    f.indent(|f| {
-        fmtln!(f, "pub fn visit(&mut self, v: &mut impl RegisterVisitor<R>) {{");
-        f.indent(|f| {
-            fmtln!(f, "match self {{");
-            f.indent_push();
-            for inst in insts {
-                let variant_name = inst.name();
-                fmtln!(f, "Self::{variant_name}(i) => i.visit(v),");
-            }
-            f.indent_pop();
-            fmtln!(f, "}}");
-        });
-        fmtln!(f, "}}");
+/// `impl Inst { fn operands... }`
+fn generate_inst_operands_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
+    f.add_block("impl<R: Registers> Inst<R>", |f| {
+        f.add_block("pub fn operands<'a>(&'a mut self) -> Vec<Operand<'a, R>>", |f| {
+            f.add_block("match self", |f| {
+                for inst in insts {
+                    let variant_name = inst.name();
+                    fmtln!(f, "Self::{variant_name}(i) => i.operands(),");
+                }
+            });
+        })
     });
-    fmtln!(f, "}}");
 }
 
 /// `impl Inst { fn features... }`
