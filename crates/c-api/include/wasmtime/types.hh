@@ -3,6 +3,7 @@
 
 #include <wasmtime/types/global.hh>
 #include <wasmtime/types/memory.hh>
+#include <wasmtime/types/table.hh>
 #include <wasmtime/types/val.hh>
 
 #endif // WASMTIME_TYPES_HH

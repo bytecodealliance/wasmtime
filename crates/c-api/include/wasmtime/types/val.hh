@@ -173,4 +173,3 @@ public:
 }; // namespace wasmtime
 
 #endif // WASMTIME_TYPES_VAL_HH
-

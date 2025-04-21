@@ -17,7 +17,7 @@ function(add_capi_test name)
 endfunction()
 
 add_capi_test(simple FILES simple.cc)
-add_capi_test(types FILES types.cc memory_type.cc val_type.cc global_type.cc)
+add_capi_test(types FILES types.cc memory_type.cc val_type.cc global_type.cc table_type.cc)
 add_capi_test(func FILES func.cc)
 add_capi_test(component-instantiate FILES component/instantiate.cc)
 add_capi_test(error FILES error.cc)
