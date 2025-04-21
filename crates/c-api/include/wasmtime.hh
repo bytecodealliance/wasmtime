@@ -47,7 +47,8 @@
 #endif
 #endif
 
-#include "wasmtime.h"
+#include <wasmtime.h>
+#include <wasmtime/error.hh>
 
 namespace wasmtime {
 

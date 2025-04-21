@@ -1,4 +1,4 @@
-#include <wasmtime/error.h>
+#include <wasmtime/error.hh>
 #include <gtest/gtest.h>
 
 using namespace wasmtime;
