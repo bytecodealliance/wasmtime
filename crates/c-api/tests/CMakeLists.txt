@@ -21,6 +21,7 @@ add_capi_test(types FILES types.cc)
 add_capi_test(func FILES func.cc)
 add_capi_test(component-instantiate FILES component/instantiate.cc)
 add_capi_test(error FILES error.cc)
+add_capi_test(memory_type FILES memory_type.cc)
 
 # Add a custom test where two files include `wasmtime.hh` and are compiled into
 # the same executable (basically makes sure any defined functions in the header
