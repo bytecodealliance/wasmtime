@@ -2,27 +2,30 @@ use crate::dsl;
 
 impl dsl::Operand {
     #[must_use]
-    pub fn generate_type(&self) -> Option<String> {
-        use dsl::OperandKind::*;
-        match self.location.kind() {
-            FixedReg(_) => None,
-            Imm(loc) => {
-                let bits = loc.bits();
+    pub fn generate_type(&self) -> String {
+        use dsl::Location::*;
+        match self.location {
+            imm8 | imm16 | imm32 => {
+                let bits = self.location.bits();
                 if self.extension.is_sign_extended() {
-                    Some(format!("Simm{bits}"))
+                    format!("Simm{bits}")
                 } else {
-                    Some(format!("Imm{bits}"))
+                    format!("Imm{bits}")
                 }
             }
-            Reg(r) => match r.bits() {
-                128 => Some(format!("Xmm<R::{}Xmm>", self.mutability.generate_type())),
-                _ => Some(format!("Gpr<R::{}Gpr>", self.mutability.generate_type())),
-            },
-            RegMem(rm) => match rm.bits() {
-                128 => Some(format!("XmmMem<R::{}Xmm, R::ReadGpr>", self.mutability.generate_type())),
-                _ => Some(format!("GprMem<R::{}Gpr, R::ReadGpr>", self.mutability.generate_type())),
-            },
-            Mem(_) => Some(format!("Amode<R::ReadGpr>")),
+            al | ax | eax | rax | cl => {
+                let enc = match self.location {
+                    al | ax | eax | rax => "{ gpr::enc::RAX }",
+                    cl => "{ gpr::enc::RCX }",
+                    _ => unreachable!(),
+                };
+                format!("Fixed<R::{}Gpr, {enc}>", self.mutability.generate_type())
+            }
+            r8 | r16 | r32 | r64 => format!("Gpr<R::{}Gpr>", self.mutability.generate_type()),
+            rm8 | rm16 | rm32 | rm64 => format!("GprMem<R::{}Gpr, R::ReadGpr>", self.mutability.generate_type()),
+            xmm => format!("Xmm<R::{}Xmm>", self.mutability.generate_type()),
+            rm128 => format!("XmmMem<R::{}Xmm, R::ReadGpr>", self.mutability.generate_type()),
+            m8 | m16 | m32 | m64 => format!("Amode<R::ReadGpr>"),
         }
     }
 }
