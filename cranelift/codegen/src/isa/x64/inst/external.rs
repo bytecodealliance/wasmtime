@@ -4,8 +4,9 @@ use super::{
     regs, Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor, OperandVisitorImpl,
     SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm,
 };
-use crate::ir::TrapCode;
+use crate::{ir::TrapCode, Reg};
 use cranelift_assembler_x64 as asm;
+use regalloc2::{PReg, RegClass};
 use std::string::String;
 
 /// Define the types of registers Cranelift will use.
@@ -156,22 +157,27 @@ where
 }
 
 impl<'a, T: OperandVisitor> asm::RegisterVisitor<CraneliftRegisters> for RegallocVisitor<'a, T> {
-    fn read(&mut self, reg: &mut Gpr) {
+    fn read_gpr(&mut self, reg: &mut Gpr) {
         self.collector.reg_use(reg);
     }
 
-    fn read_write(&mut self, reg: &mut PairedGpr) {
+    fn read_write_gpr(&mut self, reg: &mut PairedGpr) {
         let PairedGpr { read, write } = reg;
         self.collector.reg_use(read);
         self.collector.reg_reuse_def(write, 0);
     }
 
-    fn fixed_read(&mut self, _reg: &Gpr) {
-        todo!()
+    fn fixed_read_gpr(&mut self, reg: &mut Gpr, enc: u8) {
+        self.collector
+            .reg_fixed_use(reg, fixed_reg(enc, RegClass::Int));
     }
 
-    fn fixed_read_write(&mut self, _reg: &PairedGpr) {
-        todo!()
+    fn fixed_read_write_gpr(&mut self, reg: &mut PairedGpr, enc: u8) {
+        let PairedGpr { read, write } = reg;
+        self.collector
+            .reg_fixed_use(read, fixed_reg(enc, RegClass::Int));
+        self.collector
+            .reg_fixed_def(write, fixed_reg(enc, RegClass::Int));
     }
 
     fn read_xmm(&mut self, reg: &mut Xmm) {
@@ -184,13 +190,24 @@ impl<'a, T: OperandVisitor> asm::RegisterVisitor<CraneliftRegisters> for Regallo
         self.collector.reg_reuse_def(write, 0);
     }
 
-    fn fixed_read_xmm(&mut self, _reg: &Xmm) {
-        todo!()
+    fn fixed_read_xmm(&mut self, reg: &mut Xmm, enc: u8) {
+        self.collector
+            .reg_fixed_use(reg, fixed_reg(enc, RegClass::Float));
     }
 
-    fn fixed_read_write_xmm(&mut self, _reg: &PairedXmm) {
-        todo!()
+    fn fixed_read_write_xmm(&mut self, reg: &mut PairedXmm, enc: u8) {
+        let PairedXmm { read, write } = reg;
+        self.collector
+            .reg_fixed_use(read, fixed_reg(enc, RegClass::Float));
+        self.collector
+            .reg_fixed_def(write, fixed_reg(enc, RegClass::Float));
     }
+}
+
+/// A helper for building a fixed register from its hardware encoding.
+fn fixed_reg(enc: u8, class: RegClass) -> Reg {
+    let preg = PReg::new(usize::from(enc), class);
+    Reg::from_real_reg(preg)
 }
 
 impl Into<asm::Amode<Gpr>> for SyntheticAmode {

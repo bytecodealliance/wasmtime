@@ -25,6 +25,16 @@ use crate::AsReg;
 #[derive(Clone, Debug)]
 pub struct Fixed<R, const E: u8>(pub R);
 
+impl<R, const E: u8> Fixed<R, E> {
+    /// Return the fixed register encoding.
+    ///
+    /// Regardless of what `R` is (e.g., pre-register allocation), we want to be
+    /// able to know what this register should encode as.
+    pub fn expected_enc(&self) -> u8 {
+        E
+    }
+}
+
 impl<R: AsReg, const E: u8> AsReg for Fixed<R, E> {
     fn new(reg: u8) -> Self {
         assert!(reg == E);

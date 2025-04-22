@@ -127,56 +127,34 @@ impl dsl::Inst {
             &format!("pub fn visit{extra_generic_bound}(&mut self, visitor: &mut impl RegisterVisitor<R>)"),
             |f| {
                 for o in &self.format.operands {
+                    let mutability = o.mutability.generate_snake_case();
+                    let reg = o.location.generate_register_class();
                     match o.location.kind() {
                         Imm(_) => {
                             // Immediates do not need register allocation.
                         }
-                        FixedReg(_) => {
-                            let call = o.mutability.generate_regalloc_call();
-                            let ty = o.mutability.generate_type();
-                            let Some(fixed) = o.location.generate_fixed_reg() else {
-                                unreachable!()
-                            };
-                            fmtln!(f, "visitor.fixed_{call}(&R::{ty}Gpr::new({fixed}));");
+                        FixedReg(loc) => {
+                            let reg_lower = reg.unwrap().to_lowercase();
+                            fmtln!(f, "let enc = self.{loc}.expected_enc();");
+                            fmtln!(f, "visitor.fixed_{mutability}_{reg_lower}(&mut self.{loc}.0, enc);");
                         }
-                        Reg(reg) => {
-                            match reg.bits() {
-                                128 => {
-                                    let call = o.mutability.generate_xmm_regalloc_call();
-                                    fmtln!(f, "visitor.{call}(self.{reg}.as_mut());");
-                                }
-                                _ => {
-                                    let call = o.mutability.generate_regalloc_call();
-                                    fmtln!(f, "visitor.{call}(self.{reg}.as_mut());");
-                                }
-                            };
+                        Reg(loc) => {
+                            let reg_lower = reg.unwrap().to_lowercase();
+                            fmtln!(f, "visitor.{mutability}_{reg_lower}(self.{loc}.as_mut());");
                         }
-                        RegMem(rm) => {
-                            match rm.bits() {
-                                128 => {
-                                    let call = o.mutability.generate_xmm_regalloc_call();
-                                    f.add_block(&format!("match &mut self.{rm}"), |f| {
-                                        fmtln!(f, "XmmMem::Xmm(r) => visitor.{call}(r),");
-                                        fmtln!(
-                                        f,
-                                        "XmmMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
-                                    );
-                                    });
-                                }
-                                _ => {
-                                    let call = o.mutability.generate_regalloc_call();
-                                    f.add_block(&format!("match &mut self.{rm}"), |f| {
-                                        fmtln!(f, "GprMem::Gpr(r) => visitor.{call}(r),");
-                                        fmtln!(
-                                        f,
-                                        "GprMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
-                                    );
-                                    });
-                                }
-                            };
+                        RegMem(loc) => {
+                            let reg = reg.unwrap();
+                            let reg_lower = reg.to_lowercase();
+                            f.add_block(&format!("match &mut self.{loc}"), |f| {
+                                fmtln!(f, "{reg}Mem::{reg}(r) => visitor.{mutability}_{reg_lower}(r),");
+                                fmtln!(
+                                    f,
+                                    "{reg}Mem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read_gpr(r)),"
+                                );
+                            });
                         }
-                        Mem(m) => {
-                            fmtln!(f, "self.{m}.registers_mut().iter_mut().for_each(|r| visitor.read(r));");
+                        Mem(loc) => {
+                            fmtln!(f, "self.{loc}.registers_mut().iter_mut().for_each(|r| visitor.read_gpr(r));");
                         }
                     }
                 }

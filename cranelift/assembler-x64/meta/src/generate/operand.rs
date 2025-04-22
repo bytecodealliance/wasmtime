@@ -19,18 +19,31 @@ impl dsl::Operand {
                     cl => "{ gpr::enc::RCX }",
                     _ => unreachable!(),
                 };
-                format!("Fixed<R::{}Gpr, {enc}>", self.mutability.generate_type())
+                format!("Fixed<R::{}Gpr, {enc}>", self.mutability.generate_camel_case())
             }
-            r8 | r16 | r32 | r64 => format!("Gpr<R::{}Gpr>", self.mutability.generate_type()),
-            rm8 | rm16 | rm32 | rm64 => format!("GprMem<R::{}Gpr, R::ReadGpr>", self.mutability.generate_type()),
-            xmm => format!("Xmm<R::{}Xmm>", self.mutability.generate_type()),
-            rm128 => format!("XmmMem<R::{}Xmm, R::ReadGpr>", self.mutability.generate_type()),
+            r8 | r16 | r32 | r64 => format!("Gpr<R::{}Gpr>", self.mutability.generate_camel_case()),
+            rm8 | rm16 | rm32 | rm64 => format!("GprMem<R::{}Gpr, R::ReadGpr>", self.mutability.generate_camel_case()),
+            xmm => format!("Xmm<R::{}Xmm>", self.mutability.generate_camel_case()),
+            rm128 => format!("XmmMem<R::{}Xmm, R::ReadGpr>", self.mutability.generate_camel_case()),
             m8 | m16 | m32 | m64 => format!("Amode<R::ReadGpr>"),
         }
     }
 }
 
 impl dsl::Location {
+    /// `Xmm|Gpr`
+    #[must_use]
+    pub fn generate_register_class(&self) -> Option<&str> {
+        use dsl::Location::*;
+        match self {
+            al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 => Some("Gpr"),
+            xmm | rm128 => Some("Xmm"),
+            // Do not generate a register class for memory-only access or
+            // immediates.
+            imm8 | imm16 | imm32 | m8 | m16 | m32 | m64 => None,
+        }
+    }
+
     /// `self.<operand>.to_string(...)`
     #[must_use]
     pub fn generate_to_string(&self, extension: dsl::Extension) -> String {
@@ -75,31 +88,11 @@ impl dsl::Location {
             }
         }
     }
-
-    /// `Gpr(regs::...)`
-    #[must_use]
-    pub fn generate_fixed_reg(&self) -> Option<&str> {
-        use dsl::Location::*;
-        match self {
-            al | ax | eax | rax => Some("gpr::enc::RAX"),
-            cl => Some("gpr::enc::RCX"),
-            imm8 | imm16 | imm32 | r8 | r16 | r32 | r64 | xmm | rm8 | rm16 | rm32 | rm64 | rm128 | m8 | m16 | m32
-            | m64 => None,
-        }
-    }
 }
 
 impl dsl::Mutability {
     #[must_use]
-    pub fn generate_regalloc_call(&self) -> &str {
-        match self {
-            dsl::Mutability::Read => "read",
-            dsl::Mutability::ReadWrite => "read_write",
-        }
-    }
-
-    #[must_use]
-    pub fn generate_type(&self) -> &str {
+    pub fn generate_camel_case(&self) -> &str {
         match self {
             dsl::Mutability::Read => "Read",
             dsl::Mutability::ReadWrite => "ReadWrite",
@@ -107,10 +100,10 @@ impl dsl::Mutability {
     }
 
     #[must_use]
-    pub fn generate_xmm_regalloc_call(&self) -> &str {
+    pub fn generate_snake_case(&self) -> &str {
         match self {
-            dsl::Mutability::Read => "read_xmm",
-            dsl::Mutability::ReadWrite => "read_write_xmm",
+            dsl::Mutability::Read => "read",
+            dsl::Mutability::ReadWrite => "read_write",
         }
     }
 }
