@@ -13,13 +13,6 @@
        ;; =========================================
        ;; Integer instructions.
 
-       ;; Integer arithmetic/bit-twiddling.
-       (AluRmiR (size OperandSize) ;; 1, 2, 4 or 8
-                (op AluRmiROpcode)
-                (src1 Gpr)
-                (src2 GprMemImm)
-                (dst WritableGpr))
-
        ;; Integer arithmetic binary op that relies on the VEX prefix.
        ;; NOTE: we don't currently support emitting VEX instructions with memory
        ;; arguments, so `src2` is artificially constrained to be a Gpr.
@@ -859,15 +852,6 @@
 (rule (operand_size_bits (OperandSize.Size16)) 16)
 (rule (operand_size_bits (OperandSize.Size32)) 32)
 (rule (operand_size_bits (OperandSize.Size64)) 64)
-
-(type AluRmiROpcode extern
-      (enum Add
-            Adc
-            Sub
-            Sbb
-            And
-            Or
-            Xor))
 
 (type AluRmROpcode
       (enum Andn
@@ -2080,14 +2064,6 @@
 (rule (mov64_mr addr)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.Mov64MR addr dst))))
-        dst))
-
-;; Helper for emitting `MInst.AluRmiR` instructions.
-(decl alu_rmi_r (Type AluRmiROpcode Gpr GprMemImm) Gpr)
-(rule (alu_rmi_r ty opcode src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.AluRmiR size opcode src1 src2 dst))))
         dst))
 
 ;; Helper for emitting `MInst.AluRmRVex` instructions.

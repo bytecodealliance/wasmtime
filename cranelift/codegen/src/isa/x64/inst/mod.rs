@@ -75,8 +75,7 @@ impl Inst {
         match self {
             // These instructions are part of SSE2, which is a basic requirement in Cranelift, and
             // don't have to be checked.
-            Inst::AluRmiR { .. }
-            | Inst::AtomicRmwSeq { .. }
+            Inst::AtomicRmwSeq { .. }
             | Inst::Bswap { .. }
             | Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
@@ -209,27 +208,89 @@ impl Inst {
 
 // Handy constructors for Insts.
 
+macro_rules! lower_alu {
+    ($size: expr, $src: expr, $dst: expr => $b_mi: ident, $w_mi: ident, $l_mi:ident, $q_mi_sxl: ident, $b_rm: ident, $w_rm: ident, $l_rm: ident, $q_rm: ident) => {{
+        use cranelift_assembler_x64 as asm;
+        use external::CraneliftRegisters;
+        use OperandSize::*;
+
+        let dst = WritableGpr::from_writable_reg($dst).unwrap();
+        let inst: asm::Inst<CraneliftRegisters> = match $src {
+            RegMemImm::Reg { reg } => {
+                let dst = asm::Gpr::new(dst.into());
+                let src = asm::GprMem::Gpr(Gpr::unwrap_new(reg).into());
+                match $size {
+                    // We _could_ use wider instructions than necessary for
+                    // 8/16-bit register-to-register operations, avoiding CPU
+                    // dependencies, but in this context we don't know if flags
+                    // are being obseved. If they are, the wider instructions
+                    // will incorrectly interact with flags.
+                    Size8 => asm::inst::$b_rm::new(dst, src).into(),
+                    Size16 => asm::inst::$w_rm::new(dst, src).into(),
+                    Size32 => asm::inst::$l_rm::new(dst, src).into(),
+                    Size64 => asm::inst::$q_rm::new(dst, src).into(),
+                }
+            }
+            RegMemImm::Imm { simm32 } => {
+                let dst = asm::GprMem::Gpr(dst.into());
+                match $size {
+                    Size8 => {
+                        let src = asm::Imm8::new(u8::try_from(simm32).unwrap());
+                        asm::inst::$b_mi::new(dst, src).into()
+                    }
+                    Size16 => {
+                        let src = asm::Imm16::new(u16::try_from(simm32).unwrap());
+                        asm::inst::$w_mi::new(dst, src).into()
+                    }
+                    Size32 => {
+                        let src = asm::Imm32::new(simm32);
+                        asm::inst::$l_mi::new(dst, src).into()
+                    }
+                    Size64 => {
+                        let src = asm::Simm32::new(simm32 as i32);
+                        asm::inst::$q_mi_sxl::new(dst, src).into()
+                    }
+                }
+            }
+            RegMemImm::Mem { addr: _ } => unimplemented!(),
+        };
+
+        Inst::External { inst }
+    }};
+}
+
 impl Inst {
     pub(crate) fn nop(len: u8) -> Self {
         debug_assert!(len <= 15);
         Self::Nop { len }
     }
 
-    pub(crate) fn alu_rmi_r(
-        size: OperandSize,
-        op: AluRmiROpcode,
-        src: RegMemImm,
-        dst: Writable<Reg>,
-    ) -> Self {
-        src.assert_regclass_is(RegClass::Int);
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Self::AluRmiR {
-            size,
-            op,
-            src1: Gpr::unwrap_new(dst.to_reg()),
-            src2: GprMemImm::unwrap_new(src),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-        }
+    pub(crate) fn add(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
+        lower_alu!(size, src, dst => addb_mi, addw_mi, addl_mi, addq_mi_sxl, addb_rm, addw_rm, addl_rm, addq_rm)
+    }
+
+    pub(crate) fn adc(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
+        lower_alu!(size, src, dst => adcb_mi, adcw_mi, adcl_mi, adcq_mi_sxl, addb_rm, addw_rm, adcl_rm, adcq_rm)
+    }
+
+    pub(crate) fn sub(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
+        lower_alu!(size, src, dst => subb_mi, subw_mi, subl_mi, subq_mi_sxl, subb_rm, subw_rm, subl_rm, subq_rm)
+    }
+
+    pub(crate) fn sbb(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
+        lower_alu!(size, src, dst => sbbb_mi, sbbw_mi, sbbl_mi, sbbq_mi_sxl, sbbb_rm, sbbw_rm, sbbl_rm, sbbq_rm)
+    }
+
+    pub(crate) fn and(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
+        lower_alu!(size, src, dst => andb_mi, andw_mi, andl_mi, andq_mi_sxl, andb_rm, andw_rm, andl_rm, andq_rm)
+    }
+
+    pub(crate) fn or(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
+        lower_alu!(size, src, dst => orb_mi, orw_mi, orl_mi, orq_mi_sxl, orb_rm, orw_rm, orl_rm, orq_rm)
+    }
+
+    pub(crate) fn xor(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
+        lower_alu!(size, src, dst => xorb_mi, xorw_mi, xorl_mi, xorq_mi_sxl, xorb_rm, xorw_rm, xorl_rm, xorq_rm)
     }
 
     #[allow(dead_code)]
@@ -698,20 +759,6 @@ impl PrettyPrint for Inst {
         match self {
             Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
 
-            Inst::AluRmiR {
-                size,
-                op,
-                src1,
-                src2,
-                dst,
-            } => {
-                let size_bytes = size.to_bytes();
-                let src1 = pretty_print_reg(src1.to_reg(), size_bytes);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size_bytes);
-                let src2 = src2.pretty_print(size_bytes);
-                let op = ljustify2(op.to_string(), suffix_bwlq(*size));
-                format!("{op} {src1}, {src2}, {dst}")
-            }
             Inst::AluRmRVex {
                 size,
                 op,
@@ -2015,13 +2062,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
     // in `emit.rs`, and (ii) pretty-printing, in the `pretty_print`
     // method above.
     match inst {
-        Inst::AluRmiR {
-            src1, src2, dst, ..
-        } => {
-            collector.reg_use(src1);
-            collector.reg_reuse_def(dst, 0);
-            src2.get_operands(collector);
-        }
         Inst::AluRmRVex {
             src1, src2, dst, ..
         } => {

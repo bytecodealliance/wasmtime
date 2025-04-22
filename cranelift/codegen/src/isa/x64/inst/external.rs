@@ -31,6 +31,22 @@ pub struct PairedGpr {
     pub(crate) write: WritableGpr,
 }
 
+impl From<WritableGpr> for PairedGpr {
+    fn from(wgpr: WritableGpr) -> Self {
+        let read = wgpr.to_reg();
+        let write = wgpr;
+        Self { read, write }
+    }
+}
+
+// impl From<Writable<Reg>> for PairedGpr {
+//     fn from(wgpr: Writable<Reg>) -> Self {
+//         let read = wgpr.to_reg();
+//         let write = wgpr;
+//         Self { read, write }
+//     }
+// }
+
 impl asm::AsReg for PairedGpr {
     fn enc(&self) -> u8 {
         let PairedGpr { read, write } = self;

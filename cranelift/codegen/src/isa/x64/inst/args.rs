@@ -805,46 +805,6 @@ impl PrettyPrint for RegMem {
     }
 }
 
-/// Some basic ALU operations.
-#[derive(Copy, Clone, PartialEq)]
-pub enum AluRmiROpcode {
-    /// Add operation.
-    Add,
-    /// Add with carry.
-    Adc,
-    /// Integer subtraction.
-    Sub,
-    /// Integer subtraction with borrow.
-    Sbb,
-    /// Bitwise AND operation.
-    And,
-    /// Bitwise inclusive OR.
-    Or,
-    /// Bitwise exclusive OR.
-    Xor,
-}
-
-impl fmt::Debug for AluRmiROpcode {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let name = match self {
-            AluRmiROpcode::Add => "add",
-            AluRmiROpcode::Adc => "adc",
-            AluRmiROpcode::Sub => "sub",
-            AluRmiROpcode::Sbb => "sbb",
-            AluRmiROpcode::And => "and",
-            AluRmiROpcode::Or => "or",
-            AluRmiROpcode::Xor => "xor",
-        };
-        write!(fmt, "{name}")
-    }
-}
-
-impl fmt::Display for AluRmiROpcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Debug::fmt(self, f)
-    }
-}
-
 pub use crate::isa::x64::lower::isle::generated_code::AluRmROpcode;
 
 impl AluRmROpcode {
