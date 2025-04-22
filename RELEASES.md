@@ -16,6 +16,10 @@ Unreleased.
   ComponentExportIndex)` and `ComponentExportIndex`, respectively.
   [#10597](https://github.com/bytecodealliance/wasmtime/pull/10597)
 
+* On failure, `wasmtime serve` gives an internal server error response, rather
+  than closing the connection.
+  [#10645](https://github.com/bytecodealliance/wasmtime/pull/10645)
+
 --------------------------------------------------------------------------------
 
 Release notes for previous releases of Wasmtime can be found on the respective

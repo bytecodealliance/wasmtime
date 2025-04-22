@@ -2092,8 +2092,9 @@ after empty
                         .body(String::new())
                         .context("failed to make request")?,
                 )
-                .await;
-            assert!(res.is_err());
+                .await
+                .expect("got response from wasmtime");
+            assert_eq!(res.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
         }
 
         let (stdout, stderr) = server.finish()?;
