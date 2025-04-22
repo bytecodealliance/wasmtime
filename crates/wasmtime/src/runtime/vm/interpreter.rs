@@ -82,7 +82,6 @@ impl InterpreterRef<'_> {
     /// The `bytecode` pointer should previously have been produced by Cranelift
     /// and `callee` / `caller` / `args_and_results` are normal array-call
     /// arguments being passed around.
-    #[inline(never)]
     pub unsafe fn call(
         mut self,
         mut bytecode: NonNull<u8>,
