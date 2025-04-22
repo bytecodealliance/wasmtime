@@ -83,10 +83,9 @@ impl dsl::Format {
         match self.operands_by_kind().as_slice() {
             [FixedReg(dst), Imm(_)] => {
                 // TODO: don't emit REX byte here.
-                fmtln!(f, "let {dst} = {};", dst.generate_fixed_reg().unwrap());
                 assert_eq!(rex.digit, None, "we expect no digit for operands: [FixedReg, Imm]");
                 fmtln!(f, "let digit = 0;");
-                fmtln!(f, "rex.emit_two_op(buf, digit, {dst}.enc());");
+                fmtln!(f, "rex.emit_two_op(buf, digit, self.{dst}.enc());");
             }
             [Mem(dst), Imm(_)] => {
                 let digit = rex.digit.expect("REX digit must be set for operands: [Mem, Imm]");

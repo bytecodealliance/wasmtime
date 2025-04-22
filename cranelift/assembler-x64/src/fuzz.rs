@@ -4,7 +4,9 @@
 //! throughout this crate to avoid depending on the `arbitrary` crate
 //! unconditionally (use the `fuzz` feature instead).
 
-use crate::{AmodeOffset, AmodeOffsetPlusKnownOffset, AsReg, Gpr, Inst, NonRspGpr, Registers, Xmm};
+use crate::{
+    AmodeOffset, AmodeOffsetPlusKnownOffset, AsReg, Fixed, Gpr, Inst, NonRspGpr, Registers, Xmm,
+};
 use arbitrary::{Arbitrary, Result, Unstructured};
 use capstone::{arch::x86, arch::BuildsCapstone, arch::BuildsCapstoneSyntax, Capstone};
 
@@ -183,7 +185,7 @@ pub struct FuzzReg(u8);
 
 impl<'a> Arbitrary<'a> for FuzzReg {
     fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        Ok(Self::new(u.int_in_range(0..=15)?))
+        Ok(Self(u.int_in_range(0..=15)?))
     }
 }
 
@@ -205,6 +207,13 @@ impl Arbitrary<'_> for AmodeOffsetPlusKnownOffset {
         })
     }
 }
+
+impl<R: AsReg, const E: u8> Arbitrary<'_> for Fixed<R, E> {
+    fn arbitrary(_: &mut Unstructured<'_>) -> Result<Self> {
+        Ok(Self::new(E))
+    }
+}
+
 impl<R: AsReg> Arbitrary<'_> for NonRspGpr<R> {
     fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
         use crate::gpr::enc::*;
