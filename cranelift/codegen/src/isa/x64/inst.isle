@@ -794,6 +794,9 @@
        ;; knowledge about semantics and initial-value independence anyway.
        (XmmUninitializedValue (dst WritableXmm))
 
+       ;; See `XmmUninitializedValue` above.
+       (GprUninitializedValue (dst WritableGpr))
+
        ;; A call to the `ElfTlsGetAddr` libcall. Returns address of TLS symbol
        ;; `dst`, which is constrained to `rax`.
        (ElfTlsGetAddr (symbol ExternalName)
@@ -2061,6 +2064,13 @@
 (rule (xmm_uninit_value)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmUninitializedValue dst))))
+        dst))
+
+;; Helper for creating GprUninitializedValue instructions.
+(decl gpr_uninit_value () Gpr)
+(rule (gpr_uninit_value)
+      (let ((dst WritableGpr (temp_writable_gpr))
+            (_ Unit (emit (MInst.GprUninitializedValue dst))))
         dst))
 
 ;; Helper for constructing a LoadExtName instruction.

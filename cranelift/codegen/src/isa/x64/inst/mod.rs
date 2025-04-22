@@ -137,6 +137,7 @@ impl Inst {
             | Inst::XmmCmpRmR { .. }
             | Inst::XmmMinMaxSeq { .. }
             | Inst::XmmUninitializedValue { .. }
+            | Inst::GprUninitializedValue { .. }
             | Inst::ElfTlsGetAddr { .. }
             | Inst::MachOTlsGetAddr { .. }
             | Inst::CoffTlsGetAddr { .. }
@@ -1235,6 +1236,12 @@ impl PrettyPrint for Inst {
                 format!("{op} {dst}")
             }
 
+            Inst::GprUninitializedValue { dst } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
+                let op = ljustify("uninit".into());
+                format!("{op} {dst}")
+            }
+
             Inst::XmmToGpr {
                 op,
                 src,
@@ -2268,6 +2275,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             src2.get_operands(collector);
         }
         Inst::XmmUninitializedValue { dst } => collector.reg_def(dst),
+        Inst::GprUninitializedValue { dst } => collector.reg_def(dst),
         Inst::XmmMinMaxSeq { lhs, rhs, dst, .. } => {
             collector.reg_use(rhs);
             collector.reg_use(lhs);

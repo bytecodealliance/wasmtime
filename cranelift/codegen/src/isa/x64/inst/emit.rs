@@ -3348,9 +3348,9 @@ pub(crate) fn emit(
             sink.put1(*imm);
         }
 
-        Inst::XmmUninitializedValue { .. } => {
-            // This instruction format only exists to declare a register as a `def`; no code is
-            // emitted.
+        Inst::XmmUninitializedValue { .. } | Inst::GprUninitializedValue { .. } => {
+            // These instruction formats only exist to declare a register as a
+            // `def`; no code is emitted.
         }
 
         Inst::XmmMovRM { op, src, dst } => {

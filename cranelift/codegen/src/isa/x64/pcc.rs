@@ -957,6 +957,10 @@ pub(crate) fn check(
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
 
+        Inst::GprUninitializedValue { dst } => {
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+
         Inst::ElfTlsGetAddr { dst, .. } | Inst::MachOTlsGetAddr { dst, .. } => {
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
