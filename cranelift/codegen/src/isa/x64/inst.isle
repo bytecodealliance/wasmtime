@@ -3208,10 +3208,8 @@
 
 ;; Special case for integer zero immediates: turn them into an `xor r, r`.
 (rule 1 (imm (fits_in_64 ty) (u64_zero))
-      (let ((wgpr WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.AluConstOp (AluRmiROpcode.Xor) size wgpr))))
-        (gpr_to_reg wgpr)))
+      (let ((tmp Gpr (gpr_uninit_value)))
+        (x64_xor ty tmp tmp)))
 
 ;; Special case for zero immediates with vector types, they turn into an xor
 ;; specific to the vector type.
@@ -5836,6 +5834,7 @@
 (convert WritableGpr WritableReg writable_gpr_to_reg)
 (convert WritableGpr Reg writable_gpr_to_r_reg)
 (convert WritableGpr GprMem writable_gpr_to_gpr_mem)
+(convert WritableGpr GprMemImm writable_gpr_to_gpr_mem_imm)
 (convert WritableGpr ValueRegs writable_gpr_to_value_regs)
 
 (convert Xmm InstOutput output_xmm)
@@ -5906,6 +5905,9 @@
 (decl writable_gpr_to_gpr_mem (WritableGpr) GprMem)
 (rule (writable_gpr_to_gpr_mem w_gpr)
       (gpr_to_gpr_mem w_gpr))
+(decl writable_gpr_to_gpr_mem_imm (WritableGpr) GprMemImm)
+(rule (writable_gpr_to_gpr_mem_imm w_gpr)
+      (gpr_to_gpr_mem_imm w_gpr))
 (decl writable_gpr_to_value_regs (WritableGpr) ValueRegs)
 (rule (writable_gpr_to_value_regs w_gpr)
       (value_reg w_gpr))
