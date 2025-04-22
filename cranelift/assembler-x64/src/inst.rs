@@ -6,7 +6,7 @@
 use crate::api::{AsReg, CodeSink, KnownOffsetTable, RegisterVisitor, Registers};
 use crate::gpr::{self, Gpr, Size};
 use crate::imm::{Extension, Imm16, Imm32, Imm8, Simm32, Simm8};
-use crate::mem::{emit_modrm_sib_disp, Amode, GprMem, XmmMem};
+use crate::mem::{emit_modrm_sib_disp, visit_amode, Amode, GprMem, XmmMem};
 use crate::rex::{self, RexFlags};
 use crate::xmm::Xmm;
 use crate::Fixed;

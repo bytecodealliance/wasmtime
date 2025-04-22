@@ -147,14 +147,11 @@ impl dsl::Inst {
                             let reg_lower = reg.to_lowercase();
                             f.add_block(&format!("match &mut self.{loc}"), |f| {
                                 fmtln!(f, "{reg}Mem::{reg}(r) => visitor.{mutability}_{reg_lower}(r),");
-                                fmtln!(
-                                    f,
-                                    "{reg}Mem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read_gpr(r)),"
-                                );
+                                fmtln!(f, "{reg}Mem::Mem(m) => visit_amode(m, visitor),");
                             });
                         }
                         Mem(loc) => {
-                            fmtln!(f, "self.{loc}.registers_mut().iter_mut().for_each(|r| visitor.read_gpr(r));");
+                            fmtln!(f, "visit_amode(&mut self.{loc}, visitor);");
                         }
                     }
                 }
