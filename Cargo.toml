@@ -584,6 +584,10 @@ debug-assertions = false
 overflow-checks = false
 opt-level = 's'
 
+[profile.profiling]
+inherits = "bench"
+debug-info = "line-tables-only"
+
 [profile.fastest-runtime]
 inherits = "release"
 codegen-units = 1
