@@ -2384,6 +2384,7 @@ impl FuncType {
     }
 
     #[cfg(feature = "gc")]
+    #[inline]
     pub(crate) fn as_wasm_func_type(&self) -> &WasmFuncType {
         self.registered_type.unwrap_func()
     }

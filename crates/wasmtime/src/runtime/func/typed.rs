@@ -93,6 +93,7 @@ where
     /// connected to an asynchronous store.
     ///
     /// [`Trap`]: crate::Trap
+    #[inline]
     pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results> {
         let mut store = store.as_context_mut();
         assert!(
@@ -179,6 +180,7 @@ where
     ///
     /// If `Self::need_gc_before_call_raw`, then the caller must have done a GC
     /// just before calling this method.
+    #[inline]
     pub(crate) unsafe fn call_raw<T>(
         store: &mut StoreContextMut<'_, T>,
         ty: &FuncType,

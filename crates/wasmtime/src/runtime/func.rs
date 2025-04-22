@@ -943,6 +943,7 @@ impl Func {
     /// `StoreOpaque` while the `FuncType` is also being used (from the
     /// perspective of the borrow-checker) because otherwise the signature would
     /// consider `StoreOpaque` borrowed mutable while `FuncType` is in use.
+    #[inline]
     fn ty_ref<'a>(&self, store: &'a mut StoreOpaque) -> (&'a FuncType, &'a StoreOpaque) {
         // If we haven't loaded our type into the store yet then do so lazily at
         // this time.
@@ -1178,6 +1179,7 @@ impl Func {
     /// This must be called just before `call_impl_do_call`.
     ///
     /// Returns whether we need to GC before calling `call_impl_do_call`.
+    #[inline]
     fn call_impl_check_args<T>(
         &self,
         store: &mut StoreContextMut<'_, T>,
@@ -1234,6 +1236,7 @@ impl Func {
     /// You must have type checked the arguments by calling
     /// `call_impl_check_args` immediately before calling this function. It is
     /// only safe to call this function if that one did not return an error.
+    #[inline]
     unsafe fn call_impl_do_call<T>(
         &self,
         store: &mut StoreContextMut<'_, T>,
@@ -1737,6 +1740,7 @@ impl EntryStoreContext {
     /// function through this type's `Drop` implementation. This ensures that we
     /// even restore the values if we unwind the stack (e.g., because we are
     /// panicing out of a Wasm execution).
+    #[inline]
     fn exit_wasm(&mut self) {
         unsafe {
             if let Some(limit) = self.stack_limit {
@@ -1751,6 +1755,7 @@ impl EntryStoreContext {
 }
 
 impl Drop for EntryStoreContext {
+    #[inline]
     fn drop(&mut self) {
         self.exit_wasm();
     }
