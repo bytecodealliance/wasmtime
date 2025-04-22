@@ -14,10 +14,14 @@ block0(v0: i64):
 ;   subq    %rsp, $16, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
-;   xorq    %rax, %rax, %rax
-;   xorq    %rdx, %rdx, %rdx
-;   xorq    %rbx, %rbx, %rbx
-;   xorq    %rcx, %rcx, %rcx
+;   uninit  %rax
+;   xorq %rax, %rax
+;   uninit  %rdx
+;   xorq %rdx, %rdx
+;   uninit  %rbx
+;   xorq %rbx, %rbx
+;   uninit  %rcx
+;   xorq %rcx, %rcx
 ;   lock cmpxchg16b 0(%rdi), replacement=%rcx:%rbx, expected=%rdx:%rax, dst_old=%rdx:%rax
 ;   movq    0(%rsp), %rbx
 ;   addq    %rsp, $16, %rsp
