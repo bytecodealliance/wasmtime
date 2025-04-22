@@ -19,8 +19,8 @@ function(add_capi_test name)
     DISCOVERY_TIMEOUT 60)
 endfunction()
 
-add_capi_test(simple FILES simple.cc)
-add_capi_test(types FILES
+add_capi_test(tests FILES
+  simple.cc
   types.cc
   memory_type.cc
   val_type.cc
@@ -30,10 +30,11 @@ add_capi_test(types FILES
   import_type.cc
   export_type.cc
   extern_type.cc
+  func.cc
+  component/instantiate.cc
+  error.cc
+  config.cc
 )
-add_capi_test(func FILES func.cc)
-add_capi_test(component-instantiate FILES component/instantiate.cc)
-add_capi_test(error FILES error.cc)
 
 # Add a custom test where two files include `wasmtime.hh` and are compiled into
 # the same executable (basically makes sure any defined functions in the header

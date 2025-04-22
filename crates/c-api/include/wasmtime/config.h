@@ -773,7 +773,7 @@ WASM_API_EXTERN void wasmtime_pooling_allocation_strategy_set(
  * For more information see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model.
  */
-WASMTIME_CONFIG_PROP(void, component_model, bool)
+WASMTIME_CONFIG_PROP(void, wasm_component_model, bool)
 
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 

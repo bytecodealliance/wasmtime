@@ -60,6 +60,11 @@ public:
   ///
   /// Note that the `trace` cannot outlive this error object.
   Trace trace() const;
+
+  /// Release ownership of this error, acquiring the underlying C raw pointer.
+  wasmtime_error_t *release() {
+    return ptr.release();
+  }
 };
 
 /// \brief Used to print an error.
