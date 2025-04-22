@@ -13,7 +13,10 @@ function(add_capi_test name)
   cmake_parse_arguments(PARSE_ARGV 1 arg "" "" "FILES")
   add_executable(test-${name} ${arg_FILES})
   target_link_libraries(test-${name} PRIVATE wasmtime-cpp gtest_main)
-  gtest_discover_tests(test-${name})
+  gtest_discover_tests(test-${name}
+    # GitHub Actions on Windows is pretty slow, let's give it lots more time
+    # than the default 5 seconds.
+    DISCOVERY_TIMEOUT 60)
 endfunction()
 
 add_capi_test(simple FILES simple.cc)
