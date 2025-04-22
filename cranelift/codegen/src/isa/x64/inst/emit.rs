@@ -234,22 +234,6 @@ pub(crate) fn emit(
             }
         }
 
-        &Inst::AluConstOp { op, size, dst } => {
-            let dst = WritableGpr::from_writable_reg(dst.to_writable_reg()).unwrap();
-            emit(
-                &Inst::AluRmiR {
-                    size,
-                    op,
-                    dst,
-                    src1: dst.to_reg(),
-                    src2: dst.to_reg().into(),
-                },
-                sink,
-                info,
-                state,
-            );
-        }
-
         Inst::AluRmRVex {
             size,
             op,

@@ -29,11 +29,6 @@
                   (src2 GprMem)
                   (dst WritableGpr))
 
-       ;; Production of a zero value into a register of the specified size.
-       (AluConstOp (op AluRmiROpcode)
-                   (size OperandSize)
-                   (dst WritableGpr))
-
        ;; Instructions on general-purpose registers that only read src and
        ;; defines dst (dst is not modified). `bsr`, etc.
        (UnaryRmR (size OperandSize) ;; 2, 4, or 8
