@@ -41,4 +41,3 @@ wasmtime_wat2wasm(const char *wat, size_t wat_len, wasm_byte_vec_t *ret);
 #endif
 
 #endif // WASMTIME_WAT_H
-
