@@ -34,6 +34,9 @@ add_capi_test(tests FILES
   component/instantiate.cc
   error.cc
   config.cc
+  wat.cc
+  module.cc
+  engine.cc
 )
 
 # Add a custom test where two files include `wasmtime.hh` and are compiled into
