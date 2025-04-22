@@ -472,7 +472,6 @@ mod call_thread_state {
         // same store and `self.vm_store_context == self.prev.vm_store_context`) and we must to
         // maintain the list of contiguous-Wasm-frames stack regions for
         // backtracing purposes.
-        // FIXME(frank-emrich) Does this need to be an (Unsafe)Cell?
         old_state: *const EntryStoreContext,
     }
 
