@@ -6,7 +6,10 @@ use wasmtime::component::Component;
 use crate::{wasm_byte_vec_t, wasm_config_t, wasm_engine_t, wasmtime_error_t};
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_config_component_model_set(c: &mut wasm_config_t, enable: bool) {
+pub unsafe extern "C" fn wasmtime_config_wasm_component_model_set(
+    c: &mut wasm_config_t,
+    enable: bool,
+) {
     c.config.wasm_component_model(enable);
 }
 

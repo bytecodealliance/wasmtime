@@ -153,6 +153,10 @@ audited_as = "0.117.2"
 version = "0.120.0"
 audited_as = "0.118.0"
 
+[[unpublished.cranelift-srcgen]]
+version = "0.120.0"
+audited_as = "0.119.0"
+
 [[unpublished.pulley-interpreter]]
 version = "32.0.0"
 audited_as = "30.0.2"
@@ -344,6 +348,10 @@ audited_as = "30.0.2"
 [[unpublished.wasmtime-wasi-threads]]
 version = "33.0.0"
 audited_as = "31.0.0"
+
+[[unpublished.wasmtime-wasi-tls]]
+version = "33.0.0"
+audited_as = "32.0.0"
 
 [[unpublished.wasmtime-wast]]
 version = "32.0.0"
@@ -720,6 +728,12 @@ user-login = "wasmtime-publish"
 [[publisher.cranelift-serde]]
 version = "0.118.0"
 when = "2025-03-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-srcgen]]
+version = "0.119.0"
+when = "2025-04-21"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1422,6 +1436,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-wasi-threads]]
 version = "31.0.0"
 when = "2025-03-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wasi-tls]]
+version = "32.0.0"
+when = "2025-04-21"
 user-id = 73222
 user-login = "wasmtime-publish"
 

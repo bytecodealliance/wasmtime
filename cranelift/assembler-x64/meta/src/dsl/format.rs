@@ -135,11 +135,11 @@ impl Format {
         self.locations().copied().find(Location::uses_memory)
     }
 
-    /// Return `true` if any of the operands accepts a variable register (i.e.,
-    /// not a fixed register, immediate); return `false` otherwise.
+    /// Return `true` if any of the operands accepts a register (i.e., not an
+    /// immediate); return `false` otherwise.
     #[must_use]
-    pub fn uses_variable_register(&self) -> bool {
-        self.locations().any(Location::uses_variable_register)
+    pub fn uses_register(&self) -> bool {
+        self.locations().any(Location::uses_register)
     }
 
     /// Collect into operand kinds.
@@ -280,14 +280,15 @@ impl Location {
         }
     }
 
-    /// Return `true` if the location accepts a variable register (i.e., not a
-    /// fixed register, immediate); return `false` otherwise.
+    /// Return `true` if any of the operands accepts a register (i.e., not an
+    /// immediate); return `false` otherwise.
     #[must_use]
-    pub fn uses_variable_register(&self) -> bool {
+    pub fn uses_register(&self) -> bool {
         use Location::*;
         match self {
-            al | ax | eax | rax | cl | imm8 | imm16 | imm32 => false,
-            r8 | r16 | r32 | r64 | xmm | rm8 | rm16 | rm32 | rm64 | rm128 | m8 | m16 | m32 | m64 => true,
+            imm8 | imm16 | imm32 => false,
+            al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | xmm | rm8 | rm16 | rm32 | rm64 | rm128 | m8 | m16
+            | m32 | m64 => true,
         }
     }
 

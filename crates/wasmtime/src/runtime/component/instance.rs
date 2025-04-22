@@ -10,7 +10,7 @@ use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
 use crate::runtime::vm::{CompiledModuleId, VMFuncRef};
 use crate::store::{StoreOpaque, Stored};
-use crate::{AsContextMut, Engine, Module, StoreContextMut};
+use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
 use core::ptr::NonNull;
@@ -361,6 +361,20 @@ impl Instance {
             &data.component.env_component().export_items[index],
             index,
         ))
+    }
+
+    #[doc(hidden)]
+    pub fn instance_pre<T>(&self, store: &impl AsContext<Data = T>) -> InstancePre<T> {
+        // This indexing operation asserts the Store owns the Instance.
+        // Therefore, the InstancePre<T> must match the Store<T>.
+        let data = store.as_context().0[self.0].as_ref().unwrap();
+        unsafe {
+            InstancePre::new_unchecked(
+                data.component.clone(),
+                data.imports.clone(),
+                data.instance().resource_types().clone(),
+            )
+        }
     }
 }
 
@@ -815,6 +829,7 @@ impl<'a> Instantiator<'a> {
 pub struct InstancePre<T> {
     component: Component,
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
+    resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
     _marker: marker::PhantomData<fn() -> T>,
 }
 
@@ -824,6 +839,7 @@ impl<T> Clone for InstancePre<T> {
         Self {
             component: self.component.clone(),
             imports: self.imports.clone(),
+            resource_types: self.resource_types.clone(),
             _marker: self._marker,
         }
     }
@@ -838,11 +854,13 @@ impl<T> InstancePre<T> {
     /// satisfy the imports of the `component` provided.
     pub(crate) unsafe fn new_unchecked(
         component: Component,
-        imports: PrimaryMap<RuntimeImportIndex, RuntimeImport>,
+        imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
+        resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
     ) -> InstancePre<T> {
         InstancePre {
             component,
-            imports: Arc::new(imports),
+            imports,
+            resource_types,
             _marker: marker::PhantomData,
         }
     }
@@ -850,6 +868,17 @@ impl<T> InstancePre<T> {
     /// Returns the underlying component that will be instantiated.
     pub fn component(&self) -> &Component {
         &self.component
+    }
+
+    #[doc(hidden)]
+    /// Returns the type at which the underlying component will be
+    /// instantiated. This contains the instantiated type information which
+    /// was determined by the Linker.
+    pub fn instance_type(&self) -> InstanceType<'_> {
+        InstanceType {
+            types: &self.component.types(),
+            resources: &self.resource_types,
+        }
     }
 
     /// Returns the underlying engine.

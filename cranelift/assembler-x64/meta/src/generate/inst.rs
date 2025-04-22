@@ -18,16 +18,15 @@ impl dsl::Inst {
         }
         f.add_block(&format!("pub struct {struct_name} {where_clause}"), |f| {
             for k in &self.format.operands {
-                if let Some(ty) = k.generate_type() {
-                    let loc = k.location;
-                    fmtln!(f, "pub {loc}: {ty},");
-                }
+                let loc = k.location;
+                let ty = k.generate_type();
+                fmtln!(f, "pub {loc}: {ty},");
             }
         });
     }
 
     fn requires_generic(&self) -> bool {
-        self.format.uses_variable_register()
+        self.format.uses_register()
     }
 
     /// `<struct_name><R>`
@@ -70,15 +69,9 @@ impl dsl::Inst {
             self.format
                 .operands
                 .iter()
-                .filter_map(|o| o.generate_type().map(|t| format!("{}: {}", o.location, t))),
+                .map(|o| format!("{}: {}", o.location, o.generate_type())),
         );
-        let args = comma_join(
-            self.format
-                .operands
-                .iter()
-                .filter(|o| !matches!(o.location.kind(), dsl::OperandKind::FixedReg(_)))
-                .map(|o| o.location.to_string()),
-        );
+        let args = comma_join(self.format.operands.iter().map(|o| o.location.to_string()));
 
         fmtln!(f, "#[must_use]");
         f.add_block(&format!("pub fn new({params}) -> Self"), |f| {
@@ -240,6 +233,6 @@ impl dsl::Inst {
     }
 }
 
-fn comma_join<I: Into<String>>(items: impl Iterator<Item = I>) -> String {
+fn comma_join<S: Into<String>>(items: impl Iterator<Item = S>) -> String {
     items.map(Into::into).collect::<Vec<_>>().join(", ")
 }

@@ -15,12 +15,12 @@ mod signals;
 #[cfg(all(has_native_signals))]
 pub use self::signals::*;
 
-use crate::prelude::*;
 use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{InterpreterRef, VMContext, VMStoreContext};
-use crate::{EntryStoreContext, StoreContextMut, WasmBacktrace};
+use crate::{prelude::*, EntryStoreContext};
+use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
 use core::ops::Range;
@@ -469,14 +469,13 @@ mod call_thread_state {
         pub(crate) async_guard_range: Range<*mut u8>,
 
         // The state of the runtime for the *previous* `CallThreadState` for
-        // this same store. Our *current* state is saved in `self.limits`,
-        // `self.stack_chain`, etc. We need access to the old values of these
+        // this same store. Our *current* state is saved in `self.vm_store_context`,
+        // etc. We need access to the old values of these
         // fields because the `VMStoreContext` typically doesn't change across
         // nested calls into Wasm (i.e. they are typically calls back into the
         // same store and `self.vm_store_context == self.prev.vm_store_context`) and we must to
         // maintain the list of contiguous-Wasm-frames stack regions for
         // backtracing purposes.
-        // FIXME(frank-emrich) Does this need to be an (Unsafe)Cell?
         old_state: *const EntryStoreContext,
     }
 

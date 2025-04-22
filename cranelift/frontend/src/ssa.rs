@@ -12,8 +12,8 @@ use alloc::vec::Vec;
 use core::mem;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntityList, EntitySet, ListPool, SecondaryMap};
-use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
-use cranelift_codegen::ir::types::{F32, F64, I128, I64};
+use cranelift_codegen::ir::immediates::{Ieee128, Ieee16, Ieee32, Ieee64};
+use cranelift_codegen::ir::types::{F128, F16, F32, F64, I128, I64};
 use cranelift_codegen::ir::{Block, Function, Inst, InstBuilder, Type, Value};
 use cranelift_codegen::packed_option::PackedOption;
 
@@ -136,35 +136,48 @@ enum Call {
 
 /// Emit instructions to produce a zero value in the given type.
 fn emit_zero(ty: Type, mut cur: FuncCursor) -> Value {
-    if ty == I128 {
-        let zero = cur.ins().iconst(I64, 0);
-        cur.ins().uextend(I128, zero)
-    } else if ty.is_int() {
-        cur.ins().iconst(ty, 0)
-    } else if ty == F32 {
-        cur.ins().f32const(Ieee32::with_bits(0))
-    } else if ty == F64 {
-        cur.ins().f64const(Ieee64::with_bits(0))
-    } else if ty.is_vector() {
-        let scalar_ty = ty.lane_type();
-        if scalar_ty.is_int() {
-            let zero = cur.func.dfg.constants.insert(
-                core::iter::repeat(0)
-                    .take(ty.bytes().try_into().unwrap())
-                    .collect(),
-            );
-            cur.ins().vconst(ty, zero)
-        } else if scalar_ty == F32 {
-            let scalar = cur.ins().f32const(Ieee32::with_bits(0));
-            cur.ins().splat(ty, scalar)
-        } else if scalar_ty == F64 {
-            let scalar = cur.ins().f64const(Ieee64::with_bits(0));
-            cur.ins().splat(ty, scalar)
-        } else {
-            panic!("unimplemented scalar type: {ty:?}")
+    match ty {
+        I128 => {
+            let zero = cur.ins().iconst(I64, 0);
+            cur.ins().uextend(I128, zero)
         }
-    } else {
-        panic!("unimplemented type: {ty:?}")
+        ty if ty.is_int() => cur.ins().iconst(ty, 0),
+        F16 => cur.ins().f16const(Ieee16::with_bits(0)),
+        F32 => cur.ins().f32const(Ieee32::with_bits(0)),
+        F64 => cur.ins().f64const(Ieee64::with_bits(0)),
+        F128 => {
+            let zero = cur.func.dfg.constants.insert(Ieee128::with_bits(0).into());
+            cur.ins().f128const(zero)
+        }
+        ty if ty.is_vector() => match ty.lane_type() {
+            scalar_ty if scalar_ty.is_int() => {
+                let zero = cur
+                    .func
+                    .dfg
+                    .constants
+                    .insert(vec![0; ty.bytes().try_into().unwrap()].into());
+                cur.ins().vconst(ty, zero)
+            }
+            F16 => {
+                let scalar = cur.ins().f16const(Ieee16::with_bits(0));
+                cur.ins().splat(ty, scalar)
+            }
+            F32 => {
+                let scalar = cur.ins().f32const(Ieee32::with_bits(0));
+                cur.ins().splat(ty, scalar)
+            }
+            F64 => {
+                let scalar = cur.ins().f64const(Ieee64::with_bits(0));
+                cur.ins().splat(ty, scalar)
+            }
+            F128 => {
+                let zero = cur.func.dfg.constants.insert(Ieee128::with_bits(0).into());
+                let scalar = cur.ins().f128const(zero);
+                cur.ins().splat(ty, scalar)
+            }
+            _ => panic!("unimplemented scalar type: {ty:?}"),
+        },
+        ty => panic!("unimplemented type: {ty:?}"),
     }
 }
 

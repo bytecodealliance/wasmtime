@@ -1607,9 +1607,9 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
     closure: impl FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 ) -> Result<()> {
     unsafe {
-        // The `enter_wasm` call below will reset the store's `stack_chain` to
-        // a new `InitialStack`, pointing to the stack-allocated
-        // `initial_stack_csi`.
+        // The `enter_wasm` call below will reset the store context's
+        // `stack_chain` to a new `InitialStack`, pointing to the
+        // stack-allocated `initial_stack_csi`.
         let mut initial_stack_csi = VMCommonStackInformation::running_default();
         // Stores some state of the runtime just before entering Wasm. Will be
         // restored upon exiting Wasm. Note that the `CallThreadState` that is
@@ -1618,6 +1618,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         let previous_runtime_state = EntryStoreContext::enter_wasm(store, &mut initial_stack_csi);
 
         if let Err(trap) = store.0.call_hook(CallHook::CallingWasm) {
+            // `previous_runtime_state` implicitly dropped here
             return Err(trap);
         }
         let result = crate::runtime::vm::catch_traps(store, &previous_runtime_state, closure);
@@ -1628,26 +1629,25 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
 }
 
 /// This type helps managing the state of the runtime when entering and exiting
-/// Wasm. To this end, it contains a subset of the data in `VMStoreContext`..
+/// Wasm. To this end, it contains a subset of the data in `VMStoreContext`.
 /// Upon entering Wasm, it updates various runtime fields and their
 /// original values saved in this struct. Upon exiting Wasm, the previous values
 /// are restored.
-// FIXME(frank-emrich) Do the fields in here need to be (Unsafe)Cells?
-pub struct EntryStoreContext {
+pub(crate) struct EntryStoreContext {
     /// If set, contains value of `stack_limit` field to restore in
     /// `VMRuntimeLimits` when exiting Wasm.
     pub stack_limit: Option<usize>,
     /// Contains value of `last_wasm_exit_pc` field to restore in
-    /// `VMRuntimeLimits` when exiting Wasm.
+    /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_exit_pc: usize,
     /// Contains value of `last_wasm_exit_fp` field to restore in
-    /// `VMRuntimeLimits` when exiting Wasm.
+    /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_exit_fp: usize,
     /// Contains value of `last_wasm_entry_fp` field to restore in
-    /// `VMRuntimeLimits` when exiting Wasm.
+    /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_entry_fp: usize,
     /// Contains value of `stack_chain` field to restore in
-    /// `Store` when exiting Wasm.
+    /// `VMStoreContext` when exiting Wasm.
     pub stack_chain: VMStackChain,
 
     /// We need a pointer to the runtime limits, so we can update them from
@@ -1721,7 +1721,9 @@ impl EntryStoreContext {
             //
             // After we've got the stack limit then we store it into the `stack_limit`
             // variable.
-            let wasm_stack_limit = stack_pointer - store.engine().config().max_wasm_stack;
+            let wasm_stack_limit = stack_pointer
+                .checked_sub(store.engine().config().max_wasm_stack)
+                .unwrap();
             let prev_stack = unsafe {
                 mem::replace(
                     &mut *store.0.vm_store_context().stack_limit.get(),
@@ -1735,6 +1737,7 @@ impl EntryStoreContext {
             let last_wasm_exit_pc = *store.0.vm_store_context().last_wasm_exit_pc.get();
             let last_wasm_exit_fp = *store.0.vm_store_context().last_wasm_exit_fp.get();
             let last_wasm_entry_fp = *store.0.vm_store_context().last_wasm_entry_fp.get();
+
             let stack_chain = (*store.0.vm_store_context().stack_chain.get()).clone();
 
             let new_stack_chain = VMStackChain::InitialStack(initial_stack_information);
@@ -1759,9 +1762,9 @@ impl EntryStoreContext {
     /// panicing out of a Wasm execution).
     fn exit_wasm(&mut self) {
         unsafe {
-            self.stack_limit.inspect(|limit| {
-                *(&*self.vm_store_context).stack_limit.get() = *limit;
-            });
+            if let Some(limit) = self.stack_limit {
+                *(&*self.vm_store_context).stack_limit.get() = limit;
+            }
 
             *(*self.vm_store_context).last_wasm_exit_fp.get() = self.last_wasm_exit_fp;
             *(*self.vm_store_context).last_wasm_exit_pc.get() = self.last_wasm_exit_pc;

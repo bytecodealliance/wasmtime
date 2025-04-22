@@ -6,6 +6,16 @@ Unreleased.
 
 ### Changed
 
+* Wasmtime's bindgen now type-checks export functions in the constructor of
+  the generated `{Worldname}Pre` or `{Worldname}` structs, rather than at the
+  call of the export function.
+  [#10610](https://github.com/bytecodealliance/wasmtime/pull/10610)
+
+* Wasmtime's `component::Component` and `component::Instance` now have consistient
+  `get_export` and `get_export_index` methods, which return `(ComponentItem,
+  ComponentExportIndex)` and `ComponentExportIndex`, respectively.
+  [#10597](https://github.com/bytecodealliance/wasmtime/pull/10597)
+
 --------------------------------------------------------------------------------
 
 Release notes for previous releases of Wasmtime can be found on the respective
