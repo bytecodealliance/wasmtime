@@ -157,22 +157,22 @@ where
 }
 
 impl<'a, T: OperandVisitor> asm::RegisterVisitor<CraneliftRegisters> for RegallocVisitor<'a, T> {
-    fn read(&mut self, reg: &mut Gpr) {
+    fn read_gpr(&mut self, reg: &mut Gpr) {
         self.collector.reg_use(reg);
     }
 
-    fn read_write(&mut self, reg: &mut PairedGpr) {
+    fn read_write_gpr(&mut self, reg: &mut PairedGpr) {
         let PairedGpr { read, write } = reg;
         self.collector.reg_use(read);
         self.collector.reg_reuse_def(write, 0);
     }
 
-    fn fixed_read(&mut self, reg: &mut Gpr, enc: u8) {
+    fn fixed_read_gpr(&mut self, reg: &mut Gpr, enc: u8) {
         self.collector
             .reg_fixed_use(reg, fixed_reg(enc, RegClass::Int));
     }
 
-    fn fixed_read_write(&mut self, reg: &mut PairedGpr, enc: u8) {
+    fn fixed_read_write_gpr(&mut self, reg: &mut PairedGpr, enc: u8) {
         let PairedGpr { read, write } = reg;
         self.collector
             .reg_fixed_use(read, fixed_reg(enc, RegClass::Int));
