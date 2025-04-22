@@ -63,7 +63,7 @@ architecture that will run the pre-compiled Wasm programs can have a large
 impact for certain Wasm programs, particularly those using SIMD instructions.
 
 See the API docs for
-[`wasmtime::Config::detect_host_feature`](https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.detect_host_feature)
+[`wasmtime::Config::cranelift_flag_enable`](https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.cranelift_flag_enable)
 for more details.
 
 ## Putting It All Together

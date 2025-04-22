@@ -31,16 +31,10 @@ fn main() -> Result<()> {
                 );
                 return Ok(());
             }
-            config.detect_host_feature(|feature| {
-                match feature {
-                    // A few example x86_64 features you can configure.
-                    "sse4.1" => Some(true),
-                    "avx" => Some(true),
-                    "avx2" => Some(true),
-                    "lzcnt" => Some(true),
-                    _ => None,
-                }
-            });
+            config.cranelift_flag_enable("has_sse41");
+            config.cranelift_flag_enable("has_avx");
+            config.cranelift_flag_enable("has_avx2");
+            config.cranelift_flag_enable("has_lzcnt");
         }
     }
 
