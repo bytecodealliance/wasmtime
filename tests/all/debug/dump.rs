@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use std::env;
 use std::process::Command;
 
@@ -18,7 +18,7 @@ pub fn get_dwarfdump(obj: &str, section: DwarfDumpSection) -> Result<String> {
     let output = Command::new(&dwarfdump)
         .args(&[section_flag, obj])
         .output()
-        .expect("success");
+        .context(format!("failed to spawn `{dwarfdump}`"))?;
     if !output.status.success() {
         bail!(
             "failed to execute {}: {}",
