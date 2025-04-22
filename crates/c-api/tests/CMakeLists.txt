@@ -37,6 +37,7 @@ add_capi_test(tests FILES
   wat.cc
   module.cc
   engine.cc
+  trap.cc
 )
 
 # Add a custom test where two files include `wasmtime.hh` and are compiled into
