@@ -1705,7 +1705,9 @@ impl EntryStoreContext {
             //
             // After we've got the stack limit then we store it into the `stack_limit`
             // variable.
-            let wasm_stack_limit = stack_pointer - store.engine().config().max_wasm_stack;
+            let wasm_stack_limit = stack_pointer
+                .checked_sub(store.engine().config().max_wasm_stack)
+                .unwrap();
             let prev_stack = unsafe {
                 mem::replace(
                     &mut *store.0.vm_store_context().stack_limit.get(),
