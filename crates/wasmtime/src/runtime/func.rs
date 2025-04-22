@@ -1618,7 +1618,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
 }
 
 /// This type helps managing the state of the runtime when entering and exiting
-/// Wasm. To this end, it contains a subset of the data in `VMStoreContext`..
+/// Wasm. To this end, it contains a subset of the data in `VMStoreContext`.
 /// Upon entering Wasm, it updates various runtime fields and their
 /// original values saved in this struct. Upon exiting Wasm, the previous values
 /// are restored.
@@ -1628,13 +1628,13 @@ pub struct EntryStoreContext {
     /// `VMRuntimeLimits` when exiting Wasm.
     pub stack_limit: Option<usize>,
     /// Contains value of `last_wasm_exit_pc` field to restore in
-    /// `VMRuntimeLimits` when exiting Wasm.
+    /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_exit_pc: usize,
     /// Contains value of `last_wasm_exit_fp` field to restore in
-    /// `VMRuntimeLimits` when exiting Wasm.
+    /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_exit_fp: usize,
     /// Contains value of `last_wasm_entry_fp` field to restore in
-    /// `VMRuntimeLimits` when exiting Wasm.
+    /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_entry_fp: usize,
 
     /// We need a pointer to the runtime limits, so we can update them from
