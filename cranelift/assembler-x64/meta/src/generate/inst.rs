@@ -131,13 +131,10 @@ impl dsl::Inst {
                         Imm(_) => {
                             // Immediates do not need register allocation.
                         }
-                        FixedReg(_) => {
+                        FixedReg(reg) => {
                             let call = o.mutability.generate_regalloc_call();
-                            let ty = o.mutability.generate_type();
-                            let Some(fixed) = o.location.generate_fixed_reg() else {
-                                unreachable!()
-                            };
-                            fmtln!(f, "visitor.fixed_{call}(&R::{ty}Gpr::new({fixed}));");
+                            fmtln!(f, "let enc = self.{reg}.expected_enc();");
+                            fmtln!(f, "visitor.fixed_{call}(&mut self.{reg}.0, enc);");
                         }
                         Reg(reg) => {
                             match reg.bits() {
