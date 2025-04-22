@@ -44,6 +44,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         simd,
         exceptions,
         legacy_exceptions,
+        stack_switching,
 
         hogs_memory: _,
         gc_types: _,
@@ -65,17 +66,19 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     let component_model_async_stackful = component_model_async_stackful.unwrap_or(false);
     let nan_canonicalization = nan_canonicalization.unwrap_or(false);
     let relaxed_simd = relaxed_simd.unwrap_or(false);
-    let exceptions = exceptions.unwrap_or(false);
     let legacy_exceptions = legacy_exceptions.unwrap_or(false);
+    let stack_switching = stack_switching.unwrap_or(false);
 
     // Some proposals in wasm depend on previous proposals. For example the gc
     // proposal depends on function-references which depends on reference-types.
     // To avoid needing to enable all of them at once implicitly enable
     // downstream proposals once the end proposal is enabled (e.g. when enabling
     // gc that also enables function-references and reference-types).
-    let function_references = gc || function_references.unwrap_or(false);
+    let function_references = stack_switching || gc || function_references.unwrap_or(false);
     let reference_types = function_references || reference_types.unwrap_or(false);
     let simd = relaxed_simd || simd.unwrap_or(false);
+
+    let exceptions = stack_switching || exceptions.unwrap_or(false);
 
     config
         .wasm_multi_memory(multi_memory)
@@ -95,6 +98,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         .wasm_component_model_async_builtins(component_model_async_builtins)
         .wasm_component_model_async_stackful(component_model_async_stackful)
         .wasm_exceptions(exceptions)
+        .wasm_stack_switching(stack_switching)
         .cranelift_nan_canonicalization(nan_canonicalization);
     #[expect(deprecated, reason = "forwarding legacy-exceptions")]
     config.wasm_legacy_exceptions(legacy_exceptions);

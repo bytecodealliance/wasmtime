@@ -8,7 +8,6 @@ use crate::runtime::vm::{
     SendSyncPtr, Table,
 };
 use crate::{prelude::*, vm::HostAlignedByteCount};
-use std::mem;
 use std::ptr::NonNull;
 use wasmtime_environ::{Module, Tunables};
 
@@ -31,7 +30,7 @@ impl TablePool {
     /// Create a new `TablePool`.
     pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
         let table_size = HostAlignedByteCount::new_rounded_up(
-            mem::size_of::<*mut u8>()
+            crate::runtime::vm::table::MAX_TABLE_ELEM_SIZE
                 .checked_mul(config.limits.table_elements)
                 .ok_or_else(|| anyhow!("table size exceeds addressable memory"))?,
         )?;
@@ -133,13 +132,15 @@ impl TablePool {
         match (|| {
             let base = self.get(allocation_index);
 
+            let element_size = crate::vm::table::wasm_to_table_type(ty.ref_type).element_size();
+
             unsafe {
-                commit_pages(base, self.table_elements * mem::size_of::<*mut u8>())?;
+                commit_pages(base, self.table_elements * element_size)?;
             }
 
             let ptr = NonNull::new(std::ptr::slice_from_raw_parts_mut(
                 base.cast(),
-                self.table_elements * mem::size_of::<*mut u8>(),
+                self.table_elements * element_size,
             ))
             .unwrap();
             unsafe {
@@ -198,8 +199,10 @@ impl TablePool {
         // doesn't overflow? The only check that exists is for the boundary
         // condition that table.size() * mem::size_of::<*mut u8>() is less than
         // a host page smaller than usize::MAX.
-        let size = HostAlignedByteCount::new_rounded_up(table.size() * mem::size_of::<*mut u8>())
-            .expect("table entry size doesn't overflow");
+        let size = HostAlignedByteCount::new_rounded_up(
+            table.size() * table.element_type().element_size(),
+        )
+        .expect("table entry size doesn't overflow");
 
         // `memset` the first `keep_resident` bytes.
         let size_to_memset = size.min(self.keep_resident);

@@ -20,13 +20,16 @@ use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{InterpreterRef, VMContext, VMStoreContext};
-use crate::{StoreContextMut, WasmBacktrace};
+use crate::{EntryStoreContext, StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
 use core::ops::Range;
 use core::ptr::{self, NonNull};
 
 pub use self::backtrace::Backtrace;
+#[cfg(feature = "gc")]
+pub use self::backtrace::Frame;
+
 pub use self::coredump::CoreDumpStack;
 pub use self::tls::tls_eager_initialize;
 #[cfg(feature = "async")]
@@ -365,6 +368,7 @@ impl From<wasmtime_environ::Trap> for TrapReason {
 /// longjmp'd over and none of its destructors on the stack may be run.
 pub unsafe fn catch_traps<T, F>(
     store: &mut StoreContextMut<'_, T>,
+    old_state: &EntryStoreContext,
     mut closure: F,
 ) -> Result<(), Box<Trap>>
 where
@@ -372,7 +376,7 @@ where
 {
     let caller = store.0.default_caller();
 
-    let result = CallThreadState::new(store.0).with(|cx| match store.0.executor() {
+    let result = CallThreadState::new(store.0, old_state).with(|cx| match store.0.executor() {
         // In interpreted mode directly invoke the host closure since we won't
         // be using host-based `setjmp`/`longjmp` as that's not going to save
         // the context we want.
@@ -423,7 +427,9 @@ where
 // usage of its accessor methods.
 mod call_thread_state {
     use super::*;
+    use crate::runtime::vm::stack_switching::VMStackChain;
     use crate::runtime::vm::Unwind;
+    use crate::EntryStoreContext;
 
     /// Temporary state stored on the stack which is registered in the `tls`
     /// module below for calls into wasm.
@@ -462,17 +468,16 @@ mod call_thread_state {
         #[cfg(all(has_native_signals, unix))]
         pub(crate) async_guard_range: Range<*mut u8>,
 
-        // The values of `VMStoreContext::last_wasm_{exit_{pc,fp},entry_sp}` for
-        // the *previous* `CallThreadState` for this same store/limits. Our
-        // *current* last wasm PC/FP/SP are saved in `self.vm_store_context`. We
-        // save a copy of the old registers here because the `VMStoreContext`
-        // typically doesn't change across nested calls into Wasm (i.e. they are
-        // typically calls back into the same store and `self.vm_store_context
-        // == self.prev.vm_store_context`) and we must to maintain the list of
-        // contiguous-Wasm-frames stack regions for backtracing purposes.
-        old_last_wasm_exit_fp: Cell<usize>,
-        old_last_wasm_exit_pc: Cell<usize>,
-        old_last_wasm_entry_fp: Cell<usize>,
+        // The state of the runtime for the *previous* `CallThreadState` for
+        // this same store. Our *current* state is saved in `self.limits`,
+        // `self.stack_chain`, etc. We need access to the old values of these
+        // fields because the `VMStoreContext` typically doesn't change across
+        // nested calls into Wasm (i.e. they are typically calls back into the
+        // same store and `self.vm_store_context == self.prev.vm_store_context`) and we must to
+        // maintain the list of contiguous-Wasm-frames stack regions for
+        // backtracing purposes.
+        // FIXME(frank-emrich) Does this need to be an (Unsafe)Cell?
+        old_state: *const EntryStoreContext,
     }
 
     impl Drop for CallThreadState {
@@ -480,13 +485,6 @@ mod call_thread_state {
             // Unwind information should not be present as it should have
             // already been processed.
             debug_assert!(self.unwind.replace(None).is_none());
-
-            unsafe {
-                let cx = self.vm_store_context.as_ref();
-                *cx.last_wasm_exit_fp.get() = self.old_last_wasm_exit_fp.get();
-                *cx.last_wasm_exit_pc.get() = self.old_last_wasm_exit_pc.get();
-                *cx.last_wasm_entry_fp.get() = self.old_last_wasm_entry_fp.get();
-            }
         }
     }
 
@@ -494,7 +492,10 @@ mod call_thread_state {
         pub const JMP_BUF_INTERPRETER_SENTINEL: *mut u8 = 1 as *mut u8;
 
         #[inline]
-        pub(super) fn new(store: &mut StoreOpaque) -> CallThreadState {
+        pub(super) fn new(
+            store: &mut StoreOpaque,
+            old_state: *const EntryStoreContext,
+        ) -> CallThreadState {
             // Don't try to plumb #[cfg] everywhere for this field, just pretend
             // we're using it on miri/windows to silence compiler warnings.
             let _: Range<_> = store.async_guard_range();
@@ -512,31 +513,28 @@ mod call_thread_state {
                 #[cfg(all(has_native_signals, unix))]
                 async_guard_range: store.async_guard_range(),
                 prev: Cell::new(ptr::null()),
-                old_last_wasm_exit_fp: Cell::new(unsafe {
-                    *store.vm_store_context().last_wasm_exit_fp.get()
-                }),
-                old_last_wasm_exit_pc: Cell::new(unsafe {
-                    *store.vm_store_context().last_wasm_exit_pc.get()
-                }),
-                old_last_wasm_entry_fp: Cell::new(unsafe {
-                    *store.vm_store_context().last_wasm_entry_fp.get()
-                }),
+                old_state,
             }
         }
 
         /// Get the saved FP upon exit from Wasm for the previous `CallThreadState`.
-        pub fn old_last_wasm_exit_fp(&self) -> usize {
-            self.old_last_wasm_exit_fp.get()
+        pub unsafe fn old_last_wasm_exit_fp(&self) -> usize {
+            (&*self.old_state).last_wasm_exit_fp
         }
 
         /// Get the saved PC upon exit from Wasm for the previous `CallThreadState`.
-        pub fn old_last_wasm_exit_pc(&self) -> usize {
-            self.old_last_wasm_exit_pc.get()
+        pub unsafe fn old_last_wasm_exit_pc(&self) -> usize {
+            (&*self.old_state).last_wasm_exit_pc
         }
 
         /// Get the saved FP upon entry into Wasm for the previous `CallThreadState`.
-        pub fn old_last_wasm_entry_fp(&self) -> usize {
-            self.old_last_wasm_entry_fp.get()
+        pub unsafe fn old_last_wasm_entry_fp(&self) -> usize {
+            (&*self.old_state).last_wasm_entry_fp
+        }
+
+        /// Get the saved `VMStackChain` for the previous `CallThreadState`.
+        pub unsafe fn old_stack_chain(&self) -> VMStackChain {
+            (&*self.old_state).stack_chain.clone()
         }
 
         /// Get the previous `CallThreadState`.

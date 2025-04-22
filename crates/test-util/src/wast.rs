@@ -247,6 +247,7 @@ macro_rules! foreach_config_option {
             gc_types
             exceptions
             legacy_exceptions
+            stack_switching
         }
     };
 }
@@ -349,9 +350,12 @@ impl Compiler {
                     || config.gc_types()
                     || config.exceptions()
                     || config.legacy_exceptions()
+                    || config.stack_switching()
             }
 
-            Compiler::CraneliftPulley => config.threads() || config.legacy_exceptions(),
+            Compiler::CraneliftPulley => {
+                config.threads() || config.legacy_exceptions() || config.stack_switching()
+            }
         }
     }
 
@@ -422,6 +426,14 @@ impl WastTest {
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
+                return true;
+            }
+        }
+
+        if cfg!(not(all(unix, target_arch = "x86_64"))) {
+            // Stack switching is not implemented on platforms other than x64
+            // unix, the corresponding tests will fail.
+            if self.path.parent().unwrap().ends_with("stack-switching") {
                 return true;
             }
         }
