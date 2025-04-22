@@ -1622,8 +1622,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
 /// Upon entering Wasm, it updates various runtime fields and their
 /// original values saved in this struct. Upon exiting Wasm, the previous values
 /// are restored.
-// FIXME(frank-emrich) Do the fields in here need to be (Unsafe)Cells?
-pub struct EntryStoreContext {
+pub(crate) struct EntryStoreContext {
     /// If set, contains value of `stack_limit` field to restore in
     /// `VMRuntimeLimits` when exiting Wasm.
     pub stack_limit: Option<usize>,
@@ -1740,9 +1739,9 @@ impl EntryStoreContext {
     /// panicing out of a Wasm execution).
     fn exit_wasm(&mut self) {
         unsafe {
-            self.stack_limit.inspect(|limit| {
-                *(&*self.vm_store_context).stack_limit.get() = *limit;
-            });
+            if let Some(limit) = self.stack_limit {
+                *(&*self.vm_store_context).stack_limit.get() = limit;
+            }
 
             *(*self.vm_store_context).last_wasm_exit_fp.get() = self.last_wasm_exit_fp;
             *(*self.vm_store_context).last_wasm_exit_pc.get() = self.last_wasm_exit_pc;
