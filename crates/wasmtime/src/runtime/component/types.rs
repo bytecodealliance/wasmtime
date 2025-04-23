@@ -148,6 +148,7 @@ impl TypeChecker<'_> {
             (InterfaceType::Future(_), _)
             | (InterfaceType::Stream(_), _)
             | (InterfaceType::ErrorContext(_), _) => todo!(),
+            (InterfaceType::FixedSizeList(_), _) => todo!(),
         }
     }
 
@@ -666,6 +667,7 @@ impl Type {
             InterfaceType::Future(_)
             | InterfaceType::Stream(_)
             | InterfaceType::ErrorContext(_) => todo!(),
+            InterfaceType::FixedSizeList(_) => todo!(),
         }
     }
 

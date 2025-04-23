@@ -1159,6 +1159,16 @@ impl Config {
         self
     }
 
+    /// This corresponds to the 🔧 emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is _very_
+    /// incomplete.
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_fixed_size_lists(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::CM_FIXED_SIZE_LIST, enable);
+        self
+    }
+
     #[doc(hidden)] // FIXME(#3427) - if/when implemented then un-hide this
     pub fn wasm_exceptions(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::EXCEPTIONS, enable);

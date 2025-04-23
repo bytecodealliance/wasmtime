@@ -209,6 +209,7 @@ struct WasmFeatures {
     gc_types: bool,
     wide_arithmetic: bool,
     stack_switching: bool,
+    component_model_fixed_size_list: bool,
 }
 
 impl Metadata<'_> {
@@ -242,6 +243,7 @@ impl Metadata<'_> {
             gc_types,
             stack_switching,
             wide_arithmetic,
+            cm_fixed_size_list,
 
             // Always on; we don't currently have knobs for these.
             mutable_global: _,
@@ -287,6 +289,7 @@ impl Metadata<'_> {
                 component_model_async_builtins: cm_async_builtins,
                 component_model_async_stackful: cm_async_stackful,
                 component_model_error_context: cm_error_context,
+                component_model_fixed_size_list: cm_fixed_size_list,
             },
         }
     }
@@ -499,6 +502,7 @@ impl Metadata<'_> {
             component_model_async_builtins,
             component_model_async_stackful,
             component_model_error_context,
+            component_model_fixed_size_list,
             gc_types,
             wide_arithmetic,
             stack_switching,
@@ -605,6 +609,11 @@ impl Metadata<'_> {
             component_model_error_context,
             other.contains(F::CM_ERROR_CONTEXT),
             "WebAssembly component model support for error-context",
+        )?;
+        Self::check_bool(
+            component_model_fixed_size_list,
+            other.contains(F::CM_FIXED_SIZE_LIST),
+            "WebAssembly component model support for fixed size lists",
         )?;
         Self::check_cfg_bool(
             cfg!(feature = "gc"),

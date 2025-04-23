@@ -50,6 +50,7 @@ pub struct ComponentTypesBuilder {
     future_tables: HashMap<TypeFutureTable, TypeFutureTableIndex>,
     stream_tables: HashMap<TypeStreamTable, TypeStreamTableIndex>,
     error_context_tables: HashMap<TypeErrorContextTable, TypeComponentLocalErrorContextTableIndex>,
+    fixed_size_lists: HashMap<TypeFixedSizeList, TypeFixedSizeListIndex>,
 
     component_types: ComponentTypes,
     module_types: ModuleTypesBuilder,
@@ -111,6 +112,7 @@ impl ComponentTypesBuilder {
             component_types: ComponentTypes::default(),
             type_info: TypeInformationCache::default(),
             resources: ResourcesBuilder::default(),
+            fixed_size_lists: HashMap::default(),
         }
     }
 
@@ -418,6 +420,9 @@ impl ComponentTypesBuilder {
             ComponentDefinedType::Stream(ty) => {
                 InterfaceType::Stream(self.stream_table_type(types, ty)?)
             }
+            ComponentDefinedType::FixedSizeList(ty, size) => {
+                InterfaceType::FixedSizeList(self.fixed_size_list_type(types, ty, *size)?)
+            }
         };
         let info = self.type_information(&ret);
         if info.depth > MAX_TYPE_DEPTH {
@@ -529,6 +534,19 @@ impl ComponentTypesBuilder {
                 .map(|ty| self.component_types.canonical_abi(ty)),
         );
         self.add_tuple_type(TypeTuple { types, abi })
+    }
+
+    fn fixed_size_list_type(&mut self, types: TypesRef<'_>, ty: &ComponentValType, size: u32) -> Result<TypeFixedSizeListIndex> {
+        assert_eq!(types.id(), self.module_types.validator_id());
+        let element = self.valtype(types, ty)?;
+        Ok(self.new_fixed_size_list_type(element, size))
+    }
+
+    pub(crate) fn new_fixed_size_list_type(&mut self, element: InterfaceType, size: u32) -> TypeFixedSizeListIndex {
+        let element_abi = self.component_types.canonical_abi(&element);
+        let abi = CanonicalAbiInfo::record(
+            (0..size).into_iter().map(|_| element_abi));
+        self.add_fixed_size_list_type(TypeFixedSizeList { element, size, abi })
     }
 
     fn flags_type(&mut self, flags: &IndexSet<KebabString>) -> TypeFlagsIndex {
@@ -645,6 +663,11 @@ impl ComponentTypesBuilder {
     /// Interns a new tuple type within this type information.
     pub fn add_tuple_type(&mut self, ty: TypeTuple) -> TypeTupleIndex {
         intern_and_fill_flat_types!(self, tuples, ty)
+    }
+
+    /// Interns a new tuple type within this type information.
+    pub fn add_fixed_size_list_type(&mut self, ty: TypeFixedSizeList) -> TypeFixedSizeListIndex {
+        intern_and_fill_flat_types!(self, fixed_size_lists, ty)
     }
 
     /// Interns a new variant type within this type information.
@@ -782,6 +805,7 @@ impl ComponentTypesBuilder {
             InterfaceType::Enum(i) => &self.type_info.enums[*i],
             InterfaceType::Option(i) => &self.type_info.options[*i],
             InterfaceType::Result(i) => &self.type_info.results[*i],
+            InterfaceType::FixedSizeList(i) => &self.type_info.fixed_size_lists[*i],
         }
     }
 }
@@ -891,6 +915,7 @@ struct TypeInformationCache {
     options: PrimaryMap<TypeOptionIndex, TypeInformation>,
     results: PrimaryMap<TypeResultIndex, TypeInformation>,
     lists: PrimaryMap<TypeListIndex, TypeInformation>,
+    fixed_size_lists: PrimaryMap<TypeFixedSizeListIndex, TypeInformation>,
 }
 
 struct TypeInformation {
@@ -1038,6 +1063,10 @@ impl TypeInformation {
 
     fn tuples(&mut self, types: &ComponentTypesBuilder, ty: &TypeTuple) {
         self.build_record(ty.types.iter().map(|t| types.type_information(t)));
+    }
+
+    fn fixed_size_lists(&mut self, types: &ComponentTypesBuilder, ty: &TypeFixedSizeList) {
+        self.build_record((0..ty.size).into_iter().map(|_| types.type_information(&ty.element)));
     }
 
     fn enums(&mut self, _types: &ComponentTypesBuilder, _ty: &TypeEnum) {

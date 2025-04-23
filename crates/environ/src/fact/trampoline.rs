@@ -16,11 +16,7 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    CanonicalAbiInfo, ComponentTypesBuilder, FixedEncoding as FE, FlatType, InterfaceType,
-    StringEncoding, Transcode, TypeComponentLocalErrorContextTableIndex, TypeEnumIndex,
-    TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
-    TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
-    TypeVariantIndex, VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS,
+    CanonicalAbiInfo, ComponentTypesBuilder, FixedEncoding as FE, FlatType, InterfaceType, StringEncoding, Transcode, TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFixedSizeListIndex, TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
@@ -1044,6 +1040,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             | InterfaceType::Future(_)
             | InterfaceType::Stream(_)
             | InterfaceType::ErrorContext(_) => 1,
+            InterfaceType::FixedSizeList(i) => self.types[*i].size as usize,
         };
 
         match self.fuel.checked_sub(cost) {
@@ -1082,6 +1079,9 @@ impl<'a, 'b> Compiler<'a, 'b> {
                     InterfaceType::Stream(t) => self.translate_stream(*t, src, dst_ty, dst),
                     InterfaceType::ErrorContext(t) => {
                         self.translate_error_context(*t, src, dst_ty, dst)
+                    }
+                    InterfaceType::FixedSizeList(t) => {
+                        self.translate_fixed_size_list(*t, src, dst_ty, dst);
                     }
                 }
             }
@@ -2625,6 +2625,31 @@ impl<'a, 'b> Compiler<'a, 'b> {
             .zip(dst_ty.types.iter());
         for ((src, src_ty), (dst, dst_ty)) in srcs.zip(dsts) {
             self.translate(src_ty, &src, dst_ty, &dst);
+        }
+    }
+
+    fn translate_fixed_size_list(
+        &mut self,
+        src_ty: TypeFixedSizeListIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let src_ty = &self.types[src_ty];
+        let dst_ty = match dst_ty {
+            InterfaceType::FixedSizeList(t) => &self.types[*t],
+            _ => panic!("expected a fixed size list"),
+        };
+
+        // TODO: subtyping
+        assert_eq!(src_ty.size, dst_ty.size);
+
+        let srcs = src
+            .record_field_srcs(self.types, (0..src_ty.size).into_iter().map(|_| src_ty.element));
+        let dsts = dst
+            .record_field_dsts(self.types, (0..dst_ty.size).into_iter().map(|_| dst_ty.element));
+        for (src, dst) in srcs.zip(dsts) {
+            self.translate(&src_ty.element, &src, &dst_ty.element, &dst);
         }
     }
 

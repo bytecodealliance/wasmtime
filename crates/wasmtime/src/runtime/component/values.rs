@@ -201,6 +201,7 @@ impl Val {
             InterfaceType::Future(_)
             | InterfaceType::Stream(_)
             | InterfaceType::ErrorContext(_) => todo!(),
+            InterfaceType::FixedSizeList(_) => todo!(),
         })
     }
 
@@ -325,6 +326,7 @@ impl Val {
             InterfaceType::Future(_)
             | InterfaceType::Stream(_)
             | InterfaceType::ErrorContext(_) => todo!(),
+            InterfaceType::FixedSizeList(_) => todo!(),
         })
     }
 
@@ -438,6 +440,7 @@ impl Val {
             (InterfaceType::Future(_), _)
             | (InterfaceType::Stream(_), _)
             | (InterfaceType::ErrorContext(_), _) => todo!(),
+            (InterfaceType::FixedSizeList(_), _) => todo!(),
         }
     }
 
@@ -576,6 +579,7 @@ impl Val {
             (InterfaceType::Future(_), _)
             | (InterfaceType::Stream(_), _)
             | (InterfaceType::ErrorContext(_), _) => todo!(),
+            (InterfaceType::FixedSizeList(_), _) => todo!(),
         }
     }
 
