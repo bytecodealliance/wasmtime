@@ -3,6 +3,7 @@
 use crate::api::{AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, TrapCode};
 use crate::gpr::{self, NonRspGpr, Size};
 use crate::rex::{encode_modrm, encode_sib, Imm, RexFlags};
+use crate::{RegisterVisitor, Registers};
 
 /// x64 memory addressing modes.
 #[derive(Clone, Debug)]
@@ -52,23 +53,26 @@ impl<R: AsReg> Amode<R> {
             }
         }
     }
+}
 
-    /// Return the registers used by this [`Amode`].
-    ///
-    /// This is useful in generated code to allow access by a
-    /// [`RegisterVisitor`](crate::RegisterVisitor).
-    pub fn registers_mut(&mut self) -> Vec<&mut R> {
-        match self {
-            Amode::ImmReg { base, .. } => {
-                vec![base]
-            }
-            Amode::ImmRegRegShift { base, index, .. } => {
-                vec![base, index.as_mut()]
-            }
-            Amode::RipRelative { .. } => {
-                vec![]
-            }
+/// Visit the registers in an [`Amode`].
+///
+/// This is helpful for generated code: it allows capturing the `R::ReadGpr`
+/// type (which an `Amode` method cannot) and simplifies the code to be
+/// generated.
+pub(crate) fn visit_amode<R: Registers>(
+    amode: &mut Amode<R::ReadGpr>,
+    visitor: &mut impl RegisterVisitor<R>,
+) {
+    match amode {
+        Amode::ImmReg { base, .. } => {
+            visitor.read_gpr(base);
         }
+        Amode::ImmRegRegShift { base, index, .. } => {
+            visitor.read_gpr(base);
+            visitor.read_gpr(index.as_mut());
+        }
+        Amode::RipRelative { .. } => {}
     }
 }
 
