@@ -1,5 +1,3 @@
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
-
 use anyhow::Result;
 use std::io::Write;
 use std::sync::Mutex;
@@ -115,19 +113,22 @@ async fn api_read_only() -> Result<()> {
         .map_err(|()| anyhow::anyhow!("command returned with failing exit status"))
 }
 
-// This is tested in the wasi-http crate, but need to satisfy the `foreach_api!`
-// macro above.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "tested in the wasi-http crate, satisfying foreach_api! macro"
+)]
 fn api_proxy() {}
 
-// This is tested in the wasi-http crate, but need to satisfy the `foreach_api!`
-// macro above.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "tested in the wasi-http crate, satisfying foreach_api! macro"
+)]
 fn api_proxy_streaming() {}
 
-// This is tested in the wasi-http crate, but need to satisfy the `foreach_api!`
-// macro above.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "tested in the wasi-http crate, satisfying foreach_api! macro"
+)]
 fn api_proxy_forward_request() {}
 
 wasmtime::component::bindgen!({

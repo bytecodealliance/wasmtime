@@ -1,6 +1,6 @@
 //! Abstract syntax tree (AST) created from parsed ISLE.
 
-#![allow(missing_docs)]
+#![expect(missing_docs, reason = "fields mostly self-describing")]
 
 use crate::lexer::Pos;
 use crate::log;

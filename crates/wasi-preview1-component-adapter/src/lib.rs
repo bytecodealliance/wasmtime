@@ -12,7 +12,6 @@
         reason = "stripped down in proxy build",
     )
 )]
-#![expect(clippy::allow_attributes, reason = "crate not migrated yet")]
 
 use crate::bindings::wasi::clocks::{monotonic_clock, wall_clock};
 use crate::bindings::wasi::io::poll;

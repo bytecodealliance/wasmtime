@@ -30,7 +30,7 @@ mod masm;
 // Not all the fpr and gpr constructors are used at the moment;
 // in that sense, this directive is a temporary measure to avoid
 // dead code warnings.
-#[allow(dead_code)]
+#[expect(dead_code, reason = "not everything used yet, will be in the future")]
 mod regs;
 
 /// Create an ISA builder.

@@ -44,7 +44,7 @@ mod test_programs {
 
     macro_rules! assert_test_exists {
         ($name:ident) => {
-            #[allow(unused_imports)]
+            #[expect(unused_imports, reason = "here to assert function is here")]
             use self::$name as _;
         };
     }

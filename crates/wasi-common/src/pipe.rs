@@ -1,5 +1,3 @@
-// This is mostly stubs
-#![allow(unused_variables, dead_code)]
 //! Virtual pipes.
 //!
 //! These types provide easy implementations of `WasiFile` that mimic much of the behavior of Unix

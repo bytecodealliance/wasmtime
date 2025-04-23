@@ -1,4 +1,4 @@
-#![allow(missing_docs)]
+#![expect(missing_docs, reason = "fields mostly self-describing")]
 
 use crate::codegen::Prefix;
 use std::ops::Index;

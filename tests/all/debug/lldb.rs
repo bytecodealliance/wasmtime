@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::{bail, format_err, Result};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use std::env;
@@ -443,7 +441,7 @@ mod test_programs {
 
     macro_rules! assert_test_exists {
         ($name:ident) => {
-            #[allow(unused_imports)]
+            #[expect(unused_imports, reason = "used to assert functions exist")]
             use self::$name as _;
         };
     }

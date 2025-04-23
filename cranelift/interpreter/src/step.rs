@@ -59,7 +59,6 @@ fn collect_block_args(
 /// Interpret a single Cranelift instruction. Note that program traps and interpreter errors are
 /// distinct: a program trap results in `Ok(Flow::Trap(...))` whereas an interpretation error (e.g.
 /// the types of two values are incompatible) results in `Err(...)`.
-#[allow(unused_variables)]
 pub fn step<'a, I>(state: &mut dyn State<'a>, inst_context: I) -> Result<ControlFlow<'a>, StepError>
 where
     I: InstructionContext,
@@ -123,7 +122,7 @@ where
                 match mask.len() {
                     16 => DataValue::V128(mask.try_into().expect("a 16-byte vector mask")),
                     8 => DataValue::V64(mask.try_into().expect("an 8-byte vector mask")),
-                    length => panic!("unexpected Shuffle mask length {}", mask.len()),
+                    length => panic!("unexpected Shuffle mask length {length}"),
                 }
             }
             // 8-bit.
@@ -259,6 +258,7 @@ where
     };
 
     // Based on `condition`, indicate where to continue the control flow.
+    #[expect(unused_variables, reason = "here in case it's needed in the future")]
     let branch_when = |condition: bool, block| -> Result<ControlFlow, StepError> {
         if condition {
             continue_at(block)
