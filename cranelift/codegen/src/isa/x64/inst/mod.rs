@@ -142,8 +142,7 @@ impl Inst {
             | Inst::MachOTlsGetAddr { .. }
             | Inst::CoffTlsGetAddr { .. }
             | Inst::Unwind { .. }
-            | Inst::DummyUse { .. }
-            | Inst::AluConstOp { .. } => smallvec![],
+            | Inst::DummyUse { .. } => smallvec![],
 
             Inst::LockCmpxchg16b { .. }
             | Inst::Atomic128RmwSeq { .. }
@@ -707,12 +706,6 @@ impl PrettyPrint for Inst {
                 let src2 = src2.pretty_print(size_bytes);
                 let op = ljustify2(op.to_string(), suffix_bwlq(*size));
                 format!("{op} {src1}, {src2}, {dst}")
-            }
-            Inst::AluConstOp { op, dst, size } => {
-                let size_bytes = size.to_bytes();
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size_bytes);
-                let op = ljustify2(op.to_string(), suffix_lqb(*size));
-                format!("{op} {dst}, {dst}, {dst}")
             }
             Inst::AluRmRVex {
                 size,
@@ -2024,7 +2017,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_reuse_def(dst, 0);
             src2.get_operands(collector);
         }
-        Inst::AluConstOp { dst, .. } => collector.reg_def(dst),
         Inst::AluRmRVex {
             src1, src2, dst, ..
         } => {
