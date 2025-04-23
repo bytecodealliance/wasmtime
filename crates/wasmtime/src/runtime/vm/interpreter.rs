@@ -325,8 +325,8 @@ impl InterpreterRef<'_> {
             (@get u8 $reg:ident) => (self.0[$reg].get_i32() as u8);
             (@get u32 $reg:ident) => (self.0[$reg].get_u32());
             (@get u64 $reg:ident) => (self.0[$reg].get_u64());
-            (@get f32 $reg:ident) => (self.0[$reg].get_f32());
-            (@get f64 $reg:ident) => (self.0[$reg].get_f64());
+            (@get f32 $reg:ident) => (unreachable::<f32, _>($reg));
+            (@get f64 $reg:ident) => (unreachable::<f64, _>($reg));
             (@get i8x16 $reg:ident) => (unreachable::<i8x16, _>($reg));
             (@get vmctx $reg:ident) => (self.0[$reg].get_ptr());
             (@get pointer $reg:ident) => (self.0[$reg].get_ptr());

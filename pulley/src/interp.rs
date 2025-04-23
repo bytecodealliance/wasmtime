@@ -472,16 +472,6 @@ impl XRegVal {
         u64::from_le(x)
     }
 
-    pub fn get_f32(&self) -> f32 {
-        let x = unsafe { self.0.u32 };
-        f32::from_bits(u32::from_le(x))
-    }
-
-    pub fn get_f64(&self) -> f64 {
-        let x = unsafe { self.0.u64 };
-        f64::from_bits(u64::from_le(x))
-    }
-
     pub fn get_ptr<T>(&self) -> *mut T {
         let ptr = unsafe { self.0.ptr };
         core::ptr::with_exposed_provenance_mut(usize::from_le(ptr))
