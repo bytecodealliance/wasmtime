@@ -40,6 +40,7 @@ add_capi_test(tests FILES
   trap.cc
   wasi.cc
   store.cc
+  val.cc
 )
 
 # Add a custom test where two files include `wasmtime.hh` and are compiled into

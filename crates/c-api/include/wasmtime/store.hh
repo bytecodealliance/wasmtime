@@ -65,6 +65,7 @@ public:
     friend class Instance;
     friend class Linker;
     friend class ExternRef;
+    friend class AnyRef;
     friend class Val;
     friend class Store;
     wasmtime_context_t *ptr;
