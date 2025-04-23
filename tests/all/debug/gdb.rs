@@ -59,7 +59,7 @@ fn test_debug_dwarf_gdb() -> Result<()> {
             "-Oopt-level=0",
             "--invoke",
             "fib",
-            "tests/all/debug/testsuite/fib-wasm.wasm",
+            test_programs_artifacts::DWARF_FIB_WASM,
             "3",
         ],
         r#"set breakpoint pending on

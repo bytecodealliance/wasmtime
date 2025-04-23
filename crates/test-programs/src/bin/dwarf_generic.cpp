@@ -1,8 +1,10 @@
+//! extra-files = ['dwarf_generic_satellite.cpp']
+
 // clang-format off
 // clang -o generic.wasm -target wasm32-unknown-wasip1 -g generic.cpp generic-satellite.cpp
 // clang-format on
 //
-#include "generic.h"
+#include "dwarf_generic.h"
 
 int SomeClass::MainDefinedFunction() {
   int x = HIDE_FROM_CHECKER(1);

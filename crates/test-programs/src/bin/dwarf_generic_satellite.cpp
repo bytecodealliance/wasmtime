@@ -1,4 +1,6 @@
-#include "generic.h"
+//! skip = true
+
+#include "dwarf_generic.h"
 
 int SomeClass::SatelliteFunction(int x) {
   x *= 2;

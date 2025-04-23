@@ -1,3 +1,5 @@
+//! flags = ['-O2']
+
 // clang-format off
 // clang -o codegen-optimized.wasm -target wasm32-unknown-wasip1 -g -O2 codegen-optimized.cpp
 

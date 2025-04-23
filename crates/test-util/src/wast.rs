@@ -56,7 +56,7 @@ fn add_tests(tests: &mut Vec<WastTest>, path: &Path, has_config: bool) -> Result
         let contents =
             fs::read_to_string(&path).with_context(|| format!("failed to read test: {path:?}"))?;
         let config = if has_config {
-            parse_test_config(&contents)
+            parse_test_config(&contents, ";;!")
                 .with_context(|| format!("failed to parse test configuration: {path:?}"))?
         } else {
             spec_test_config(&path)
@@ -189,7 +189,7 @@ fn spec_test_config(test: &Path) -> TestConfig {
 
 /// Parse test configuration from the specified test, comments starting with
 /// `;;!`.
-pub fn parse_test_config<T>(wat: &str) -> Result<T>
+pub fn parse_test_config<T>(wat: &str, comment: &'static str) -> Result<T>
 where
     T: DeserializeOwned,
 {
@@ -197,8 +197,8 @@ where
     // prefixed with `;;!`.
     let config_lines: Vec<_> = wat
         .lines()
-        .take_while(|l| l.starts_with(";;!"))
-        .map(|l| &l[3..])
+        .take_while(|l| l.starts_with(comment))
+        .map(|l| &l[comment.len()..])
         .collect();
     let config_text = config_lines.join("\n");
 
