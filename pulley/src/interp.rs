@@ -493,14 +493,6 @@ impl XRegVal {
         self.0.u64 = x.to_le();
     }
 
-    pub fn set_f32(&mut self, x: f32) {
-        self.0.u32 = x.to_bits().to_le();
-    }
-
-    pub fn set_f64(&mut self, x: f64) {
-        self.0.u64 = x.to_bits().to_le();
-    }
-
     pub fn set_ptr<T>(&mut self, ptr: *mut T) {
         self.0.ptr = ptr.expose_provenance().to_le();
     }
