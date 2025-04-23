@@ -3350,7 +3350,10 @@ pub(crate) fn emit(
 
         Inst::XmmUninitializedValue { .. } | Inst::GprUninitializedValue { .. } => {
             // These instruction formats only exist to declare a register as a
-            // `def`; no code is emitted.
+            // `def`; no code is emitted. This is always immediately followed by
+            // an instruction, such as `xor <tmp>, <tmp>`, that semantically
+            // reads this undefined value but arithmetically produces the same
+            // result regardless of its value.
         }
 
         Inst::XmmMovRM { op, src, dst } => {
