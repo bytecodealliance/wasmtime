@@ -9,6 +9,9 @@
 #include <string>
 #include <vector>
 #include <wasi.h>
+#include <wasmtime/conf.h>
+
+#ifdef WASMTIME_FEATURE_WASI
 
 namespace wasmtime {
 
@@ -102,5 +105,7 @@ public:
 };
 
 } // namespace wasmtime
+
+#endif // WASMTIME_FEATURE_WASI
 
 #endif // WASMTIME_WASI_HH
