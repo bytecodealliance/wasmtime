@@ -517,3 +517,110 @@ fn test_percent_settings() {
         cd
     );
 }
+
+/// Default builder produces a disabled cache configuration with the same defaults.
+#[test]
+fn test_builder_default() {
+    let dir = tempfile::tempdir().expect("Can't create temporary directory");
+    let config_path = dir.path().join("cache-config.toml");
+    let config_content = "[cache]\n\
+                          enabled = false\n";
+    fs::write(&config_path, config_content).expect("Failed to write test config file");
+    let expected_config = CacheConfig::from_file(Some(&config_path)).unwrap();
+
+    let config = CacheConfig::builder()
+        .build()
+        .expect("Failed to build CacheConfig");
+
+    assert_eq!(config.enabled, expected_config.enabled);
+    assert_eq!(config.directory, expected_config.directory);
+    assert_eq!(
+        config.worker_event_queue_size,
+        expected_config.worker_event_queue_size
+    );
+    assert_eq!(
+        config.baseline_compression_level,
+        expected_config.baseline_compression_level
+    );
+    assert_eq!(
+        config.optimized_compression_level,
+        expected_config.optimized_compression_level
+    );
+    assert_eq!(
+        config.optimized_compression_usage_counter_threshold,
+        expected_config.optimized_compression_usage_counter_threshold
+    );
+    assert_eq!(config.cleanup_interval, expected_config.cleanup_interval);
+    assert_eq!(
+        config.optimizing_compression_task_timeout,
+        expected_config.optimizing_compression_task_timeout
+    );
+    assert_eq!(
+        config.allowed_clock_drift_for_files_from_future,
+        expected_config.allowed_clock_drift_for_files_from_future
+    );
+    assert_eq!(
+        config.file_count_soft_limit,
+        expected_config.file_count_soft_limit
+    );
+    assert_eq!(
+        config.files_total_size_soft_limit,
+        expected_config.files_total_size_soft_limit
+    );
+    assert_eq!(
+        config.file_count_limit_percent_if_deleting,
+        expected_config.file_count_limit_percent_if_deleting
+    );
+    assert_eq!(
+        config.files_total_size_limit_percent_if_deleting,
+        expected_config.files_total_size_limit_percent_if_deleting
+    );
+}
+
+#[test]
+fn test_builder_all_settings() {
+    let (_td, cd, _cp) = test_prolog();
+
+    let conf = CacheConfig::builder()
+        .enabled(true)
+        .directory(&cd)
+        .worker_event_queue_size(0x10)
+        .baseline_compression_level(3)
+        .optimized_compression_level(20)
+        .optimized_compression_usage_counter_threshold(0x100)
+        .cleanup_interval(Duration::from_secs(60 * 60))
+        .optimizing_compression_task_timeout(Duration::from_secs(30 * 60))
+        .allowed_clock_drift_for_files_from_future(Duration::from_secs(60 * 60 * 24))
+        .file_count_soft_limit(0x10_000)
+        .files_total_size_soft_limit(512 * (1u64 << 20))
+        .file_count_limit_percent_if_deleting(70)
+        .files_total_size_limit_percent_if_deleting(70)
+        .build()
+        .expect("Failed to build config");
+    check_conf(&conf, &cd);
+
+    fn check_conf(conf: &CacheConfig, cd: &PathBuf) {
+        assert!(conf.enabled());
+        assert_eq!(
+            conf.directory(),
+            &fs::canonicalize(cd).expect("canonicalize failed")
+        );
+        assert_eq!(conf.worker_event_queue_size(), 0x10);
+        assert_eq!(conf.baseline_compression_level(), 3);
+        assert_eq!(conf.optimized_compression_level(), 20);
+        assert_eq!(conf.optimized_compression_usage_counter_threshold(), 0x100);
+        assert_eq!(conf.cleanup_interval(), Duration::from_secs(60 * 60));
+        assert_eq!(
+            conf.optimizing_compression_task_timeout(),
+            Duration::from_secs(30 * 60)
+        );
+        assert_eq!(
+            conf.allowed_clock_drift_for_files_from_future(),
+            Duration::from_secs(60 * 60 * 24)
+        );
+        assert_eq!(conf.file_count_soft_limit(), 0x10_000);
+        assert_eq!(conf.files_total_size_soft_limit(), 512 * (1u64 << 20));
+        assert_eq!(conf.file_count_limit_percent_if_deleting(), 70);
+        assert_eq!(conf.files_total_size_limit_percent_if_deleting(), 70);
+    }
+}

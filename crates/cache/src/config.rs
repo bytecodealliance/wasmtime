@@ -301,6 +301,10 @@ impl CacheConfig {
     generate_setting_getter!(file_count_limit_percent_if_deleting: u8);
     generate_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
 
+    pub fn builder() -> CacheConfigBuilder {
+        CacheConfigBuilder::default()
+    }
+
     /// Returns true if and only if the cache is enabled.
     pub fn enabled(&self) -> bool {
         self.enabled
@@ -345,22 +349,7 @@ impl CacheConfig {
     /// Parses cache configuration from the file specified
     pub fn from_file(config_file: Option<&Path>) -> Result<Self> {
         let mut config = Self::load_and_parse_file(config_file)?;
-
-        // validate values and fill in defaults
-        config.validate_directory_or_default()?;
-        config.validate_worker_event_queue_size_or_default();
-        config.validate_baseline_compression_level_or_default()?;
-        config.validate_optimized_compression_level_or_default()?;
-        config.validate_optimized_compression_usage_counter_threshold_or_default();
-        config.validate_cleanup_interval_or_default();
-        config.validate_optimizing_compression_task_timeout_or_default();
-        config.validate_allowed_clock_drift_for_files_from_future_or_default();
-        config.validate_file_count_soft_limit_or_default();
-        config.validate_files_total_size_soft_limit_or_default();
-        config.validate_file_count_limit_percent_if_deleting_or_default()?;
-        config.validate_files_total_size_limit_percent_if_deleting_or_default()?;
-        config.spawn_worker();
-
+        config.validate_or_default()?;
         Ok(config)
     }
 
@@ -418,6 +407,24 @@ impl CacheConfig {
                 Ok(config.cache)
             }
         }
+    }
+
+    /// validate values and fill in defaults
+    fn validate_or_default(&mut self) -> Result<()> {
+        self.validate_directory_or_default()?;
+        self.validate_worker_event_queue_size_or_default();
+        self.validate_baseline_compression_level_or_default()?;
+        self.validate_optimized_compression_level_or_default()?;
+        self.validate_optimized_compression_usage_counter_threshold_or_default();
+        self.validate_cleanup_interval_or_default();
+        self.validate_optimizing_compression_task_timeout_or_default();
+        self.validate_allowed_clock_drift_for_files_from_future_or_default();
+        self.validate_file_count_soft_limit_or_default();
+        self.validate_files_total_size_soft_limit_or_default();
+        self.validate_file_count_limit_percent_if_deleting_or_default()?;
+        self.validate_files_total_size_limit_percent_if_deleting_or_default()?;
+        self.spawn_worker();
+        Ok(())
     }
 
     fn validate_directory_or_default(&mut self) -> Result<()> {
@@ -576,6 +583,187 @@ impl CacheConfig {
             );
         }
         Ok(())
+    }
+}
+
+/// A builder for `CacheConfig`s.
+#[derive(Debug, Clone, Default)]
+pub struct CacheConfigBuilder {
+    enabled: bool,
+    directory: Option<PathBuf>,
+    worker_event_queue_size: Option<u64>,
+    baseline_compression_level: Option<i32>,
+    optimized_compression_level: Option<i32>,
+    optimized_compression_usage_counter_threshold: Option<u64>,
+    cleanup_interval: Option<Duration>,
+    optimizing_compression_task_timeout: Option<Duration>,
+    allowed_clock_drift_for_files_from_future: Option<Duration>,
+    file_count_soft_limit: Option<u64>,
+    files_total_size_soft_limit: Option<u64>,
+    file_count_limit_percent_if_deleting: Option<u8>,
+    files_total_size_limit_percent_if_deleting: Option<u8>,
+}
+
+impl CacheConfigBuilder {
+    /// Specifies whether the cache system is used or not.
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.enabled = enabled;
+        self
+    }
+
+    /// Specifies where the cache directory is. Must be an absolute path.
+    pub fn directory(mut self, directory: impl Into<PathBuf>) -> Self {
+        self.directory = Some(directory.into());
+        self
+    }
+
+    /// Size of cache worker event queue. If the queue is full, incoming cache usage events will be
+    /// dropped.
+    pub fn worker_event_queue_size(mut self, size: u64) -> Self {
+        self.worker_event_queue_size = Some(size);
+        self
+    }
+
+    /// Compression level used when a new cache file is being written by the cache system. Wasmtime
+    /// uses zstd compression.
+    pub fn baseline_compression_level(mut self, level: i32) -> Self {
+        self.baseline_compression_level = Some(level);
+        self
+    }
+
+    /// Compression level used when the cache worker decides to recompress a cache file. Wasmtime
+    /// uses zstd compression.
+    pub fn optimized_compression_level(mut self, level: i32) -> Self {
+        self.optimized_compression_level = Some(level);
+        self
+    }
+
+    /// One of the conditions for the cache worker to recompress a cache file is to have usage
+    /// count of the file exceeding this threshold.
+    pub fn optimized_compression_usage_counter_threshold(mut self, threshold: u64) -> Self {
+        self.optimized_compression_usage_counter_threshold = Some(threshold);
+        self
+    }
+
+    /// When the cache worker is notified about a cache file being updated by the cache system and
+    /// this interval has already passed since last cleaning up, the worker will attempt a new
+    /// cleanup.
+    pub fn cleanup_interval(mut self, interval: Duration) -> Self {
+        self.cleanup_interval = Some(interval);
+        self
+    }
+
+    /// When the cache worker decides to recompress a cache file, it makes sure that no other
+    /// worker has started the task for this file within the last
+    /// optimizing-compression-task-timeout interval. If some worker has started working on it,
+    /// other workers are skipping this task.
+    pub fn optimizing_compression_task_timeout(mut self, timeout: Duration) -> Self {
+        self.optimizing_compression_task_timeout = Some(timeout);
+        self
+    }
+
+    /// ### Locks
+    ///
+    /// When the cache worker attempts acquiring a lock for some task, it checks if some other
+    /// worker has already acquired such a lock. To be fault tolerant and eventually execute every
+    /// task, the locks expire after some interval. However, because of clock drifts and different
+    /// timezones, it would happen that some lock was created in the future. This setting defines a
+    /// tolerance limit for these locks. If the time has been changed in the system (i.e. two years
+    /// backwards), the cache system should still work properly. Thus, these locks will be treated
+    /// as expired (assuming the tolerance is not too big).
+    ///
+    /// ### Cache files
+    ///
+    /// Similarly to the locks, the cache files or their metadata might have modification time in
+    /// distant future. The cache system tries to keep these files as long as possible. If the
+    /// limits are not reached, the cache files will not be deleted. Otherwise, they will be
+    /// treated as the oldest files, so they might survive. If the user actually uses the cache
+    /// file, the modification time will be updated.
+    pub fn allowed_clock_drift_for_files_from_future(mut self, drift: Duration) -> Self {
+        self.allowed_clock_drift_for_files_from_future = Some(drift);
+        self
+    }
+
+    /// Soft limit for the file count in the cache directory.
+    ///
+    /// This doesn't include files with metadata. To learn more, please refer to the cache system
+    /// section.
+    pub fn file_count_soft_limit(mut self, limit: u64) -> Self {
+        self.file_count_soft_limit = Some(limit);
+        self
+    }
+
+    /// Soft limit for the total size* of files in the cache directory.
+    ///
+    /// This doesn't include files with metadata. To learn more, please refer to the cache system
+    /// section.
+    ///
+    /// *this is the file size, not the space physically occupied on the disk.
+    pub fn files_total_size_soft_limit(mut self, limit: u64) -> Self {
+        self.files_total_size_soft_limit = Some(limit);
+        self
+    }
+
+    /// If file-count-soft-limit is exceeded and the cache worker performs the cleanup task, then
+    /// the worker will delete some cache files, so after the task, the file count should not
+    /// exceed file-count-soft-limit * file-count-limit-percent-if-deleting.
+    ///
+    /// This doesn't include files with metadata. To learn more, please refer to the cache system
+    /// section.
+    pub fn file_count_limit_percent_if_deleting(mut self, percent: u8) -> Self {
+        self.file_count_limit_percent_if_deleting = Some(percent);
+        self
+    }
+
+    /// If files-total-size-soft-limit is exceeded and cache worker performs the cleanup task, then
+    /// the worker will delete some cache files, so after the task, the files total size should not
+    /// exceed files-total-size-soft-limit * files-total-size-limit-percent-if-deleting.
+    ///
+    /// This doesn't include files with metadata. To learn more, please refer to the cache system
+    /// section.
+    pub fn files_total_size_limit_percent_if_deleting(mut self, percent: u8) -> Self {
+        self.files_total_size_limit_percent_if_deleting = Some(percent);
+        self
+    }
+
+    pub fn build(self) -> Result<CacheConfig> {
+        let CacheConfigBuilder {
+            enabled,
+            directory,
+            worker_event_queue_size,
+            baseline_compression_level,
+            optimized_compression_level,
+            optimized_compression_usage_counter_threshold,
+            cleanup_interval,
+            optimizing_compression_task_timeout,
+            allowed_clock_drift_for_files_from_future,
+            file_count_soft_limit,
+            files_total_size_soft_limit,
+            file_count_limit_percent_if_deleting,
+            files_total_size_limit_percent_if_deleting,
+        } = self;
+
+        let mut config = CacheConfig {
+            enabled,
+            directory,
+            worker_event_queue_size,
+            baseline_compression_level,
+            optimized_compression_level,
+            optimized_compression_usage_counter_threshold,
+            cleanup_interval,
+            optimizing_compression_task_timeout,
+            allowed_clock_drift_for_files_from_future,
+            file_count_soft_limit,
+            files_total_size_soft_limit,
+            file_count_limit_percent_if_deleting,
+            files_total_size_limit_percent_if_deleting,
+            worker: None,
+            state: Arc::new(CacheState::default()),
+        };
+
+        config.validate_or_default()?;
+
+        Ok(config)
     }
 }
 
