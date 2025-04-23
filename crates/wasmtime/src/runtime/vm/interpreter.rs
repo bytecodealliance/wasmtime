@@ -342,8 +342,8 @@ impl InterpreterRef<'_> {
             (@set bool $reg:ident $val:ident) => (self.0[$reg].set_i32(i32::from($val)));
             (@set u32 $reg:ident $val:ident) => (self.0[$reg].set_u32($val));
             (@set u64 $reg:ident $val:ident) => (self.0[$reg].set_u64($val));
-            (@set f32 $reg:ident $val:ident) => (self.0[$reg].set_f32($val));
-            (@set f64 $reg:ident $val:ident) => (self.0[$reg].set_f64($val));
+            (@set f32 $reg:ident $val:ident) => (unreachable::<f32, _>(($reg, $val)));
+            (@set f64 $reg:ident $val:ident) => (unreachable::<f64, _>(($reg, $val)));
             (@set i8x16 $reg:ident $val:ident) => (unreachable::<i8x16, _>(($reg, $val)));
             (@set pointer $reg:ident $val:ident) => (self.0[$reg].set_ptr($val));
             (@set size $reg:ident $val:ident) => (self.0[$reg].set_ptr($val as *mut u8));
