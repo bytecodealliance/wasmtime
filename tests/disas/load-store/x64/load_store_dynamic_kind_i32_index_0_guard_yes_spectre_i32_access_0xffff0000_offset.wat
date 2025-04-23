@@ -22,17 +22,17 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movl    %edx, %r10d
-;;       movq    %r10, %rax
-;;       addq    0x2f(%rip), %rax
+;;       movq    %r10, %rdx
+;;       addq    0x2f(%rip), %rdx
 ;;       jb      0x3a
-;;   17: movq    0x48(%rdi), %r8
-;;       xorq    %rdx, %rdx
+;;   17: movq    0x48(%rdi), %r9
+;;       xorq    %r8, %r8
 ;;       addq    0x40(%rdi), %r10
-;;       movl    $0xffff0000, %r9d
-;;       addq    %r10, %r9
-;;       cmpq    %r8, %rax
-;;       cmovaq  %rdx, %r9
-;;       movl    %ecx, (%r9)
+;;       movl    $0xffff0000, %r11d
+;;       addq    %r11, %r10
+;;       cmpq    %r9, %rdx
+;;       cmovaq  %r8, %r10
+;;       movl    %ecx, (%r10)
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
@@ -45,17 +45,17 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movl    %edx, %r10d
-;;       movq    %r10, %rax
-;;       addq    0x2f(%rip), %rax
+;;       movq    %r10, %rcx
+;;       addq    0x2f(%rip), %rcx
 ;;       jb      0x9a
-;;   77: movq    0x48(%rdi), %rdx
-;;       xorq    %rcx, %rcx
+;;   77: movq    0x48(%rdi), %r8
+;;       xorq    %rdx, %rdx
 ;;       addq    0x40(%rdi), %r10
-;;       movl    $0xffff0000, %r8d
-;;       addq    %r10, %r8
-;;       cmpq    %rdx, %rax
-;;       cmovaq  %rcx, %r8
-;;       movl    (%r8), %eax
+;;       movl    $0xffff0000, %r9d
+;;       addq    %r10, %r9
+;;       cmpq    %r8, %rcx
+;;       cmovaq  %rdx, %r9
+;;       movl    (%r9), %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
