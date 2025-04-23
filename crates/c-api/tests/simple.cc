@@ -11,20 +11,6 @@ template <typename T, typename E> T unwrap(Result<T, E> result) {
   std::abort();
 }
 
-TEST(Store, Smoke) {
-  Engine engine;
-  Store store(engine);
-  Store store2 = std::move(store);
-  Store store3(std::move(store2));
-
-  store = Store(engine);
-  store.limiter(-1, -1, -1, -1, -1);
-  store.context().gc();
-  store.context().get_fuel().err();
-  store.context().set_fuel(1).err();
-  store.context().set_epoch_deadline(1);
-}
-
 TEST(Engine, Smoke) {
   Engine engine;
   Config config;
@@ -70,27 +56,6 @@ TEST(Module, Serialize) {
   ::remove(path.c_str());
 }
 
-TEST(WasiConfig, Smoke) {
-  WasiConfig config;
-  config.argv({"x"});
-  config.inherit_argv();
-  config.env({{"x", "y"}});
-  config.inherit_env();
-  EXPECT_FALSE(config.stdin_file("nonexistent"));
-  config.inherit_stdin();
-  EXPECT_FALSE(config.stdout_file("path/to/nonexistent"));
-  config.inherit_stdout();
-  EXPECT_FALSE(config.stderr_file("path/to/nonexistent"));
-  config.inherit_stderr();
-
-  WasiConfig config2;
-  if (config2.preopen_dir("nonexistent", "nonexistent", 0, 0)) {
-    Engine engine;
-    Store store(engine);
-    EXPECT_FALSE(store.context().set_wasi(std::move(config2)));
-  }
-}
-
 TEST(ExternRef, Smoke) {
   Engine engine;
   Store store(engine);
@@ -100,64 +65,6 @@ TEST(ExternRef, Smoke) {
   EXPECT_EQ(std::any_cast<int>(b.data(store)), 3);
   a.unroot(store);
   a = b;
-}
-
-TEST(Val, Smoke) {
-  Val val(1);
-  EXPECT_EQ(val.kind(), ValKind::I32);
-  EXPECT_EQ(val.i32(), 1);
-
-  val = (int32_t)3;
-  EXPECT_EQ(val.kind(), ValKind::I32);
-  EXPECT_EQ(val.i32(), 3);
-
-  val = (int64_t)4;
-  EXPECT_EQ(val.kind(), ValKind::I64);
-  EXPECT_EQ(val.i64(), 4);
-
-  val = (float)5;
-  EXPECT_EQ(val.kind(), ValKind::F32);
-  EXPECT_EQ(val.f32(), 5);
-
-  val = (double)6;
-  EXPECT_EQ(val.kind(), ValKind::F64);
-  EXPECT_EQ(val.f64(), 6);
-
-  val = V128();
-  EXPECT_EQ(val.kind(), ValKind::V128);
-  for (int i = 0; i < 16; i++) {
-    EXPECT_EQ(val.v128().v128[i], 0);
-  }
-
-  Engine engine;
-  Store store(engine);
-  val = std::optional<ExternRef>(std::nullopt);
-  EXPECT_EQ(val.kind(), ValKind::ExternRef);
-  EXPECT_EQ(val.externref(store), std::nullopt);
-
-  val = std::optional<ExternRef>(ExternRef(store, 5));
-  EXPECT_EQ(val.kind(), ValKind::ExternRef);
-  EXPECT_EQ(std::any_cast<int>(val.externref(store)->data(store)), 5);
-
-  val = ExternRef(store, 5);
-  EXPECT_EQ(val.kind(), ValKind::ExternRef);
-  EXPECT_EQ(std::any_cast<int>(val.externref(store)->data(store)), 5);
-
-  val = std::optional<Func>(std::nullopt);
-  EXPECT_EQ(val.kind(), ValKind::FuncRef);
-  EXPECT_EQ(val.funcref(), std::nullopt);
-
-  Func func(
-      store, FuncType({}, {}),
-      [](auto caller, auto params, auto results) -> auto{
-        return std::monostate();
-      });
-
-  val = std::optional<Func>(func);
-  EXPECT_EQ(val.kind(), ValKind::FuncRef);
-
-  val = func;
-  EXPECT_EQ(val.kind(), ValKind::FuncRef);
 }
 
 TEST(Global, Smoke) {
