@@ -17,6 +17,20 @@ pub struct CodegenOptions {
     /// Do not include the `#![allow(...)]` pragmas in the generated
     /// source. Useful if it must be include!()'d elsewhere.
     pub exclude_global_allow_pragmas: bool,
+
+    /// Prefixes to remove when printing file names in generaed files. This
+    /// helps keep codegen deterministic.
+    pub prefixes: Vec<Prefix>,
+}
+
+/// A path prefix which should be replaced when printing file names.
+#[derive(Clone, Debug)]
+pub struct Prefix {
+    /// Prefix to strip
+    pub prefix: String,
+
+    /// Name replacing the stripped prefix.
+    pub name: String,
 }
 
 /// Emit Rust source code for the given type and term environments.

@@ -1,5 +1,6 @@
 #![allow(missing_docs)]
 
+use crate::codegen::Prefix;
 use std::ops::Index;
 use std::path::{Path, PathBuf};
 
@@ -55,7 +56,17 @@ impl LineMap {
 impl Files {
     pub fn from_paths<P: AsRef<Path>>(
         paths: impl IntoIterator<Item = P>,
+        prefixes: &[crate::codegen::Prefix],
     ) -> Result<Self, (PathBuf, std::io::Error)> {
+        fn replace_prefixes(prefixes: &[Prefix], path: String) -> String {
+            for Prefix { prefix, name } in prefixes {
+                if path.starts_with(prefix) {
+                    return path.replacen(prefix, name, 1);
+                }
+            }
+            path
+        }
+
         let mut file_names = Vec::new();
         let mut file_texts = Vec::new();
         let mut file_line_maps = Vec::new();
@@ -64,7 +75,7 @@ impl Files {
             let path = path.as_ref();
             let contents =
                 std::fs::read_to_string(path).map_err(|err| (path.to_path_buf(), err))?;
-            let name = path.display().to_string();
+            let name = replace_prefixes(prefixes, path.display().to_string());
 
             file_line_maps.push(LineMap::from_str(&contents));
             file_names.push(name);
