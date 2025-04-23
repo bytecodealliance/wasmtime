@@ -331,6 +331,8 @@ wasmtime_option_group! {
         pub trap_on_grow_failure: Option<bool>,
         /// Maximum execution time of wasm code before timing out (1, 2s, 100ms, etc)
         pub timeout: Option<Duration>,
+        /// Size of stacks created with cont.new instructions
+        pub stack_switching_stack_size: Option<usize>,
         /// Configures support for all WebAssembly proposals implemented.
         pub all_proposals: Option<bool>,
         /// Configure support for the bulk memory proposal.
@@ -374,6 +376,8 @@ wasmtime_option_group! {
         pub component_model_async_stackful: Option<bool>,
         /// Configure support for the function-references proposal.
         pub function_references: Option<bool>,
+        /// Configure support for the stack-switching proposal.
+        pub stack_switching: Option<bool>,
         /// Configure support for the GC proposal.
         pub gc: Option<bool>,
         /// Configure support for the custom-page-sizes proposal.
@@ -816,6 +820,12 @@ impl CommonOptions {
         }
 
         match_feature! {
+            ["stack-switching" : self.wasm.stack_switching_stack_size]
+            size => config.stack_switching_stack_size(size),
+            _ => err,
+        }
+
+        match_feature! {
             ["pooling-allocator" : self.opts.pooling_allocator.or(pooling_allocator_default)]
             enable => {
                 if enable {
@@ -980,6 +990,9 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.memory64.or(all) {
             config.wasm_memory64(enable);
         }
+        if let Some(enable) = self.wasm.stack_switching {
+            config.wasm_stack_switching(enable);
+        }
         if let Some(enable) = self.wasm.custom_page_sizes.or(all) {
             config.wasm_custom_page_sizes(enable);
         }
@@ -1019,6 +1032,7 @@ impl CommonOptions {
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)
             ("gc", function_references, wasm_function_references)
+            ("stack-switching", stack_switching, wasm_stack_switching)
         }
         Ok(())
     }

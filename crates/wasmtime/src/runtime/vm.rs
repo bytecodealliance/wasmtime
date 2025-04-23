@@ -42,6 +42,7 @@ mod vmcontext;
 
 #[cfg(feature = "threads")]
 mod parking_spot;
+pub mod stack_switching;
 
 // Note that `debug_builtins` here is disabled with a feature or a lack of a
 // native compilation backend because it's only here to assist in debugging
@@ -97,6 +98,7 @@ pub use crate::runtime::vm::vmcontext::{
     VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport,
     VMOpaqueContext, VMStoreContext, VMTable, VMTagImport, VMWasmCallFunction, ValRaw,
 };
+
 pub use send_sync_ptr::SendSyncPtr;
 
 mod module_id;

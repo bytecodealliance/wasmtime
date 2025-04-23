@@ -27,6 +27,9 @@ use core::ops::Range;
 use core::ptr::{self, NonNull};
 
 pub use self::backtrace::Backtrace;
+#[cfg(feature = "gc")]
+pub use self::backtrace::Frame;
+
 pub use self::coredump::CoreDumpStack;
 pub use self::tls::tls_eager_initialize;
 #[cfg(feature = "async")]
@@ -424,6 +427,7 @@ where
 // usage of its accessor methods.
 mod call_thread_state {
     use super::*;
+    use crate::runtime::vm::stack_switching::VMStackChain;
     use crate::runtime::vm::Unwind;
     use crate::EntryStoreContext;
 
@@ -525,6 +529,11 @@ mod call_thread_state {
         /// Get the saved FP upon entry into Wasm for the previous `CallThreadState`.
         pub unsafe fn old_last_wasm_entry_fp(&self) -> usize {
             (&*self.old_state).last_wasm_entry_fp
+        }
+
+        /// Get the saved `VMStackChain` for the previous `CallThreadState`.
+        pub unsafe fn old_stack_chain(&self) -> VMStackChain {
+            (&*self.old_state).stack_chain.clone()
         }
 
         /// Get the previous `CallThreadState`.

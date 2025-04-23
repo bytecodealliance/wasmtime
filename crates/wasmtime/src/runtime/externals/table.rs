@@ -188,6 +188,11 @@ impl Table {
                         ty => unreachable!("not a top type: {ty:?}"),
                     }
                 }
+
+                runtime::TableElement::ContRef(_c) => {
+                    // TODO(#10248) Required to support stack switching in the embedder API.
+                    unimplemented!()
+                }
             }
         }
     }
