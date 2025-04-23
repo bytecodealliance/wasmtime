@@ -2144,7 +2144,17 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::Fli {
-            ty: F32,
+            width: FpuOPWidth::H,
+            rd: writable_fa0(),
+            imm: FliConstant::new(3),
+        },
+        "fli.h fa0,2^-15",
+        0xf4118553,
+    ));
+
+    insns.push(TestUnit::new(
+        Inst::Fli {
+            width: FpuOPWidth::S,
             rd: writable_fa0(),
             imm: FliConstant::new(0),
         },
@@ -2154,7 +2164,7 @@ fn test_riscv64_binemit() {
 
     insns.push(TestUnit::new(
         Inst::Fli {
-            ty: F64,
+            width: FpuOPWidth::D,
             rd: writable_fa0(),
             imm: FliConstant::new(13),
         },

@@ -1,6 +1,6 @@
 test compile precise-output
 set unwind_info=false
-target riscv64 has_zfh
+target riscv64 has_zfhmin has_zfh
 
 function %fadd(f16, f16) -> f16 {
 block0(v0: f16, v1: f16):

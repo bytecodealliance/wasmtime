@@ -844,3 +844,86 @@ block0(v0: i16):
 ;   addi sp, sp, 0x10
 ;   ret
 
+function %second_f16(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+    return v1
+}
+
+; VCode:
+; block0:
+;   fmv.d fa0,fa1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmv.d fa0, fa1
+;   ret
+
+function %second_f128(f128, f128) -> f128 {
+block0(v0: f128, v1: f128):
+    return v1
+}
+
+; VCode:
+; block0:
+;   mv a0,a2
+;   mv a1,a3
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a0, a2
+;   mv a1, a3
+;   ret
+
+function %ninth_f16(f16, f16, f16, f16, f16, f16, f16, f16, f16) -> f16 {
+block0(v0: f16, v1: f16, v2: f16, v3: f16, v4: f16, v5: f16, v6: f16, v7: f16, v8: f16):
+    return v8
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   flh fa0,-16(incoming_arg)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   lh t6, 0x10(sp)
+;   lui t5, 0xffff0
+;   or t6, t6, t5
+;   fmv.w.x fa0, t6
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %return_f16_three_times(f16) -> f16, f16, f16 {
+block0(v0: f16):
+    return v0, v0, v0
+}
+
+; VCode:
+; block0:
+;   fsh fa0,0(a0)
+;   fmv.d fa1,fa0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   fmv.x.w t6, fa0
+;   sh t6, 0(a0)
+;   fmv.d fa1, fa0
+;   ret
+

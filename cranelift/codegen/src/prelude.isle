@@ -318,6 +318,12 @@
 (decl u16_replicated_u8 (u8) u64)
 (extern extractor u16_replicated_u8 u16_replicated_u8)
 
+;; Get the low and high bits of a `u128` as `u64`s.
+(decl u128_low_bits (u128) u64)
+(extern constructor u128_low_bits u128_low_bits)
+(decl u128_high_bits (u128) u64)
+(extern constructor u128_high_bits u128_high_bits)
+
 ;; Floating point operations
 
 (decl pure partial f16_min (Ieee16 Ieee16) Ieee16)
@@ -611,7 +617,7 @@
 (decl ty_scalar (Type) Type)
 (extern extractor ty_scalar ty_scalar)
 
-;; An extractor that only matches scalar floating-point types--F32 or F64.
+;; An extractor that only matches scalar floating-point types.
 (decl ty_scalar_float (Type) Type)
 (extern extractor ty_scalar_float ty_scalar_float)
 
