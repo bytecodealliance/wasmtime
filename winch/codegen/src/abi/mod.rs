@@ -536,7 +536,7 @@ impl ABIParams {
     }
 
     /// Get the [`ABIOperand`] param in the nth position.
-    #[allow(unused)]
+    #[cfg(test)]
     pub fn get(&self, n: usize) -> Option<&ABIOperand> {
         self.operands.inner.get(n)
     }

@@ -1111,7 +1111,7 @@ mod test_programs {
 
     macro_rules! assert_test_exists {
         ($name:ident) => {
-            #[allow(unused_imports)]
+            #[expect(unused_imports, reason = "just here to assert the test is here")]
             use self::$name as _;
         };
     }

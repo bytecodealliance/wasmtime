@@ -209,7 +209,6 @@ fn test_trap_through_host() -> Result<()> {
 }
 
 #[test]
-#[allow(deprecated)]
 fn test_trap_backtrace_disabled() -> Result<()> {
     let mut config = Config::default();
     config.wasm_backtrace(false);
@@ -1147,7 +1146,6 @@ fn standalone_backtrace() -> Result<()> {
 }
 
 #[test]
-#[allow(deprecated)]
 fn standalone_backtrace_disabled() -> Result<()> {
     let mut config = Config::new();
     config.wasm_backtrace(false);

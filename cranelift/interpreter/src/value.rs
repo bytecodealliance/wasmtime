@@ -1,7 +1,7 @@
 //! The [DataValueExt] trait is an extension trait for [DataValue]. It provides a lot of functions
 //! used by the rest of the interpreter.
 
-#![allow(trivial_numeric_casts)]
+#![expect(trivial_numeric_casts, reason = "macro-generated code")]
 
 use core::fmt::{self, Display, Formatter};
 use core::ops::Neg;

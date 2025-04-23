@@ -2571,7 +2571,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         Ok(())
     }
 
-    #[allow(unused_variables)]
     #[instrument(skip(self, _memory))]
     fn sock_accept(
         &mut self,
@@ -2584,7 +2583,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         Err(types::Errno::Notsock.into())
     }
 
-    #[allow(unused_variables)]
     #[instrument(skip(self, _memory))]
     fn sock_recv(
         &mut self,
@@ -2598,7 +2596,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         Err(types::Errno::Notsock.into())
     }
 
-    #[allow(unused_variables)]
     #[instrument(skip(self, _memory))]
     fn sock_send(
         &mut self,
@@ -2612,7 +2609,6 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
         Err(types::Errno::Notsock.into())
     }
 
-    #[allow(unused_variables)]
     #[instrument(skip(self, _memory))]
     fn sock_shutdown(
         &mut self,

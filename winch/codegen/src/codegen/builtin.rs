@@ -94,8 +94,7 @@ macro_rules! declare_function_sig {
             )*
         }
 
-        // Until all the builtin functions are used.
-        #[allow(dead_code)]
+        #[expect(dead_code, reason = "not all functions used yet")]
         impl BuiltinFunctions {
             pub fn new<P: PtrSize>(
                 vmoffsets: &VMOffsets<P>,
@@ -103,7 +102,6 @@ macro_rules! declare_function_sig {
                 wasm_call_conv: CallingConvention,
             ) -> Self {
                 let size = vmoffsets.ptr.size();
-                #[allow(unused_doc_comments)]
                 Self {
                     host_call_conv,
                     wasm_call_conv,

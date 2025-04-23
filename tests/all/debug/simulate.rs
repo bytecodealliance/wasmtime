@@ -5,7 +5,7 @@ use filecheck::{CheckerBuilder, NO_VARIABLES};
 use tempfile::NamedTempFile;
 use wat::parse_str;
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "used by conditionally-defined tests below")]
 fn check_wat(wat: &str) -> Result<()> {
     let wasm = parse_str(wat)?;
     let obj_file = NamedTempFile::new()?;
@@ -33,9 +33,9 @@ fn check_wat(wat: &str) -> Result<()> {
 fn test_debug_dwarf_simulate_simple_x86_64() -> Result<()> {
     check_wat(
         r#"
-;; check: DW_TAG_compile_unit 
+;; check: DW_TAG_compile_unit
 (module
-;; check: DW_TAG_subprogram 
+;; check: DW_TAG_subprogram
 ;; check: DW_AT_name	("wasm-function[0]")
 ;; check:   DW_TAG_formal_parameter
 ;; check:     DW_AT_name	("var0")
@@ -64,9 +64,9 @@ fn test_debug_dwarf_simulate_simple_x86_64() -> Result<()> {
 fn test_debug_dwarf_simulate_with_imports_x86_64() -> Result<()> {
     check_wat(
         r#"
-;; check: DW_TAG_compile_unit 
+;; check: DW_TAG_compile_unit
 (module
-;; check: DW_TAG_subprogram 
+;; check: DW_TAG_subprogram
 ;; check: DW_AT_name	("func1")
     (import "foo" "bar" (func $import1) )
     (func $func1 (result i32)
@@ -85,9 +85,9 @@ fn test_debug_dwarf_simulate_with_imports_x86_64() -> Result<()> {
 fn test_debug_dwarf_simulate_with_invalid_name_x86_64() -> Result<()> {
     check_wat(
         r#"
-;; check: DW_TAG_compile_unit 
+;; check: DW_TAG_compile_unit
 (module (@name "\00")
-;; check: DW_TAG_subprogram 
+;; check: DW_TAG_subprogram
 ;; check: DW_AT_name	("wasm-function[1]")
     (import "foo" "bar" (func $import1) )
     (func (@name "\00f") (result i32)

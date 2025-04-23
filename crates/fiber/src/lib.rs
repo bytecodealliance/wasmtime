@@ -1,4 +1,3 @@
-#![expect(clippy::allow_attributes, reason = "crate not migrated yet")]
 #![no_std]
 
 #[cfg(any(feature = "std", unix, windows))]

@@ -69,7 +69,6 @@
 
 #![warn(clippy::cast_sign_loss)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 pub mod clocks;
 mod ctx;

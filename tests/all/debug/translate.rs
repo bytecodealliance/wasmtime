@@ -5,7 +5,6 @@ use filecheck::{CheckerBuilder, NO_VARIABLES};
 use std::fs::read;
 use tempfile::NamedTempFile;
 
-#[allow(dead_code)]
 fn check_wasm(wasm_path: &str, directives: &str) -> Result<()> {
     let wasm = read(wasm_path)?;
     let obj_file = NamedTempFile::new()?;
@@ -24,31 +23,8 @@ fn check_wasm(wasm_path: &str, directives: &str) -> Result<()> {
     Ok(())
 }
 
-#[allow(dead_code)]
-fn check_line_program(wasm_path: &str, directives: &str) -> Result<()> {
-    let wasm = read(wasm_path)?;
-    let obj_file = NamedTempFile::new()?;
-    let obj_path = obj_file.path().to_str().unwrap();
-    compile_cranelift(&wasm, Some(wasm_path.as_ref()), None, obj_path)?;
-    let dump = get_dwarfdump(obj_path, DwarfDumpSection::DebugLine)?;
-    let mut builder = CheckerBuilder::new();
-    builder
-        .text(directives)
-        .map_err(|e| format_err!("unable to build checker: {:?}", e))?;
-    let checker = builder.finish();
-    let check = checker
-        .explain(&dump, NO_VARIABLES)
-        .map_err(|e| format_err!("{:?}", e))?;
-    assert!(check.0, "didn't pass check {}", check.1);
-    Ok(())
-}
-
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 fn test_debug_dwarf_translate_dead_code() -> Result<()> {
     check_wasm(
         "tests/all/debug/testsuite/dead_code.wasm",
@@ -69,10 +45,6 @@ check:      DW_AT_name	("baz")
 
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 fn test_debug_dwarf_translate() -> Result<()> {
     check_wasm(
         "tests/all/debug/testsuite/fib-wasm.wasm",
@@ -102,10 +74,6 @@ check:        DW_AT_decl_line	(10)
 
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 fn test_debug_dwarf5_translate() -> Result<()> {
     check_wasm(
         "tests/all/debug/testsuite/fib-wasm-dwarf5.wasm",
@@ -135,10 +103,6 @@ check:        DW_AT_decl_line	(10)
 
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 fn test_debug_split_dwarf4_translate() -> Result<()> {
     check_wasm(
         "tests/all/debug/testsuite/fib-wasm-split4.wasm",
@@ -168,10 +132,6 @@ check:        DW_AT_decl_line	(10)
 
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 fn test_debug_dwarf_translate_generated() -> Result<()> {
     check_wasm(
         "tests/all/debug/testsuite/fraction-norm.wasm",
@@ -191,10 +151,6 @@ check:     DW_AT_decl_line	(124)
 
 #[test]
 #[ignore]
-#[cfg(all(
-    any(target_os = "linux", target_os = "macos"),
-    target_pointer_width = "64"
-))]
 fn test_debug_dwarf_translate_fission() -> Result<()> {
     check_wasm(
         "tests/all/debug/testsuite/dwarf_fission.wasm",

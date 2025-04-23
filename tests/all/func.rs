@@ -1255,7 +1255,7 @@ fn wrap_multiple_results(config: &mut Config) -> anyhow::Result<()> {
 
     macro_rules! equal_tuples {
         ($($cnt:tt ($($a:ident),*))*) => ($(
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, reason = "macro-generated code")]
             impl<$($a: EqualToValue,)*> EqualToValues for ($($a,)*) {
                 fn eq_values(&self, values: &[Val]) -> bool {
                     let ($($a,)*) = self;
