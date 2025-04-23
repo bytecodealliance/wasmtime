@@ -3445,7 +3445,7 @@ impl FuncEnvironment<'_> {
     ) -> ir::Value {
         // As above, fall back to a builtin if we lack SSSE3.
         if !self.is_x86() || self.isa.has_x86_pshufb_lowering() {
-            if self.relaxed_simd_deterministic() || self.isa.triple().is_pulley() {
+            if !self.is_x86() || self.relaxed_simd_deterministic() {
                 builder.ins().swizzle(a, b)
             } else {
                 builder.ins().x86_pshufb(a, b)
