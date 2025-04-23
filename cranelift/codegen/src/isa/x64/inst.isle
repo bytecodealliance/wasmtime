@@ -3071,16 +3071,6 @@
 (rule 0 (x64_and $I32 src1 (is_gpr_mem src2)) (x64_andl_rm src1 src2))
 (rule 0 (x64_and $I64 src1 (is_gpr_mem src2)) (x64_andq_rm src1 src2))
 
-(decl x64_and_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
-(rule (x64_and_with_flags_paired ty src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr)))
-           (ProducesFlags.ProducesFlagsSideEffect
-                 (MInst.AluRmiR (operand_size_of_type_32_64 ty)
-                       (AluRmiROpcode.And)
-                       src1
-                       src2
-                       dst))))
-
 
 
 ;; Helper for emitting raw `or` instructions.
