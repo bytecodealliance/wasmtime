@@ -25,8 +25,8 @@ wasmtime_wasi_nn::witx::add_to_linker(...);
 
 ### Build
 
-```sh
-$ cargo build
+```console
+cargo build
 ```
 
 To use the WIT-based ABI, compile with `--features component-model` and use `wasmtime_wasi_nn::wit::add_to_linker`.

@@ -23,8 +23,8 @@ hunt for toolchains if you want to compile for Linux or Windows.
 First, use `rustup` to install Rust targets for the other architectures that
 Wasmtime and Cranelift support:
 
-```shell
-$ rustup target add \
+```console
+rustup target add \
     s390x-unknown-linux-gnu \
     riscv64gc-unknown-linux-gnu \
     aarch64-unknown-linux-gnu
@@ -35,8 +35,8 @@ $ rustup target add \
 Next, you'll need to install a `gcc` for each cross-compilation target to serve
 as a linker for `rustc`.
 
-```shell
-$ sudo apt install \
+```console
+sudo apt install \
     gcc-s390x-linux-gnu \
     gcc-riscv64-linux-gnu \
     gcc-aarch64-linux-gnu
@@ -46,8 +46,8 @@ $ sudo apt install \
 
 You will also need to install `qemu` to emulate the cross-compilation targets.
 
-```shell
-$ sudo apt install qemu-user
+```console
+sudo apt install qemu-user
 ```
 
 ## Configure Cargo
@@ -83,18 +83,18 @@ A few examples:
 
 * Build the `wasmtime` binary for `aarch64`:
 
-  ```shell
-  $ cargo build --target aarch64-unknown-linux-gnu
+  ```console
+  cargo build --target aarch64-unknown-linux-gnu
   ```
 
 * Run the tests under `riscv` emulation:
 
-  ```shell
-  $ cargo test --target riscv64gc-unknown-linux-gnu
+  ```console
+  cargo test --target riscv64gc-unknown-linux-gnu
   ```
 
 * Run the `wasmtime` binary under `s390x` emulation:
 
-  ```shell
-  $ cargo run --target s390x-unknown-linux-gnu -- compile example.wasm
+  ```console
+  cargo run --target s390x-unknown-linux-gnu -- compile example.wasm
   ```

@@ -13,7 +13,7 @@ The Wasmtime repository contains a number of git submodules. To build Wasmtime
 and most other crates in the repository, you have to ensure that those are
 initialized with this command:
 
-```shell
+```console
 git submodule update --init
 ```
 
@@ -35,7 +35,7 @@ here.](https://rust-lang.github.io/rust-bindgen/requirements.html#clang)
 To make an unoptimized, debug build of the `wasmtime` CLI tool, go to the root
 of the repository and run this command:
 
-```shell
+```console
 cargo build
 ```
 
@@ -43,7 +43,7 @@ The built executable will be located at `target/debug/wasmtime`.
 
 To make an optimized build, run this command in the root of the repository:
 
-```shell
+```console
 cargo build --release
 ```
 
@@ -64,14 +64,14 @@ You can build any of the Wasmtime crates by appending `-p wasmtime-whatever` to
 the `cargo build` invocation. For example, to build the `wasmtime-environ` crate,
 execute this command:
 
-```shell
+```console
 cargo build -p wasmtime-environ
 ```
 
 Alternatively, you can `cd` into the crate's directory, and run `cargo build`
 there, without needing to supply the `-p` flag:
 
-```shell
+```console
 cd crates/environ/
 cargo build
 ```

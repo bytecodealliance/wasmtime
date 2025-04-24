@@ -39,20 +39,20 @@ Details on ISLE's integration into Cranelift can be found
 
 Build `islec`, the ISLE compiler:
 
-```shell
-$ cargo build --release
+```console
+cargo build --release
 ```
 
 Compile a `.isle` source file into Rust code:
 
-```shell
-$ target/release/islec -i isle_examples/test.isle -o isle_examples/test.rs
+```console
+target/release/islec -i isle_examples/test.isle -o isle_examples/test.rs
 ```
 
 Include that Rust code in your crate and compile it:
 
-```shell
-$ rustc isle_examples/test_main.rs
+```console
+rustc isle_examples/test_main.rs
 ```
 
 ## Tutorial
@@ -132,8 +132,8 @@ variable `c` is bound from the LHS and then reused in the RHS.
 
 Now we can compile this code by running
 
-```shell
-$ islec isle_examples/tutorial.isle
+```console
+islec isle_examples/tutorial.isle
 ```
 
 and we'll get the following output <sup>(ignoring any minor code generation

@@ -14,7 +14,7 @@ To run this example, perform the following steps on Windows 10 v1803 and later:
 
 1. Build Wasmtime according to the [build guide], but enable the `winml`
    feature:
-   ```shell
+   ```console
    cargo build --release --features wasmtime-wasi-nn/winml
    ```
 1. Navigate to this directory from Wasmtime's top-level directory (referred to
