@@ -1,9 +1,4 @@
-// Compile with:
-//   clang --target=wasm32 fib-wasm.c -o fib-wasm.wasm -gdwarf-4 \
-//     -Wl,--no-entry,--export=fib -nostdlib -fdebug-prefix-map=$PWD=.
-//
-//   clang --target=wasm32 fib-wasm.c -o fib-wasm-dwarf5.wasm -gdwarf-5 \
-//     -Wl,--no-entry,--export=fib -nostdlib -fdebug-prefix-map=$PWD=.
+//! flags = ['-Wl,--no-entry,--export=fib']
 
 int fib(int n) {
   int t, a = 0, b = 1;
