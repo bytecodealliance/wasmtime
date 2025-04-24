@@ -123,3 +123,22 @@ block0(v0: f16):
 ;   addi sp, sp, 0x10
 ;   ret
 
+function %copy_f16(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = load.f16 v0
+    store.f16 v2, v1
+    return
+}
+
+; VCode:
+; block0:
+;   flh fa3,0(a0)
+;   fsh fa3,0(a1)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x87, 0x16, 0x05, 0x00 ; trap: heap_oob
+;   .byte 0x27, 0x90, 0xd5, 0x00 ; trap: heap_oob
+;   ret
+
