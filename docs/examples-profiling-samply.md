@@ -25,8 +25,8 @@ your application's performance.
 
 For example if you're using the CLI, you'll execute:
 
-```sh
-$ samply record wasmtime --profile=perfmap foo.wasm
+```console
+samply record wasmtime --profile=perfmap foo.wasm
 ```
 
 This will record your application's performance and open the Firefox profiler UI to view the

@@ -29,9 +29,9 @@ from Rust.
 
 First up let's create a rust project
 
-```sh
-$ cargo new --bin wasmtime_hello
-$ cd wasmtime_hello
+```console
+cargo new --bin wasmtime_hello
+cd wasmtime_hello
 ```
 
 Next you'll want to add `hello.wat` to the root of your project.
@@ -97,7 +97,7 @@ We can build and execute our example with `cargo run`. Note that by depending on
 `wasmtime` you're depending on a JIT compiler, so it may take a moment to build
 all of its dependencies:
 
-```sh
+```shell-session
 $ cargo run
   Compiling ...
   ...

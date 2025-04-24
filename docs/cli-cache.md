@@ -2,8 +2,8 @@
 
 The configuration file uses the [toml] format.
 You can create a configuration file at the default location with:
-```sh
-$ wasmtime config new
+```console
+wasmtime config new
 ```
 It will print the location regardless of the success.
 Please refer to the  `--help` message for using a custom location.
