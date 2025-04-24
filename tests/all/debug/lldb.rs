@@ -68,7 +68,7 @@ fn check_lldb_output(output: &str, directives: &str) -> Result<()> {
     Ok(())
 }
 
-#[expect(dead_code, reason = "tested elsewhere")]
+#[allow(dead_code, reason = "tested elsewhere")]
 fn dwarf_dead_code() {} // this is tested over in `translate.rs`
 
 #[test]
