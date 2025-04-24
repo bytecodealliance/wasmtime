@@ -10,12 +10,8 @@
 )
 ;; function u0:0(i64 vmctx, i64, i64) -> i32 tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
-;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx, i32, i32) -> i32 tail
 ;;     fn0 = colocated u1:36 sig0
-;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
 ;;                                     v17 = iconst.i64 0
