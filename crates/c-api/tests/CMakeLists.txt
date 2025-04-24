@@ -32,6 +32,7 @@ add_capi_test(tests FILES
   extern_type.cc
   func.cc
   component/instantiate.cc
+  component/define_module.cc
   error.cc
   config.cc
   wat.cc

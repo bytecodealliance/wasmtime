@@ -32,10 +32,10 @@ wasmtime_component_linker_new(const wasm_engine_t *engine);
  * \brief Returns the "root instance" of this linker, used to define names into
  * the root namespace.
  *
- * \note This mutably borrows the provided linker, meaning nothing else should
- * access the linker until the returned #wasmtime_component_linker_instance_t is
- * deleted. The linker also needs to stay alive as long as the returned
- * #wasmtime_component_linker_instance_t is alive.
+ * \warning This acquires exclusive access to the \p linker. The \p linker
+ * *MUST* not be accessed by anything until the returned
+ * #wasmtime_component_linker_instance_t in \p linker_instance_out is destroyed
+ * by #wasmtime_component_linker_instance_delete.
  */
 WASM_API_EXTERN wasmtime_component_linker_instance_t *
 wasmtime_component_linker_root(wasmtime_component_linker_t *linker);
@@ -68,11 +68,39 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instantiate(
 WASM_API_EXTERN void
 wasmtime_component_linker_delete(wasmtime_component_linker_t *linker);
 
+/**
+ * \brief Defines a nested instance within this instance.
+ *
+ * This can be used to describe arbitrarily nested levels of instances within a
+ * linker to satisfy nested instance exports of components.
+ *
+ * \warning This acquires exclusive access to the \p linker_instance. The \p
+ * linker_instance *MUST* not be accessed by anything until the returned
+ * #wasmtime_component_linker_instance_t in \p linker_instance_out is destroyed
+ * by #wasmtime_component_linker_instance_delete.
+ *
+ * \param linker_instance the linker instance from which the new one is created
+ * \param name new instance name
+ * \param linker_instance_out on success, the new #component_linker_instance_t
+ * \return on success `NULL`, otherwise an error
+ */
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_component_linker_instance_add_instance(
     wasmtime_component_linker_instance_t *linker_instance, const char *name,
     wasmtime_component_linker_instance_t **linker_instance_out);
 
+/**
+ * \brief Defines a #wasmtime_module_t within this instance.
+ *
+ * This can be used to provide a core wasm #wasmtime_module_t as an import
+ * to a component. The #wasmtime_module_t provided is saved within the
+ * linker for the specified \p name in this instance.
+ *
+ * \param linker_instance the instance to define the module in
+ * \param name the module name
+ * \param module the module
+ * \return on success `NULL`, otherwise an error
+ */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instance_add_module(
     wasmtime_component_linker_instance_t *linker_instance, const char *name,
     const wasmtime_module_t *module);
