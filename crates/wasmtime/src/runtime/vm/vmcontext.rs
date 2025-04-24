@@ -5,7 +5,7 @@ mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
-use crate::runtime::vm::{i8x16, GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe};
+use crate::runtime::vm::{f32x4, f64x2, i8x16, GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe};
 use crate::store::StoreOpaque;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
@@ -454,6 +454,8 @@ mod test_vmglobal_definition {
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<f32>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<f64>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<[u8; 16]>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<[f32; 4]>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<[f64; 2]>());
     }
 
     #[test]
@@ -976,6 +978,8 @@ macro_rules! define_builtin_array {
     (@ty f64) => (f64);
     (@ty u8) => (u8);
     (@ty i8x16) => (i8x16);
+    (@ty f32x4) => (f32x4);
+    (@ty f64x2) => (f64x2);
     (@ty bool) => (bool);
     (@ty pointer) => (*mut u8);
     (@ty vmctx) => (NonNull<VMContext>);

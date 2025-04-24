@@ -5,10 +5,17 @@
 // selectively enabled here.
 #![warn(clippy::cast_sign_loss)]
 
-// Polyfill `std::simd::i8x16` until it's stable.
+// Polyfill `std::simd::i8x16` etc. until they're stable.
 #[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
 #[allow(non_camel_case_types)]
 pub(crate) type i8x16 = core::arch::x86_64::__m128i;
+#[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
+#[allow(non_camel_case_types)]
+pub(crate) type f32x4 = core::arch::x86_64::__m128;
+#[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
+#[allow(non_camel_case_types)]
+pub(crate) type f64x2 = core::arch::x86_64::__m128d;
+
 // On platforms other than x86_64, define i8x16 to a non-constructible type;
 // we need a type because we have a lot of macros for defining builtin
 // functions that are awkward to make conditional on the target, but it
@@ -17,6 +24,14 @@ pub(crate) type i8x16 = core::arch::x86_64::__m128i;
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone)]
 pub(crate) struct i8x16(());
+#[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone)]
+pub(crate) struct f32x4(());
+#[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone)]
+pub(crate) struct f64x2(());
 
 use crate::prelude::*;
 use crate::store::StoreOpaque;

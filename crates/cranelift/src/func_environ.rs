@@ -3485,6 +3485,48 @@ impl FuncEnvironment<'_> {
         }
     }
 
+    pub fn fma_f32x4(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        a: ir::Value,
+        b: ir::Value,
+        c: ir::Value,
+    ) -> ir::Value {
+        if self.has_native_fma() {
+            builder.ins().fma(a, b, c)
+        } else if self.relaxed_simd_deterministic() {
+            // Deterministic semantics are "fused multiply and add".
+            let fma = self.builtin_functions.fma_f32x4(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(fma, &[vmctx, a, b, c]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        } else {
+            let mul = builder.ins().fmul(a, b);
+            builder.ins().fadd(mul, c)
+        }
+    }
+
+    pub fn fma_f64x2(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        a: ir::Value,
+        b: ir::Value,
+        c: ir::Value,
+    ) -> ir::Value {
+        if self.has_native_fma() {
+            builder.ins().fma(a, b, c)
+        } else if self.relaxed_simd_deterministic() {
+            // Deterministic semantics are "fused multiply and add".
+            let fma = self.builtin_functions.fma_f64x2(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(fma, &[vmctx, a, b, c]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        } else {
+            let mul = builder.ins().fmul(a, b);
+            builder.ins().fadd(mul, c)
+        }
+    }
+
     pub fn isa(&self) -> &dyn TargetIsa {
         &*self.isa
     }

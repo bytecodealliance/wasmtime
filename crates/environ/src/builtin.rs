@@ -214,6 +214,8 @@ macro_rules! foreach_builtin_function {
             nearest_f64(vmctx: vmctx, x: f64) -> f64;
             i8x16_swizzle(vmctx: vmctx, a: i8x16, b: i8x16) -> i8x16;
             i8x16_shuffle(vmctx: vmctx, a: i8x16, b: i8x16, c: i8x16) -> i8x16;
+            fma_f32x4(vmctx: vmctx, x: f32x4, y: f32x4, z: f32x4) -> f32x4;
+            fma_f64x2(vmctx: vmctx, x: f64x2, y: f64x2, z: f64x2) -> f64x2;
 
             // Raises an unconditional trap with the specified code.
             //
@@ -401,6 +403,8 @@ impl BuiltinFunctionIndex {
             (@get nearest_f64 f64) => (return None);
             (@get i8x16_swizzle i8x16) => (return None);
             (@get i8x16_shuffle i8x16) => (return None);
+            (@get fma_f32x4 f32x4) => (return None);
+            (@get fma_f64x2 f64x2) => (return None);
 
             // Bool-returning functions use `false` as an indicator of a trap.
             (@get $name:ident bool) => (TrapSentinel::Falsy);

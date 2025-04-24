@@ -125,6 +125,14 @@ macro_rules! declare_function_sig {
                 WasmValType::V128
             }
 
+            fn f32x4(&self) -> WasmValType {
+                WasmValType::V128
+            }
+
+            fn f64x2(&self) -> WasmValType {
+                WasmValType::V128
+            }
+
             fn bool(&self) -> WasmValType {
                 WasmValType::I32
             }

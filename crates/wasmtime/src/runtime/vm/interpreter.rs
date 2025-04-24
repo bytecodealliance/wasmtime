@@ -1,6 +1,8 @@
 use crate::prelude::*;
 use crate::runtime::vm::vmcontext::VMArrayCallNative;
-use crate::runtime::vm::{i8x16, tls, TrapRegisters, TrapTest, VMContext, VMOpaqueContext};
+use crate::runtime::vm::{
+    f32x4, f64x2, i8x16, tls, TrapRegisters, TrapTest, VMContext, VMOpaqueContext,
+};
 use crate::{Engine, ValRaw};
 use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
@@ -313,6 +315,8 @@ impl InterpreterRef<'_> {
             (@ty f32) => (f32);
             (@ty f64) => (f64);
             (@ty i8x16) => (i8x16);
+            (@ty f32x4) => (f32x4);
+            (@ty f64x2) => (f64x2);
             (@ty vmctx) => (*mut VMContext);
             (@ty pointer) => (*mut u8);
             (@ty ptr_u8) => (*mut u8);
@@ -328,6 +332,8 @@ impl InterpreterRef<'_> {
             (@get f32 $reg:ident) => (unreachable::<f32, _>($reg));
             (@get f64 $reg:ident) => (unreachable::<f64, _>($reg));
             (@get i8x16 $reg:ident) => (unreachable::<i8x16, _>($reg));
+            (@get f32x4 $reg:ident) => (unreachable::<f32x4, _>($reg));
+            (@get f64x2 $reg:ident) => (unreachable::<f64x2, _>($reg));
             (@get vmctx $reg:ident) => (self.0[$reg].get_ptr());
             (@get pointer $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr $reg:ident) => (self.0[$reg].get_ptr());
@@ -345,6 +351,8 @@ impl InterpreterRef<'_> {
             (@set f32 $reg:ident $val:ident) => (unreachable::<f32, _>(($reg, $val)));
             (@set f64 $reg:ident $val:ident) => (unreachable::<f64, _>(($reg, $val)));
             (@set i8x16 $reg:ident $val:ident) => (unreachable::<i8x16, _>(($reg, $val)));
+            (@set f32x4 $reg:ident $val:ident) => (unreachable::<f32x4, _>(($reg, $val)));
+            (@set f64x2 $reg:ident $val:ident) => (unreachable::<f64x2, _>(($reg, $val)));
             (@set pointer $reg:ident $val:ident) => (self.0[$reg].set_ptr($val));
             (@set size $reg:ident $val:ident) => (self.0[$reg].set_ptr($val as *mut u8));
         }

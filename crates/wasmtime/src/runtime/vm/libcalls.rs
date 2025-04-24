@@ -59,7 +59,9 @@ use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::VMFuncRef;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
-use crate::runtime::vm::{i8x16, HostResultHasUnwindSentinel, Instance, TrapReason, VMStore};
+use crate::runtime::vm::{
+    f32x4, f64x2, i8x16, HostResultHasUnwindSentinel, Instance, TrapReason, VMStore,
+};
 use core::convert::Infallible;
 use core::ptr::NonNull;
 #[cfg(feature = "threads")]
@@ -92,7 +94,7 @@ pub mod raw {
     // between doc comments and `cfg`s.
     #![allow(unused_doc_comments, unused_attributes)]
 
-    use crate::runtime::vm::{i8x16, InstanceAndStore, VMContext};
+    use crate::runtime::vm::{f32x4, f64x2, i8x16, InstanceAndStore, VMContext};
     use core::ptr::NonNull;
 
     macro_rules! libcall {
@@ -155,6 +157,8 @@ pub mod raw {
         (@ty f64) => (f64);
         (@ty u8) => (u8);
         (@ty i8x16) => (i8x16);
+        (@ty f32x4) => (f32x4);
+        (@ty f64x2) => (f64x2);
         (@ty bool) => (bool);
         (@ty pointer) => (*mut u8);
     }
@@ -1392,6 +1396,62 @@ fn i8x16_shuffle(
     _c: i8x16,
 ) -> i8x16 {
     unreachable!()
+}
+
+fn fma_f32x4(
+    _store: &mut dyn VMStore,
+    _instance: &mut Instance,
+    x: f32x4,
+    y: f32x4,
+    z: f32x4,
+) -> f32x4 {
+    union U {
+        reg: f32x4,
+        mem: [f32; 4],
+    }
+
+    unsafe {
+        let x = U { reg: x }.mem;
+        let y = U { reg: y }.mem;
+        let z = U { reg: z }.mem;
+
+        U {
+            mem: [
+                wasmtime_math::WasmFloat::wasm_mul_add(x[0], y[0], z[0]),
+                wasmtime_math::WasmFloat::wasm_mul_add(x[1], y[1], z[1]),
+                wasmtime_math::WasmFloat::wasm_mul_add(x[2], y[2], z[2]),
+                wasmtime_math::WasmFloat::wasm_mul_add(x[3], y[3], z[3]),
+            ],
+        }
+        .reg
+    }
+}
+
+fn fma_f64x2(
+    _store: &mut dyn VMStore,
+    _instance: &mut Instance,
+    x: f64x2,
+    y: f64x2,
+    z: f64x2,
+) -> f64x2 {
+    union U {
+        reg: f64x2,
+        mem: [f64; 2],
+    }
+
+    unsafe {
+        let x = U { reg: x }.mem;
+        let y = U { reg: y }.mem;
+        let z = U { reg: z }.mem;
+
+        U {
+            mem: [
+                wasmtime_math::WasmFloat::wasm_mul_add(x[0], y[0], z[0]),
+                wasmtime_math::WasmFloat::wasm_mul_add(x[1], y[1], z[1]),
+            ],
+        }
+        .reg
+    }
 }
 
 /// This intrinsic is just used to record trap information.

@@ -2295,32 +2295,23 @@ pub fn translate_operator(
             state.push1(environ.relaxed_swizzle(builder, a, b));
         }
 
-        Operator::F32x4RelaxedMadd | Operator::F64x2RelaxedMadd => {
+        Operator::F32x4RelaxedMadd => {
             let (a, b, c) = pop3_with_bitcast(state, type_of(op), builder);
-            state.push1(
-                if environ.relaxed_simd_deterministic() || environ.has_native_fma() {
-                    // Deterministic semantics are "fused multiply and add"
-                    // which the CLIF `fma` guarantees.
-                    builder.ins().fma(a, b, c)
-                } else {
-                    let mul = builder.ins().fmul(a, b);
-                    builder.ins().fadd(mul, c)
-                },
-            );
+            state.push1(environ.fma_f32x4(builder, a, b, c));
         }
-        Operator::F32x4RelaxedNmadd | Operator::F64x2RelaxedNmadd => {
+        Operator::F64x2RelaxedMadd => {
+            let (a, b, c) = pop3_with_bitcast(state, type_of(op), builder);
+            state.push1(environ.fma_f64x2(builder, a, b, c));
+        }
+        Operator::F32x4RelaxedNmadd => {
             let (a, b, c) = pop3_with_bitcast(state, type_of(op), builder);
             let a = builder.ins().fneg(a);
-            state.push1(
-                if environ.relaxed_simd_deterministic() || environ.has_native_fma() {
-                    // Deterministic semantics are "fused multiply and add"
-                    // which the CLIF `fma` guarantees.
-                    builder.ins().fma(a, b, c)
-                } else {
-                    let mul = builder.ins().fmul(a, b);
-                    builder.ins().fadd(mul, c)
-                },
-            );
+            state.push1(environ.fma_f32x4(builder, a, b, c));
+        }
+        Operator::F64x2RelaxedNmadd => {
+            let (a, b, c) = pop3_with_bitcast(state, type_of(op), builder);
+            let a = builder.ins().fneg(a);
+            state.push1(environ.fma_f64x2(builder, a, b, c));
         }
 
         Operator::I8x16RelaxedLaneselect
