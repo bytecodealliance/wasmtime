@@ -6,8 +6,6 @@ use core::str::FromStr;
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
 use wasmparser::WasmFeatures;
-#[cfg(feature = "cache")]
-use wasmtime_cache::CacheConfig;
 use wasmtime_environ::{ConfigTunables, TripleExt, Tunables};
 
 #[cfg(feature = "runtime")]
@@ -28,6 +26,8 @@ use wasmtime_fiber::RuntimeFiberStackCreator;
 
 #[cfg(feature = "runtime")]
 pub use crate::runtime::code_memory::CustomCodeMemory;
+#[cfg(feature = "cache")]
+pub use wasmtime_cache::{CacheConfig, CacheConfigBuilder};
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
 
@@ -1366,6 +1366,23 @@ impl Config {
         self.compiler_config
             .settings
             .insert(name.to_string(), value.to_string());
+        self
+    }
+
+    /// Set a custom cache configuration.
+    ///
+    /// If you want to load the cache configuration from a file, use [`Config::cache_config_load`]
+    /// or [`Config::cache_config_load_default`] for the default enabled configuration.
+    ///
+    /// By default cache configuration is not enabled or loaded.
+    ///
+    /// This method is only available when the `cache` feature of this crate is
+    /// enabled.
+    ///
+    /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
+    #[cfg(feature = "cache")]
+    pub fn cache_config(&mut self, cache_config: CacheConfig) -> &mut Self {
+        self.cache_config = cache_config;
         self
     }
 
