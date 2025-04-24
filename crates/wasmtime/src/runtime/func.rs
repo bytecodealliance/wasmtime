@@ -1179,7 +1179,6 @@ impl Func {
     /// This must be called just before `call_impl_do_call`.
     ///
     /// Returns whether we need to GC before calling `call_impl_do_call`.
-    #[inline]
     fn call_impl_check_args<T>(
         &self,
         store: &mut StoreContextMut<'_, T>,
@@ -1236,7 +1235,6 @@ impl Func {
     /// You must have type checked the arguments by calling
     /// `call_impl_check_args` immediately before calling this function. It is
     /// only safe to call this function if that one did not return an error.
-    #[inline]
     unsafe fn call_impl_do_call<T>(
         &self,
         store: &mut StoreContextMut<'_, T>,

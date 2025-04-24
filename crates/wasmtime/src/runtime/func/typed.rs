@@ -180,7 +180,6 @@ where
     ///
     /// If `Self::need_gc_before_call_raw`, then the caller must have done a GC
     /// just before calling this method.
-    #[inline]
     pub(crate) unsafe fn call_raw<T>(
         store: &mut StoreContextMut<'_, T>,
         ty: &FuncType,
