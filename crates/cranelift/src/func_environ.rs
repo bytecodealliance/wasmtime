@@ -12,7 +12,7 @@ use cranelift_codegen::ir::immediates::{Imm64, Offset32};
 use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, types};
-use cranelift_codegen::ir::{ArgumentPurpose, Function, InstBuilder, MemFlags};
+use cranelift_codegen::ir::{ArgumentPurpose, ConstantData, Function, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::FunctionBuilder;
@@ -3219,10 +3219,6 @@ impl FuncEnvironment<'_> {
         self.isa.has_x86_blendv_lowering(ty)
     }
 
-    pub fn use_x86_pshufb_for_relaxed_swizzle(&self) -> bool {
-        self.isa.has_x86_pshufb_lowering()
-    }
-
     pub fn use_x86_pmulhrsw_for_relaxed_q15mul(&self) -> bool {
         self.isa.has_x86_pmulhrsw_lowering()
     }
@@ -3321,6 +3317,214 @@ impl FuncEnvironment<'_> {
         }
         #[cfg(not(feature = "wmemcheck"))]
         let _ = (builder, num_pages, mem_index);
+    }
+
+    pub fn ceil_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // If the ISA has rounding instructions, let Cranelift use them. But if
+        // not, lower to a libcall here, rather than having Cranelift do it. We
+        // can pass our libcall the vmctx pointer, which we use for stack
+        // overflow checking.
+        if self.isa.has_round() {
+            builder.ins().ceil(value)
+        } else {
+            let ceil = self.builtin_functions.ceil_f32(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(ceil, &[vmctx, value]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn ceil_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
+        if self.isa.has_round() {
+            builder.ins().ceil(value)
+        } else {
+            let ceil = self.builtin_functions.ceil_f64(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(ceil, &[vmctx, value]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn floor_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
+        if self.isa.has_round() {
+            builder.ins().floor(value)
+        } else {
+            let floor = self.builtin_functions.floor_f32(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(floor, &[vmctx, value]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn floor_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
+        if self.isa.has_round() {
+            builder.ins().floor(value)
+        } else {
+            let floor = self.builtin_functions.floor_f64(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(floor, &[vmctx, value]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn trunc_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
+        if self.isa.has_round() {
+            builder.ins().trunc(value)
+        } else {
+            let trunc = self.builtin_functions.trunc_f32(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(trunc, &[vmctx, value]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn trunc_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
+        if self.isa.has_round() {
+            builder.ins().trunc(value)
+        } else {
+            let trunc = self.builtin_functions.trunc_f64(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(trunc, &[vmctx, value]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn nearest_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
+        if self.isa.has_round() {
+            builder.ins().nearest(value)
+        } else {
+            let nearest = self.builtin_functions.nearest_f32(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(nearest, &[vmctx, value]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn nearest_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
+        if self.isa.has_round() {
+            builder.ins().nearest(value)
+        } else {
+            let nearest = self.builtin_functions.nearest_f64(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(nearest, &[vmctx, value]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn swizzle(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        a: ir::Value,
+        b: ir::Value,
+    ) -> ir::Value {
+        // On x86, swizzle would typically be compiled to `pshufb`, except
+        // that that's not available on CPUs that lack SSSE3. In that case,
+        // fall back to a builtin function.
+        if !self.is_x86() || self.isa.has_x86_pshufb_lowering() {
+            builder.ins().swizzle(a, b)
+        } else {
+            let swizzle = self.builtin_functions.i8x16_swizzle(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(swizzle, &[vmctx, a, b]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn relaxed_swizzle(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        a: ir::Value,
+        b: ir::Value,
+    ) -> ir::Value {
+        // As above, fall back to a builtin if we lack SSSE3.
+        if !self.is_x86() || self.isa.has_x86_pshufb_lowering() {
+            if !self.is_x86() || self.relaxed_simd_deterministic() {
+                builder.ins().swizzle(a, b)
+            } else {
+                builder.ins().x86_pshufb(a, b)
+            }
+        } else {
+            let swizzle = self.builtin_functions.i8x16_swizzle(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(swizzle, &[vmctx, a, b]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn i8x16_shuffle(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        a: ir::Value,
+        b: ir::Value,
+        lanes: &[u8; 16],
+    ) -> ir::Value {
+        // As with swizzle, i8x16.shuffle would also commonly be implemented
+        // with pshufb, so if we lack SSSE3, fall back to a builtin.
+        if !self.is_x86() || self.isa.has_x86_pshufb_lowering() {
+            let lanes = ConstantData::from(&lanes[..]);
+            let mask = builder.func.dfg.immediates.push(lanes);
+            builder.ins().shuffle(a, b, mask)
+        } else {
+            let lanes = builder
+                .func
+                .dfg
+                .constants
+                .insert(ConstantData::from(&lanes[..]));
+            let lanes = builder.ins().vconst(I8X16, lanes);
+            let i8x16_shuffle = self.builtin_functions.i8x16_shuffle(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(i8x16_shuffle, &[vmctx, a, b, lanes]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn fma_f32x4(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        a: ir::Value,
+        b: ir::Value,
+        c: ir::Value,
+    ) -> ir::Value {
+        if self.has_native_fma() {
+            builder.ins().fma(a, b, c)
+        } else if self.relaxed_simd_deterministic() {
+            // Deterministic semantics are "fused multiply and add".
+            let fma = self.builtin_functions.fma_f32x4(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(fma, &[vmctx, a, b, c]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        } else {
+            let mul = builder.ins().fmul(a, b);
+            builder.ins().fadd(mul, c)
+        }
+    }
+
+    pub fn fma_f64x2(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        a: ir::Value,
+        b: ir::Value,
+        c: ir::Value,
+    ) -> ir::Value {
+        if self.has_native_fma() {
+            builder.ins().fma(a, b, c)
+        } else if self.relaxed_simd_deterministic() {
+            // Deterministic semantics are "fused multiply and add".
+            let fma = self.builtin_functions.fma_f64x2(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(fma, &[vmctx, a, b, c]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        } else {
+            let mul = builder.ins().fmul(a, b);
+            builder.ins().fadd(mul, c)
+        }
     }
 
     pub fn isa(&self) -> &dyn TargetIsa {

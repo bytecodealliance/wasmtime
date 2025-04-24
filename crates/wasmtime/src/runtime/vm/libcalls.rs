@@ -59,7 +59,9 @@ use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::VMFuncRef;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
-use crate::runtime::vm::{HostResultHasUnwindSentinel, Instance, TrapReason, VMStore};
+use crate::runtime::vm::{
+    f32x4, f64x2, i8x16, HostResultHasUnwindSentinel, Instance, TrapReason, VMStore,
+};
 use core::convert::Infallible;
 use core::ptr::NonNull;
 #[cfg(feature = "threads")]
@@ -92,7 +94,7 @@ pub mod raw {
     // between doc comments and `cfg`s.
     #![allow(unused_doc_comments, unused_attributes)]
 
-    use crate::runtime::vm::{InstanceAndStore, VMContext};
+    use crate::runtime::vm::{f32x4, f64x2, i8x16, InstanceAndStore, VMContext};
     use core::ptr::NonNull;
 
     macro_rules! libcall {
@@ -109,7 +111,10 @@ pub mod raw {
                 // This will delegate to the outer module to the actual
                 // implementation and automatically perform `catch_unwind` along
                 // with conversion of the return value in the face of traps.
+                //
+                // Ignore improper ctypes to permit `__m128i` on x86_64.
                 #[allow(unused_variables, missing_docs)]
+                #[allow(improper_ctypes_definitions)]
                 pub unsafe extern "C" fn $name(
                     vmctx: NonNull<VMContext>,
                     $( $pname : libcall!(@ty $param), )*
@@ -132,9 +137,12 @@ pub mod raw {
                 // This works around a `rustc` bug where compiling with LTO
                 // will sometimes strip out some of these symbols resulting
                 // in a linking failure.
+                //
+                // Ignore improper ctypes to permit `__m128i` on x86_64.
                 #[allow(non_upper_case_globals)]
                 const _: () = {
                     #[used]
+                    #[allow(improper_ctypes_definitions)]
                     static I_AM_USED: unsafe extern "C" fn(
                         NonNull<VMContext>,
                         $( $pname : libcall!(@ty $param), )*
@@ -145,7 +153,12 @@ pub mod raw {
 
         (@ty u32) => (u32);
         (@ty u64) => (u64);
+        (@ty f32) => (f32);
+        (@ty f64) => (f64);
         (@ty u8) => (u8);
+        (@ty i8x16) => (i8x16);
+        (@ty f32x4) => (f32x4);
+        (@ty f64x2) => (f64x2);
         (@ty bool) => (bool);
         (@ty pointer) => (*mut u8);
     }
@@ -1228,6 +1241,219 @@ fn update_mem_size(_store: &mut dyn VMStore, instance: &mut Instance, num_pages:
     }
 }
 
+fn floor_f32(_store: &mut dyn VMStore, _instance: &mut Instance, val: f32) -> f32 {
+    wasmtime_math::WasmFloat::wasm_floor(val)
+}
+
+fn floor_f64(_store: &mut dyn VMStore, _instance: &mut Instance, val: f64) -> f64 {
+    wasmtime_math::WasmFloat::wasm_floor(val)
+}
+
+fn ceil_f32(_store: &mut dyn VMStore, _instance: &mut Instance, val: f32) -> f32 {
+    wasmtime_math::WasmFloat::wasm_ceil(val)
+}
+
+fn ceil_f64(_store: &mut dyn VMStore, _instance: &mut Instance, val: f64) -> f64 {
+    wasmtime_math::WasmFloat::wasm_ceil(val)
+}
+
+fn trunc_f32(_store: &mut dyn VMStore, _instance: &mut Instance, val: f32) -> f32 {
+    wasmtime_math::WasmFloat::wasm_trunc(val)
+}
+
+fn trunc_f64(_store: &mut dyn VMStore, _instance: &mut Instance, val: f64) -> f64 {
+    wasmtime_math::WasmFloat::wasm_trunc(val)
+}
+
+fn nearest_f32(_store: &mut dyn VMStore, _instance: &mut Instance, val: f32) -> f32 {
+    wasmtime_math::WasmFloat::wasm_nearest(val)
+}
+
+fn nearest_f64(_store: &mut dyn VMStore, _instance: &mut Instance, val: f64) -> f64 {
+    wasmtime_math::WasmFloat::wasm_nearest(val)
+}
+
+// This intrinsic is only used on x86_64 platforms as an implementation of
+// the `i8x16.swizzle` instruction when `pshufb` in SSSE3 is not available.
+#[cfg(target_arch = "x86_64")]
+fn i8x16_swizzle(_store: &mut dyn VMStore, _instance: &mut Instance, a: i8x16, b: i8x16) -> i8x16 {
+    union U {
+        reg: i8x16,
+        mem: [u8; 16],
+    }
+
+    unsafe {
+        let a = U { reg: a }.mem;
+        let b = U { reg: b }.mem;
+
+        // Use the `swizzle` semantics of returning 0 on any out-of-bounds
+        // index, rather than the x86 pshufb semantics, since Wasmtime uses
+        // this to implement `i8x16.swizzle`.
+        let select = |arr: &[u8; 16], byte: u8| {
+            if byte >= 16 {
+                0x00
+            } else {
+                arr[byte as usize]
+            }
+        };
+
+        U {
+            mem: [
+                select(&a, b[0]),
+                select(&a, b[1]),
+                select(&a, b[2]),
+                select(&a, b[3]),
+                select(&a, b[4]),
+                select(&a, b[5]),
+                select(&a, b[6]),
+                select(&a, b[7]),
+                select(&a, b[8]),
+                select(&a, b[9]),
+                select(&a, b[10]),
+                select(&a, b[11]),
+                select(&a, b[12]),
+                select(&a, b[13]),
+                select(&a, b[14]),
+                select(&a, b[15]),
+            ],
+        }
+        .reg
+    }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+fn i8x16_swizzle(
+    _store: &mut dyn VMStore,
+    _instance: &mut Instance,
+    _a: i8x16,
+    _b: i8x16,
+) -> i8x16 {
+    unreachable!()
+}
+
+// This intrinsic is only used on x86_64 platforms as an implementation of
+// the `i8x16.shuffle` instruction when `pshufb` in SSSE3 is not available.
+#[cfg(target_arch = "x86_64")]
+fn i8x16_shuffle(
+    _store: &mut dyn VMStore,
+    _instance: &mut Instance,
+    a: i8x16,
+    b: i8x16,
+    c: i8x16,
+) -> i8x16 {
+    union U {
+        reg: i8x16,
+        mem: [u8; 16],
+    }
+
+    unsafe {
+        let ab = [U { reg: a }.mem, U { reg: b }.mem];
+        let c = U { reg: c }.mem;
+
+        // Use the `shuffle` semantics of returning 0 on any out-of-bounds
+        // index, rather than the x86 pshufb semantics, since Wasmtime uses
+        // this to implement `i8x16.shuffle`.
+        let select = |arr: &[[u8; 16]; 2], byte: u8| {
+            if byte >= 32 {
+                0x00
+            } else if byte >= 16 {
+                arr[1][byte as usize - 16]
+            } else {
+                arr[0][byte as usize]
+            }
+        };
+
+        U {
+            mem: [
+                select(&ab, c[0]),
+                select(&ab, c[1]),
+                select(&ab, c[2]),
+                select(&ab, c[3]),
+                select(&ab, c[4]),
+                select(&ab, c[5]),
+                select(&ab, c[6]),
+                select(&ab, c[7]),
+                select(&ab, c[8]),
+                select(&ab, c[9]),
+                select(&ab, c[10]),
+                select(&ab, c[11]),
+                select(&ab, c[12]),
+                select(&ab, c[13]),
+                select(&ab, c[14]),
+                select(&ab, c[15]),
+            ],
+        }
+        .reg
+    }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+fn i8x16_shuffle(
+    _store: &mut dyn VMStore,
+    _instance: &mut Instance,
+    _a: i8x16,
+    _b: i8x16,
+    _c: i8x16,
+) -> i8x16 {
+    unreachable!()
+}
+
+fn fma_f32x4(
+    _store: &mut dyn VMStore,
+    _instance: &mut Instance,
+    x: f32x4,
+    y: f32x4,
+    z: f32x4,
+) -> f32x4 {
+    union U {
+        reg: f32x4,
+        mem: [f32; 4],
+    }
+
+    unsafe {
+        let x = U { reg: x }.mem;
+        let y = U { reg: y }.mem;
+        let z = U { reg: z }.mem;
+
+        U {
+            mem: [
+                wasmtime_math::WasmFloat::wasm_mul_add(x[0], y[0], z[0]),
+                wasmtime_math::WasmFloat::wasm_mul_add(x[1], y[1], z[1]),
+                wasmtime_math::WasmFloat::wasm_mul_add(x[2], y[2], z[2]),
+                wasmtime_math::WasmFloat::wasm_mul_add(x[3], y[3], z[3]),
+            ],
+        }
+        .reg
+    }
+}
+
+fn fma_f64x2(
+    _store: &mut dyn VMStore,
+    _instance: &mut Instance,
+    x: f64x2,
+    y: f64x2,
+    z: f64x2,
+) -> f64x2 {
+    union U {
+        reg: f64x2,
+        mem: [f64; 2],
+    }
+
+    unsafe {
+        let x = U { reg: x }.mem;
+        let y = U { reg: y }.mem;
+        let z = U { reg: z }.mem;
+
+        U {
+            mem: [
+                wasmtime_math::WasmFloat::wasm_mul_add(x[0], y[0], z[0]),
+                wasmtime_math::WasmFloat::wasm_mul_add(x[1], y[1], z[1]),
+            ],
+        }
+        .reg
+    }
+}
+
 /// This intrinsic is just used to record trap information.
 ///
 /// The `Infallible` "ok" type here means that this never returns success, it
@@ -1256,104 +1482,4 @@ fn raise(_store: &mut dyn VMStore, _instance: &mut Instance) {
     // just insert a stub to catch bugs if it's accidentally called.
     #[cfg(not(has_host_compiler_backend))]
     unreachable!()
-}
-
-/// This module contains functions which are used for resolving relocations at
-/// runtime if necessary.
-///
-/// These functions are not used by default and currently the only platform
-/// they're used for is on x86_64 when SIMD is disabled and then SSE features
-/// are further disabled. In these configurations Cranelift isn't allowed to use
-/// native CPU instructions so it falls back to libcalls and we rely on the Rust
-/// standard library generally for implementing these.
-#[allow(missing_docs)]
-pub mod relocs {
-    pub extern "C" fn floorf32(f: f32) -> f32 {
-        wasmtime_math::WasmFloat::wasm_floor(f)
-    }
-
-    pub extern "C" fn floorf64(f: f64) -> f64 {
-        wasmtime_math::WasmFloat::wasm_floor(f)
-    }
-
-    pub extern "C" fn ceilf32(f: f32) -> f32 {
-        wasmtime_math::WasmFloat::wasm_ceil(f)
-    }
-
-    pub extern "C" fn ceilf64(f: f64) -> f64 {
-        wasmtime_math::WasmFloat::wasm_ceil(f)
-    }
-
-    pub extern "C" fn truncf32(f: f32) -> f32 {
-        wasmtime_math::WasmFloat::wasm_trunc(f)
-    }
-
-    pub extern "C" fn truncf64(f: f64) -> f64 {
-        wasmtime_math::WasmFloat::wasm_trunc(f)
-    }
-
-    pub extern "C" fn nearestf32(x: f32) -> f32 {
-        wasmtime_math::WasmFloat::wasm_nearest(x)
-    }
-
-    pub extern "C" fn nearestf64(x: f64) -> f64 {
-        wasmtime_math::WasmFloat::wasm_nearest(x)
-    }
-
-    pub extern "C" fn fmaf32(a: f32, b: f32, c: f32) -> f32 {
-        wasmtime_math::WasmFloat::wasm_mul_add(a, b, c)
-    }
-
-    pub extern "C" fn fmaf64(a: f64, b: f64, c: f64) -> f64 {
-        wasmtime_math::WasmFloat::wasm_mul_add(a, b, c)
-    }
-
-    // This intrinsic is only used on x86_64 platforms as an implementation of
-    // the `pshufb` instruction when SSSE3 is not available.
-    #[cfg(target_arch = "x86_64")]
-    use core::arch::x86_64::__m128i;
-    #[cfg(target_arch = "x86_64")]
-    #[target_feature(enable = "sse")]
-    #[allow(improper_ctypes_definitions)]
-    pub unsafe extern "C" fn x86_pshufb(a: __m128i, b: __m128i) -> __m128i {
-        union U {
-            reg: __m128i,
-            mem: [u8; 16],
-        }
-
-        unsafe {
-            let a = U { reg: a }.mem;
-            let b = U { reg: b }.mem;
-
-            let select = |arr: &[u8; 16], byte: u8| {
-                if byte & 0x80 != 0 {
-                    0x00
-                } else {
-                    arr[(byte & 0xf) as usize]
-                }
-            };
-
-            U {
-                mem: [
-                    select(&a, b[0]),
-                    select(&a, b[1]),
-                    select(&a, b[2]),
-                    select(&a, b[3]),
-                    select(&a, b[4]),
-                    select(&a, b[5]),
-                    select(&a, b[6]),
-                    select(&a, b[7]),
-                    select(&a, b[8]),
-                    select(&a, b[9]),
-                    select(&a, b[10]),
-                    select(&a, b[11]),
-                    select(&a, b[12]),
-                    select(&a, b[13]),
-                    select(&a, b[14]),
-                    select(&a, b[15]),
-                ],
-            }
-            .reg
-        }
-    }
 }

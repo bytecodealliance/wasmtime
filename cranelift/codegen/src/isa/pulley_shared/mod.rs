@@ -225,7 +225,13 @@ where
     }
 
     fn has_native_fma(&self) -> bool {
-        false
+        // The pulley interpreter does have fma opcodes.
+        true
+    }
+
+    fn has_round(&self) -> bool {
+        // The pulley interpreter does have rounding opcodes.
+        true
     }
 
     fn has_x86_blendv_lowering(&self, _ty: ir::Type) -> bool {
