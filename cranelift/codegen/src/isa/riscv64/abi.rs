@@ -95,6 +95,8 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         add_ret_area_ptr: bool,
         mut args: ArgsAccumulator,
     ) -> CodegenResult<(u32, Option<usize>)> {
+        // This implements the LP64D RISC-V ABI.
+
         assert_ne!(
             call_conv,
             isa::CallConv::Winch,

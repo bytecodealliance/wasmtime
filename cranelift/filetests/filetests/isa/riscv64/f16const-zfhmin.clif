@@ -1,5 +1,5 @@
 test compile precise-output
-target riscv64 has_zfh
+target riscv64 has_zfhmin
 
 function %ret_0() -> f16 {
 block0():

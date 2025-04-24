@@ -20,7 +20,7 @@
       (imm Imm20))
 
     (Fli
-      (ty Type)
+      (width FpuOPWidth)
       (imm FliConstant)
       (rd WritableReg))
 
@@ -1005,8 +1005,14 @@
 (decl pure has_zfa () bool)
 (extern constructor has_zfa has_zfa)
 
+(decl pure has_zfhmin () bool)
+(extern constructor has_zfhmin has_zfhmin)
+
 (decl pure has_zfh () bool)
 (extern constructor has_zfh has_zfh)
+
+(decl pure has_zvfh () bool)
+(extern constructor has_zvfh has_zvfh)
 
 (decl pure has_zbkb () bool)
 (extern constructor has_zbkb has_zbkb)
@@ -1035,12 +1041,26 @@
 (extern extractor ty_supported ty_supported)
 
 ;; Helper that matches any scalar floating point type
-(decl ty_supported_float (Type) Type)
-(extern extractor ty_supported_float ty_supported_float)
+
+;; Floating point registers are large enough to hold the type
+(decl ty_supported_float_size (Type) Type)
+(extern extractor ty_supported_float_size ty_supported_float_size)
+
+;; At least basic floating point instructions like load/store are supported (e.g. Zfhmin)
+(decl ty_supported_float_min (Type) Type)
+(extern extractor ty_supported_float_min ty_supported_float_min)
+
+;; All floating point instructions are supported (e.g. Zfh)
+(decl ty_supported_float_full (Type) Type)
+(extern extractor ty_supported_float_full ty_supported_float_full)
 
 ;; Helper that matches any supported vector type
 (decl ty_supported_vec (Type) Type)
 (extern extractor ty_supported_vec ty_supported_vec)
+
+;; Helper that matches types which are stored in a pair of integer registers (I128 and F128)
+(decl ty_reg_pair (Type) Type)
+(extern extractor ty_reg_pair ty_reg_pair)
 
 
 ;;;; Instruction Helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1834,6 +1854,13 @@
 (decl i64_shift (i64 Imm12) i64)
 (extern extractor i64_shift i64_shift)
 
+(decl pure has_fli_for_type (Type) bool)
+(rule 2 (has_fli_for_type $F16) (if-let true (has_zfh)) (has_zfa))
+(rule 1 (has_fli_for_type $F16) (if-let true (has_zvfh)) (has_zfa))
+(rule (has_fli_for_type $F16) false)
+(rule (has_fli_for_type $F32) (has_zfa))
+(rule (has_fli_for_type $F64) (has_zfa))
+
 ;; Immediate Loading rules
 ;; TODO: Loading the zero reg directly causes a bunch of regalloc errors, we should look into it.
 ;; TODO: Load floats using `fld` instead of `ld`
@@ -1841,13 +1868,11 @@
 
 ;; Special-case 0.0 for floats to use the `(zero_reg)` directly.
 ;; See #7162 for why this doesn't fall out of the rules below.
-(rule 9 (imm (ty_supported_float $F16) 0) (gen_bitcast (zero_reg) $I16 $F16))
-(rule 9 (imm (ty_supported_float $F32) 0) (gen_bitcast (zero_reg) $I32 $F32))
-(rule 9 (imm (ty_supported_float $F64) 0) (gen_bitcast (zero_reg) $I64 $F64))
+(rule 9 (imm (ty_supported_float_min ty) 0) (gen_bitcast (zero_reg) (float_int_of_same_size ty) ty))
 
 ;; If Zfa is enabled, we can load certain constants with the `fli` instruction.
-(rule 8 (imm (ty_supported_float (ty_32_or_64 ty)) imm)
-  (if-let true (has_zfa))
+(rule 8 (imm (ty_supported_float_size ty) imm)
+  (if-let true (has_fli_for_type ty))
   (if-let const (fli_constant_from_u64 ty imm))
   (rv_fli ty const))
 
@@ -1856,15 +1881,15 @@
 ;;
 ;; For f64's this saves one instruction, and for f32's it avoids
 ;; having to allocate an integer register, reducing integer register pressure.
-(rule 7 (imm (ty_supported_float (ty_32_or_64 ty)) imm)
-  (if-let true (has_zfa))
+(rule 7 (imm (ty_supported_float_full ty) imm)
+  (if-let true (has_fli_for_type ty))
   (if-let const (fli_constant_from_negated_u64 ty imm))
   (rv_fneg ty (rv_fli ty const)))
 
 ;; Otherwise floats get loaded as integers and then moved into an F register.
-(rule 6 (imm (ty_supported_float $F16) c) (gen_bitcast (imm $I16 c) $I16 $F16))
-(rule 6 (imm (ty_supported_float $F32) c) (gen_bitcast (imm $I32 c) $I32 $F32))
-(rule 6 (imm (ty_supported_float $F64) c) (gen_bitcast (imm $I64 c) $I64 $F64))
+(rule 6 (imm (ty_supported_float_min ty) c) (gen_bitcast (imm (float_int_of_same_size ty) c) (float_int_of_same_size ty) ty))
+;; NaN-box the constant when 16-bit `fmv` is unavailable.
+(rule 5 (imm (ty_supported_float_size $F16) c) (gen_bitcast (imm $I32 (u64_or c 0xffff0000)) $I32 $F32))
 
 ;; Try to match just an imm12
 (rule 4 (imm (ty_int ty) c)
@@ -2441,6 +2466,9 @@
   (let ((dst WritableReg (temp_writable_reg (load_op_reg_type op)))
       (_ Unit (emit (MInst.Load dst op flags amode))))
     dst))
+(rule 1 (gen_load amode (LoadOP.Flh) flags)
+  (if-let false (has_zfhmin))
+  (gen_bitcast (gen_load amode (LoadOP.Lh) flags) $I16 $F16))
 
 ;; Similar to `gen_load` but marks `Inst` as sunk at the current point.
 ;;
@@ -2458,6 +2486,9 @@
 ;; directly store the `zero` register to memory. See #7162 for some discussion
 ;; on why this doesn't just fall out.
 (decl gen_store (AMode MemFlags Value) InstOutput)
+(rule 2 (gen_store amode flags val @ (value_type $F16))
+  (if-let false (has_zfhmin))
+  (rv_store amode (StoreOP.Sh) flags (gen_bitcast val $F16 $I16)))
 (rule 1 (gen_store amode flags val @ (value_type ty))
   (if-let (u64_from_iconst 0) val)
   (rv_store amode (store_op ty) flags (zero_reg)))
@@ -2744,7 +2775,7 @@
   (let ((x_rs1 XReg (move_f_to_x rs1 ty))
         (x_rs2 XReg (move_f_to_x rs2 ty))
         (tmp XReg (alu_rrr op x_rs1 x_rs2)))
-    (move_x_to_f tmp (float_int_of_same_size ty))))
+    (move_x_to_f tmp ty)))
 
 
 (decl i128_sub (ValueRegs ValueRegs) ValueRegs)
@@ -2928,30 +2959,37 @@
 ;; Args are: src, src_ty, dst_ty
 (decl gen_bitcast (Reg Type Type) Reg)
 
-;; To support FP16 vfmv.* we need to check for the `zvfh` isa flag, which we currently don't
-;; support, so restrict the floating point types to 32/64 bits.
-(rule 5 (gen_bitcast r (ty_supported_float (ty_32_or_64 src_ty)) (ty_supported_vec _)) (rv_vfmv_sf r src_ty))
-(rule 4 (gen_bitcast r (ty_supported_vec _) (ty_supported_float (ty_32_or_64 dst_ty))) (rv_vfmv_fs r dst_ty))
+(rule 9 (gen_bitcast r (ty_supported_float_size $F16) (ty_supported_vec _)) (if-let false (has_zvfh)) (rv_vfmv_sf r (vstate_from_type $F32)))
+(rule 8 (gen_bitcast r (ty_supported_vec ty) (ty_supported_float_size $F16)) (if-let false (has_zvfh)) (gen_bitcast (gen_bitcast r ty $I16) $I16 $F16))
+(rule 7 (gen_bitcast r (ty_supported_float_min src_ty) (ty_supported_vec _)) (rv_vfmv_sf r src_ty))
+(rule 6 (gen_bitcast r (ty_supported_vec _) (ty_supported_float_min dst_ty)) (rv_vfmv_fs r dst_ty))
 
-(rule 3 (gen_bitcast r (ty_int_ref_scalar_64 src_ty) (ty_supported_vec _)) (rv_vmv_sx r src_ty))
-(rule 2 (gen_bitcast r (ty_supported_vec _) (ty_int_ref_scalar_64 dst_ty)) (rv_vmv_xs r dst_ty))
-(rule 1 (gen_bitcast r $F16 $I16) (rv_fmvxh r))
-(rule 1 (gen_bitcast r $F32 $I32) (rv_fmvxw r))
-(rule 1 (gen_bitcast r $F64 $I64) (rv_fmvxd r))
-(rule 1 (gen_bitcast r $I16 $F16) (rv_fmvhx r))
-(rule 1 (gen_bitcast r $I32 $F32) (rv_fmvwx r))
-(rule 1 (gen_bitcast r $I64 $F64) (rv_fmvdx r))
-(rule (gen_bitcast r _ _) r)
+(rule 5 (gen_bitcast r (ty_int_ref_scalar_64 src_ty) (ty_supported_vec _)) (rv_vmv_sx r src_ty))
+(rule 4 (gen_bitcast r (ty_supported_vec _) (ty_int_ref_scalar_64 dst_ty)) (rv_vmv_xs r dst_ty))
+(rule 3 (gen_bitcast r (ty_supported_float_min $F16) $I16) (rv_fmvxh r))
+(rule 2 (gen_bitcast r (ty_supported_float_size $F16) $I16) (rv_fmvxw r))
+(rule 2 (gen_bitcast r (ty_supported_float_size $F32) $I32) (rv_fmvxw r))
+(rule 2 (gen_bitcast r (ty_supported_float_size $F64) $I64) (rv_fmvxd r))
+(rule 1 (gen_bitcast r $I16 (ty_supported_float_min $F16)) (rv_fmvhx r))
+;; Smaller float types are NaN-boxed inside of larger floating point types on RISC-V, meaning the
+;; smaller float is stored in the lower bits of the larger float and all the other bits are set to 1.
+;; This is done automatically by the correctly-sized `fmv` instructions but needs to be done manually
+;; here when using a 32-bit `fmv` for a 16-bit float.
+(rule 0 (gen_bitcast r $I16 (ty_supported_float_size $F16)) (rv_fmvwx (rv_or r (imm $I32 0xffff0000))))
+(rule 0 (gen_bitcast r $I32 (ty_supported_float_size $F32)) (rv_fmvwx r))
+(rule 0 (gen_bitcast r $I64 (ty_supported_float_size $F64)) (rv_fmvdx r))
+(rule -1 (gen_bitcast r (ty_supported_float_size _) (ty_supported_float_size _)) r)
+(rule -2 (gen_bitcast r (ty_int_ref_scalar_64 _) (ty_int_ref_scalar_64 _)) r)
+(rule -3 (gen_bitcast r (ty_supported_vec _) (ty_supported_vec _)) r)
 
 (decl move_f_to_x (FReg Type) XReg)
-(rule (move_f_to_x r $F32) (gen_bitcast r $F32 $I32))
-(rule (move_f_to_x r $F64) (gen_bitcast r $F64 $I64))
+(rule (move_f_to_x r ty) (gen_bitcast r ty (float_int_of_same_size ty)))
 
 (decl move_x_to_f (XReg Type) FReg)
-(rule (move_x_to_f r $I32) (gen_bitcast r $I32 $F32))
-(rule (move_x_to_f r $I64) (gen_bitcast r $I64 $F64))
+(rule (move_x_to_f r ty) (gen_bitcast r (float_int_of_same_size ty) ty))
 
 (decl float_int_of_same_size (Type) Type)
+(rule (float_int_of_same_size $F16) $I16)
 (rule (float_int_of_same_size $F32) $I32)
 (rule (float_int_of_same_size $F64) $I64)
 

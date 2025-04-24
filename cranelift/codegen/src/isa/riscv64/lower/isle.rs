@@ -141,11 +141,13 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             // Scalar integers are always supported
             ty if ty.is_int() => true,
             // Floating point types depend on certain extensions
-            F16 => self.backend.isa_flags.has_zfh(),
             // F32 depends on the F extension
-            F32 => self.backend.isa_flags.has_f(),
+            // If F32 is supported, then the registers are also large enough for F16
+            F16 | F32 => self.backend.isa_flags.has_f(),
             // F64 depends on the D extension
             F64 => self.backend.isa_flags.has_d(),
+            // F128 is currently stored in a pair of integer registers
+            F128 => true,
 
             // The base vector extension supports all integer types, up to 64 bits
             // as long as they fit in a register
@@ -166,7 +168,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
                 && lane_type.is_float()
                 && self.ty_supported(lane_type).is_some()
                 // Additionally the base V spec only supports 32 and 64 bit floating point types.
-                && (lane_type.bits() == 32 || lane_type.bits() == 64) =>
+                && (lane_type.bits() == 32 || lane_type.bits() == 64 || (lane_type.bits() == 16 && self.backend.isa_flags.has_zvfh())) =>
             {
                 true
             }
@@ -182,12 +184,30 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         }
     }
 
-    fn ty_supported_float(&mut self, ty: Type) -> Option<Type> {
-        self.ty_supported(ty).filter(|ty| ty.is_float())
+    fn ty_supported_float_size(&mut self, ty: Type) -> Option<Type> {
+        self.ty_supported(ty)
+            .filter(|&ty| ty.is_float() && ty != F128)
+    }
+
+    fn ty_supported_float_min(&mut self, ty: Type) -> Option<Type> {
+        self.ty_supported_float_size(ty)
+            .filter(|&ty| ty != F16 || self.backend.isa_flags.has_zfhmin())
+    }
+
+    fn ty_supported_float_full(&mut self, ty: Type) -> Option<Type> {
+        self.ty_supported_float_min(ty)
+            .filter(|&ty| ty != F16 || self.backend.isa_flags.has_zfh())
     }
 
     fn ty_supported_vec(&mut self, ty: Type) -> Option<Type> {
         self.ty_supported(ty).filter(|ty| ty.is_vector())
+    }
+
+    fn ty_reg_pair(&mut self, ty: Type) -> Option<Type> {
+        match ty {
+            I128 | F128 => Some(ty),
+            _ => None,
+        }
     }
 
     fn load_ra(&mut self) -> Reg {
@@ -219,8 +239,9 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn fli_constant_from_negated_u64(&mut self, ty: Type, imm: u64) -> Option<FliConstant> {
         let negated_imm = match ty {
-            F64 => imm ^ 0x8000000000000000,
-            F32 => imm ^ 0x80000000,
+            F64 => imm ^ 0x8000_0000_0000_0000,
+            F32 => imm ^ 0x8000_0000,
+            F16 => imm ^ 0x8000,
             _ => unimplemented!(),
         };
 
@@ -410,8 +431,16 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_zfa()
     }
 
+    fn has_zfhmin(&mut self) -> bool {
+        self.backend.isa_flags.has_zfhmin()
+    }
+
     fn has_zfh(&mut self) -> bool {
         self.backend.isa_flags.has_zfh()
+    }
+
+    fn has_zvfh(&mut self) -> bool {
+        self.backend.isa_flags.has_zvfh()
     }
 
     fn has_zbkb(&mut self) -> bool {

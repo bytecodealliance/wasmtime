@@ -1,0 +1,92 @@
+test compile precise-output
+set enable_multi_ret_implicit_sret
+target riscv64 has_v has_zfhmin has_zvfh
+
+function %bitcast_i16_f16(i16) -> f16 fast {
+block0(v0: i16):
+    v1 = bitcast.f16 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   fmv.h.x fa0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0x05, 0xf4
+;   ret
+
+function %bitcast_f16_i16(f16) -> i16 fast {
+block0(v0: f16):
+    v1 = bitcast.i16 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   fmv.x.h a0,fa0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x53, 0x05, 0x05, 0xe4
+;   ret
+
+function %bitcast_i8x2_f16(i8x2) -> f16 fast {
+block0(v0: i8x2):
+    v1 = bitcast.f16 little v0
+    return v1
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+; block0:
+;   vle8.v v8,-16(incoming_arg) #avl=2, #vtype=(e8, m1, ta, ma)
+;   vfmv.f.s fa0,v8 #avl=1, #vtype=(e16, m1, ta, ma)
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+; block1: ; offset 0x10
+;   .byte 0x57, 0x70, 0x01, 0xcc
+;   addi t6, sp, 0x10
+;   .byte 0x07, 0x84, 0x0f, 0x02
+;   .byte 0x57, 0xf0, 0x80, 0xcc
+;   .byte 0x57, 0x15, 0x80, 0x42
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %bitcast_f16_i8x2(f16) -> i8x2 fast {
+block0(v0: f16):
+    v1 = bitcast.i8x2 little v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   vfmv.s.f v11,fa0 #avl=1, #vtype=(e16, m1, ta, ma)
+;   vse8.v v11,0(a0) #avl=2, #vtype=(e8, m1, ta, ma)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   .byte 0x57, 0xf0, 0x80, 0xcc
+;   .byte 0xd7, 0x55, 0x05, 0x42
+;   .byte 0x57, 0x70, 0x01, 0xcc
+;   .byte 0xa7, 0x05, 0x05, 0x02
+;   ret
+

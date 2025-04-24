@@ -2,7 +2,7 @@ test interpret
 test run
 set enable_llvm_abi_extensions
 target x86_64
-target riscv64 has_zfh
+target riscv64 has_zfhmin has_zfh
 
 function %f16_load(i16) -> f16 {
     ss0 = explicit_slot 4
