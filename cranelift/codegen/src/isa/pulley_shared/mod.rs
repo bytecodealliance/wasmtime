@@ -225,7 +225,8 @@ where
     }
 
     fn has_native_fma(&self) -> bool {
-        false
+        // The pulley interpreter does have fma opcodes.
+        true
     }
 
     fn has_round(&self) -> bool {
