@@ -23,6 +23,7 @@
 
 use crate::prelude::*;
 use crate::{Engine, ModuleVersionStrategy, Precompiled};
+use core::fmt;
 use core::str::FromStr;
 use object::endian::Endianness;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -179,115 +180,18 @@ pub struct Metadata<'a> {
     #[serde(borrow)]
     isa_flags: Vec<(&'a str, FlagValue<'a>)>,
     tunables: Tunables,
-    features: WasmFeatures,
-}
-
-// This exists because `wasmparser::WasmFeatures` isn't serializable
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-struct WasmFeatures {
-    reference_types: bool,
-    multi_value: bool,
-    bulk_memory: bool,
-    component_model: bool,
-    simd: bool,
-    tail_call: bool,
-    threads: bool,
-    shared_everything_threads: bool,
-    multi_memory: bool,
-    exceptions: bool,
-    legacy_exceptions: bool,
-    memory64: bool,
-    relaxed_simd: bool,
-    extended_const: bool,
-    function_references: bool,
-    gc: bool,
-    custom_page_sizes: bool,
-    component_model_async: bool,
-    component_model_async_builtins: bool,
-    component_model_async_stackful: bool,
-    component_model_error_context: bool,
-    gc_types: bool,
-    wide_arithmetic: bool,
-    stack_switching: bool,
+    features: u32,
 }
 
 impl Metadata<'_> {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn new(engine: &Engine) -> Metadata<'static> {
-        let wasmparser::WasmFeaturesInflated {
-            reference_types,
-            multi_value,
-            bulk_memory,
-            component_model,
-            simd,
-            threads,
-            shared_everything_threads,
-            tail_call,
-            multi_memory,
-            exceptions,
-            memory64,
-            relaxed_simd,
-            extended_const,
-            memory_control,
-            function_references,
-            gc,
-            custom_page_sizes,
-            cm_async,
-            cm_async_builtins,
-            cm_async_stackful,
-            cm_nested_names,
-            cm_values,
-            cm_error_context,
-            legacy_exceptions,
-            gc_types,
-            stack_switching,
-            wide_arithmetic,
-
-            // Always on; we don't currently have knobs for these.
-            mutable_global: _,
-            saturating_float_to_int: _,
-            sign_extension: _,
-            floats: _,
-        } = engine.features().inflate();
-
-        // These features are not implemented in Wasmtime yet. We match on them
-        // above so that once we do implement support for them, we won't
-        // silently ignore them during serialization.
-        assert!(!memory_control);
-        assert!(!cm_nested_names);
-        assert!(!cm_values);
-
         Metadata {
             target: engine.compiler().triple().to_string(),
             shared_flags: engine.compiler().flags(),
             isa_flags: engine.compiler().isa_flags(),
             tunables: engine.tunables().clone(),
-            features: WasmFeatures {
-                reference_types,
-                multi_value,
-                bulk_memory,
-                component_model,
-                simd,
-                threads,
-                shared_everything_threads,
-                tail_call,
-                multi_memory,
-                exceptions,
-                legacy_exceptions,
-                memory64,
-                relaxed_simd,
-                extended_const,
-                function_references,
-                gc,
-                custom_page_sizes,
-                gc_types,
-                wide_arithmetic,
-                stack_switching,
-                component_model_async: cm_async,
-                component_model_async_builtins: cm_async_builtins,
-                component_model_async_stackful: cm_async_stackful,
-                component_model_error_context: cm_error_context,
-            },
+            features: engine.features().bits(),
         }
     }
 
@@ -342,7 +246,7 @@ impl Metadata<'_> {
         Ok(())
     }
 
-    fn check_int<T: Eq + core::fmt::Display>(found: T, expected: T, feature: &str) -> Result<()> {
+    fn check_int<T: Eq + fmt::Display>(found: T, expected: T, feature: &str) -> Result<()> {
         if found == expected {
             return Ok(());
         }
@@ -355,7 +259,7 @@ impl Metadata<'_> {
         );
     }
 
-    fn check_bool(found: bool, expected: bool, feature: &str) -> Result<()> {
+    fn check_bool(found: bool, expected: bool, feature: impl fmt::Display) -> Result<()> {
         if found == expected {
             return Ok(());
         }
@@ -460,7 +364,7 @@ impl Metadata<'_> {
         cfg_str: &str,
         found: bool,
         expected: bool,
-        feature: &str,
+        feature: impl fmt::Display,
     ) -> Result<()> {
         if cfg {
             Self::check_bool(found, expected, feature)
@@ -477,153 +381,33 @@ impl Metadata<'_> {
     }
 
     fn check_features(&mut self, other: &wasmparser::WasmFeatures) -> Result<()> {
-        let WasmFeatures {
-            reference_types,
-            multi_value,
-            bulk_memory,
-            component_model,
-            simd,
-            tail_call,
-            threads,
-            shared_everything_threads,
-            multi_memory,
-            exceptions,
-            legacy_exceptions,
-            memory64,
-            relaxed_simd,
-            extended_const,
-            function_references,
-            gc,
-            custom_page_sizes,
-            component_model_async,
-            component_model_async_builtins,
-            component_model_async_stackful,
-            component_model_error_context,
-            gc_types,
-            wide_arithmetic,
-            stack_switching,
-        } = self.features;
+        let module_features = wasmparser::WasmFeatures::from_bits_truncate(self.features);
+        let difference = *other ^ module_features;
+        for (name, flag) in difference.iter_names() {
+            let found = module_features.contains(flag);
+            let expected = other.contains(flag);
+            if flag == wasmparser::WasmFeatures::GC_TYPES {
+                Self::check_cfg_bool(
+                    cfg!(feature = "gc"),
+                    "gc",
+                    found,
+                    expected,
+                    WasmFeature(name),
+                )?;
+            } else {
+                Self::check_bool(found, expected, WasmFeature(name))?;
+            }
+        }
 
-        use wasmparser::WasmFeatures as F;
-        Self::check_bool(
-            reference_types,
-            other.contains(F::REFERENCE_TYPES),
-            "WebAssembly reference types support",
-        )?;
-        Self::check_bool(
-            function_references,
-            other.contains(F::FUNCTION_REFERENCES),
-            "WebAssembly function-references support",
-        )?;
-        Self::check_bool(
-            gc,
-            other.contains(F::GC),
-            "WebAssembly garbage collection support",
-        )?;
-        Self::check_bool(
-            multi_value,
-            other.contains(F::MULTI_VALUE),
-            "WebAssembly multi-value support",
-        )?;
-        Self::check_bool(
-            bulk_memory,
-            other.contains(F::BULK_MEMORY),
-            "WebAssembly bulk memory support",
-        )?;
-        Self::check_bool(
-            component_model,
-            other.contains(F::COMPONENT_MODEL),
-            "WebAssembly component model support",
-        )?;
-        Self::check_bool(simd, other.contains(F::SIMD), "WebAssembly SIMD support")?;
-        Self::check_bool(
-            tail_call,
-            other.contains(F::TAIL_CALL),
-            "WebAssembly tail calls support",
-        )?;
-        Self::check_bool(
-            threads,
-            other.contains(F::THREADS),
-            "WebAssembly threads support",
-        )?;
-        Self::check_bool(
-            shared_everything_threads,
-            other.contains(F::SHARED_EVERYTHING_THREADS),
-            "WebAssembly shared-everything-threads support",
-        )?;
-        Self::check_bool(
-            multi_memory,
-            other.contains(F::MULTI_MEMORY),
-            "WebAssembly multi-memory support",
-        )?;
-        Self::check_bool(
-            exceptions,
-            other.contains(F::EXCEPTIONS),
-            "WebAssembly exceptions support",
-        )?;
-        Self::check_bool(
-            legacy_exceptions,
-            other.contains(F::LEGACY_EXCEPTIONS),
-            "WebAssembly legacy exceptions support",
-        )?;
-        Self::check_bool(
-            memory64,
-            other.contains(F::MEMORY64),
-            "WebAssembly 64-bit memory support",
-        )?;
-        Self::check_bool(
-            extended_const,
-            other.contains(F::EXTENDED_CONST),
-            "WebAssembly extended-const support",
-        )?;
-        Self::check_bool(
-            relaxed_simd,
-            other.contains(F::RELAXED_SIMD),
-            "WebAssembly relaxed-simd support",
-        )?;
-        Self::check_bool(
-            custom_page_sizes,
-            other.contains(F::CUSTOM_PAGE_SIZES),
-            "WebAssembly custom-page-sizes support",
-        )?;
-        Self::check_bool(
-            component_model_async,
-            other.contains(F::CM_ASYNC),
-            "WebAssembly component model support for async lifts/lowers, futures, streams, and errors",
-        )?;
-        Self::check_bool(
-            component_model_async_builtins,
-            other.contains(F::CM_ASYNC_BUILTINS),
-            "WebAssembly component model support for async builtins",
-        )?;
-        Self::check_bool(
-            component_model_async_stackful,
-            other.contains(F::CM_ASYNC_STACKFUL),
-            "WebAssembly component model support for async stackful",
-        )?;
-        Self::check_bool(
-            component_model_error_context,
-            other.contains(F::CM_ERROR_CONTEXT),
-            "WebAssembly component model support for error-context",
-        )?;
-        Self::check_cfg_bool(
-            cfg!(feature = "gc"),
-            "gc",
-            gc_types,
-            other.contains(F::GC_TYPES),
-            "support for WebAssembly gc types",
-        )?;
-        Self::check_bool(
-            wide_arithmetic,
-            other.contains(F::WIDE_ARITHMETIC),
-            "WebAssembly wide-arithmetic support",
-        )?;
-        Self::check_bool(
-            stack_switching,
-            other.contains(F::STACK_SWITCHING),
-            "WebAssembly stack switching support",
-        )?;
-        Ok(())
+        return Ok(());
+
+        struct WasmFeature<'a>(&'a str);
+
+        impl fmt::Display for WasmFeature<'_> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                write!(f, "support for WebAssembly feature {}", self.0)
+            }
+        }
     }
 
     fn check_collector(
