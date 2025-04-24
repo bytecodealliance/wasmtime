@@ -246,7 +246,7 @@ impl InterpreterRef<'_> {
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
-        unused_macro_rules,
+        unused,
         reason = "macro-generated code"
     )]
     #[cfg_attr(

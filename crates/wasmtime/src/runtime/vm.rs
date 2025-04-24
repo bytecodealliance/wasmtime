@@ -23,15 +23,15 @@ pub(crate) type f64x2 = core::arch::x86_64::__m128d;
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone)]
-pub(crate) struct i8x16(());
+pub(crate) struct i8x16(crate::uninhabited::Uninhabited);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone)]
-pub(crate) struct f32x4(());
+pub(crate) struct f32x4(crate::uninhabited::Uninhabited);
 #[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 #[allow(non_camel_case_types)]
 #[derive(Copy, Clone)]
-pub(crate) struct f64x2(());
+pub(crate) struct f64x2(crate::uninhabited::Uninhabited);
 
 use crate::prelude::*;
 use crate::store::StoreOpaque;

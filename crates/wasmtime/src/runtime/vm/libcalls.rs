@@ -1275,7 +1275,7 @@ fn nearest_f64(_store: &mut dyn VMStore, _instance: &mut Instance, val: f64) -> 
 
 // This intrinsic is only used on x86_64 platforms as an implementation of
 // the `i8x16.swizzle` instruction when `pshufb` in SSSE3 is not available.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
 fn i8x16_swizzle(_store: &mut dyn VMStore, _instance: &mut Instance, a: i8x16, b: i8x16) -> i8x16 {
     union U {
         reg: i8x16,
@@ -1321,7 +1321,7 @@ fn i8x16_swizzle(_store: &mut dyn VMStore, _instance: &mut Instance, a: i8x16, b
     }
 }
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 fn i8x16_swizzle(
     _store: &mut dyn VMStore,
     _instance: &mut Instance,
@@ -1333,7 +1333,7 @@ fn i8x16_swizzle(
 
 // This intrinsic is only used on x86_64 platforms as an implementation of
 // the `i8x16.shuffle` instruction when `pshufb` in SSSE3 is not available.
-#[cfg(target_arch = "x86_64")]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
 fn i8x16_shuffle(
     _store: &mut dyn VMStore,
     _instance: &mut Instance,
@@ -1387,7 +1387,7 @@ fn i8x16_shuffle(
     }
 }
 
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
 fn i8x16_shuffle(
     _store: &mut dyn VMStore,
     _instance: &mut Instance,
