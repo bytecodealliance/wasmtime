@@ -521,12 +521,11 @@ fn test_percent_settings() {
 /// Default builder produces a disabled cache configuration with the same defaults.
 #[test]
 fn test_builder_default() {
-    let dir = tempfile::tempdir().expect("Can't create temporary directory");
-    let config_path = dir.path().join("cache-config.toml");
+    let (_td, _cd, cp) = test_prolog();
     let config_content = "[cache]\n\
                           enabled = false\n";
-    fs::write(&config_path, config_content).expect("Failed to write test config file");
-    let expected_config = CacheConfig::from_file(Some(&config_path)).unwrap();
+    fs::write(&cp, config_content).expect("Failed to write test config file");
+    let expected_config = CacheConfig::from_file(Some(&cp)).unwrap();
 
     let config = CacheConfig::builder()
         .build()
