@@ -38,3 +38,22 @@ block0(v0: f128, v1: i64):
 ;   sd a1, 8(a2) ; trap: heap_oob
 ;   ret
 
+function %copy_f16(i64, i64) {
+block0(v0: i64, v1: i64):
+    v2 = load.f16 v0
+    store.f16 v2, v1
+    return
+}
+
+; VCode:
+; block0:
+;   lh a3,0(a0)
+;   sh a3,0(a1)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lh a3, 0(a0) ; trap: heap_oob
+;   sh a3, 0(a1) ; trap: heap_oob
+;   ret
+

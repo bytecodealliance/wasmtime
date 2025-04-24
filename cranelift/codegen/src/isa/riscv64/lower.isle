@@ -2214,6 +2214,12 @@
         (amode AMode (amode addr offset)))
     (vec_store eew (VecAMode.UnitStride amode) src flags (unmasked) ty)))
 
+;; Avoid unnecessary moves to floating point registers for `F16` memory to memory copies when
+;; `Zfhmin` is unavailable.
+(rule 3 (lower (store store_flags (sinkable_load inst $F16 load_flags load_addr load_offset) store_addr store_offset))
+  (if-let false (has_zfhmin))
+  (rv_store (amode store_addr store_offset) (StoreOP.Sh) store_flags (gen_sunk_load inst (amode load_addr load_offset) (LoadOP.Lh) load_flags)))
+
 
 ;;;;;  Rules for `icmp`;;;;;;;;;
 
