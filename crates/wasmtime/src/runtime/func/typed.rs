@@ -93,6 +93,7 @@ where
     /// connected to an asynchronous store.
     ///
     /// [`Trap`]: crate::Trap
+    #[inline]
     pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results> {
         let mut store = store.as_context_mut();
         assert!(

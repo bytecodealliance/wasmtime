@@ -835,6 +835,7 @@ impl VMFuncRef {
     ///
     /// Note that the unsafety invariants to maintain here are not currently
     /// exhaustively documented.
+    #[inline]
     pub unsafe fn array_call(
         &self,
         pulley: Option<InterpreterRef<'_>>,
@@ -869,6 +870,7 @@ impl VMFuncRef {
         )
     }
 
+    #[inline]
     unsafe fn array_call_native(
         &self,
         caller: NonNull<VMOpaqueContext>,
