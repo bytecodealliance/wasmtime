@@ -589,7 +589,6 @@ impl CacheConfig {
 /// A builder for `CacheConfig`s.
 #[derive(Debug, Clone, Default)]
 pub struct CacheConfigBuilder {
-    enabled: bool,
     directory: Option<PathBuf>,
     worker_event_queue_size: Option<u64>,
     baseline_compression_level: Option<i32>,
@@ -605,12 +604,6 @@ pub struct CacheConfigBuilder {
 }
 
 impl CacheConfigBuilder {
-    /// Specifies whether the cache system is used or not.
-    pub fn enabled(mut self, enabled: bool) -> Self {
-        self.enabled = enabled;
-        self
-    }
-
     /// Specifies where the cache directory is. Must be an absolute path.
     pub fn directory(mut self, directory: impl Into<PathBuf>) -> Self {
         self.directory = Some(directory.into());
@@ -728,7 +721,6 @@ impl CacheConfigBuilder {
 
     pub fn build(self) -> Result<CacheConfig> {
         let CacheConfigBuilder {
-            enabled,
             directory,
             worker_event_queue_size,
             baseline_compression_level,
@@ -744,7 +736,7 @@ impl CacheConfigBuilder {
         } = self;
 
         let mut config = CacheConfig {
-            enabled,
+            enabled: true,
             directory,
             worker_event_queue_size,
             baseline_compression_level,

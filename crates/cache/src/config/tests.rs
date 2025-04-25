@@ -523,7 +523,7 @@ fn test_percent_settings() {
 fn test_builder_default() {
     let (_td, _cd, cp) = test_prolog();
     let config_content = "[cache]\n\
-                          enabled = false\n";
+                          enabled = true\n";
     fs::write(&cp, config_content).expect("Failed to write test config file");
     let expected_config = CacheConfig::from_file(Some(&cp)).unwrap();
 
@@ -581,7 +581,6 @@ fn test_builder_all_settings() {
     let (_td, cd, _cp) = test_prolog();
 
     let conf = CacheConfig::builder()
-        .enabled(true)
         .directory(&cd)
         .worker_event_queue_size(0x10)
         .baseline_compression_level(3)
