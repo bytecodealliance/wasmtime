@@ -580,7 +580,8 @@ fn test_builder_default() {
 fn test_builder_all_settings() {
     let (_td, cd, _cp) = test_prolog();
 
-    let conf = CacheConfig::builder()
+    let mut builder = CacheConfig::builder();
+    builder
         .directory(&cd)
         .worker_event_queue_size(0x10)
         .baseline_compression_level(3)
@@ -592,9 +593,8 @@ fn test_builder_all_settings() {
         .file_count_soft_limit(0x10_000)
         .files_total_size_soft_limit(512 * (1u64 << 20))
         .file_count_limit_percent_if_deleting(70)
-        .files_total_size_limit_percent_if_deleting(70)
-        .build()
-        .expect("Failed to build config");
+        .files_total_size_limit_percent_if_deleting(70);
+    let conf = builder.build().expect("Failed to build config");
     check_conf(&conf, &cd);
 
     fn check_conf(conf: &CacheConfig, cd: &PathBuf) {

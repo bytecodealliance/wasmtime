@@ -605,35 +605,35 @@ pub struct CacheConfigBuilder {
 
 impl CacheConfigBuilder {
     /// Specifies where the cache directory is. Must be an absolute path.
-    pub fn directory(mut self, directory: impl Into<PathBuf>) -> Self {
+    pub fn directory(&mut self, directory: impl Into<PathBuf>) -> &mut Self {
         self.directory = Some(directory.into());
         self
     }
 
     /// Size of cache worker event queue. If the queue is full, incoming cache usage events will be
     /// dropped.
-    pub fn worker_event_queue_size(mut self, size: u64) -> Self {
+    pub fn worker_event_queue_size(&mut self, size: u64) -> &mut Self {
         self.worker_event_queue_size = Some(size);
         self
     }
 
     /// Compression level used when a new cache file is being written by the cache system. Wasmtime
     /// uses zstd compression.
-    pub fn baseline_compression_level(mut self, level: i32) -> Self {
+    pub fn baseline_compression_level(&mut self, level: i32) -> &mut Self {
         self.baseline_compression_level = Some(level);
         self
     }
 
     /// Compression level used when the cache worker decides to recompress a cache file. Wasmtime
     /// uses zstd compression.
-    pub fn optimized_compression_level(mut self, level: i32) -> Self {
+    pub fn optimized_compression_level(&mut self, level: i32) -> &mut Self {
         self.optimized_compression_level = Some(level);
         self
     }
 
     /// One of the conditions for the cache worker to recompress a cache file is to have usage
     /// count of the file exceeding this threshold.
-    pub fn optimized_compression_usage_counter_threshold(mut self, threshold: u64) -> Self {
+    pub fn optimized_compression_usage_counter_threshold(&mut self, threshold: u64) -> &mut Self {
         self.optimized_compression_usage_counter_threshold = Some(threshold);
         self
     }
@@ -641,7 +641,7 @@ impl CacheConfigBuilder {
     /// When the cache worker is notified about a cache file being updated by the cache system and
     /// this interval has already passed since last cleaning up, the worker will attempt a new
     /// cleanup.
-    pub fn cleanup_interval(mut self, interval: Duration) -> Self {
+    pub fn cleanup_interval(&mut self, interval: Duration) -> &mut Self {
         self.cleanup_interval = Some(interval);
         self
     }
@@ -650,7 +650,7 @@ impl CacheConfigBuilder {
     /// worker has started the task for this file within the last
     /// optimizing-compression-task-timeout interval. If some worker has started working on it,
     /// other workers are skipping this task.
-    pub fn optimizing_compression_task_timeout(mut self, timeout: Duration) -> Self {
+    pub fn optimizing_compression_task_timeout(&mut self, timeout: Duration) -> &mut Self {
         self.optimizing_compression_task_timeout = Some(timeout);
         self
     }
@@ -672,7 +672,7 @@ impl CacheConfigBuilder {
     /// limits are not reached, the cache files will not be deleted. Otherwise, they will be
     /// treated as the oldest files, so they might survive. If the user actually uses the cache
     /// file, the modification time will be updated.
-    pub fn allowed_clock_drift_for_files_from_future(mut self, drift: Duration) -> Self {
+    pub fn allowed_clock_drift_for_files_from_future(&mut self, drift: Duration) -> &mut Self {
         self.allowed_clock_drift_for_files_from_future = Some(drift);
         self
     }
@@ -681,7 +681,7 @@ impl CacheConfigBuilder {
     ///
     /// This doesn't include files with metadata. To learn more, please refer to the cache system
     /// section.
-    pub fn file_count_soft_limit(mut self, limit: u64) -> Self {
+    pub fn file_count_soft_limit(&mut self, limit: u64) -> &mut Self {
         self.file_count_soft_limit = Some(limit);
         self
     }
@@ -692,7 +692,7 @@ impl CacheConfigBuilder {
     /// section.
     ///
     /// *this is the file size, not the space physically occupied on the disk.
-    pub fn files_total_size_soft_limit(mut self, limit: u64) -> Self {
+    pub fn files_total_size_soft_limit(&mut self, limit: u64) -> &mut Self {
         self.files_total_size_soft_limit = Some(limit);
         self
     }
@@ -703,7 +703,7 @@ impl CacheConfigBuilder {
     ///
     /// This doesn't include files with metadata. To learn more, please refer to the cache system
     /// section.
-    pub fn file_count_limit_percent_if_deleting(mut self, percent: u8) -> Self {
+    pub fn file_count_limit_percent_if_deleting(&mut self, percent: u8) -> &mut Self {
         self.file_count_limit_percent_if_deleting = Some(percent);
         self
     }
@@ -714,7 +714,7 @@ impl CacheConfigBuilder {
     ///
     /// This doesn't include files with metadata. To learn more, please refer to the cache system
     /// section.
-    pub fn files_total_size_limit_percent_if_deleting(mut self, percent: u8) -> Self {
+    pub fn files_total_size_limit_percent_if_deleting(&mut self, percent: u8) -> &mut Self {
         self.files_total_size_limit_percent_if_deleting = Some(percent);
         self
     }
