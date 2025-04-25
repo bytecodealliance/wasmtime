@@ -408,7 +408,12 @@ impl Metadata<'_> {
 
         impl fmt::Display for WasmFeature<'_> {
             fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-                write!(f, "support for WebAssembly feature {}", self.0)
+                write!(f, "support for WebAssembly feature `")?;
+                for c in self.0.chars().map(|c| c.to_lowercase()) {
+                    write!(f, "{c}")?;
+                }
+                write!(f, "`")?;
+                Ok(())
             }
         }
     }
@@ -598,11 +603,15 @@ Caused by:
 
         let engine = Engine::new(&config)?;
         let mut metadata = Metadata::new(&engine);
-        metadata.features.threads = false;
+        metadata.features &= !wasmparser::WasmFeatures::THREADS.bits();
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(e.to_string(), "Module was compiled without WebAssembly threads support but it is enabled for the host"),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Module was compiled without support for WebAssembly feature \
+                 `threads` but it is enabled for the host"
+            ),
         }
 
         let mut config = Config::new();
@@ -610,11 +619,15 @@ Caused by:
 
         let engine = Engine::new(&config)?;
         let mut metadata = Metadata::new(&engine);
-        metadata.features.threads = true;
+        metadata.features |= wasmparser::WasmFeatures::THREADS.bits();
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(e.to_string(), "Module was compiled with WebAssembly threads support but it is not enabled for the host"),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Module was compiled with support for WebAssembly feature \
+                `threads` but it is not enabled for the host"
+            ),
         }
 
         Ok(())
