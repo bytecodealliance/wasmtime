@@ -386,6 +386,9 @@ impl Metadata<'_> {
         for (name, flag) in difference.iter_names() {
             let found = module_features.contains(flag);
             let expected = other.contains(flag);
+            // Give a slightly more specialized error message for the `GC_TYPES`
+            // feature which isn't actually part of wasm itself but is gated by
+            // compile-time crate features.
             if flag == wasmparser::WasmFeatures::GC_TYPES {
                 Self::check_cfg_bool(
                     cfg!(feature = "gc"),
