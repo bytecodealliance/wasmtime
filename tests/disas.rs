@@ -165,7 +165,8 @@ impl Test {
         if let Some(config) = &config.flags {
             flags.extend(config.to_vec());
         }
-        let opts = wasmtime_cli_flags::CommonOptions::try_parse_from(&flags)?;
+        let mut opts = wasmtime_cli_flags::CommonOptions::try_parse_from(&flags)?;
+        opts.codegen.cranelift_debug_verifier = Some(true);
 
         Ok(Test {
             path: path.to_path_buf(),
