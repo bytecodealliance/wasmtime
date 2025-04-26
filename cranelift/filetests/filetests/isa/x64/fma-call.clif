@@ -64,7 +64,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $96, %rsp
+;   subq $0x60, %rsp
 ; block0:
 ;   movdqu  %xmm0, rsp(0 + virtual offset)
 ;   movdqu  %xmm1, rsp(16 + virtual offset)
@@ -106,7 +106,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   insertps $32, %xmm0, %xmm6, %xmm0
 ;   movdqa  %xmm2, %xmm3
 ;   insertps $48, %xmm0, %xmm3, %xmm0
-;   addq    %rsp, $96, %rsp
+;   addq $0x60, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -171,7 +171,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $64, %rsp
+;   subq $0x40, %rsp
 ; block0:
 ;   movdqu  %xmm0, rsp(0 + virtual offset)
 ;   movdqu  %xmm1, rsp(16 + virtual offset)
@@ -190,7 +190,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   movdqa  %xmm0, %xmm6
 ;   movdqu  rsp(48 + virtual offset), %xmm0
 ;   movlhps %xmm0, %xmm6, %xmm0
-;   addq    %rsp, $64, %rsp
+;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

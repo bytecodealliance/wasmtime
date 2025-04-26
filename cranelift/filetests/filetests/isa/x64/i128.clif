@@ -317,7 +317,7 @@ block0(v0: i128, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $48, %rsp
+;   subq $0x30, %rsp
 ;   movq    %rbx, 0(%rsp)
 ;   movq    %r12, 8(%rsp)
 ;   movq    %r13, 16(%rsp)
@@ -381,7 +381,7 @@ block0(v0: i128, v1: i128):
 ;   movq    16(%rsp), %r13
 ;   movq    24(%rsp), %r14
 ;   movq    32(%rsp), %r15
-;   addq    %rsp, $48, %rsp
+;   addq $0x30, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1172,7 +1172,7 @@ block0(v0: i128, v1: i128, v2: i64, v3: i128, v4: i128, v5: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $32, %rsp
+;   subq $0x20, %rsp
 ;   movq    %r13, 0(%rsp)
 ;   movq    %r14, 8(%rsp)
 ;   movq    %r15, 16(%rsp)
@@ -1198,7 +1198,7 @@ block0(v0: i128, v1: i128, v2: i64, v3: i128, v4: i128, v5: i128):
 ;   movq    0(%rsp), %r13
 ;   movq    8(%rsp), %r14
 ;   movq    16(%rsp), %r15
-;   addq    %rsp, $32, %rsp
+;   addq $0x20, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1291,7 +1291,7 @@ block0(v0: i128, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $32, %rsp
+;   subq $0x20, %rsp
 ;   movq    %r12, 16(%rsp)
 ;   movq    %r13, 24(%rsp)
 ; block0:
@@ -1303,7 +1303,7 @@ block0(v0: i128, v1: i128):
 ;   movq    %r12, 0(%rdi)
 ;   movq    16(%rsp), %r12
 ;   movq    24(%rsp), %r13
-;   addq    %rsp, $32, %rsp
+;   addq $0x20, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

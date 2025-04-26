@@ -19,10 +19,10 @@ block0:
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $8192, %rsp
+;   subq $0x2000, %rsp
 ; block0:
 ;   lea     rsp(0 + virtual offset), %rax
-;   addq    %rsp, $8192, %rsp
+;   addq $0x2000, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -50,17 +50,17 @@ block0:
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $65536, %rsp
+;   subq $0x10000, %rsp
 ;   movl    %esp, 0(%rsp)
-;   subq    %rsp, $65536, %rsp
+;   subq $0x10000, %rsp
 ;   movl    %esp, 0(%rsp)
-;   subq    %rsp, $65536, %rsp
+;   subq $0x10000, %rsp
 ;   movl    %esp, 0(%rsp)
-;   addq    %rsp, $196608, %rsp
-;   subq    %rsp, $196608, %rsp
+;   addq $0x30000, %rsp
+;   subq $0x30000, %rsp
 ; block0:
 ;   lea     rsp(0 + virtual offset), %rax
-;   addq    %rsp, $196608, %rsp
+;   addq $0x30000, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -96,10 +96,10 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ;   stack_probe_loop %r11, frame_size=2097152, guard_size=65536
-;   subq    %rsp, $2097152, %rsp
+;   subq $0x200000, %rsp
 ; block0:
 ;   lea     rsp(0 + virtual offset), %rax
-;   addq    %rsp, $2097152, %rsp
+;   addq $0x200000, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
