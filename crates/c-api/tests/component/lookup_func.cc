@@ -1,14 +1,7 @@
+#include "utils.h"
+
 #include <gtest/gtest.h>
 #include <wasmtime.h>
-
-#define CHECK(err)                                                             \
-  do {                                                                         \
-    if (err) {                                                                 \
-      auto msg = wasm_name_t{};                                                \
-      wasmtime_error_message(err, &msg);                                       \
-      EXPECT_EQ(err, nullptr) << std::string_view{msg.data, msg.size};         \
-    }                                                                          \
-  } while (false)
 
 TEST(component, lookup_func) {
   static constexpr auto component_text = std::string_view{
@@ -35,7 +28,7 @@ TEST(component, lookup_func) {
       engine, reinterpret_cast<const uint8_t *>(component_text.data()),
       component_text.size(), &component);
 
-  CHECK(err);
+  CHECK_ERR(err);
 
   auto name = wasm_name_t{};
   wasm_name_new_from_string(&name, "ff");
@@ -58,7 +51,7 @@ TEST(component, lookup_func) {
   wasmtime_component_instance_t instance = {};
   err = wasmtime_component_linker_instantiate(linker, context, component,
                                               &instance);
-  CHECK(err);
+  CHECK_ERR(err);
 
   wasmtime_component_func_t func = {};
   found = wasmtime_component_instance_get_func(&instance, context, f, &func);

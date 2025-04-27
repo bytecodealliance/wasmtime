@@ -1,14 +1,7 @@
+#include "utils.h"
+
 #include <gtest/gtest.h>
 #include <wasmtime.h>
-
-#define CHECK(err)                                                             \
-  do {                                                                         \
-    if (err) {                                                                 \
-      auto msg = wasm_name_t{};                                                \
-      wasmtime_error_message(err, &msg);                                       \
-      EXPECT_EQ(err, nullptr) << std::string_view{msg.data, msg.size};         \
-    }                                                                          \
-  } while (false)
 
 TEST(component, define_module) {
   static constexpr auto module_wat = std::string_view{
@@ -37,12 +30,12 @@ TEST(component, define_module) {
 
   wasm_byte_vec_t wasm;
   auto err = wasmtime_wat2wasm(module_wat.data(), module_wat.size(), &wasm);
-  CHECK(err);
+  CHECK_ERR(err);
 
   wasmtime_module_t *module = nullptr;
   err = wasmtime_module_new(
       engine, reinterpret_cast<const uint8_t *>(wasm.data), wasm.size, &module);
-  CHECK(err);
+  CHECK_ERR(err);
 
   const auto store = wasmtime_store_new(engine, nullptr, nullptr);
   const auto context = wasmtime_store_context(store);
@@ -53,7 +46,7 @@ TEST(component, define_module) {
       engine, reinterpret_cast<const uint8_t *>(component_text.data()),
       component_text.size(), &component);
 
-  CHECK(err);
+  CHECK_ERR(err);
 
   const auto linker = wasmtime_component_linker_new(engine);
 
@@ -63,11 +56,11 @@ TEST(component, define_module) {
   auto name = wasm_name_t{};
   wasm_name_new_from_string(&name, "x:y/z");
   err = wasmtime_component_linker_instance_add_instance(root, &name, &x_y_z);
-  CHECK(err);
+  CHECK_ERR(err);
 
   wasm_name_new_from_string(&name, "mod");
   err = wasmtime_component_linker_instance_add_module(x_y_z, &name, module);
-  CHECK(err);
+  CHECK_ERR(err);
 
   wasmtime_component_linker_instance_delete(x_y_z);
   wasmtime_component_linker_instance_delete(root);
@@ -75,7 +68,7 @@ TEST(component, define_module) {
   wasmtime_component_instance_t instance = {};
   err = wasmtime_component_linker_instantiate(linker, context, component,
                                               &instance);
-  CHECK(err);
+  CHECK_ERR(err);
 
   wasmtime_component_linker_delete(linker);
 
