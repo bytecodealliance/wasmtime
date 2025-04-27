@@ -346,7 +346,23 @@ impl CacheConfig {
         conf
     }
 
-    /// Parses cache configuration from the file specified
+    /// Loads cache configuration specified at `path`.
+    ///
+    /// This method will read the file specified by `path` on the filesystem and
+    /// attempt to load cache configuration from it. This method can also fail
+    /// due to I/O errors, misconfiguration, syntax errors, etc. For expected
+    /// syntax in the configuration file see the [documentation online][docs].
+    ///
+    /// Passing in `None` loads cache configuration from the system default path.
+    /// This is located, for example, on Unix at `$HOME/.config/wasmtime/config.toml`
+    /// and is typically created with the `wasmtime config new` command.
+    ///
+    /// # Errors
+    ///
+    /// This method can fail due to any error that happens when loading the file
+    /// pointed to by `path` and attempting to load the cache configuration.
+    ///
+    /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
     pub fn from_file(config_file: Option<&Path>) -> Result<Self> {
         let mut config = Self::load_and_parse_file(config_file)?;
         config.validate_or_default()?;

@@ -737,10 +737,12 @@ impl CommonOptions {
         if self.codegen.cache != Some(false) {
             match &self.codegen.cache_config {
                 Some(path) => {
-                    config.cache_config_load(path)?;
+                    config.cache_config(Some(wasmtime::CacheConfig::from_file(Some(Path::new(
+                        path,
+                    )))?));
                 }
                 None => {
-                    config.cache_config_load_default()?;
+                    config.cache_config(Some(wasmtime::CacheConfig::from_file(None)?));
                 }
             }
         }

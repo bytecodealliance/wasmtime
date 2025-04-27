@@ -3,14 +3,14 @@
 //! If your application design is compatible with pre-compiling Wasm programs,
 //! prefer doing that.
 
-use wasmtime::{Config, Engine, Result, Strategy};
+use wasmtime::{CacheConfig, Config, Engine, Result, Strategy};
 
 fn main() -> Result<()> {
     let mut config = Config::new();
 
     // Enable the compilation cache, using the default cache configuration
     // settings.
-    config.cache_config_load_default()?;
+    config.cache_config(Some(CacheConfig::from_file(None)?));
 
     // Enable Winch, Wasmtime's baseline compiler.
     config.strategy(Strategy::Winch);

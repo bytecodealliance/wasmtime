@@ -446,7 +446,7 @@ impl Metadata<'_> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{Config, Module, OptLevel};
+    use crate::{CacheConfig, Config, Module, OptLevel};
     use std::{
         collections::hash_map::DefaultHasher,
         hash::{Hash, Hasher},
@@ -664,7 +664,7 @@ Caused by:
         )?;
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::None)
-            .cache_config_load(&config_path)?;
+            .cache_config(Some(CacheConfig::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
         Module::new(&engine, "(module (func))")?;
         assert_eq!(engine.config().cache_config.cache_hits(), 0);
@@ -675,7 +675,7 @@ Caused by:
 
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::Speed)
-            .cache_config_load(&config_path)?;
+            .cache_config(Some(CacheConfig::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
         Module::new(&engine, "(module (func))")?;
         assert_eq!(engine.config().cache_config.cache_hits(), 0);
@@ -686,7 +686,7 @@ Caused by:
 
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::SpeedAndSize)
-            .cache_config_load(&config_path)?;
+            .cache_config(Some(CacheConfig::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
         Module::new(&engine, "(module (func))")?;
         assert_eq!(engine.config().cache_config.cache_hits(), 0);
@@ -696,7 +696,8 @@ Caused by:
         assert_eq!(engine.config().cache_config.cache_misses(), 1);
 
         let mut cfg = Config::new();
-        cfg.debug_info(true).cache_config_load(&config_path)?;
+        cfg.debug_info(true)
+            .cache_config(Some(CacheConfig::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
         Module::new(&engine, "(module (func))")?;
         assert_eq!(engine.config().cache_config.cache_hits(), 0);
@@ -771,7 +772,7 @@ Caused by:
             ),
         )?;
         let mut cfg = Config::new();
-        cfg.cache_config_load(&config_path)?;
+        cfg.cache_config(Some(CacheConfig::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
         Component::new(&engine, "(component (core module (func)))")?;
         assert_eq!(engine.config().cache_config.cache_hits(), 0);

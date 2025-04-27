@@ -1371,86 +1371,23 @@ impl Config {
 
     /// Set a custom cache configuration.
     ///
-    /// If you want to load the cache configuration from a file, use [`Config::cache_config_load`]
-    /// or [`Config::cache_config_load_default`] for the default enabled configuration.
+    /// If you want to load the cache configuration from a file, use [`CacheConfig::from_file`].
+    /// You can call [`CacheConfig::from_file(None)`] for the default, enabled configuration.
     ///
-    /// By default cache configuration is not enabled or loaded.
+    /// If you want to disable the cache, you can call this method with `None`.
+    ///
+    /// By default, new configs do not have caching enabled.
+    /// Every call to [`Module::new(my_wasm)`][crate::Module::new] will recompile `my_wasm`,
+    /// even when it is unchanged, unless an enabled `CacheConfig` is provided.
     ///
     /// This method is only available when the `cache` feature of this crate is
     /// enabled.
     ///
     /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
     #[cfg(feature = "cache")]
-    pub fn cache_config(&mut self, cache_config: CacheConfig) -> &mut Self {
-        self.cache_config = cache_config;
+    pub fn cache_config(&mut self, cache_config: Option<CacheConfig>) -> &mut Self {
+        self.cache_config = cache_config.unwrap_or_else(|| CacheConfig::new_cache_disabled());
         self
-    }
-
-    /// Loads cache configuration specified at `path`.
-    ///
-    /// This method will read the file specified by `path` on the filesystem and
-    /// attempt to load cache configuration from it. This method can also fail
-    /// due to I/O errors, misconfiguration, syntax errors, etc. For expected
-    /// syntax in the configuration file see the [documentation online][docs].
-    ///
-    /// By default cache configuration is not enabled or loaded.
-    ///
-    /// This method is only available when the `cache` feature of this crate is
-    /// enabled.
-    ///
-    /// # Errors
-    ///
-    /// This method can fail due to any error that happens when loading the file
-    /// pointed to by `path` and attempting to load the cache configuration.
-    ///
-    /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
-    #[cfg(feature = "cache")]
-    pub fn cache_config_load(&mut self, path: impl AsRef<Path>) -> Result<&mut Self> {
-        self.cache_config = CacheConfig::from_file(Some(path.as_ref()))?;
-        Ok(self)
-    }
-
-    /// Disable caching.
-    ///
-    /// Every call to [`Module::new(my_wasm)`][crate::Module::new] will
-    /// recompile `my_wasm`, even when it is unchanged.
-    ///
-    /// By default, new configs do not have caching enabled. This method is only
-    /// useful for disabling a previous cache configuration.
-    ///
-    /// This method is only available when the `cache` feature of this crate is
-    /// enabled.
-    #[cfg(feature = "cache")]
-    pub fn disable_cache(&mut self) -> &mut Self {
-        self.cache_config = CacheConfig::new_cache_disabled();
-        self
-    }
-
-    /// Loads cache configuration from the system default path.
-    ///
-    /// This commit is the same as [`Config::cache_config_load`] except that it
-    /// does not take a path argument and instead loads the default
-    /// configuration present on the system. This is located, for example, on
-    /// Unix at `$HOME/.config/wasmtime/config.toml` and is typically created
-    /// with the `wasmtime config new` command.
-    ///
-    /// By default cache configuration is not enabled or loaded.
-    ///
-    /// This method is only available when the `cache` feature of this crate is
-    /// enabled.
-    ///
-    /// # Errors
-    ///
-    /// This method can fail due to any error that happens when loading the
-    /// default system configuration. Note that it is not an error if the
-    /// default config file does not exist, in which case the default settings
-    /// for an enabled cache are applied.
-    ///
-    /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
-    #[cfg(feature = "cache")]
-    pub fn cache_config_load_default(&mut self) -> Result<&mut Self> {
-        self.cache_config = CacheConfig::from_file(None)?;
-        Ok(self)
     }
 
     /// Sets a custom memory creator.
