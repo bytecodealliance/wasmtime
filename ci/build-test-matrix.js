@@ -17,6 +17,7 @@ const SINGLE_CRATE_BUCKETS = ["wasmtime", "wasmtime-cli", "wasmtime-wasi"];
 
 const ubuntu = 'ubuntu-24.04';
 const windows = 'windows-2025';
+const windows_arm = 'windows-11-arm';
 const macos = 'macos-14';
 
 // This is the small, fast-to-execute matrix we use for PRs before they enter
@@ -94,6 +95,12 @@ const FULL_MATRIX = [
     "os": windows,
     "name": "Test Windows MSVC x86_64",
     "filter": "windows-x64",
+  },
+  {
+    "os": windows_arm,
+    "name": "Test Windows MSVC aarch64",
+    "filter": "windows-aarch64",
+    "target": "aarch64-pc-windows-msvc",
   },
   {
     "os": windows,
