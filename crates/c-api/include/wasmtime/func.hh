@@ -6,7 +6,7 @@
 #define WASMTIME_FUNC_HH
 
 #include <wasmtime/error.hh>
-#include <wasmtime/extern.hh>
+#include <wasmtime/extern_declare.hh>
 #include <wasmtime/func.h>
 #include <wasmtime/span.hh>
 #include <wasmtime/store.hh>
@@ -550,7 +550,7 @@ public:
   }
 
   /// Returns the raw underlying C API function this is using.
-  const wasmtime_func_t &raw_func() const { return func; }
+  const wasmtime_func_t &capi() const { return func; }
 };
 
 /**
@@ -630,7 +630,7 @@ template <> struct detail::WasmType<std::optional<Func>> {
   static void store(Store::Context cx, wasmtime_val_raw_t *p,
                     const std::optional<Func> func) {
     if (func) {
-      p->funcref = wasmtime_func_to_raw(cx.raw_context(), &func->raw_func());
+      p->funcref = wasmtime_func_to_raw(cx.raw_context(), &func->capi());
     } else {
       p->funcref = 0;
     }
