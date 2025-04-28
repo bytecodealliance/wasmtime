@@ -342,4 +342,7 @@ public:
 
 } // namespace wasmtime
 
+// fill in `Func` constructors for `Val`
+#include <wasmtime/func.hh>
+
 #endif // WASMTIME_VAL_HH
