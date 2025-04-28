@@ -658,7 +658,7 @@ block0(v0: f128, v1: f128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm1, %xmm0
+;   movdqu  0(%rdx), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -668,7 +668,8 @@ block0(v0: f128, v1: f128):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movdqa %xmm1, %xmm0
+;   movdqu (%rdx), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+

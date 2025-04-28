@@ -211,10 +211,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 );
             }
 
-            // Windows fastcall dictates that `__m128i` parameters to a function
-            // are passed indirectly as pointers, so handle that as a special
-            // case before the loop below.
-            if param.value_type.is_vector()
+            // Windows fastcall dictates that `__m128i` and `f128` parameters to
+            // a function are passed indirectly as pointers, so handle that as a
+            // special case before the loop below.
+            if (param.value_type.is_vector() || param.value_type.is_float())
                 && param.value_type.bits() >= 128
                 && args_or_rets == ArgsOrRets::Args
                 && is_fastcall
@@ -504,9 +504,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I {
-        // Only ever used for I64s and vectors; if that changes, see if the
-        // ExtKind below needs to be changed.
-        assert!(ty == I64 || ty.is_vector());
+        // Only ever used for I64s, F128s and vectors; if that changes, see if
+        // the ExtKind below needs to be changed.
+        assert!(ty == I64 || ty.is_vector() || ty == F128);
         let mem = Amode::imm_reg(offset, base);
         Inst::load(ty, mem, into_reg, ExtKind::None)
     }
