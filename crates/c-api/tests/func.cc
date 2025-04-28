@@ -1,3 +1,5 @@
+#include <wasmtime/func.hh>
+
 #include <gtest/gtest.h>
 #include <wasmtime.hh>
 

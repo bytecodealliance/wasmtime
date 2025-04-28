@@ -121,4 +121,3 @@ private:
 } // namespace wasmtime
 
 #endif // WASMTIME_ERROR_HH
-

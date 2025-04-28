@@ -67,53 +67,6 @@ TEST(ExternRef, Smoke) {
   a = b;
 }
 
-TEST(Global, Smoke) {
-  Engine engine;
-  Store store(engine);
-  Global::create(store, GlobalType(ValKind::I32, true), 3.0).err();
-  unwrap(Global::create(store, GlobalType(ValKind::I32, true), 3));
-  unwrap(Global::create(store, GlobalType(ValKind::I32, false), 3));
-
-  Global g = unwrap(Global::create(store, GlobalType(ValKind::I32, true), 4));
-  EXPECT_EQ(g.get(store).i32(), 4);
-  unwrap(g.set(store, 10));
-  EXPECT_EQ(g.get(store).i32(), 10);
-  g.set(store, 10.23).err();
-  EXPECT_EQ(g.get(store).i32(), 10);
-
-  EXPECT_EQ(g.type(store)->content().kind(), ValKind::I32);
-  EXPECT_TRUE(g.type(store)->is_mutable());
-}
-
-TEST(Table, Smoke) {
-  Engine engine;
-  Store store(engine);
-  Table::create(store, TableType(ValKind::FuncRef, 1), 3.0).err();
-
-  Val null = std::optional<Func>();
-  Table t = unwrap(Table::create(store, TableType(ValKind::FuncRef, 1), null));
-  EXPECT_FALSE(t.get(store, 1));
-  EXPECT_TRUE(t.get(store, 0));
-  Val val = *t.get(store, 0);
-  EXPECT_EQ(val.kind(), ValKind::FuncRef);
-  EXPECT_FALSE(val.funcref());
-  EXPECT_EQ(unwrap(t.grow(store, 4, null)), 1);
-  unwrap(t.set(store, 3, null));
-  t.set(store, 3, 3).err();
-  EXPECT_EQ(t.size(store), 5);
-  EXPECT_EQ(t.type(store)->element().kind(), ValKind::FuncRef);
-}
-
-TEST(Memory, Smoke) {
-  Engine engine;
-  Store store(engine);
-  Memory m = unwrap(Memory::create(store, MemoryType(1)));
-  EXPECT_EQ(m.size(store), 1);
-  EXPECT_EQ(unwrap(m.grow(store, 1)), 1);
-  EXPECT_EQ(m.data(store).size(), 2 << 16);
-  EXPECT_EQ(m.type(store)->min(), 1);
-}
-
 TEST(Instance, Smoke) {
   Engine engine;
   Store store(engine);
