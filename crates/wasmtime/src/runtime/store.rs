@@ -252,6 +252,7 @@ enum CallHookInner<T> {
 
 /// What to do after returning from a callback when the engine epoch reaches
 /// the deadline for a Store during execution of a function using that store.
+#[non_exhaustive]
 pub enum UpdateDeadline {
     /// Extend the deadline by the specified number of ticks.
     Continue(u64),
@@ -260,6 +261,18 @@ pub enum UpdateDeadline {
     /// configured via [`Config::async_support`](crate::Config::async_support).
     #[cfg(feature = "async")]
     Yield(u64),
+    /// Extend the deadline by the specified number of ticks after yielding to
+    /// the async executor loop. This can only be used with an async [`Store`]
+    /// configured via [`Config::async_support`](crate::Config::async_support).
+    ///
+    /// The yield will be performed by the future provided; when using `tokio`
+    /// it is recommended to provide [`tokio::task::yield_now`](https://docs.rs/tokio/latest/tokio/task/fn.yield_now.html)
+    /// here.
+    #[cfg(feature = "async")]
+    YieldCustom(
+        u64,
+        ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + Send>>,
+    ),
 }
 
 // Forward methods on `StoreOpaque` to also being on `StoreInner<T>`
@@ -942,10 +955,10 @@ impl<T> Store<T> {
     /// add to the epoch deadline, as well as indicating what
     /// to do after the callback returns. If the [`Store`] is
     /// configured with async support, then the callback may return
-    /// [`UpdateDeadline::Yield`] to yield to the async executor before
-    /// updating the epoch deadline. Alternatively, the callback may
-    /// return [`UpdateDeadline::Continue`] to update the epoch deadline
-    /// immediately.
+    /// [`UpdateDeadline::Yield`] or [`UpdateDeadline::YieldCustom`]
+    /// to yield to the async executor before updating the epoch deadline.
+    /// Alternatively, the callback may return [`UpdateDeadline::Continue`] to
+    /// update the epoch deadline immediately.
     ///
     /// This setting is intended to allow for coarse-grained
     /// interruption, but not a deterministic deadline of a fixed,
@@ -2104,7 +2117,6 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
             Some(callback) => callback((&mut *self).as_context_mut()).and_then(|update| {
                 let delta = match update {
                     UpdateDeadline::Continue(delta) => delta,
-
                     #[cfg(feature = "async")]
                     UpdateDeadline::Yield(delta) => {
                         assert!(
@@ -2114,6 +2126,27 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
                         // Do the async yield. May return a trap if future was
                         // canceled while we're yielded.
                         self.async_yield_impl()?;
+                        delta
+                    }
+                    #[cfg(feature = "async")]
+                    UpdateDeadline::YieldCustom(delta, future) => {
+                        assert!(
+                            self.async_support(),
+                            "cannot use `UpdateDeadline::YieldCustom` without enabling async support in the config"
+                        );
+
+                        // When control returns, we have a `Result<()>` passed
+                        // in from the host fiber. If this finished successfully then
+                        // we were resumed normally via a `poll`, so keep going.  If
+                        // the future was dropped while we were yielded, then we need
+                        // to clean up this fiber. Do so by raising a trap which will
+                        // abort all wasm and get caught on the other side to clean
+                        // things up.
+                        unsafe {
+                            self.async_cx()
+                                .expect("attempted to pull async context during shutdown")
+                                .block_on(future)?
+                        }
                         delta
                     }
                 };
