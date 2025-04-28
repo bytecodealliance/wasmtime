@@ -12,6 +12,7 @@ mod results;
 
 mod no_imports {
     use super::*;
+    use std::rc::Rc;
 
     wasmtime::component::bindgen!({
         inline: "
@@ -53,6 +54,12 @@ mod no_imports {
         let no_imports = NoImports::instantiate(&mut store, &component, &linker)?;
         no_imports.call_bar(&mut store)?;
         no_imports.foo().call_foo(&mut store)?;
+
+        let linker = Linker::new(&engine);
+        let mut non_send_store = Store::new(&engine, Rc::new(()));
+        let no_imports = NoImports::instantiate(&mut non_send_store, &component, &linker)?;
+        no_imports.call_bar(&mut non_send_store)?;
+        no_imports.foo().call_foo(&mut non_send_store)?;
         Ok(())
     }
 }

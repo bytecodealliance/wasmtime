@@ -426,10 +426,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[u32],
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[u32],),
@@ -443,10 +440,7 @@ pub mod exports {
                     pub fn call_simple_list2<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u32>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u32>> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -467,10 +461,7 @@ pub mod exports {
                             wasmtime::component::__internal::Vec<u32>,
                             wasmtime::component::__internal::Vec<u32>,
                         ),
-                    >
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    > {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[u32], &[u32]),
@@ -494,10 +485,7 @@ pub mod exports {
                         wasmtime::component::__internal::Vec<
                             wasmtime::component::__internal::Vec<u32>,
                         >,
-                    >
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    > {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[wasmtime::component::__internal::Vec<u32>],),

@@ -317,10 +317,7 @@ const _: () = {
         pub fn call_some_world_func2<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
-        ) -> wasmtime::Result<wasmtime::component::Resource<WorldResource>>
-        where
-            <S as wasmtime::AsContext>::Data: Send,
-        {
+        ) -> wasmtime::Result<wasmtime::component::Resource<WorldResource>> {
             let callee = unsafe {
                 wasmtime::component::TypedFunc::<
                     (),
@@ -1197,10 +1194,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: wasmtime::component::Resource<Foo>,
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (wasmtime::component::Resource<Foo>,),

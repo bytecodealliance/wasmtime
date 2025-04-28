@@ -350,10 +350,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: f32,
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (f32,),
@@ -368,10 +365,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: f64,
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (f64,),
@@ -385,10 +379,7 @@ pub mod exports {
                     pub fn call_f32_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<f32>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<f32> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -402,10 +393,7 @@ pub mod exports {
                     pub fn call_f64_result<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<f64>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<f64> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
