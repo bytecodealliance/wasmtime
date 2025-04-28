@@ -5,6 +5,7 @@
 #ifndef WASMTIME_FUNC_HH
 #define WASMTIME_FUNC_HH
 
+#include <array>
 #include <wasmtime/error.hh>
 #include <wasmtime/extern_declare.hh>
 #include <wasmtime/func.h>
