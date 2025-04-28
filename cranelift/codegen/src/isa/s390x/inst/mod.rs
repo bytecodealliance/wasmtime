@@ -1,6 +1,7 @@
 //! This module defines s390x-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
+use crate::ir::immediates::Ieee16;
 use crate::ir::{types, ExternalName, Type};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::{CallConv, FunctionAlignment};
@@ -177,6 +178,7 @@ impl Inst {
             | Inst::FpuRRRR { .. }
             | Inst::FpuCmp32 { .. }
             | Inst::FpuCmp64 { .. }
+            | Inst::LoadFpuConst16 { .. }
             | Inst::LoadFpuConst32 { .. }
             | Inst::LoadFpuConst64 { .. }
             | Inst::VecRRR { .. }
@@ -324,6 +326,12 @@ impl Inst {
             types::I16 => Inst::Load64ZExt16 { rd: into_reg, mem },
             types::I32 => Inst::Load64ZExt32 { rd: into_reg, mem },
             types::I64 => Inst::Load64 { rd: into_reg, mem },
+            types::F16 => Inst::VecLoadLaneUndef {
+                size: 16,
+                rd: into_reg,
+                mem,
+                lane_imm: 0,
+            },
             types::F32 => Inst::VecLoadLaneUndef {
                 size: 32,
                 rd: into_reg,
@@ -336,8 +344,7 @@ impl Inst {
                 mem,
                 lane_imm: 0,
             },
-            _ if ty.is_vector() && ty.bits() == 128 => Inst::VecLoad { rd: into_reg, mem },
-            types::I128 => Inst::VecLoad { rd: into_reg, mem },
+            _ if ty.bits() == 128 => Inst::VecLoad { rd: into_reg, mem },
             _ => unimplemented!("gen_load({})", ty),
         }
     }
@@ -349,6 +356,12 @@ impl Inst {
             types::I16 => Inst::Store16 { rd: from_reg, mem },
             types::I32 => Inst::Store32 { rd: from_reg, mem },
             types::I64 => Inst::Store64 { rd: from_reg, mem },
+            types::F16 => Inst::VecStoreLane {
+                size: 16,
+                rd: from_reg,
+                mem,
+                lane_imm: 0,
+            },
             types::F32 => Inst::VecStoreLane {
                 size: 32,
                 rd: from_reg,
@@ -361,8 +374,7 @@ impl Inst {
                 mem,
                 lane_imm: 0,
             },
-            _ if ty.is_vector() && ty.bits() == 128 => Inst::VecStore { rd: from_reg, mem },
-            types::I128 => Inst::VecStore { rd: from_reg, mem },
+            _ if ty.bits() == 128 => Inst::VecStore { rd: from_reg, mem },
             _ => unimplemented!("gen_store({})", ty),
         }
     }
@@ -646,7 +658,9 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        Inst::LoadFpuConst32 { rd, .. } | Inst::LoadFpuConst64 { rd, .. } => {
+        Inst::LoadFpuConst16 { rd, .. }
+        | Inst::LoadFpuConst32 { rd, .. }
+        | Inst::LoadFpuConst64 { rd, .. } => {
             collector.reg_def(rd);
             collector.reg_fixed_nonallocatable(gpr_preg(1));
         }
@@ -1119,8 +1133,10 @@ impl MachInst for Inst {
             types::I16 => Ok((&[RegClass::Int], &[types::I16])),
             types::I32 => Ok((&[RegClass::Int], &[types::I32])),
             types::I64 => Ok((&[RegClass::Int], &[types::I64])),
+            types::F16 => Ok((&[RegClass::Float], &[types::F16])),
             types::F32 => Ok((&[RegClass::Float], &[types::F32])),
             types::F64 => Ok((&[RegClass::Float], &[types::F64])),
+            types::F128 => Ok((&[RegClass::Float], &[types::F128])),
             types::I128 => Ok((&[RegClass::Float], &[types::I128])),
             _ if ty.is_vector() && ty.bits() == 128 => Ok((&[RegClass::Float], &[types::I8X16])),
             _ => Err(CodegenError::Unsupported(format!(
@@ -2266,6 +2282,18 @@ impl Inst {
                 } else {
                     format!("wfcdb {}, {}", rn_fpr.unwrap_or(rn), rm_fpr.unwrap_or(rm))
                 }
+            }
+            &Inst::LoadFpuConst16 { rd, const_data } => {
+                let (rd, _rd_fpr) = pretty_print_fpr(rd.to_reg());
+                let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg());
+                // FIXME(#8312): Use `f16::from_bits` once it is stabilised.
+                format!(
+                    "bras {}, 8 ; data.f16 {} ; vleh {}, 0({}), 0",
+                    tmp,
+                    Ieee16::with_bits(const_data),
+                    rd,
+                    tmp
+                )
             }
             &Inst::LoadFpuConst32 { rd, const_data } => {
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg());

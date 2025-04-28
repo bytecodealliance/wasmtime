@@ -38,6 +38,11 @@ macro_rules! debug_assert_valid_regpair {
     };
 }
 
+const OPCODE_BRAS: u16 = 0xa75;
+const OPCODE_BCR: u16 = 0xa74;
+const OPCODE_LDR: u16 = 0x28;
+const OPCODE_VLR: u16 = 0xe756;
+
 /// Type(s) of memory instructions available for mem_finalize.
 pub struct MemInstType {
     /// True if 12-bit unsigned displacement is supported.
@@ -2298,9 +2303,8 @@ impl Inst {
                 rd,
                 ref symbol_reloc,
             } => {
-                let opcode = 0xa75; // BRAS
                 let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(opcode, reg, 12));
+                put(sink, &enc_ri_b(OPCODE_BRAS, reg, 12));
                 let (reloc, name, offset) = match &**symbol_reloc {
                     SymbolReloc::Absolute { name, offset } => (Reloc::Abs8, name, *offset),
                     SymbolReloc::TlsGd { name } => (Reloc::S390xTlsGd64, name, 0),
@@ -2319,53 +2323,54 @@ impl Inst {
                     let opcode = 0x38; // LER
                     put(sink, &enc_rr(opcode, rd.to_reg(), rn));
                 } else {
-                    let opcode = 0xe756; // VLR
-                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, 0, 0, 0));
+                    put(sink, &enc_vrr_a(OPCODE_VLR, rd.to_reg(), rn, 0, 0, 0));
                 }
             }
             &Inst::FpuMove64 { rd, rn } => {
                 if is_fpr(rd.to_reg()) && is_fpr(rn) {
-                    let opcode = 0x28; // LDR
-                    put(sink, &enc_rr(opcode, rd.to_reg(), rn));
+                    put(sink, &enc_rr(OPCODE_LDR, rd.to_reg(), rn));
                 } else {
-                    let opcode = 0xe756; // VLR
-                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, 0, 0, 0));
+                    put(sink, &enc_vrr_a(OPCODE_VLR, rd.to_reg(), rn, 0, 0, 0));
                 }
             }
             &Inst::FpuCMov32 { rd, cond, ri, rm } => {
                 debug_assert_eq!(rd.to_reg(), ri);
 
                 if is_fpr(rd.to_reg()) && is_fpr(rm) {
-                    let opcode = 0xa74; // BCR
-                    put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 2));
+                    put(sink, &enc_ri_c(OPCODE_BCR, cond.invert().bits(), 4 + 2));
                     let opcode = 0x38; // LER
                     put(sink, &enc_rr(opcode, rd.to_reg(), rm));
                 } else {
-                    let opcode = 0xa74; // BCR
-                    put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 6));
-                    let opcode = 0xe756; // VLR
-                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rm, 0, 0, 0));
+                    put(sink, &enc_ri_c(OPCODE_BCR, cond.invert().bits(), 4 + 6));
+                    put(sink, &enc_vrr_a(OPCODE_VLR, rd.to_reg(), rm, 0, 0, 0));
                 }
             }
             &Inst::FpuCMov64 { rd, cond, ri, rm } => {
                 debug_assert_eq!(rd.to_reg(), ri);
 
                 if is_fpr(rd.to_reg()) && is_fpr(rm) {
-                    let opcode = 0xa74; // BCR
-                    put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 2));
-                    let opcode = 0x28; // LDR
-                    put(sink, &enc_rr(opcode, rd.to_reg(), rm));
+                    put(sink, &enc_ri_c(OPCODE_BCR, cond.invert().bits(), 4 + 2));
+                    put(sink, &enc_rr(OPCODE_LDR, rd.to_reg(), rm));
                 } else {
-                    let opcode = 0xa74; // BCR
-                    put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 6));
-                    let opcode = 0xe756; // VLR
-                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rm, 0, 0, 0));
+                    put(sink, &enc_ri_c(OPCODE_BCR, cond.invert().bits(), 4 + 6));
+                    put(sink, &enc_vrr_a(OPCODE_VLR, rd.to_reg(), rm, 0, 0, 0));
                 }
             }
-            &Inst::LoadFpuConst32 { rd, const_data } => {
-                let opcode = 0xa75; // BRAS
+            &Inst::LoadFpuConst16 { rd, const_data } => {
                 let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(opcode, reg, 8));
+                put(sink, &enc_ri_b(OPCODE_BRAS, reg, 6));
+                sink.put2(const_data.swap_bytes());
+                let inst = Inst::VecLoadLaneUndef {
+                    size: 16,
+                    rd,
+                    mem: MemArg::reg(reg, MemFlags::trusted()),
+                    lane_imm: 0,
+                };
+                inst.emit(sink, emit_info, state);
+            }
+            &Inst::LoadFpuConst32 { rd, const_data } => {
+                let reg = writable_spilltmp_reg().to_reg();
+                put(sink, &enc_ri_b(OPCODE_BRAS, reg, 8));
                 sink.put4(const_data.swap_bytes());
                 let inst = Inst::VecLoadLaneUndef {
                     size: 32,
@@ -2376,9 +2381,8 @@ impl Inst {
                 inst.emit(sink, emit_info, state);
             }
             &Inst::LoadFpuConst64 { rd, const_data } => {
-                let opcode = 0xa75; // BRAS
                 let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(opcode, reg, 12));
+                put(sink, &enc_ri_b(OPCODE_BRAS, reg, 12));
                 sink.put8(const_data.swap_bytes());
                 let inst = Inst::VecLoadLaneUndef {
                     size: 64,
@@ -2780,8 +2784,7 @@ impl Inst {
                 put(sink, &enc_vrr_a(opcode, rm, rn, m3, 0, 0));
 
                 // If CC != 0, we'd done, so jump over the next instruction.
-                let opcode = 0xa74; // BCR
-                put(sink, &enc_ri_c(opcode, 7, 4 + 6));
+                put(sink, &enc_ri_c(OPCODE_BCR, 7, 4 + 6));
 
                 // Otherwise, use VECTOR COMPARE HIGH LOGICAL.
                 // Since we already know the high parts are equal, the CC
@@ -2864,25 +2867,21 @@ impl Inst {
             }
 
             &Inst::VecMov { rd, rn } => {
-                let opcode = 0xe756; // VLR
-                put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, 0, 0, 0));
+                put(sink, &enc_vrr_a(OPCODE_VLR, rd.to_reg(), rn, 0, 0, 0));
             }
             &Inst::VecCMov { rd, cond, ri, rm } => {
                 debug_assert_eq!(rd.to_reg(), ri);
 
-                let opcode = 0xa74; // BCR
-                put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 6));
-                let opcode = 0xe756; // VLR
-                put(sink, &enc_vrr_a(opcode, rd.to_reg(), rm, 0, 0, 0));
+                put(sink, &enc_ri_c(OPCODE_BCR, cond.invert().bits(), 4 + 6));
+                put(sink, &enc_vrr_a(OPCODE_VLR, rd.to_reg(), rm, 0, 0, 0));
             }
             &Inst::MovToVec128 { rd, rn, rm } => {
                 let opcode = 0xe762; // VLVGP
                 put(sink, &enc_vrr_f(opcode, rd.to_reg(), rn, rm));
             }
             &Inst::VecLoadConst { rd, const_data } => {
-                let opcode = 0xa75; // BRAS
                 let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(opcode, reg, 20));
+                put(sink, &enc_ri_b(OPCODE_BRAS, reg, 20));
                 for i in const_data.to_be_bytes().iter() {
                     sink.put1(*i);
                 }
@@ -2897,9 +2896,8 @@ impl Inst {
                 rd,
                 const_data,
             } => {
-                let opcode = 0xa75; // BRAS
                 let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(opcode, reg, (4 + size / 8) as i32));
+                put(sink, &enc_ri_b(OPCODE_BRAS, reg, (4 + size / 8) as i32));
                 for i in 0..size / 8 {
                     sink.put1((const_data >> (size - 8 - 8 * i)) as u8);
                 }

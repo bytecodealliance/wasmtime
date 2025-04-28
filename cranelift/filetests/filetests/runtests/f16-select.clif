@@ -6,6 +6,7 @@ target aarch64
 target aarch64 has_fp16
 target riscv64
 target riscv64 has_zfhmin
+target s390x
 
 function %select_icmp_i8_f16(i8, f16, f16) -> f16 {
 block0(v0: i8, v1: f16, v2: f16):

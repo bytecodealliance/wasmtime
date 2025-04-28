@@ -425,6 +425,7 @@
 (extern const $I32X4 Type)
 (extern const $I64X2 Type)
 
+(extern const $F16X8 Type)
 (extern const $F32X4 Type)
 (extern const $F64X2 Type)
 

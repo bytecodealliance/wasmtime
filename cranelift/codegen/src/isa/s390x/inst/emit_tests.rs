@@ -7817,6 +7817,24 @@ fn test_s390x_binemit() {
         "wfcdb %v24, %f12",
     ));
 
+    // FIXME(#8312): Use `1.0_f16.to_bits()` once `f16` is stabilised.
+    let f16_1_0 = 0x3c00;
+    insns.push((
+        Inst::LoadFpuConst16 {
+            rd: writable_vr(8),
+            const_data: f16_1_0,
+        },
+        "A71500033C00E78010000001",
+        "bras %r1, 8 ; data.f16 0x1.000p0 ; vleh %v8, 0(%r1), 0",
+    ));
+    insns.push((
+        Inst::LoadFpuConst16 {
+            rd: writable_vr(24),
+            const_data: f16_1_0,
+        },
+        "A71500033C00E78010000801",
+        "bras %r1, 8 ; data.f16 0x1.000p0 ; vleh %v24, 0(%r1), 0",
+    ));
     insns.push((
         Inst::LoadFpuConst32 {
             rd: writable_vr(8),
