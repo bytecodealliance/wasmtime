@@ -1169,11 +1169,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         };
         let isnan = builder.ins().fcmp(FloatCC::NotEqual, val, val);
         self.trapnz(builder, isnan, ir::TrapCode::BAD_CONVERSION_TO_INTEGER);
-        let val = if val_ty == F64 {
-            self.trunc_f64(builder, val)
-        } else {
-            self.trunc_f32(builder, val)
-        };
+        let val = self.trunc_f64(builder, val);
         let (lower_bound, upper_bound) = match ty {
             I32 => range32,
             I64 => range64,
