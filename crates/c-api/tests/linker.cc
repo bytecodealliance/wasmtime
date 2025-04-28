@@ -11,10 +11,12 @@ TEST(Linker, Smoke) {
   Global g = Global::create(store, GlobalType(ValKind::I32, false), 1).unwrap();
   linker.define(store, "a", "g", g).unwrap();
   linker.define_wasi().unwrap();
-  linker.func_new("a", "f", FuncType({}, {}),
-                         [](auto caller, auto params, auto results) -> auto {
-                           return std::monostate();
-                         }).unwrap();
+  linker
+      .func_new("a", "f", FuncType({}, {}),
+                [](auto caller, auto params, auto results) -> auto {
+                  return std::monostate();
+                })
+      .unwrap();
   linker.func_wrap("a", "f2", []() {}).unwrap();
   linker.func_wrap("a", "f3", [](Caller arg) {}).unwrap();
   linker.func_wrap("a", "f4", [](Caller arg, int32_t a) {}).unwrap();
