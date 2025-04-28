@@ -397,6 +397,15 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_16(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 16 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_32(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() == 32 {
                 Some(ty)
@@ -408,6 +417,15 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn ty_64(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() == 64 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_128(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 128 {
                 Some(ty)
             } else {
                 None

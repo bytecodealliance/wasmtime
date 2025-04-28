@@ -564,6 +564,10 @@
 (decl fits_in_64 (Type) Type)
 (extern extractor fits_in_64 fits_in_64)
 
+;; An extractor that only matches types that fit in exactly 16 bits.
+(decl ty_16 (Type) Type)
+(extern extractor ty_16 ty_16)
+
 ;; An extractor that only matches types that fit in exactly 32 bits.
 (decl ty_32 (Type) Type)
 (extern extractor ty_32 ty_32)
@@ -571,6 +575,10 @@
 ;; An extractor that only matches types that fit in exactly 64 bits.
 (decl ty_64 (Type) Type)
 (extern extractor ty_64 ty_64)
+
+;; An extractor that only matches types that fit in exactly 128 bits.
+(decl ty_128 (Type) Type)
+(extern extractor ty_128 ty_128)
 
 ;; A pure constructor/extractor that only matches scalar integers, and
 ;; references that can fit in 64 bits.

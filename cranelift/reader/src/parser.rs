@@ -2917,16 +2917,17 @@ impl<'a> Parser<'a> {
             F128 => DataValue::from(self.match_ieee128("expected an f128")?),
             _ if (ty.is_vector() || ty.is_dynamic_vector()) => {
                 let as_vec = self.match_uimm128(ty)?.into_vec();
-                if as_vec.len() == 16 {
-                    let mut as_array = [0; 16];
-                    as_array.copy_from_slice(&as_vec[..]);
-                    DataValue::from(as_array)
-                } else if as_vec.len() == 8 {
-                    let mut as_array = [0; 8];
-                    as_array.copy_from_slice(&as_vec[..]);
-                    DataValue::from(as_array)
-                } else {
-                    return Err(self.error("only 128-bit vectors are currently supported"));
+                let slice = as_vec.as_slice();
+                match slice.len() {
+                    16 => DataValue::V128(slice.try_into().unwrap()),
+                    8 => DataValue::V64(slice.try_into().unwrap()),
+                    4 => DataValue::V32(slice.try_into().unwrap()),
+                    2 => DataValue::V16(slice.try_into().unwrap()),
+                    _ => {
+                        return Err(
+                            self.error("vectors larger than 128 bits are not currently supported")
+                        )
+                    }
                 }
             }
             _ => return Err(self.error(&format!("don't know how to parse data values of: {ty}"))),
@@ -4032,6 +4033,9 @@ mod tests {
             parse("[0 1 2 3]", I32X4).to_string(),
             "0x00000003000000020000000100000000"
         );
+        assert_eq!(parse("[1 2]", I32X2).to_string(), "0x0000000200000001");
+        assert_eq!(parse("[1 2 3 4]", I8X4).to_string(), "0x04030201");
+        assert_eq!(parse("[1 2]", I8X2).to_string(), "0x0201");
     }
 
     #[test]

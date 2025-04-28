@@ -1,0 +1,79 @@
+test compile precise-output
+target x86_64
+
+function %load_i8x2(i64) -> i8x2 {
+block0(v0: i64):
+    v1 = load.i8x2 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   uninit  %xmm0
+;   pinsrw  $0, %xmm0, 0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pinsrw $0, (%rdi), %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_i16x2(i64) -> i16x2 {
+block0(v0: i64):
+    v1 = load.i16x2 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movss   0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movss (%rdi), %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %load_i32x2(i64) -> i32x2 {
+block0(v0: i64):
+    v1 = load.i32x2 v0
+    return v1
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movsd   0(%rdi), %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movsd (%rdi), %xmm0 ; trap: heap_oob
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+

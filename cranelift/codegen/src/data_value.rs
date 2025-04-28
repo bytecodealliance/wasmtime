@@ -23,6 +23,8 @@ pub enum DataValue {
     F128(Ieee128),
     V128([u8; 16]),
     V64([u8; 8]),
+    V32([u8; 4]),
+    V16([u8; 2]),
 }
 
 impl PartialEq for DataValue {
@@ -51,6 +53,10 @@ impl PartialEq for DataValue {
             (V128(_), _) => false,
             (V64(l), V64(r)) => l == r,
             (V64(_), _) => false,
+            (V32(l), V32(r)) => l == r,
+            (V32(_), _) => false,
+            (V16(l), V16(r)) => l == r,
+            (V16(_), _) => false,
         }
     }
 }
@@ -83,13 +89,15 @@ impl DataValue {
             DataValue::F128(_) => types::F128,
             DataValue::V128(_) => types::I8X16, // A default type.
             DataValue::V64(_) => types::I8X8,   // A default type.
+            DataValue::V32(_) => types::I8X4,   // A default type.
+            DataValue::V16(_) => types::I8X2,   // A default type.
         }
     }
 
     /// Return true if the value is a vector (i.e. `DataValue::V128`).
     pub fn is_vector(&self) -> bool {
         match self {
-            DataValue::V128(_) | DataValue::V64(_) => true,
+            DataValue::V128(_) | DataValue::V64(_) | DataValue::V32(_) | DataValue::V16(_) => true,
             _ => false,
         }
     }
@@ -112,6 +120,14 @@ impl DataValue {
             DataValue::V64(mut v) => {
                 v.reverse();
                 DataValue::V64(v)
+            }
+            DataValue::V32(mut v) => {
+                v.reverse();
+                DataValue::V32(v)
+            }
+            DataValue::V16(mut v) => {
+                v.reverse();
+                DataValue::V16(v)
             }
         }
     }
@@ -152,6 +168,8 @@ impl DataValue {
             DataValue::F128(f) => dst[..16].copy_from_slice(&f.bits().to_ne_bytes()[..]),
             DataValue::V128(v) => dst[..16].copy_from_slice(&v[..]),
             DataValue::V64(v) => dst[..8].copy_from_slice(&v[..]),
+            DataValue::V32(v) => dst[..4].copy_from_slice(&v[..]),
+            DataValue::V16(v) => dst[..2].copy_from_slice(&v[..]),
         };
     }
 
@@ -197,15 +215,13 @@ impl DataValue {
             types::F128 => DataValue::F128(Ieee128::with_bits(u128::from_ne_bytes(
                 src[..16].try_into().unwrap(),
             ))),
-            _ if ty.is_vector() => {
-                if ty.bytes() == 16 {
-                    DataValue::V128(src[..16].try_into().unwrap())
-                } else if ty.bytes() == 8 {
-                    DataValue::V64(src[..8].try_into().unwrap())
-                } else {
-                    unimplemented!()
-                }
-            }
+            _ if ty.is_vector() => match ty.bytes() {
+                16 => DataValue::V128(src[..16].try_into().unwrap()),
+                8 => DataValue::V64(src[..8].try_into().unwrap()),
+                4 => DataValue::V32(src[..4].try_into().unwrap()),
+                2 => DataValue::V16(src[..2].try_into().unwrap()),
+                _ => unimplemented!(),
+            },
             _ => unimplemented!(),
         }
     }
@@ -324,6 +340,8 @@ build_conversion_impl!(Ieee64, F64, F64);
 build_conversion_impl!(Ieee128, F128, F128);
 build_conversion_impl!([u8; 16], V128, I8X16);
 build_conversion_impl!([u8; 8], V64, I8X8);
+build_conversion_impl!([u8; 4], V32, I8X4);
+build_conversion_impl!([u8; 2], V16, I8X2);
 impl From<Offset32> for DataValue {
     fn from(o: Offset32) -> Self {
         DataValue::from(Into::<i32>::into(o))
@@ -346,6 +364,8 @@ impl Display for DataValue {
             // Again, for syntax consistency, use ConstantData, which in this case displays as hex.
             DataValue::V128(dv) => write!(f, "{}", ConstantData::from(&dv[..])),
             DataValue::V64(dv) => write!(f, "{}", ConstantData::from(&dv[..])),
+            DataValue::V32(dv) => write!(f, "{}", ConstantData::from(&dv[..])),
+            DataValue::V16(dv) => write!(f, "{}", ConstantData::from(&dv[..])),
         }
     }
 }
