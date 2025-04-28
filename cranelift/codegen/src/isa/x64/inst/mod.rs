@@ -211,13 +211,13 @@ impl Inst {
 macro_rules! lower_alu {
     ($size: expr, $src: expr, $dst: expr => $b_mi: ident, $w_mi: ident, $l_mi:ident, $l_mi_sxb:ident, $q_mi_sxb: ident, $q_mi_sxl: ident, $b_rm: ident, $w_rm: ident, $l_rm: ident, $q_rm: ident) => {{
         use cranelift_assembler_x64 as asm;
-        use external::CraneliftRegisters;
+        use external::{CraneliftRegisters, PairedGpr};
         use OperandSize::*;
 
         let dst = WritableGpr::from_writable_reg($dst).unwrap();
         let inst: asm::Inst<CraneliftRegisters> = match $src {
             RegMemImm::Reg { reg } => {
-                let dst = asm::Gpr::new(dst.into());
+                let dst = asm::Gpr::new(PairedGpr::from(dst));
                 let src = asm::GprMem::Gpr(Gpr::unwrap_new(reg).into());
                 match $size {
                     // We _could_ use wider instructions than necessary for
@@ -232,7 +232,7 @@ macro_rules! lower_alu {
                 }
             }
             RegMemImm::Imm { simm32 } => {
-                let dst = asm::GprMem::Gpr(dst.into());
+                let dst = asm::GprMem::Gpr(PairedGpr::from(dst));
                 match $size {
                     Size8 => {
                         let src = asm::Imm8::new(u8::try_from(simm32).unwrap());

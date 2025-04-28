@@ -26,9 +26,10 @@ impl asm::Registers for CraneliftRegisters {
 /// complete, we expect the hardware encoding for both `read` and `write` to be
 /// the same.
 #[derive(Clone, Copy, Debug)]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub struct PairedGpr {
-    pub(crate) read: Gpr,
-    pub(crate) write: WritableGpr,
+    pub read: Gpr,
+    pub write: WritableGpr,
 }
 
 impl From<WritableGpr> for PairedGpr {
@@ -39,13 +40,19 @@ impl From<WritableGpr> for PairedGpr {
     }
 }
 
-// impl From<Writable<Reg>> for PairedGpr {
-//     fn from(wgpr: Writable<Reg>) -> Self {
-//         let read = wgpr.to_reg();
-//         let write = wgpr;
-//         Self { read, write }
-//     }
-// }
+// For Winch ergonomics.
+impl From<PairedGpr> for asm::Gpr<PairedGpr> {
+    fn from(pair: PairedGpr) -> Self {
+        Self::new(pair)
+    }
+}
+
+// For Winch ergonomics.
+impl From<PairedGpr> for asm::GprMem<PairedGpr, Gpr> {
+    fn from(pair: PairedGpr) -> Self {
+        Self::Gpr(pair)
+    }
+}
 
 impl asm::AsReg for PairedGpr {
     fn enc(&self) -> u8 {
@@ -290,6 +297,7 @@ impl Into<asm::Amode<Gpr>> for Amode {
 
 /// Keep track of the offset slots to fill in during emission; see
 /// `KnownOffsetTable`.
+#[expect(missing_docs, reason = "self-describing keys")]
 pub mod offsets {
     pub const KEY_INCOMING_ARG: usize = 0;
     pub const KEY_SLOT_OFFSET: usize = 1;
