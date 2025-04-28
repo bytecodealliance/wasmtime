@@ -368,21 +368,22 @@ public:
     wasmtime_config_wasm_memory64_set(ptr.get(), enable);
   }
 
-  /// \brief Configures whether the WebAssembly Garbage Collection proposal will be enabled
+  /// \brief Configures whether the WebAssembly Garbage Collection proposal will
+  /// be enabled
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_gc
-  void wasm_gc(bool enable) {
-    wasmtime_config_wasm_gc_set(ptr.get(), enable);
-  }
+  void wasm_gc(bool enable) { wasmtime_config_wasm_gc_set(ptr.get(), enable); }
 
-  /// \brief Configures whether the WebAssembly function references proposal will be enabled
+  /// \brief Configures whether the WebAssembly function references proposal
+  /// will be enabled
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_function_references
   void wasm_function_references(bool enable) {
     wasmtime_config_wasm_function_references_set(ptr.get(), enable);
   }
 
-  /// \brief Configures whether the WebAssembly wide arithmetic proposal will be enabled
+  /// \brief Configures whether the WebAssembly wide arithmetic proposal will be
+  /// enabled
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_wide_arithmetic
   void wasm_wide_arithmetic(bool enable) {
@@ -390,7 +391,8 @@ public:
   }
 
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
-  /// \brief Configures whether the WebAssembly component model proposal will be enabled
+  /// \brief Configures whether the WebAssembly component model proposal will be
+  /// enabled
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model
   void wasm_component_model(bool enable) {
@@ -399,7 +401,8 @@ public:
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 
 #ifdef WASMTIME_FEATURE_PARALLEL_COMPILATION
-  /// \brief Configure whether wasmtime should compile a module using multiple threads.
+  /// \brief Configure whether wasmtime should compile a module using multiple
+  /// threads.
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.parallel_compilation
   void parallel_compilation(bool enable) {
@@ -468,7 +471,8 @@ public:
     wasmtime_config_memory_reservation_set(ptr.get(), size);
   }
 
-  /// \brief Configures the size of the bytes to reserve beyond the end of linear memory to grow into.
+  /// \brief Configures the size of the bytes to reserve beyond the end of
+  /// linear memory to grow into.
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_reservation_for_growth
   void memory_reservation_for_growth(size_t size) {
@@ -482,7 +486,8 @@ public:
     wasmtime_config_memory_guard_size_set(ptr.get(), size);
   }
 
-  /// \brief Configures whether the base pointer of linear memory is allowed to move.
+  /// \brief Configures whether the base pointer of linear memory is allowed to
+  /// move.
   ///
   /// https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_may_move
   void memory_may_move(bool enable) {
@@ -535,13 +540,13 @@ public:
 #endif // WASMTIME_FEATURE_CACHE
 
 private:
-  template <typename T>
-  static void raw_finalize(void *env) {
+  template <typename T> static void raw_finalize(void *env) {
     std::unique_ptr<T> ptr(reinterpret_cast<T *>(env));
   }
 
   template <typename M>
-  static uint8_t *raw_get_memory(void *env, size_t *byte_size, size_t *byte_capacity) {
+  static uint8_t *raw_get_memory(void *env, size_t *byte_size,
+                                 size_t *byte_capacity) {
     M *memory = reinterpret_cast<M *>(env);
     return memory->get_memory(byte_size, byte_capacity);
   }
@@ -556,19 +561,16 @@ private:
   }
 
   template <typename T>
-  static wasmtime_error_t *raw_new_memory(
-    void *env, const wasm_memorytype_t *ty, size_t minimum, size_t maximum,
-    size_t reserved_size_in_bytes, size_t guard_size_in_bytes,
-    wasmtime_linear_memory_t *memory_ret)
-  {
+  static wasmtime_error_t *
+  raw_new_memory(void *env, const wasm_memorytype_t *ty, size_t minimum,
+                 size_t maximum, size_t reserved_size_in_bytes,
+                 size_t guard_size_in_bytes,
+                 wasmtime_linear_memory_t *memory_ret) {
     using Memory = typename T::Memory;
     T *creator = reinterpret_cast<T *>(env);
-    Result<Memory> result = creator->new_memory(
-        MemoryType::Ref(ty),
-        minimum,
-        maximum,
-        reserved_size_in_bytes,
-        guard_size_in_bytes);
+    Result<Memory> result =
+        creator->new_memory(MemoryType::Ref(ty), minimum, maximum,
+                            reserved_size_in_bytes, guard_size_in_bytes);
     if (!result) {
       return result.err().release();
     }
@@ -581,21 +583,18 @@ private:
   }
 
 public:
-
   /// \brief Configures a custom memory creator for this configuration and
   /// eventual Engine.
   ///
   /// This can be used to use `creator` to allocate linear memories for the
   /// engine that this configuration will be used for.
-  template<typename T>
-  void host_memory_creator(T creator) {
+  template <typename T> void host_memory_creator(T creator) {
     wasmtime_memory_creator_t config = {0};
-    config.env =  std::make_unique<T>(creator).release();
+    config.env = std::make_unique<T>(creator).release();
     config.finalizer = raw_finalize<T>;
     config.new_memory = raw_new_memory<T>;
     wasmtime_config_host_memory_creator_set(ptr.get(), &config);
   }
-
 
 #ifdef WASMTIME_FEATURE_POOLING_ALLOCATOR
   /// \brief Enables and configures the pooling allocation strategy.

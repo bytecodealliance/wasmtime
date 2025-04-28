@@ -64,11 +64,10 @@ TEST(Val, Smoke) {
   EXPECT_EQ(val.kind(), ValKind::FuncRef);
   EXPECT_EQ(val.funcref(), std::nullopt);
 
-  Func func(
-      store, FuncType({}, {}),
-      [](auto caller, auto params, auto results) -> auto{
-        return std::monostate();
-      });
+  Func func(store, FuncType({}, {}),
+            [](auto caller, auto params, auto results) -> auto {
+              return std::monostate();
+            });
 
   val = std::optional<Func>(func);
   EXPECT_EQ(val.kind(), ValKind::FuncRef);

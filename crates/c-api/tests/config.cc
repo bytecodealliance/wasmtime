@@ -1,6 +1,6 @@
-#include <wasmtime/config.hh>
 #include <gtest/gtest.h>
 #include <wasmtime.hh>
+#include <wasmtime/config.hh>
 
 using namespace wasmtime;
 
@@ -91,13 +91,9 @@ struct MyMemoryCreator {
     }
   };
 
-  Result<Memory> new_memory(
-      const MemoryType::Ref &ty,
-      size_t minimum,
-      size_t maximum,
-      size_t reserved_size_in_bytes,
-      size_t guard_size_in_bytes)
-  {
+  Result<Memory> new_memory(const MemoryType::Ref &ty, size_t minimum,
+                            size_t maximum, size_t reserved_size_in_bytes,
+                            size_t guard_size_in_bytes) {
     EXPECT_EQ(guard_size_in_bytes, 0);
     EXPECT_EQ(reserved_size_in_bytes, 0);
 
@@ -115,7 +111,8 @@ TEST(Config, MemoryCreator) {
   config.host_memory_creator(MyMemoryCreator());
 
   Engine engine(std::move(config));
-  Module m = Module::compile(engine, "(module (memory (export \"x\") 1))").unwrap();
+  Module m =
+      Module::compile(engine, "(module (memory (export \"x\") 1))").unwrap();
 
   Store store(engine);
   Instance i = Instance::create(store, m, {}).unwrap();

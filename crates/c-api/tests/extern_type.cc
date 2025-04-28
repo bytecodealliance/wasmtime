@@ -8,10 +8,12 @@ using namespace wasmtime;
 TEST(ExternType, Smoke) {
   Engine engine;
 
-  Module module = Module::compile(engine, "(module"
-                                   "(import \"a\" \"b\" (func))"
-                                   "(global (export \"x\") i32 (i32.const 0))"
-                                   ")").unwrap();
+  Module module =
+      Module::compile(engine, "(module"
+                              "(import \"a\" \"b\" (func))"
+                              "(global (export \"x\") i32 (i32.const 0))"
+                              ")")
+          .unwrap();
 
   auto imports = module.imports();
   EXPECT_EQ(imports.size(), 1);

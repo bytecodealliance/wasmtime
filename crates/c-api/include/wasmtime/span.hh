@@ -99,4 +99,3 @@ private:
 } // namespace wasmtime
 
 #endif // WASMTIME_SPAN_HH
-

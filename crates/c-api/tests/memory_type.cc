@@ -1,5 +1,5 @@
-#include <wasmtime/types/memory.hh>
 #include <gtest/gtest.h>
+#include <wasmtime/types/memory.hh>
 
 using namespace wasmtime;
 
@@ -46,10 +46,14 @@ TEST(MemoryType, Builder) {
   EXPECT_TRUE(ty->is_64());
   EXPECT_TRUE(ty->is_shared());
 
-  ty = MemoryType::Builder().min(5).max(500).shared(true).memory64(false).build();
+  ty = MemoryType::Builder()
+           .min(5)
+           .max(500)
+           .shared(true)
+           .memory64(false)
+           .build();
   EXPECT_EQ(ty->min(), 5);
   EXPECT_EQ(ty->max(), 500);
   EXPECT_FALSE(ty->is_64());
   EXPECT_TRUE(ty->is_shared());
-
 }

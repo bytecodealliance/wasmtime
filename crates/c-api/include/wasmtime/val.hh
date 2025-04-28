@@ -46,7 +46,7 @@ public:
   template <typename T> explicit ExternRef(Store::Context cx, T val) {
     void *ptr = std::make_unique<std::any>(std::move(val)).release();
     bool ok = wasmtime_externref_new(cx.ptr, ptr, finalizer, &this->val);
-    if (!ok)  {
+    if (!ok) {
       fprintf(stderr, "failed to allocate a new externref");
       abort();
     }
@@ -66,9 +66,7 @@ public:
 
   /// Unroots this value from the context provided, enabling a future GC to
   /// collect the internal object if there are no more references.
-  void unroot(Store::Context cx) {
-    wasmtime_externref_unroot(cx.ptr, &val);
-  }
+  void unroot(Store::Context cx) { wasmtime_externref_unroot(cx.ptr, &val); }
 
   /// Returns the raw underlying C API value.
   ///
@@ -105,9 +103,7 @@ public:
 
   /// Unroots this value from the context provided, enabling a future GC to
   /// collect the internal object if there are no more references.
-  void unroot(Store::Context cx) {
-    wasmtime_anyref_unroot(cx.ptr, &val);
-  }
+  void unroot(Store::Context cx) { wasmtime_anyref_unroot(cx.ptr, &val); }
 
   /// Returns the raw underlying C API value.
   ///
@@ -335,9 +331,7 @@ public:
   std::optional<Func> funcref() const;
 
   /// Unroots any GC references this `Val` points to within the `cx` provided.
-  void unroot(Store::Context cx) {
-    wasmtime_val_unroot(cx.ptr, &val);
-  }
+  void unroot(Store::Context cx) { wasmtime_val_unroot(cx.ptr, &val); }
 };
 
 } // namespace wasmtime

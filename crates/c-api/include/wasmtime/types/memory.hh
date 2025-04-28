@@ -120,34 +120,34 @@ public:
     Builder() : _min(0), _memory64(false), _shared(false) {}
 
     /// \brief Configure the minimum size, in pages, of linear memory.
-    Builder& min(uint64_t min) {
+    Builder &min(uint64_t min) {
       _min = min;
       return *this;
     }
 
     /// \brief Configure the maximal size, in pages, of linear memory.
-    Builder& max(std::optional<uint64_t> max) {
+    Builder &max(std::optional<uint64_t> max) {
       _max = max;
       return *this;
     }
 
     /// \brief Configure whether this is a 64-bit linear memory.
-    Builder& memory64(bool enable) {
+    Builder &memory64(bool enable) {
       _memory64 = enable;
       return *this;
     }
 
     /// \brief Configure whether this is a shared linear memory.
-    Builder& shared(bool enable) {
+    Builder &shared(bool enable) {
       _shared = enable;
       return *this;
     }
 
     /// \brief Construct the final `MemoryType` value.
     MemoryType build() const {
-      return MemoryType(wasmtime_memorytype_new(
-            _min, _max.has_value(), _max.has_value() ? *_max : 0,
-            _memory64, _shared));
+      return MemoryType(wasmtime_memorytype_new(_min, _max.has_value(),
+                                                _max.has_value() ? *_max : 0,
+                                                _memory64, _shared));
     }
   };
 };

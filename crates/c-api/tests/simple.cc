@@ -74,11 +74,10 @@ TEST(Instance, Smoke) {
   Global g = unwrap(Global::create(store, GlobalType(ValKind::I32, false), 1));
   Table t = unwrap(Table::create(store, TableType(ValKind::FuncRef, 1),
                                  std::optional<Func>()));
-  Func f(
-      store, FuncType({}, {}),
-      [](auto caller, auto params, auto results) -> auto{
-        return std::monostate();
-      });
+  Func f(store, FuncType({}, {}),
+         [](auto caller, auto params, auto results) -> auto {
+           return std::monostate();
+         });
 
   Module mod =
       unwrap(Module::compile(engine, "(module"
@@ -117,11 +116,10 @@ TEST(Linker, Smoke) {
   Global g = unwrap(Global::create(store, GlobalType(ValKind::I32, false), 1));
   unwrap(linker.define(store, "a", "g", g));
   unwrap(linker.define_wasi());
-  unwrap(linker.func_new(
-      "a", "f", FuncType({}, {}),
-      [](auto caller, auto params, auto results) -> auto{
-        return std::monostate();
-      }));
+  unwrap(linker.func_new("a", "f", FuncType({}, {}),
+                         [](auto caller, auto params, auto results) -> auto {
+                           return std::monostate();
+                         }));
   unwrap(linker.func_wrap("a", "f2", []() {}));
   unwrap(linker.func_wrap("a", "f3", [](Caller arg) {}));
   unwrap(linker.func_wrap("a", "f4", [](Caller arg, int32_t a) {}));
@@ -144,10 +142,11 @@ TEST(Linker, CallableMove) {
 
   struct CallableFunc {
     CallableFunc() = default;
-    CallableFunc(const CallableFunc&) = delete;
-    CallableFunc(CallableFunc&&) = default;
+    CallableFunc(const CallableFunc &) = delete;
+    CallableFunc(CallableFunc &&) = default;
 
-    Result<std::monostate, Trap> operator()(Caller caller, Span<const Val> params, Span<Val> results) {
+    Result<std::monostate, Trap>
+    operator()(Caller caller, Span<const Val> params, Span<Val> results) {
       return std::monostate();
     }
   };
@@ -164,10 +163,11 @@ TEST(Linker, CallableCopy) {
 
   struct CallableFunc {
     CallableFunc() = default;
-    CallableFunc(const CallableFunc&) = default;
-    CallableFunc(CallableFunc&&) = default;
+    CallableFunc(const CallableFunc &) = default;
+    CallableFunc(CallableFunc &&) = default;
 
-    Result<std::monostate, Trap> operator()(Caller caller, Span<const Val> params, Span<Val> results) {
+    Result<std::monostate, Trap>
+    operator()(Caller caller, Span<const Val> params, Span<Val> results) {
       return std::monostate();
     }
   };
@@ -179,12 +179,11 @@ TEST(Linker, CallableCopy) {
 TEST(Caller, Smoke) {
   Engine engine;
   Store store(engine);
-  Func f(
-      store, FuncType({}, {}),
-      [](auto caller, auto params, auto results) -> auto{
-        EXPECT_FALSE(caller.get_export("foo"));
-        return std::monostate();
-      });
+  Func f(store, FuncType({}, {}),
+         [](auto caller, auto params, auto results) -> auto {
+           EXPECT_FALSE(caller.get_export("foo"));
+           return std::monostate();
+         });
   unwrap(f.call(store, {}));
 
   Module m = unwrap(Module::compile(engine, "(module "
@@ -192,16 +191,15 @@ TEST(Caller, Smoke) {
                                             "(memory (export \"m\") 1)"
                                             "(func (export \"f\") call 0)"
                                             ")"));
-  Func f2(
-      store, FuncType({}, {}),
-      [](auto caller, auto params, auto results) -> auto{
-        EXPECT_FALSE(caller.get_export("foo"));
-        EXPECT_TRUE(caller.get_export("m"));
-        EXPECT_TRUE(caller.get_export("f"));
-        Memory m = std::get<Memory>(*caller.get_export("m"));
-        EXPECT_EQ(m.type(caller)->min(), 1);
-        return std::monostate();
-      });
+  Func f2(store, FuncType({}, {}),
+          [](auto caller, auto params, auto results) -> auto {
+            EXPECT_FALSE(caller.get_export("foo"));
+            EXPECT_TRUE(caller.get_export("m"));
+            EXPECT_TRUE(caller.get_export("f"));
+            Memory m = std::get<Memory>(*caller.get_export("m"));
+            EXPECT_EQ(m.type(caller)->min(), 1);
+            return std::monostate();
+          });
   Instance i = unwrap(Instance::create(store, m, {f2}));
   f = std::get<Func>(*i.get(store, "f"));
   unwrap(f.call(store, {}));
@@ -210,18 +208,16 @@ TEST(Caller, Smoke) {
 TEST(Func, Smoke) {
   Engine engine;
   Store store(engine);
-  Func f(
-      store, FuncType({}, {}),
-      [](auto caller, auto params, auto results) -> auto{
-        return std::monostate();
-      });
+  Func f(store, FuncType({}, {}),
+         [](auto caller, auto params, auto results) -> auto {
+           return std::monostate();
+         });
   unwrap(f.call(store, {}));
 
-  Func f2(
-      store, FuncType({}, {}),
-      [](auto caller, auto params, auto results) -> auto{
-        return Trap("message");
-      });
+  Func f2(store, FuncType({}, {}),
+          [](auto caller, auto params, auto results) -> auto {
+            return Trap("message");
+          });
   EXPECT_EQ(f2.call(store, {}).err().message(), "message");
 }
 

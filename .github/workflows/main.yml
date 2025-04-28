@@ -80,7 +80,7 @@ jobs:
       with:
         submodules: true
     - run: |
-        git ls-files '*.h' '*.c' '*.cpp' | \
+        git ls-files '*.h' '*.c' '*.cpp' '*.hh' '*.cc' | \
           grep -v wasmtime-platform.h | \
           grep -v wasm.h | \
           xargs clang-format-18 --dry-run --Werror --verbose

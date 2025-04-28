@@ -12,7 +12,8 @@ TEST(Trap, Smoke) {
 
   Engine engine;
   Module m =
-      Module::compile(engine, "(module (func (export \"\") unreachable))").unwrap();
+      Module::compile(engine, "(module (func (export \"\") unreachable))")
+          .unwrap();
   Store store(engine);
   Instance i = Instance::create(store, m, {}).unwrap();
   auto func = std::get<Func>(*i.get(store, ""));

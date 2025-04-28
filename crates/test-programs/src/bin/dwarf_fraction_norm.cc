@@ -7,20 +7,17 @@ struct Fraction {
   long denominator;
 };
 
-inline long abs(long x)
-{
-  return x >= 0 ? x : -x;  
-}
+inline long abs(long x) { return x >= 0 ? x : -x; }
 
-extern "C"
-void norm(Fraction &n)
-{
+extern "C" void norm(Fraction &n) {
   long a = abs(n.numerator), b = abs(n.denominator);
-  if (a == 0 || b == 0) return;
+  if (a == 0 || b == 0)
+    return;
   do {
-   a %= b;
-   if (a == 0) break;
-   b %= a;
+    a %= b;
+    if (a == 0)
+      break;
+    b %= a;
   } while (b > 0);
   long gcd = a + b;
   if (n.denominator > 0) {
@@ -32,8 +29,7 @@ void norm(Fraction &n)
   }
 }
 
-int main()
-{
+int main() {
   Fraction c = {6, 27};
   norm(c);
   return 0;
