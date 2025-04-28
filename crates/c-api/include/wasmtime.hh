@@ -310,11 +310,13 @@ public:
                 bool> = true>
   Result<std::monostate> func_new(std::string_view module,
                                   std::string_view name, const FuncType &ty,
-                                  F&& f) {
+                                  F &&f) {
 
     auto *error = wasmtime_linker_define_func(
         ptr.get(), module.data(), module.length(), name.data(), name.length(),
-        ty.ptr.get(), Func::raw_callback<std::remove_reference_t<F>>, std::make_unique<std::remove_reference_t<F>>(std::forward<F>(f)).release(),
+        ty.ptr.get(), Func::raw_callback<std::remove_reference_t<F>>,
+        std::make_unique<std::remove_reference_t<F>>(std::forward<F>(f))
+            .release(),
         Func::raw_finalize<std::remove_reference_t<F>>);
 
     if (error != nullptr) {
@@ -330,7 +332,7 @@ public:
             std::enable_if_t<WasmHostFunc<F>::Params::valid, bool> = true,
             std::enable_if_t<WasmHostFunc<F>::Results::valid, bool> = true>
   Result<std::monostate> func_wrap(std::string_view module,
-                                   std::string_view name, F&& f) {
+                                   std::string_view name, F &&f) {
     using HostFunc = WasmHostFunc<F>;
     auto params = HostFunc::Params::types();
     auto results = HostFunc::Results::types();
@@ -338,7 +340,9 @@ public:
     auto *error = wasmtime_linker_define_func_unchecked(
         ptr.get(), module.data(), module.length(), name.data(), name.length(),
         ty.ptr.get(), Func::raw_callback_unchecked<std::remove_reference_t<F>>,
-        std::make_unique<std::remove_reference_t<F>>(std::forward<F>(f)).release(), Func::raw_finalize<std::remove_reference_t<F>>);
+        std::make_unique<std::remove_reference_t<F>>(std::forward<F>(f))
+            .release(),
+        Func::raw_finalize<std::remove_reference_t<F>>);
 
     if (error != nullptr) {
       return Error(error);

@@ -11,8 +11,8 @@
 #include <wasmtime/span.hh>
 #include <wasmtime/store.hh>
 #include <wasmtime/trap.hh>
-#include <wasmtime/types/val.hh>
 #include <wasmtime/types/func.hh>
+#include <wasmtime/types/val.hh>
 #include <wasmtime/val.hh>
 
 namespace wasmtime {
@@ -49,7 +49,9 @@ namespace detail {
 
 /// A "trait" for native types that correspond to WebAssembly types for use with
 /// `Func::wrap` and `TypedFunc::call`
-template <typename T> struct WasmType { static const bool valid = false; };
+template <typename T> struct WasmType {
+  static const bool valid = false;
+};
 
 /// Helper macro to define `WasmType` definitions for primitive types like
 /// int32_t and such.
@@ -577,11 +579,11 @@ public:
         storage;
     wasmtime_val_raw_t *ptr = storage.data();
     if (ptr == nullptr)
-      ptr = reinterpret_cast<wasmtime_val_raw_t*>(alignof(wasmtime_val_raw_t));
+      ptr = reinterpret_cast<wasmtime_val_raw_t *>(alignof(wasmtime_val_raw_t));
     WasmTypeList<Params>::store(cx, ptr, params);
     wasm_trap_t *trap = nullptr;
-    auto *error = wasmtime_func_call_unchecked(
-        cx.raw_context(), &f.func, ptr, storage.size(), &trap);
+    auto *error = wasmtime_func_call_unchecked(cx.raw_context(), &f.func, ptr,
+                                               storage.size(), &trap);
     if (error != nullptr) {
       return TrapError(Error(error));
     }

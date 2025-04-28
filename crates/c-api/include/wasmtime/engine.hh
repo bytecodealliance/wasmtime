@@ -61,4 +61,3 @@ public:
 } // namespace wasmtime
 
 #endif // WASMTIME_ENGINE_HH
-

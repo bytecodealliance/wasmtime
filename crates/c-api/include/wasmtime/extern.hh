@@ -5,8 +5,8 @@
 #ifndef WASMTIME_EXTERN_HH
 #define WASMTIME_EXTERN_HH
 
-#include <wasmtime/extern.h>
 #include <variant>
+#include <wasmtime/extern.h>
 
 namespace wasmtime {
 
