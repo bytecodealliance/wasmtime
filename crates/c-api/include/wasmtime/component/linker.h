@@ -81,12 +81,14 @@ wasmtime_component_linker_delete(wasmtime_component_linker_t *linker);
  *
  * \param linker_instance the linker instance from which the new one is created
  * \param name new instance name
+ * \param name_len length of \p name in bytes
  * \param linker_instance_out on success, the new #component_linker_instance_t
  * \return on success `NULL`, otherwise an error
  */
 WASM_API_EXTERN wasmtime_error_t *
 wasmtime_component_linker_instance_add_instance(
     wasmtime_component_linker_instance_t *linker_instance, const char *name,
+    size_t name_len,
     wasmtime_component_linker_instance_t **linker_instance_out);
 
 /**
@@ -98,12 +100,13 @@ wasmtime_component_linker_instance_add_instance(
  *
  * \param linker_instance the instance to define the module in
  * \param name the module name
+ * \param name_len length of \p name in bytes
  * \param module the module
  * \return on success `NULL`, otherwise an error
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instance_add_module(
     wasmtime_component_linker_instance_t *linker_instance, const char *name,
-    const wasmtime_module_t *module);
+    size_t name_len, const wasmtime_module_t *module);
 
 /**
  * \brief Deletes a #wasmtime_component_linker_instance_t

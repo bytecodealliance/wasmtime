@@ -1,7 +1,7 @@
 use std::ffi::{c_char, CStr};
 
 use anyhow::Context;
-use wasmtime::component::Component;
+use wasmtime::component::{Component, ComponentExportIndex};
 
 use crate::{wasm_byte_vec_t, wasm_config_t, wasm_engine_t, wasmtime_error_t};
 
@@ -85,3 +85,38 @@ pub unsafe extern "C" fn wasmtime_component_clone(
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_delete(_component: Box<wasmtime_component_t>) {}
+
+#[repr(transparent)]
+pub struct wasmtime_component_export_index_t {
+    pub(crate) export_index: ComponentExportIndex,
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_get_export_index(
+    component: &wasmtime_component_t,
+    instance_export_index: *const wasmtime_component_export_index_t,
+    name: *const u8,
+    name_len: usize,
+) -> Option<Box<wasmtime_component_export_index_t>> {
+    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let Ok(name) = std::str::from_utf8(name) else {
+        return None;
+    };
+
+    let instance_export_index = if instance_export_index.is_null() {
+        None
+    } else {
+        Some((*instance_export_index).export_index)
+    };
+
+    component
+        .component
+        .get_export_index(instance_export_index.as_ref(), &name)
+        .map(|export_index| Box::new(wasmtime_component_export_index_t { export_index }))
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_export_index_delete(
+    _export_index: Box<wasmtime_component_export_index_t>,
+) {
+}

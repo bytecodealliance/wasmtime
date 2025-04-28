@@ -1,6 +1,3 @@
-use std::ffi::{c_char, CStr};
-
-use anyhow::Context;
 use wasmtime::component::{Instance, Linker, LinkerInstance};
 
 use crate::{
@@ -57,15 +54,16 @@ pub unsafe extern "C" fn wasmtime_component_linker_delete(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_linker_instance_add_instance<'a>(
     linker_instance: &'a mut wasmtime_component_linker_instance_t<'a>,
-    name: *const c_char,
+    name: *const u8,
+    name_len: usize,
     linker_instance_out: &mut *mut wasmtime_component_linker_instance_t<'a>,
 ) -> Option<Box<wasmtime_error_t>> {
-    let name = unsafe { CStr::from_ptr(name) };
-    let result = name
-        .to_str()
-        .context("input name is not valid utf-8")
-        .and_then(|name| linker_instance.linker_instance.instance(name));
+    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let Ok(name) = std::str::from_utf8(name) else {
+        return crate::bad_utf8();
+    };
 
+    let result = linker_instance.linker_instance.instance(&name);
     crate::handle_result(result, |linker_instance| {
         *linker_instance_out = Box::into_raw(Box::new(wasmtime_component_linker_instance_t {
             linker_instance,
@@ -76,14 +74,18 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_instance<'a>(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_linker_instance_add_module(
     linker_instance: &mut wasmtime_component_linker_instance_t,
-    name: *const c_char,
+    name: *const u8,
+    name_len: usize,
     module: &wasmtime_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    let name = unsafe { CStr::from_ptr(name) };
-    let result = name
-        .to_str()
-        .context("input name is not valid utf-8")
-        .and_then(|name| linker_instance.linker_instance.module(name, &module.module));
+    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let Ok(name) = std::str::from_utf8(name) else {
+        return crate::bad_utf8();
+    };
+
+    let result = linker_instance
+        .linker_instance
+        .module(&name, &module.module);
 
     crate::handle_result(result, |_| ())
 }
