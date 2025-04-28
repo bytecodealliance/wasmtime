@@ -59,7 +59,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_instance<'a>(
     linker_instance_out: &mut *mut wasmtime_component_linker_instance_t<'a>,
 ) -> Option<Box<wasmtime_error_t>> {
     let name = unsafe { std::slice::from_raw_parts(name, name_len) };
-    let Ok(name) = str::from_utf8(name) else {
+    let Ok(name) = std::str::from_utf8(name) else {
         return crate::bad_utf8();
     };
 
@@ -79,7 +79,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_module(
     module: &wasmtime_module_t,
 ) -> Option<Box<wasmtime_error_t>> {
     let name = unsafe { std::slice::from_raw_parts(name, name_len) };
-    let Ok(name) = str::from_utf8(name) else {
+    let Ok(name) = std::str::from_utf8(name) else {
         return crate::bad_utf8();
     };
 
