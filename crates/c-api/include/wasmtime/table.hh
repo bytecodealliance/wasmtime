@@ -105,6 +105,9 @@ public:
     }
     return prev;
   }
+
+  /// Returns the raw underlying C API table this is using.
+  const wasmtime_table_t &capi() const { return table; }
 };
 
 } // namespace wasmtime

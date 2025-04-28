@@ -74,6 +74,9 @@ public:
     }
     return std::monostate();
   }
+
+  /// Returns the raw underlying C API global this is using.
+  const wasmtime_global_t &capi() const { return global; }
 };
 
 } // namespace wasmtime

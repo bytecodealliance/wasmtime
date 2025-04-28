@@ -75,6 +75,9 @@ public:
     }
     return prev;
   }
+
+  /// Returns the raw underlying C API memory this is using.
+  const wasmtime_memory_t &capi() const { return memory; }
 };
 
 } // namespace wasmtime

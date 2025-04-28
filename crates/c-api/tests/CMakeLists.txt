@@ -46,6 +46,8 @@ add_capi_test(tests FILES
   table.cc
   global.cc
   memory.cc
+  instance.cc
+  linker.cc
 )
 
 # Add a custom test where two files include `wasmtime.hh` and are compiled into
