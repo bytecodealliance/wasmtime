@@ -15,6 +15,88 @@ use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
 use std::time::Duration;
 
+/// Global configuration for how the cache is managed
+#[derive(Debug, Clone)]
+pub struct Cache {
+    directory: PathBuf,
+    worker_event_queue_size: u64,
+    baseline_compression_level: i32,
+    optimized_compression_level: i32,
+    optimized_compression_usage_counter_threshold: u64,
+    cleanup_interval: Duration,
+    optimizing_compression_task_timeout: Duration,
+    allowed_clock_drift_for_files_from_future: Duration,
+    file_count_soft_limit: u64,
+    files_total_size_soft_limit: u64,
+    file_count_limit_percent_if_deleting: u8,
+    files_total_size_limit_percent_if_deleting: u8,
+    worker: Worker,
+    state: Arc<CacheState>,
+}
+
+macro_rules! generate_setting_getter {
+    ($setting:ident: $setting_type:ty) => {
+        /// Returns `$setting`.
+        ///
+        /// Panics if the cache is disabled.
+        pub fn $setting(&self) -> $setting_type {
+            self.$setting
+        }
+    };
+}
+
+impl Cache {
+    generate_setting_getter!(worker_event_queue_size: u64);
+    generate_setting_getter!(baseline_compression_level: i32);
+    generate_setting_getter!(optimized_compression_level: i32);
+    generate_setting_getter!(optimized_compression_usage_counter_threshold: u64);
+    generate_setting_getter!(cleanup_interval: Duration);
+    generate_setting_getter!(optimizing_compression_task_timeout: Duration);
+    generate_setting_getter!(allowed_clock_drift_for_files_from_future: Duration);
+    generate_setting_getter!(file_count_soft_limit: u64);
+    generate_setting_getter!(files_total_size_soft_limit: u64);
+    generate_setting_getter!(file_count_limit_percent_if_deleting: u8);
+    generate_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
+
+    /// Returns path to the cache directory.
+    ///
+    /// Panics if the cache is disabled.
+    pub fn directory(&self) -> &PathBuf {
+        &self.directory
+    }
+
+    #[cfg(test)]
+    pub(super) fn worker(&self) -> &Worker {
+        &self.worker
+    }
+
+    /// Returns the number of cache hits seen so far
+    pub fn cache_hits(&self) -> usize {
+        self.state.hits.load(SeqCst)
+    }
+
+    /// Returns the number of cache misses seen so far
+    pub fn cache_misses(&self) -> usize {
+        self.state.misses.load(SeqCst)
+    }
+
+    pub(crate) fn on_cache_get_async(&self, path: impl AsRef<Path>) {
+        self.state.hits.fetch_add(1, SeqCst);
+        self.worker.on_cache_get_async(path)
+    }
+
+    pub(crate) fn on_cache_update_async(&self, path: impl AsRef<Path>) {
+        self.state.misses.fetch_add(1, SeqCst);
+        self.worker.on_cache_update_async(path)
+    }
+}
+
+#[derive(Default, Debug)]
+struct CacheState {
+    hits: AtomicUsize,
+    misses: AtomicUsize,
+}
+
 // wrapped, so we have named section in config,
 // also, for possible future compatibility
 #[derive(serde_derive::Deserialize, Debug)]
@@ -87,17 +169,6 @@ pub struct CacheConfig {
         deserialize_with = "deserialize_percent"
     )]
     files_total_size_limit_percent_if_deleting: Option<u8>,
-
-    #[serde(skip)]
-    worker: Option<Worker>,
-    #[serde(skip)]
-    state: Arc<CacheState>,
-}
-
-#[derive(Default, Debug)]
-struct CacheState {
-    hits: AtomicUsize,
-    misses: AtomicUsize,
 }
 
 /// Creates a new configuration file at specified path, or default path if None is passed.
@@ -277,7 +348,7 @@ generate_deserializer!(deserialize_percent(num: u8, unit: &str) -> Option<u8> {
 static CACHE_IMPROPER_CONFIG_ERROR_MSG: &str =
     "Cache system should be enabled and all settings must be validated or defaulted";
 
-macro_rules! generate_setting_getter {
+macro_rules! generate_option_setting_getter {
     ($setting:ident: $setting_type:ty) => {
         /// Returns `$setting`.
         ///
@@ -289,17 +360,17 @@ macro_rules! generate_setting_getter {
 }
 
 impl CacheConfig {
-    generate_setting_getter!(worker_event_queue_size: u64);
-    generate_setting_getter!(baseline_compression_level: i32);
-    generate_setting_getter!(optimized_compression_level: i32);
-    generate_setting_getter!(optimized_compression_usage_counter_threshold: u64);
-    generate_setting_getter!(cleanup_interval: Duration);
-    generate_setting_getter!(optimizing_compression_task_timeout: Duration);
-    generate_setting_getter!(allowed_clock_drift_for_files_from_future: Duration);
-    generate_setting_getter!(file_count_soft_limit: u64);
-    generate_setting_getter!(files_total_size_soft_limit: u64);
-    generate_setting_getter!(file_count_limit_percent_if_deleting: u8);
-    generate_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
+    generate_option_setting_getter!(worker_event_queue_size: u64);
+    generate_option_setting_getter!(baseline_compression_level: i32);
+    generate_option_setting_getter!(optimized_compression_level: i32);
+    generate_option_setting_getter!(optimized_compression_usage_counter_threshold: u64);
+    generate_option_setting_getter!(cleanup_interval: Duration);
+    generate_option_setting_getter!(optimizing_compression_task_timeout: Duration);
+    generate_option_setting_getter!(allowed_clock_drift_for_files_from_future: Duration);
+    generate_option_setting_getter!(file_count_soft_limit: u64);
+    generate_option_setting_getter!(files_total_size_soft_limit: u64);
+    generate_option_setting_getter!(file_count_limit_percent_if_deleting: u8);
+    generate_option_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
 
     pub fn builder() -> CacheConfigBuilder {
         CacheConfigBuilder::default()
@@ -335,8 +406,6 @@ impl CacheConfig {
             files_total_size_soft_limit: None,
             file_count_limit_percent_if_deleting: None,
             files_total_size_limit_percent_if_deleting: None,
-            worker: None,
-            state: Arc::new(CacheState::default()),
         }
     }
 
@@ -367,37 +436,6 @@ impl CacheConfig {
         let mut config = Self::load_and_parse_file(config_file)?;
         config.validate_or_default()?;
         Ok(config)
-    }
-
-    fn spawn_worker(&mut self) {
-        if self.enabled {
-            self.worker = Some(Worker::start_new(self));
-        }
-    }
-
-    pub(super) fn worker(&self) -> &Worker {
-        assert!(self.enabled);
-        self.worker.as_ref().unwrap()
-    }
-
-    /// Returns the number of cache hits seen so far
-    pub fn cache_hits(&self) -> usize {
-        self.state.hits.load(SeqCst)
-    }
-
-    /// Returns the number of cache misses seen so far
-    pub fn cache_misses(&self) -> usize {
-        self.state.misses.load(SeqCst)
-    }
-
-    pub(crate) fn on_cache_get_async(&self, path: impl AsRef<Path>) {
-        self.state.hits.fetch_add(1, SeqCst);
-        self.worker().on_cache_get_async(path)
-    }
-
-    pub(crate) fn on_cache_update_async(&self, path: impl AsRef<Path>) {
-        self.state.misses.fetch_add(1, SeqCst);
-        self.worker().on_cache_update_async(path)
     }
 
     fn load_and_parse_file(config_file: Option<&Path>) -> Result<Self> {
@@ -439,7 +477,6 @@ impl CacheConfig {
         self.validate_files_total_size_soft_limit_or_default();
         self.validate_file_count_limit_percent_if_deleting_or_default()?;
         self.validate_files_total_size_limit_percent_if_deleting_or_default()?;
-        self.spawn_worker();
         Ok(())
     }
 
@@ -599,6 +636,50 @@ impl CacheConfig {
             );
         }
         Ok(())
+    }
+
+    /// Builds a [`Cache`] from the configuration and spawns the cache worker.
+    ///
+    /// # Errors
+    /// Returns an error if the configuration is invalid.
+    pub fn spawn(&mut self) -> Result<Cache> {
+        self.validate_or_default()?;
+        let CacheConfig {
+            enabled,
+            directory,
+            worker_event_queue_size,
+            baseline_compression_level,
+            optimized_compression_level,
+            optimized_compression_usage_counter_threshold,
+            cleanup_interval,
+            optimizing_compression_task_timeout,
+            allowed_clock_drift_for_files_from_future,
+            file_count_soft_limit,
+            files_total_size_soft_limit,
+            file_count_limit_percent_if_deleting,
+            files_total_size_limit_percent_if_deleting,
+        } = self;
+
+        // Unwrapping because validation will ensure these are all set
+        Ok(Cache {
+            directory: directory.clone().unwrap(),
+            worker_event_queue_size: worker_event_queue_size.unwrap(),
+            baseline_compression_level: baseline_compression_level.unwrap(),
+            optimized_compression_level: optimized_compression_level.unwrap(),
+            optimized_compression_usage_counter_threshold:
+                optimized_compression_usage_counter_threshold.unwrap(),
+            cleanup_interval: cleanup_interval.unwrap(),
+            optimizing_compression_task_timeout: optimizing_compression_task_timeout.unwrap(),
+            allowed_clock_drift_for_files_from_future: allowed_clock_drift_for_files_from_future
+                .unwrap(),
+            file_count_soft_limit: file_count_soft_limit.unwrap(),
+            files_total_size_soft_limit: files_total_size_soft_limit.unwrap(),
+            file_count_limit_percent_if_deleting: file_count_limit_percent_if_deleting.unwrap(),
+            files_total_size_limit_percent_if_deleting: files_total_size_limit_percent_if_deleting
+                .unwrap(),
+            worker: Worker::start_new(self),
+            state: Default::default(),
+        })
     }
 }
 
@@ -765,8 +846,6 @@ impl CacheConfigBuilder {
             files_total_size_soft_limit,
             file_count_limit_percent_if_deleting,
             files_total_size_limit_percent_if_deleting,
-            worker: None,
-            state: Arc::new(CacheState::default()),
         };
 
         config.validate_or_default()?;

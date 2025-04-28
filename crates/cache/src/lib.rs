@@ -12,33 +12,27 @@ use std::{fs, io};
 mod config;
 mod worker;
 
-pub use config::{create_new_config, CacheConfig, CacheConfigBuilder};
+pub use config::{create_new_config, Cache, CacheConfig, CacheConfigBuilder};
 use worker::Worker;
 
 /// Module level cache entry.
-pub struct ModuleCacheEntry<'config>(Option<ModuleCacheEntryInner<'config>>);
+pub struct ModuleCacheEntry<'cache>(Option<ModuleCacheEntryInner<'cache>>);
 
-struct ModuleCacheEntryInner<'config> {
+struct ModuleCacheEntryInner<'cache> {
     root_path: PathBuf,
-    cache_config: &'config CacheConfig,
+    cache: &'cache Cache,
 }
 
 struct Sha256Hasher(Sha256);
 
-impl<'config> ModuleCacheEntry<'config> {
+impl<'cache> ModuleCacheEntry<'cache> {
     /// Create the cache entry.
-    pub fn new(compiler_name: &str, cache_config: Option<&'config CacheConfig>) -> Self {
-        match cache_config {
-            Some(cache_config) if cache_config.enabled() => Self(Some(ModuleCacheEntryInner::new(
-                compiler_name,
-                cache_config,
-            ))),
-            Some(_) | None => Self(None),
-        }
+    pub fn new(compiler_name: &str, cache: Option<&'cache Cache>) -> Self {
+        Self(cache.map(|cache| ModuleCacheEntryInner::new(compiler_name, cache)))
     }
 
     #[cfg(test)]
-    fn from_inner(inner: ModuleCacheEntryInner<'config>) -> Self {
+    fn from_inner(inner: ModuleCacheEntryInner<'cache>) -> Self {
         Self(Some(inner))
     }
 
@@ -91,7 +85,7 @@ impl<'config> ModuleCacheEntry<'config> {
         if let Some(cached_val) = inner.get_data(&hash) {
             if let Some(val) = deserialize(state, cached_val) {
                 let mod_cache_path = inner.root_path.join(&hash);
-                inner.cache_config.on_cache_get_async(&mod_cache_path); // call on success
+                inner.cache.on_cache_get_async(&mod_cache_path); // call on success
                 return Ok(val);
             }
         }
@@ -99,15 +93,15 @@ impl<'config> ModuleCacheEntry<'config> {
         if let Some(bytes) = serialize(state, &val_to_cache) {
             if inner.update_data(&hash, &bytes).is_some() {
                 let mod_cache_path = inner.root_path.join(&hash);
-                inner.cache_config.on_cache_update_async(&mod_cache_path); // call on success
+                inner.cache.on_cache_update_async(&mod_cache_path); // call on success
             }
         }
         Ok(val_to_cache)
     }
 }
 
-impl<'config> ModuleCacheEntryInner<'config> {
-    fn new(compiler_name: &str, cache_config: &'config CacheConfig) -> Self {
+impl<'cache> ModuleCacheEntryInner<'cache> {
+    fn new(compiler_name: &str, cache: &'cache Cache) -> Self {
         // If debug assertions are enabled then assume that we're some sort of
         // local build. We don't want local builds to stomp over caches between
         // builds, so just use a separate cache directory based on the mtime of
@@ -141,12 +135,9 @@ impl<'config> ModuleCacheEntryInner<'config> {
                 comp_ver = env!("GIT_REV"),
             )
         };
-        let root_path = cache_config.directory().join("modules").join(compiler_dir);
+        let root_path = cache.directory().join("modules").join(compiler_dir);
 
-        Self {
-            root_path,
-            cache_config,
-        }
+        Self { root_path, cache }
     }
 
     fn get_data(&self, hash: &str) -> Option<Vec<u8>> {
@@ -164,7 +155,7 @@ impl<'config> ModuleCacheEntryInner<'config> {
         trace!("update_data() for path: {}", mod_cache_path.display());
         let compressed_data = zstd::encode_all(
             &serialized_data[..],
-            self.cache_config.baseline_compression_level(),
+            self.cache.baseline_compression_level(),
         )
         .map_err(|err| warn!("Failed to compress cached code: {}", err))
         .ok()?;

@@ -21,7 +21,7 @@ fn test_cache_init() {
     );
     fs::write(&config_path, config_content).expect("Failed to write test config file");
 
-    let cache_config = CacheConfig::from_file(Some(&config_path)).unwrap();
+    let mut cache_config = CacheConfig::from_file(Some(&config_path)).unwrap();
 
     // test if we can use config
     assert!(cache_config.enabled());
@@ -36,13 +36,17 @@ fn test_cache_init() {
     );
 
     // test if we can use worker
-    cache_config.worker().on_cache_update_async(config_path);
+    cache_config
+        .spawn()
+        .unwrap()
+        .worker()
+        .on_cache_update_async(config_path);
 }
 
 #[test]
 fn test_write_read_cache() {
     let (_tempdir, cache_dir, config_path) = test_prolog();
-    let cache_config = load_config!(
+    let mut cache_config = load_config!(
         config_path,
         "[cache]\n\
          enabled = true\n\
@@ -51,6 +55,7 @@ fn test_write_read_cache() {
         cache_dir
     );
     assert!(cache_config.enabled());
+    let cache = cache_config.spawn().unwrap();
 
     // assumption: config load creates cache directory and returns canonicalized path
     assert_eq!(
@@ -61,8 +66,8 @@ fn test_write_read_cache() {
     let compiler1 = "test-1";
     let compiler2 = "test-2";
 
-    let entry1 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(compiler1, &cache_config));
-    let entry2 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(compiler2, &cache_config));
+    let entry1 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(compiler1, &cache));
+    let entry2 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(compiler2, &cache));
 
     entry1.get_data::<_, i32, i32>(1, |_| Ok(100)).unwrap();
     entry1.get_data::<_, i32, i32>(1, |_| panic!()).unwrap();
