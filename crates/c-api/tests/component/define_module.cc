@@ -53,13 +53,12 @@ TEST(component, define_module) {
   const auto root = wasmtime_component_linker_root(linker);
 
   wasmtime_component_linker_instance_t *x_y_z = nullptr;
-  auto name = wasm_name_t{};
-  wasm_name_new_from_string(&name, "x:y/z");
-  err = wasmtime_component_linker_instance_add_instance(root, &name, &x_y_z);
+  err = wasmtime_component_linker_instance_add_instance(
+      root, "x:y/z", strlen("x:y/z"), &x_y_z);
   CHECK_ERR(err);
 
-  wasm_name_new_from_string(&name, "mod");
-  err = wasmtime_component_linker_instance_add_module(x_y_z, &name, module);
+  err = wasmtime_component_linker_instance_add_module(x_y_z, "mod",
+                                                      strlen("mod"), module);
   CHECK_ERR(err);
 
   wasmtime_component_linker_instance_delete(x_y_z);

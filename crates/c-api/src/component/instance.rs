@@ -1,6 +1,6 @@
 use wasmtime::component::{Func, Instance};
 
-use crate::{wasm_name_t, WasmtimeStoreContextMut};
+use crate::WasmtimeStoreContextMut;
 
 use super::wasmtime_component_export_index_t;
 
@@ -9,12 +9,12 @@ pub unsafe extern "C" fn wasmtime_component_instance_get_export_index(
     instance: &Instance,
     context: WasmtimeStoreContextMut<'_>,
     instance_export_index: *const wasmtime_component_export_index_t,
-    name: &mut wasm_name_t,
-    out: &mut *mut wasmtime_component_export_index_t,
-) -> bool {
-    let name = name.take();
-    let Ok(name) = String::from_utf8(name) else {
-        return false;
+    name: *const u8,
+    name_len: usize,
+) -> Option<Box<wasmtime_component_export_index_t>> {
+    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let Ok(name) = str::from_utf8(name) else {
+        return None;
     };
 
     let instance_export_index = if instance_export_index.is_null() {
@@ -23,14 +23,9 @@ pub unsafe extern "C" fn wasmtime_component_instance_get_export_index(
         Some((*instance_export_index).export_index)
     };
 
-    let export_index = instance.get_export_index(context, instance_export_index.as_ref(), &name);
-
-    if let Some(export_index) = export_index {
-        *out = Box::into_raw(Box::new(wasmtime_component_export_index_t { export_index }));
-        true
-    } else {
-        false
-    }
+    instance
+        .get_export_index(context, instance_export_index.as_ref(), &name)
+        .map(|export_index| Box::new(wasmtime_component_export_index_t { export_index }))
 }
 
 #[unsafe(no_mangle)]

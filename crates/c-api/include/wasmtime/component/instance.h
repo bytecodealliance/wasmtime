@@ -34,13 +34,14 @@ typedef struct wasmtime_component_instance {
  * \param context the context where \p instance lives in
  * \param instance_export_index optional (i.e. nullable) instance to look up in
  * \param name the name of the export
- * \param out the export index if found
- * \return boolean indicating if found
+ * \param name_len length of \p name in bytes
+ * \return export index if found, else NULL
  */
-WASM_API_EXTERN bool wasmtime_component_instance_get_export_index(
+WASM_API_EXTERN wasmtime_component_export_index_t *
+wasmtime_component_instance_get_export_index(
     const wasmtime_component_instance_t *instance, wasmtime_context_t *context,
     const wasmtime_component_export_index_t *instance_export_index,
-    wasm_name_t *name, wasmtime_component_export_index_t **out);
+    const char *name, size_t name_len);
 
 /**
  * \brief Looks up an exported function by name within this

@@ -30,20 +30,13 @@ TEST(component, lookup_func) {
 
   CHECK_ERR(err);
 
-  auto name = wasm_name_t{};
-  wasm_name_new_from_string(&name, "ff");
+  auto f = wasmtime_component_get_export_index(component, nullptr, "ff",
+                                               strlen("ff"));
 
-  wasmtime_component_export_index_t *f = nullptr;
-  auto found =
-      wasmtime_component_get_export_index(component, nullptr, &name, &f);
-
-  EXPECT_FALSE(found);
   EXPECT_EQ(f, nullptr);
 
-  wasm_name_new_from_string(&name, "f");
-  found = wasmtime_component_get_export_index(component, nullptr, &name, &f);
+  f = wasmtime_component_get_export_index(component, nullptr, "f", strlen("f"));
 
-  EXPECT_TRUE(found);
   EXPECT_NE(f, nullptr);
 
   const auto linker = wasmtime_component_linker_new(engine);
@@ -54,18 +47,15 @@ TEST(component, lookup_func) {
   CHECK_ERR(err);
 
   wasmtime_component_func_t func = {};
-  found = wasmtime_component_instance_get_func(&instance, context, f, &func);
+  const auto found =
+      wasmtime_component_instance_get_func(&instance, context, f, &func);
   EXPECT_TRUE(found);
   EXPECT_NE(func.store_id, 0);
 
   wasmtime_component_export_index_delete(f);
-  found = false;
-  f = nullptr;
 
-  wasm_name_new_from_string(&name, "f");
-  found = wasmtime_component_instance_get_export_index(&instance, context,
-                                                       nullptr, &name, &f);
-  EXPECT_TRUE(found);
+  f = wasmtime_component_instance_get_export_index(&instance, context, nullptr,
+                                                   "f", strlen("f"));
   EXPECT_NE(f, nullptr);
 
   wasmtime_component_export_index_delete(f);
