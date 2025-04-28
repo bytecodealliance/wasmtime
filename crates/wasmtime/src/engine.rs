@@ -684,8 +684,8 @@ impl Engine {
     }
 
     #[cfg(all(feature = "cache", any(feature = "cranelift", feature = "winch")))]
-    pub(crate) fn cache_config(&self) -> &wasmtime_cache::CacheConfig {
-        &self.config().cache_config
+    pub(crate) fn cache_config(&self) -> Option<&wasmtime_cache::CacheConfig> {
+        self.config().cache_config.as_ref()
     }
 
     pub(crate) fn signatures(&self) -> &TypeRegistry {

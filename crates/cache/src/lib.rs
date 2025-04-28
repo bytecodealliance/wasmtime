@@ -27,14 +27,13 @@ struct Sha256Hasher(Sha256);
 
 impl<'config> ModuleCacheEntry<'config> {
     /// Create the cache entry.
-    pub fn new(compiler_name: &str, cache_config: &'config CacheConfig) -> Self {
-        if cache_config.enabled() {
-            Self(Some(ModuleCacheEntryInner::new(
+    pub fn new(compiler_name: &str, cache_config: Option<&'config CacheConfig>) -> Self {
+        match cache_config {
+            Some(cache_config) if cache_config.enabled() => Self(Some(ModuleCacheEntryInner::new(
                 compiler_name,
                 cache_config,
-            )))
-        } else {
-            Self(None)
+            ))),
+            Some(_) | None => Self(None),
         }
     }
 

@@ -128,7 +128,7 @@ pub struct Config {
     tunables: ConfigTunables,
 
     #[cfg(feature = "cache")]
-    pub(crate) cache_config: CacheConfig,
+    pub(crate) cache_config: Option<CacheConfig>,
     #[cfg(feature = "runtime")]
     pub(crate) mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
     #[cfg(feature = "runtime")]
@@ -231,7 +231,7 @@ impl Config {
             #[cfg(feature = "gc")]
             collector: Collector::default(),
             #[cfg(feature = "cache")]
-            cache_config: CacheConfig::new_cache_disabled(),
+            cache_config: None,
             profiling_strategy: ProfilingStrategy::None,
             #[cfg(feature = "runtime")]
             mem_creator: None,
@@ -1386,7 +1386,7 @@ impl Config {
     /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
     #[cfg(feature = "cache")]
     pub fn cache_config(&mut self, cache_config: Option<CacheConfig>) -> &mut Self {
-        self.cache_config = cache_config.unwrap_or_else(|| CacheConfig::new_cache_disabled());
+        self.cache_config = cache_config;
         self
     }
 

@@ -667,44 +667,64 @@ Caused by:
             .cache_config(Some(CacheConfig::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config().cache_config.cache_hits(), 0);
-        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        let cache_config = engine
+            .config()
+            .cache_config
+            .as_ref()
+            .expect("Missing cache config");
+        assert_eq!(cache_config.cache_hits(), 0);
+        assert_eq!(cache_config.cache_misses(), 1);
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config().cache_config.cache_hits(), 1);
-        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        assert_eq!(cache_config.cache_hits(), 1);
+        assert_eq!(cache_config.cache_misses(), 1);
 
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::Speed)
             .cache_config(Some(CacheConfig::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
+        let cache_config = engine
+            .config()
+            .cache_config
+            .as_ref()
+            .expect("Missing cache config");
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config().cache_config.cache_hits(), 0);
-        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        assert_eq!(cache_config.cache_hits(), 0);
+        assert_eq!(cache_config.cache_misses(), 1);
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config().cache_config.cache_hits(), 1);
-        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        assert_eq!(cache_config.cache_hits(), 1);
+        assert_eq!(cache_config.cache_misses(), 1);
 
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::SpeedAndSize)
             .cache_config(Some(CacheConfig::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
+        let cache_config = engine
+            .config()
+            .cache_config
+            .as_ref()
+            .expect("Missing cache config");
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config().cache_config.cache_hits(), 0);
-        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        assert_eq!(cache_config.cache_hits(), 0);
+        assert_eq!(cache_config.cache_misses(), 1);
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config().cache_config.cache_hits(), 1);
-        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        assert_eq!(cache_config.cache_hits(), 1);
+        assert_eq!(cache_config.cache_misses(), 1);
 
         let mut cfg = Config::new();
         cfg.debug_info(true)
             .cache_config(Some(CacheConfig::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
+        let cache_config = engine
+            .config()
+            .cache_config
+            .as_ref()
+            .expect("Missing cache config");
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config().cache_config.cache_hits(), 0);
-        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        assert_eq!(cache_config.cache_hits(), 0);
+        assert_eq!(cache_config.cache_misses(), 1);
         Module::new(&engine, "(module (func))")?;
-        assert_eq!(engine.config().cache_config.cache_hits(), 1);
-        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        assert_eq!(cache_config.cache_hits(), 1);
+        assert_eq!(cache_config.cache_misses(), 1);
 
         Ok(())
     }
@@ -774,12 +794,17 @@ Caused by:
         let mut cfg = Config::new();
         cfg.cache_config(Some(CacheConfig::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
+        let cache_config = engine
+            .config()
+            .cache_config
+            .as_ref()
+            .expect("Missing cache config");
         Component::new(&engine, "(component (core module (func)))")?;
-        assert_eq!(engine.config().cache_config.cache_hits(), 0);
-        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        assert_eq!(cache_config.cache_hits(), 0);
+        assert_eq!(cache_config.cache_misses(), 1);
         Component::new(&engine, "(component (core module (func)))")?;
-        assert_eq!(engine.config().cache_config.cache_hits(), 1);
-        assert_eq!(engine.config().cache_config.cache_misses(), 1);
+        assert_eq!(cache_config.cache_hits(), 1);
+        assert_eq!(cache_config.cache_misses(), 1);
 
         Ok(())
     }
