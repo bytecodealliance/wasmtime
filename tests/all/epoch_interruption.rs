@@ -399,7 +399,7 @@ async fn epoch_callback_yield_custom(config: &mut Config) {
             InterruptMode::Callback(|mut cx| {
                 let s = cx.data_mut();
                 *s += 1;
-                let fut = Box::new(tokio::task::yield_now());
+                let fut = Box::pin(tokio::task::yield_now());
                 Ok(UpdateDeadline::YieldCustom(1, fut))
             }),
             |_| {},

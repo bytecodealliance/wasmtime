@@ -252,6 +252,7 @@ enum CallHookInner<T> {
 
 /// What to do after returning from a callback when the engine epoch reaches
 /// the deadline for a Store during execution of a function using that store.
+#[non_exhaustive]
 pub enum UpdateDeadline {
     /// Extend the deadline by the specified number of ticks.
     Continue(u64),
@@ -268,7 +269,10 @@ pub enum UpdateDeadline {
     /// it is recommended to provide [`tokio::task::yield_now`](https://docs.rs/tokio/latest/tokio/task/fn.yield_now.html)
     /// here.
     #[cfg(feature = "async")]
-    YieldCustom(u64, Box<dyn ::core::future::Future<Output = ()> + Send>),
+    YieldCustom(
+        u64,
+        ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + Send>>,
+    ),
 }
 
 // Forward methods on `StoreOpaque` to also being on `StoreInner<T>`
@@ -2141,7 +2145,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
                         unsafe {
                             self.async_cx()
                                 .expect("attempted to pull async context during shutdown")
-                                .block_on(::core::pin::Pin::new_unchecked(future))?
+                                .block_on(future)?
                         }
                         delta
                     }
