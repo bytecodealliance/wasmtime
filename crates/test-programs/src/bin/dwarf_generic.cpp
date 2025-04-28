@@ -63,10 +63,26 @@ int TestInstanceMethod() {
   return 0;
 }
 
+__asm("FunctionWithoutWasmDWARF:\n"
+      ".global	FunctionWithoutWasmDWARF\n"
+      ".functype	FunctionWithoutWasmDWARF (i32, i32) -> (i32)\n"
+      "local.get	0\n"
+      "local.get	1\n"
+      "i32.div_u\n"
+      "end_function\n");
+extern "C" int FunctionWithoutWasmDWARF(int a, int b);
+
+int TestFunctionWithoutWasmDWARF() {
+  debug_break();
+  int x = FunctionWithoutWasmDWARF(9, 10);
+  return x == 0 ? 0 : 4;
+}
+
 int main() {
   int exitCode = 0;
   exitCode += TestClassDefinitionSpreadAcrossCompileUnits();
   exitCode += TestInheritance();
   exitCode += TestInstanceMethod();
+  exitCode += TestFunctionWithoutWasmDWARF();
   return exitCode;
 }

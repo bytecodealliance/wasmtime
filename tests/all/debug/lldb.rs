@@ -206,6 +206,12 @@ c
 p __this->BaseValue + __this->DerivedValue
 c
 p __this->BaseValue + __this->DerivedValue
+c
+f
+n
+s
+v var0
+v var1
 c"#,
     )?;
 
@@ -227,6 +233,9 @@ check: stop reason = breakpoint 1.1
 check: 7
 check: stop reason = breakpoint 1.1
 check: 8
+check: stop reason = breakpoint 1.1
+check: 9
+check: 10
 check: exited with status = 0
 "#,
     )?;

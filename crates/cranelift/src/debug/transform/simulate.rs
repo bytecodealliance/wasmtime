@@ -69,24 +69,32 @@ fn generate_line_info(
 
     for (symbol, map) in maps {
         let base_addr = map.offset;
-        out_program.begin_sequence(Some(write::Address::Symbol { symbol, addend: 0 }));
+        out_program.begin_sequence(Some(write::Address::Symbol {
+            symbol,
+            addend: base_addr as i64,
+        }));
+
+        // Always emit a row for offset zero - debuggers expect this.
+        out_program.row().address_offset = 0;
+        out_program.row().file = file_index;
+        out_program.row().line = 0; // Special line number for non-user code.
+        out_program.row().discriminator = 1;
+        out_program.row().is_statement = true;
+        out_program.generate_row();
+
+        let mut is_prologue_end = true;
         for addr_map in map.addresses.iter() {
             let address_offset = (addr_map.generated - base_addr) as u64;
             out_program.row().address_offset = address_offset;
-            out_program.row().op_index = 0;
-            out_program.row().file = file_index;
             let wasm_offset = w.code_section_offset + addr_map.wasm;
             out_program.row().line = wasm_offset;
-            out_program.row().column = 0;
             out_program.row().discriminator = 1;
-            out_program.row().is_statement = true;
-            out_program.row().basic_block = false;
-            out_program.row().prologue_end = false;
-            out_program.row().epilogue_begin = false;
-            out_program.row().isa = 0;
+            out_program.row().prologue_end = is_prologue_end;
             out_program.generate_row();
+
+            is_prologue_end = false;
         }
-        let end_addr = (map.offset + map.len - 1) as u64;
+        let end_addr = (base_addr + map.len - 1) as u64;
         out_program.end_sequence(end_addr);
     }
 
@@ -345,6 +353,7 @@ pub fn generate_simulated_dwarf(
     };
 
     let wasm_types = add_wasm_types(unit, root_id, out_strings);
+    let mut unit_ranges = vec![];
     for (module, index) in compilation.indexes().collect::<Vec<_>>() {
         let (symbol, _) = compilation.function(module, index);
         if translated.contains(&symbol) {
@@ -353,21 +362,22 @@ pub fn generate_simulated_dwarf(
 
         let addr_tr = &addr_tr[module];
         let map = &addr_tr.map()[index];
-        let start = map.offset as u64;
-        let end = start + map.len as u64;
         let die_id = unit.add(root_id, gimli::DW_TAG_subprogram);
         let die = unit.get_mut(die_id);
-        die.set(
-            gimli::DW_AT_low_pc,
-            write::AttributeValue::Address(write::Address::Symbol {
-                symbol,
-                addend: start as i64,
-            }),
-        );
+        let low_pc = write::Address::Symbol {
+            symbol,
+            addend: map.offset as i64,
+        };
+        let code_length = map.len as u64;
+        die.set(gimli::DW_AT_low_pc, write::AttributeValue::Address(low_pc));
         die.set(
             gimli::DW_AT_high_pc,
-            write::AttributeValue::Udata(end - start),
+            write::AttributeValue::Udata(code_length),
         );
+        unit_ranges.push(write::Range::StartLength {
+            begin: low_pc,
+            length: code_length,
+        });
 
         let translation = &compilation.translations[module];
         let func_index = translation.module.func_index(index);
@@ -412,6 +422,11 @@ pub fn generate_simulated_dwarf(
             isa,
         )?;
     }
+    let unit_ranges_id = unit.ranges.add(write::RangeList(unit_ranges));
+    unit.get_mut(root_id).set(
+        gimli::DW_AT_ranges,
+        write::AttributeValue::RangeListRef(unit_ranges_id),
+    );
 
     Ok(())
 }
