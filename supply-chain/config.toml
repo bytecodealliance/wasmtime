@@ -85,6 +85,9 @@ audit-as-crates-io = true
 [policy.cranelift-serde]
 audit-as-crates-io = true
 
+[policy.cranelift-srcgen]
+audit-as-crates-io = true
+
 [policy.isle-fuzz]
 criteria = []
 
@@ -179,6 +182,9 @@ audit-as-crates-io = true
 audit-as-crates-io = true
 
 [policy.wasmtime-wasi-threads]
+audit-as-crates-io = true
+
+[policy.wasmtime-wasi-tls]
 audit-as-crates-io = true
 
 [policy.wasmtime-wast]
