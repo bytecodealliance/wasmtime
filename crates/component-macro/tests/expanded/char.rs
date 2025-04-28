@@ -316,10 +316,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: char,
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (char,),
@@ -334,10 +331,7 @@ pub mod exports {
                     pub fn call_return_char<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<char>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<char> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),

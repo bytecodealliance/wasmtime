@@ -348,10 +348,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &str,
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&str,),
@@ -365,10 +362,7 @@ pub mod exports {
                     pub fn call_b<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::String>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::String> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -384,10 +378,7 @@ pub mod exports {
                         mut store: S,
                         arg0: &str,
                         arg1: &str,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::String>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::String> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&str, &str),
