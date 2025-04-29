@@ -39,7 +39,7 @@ impl<'a> CodeBuilder<'a> {
                 NotHashed(state),
             );
             let (code, info_and_types) =
-                wasmtime_cache::ModuleCacheEntry::new("wasmtime", self.engine.cache_config())
+                wasmtime_cache::ModuleCacheEntry::new("wasmtime", self.engine.cache())
                     .get_data_raw(
                         &state,
                         // Cache miss, compute the actual artifacts

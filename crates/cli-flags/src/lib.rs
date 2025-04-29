@@ -735,14 +735,12 @@ impl CommonOptions {
 
         #[cfg(feature = "cache")]
         if self.codegen.cache != Some(false) {
-            match &self.codegen.cache_config {
-                Some(path) => {
-                    config.cache_config_load(path)?;
-                }
-                None => {
-                    config.cache_config_load_default()?;
-                }
-            }
+            use wasmtime::Cache;
+            let cache = match &self.codegen.cache_config {
+                Some(path) => Cache::from_file(Some(Path::new(path)))?,
+                None => Cache::from_file(None)?,
+            };
+            config.cache(Some(cache));
         }
         #[cfg(not(feature = "cache"))]
         if self.codegen.cache == Some(true) {

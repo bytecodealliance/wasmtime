@@ -436,7 +436,7 @@ impl BenchState {
     ) -> Result<Self> {
         let mut config = options.config(None)?;
         // NB: always disable the compilation cache.
-        config.disable_cache();
+        config.cache(None);
         let engine = Engine::new(&config)?;
         let mut linker = Linker::<HostState>::new(&engine);
 
