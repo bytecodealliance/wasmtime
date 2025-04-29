@@ -18,51 +18,49 @@ use std::time::Duration;
 /// Global configuration for how the cache is managed
 #[derive(Debug, Clone)]
 pub struct Cache {
-    directory: PathBuf,
-    worker_event_queue_size: u64,
-    baseline_compression_level: i32,
-    optimized_compression_level: i32,
-    optimized_compression_usage_counter_threshold: u64,
-    cleanup_interval: Duration,
-    optimizing_compression_task_timeout: Duration,
-    allowed_clock_drift_for_files_from_future: Duration,
-    file_count_soft_limit: u64,
-    files_total_size_soft_limit: u64,
-    file_count_limit_percent_if_deleting: u8,
-    files_total_size_limit_percent_if_deleting: u8,
+    config: CacheConfig,
     worker: Worker,
     state: Arc<CacheState>,
 }
 
-macro_rules! generate_setting_getter {
+macro_rules! generate_config_setting_getter {
     ($setting:ident: $setting_type:ty) => {
         /// Returns `$setting`.
         ///
         /// Panics if the cache is disabled.
         pub fn $setting(&self) -> $setting_type {
-            self.$setting
+            self.config.$setting()
         }
     };
 }
 
 impl Cache {
-    generate_setting_getter!(worker_event_queue_size: u64);
-    generate_setting_getter!(baseline_compression_level: i32);
-    generate_setting_getter!(optimized_compression_level: i32);
-    generate_setting_getter!(optimized_compression_usage_counter_threshold: u64);
-    generate_setting_getter!(cleanup_interval: Duration);
-    generate_setting_getter!(optimizing_compression_task_timeout: Duration);
-    generate_setting_getter!(allowed_clock_drift_for_files_from_future: Duration);
-    generate_setting_getter!(file_count_soft_limit: u64);
-    generate_setting_getter!(files_total_size_soft_limit: u64);
-    generate_setting_getter!(file_count_limit_percent_if_deleting: u8);
-    generate_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
+    pub fn new(mut config: CacheConfig) -> Result<Self> {
+        config.validate()?;
+        Ok(Self {
+            worker: Worker::start_new(&config),
+            config,
+            state: Default::default(),
+        })
+    }
+
+    generate_config_setting_getter!(worker_event_queue_size: u64);
+    generate_config_setting_getter!(baseline_compression_level: i32);
+    generate_config_setting_getter!(optimized_compression_level: i32);
+    generate_config_setting_getter!(optimized_compression_usage_counter_threshold: u64);
+    generate_config_setting_getter!(cleanup_interval: Duration);
+    generate_config_setting_getter!(optimizing_compression_task_timeout: Duration);
+    generate_config_setting_getter!(allowed_clock_drift_for_files_from_future: Duration);
+    generate_config_setting_getter!(file_count_soft_limit: u64);
+    generate_config_setting_getter!(files_total_size_soft_limit: u64);
+    generate_config_setting_getter!(file_count_limit_percent_if_deleting: u8);
+    generate_config_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
 
     /// Returns path to the cache directory.
     ///
-    /// Panics if the cache is disabled.
+    /// Panics if the cache directory is not set.
     pub fn directory(&self) -> &PathBuf {
-        &self.directory
+        &self.config.directory()
     }
 
     #[cfg(test)]
@@ -112,63 +110,69 @@ pub struct CacheConfig {
     enabled: bool,
     directory: Option<PathBuf>,
     #[serde(
-        default,
+        default = "default_worker_event_queue_size",
         rename = "worker-event-queue-size",
         deserialize_with = "deserialize_si_prefix"
     )]
-    worker_event_queue_size: Option<u64>,
-    #[serde(rename = "baseline-compression-level")]
-    baseline_compression_level: Option<i32>,
-    #[serde(rename = "optimized-compression-level")]
-    optimized_compression_level: Option<i32>,
+    worker_event_queue_size: u64,
     #[serde(
-        default,
+        default = "default_baseline_compression_level",
+        rename = "baseline-compression-level"
+    )]
+    baseline_compression_level: i32,
+    #[serde(
+        default = "default_optimized_compression_level",
+        rename = "optimized-compression-level"
+    )]
+    optimized_compression_level: i32,
+    #[serde(
+        default = "default_optimized_compression_usage_counter_threshold",
         rename = "optimized-compression-usage-counter-threshold",
         deserialize_with = "deserialize_si_prefix"
     )]
-    optimized_compression_usage_counter_threshold: Option<u64>,
+    optimized_compression_usage_counter_threshold: u64,
     #[serde(
-        default,
+        default = "default_cleanup_interval",
         rename = "cleanup-interval",
         deserialize_with = "deserialize_duration"
     )]
-    cleanup_interval: Option<Duration>,
+    cleanup_interval: Duration,
     #[serde(
-        default,
+        default = "default_optimizing_compression_task_timeout",
         rename = "optimizing-compression-task-timeout",
         deserialize_with = "deserialize_duration"
     )]
-    optimizing_compression_task_timeout: Option<Duration>,
+    optimizing_compression_task_timeout: Duration,
     #[serde(
-        default,
+        default = "default_allowed_clock_drift_for_files_from_future",
         rename = "allowed-clock-drift-for-files-from-future",
         deserialize_with = "deserialize_duration"
     )]
-    allowed_clock_drift_for_files_from_future: Option<Duration>,
+    allowed_clock_drift_for_files_from_future: Duration,
     #[serde(
-        default,
+        default = "default_file_count_soft_limit",
         rename = "file-count-soft-limit",
         deserialize_with = "deserialize_si_prefix"
     )]
-    file_count_soft_limit: Option<u64>,
+    file_count_soft_limit: u64,
     #[serde(
-        default,
+        default = "default_files_total_size_soft_limit",
         rename = "files-total-size-soft-limit",
         deserialize_with = "deserialize_disk_space"
     )]
-    files_total_size_soft_limit: Option<u64>,
+    files_total_size_soft_limit: u64,
     #[serde(
-        default,
+        default = "default_file_count_limit_percent_if_deleting",
         rename = "file-count-limit-percent-if-deleting",
         deserialize_with = "deserialize_percent"
     )]
-    file_count_limit_percent_if_deleting: Option<u8>,
+    file_count_limit_percent_if_deleting: u8,
     #[serde(
-        default,
+        default = "default_files_total_size_limit_percent_if_deleting",
         rename = "files-total-size-limit-percent-if-deleting",
         deserialize_with = "deserialize_percent"
     )]
-    files_total_size_limit_percent_if_deleting: Option<u8>,
+    files_total_size_limit_percent_if_deleting: u8,
 }
 
 /// Creates a new configuration file at specified path, or default path if None is passed.
@@ -227,34 +231,57 @@ const ZSTD_COMPRESSION_LEVELS: std::ops::RangeInclusive<i32> = 0..=21;
 // At the moment of writing, the modules couldn't depend on another,
 // so we have at most one module per wasmtime instance
 // if changed, update cli-cache.md
-const DEFAULT_WORKER_EVENT_QUEUE_SIZE: u64 = 0x10;
-const WORKER_EVENT_QUEUE_SIZE_WARNING_THRESHOLD: u64 = 3;
+const fn default_worker_event_queue_size() -> u64 {
+    0x10
+}
+const fn worker_event_queue_size_warning_threshold() -> u64 {
+    3
+}
 // should be quick and provide good enough compression
 // if changed, update cli-cache.md
-const DEFAULT_BASELINE_COMPRESSION_LEVEL: i32 = zstd::DEFAULT_COMPRESSION_LEVEL;
+const fn default_baseline_compression_level() -> i32 {
+    zstd::DEFAULT_COMPRESSION_LEVEL
+}
 // should provide significantly better compression than baseline
 // if changed, update cli-cache.md
-const DEFAULT_OPTIMIZED_COMPRESSION_LEVEL: i32 = 20;
+const fn default_optimized_compression_level() -> i32 {
+    20
+}
 // shouldn't be to low to avoid recompressing too many files
 // if changed, update cli-cache.md
-const DEFAULT_OPTIMIZED_COMPRESSION_USAGE_COUNTER_THRESHOLD: u64 = 0x100;
+const fn default_optimized_compression_usage_counter_threshold() -> u64 {
+    0x100
+}
 // if changed, update cli-cache.md
-const DEFAULT_CLEANUP_INTERVAL: Duration = Duration::from_secs(60 * 60);
+const fn default_cleanup_interval() -> Duration {
+    Duration::from_secs(60 * 60)
+}
 // if changed, update cli-cache.md
-const DEFAULT_OPTIMIZING_COMPRESSION_TASK_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+const fn default_optimizing_compression_task_timeout() -> Duration {
+    Duration::from_secs(30 * 60)
+}
 // the default assumes problems with timezone configuration on network share + some clock drift
 // please notice 24 timezones = max 23h difference between some of them
 // if changed, update cli-cache.md
-const DEFAULT_ALLOWED_CLOCK_DRIFT_FOR_FILES_FROM_FUTURE: Duration =
-    Duration::from_secs(60 * 60 * 24);
+const fn default_allowed_clock_drift_for_files_from_future() -> Duration {
+    Duration::from_secs(60 * 60 * 24)
+}
 // if changed, update cli-cache.md
-const DEFAULT_FILE_COUNT_SOFT_LIMIT: u64 = 0x10_000;
+const fn default_file_count_soft_limit() -> u64 {
+    0x10_000
+}
 // if changed, update cli-cache.md
-const DEFAULT_FILES_TOTAL_SIZE_SOFT_LIMIT: u64 = 1024 * 1024 * 512;
+const fn default_files_total_size_soft_limit() -> u64 {
+    1024 * 1024 * 512
+}
 // if changed, update cli-cache.md
-const DEFAULT_FILE_COUNT_LIMIT_PERCENT_IF_DELETING: u8 = 70;
+const fn default_file_count_limit_percent_if_deleting() -> u8 {
+    70
+}
 // if changed, update cli-cache.md
-const DEFAULT_FILES_TOTAL_SIZE_LIMIT_PERCENT_IF_DELETING: u8 = 70;
+const fn default_files_total_size_limit_percent_if_deleting() -> u8 {
+    70
+}
 
 fn project_dirs() -> Option<ProjectDirs> {
     ProjectDirs::from("", "BytecodeAlliance", "wasmtime")
@@ -275,11 +302,7 @@ macro_rules! generate_deserializer {
         where
             D: Deserializer<'de>,
         {
-            let text = Option::<String>::deserialize(deserializer)?;
-            let text = match text {
-                None => return Ok(None),
-                Some(text) => text,
-            };
+            let text = String::deserialize(deserializer)?;
             let text = text.trim();
             let split_point = text.find(|c: char| !c.is_numeric());
             let (num, unit) = split_point.map_or_else(|| (text, ""), |p| text.split_at(p));
@@ -288,7 +311,7 @@ macro_rules! generate_deserializer {
                 let $unitname = unit.trim();
                 $body
             })();
-            if deserialized.is_some() {
+            if let Some(deserialized) = deserialized {
                 Ok(deserialized)
             } else {
                 Err(de::Error::custom(
@@ -299,7 +322,7 @@ macro_rules! generate_deserializer {
     };
 }
 
-generate_deserializer!(deserialize_duration(num: u64, unit: &str) -> Option<Duration> {
+generate_deserializer!(deserialize_duration(num: u64, unit: &str) -> Duration {
     match unit {
         "s" => Some(Duration::from_secs(num)),
         "m" => Some(Duration::from_secs(num * 60)),
@@ -309,7 +332,7 @@ generate_deserializer!(deserialize_duration(num: u64, unit: &str) -> Option<Dura
     }
 });
 
-generate_deserializer!(deserialize_si_prefix(num: u64, unit: &str) -> Option<u64> {
+generate_deserializer!(deserialize_si_prefix(num: u64, unit: &str) -> u64 {
     match unit {
         "" => Some(num),
         "K" => num.checked_mul(1_000),
@@ -321,7 +344,7 @@ generate_deserializer!(deserialize_si_prefix(num: u64, unit: &str) -> Option<u64
     }
 });
 
-generate_deserializer!(deserialize_disk_space(num: u64, unit: &str) -> Option<u64> {
+generate_deserializer!(deserialize_disk_space(num: u64, unit: &str) -> u64 {
     match unit {
         "" => Some(num),
         "K" => num.checked_mul(1_000),
@@ -338,7 +361,7 @@ generate_deserializer!(deserialize_disk_space(num: u64, unit: &str) -> Option<u6
     }
 });
 
-generate_deserializer!(deserialize_percent(num: u8, unit: &str) -> Option<u8> {
+generate_deserializer!(deserialize_percent(num: u8, unit: &str) -> u8 {
     match unit {
         "%" => Some(num),
         _ => None,
@@ -348,33 +371,29 @@ generate_deserializer!(deserialize_percent(num: u8, unit: &str) -> Option<u8> {
 static CACHE_IMPROPER_CONFIG_ERROR_MSG: &str =
     "Cache system should be enabled and all settings must be validated or defaulted";
 
-macro_rules! generate_option_setting_getter {
+macro_rules! generate_setting_getter {
     ($setting:ident: $setting_type:ty) => {
         /// Returns `$setting`.
         ///
         /// Panics if the cache is disabled.
         pub fn $setting(&self) -> $setting_type {
-            self.$setting.expect(CACHE_IMPROPER_CONFIG_ERROR_MSG)
+            self.$setting
         }
     };
 }
 
 impl CacheConfig {
-    generate_option_setting_getter!(worker_event_queue_size: u64);
-    generate_option_setting_getter!(baseline_compression_level: i32);
-    generate_option_setting_getter!(optimized_compression_level: i32);
-    generate_option_setting_getter!(optimized_compression_usage_counter_threshold: u64);
-    generate_option_setting_getter!(cleanup_interval: Duration);
-    generate_option_setting_getter!(optimizing_compression_task_timeout: Duration);
-    generate_option_setting_getter!(allowed_clock_drift_for_files_from_future: Duration);
-    generate_option_setting_getter!(file_count_soft_limit: u64);
-    generate_option_setting_getter!(files_total_size_soft_limit: u64);
-    generate_option_setting_getter!(file_count_limit_percent_if_deleting: u8);
-    generate_option_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
-
-    pub fn builder() -> CacheConfigBuilder {
-        CacheConfigBuilder::default()
-    }
+    generate_setting_getter!(worker_event_queue_size: u64);
+    generate_setting_getter!(baseline_compression_level: i32);
+    generate_setting_getter!(optimized_compression_level: i32);
+    generate_setting_getter!(optimized_compression_usage_counter_threshold: u64);
+    generate_setting_getter!(cleanup_interval: Duration);
+    generate_setting_getter!(optimizing_compression_task_timeout: Duration);
+    generate_setting_getter!(allowed_clock_drift_for_files_from_future: Duration);
+    generate_setting_getter!(file_count_soft_limit: u64);
+    generate_setting_getter!(files_total_size_soft_limit: u64);
+    generate_setting_getter!(file_count_limit_percent_if_deleting: u8);
+    generate_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
 
     /// Returns true if and only if the cache is enabled.
     pub fn enabled(&self) -> bool {
@@ -395,17 +414,20 @@ impl CacheConfig {
         Self {
             enabled: false,
             directory: None,
-            worker_event_queue_size: None,
-            baseline_compression_level: None,
-            optimized_compression_level: None,
-            optimized_compression_usage_counter_threshold: None,
-            cleanup_interval: None,
-            optimizing_compression_task_timeout: None,
-            allowed_clock_drift_for_files_from_future: None,
-            file_count_soft_limit: None,
-            files_total_size_soft_limit: None,
-            file_count_limit_percent_if_deleting: None,
-            files_total_size_limit_percent_if_deleting: None,
+            worker_event_queue_size: default_worker_event_queue_size(),
+            baseline_compression_level: default_baseline_compression_level(),
+            optimized_compression_level: default_optimized_compression_level(),
+            optimized_compression_usage_counter_threshold:
+                default_optimized_compression_usage_counter_threshold(),
+            cleanup_interval: default_cleanup_interval(),
+            optimizing_compression_task_timeout: default_optimizing_compression_task_timeout(),
+            allowed_clock_drift_for_files_from_future:
+                default_allowed_clock_drift_for_files_from_future(),
+            file_count_soft_limit: default_file_count_soft_limit(),
+            files_total_size_soft_limit: default_files_total_size_soft_limit(),
+            file_count_limit_percent_if_deleting: default_file_count_limit_percent_if_deleting(),
+            files_total_size_limit_percent_if_deleting:
+                default_files_total_size_limit_percent_if_deleting(),
         }
     }
 
@@ -434,7 +456,7 @@ impl CacheConfig {
     /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
     pub fn from_file(config_file: Option<&Path>) -> Result<Self> {
         let mut config = Self::load_and_parse_file(config_file)?;
-        config.validate_or_default()?;
+        config.validate()?;
         Ok(config)
     }
 
@@ -464,19 +486,13 @@ impl CacheConfig {
     }
 
     /// validate values and fill in defaults
-    fn validate_or_default(&mut self) -> Result<()> {
+    fn validate(&mut self) -> Result<()> {
         self.validate_directory_or_default()?;
-        self.validate_worker_event_queue_size_or_default();
-        self.validate_baseline_compression_level_or_default()?;
-        self.validate_optimized_compression_level_or_default()?;
-        self.validate_optimized_compression_usage_counter_threshold_or_default();
-        self.validate_cleanup_interval_or_default();
-        self.validate_optimizing_compression_task_timeout_or_default();
-        self.validate_allowed_clock_drift_for_files_from_future_or_default();
-        self.validate_file_count_soft_limit_or_default();
-        self.validate_files_total_size_soft_limit_or_default();
-        self.validate_file_count_limit_percent_if_deleting_or_default()?;
-        self.validate_files_total_size_limit_percent_if_deleting_or_default()?;
+        self.validate_worker_event_queue_size();
+        self.validate_baseline_compression_level()?;
+        self.validate_optimized_compression_level()?;
+        self.validate_file_count_limit_percent_if_deleting()?;
+        self.validate_files_total_size_limit_percent_if_deleting()?;
         Ok(())
     }
 
@@ -515,25 +531,17 @@ impl CacheConfig {
         Ok(())
     }
 
-    fn validate_worker_event_queue_size_or_default(&mut self) {
-        if self.worker_event_queue_size.is_none() {
-            self.worker_event_queue_size = Some(DEFAULT_WORKER_EVENT_QUEUE_SIZE);
-        }
-
-        if self.worker_event_queue_size.unwrap() < WORKER_EVENT_QUEUE_SIZE_WARNING_THRESHOLD {
+    fn validate_worker_event_queue_size(&self) {
+        if self.worker_event_queue_size < worker_event_queue_size_warning_threshold() {
             warn!("Detected small worker event queue size. Some messages might be lost.");
         }
     }
 
-    fn validate_baseline_compression_level_or_default(&mut self) -> Result<()> {
-        if self.baseline_compression_level.is_none() {
-            self.baseline_compression_level = Some(DEFAULT_BASELINE_COMPRESSION_LEVEL);
-        }
-
-        if !ZSTD_COMPRESSION_LEVELS.contains(&self.baseline_compression_level.unwrap()) {
+    fn validate_baseline_compression_level(&self) -> Result<()> {
+        if !ZSTD_COMPRESSION_LEVELS.contains(&self.baseline_compression_level) {
             bail!(
                 "Invalid baseline compression level: {} not in {:#?}",
-                self.baseline_compression_level.unwrap(),
+                self.baseline_compression_level,
                 ZSTD_COMPRESSION_LEVELS
             );
         }
@@ -541,98 +549,40 @@ impl CacheConfig {
     }
 
     // assumption: baseline compression level has been verified
-    fn validate_optimized_compression_level_or_default(&mut self) -> Result<()> {
-        if self.optimized_compression_level.is_none() {
-            self.optimized_compression_level = Some(DEFAULT_OPTIMIZED_COMPRESSION_LEVEL);
-        }
-
-        let opt_lvl = self.optimized_compression_level.unwrap();
-        let base_lvl = self.baseline_compression_level.unwrap();
-
-        if !ZSTD_COMPRESSION_LEVELS.contains(&opt_lvl) {
+    fn validate_optimized_compression_level(&self) -> Result<()> {
+        if !ZSTD_COMPRESSION_LEVELS.contains(&self.optimized_compression_level) {
             bail!(
                 "Invalid optimized compression level: {} not in {:#?}",
-                opt_lvl,
+                self.optimized_compression_level,
                 ZSTD_COMPRESSION_LEVELS
             );
         }
 
-        if opt_lvl < base_lvl {
+        if self.optimized_compression_level < self.baseline_compression_level {
             bail!(
                 "Invalid optimized compression level is lower than baseline: {} < {}",
-                opt_lvl,
-                base_lvl
+                self.optimized_compression_level,
+                self.baseline_compression_level
             );
         }
         Ok(())
     }
 
-    fn validate_optimized_compression_usage_counter_threshold_or_default(&mut self) {
-        if self.optimized_compression_usage_counter_threshold.is_none() {
-            self.optimized_compression_usage_counter_threshold =
-                Some(DEFAULT_OPTIMIZED_COMPRESSION_USAGE_COUNTER_THRESHOLD);
-        }
-    }
-
-    fn validate_cleanup_interval_or_default(&mut self) {
-        if self.cleanup_interval.is_none() {
-            self.cleanup_interval = Some(DEFAULT_CLEANUP_INTERVAL);
-        }
-    }
-
-    fn validate_optimizing_compression_task_timeout_or_default(&mut self) {
-        if self.optimizing_compression_task_timeout.is_none() {
-            self.optimizing_compression_task_timeout =
-                Some(DEFAULT_OPTIMIZING_COMPRESSION_TASK_TIMEOUT);
-        }
-    }
-
-    fn validate_allowed_clock_drift_for_files_from_future_or_default(&mut self) {
-        if self.allowed_clock_drift_for_files_from_future.is_none() {
-            self.allowed_clock_drift_for_files_from_future =
-                Some(DEFAULT_ALLOWED_CLOCK_DRIFT_FOR_FILES_FROM_FUTURE);
-        }
-    }
-
-    fn validate_file_count_soft_limit_or_default(&mut self) {
-        if self.file_count_soft_limit.is_none() {
-            self.file_count_soft_limit = Some(DEFAULT_FILE_COUNT_SOFT_LIMIT);
-        }
-    }
-
-    fn validate_files_total_size_soft_limit_or_default(&mut self) {
-        if self.files_total_size_soft_limit.is_none() {
-            self.files_total_size_soft_limit = Some(DEFAULT_FILES_TOTAL_SIZE_SOFT_LIMIT);
-        }
-    }
-
-    fn validate_file_count_limit_percent_if_deleting_or_default(&mut self) -> Result<()> {
-        if self.file_count_limit_percent_if_deleting.is_none() {
-            self.file_count_limit_percent_if_deleting =
-                Some(DEFAULT_FILE_COUNT_LIMIT_PERCENT_IF_DELETING);
-        }
-
-        let percent = self.file_count_limit_percent_if_deleting.unwrap();
-        if percent > 100 {
+    fn validate_file_count_limit_percent_if_deleting(&self) -> Result<()> {
+        if self.file_count_limit_percent_if_deleting > 100 {
             bail!(
                 "Invalid files count limit percent if deleting: {} not in range 0-100%",
-                percent
+                self.file_count_limit_percent_if_deleting
             );
         }
         Ok(())
     }
 
-    fn validate_files_total_size_limit_percent_if_deleting_or_default(&mut self) -> Result<()> {
-        if self.files_total_size_limit_percent_if_deleting.is_none() {
-            self.files_total_size_limit_percent_if_deleting =
-                Some(DEFAULT_FILES_TOTAL_SIZE_LIMIT_PERCENT_IF_DELETING);
-        }
-
-        let percent = self.files_total_size_limit_percent_if_deleting.unwrap();
-        if percent > 100 {
+    fn validate_files_total_size_limit_percent_if_deleting(&self) -> Result<()> {
+        if self.files_total_size_limit_percent_if_deleting > 100 {
             bail!(
                 "Invalid files total size limit percent if deleting: {} not in range 0-100%",
-                percent
+                self.files_total_size_limit_percent_if_deleting
             );
         }
         Ok(())
@@ -643,40 +593,11 @@ impl CacheConfig {
     /// # Errors
     /// Returns an error if the configuration is invalid.
     pub fn spawn(&mut self) -> Result<Cache> {
-        self.validate_or_default()?;
-        let CacheConfig {
-            enabled,
-            directory,
-            worker_event_queue_size,
-            baseline_compression_level,
-            optimized_compression_level,
-            optimized_compression_usage_counter_threshold,
-            cleanup_interval,
-            optimizing_compression_task_timeout,
-            allowed_clock_drift_for_files_from_future,
-            file_count_soft_limit,
-            files_total_size_soft_limit,
-            file_count_limit_percent_if_deleting,
-            files_total_size_limit_percent_if_deleting,
-        } = self;
+        self.validate()?;
 
         // Unwrapping because validation will ensure these are all set
         Ok(Cache {
-            directory: directory.clone().unwrap(),
-            worker_event_queue_size: worker_event_queue_size.unwrap(),
-            baseline_compression_level: baseline_compression_level.unwrap(),
-            optimized_compression_level: optimized_compression_level.unwrap(),
-            optimized_compression_usage_counter_threshold:
-                optimized_compression_usage_counter_threshold.unwrap(),
-            cleanup_interval: cleanup_interval.unwrap(),
-            optimizing_compression_task_timeout: optimizing_compression_task_timeout.unwrap(),
-            allowed_clock_drift_for_files_from_future: allowed_clock_drift_for_files_from_future
-                .unwrap(),
-            file_count_soft_limit: file_count_soft_limit.unwrap(),
-            files_total_size_soft_limit: files_total_size_soft_limit.unwrap(),
-            file_count_limit_percent_if_deleting: file_count_limit_percent_if_deleting.unwrap(),
-            files_total_size_limit_percent_if_deleting: files_total_size_limit_percent_if_deleting
-                .unwrap(),
+            config: self.clone(),
             worker: Worker::start_new(self),
             state: Default::default(),
         })
@@ -684,62 +605,113 @@ impl CacheConfig {
 }
 
 /// A builder for `CacheConfig`s.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct CacheConfigBuilder {
     directory: Option<PathBuf>,
-    worker_event_queue_size: Option<u64>,
-    baseline_compression_level: Option<i32>,
-    optimized_compression_level: Option<i32>,
-    optimized_compression_usage_counter_threshold: Option<u64>,
-    cleanup_interval: Option<Duration>,
-    optimizing_compression_task_timeout: Option<Duration>,
-    allowed_clock_drift_for_files_from_future: Option<Duration>,
-    file_count_soft_limit: Option<u64>,
-    files_total_size_soft_limit: Option<u64>,
-    file_count_limit_percent_if_deleting: Option<u8>,
-    files_total_size_limit_percent_if_deleting: Option<u8>,
+    worker_event_queue_size: u64,
+    baseline_compression_level: i32,
+    optimized_compression_level: i32,
+    optimized_compression_usage_counter_threshold: u64,
+    optimizing_compression_task_timeout: Duration,
+    cleanup_interval: Duration,
+    allowed_clock_drift_for_files_from_future: Duration,
+    file_count_soft_limit: u64,
+    files_total_size_soft_limit: u64,
+    file_count_limit_percent_if_deleting: u8,
+    files_total_size_limit_percent_if_deleting: u8,
+}
+
+impl Default for CacheConfigBuilder {
+    fn default() -> Self {
+        Self {
+            directory: None,
+            worker_event_queue_size: default_worker_event_queue_size(),
+            baseline_compression_level: default_baseline_compression_level(),
+            optimized_compression_level: default_optimized_compression_level(),
+            optimized_compression_usage_counter_threshold:
+                default_optimized_compression_usage_counter_threshold(),
+            optimizing_compression_task_timeout: default_optimizing_compression_task_timeout(),
+            cleanup_interval: default_cleanup_interval(),
+            allowed_clock_drift_for_files_from_future:
+                default_allowed_clock_drift_for_files_from_future(),
+            file_count_soft_limit: default_file_count_soft_limit(),
+            files_total_size_soft_limit: default_files_total_size_soft_limit(),
+            file_count_limit_percent_if_deleting: default_file_count_limit_percent_if_deleting(),
+            files_total_size_limit_percent_if_deleting:
+                default_files_total_size_limit_percent_if_deleting(),
+        }
+    }
 }
 
 impl CacheConfigBuilder {
-    /// Specifies where the cache directory is. Must be an absolute path.
-    pub fn directory(&mut self, directory: impl Into<PathBuf>) -> &mut Self {
+    /// Specify where the cache directory is. Must be an absolute path.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    generate_setting_getter!(worker_event_queue_size: u64);
+    generate_setting_getter!(baseline_compression_level: i32);
+    generate_setting_getter!(optimized_compression_level: i32);
+    generate_setting_getter!(optimized_compression_usage_counter_threshold: u64);
+    generate_setting_getter!(cleanup_interval: Duration);
+    generate_setting_getter!(optimizing_compression_task_timeout: Duration);
+    generate_setting_getter!(allowed_clock_drift_for_files_from_future: Duration);
+    generate_setting_getter!(file_count_soft_limit: u64);
+    generate_setting_getter!(files_total_size_soft_limit: u64);
+    generate_setting_getter!(file_count_limit_percent_if_deleting: u8);
+    generate_setting_getter!(files_total_size_limit_percent_if_deleting: u8);
+
+    /// Returns path to the cache directory.
+    ///
+    /// Panics if the directory hasn't been set yet.
+    pub fn directory(&self) -> &PathBuf {
+        self.directory
+            .as_ref()
+            .expect(CACHE_IMPROPER_CONFIG_ERROR_MSG)
+    }
+
+    /// Specify where the cache directory is. Must be an absolute path.
+    pub fn with_directory(&mut self, directory: impl Into<PathBuf>) -> &mut Self {
         self.directory = Some(directory.into());
         self
     }
 
     /// Size of cache worker event queue. If the queue is full, incoming cache usage events will be
     /// dropped.
-    pub fn worker_event_queue_size(&mut self, size: u64) -> &mut Self {
-        self.worker_event_queue_size = Some(size);
+    pub fn with_worker_event_queue_size(&mut self, size: u64) -> &mut Self {
+        self.worker_event_queue_size = size;
         self
     }
 
     /// Compression level used when a new cache file is being written by the cache system. Wasmtime
     /// uses zstd compression.
-    pub fn baseline_compression_level(&mut self, level: i32) -> &mut Self {
-        self.baseline_compression_level = Some(level);
+    pub fn with_baseline_compression_level(&mut self, level: i32) -> &mut Self {
+        self.baseline_compression_level = level;
         self
     }
 
     /// Compression level used when the cache worker decides to recompress a cache file. Wasmtime
     /// uses zstd compression.
-    pub fn optimized_compression_level(&mut self, level: i32) -> &mut Self {
-        self.optimized_compression_level = Some(level);
+    pub fn with_optimized_compression_level(&mut self, level: i32) -> &mut Self {
+        self.optimized_compression_level = level;
         self
     }
 
     /// One of the conditions for the cache worker to recompress a cache file is to have usage
     /// count of the file exceeding this threshold.
-    pub fn optimized_compression_usage_counter_threshold(&mut self, threshold: u64) -> &mut Self {
-        self.optimized_compression_usage_counter_threshold = Some(threshold);
+    pub fn with_optimized_compression_usage_counter_threshold(
+        &mut self,
+        threshold: u64,
+    ) -> &mut Self {
+        self.optimized_compression_usage_counter_threshold = threshold;
         self
     }
 
     /// When the cache worker is notified about a cache file being updated by the cache system and
     /// this interval has already passed since last cleaning up, the worker will attempt a new
     /// cleanup.
-    pub fn cleanup_interval(&mut self, interval: Duration) -> &mut Self {
-        self.cleanup_interval = Some(interval);
+    pub fn with_cleanup_interval(&mut self, interval: Duration) -> &mut Self {
+        self.cleanup_interval = interval;
         self
     }
 
@@ -747,8 +719,8 @@ impl CacheConfigBuilder {
     /// worker has started the task for this file within the last
     /// optimizing-compression-task-timeout interval. If some worker has started working on it,
     /// other workers are skipping this task.
-    pub fn optimizing_compression_task_timeout(&mut self, timeout: Duration) -> &mut Self {
-        self.optimizing_compression_task_timeout = Some(timeout);
+    pub fn with_optimizing_compression_task_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.optimizing_compression_task_timeout = timeout;
         self
     }
 
@@ -769,8 +741,8 @@ impl CacheConfigBuilder {
     /// limits are not reached, the cache files will not be deleted. Otherwise, they will be
     /// treated as the oldest files, so they might survive. If the user actually uses the cache
     /// file, the modification time will be updated.
-    pub fn allowed_clock_drift_for_files_from_future(&mut self, drift: Duration) -> &mut Self {
-        self.allowed_clock_drift_for_files_from_future = Some(drift);
+    pub fn with_allowed_clock_drift_for_files_from_future(&mut self, drift: Duration) -> &mut Self {
+        self.allowed_clock_drift_for_files_from_future = drift;
         self
     }
 
@@ -778,8 +750,8 @@ impl CacheConfigBuilder {
     ///
     /// This doesn't include files with metadata. To learn more, please refer to the cache system
     /// section.
-    pub fn file_count_soft_limit(&mut self, limit: u64) -> &mut Self {
-        self.file_count_soft_limit = Some(limit);
+    pub fn with_file_count_soft_limit(&mut self, limit: u64) -> &mut Self {
+        self.file_count_soft_limit = limit;
         self
     }
 
@@ -789,8 +761,8 @@ impl CacheConfigBuilder {
     /// section.
     ///
     /// *this is the file size, not the space physically occupied on the disk.
-    pub fn files_total_size_soft_limit(&mut self, limit: u64) -> &mut Self {
-        self.files_total_size_soft_limit = Some(limit);
+    pub fn with_files_total_size_soft_limit(&mut self, limit: u64) -> &mut Self {
+        self.files_total_size_soft_limit = limit;
         self
     }
 
@@ -800,8 +772,8 @@ impl CacheConfigBuilder {
     ///
     /// This doesn't include files with metadata. To learn more, please refer to the cache system
     /// section.
-    pub fn file_count_limit_percent_if_deleting(&mut self, percent: u8) -> &mut Self {
-        self.file_count_limit_percent_if_deleting = Some(percent);
+    pub fn with_file_count_limit_percent_if_deleting(&mut self, percent: u8) -> &mut Self {
+        self.file_count_limit_percent_if_deleting = percent;
         self
     }
 
@@ -811,12 +783,116 @@ impl CacheConfigBuilder {
     ///
     /// This doesn't include files with metadata. To learn more, please refer to the cache system
     /// section.
-    pub fn files_total_size_limit_percent_if_deleting(&mut self, percent: u8) -> &mut Self {
-        self.files_total_size_limit_percent_if_deleting = Some(percent);
+    pub fn with_files_total_size_limit_percent_if_deleting(&mut self, percent: u8) -> &mut Self {
+        self.files_total_size_limit_percent_if_deleting = percent;
         self
     }
 
-    pub fn build(self) -> Result<CacheConfig> {
+    /// validate values and fill in defaults
+    fn validate(&mut self) -> Result<()> {
+        self.validate_directory()?;
+        self.validate_worker_event_queue_size();
+        self.validate_baseline_compression_level()?;
+        self.validate_optimized_compression_level()?;
+        self.validate_file_count_limit_percent_if_deleting()?;
+        self.validate_files_total_size_limit_percent_if_deleting()?;
+        Ok(())
+    }
+
+    fn validate_directory(&mut self) -> Result<()> {
+        if self.directory.is_none() {
+            match project_dirs() {
+                Some(proj_dirs) => self.directory = Some(proj_dirs.cache_dir().to_path_buf()),
+                None => {
+                    bail!("Cache directory not specified and failed to get the default");
+                }
+            }
+        }
+
+        // On Windows, if we want long paths, we need '\\?\' prefix, but it doesn't work
+        // with relative paths. One way to get absolute path (the only one?) is to use
+        // fs::canonicalize, but it requires that given path exists. The extra advantage
+        // of this method is fact that the method prepends '\\?\' on Windows.
+        let cache_dir = self.directory.as_ref().unwrap();
+
+        if !cache_dir.is_absolute() {
+            bail!(
+                "Cache directory path has to be absolute, path: {}",
+                cache_dir.display(),
+            );
+        }
+
+        fs::create_dir_all(cache_dir).context(format!(
+            "failed to create cache directory: {}",
+            cache_dir.display()
+        ))?;
+        let canonical = fs::canonicalize(cache_dir).context(format!(
+            "failed to canonicalize cache directory: {}",
+            cache_dir.display()
+        ))?;
+        self.directory = Some(canonical);
+        Ok(())
+    }
+
+    fn validate_worker_event_queue_size(&self) {
+        if self.worker_event_queue_size < worker_event_queue_size_warning_threshold() {
+            warn!("Detected small worker event queue size. Some messages might be lost.");
+        }
+    }
+
+    fn validate_baseline_compression_level(&self) -> Result<()> {
+        if !ZSTD_COMPRESSION_LEVELS.contains(&self.baseline_compression_level) {
+            bail!(
+                "Invalid baseline compression level: {} not in {:#?}",
+                self.baseline_compression_level,
+                ZSTD_COMPRESSION_LEVELS
+            );
+        }
+        Ok(())
+    }
+
+    // assumption: baseline compression level has been verified
+    fn validate_optimized_compression_level(&self) -> Result<()> {
+        if !ZSTD_COMPRESSION_LEVELS.contains(&self.optimized_compression_level) {
+            bail!(
+                "Invalid optimized compression level: {} not in {:#?}",
+                self.optimized_compression_level,
+                ZSTD_COMPRESSION_LEVELS
+            );
+        }
+
+        if self.optimized_compression_level < self.baseline_compression_level {
+            bail!(
+                "Invalid optimized compression level is lower than baseline: {} < {}",
+                self.optimized_compression_level,
+                self.baseline_compression_level
+            );
+        }
+        Ok(())
+    }
+
+    fn validate_file_count_limit_percent_if_deleting(&self) -> Result<()> {
+        if self.file_count_limit_percent_if_deleting > 100 {
+            bail!(
+                "Invalid files count limit percent if deleting: {} not in range 0-100%",
+                self.file_count_limit_percent_if_deleting
+            );
+        }
+        Ok(())
+    }
+
+    fn validate_files_total_size_limit_percent_if_deleting(&self) -> Result<()> {
+        if self.files_total_size_limit_percent_if_deleting > 100 {
+            bail!(
+                "Invalid files total size limit percent if deleting: {} not in range 0-100%",
+                self.files_total_size_limit_percent_if_deleting
+            );
+        }
+        Ok(())
+    }
+
+    pub fn build(mut self) -> Result<CacheConfig> {
+        self.validate()?;
         let CacheConfigBuilder {
             directory,
             worker_event_queue_size,
@@ -848,7 +924,7 @@ impl CacheConfigBuilder {
             files_total_size_limit_percent_if_deleting,
         };
 
-        config.validate_or_default()?;
+        config.validate()?;
 
         Ok(config)
     }

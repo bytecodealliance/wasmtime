@@ -10,7 +10,7 @@ fn main() -> Result<()> {
 
     // Enable the compilation cache, using the default cache configuration
     // settings.
-    config.cache_config(Some(CacheConfig::from_file(None)?));
+    config.cache_config(Some(CacheConfig::from_file(None)?))?;
 
     // Enable Winch, Wasmtime's baseline compiler.
     config.strategy(Strategy::Winch);

@@ -1,3 +1,5 @@
+use crate::CacheConfigBuilder;
+
 use super::CacheConfig;
 use std::fs;
 use std::path::PathBuf;
@@ -527,7 +529,7 @@ fn test_builder_default() {
     fs::write(&cp, config_content).expect("Failed to write test config file");
     let expected_config = CacheConfig::from_file(Some(&cp)).unwrap();
 
-    let config = CacheConfig::builder()
+    let config = CacheConfigBuilder::new()
         .build()
         .expect("Failed to build CacheConfig");
 
@@ -580,20 +582,20 @@ fn test_builder_default() {
 fn test_builder_all_settings() {
     let (_td, cd, _cp) = test_prolog();
 
-    let mut builder = CacheConfig::builder();
+    let mut builder = CacheConfigBuilder::new();
     builder
-        .directory(&cd)
-        .worker_event_queue_size(0x10)
-        .baseline_compression_level(3)
-        .optimized_compression_level(20)
-        .optimized_compression_usage_counter_threshold(0x100)
-        .cleanup_interval(Duration::from_secs(60 * 60))
-        .optimizing_compression_task_timeout(Duration::from_secs(30 * 60))
-        .allowed_clock_drift_for_files_from_future(Duration::from_secs(60 * 60 * 24))
-        .file_count_soft_limit(0x10_000)
-        .files_total_size_soft_limit(512 * (1u64 << 20))
-        .file_count_limit_percent_if_deleting(70)
-        .files_total_size_limit_percent_if_deleting(70);
+        .with_directory(&cd)
+        .with_worker_event_queue_size(0x10)
+        .with_baseline_compression_level(3)
+        .with_optimized_compression_level(20)
+        .with_optimized_compression_usage_counter_threshold(0x100)
+        .with_cleanup_interval(Duration::from_secs(60 * 60))
+        .with_optimizing_compression_task_timeout(Duration::from_secs(30 * 60))
+        .with_allowed_clock_drift_for_files_from_future(Duration::from_secs(60 * 60 * 24))
+        .with_file_count_soft_limit(0x10_000)
+        .with_files_total_size_soft_limit(512 * (1u64 << 20))
+        .with_file_count_limit_percent_if_deleting(70)
+        .with_files_total_size_limit_percent_if_deleting(70);
     let conf = builder.build().expect("Failed to build config");
     check_conf(&conf, &cd);
 
