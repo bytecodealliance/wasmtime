@@ -455,6 +455,12 @@ impl CacheConfig {
     ///
     /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
     pub fn from_file(config_file: Option<&Path>) -> Result<Self> {
+        let mut config = Self::load_and_parse_file(config_file)?;
+        config.validate()?;
+        Ok(config)
+    }
+
+    fn load_and_parse_file(config_file: Option<&Path>) -> Result<Self> {
         // get config file path
         let (config_file, user_custom_file) = match config_file {
             Some(path) => (path.to_path_buf(), true),
