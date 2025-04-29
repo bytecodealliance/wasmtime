@@ -52,7 +52,7 @@ TEST(component, call_func) {
       wasmtime_component_instance_get_func(&instance, context, f, &func);
   EXPECT_TRUE(found);
 
-  const auto params = std::array<wasmtime_component_val_t, 2>{
+  auto params = std::array<wasmtime_component_val_t, 2>{
       wasmtime_component_val_t{
           .kind = WASMTIME_COMPONENT_U32,
           .of = {.u32 = 34},
