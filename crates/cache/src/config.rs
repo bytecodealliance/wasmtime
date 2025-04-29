@@ -37,6 +37,9 @@ macro_rules! generate_config_setting_getter {
 impl Cache {
     /// Builds a [`Cache`] from the configuration and spawns the cache worker.
     ///
+    /// If you want to load the cache configuration from a file, use [`CacheConfig::from_file`].
+    /// You can call [`CacheConfig::new`] for the default configuration.
+    ///
     /// # Errors
     /// Returns an error if the configuration is invalid.
     pub fn new(mut config: CacheConfig) -> Result<Self> {
@@ -46,6 +49,28 @@ impl Cache {
             config,
             state: Default::default(),
         })
+    }
+
+    /// Loads cache configuration specified at `path`.
+    ///
+    /// This method will read the file specified by `path` on the filesystem and
+    /// attempt to load cache configuration from it. This method can also fail
+    /// due to I/O errors, misconfiguration, syntax errors, etc. For expected
+    /// syntax in the configuration file see the [documentation online][docs].
+    ///
+    /// Passing in `None` loads cache configuration from the system default path.
+    /// This is located, for example, on Unix at `$HOME/.config/wasmtime/config.toml`
+    /// and is typically created with the `wasmtime config new` command.
+    ///
+    /// # Errors
+    ///
+    /// This method can fail due to any error that happens when loading the file
+    /// pointed to by `path` and attempting to load the cache configuration.
+    ///
+    /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
+    pub fn from_file(path: Option<&Path>) -> Result<Self> {
+        let config = CacheConfig::from_file(path)?;
+        Self::new(config)
     }
 
     generate_config_setting_getter!(worker_event_queue_size: u64);

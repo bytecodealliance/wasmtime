@@ -1369,10 +1369,10 @@ impl Config {
         self
     }
 
-    /// Set a custom cache configuration.
+    /// Set a custom [`Cache`].
     ///
-    /// If you want to load the cache configuration from a file, use [`CacheConfig::from_file`].
-    /// You can call [`CacheConfig::from_file(None)`] for the default, enabled configuration.
+    /// To load a cache from a file, use [`Cache::from_file`]. Otherwise, you can create a new
+    /// cache config using [`CacheConfig::new`] and passing that to [`Cache::new`].
     ///
     /// If you want to disable the cache, you can call this method with `None`.
     ///
@@ -1385,13 +1385,9 @@ impl Config {
     ///
     /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
     #[cfg(feature = "cache")]
-    pub fn cache_config(&mut self, cache_config: Option<CacheConfig>) -> Result<&mut Self> {
-        self.cache = if let Some(cache_config) = cache_config {
-            Some(Cache::new(cache_config)?)
-        } else {
-            None
-        };
-        Ok(self)
+    pub fn cache(&mut self, cache: Option<Cache>) -> &mut Self {
+        self.cache = cache;
+        self
     }
 
     /// Sets a custom memory creator.

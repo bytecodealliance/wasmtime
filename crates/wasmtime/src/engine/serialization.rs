@@ -446,7 +446,7 @@ impl Metadata<'_> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{CacheConfig, Config, Module, OptLevel};
+    use crate::{Cache, Config, Module, OptLevel};
     use std::{
         collections::hash_map::DefaultHasher,
         hash::{Hash, Hasher},
@@ -663,7 +663,7 @@ Caused by:
         )?;
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::None)
-            .cache_config(Some(CacheConfig::from_file(Some(&config_path))?))?;
+            .cache(Some(Cache::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
         Module::new(&engine, "(module (func))")?;
         let cache_config = engine
@@ -679,7 +679,7 @@ Caused by:
 
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::Speed)
-            .cache_config(Some(CacheConfig::from_file(Some(&config_path))?))?;
+            .cache(Some(Cache::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
         let cache_config = engine
             .config()
@@ -695,7 +695,7 @@ Caused by:
 
         let mut cfg = Config::new();
         cfg.cranelift_opt_level(OptLevel::SpeedAndSize)
-            .cache_config(Some(CacheConfig::from_file(Some(&config_path))?))?;
+            .cache(Some(Cache::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
         let cache_config = engine
             .config()
@@ -711,7 +711,7 @@ Caused by:
 
         let mut cfg = Config::new();
         cfg.debug_info(true)
-            .cache_config(Some(CacheConfig::from_file(Some(&config_path))?))?;
+            .cache(Some(Cache::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
         let cache_config = engine
             .config()
@@ -790,7 +790,7 @@ Caused by:
             ),
         )?;
         let mut cfg = Config::new();
-        cfg.cache_config(Some(CacheConfig::from_file(Some(&config_path))?))?;
+        cfg.cache(Some(Cache::from_file(Some(&config_path))?));
         let engine = Engine::new(&cfg)?;
         let cache_config = engine
             .config()

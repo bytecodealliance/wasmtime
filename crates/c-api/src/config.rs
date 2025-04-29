@@ -213,15 +213,16 @@ pub unsafe extern "C" fn wasmtime_config_cache_config_load(
 ) -> Option<Box<wasmtime_error_t>> {
     use std::path::Path;
 
-    use wasmtime::CacheConfig;
+    use wasmtime::Cache;
 
     handle_result(
         if filename.is_null() {
-            CacheConfig::from_file(None).map(|cfg| c.config.cache_config(Some(cfg)))
+            Cache::from_file(None).map(|cache| c.config.cache(Some(cache)))
         } else {
             match CStr::from_ptr(filename).to_str() {
-                Ok(s) => CacheConfig::from_file(Some(&Path::new(s)))
-                    .map(|cfg| c.config.cache_config(Some(cfg))),
+                Ok(s) => {
+                    Cache::from_file(Some(&Path::new(s))).map(|cache| c.config.cache(Some(cache)))
+                }
                 Err(e) => Err(e.into()),
             }
         },
