@@ -61,6 +61,10 @@ add_capi_test(tests FILES
 cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "../include" OUTPUT_VARIABLE header_root)
 file(GLOB_RECURSE cpp_headers "${header_root}/*.h*")
 foreach(header IN LISTS cpp_headers)
+  cmake_path(GET header EXTENSION header_extension)
+  if(header_extension STREQUAL ".h.in")
+    continue()
+  endif()
   cmake_path(GET header FILENAME header_filename)
   cmake_path(APPEND CMAKE_CURRENT_BINARY_DIR "header-test" "${header_filename}.cc"
     OUTPUT_VARIABLE test_filename)
