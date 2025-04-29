@@ -9,7 +9,11 @@ fn main() {
 
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");
     let out_dir = Path::new(&out_dir);
-    let built_files = [meta::generate_rust_assembler(out_dir, "assembler.rs")];
+    let built_files = [meta::generate_rust_assembler(
+        out_dir,
+        "OUT_DIR",
+        "assembler.rs",
+    )];
 
     // Generating this additional bit of Rust is necessary for listing the
     // generated files.

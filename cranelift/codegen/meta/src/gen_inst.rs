@@ -1210,12 +1210,12 @@ pub(crate) fn generate(
     gen_opcodes(all_inst, &mut fmt);
     fmt.empty_line();
     gen_type_constraints(all_inst, &mut fmt);
-    fmt.write(opcode_filename, out_dir)?;
+    fmt.write(opcode_filename, out_dir, "OUT_DIR")?;
 
     // Instruction builder.
     let mut fmt = Formatter::new(Language::Rust);
     gen_builder(all_inst, &formats, &mut fmt);
-    fmt.write(inst_builder_filename, out_dir)?;
+    fmt.write(inst_builder_filename, out_dir, "OUT_DIR")?;
 
     Ok(())
 }

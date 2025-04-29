@@ -106,7 +106,7 @@ fn generate_isle_for_assembler(
 ) -> Result<(), error::Error> {
     let mut fmt = Formatter::new(Language::Isle);
     gen_asm::generate_isle(&mut fmt, insts);
-    fmt.write("assembler.isle", isle_dir)
+    fmt.write("assembler.isle", isle_dir, "ISLE_DIR")
 }
 
 /// Generate a macro containing builder functions for the assembler's ISLE
@@ -118,7 +118,7 @@ fn generate_rust_macro_for_assembler(
 ) -> Result<(), error::Error> {
     let mut fmt = Formatter::new(Language::Rust);
     gen_asm::generate_rust_macro(&mut fmt, insts);
-    fmt.write("assembler-isle-macro.rs", out_dir)
+    fmt.write("assembler-isle-macro.rs", out_dir, "OUT_DIR")
 }
 
 /// Generates all the source files used in Cranelift from the meta-language.

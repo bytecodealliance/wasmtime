@@ -14,11 +14,11 @@ use std::path::{Path, PathBuf};
 /// # Panics
 ///
 /// This function panics if we cannot update the file.
-pub fn generate_rust_assembler<P: AsRef<Path>>(dir: P, file: &str) -> PathBuf {
+pub fn generate_rust_assembler<P: AsRef<Path>>(dir: P, dir_name: &str, file: &str) -> PathBuf {
     let out = dir.as_ref().join(file);
     eprintln!("Generating {}", out.display());
     let mut fmt = Formatter::new(Language::Rust);
     generate::rust_assembler(&mut fmt, &instructions::list());
-    fmt.write(file, dir.as_ref()).unwrap();
+    fmt.write(file, dir.as_ref(), dir_name).unwrap();
     out
 }

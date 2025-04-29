@@ -232,13 +232,23 @@ impl Formatter {
     }
 
     /// Write `self.lines` to a file.
+    ///
+    /// The `directory_name` should be a deterministic name for the `directory`
+    /// that can be used for logging. The goal here is to prevent
+    /// non-deterministic output which could trigger cache misses in build
+    /// systems.
     pub fn write(
         &self,
         filename: impl AsRef<std::path::Path>,
         directory: &std::path::Path,
+        directory_name: &str,
     ) -> Result<(), error::Error> {
         let path = directory.join(&filename);
-        eprintln!("Writing generated file: {}", path.display());
+        eprintln!(
+            "Writing generated file: {} in {}",
+            filename.as_ref().display(),
+            directory_name
+        );
         let mut f = fs::File::create(path)?;
 
         for l in self.lines.iter().map(|l| l.as_bytes()) {
