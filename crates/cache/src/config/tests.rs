@@ -464,7 +464,10 @@ fn test_builder_default() {
     fs::write(&cp, config_content).expect("Failed to write test config file");
     let expected_config = CacheConfig::from_file(Some(&cp)).unwrap();
 
-    let config = CacheConfig::new();
+    let mut config = CacheConfig::new();
+    config
+        .validate()
+        .expect("Failed to validate default config");
 
     assert_eq!(config.directory, expected_config.directory);
     assert_eq!(
