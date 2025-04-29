@@ -58,7 +58,7 @@ add_capi_test(tests FILES
 # compilations together. This binary doesn't actually run any tests itself but
 # it does test that all headers compile in isolation at least. Not perfect but
 # hopefully at least something.
-cmake_path(APPEND CMAKE_CURRENT_BINARY_DIR "../include" OUTPUT_VARIABLE header_root)
+cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "../include" OUTPUT_VARIABLE header_root)
 file(GLOB_RECURSE cpp_headers "${header_root}/*.h*")
 foreach(header IN LISTS cpp_headers)
   cmake_path(GET header FILENAME header_filename)
