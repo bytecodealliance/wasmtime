@@ -166,7 +166,7 @@ fn in_int_reg(ty: Type) -> bool {
 
 fn in_flt_reg(ty: Type) -> bool {
     match ty {
-        types::F32 | types::F64 => true,
+        types::F16 | types::F32 | types::F64 => true,
         _ => false,
     }
 }

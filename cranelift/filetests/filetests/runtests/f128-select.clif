@@ -1,9 +1,11 @@
 test interpret
 test run
 set enable_llvm_abi_extensions
+set enable_multi_ret_implicit_sret
 target x86_64
 target aarch64
 target riscv64
+target s390x
 
 function %select_icmp_i8_f128(i8, f128, f128) -> f128 {
 block0(v0: i8, v1: f128, v2: f128):

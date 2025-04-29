@@ -552,6 +552,11 @@
       (rn Reg)
       (rm Reg))
 
+    ;; Load floating-point constant, half-precision (16 bit).
+    (LoadFpuConst16
+      (rd WritableReg)
+      (const_data u16))
+
     ;; Load floating-point constant, single-precision (32 bit).
     (LoadFpuConst32
       (rd WritableReg)
@@ -2836,6 +2841,7 @@
 (rule (arg_store $I16 reg mem) (store16 reg mem))
 (rule (arg_store $I32 reg mem) (store32 reg mem))
 (rule (arg_store $I64 reg mem) (store64 reg mem))
+(rule (arg_store $F16 reg mem) (vec_store_lane $F16X8 reg mem 0))
 (rule (arg_store $F32 reg mem) (vec_store_lane $F32X4 reg mem 0))
 (rule (arg_store $F64 reg mem) (vec_store_lane $F64X2 reg mem 0))
 (rule -1 (arg_store (vr128_ty ty) reg mem) (vec_store reg mem))
@@ -2861,6 +2867,7 @@
 (rule 5 (abi_vec_elt_rev _ (gpr32_ty ty) reg) reg)
 (rule 4 (abi_vec_elt_rev _ (gpr64_ty ty) reg) reg)
 (rule 3 (abi_vec_elt_rev _ $I128 reg) reg)
+(rule 3 (abi_vec_elt_rev _ $F128 reg) reg)
 (rule 2 (abi_vec_elt_rev _ (ty_scalar_float ty) reg) reg)
 (rule 0 (abi_vec_elt_rev callee_lane_order _ reg)
       (if-let true (lane_order_equal callee_lane_order (lane_order)))
@@ -2925,7 +2932,7 @@
 (decl imm (Type u64) Reg)
 
 ;; 16-bit (or smaller) result type, any value
-(rule 7 (imm (fits_in_16 ty) n)
+(rule 7 (imm (fits_in_16 (ty_int ty)) n)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov32SImm16 dst (u64_as_i16 n)))))
         dst))
@@ -2984,6 +2991,13 @@
 (rule (insert_imm ty src (uimm32shifted_from_u64 n))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Insert64UImm32Shifted dst src n))))
+        dst))
+
+;; 16-bit floating-point type, any value.  Loaded from literal pool.
+;; TODO: use LZER to load 0.0
+(rule 8 (imm $F16 n)
+      (let ((dst WritableReg (temp_writable_reg $F16))
+            (_ Unit (emit (MInst.LoadFpuConst16 dst (u64_as_u16 n)))))
         dst))
 
 ;; 32-bit floating-point type, any value.  Loaded from literal pool.
@@ -3221,6 +3235,10 @@
 (rule 2 (cmov_reg_reg (gpr64_ty ty) cond reg_true reg_false)
       (let ((dst WritableReg (temp_writable_reg ty))
             (inst MInst (MInst.CMov64 dst cond reg_false reg_true)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg inst dst)))
+(rule 3 (cmov_reg_reg $F16 cond reg_true reg_false)
+      (let ((dst WritableReg (temp_writable_reg $F16))
+            (inst MInst (MInst.FpuCMov32 dst cond reg_false reg_true)))
         (ConsumesFlags.ConsumesFlagsReturnsReg inst dst)))
 (rule 3 (cmov_reg_reg $F32 cond reg_true reg_false)
       (let ((dst WritableReg (temp_writable_reg $F32))

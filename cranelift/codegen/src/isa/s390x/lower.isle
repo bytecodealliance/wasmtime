@@ -16,6 +16,12 @@
       (imm ty n))
 
 
+;;;; Rules for `f16const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (f16const (u16_from_ieee16 x)))
+      (imm $F16 x))
+
+
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (f32const (u32_from_ieee32 x)))
@@ -26,6 +32,12 @@
 
 (rule (lower (f64const (u64_from_ieee64 x)))
       (imm $F64 x))
+
+
+;;;; Rules for `f128const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (f128const (u128_from_constant x)))
+      (vec_imm $F128 (be_vec_const $F128 x)))
 
 
 ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1731,6 +1743,14 @@
 (rule (lower (has_type $I32 (bitcast _ x @ (value_type $F32))))
       (vec_extract_lane $F32X4 x 0 (zero_reg)))
 
+;; Reinterpret a 16-bit integer value as floating-point.
+(rule (lower (has_type $F16 (bitcast _ x @ (value_type $I16))))
+      (vec_insert_lane_undef $F16X8 x 0 (zero_reg)))
+
+;; Reinterpret a 16-bit floating-point value as integer.
+(rule (lower (has_type $I16 (bitcast _ x @ (value_type $F16))))
+      (vec_extract_lane $F16X8 x 0 (zero_reg)))
+
 ;; Bitcast between types residing in GPRs is a no-op.
 (rule 1 (lower (has_type (gpr32_ty _)
                          (bitcast _ x @ (value_type (gpr32_ty _)))))
@@ -2323,6 +2343,14 @@
 (rule -1 (lower (has_type $I64 (load flags @ (littleendian) addr offset)))
       (loadrev64 (lower_address flags addr offset)))
 
+;; Load 16-bit big-endian floating-point values (as vector lane).
+(rule (lower (has_type $F16 (load flags @ (bigendian) addr offset)))
+      (vec_load_lane_undef $F16X8 (lower_address flags addr offset) 0))
+
+;; Load 16-bit little-endian floating-point values (as vector lane).
+(rule -1 (lower (has_type $F16 (load flags @ (littleendian) addr offset)))
+      (vec_load_lane_little_undef $F16X8 (lower_address flags addr offset) 0))
+
 ;; Load 32-bit big-endian floating-point values (as vector lane).
 (rule (lower (has_type $F32 (load flags @ (bigendian) addr offset)))
       (vec_load_lane_undef $F32X4 (lower_address flags addr offset) 0))
@@ -2383,6 +2411,10 @@
 (rule -1 (vec_load_byte_rev $I128 flags addr offset)
       (vec_load_full_rev $I128 flags addr offset))
 
+;; Same for `f128`.
+(rule -1 (vec_load_byte_rev $F128 flags addr offset)
+      (vec_load_full_rev $F128 flags addr offset))
+
 ;; Element-wise byte-reversed 16x8-bit load is a direct load.
 (rule (vec_load_byte_rev ty @ (multi_lane 8 16) flags addr offset)
       (vec_load ty (lower_address flags addr offset)))
@@ -2417,6 +2449,10 @@
 ;; For 1x128-bit types, this is a direct load.
 (rule -1 (vec_load_elt_rev $I128 flags addr offset)
       (vec_load $I128 (lower_address flags addr offset)))
+
+;; Same for `f128`.
+(rule -1 (vec_load_elt_rev $F128 flags addr offset)
+      (vec_load $F128 (lower_address flags addr offset)))
 
 ;; Element-reversed 16x8-bit load is a full byte-reversed load.
 (rule (vec_load_elt_rev ty @ (multi_lane 8 16) flags addr offset)
@@ -2641,6 +2677,18 @@
 (rule (lower (store flags val @ (value_type $I64) addr offset))
       (side_effect (istore64_impl flags val addr offset)))
 
+;; Store 16-bit big-endian floating-point type (as vector lane).
+(rule -1 (lower (store flags @ (bigendian)
+                    val @ (value_type $F16) addr offset))
+      (side_effect (vec_store_lane $F16X8 val
+                                   (lower_address flags addr offset) 0)))
+
+;; Store 16-bit little-endian floating-point type (as vector lane).
+(rule (lower (store flags @ (littleendian)
+                    val @ (value_type $F16) addr offset))
+      (side_effect (vec_store_lane_little $F16X8 val
+                                          (lower_address flags addr offset) 0)))
+
 ;; Store 32-bit big-endian floating-point type (as vector lane).
 (rule -1 (lower (store flags @ (bigendian)
                     val @ (value_type $F32) addr offset))
@@ -2714,6 +2762,10 @@
 (rule -1 (vec_store_byte_rev $I128 val flags addr offset)
       (vec_store_full_rev $I128 val flags addr offset))
 
+;; Same for `f128`.
+(rule -1 (vec_store_byte_rev $F128 val flags addr offset)
+      (vec_store_full_rev $F128 val flags addr offset))
+
 ;; Element-wise byte-reversed 16x8-bit store is a direct store.
 (rule (vec_store_byte_rev (multi_lane 8 16) val flags addr offset)
       (vec_store val (lower_address flags addr offset)))
@@ -2746,6 +2798,10 @@
 
 ;; Element-reversed 1x128-bit store is a direct store.
 (rule -1 (vec_store_elt_rev $I128 val flags addr offset)
+      (vec_store val (lower_address flags addr offset)))
+
+;; Same for `f128`.
+(rule -1 (vec_store_elt_rev $F128 val flags addr offset)
       (vec_store val (lower_address flags addr offset)))
 
 ;; Element-reversed 16x8-bit store is a full byte-reversed store.

@@ -5,6 +5,7 @@ set enable_multi_ret_implicit_sret
 target x86_64
 target aarch64
 target riscv64
+target s390x
 
 ;; These values are special for RISC-V since it has a dedicated
 ;; instruction to generate them.

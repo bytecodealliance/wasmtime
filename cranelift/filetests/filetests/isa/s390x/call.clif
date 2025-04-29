@@ -392,3 +392,85 @@ block0:
 ;   brasl %r14, 0xe ; reloc_external PLTRel32Dbl %g 2
 ;   .byte 0x00, 0x00 ; trap: user1
 
+function %second_f16(f16, f16) -> f16 {
+block0(v0: f16, v1: f16):
+    return v1
+}
+
+; VCode:
+; block0:
+;   vlr %v0, %v2
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vlr %v0, %v2
+;   br %r14
+
+function %second_f128(f128, f128) -> f128 {
+block0(v0: f128, v1: f128):
+    return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r4)
+;   vst %v1, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r4)
+;   vst %v1, 0(%r2)
+;   br %r14
+
+function %call_f128(f128) -> f128 {
+    fn0 = %g(f128) -> f128
+
+block0(v0: f128):
+    v1 = call fn0(v0)
+    return v1
+}
+
+; VCode:
+;   stmg %r6, %r15, 48(%r15)
+;   aghi %r15, -208
+; block0:
+;   lgr %r6, %r2
+;   vl %v1, 0(%r3)
+;   vst %v1, 160(%r15)
+;   la %r3, 160(%r15)
+;   la %r2, 176(%r15)
+;   bras %r1, 12 ; data %g + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4 ; vl %v1, 176(%r15) ; vst %v1, 192(%r15)
+;   lgr %r2, %r6
+;   vl %v19, 192(%r15)
+;   vst %v19, 0(%r2)
+;   lmg %r6, %r15, 256(%r15)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stmg %r6, %r15, 0x30(%r15)
+;   aghi %r15, -0xd0
+; block1: ; offset 0xa
+;   lgr %r6, %r2
+;   vl %v1, 0(%r3)
+;   vst %v1, 0xa0(%r15)
+;   la %r3, 0xa0(%r15)
+;   la %r2, 0xb0(%r15)
+;   bras %r1, 0x2e
+;   .byte 0x00, 0x00 ; reloc_external Abs8 %g 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   lg %r4, 0(%r1)
+;   basr %r14, %r4
+;   vl %v1, 0xb0(%r15)
+;   vst %v1, 0xc0(%r15)
+;   lgr %r2, %r6
+;   vl %v19, 0xc0(%r15)
+;   vst %v19, 0(%r2)
+;   lmg %r6, %r15, 0x100(%r15)
+;   br %r14
+

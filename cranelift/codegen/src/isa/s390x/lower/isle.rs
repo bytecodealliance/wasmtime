@@ -342,7 +342,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn vr128_ty(&mut self, ty: Type) -> Option<Type> {
         match ty {
-            I128 => Some(ty),
+            I128 | F128 => Some(ty),
             _ if ty.is_vector() && ty.bits() == 128 => Some(ty),
             _ => None,
         }
@@ -496,6 +496,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     fn be_vec_const(&mut self, ty: Type, n: u128) -> u128 {
         match self.lane_order() {
             LaneOrder::LittleEndian => n,
+            LaneOrder::BigEndian if ty.lane_count() == 1 => n,
             LaneOrder::BigEndian => {
                 let lane_count = ty.lane_count();
                 let lane_bits = ty.lane_bits();

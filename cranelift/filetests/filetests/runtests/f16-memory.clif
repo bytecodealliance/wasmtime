@@ -2,7 +2,11 @@ test interpret
 test run
 set enable_llvm_abi_extensions
 target x86_64
-target riscv64 has_zfhmin has_zfh
+target aarch64
+target aarch64 has_fp16
+target riscv64
+target riscv64 has_zfhmin
+target s390x
 
 function %f16_load(i16) -> f16 {
     ss0 = explicit_slot 4

@@ -12,6 +12,7 @@ target riscv64 has_zfa
 target riscv64 has_zfhmin has_zfa
 target riscv64 has_zfhmin has_zfh has_zfa
 target riscv64 has_zfhmin has_zvfh has_zfa
+target s390x
 
 
 ;; These values are special for RISC-V since it has a dedicated
