@@ -12,6 +12,7 @@ use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::slice;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
@@ -607,9 +608,11 @@ impl Inst {
             }
             RegClass::Float => {
                 let opcode = match ty {
-                    types::F16 => panic!("loading a f16 requires multiple instructions"),
-                    types::F32 => SseOpcode::Movss,
-                    types::F64 => SseOpcode::Movsd,
+                    types::F16 | types::I8X2 => {
+                        panic!("loading a f16 or i8x2 requires multiple instructions")
+                    }
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 32 => SseOpcode::Movss,
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 64 => SseOpcode::Movsd,
                     types::F32X4 => SseOpcode::Movups,
                     types::F64X2 => SseOpcode::Movupd,
                     _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => SseOpcode::Movdqu,
@@ -628,9 +631,11 @@ impl Inst {
             RegClass::Int => Inst::mov_r_m(OperandSize::from_ty(ty), from_reg, to_addr),
             RegClass::Float => {
                 let opcode = match ty {
-                    types::F16 => panic!("storing a f16 requires multiple instructions"),
-                    types::F32 => SseOpcode::Movss,
-                    types::F64 => SseOpcode::Movsd,
+                    types::F16 | types::I8X2 => {
+                        panic!("storing a f16 or i8x2 requires multiple instructions")
+                    }
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 32 => SseOpcode::Movss,
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 64 => SseOpcode::Movsd,
                     types::F32X4 => SseOpcode::Movups,
                     types::F64X2 => SseOpcode::Movupd,
                     _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => SseOpcode::Movdqu,
@@ -2862,7 +2867,7 @@ impl MachInst for Inst {
                 let opcode = match ty {
                     types::F16 | types::F32 | types::F64 | types::F32X4 => SseOpcode::Movaps,
                     types::F64X2 => SseOpcode::Movapd,
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => SseOpcode::Movdqa,
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() <= 128 => SseOpcode::Movdqa,
                     _ => unimplemented!("unable to move type: {}", ty),
                 };
                 Inst::xmm_unary_rm_r(opcode, RegMem::reg(src_reg), dst_reg)
@@ -2886,9 +2891,12 @@ impl MachInst for Inst {
             types::F64 => Ok((&[RegClass::Float], &[types::F64])),
             types::F128 => Ok((&[RegClass::Float], &[types::F128])),
             types::I128 => Ok((&[RegClass::Int, RegClass::Int], &[types::I64, types::I64])),
-            _ if ty.is_vector() => {
-                assert!(ty.bits() <= 128);
-                Ok((&[RegClass::Float], &[types::I8X16]))
+            _ if ty.is_vector() && ty.bits() <= 128 => {
+                let types = &[types::I8X2, types::I8X4, types::I8X8, types::I8X16];
+                Ok((
+                    &[RegClass::Float],
+                    slice::from_ref(&types[ty.bytes().ilog2() as usize - 1]),
+                ))
             }
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {ty}"

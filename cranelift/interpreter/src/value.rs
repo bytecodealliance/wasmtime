@@ -354,14 +354,13 @@ impl DataValueExt for DataValue {
     }
 
     fn vector(v: [u8; 16], ty: Type) -> ValueResult<Self> {
-        assert!(ty.is_vector() && [8, 16].contains(&ty.bytes()));
-        if ty.bytes() == 16 {
-            Ok(DataValue::V128(v))
-        } else if ty.bytes() == 8 {
-            let v64: [u8; 8] = v[..8].try_into().unwrap();
-            Ok(DataValue::V64(v64))
-        } else {
-            unimplemented!()
+        assert!(ty.is_vector() && [2, 4, 8, 16].contains(&ty.bytes()));
+        match ty.bytes() {
+            16 => Ok(DataValue::V128(v)),
+            8 => Ok(DataValue::V64(v[..8].try_into().unwrap())),
+            4 => Ok(DataValue::V32(v[..4].try_into().unwrap())),
+            2 => Ok(DataValue::V16(v[..2].try_into().unwrap())),
+            _ => unreachable!(),
         }
     }
 
@@ -371,6 +370,16 @@ impl DataValueExt for DataValue {
             DataValue::V64(v) => {
                 let mut v128 = [0; 16];
                 v128[..8].clone_from_slice(&v);
+                Ok(v128)
+            }
+            DataValue::V32(v) => {
+                let mut v128 = [0; 16];
+                v128[..4].clone_from_slice(&v);
+                Ok(v128)
+            }
+            DataValue::V16(v) => {
+                let mut v128 = [0; 16];
+                v128[..2].clone_from_slice(&v);
                 Ok(v128)
             }
             _ => Err(ValueError::InvalidType(ValueTypeClass::Vector, self.ty())),
@@ -495,7 +504,7 @@ impl DataValueExt for DataValue {
             DataValue::F32(f) => Ok(f.is_zero()),
             DataValue::F64(f) => Ok(f.is_zero()),
             DataValue::F128(f) => Ok(f.is_zero()),
-            DataValue::V64(_) | DataValue::V128(_) => {
+            DataValue::V16(_) | DataValue::V32(_) | DataValue::V64(_) | DataValue::V128(_) => {
                 Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty()))
             }
         }

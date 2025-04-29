@@ -1421,7 +1421,7 @@ pub(crate) fn emit(
                 types::F32X4 => SseOpcode::Movaps,
                 types::F64X2 => SseOpcode::Movapd,
                 ty => {
-                    debug_assert!((ty.is_float() || ty.is_vector()) && ty.bytes() == 16);
+                    debug_assert!((ty.is_float() || ty.is_vector()) && ty.bytes() <= 16);
                     SseOpcode::Movdqa
                 }
             };

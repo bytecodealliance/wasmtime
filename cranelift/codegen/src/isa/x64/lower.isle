@@ -3029,19 +3029,17 @@
 ;; For `$F32` and `$F64` this is important--we only want to load 32 or 64 bits.
 ;; But for the 128-bit types, this is not strictly necessary for performance but
 ;; might help with clarity during disassembly.
-(rule (lower (has_type $F16 (load flags address offset)))
+(rule 4 (lower (has_type (is_xmm_type (ty_16 _)) (load flags address offset)))
       (x64_pinsrw (xmm_uninit_value) (to_amode flags address offset) 0))
-(rule (lower (has_type $F32 (load flags address offset)))
+(rule 3 (lower (has_type (is_xmm_type (ty_32 _)) (load flags address offset)))
       (x64_movss_load (to_amode flags address offset)))
-(rule (lower (has_type $F64 (load flags address offset)))
+(rule 2 (lower (has_type (is_xmm_type (ty_64 _)) (load flags address offset)))
       (x64_movsd_load (to_amode flags address offset)))
-(rule (lower (has_type $F128 (load flags address offset)))
-      (x64_movdqu_load (to_amode flags address offset)))
-(rule (lower (has_type $F32X4 (load flags address offset)))
+(rule 1 (lower (has_type $F32X4 (load flags address offset)))
       (x64_movups_load (to_amode flags address offset)))
-(rule (lower (has_type $F64X2 (load flags address offset)))
+(rule 1 (lower (has_type $F64X2 (load flags address offset)))
       (x64_movupd_load (to_amode flags address offset)))
-(rule -2 (lower (has_type (ty_vec128 ty) (load flags address offset)))
+(rule 0 (lower (has_type (is_xmm_type (ty_128 _)) (load flags address offset)))
       (x64_movdqu_load (to_amode flags address offset)))
 
 ;; We can load an I128 by doing two 64-bit loads.
@@ -3115,15 +3113,15 @@
        (x64_movimm_m ty (to_amode flags address offset) imm)))
 
 ;; F16 stores of values in XMM registers.
-(rule 0 (lower (store flags
-                    value @ (value_type $F16)
+(rule -2 (lower (store flags
+                    value @ (value_type (is_xmm_type (ty_16 _)))
                     address
                     offset))
       (side_effect
        (x64_movrm $I16 (to_amode flags address offset) (bitcast_xmm_to_gpr 16 value))))
 
-(rule 1 (lower (store flags
-                    value @ (value_type $F16)
+(rule -1 (lower (store flags
+                    value @ (value_type (is_xmm_type (ty_16 _)))
                     address
                     offset))
       (if-let true (use_sse41))
@@ -3131,28 +3129,20 @@
        (x64_pextrw_store (to_amode flags address offset) value 0)))
 
 ;; F32 stores of values in XMM registers.
-(rule 1 (lower (store flags
-                    value @ (value_type $F32)
+(rule -3 (lower (store flags
+                    value @ (value_type (is_xmm_type (ty_32 _)))
                     address
                     offset))
       (side_effect
        (x64_movss_store (to_amode flags address offset) value)))
 
 ;; F64 stores of values in XMM registers.
-(rule 1 (lower (store flags
-                    value @ (value_type $F64)
+(rule -4 (lower (store flags
+                    value @ (value_type (is_xmm_type (ty_64 _)))
                     address
                     offset))
       (side_effect
        (x64_movsd_store (to_amode flags address offset) value)))
-
-;; F128 stores of values in XMM registers.
-(rule 1 (lower (store flags
-                    value @ (value_type $F128)
-                    address
-                    offset))
-      (side_effect
-       (x64_movdqu_store (to_amode flags address offset) value)))
 
 ;; Stores of F32X4 vectors.
 (rule 1 (lower (store flags
@@ -3171,8 +3161,8 @@
        (x64_movupd_store (to_amode flags address offset) value)))
 
 ;; Stores of all other 128-bit vector types with integer lanes.
-(rule -1 (lower (store flags
-                    value @ (value_type (ty_vec128_int _))
+(rule -5 (lower (store flags
+                    value @ (value_type (is_xmm_type (ty_128 _)))
                     address
                     offset))
       (side_effect
