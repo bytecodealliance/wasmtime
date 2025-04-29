@@ -12,7 +12,9 @@
 #endif
 
 #ifndef __cpp_lib_span
+#include <cstddef>
 #include <limits>
+#include <type_traits>
 #endif
 
 namespace wasmtime {

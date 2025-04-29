@@ -10,6 +10,8 @@
 #include <wasm.h>
 #include <wasmtime/conf.h>
 #include <wasmtime/error.h>
+#include <wasmtime/module.h>
+#include <wasmtime/store.h>
 
 #ifdef WASMTIME_FEATURE_PROFILING
 

@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <string>
 #include <variant>
 #include <wasmtime/error.h>

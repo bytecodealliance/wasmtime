@@ -50,6 +50,34 @@ add_capi_test(tests FILES
   linker.cc
 )
 
+# Create a list of all wasmtime headers with `GLOB_RECURSE`, then emit a file
+# into the current binary directory which tests that if the header is included
+# that the file compiles correctly.
+#
+# Gather everything into a list and then create a test which links all these
+# compilations together. This binary doesn't actually run any tests itself but
+# it does test that all headers compile in isolation at least. Not perfect but
+# hopefully at least something.
+cmake_path(APPEND CMAKE_CURRENT_SOURCE_DIR "../include" OUTPUT_VARIABLE header_root)
+file(GLOB_RECURSE cpp_headers "${header_root}/*.h*")
+foreach(header IN LISTS cpp_headers)
+  cmake_path(GET header EXTENSION header_extension)
+  if(header_extension STREQUAL ".h.in")
+    continue()
+  endif()
+  cmake_path(GET header FILENAME header_filename)
+  cmake_path(APPEND CMAKE_CURRENT_BINARY_DIR "header-test" "${header_filename}.cc"
+    OUTPUT_VARIABLE test_filename)
+  list(APPEND header_tests ${test_filename})
+
+  cmake_path(
+    RELATIVE_PATH header
+    BASE_DIRECTORY ${header_root}
+    OUTPUT_VARIABLE rel_header)
+  file(WRITE ${test_filename} "#include <${rel_header}>")
+endforeach()
+add_capi_test(standalone-headers FILES ${header_tests})
+
 # Add a custom test where two files include `wasmtime.hh` and are compiled into
 # the same executable (basically makes sure any defined functions in the header
 # are tagged with `inline`).
