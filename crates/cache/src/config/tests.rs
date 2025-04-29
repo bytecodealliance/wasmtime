@@ -1,5 +1,3 @@
-use crate::CacheConfigBuilder;
-
 use super::CacheConfig;
 use std::fs;
 use std::path::PathBuf;
@@ -36,18 +34,6 @@ macro_rules! bad_config {
     }};
 }
 
-// test without macros to test being disabled
-#[test]
-fn test_disabled() {
-    let dir = tempfile::tempdir().expect("Can't create temporary directory");
-    let config_path = dir.path().join("cache-config.toml");
-    let config_content = "[cache]\n\
-                          enabled = false\n";
-    fs::write(&config_path, config_content).expect("Failed to write test config file");
-    let conf = CacheConfig::from_file(Some(&config_path)).unwrap();
-    assert!(!conf.enabled());
-}
-
 #[test]
 fn test_unrecognized_settings() {
     let (_td, cd, cp) = test_prolog();
@@ -55,7 +41,6 @@ fn test_unrecognized_settings() {
         cp,
         "unrecognized-setting = 42\n\
          [cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'",
         cd
     );
@@ -63,7 +48,6 @@ fn test_unrecognized_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          unrecognized-setting = 42",
         cd
@@ -76,7 +60,6 @@ fn test_all_settings() {
     let conf = load_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          baseline-compression-level = 3\n\
@@ -97,7 +80,6 @@ fn test_all_settings() {
         cp,
         // added some white spaces
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size  = ' 16\t'\n\
          baseline-compression-level = 3\n\
@@ -115,7 +97,6 @@ fn test_all_settings() {
     check_conf(&conf, &cd);
 
     fn check_conf(conf: &CacheConfig, cd: &PathBuf) {
-        assert!(conf.enabled());
         assert_eq!(
             conf.directory(),
             &fs::canonicalize(cd).expect("canonicalize failed")
@@ -146,20 +127,17 @@ fn test_compression_level_settings() {
     let conf = load_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          baseline-compression-level = 1\n\
          optimized-compression-level = 21",
         cd
     );
-    assert!(conf.enabled());
     assert_eq!(conf.baseline_compression_level(), 1);
     assert_eq!(conf.optimized_compression_level(), 21);
 
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          baseline-compression-level = -1\n\
          optimized-compression-level = 21",
@@ -169,7 +147,6 @@ fn test_compression_level_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          baseline-compression-level = 15\n\
          optimized-compression-level = 10",
@@ -183,14 +160,12 @@ fn test_si_prefix_settings() {
     let conf = load_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size = '42'\n\
          optimized-compression-usage-counter-threshold = '4K'\n\
          file-count-soft-limit = '3M'",
         cd
     );
-    assert!(conf.enabled());
     assert_eq!(conf.worker_event_queue_size(), 42);
     assert_eq!(conf.optimized_compression_usage_counter_threshold(), 4_000);
     assert_eq!(conf.file_count_soft_limit(), 3_000_000);
@@ -198,14 +173,12 @@ fn test_si_prefix_settings() {
     let conf = load_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size = '2K'\n\
          optimized-compression-usage-counter-threshold = '4444T'\n\
          file-count-soft-limit = '1P'",
         cd
     );
-    assert!(conf.enabled());
     assert_eq!(conf.worker_event_queue_size(), 2_000);
     assert_eq!(
         conf.optimized_compression_usage_counter_threshold(),
@@ -217,7 +190,6 @@ fn test_si_prefix_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size = '2g'",
         cd
@@ -226,7 +198,6 @@ fn test_si_prefix_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          file-count-soft-limit = 1",
         cd
@@ -235,7 +206,6 @@ fn test_si_prefix_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          file-count-soft-limit = '-31337'",
         cd
@@ -244,7 +214,6 @@ fn test_si_prefix_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          file-count-soft-limit = '3.14M'",
         cd
@@ -257,74 +226,61 @@ fn test_disk_space_settings() {
     let conf = load_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '76'",
         cd
     );
-    assert!(conf.enabled());
     assert_eq!(conf.files_total_size_soft_limit(), 76);
 
     let conf = load_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '42 Mi'",
         cd
     );
-    assert!(conf.enabled());
     assert_eq!(conf.files_total_size_soft_limit(), 42 * (1u64 << 20));
 
     let conf = load_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '2 Gi'",
         cd
     );
-    assert!(conf.enabled());
     assert_eq!(conf.files_total_size_soft_limit(), 2 * (1u64 << 30));
 
     let conf = load_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '31337 Ti'",
         cd
     );
-    assert!(conf.enabled());
     assert_eq!(conf.files_total_size_soft_limit(), 31337 * (1u64 << 40));
 
     let conf = load_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '7 Pi'",
         cd
     );
-    assert!(conf.enabled());
     assert_eq!(conf.files_total_size_soft_limit(), 7 * (1u64 << 50));
 
     let conf = load_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '7M'",
         cd
     );
-    assert!(conf.enabled());
     assert_eq!(conf.files_total_size_soft_limit(), 7_000_000);
 
     // different errors
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '7 mi'",
         cd
@@ -333,7 +289,6 @@ fn test_disk_space_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-soft-limit = 1",
         cd
@@ -342,7 +297,6 @@ fn test_disk_space_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '-31337'",
         cd
@@ -351,7 +305,6 @@ fn test_disk_space_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-soft-limit = '3.14Ki'",
         cd
@@ -364,14 +317,12 @@ fn test_duration_settings() {
     let conf = load_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          cleanup-interval = '100s'\n\
          optimizing-compression-task-timeout = '3m'\n\
          allowed-clock-drift-for-files-from-future = '4h'",
         cd
     );
-    assert!(conf.enabled());
     assert_eq!(conf.cleanup_interval(), Duration::from_secs(100));
     assert_eq!(
         conf.optimizing_compression_task_timeout(),
@@ -385,13 +336,11 @@ fn test_duration_settings() {
     let conf = load_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          cleanup-interval = '2d'\n\
          optimizing-compression-task-timeout = '333 m'",
         cd
     );
-    assert!(conf.enabled());
     assert_eq!(
         conf.cleanup_interval(),
         Duration::from_secs(2 * 24 * 60 * 60)
@@ -405,7 +354,6 @@ fn test_duration_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          optimizing-compression-task-timeout = '333'",
         cd
@@ -414,7 +362,6 @@ fn test_duration_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          optimizing-compression-task-timeout = 333",
         cd
@@ -423,7 +370,6 @@ fn test_duration_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          optimizing-compression-task-timeout = '10 M'",
         cd
@@ -432,7 +378,6 @@ fn test_duration_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          optimizing-compression-task-timeout = '10 min'",
         cd
@@ -441,7 +386,6 @@ fn test_duration_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          optimizing-compression-task-timeout = '-10s'",
         cd
@@ -450,7 +394,6 @@ fn test_duration_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          optimizing-compression-task-timeout = '1.5m'",
         cd
@@ -463,13 +406,11 @@ fn test_percent_settings() {
     let conf = load_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          file-count-limit-percent-if-deleting = '62%'\n\
          files-total-size-limit-percent-if-deleting = '23 %'",
         cd
     );
-    assert!(conf.enabled());
     assert_eq!(conf.file_count_limit_percent_if_deleting(), 62);
     assert_eq!(conf.files_total_size_limit_percent_if_deleting(), 23);
 
@@ -477,7 +418,6 @@ fn test_percent_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-limit-percent-if-deleting = '23'",
         cd
@@ -486,7 +426,6 @@ fn test_percent_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-limit-percent-if-deleting = '22.5%'",
         cd
@@ -495,7 +434,6 @@ fn test_percent_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-limit-percent-if-deleting = '0.5'",
         cd
@@ -504,7 +442,6 @@ fn test_percent_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-limit-percent-if-deleting = '-1%'",
         cd
@@ -513,7 +450,6 @@ fn test_percent_settings() {
     bad_config!(
         cp,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          files-total-size-limit-percent-if-deleting = '101%'",
         cd
@@ -524,16 +460,12 @@ fn test_percent_settings() {
 #[test]
 fn test_builder_default() {
     let (_td, _cd, cp) = test_prolog();
-    let config_content = "[cache]\n\
-                          enabled = true\n";
+    let config_content = "[cache]\n";
     fs::write(&cp, config_content).expect("Failed to write test config file");
     let expected_config = CacheConfig::from_file(Some(&cp)).unwrap();
 
-    let config = CacheConfigBuilder::new()
-        .build()
-        .expect("Failed to build CacheConfig");
+    let config = CacheConfig::new();
 
-    assert_eq!(config.enabled, expected_config.enabled);
     assert_eq!(config.directory, expected_config.directory);
     assert_eq!(
         config.worker_event_queue_size,
@@ -582,9 +514,8 @@ fn test_builder_default() {
 fn test_builder_all_settings() {
     let (_td, cd, _cp) = test_prolog();
 
-    let mut builder = CacheConfigBuilder::new();
-    builder
-        .with_directory(&cd)
+    let mut conf = CacheConfig::new();
+    conf.with_directory(&cd)
         .with_worker_event_queue_size(0x10)
         .with_baseline_compression_level(3)
         .with_optimized_compression_level(20)
@@ -596,11 +527,10 @@ fn test_builder_all_settings() {
         .with_files_total_size_soft_limit(512 * (1u64 << 20))
         .with_file_count_limit_percent_if_deleting(70)
         .with_files_total_size_limit_percent_if_deleting(70);
-    let conf = builder.build().expect("Failed to build config");
+    conf.validate().expect("validation failed");
     check_conf(&conf, &cd);
 
     fn check_conf(conf: &CacheConfig, cd: &PathBuf) {
-        assert!(conf.enabled());
         assert_eq!(
             conf.directory(),
             &fs::canonicalize(cd).expect("canonicalize failed")

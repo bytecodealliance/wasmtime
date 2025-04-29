@@ -656,7 +656,6 @@ Caused by:
             &format!(
                 "
                     [cache]
-                    enabled = true
                     directory = '{}'
                 ",
                 td.path().join("cache").display()
@@ -785,7 +784,6 @@ Caused by:
             &format!(
                 "
                     [cache]
-                    enabled = true
                     directory = '{}'
                 ",
                 td.path().join("cache").display()

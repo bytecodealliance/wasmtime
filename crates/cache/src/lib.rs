@@ -12,7 +12,7 @@ use std::{fs, io};
 mod config;
 mod worker;
 
-pub use config::{create_new_config, Cache, CacheConfig, CacheConfigBuilder};
+pub use config::{create_new_config, Cache, CacheConfig};
 use worker::Worker;
 
 /// Module level cache entry.

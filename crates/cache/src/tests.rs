@@ -13,7 +13,6 @@ fn test_cache_init() {
     let baseline_compression_level = 4;
     let config_content = format!(
         "[cache]\n\
-         enabled = true\n\
          directory = '{}'\n\
          baseline-compression-level = {}\n",
         cache_dir.display(),
@@ -21,10 +20,8 @@ fn test_cache_init() {
     );
     fs::write(&config_path, config_content).expect("Failed to write test config file");
 
-    let mut cache_config = CacheConfig::from_file(Some(&config_path)).unwrap();
+    let cache_config = CacheConfig::from_file(Some(&config_path)).unwrap();
 
-    // test if we can use config
-    assert!(cache_config.enabled());
     // assumption: config init creates cache directory and returns canonicalized path
     assert_eq!(
         *cache_config.directory(),
@@ -36,8 +33,7 @@ fn test_cache_init() {
     );
 
     // test if we can use worker
-    cache_config
-        .spawn()
+    Cache::new(cache_config)
         .unwrap()
         .worker()
         .on_cache_update_async(config_path);
@@ -46,16 +42,14 @@ fn test_cache_init() {
 #[test]
 fn test_write_read_cache() {
     let (_tempdir, cache_dir, config_path) = test_prolog();
-    let mut cache_config = load_config!(
+    let cache_config = load_config!(
         config_path,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          baseline-compression-level = 3\n",
         cache_dir
     );
-    assert!(cache_config.enabled());
-    let cache = cache_config.spawn().unwrap();
+    let cache = Cache::new(cache_config.clone()).unwrap();
 
     // assumption: config load creates cache directory and returns canonicalized path
     assert_eq!(

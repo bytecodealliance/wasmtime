@@ -18,7 +18,6 @@ Wasmtime assumes all the options are in the `cache` section.
 Example config:
 ```toml
 [cache]
-enabled = true
 directory = "/nfs-share/wasmtime-cache/"
 cleanup-interval = "30m"
 files-total-size-soft-limit = "1Gi"

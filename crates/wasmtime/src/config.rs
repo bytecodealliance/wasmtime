@@ -27,7 +27,7 @@ use wasmtime_fiber::RuntimeFiberStackCreator;
 #[cfg(feature = "runtime")]
 pub use crate::runtime::code_memory::CustomCodeMemory;
 #[cfg(feature = "cache")]
-pub use wasmtime_cache::{Cache, CacheConfig, CacheConfigBuilder};
+pub use wasmtime_cache::{Cache, CacheConfig};
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
 
@@ -1386,8 +1386,8 @@ impl Config {
     /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
     #[cfg(feature = "cache")]
     pub fn cache_config(&mut self, cache_config: Option<CacheConfig>) -> Result<&mut Self> {
-        self.cache = if let Some(mut cache_config) = cache_config {
-            Some(cache_config.spawn()?)
+        self.cache = if let Some(cache_config) = cache_config {
+            Some(Cache::new(cache_config)?)
         } else {
             None
         };
