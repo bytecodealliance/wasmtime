@@ -24,7 +24,7 @@
     <span> | </span>
     <a href="https://bytecodealliance.zulipchat.com/#narrow/stream/217126-wasmtime">Chat</a>
     <span> | </span>
-    <a href="https://github.com/bytecodealliance/wasmtime/blob/main/LICENSE/#https://img.shields.io/github/license/bytecodealliance/wasmtime">License</a>
+    <a href="https://github.com/bytecodealliance/wasmtime/blob/main/LICENSE">License</a>
   </h3>
 </div>
 
