@@ -1,5 +1,7 @@
 use wasmtime::component::Val;
 
+use crate::wasm_name_t;
+
 #[repr(C, u8)]
 pub enum wasmtime_component_val_t {
     Bool(bool),
@@ -13,6 +15,8 @@ pub enum wasmtime_component_val_t {
     U64(u64),
     F32(f32),
     F64(f64),
+    Char(char),
+    String(wasm_name_t),
 }
 
 impl From<&mut wasmtime_component_val_t> for Val {
@@ -29,6 +33,10 @@ impl From<&mut wasmtime_component_val_t> for Val {
             wasmtime_component_val_t::U64(x) => Val::U64(*x),
             wasmtime_component_val_t::F32(x) => Val::Float32(*x),
             wasmtime_component_val_t::F64(x) => Val::Float64(*x),
+            wasmtime_component_val_t::Char(x) => Val::Char(*x),
+            wasmtime_component_val_t::String(x) => {
+                Val::String(String::from_utf8(x.take()).unwrap())
+            }
         }
     }
 }
@@ -47,8 +55,8 @@ impl From<Val> for wasmtime_component_val_t {
             Val::U64(x) => wasmtime_component_val_t::U64(x),
             Val::Float32(x) => wasmtime_component_val_t::F32(x),
             Val::Float64(x) => wasmtime_component_val_t::F64(x),
-            Val::Char(_) => todo!(),
-            Val::String(_) => todo!(),
+            Val::Char(x) => wasmtime_component_val_t::Char(x),
+            Val::String(x) => wasmtime_component_val_t::String(wasm_name_t::from_name(x)),
             Val::List(_vals) => todo!(),
             Val::Record(_items) => todo!(),
             Val::Tuple(_vals) => todo!(),

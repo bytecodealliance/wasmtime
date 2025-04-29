@@ -22,6 +22,8 @@ typedef uint8_t wasmtime_component_valkind_t;
 #define WASMTIME_COMPONENT_U64 8
 #define WASMTIME_COMPONENT_F32 9
 #define WASMTIME_COMPONENT_F64 10
+#define WASMTIME_COMPONENT_CHAR 11
+#define WASMTIME_COMPONENT_STRING 12
 
 typedef union {
   bool boolean;
@@ -35,6 +37,8 @@ typedef union {
   uint64_t u64;
   float32_t f32;
   float64_t f64;
+  uint32_t character;
+  wasm_name_t string;
 } wasmtime_component_valunion_t;
 
 typedef struct {
