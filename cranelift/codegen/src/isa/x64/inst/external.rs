@@ -1,10 +1,10 @@
 //! Interface with the external assembler crate.
 
 use super::{
-    regs, Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor, OperandVisitorImpl,
-    SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm,
+    args::FromWritableReg, regs, Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor,
+    OperandVisitorImpl, SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm,
 };
-use crate::{ir::TrapCode, Reg};
+use crate::{ir::TrapCode, Reg, Writable};
 use cranelift_assembler_x64 as asm;
 use regalloc2::{PReg, RegClass};
 use std::string::String;
@@ -37,6 +37,52 @@ impl From<WritableGpr> for PairedGpr {
         let read = wgpr.to_reg();
         let write = wgpr;
         Self { read, write }
+    }
+}
+
+/// For ABI ergonomics.
+impl From<WritableGpr> for asm::Gpr<PairedGpr> {
+    fn from(wgpr: WritableGpr) -> Self {
+        asm::Gpr::new(wgpr.into())
+    }
+}
+
+// For ABI ergonomics.
+impl From<Writable<Reg>> for asm::GprMem<PairedGpr, Gpr> {
+    fn from(wgpr: Writable<Reg>) -> Self {
+        let wgpr = WritableGpr::from_writable_reg(wgpr).unwrap();
+        Self::Gpr(wgpr.into())
+    }
+}
+
+// For ABI ergonomics.
+impl From<Gpr> for asm::GprMem<Gpr, Gpr> {
+    fn from(gpr: Gpr) -> Self {
+        Self::Gpr(gpr)
+    }
+}
+
+// For ABI ergonomics.
+impl From<Reg> for asm::GprMem<Gpr, Gpr> {
+    fn from(gpr: Reg) -> Self {
+        let gpr = Gpr::unwrap_new(gpr);
+        Self::Gpr(gpr)
+    }
+}
+
+// For ABI ergonomics.
+impl From<Writable<Reg>> for asm::GprMem<Gpr, Gpr> {
+    fn from(wgpr: Writable<Reg>) -> Self {
+        let gpr = Gpr::unwrap_new(wgpr.to_reg());
+        Self::Gpr(gpr)
+    }
+}
+
+// For ABI ergonomics.
+impl From<Writable<Reg>> for asm::Gpr<PairedGpr> {
+    fn from(wgpr: Writable<Reg>) -> Self {
+        let wgpr = WritableGpr::from_writable_reg(wgpr).unwrap();
+        Self::new(wgpr.into())
     }
 }
 
