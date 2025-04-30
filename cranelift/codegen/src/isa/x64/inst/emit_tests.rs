@@ -4390,7 +4390,7 @@ fn test_x64_emit() {
             temp: w_r11,
             dst_old: w_rax,
         },
-        "490FB6014989C34D09D3F0450FB0190F85EFFFFFFF",
+        "490FB6014989C34D0BDAF0450FB0190F85EFFFFFFF",
         "atomically { 8_bits_at_[%r9] Or= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }",
     ));
     insns.push((
@@ -4402,7 +4402,7 @@ fn test_x64_emit() {
             temp: w_r11,
             dst_old: w_rax
         },
-        "490FB7014989C34D21D366F0450FB1190F85EEFFFFFF",
+        "490FB7014989C34D23DA66F0450FB1190F85EEFFFFFF",
         "atomically { 16_bits_at_[%r9] And= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
     ));
     insns.push((
@@ -4414,7 +4414,7 @@ fn test_x64_emit() {
             temp: w_r11,
             dst_old: w_rax
         },
-        "418B014989C34D21D349F7D3F0450FB1190F85ECFFFFFF",
+        "418B014989C34D23DA49F7D3F0450FB1190F85ECFFFFFF",
         "atomically { 32_bits_at_[%r9] Nand= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
     ));
     insns.push((
@@ -4454,7 +4454,7 @@ fn test_x64_emit() {
             dst_old_low: w_rax,
             dst_old_high: w_rdx,
         },
-        "498B01498B51084889C34889D14C09D34C09D9F0490FC7090F85E9FFFFFF",
+        "498B01498B51084889C34889D1490BDA490BCBF0490FC7090F85E9FFFFFF",
         "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax Or %r11:%r10; 0(%r9) = %rcx:%rbx }",
     ));
     insns.push((
@@ -4468,7 +4468,7 @@ fn test_x64_emit() {
             dst_old_low: w_rax,
             dst_old_high: w_rdx,
         },
-        "498B01498B51084889C34889D14C21D34C21D9F0490FC7090F85E9FFFFFF",
+        "498B01498B51084889C34889D14923DA4923CBF0490FC7090F85E9FFFFFF",
         "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax And %r11:%r10; 0(%r9) = %rcx:%rbx }"
     ));
     insns.push((
@@ -4482,7 +4482,7 @@ fn test_x64_emit() {
             dst_old_low: w_rax,
             dst_old_high: w_rdx,
         },
-        "498B01498B51084889C34889D14C39D34C19D94889D1490F43DA490F43CBF0490FC7090F85DEFFFFFF",
+        "498B01498B51084889C34889D14C39D3491BCB4889D1490F43DA490F43CBF0490FC7090F85DEFFFFFF",
         "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax Umin %r11:%r10; 0(%r9) = %rcx:%rbx }"
     ));
     insns.push((
@@ -4496,7 +4496,7 @@ fn test_x64_emit() {
             dst_old_low: w_rax,
             dst_old_high: w_rdx,
         },
-        "498B01498B51084889C34889D14C01D34C11D9F0490FC7090F85E9FFFFFF",
+        "498B01498B51084889C34889D14903DA4913CBF0490FC7090F85E9FFFFFF",
         "atomically { %rdx:%rax = 0(%r9); %rcx:%rbx = %rdx:%rax Add %r11:%r10; 0(%r9) = %rcx:%rbx }"
     ));
     insns.push((
