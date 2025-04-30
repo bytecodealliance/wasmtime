@@ -455,7 +455,7 @@
   (instance $i (instantiate $inner))
 
   ;; the rest of this component which is a single function that invokes `drop`
-  ;; for index 0. The index 0 should be valid within the above component, but
+  ;; for index 1. The index 1 should be valid within the above component, but
   ;; it is not valid within this component
   (alias export $i "r" (type $r))
   (core func $drop (canon resource.drop $r))
@@ -476,7 +476,7 @@
   (func (export "f") (canon lift (core func $i "f")))
 )
 
-(assert_trap (invoke "f") "unknown handle index")
+(assert_trap (invoke "f") "unknown handle index 1")
 
 ;; Each instantiation of a component generates a unique resource type, so
 ;; allocating in one component and deallocating in another should fail.
@@ -700,9 +700,10 @@
       (local.set $r1 (call $new1 (i32.const 100)))
       (local.set $r2 (call $new2 (i32.const 200)))
 
-      ;; both should be index 0
+      ;; indexes start at 1 and while they have distinct types they should be
+      ;; within the same table.
       (if (i32.ne (local.get $r1) (i32.const 1)) (then (unreachable)))
-      (if (i32.ne (local.get $r2) (i32.const 1)) (then (unreachable)))
+      (if (i32.ne (local.get $r2) (i32.const 2)) (then (unreachable)))
 
       ;; nothing should be dropped yet
       (if (i32.ne (call $drops) (i32.const 0)) (then (unreachable)))
@@ -1049,3 +1050,42 @@
 )
 
 (assert_return (invoke "f"))
+
+;; Test destructor behavior when using the wrong resource type
+(component definition $C
+  (type $r1 (resource (rep i32)))
+  (type $r2 (resource (rep i32)))
+
+  (core func $drop1 (canon resource.drop $r1))
+  (core func $drop2 (canon resource.drop $r2))
+  (core func $new1 (canon resource.new $r1))
+  (core func $new2 (canon resource.new $r2))
+
+  (core module $m2
+    (import "" "drop1" (func $drop1 (param i32)))
+    (import "" "drop2" (func $drop2 (param i32)))
+    (import "" "new1" (func $new1 (param i32) (result i32)))
+    (import "" "new2" (func $new2 (param i32) (result i32)))
+
+    (func (export "drop-r1-as-r2") (call $drop2 (call $new1 (i32.const 100))))
+    (func (export "return-r1-as-r2") (result i32) (call $new1 (i32.const 100)))
+  )
+
+  (core instance $i2 (instantiate $m2
+    (with "" (instance
+      (export "drop1" (func $drop1))
+      (export "drop2" (func $drop2))
+      (export "new1" (func $new1))
+      (export "new2" (func $new2))
+    ))
+  ))
+
+  (export $r2' "r2" (type $r2))
+  (func (export "drop-r1-as-r2") (canon lift (core func $i2 "drop-r1-as-r2")))
+  (func (export "return-r1-as-r2") (result (own $r2')) (canon lift (core func $i2 "return-r1-as-r2")))
+)
+
+(component instance $C1 $C)
+(assert_trap (invoke "drop-r1-as-r2") "handle index 1 used with the wrong type, expected guest-defined resource but found a different guest-defined resource")
+(component instance $C1 $C)
+(assert_trap (invoke "return-r1-as-r2") "handle index 1 used with the wrong type, expected guest-defined resource but found a different guest-defined resource")

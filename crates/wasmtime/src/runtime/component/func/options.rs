@@ -369,7 +369,7 @@ impl<'a, T> LowerContext<'a, T> {
                 calls,
                 // Note that the unsafety here should be valid given the contract of
                 // `LowerContext::new`.
-                tables: Some(unsafe { (*self.instance).component_resource_tables() }),
+                guest: Some(unsafe { (*self.instance).guest_tables() }),
             },
             host_resource_data,
         )
@@ -533,7 +533,7 @@ impl<'a> LiftContext<'a> {
                 calls: self.calls,
                 // Note that the unsafety here should be valid given the contract of
                 // `LiftContext::new`.
-                tables: Some(unsafe { (*self.instance).component_resource_tables() }),
+                guest: Some(unsafe { (*self.instance).guest_tables() }),
             },
             self.host_resource_data,
         )
