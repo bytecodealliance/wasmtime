@@ -209,7 +209,7 @@ impl Inst {
 // Handy constructors for Insts.
 
 macro_rules! lower_alu {
-    ($size: expr, $src: expr, $dst: expr => $b_mi: ident, $w_mi: ident, $l_mi:ident, $q_mi_sxl: ident, $b_rm: ident, $w_rm: ident, $l_rm: ident, $q_rm: ident) => {{
+    ($size: expr, $src: expr, $dst: expr => $b_mi: ident, $w_mi: ident, $l_mi:ident, $l_mi_sxb:ident, $q_mi_sxb: ident, $q_mi_sxl: ident, $b_rm: ident, $w_rm: ident, $l_rm: ident, $q_rm: ident) => {{
         use cranelift_assembler_x64 as asm;
         use external::CraneliftRegisters;
         use OperandSize::*;
@@ -243,12 +243,22 @@ macro_rules! lower_alu {
                         asm::inst::$w_mi::new(dst, src).into()
                     }
                     Size32 => {
-                        let src = asm::Imm32::new(simm32);
-                        asm::inst::$l_mi::new(dst, src).into()
+                        if let Ok(simm8) = i8::try_from(simm32) {
+                            let src = asm::Simm8::new(simm8);
+                            asm::inst::$l_mi_sxb::new(dst, src).into()
+                        } else {
+                            let src = asm::Imm32::new(simm32);
+                            asm::inst::$l_mi::new(dst, src).into()
+                        }
                     }
                     Size64 => {
-                        let src = asm::Simm32::new(simm32 as i32);
-                        asm::inst::$q_mi_sxl::new(dst, src).into()
+                        if let Ok(simm8) = i8::try_from(simm32) {
+                            let src = asm::Simm8::new(simm8);
+                            asm::inst::$q_mi_sxb::new(dst, src).into()
+                        } else {
+                            let src = asm::Simm32::new(simm32 as i32);
+                            asm::inst::$q_mi_sxl::new(dst, src).into()
+                        }
                     }
                 }
             }
@@ -266,31 +276,31 @@ impl Inst {
     }
 
     pub(crate) fn add(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
-        lower_alu!(size, src, dst => addb_mi, addw_mi, addl_mi, addq_mi_sxl, addb_rm, addw_rm, addl_rm, addq_rm)
+        lower_alu!(size, src, dst => addb_mi, addw_mi, addl_mi, addl_mi_sxb, addq_mi_sxb, addq_mi_sxl, addb_rm, addw_rm, addl_rm, addq_rm)
     }
 
     pub(crate) fn adc(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
-        lower_alu!(size, src, dst => adcb_mi, adcw_mi, adcl_mi, adcq_mi_sxl, addb_rm, addw_rm, adcl_rm, adcq_rm)
+        lower_alu!(size, src, dst => adcb_mi, adcw_mi, adcl_mi, adcl_mi_sxb, addq_mi_sxb, adcq_mi_sxl, addb_rm, addw_rm, adcl_rm, adcq_rm)
     }
 
     pub(crate) fn sub(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
-        lower_alu!(size, src, dst => subb_mi, subw_mi, subl_mi, subq_mi_sxl, subb_rm, subw_rm, subl_rm, subq_rm)
+        lower_alu!(size, src, dst => subb_mi, subw_mi, subl_mi, subl_mi_sxb, subq_mi_sxb, subq_mi_sxl, subb_rm, subw_rm, subl_rm, subq_rm)
     }
 
     pub(crate) fn sbb(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
-        lower_alu!(size, src, dst => sbbb_mi, sbbw_mi, sbbl_mi, sbbq_mi_sxl, sbbb_rm, sbbw_rm, sbbl_rm, sbbq_rm)
+        lower_alu!(size, src, dst => sbbb_mi, sbbw_mi, sbbl_mi, sbbl_mi_sxb, sbbq_mi_sxb, sbbq_mi_sxl, sbbb_rm, sbbw_rm, sbbl_rm, sbbq_rm)
     }
 
     pub(crate) fn and(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
-        lower_alu!(size, src, dst => andb_mi, andw_mi, andl_mi, andq_mi_sxl, andb_rm, andw_rm, andl_rm, andq_rm)
+        lower_alu!(size, src, dst => andb_mi, andw_mi, andl_mi, andl_mi_sxb, andq_mi_sxb, andq_mi_sxl, andb_rm, andw_rm, andl_rm, andq_rm)
     }
 
     pub(crate) fn or(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
-        lower_alu!(size, src, dst => orb_mi, orw_mi, orl_mi, orq_mi_sxl, orb_rm, orw_rm, orl_rm, orq_rm)
+        lower_alu!(size, src, dst => orb_mi, orw_mi, orl_mi, orl_mi_sxb, orq_mi_sxb, orq_mi_sxl, orb_rm, orw_rm, orl_rm, orq_rm)
     }
 
     pub(crate) fn xor(size: OperandSize, src: RegMemImm, dst: Writable<Reg>) -> Self {
-        lower_alu!(size, src, dst => xorb_mi, xorw_mi, xorl_mi, xorq_mi_sxl, xorb_rm, xorw_rm, xorl_rm, xorq_rm)
+        lower_alu!(size, src, dst => xorb_mi, xorw_mi, xorl_mi, xorl_mi_sxb, orq_mi_sxb, xorq_mi_sxl, xorb_rm, xorw_rm, xorl_rm, xorq_rm)
     }
 
     #[allow(dead_code)]
