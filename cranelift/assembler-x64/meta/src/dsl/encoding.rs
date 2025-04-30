@@ -34,13 +34,9 @@ pub fn rex(opcode: impl Into<Opcodes>) -> Rex {
 #[must_use]
 pub fn vex(opcode: impl Into<Opcodes>) -> Vex {
     Vex {
-        map: OpcodeMap::None,
         opcodes: opcode.into(),
         w: false,
         r: false,
-        digit: 0,
-        is4: false,
-        size_e: 0,
         wig: false,
         rxb: 0,
         length: VexLength::default(),
@@ -616,13 +612,9 @@ impl fmt::Display for Imm {
 }
 
 pub struct Vex {
-    pub map: OpcodeMap,
     pub opcodes: Opcodes,
     pub w: bool,
     pub r: bool,
-    pub digit: u8,
-    pub is4: bool,
-    pub size_e: u8,
     pub wig: bool,
     pub rxb: u8,
     pub length: VexLength,
@@ -638,9 +630,10 @@ pub enum VexPP {
     None,
     /// Operand size override -- here, denoting "16-bit operation".
     _66,
-    /// The lock prefix.
-    _F3,
+    /// REPNE, but no specific meaning here -- is just an opcode extension.
     _F2,
+    /// REP/REPE, but no specific meaning here -- is just an opcode extension.
+    _F3,
 }
 
 impl fmt::Display for VexPP {
@@ -693,35 +686,6 @@ impl VexLength {
 impl Default for VexLength {
     fn default() -> Self {
         Self::_128
-    }
-}
-
-/// Allows using the same opcode byte in different "opcode maps" to allow for more instruction
-/// encodings. See appendix A in the Intel Software Developer's Manual, volume 2A, for more details.
-#[derive(PartialEq)]
-pub enum OpcodeMap {
-    None,
-    _0F,
-    _0F38,
-    _0F3A,
-}
-
-impl OpcodeMap {
-    /// Normally the opcode map is specified as bytes in the instruction, but some x64 encoding
-    /// formats pack this information as bits in a prefix (e.g. VEX / EVEX).
-    pub fn bits(&self) -> u8 {
-        match self {
-            OpcodeMap::None => 0b00,
-            OpcodeMap::_0F => 0b01,
-            OpcodeMap::_0F38 => 0b10,
-            OpcodeMap::_0F3A => 0b11,
-        }
-    }
-}
-
-impl Default for OpcodeMap {
-    fn default() -> Self {
-        Self::None
     }
 }
 

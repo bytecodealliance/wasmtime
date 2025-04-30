@@ -9,7 +9,6 @@ rust-version.workspace = true
 [dependencies]
 arbitrary = { workspace = true, features = ["derive"], optional = true }
 capstone = { workspace = true, optional = true }
-cranelift-assembler-x64-meta = { path = "meta", version = "0.120.0" }
 
 [dev-dependencies]
 arbitrary = { workspace = true, features = ["derive"] }
