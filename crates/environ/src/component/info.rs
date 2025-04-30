@@ -166,10 +166,6 @@ pub struct Component {
     /// instantiate this component.
     pub num_lowerings: u32,
 
-    /// Maximal number of tables required at runtime for resource-related
-    /// information in this component.
-    pub num_resource_tables: usize,
-
     /// Total number of resources both imported and defined within this
     /// component.
     pub num_resources: u32,

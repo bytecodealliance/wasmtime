@@ -120,11 +120,6 @@ pub struct ComponentDfg {
     /// with what the corresponding runtime import is.
     pub imported_resources: PrimaryMap<ResourceIndex, RuntimeImportIndex>,
 
-    /// The total number of resource tables that will be used by this component,
-    /// currently the number of unique `TypeResourceTableIndex` allocations for
-    /// this component.
-    pub num_resource_tables: usize,
-
     /// The total number of future tables that will be used by this component.
     pub num_future_tables: usize,
 
@@ -544,7 +539,6 @@ impl ComponentDfg {
                 imports: self.imports,
                 import_types: self.import_types,
                 num_runtime_component_instances: self.num_runtime_component_instances,
-                num_resource_tables: self.num_resource_tables,
                 num_future_tables: self.num_future_tables,
                 num_stream_tables: self.num_stream_tables,
                 num_error_context_tables: self.num_error_context_tables,

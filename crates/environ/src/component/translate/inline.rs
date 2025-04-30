@@ -134,7 +134,6 @@ pub(super) fn run(
         inliner.record_export(name, def, types, &mut export_map)?;
     }
     inliner.result.exports = export_map;
-    inliner.result.num_resource_tables = types.num_resource_tables();
     inliner.result.num_future_tables = types.num_future_tables();
     inliner.result.num_stream_tables = types.num_stream_tables();
     inliner.result.num_error_context_tables = types.num_error_context_tables();
