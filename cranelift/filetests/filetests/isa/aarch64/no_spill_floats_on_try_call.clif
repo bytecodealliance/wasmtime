@@ -1,0 +1,69 @@
+test compile precise-output
+target aarch64
+
+function u0:0() system_v {
+    sig0 = () system_v
+    fn0 = colocated u0:1 sig0
+
+block0:
+    try_call fn0(), sig0, block1, []
+
+block1:
+    return
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   bl 0; b MachLabel(1); catch []
+; block1:
+;   ldp fp, lr, [sp], #16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   bl #8 ; reloc_external Call u0:1 0
+; block2: ; offset 0xc
+;   ldp x29, x30, [sp], #0x10
+;   ret
+
+function u0:1() system_v {
+    sig0 = () system_v
+    fn0 = colocated u0:1 sig0
+
+block0:
+    try_call fn0(), sig0, block1, [ tag0: block2(exn0) ]
+
+block1:
+    return
+
+block2(v0: i64):
+    trap user1
+}
+
+; VCode:
+;   stp fp, lr, [sp, #-16]!
+;   mov fp, sp
+; block0:
+;   bl 0; b MachLabel(1); catch [Some(tag0): MachLabel(2)]
+; block1:
+;   ldp fp, lr, [sp], #16
+;   ret
+; block2:
+;   udf #0xc11f
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   stp x29, x30, [sp, #-0x10]!
+;   mov x29, sp
+; block1: ; offset 0x8
+;   bl #8 ; reloc_external Call u0:1 0
+; block2: ; offset 0xc
+;   ldp x29, x30, [sp], #0x10
+;   ret
+; block3: ; offset 0x14
+;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: user1

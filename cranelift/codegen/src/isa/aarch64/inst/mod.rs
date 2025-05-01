@@ -950,12 +950,18 @@ impl MachInst for Inst {
     }
 
     fn is_included_in_clobbers(&self) -> bool {
-        let (caller, callee) = match self {
+        let (caller, callee, is_exception) = match self {
             Inst::Args { .. } => return false,
-            Inst::Call { info } if info.try_call_info.is_some() => return true,
-            Inst::CallInd { info } if info.try_call_info.is_some() => return true,
-            Inst::Call { info } => (info.caller_conv, info.callee_conv),
-            Inst::CallInd { info } => (info.caller_conv, info.callee_conv),
+            Inst::Call { info } => (
+                info.caller_conv,
+                info.callee_conv,
+                info.try_call_info.is_some(),
+            ),
+            Inst::CallInd { info } => (
+                info.caller_conv,
+                info.callee_conv,
+                info.try_call_info.is_some(),
+            ),
             _ => return true,
         };
 
@@ -970,8 +976,8 @@ impl MachInst for Inst {
         //
         // See the note in [crate::isa::aarch64::abi::is_caller_save_reg] for
         // more information on this ABI-implementation hack.
-        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(caller, false);
-        let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(callee, false);
+        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(caller, is_exception);
+        let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(callee, is_exception);
 
         let mut all_clobbers = caller_clobbers;
         all_clobbers.union_from(callee_clobbers);
