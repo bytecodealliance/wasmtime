@@ -30,4 +30,6 @@ tests/all/pulley_provenance_test.cwasm
 /artifacts
 testcase*.wat
 testcase*.wasm
+testcase*.dna
+testcase*.json
 perf.data*
