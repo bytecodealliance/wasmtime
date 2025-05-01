@@ -47,16 +47,21 @@ column is below.
 |  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API |
 |--------------------------|---------|-------|----------|--------|-----|-------|
 | [`function-references`]  | ✅      | ✅    | ❌       | ❌     | ✅  | ❌    |
-| [`gc`] [^6]              | ✅      | ✅    | ❌[^7]   | ❌     | ✅  | ❌    |
+| [`gc`] [^6]              | ✅      | ✅    | ⚠️[^7]   | ⚠️[^8] | ✅  | ❌    |
 | [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ❌    |
 
 [^6]: There is also a [tracking
     issue](https://github.com/bytecodealliance/wasmtime/issues/5032) for the
     GC proposal.
-[^7]: The implementation of GC has [known performance
-    issues](https://github.com/bytecodealliance/wasmtime/issues/9351) which can
-    affect non-GC code when the GC proposal is enabled.
+[^7]: The implementation of Wasm GC is feature complete from a specification
+    perspective, however a number of quality-of-implementation tasks
+    [remain](https://github.com/bytecodealliance/wasmtime/issues/5032), notably
+    a tracing collector that can reclaim garbage cycles.
+[^8]: The GC proposal is lightly fuzzed via `wasm-smith` and our usual
+    whole-module fuzz targets like `differential`, but we would like to
+    additionally [extend the `table_ops` fuzz target to exercise more of the GC
+    proposal](https://github.com/bytecodealliance/wasmtime/issues/10327).
 
 ## Unimplemented proposals
 
