@@ -66,5 +66,13 @@ pub fn list() -> Vec<Inst> {
         inst("subsd", fmt("A", [rw(xmm), r(xmm_m64)]), rex([0xF2, 0x0F, 0x5C]).r(), _64b | compat | sse2),
         inst("subps", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x0F, 0x5C]).r(), _64b | compat | sse),
         inst("subpd", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x5C]).r(), _64b | compat | sse2),
+        inst("psubb", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF8]).r(), _64b | compat | sse2),
+        inst("psubw", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF9]).r(), _64b | compat | sse2),
+        inst("psubd", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFA]).r(), _64b | compat | sse2),
+        inst("psubq", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFB]).r(), _64b | compat | sse2),
+        inst("psubsb", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xE8]).r(), _64b | compat | sse2),
+        inst("psubsw", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xE9]).r(), _64b | compat | sse2),
+        inst("psubusb", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD8]).r(), _64b | compat | sse2),
+        inst("psubusw", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD9]).r(), _64b | compat | sse2),
     ]
 }

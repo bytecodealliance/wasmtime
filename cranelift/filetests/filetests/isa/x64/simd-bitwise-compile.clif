@@ -893,7 +893,7 @@ block0(v0: i64x2, v1: i32):
 ;   movdqa  %xmm0, %xmm7
 ;   movdqa  %xmm1, %xmm0
 ;   pxor    %xmm0, %xmm7, %xmm0
-;   psubq   %xmm0, %xmm1, %xmm0
+;   psubq %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

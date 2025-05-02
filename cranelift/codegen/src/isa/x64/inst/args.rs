@@ -1066,14 +1066,6 @@ pub enum SseOpcode {
     Psrlw,
     Psrld,
     Psrlq,
-    Psubb,
-    Psubd,
-    Psubq,
-    Psubw,
-    Psubsb,
-    Psubsw,
-    Psubusb,
-    Psubusw,
     Ptest,
     Punpckhbw,
     Punpckhwd,
@@ -1206,14 +1198,6 @@ impl SseOpcode {
             | SseOpcode::Psrlw
             | SseOpcode::Psrld
             | SseOpcode::Psrlq
-            | SseOpcode::Psubb
-            | SseOpcode::Psubd
-            | SseOpcode::Psubq
-            | SseOpcode::Psubw
-            | SseOpcode::Psubsb
-            | SseOpcode::Psubsw
-            | SseOpcode::Psubusb
-            | SseOpcode::Psubusw
             | SseOpcode::Punpckhbw
             | SseOpcode::Punpckhwd
             | SseOpcode::Punpcklbw
@@ -1442,14 +1426,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Psrlw => "psrlw",
             SseOpcode::Psrld => "psrld",
             SseOpcode::Psrlq => "psrlq",
-            SseOpcode::Psubb => "psubb",
-            SseOpcode::Psubd => "psubd",
-            SseOpcode::Psubq => "psubq",
-            SseOpcode::Psubw => "psubw",
-            SseOpcode::Psubsb => "psubsb",
-            SseOpcode::Psubsw => "psubsw",
-            SseOpcode::Psubusb => "psubusb",
-            SseOpcode::Psubusw => "psubusw",
             SseOpcode::Ptest => "ptest",
             SseOpcode::Punpckhbw => "punpckhbw",
             SseOpcode::Punpckhwd => "punpckhwd",

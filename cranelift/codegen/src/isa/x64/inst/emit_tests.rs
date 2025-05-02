@@ -207,7 +207,6 @@ fn test_x64_emit() {
     let w_xmm2 = Writable::<Reg>::from_reg(xmm2);
     let w_xmm3 = Writable::<Reg>::from_reg(xmm3);
     let w_xmm4 = Writable::<Reg>::from_reg(xmm4);
-    let w_xmm5 = Writable::<Reg>::from_reg(xmm5);
     let w_xmm6 = Writable::<Reg>::from_reg(xmm6);
     let w_xmm7 = Writable::<Reg>::from_reg(xmm7);
     let w_xmm8 = Writable::<Reg>::from_reg(xmm8);
@@ -3263,30 +3262,6 @@ fn test_x64_emit() {
     // XMM_RM_R: Integer Packed
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubsb, RegMem::reg(xmm9), w_xmm5),
-        "66410FE8E9",
-        "psubsb  %xmm5, %xmm9, %xmm5",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubsw, RegMem::reg(xmm7), w_xmm6),
-        "660FE9F7",
-        "psubsw  %xmm6, %xmm7, %xmm6",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubusb, RegMem::reg(xmm12), w_xmm13),
-        "66450FD8EC",
-        "psubusb %xmm13, %xmm12, %xmm13",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubusw, RegMem::reg(xmm1), w_xmm8),
-        "66440FD9C1",
-        "psubusw %xmm8, %xmm1, %xmm8",
-    ));
-
-    insns.push((
         Inst::xmm_rm_r(SseOpcode::Pavgb, RegMem::reg(xmm12), w_xmm13),
         "66450FE0EC",
         "pavgb   %xmm13, %xmm12, %xmm13",
@@ -3296,30 +3271,6 @@ fn test_x64_emit() {
         Inst::xmm_rm_r(SseOpcode::Pavgw, RegMem::reg(xmm1), w_xmm8),
         "66440FE3C1",
         "pavgw   %xmm8, %xmm1, %xmm8",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubb, RegMem::reg(xmm5), w_xmm9),
-        "66440FF8CD",
-        "psubb   %xmm9, %xmm5, %xmm9",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubw, RegMem::reg(xmm6), w_xmm7),
-        "660FF9FE",
-        "psubw   %xmm7, %xmm6, %xmm7",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubd, RegMem::reg(xmm13), w_xmm12),
-        "66450FFAE5",
-        "psubd   %xmm12, %xmm13, %xmm12",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Psubq, RegMem::reg(xmm8), w_xmm1),
-        "66410FFBC8",
-        "psubq   %xmm1, %xmm8, %xmm1",
     ));
 
     insns.push((

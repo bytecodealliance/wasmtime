@@ -386,7 +386,7 @@ block0(v0: i32x4):
 ;   movdqa  %xmm0, %xmm3
 ;   pslld   %xmm3, $16, %xmm3
 ;   psrld   %xmm3, $16, %xmm3
-;   psubd   %xmm0, %xmm3, %xmm0
+;   psubd %xmm3, %xmm0
 ;   cvtdq2ps %xmm3, %xmm1
 ;   psrld   %xmm0, $1, %xmm0
 ;   cvtdq2ps %xmm0, %xmm0
