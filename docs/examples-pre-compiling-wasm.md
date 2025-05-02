@@ -68,6 +68,6 @@ disabled.
   [`wasmtime::Engine::precompile_component`](https://docs.rs/wasmtime/latest/wasmtime/struct.Engine.html#method.precompile_component)
 * [`wasmtime::Module::deserialize`](https://docs.rs/wasmtime/latest/wasmtime/struct.Module.html#method.deserialize),
   [`wasmtime::Module::deserialize_file`](https://docs.rs/wasmtime/latest/wasmtime/struct.Module.html#method.deserialize_file),
-  [`wasmtime::Component::deserialize`](https://docs.rs/wasmtime/latest/wasmtime/struct.Component.html#method.deserialize),
+  [`wasmtime::component::Component::deserialize`](https://docs.rs/wasmtime/latest/wasmtime/component/struct.Component.html#method.deserialize),
   and
-  [`wasmtime::Component::deserialize_file`](https://docs.rs/wasmtime/latest/wasmtime/struct.Component.html#method.deserialize_file)
+  [`wasmtime::component::Component::deserialize_file`](https://docs.rs/wasmtime/latest/wasmtime/component/struct.Component.html#method.deserialize_file)
