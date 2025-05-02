@@ -876,9 +876,7 @@
       (enum Rorx))
 
 (type SseOpcode extern
-      (enum Andps
-            Andpd
-            Andnps
+      (enum Andnps
             Andnpd
             Blendvpd
             Blendvps
@@ -932,8 +930,6 @@
             Mulpd
             Mulss
             Mulsd
-            Orps
-            Orpd
             Pabsb
             Pabsw
             Pabsd
@@ -1045,8 +1041,6 @@
             Unpcklps
             Unpcklpd
             Unpckhps
-            Xorps
-            Xorpd
             Phaddw
             Phaddd
             Punpckhdq
@@ -3645,12 +3639,10 @@
 
 ;; Helper for creating `orpd` instructions.
 (decl x64_orpd (Xmm XmmMem) Xmm)
-(rule 2 (x64_orpd src1 src2)
+(rule 1 (x64_orpd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vorpd) src1 src2))
-(rule 1 (x64_orpd src1 (is_xmm_mem src2)) (x64_orpd_a src1 src2))
-(rule 0 (x64_orpd src1 src2)
-      (xmm_rm_r (SseOpcode.Orpd) src1 src2))
+(rule 0 (x64_orpd src1 (is_xmm_mem src2)) (x64_orpd_a src1 src2))
 
 ;; Helper fxor creating `pxor` instructions.
 (decl x64_pxor (Xmm XmmMem) Xmm)

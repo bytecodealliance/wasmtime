@@ -941,8 +941,6 @@ pub(crate) enum InstructionSet {
 #[allow(dead_code)] // some variants here aren't used just yet
 #[allow(missing_docs)]
 pub enum SseOpcode {
-    Andps,
-    Andpd,
     Andnps,
     Andnpd,
     Blendvpd,
@@ -997,8 +995,6 @@ pub enum SseOpcode {
     Mulpd,
     Mulss,
     Mulsd,
-    Orps,
-    Orpd,
     Pabsb,
     Pabsw,
     Pabsd,
@@ -1110,8 +1106,6 @@ pub enum SseOpcode {
     Unpcklps,
     Unpcklpd,
     Unpckhps,
-    Xorps,
-    Xorpd,
     Phaddw,
     Phaddd,
     Punpckhdq,
@@ -1129,8 +1123,7 @@ impl SseOpcode {
     pub(crate) fn available_from(&self) -> InstructionSet {
         use InstructionSet::*;
         match self {
-            SseOpcode::Andps
-            | SseOpcode::Andnps
+            SseOpcode::Andnps
             | SseOpcode::Comiss
             | SseOpcode::Cmpps
             | SseOpcode::Cmpss
@@ -1150,7 +1143,6 @@ impl SseOpcode {
             | SseOpcode::Movups
             | SseOpcode::Mulps
             | SseOpcode::Mulss
-            | SseOpcode::Orps
             | SseOpcode::Rcpss
             | SseOpcode::Rsqrtss
             | SseOpcode::Shufps
@@ -1158,11 +1150,9 @@ impl SseOpcode {
             | SseOpcode::Sqrtss
             | SseOpcode::Ucomiss
             | SseOpcode::Unpcklps
-            | SseOpcode::Unpckhps
-            | SseOpcode::Xorps => SSE,
+            | SseOpcode::Unpckhps => SSE,
 
-            SseOpcode::Andpd
-            | SseOpcode::Andnpd
+            SseOpcode::Andnpd
             | SseOpcode::Cmppd
             | SseOpcode::Cmpsd
             | SseOpcode::Comisd
@@ -1193,7 +1183,6 @@ impl SseOpcode {
             | SseOpcode::Movdqu
             | SseOpcode::Mulpd
             | SseOpcode::Mulsd
-            | SseOpcode::Orpd
             | SseOpcode::Packssdw
             | SseOpcode::Packsswb
             | SseOpcode::Packuswb
@@ -1253,7 +1242,6 @@ impl SseOpcode {
             | SseOpcode::Sqrtpd
             | SseOpcode::Sqrtsd
             | SseOpcode::Ucomisd
-            | SseOpcode::Xorpd
             | SseOpcode::Punpckldq
             | SseOpcode::Punpckhdq
             | SseOpcode::Punpcklqdq
@@ -1349,8 +1337,6 @@ impl SseOpcode {
 impl fmt::Debug for SseOpcode {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
-            SseOpcode::Andpd => "andpd",
-            SseOpcode::Andps => "andps",
             SseOpcode::Andnps => "andnps",
             SseOpcode::Andnpd => "andnpd",
             SseOpcode::Blendvpd => "blendvpd",
@@ -1405,8 +1391,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Mulpd => "mulpd",
             SseOpcode::Mulss => "mulss",
             SseOpcode::Mulsd => "mulsd",
-            SseOpcode::Orpd => "orpd",
-            SseOpcode::Orps => "orps",
             SseOpcode::Pabsb => "pabsb",
             SseOpcode::Pabsw => "pabsw",
             SseOpcode::Pabsd => "pabsd",
@@ -1517,8 +1501,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Ucomisd => "ucomisd",
             SseOpcode::Unpcklps => "unpcklps",
             SseOpcode::Unpckhps => "unpckhps",
-            SseOpcode::Xorps => "xorps",
-            SseOpcode::Xorpd => "xorpd",
             SseOpcode::Phaddw => "phaddw",
             SseOpcode::Phaddd => "phaddd",
             SseOpcode::Punpckldq => "punpckldq",

@@ -855,18 +855,13 @@ impl Assembler {
 
     /// "and" two float registers.
     pub fn xmm_and_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Andps,
-            OperandSize::S64 => SseOpcode::Andpd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::andps_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::andpd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmR {
-            op,
-            src1: dst.to_reg().into(),
-            src2: XmmMemAligned::from(Xmm::from(src)),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// "and not" two float registers.
@@ -1048,18 +1043,13 @@ impl Assembler {
     }
 
     pub fn xmm_or_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Orps,
-            OperandSize::S64 => SseOpcode::Orpd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::orps_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::orpd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmR {
-            op,
-            src1: dst.to_reg().into(),
-            src2: XmmMemAligned::from(Xmm::from(src)),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Logical exclusive or with registers.
@@ -1089,18 +1079,13 @@ impl Assembler {
 
     /// Logical exclusive or with float registers.
     pub fn xmm_xor_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Xorps,
-            OperandSize::S64 => SseOpcode::Xorpd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::xorps_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::xorpd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmR {
-            op,
-            src1: dst.to_reg().into(),
-            src2: XmmMemAligned::from(Xmm::from(src)),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Shift with register and register.
