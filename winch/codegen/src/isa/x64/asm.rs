@@ -1536,18 +1536,13 @@ impl Assembler {
 
     /// Performs float subtraction on src and dst and places result in dst.
     pub fn xmm_sub_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Subss,
-            OperandSize::S64 => SseOpcode::Subsd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::subss_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::subsd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmRUnaligned {
-            op,
-            src1: Xmm::from(dst.to_reg()).into(),
-            src2: Xmm::from(src).into(),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Performs float multiplication on src and dst and places result in dst.
