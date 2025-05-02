@@ -941,10 +941,6 @@ pub(crate) enum InstructionSet {
 #[allow(dead_code)] // some variants here aren't used just yet
 #[allow(missing_docs)]
 pub enum SseOpcode {
-    Addps,
-    Addpd,
-    Addss,
-    Addsd,
     Andps,
     Andpd,
     Andnps,
@@ -1137,9 +1133,7 @@ impl SseOpcode {
     pub(crate) fn available_from(&self) -> InstructionSet {
         use InstructionSet::*;
         match self {
-            SseOpcode::Addps
-            | SseOpcode::Addss
-            | SseOpcode::Andps
+            SseOpcode::Andps
             | SseOpcode::Andnps
             | SseOpcode::Comiss
             | SseOpcode::Cmpps
@@ -1173,9 +1167,7 @@ impl SseOpcode {
             | SseOpcode::Unpckhps
             | SseOpcode::Xorps => SSE,
 
-            SseOpcode::Addpd
-            | SseOpcode::Addsd
-            | SseOpcode::Andpd
+            SseOpcode::Andpd
             | SseOpcode::Andnpd
             | SseOpcode::Cmppd
             | SseOpcode::Cmpsd
@@ -1365,10 +1357,6 @@ impl SseOpcode {
 impl fmt::Debug for SseOpcode {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let name = match self {
-            SseOpcode::Addps => "addps",
-            SseOpcode::Addpd => "addpd",
-            SseOpcode::Addss => "addss",
-            SseOpcode::Addsd => "addsd",
             SseOpcode::Andpd => "andpd",
             SseOpcode::Andps => "andps",
             SseOpcode::Andnps => "andnps",

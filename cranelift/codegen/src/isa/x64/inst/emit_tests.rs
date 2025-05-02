@@ -3220,36 +3220,6 @@ fn test_x64_emit() {
     // XMM_RM_R: float binary ops
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Addss, RegMem::reg(xmm1), w_xmm0),
-        "F30F58C1",
-        "addss   %xmm0, %xmm1, %xmm0",
-    ));
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Addss, RegMem::reg(xmm11), w_xmm13),
-        "F3450F58EB",
-        "addss   %xmm13, %xmm11, %xmm13",
-    ));
-    insns.push((
-        Inst::xmm_rm_r(
-            SseOpcode::Addss,
-            RegMem::mem(Amode::imm_reg_reg_shift(
-                123,
-                Gpr::unwrap_new(r10),
-                Gpr::unwrap_new(rdx),
-                2,
-            )),
-            w_xmm0,
-        ),
-        "F3410F5844927B",
-        "addss   %xmm0, 123(%r10,%rdx,4), %xmm0",
-    ));
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Addsd, RegMem::reg(xmm15), w_xmm4),
-        "F2410F58E7",
-        "addsd   %xmm4, %xmm15, %xmm4",
-    ));
-
-    insns.push((
         Inst::xmm_rm_r(SseOpcode::Subss, RegMem::reg(xmm0), w_xmm1),
         "F30F5CC8",
         "subss   %xmm1, %xmm0, %xmm1",

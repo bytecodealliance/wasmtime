@@ -2205,10 +2205,6 @@ pub(crate) fn emit(
 
             let rex = RexFlags::clear_w();
             let (prefix, opcode, length) = match op {
-                SseOpcode::Addps => (LegacyPrefixes::None, 0x0F58, 2),
-                SseOpcode::Addpd => (LegacyPrefixes::_66, 0x0F58, 2),
-                SseOpcode::Addss => (LegacyPrefixes::_F3, 0x0F58, 2),
-                SseOpcode::Addsd => (LegacyPrefixes::_F2, 0x0F58, 2),
                 SseOpcode::Andps => (LegacyPrefixes::None, 0x0F54, 2),
                 SseOpcode::Andpd => (LegacyPrefixes::_66, 0x0F54, 2),
                 SseOpcode::Andnps => (LegacyPrefixes::None, 0x0F55, 2),
@@ -3110,7 +3106,7 @@ pub(crate) fn emit(
 
             let (add_op, cmp_op, and_op, or_op, min_max_op) = match size {
                 OperandSize::Size32 => (
-                    SseOpcode::Addss,
+                    asm::inst::addss_a::new(dst, lhs).into(),
                     SseOpcode::Ucomiss,
                     SseOpcode::Andps,
                     SseOpcode::Orps,
@@ -3121,7 +3117,7 @@ pub(crate) fn emit(
                     },
                 ),
                 OperandSize::Size64 => (
-                    SseOpcode::Addsd,
+                    asm::inst::addsd_a::new(dst, lhs).into(),
                     SseOpcode::Ucomisd,
                     SseOpcode::Andpd,
                     SseOpcode::Orpd,
@@ -3154,8 +3150,7 @@ pub(crate) fn emit(
             // read-only operand: perform an addition between the two operands, which has the
             // desired NaN propagation effects.
             sink.bind_label(propagate_nan, state.ctrl_plane_mut());
-            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(lhs), dst);
-            inst.emit(sink, info, state);
+            Inst::External { inst: add_op }.emit(sink, info, state);
 
             one_way_jmp(sink, CC::P, done);
 
@@ -3538,13 +3533,12 @@ pub(crate) fn emit(
                 *dst_size == OperandSize::Size64,
             );
 
-            let add_op = if *dst_size == OperandSize::Size64 {
-                SseOpcode::Addsd
-            } else {
-                SseOpcode::Addss
+            let inst = match *dst_size {
+                OperandSize::Size64 => asm::inst::addsd_a::new(dst, dst.to_reg()).into(),
+                OperandSize::Size32 => asm::inst::addss_a::new(dst, dst.to_reg()).into(),
+                _ => unreachable!(),
             };
-            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(dst.to_reg()), dst);
-            inst.emit(sink, info, state);
+            Inst::External { inst }.emit(sink, info, state);
 
             sink.bind_label(done, state.ctrl_plane_mut());
         }
