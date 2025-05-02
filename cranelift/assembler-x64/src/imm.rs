@@ -42,6 +42,19 @@ impl Imm8 {
     }
 }
 
+impl From<u8> for Imm8 {
+    fn from(imm8: u8) -> Self {
+        Self(imm8)
+    }
+}
+
+impl TryFrom<i32> for Imm8 {
+    type Error = std::num::TryFromIntError;
+    fn try_from(simm32: i32) -> Result<Self, Self::Error> {
+        Ok(Self(u8::try_from(simm32)?))
+    }
+}
+
 impl fmt::Display for Imm8 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "$0x{:x}", self.0)
@@ -80,6 +93,19 @@ impl Simm8 {
     }
 }
 
+impl From<i8> for Simm8 {
+    fn from(simm8: i8) -> Self {
+        Self(simm8)
+    }
+}
+
+impl TryFrom<i32> for Simm8 {
+    type Error = std::num::TryFromIntError;
+    fn try_from(simm32: i32) -> Result<Self, Self::Error> {
+        Ok(Self(i8::try_from(simm32)?))
+    }
+}
+
 /// A 16-bit immediate operand.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
@@ -98,6 +124,19 @@ impl Imm16 {
 
     pub fn encode(&self, sink: &mut impl CodeSink) {
         sink.put2(self.0);
+    }
+}
+
+impl From<u16> for Imm16 {
+    fn from(imm16: u16) -> Self {
+        Self(imm16)
+    }
+}
+
+impl TryFrom<i32> for Imm16 {
+    type Error = std::num::TryFromIntError;
+    fn try_from(simm32: i32) -> Result<Self, Self::Error> {
+        Ok(Self(u16::try_from(simm32)?))
     }
 }
 
@@ -139,6 +178,19 @@ impl Simm16 {
     }
 }
 
+impl From<i16> for Simm16 {
+    fn from(simm16: i16) -> Self {
+        Self(simm16)
+    }
+}
+
+impl TryFrom<i32> for Simm16 {
+    type Error = std::num::TryFromIntError;
+    fn try_from(simm32: i32) -> Result<Self, Self::Error> {
+        Ok(Self(i16::try_from(simm32)?))
+    }
+}
+
 /// A 32-bit immediate operand.
 ///
 /// Note that, "in 64-bit mode, the typical size of immediate operands remains
@@ -161,6 +213,19 @@ impl Imm32 {
 
     pub fn encode(&self, sink: &mut impl CodeSink) {
         sink.put4(self.0);
+    }
+}
+
+impl From<u32> for Imm32 {
+    fn from(imm32: u32) -> Self {
+        Self(imm32)
+    }
+}
+
+impl From<i32> for Imm32 {
+    fn from(simm32: i32) -> Self {
+        // TODO: should this be a `TryFrom`?
+        Self(simm32 as u32)
     }
 }
 
@@ -203,6 +268,12 @@ impl Simm32 {
             SignExtendLong => unreachable!("the 32-bit value is already 32 bits"),
             SignExtendQuad => hexify_sign_extend!(self.0, i32 => i64),
         }
+    }
+}
+
+impl From<i32> for Simm32 {
+    fn from(simm32: i32) -> Self {
+        Self(simm32)
     }
 }
 

@@ -470,12 +470,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         if from_reg != into_reg.to_reg() {
             ret.push(Inst::gen_move(into_reg, from_reg, I64));
         }
-        ret.push(Inst::alu_rmi_r(
-            OperandSize::Size64,
-            AluRmiROpcode::Add,
-            RegMemImm::imm(imm),
-            into_reg,
-        ));
+        let imm = i32::try_from(imm).expect("`imm` is too large to fit in a 32-bit immediate");
+        ret.push(Inst::addq_mi(into_reg, imm));
         ret
     }
 
@@ -524,20 +520,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Self::I> {
-        let (alu_op, amount) = if amount >= 0 {
-            (AluRmiROpcode::Add, amount)
+        let rsp = Writable::from_reg(regs::rsp());
+        let inst = if amount >= 0 {
+            Inst::addq_mi(rsp, amount)
         } else {
-            (AluRmiROpcode::Sub, -amount)
+            Inst::subq_mi(rsp, -amount)
         };
-
-        let amount = amount as u32;
-
-        smallvec![Inst::alu_rmi_r(
-            OperandSize::Size64,
-            alu_op,
-            RegMemImm::imm(amount),
-            Writable::from_reg(regs::rsp()),
-        )]
+        smallvec![inst]
     }
 
     fn gen_prologue_frame_setup(
@@ -652,15 +641,16 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // present, resize the incoming argument area of the frame to accommodate those arguments.
         let incoming_args_diff = frame_layout.tail_args_size - frame_layout.incoming_args_size;
         if incoming_args_diff > 0 {
-            // Decrement the stack pointer to make space for the new arguments
-            insts.push(Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Sub,
-                RegMemImm::imm(incoming_args_diff),
-                Writable::from_reg(regs::rsp()),
+            // Decrement the stack pointer to make space for the new arguments.
+            let rsp = Writable::from_reg(regs::rsp());
+            insts.push(Inst::subq_mi(
+                rsp,
+                i32::try_from(incoming_args_diff)
+                    .expect("`incoming_args_diff` is too large to fit in a 32-bit immediate"),
             ));
 
-            // Make sure to keep the frame pointer and stack pointer in sync at this point
+            // Make sure to keep the frame pointer and stack pointer in sync at
+            // this point.
             insts.push(Inst::mov_r_r(
                 OperandSize::Size64,
                 regs::rsp(),
@@ -669,7 +659,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
             let incoming_args_diff = i32::try_from(incoming_args_diff).unwrap();
 
-            // Move the saved frame pointer down by `incoming_args_diff`
+            // Move the saved frame pointer down by `incoming_args_diff`.
             insts.push(Inst::mov64_m_r(
                 Amode::imm_reg(incoming_args_diff, regs::rsp()),
                 Writable::from_reg(regs::r11()),
@@ -680,7 +670,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 Amode::imm_reg(0, regs::rsp()),
             ));
 
-            // Move the saved return address down by `incoming_args_diff`
+            // Move the saved return address down by `incoming_args_diff`.
             insts.push(Inst::mov64_m_r(
                 Amode::imm_reg(incoming_args_diff + 8, regs::rsp()),
                 Writable::from_reg(regs::r11()),
@@ -715,12 +705,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             + frame_layout.clobber_size
             + frame_layout.outgoing_args_size;
         if stack_size > 0 {
-            insts.push(Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Sub,
-                RegMemImm::imm(stack_size),
-                Writable::from_reg(regs::rsp()),
-            ));
+            let rsp = Writable::from_reg(regs::rsp());
+            let stack_size = i32::try_from(stack_size)
+                .expect("`stack_size` is too large to fit in a 32-bit immediate");
+            insts.push(Inst::subq_mi(rsp, stack_size));
         }
 
         // Store each clobbered register in order at offsets from RSP,
@@ -799,12 +787,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         // Adjust RSP back upward.
         if stack_size > 0 {
-            insts.push(Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Add,
-                RegMemImm::imm(stack_size),
-                Writable::from_reg(regs::rsp()),
-            ));
+            let rsp = Writable::from_reg(regs::rsp());
+            let stack_size = i32::try_from(stack_size)
+                .expect("`stack_size` is too large to fit in a 32-bit immediate");
+            insts.push(Inst::addq_mi(rsp, stack_size));
         }
 
         insts

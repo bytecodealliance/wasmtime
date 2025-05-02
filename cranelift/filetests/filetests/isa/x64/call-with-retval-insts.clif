@@ -36,7 +36,7 @@ block0(v0: i32):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $304, %rsp
+;   subq $0x130, %rsp
 ;   movq    %rbx, 256(%rsp)
 ;   movq    %r12, 264(%rsp)
 ;   movq    %r13, 272(%rsp)
@@ -84,7 +84,7 @@ block0(v0: i32):
 ;   movq    272(%rsp), %r13
 ;   movq    280(%rsp), %r14
 ;   movq    288(%rsp), %r15
-;   addq    %rsp, $304, %rsp
+;   addq $0x130, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

@@ -1,10 +1,10 @@
 //! Interface with the external assembler crate.
 
 use super::{
-    regs, Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor, OperandVisitorImpl,
-    SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm,
+    args::FromWritableReg, regs, Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor,
+    OperandVisitorImpl, SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm,
 };
-use crate::{ir::TrapCode, Reg};
+use crate::{ir::TrapCode, Reg, Writable};
 use cranelift_assembler_x64 as asm;
 use regalloc2::{PReg, RegClass};
 use std::string::String;
@@ -26,9 +26,78 @@ impl asm::Registers for CraneliftRegisters {
 /// complete, we expect the hardware encoding for both `read` and `write` to be
 /// the same.
 #[derive(Clone, Copy, Debug)]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub struct PairedGpr {
-    pub(crate) read: Gpr,
-    pub(crate) write: WritableGpr,
+    pub read: Gpr,
+    pub write: WritableGpr,
+}
+
+impl From<WritableGpr> for PairedGpr {
+    fn from(wgpr: WritableGpr) -> Self {
+        let read = wgpr.to_reg();
+        let write = wgpr;
+        Self { read, write }
+    }
+}
+
+/// For ABI ergonomics.
+impl From<WritableGpr> for asm::Gpr<PairedGpr> {
+    fn from(wgpr: WritableGpr) -> Self {
+        asm::Gpr::new(wgpr.into())
+    }
+}
+
+// For ABI ergonomics.
+impl From<Writable<Reg>> for asm::GprMem<PairedGpr, Gpr> {
+    fn from(wgpr: Writable<Reg>) -> Self {
+        let wgpr = WritableGpr::from_writable_reg(wgpr).unwrap();
+        Self::Gpr(wgpr.into())
+    }
+}
+
+// For ABI ergonomics.
+impl From<Gpr> for asm::GprMem<Gpr, Gpr> {
+    fn from(gpr: Gpr) -> Self {
+        Self::Gpr(gpr)
+    }
+}
+
+// For ABI ergonomics.
+impl From<Reg> for asm::GprMem<Gpr, Gpr> {
+    fn from(gpr: Reg) -> Self {
+        let gpr = Gpr::unwrap_new(gpr);
+        Self::Gpr(gpr)
+    }
+}
+
+// For ABI ergonomics.
+impl From<Writable<Reg>> for asm::GprMem<Gpr, Gpr> {
+    fn from(wgpr: Writable<Reg>) -> Self {
+        let gpr = Gpr::unwrap_new(wgpr.to_reg());
+        Self::Gpr(gpr)
+    }
+}
+
+// For ABI ergonomics.
+impl From<Writable<Reg>> for asm::Gpr<PairedGpr> {
+    fn from(wgpr: Writable<Reg>) -> Self {
+        let wgpr = WritableGpr::from_writable_reg(wgpr).unwrap();
+        Self::new(wgpr.into())
+    }
+}
+
+// For Winch ergonomics.
+impl From<PairedGpr> for asm::Gpr<PairedGpr> {
+    fn from(pair: PairedGpr) -> Self {
+        Self::new(pair)
+    }
+}
+
+// For Winch ergonomics.
+impl From<PairedGpr> for asm::GprMem<PairedGpr, Gpr> {
+    fn from(pair: PairedGpr) -> Self {
+        Self::Gpr(pair)
+    }
 }
 
 impl asm::AsReg for PairedGpr {
@@ -274,6 +343,7 @@ impl Into<asm::Amode<Gpr>> for Amode {
 
 /// Keep track of the offset slots to fill in during emission; see
 /// `KnownOffsetTable`.
+#[expect(missing_docs, reason = "self-describing keys")]
 pub mod offsets {
     pub const KEY_INCOMING_ARG: usize = 0;
     pub const KEY_SLOT_OFFSET: usize = 1;

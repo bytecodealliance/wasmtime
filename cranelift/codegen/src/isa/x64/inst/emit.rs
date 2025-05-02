@@ -10,6 +10,7 @@ use crate::isa::x64::encoding::vex::{VexInstruction, VexVectorLength};
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::isa::x64::lower::isle::generated_code::{Atomic128RmwSeqOp, AtomicRmwSeqOp};
+use cranelift_assembler_x64 as asm;
 
 /// A small helper to generate a signed conversion instruction.
 fn emit_signed_cvt(
@@ -144,96 +145,6 @@ pub(crate) fn emit(
         )
     }
     match inst {
-        Inst::AluRmiR {
-            size,
-            op,
-            src1,
-            src2,
-            dst: reg_g,
-        } => {
-            let src1 = src1.to_reg();
-            let reg_g = reg_g.to_reg().to_reg();
-            debug_assert_eq!(src1, reg_g);
-            let src2 = src2.clone().to_reg_mem_imm().clone();
-
-            let prefix = if *size == OperandSize::Size16 {
-                LegacyPrefixes::_66
-            } else {
-                LegacyPrefixes::None
-            };
-
-            let mut rex = RexFlags::from(*size);
-            let (opcode_r, opcode_m, subopcode_i) = match op {
-                AluRmiROpcode::Add => (0x01, 0x03, 0),
-                AluRmiROpcode::Adc => (0x11, 0x13, 2),
-                AluRmiROpcode::Sub => (0x29, 0x2B, 5),
-                AluRmiROpcode::Sbb => (0x19, 0x1B, 3),
-                AluRmiROpcode::And => (0x21, 0x23, 4),
-                AluRmiROpcode::Or => (0x09, 0x0B, 1),
-                AluRmiROpcode::Xor => (0x31, 0x33, 6),
-            };
-
-            let (opcode_r, opcode_m) = if *size == OperandSize::Size8 {
-                (opcode_r - 1, opcode_m - 1)
-            } else {
-                (opcode_r, opcode_m)
-            };
-
-            if *size == OperandSize::Size8 {
-                debug_assert!(reg_g.is_real());
-                rex.always_emit_if_8bit_needed(reg_g);
-            }
-
-            match src2 {
-                RegMemImm::Reg { reg: reg_e } => {
-                    if *size == OperandSize::Size8 {
-                        debug_assert!(reg_e.is_real());
-                        rex.always_emit_if_8bit_needed(reg_e);
-                    }
-
-                    // GCC/llvm use the swapped operand encoding (viz., the R/RM vs RM/R
-                    // duality). Do this too, so as to be able to compare generated machine
-                    // code easily.
-                    emit_std_reg_reg(sink, prefix, opcode_r, 1, reg_e, reg_g, rex);
-                }
-
-                RegMemImm::Mem { addr } => {
-                    let amode = addr.finalize(state.frame_layout(), sink);
-                    // Here we revert to the "normal" G-E ordering.
-                    emit_std_reg_mem(sink, prefix, opcode_m, 1, reg_g, &amode, rex, 0);
-                }
-
-                RegMemImm::Imm { simm32 } => {
-                    let imm_size = if *size == OperandSize::Size8 {
-                        1
-                    } else {
-                        if low8_will_sign_extend_to_32(simm32) {
-                            1
-                        } else {
-                            if *size == OperandSize::Size16 {
-                                2
-                            } else {
-                                4
-                            }
-                        }
-                    };
-
-                    let opcode = if *size == OperandSize::Size8 {
-                        0x80
-                    } else if low8_will_sign_extend_to_32(simm32) {
-                        0x83
-                    } else {
-                        0x81
-                    };
-
-                    // And also here we use the "normal" G-E ordering.
-                    let enc_g = int_reg_enc(reg_g);
-                    emit_std_enc_enc(sink, prefix, opcode, 1, subopcode_i, enc_g, rex);
-                    emit_simm(sink, imm_size, simm32);
-                }
-            }
-        }
-
         Inst::AluRmRVex {
             size,
             op,
@@ -981,13 +892,13 @@ pub(crate) fn emit(
 
             // If this `lea` can actually get encoded as an `add` then do that
             // instead. Currently all candidate `iadd`s become an `lea`
-            // pseudo-instruction here but maximizing the sue of `lea` is not
+            // pseudo-instruction here but maximizing the use of `lea` is not
             // necessarily optimal. The `lea` instruction goes through dedicated
             // address units on cores which are finite and disjoint from the
             // general ALU, so if everything uses `lea` then those units can get
             // saturated while leaving the ALU idle.
             //
-            // To help make use of more parts of a cpu, this attempts to use
+            // To help make use of more parts of a CPU, this attempts to use
             // `add` when it's semantically equivalent to `lea`, or otherwise
             // when the `dst` register is the same as the `base` or `index`
             // register.
@@ -1005,12 +916,14 @@ pub(crate) fn emit(
                     base,
                     flags: _,
                 } if base == dst => {
-                    let inst = Inst::alu_rmi_r(
-                        *size,
-                        AluRmiROpcode::Add,
-                        RegMemImm::imm(simm32 as u32),
-                        Writable::from_reg(dst),
-                    );
+                    let dst = Writable::from_reg(dst);
+                    let inst = match size {
+                        OperandSize::Size32 => Inst::External {
+                            inst: asm::inst::addl_mi::new(dst, simm32 as u32).into(),
+                        },
+                        OperandSize::Size64 => Inst::addq_mi(dst, simm32),
+                        _ => unreachable!(),
+                    };
                     inst.emit(sink, info, state);
                 }
                 // If the offset is 0 and the shift is 0 (meaning multiplication
@@ -1032,13 +945,13 @@ pub(crate) fn emit(
                     } else {
                         (index, base)
                     };
-                    let inst = Inst::alu_rmi_r(
-                        *size,
-                        AluRmiROpcode::Add,
-                        RegMemImm::reg(operand.to_reg()),
-                        Writable::from_reg(dst.to_reg()),
-                    );
-                    inst.emit(sink, info, state);
+                    let dst = Writable::from_reg(dst);
+                    let inst = match size {
+                        OperandSize::Size32 => asm::inst::addl_rm::new(dst, operand).into(),
+                        OperandSize::Size64 => asm::inst::addq_rm::new(dst, operand).into(),
+                        _ => unreachable!(),
+                    };
+                    Inst::External { inst }.emit(sink, info, state);
                 }
 
                 // If `lea`'s 3-operand mode is leveraged by regalloc, or if
@@ -1522,26 +1435,19 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
 
             // sub  tmp_reg, GUARD_SIZE * probe_count
-            let inst = Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Sub,
-                RegMemImm::imm(guard_size * probe_count),
-                tmp,
-            );
-            inst.emit(sink, info, state);
+            let guard_plus_count = i32::try_from(guard_size * probe_count)
+                .expect("`guard_size * probe_count` is too large to fit in a 32-bit immediate");
+            Inst::subq_mi(tmp, guard_plus_count).emit(sink, info, state);
 
             // Emit the main loop!
             let loop_start = sink.get_label();
             sink.bind_label(loop_start, state.ctrl_plane_mut());
 
             // sub  rsp, GUARD_SIZE
-            let inst = Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Sub,
-                RegMemImm::imm(*guard_size),
-                Writable::from_reg(regs::rsp()),
-            );
-            inst.emit(sink, info, state);
+            let rsp = Writable::from_reg(regs::rsp());
+            let guard_size_ = i32::try_from(*guard_size)
+                .expect("`guard_size` is too large to fit in a 32-bit immediate");
+            Inst::subq_mi(rsp, guard_size_).emit(sink, info, state);
 
             // TODO: `mov [rsp], 0` would be better, but we don't have that instruction
             // Probe the stack! We don't use Inst::gen_store_stack here because we need a predictable
@@ -1575,13 +1481,7 @@ pub(crate) fn emit(
             // and in the stack adj portion of the prologue
             //
             // add rsp, GUARD_SIZE * probe_count
-            let inst = Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Add,
-                RegMemImm::imm(guard_size * probe_count),
-                Writable::from_reg(regs::rsp()),
-            );
-            inst.emit(sink, info, state);
+            Inst::addq_mi(rsp, guard_plus_count).emit(sink, info, state);
         }
 
         Inst::CallKnown { info: call_info } => {
@@ -1591,8 +1491,8 @@ pub(crate) fn emit(
             }
 
             sink.put1(0xE8);
-            // The addend adjusts for the difference between the end of the instruction and the
-            // beginning of the immediate field.
+            // The addend adjusts for the difference between the end of the
+            // instruction and the beginning of the immediate field.
             emit_reloc(sink, Reloc::X86CallPCRel4, &call_info.dest, -4);
             sink.put4(0);
 
@@ -1602,16 +1502,14 @@ pub(crate) fn emit(
                 sink.add_call_site(&[]);
             }
 
-            // Reclaim the outgoing argument area that was released by the callee, to ensure that
-            // StackAMode values are always computed from a consistent SP.
+            // Reclaim the outgoing argument area that was released by the
+            // callee, to ensure that StackAMode values are always computed from
+            // a consistent SP.
             if call_info.callee_pop_size > 0 {
-                Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::Sub,
-                    RegMemImm::imm(call_info.callee_pop_size),
-                    Writable::from_reg(regs::rsp()),
-                )
-                .emit(sink, info, state);
+                let rsp = Writable::from_reg(regs::rsp());
+                let callee_pop_size = i32::try_from(call_info.callee_pop_size)
+                    .expect("`callee_pop_size` is too large to fit in a 32-bit immediate");
+                Inst::subq_mi(rsp, callee_pop_size).emit(sink, info, state);
             }
 
             // Load any stack-carried return values.
@@ -1707,13 +1605,10 @@ pub(crate) fn emit(
             // Reclaim the outgoing argument area that was released by the callee, to ensure that
             // StackAMode values are always computed from a consistent SP.
             if call_info.callee_pop_size > 0 {
-                Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::Sub,
-                    RegMemImm::imm(call_info.callee_pop_size),
-                    Writable::from_reg(regs::rsp()),
-                )
-                .emit(sink, info, state);
+                let rsp = Writable::from_reg(regs::rsp());
+                let callee_pop_size = i32::try_from(call_info.callee_pop_size)
+                    .expect("`callee_pop_size` is too large to fit in a 32-bit immediate");
+                Inst::subq_mi(rsp, callee_pop_size).emit(sink, info, state);
             }
 
             // Load any stack-carried return values.
@@ -2067,12 +1962,9 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
 
             // Add base of jump table to jump-table-sourced block offset.
-            let inst = Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Add,
-                RegMemImm::reg(tmp2.to_reg()),
-                tmp1,
-            );
+            let inst = Inst::External {
+                inst: asm::inst::addq_rm::new(tmp1, tmp2).into(),
+            };
             inst.emit(sink, info, state);
 
             // Branch to computed address.
@@ -3627,21 +3519,15 @@ pub(crate) fn emit(
             let inst = Inst::gen_move(tmp_gpr2, src, types::I64);
             inst.emit(sink, info, state);
 
-            let inst = Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::And,
-                RegMemImm::imm(1),
-                tmp_gpr2,
-            );
-            inst.emit(sink, info, state);
+            Inst::External {
+                inst: asm::inst::andq_mi_sxb::new(tmp_gpr2, 1).into(),
+            }
+            .emit(sink, info, state);
 
-            let inst = Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Or,
-                RegMemImm::reg(tmp_gpr1.to_reg()),
-                tmp_gpr2,
-            );
-            inst.emit(sink, info, state);
+            Inst::External {
+                inst: asm::inst::orq_rm::new(tmp_gpr2, tmp_gpr1).into(),
+            }
+            .emit(sink, info, state);
 
             emit_signed_cvt(
                 sink,
@@ -3751,13 +3637,12 @@ pub(crate) fn emit(
                 one_way_jmp(sink, CC::NP, not_nan); // go to not_nan if not a NaN
 
                 // For NaN, emit 0.
-                let inst = Inst::alu_rmi_r(
-                    *dst_size,
-                    AluRmiROpcode::Xor,
-                    RegMemImm::reg(dst.to_reg()),
-                    dst,
-                );
-                inst.emit(sink, info, state);
+                let inst = match *dst_size {
+                    OperandSize::Size32 => asm::inst::xorl_rm::new(dst, dst).into(),
+                    OperandSize::Size64 => asm::inst::xorq_rm::new(dst, dst).into(),
+                    _ => unreachable!(),
+                };
+                Inst::External { inst }.emit(sink, info, state);
 
                 let inst = Inst::jmp_known(done);
                 inst.emit(sink, info, state);
@@ -3937,13 +3822,13 @@ pub(crate) fn emit(
                 // If not NaN jump over this 0-return, otherwise return 0
                 let not_nan = sink.get_label();
                 one_way_jmp(sink, CC::NP, not_nan);
-                let inst = Inst::alu_rmi_r(
-                    *dst_size,
-                    AluRmiROpcode::Xor,
-                    RegMemImm::reg(dst.to_reg()),
-                    dst,
-                );
-                inst.emit(sink, info, state);
+
+                let inst = match *dst_size {
+                    OperandSize::Size32 => asm::inst::xorl_rm::new(dst, dst).into(),
+                    OperandSize::Size64 => asm::inst::xorq_rm::new(dst, dst).into(),
+                    _ => unreachable!(),
+                };
+                Inst::External { inst }.emit(sink, info, state);
 
                 let inst = Inst::jmp_known(done);
                 inst.emit(sink, info, state);
@@ -3968,13 +3853,12 @@ pub(crate) fn emit(
             if *is_saturating {
                 // The input was "small" (< 2**(width -1)), so the only way to get an integer
                 // overflow is because the input was too small: saturate to the min value, i.e. 0.
-                let inst = Inst::alu_rmi_r(
-                    *dst_size,
-                    AluRmiROpcode::Xor,
-                    RegMemImm::reg(dst.to_reg()),
-                    dst,
-                );
-                inst.emit(sink, info, state);
+                let inst = match *dst_size {
+                    OperandSize::Size32 => asm::inst::xorl_rm::new(dst, dst).into(),
+                    OperandSize::Size64 => asm::inst::xorq_rm::new(dst, dst).into(),
+                    _ => unreachable!(),
+                };
+                Inst::External { inst }.emit(sink, info, state);
 
                 let inst = Inst::jmp_known(done);
                 inst.emit(sink, info, state);
@@ -4029,20 +3913,14 @@ pub(crate) fn emit(
                 let inst = Inst::imm(OperandSize::Size64, 1 << 63, tmp_gpr);
                 inst.emit(sink, info, state);
 
-                let inst = Inst::alu_rmi_r(
-                    OperandSize::Size64,
-                    AluRmiROpcode::Add,
-                    RegMemImm::reg(tmp_gpr.to_reg()),
-                    dst,
-                );
+                let inst = Inst::External {
+                    inst: asm::inst::addq_rm::new(dst, tmp_gpr).into(),
+                };
                 inst.emit(sink, info, state);
             } else {
-                let inst = Inst::alu_rmi_r(
-                    OperandSize::Size32,
-                    AluRmiROpcode::Add,
-                    RegMemImm::imm(1 << 31),
-                    dst,
-                );
+                let inst = Inst::External {
+                    inst: asm::inst::addl_mi::new(dst, asm::Imm32::new(1 << 31)).into(),
+                };
                 inst.emit(sink, info, state);
             }
 
@@ -4239,14 +4117,14 @@ pub(crate) fn emit(
             let i2 = Inst::mov_r_r(OperandSize::Size64, dst_old.to_reg(), temp);
             i2.emit(sink, info, state);
 
-            let operand_rmi = RegMemImm::reg(operand);
             use AtomicRmwSeqOp as RmwOp;
             match op {
                 RmwOp::Nand => {
                     // andq %r_operand, %r_temp
-                    let i3 =
-                        Inst::alu_rmi_r(OperandSize::Size64, AluRmiROpcode::And, operand_rmi, temp);
-                    i3.emit(sink, info, state);
+                    Inst::External {
+                        inst: asm::inst::andq_rm::new(temp, operand).into(),
+                    }
+                    .emit(sink, info, state);
 
                     // notq %r_temp
                     let i4 = Inst::not(OperandSize::Size64, temp);
@@ -4272,16 +4150,26 @@ pub(crate) fn emit(
                     let i4 = Inst::cmove(OperandSize::Size64, cc, RegMem::reg(operand), temp);
                     i4.emit(sink, info, state);
                 }
-                RmwOp::And | RmwOp::Or | RmwOp::Xor => {
-                    // opq %r_operand, %r_temp
-                    let alu_op = match op {
-                        RmwOp::And => AluRmiROpcode::And,
-                        RmwOp::Or => AluRmiROpcode::Or,
-                        RmwOp::Xor => AluRmiROpcode::Xor,
-                        _ => unreachable!(),
-                    };
-                    let i3 = Inst::alu_rmi_r(OperandSize::Size64, alu_op, operand_rmi, temp);
-                    i3.emit(sink, info, state);
+                RmwOp::And => {
+                    // andq %r_operand, %r_temp
+                    Inst::External {
+                        inst: asm::inst::andq_rm::new(temp, operand).into(),
+                    }
+                    .emit(sink, info, state);
+                }
+                RmwOp::Or => {
+                    // orq %r_operand, %r_temp
+                    Inst::External {
+                        inst: asm::inst::orq_rm::new(temp, operand).into(),
+                    }
+                    .emit(sink, info, state);
+                }
+                RmwOp::Xor => {
+                    // xorq %r_operand, %r_temp
+                    Inst::External {
+                        inst: asm::inst::xorq_rm::new(temp, operand).into(),
+                    }
+                    .emit(sink, info, state);
                 }
             }
 
@@ -4341,24 +4229,17 @@ pub(crate) fn emit(
 
             // Perform the operation.
             let operand_low_rmi = RegMemImm::reg(operand_low);
-            let operand_high_rmi = RegMemImm::reg(operand_high);
             use Atomic128RmwSeqOp as RmwOp;
             match op {
                 RmwOp::Nand => {
                     // temp &= operand
-                    Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::And,
-                        operand_low_rmi,
-                        temp_low,
-                    )
+                    Inst::External {
+                        inst: asm::inst::andq_rm::new(temp_low, operand_low).into(),
+                    }
                     .emit(sink, info, state);
-                    Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::And,
-                        operand_high_rmi,
-                        temp_high,
-                    )
+                    Inst::External {
+                        inst: asm::inst::andq_rm::new(temp_high, operand_high).into(),
+                    }
                     .emit(sink, info, state);
 
                     // temp = !temp
@@ -4371,12 +4252,9 @@ pub(crate) fn emit(
                     Inst::cmp_rmi_r(OperandSize::Size64, temp_low.to_reg(), operand_low_rmi)
                         .emit(sink, info, state);
                     // This will clobber `temp_high`
-                    Inst::alu_rmi_r(
-                        OperandSize::Size64,
-                        AluRmiROpcode::Sbb,
-                        operand_high_rmi,
-                        temp_high,
-                    )
+                    Inst::External {
+                        inst: asm::inst::sbbq_rm::new(temp_high, operand_high).into(),
+                    }
                     .emit(sink, info, state);
                     // Restore the clobbered value
                     Inst::mov_r_r(OperandSize::Size64, dst_old_high.to_reg(), temp_high)
@@ -4393,20 +4271,55 @@ pub(crate) fn emit(
                     Inst::cmove(OperandSize::Size64, cc, operand_high.into(), temp_high)
                         .emit(sink, info, state);
                 }
-                RmwOp::Add | RmwOp::Sub | RmwOp::And | RmwOp::Or | RmwOp::Xor => {
-                    // temp op= operand
-                    let (op_low, op_high) = match op {
-                        RmwOp::Add => (AluRmiROpcode::Add, AluRmiROpcode::Adc),
-                        RmwOp::Sub => (AluRmiROpcode::Sub, AluRmiROpcode::Sbb),
-                        RmwOp::And => (AluRmiROpcode::And, AluRmiROpcode::And),
-                        RmwOp::Or => (AluRmiROpcode::Or, AluRmiROpcode::Or),
-                        RmwOp::Xor => (AluRmiROpcode::Xor, AluRmiROpcode::Xor),
-                        _ => unreachable!(),
-                    };
-                    Inst::alu_rmi_r(OperandSize::Size64, op_low, operand_low_rmi, temp_low)
-                        .emit(sink, info, state);
-                    Inst::alu_rmi_r(OperandSize::Size64, op_high, operand_high_rmi, temp_high)
-                        .emit(sink, info, state);
+                RmwOp::Add => {
+                    Inst::External {
+                        inst: asm::inst::addq_rm::new(temp_low, operand_low).into(),
+                    }
+                    .emit(sink, info, state);
+                    Inst::External {
+                        inst: asm::inst::adcq_rm::new(temp_high, operand_high).into(),
+                    }
+                    .emit(sink, info, state);
+                }
+                RmwOp::Sub => {
+                    Inst::External {
+                        inst: asm::inst::subq_rm::new(temp_low, operand_low).into(),
+                    }
+                    .emit(sink, info, state);
+                    Inst::External {
+                        inst: asm::inst::sbbq_rm::new(temp_high, operand_high).into(),
+                    }
+                    .emit(sink, info, state);
+                }
+                RmwOp::And => {
+                    Inst::External {
+                        inst: asm::inst::andq_rm::new(temp_low, operand_low).into(),
+                    }
+                    .emit(sink, info, state);
+                    Inst::External {
+                        inst: asm::inst::andq_rm::new(temp_high, operand_high).into(),
+                    }
+                    .emit(sink, info, state);
+                }
+                RmwOp::Or => {
+                    Inst::External {
+                        inst: asm::inst::orq_rm::new(temp_low, operand_low).into(),
+                    }
+                    .emit(sink, info, state);
+                    Inst::External {
+                        inst: asm::inst::orq_rm::new(temp_high, operand_high).into(),
+                    }
+                    .emit(sink, info, state);
+                }
+                RmwOp::Xor => {
+                    Inst::External {
+                        inst: asm::inst::xorq_rm::new(temp_low, operand_low).into(),
+                    }
+                    .emit(sink, info, state);
+                    Inst::External {
+                        inst: asm::inst::xorq_rm::new(temp_high, operand_high).into(),
+                    }
+                    .emit(sink, info, state);
                 }
             }
 
@@ -4749,13 +4662,11 @@ fn emit_return_call_common_sequence<T>(
         )
         .emit(sink, info, state);
 
-        // Increment the stack pointer to shrink the argument area for the new call.
-        Inst::alu_rmi_r(
-            OperandSize::Size64,
-            AluRmiROpcode::Add,
-            RegMemImm::imm(incoming_args_diff),
-            Writable::from_reg(regs::rsp()),
-        )
-        .emit(sink, info, state);
+        // Increment the stack pointer to shrink the argument area for the new
+        // call.
+        let rsp = Writable::from_reg(regs::rsp());
+        let incoming_args_diff = i32::try_from(incoming_args_diff)
+            .expect("`incoming_args_diff` is too large to fit in a 32-bit signed immediate");
+        Inst::addq_mi(rsp, incoming_args_diff).emit(sink, info, state);
     }
 }

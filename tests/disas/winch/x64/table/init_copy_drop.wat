@@ -41,7 +41,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x37
+;;       ja      0x3d
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
@@ -50,7 +50,7 @@
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   37: ud2
+;;   3d: ud2
 ;;
 ;; wasm[0]::function[6]:
 ;;       pushq   %rbp
@@ -59,7 +59,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x77
+;;       ja      0x7d
 ;;   5c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
@@ -68,7 +68,7 @@
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   77: ud2
+;;   7d: ud2
 ;;
 ;; wasm[0]::function[7]:
 ;;       pushq   %rbp
@@ -77,7 +77,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0xb7
+;;       ja      0xbd
 ;;   9c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
@@ -86,7 +86,7 @@
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   b7: ud2
+;;   bd: ud2
 ;;
 ;; wasm[0]::function[8]:
 ;;       pushq   %rbp
@@ -95,7 +95,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0xf7
+;;       ja      0xfd
 ;;   dc: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
@@ -104,7 +104,7 @@
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   f7: ud2
+;;   fd: ud2
 ;;
 ;; wasm[0]::function[9]:
 ;;       pushq   %rbp
@@ -113,7 +113,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x137
+;;       ja      0x13d
 ;;  11c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
@@ -122,7 +122,7 @@
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  137: ud2
+;;  13d: ud2
 ;;
 ;; wasm[0]::function[10]:
 ;;       pushq   %rbp
@@ -131,7 +131,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x2ae
+;;       ja      0x2b4
 ;;  15c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
@@ -142,11 +142,11 @@
 ;;       movl    $7, %ecx
 ;;       movl    $0, %r8d
 ;;       movl    $4, %r9d
-;;       callq   0x87f
+;;       callq   0x8aa
 ;;       movq    8(%rsp), %r14
 ;;       movq    %r14, %rdi
 ;;       movl    $1, %esi
-;;       callq   0x8de
+;;       callq   0x909
 ;;       movq    8(%rsp), %r14
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
@@ -154,11 +154,11 @@
 ;;       movl    $0xf, %ecx
 ;;       movl    $1, %r8d
 ;;       movl    $3, %r9d
-;;       callq   0x87f
+;;       callq   0x8aa
 ;;       movq    8(%rsp), %r14
 ;;       movq    %r14, %rdi
 ;;       movl    $3, %esi
-;;       callq   0x8de
+;;       callq   0x909
 ;;       movq    8(%rsp), %r14
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
@@ -166,7 +166,7 @@
 ;;       movl    $0x14, %ecx
 ;;       movl    $0xf, %r8d
 ;;       movl    $5, %r9d
-;;       callq   0x91d
+;;       callq   0x948
 ;;       movq    8(%rsp), %r14
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
@@ -174,7 +174,7 @@
 ;;       movl    $0x15, %ecx
 ;;       movl    $0x1d, %r8d
 ;;       movl    $1, %r9d
-;;       callq   0x91d
+;;       callq   0x948
 ;;       movq    8(%rsp), %r14
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
@@ -182,7 +182,7 @@
 ;;       movl    $0x18, %ecx
 ;;       movl    $0xa, %r8d
 ;;       movl    $1, %r9d
-;;       callq   0x91d
+;;       callq   0x948
 ;;       movq    8(%rsp), %r14
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
@@ -190,7 +190,7 @@
 ;;       movl    $0xd, %ecx
 ;;       movl    $0xb, %r8d
 ;;       movl    $4, %r9d
-;;       callq   0x91d
+;;       callq   0x948
 ;;       movq    8(%rsp), %r14
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
@@ -198,12 +198,12 @@
 ;;       movl    $0x13, %ecx
 ;;       movl    $0x14, %r8d
 ;;       movl    $5, %r9d
-;;       callq   0x91d
+;;       callq   0x948
 ;;       movq    8(%rsp), %r14
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  2ae: ud2
+;;  2b4: ud2
 ;;
 ;; wasm[0]::function[11]:
 ;;       pushq   %rbp
@@ -212,8 +212,8 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x30, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x398
-;;  2cc: movq    %rdi, %r14
+;;       ja      0x3c3
+;;  2dc: movq    %rdi, %r14
 ;;       subq    $0x20, %rsp
 ;;       movq    %rdi, 0x18(%rsp)
 ;;       movq    %rsi, 0x10(%rsp)
@@ -226,8 +226,8 @@
 ;;       movq    %r14, %rdx
 ;;       movq    0xb8(%rdx), %rbx
 ;;       cmpq    %rbx, %rcx
-;;       jae     0x39a
-;;  308: movq    %rcx, %r11
+;;       jae     0x3c5
+;;  321: movq    %rcx, %r11
 ;;       imulq   $8, %r11, %r11
 ;;       movq    0xb0(%rdx), %rdx
 ;;       movq    %rdx, %rsi
@@ -236,27 +236,27 @@
 ;;       cmovaeq %rsi, %rdx
 ;;       movq    (%rdx), %rax
 ;;       testq   %rax, %rax
-;;       jne     0x35c
-;;  32e: subq    $4, %rsp
+;;       jne     0x381
+;;  347: subq    $4, %rsp
 ;;       movl    %ecx, (%rsp)
 ;;       subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
 ;;       movl    $0, %esi
 ;;       movl    0xc(%rsp), %edx
-;;       callq   0x97c
+;;       callq   0x9a7
 ;;       addq    $0xc, %rsp
 ;;       addq    $4, %rsp
 ;;       movq    0x18(%rsp), %r14
-;;       jmp     0x360
-;;  35c: andq    $0xfffffffffffffffe, %rax
+;;       jmp     0x388
+;;  381: andq    $0xfffffffffffffffe, %rax
 ;;       testq   %rax, %rax
-;;       je      0x39c
-;;  369: movq    0x30(%r14), %r11
+;;       je      0x3c7
+;;  391: movq    0x30(%r14), %r11
 ;;       movl    (%r11), %ecx
 ;;       movl    0x10(%rax), %edx
 ;;       cmpl    %edx, %ecx
-;;       jne     0x39e
-;;  37b: pushq   %rax
+;;       jne     0x3c9
+;;  3a3: pushq   %rax
 ;;       popq    %rcx
 ;;       movq    0x18(%rcx), %rbx
 ;;       movq    8(%rcx), %rdx
@@ -267,7 +267,7 @@
 ;;       addq    $0x20, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  398: ud2
-;;  39a: ud2
-;;  39c: ud2
-;;  39e: ud2
+;;  3c3: ud2
+;;  3c5: ud2
+;;  3c7: ud2
+;;  3c9: ud2

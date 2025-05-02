@@ -69,13 +69,16 @@ impl dsl::Inst {
             self.format
                 .operands
                 .iter()
-                .map(|o| format!("{}: {}", o.location, o.generate_type())),
+                .map(|o| format!("{}: impl Into<{}>", o.location, o.generate_type())),
         );
-        let args = comma_join(self.format.operands.iter().map(|o| o.location.to_string()));
-
         fmtln!(f, "#[must_use]");
         f.add_block(&format!("pub fn new({params}) -> Self"), |f| {
-            fmtln!(f, "Self {{ {args} }}",);
+            f.add_block("Self", |f| {
+                for o in &self.format.operands {
+                    let loc = o.location;
+                    fmtln!(f, "{loc}: {loc}.into(),");
+                }
+            });
         });
     }
 

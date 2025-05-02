@@ -22,6 +22,7 @@ target-lexicon = { workspace = true, features = ["std"] }
 # by Cranelift and Winch.
 cranelift-codegen = { workspace = true, features = ["unwind"] }
 regalloc2 = { workspace = true }
+cranelift-assembler-x64 = { workspace = true }
 gimli = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-cranelift = { workspace = true }

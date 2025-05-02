@@ -4972,6 +4972,7 @@ name = "winch-codegen"
 version = "33.0.0"
 dependencies = [
  "anyhow",
+ "cranelift-assembler-x64",
  "cranelift-codegen",
  "gimli",
  "regalloc2",

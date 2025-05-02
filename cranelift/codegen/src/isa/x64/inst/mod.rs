@@ -13,6 +13,7 @@ use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::slice;
+use cranelift_assembler_x64 as asm;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
@@ -75,8 +76,7 @@ impl Inst {
         match self {
             // These instructions are part of SSE2, which is a basic requirement in Cranelift, and
             // don't have to be checked.
-            Inst::AluRmiR { .. }
-            | Inst::AtomicRmwSeq { .. }
+            Inst::AtomicRmwSeq { .. }
             | Inst::Bswap { .. }
             | Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
@@ -215,21 +215,22 @@ impl Inst {
         Self::Nop { len }
     }
 
-    pub(crate) fn alu_rmi_r(
-        size: OperandSize,
-        op: AluRmiROpcode,
-        src: RegMemImm,
-        dst: Writable<Reg>,
-    ) -> Self {
-        src.assert_regclass_is(RegClass::Int);
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Self::AluRmiR {
-            size,
-            op,
-            src1: Gpr::unwrap_new(dst.to_reg()),
-            src2: GprMemImm::unwrap_new(src),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-        }
+    pub(crate) fn addq_mi(dst: Writable<Reg>, simm32: i32) -> Self {
+        let inst = if let Ok(simm8) = i8::try_from(simm32) {
+            asm::inst::addq_mi_sxb::new(dst, simm8).into()
+        } else {
+            asm::inst::addq_mi_sxl::new(dst, simm32).into()
+        };
+        Inst::External { inst }
+    }
+
+    pub(crate) fn subq_mi(dst: Writable<Reg>, simm32: i32) -> Self {
+        let inst = if let Ok(simm8) = i8::try_from(simm32) {
+            asm::inst::subq_mi_sxb::new(dst, simm8).into()
+        } else {
+            asm::inst::subq_mi_sxl::new(dst, simm32).into()
+        };
+        Inst::External { inst }
     }
 
     #[allow(dead_code)]
@@ -698,20 +699,6 @@ impl PrettyPrint for Inst {
         match self {
             Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
 
-            Inst::AluRmiR {
-                size,
-                op,
-                src1,
-                src2,
-                dst,
-            } => {
-                let size_bytes = size.to_bytes();
-                let src1 = pretty_print_reg(src1.to_reg(), size_bytes);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size_bytes);
-                let src2 = src2.pretty_print(size_bytes);
-                let op = ljustify2(op.to_string(), suffix_bwlq(*size));
-                format!("{op} {src1}, {src2}, {dst}")
-            }
             Inst::AluRmRVex {
                 size,
                 op,
@@ -2015,13 +2002,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
     // in `emit.rs`, and (ii) pretty-printing, in the `pretty_print`
     // method above.
     match inst {
-        Inst::AluRmiR {
-            src1, src2, dst, ..
-        } => {
-            collector.reg_use(src1);
-            collector.reg_reuse_def(dst, 0);
-            src2.get_operands(collector);
-        }
         Inst::AluRmRVex {
             src1, src2, dst, ..
         } => {

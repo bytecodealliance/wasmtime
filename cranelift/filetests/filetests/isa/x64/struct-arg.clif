@@ -72,7 +72,7 @@ block0(v0: i64):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $64, %rsp
+;   subq $0x40, %rsp
 ; block0:
 ;   movq    %rdi, %rsi
 ;   lea     0(%rsp), %rdi
@@ -80,7 +80,7 @@ block0(v0: i64):
 ;   load_ext_name %Memcpy+0, %r9
 ;   call    *%r9
 ;   call    User(userextname0)
-;   addq    %rsp, $64, %rsp
+;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -113,7 +113,7 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $80, %rsp
+;   subq $0x50, %rsp
 ;   movq    %r14, 64(%rsp)
 ; block0:
 ;   movq    %rdi, %r14
@@ -124,7 +124,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %r14, %rdi
 ;   call    User(userextname0)
 ;   movq    64(%rsp), %r14
-;   addq    %rsp, $80, %rsp
+;   addq $0x50, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -195,7 +195,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $208, %rsp
+;   subq $0xd0, %rsp
 ;   movq    %rbx, 192(%rsp)
 ;   movq    %r13, 200(%rsp)
 ; block0:
@@ -214,7 +214,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   call    User(userextname0)
 ;   movq    192(%rsp), %rbx
 ;   movq    200(%rsp), %r13
-;   addq    %rsp, $208, %rsp
+;   addq $0xd0, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
