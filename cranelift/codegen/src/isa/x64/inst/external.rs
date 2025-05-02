@@ -50,6 +50,7 @@ impl From<WritableGpr> for asm::Gpr<PairedGpr> {
 // For ABI ergonomics.
 impl From<Writable<Reg>> for asm::GprMem<PairedGpr, Gpr> {
     fn from(wgpr: Writable<Reg>) -> Self {
+        assert!(wgpr.to_reg().class() == RegClass::Int);
         let wgpr = WritableGpr::from_writable_reg(wgpr).unwrap();
         Self::Gpr(wgpr.into())
     }
@@ -65,6 +66,7 @@ impl From<Gpr> for asm::GprMem<Gpr, Gpr> {
 // For ABI ergonomics.
 impl From<Reg> for asm::GprMem<Gpr, Gpr> {
     fn from(gpr: Reg) -> Self {
+        assert!(gpr.class() == RegClass::Int);
         let gpr = Gpr::unwrap_new(gpr);
         Self::Gpr(gpr)
     }
@@ -73,14 +75,14 @@ impl From<Reg> for asm::GprMem<Gpr, Gpr> {
 // For ABI ergonomics.
 impl From<Writable<Reg>> for asm::GprMem<Gpr, Gpr> {
     fn from(wgpr: Writable<Reg>) -> Self {
-        let gpr = Gpr::unwrap_new(wgpr.to_reg());
-        Self::Gpr(gpr)
+        wgpr.to_reg().into()
     }
 }
 
 // For ABI ergonomics.
 impl From<Writable<Reg>> for asm::Gpr<PairedGpr> {
     fn from(wgpr: Writable<Reg>) -> Self {
+        assert!(wgpr.to_reg().class() == RegClass::Int);
         let wgpr = WritableGpr::from_writable_reg(wgpr).unwrap();
         Self::new(wgpr.into())
     }
@@ -126,9 +128,59 @@ impl asm::AsReg for PairedGpr {
 
 /// A pair of XMM registers, one for reading and one for writing.
 #[derive(Clone, Copy, Debug)]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub struct PairedXmm {
-    pub(crate) read: Xmm,
-    pub(crate) write: WritableXmm,
+    pub read: Xmm,
+    pub write: WritableXmm,
+}
+
+impl From<WritableXmm> for PairedXmm {
+    fn from(wxmm: WritableXmm) -> Self {
+        let read = wxmm.to_reg();
+        let write = wxmm;
+        Self { read, write }
+    }
+}
+
+/// For ABI ergonomics.
+impl From<WritableXmm> for asm::Xmm<PairedXmm> {
+    fn from(wgpr: WritableXmm) -> Self {
+        asm::Xmm::new(wgpr.into())
+    }
+}
+
+// For emission ergonomics.
+impl From<Writable<Reg>> for asm::Xmm<PairedXmm> {
+    fn from(wxmm: Writable<Reg>) -> Self {
+        assert!(wxmm.to_reg().class() == RegClass::Float);
+        let wxmm = WritableXmm::from_writable_reg(wxmm).unwrap();
+        Self::new(wxmm.into())
+    }
+}
+
+// For emission ergonomics.
+impl From<Reg> for asm::Xmm<Xmm> {
+    fn from(xmm: Reg) -> Self {
+        assert!(xmm.class() == RegClass::Float);
+        let xmm = Xmm::unwrap_new(xmm);
+        Self::new(xmm)
+    }
+}
+
+// For emission ergonomics.
+impl From<Reg> for asm::XmmMem<Xmm, Gpr> {
+    fn from(xmm: Reg) -> Self {
+        assert!(xmm.class() == RegClass::Float);
+        let xmm = Xmm::unwrap_new(xmm);
+        Self::Xmm(xmm)
+    }
+}
+
+// For Winch ergonomics.
+impl From<PairedXmm> for asm::Xmm<PairedXmm> {
+    fn from(pair: PairedXmm) -> Self {
+        Self::new(pair)
+    }
 }
 
 impl asm::AsReg for PairedXmm {

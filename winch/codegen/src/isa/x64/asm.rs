@@ -23,7 +23,7 @@ use cranelift_codegen::{
                 WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm, CC,
             },
             encoding::rex::{encode_modrm, RexFlags},
-            external::PairedGpr,
+            external::{PairedGpr, PairedXmm},
             settings as x64_settings, AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
         },
     },
@@ -58,8 +58,17 @@ impl From<Reg> for WritableGpr {
     }
 }
 
-/// Convert a writable register to the read-write pair expected by `cranelift-codegen```
-fn pair(reg: WritableReg) -> PairedGpr {
+impl From<Reg> for WritableXmm {
+    fn from(reg: Reg) -> Self {
+        let writable = Writable::from_reg(reg.into());
+        WritableXmm::from_writable_reg(writable).expect("valid writable xmm")
+    }
+}
+
+/// Convert a writable GPR register to the read-write pair expected by
+/// `cranelift-codegen`.
+fn pair_gpr(reg: WritableReg) -> PairedGpr {
+    assert!(reg.to_reg().is_int());
     let read = Gpr::unwrap_new(reg.to_reg().into());
     let write = WritableGpr::from_reg(reg.to_reg().into());
     PairedGpr { read, write }
@@ -71,10 +80,18 @@ impl From<Reg> for asm::GprMem<Gpr, Gpr> {
     }
 }
 
-impl From<Reg> for WritableXmm {
+/// Convert a writable XMM register to the read-write pair expected by
+/// `cranelift-codegen`.
+fn pair_xmm(reg: WritableReg) -> PairedXmm {
+    assert!(reg.to_reg().is_float());
+    let read = Xmm::unwrap_new(reg.to_reg().into());
+    let write = WritableXmm::from_reg(reg.to_reg().into());
+    PairedXmm { read, write }
+}
+
+impl From<Reg> for asm::XmmMem<Xmm, Gpr> {
     fn from(reg: Reg) -> Self {
-        let writable = Writable::from_reg(reg.into());
-        WritableXmm::from_writable_reg(writable).expect("valid writable xmm")
+        asm::XmmMem::Xmm(reg.into())
     }
 }
 
@@ -787,7 +804,7 @@ impl Assembler {
 
     /// Subtract register and register
     pub fn sub_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst);
+        let dst = pair_gpr(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::subb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::subw_rm::new(dst, src).into(),
@@ -800,7 +817,7 @@ impl Assembler {
 
     /// Subtract immediate register.
     pub fn sub_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst);
+        let dst = pair_gpr(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::subb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
             OperandSize::S16 => asm::inst::subw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
@@ -813,7 +830,7 @@ impl Assembler {
 
     /// "and" two registers.
     pub fn and_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst);
+        let dst = pair_gpr(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::andb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::andw_rm::new(dst, src).into(),
@@ -825,7 +842,7 @@ impl Assembler {
     }
 
     pub fn and_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst);
+        let dst = pair_gpr(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::andb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
             OperandSize::S16 => asm::inst::andw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
@@ -1007,7 +1024,7 @@ impl Assembler {
     }
 
     pub fn or_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst);
+        let dst = pair_gpr(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::orb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::orw_rm::new(dst, src).into(),
@@ -1019,7 +1036,7 @@ impl Assembler {
     }
 
     pub fn or_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst);
+        let dst = pair_gpr(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::orb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
             OperandSize::S16 => asm::inst::orw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
@@ -1047,7 +1064,7 @@ impl Assembler {
 
     /// Logical exclusive or with registers.
     pub fn xor_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst);
+        let dst = pair_gpr(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::xorb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::xorw_rm::new(dst, src).into(),
@@ -1059,7 +1076,7 @@ impl Assembler {
     }
 
     pub fn xor_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst);
+        let dst = pair_gpr(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::xorb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
             OperandSize::S16 => asm::inst::xorw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
@@ -1232,7 +1249,7 @@ impl Assembler {
 
     /// Add immediate and register.
     pub fn add_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst);
+        let dst = pair_gpr(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::addb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
             OperandSize::S16 => asm::inst::addw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
@@ -1245,7 +1262,7 @@ impl Assembler {
 
     /// Add register and register.
     pub fn add_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst);
+        let dst = pair_gpr(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::addb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::addw_rm::new(dst, src).into(),
@@ -1508,34 +1525,24 @@ impl Assembler {
 
     /// Performs float addition on src and dst and places result in dst.
     pub fn xmm_add_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Addss,
-            OperandSize::S64 => SseOpcode::Addsd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::addss_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::addsd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmRUnaligned {
-            op,
-            src1: Xmm::from(dst.to_reg()).into(),
-            src2: Xmm::from(src).into(),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Performs float subtraction on src and dst and places result in dst.
     pub fn xmm_sub_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Subss,
-            OperandSize::S64 => SseOpcode::Subsd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::subss_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::subsd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmRUnaligned {
-            op,
-            src1: Xmm::from(dst.to_reg()).into(),
-            src2: Xmm::from(src).into(),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Performs float multiplication on src and dst and places result in dst.
@@ -1712,7 +1719,7 @@ impl Assembler {
     }
 
     pub fn adc_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst);
+        let dst = pair_gpr(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::adcb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::adcw_rm::new(dst, src).into(),
@@ -1724,7 +1731,7 @@ impl Assembler {
     }
 
     pub fn sbb_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst);
+        let dst = pair_gpr(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::sbbb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::sbbw_rm::new(dst, src).into(),

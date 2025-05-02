@@ -96,7 +96,7 @@ block0(v0: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addsd   %xmm0, const(0), %xmm0
+;   addsd (%rip), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

@@ -2205,10 +2205,6 @@ pub(crate) fn emit(
 
             let rex = RexFlags::clear_w();
             let (prefix, opcode, length) = match op {
-                SseOpcode::Addps => (LegacyPrefixes::None, 0x0F58, 2),
-                SseOpcode::Addpd => (LegacyPrefixes::_66, 0x0F58, 2),
-                SseOpcode::Addss => (LegacyPrefixes::_F3, 0x0F58, 2),
-                SseOpcode::Addsd => (LegacyPrefixes::_F2, 0x0F58, 2),
                 SseOpcode::Andps => (LegacyPrefixes::None, 0x0F54, 2),
                 SseOpcode::Andpd => (LegacyPrefixes::_66, 0x0F54, 2),
                 SseOpcode::Andnps => (LegacyPrefixes::None, 0x0F55, 2),
@@ -2297,10 +2293,6 @@ pub(crate) fn emit(
                 SseOpcode::Punpckhdq => (LegacyPrefixes::_66, 0x0F6A, 2),
                 SseOpcode::Punpckhqdq => (LegacyPrefixes::_66, 0x0F6D, 2),
                 SseOpcode::Pxor => (LegacyPrefixes::_66, 0x0FEF, 2),
-                SseOpcode::Subps => (LegacyPrefixes::None, 0x0F5C, 2),
-                SseOpcode::Subpd => (LegacyPrefixes::_66, 0x0F5C, 2),
-                SseOpcode::Subss => (LegacyPrefixes::_F3, 0x0F5C, 2),
-                SseOpcode::Subsd => (LegacyPrefixes::_F2, 0x0F5C, 2),
                 SseOpcode::Unpcklps => (LegacyPrefixes::None, 0x0F14, 2),
                 SseOpcode::Unpckhps => (LegacyPrefixes::None, 0x0F15, 2),
                 SseOpcode::Xorps => (LegacyPrefixes::None, 0x0F57, 2),
@@ -3110,7 +3102,7 @@ pub(crate) fn emit(
 
             let (add_op, cmp_op, and_op, or_op, min_max_op) = match size {
                 OperandSize::Size32 => (
-                    SseOpcode::Addss,
+                    asm::inst::addss_a::new(dst, lhs).into(),
                     SseOpcode::Ucomiss,
                     SseOpcode::Andps,
                     SseOpcode::Orps,
@@ -3121,7 +3113,7 @@ pub(crate) fn emit(
                     },
                 ),
                 OperandSize::Size64 => (
-                    SseOpcode::Addsd,
+                    asm::inst::addsd_a::new(dst, lhs).into(),
                     SseOpcode::Ucomisd,
                     SseOpcode::Andpd,
                     SseOpcode::Orpd,
@@ -3154,8 +3146,7 @@ pub(crate) fn emit(
             // read-only operand: perform an addition between the two operands, which has the
             // desired NaN propagation effects.
             sink.bind_label(propagate_nan, state.ctrl_plane_mut());
-            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(lhs), dst);
-            inst.emit(sink, info, state);
+            Inst::External { inst: add_op }.emit(sink, info, state);
 
             one_way_jmp(sink, CC::P, done);
 
@@ -3538,13 +3529,12 @@ pub(crate) fn emit(
                 *dst_size == OperandSize::Size64,
             );
 
-            let add_op = if *dst_size == OperandSize::Size64 {
-                SseOpcode::Addsd
-            } else {
-                SseOpcode::Addss
+            let inst = match *dst_size {
+                OperandSize::Size64 => asm::inst::addsd_a::new(dst, dst.to_reg()).into(),
+                OperandSize::Size32 => asm::inst::addss_a::new(dst, dst.to_reg()).into(),
+                _ => unreachable!(),
             };
-            let inst = Inst::xmm_rm_r(add_op, RegMem::reg(dst.to_reg()), dst);
-            inst.emit(sink, info, state);
+            Inst::External { inst }.emit(sink, info, state);
 
             sink.bind_label(done, state.ctrl_plane_mut());
         }
@@ -3784,13 +3774,13 @@ pub(crate) fn emit(
 
             let (sub_op, cast_op, cmp_op, trunc_op) = match src_size {
                 OperandSize::Size32 => (
-                    SseOpcode::Subss,
+                    asm::inst::subss_a::new(tmp_xmm2, tmp_xmm.to_reg()).into(),
                     SseOpcode::Movd,
                     SseOpcode::Ucomiss,
                     SseOpcode::Cvttss2si,
                 ),
                 OperandSize::Size64 => (
-                    SseOpcode::Subsd,
+                    asm::inst::subsd_a::new(tmp_xmm2, tmp_xmm.to_reg()).into(),
                     SseOpcode::Movq,
                     SseOpcode::Ucomisd,
                     SseOpcode::Cvttsd2si,
@@ -3875,8 +3865,7 @@ pub(crate) fn emit(
             let inst = Inst::gen_move(tmp_xmm2, src, types::F64);
             inst.emit(sink, info, state);
 
-            let inst = Inst::xmm_rm_r(sub_op, RegMem::reg(tmp_xmm.to_reg()), tmp_xmm2);
-            inst.emit(sink, info, state);
+            Inst::External { inst: sub_op }.emit(sink, info, state);
 
             let inst = Inst::xmm_to_gpr(trunc_op, tmp_xmm2.to_reg(), dst, *dst_size);
             inst.emit(sink, info, state);

@@ -62,6 +62,8 @@ pub fn list() -> Vec<Inst> {
         inst("lock_adcl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x11]).r(), _64b | compat),
         inst("lock_adcq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x11]).w().r(), _64b),
         // Vector instructions.
+        inst("addss", fmt("A", [rw(xmm), r(xmm_m32)]), rex([0xF3, 0x0F, 0x58]).r(), _64b | compat | sse),
+        inst("addsd", fmt("A", [rw(xmm), r(xmm_m64)]), rex([0xF2, 0x0F, 0x58]).r(), _64b | compat | sse2),
         inst("addps", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x0F, 0x58]).r(), _64b | compat | sse),
         inst("addpd", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x58]).r(), _64b | compat | sse2),
     ]

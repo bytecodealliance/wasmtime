@@ -876,11 +876,7 @@
       (enum Rorx))
 
 (type SseOpcode extern
-      (enum Addps
-            Addpd
-            Addss
-            Addsd
-            Andps
+      (enum Andps
             Andpd
             Andnps
             Andnpd
@@ -1044,10 +1040,6 @@
             Sqrtpd
             Sqrtss
             Sqrtsd
-            Subps
-            Subpd
-            Subss
-            Subsd
             Ucomiss
             Ucomisd
             Unpcklps
@@ -3836,19 +3828,17 @@
 
 ;; Helper for creating `addss` instructions.
 (decl x64_addss (Xmm XmmMem) Xmm)
-(rule (x64_addss src1 src2)
-      (xmm_rm_r_unaligned (SseOpcode.Addss) src1 src2))
 (rule 1 (x64_addss src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vaddss) src1 src2))
+(rule (x64_addss src1 src2) (x64_addss_a src1 src2))
 
 ;; Helper for creating `addsd` instructions.
 (decl x64_addsd (Xmm XmmMem) Xmm)
-(rule (x64_addsd src1 src2)
-      (xmm_rm_r_unaligned (SseOpcode.Addsd) src1 src2))
 (rule 1 (x64_addsd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vaddsd) src1 src2))
+(rule (x64_addsd src1 src2) (x64_addsd_a src1 src2))
 
 ;; Helper for creating `addps` instructions.
 (decl x64_addps (Xmm XmmMem) Xmm)
@@ -3866,19 +3856,17 @@
 
 ;; Helper for creating `subss` instructions.
 (decl x64_subss (Xmm XmmMem) Xmm)
-(rule (x64_subss src1 src2)
-      (xmm_rm_r_unaligned (SseOpcode.Subss) src1 src2))
 (rule 1 (x64_subss src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vsubss) src1 src2))
+(rule (x64_subss src1 src2) (x64_subss_a src1 src2))
 
 ;; Helper for creating `subsd` instructions.
 (decl x64_subsd (Xmm XmmMem) Xmm)
-(rule (x64_subsd src1 src2)
-      (xmm_rm_r_unaligned (SseOpcode.Subsd) src1 src2))
 (rule 1 (x64_subsd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vsubsd) src1 src2))
+(rule (x64_subsd src1 src2) (x64_subsd_a src1 src2))
 
 ;; Helper for creating `subps` instructions.
 (decl x64_subps (Xmm XmmMem) Xmm)
