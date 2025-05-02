@@ -15,12 +15,7 @@ pub use format::{align, fmt, r, rw, sxl, sxq, sxw};
 pub use format::{Extension, Format, Location, Mutability, Operand, OperandKind};
 
 /// Abbreviated constructor for an x64 instruction.
-pub fn inst(
-    mnemonic: impl Into<String>,
-    format: Format,
-    encoding: impl Into<Encoding>,
-    features: impl Into<Features>,
-) -> Inst {
+pub fn inst(mnemonic: impl Into<String>, format: Format, encoding: impl Into<Encoding>, features: impl Into<Features>) -> Inst {
     let encoding = encoding.into();
     encoding.validate(&format.operands);
     Inst {

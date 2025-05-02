@@ -15,12 +15,7 @@ impl dsl::Format {
     /// (TODO).
     #[must_use]
     pub fn generate_att_style_operands(&self) -> String {
-        let ordered_ops: Vec<_> = self
-            .operands
-            .iter()
-            .rev()
-            .map(|o| format!("{{{}}}", o.location))
-            .collect();
+        let ordered_ops: Vec<_> = self.operands.iter().rev().map(|o| format!("{{{}}}", o.location)).collect();
         ordered_ops.join(", ")
     }
 

@@ -5,11 +5,7 @@ impl dsl::Inst {
     /// `struct <inst> { <op>: Reg, <op>: Reg, ... }`
     pub fn generate_struct(&self, f: &mut Formatter) {
         let struct_name = self.struct_name_with_generic();
-        let where_clause = if self.requires_generic() {
-            "where R: Registers"
-        } else {
-            ""
-        };
+        let where_clause = if self.requires_generic() { "where R: Registers" } else { "" };
 
         fmtln!(f, "/// `{self}`");
         generate_derive(f);
@@ -84,11 +80,7 @@ impl dsl::Inst {
 
     /// `fn encode(&self, ...) { ... }`
     fn generate_encode_function(&self, f: &mut Formatter) {
-        let off = if self.format.uses_memory().is_some() {
-            "off"
-        } else {
-            "_"
-        };
+        let off = if self.format.uses_memory().is_some() { "off" } else { "_" };
         f.add_block(&format!("pub fn encode(&self, buf: &mut impl CodeSink, {off}: &impl KnownOffsetTable)"), |f| {
             // Emit trap.
             if let Some(op) = self.format.uses_memory() {
@@ -123,51 +115,44 @@ impl dsl::Inst {
     fn generate_visit_function(&self, f: &mut Formatter) {
         use dsl::OperandKind::*;
         let extra_generic_bound = if self.requires_generic() { "" } else { "<R: Registers>" };
-        f.add_block(
-            &format!("pub fn visit{extra_generic_bound}(&mut self, visitor: &mut impl RegisterVisitor<R>)"),
-            |f| {
-                for o in &self.format.operands {
-                    let mutability = o.mutability.generate_snake_case();
-                    let reg = o.location.reg_class();
-                    match o.location.kind() {
-                        Imm(_) => {
-                            // Immediates do not need register allocation.
-                        }
-                        FixedReg(loc) => {
-                            let reg_lower = reg.unwrap().to_string().to_lowercase();
-                            fmtln!(f, "let enc = self.{loc}.expected_enc();");
-                            fmtln!(f, "visitor.fixed_{mutability}_{reg_lower}(&mut self.{loc}.0, enc);");
-                        }
-                        Reg(loc) => {
-                            let reg_lower = reg.unwrap().to_string().to_lowercase();
-                            fmtln!(f, "visitor.{mutability}_{reg_lower}(self.{loc}.as_mut());");
-                        }
-                        RegMem(loc) => {
-                            let reg = reg.unwrap();
-                            let reg_lower = reg.to_string().to_lowercase();
-                            f.add_block(&format!("match &mut self.{loc}"), |f| {
-                                fmtln!(f, "{reg}Mem::{reg}(r) => visitor.{mutability}_{reg_lower}(r),");
-                                fmtln!(f, "{reg}Mem::Mem(m) => visit_amode(m, visitor),");
-                            });
-                        }
-                        Mem(loc) => {
-                            fmtln!(f, "visit_amode(&mut self.{loc}, visitor);");
-                        }
+        f.add_block(&format!("pub fn visit{extra_generic_bound}(&mut self, visitor: &mut impl RegisterVisitor<R>)"), |f| {
+            for o in &self.format.operands {
+                let mutability = o.mutability.generate_snake_case();
+                let reg = o.location.reg_class();
+                match o.location.kind() {
+                    Imm(_) => {
+                        // Immediates do not need register allocation.
+                    }
+                    FixedReg(loc) => {
+                        let reg_lower = reg.unwrap().to_string().to_lowercase();
+                        fmtln!(f, "let enc = self.{loc}.expected_enc();");
+                        fmtln!(f, "visitor.fixed_{mutability}_{reg_lower}(&mut self.{loc}.0, enc);");
+                    }
+                    Reg(loc) => {
+                        let reg_lower = reg.unwrap().to_string().to_lowercase();
+                        fmtln!(f, "visitor.{mutability}_{reg_lower}(self.{loc}.as_mut());");
+                    }
+                    RegMem(loc) => {
+                        let reg = reg.unwrap();
+                        let reg_lower = reg.to_string().to_lowercase();
+                        f.add_block(&format!("match &mut self.{loc}"), |f| {
+                            fmtln!(f, "{reg}Mem::{reg}(r) => visitor.{mutability}_{reg_lower}(r),");
+                            fmtln!(f, "{reg}Mem::Mem(m) => visit_amode(m, visitor),");
+                        });
+                    }
+                    Mem(loc) => {
+                        fmtln!(f, "visit_amode(&mut self.{loc}, visitor);");
                     }
                 }
-            },
-        );
+            }
+        });
     }
 
     /// `fn features(&self) -> Vec<Flag> { ... }`
     fn generate_features_function(&self, f: &mut Formatter) {
         fmtln!(f, "#[must_use]");
         f.add_block("pub fn features(&self) -> Vec<Feature>", |f| {
-            let flags = self
-                .features
-                .iter()
-                .map(|f| format!("Feature::{f}"))
-                .collect::<Vec<_>>();
+            let flags = self.features.iter().map(|f| format!("Feature::{f}")).collect::<Vec<_>>();
             fmtln!(f, "vec![{}]", flags.join(", "));
         });
     }

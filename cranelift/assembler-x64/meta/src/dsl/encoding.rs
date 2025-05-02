@@ -202,11 +202,7 @@ impl Rex {
             .map(|o| o.location.kind())
             .find(|k| matches!(k, OperandKind::Imm(_)))
         {
-            assert_eq!(
-                op.bits(),
-                self.imm.bits(),
-                "for an immediate, the encoding width must match the declared operand width"
-            );
+            assert_eq!(op.bits(), self.imm.bits(), "for an immediate, the encoding width must match the declared operand width");
         }
     }
 }
@@ -313,7 +309,9 @@ impl<const N: usize> From<[u8; N]> for Opcodes {
             [primary] => (false, *primary, None),
             [0x0f, primary] => (true, *primary, None),
             [0x0f, primary, secondary] => (true, *primary, Some(*secondary)),
-            _ => panic!("invalid opcodes after prefix; expected [opcode], [0x0f, opcode], or [0x0f, opcode, opcode], found {remaining:?}"),
+            _ => panic!(
+                "invalid opcodes after prefix; expected [opcode], [0x0f, opcode], or [0x0f, opcode, opcode], found {remaining:?}"
+            ),
         };
         Self { prefixes, escape, primary, secondary }
     }

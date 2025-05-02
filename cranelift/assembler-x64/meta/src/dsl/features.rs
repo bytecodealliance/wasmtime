@@ -56,6 +56,7 @@ pub enum Feature {
     compat,
     sse,
     sse2,
+    ssse3,
 }
 
 /// List all CPU features.
@@ -65,7 +66,7 @@ pub enum Feature {
 /// transcribe each variant to an `enum` available in the generated layer above.
 /// If this list is incomplete, we will (fortunately) see compile errors for
 /// generated functions that use the missing variants.
-pub const ALL_FEATURES: &[Feature] = &[Feature::_64b, Feature::compat, Feature::sse, Feature::sse2];
+pub const ALL_FEATURES: &[Feature] = &[Feature::_64b, Feature::compat, Feature::sse, Feature::sse2, Feature::ssse3];
 
 impl fmt::Display for Feature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -74,6 +75,7 @@ impl fmt::Display for Feature {
             Feature::compat => write!(f, "compat"),
             Feature::sse => write!(f, "sse"),
             Feature::sse2 => write!(f, "sse2"),
+            Feature::ssse3 => write!(f, "ssse3"),
         }
     }
 }

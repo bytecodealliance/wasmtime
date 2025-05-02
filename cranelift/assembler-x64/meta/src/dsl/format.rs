@@ -307,8 +307,8 @@ impl Location {
         use Location::*;
         match self {
             imm8 | imm16 | imm32 => false,
-            al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 | xmm | xmm_m32 | xmm_m64
-            | xmm_m128 | m8 | m16 | m32 | m64 => true,
+            al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 | xmm | xmm_m32 | xmm_m64 | xmm_m128
+            | m8 | m16 | m32 | m64 => true,
         }
     }
 

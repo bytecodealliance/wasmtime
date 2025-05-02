@@ -2273,8 +2273,6 @@ pub(crate) fn emit(
                 SseOpcode::Pxor => (LegacyPrefixes::_66, 0x0FEF, 2),
                 SseOpcode::Unpcklps => (LegacyPrefixes::None, 0x0F14, 2),
                 SseOpcode::Unpckhps => (LegacyPrefixes::None, 0x0F15, 2),
-                SseOpcode::Phaddw => (LegacyPrefixes::_66, 0x0F3801, 3),
-                SseOpcode::Phaddd => (LegacyPrefixes::_66, 0x0F3802, 3),
                 SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F10, 2),
                 SseOpcode::Cvtss2sd => (LegacyPrefixes::_F3, 0x0F5A, 2),
                 SseOpcode::Cvtsd2ss => (LegacyPrefixes::_F2, 0x0F5A, 2),

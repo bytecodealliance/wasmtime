@@ -1088,8 +1088,6 @@ pub enum SseOpcode {
     Unpcklps,
     Unpcklpd,
     Unpckhps,
-    Phaddw,
-    Phaddd,
     Punpckhdq,
     Punpckldq,
     Punpckhqdq,
@@ -1220,8 +1218,6 @@ impl SseOpcode {
             | SseOpcode::Palignr
             | SseOpcode::Pmulhrsw
             | SseOpcode::Pshufb
-            | SseOpcode::Phaddw
-            | SseOpcode::Phaddd
             | SseOpcode::Pmaddubsw
             | SseOpcode::Movddup => SSSE3,
 
@@ -1447,8 +1443,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Ucomisd => "ucomisd",
             SseOpcode::Unpcklps => "unpcklps",
             SseOpcode::Unpckhps => "unpckhps",
-            SseOpcode::Phaddw => "phaddw",
-            SseOpcode::Phaddd => "phaddd",
             SseOpcode::Punpckldq => "punpckldq",
             SseOpcode::Punpckhdq => "punpckhdq",
             SseOpcode::Punpcklqdq => "punpcklqdq",
