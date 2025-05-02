@@ -266,7 +266,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   andps %xmm0, %xmm1
-;   andnps  %xmm0, %xmm2, %xmm0
+;   andnps %xmm2, %xmm0
 ;   orps %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -295,7 +295,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   andpd %xmm0, %xmm1
-;   andnpd  %xmm0, %xmm2, %xmm0
+;   andnpd %xmm2, %xmm0
 ;   orpd %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

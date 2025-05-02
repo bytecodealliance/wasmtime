@@ -3242,12 +3242,6 @@ fn test_x64_emit() {
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Andnps, RegMem::reg(xmm4), w_xmm11),
-        "440F55DC",
-        "andnps  %xmm11, %xmm4, %xmm11",
-    ));
-
-    insns.push((
         Inst::xmm_rm_r_blend(SseOpcode::Blendvpd, RegMem::reg(xmm15), w_xmm4),
         "66410F3815E7",
         "blendvpd %xmm4, %xmm15, %xmm4",

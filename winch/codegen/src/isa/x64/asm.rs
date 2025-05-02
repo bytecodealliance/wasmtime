@@ -866,18 +866,13 @@ impl Assembler {
 
     /// "and not" two float registers.
     pub fn xmm_andn_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Andnps,
-            OperandSize::S64 => SseOpcode::Andnpd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::andnps_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::andnpd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmR {
-            op,
-            src1: dst.to_reg().into(),
-            src2: Xmm::from(src).into(),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     pub fn gpr_to_xmm(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
