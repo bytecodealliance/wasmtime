@@ -16,8 +16,8 @@ instead.
 
 This adapter can be built with:
 
-```sh
-$ cargo build -p wasi-preview1-component-adapter --target wasm32-unknown-unknown --release
+```console
+cargo build -p wasi-preview1-component-adapter --target wasm32-unknown-unknown --release
 ```
 
 And the artifact will be located at
@@ -40,7 +40,7 @@ With a `wasi_snapshot_preview1.wasm` file on-hand you can create a component
 from a module that imports WASI functions using the [`wasm-tools`
 CLI](https://github.com/bytecodealliance/wasm-tools)
 
-```sh
+```shell-session
 $ cat foo.rs
 fn main() {
     println!("Hello, world!");

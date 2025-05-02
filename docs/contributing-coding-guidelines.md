@@ -11,8 +11,8 @@ be aware of.
 All PRs must be formatted according to rustfmt, and this is checked in the
 continuous integration tests. You can format code locally with:
 
-```sh
-$ cargo fmt
+```console
+cargo fmt
 ```
 
 at the root of the repository. You can find [more information about rustfmt
@@ -82,8 +82,8 @@ crates in the workspace to land the PR in CI.
 
 Clippy can be run locally with:
 
-```shell
-$ cargo clippy --workspace --all-targets
+```console
+cargo clippy --workspace --all-targets
 ```
 
 Contributors are welcome to enable new lints and send PRs for this. Feel free to
