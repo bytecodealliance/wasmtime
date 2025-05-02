@@ -941,14 +941,6 @@
             Packsswb
             Packusdw
             Packuswb
-            Paddb
-            Paddd
-            Paddq
-            Paddw
-            Paddsb
-            Paddsw
-            Paddusb
-            Paddusw
             Palignr
             Pand
             Pandn
@@ -3448,51 +3440,45 @@
 
 ;; Helper for creating `paddb` instructions.
 (decl x64_paddb (Xmm XmmMem) Xmm)
-(rule 0 (x64_paddb src1 src2)
-      (xmm_rm_r (SseOpcode.Paddb) src1 src2))
 (rule 1 (x64_paddb src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpaddb) src1 src2))
+(rule 0 (x64_paddb src1 src2) (x64_paddb_a src1 src2))
 
 ;; Helper for creating `paddw` instructions.
 (decl x64_paddw (Xmm XmmMem) Xmm)
-(rule 0 (x64_paddw src1 src2)
-      (xmm_rm_r (SseOpcode.Paddw) src1 src2))
 (rule 1 (x64_paddw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpaddw) src1 src2))
+(rule 0 (x64_paddw src1 src2) (x64_paddw_a src1 src2))
 
 ;; Helper for creating `paddd` instructions.
 (decl x64_paddd (Xmm XmmMem) Xmm)
-(rule 0 (x64_paddd src1 src2)
-      (xmm_rm_r (SseOpcode.Paddd) src1 src2))
 (rule 1 (x64_paddd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpaddd) src1 src2))
+(rule 0 (x64_paddd src1 src2) (x64_paddd_a src1 src2))
 
 ;; Helper for creating `paddq` instructions.
 (decl x64_paddq (Xmm XmmMem) Xmm)
-(rule 0 (x64_paddq src1 src2)
-      (xmm_rm_r (SseOpcode.Paddq) src1 src2))
 (rule 1 (x64_paddq src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpaddq) src1 src2))
+(rule 0 (x64_paddq src1 src2) (x64_paddq_a src1 src2))
 
 ;; Helper for creating `paddsb` instructions.
 (decl x64_paddsb (Xmm XmmMem) Xmm)
-(rule 0 (x64_paddsb src1 src2)
-      (xmm_rm_r (SseOpcode.Paddsb) src1 src2))
 (rule 1 (x64_paddsb src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpaddsb) src1 src2))
+(rule 0 (x64_paddsb src1 src2) (x64_paddsb_a src1 src2))
 
 ;; Helper for creating `paddsw` instructions.
 (decl x64_paddsw (Xmm XmmMem) Xmm)
-(rule 0 (x64_paddsw src1 src2)
-      (xmm_rm_r (SseOpcode.Paddsw) src1 src2))
 (rule 1 (x64_paddsw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpaddsw) src1 src2))
+(rule 0 (x64_paddsw src1 src2) (x64_paddsw_a src1 src2))
 
 ;; Helper for creating `phaddw` instructions.
 (decl x64_phaddw (Xmm XmmMem) Xmm)
@@ -3512,19 +3498,17 @@
 
 ;; Helper for creating `paddusb` instructions.
 (decl x64_paddusb (Xmm XmmMem) Xmm)
-(rule 0 (x64_paddusb src1 src2)
-      (xmm_rm_r (SseOpcode.Paddusb) src1 src2))
 (rule 1 (x64_paddusb src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpaddusb) src1 src2))
+(rule 0 (x64_paddusb src1 src2) (x64_paddusb_a src1 src2))
 
 ;; Helper for creating `paddusw` instructions.
 (decl x64_paddusw (Xmm XmmMem) Xmm)
-(rule 0 (x64_paddusw src1 src2)
-      (xmm_rm_r (SseOpcode.Paddusw) src1 src2))
 (rule 1 (x64_paddusw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpaddusw) src1 src2))
+(rule 0 (x64_paddusw src1 src2) (x64_paddusw_a src1 src2))
 
 ;; Helper for creating `psubb` instructions.
 (decl x64_psubb (Xmm XmmMem) Xmm)

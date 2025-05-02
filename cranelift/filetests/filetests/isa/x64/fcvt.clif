@@ -1078,7 +1078,7 @@ block0(v0: f32x4):
 ;   uninit  %xmm1
 ;   pxor    %xmm1, %xmm1, %xmm1
 ;   pmaxsd  %xmm0, %xmm1, %xmm0
-;   paddd   %xmm0, %xmm6, %xmm0
+;   paddd %xmm6, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
