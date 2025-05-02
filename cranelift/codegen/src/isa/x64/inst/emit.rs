@@ -919,11 +919,7 @@ pub(crate) fn emit(
                     let dst = Writable::from_reg(dst);
                     let inst = match size {
                         OperandSize::Size32 => Inst::External {
-                            inst: asm::inst::addl_mi::new(
-                                dst.into(),
-                                asm::Imm32::new(simm32 as u32),
-                            )
-                            .into(),
+                            inst: asm::inst::addl_mi::new(dst, simm32 as u32).into(),
                         },
                         OperandSize::Size64 => Inst::addq_mi(dst, simm32),
                         _ => unreachable!(),
@@ -951,12 +947,8 @@ pub(crate) fn emit(
                     };
                     let dst = Writable::from_reg(dst);
                     let inst = match size {
-                        OperandSize::Size32 => {
-                            asm::inst::addl_rm::new(dst.into(), operand.into()).into()
-                        }
-                        OperandSize::Size64 => {
-                            asm::inst::addq_rm::new(dst.into(), operand.into()).into()
-                        }
+                        OperandSize::Size32 => asm::inst::addl_rm::new(dst, operand).into(),
+                        OperandSize::Size64 => asm::inst::addq_rm::new(dst, operand).into(),
                         _ => unreachable!(),
                     };
                     Inst::External { inst }.emit(sink, info, state);
@@ -1971,7 +1963,7 @@ pub(crate) fn emit(
 
             // Add base of jump table to jump-table-sourced block offset.
             let inst = Inst::External {
-                inst: asm::inst::addq_rm::new(tmp1.into(), tmp2.into()).into(),
+                inst: asm::inst::addq_rm::new(tmp1, tmp2).into(),
             };
             inst.emit(sink, info, state);
 
@@ -3528,12 +3520,12 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
 
             Inst::External {
-                inst: asm::inst::andq_mi_sxb::new(tmp_gpr2.into(), asm::Simm8::new(1)).into(),
+                inst: asm::inst::andq_mi_sxb::new(tmp_gpr2, 1).into(),
             }
             .emit(sink, info, state);
 
             Inst::External {
-                inst: asm::inst::orq_rm::new(tmp_gpr2.into(), tmp_gpr1.into()).into(),
+                inst: asm::inst::orq_rm::new(tmp_gpr2, tmp_gpr1).into(),
             }
             .emit(sink, info, state);
 
@@ -3646,8 +3638,8 @@ pub(crate) fn emit(
 
                 // For NaN, emit 0.
                 let inst = match *dst_size {
-                    OperandSize::Size32 => asm::inst::xorl_rm::new(dst.into(), dst.into()).into(),
-                    OperandSize::Size64 => asm::inst::xorq_rm::new(dst.into(), dst.into()).into(),
+                    OperandSize::Size32 => asm::inst::xorl_rm::new(dst, dst).into(),
+                    OperandSize::Size64 => asm::inst::xorq_rm::new(dst, dst).into(),
                     _ => unreachable!(),
                 };
                 Inst::External { inst }.emit(sink, info, state);
@@ -3832,8 +3824,8 @@ pub(crate) fn emit(
                 one_way_jmp(sink, CC::NP, not_nan);
 
                 let inst = match *dst_size {
-                    OperandSize::Size32 => asm::inst::xorl_rm::new(dst.into(), dst.into()).into(),
-                    OperandSize::Size64 => asm::inst::xorq_rm::new(dst.into(), dst.into()).into(),
+                    OperandSize::Size32 => asm::inst::xorl_rm::new(dst, dst).into(),
+                    OperandSize::Size64 => asm::inst::xorq_rm::new(dst, dst).into(),
                     _ => unreachable!(),
                 };
                 Inst::External { inst }.emit(sink, info, state);
@@ -3862,8 +3854,8 @@ pub(crate) fn emit(
                 // The input was "small" (< 2**(width -1)), so the only way to get an integer
                 // overflow is because the input was too small: saturate to the min value, i.e. 0.
                 let inst = match *dst_size {
-                    OperandSize::Size32 => asm::inst::xorl_rm::new(dst.into(), dst.into()).into(),
-                    OperandSize::Size64 => asm::inst::xorq_rm::new(dst.into(), dst.into()).into(),
+                    OperandSize::Size32 => asm::inst::xorl_rm::new(dst, dst).into(),
+                    OperandSize::Size64 => asm::inst::xorq_rm::new(dst, dst).into(),
                     _ => unreachable!(),
                 };
                 Inst::External { inst }.emit(sink, info, state);
@@ -3922,12 +3914,12 @@ pub(crate) fn emit(
                 inst.emit(sink, info, state);
 
                 let inst = Inst::External {
-                    inst: asm::inst::addq_rm::new(dst.into(), tmp_gpr.into()).into(),
+                    inst: asm::inst::addq_rm::new(dst, tmp_gpr).into(),
                 };
                 inst.emit(sink, info, state);
             } else {
                 let inst = Inst::External {
-                    inst: asm::inst::addl_mi::new(dst.into(), asm::Imm32::new(1 << 31)).into(),
+                    inst: asm::inst::addl_mi::new(dst, asm::Imm32::new(1 << 31)).into(),
                 };
                 inst.emit(sink, info, state);
             }
@@ -4130,7 +4122,7 @@ pub(crate) fn emit(
                 RmwOp::Nand => {
                     // andq %r_operand, %r_temp
                     Inst::External {
-                        inst: asm::inst::andq_rm::new(temp.into(), operand.into()).into(),
+                        inst: asm::inst::andq_rm::new(temp, operand).into(),
                     }
                     .emit(sink, info, state);
 
@@ -4161,21 +4153,21 @@ pub(crate) fn emit(
                 RmwOp::And => {
                     // andq %r_operand, %r_temp
                     Inst::External {
-                        inst: asm::inst::andq_rm::new(temp.into(), operand.into()).into(),
+                        inst: asm::inst::andq_rm::new(temp, operand).into(),
                     }
                     .emit(sink, info, state);
                 }
                 RmwOp::Or => {
                     // orq %r_operand, %r_temp
                     Inst::External {
-                        inst: asm::inst::orq_rm::new(temp.into(), operand.into()).into(),
+                        inst: asm::inst::orq_rm::new(temp, operand).into(),
                     }
                     .emit(sink, info, state);
                 }
                 RmwOp::Xor => {
                     // xorq %r_operand, %r_temp
                     Inst::External {
-                        inst: asm::inst::xorq_rm::new(temp.into(), operand.into()).into(),
+                        inst: asm::inst::xorq_rm::new(temp, operand).into(),
                     }
                     .emit(sink, info, state);
                 }
@@ -4242,11 +4234,11 @@ pub(crate) fn emit(
                 RmwOp::Nand => {
                     // temp &= operand
                     Inst::External {
-                        inst: asm::inst::andq_rm::new(temp_low.into(), operand_low.into()).into(),
+                        inst: asm::inst::andq_rm::new(temp_low, operand_low).into(),
                     }
                     .emit(sink, info, state);
                     Inst::External {
-                        inst: asm::inst::andq_rm::new(temp_high.into(), operand_high.into()).into(),
+                        inst: asm::inst::andq_rm::new(temp_high, operand_high).into(),
                     }
                     .emit(sink, info, state);
 
@@ -4261,7 +4253,7 @@ pub(crate) fn emit(
                         .emit(sink, info, state);
                     // This will clobber `temp_high`
                     Inst::External {
-                        inst: asm::inst::sbbq_rm::new(temp_high.into(), operand_high.into()).into(),
+                        inst: asm::inst::sbbq_rm::new(temp_high, operand_high).into(),
                     }
                     .emit(sink, info, state);
                     // Restore the clobbered value
@@ -4281,51 +4273,51 @@ pub(crate) fn emit(
                 }
                 RmwOp::Add => {
                     Inst::External {
-                        inst: asm::inst::addq_rm::new(temp_low.into(), operand_low.into()).into(),
+                        inst: asm::inst::addq_rm::new(temp_low, operand_low).into(),
                     }
                     .emit(sink, info, state);
                     Inst::External {
-                        inst: asm::inst::adcq_rm::new(temp_high.into(), operand_high.into()).into(),
+                        inst: asm::inst::adcq_rm::new(temp_high, operand_high).into(),
                     }
                     .emit(sink, info, state);
                 }
                 RmwOp::Sub => {
                     Inst::External {
-                        inst: asm::inst::subq_rm::new(temp_low.into(), operand_low.into()).into(),
+                        inst: asm::inst::subq_rm::new(temp_low, operand_low).into(),
                     }
                     .emit(sink, info, state);
                     Inst::External {
-                        inst: asm::inst::sbbq_rm::new(temp_high.into(), operand_high.into()).into(),
+                        inst: asm::inst::sbbq_rm::new(temp_high, operand_high).into(),
                     }
                     .emit(sink, info, state);
                 }
                 RmwOp::And => {
                     Inst::External {
-                        inst: asm::inst::andq_rm::new(temp_low.into(), operand_low.into()).into(),
+                        inst: asm::inst::andq_rm::new(temp_low, operand_low).into(),
                     }
                     .emit(sink, info, state);
                     Inst::External {
-                        inst: asm::inst::andq_rm::new(temp_high.into(), operand_high.into()).into(),
+                        inst: asm::inst::andq_rm::new(temp_high, operand_high).into(),
                     }
                     .emit(sink, info, state);
                 }
                 RmwOp::Or => {
                     Inst::External {
-                        inst: asm::inst::orq_rm::new(temp_low.into(), operand_low.into()).into(),
+                        inst: asm::inst::orq_rm::new(temp_low, operand_low).into(),
                     }
                     .emit(sink, info, state);
                     Inst::External {
-                        inst: asm::inst::orq_rm::new(temp_high.into(), operand_high.into()).into(),
+                        inst: asm::inst::orq_rm::new(temp_high, operand_high).into(),
                     }
                     .emit(sink, info, state);
                 }
                 RmwOp::Xor => {
                     Inst::External {
-                        inst: asm::inst::xorq_rm::new(temp_low.into(), operand_low.into()).into(),
+                        inst: asm::inst::xorq_rm::new(temp_low, operand_low).into(),
                     }
                     .emit(sink, info, state);
                     Inst::External {
-                        inst: asm::inst::xorq_rm::new(temp_high.into(), operand_high.into()).into(),
+                        inst: asm::inst::xorq_rm::new(temp_high, operand_high).into(),
                     }
                     .emit(sink, info, state);
                 }

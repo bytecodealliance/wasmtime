@@ -787,8 +787,7 @@ impl Assembler {
 
     /// Subtract register and register
     pub fn sub_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst).into();
-        let src = src.into();
+        let dst = pair(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::subb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::subw_rm::new(dst, src).into(),
@@ -799,14 +798,14 @@ impl Assembler {
         self.emit(Inst::External { inst });
     }
 
-    /// Subtact immediate register.
+    /// Subtract immediate register.
     pub fn sub_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst).into();
+        let dst = pair(dst);
         let inst = match size {
-            OperandSize::S8 => asm::inst::subb_mi::new(dst, imm.try_into().unwrap()).into(),
-            OperandSize::S16 => asm::inst::subw_mi::new(dst, imm.try_into().unwrap()).into(),
-            OperandSize::S32 => asm::inst::subl_mi::new(dst, imm.into()).into(),
-            OperandSize::S64 => asm::inst::subq_mi_sxl::new(dst, imm.into()).into(),
+            OperandSize::S8 => asm::inst::subb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
+            OperandSize::S16 => asm::inst::subw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
+            OperandSize::S32 => asm::inst::subl_mi::new(dst, imm as u32).into(),
+            OperandSize::S64 => asm::inst::subq_mi_sxl::new(dst, imm).into(),
             OperandSize::S128 => unimplemented!(),
         };
         self.emit(Inst::External { inst });
@@ -814,8 +813,7 @@ impl Assembler {
 
     /// "and" two registers.
     pub fn and_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst).into();
-        let src = src.into();
+        let dst = pair(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::andb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::andw_rm::new(dst, src).into(),
@@ -827,12 +825,12 @@ impl Assembler {
     }
 
     pub fn and_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst).into();
+        let dst = pair(dst);
         let inst = match size {
-            OperandSize::S8 => asm::inst::andb_mi::new(dst, imm.try_into().unwrap()).into(),
-            OperandSize::S16 => asm::inst::andw_mi::new(dst, imm.try_into().unwrap()).into(),
-            OperandSize::S32 => asm::inst::andl_mi::new(dst, imm.into()).into(),
-            OperandSize::S64 => asm::inst::andq_mi_sxl::new(dst, imm.into()).into(),
+            OperandSize::S8 => asm::inst::andb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
+            OperandSize::S16 => asm::inst::andw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
+            OperandSize::S32 => asm::inst::andl_mi::new(dst, imm as u32).into(),
+            OperandSize::S64 => asm::inst::andq_mi_sxl::new(dst, imm).into(),
             OperandSize::S128 => unimplemented!(),
         };
         self.emit(Inst::External { inst });
@@ -1009,8 +1007,7 @@ impl Assembler {
     }
 
     pub fn or_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst).into();
-        let src = src.into();
+        let dst = pair(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::orb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::orw_rm::new(dst, src).into(),
@@ -1022,12 +1019,12 @@ impl Assembler {
     }
 
     pub fn or_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst).into();
+        let dst = pair(dst);
         let inst = match size {
-            OperandSize::S8 => asm::inst::orb_mi::new(dst, imm.try_into().unwrap()).into(),
-            OperandSize::S16 => asm::inst::orw_mi::new(dst, imm.try_into().unwrap()).into(),
-            OperandSize::S32 => asm::inst::orl_mi::new(dst, imm.into()).into(),
-            OperandSize::S64 => asm::inst::orq_mi_sxl::new(dst, imm.into()).into(),
+            OperandSize::S8 => asm::inst::orb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
+            OperandSize::S16 => asm::inst::orw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
+            OperandSize::S32 => asm::inst::orl_mi::new(dst, imm as u32).into(),
+            OperandSize::S64 => asm::inst::orq_mi_sxl::new(dst, imm).into(),
             OperandSize::S128 => unimplemented!(),
         };
         self.emit(Inst::External { inst });
@@ -1050,8 +1047,7 @@ impl Assembler {
 
     /// Logical exclusive or with registers.
     pub fn xor_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst).into();
-        let src = src.into();
+        let dst = pair(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::xorb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::xorw_rm::new(dst, src).into(),
@@ -1063,12 +1059,12 @@ impl Assembler {
     }
 
     pub fn xor_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst).into();
+        let dst = pair(dst);
         let inst = match size {
-            OperandSize::S8 => asm::inst::xorb_mi::new(dst, imm.try_into().unwrap()).into(),
-            OperandSize::S16 => asm::inst::xorw_mi::new(dst, imm.try_into().unwrap()).into(),
-            OperandSize::S32 => asm::inst::xorl_mi::new(dst, imm.into()).into(),
-            OperandSize::S64 => asm::inst::xorq_mi_sxl::new(dst, imm.into()).into(),
+            OperandSize::S8 => asm::inst::xorb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
+            OperandSize::S16 => asm::inst::xorw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
+            OperandSize::S32 => asm::inst::xorl_mi::new(dst, imm as u32).into(),
+            OperandSize::S64 => asm::inst::xorq_mi_sxl::new(dst, imm).into(),
             OperandSize::S128 => unimplemented!(),
         };
         self.emit(Inst::External { inst });
@@ -1236,12 +1232,12 @@ impl Assembler {
 
     /// Add immediate and register.
     pub fn add_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst).into();
+        let dst = pair(dst);
         let inst = match size {
-            OperandSize::S8 => asm::inst::addb_mi::new(dst, imm.try_into().unwrap()).into(),
-            OperandSize::S16 => asm::inst::addw_mi::new(dst, imm.try_into().unwrap()).into(),
-            OperandSize::S32 => asm::inst::addl_mi::new(dst, imm.into()).into(),
-            OperandSize::S64 => asm::inst::addq_mi_sxl::new(dst, imm.into()).into(),
+            OperandSize::S8 => asm::inst::addb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
+            OperandSize::S16 => asm::inst::addw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
+            OperandSize::S32 => asm::inst::addl_mi::new(dst, imm as u32).into(),
+            OperandSize::S64 => asm::inst::addq_mi_sxl::new(dst, imm).into(),
             OperandSize::S128 => unimplemented!(),
         };
         self.emit(Inst::External { inst });
@@ -1249,8 +1245,7 @@ impl Assembler {
 
     /// Add register and register.
     pub fn add_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst).into();
-        let src = src.into();
+        let dst = pair(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::addb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::addw_rm::new(dst, src).into(),
@@ -1717,8 +1712,7 @@ impl Assembler {
     }
 
     pub fn adc_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst).into();
-        let src = src.into();
+        let dst = pair(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::adcb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::adcw_rm::new(dst, src).into(),
@@ -1730,8 +1724,7 @@ impl Assembler {
     }
 
     pub fn sbb_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let dst = pair(dst).into();
-        let src = src.into();
+        let dst = pair(dst);
         let inst = match size {
             OperandSize::S8 => asm::inst::sbbb_rm::new(dst, src).into(),
             OperandSize::S16 => asm::inst::sbbw_rm::new(dst, src).into(),

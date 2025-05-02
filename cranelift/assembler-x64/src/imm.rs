@@ -42,6 +42,12 @@ impl Imm8 {
     }
 }
 
+impl From<u8> for Imm8 {
+    fn from(imm8: u8) -> Self {
+        Self(imm8)
+    }
+}
+
 impl TryFrom<i32> for Imm8 {
     type Error = std::num::TryFromIntError;
     fn try_from(simm32: i32) -> Result<Self, Self::Error> {
@@ -87,6 +93,12 @@ impl Simm8 {
     }
 }
 
+impl From<i8> for Simm8 {
+    fn from(simm8: i8) -> Self {
+        Self(simm8)
+    }
+}
+
 impl TryFrom<i32> for Simm8 {
     type Error = std::num::TryFromIntError;
     fn try_from(simm32: i32) -> Result<Self, Self::Error> {
@@ -112,6 +124,12 @@ impl Imm16 {
 
     pub fn encode(&self, sink: &mut impl CodeSink) {
         sink.put2(self.0);
+    }
+}
+
+impl From<u16> for Imm16 {
+    fn from(imm16: u16) -> Self {
+        Self(imm16)
     }
 }
 
@@ -160,6 +178,12 @@ impl Simm16 {
     }
 }
 
+impl From<i16> for Simm16 {
+    fn from(simm16: i16) -> Self {
+        Self(simm16)
+    }
+}
+
 impl TryFrom<i32> for Simm16 {
     type Error = std::num::TryFromIntError;
     fn try_from(simm32: i32) -> Result<Self, Self::Error> {
@@ -189,6 +213,12 @@ impl Imm32 {
 
     pub fn encode(&self, sink: &mut impl CodeSink) {
         sink.put4(self.0);
+    }
+}
+
+impl From<u32> for Imm32 {
+    fn from(imm32: u32) -> Self {
+        Self(imm32)
     }
 }
 

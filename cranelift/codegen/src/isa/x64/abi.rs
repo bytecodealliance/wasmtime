@@ -13,7 +13,6 @@ use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
-use cranelift_assembler_x64 as asm;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::borrow::ToOwned;
