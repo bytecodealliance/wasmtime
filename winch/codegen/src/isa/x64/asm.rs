@@ -1525,18 +1525,13 @@ impl Assembler {
 
     /// Performs float addition on src and dst and places result in dst.
     pub fn xmm_add_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Addss,
-            OperandSize::S64 => SseOpcode::Addsd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::addss_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::addsd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmRUnaligned {
-            op,
-            src1: Xmm::from(dst.to_reg()).into(),
-            src2: Xmm::from(src).into(),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Performs float subtraction on src and dst and places result in dst.
