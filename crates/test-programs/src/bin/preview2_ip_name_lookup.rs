@@ -4,7 +4,8 @@ use test_programs::wasi::sockets::network::{ErrorCode, IpAddress};
 fn main() {
     // Valid domains
     resolve("localhost").unwrap();
-    resolve("example.com").unwrap();
+
+    resolve_at_least_one_of(&["example.com", "api.github.com"]);
 
     // NB: this is an actual real resolution, so it might time out, might cause
     // issues, etc. This result is ignored to prevent flaky failures in CI.
@@ -50,6 +51,20 @@ fn main() {
         resolve("http://example.com/").unwrap_err(),
         ErrorCode::InvalidArgument
     );
+}
+
+/// Attempts to resolve at least one of `domains`. Allows failure so long as one
+/// succeeds. Intended to help make this test less flaky while still also
+/// testing live services.
+fn resolve_at_least_one_of(domains: &[&str]) {
+    for domain in domains {
+        match resolve(domain) {
+            Ok(_) => return,
+            Err(e) => eprintln!("failed to resolve `{domain}`: {e}"),
+        }
+    }
+
+    panic!("should have been able to resolve at least one domain");
 }
 
 fn resolve(name: &str) -> Result<Vec<IpAddress>, ErrorCode> {
