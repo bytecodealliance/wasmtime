@@ -13,6 +13,7 @@ use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::slice;
+use cranelift_assembler_x64 as asm;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
@@ -212,6 +213,24 @@ impl Inst {
     pub(crate) fn nop(len: u8) -> Self {
         debug_assert!(len <= 15);
         Self::Nop { len }
+    }
+
+    pub(crate) fn addq_mi(dst: Writable<Reg>, simm32: i32) -> Self {
+        let inst = if let Ok(simm8) = i8::try_from(simm32) {
+            asm::inst::addq_mi_sxb::new(dst.into(), asm::Simm8::new(simm8)).into()
+        } else {
+            asm::inst::addq_mi_sxl::new(dst.into(), asm::Simm32::new(simm32)).into()
+        };
+        Inst::External { inst }
+    }
+
+    pub(crate) fn subq_mi(dst: Writable<Reg>, simm32: i32) -> Self {
+        let inst = if let Ok(simm8) = i8::try_from(simm32) {
+            asm::inst::subq_mi_sxb::new(dst.into(), asm::Simm8::new(simm8)).into()
+        } else {
+            asm::inst::subq_mi_sxl::new(dst.into(), asm::Simm32::new(simm32)).into()
+        };
+        Inst::External { inst }
     }
 
     #[allow(dead_code)]

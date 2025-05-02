@@ -471,14 +471,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         if from_reg != into_reg.to_reg() {
             ret.push(Inst::gen_move(into_reg, from_reg, I64));
         }
-        let inst = if let Ok(simm8) = i8::try_from(imm) {
-            asm::inst::addq_mi_sxb::new(into_reg.into(), asm::Simm8::new(simm8)).into()
-        } else if let Ok(simm32) = i32::try_from(imm) {
-            asm::inst::addq_mi_sxl::new(into_reg.into(), asm::Simm32::new(simm32)).into()
-        } else {
-            panic!("`imm` is too large to fit in a 32-bit immediate");
-        };
-        ret.push(Inst::External { inst });
+        let imm = i32::try_from(imm).expect("`imm` is too large to fit in a 32-bit immediate");
+        ret.push(Inst::addq_mi(into_reg, imm));
         ret
     }
 
@@ -529,19 +523,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Self::I> {
         let rsp = Writable::from_reg(regs::rsp());
         let inst = if amount >= 0 {
-            if let Ok(amount) = i8::try_from(amount) {
-                asm::inst::addq_mi_sxb::new(rsp.into(), asm::Simm8::new(amount)).into()
-            } else {
-                asm::inst::addq_mi_sxl::new(rsp.into(), asm::Simm32::new(amount)).into()
-            }
+            Inst::addq_mi(rsp, amount)
         } else {
-            if let Ok(amount) = i8::try_from(amount) {
-                asm::inst::subq_mi_sxb::new(rsp.into(), asm::Simm8::new(-amount)).into()
-            } else {
-                asm::inst::subq_mi_sxl::new(rsp.into(), asm::Simm32::new(-amount)).into()
-            }
+            Inst::subq_mi(rsp, -amount)
         };
-        smallvec![Inst::External { inst }]
+        smallvec![inst]
     }
 
     fn gen_prologue_frame_setup(
@@ -658,14 +644,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         if incoming_args_diff > 0 {
             // Decrement the stack pointer to make space for the new arguments.
             let rsp = Writable::from_reg(regs::rsp());
-            let inst = if let Ok(incoming_args_diff) = i8::try_from(incoming_args_diff) {
-                asm::inst::subq_mi_sxb::new(rsp.into(), asm::Simm8::new(incoming_args_diff)).into()
-            } else if let Ok(incoming_args_diff) = i32::try_from(incoming_args_diff) {
-                asm::inst::subq_mi_sxl::new(rsp.into(), asm::Simm32::new(incoming_args_diff)).into()
-            } else {
-                panic!("`incoming_args_diff` is too large to fit in a 32-bit immediate");
-            };
-            insts.push(Inst::External { inst });
+            insts.push(Inst::subq_mi(
+                rsp,
+                i32::try_from(incoming_args_diff)
+                    .expect("`incoming_args_diff` is too large to fit in a 32-bit immediate"),
+            ));
 
             // Make sure to keep the frame pointer and stack pointer in sync at
             // this point.
@@ -724,14 +707,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             + frame_layout.outgoing_args_size;
         if stack_size > 0 {
             let rsp = Writable::from_reg(regs::rsp());
-            let inst = if let Ok(stack_size) = i8::try_from(stack_size) {
-                asm::inst::subq_mi_sxb::new(rsp.into(), asm::Simm8::new(stack_size)).into()
-            } else if let Ok(simm32) = i32::try_from(stack_size) {
-                asm::inst::subq_mi_sxl::new(rsp.into(), asm::Simm32::new(simm32)).into()
-            } else {
-                panic!("`stack_size` is too large to fit in a 32-bit immediate");
-            };
-            insts.push(Inst::External { inst });
+            let stack_size = i32::try_from(stack_size)
+                .expect("`stack_size` is too large to fit in a 32-bit immediate");
+            insts.push(Inst::subq_mi(rsp, stack_size));
         }
 
         // Store each clobbered register in order at offsets from RSP,
@@ -811,14 +789,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // Adjust RSP back upward.
         if stack_size > 0 {
             let rsp = Writable::from_reg(regs::rsp());
-            let inst = if let Ok(stack_size) = i8::try_from(stack_size) {
-                asm::inst::addq_mi_sxb::new(rsp.into(), asm::Simm8::new(stack_size)).into()
-            } else if let Ok(simm32) = i32::try_from(stack_size) {
-                asm::inst::addq_mi_sxl::new(rsp.into(), asm::Simm32::new(simm32)).into()
-            } else {
-                panic!("`stack_size` is too large to fit in a 32-bit immediate");
-            };
-            insts.push(Inst::External { inst });
+            let stack_size = i32::try_from(stack_size)
+                .expect("`stack_size` is too large to fit in a 32-bit immediate");
+            insts.push(Inst::addq_mi(rsp, stack_size));
         }
 
         insts

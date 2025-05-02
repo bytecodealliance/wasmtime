@@ -918,22 +918,17 @@ pub(crate) fn emit(
                 } if base == dst => {
                     let dst = Writable::from_reg(dst);
                     let inst = match size {
-                        OperandSize::Size32 => {
-                            asm::inst::addl_mi::new(dst.into(), asm::Imm32::new(simm32 as u32))
-                                .into()
-                        }
-                        OperandSize::Size64 => {
-                            if let Ok(simm8) = i8::try_from(simm32) {
-                                asm::inst::addq_mi_sxb::new(dst.into(), asm::Simm8::new(simm8))
-                                    .into()
-                            } else {
-                                asm::inst::addq_mi_sxl::new(dst.into(), asm::Simm32::new(simm32))
-                                    .into()
-                            }
-                        }
+                        OperandSize::Size32 => Inst::External {
+                            inst: asm::inst::addl_mi::new(
+                                dst.into(),
+                                asm::Imm32::new(simm32 as u32),
+                            )
+                            .into(),
+                        },
+                        OperandSize::Size64 => Inst::addq_mi(dst, simm32),
                         _ => unreachable!(),
                     };
-                    Inst::External { inst }.emit(sink, info, state);
+                    inst.emit(sink, info, state);
                 }
                 // If the offset is 0 and the shift is 0 (meaning multiplication
                 // by 1) then:
@@ -1448,15 +1443,9 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
 
             // sub  tmp_reg, GUARD_SIZE * probe_count
-            let imm = guard_size * probe_count;
-            let inst = if let Ok(simm8) = i8::try_from(imm) {
-                asm::inst::subq_mi_sxb::new(tmp.into(), asm::Simm8::new(simm8)).into()
-            } else if let Ok(simm32) = i32::try_from(imm) {
-                asm::inst::subq_mi_sxl::new(tmp.into(), asm::Simm32::new(simm32)).into()
-            } else {
-                panic!("`guard_size * probe_count` is too large to fit in a 32-bit immediate");
-            };
-            Inst::External { inst }.emit(sink, info, state);
+            let guard_plus_count = i32::try_from(guard_size * probe_count)
+                .expect("`guard_size * probe_count` is too large to fit in a 32-bit immediate");
+            Inst::subq_mi(tmp, guard_plus_count).emit(sink, info, state);
 
             // Emit the main loop!
             let loop_start = sink.get_label();
@@ -1464,14 +1453,9 @@ pub(crate) fn emit(
 
             // sub  rsp, GUARD_SIZE
             let rsp = Writable::from_reg(regs::rsp());
-            let inst = if let Ok(simm8) = i8::try_from(*guard_size) {
-                asm::inst::subq_mi_sxb::new(rsp.into(), asm::Simm8::new(simm8)).into()
-            } else if let Ok(simm32) = i32::try_from(*guard_size) {
-                asm::inst::subq_mi_sxl::new(rsp.into(), asm::Simm32::new(simm32)).into()
-            } else {
-                panic!("`guard_size * probe_count` is too large to fit in a 32-bit immediate");
-            };
-            Inst::External { inst }.emit(sink, info, state);
+            let guard_size_ = i32::try_from(*guard_size)
+                .expect("`guard_size` is too large to fit in a 32-bit immediate");
+            Inst::subq_mi(rsp, guard_size_).emit(sink, info, state);
 
             // TODO: `mov [rsp], 0` would be better, but we don't have that instruction
             // Probe the stack! We don't use Inst::gen_store_stack here because we need a predictable
@@ -1505,16 +1489,7 @@ pub(crate) fn emit(
             // and in the stack adj portion of the prologue
             //
             // add rsp, GUARD_SIZE * probe_count
-            let rsp = Writable::from_reg(regs::rsp());
-            let imm = guard_size * probe_count;
-            let inst = if let Ok(simm8) = i8::try_from(imm) {
-                asm::inst::addq_mi_sxb::new(rsp.into(), asm::Simm8::new(simm8)).into()
-            } else if let Ok(simm32) = i32::try_from(imm) {
-                asm::inst::addq_mi_sxl::new(rsp.into(), asm::Simm32::new(simm32)).into()
-            } else {
-                panic!("`guard_size * probe_count` is too large to fit in a 32-bit immediate");
-            };
-            Inst::External { inst }.emit(sink, info, state);
+            Inst::addq_mi(rsp, guard_plus_count).emit(sink, info, state);
         }
 
         Inst::CallKnown { info: call_info } => {
@@ -1540,14 +1515,9 @@ pub(crate) fn emit(
             // a consistent SP.
             if call_info.callee_pop_size > 0 {
                 let rsp = Writable::from_reg(regs::rsp());
-                let inst = if let Ok(simm8) = i8::try_from(call_info.callee_pop_size) {
-                    asm::inst::subq_mi_sxb::new(rsp.into(), asm::Simm8::new(simm8)).into()
-                } else if let Ok(simm32) = i32::try_from(call_info.callee_pop_size) {
-                    asm::inst::subq_mi_sxl::new(rsp.into(), asm::Simm32::new(simm32)).into()
-                } else {
-                    panic!("`callee_pop_size` is too large to fit in a 32-bit immediate");
-                };
-                Inst::External { inst }.emit(sink, info, state);
+                let callee_pop_size = i32::try_from(call_info.callee_pop_size)
+                    .expect("`callee_pop_size` is too large to fit in a 32-bit immediate");
+                Inst::subq_mi(rsp, callee_pop_size).emit(sink, info, state);
             }
 
             // Load any stack-carried return values.
@@ -1644,14 +1614,9 @@ pub(crate) fn emit(
             // StackAMode values are always computed from a consistent SP.
             if call_info.callee_pop_size > 0 {
                 let rsp = Writable::from_reg(regs::rsp());
-                let inst = if let Ok(simm8) = i8::try_from(call_info.callee_pop_size) {
-                    asm::inst::subq_mi_sxb::new(rsp.into(), asm::Simm8::new(simm8)).into()
-                } else if let Ok(simm32) = i32::try_from(call_info.callee_pop_size) {
-                    asm::inst::subq_mi_sxl::new(rsp.into(), asm::Simm32::new(simm32)).into()
-                } else {
-                    panic!("`callee_pop_size` is too large to fit in a 32-bit immediate");
-                };
-                Inst::External { inst }.emit(sink, info, state);
+                let callee_pop_size = i32::try_from(call_info.callee_pop_size)
+                    .expect("`callee_pop_size` is too large to fit in a 32-bit immediate");
+                Inst::subq_mi(rsp, callee_pop_size).emit(sink, info, state);
             }
 
             // Load any stack-carried return values.
@@ -4708,13 +4673,8 @@ fn emit_return_call_common_sequence<T>(
         // Increment the stack pointer to shrink the argument area for the new
         // call.
         let rsp = Writable::from_reg(regs::rsp());
-        let inst = if let Ok(incoming_args_diff) = i8::try_from(incoming_args_diff) {
-            asm::inst::addq_mi_sxb::new(rsp.into(), asm::Simm8::new(incoming_args_diff)).into()
-        } else if let Ok(incoming_args_diff) = i32::try_from(incoming_args_diff) {
-            asm::inst::addq_mi_sxl::new(rsp.into(), asm::Simm32::new(incoming_args_diff)).into()
-        } else {
-            panic!("`incoming_args_diff` is too large to fit in a 32-bit signed immediate");
-        };
-        Inst::External { inst }.emit(sink, info, state);
+        let incoming_args_diff = i32::try_from(incoming_args_diff)
+            .expect("`incoming_args_diff` is too large to fit in a 32-bit signed immediate");
+        Inst::addq_mi(rsp, incoming_args_diff).emit(sink, info, state);
     }
 }
