@@ -288,9 +288,9 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 ;   movl    %edx, %r8d
 ;   cvtsi2ss %xmm7, %r8, %xmm7
 ;   u64_to_f32_seq %rcx, %xmm4, %r8, %rdx
-;   addss   %xmm0, %xmm6, %xmm0
-;   addss   %xmm0, %xmm7, %xmm0
-;   addss   %xmm0, %xmm4, %xmm0
+;   addss %xmm6, %xmm0
+;   addss %xmm7, %xmm0
+;   addss %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

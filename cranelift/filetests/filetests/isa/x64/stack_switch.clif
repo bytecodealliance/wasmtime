@@ -459,37 +459,37 @@ block0(v0: i64, v1: i64):
 ;   %rdi = stack_switch_basic %rsi, %rsi, %rdi
 ;   u64_to_f64_seq %rdi, %xmm0, %rcx, %rdx
 ;   movdqu  rsp(240 + virtual offset), %xmm5
-;   addsd   %xmm0, %xmm5, %xmm0
+;   addsd %xmm5, %xmm0
 ;   movdqu  rsp(224 + virtual offset), %xmm1
-;   addsd   %xmm0, %xmm1, %xmm0
+;   addsd %xmm1, %xmm0
 ;   movdqu  rsp(208 + virtual offset), %xmm3
-;   addsd   %xmm0, %xmm3, %xmm0
+;   addsd %xmm3, %xmm0
 ;   movdqu  rsp(192 + virtual offset), %xmm6
-;   addsd   %xmm0, %xmm6, %xmm0
+;   addsd %xmm6, %xmm0
 ;   movdqu  rsp(176 + virtual offset), %xmm1
-;   addsd   %xmm0, %xmm1, %xmm0
+;   addsd %xmm1, %xmm0
 ;   movdqu  rsp(160 + virtual offset), %xmm4
-;   addsd   %xmm0, %xmm4, %xmm0
+;   addsd %xmm4, %xmm0
 ;   movdqu  rsp(144 + virtual offset), %xmm7
-;   addsd   %xmm0, %xmm7, %xmm0
+;   addsd %xmm7, %xmm0
 ;   movdqu  rsp(128 + virtual offset), %xmm2
-;   addsd   %xmm0, %xmm2, %xmm0
+;   addsd %xmm2, %xmm0
 ;   movdqu  rsp(112 + virtual offset), %xmm5
-;   addsd   %xmm0, %xmm5, %xmm0
+;   addsd %xmm5, %xmm0
 ;   movdqu  rsp(96 + virtual offset), %xmm1
-;   addsd   %xmm0, %xmm1, %xmm0
+;   addsd %xmm1, %xmm0
 ;   movdqu  rsp(80 + virtual offset), %xmm3
-;   addsd   %xmm0, %xmm3, %xmm0
+;   addsd %xmm3, %xmm0
 ;   movdqu  rsp(64 + virtual offset), %xmm6
-;   addsd   %xmm0, %xmm6, %xmm0
+;   addsd %xmm6, %xmm0
 ;   movdqu  rsp(48 + virtual offset), %xmm1
-;   addsd   %xmm0, %xmm1, %xmm0
+;   addsd %xmm1, %xmm0
 ;   movdqu  rsp(32 + virtual offset), %xmm4
-;   addsd   %xmm0, %xmm4, %xmm0
+;   addsd %xmm4, %xmm0
 ;   movdqu  rsp(16 + virtual offset), %xmm7
-;   addsd   %xmm0, %xmm7, %xmm0
+;   addsd %xmm7, %xmm0
 ;   movdqu  rsp(0 + virtual offset), %xmm2
-;   addsd   %xmm0, %xmm2, %xmm0
+;   addsd %xmm2, %xmm0
 ;   movq    256(%rsp), %rbx
 ;   movq    264(%rsp), %r12
 ;   movq    272(%rsp), %r13
