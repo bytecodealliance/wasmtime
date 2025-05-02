@@ -368,3 +368,40 @@ function %f2(i32) -> i32, f32, f64 {
 ;   popq %rbp
 ;   retq
 
+function %f3() system_v {
+    sig0 = () system_v
+    fn0 = u0:1 sig0
+
+block0:
+    jump block1
+
+block1:
+    try_call fn0(), sig0, block2, []
+
+block2:
+    jump block2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   jmp     label1
+; block1:
+;   load_ext_name userextname0+0, %rcx
+;   call    *%rcx; jmp MachLabel(2); catch []
+; block2:
+;   jmp     label3
+; block3:
+;   jmp     label3
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $0, %rcx ; reloc_external Abs8 u0:1 0
+;   callq *%rcx
+; block2: ; offset 0x10
+;   jmp 0x10
+
