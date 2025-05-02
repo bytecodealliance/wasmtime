@@ -4,6 +4,7 @@ impl dsl::Operand {
     #[must_use]
     pub fn generate_type(&self) -> String {
         use dsl::Location::*;
+        let mut_ = self.mutability.generate_camel_case();
         match self.location {
             imm8 | imm16 | imm32 => {
                 let bits = self.location.bits();
@@ -19,31 +20,20 @@ impl dsl::Operand {
                     cl => "{ gpr::enc::RCX }",
                     _ => unreachable!(),
                 };
-                format!("Fixed<R::{}Gpr, {enc}>", self.mutability.generate_camel_case())
+                format!("Fixed<R::{mut_}Gpr, {enc}>")
             }
-            r8 | r16 | r32 | r64 => format!("Gpr<R::{}Gpr>", self.mutability.generate_camel_case()),
-            rm8 | rm16 | rm32 | rm64 => format!("GprMem<R::{}Gpr, R::ReadGpr>", self.mutability.generate_camel_case()),
-            xmm => format!("Xmm<R::{}Xmm>", self.mutability.generate_camel_case()),
-            rm128 => format!("XmmMem<R::{}Xmm, R::ReadGpr>", self.mutability.generate_camel_case()),
+            r8 | r16 | r32 | r64 => format!("Gpr<R::{mut_}Gpr>"),
+            rm8 | rm16 | rm32 | rm64 => format!("GprMem<R::{mut_}Gpr, R::ReadGpr>"),
+            xmm => format!("Xmm<R::{mut_}Xmm>"),
+            xmm_m32 | xmm_m64 | xmm_m128 => {
+                format!("XmmMem<R::{mut_}Xmm, R::ReadGpr>")
+            }
             m8 | m16 | m32 | m64 => format!("Amode<R::ReadGpr>"),
         }
     }
 }
 
 impl dsl::Location {
-    /// `Xmm|Gpr`
-    #[must_use]
-    pub fn generate_register_class(&self) -> Option<&str> {
-        use dsl::Location::*;
-        match self {
-            al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 => Some("Gpr"),
-            xmm | rm128 => Some("Xmm"),
-            // Do not generate a register class for memory-only access or
-            // immediates.
-            imm8 | imm16 | imm32 | m8 | m16 | m32 | m64 => None,
-        }
-    }
-
     /// `self.<operand>.to_string(...)`
     #[must_use]
     pub fn generate_to_string(&self, extension: dsl::Extension) -> String {
@@ -66,7 +56,7 @@ impl dsl::Location {
                 Some(size) => format!("self.{self}.to_string({size})"),
                 None => unreachable!(),
             },
-            xmm | rm128 | m8 | m16 | m32 | m64 => format!("self.{self}.to_string()"),
+            xmm | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => format!("self.{self}.to_string()"),
         }
     }
 
@@ -83,7 +73,7 @@ impl dsl::Location {
             m8 | m16 | m32 | m64 => {
                 panic!("no need to generate a size for memory-only access")
             }
-            xmm | rm128 => {
+            xmm | xmm_m32 | xmm_m64 | xmm_m128 => {
                 panic!("no need to generate a size for XMM-sized access")
             }
         }

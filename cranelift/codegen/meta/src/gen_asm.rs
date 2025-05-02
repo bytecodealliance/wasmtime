@@ -15,56 +15,57 @@ pub fn rust_param_raw(op: &Operand) -> String {
             }
         }
         OperandKind::RegMem(rm) => {
-            let reg = match rm.bits() {
-                128 => "Xmm",
-                _ => "Gpr",
-            };
+            let reg = rm.reg_class().unwrap();
             let aligned = if op.align { "Aligned" } else { "" };
             format!("&{reg}Mem{aligned}")
         }
         OperandKind::Mem(_) => {
             format!("&Amode")
         }
-        OperandKind::Reg(r) | OperandKind::FixedReg(r) => match r.bits() {
-            128 => "Xmm".to_string(),
-            _ => "Gpr".to_string(),
-        },
+        OperandKind::Reg(r) | OperandKind::FixedReg(r) => r.reg_class().unwrap().to_string(),
     }
 }
 
 /// Returns the conversion function, if any, when converting the ISLE type for
 /// this parameter to the assembler type for this parameter. Effectively
 /// converts `self.rust_param_raw()` to the assembler type.
-pub fn rust_convert_isle_to_assembler(op: &Operand) -> &'static str {
+pub fn rust_convert_isle_to_assembler(op: &Operand) -> String {
     match op.location.kind() {
-        OperandKind::Reg(r) => match (r.bits(), op.mutability) {
-            (128, Mutability::Read) => "cranelift_assembler_x64::Xmm::new",
-            (128, Mutability::ReadWrite) => "self.convert_xmm_to_assembler_read_write_xmm",
-            (_, Mutability::Read) => "cranelift_assembler_x64::Gpr::new",
-            (_, Mutability::ReadWrite) => "self.convert_gpr_to_assembler_read_write_gpr",
-        },
-        OperandKind::FixedReg(r) => match (r.bits(), op.mutability) {
-            (128, Mutability::Read) => "cranelift_assembler_x64::Fixed",
-            (128, Mutability::ReadWrite) => "self.convert_xmm_to_assembler_fixed_read_write_xmm",
-            (_, Mutability::Read) => "cranelift_assembler_x64::Fixed",
-            (_, Mutability::ReadWrite) => "self.convert_gpr_to_assembler_fixed_read_write_gpr",
-        },
-        OperandKind::Mem(_) => "self.convert_amode_to_assembler_amode",
-        OperandKind::RegMem(r) => match (r.bits(), op.mutability) {
-            (128, Mutability::Read) => "self.convert_xmm_mem_to_assembler_read_xmm_mem",
-            (128, Mutability::ReadWrite) => "self.convert_xmm_mem_to_assembler_read_write_xmm_mem",
-            (_, Mutability::Read) => "self.convert_gpr_mem_to_assembler_read_gpr_mem",
-            (_, Mutability::ReadWrite) => "self.convert_gpr_mem_to_assembler_read_write_gpr_mem",
-        },
-        OperandKind::Imm(loc) => match (op.extension.is_sign_extended(), loc.bits()) {
-            (true, 8) => "cranelift_assembler_x64::Simm8::new",
-            (true, 16) => "cranelift_assembler_x64::Simm16::new",
-            (true, 32) => "cranelift_assembler_x64::Simm32::new",
-            (false, 8) => "cranelift_assembler_x64::Imm8::new",
-            (false, 16) => "cranelift_assembler_x64::Imm16::new",
-            (false, 32) => "cranelift_assembler_x64::Imm32::new",
-            _ => unreachable!(),
-        },
+        OperandKind::Imm(loc) => {
+            let bits = loc.bits();
+            let ty = if op.extension.is_sign_extended() {
+                "Simm"
+            } else {
+                "Imm"
+            };
+            format!("cranelift_assembler_x64::{ty}{bits}::new")
+        }
+        OperandKind::FixedReg(r) => {
+            let reg = r.reg_class().unwrap().to_string().to_lowercase();
+            match op.mutability {
+                Mutability::Read => "cranelift_assembler_x64::Fixed".to_string(),
+                Mutability::ReadWrite => {
+                    format!("self.convert_{reg}_to_assembler_fixed_read_write_{reg}")
+                }
+            }
+        }
+        OperandKind::Reg(r) => {
+            let reg = r.reg_class().unwrap();
+            let reg_lower = reg.to_string().to_lowercase();
+            match op.mutability {
+                Mutability::Read => format!("cranelift_assembler_x64::{reg}::new"),
+                Mutability::ReadWrite => {
+                    format!("self.convert_{reg_lower}_to_assembler_read_write_{reg_lower}")
+                }
+            }
+        }
+        OperandKind::RegMem(r) => {
+            let reg = r.reg_class().unwrap().to_string().to_lowercase();
+            let mut_ = op.mutability.generate_snake_case();
+            let align = if op.align { "_aligned" } else { "" };
+            format!("self.convert_{reg}_mem_to_assembler_{mut_}_{reg}_mem{align}")
+        }
+        OperandKind::Mem(_) => "self.convert_amode_to_assembler_amode".to_string(),
     }
 }
 
@@ -121,10 +122,8 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                         // One read/write register output? Output the instruction
                         // and that register.
                         OperandKind::Reg(r) | OperandKind::FixedReg(r) => {
-                            let (var, ty) = match r.bits() {
-                                128 => ("xmm", "Xmm"),
-                                _ => ("gpr", "Gpr"),
-                            };
+                            let ty = r.reg_class().unwrap().to_string();
+                            let var = ty.to_lowercase();
                             fmtln!(f, "let {var} = {r}.as_ref().write.to_reg();",);
                             fmtln!(f, "AssemblerOutputs::Ret{ty} {{ inst, {var} }}");
                         }
@@ -137,10 +136,8 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                         // emitted (e.g. the mem variant or the register variant).
                         OperandKind::RegMem(rm) => {
                             assert_eq!(results.len(), 1);
-                            let (var, ty) = match rm.bits() {
-                                128 => ("xmm", "Xmm"),
-                                _ => ("gpr", "Gpr"),
-                            };
+                            let ty = rm.reg_class().unwrap().to_string();
+                            let var = ty.to_lowercase();
                             f.add_block(&format!("match {rm}"), |f| {
                                 f.add_block(&format!("asm::{ty}Mem::{ty}(reg) => "), |f| {
                                     fmtln!(f, "let {var} = reg.write.to_reg();");
@@ -187,10 +184,7 @@ pub fn isle_param_raw(op: &Operand) -> String {
                 format!("u{bits}")
             }
         }
-        OperandKind::Reg(r) | OperandKind::FixedReg(r) => match r.bits() {
-            128 => "Xmm".to_string(),
-            _ => "Gpr".to_string(),
-        },
+        OperandKind::Reg(r) | OperandKind::FixedReg(r) => r.reg_class().unwrap().to_string(),
         OperandKind::Mem(_) => {
             if op.align {
                 unimplemented!("no way yet to mark an Amode as aligned")
@@ -199,10 +193,7 @@ pub fn isle_param_raw(op: &Operand) -> String {
             }
         }
         OperandKind::RegMem(rm) => {
-            let reg = match rm.bits() {
-                128 => "Xmm",
-                _ => "Gpr",
-            };
+            let reg = rm.reg_class().unwrap();
             let aligned = if op.align { "Aligned" } else { "" };
             format!("{reg}Mem{aligned}")
         }
