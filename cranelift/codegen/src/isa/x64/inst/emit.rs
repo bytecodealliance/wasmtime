@@ -2293,10 +2293,6 @@ pub(crate) fn emit(
                 SseOpcode::Punpckhdq => (LegacyPrefixes::_66, 0x0F6A, 2),
                 SseOpcode::Punpckhqdq => (LegacyPrefixes::_66, 0x0F6D, 2),
                 SseOpcode::Pxor => (LegacyPrefixes::_66, 0x0FEF, 2),
-                SseOpcode::Subps => (LegacyPrefixes::None, 0x0F5C, 2),
-                SseOpcode::Subpd => (LegacyPrefixes::_66, 0x0F5C, 2),
-                SseOpcode::Subss => (LegacyPrefixes::_F3, 0x0F5C, 2),
-                SseOpcode::Subsd => (LegacyPrefixes::_F2, 0x0F5C, 2),
                 SseOpcode::Unpcklps => (LegacyPrefixes::None, 0x0F14, 2),
                 SseOpcode::Unpckhps => (LegacyPrefixes::None, 0x0F15, 2),
                 SseOpcode::Xorps => (LegacyPrefixes::None, 0x0F57, 2),
@@ -3778,13 +3774,13 @@ pub(crate) fn emit(
 
             let (sub_op, cast_op, cmp_op, trunc_op) = match src_size {
                 OperandSize::Size32 => (
-                    SseOpcode::Subss,
+                    asm::inst::subss_a::new(tmp_xmm2, tmp_xmm.to_reg()).into(),
                     SseOpcode::Movd,
                     SseOpcode::Ucomiss,
                     SseOpcode::Cvttss2si,
                 ),
                 OperandSize::Size64 => (
-                    SseOpcode::Subsd,
+                    asm::inst::subsd_a::new(tmp_xmm2, tmp_xmm.to_reg()).into(),
                     SseOpcode::Movq,
                     SseOpcode::Ucomisd,
                     SseOpcode::Cvttsd2si,
@@ -3869,8 +3865,7 @@ pub(crate) fn emit(
             let inst = Inst::gen_move(tmp_xmm2, src, types::F64);
             inst.emit(sink, info, state);
 
-            let inst = Inst::xmm_rm_r(sub_op, RegMem::reg(tmp_xmm.to_reg()), tmp_xmm2);
-            inst.emit(sink, info, state);
+            Inst::External { inst: sub_op }.emit(sink, info, state);
 
             let inst = Inst::xmm_to_gpr(trunc_op, tmp_xmm2.to_reg(), dst, *dst_size);
             inst.emit(sink, info, state);
