@@ -168,6 +168,7 @@ impl InterpreterRef<'_> {
         let regs = TrapRegisters {
             pc: pc.as_ptr() as usize,
             fp: self.0.fp() as usize,
+            sp: self.0.sp() as usize,
         };
         tls::with(|s| {
             let s = s.unwrap();

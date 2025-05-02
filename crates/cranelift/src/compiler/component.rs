@@ -1492,6 +1492,8 @@ impl ComponentCompiler for Compiler {
                     pointer_type,
                     &c.offsets.ptr,
                     vm_store_context,
+                    &self.tunables,
+                    &*self.isa,
                 );
             }
 

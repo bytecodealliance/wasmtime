@@ -307,12 +307,13 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 
             let thread_state_flavor = x86_THREAD_STATE64;
 
-            let get_pc_and_fp = |state: &ThreadState| (
+            let get_pc_and_fp_and_sp = |state: &ThreadState| (
                 state.__rip as *const u8,
                 state.__rbp as usize,
+                state.__rsp as usize,
             );
 
-            let resume = |state: &mut ThreadState, pc: usize, fp: usize, fault1: usize, fault2: usize, trap: Trap| {
+            let resume = |state: &mut ThreadState, pc: usize, fp: usize, sp: usize, fault1: usize, fault2: usize, trap: Trap| {
                 // The x86_64 ABI requires a 16-byte stack alignment for
                 // functions, so typically we'll be 16-byte aligned. In this
                 // case we simulate a `call` instruction by decrementing the
@@ -339,9 +340,10 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 state.__rip = unwind as u64;
                 state.__rdi = pc as u64;
                 state.__rsi = fp as u64;
-                state.__rdx = fault1 as u64;
-                state.__rcx = fault2 as u64;
-                state.__r8 = trap as u64;
+                state.__rdx = sp as u64;
+                state.__rcx = fault1 as u64;
+                state.__r8 = fault2 as u64;
+                state.__r9 = trap as u64;
             };
             let mut thread_state = ThreadState::new();
         } else if #[cfg(target_arch = "aarch64")] {
@@ -349,12 +351,13 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 
             let thread_state_flavor = ARM_THREAD_STATE64;
 
-            let get_pc_and_fp = |state: &ThreadState| (
+            let get_pc_and_fp_and_sp = |state: &ThreadState| (
                 state.__pc as *const u8,
                 state.__fp as usize,
+                state.__sp as usize,
             );
 
-            let resume = |state: &mut ThreadState, pc: usize, fp: usize, fault1: usize, fault2: usize, trap: Trap| {
+            let resume = |state: &mut ThreadState, pc: usize, fp: usize, sp: usize, fault1: usize, fault2: usize, trap: Trap| {
                 // Clobber LR with the faulting PC, so unwinding resumes at the
                 // faulting instruction. The previous value of LR has been saved
                 // by the callee (in Cranelift generated code), so no need to
@@ -365,9 +368,10 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
                 // it looks like a call to unwind.
                 state.__x[0] = pc as u64;
                 state.__x[1] = fp as u64;
-                state.__x[2] = fault1 as u64;
-                state.__x[3] = fault2 as u64;
-                state.__x[4] = trap as u64;
+                state.__x[2] = sp as u64;
+                state.__x[3] = fault1 as u64;
+                state.__x[4] = fault2 as u64;
+                state.__x[5] = trap as u64;
                 state.__pc = unwind as u64;
             };
             let mut thread_state = mem::zeroed::<ThreadState>();
@@ -403,7 +407,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
     // Finally our indirection with a pointer means that we can read the
     // pointer value and if `MAP` changes happen after we read our entry that's
     // ok since they won't invalidate our entry.
-    let (pc, fp) = get_pc_and_fp(&thread_state);
+    let (pc, fp, sp) = get_pc_and_fp_and_sp(&thread_state);
     let Some((code, text_offset)) = lookup_code(pc as usize) else {
         return false;
     };
@@ -420,7 +424,7 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
         None => (0, 0),
         Some(addr) => (1, addr),
     };
-    resume(&mut thread_state, pc as usize, fp, fault1, fault2, trap);
+    resume(&mut thread_state, pc as usize, fp, sp, fault1, fault2, trap);
     let kret = thread_set_state(
         origin_thread,
         thread_state_flavor,
@@ -437,10 +441,17 @@ unsafe fn handle_exception(request: &mut ExceptionRequest) -> bool {
 /// a native backtrace once we've switched back to the thread itself. After
 /// the backtrace is captured we can do the usual `longjmp` back to the source
 /// of the wasm code.
-unsafe extern "C" fn unwind(pc: usize, fp: usize, fault1: usize, fault2: usize, trap: u8) -> ! {
+unsafe extern "C" fn unwind(
+    pc: usize,
+    fp: usize,
+    sp: usize,
+    fault1: usize,
+    fault2: usize,
+    trap: u8,
+) -> ! {
     let jmp_buf = tls::with(|state| {
         let state = state.unwrap();
-        let regs = TrapRegisters { pc, fp };
+        let regs = TrapRegisters { pc, fp, sp };
         let faulting_addr = match fault1 {
             0 => None,
             _ => Some(fault2),

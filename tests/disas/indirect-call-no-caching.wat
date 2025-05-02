@@ -21,11 +21,6 @@
 
  (elem (i32.const 1) func $f1 $f2 $f3))
 ;; function u0:0(i64 vmctx, i64) -> i32 tail {
-;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
-;;     stack_limit = gv2
-;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @003f                               v3 = iconst.i32 1
 ;; @0041                               jump block1
@@ -35,11 +30,6 @@
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
-;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
-;;     stack_limit = gv2
-;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0044                               v3 = iconst.i32 2
 ;; @0046                               jump block1
@@ -49,11 +39,6 @@
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64) -> i32 tail {
-;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
-;;     stack_limit = gv2
-;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0049                               v3 = iconst.i32 3
 ;; @004b                               jump block1
@@ -64,14 +49,10 @@
 ;;
 ;; function u0:3(i64 vmctx, i64, i32) -> i32 tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+56
+;;     gv1 = load.i64 notrap aligned readonly can_move gv0+56
 ;;     sig0 = (i64 vmctx, i64) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     fn0 = colocated u1:9 sig1
-;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0050                               v4 = iconst.i32 10

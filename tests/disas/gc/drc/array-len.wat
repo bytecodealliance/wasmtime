@@ -11,13 +11,9 @@
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
-;;     gv5 = load.i64 notrap aligned readonly can_move gv4+24
-;;     gv6 = load.i64 notrap aligned gv4+32
-;;     stack_limit = gv2
+;;     gv1 = load.i64 notrap aligned readonly can_move gv0+8
+;;     gv2 = load.i64 notrap aligned readonly can_move gv1+24
+;;     gv3 = load.i64 notrap aligned gv1+32
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @001f                               trapz v2, user16
