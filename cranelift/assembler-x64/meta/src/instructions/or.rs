@@ -34,6 +34,6 @@ pub fn list() -> Vec<Inst> {
         inst("lock_orq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x09]).w().r(), _64b),
         // Vector instructions.
         inst("orps", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x0F, 0x56]).r(), _64b | compat | sse),
-        inst("orpd", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x66, 0x0F, 0x56]).r(), _64b | compat | sse),
+        inst("orpd", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x66, 0x0F, 0x56]).r(), _64b | compat | sse2),
     ]
 }

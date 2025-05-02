@@ -199,6 +199,7 @@ impl Inst {
                     match f {
                         _64b | compat => {}
                         sse => features.push(InstructionSet::SSE),
+                        sse2 => features.push(InstructionSet::SSE2),
                     }
                 }
                 features
