@@ -33,8 +33,8 @@ cfg_if::cfg_if! {
     }
 }
 
-/// A helper module to get reeported above in each case that we actually have
-/// stack-switching routines available in in line asm. The fall-through case
+/// A helper module to get reexported above in each case that we actually have
+/// stack-switching routines available in inline assembly. The fall-through case
 /// though reexports the `unsupported` module instead.
 #[allow(
     dead_code,

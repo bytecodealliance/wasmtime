@@ -170,7 +170,7 @@ interface types {
   /// A `fields` may be mutable or immutable. A `fields` created using the
   /// constructor, `from-list`, or `clone` will be mutable, but a `fields`
   /// resource given by other means (including, but not limited to,
-  /// `incoming-request.headers`, `outgoing-request.headers`) might be be
+  /// `incoming-request.headers`, `outgoing-request.headers`) might be
   /// immutable. In an immutable fields, the `set`, `append`, and `delete`
   /// operations will fail with `header-error.immutable`.
   @since(version = 0.2.0)
