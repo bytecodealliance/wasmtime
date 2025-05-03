@@ -845,21 +845,6 @@ macro_rules! isle_common_prelude_methods {
             Offset32::new(offset)
         }
 
-        fn range(&mut self, start: usize, end: usize) -> Range {
-            (start, end)
-        }
-
-        fn range_view(&mut self, (start, end): Range) -> RangeView {
-            if start >= end {
-                RangeView::Empty
-            } else {
-                RangeView::NonEmpty {
-                    index: start,
-                    rest: (start + 1, end),
-                }
-            }
-        }
-
         #[inline]
         fn mem_flags_trusted(&mut self) -> MemFlags {
             MemFlags::trusted()

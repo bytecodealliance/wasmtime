@@ -112,9 +112,9 @@ block0(v0: i64):
 ;   stg %r1, 0(%r15)
 ; block0:
 ;   lgr %r9, %r2
-;   bras %r1, 12 ; data %callee_i64 + 0 ; lg %r6, 0(%r1)
+;   bras %r1, 12 ; data %callee_i64 + 0 ; lg %r7, 0(%r1)
 ;   lgr %r2, %r3
-;   basr %r14, %r6
+;   basr %r14, %r7
 ;   bras %r1, 12 ; data %callee_i64_multiret + 0 ; lg %r7, 0(%r1)
 ;   lgr %r3, %r2
 ;   lgr %r2, %r9
@@ -133,9 +133,9 @@ block0(v0: i64):
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r6, 0(%r1)
+;   lg %r7, 0(%r1)
 ;   lgr %r2, %r3
-;   basr %r14, %r6
+;   basr %r14, %r7
 ;   bras %r1, 0x3c
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_i64_multiret 0
 ;   .byte 0x00, 0x00

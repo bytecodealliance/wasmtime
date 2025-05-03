@@ -2944,13 +2944,6 @@
 (rule (lower_branch (br_table index _) targets)
   (lower_br_table index targets))
 
-(rule (lower_branch (try_call (func_ref_data sig_ref extname dist) inputs et) targets)
-      (gen_try_call sig_ref extname dist et inputs targets))
-
-(rule (lower_branch (try_call_indirect val inputs et) targets)
-      (if-let (exception_sig sig_ref) et)
-      (gen_try_call_indirect sig_ref val et inputs targets))
-
 (decl load_ra () Reg)
 (extern constructor load_ra load_ra)
 
@@ -3056,17 +3049,38 @@
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl gen_call (SigRef ExternalName RelocDistance ValueSlice) InstOutput)
-(extern constructor gen_call gen_call)
+(decl gen_call_info (Sig ExternalName CallArgList CallRetList OptionTryCallInfo) BoxCallInfo)
+(extern constructor gen_call_info gen_call_info)
 
-(decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
-(extern constructor gen_call_indirect gen_call_indirect)
+(decl gen_call_ind_info (Sig Reg CallArgList CallRetList OptionTryCallInfo) BoxCallIndInfo)
+(extern constructor gen_call_ind_info gen_call_ind_info)
 
-(decl gen_try_call (SigRef ExternalName RelocDistance ExceptionTable ValueSlice MachLabelSlice) Unit)
-(extern constructor gen_try_call gen_try_call)
+(decl gen_return_call_info (Sig ExternalName CallArgList) BoxReturnCallInfo)
+(extern constructor gen_return_call_info gen_return_call_info)
 
-(decl gen_try_call_indirect (SigRef Value ExceptionTable ValueSlice MachLabelSlice) Unit)
-(extern constructor gen_try_call_indirect gen_try_call_indirect)
+(decl gen_return_call_ind_info (Sig Reg CallArgList) BoxReturnCallIndInfo)
+(extern constructor gen_return_call_ind_info gen_return_call_ind_info)
+
+;; Helper for creating `MInst.Call` instructions.
+(decl call_impl (BoxCallInfo) SideEffectNoResult)
+(rule (call_impl info)
+      (SideEffectNoResult.Inst (MInst.Call info)))
+
+;; Helper for creating `MInst.CallInd` instructions.
+(decl call_ind_impl (BoxCallIndInfo) SideEffectNoResult)
+(rule (call_ind_impl info)
+      (SideEffectNoResult.Inst (MInst.CallInd info)))
+
+;; Helper for creating `MInst.ReturnCall` instructions.
+(decl return_call_impl (BoxReturnCallInfo) SideEffectNoResult)
+(rule (return_call_impl info)
+      (SideEffectNoResult.Inst (MInst.ReturnCall info)))
+
+;; Helper for creating `MInst.ReturnCallInd` instructions.
+(decl return_call_ind_impl (BoxReturnCallIndInfo) SideEffectNoResult)
+(rule (return_call_ind_impl info)
+      (SideEffectNoResult.Inst (MInst.ReturnCallInd info)))
+
 
 ;;; this is trying to imitate aarch64 `madd` instruction.
 (decl madd (XReg XReg XReg) XReg)

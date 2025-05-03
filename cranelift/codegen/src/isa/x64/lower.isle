@@ -3468,28 +3468,94 @@
 
 ;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (call (func_ref_data sig_ref extname dist) inputs))
-      (gen_call sig_ref extname dist inputs))
+;; Direct call to an in-range function.
+(rule 1 (lower (call (func_ref_data sig_ref name (reloc_distance_near)) args))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_call_rets abi output))
+            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none)))
+            (_ Unit (emit_side_effect (call_known info))))
+        output))
 
-(rule (lower (call_indirect sig_ref val inputs))
-      (gen_call_indirect sig_ref val inputs))
+;; Direct call to an out-of-range function (implicitly via pointer).
+(rule (lower (call (func_ref_data sig_ref name dist) args))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_call_rets abi output))
+            (target RegMem (RegMem.Reg (load_ext_name name 0 dist)))
+            (info BoxCallIndInfo (gen_call_ind_info abi target uses defs (try_call_none)))
+            (_ Unit (emit_side_effect (call_unknown info))))
+        output))
+
+;; Indirect call.
+(rule (lower (call_indirect sig_ref ptr args))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
+            (target RegMem (RegMem.Reg (put_in_reg ptr)))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_call_rets abi output))
+            (info BoxCallIndInfo (gen_call_ind_info abi target uses defs (try_call_none)))
+            (_ Unit (emit_side_effect (call_unknown info))))
+        output))
 
 ;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (return_call (func_ref_data sig_ref extname dist) args))
-      (gen_return_call sig_ref extname dist args))
+;; Direct call to an in-range function.
+(rule 1 (lower (return_call (func_ref_data sig_ref name (reloc_distance_near)) args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_return_call_args abi args))
+            (info BoxReturnCallInfo (gen_return_call_info abi name uses)))
+        (side_effect (return_call_known info))))
 
-(rule (lower (return_call_indirect sig_ref callee args))
-      (gen_return_call_indirect sig_ref callee args))
+;; Direct call to an out-of-range function (implicitly via pointer).
+(rule (lower (return_call (func_ref_data sig_ref name dist) args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_return_call_args abi args))
+            (target Reg (load_ext_name name 0 dist))
+            (info BoxReturnCallIndInfo (gen_return_call_ind_info abi target uses)))
+        (side_effect (return_call_unknown info))))
+
+;; Indirect call.
+(rule (lower (return_call_indirect sig_ref ptr args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (target Reg (put_in_reg ptr))
+            (uses CallArgList (gen_return_call_args abi args))
+            (info BoxReturnCallIndInfo (gen_return_call_ind_info abi target uses)))
+        (side_effect (return_call_unknown info))))
 
 ;;;; Rules for `try_call` and `try_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower_branch (try_call (func_ref_data sig_ref extname dist) inputs et) targets)
-      (gen_try_call sig_ref extname dist et inputs targets))
+;; Direct call to an in-range function.
+(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (reloc_distance_near)) args et) targets)
+      (let ((abi Sig (abi_sig sig_ref))
+            (trycall OptionTryCallInfo (try_call_info et targets))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_try_call_rets abi))
+            (info BoxCallInfo (gen_call_info abi name uses defs trycall)))
+        (emit_side_effect (call_known info))))
 
-(rule (lower_branch (try_call_indirect val inputs et) targets)
+;; Direct call to an out-of-range function (implicitly via pointer).
+(rule (lower_branch (try_call (func_ref_data sig_ref name dist) args et) targets)
+      (let ((abi Sig (abi_sig sig_ref))
+            (trycall OptionTryCallInfo (try_call_info et targets))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_try_call_rets abi))
+            (target RegMem (RegMem.Reg (load_ext_name name 0 dist)))
+            (info BoxCallIndInfo (gen_call_ind_info abi target uses defs trycall)))
+        (emit_side_effect (call_unknown info))))
+
+;; Indirect call.
+(rule (lower_branch (try_call_indirect ptr args et) targets)
       (if-let (exception_sig sig_ref) et)
-      (gen_try_call_indirect sig_ref val et inputs targets))
+      (let ((abi Sig (abi_sig sig_ref))
+            (trycall OptionTryCallInfo (try_call_info et targets))
+            (target RegMem (RegMem.Reg (put_in_reg ptr)))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_try_call_rets abi))
+            (info BoxCallIndInfo (gen_call_ind_info abi target uses defs trycall)))
+        (emit_side_effect (call_unknown info))))
 
 ;; Rules for `stack_switch` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

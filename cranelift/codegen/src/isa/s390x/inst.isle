@@ -886,6 +886,12 @@
       (rn Reg)
       (lane_imm u8))
 
+    ;; Synthetic instruction to reverse vector elements in-register.
+    (VecEltRev
+      (lane_count u32)
+      (rd WritableReg)
+      (rn Reg))
+
     ;; Allocate stack space for outgoing tail-call arguments.
     (AllocateArgs
       (size u32))
@@ -1013,25 +1019,19 @@
 
 ;; Primitive types used in instruction formats.
 
+(type CallInstDest (primitive CallInstDest))
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
 (type VecMachLabel extern (enum))
 
-;; Information about a call site.
-(type CallSiteInfo (primitive CallSiteInfo))
-(decl call_site_info (BoxCallInfo InstOutput) CallSiteInfo)
-(extern extractor infallible call_site_info call_site_info_split)
+(decl call_inst_dest_direct (ExternalName) CallInstDest)
+(extern constructor call_inst_dest_direct call_inst_dest_direct)
+(convert ExternalName CallInstDest call_inst_dest_direct)
 
-;; The destination of a call instruction.
-(type CallInstDest
-  (enum
-    ;; Direct call.
-    (Direct
-      (name ExternalName))
-    ;; Indirect call.
-    (Indirect
-      (reg Reg))))
+(decl call_inst_dest_indirect (Reg) CallInstDest)
+(extern constructor call_inst_dest_indirect call_inst_dest_indirect)
+(convert Reg CallInstDest call_inst_dest_indirect)
 
 ;; A symbol reference carrying relocation information.
 (type SymbolReloc
@@ -1775,9 +1775,6 @@
 
 (type MemArg extern (enum))
 
-(decl memarg_flags (MemArg) MemFlags)
-(extern constructor memarg_flags memarg_flags)
-
 (decl memarg_reg_plus_reg (Reg Reg u8 MemFlags) MemArg)
 (extern constructor memarg_reg_plus_reg memarg_reg_plus_reg)
 
@@ -1789,10 +1786,6 @@
 
 (decl memarg_got () MemArg)
 (extern constructor memarg_got memarg_got)
-
-;; Add an offset to a virtual MemArg.
-(decl memarg_offset (MemArg i64) MemArg)
-(extern constructor memarg_offset memarg_offset)
 
 ;; Form the sum of two offset values, and check that the result is
 ;; a valid `MemArg::Symbol` offset (i.e. is even and fits into i32).
@@ -2659,6 +2652,13 @@
             (_ Unit (emit (MInst.VecReplicateLane size dst src lane_imm))))
         dst))
 
+;; Helper for emitting `MInst.VecEltRev` instructions.
+(decl vec_elt_rev (Type Reg) Reg)
+(rule (vec_elt_rev ty @ (multi_lane _ lanes) src)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecEltRev lanes dst src))))
+        dst))
+
 ;; Helper for emitting `MInst.LoadSymbolReloc` instructions.
 (decl load_symbol_reloc (SymbolReloc) Reg)
 (rule (load_symbol_reloc symbol_reloc)
@@ -2833,97 +2833,6 @@
 (decl sp () Reg)
 (rule (sp)
       (mov_preg (preg_stack)))
-
-;; Helpers for accessing argument / return value slots ;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl arg_store (Type Reg MemArg) SideEffectNoResult)
-(rule (arg_store $I8 reg mem) (store8 reg mem))
-(rule (arg_store $I16 reg mem) (store16 reg mem))
-(rule (arg_store $I32 reg mem) (store32 reg mem))
-(rule (arg_store $I64 reg mem) (store64 reg mem))
-(rule (arg_store $F16 reg mem) (vec_store_lane $F16X8 reg mem 0))
-(rule (arg_store $F32 reg mem) (vec_store_lane $F32X4 reg mem 0))
-(rule (arg_store $F64 reg mem) (vec_store_lane $F64X2 reg mem 0))
-(rule -1 (arg_store (vr128_ty ty) reg mem) (vec_store reg mem))
-
-;; Helper to perform a lane swap in register.
-(decl vec_elt_rev (Type Reg) Reg)
-(rule (vec_elt_rev (multi_lane 64 2) reg)
-      (vec_permute_dw_imm $I64X2 reg 1 reg 0))
-(rule (vec_elt_rev (multi_lane 32 4) reg)
-      (let ((rev Reg (vec_permute_dw_imm $I64X2 reg 1 reg 0)))
-        (vec_rot_imm $I64X2 rev 32)))
-(rule (vec_elt_rev (multi_lane 16 8) reg)
-      (let ((rev Reg (vec_permute_dw_imm $I64X2 reg 1 reg 0)))
-        (vec_rot_imm $I32X4 (vec_rot_imm $I64X2 rev 32) 16)))
-(rule (vec_elt_rev (multi_lane 8 16) reg)
-      (let ((rev Reg (vec_permute_dw_imm $I64X2 reg 1 reg 0)))
-        (vec_rot_imm $I16X8 (vec_rot_imm $I32X4 (vec_rot_imm $I64X2 rev 32) 16) 8)))
-
-;; When passing a vector value to a function whose ABI uses a different
-;; lane order than the current function, we need to swap lanes.
-;; The first operand is the lane order used by the callee.
-(decl abi_vec_elt_rev (LaneOrder Type Reg) Reg)
-(rule 5 (abi_vec_elt_rev _ (gpr32_ty ty) reg) reg)
-(rule 4 (abi_vec_elt_rev _ (gpr64_ty ty) reg) reg)
-(rule 3 (abi_vec_elt_rev _ $I128 reg) reg)
-(rule 3 (abi_vec_elt_rev _ $F128 reg) reg)
-(rule 2 (abi_vec_elt_rev _ (ty_scalar_float ty) reg) reg)
-(rule 0 (abi_vec_elt_rev callee_lane_order _ reg)
-      (if-let true (lane_order_equal callee_lane_order (lane_order)))
-      reg)
-(rule 1 (abi_vec_elt_rev callee_lane_order (ty_vec128 ty) reg)
-      (if-let false (lane_order_equal callee_lane_order (lane_order)))
-      (vec_elt_rev ty reg))
-
-;; Prepare a stack copy of a single (oversized) argument.
-(decl copy_to_buffer (MemArg ABIArg Value) InstOutput)
-(rule 2 (copy_to_buffer base (abi_arg_only_slot slot) _) (output_none))
-(rule 0 (copy_to_buffer base (abi_arg_implicit_pointer _ offset ty)
-                      val @ (value_type ty))
-      (side_effect (arg_store ty val (memarg_offset base offset))))
-
-;; Copy a single argument/return value to its slots.
-;; For oversized arguments, set the slot to the buffer address.
-(decl copy_to_arg (CallArgListBuilder LaneOrder MemArg ABIArg Value) InstOutput)
-(rule 2 (copy_to_arg uses lo base (abi_arg_only_slot slot) val)
-      (copy_reg_to_arg_slot uses lo base slot (prepare_arg_val slot val)))
-(rule 0 (copy_to_arg uses lo base (abi_arg_implicit_pointer slot offset _) _)
-      (let ((ptr Reg (load_addr (memarg_offset base offset))))
-        (copy_reg_to_arg_slot uses lo base slot ptr)))
-
-;; Place one component of an argument/return value into a register.
-;; Copy reference values into registers of integer type.
-;; Zero- or sign-extend as required by the ABI.
-(decl prepare_arg_val (ABIArgSlot Value) Reg)
-(rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.None)) val)
-      val)
-(rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.Uext)) val)
-      (put_in_reg_zext64 val))
-(rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.Sext)) val)
-      (put_in_reg_sext64 val))
-(rule (prepare_arg_val (ABIArgSlot.Stack _ _ (ArgumentExtension.None)) val)
-      val)
-(rule (prepare_arg_val (ABIArgSlot.Stack _ _ (ArgumentExtension.Uext)) val)
-      (put_in_reg_zext64 val))
-(rule (prepare_arg_val (ABIArgSlot.Stack _ _ (ArgumentExtension.Sext)) val)
-      (put_in_reg_sext64 val))
-
-;; Copy one component of an argument/return value to its slot, where the
-;; value is already extended and present in a register.
-(decl copy_reg_to_arg_slot (CallArgListBuilder LaneOrder MemArg ABIArgSlot Reg) InstOutput)
-(rule (copy_reg_to_arg_slot uses lo _ (ABIArgSlot.Reg reg ty ext) src)
-      (let ((_ Unit (args_builder_push uses (abi_vec_elt_rev lo ty src) reg)))
-        (output_none)))
-(rule (copy_reg_to_arg_slot _ lo base (ABIArgSlot.Stack offset ty ext) src)
-      (side_effect (arg_store (abi_ext_ty ext ty) (abi_vec_elt_rev lo ty src)
-                              (memarg_offset base offset))))
-
-;; Helper to compute the type of an implicitly extended argument/return value.
-(decl abi_ext_ty (ArgumentExtension Type) Type)
-(rule 0 (abi_ext_ty _ ty) ty)
-(rule 1 (abi_ext_ty (ArgumentExtension.Uext) (gpr32_ty _)) $I64)
-(rule 1 (abi_ext_ty (ArgumentExtension.Sext) (gpr32_ty _)) $I64)
 
 
 ;; Helpers for generating immediate values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3474,63 +3383,23 @@
 
 ;; Helpers for generating `call` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Partial (mutable) argument list in the process of being created.
-(type CallArgListBuilder extern (enum))
+(decl gen_call_info (Sig CallInstDest CallArgList CallRetList OptionTryCallInfo) BoxCallInfo)
+(extern constructor gen_call_info gen_call_info)
 
-;; Create a new empty instruction sequence builder.
-(decl args_builder_new () CallArgListBuilder)
-(extern constructor args_builder_new args_builder_new)
+(decl gen_return_call_info (Sig CallInstDest CallArgList) BoxReturnCallInfo)
+(extern constructor gen_return_call_info gen_return_call_info)
 
-;; Push an instruction to a sequence under construction.
-(decl args_builder_push (CallArgListBuilder Reg RealReg) Unit)
-(extern constructor args_builder_push args_builder_push)
+(decl abi_emit_call_adjust_stack (Sig) Unit)
+(extern constructor abi_emit_call_adjust_stack abi_emit_call_adjust_stack)
 
-;; Complete the sequence under construction.
-(decl args_builder_finish (CallArgListBuilder) CallArgList)
-(extern constructor args_builder_finish args_builder_finish)
+(decl abi_emit_return_call_adjust_stack (Sig) Unit)
+(extern constructor abi_emit_return_call_adjust_stack abi_emit_return_call_adjust_stack)
 
-(decl abi_sig (SigRef) Sig)
-(extern constructor abi_sig abi_sig)
-
-(decl abi_call_site_info (Sig CallInstDest CallArgList) CallSiteInfo)
-(extern constructor abi_call_site_info abi_call_site_info)
-
-(decl abi_try_call_info (Sig CallInstDest CallArgList ExceptionTable MachLabelSlice) BoxCallInfo)
-(extern constructor abi_try_call_info abi_try_call_info)
-
-(decl abi_return_call_info (Sig CallInstDest CallArgList) BoxReturnCallInfo)
-(extern constructor abi_return_call_info abi_return_call_info)
-
-(decl abi_call_stack_args (Sig) MemArg)
-(extern constructor abi_call_stack_args abi_call_stack_args)
-
-(decl abi_call_stack_rets (Sig) MemArg)
-(extern constructor abi_call_stack_rets abi_call_stack_rets)
-
-(decl abi_return_call_stack_args (Sig) MemArg)
-(extern constructor abi_return_call_stack_args abi_return_call_stack_args)
+(decl abi_prepare_args (Sig ValueSlice) ValueRegsVec)
+(extern constructor abi_prepare_args abi_prepare_args)
 
 (decl writable_link_reg () WritableReg)
 (rule (writable_link_reg) (writable_gpr 14))
-
-(decl abi_call (Sig CallInstDest CallArgList) InstOutput)
-(rule (abi_call abi dest uses)
-      (abi_call_impl (abi_call_site_info abi dest uses)))
-(decl abi_call_impl (CallSiteInfo) InstOutput)
-(rule (abi_call_impl (call_site_info info output))
-      (let ((_ Unit (emit_side_effect (call_impl (writable_link_reg) info))))
-        output))
-
-(decl abi_return_call (Sig CallInstDest CallArgList) SideEffectNoResult)
-(rule (abi_return_call abi dest uses)
-      (return_call_impl (abi_return_call_info abi dest uses)))
-
-(decl abi_try_call (Sig CallInstDest CallArgList ExceptionTable MachLabelSlice) SideEffectNoResult)
-(rule (abi_try_call abi dest uses et targets)
-      (call_impl (writable_link_reg) (abi_try_call_info abi dest uses et targets)))
-
-(decl abi_lane_order (Sig) LaneOrder)
-(extern constructor abi_lane_order abi_lane_order)
 
 
 ;; Helpers for generating vector pack and unpack instructions ;;;;;;;;;;;;;;;;;;

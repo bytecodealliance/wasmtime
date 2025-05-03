@@ -2469,17 +2469,38 @@
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl gen_call (SigRef ExternalName RelocDistance ValueSlice) InstOutput)
-(extern constructor gen_call gen_call)
+(decl gen_call_info (Sig ExternalName CallArgList CallRetList OptionTryCallInfo) BoxCallInfo)
+(extern constructor gen_call_info gen_call_info)
 
-(decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
-(extern constructor gen_call_indirect gen_call_indirect)
+(decl gen_call_ind_info (Sig RegMem CallArgList CallRetList OptionTryCallInfo) BoxCallIndInfo)
+(extern constructor gen_call_ind_info gen_call_ind_info)
 
-(decl gen_try_call (SigRef ExternalName RelocDistance ExceptionTable ValueSlice MachLabelSlice) Unit)
-(extern constructor gen_try_call gen_try_call)
+(decl gen_return_call_info (Sig ExternalName CallArgList) BoxReturnCallInfo)
+(extern constructor gen_return_call_info gen_return_call_info)
 
-(decl gen_try_call_indirect (SigRef Value ExceptionTable ValueSlice MachLabelSlice) Unit)
-(extern constructor gen_try_call_indirect gen_try_call_indirect)
+(decl gen_return_call_ind_info (Sig Reg CallArgList) BoxReturnCallIndInfo)
+(extern constructor gen_return_call_ind_info gen_return_call_ind_info)
+
+;; Helper for creating `CallKnown` instructions.
+(decl call_known (BoxCallInfo) SideEffectNoResult)
+(rule (call_known info)
+      (SideEffectNoResult.Inst (MInst.CallKnown info)))
+
+;; Helper for creating `CallUnknown` instructions.
+(decl call_unknown (BoxCallIndInfo) SideEffectNoResult)
+(rule (call_unknown info)
+      (SideEffectNoResult.Inst (MInst.CallUnknown info)))
+
+;; Helper for creating `ReturnCallKnown` instructions.
+(decl return_call_known (BoxReturnCallInfo) SideEffectNoResult)
+(rule (return_call_known info)
+      (SideEffectNoResult.Inst (MInst.ReturnCallKnown info)))
+
+;; Helper for creating `ReturnCallUnknown` instructions.
+(decl return_call_unknown (BoxReturnCallIndInfo) SideEffectNoResult)
+(rule (return_call_unknown info)
+      (SideEffectNoResult.Inst (MInst.ReturnCallUnknown info)))
+
 
 ;;;; Helpers for emitting stack switches ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

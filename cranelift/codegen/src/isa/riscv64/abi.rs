@@ -5,7 +5,7 @@ use crate::ir::types::*;
 
 use crate::isa;
 
-use crate::isa::riscv64::{inst::*, Riscv64Backend};
+use crate::isa::riscv64::inst::*;
 use crate::isa::CallConv;
 use crate::machinst::*;
 
@@ -25,9 +25,6 @@ use std::sync::OnceLock;
 
 /// Support for the Riscv64 ABI from the callee side (within a function body).
 pub(crate) type Riscv64Callee = Callee<Riscv64MachineDeps>;
-
-/// Support for the Riscv64 ABI from the caller side (at a callsite).
-pub(crate) type Riscv64ABICallSite = CallSite<Riscv64MachineDeps>;
 
 /// Riscv64-specific ABI behavior. This struct just serves as an implementation
 /// point for the trait; it is never actually instantiated.
@@ -557,30 +554,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         insts
     }
 
-    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Self::I; 2]> {
-        let mut insts = SmallVec::new();
-        match &dest {
-            CallDest::ExtName(name, RelocDistance::Near) => {
-                let info = Box::new(info.map(|()| name.clone()));
-                insts.push(Inst::Call { info })
-            }
-            CallDest::ExtName(name, RelocDistance::Far) => {
-                insts.push(Inst::LoadExtName {
-                    rd: tmp,
-                    name: Box::new(name.clone()),
-                    offset: 0,
-                });
-                let info = Box::new(info.map(|()| tmp.to_reg()));
-                insts.push(Inst::CallInd { info });
-            }
-            CallDest::Reg(reg) => {
-                let info = Box::new(info.map(|()| *reg));
-                insts.push(Inst::CallInd { info });
-            }
-        }
-        insts
-    }
-
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
@@ -742,61 +715,6 @@ impl ABIMachineSpec for Riscv64MachineDeps {
         match call_conv {
             isa::CallConv::SystemV | isa::CallConv::Tail => PAYLOAD_REGS,
             _ => &[],
-        }
-    }
-}
-
-impl Riscv64ABICallSite {
-    pub fn emit_return_call(
-        mut self,
-        ctx: &mut Lower<Inst>,
-        args: isle::ValueSlice,
-        _backend: &Riscv64Backend,
-    ) {
-        let new_stack_arg_size =
-            u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
-
-        ctx.abi_mut().accumulate_tail_args_size(new_stack_arg_size);
-
-        // Put all arguments in registers and stack slots (within that newly
-        // allocated stack space).
-        self.emit_args(ctx, args);
-        self.emit_stack_ret_arg_for_tail_call(ctx);
-
-        let dest = self.dest().clone();
-        let uses = self.take_uses();
-
-        match dest {
-            CallDest::ExtName(name, RelocDistance::Near) => {
-                let info = Box::new(ReturnCallInfo {
-                    dest: name,
-                    uses,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnCall { info });
-            }
-            CallDest::ExtName(name, RelocDistance::Far) => {
-                let callee = ctx.alloc_tmp(ir::types::I64).only_reg().unwrap();
-                ctx.emit(Inst::LoadExtName {
-                    rd: callee,
-                    name: Box::new(name),
-                    offset: 0,
-                });
-                let info = Box::new(ReturnCallInfo {
-                    dest: callee.to_reg(),
-                    uses,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnCallInd { info });
-            }
-            CallDest::Reg(callee) => {
-                let info = Box::new(ReturnCallInfo {
-                    dest: callee,
-                    uses,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnCallInd { info });
-            }
         }
     }
 }

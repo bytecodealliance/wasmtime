@@ -17,8 +17,8 @@ block0(v0: i64):
 ;   stmg %r14, %r15, 112(%r15)
 ;   aghi %r15, -160
 ; block0:
-;   bras %r1, 12 ; data %g + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4
+;   bras %r1, 12 ; data %g + 0 ; lg %r5, 0(%r1)
+;   basr %r14, %r5
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
 ;
@@ -32,8 +32,8 @@ block0(v0: i64):
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r4, 0(%r1)
-;   basr %r14, %r4
+;   lg %r5, 0(%r1)
+;   basr %r14, %r5
 ;   lmg %r14, %r15, 0x110(%r15)
 ;   br %r14
 

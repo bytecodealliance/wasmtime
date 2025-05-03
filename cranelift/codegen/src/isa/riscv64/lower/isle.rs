@@ -7,8 +7,6 @@ use generated_code::MInst;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use self::generated_code::{FpuOPWidth, VecAluOpRR, VecLmul};
-use crate::isa;
-use crate::isa::riscv64::abi::Riscv64ABICallSite;
 use crate::isa::riscv64::lower::args::{
     FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
 };
@@ -22,7 +20,7 @@ use crate::{
         MemFlags, Opcode, TrapCode, Value, ValueList,
     },
     isa::riscv64::inst::*,
-    machinst::{ArgPair, InstOutput, IsTailCall},
+    machinst::{ArgPair, CallArgList, CallRetList, InstOutput},
 };
 use regalloc2::PReg;
 use std::boxed::Box;
@@ -64,7 +62,82 @@ impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
 
 impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> {
     isle_lower_prelude_methods!();
-    isle_prelude_caller_methods!(Riscv64ABICallSite);
+
+    fn gen_call_info(
+        &mut self,
+        sig: Sig,
+        dest: ExternalName,
+        uses: CallArgList,
+        defs: CallRetList,
+        try_call_info: Option<TryCallInfo>,
+    ) -> BoxCallInfo {
+        let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
+        let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
+
+        Box::new(
+            self.lower_ctx
+                .gen_call_info(sig, dest, uses, defs, try_call_info),
+        )
+    }
+
+    fn gen_call_ind_info(
+        &mut self,
+        sig: Sig,
+        dest: Reg,
+        uses: CallArgList,
+        defs: CallRetList,
+        try_call_info: Option<TryCallInfo>,
+    ) -> BoxCallIndInfo {
+        let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
+        let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
+
+        Box::new(
+            self.lower_ctx
+                .gen_call_info(sig, dest, uses, defs, try_call_info),
+        )
+    }
+
+    fn gen_return_call_info(
+        &mut self,
+        sig: Sig,
+        dest: ExternalName,
+        uses: CallArgList,
+    ) -> BoxReturnCallInfo {
+        let new_stack_arg_size = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_tail_args_size(new_stack_arg_size);
+
+        Box::new(ReturnCallInfo {
+            dest,
+            uses,
+            new_stack_arg_size,
+        })
+    }
+
+    fn gen_return_call_ind_info(
+        &mut self,
+        sig: Sig,
+        dest: Reg,
+        uses: CallArgList,
+    ) -> BoxReturnCallIndInfo {
+        let new_stack_arg_size = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_tail_args_size(new_stack_arg_size);
+
+        Box::new(ReturnCallInfo {
+            dest,
+            uses,
+            new_stack_arg_size,
+        })
+    }
 
     fn fpu_op_width_from_ty(&mut self, ty: Type) -> FpuOPWidth {
         match ty {

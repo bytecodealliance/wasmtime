@@ -1,8 +1,10 @@
 //! S390x ISA: binary code emission.
 
 use crate::ir::{self, LibCall, MemFlags, TrapCode};
+use crate::isa::s390x::abi::REG_SAVE_AREA_SIZE;
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
+use crate::isa::CallConv;
 use cranelift_control::ControlPlane;
 
 /// Debug macro for testing that a regpair is valid: that the high register is even, and the low
@@ -72,18 +74,28 @@ pub fn mem_finalize(
     let mem = match mem {
         &MemArg::RegOffset { off, .. }
         | &MemArg::InitialSPOffset { off }
-        | &MemArg::NominalSPOffset { off }
+        | &MemArg::IncomingArgOffset { off }
+        | &MemArg::OutgoingArgOffset { off }
         | &MemArg::SlotOffset { off }
         | &MemArg::SpillOffset { off } => {
             let base = match mem {
                 &MemArg::RegOffset { reg, .. } => reg,
                 &MemArg::InitialSPOffset { .. }
-                | &MemArg::NominalSPOffset { .. }
+                | &MemArg::IncomingArgOffset { .. }
+                | &MemArg::OutgoingArgOffset { .. }
                 | &MemArg::SlotOffset { .. }
                 | &MemArg::SpillOffset { .. } => stack_reg(),
                 _ => unreachable!(),
             };
             let adj = match mem {
+                &MemArg::IncomingArgOffset { .. } => i64::from(
+                    state.incoming_args_size
+                        + REG_SAVE_AREA_SIZE
+                        + state.frame_layout().clobber_size
+                        + state.frame_layout().fixed_frame_storage_size
+                        + state.frame_layout().outgoing_args_size
+                        + state.nominal_sp_offset,
+                ),
                 &MemArg::InitialSPOffset { .. } => i64::from(
                     state.frame_layout().clobber_size
                         + state.frame_layout().fixed_frame_storage_size
@@ -98,7 +110,9 @@ pub fn mem_finalize(
                 &MemArg::SlotOffset { .. } => {
                     i64::from(state.frame_layout().outgoing_args_size + state.nominal_sp_offset)
                 }
-                &MemArg::NominalSPOffset { .. } => i64::from(state.nominal_sp_offset),
+                &MemArg::OutgoingArgOffset { .. } => {
+                    i64::from(REG_SAVE_AREA_SIZE) - i64::from(state.outgoing_sp_offset)
+                }
                 _ => 0,
             };
             let off = off + adj;
@@ -1284,6 +1298,15 @@ pub struct EmitState {
     /// ABI, between the AllocateArgs and the actual call instruction.
     pub(crate) nominal_sp_offset: u32,
 
+    /// Offset from the actual SP to the SP during an outgoing function call.
+    /// This is normally always zero, except during processing of the return
+    /// argument handling after a call using the tail-call ABI has returned.
+    pub(crate) outgoing_sp_offset: u32,
+
+    /// Size of the incoming argument area in the caller's frame.  Always zero
+    /// for functions using the tail-call ABI.
+    pub(crate) incoming_args_size: u32,
+
     /// The user stack map for the upcoming instruction, as provided to
     /// `pre_safepoint()`.
     user_stack_map: Option<ir::UserStackMap>,
@@ -1297,8 +1320,15 @@ pub struct EmitState {
 
 impl MachInstEmitState<Inst> for EmitState {
     fn new(abi: &Callee<S390xMachineDeps>, ctrl_plane: ControlPlane) -> Self {
+        let incoming_args_size = if abi.call_conv() == CallConv::Tail {
+            0
+        } else {
+            abi.frame_layout().incoming_args_size
+        };
         EmitState {
             nominal_sp_offset: 0,
+            outgoing_sp_offset: 0,
+            incoming_args_size,
             user_stack_map: None,
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
@@ -3177,6 +3207,48 @@ impl Inst {
                 );
             }
 
+            &Inst::VecEltRev { lane_count, rd, rn } => {
+                assert!(lane_count >= 2 && lane_count <= 16);
+                let inst = Inst::VecPermuteDWImm {
+                    rd,
+                    rn,
+                    rm: rn,
+                    idx1: 1,
+                    idx2: 0,
+                };
+                inst.emit(sink, emit_info, state);
+                if lane_count >= 4 {
+                    let inst = Inst::VecShiftRR {
+                        shift_op: VecShiftOp::RotL64x2,
+                        rd,
+                        rn: rd.to_reg(),
+                        shift_imm: 32,
+                        shift_reg: zero_reg(),
+                    };
+                    inst.emit(sink, emit_info, state);
+                }
+                if lane_count >= 8 {
+                    let inst = Inst::VecShiftRR {
+                        shift_op: VecShiftOp::RotL32x4,
+                        rd,
+                        rn: rd.to_reg(),
+                        shift_imm: 16,
+                        shift_reg: zero_reg(),
+                    };
+                    inst.emit(sink, emit_info, state);
+                }
+                if lane_count >= 16 {
+                    let inst = Inst::VecShiftRR {
+                        shift_op: VecShiftOp::RotL16x8,
+                        rd,
+                        rn: rd.to_reg(),
+                        shift_imm: 8,
+                        shift_reg: zero_reg(),
+                    };
+                    inst.emit(sink, emit_info, state);
+                }
+            }
+
             &Inst::AllocateArgs { size } => {
                 let inst = if let Ok(size) = i16::try_from(size) {
                     Inst::AluRSImm16 {
@@ -3194,6 +3266,7 @@ impl Inst {
                     }
                 };
                 inst.emit(sink, emit_info, state);
+                assert_eq!(state.nominal_sp_offset, 0);
                 state.nominal_sp_offset += size;
             }
             &Inst::Call { link, ref info } => {
@@ -3222,10 +3295,13 @@ impl Inst {
                 }
 
                 state.nominal_sp_offset -= info.callee_pop_size;
+                assert_eq!(state.nominal_sp_offset, 0);
 
+                state.outgoing_sp_offset = info.callee_pop_size;
                 for inst in S390xMachineDeps::gen_retval_loads(info) {
                     inst.emit(sink, emit_info, state);
                 }
+                state.outgoing_sp_offset = 0;
 
                 // If this is a try-call, jump to the continuation
                 // (normal-return) block.

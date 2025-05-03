@@ -26,7 +26,7 @@ use crate::CodegenError;
 use crate::{machinst::*, trace_log_enabled};
 use crate::{LabelValueLoc, ValueLocRange};
 use regalloc2::{
-    Edit, Function as RegallocFunction, InstOrEdit, InstPosition, InstRange, MachineEnv, Operand,
+    Edit, Function as RegallocFunction, InstOrEdit, InstPosition, InstRange, Operand,
     OperandConstraint, OperandKind, PRegSet, ProgPoint, RegClass,
 };
 use rustc_hash::FxHashMap;
@@ -517,7 +517,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     fn collect_operands(&mut self, vregs: &VRegAllocator<I>) {
-        let allocatable = PRegSet::from(self.vcode.machine_env());
+        let allocatable = PRegSet::from(self.vcode.abi.machine_env());
         for (i, insn) in self.vcode.insts.iter_mut().enumerate() {
             // Push operands from the instruction onto the operand list.
             //
@@ -663,11 +663,6 @@ impl<I: VCodeInst> VCode<I> {
             facts: vec![],
             log2_min_function_alignment,
         }
-    }
-
-    /// Get the ABI-dependent MachineEnv for managing register allocation.
-    pub fn machine_env(&self) -> &MachineEnv {
-        self.abi.machine_env(&self.sigs)
     }
 
     /// Get the number of blocks. Block indices will be in the range `0 ..
