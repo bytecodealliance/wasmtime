@@ -76,5 +76,5 @@ You can make this deterministic in a variety of ways:
 ## Use Deterministic Interruption, If Any
 
 If you are making Wasm execution interruptible, use [deterministic fuel-based
-interruption](./examples-interrupting-wasm.html#deterministic-fuel) rather than
+interruption](./examples-interrupting-wasm.md#deterministic-fuel) rather than
 non-deterministic epoch-based interruption.
