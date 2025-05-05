@@ -94,6 +94,25 @@ modules as Cranelift is an optimizing compiler. Compiling WebAssembly to Pulley
 bytecode should be expected to take about the same time as compiling to native
 platforms.
 
+## Disabling SIMD in Pulley
+
+By default all Pulley opcodes are enabled in the interpreter meaning it's
+possible to execute any Pulley bytecode created by Cranelift and Wasmtime. This
+includes, for example, SIMD opcodes for all of the WebAssembly SIMD proposal.
+Not all WebAssembly modules use these opcodes though nor do all embeddings want
+to enable it, so Pulley supports a custom Rust flag that can be specified at
+compile time to compile-out the SIMD opcodes:
+
+```text
+RUSTFLAGS=--cfg=pulley_disable_interp_simd
+```
+
+When specified the Pulley interpreter will no longer include code to execute
+SIMD opcodes. Instead attempting to execute any opcode will raise a "disabled
+opcode" trap instead. If doing this it's recommended to pair it with
+`Config::wasm_simd(false)` to ensure that SIMD-using modules do not pass
+validation.
+
 ## High-level Design of Pulley
 
 This section is not necessary for users of Pulley but for those interested this
