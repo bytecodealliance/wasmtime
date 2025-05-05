@@ -3263,54 +3263,6 @@ fn test_x64_emit() {
     // XMM_RM_R: Integer Packed
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddb, RegMem::reg(xmm9), w_xmm5),
-        "66410FFCE9",
-        "paddb   %xmm5, %xmm9, %xmm5",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddw, RegMem::reg(xmm7), w_xmm6),
-        "660FFDF7",
-        "paddw   %xmm6, %xmm7, %xmm6",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddd, RegMem::reg(xmm12), w_xmm13),
-        "66450FFEEC",
-        "paddd   %xmm13, %xmm12, %xmm13",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddq, RegMem::reg(xmm1), w_xmm8),
-        "66440FD4C1",
-        "paddq   %xmm8, %xmm1, %xmm8",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddsb, RegMem::reg(xmm9), w_xmm5),
-        "66410FECE9",
-        "paddsb  %xmm5, %xmm9, %xmm5",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddsw, RegMem::reg(xmm7), w_xmm6),
-        "660FEDF7",
-        "paddsw  %xmm6, %xmm7, %xmm6",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddusb, RegMem::reg(xmm12), w_xmm13),
-        "66450FDCEC",
-        "paddusb %xmm13, %xmm12, %xmm13",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Paddusw, RegMem::reg(xmm1), w_xmm8),
-        "66440FDDC1",
-        "paddusw %xmm8, %xmm1, %xmm8",
-    ));
-
-    insns.push((
         Inst::xmm_rm_r(SseOpcode::Psubsb, RegMem::reg(xmm9), w_xmm5),
         "66410FE8E9",
         "psubsb  %xmm5, %xmm9, %xmm5",

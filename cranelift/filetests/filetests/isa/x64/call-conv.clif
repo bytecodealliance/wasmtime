@@ -406,7 +406,7 @@ block0(v0: i32, v1: i32, v2: i8x16, v3: i64, v4: i8x16):
 ;   movdqu  %xmm1, 0(%r9)
 ;   movq    %rsi, %rcx
 ;   call    *%rdi
-;   paddb   %xmm0, %xmm0, %xmm0
+;   paddb %xmm0, %xmm0
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

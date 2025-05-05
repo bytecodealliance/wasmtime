@@ -120,7 +120,7 @@ block0:
 ; block0:
 ;   movdqu  const(1), %xmm0
 ;   movdqu  const(1), %xmm1
-;   paddusb %xmm1, const(0), %xmm1
+;   paddusb (%rip), %xmm1
 ;   pshufb  %xmm0, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
