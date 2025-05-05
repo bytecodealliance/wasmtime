@@ -180,7 +180,7 @@ pub struct Metadata<'a> {
     #[serde(borrow)]
     isa_flags: Vec<(&'a str, FlagValue<'a>)>,
     tunables: Tunables,
-    features: u32,
+    features: u64,
 }
 
 impl Metadata<'_> {

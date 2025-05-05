@@ -1804,6 +1804,7 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Handle(handle) => self.type_handle(id, name, handle, &ty.docs),
             TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs),
             TypeDefKind::Unknown => unreachable!(),
+            TypeDefKind::FixedSizeList(..) => todo!(),
         }
     }
 
@@ -3594,6 +3595,7 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
                 .any(|case| option_type_contains_lists(case.ty, resolve)),
             TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
             TypeDefKind::List(_) => true,
+            TypeDefKind::FixedSizeList(..) => todo!(),
         },
 
         // Technically strings are lists too, but we ignore that here because
