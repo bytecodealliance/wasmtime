@@ -1001,14 +1001,6 @@
             Psrlw
             Psrld
             Psrlq
-            Psubb
-            Psubd
-            Psubq
-            Psubw
-            Psubsb
-            Psubsw
-            Psubusb
-            Psubusw
             Ptest
             Punpckhbw
             Punpckhwd
@@ -3504,67 +3496,59 @@
 
 ;; Helper for creating `psubb` instructions.
 (decl x64_psubb (Xmm XmmMem) Xmm)
-(rule 0 (x64_psubb src1 src2)
-      (xmm_rm_r (SseOpcode.Psubb) src1 src2))
 (rule 1 (x64_psubb src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpsubb) src1 src2))
+(rule 0 (x64_psubb src1 src2) (x64_psubb_a src1 src2))
 
 ;; Helper for creating `psubw` instructions.
 (decl x64_psubw (Xmm XmmMem) Xmm)
-(rule 0 (x64_psubw src1 src2)
-      (xmm_rm_r (SseOpcode.Psubw) src1 src2))
 (rule 1 (x64_psubw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpsubw) src1 src2))
+(rule 0 (x64_psubw src1 src2) (x64_psubw_a src1 src2))
 
 ;; Helper for creating `psubd` instructions.
 (decl x64_psubd (Xmm XmmMem) Xmm)
-(rule 0 (x64_psubd src1 src2)
-      (xmm_rm_r (SseOpcode.Psubd) src1 src2))
 (rule 1 (x64_psubd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpsubd) src1 src2))
+(rule 0 (x64_psubd src1 src2) (x64_psubd_a src1 src2))
 
 ;; Helper for creating `psubq` instructions.
 (decl x64_psubq (Xmm XmmMem) Xmm)
-(rule 0 (x64_psubq src1 src2)
-      (xmm_rm_r (SseOpcode.Psubq) src1 src2))
 (rule 1 (x64_psubq src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpsubq) src1 src2))
+(rule 0 (x64_psubq src1 src2) (x64_psubq_a src1 src2))
 
 ;; Helper for creating `psubsb` instructions.
 (decl x64_psubsb (Xmm XmmMem) Xmm)
-(rule 0 (x64_psubsb src1 src2)
-      (xmm_rm_r (SseOpcode.Psubsb) src1 src2))
 (rule 1 (x64_psubsb src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpsubsb) src1 src2))
+(rule 0 (x64_psubsb src1 src2) (x64_psubsb_a src1 src2))
 
 ;; Helper for creating `psubsw` instructions.
 (decl x64_psubsw (Xmm XmmMem) Xmm)
-(rule 0 (x64_psubsw src1 src2)
-      (xmm_rm_r (SseOpcode.Psubsw) src1 src2))
 (rule 1 (x64_psubsw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpsubsw) src1 src2))
+(rule 0 (x64_psubsw src1 src2) (x64_psubsw_a src1 src2))
 
 ;; Helper for creating `psubusb` instructions.
 (decl x64_psubusb (Xmm XmmMem) Xmm)
-(rule 0 (x64_psubusb src1 src2)
-      (xmm_rm_r (SseOpcode.Psubusb) src1 src2))
 (rule 1 (x64_psubusb src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpsubusb) src1 src2))
+(rule 0 (x64_psubusb src1 src2) (x64_psubusb_a src1 src2))
 
 ;; Helper for creating `psubusw` instructions.
 (decl x64_psubusw (Xmm XmmMem) Xmm)
-(rule 0 (x64_psubusw src1 src2)
-      (xmm_rm_r (SseOpcode.Psubusw) src1 src2))
 (rule 1 (x64_psubusw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpsubusw) src1 src2))
+(rule 0 (x64_psubusw src1 src2) (x64_psubusw_a src1 src2))
 
 ;; Helper for creating `pavgb` instructions.
 (decl x64_pavgb (Xmm XmmMem) Xmm)
