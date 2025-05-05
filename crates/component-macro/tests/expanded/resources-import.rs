@@ -256,6 +256,15 @@ const _: () = {
                 )?;
             linker
                 .func_wrap(
+                    "some-world-func",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let host = &mut host_getter(caller.data_mut());
+                        let r = TheWorldImports::some_world_func(host);
+                        Ok((r,))
+                    },
+                )?;
+            linker
+                .func_wrap(
                     "[constructor]world-resource",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
                         let host = &mut host_getter(caller.data_mut());
@@ -282,15 +291,6 @@ const _: () = {
                         let host = &mut host_getter(caller.data_mut());
                         let r = HostWorldResource::static_foo(host);
                         Ok(r)
-                    },
-                )?;
-            linker
-                .func_wrap(
-                    "some-world-func",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = TheWorldImports::some_world_func(host);
-                        Ok((r,))
                     },
                 )?;
             Ok(())

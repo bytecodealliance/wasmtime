@@ -270,6 +270,30 @@ const _: () = {
                 )?;
             linker
                 .func_wrap_async(
+                    "some-world-func",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        use tracing::Instrument;
+                        let span = tracing::span!(
+                            tracing::Level::TRACE, "wit-bindgen import", module =
+                            "the-world", function = "some-world-func",
+                        );
+                        wasmtime::component::__internal::Box::new(
+                            async move {
+                                tracing::event!(tracing::Level::TRACE, "call");
+                                let host = &mut host_getter(caller.data_mut());
+                                let r = TheWorldImports::some_world_func(host).await;
+                                tracing::event!(
+                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
+                                    "return"
+                                );
+                                Ok((r,))
+                            }
+                                .instrument(span),
+                        )
+                    },
+                )?;
+            linker
+                .func_wrap_async(
                     "[constructor]world-resource",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
                         use tracing::Instrument;
@@ -341,30 +365,6 @@ const _: () = {
                                     "return"
                                 );
                                 Ok(r)
-                            }
-                                .instrument(span),
-                        )
-                    },
-                )?;
-            linker
-                .func_wrap_async(
-                    "some-world-func",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        use tracing::Instrument;
-                        let span = tracing::span!(
-                            tracing::Level::TRACE, "wit-bindgen import", module =
-                            "the-world", function = "some-world-func",
-                        );
-                        wasmtime::component::__internal::Box::new(
-                            async move {
-                                tracing::event!(tracing::Level::TRACE, "call");
-                                let host = &mut host_getter(caller.data_mut());
-                                let r = TheWorldImports::some_world_func(host).await;
-                                tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
-                                );
-                                Ok((r,))
                             }
                                 .instrument(span),
                         )
