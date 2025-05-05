@@ -2205,10 +2205,6 @@ pub(crate) fn emit(
 
             let rex = RexFlags::clear_w();
             let (prefix, opcode, length) = match op {
-                SseOpcode::Andps => (LegacyPrefixes::None, 0x0F54, 2),
-                SseOpcode::Andpd => (LegacyPrefixes::_66, 0x0F54, 2),
-                SseOpcode::Andnps => (LegacyPrefixes::None, 0x0F55, 2),
-                SseOpcode::Andnpd => (LegacyPrefixes::_66, 0x0F55, 2),
                 SseOpcode::Divps => (LegacyPrefixes::None, 0x0F5E, 2),
                 SseOpcode::Divpd => (LegacyPrefixes::_66, 0x0F5E, 2),
                 SseOpcode::Divss => (LegacyPrefixes::_F3, 0x0F5E, 2),
@@ -2227,8 +2223,6 @@ pub(crate) fn emit(
                 SseOpcode::Mulpd => (LegacyPrefixes::_66, 0x0F59, 2),
                 SseOpcode::Mulss => (LegacyPrefixes::_F3, 0x0F59, 2),
                 SseOpcode::Mulsd => (LegacyPrefixes::_F2, 0x0F59, 2),
-                SseOpcode::Orpd => (LegacyPrefixes::_66, 0x0F56, 2),
-                SseOpcode::Orps => (LegacyPrefixes::None, 0x0F56, 2),
                 SseOpcode::Packssdw => (LegacyPrefixes::_66, 0x0F6B, 2),
                 SseOpcode::Packsswb => (LegacyPrefixes::_66, 0x0F63, 2),
                 SseOpcode::Packusdw => (LegacyPrefixes::_66, 0x0F382B, 3),
@@ -2295,8 +2289,6 @@ pub(crate) fn emit(
                 SseOpcode::Pxor => (LegacyPrefixes::_66, 0x0FEF, 2),
                 SseOpcode::Unpcklps => (LegacyPrefixes::None, 0x0F14, 2),
                 SseOpcode::Unpckhps => (LegacyPrefixes::None, 0x0F15, 2),
-                SseOpcode::Xorps => (LegacyPrefixes::None, 0x0F57, 2),
-                SseOpcode::Xorpd => (LegacyPrefixes::_66, 0x0F57, 2),
                 SseOpcode::Phaddw => (LegacyPrefixes::_66, 0x0F3801, 3),
                 SseOpcode::Phaddd => (LegacyPrefixes::_66, 0x0F3802, 3),
                 SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F10, 2),
@@ -3104,8 +3096,8 @@ pub(crate) fn emit(
                 OperandSize::Size32 => (
                     asm::inst::addss_a::new(dst, lhs).into(),
                     SseOpcode::Ucomiss,
-                    SseOpcode::Andps,
-                    SseOpcode::Orps,
+                    asm::inst::andps_a::new(dst, lhs).into(),
+                    asm::inst::orps_a::new(dst, lhs).into(),
                     if *is_min {
                         SseOpcode::Minss
                     } else {
@@ -3115,8 +3107,8 @@ pub(crate) fn emit(
                 OperandSize::Size64 => (
                     asm::inst::addsd_a::new(dst, lhs).into(),
                     SseOpcode::Ucomisd,
-                    SseOpcode::Andpd,
-                    SseOpcode::Orpd,
+                    asm::inst::andpd_a::new(dst, lhs).into(),
+                    asm::inst::orpd_a::new(dst, lhs).into(),
                     if *is_min {
                         SseOpcode::Minsd
                     } else {
@@ -3135,9 +3127,8 @@ pub(crate) fn emit(
             // Ordered and equal. The operands are bit-identical unless they are zero
             // and negative zero. These instructions merge the sign bits in that
             // case, and are no-ops otherwise.
-            let op = if *is_min { or_op } else { and_op };
-            let inst = Inst::xmm_rm_r(op, RegMem::reg(lhs), dst);
-            inst.emit(sink, info, state);
+            let inst = if *is_min { or_op } else { and_op };
+            Inst::External { inst }.emit(sink, info, state);
 
             let inst = Inst::jmp_known(done);
             inst.emit(sink, info, state);
@@ -3642,8 +3633,8 @@ pub(crate) fn emit(
                 // If the input was positive, saturate to INT_MAX.
 
                 // Zero out tmp_xmm.
-                let inst = Inst::xmm_rm_r(SseOpcode::Xorpd, RegMem::reg(tmp_xmm.to_reg()), tmp_xmm);
-                inst.emit(sink, info, state);
+                let inst = asm::inst::xorpd_a::new(tmp_xmm, tmp_xmm.to_reg()).into();
+                Inst::External { inst }.emit(sink, info, state);
 
                 let inst = Inst::xmm_cmp_rm_r(cmp_op, tmp_xmm.to_reg(), RegMem::reg(src));
                 inst.emit(sink, info, state);
@@ -3706,8 +3697,8 @@ pub(crate) fn emit(
                 // If positive, it was a real overflow.
 
                 // Zero out the tmp_xmm register.
-                let inst = Inst::xmm_rm_r(SseOpcode::Xorpd, RegMem::reg(tmp_xmm.to_reg()), tmp_xmm);
-                inst.emit(sink, info, state);
+                let inst = asm::inst::xorpd_a::new(tmp_xmm, tmp_xmm.to_reg()).into();
+                Inst::External { inst }.emit(sink, info, state);
 
                 let inst = Inst::xmm_cmp_rm_r(cmp_op, tmp_xmm.to_reg(), RegMem::reg(src));
                 inst.emit(sink, info, state);

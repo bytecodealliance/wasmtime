@@ -876,11 +876,7 @@
       (enum Rorx))
 
 (type SseOpcode extern
-      (enum Andps
-            Andpd
-            Andnps
-            Andnpd
-            Blendvpd
+      (enum Blendvpd
             Blendvps
             Comiss
             Comisd
@@ -932,8 +928,6 @@
             Mulpd
             Mulss
             Mulsd
-            Orps
-            Orpd
             Pabsb
             Pabsw
             Pabsd
@@ -1045,8 +1039,6 @@
             Unpcklps
             Unpcklpd
             Unpckhps
-            Xorps
-            Xorpd
             Phaddw
             Phaddd
             Punpckhdq
@@ -3645,12 +3637,10 @@
 
 ;; Helper for creating `orpd` instructions.
 (decl x64_orpd (Xmm XmmMem) Xmm)
-(rule 2 (x64_orpd src1 src2)
+(rule 1 (x64_orpd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vorpd) src1 src2))
-(rule 1 (x64_orpd src1 (is_xmm_mem src2)) (x64_orpd_a src1 src2))
-(rule 0 (x64_orpd src1 src2)
-      (xmm_rm_r (SseOpcode.Orpd) src1 src2))
+(rule 0 (x64_orpd src1 (is_xmm_mem src2)) (x64_orpd_a src1 src2))
 
 ;; Helper fxor creating `pxor` instructions.
 (decl x64_pxor (Xmm XmmMem) Xmm)
@@ -3804,19 +3794,17 @@
 
 ;; Helper for creating `andnps` instructions.
 (decl x64_andnps (Xmm XmmMem) Xmm)
-(rule 0 (x64_andnps src1 src2)
-      (xmm_rm_r (SseOpcode.Andnps) src1 src2))
 (rule 1 (x64_andnps src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vandnps) src1 src2))
+(rule 0 (x64_andnps src1 src2) (x64_andnps_a src1 src2))
 
 ;; Helper for creating `andnpd` instructions.
 (decl x64_andnpd (Xmm XmmMem) Xmm)
-(rule 0 (x64_andnpd src1 src2)
-      (xmm_rm_r (SseOpcode.Andnpd) src1 src2))
 (rule 1 (x64_andnpd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vandnpd) src1 src2))
+(rule 0 (x64_andnpd src1 src2) (x64_andnpd_a src1 src2))
 
 ;; Helper for creating `pandn` instructions.
 (decl x64_pandn (Xmm XmmMem) Xmm)

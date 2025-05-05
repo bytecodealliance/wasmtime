@@ -3242,29 +3242,6 @@ fn test_x64_emit() {
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Andps, RegMem::reg(xmm3), w_xmm12),
-        "440F54E3",
-        "andps   %xmm12, %xmm3, %xmm12",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Andnps, RegMem::reg(xmm4), w_xmm11),
-        "440F55DC",
-        "andnps  %xmm11, %xmm4, %xmm11",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Orps, RegMem::reg(xmm1), w_xmm15),
-        "440F56F9",
-        "orps    %xmm15, %xmm1, %xmm15",
-    ));
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Orps, RegMem::reg(xmm5), w_xmm4),
-        "0F56E5",
-        "orps    %xmm4, %xmm5, %xmm4",
-    ));
-
-    insns.push((
         Inst::xmm_rm_r_blend(SseOpcode::Blendvpd, RegMem::reg(xmm15), w_xmm4),
         "66410F3815E7",
         "blendvpd %xmm4, %xmm15, %xmm4",
