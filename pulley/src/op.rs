@@ -91,6 +91,10 @@ macro_rules! define_extended_op {
                 )*
             )? }
 
+            #[doc(hidden)]
+            #[expect(non_camel_case_types, reason = "used in macros as an alternative to camel case")]
+            pub type $snake_name = $name;
+
             impl From<$name> for Op {
                 #[inline]
                 fn from(op: $name) -> Self {

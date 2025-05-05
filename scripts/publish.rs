@@ -20,6 +20,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // pulley
     "cranelift-bitset",
     "wasmtime-math",
+    "pulley-macros",
     "pulley-interpreter",
     // cranelift
     "cranelift-srcgen",

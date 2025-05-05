@@ -2658,6 +2658,7 @@ dependencies = [
  "cranelift-bitset",
  "env_logger 0.11.5",
  "log",
+ "pulley-macros",
  "termcolor",
  "wasmtime-math",
 ]
@@ -2669,6 +2670,15 @@ dependencies = [
  "env_logger 0.11.5",
  "log",
  "pulley-interpreter",
+]
+
+[[package]]
+name = "pulley-macros"
+version = "34.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
 ]
 
 [[package]]

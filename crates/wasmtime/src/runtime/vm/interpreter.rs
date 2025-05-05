@@ -178,6 +178,7 @@ impl InterpreterRef<'_> {
                         TrapKind::DivideByZero => Trap::IntegerDivisionByZero,
                         TrapKind::BadConversionToInteger => Trap::BadConversionToInteger,
                         TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds,
+                        TrapKind::DisabledOpcode => Trap::DisabledOpcode,
                     };
                     s.set_jit_trap(regs, None, trap);
                 }

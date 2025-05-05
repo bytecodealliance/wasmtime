@@ -204,6 +204,7 @@ level = "warn"
 check-cfg = [
   'cfg(pulley_tail_calls)',
   'cfg(pulley_assume_llvm_makes_tail_calls)',
+  'cfg(pulley_disable_interp_simd)',
 ]
 
 [workspace.lints.clippy]
@@ -261,6 +262,7 @@ wasmtime-test-util = { path = "crates/test-util" }
 
 pulley-interpreter = { path = 'pulley', version = "=34.0.0" }
 pulley-interpreter-fuzz = { path = 'pulley/fuzz' }
+pulley-macros = { path = 'pulley/macros', version = "=34.0.0" }
 
 cranelift-assembler-x64 = { path = "cranelift/assembler-x64", version = "0.121.0" }
 cranelift-codegen = { path = "cranelift/codegen", version = "0.121.0", default-features = false, features = ["std", "unwind"] }

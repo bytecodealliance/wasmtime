@@ -624,6 +624,9 @@ jobs:
     - run: cargo check -p pulley-interpreter --all-features
       env:
         RUSTFLAGS: "--cfg pulley_tail_calls"
+    - run: cargo check -p pulley-interpreter --all-features
+      env:
+        RUSTFLAGS: "--cfg pulley_disable_interp_simd"
     - run: cargo test -p pulley-interpreter --all-features --release
       env:
         RUSTFLAGS: "--cfg pulley_assume_llvm_makes_tail_calls"
