@@ -8,15 +8,15 @@ use crate::translate::{
 use crate::{BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
-use cranelift_codegen::ir::immediates::{Imm64, Offset32};
+use cranelift_codegen::ir::immediates::{Imm64, Offset32, V128Imm};
 use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, types};
 use cranelift_codegen::ir::{ArgumentPurpose, ConstantData, Function, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
-use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
+use cranelift_frontend::{FuncInstBuilder, FunctionBuilder};
 use smallvec::SmallVec;
 use std::mem;
 use wasmparser::{Operator, WasmFeatures};
@@ -3319,103 +3319,193 @@ impl FuncEnvironment<'_> {
         let _ = (builder, num_pages, mem_index);
     }
 
-    pub fn ceil_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
-        // If the ISA has rounding instructions, let Cranelift use them. But if
-        // not, lower to a libcall here, rather than having Cranelift do it. We
-        // can pass our libcall the vmctx pointer, which we use for stack
-        // overflow checking.
+    /// If the ISA has rounding instructions, let Cranelift use them. But if
+    /// not, lower to a libcall here, rather than having Cranelift do it. We
+    /// can pass our libcall the vmctx pointer, which we use for stack
+    /// overflow checking.
+    ///
+    /// This helper is generic for all rounding instructions below, both for
+    /// scalar and simd types. The `clif_round` argument is the CLIF-level
+    /// rounding instruction to use if the ISA has the instruction, and the
+    /// `round_builtin` helper is used to determine which element-level
+    /// rounding operation builtin is used. Note that this handles the case
+    /// when `value` is a vector by doing an element-wise libcall invocation.
+    fn isa_round(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        value: ir::Value,
+        clif_round: fn(FuncInstBuilder<'_, '_>, ir::Value) -> ir::Value,
+        round_builtin: fn(&mut BuiltinFunctions, &mut Function) -> ir::FuncRef,
+    ) -> ir::Value {
         if self.isa.has_round() {
-            builder.ins().ceil(value)
-        } else {
-            let ceil = self.builtin_functions.ceil_f32(builder.func);
-            let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(ceil, &[vmctx, value]);
-            *builder.func.dfg.inst_results(call).first().unwrap()
+            return clif_round(builder.ins(), value);
         }
+
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let round = round_builtin(&mut self.builtin_functions, builder.func);
+        let round_one = |builder: &mut FunctionBuilder, value: ir::Value| {
+            let call = builder.ins().call(round, &[vmctx, value]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        };
+
+        let ty = builder.func.dfg.value_type(value);
+        if !ty.is_vector() {
+            return round_one(builder, value);
+        }
+
+        assert_eq!(ty.bits(), 128);
+        let zero = builder.func.dfg.constants.insert(V128Imm([0; 16]).into());
+        let mut result = builder.ins().vconst(ty, zero);
+        for i in 0..u8::try_from(ty.lane_count()).unwrap() {
+            let element = builder.ins().extractlane(value, i);
+            let element_rounded = round_one(builder, element);
+            result = builder.ins().insertlane(result, element_rounded, i);
+        }
+        result
+    }
+
+    pub fn ceil_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.ceil(val),
+            BuiltinFunctions::ceil_f32,
+        )
     }
 
     pub fn ceil_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
-        // See the comments in `ceil_f32` about libcalls.
-        if self.isa.has_round() {
-            builder.ins().ceil(value)
-        } else {
-            let ceil = self.builtin_functions.ceil_f64(builder.func);
-            let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(ceil, &[vmctx, value]);
-            *builder.func.dfg.inst_results(call).first().unwrap()
-        }
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.ceil(val),
+            BuiltinFunctions::ceil_f64,
+        )
+    }
+
+    pub fn ceil_f32x4(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.ceil(val),
+            BuiltinFunctions::ceil_f32,
+        )
+    }
+
+    pub fn ceil_f64x2(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.ceil(val),
+            BuiltinFunctions::ceil_f64,
+        )
     }
 
     pub fn floor_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
-        // See the comments in `ceil_f32` about libcalls.
-        if self.isa.has_round() {
-            builder.ins().floor(value)
-        } else {
-            let floor = self.builtin_functions.floor_f32(builder.func);
-            let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(floor, &[vmctx, value]);
-            *builder.func.dfg.inst_results(call).first().unwrap()
-        }
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.floor(val),
+            BuiltinFunctions::floor_f32,
+        )
     }
 
     pub fn floor_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
-        // See the comments in `ceil_f32` about libcalls.
-        if self.isa.has_round() {
-            builder.ins().floor(value)
-        } else {
-            let floor = self.builtin_functions.floor_f64(builder.func);
-            let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(floor, &[vmctx, value]);
-            *builder.func.dfg.inst_results(call).first().unwrap()
-        }
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.floor(val),
+            BuiltinFunctions::floor_f64,
+        )
+    }
+
+    pub fn floor_f32x4(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.floor(val),
+            BuiltinFunctions::floor_f32,
+        )
+    }
+
+    pub fn floor_f64x2(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.floor(val),
+            BuiltinFunctions::floor_f64,
+        )
     }
 
     pub fn trunc_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
-        // See the comments in `ceil_f32` about libcalls.
-        if self.isa.has_round() {
-            builder.ins().trunc(value)
-        } else {
-            let trunc = self.builtin_functions.trunc_f32(builder.func);
-            let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(trunc, &[vmctx, value]);
-            *builder.func.dfg.inst_results(call).first().unwrap()
-        }
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.trunc(val),
+            BuiltinFunctions::trunc_f32,
+        )
     }
 
     pub fn trunc_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
-        // See the comments in `ceil_f32` about libcalls.
-        if self.isa.has_round() {
-            builder.ins().trunc(value)
-        } else {
-            let trunc = self.builtin_functions.trunc_f64(builder.func);
-            let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(trunc, &[vmctx, value]);
-            *builder.func.dfg.inst_results(call).first().unwrap()
-        }
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.trunc(val),
+            BuiltinFunctions::trunc_f64,
+        )
+    }
+
+    pub fn trunc_f32x4(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.trunc(val),
+            BuiltinFunctions::trunc_f32,
+        )
+    }
+
+    pub fn trunc_f64x2(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.trunc(val),
+            BuiltinFunctions::trunc_f64,
+        )
     }
 
     pub fn nearest_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
-        // See the comments in `ceil_f32` about libcalls.
-        if self.isa.has_round() {
-            builder.ins().nearest(value)
-        } else {
-            let nearest = self.builtin_functions.nearest_f32(builder.func);
-            let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(nearest, &[vmctx, value]);
-            *builder.func.dfg.inst_results(call).first().unwrap()
-        }
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.nearest(val),
+            BuiltinFunctions::nearest_f32,
+        )
     }
 
     pub fn nearest_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
-        // See the comments in `ceil_f32` about libcalls.
-        if self.isa.has_round() {
-            builder.ins().nearest(value)
-        } else {
-            let nearest = self.builtin_functions.nearest_f64(builder.func);
-            let vmctx = self.vmctx_val(&mut builder.cursor());
-            let call = builder.ins().call(nearest, &[vmctx, value]);
-            *builder.func.dfg.inst_results(call).first().unwrap()
-        }
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.nearest(val),
+            BuiltinFunctions::nearest_f64,
+        )
+    }
+
+    pub fn nearest_f32x4(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.nearest(val),
+            BuiltinFunctions::nearest_f32,
+        )
+    }
+
+    pub fn nearest_f64x2(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.nearest(val),
+            BuiltinFunctions::nearest_f64,
+        )
     }
 
     pub fn swizzle(
