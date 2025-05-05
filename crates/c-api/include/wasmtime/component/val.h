@@ -24,6 +24,14 @@ typedef uint8_t wasmtime_component_valkind_t;
 #define WASMTIME_COMPONENT_F64 10
 #define WASMTIME_COMPONENT_CHAR 11
 #define WASMTIME_COMPONENT_STRING 12
+#define WASMTIME_COMPONENT_LIST 13
+
+struct wasmtime_component_val;
+
+typedef struct {
+  struct wasmtime_component_val *ptr;
+  size_t len;
+} wasmtime_component_vallist_t;
 
 typedef union {
   bool boolean;
@@ -39,12 +47,16 @@ typedef union {
   float64_t f64;
   uint32_t character;
   wasm_name_t string;
+  wasmtime_component_vallist_t list;
 } wasmtime_component_valunion_t;
 
-typedef struct {
+typedef struct wasmtime_component_val {
   wasmtime_component_valkind_t kind;
   wasmtime_component_valunion_t of;
 } wasmtime_component_val_t;
+
+WASM_API_EXTERN void
+wasmtime_component_val_delete(wasmtime_component_val_t *value);
 
 #ifdef __cplusplus
 } // extern "C"

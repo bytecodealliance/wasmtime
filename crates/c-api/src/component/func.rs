@@ -8,15 +8,15 @@ use super::wasmtime_component_val_t;
 pub unsafe extern "C" fn wasmtime_component_func_call(
     func: &Func,
     mut context: WasmtimeStoreContextMut<'_>,
-    args: *mut wasmtime_component_val_t,
+    args: *const wasmtime_component_val_t,
     args_len: usize,
     results: *mut wasmtime_component_val_t,
     results_len: usize,
 ) -> Option<Box<wasmtime_error_t>> {
-    let c_args = unsafe { std::slice::from_raw_parts_mut(args, args_len) };
+    let c_args = unsafe { std::slice::from_raw_parts(args, args_len) };
     let c_results = unsafe { std::slice::from_raw_parts_mut(results, results_len) };
 
-    let args = c_args.iter_mut().map(Val::from).collect::<Vec<_>>();
+    let args = c_args.iter().map(Val::from).collect::<Vec<_>>();
     let mut results = vec![Val::Bool(false); results_len];
 
     let result = func
