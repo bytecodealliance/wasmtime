@@ -1,4 +1,4 @@
-## 33.0.0
+## 34.0.0
 
 Unreleased.
 
@@ -6,26 +6,13 @@ Unreleased.
 
 ### Changed
 
-* Wasmtime's bindgen now type-checks export functions in the constructor of
-  the generated `{Worldname}Pre` or `{Worldname}` structs, rather than at the
-  call of the export function.
-  [#10610](https://github.com/bytecodealliance/wasmtime/pull/10610)
-
-* Wasmtime's `component::Component` and `component::Instance` now have consistient
-  `get_export` and `get_export_index` methods, which return `(ComponentItem,
-  ComponentExportIndex)` and `ComponentExportIndex`, respectively.
-  [#10597](https://github.com/bytecodealliance/wasmtime/pull/10597)
-
-* On failure, `wasmtime serve` gives an internal server error response, rather
-  than closing the connection.
-  [#10645](https://github.com/bytecodealliance/wasmtime/pull/10645)
-
 --------------------------------------------------------------------------------
 
 Release notes for previous releases of Wasmtime can be found on the respective
 release branches of the Wasmtime repository.
 
 <!-- ARCHIVE_START -->
+* [33.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-33.0.0/RELEASES.md)
 * [32.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-32.0.0/RELEASES.md)
 * [31.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-31.0.0/RELEASES.md)
 * [30.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-30.0.0/RELEASES.md)
