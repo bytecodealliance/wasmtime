@@ -270,6 +270,17 @@ const _: () = {
                 )?;
             linker
                 .func_wrap_async(
+                    "some-world-func",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        wasmtime::component::__internal::Box::new(async move {
+                            let host = &mut host_getter(caller.data_mut());
+                            let r = TheWorldImports::some_world_func(host).await;
+                            Ok((r,))
+                        })
+                    },
+                )?;
+            linker
+                .func_wrap_async(
                     "[constructor]world-resource",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
                         wasmtime::component::__internal::Box::new(async move {
@@ -301,17 +312,6 @@ const _: () = {
                             let host = &mut host_getter(caller.data_mut());
                             let r = HostWorldResource::static_foo(host).await;
                             Ok(r)
-                        })
-                    },
-                )?;
-            linker
-                .func_wrap_async(
-                    "some-world-func",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        wasmtime::component::__internal::Box::new(async move {
-                            let host = &mut host_getter(caller.data_mut());
-                            let r = TheWorldImports::some_world_func(host).await;
-                            Ok((r,))
                         })
                     },
                 )?;

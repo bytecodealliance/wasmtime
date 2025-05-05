@@ -61,19 +61,6 @@ impl LinkOptions {
         self
     }
 }
-pub enum Baz {}
-pub trait HostBaz: Sized {
-    fn foo(&mut self, self_: wasmtime::component::Resource<Baz>) -> ();
-    fn drop(&mut self, rep: wasmtime::component::Resource<Baz>) -> wasmtime::Result<()>;
-}
-impl<_T: HostBaz + ?Sized> HostBaz for &mut _T {
-    fn foo(&mut self, self_: wasmtime::component::Resource<Baz>) -> () {
-        HostBaz::foo(*self, self_)
-    }
-    fn drop(&mut self, rep: wasmtime::component::Resource<Baz>) -> wasmtime::Result<()> {
-        HostBaz::drop(*self, rep)
-    }
-}
 impl core::convert::From<LinkOptions> for foo::foo::the_interface::LinkOptions {
     fn from(src: LinkOptions) -> Self {
         (&src).into()
@@ -89,6 +76,19 @@ impl core::convert::From<&LinkOptions> for foo::foo::the_interface::LinkOptions 
             src.experimental_interface_resource_method,
         );
         dest
+    }
+}
+pub enum Baz {}
+pub trait HostBaz: Sized {
+    fn foo(&mut self, self_: wasmtime::component::Resource<Baz>) -> ();
+    fn drop(&mut self, rep: wasmtime::component::Resource<Baz>) -> wasmtime::Result<()>;
+}
+impl<_T: HostBaz + ?Sized> HostBaz for &mut _T {
+    fn foo(&mut self, self_: wasmtime::component::Resource<Baz>) -> () {
+        HostBaz::foo(*self, self_)
+    }
+    fn drop(&mut self, rep: wasmtime::component::Resource<Baz>) -> wasmtime::Result<()> {
+        HostBaz::drop(*self, rep)
     }
 }
 /// Auto-generated bindings for a pre-instantiated version of a

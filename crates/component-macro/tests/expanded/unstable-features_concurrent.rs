@@ -61,6 +61,23 @@ impl LinkOptions {
         self
     }
 }
+impl core::convert::From<LinkOptions> for foo::foo::the_interface::LinkOptions {
+    fn from(src: LinkOptions) -> Self {
+        (&src).into()
+    }
+}
+impl core::convert::From<&LinkOptions> for foo::foo::the_interface::LinkOptions {
+    fn from(src: &LinkOptions) -> Self {
+        let mut dest = Self::default();
+        dest.experimental_interface(src.experimental_interface);
+        dest.experimental_interface_function(src.experimental_interface_function);
+        dest.experimental_interface_resource(src.experimental_interface_resource);
+        dest.experimental_interface_resource_method(
+            src.experimental_interface_resource_method,
+        );
+        dest
+    }
+}
 pub enum Baz {}
 pub trait HostBaz: Sized {
     type BazData;
@@ -93,23 +110,6 @@ impl<_T: HostBaz> HostBaz for &mut _T {
     }
     fn drop(&mut self, rep: wasmtime::component::Resource<Baz>) -> wasmtime::Result<()> {
         HostBaz::drop(*self, rep)
-    }
-}
-impl core::convert::From<LinkOptions> for foo::foo::the_interface::LinkOptions {
-    fn from(src: LinkOptions) -> Self {
-        (&src).into()
-    }
-}
-impl core::convert::From<&LinkOptions> for foo::foo::the_interface::LinkOptions {
-    fn from(src: &LinkOptions) -> Self {
-        let mut dest = Self::default();
-        dest.experimental_interface(src.experimental_interface);
-        dest.experimental_interface_function(src.experimental_interface_function);
-        dest.experimental_interface_resource(src.experimental_interface_resource);
-        dest.experimental_interface_resource_method(
-            src.experimental_interface_resource_method,
-        );
-        dest
     }
 }
 /// Auto-generated bindings for a pre-instantiated version of a
