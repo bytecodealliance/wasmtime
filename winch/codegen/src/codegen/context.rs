@@ -5,12 +5,12 @@ use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
 use super::ControlStackFrame;
 use crate::{
     abi::{scratch, vmctx, ABIOperand, ABIResults, RetArea},
-    codegen::{CodeGenError, CodeGenPhase, Emission, Prologue},
+    codegen::{BranchState, CodeGenError, CodeGenPhase, Emission, Prologue},
     frame::Frame,
     isa::reg::RegClass,
     masm::{
-        ExtractLaneKind, MacroAssembler, OperandSize, RegImm, ReplaceLaneKind, SPOffset, ShiftKind,
-        StackSlot,
+        ExtractLaneKind, MacroAssembler, MemMoveDirection, OperandSize, RegImm, ReplaceLaneKind,
+        SPOffset, ShiftKind, StackSlot,
     },
     reg::{writable, Reg, WritableReg},
     regalloc::RegAlloc,
@@ -653,14 +653,14 @@ impl<'a> CodeGenContext<'a, Emission> {
         Self::spill_impl(&mut self.stack, &mut self.regalloc, &self.frame, masm)
     }
 
-    /// Prepares the compiler to emit an uncoditional jump to the given
-    /// destination branch.  This process involves:
-    /// * Balancing the machine
-    ///   stack pointer and value stack by popping it to match the destination
-    ///   branch.
+    /// Prepares the compiler to branch to the given destination
+    /// frame.
+    ///  This process involves:
+    /// * Balancing the machine stack pointer and value stack by
+    ///   popping it to match the destination branch.
     /// * Updating the reachability state.
     /// * Marking the destination frame as a destination target.
-    pub fn unconditional_jump<M, F>(
+    pub fn br<M, F, B>(
         &mut self,
         dest: &mut ControlStackFrame,
         masm: &mut M,
@@ -669,52 +669,69 @@ impl<'a> CodeGenContext<'a, Emission> {
     where
         M: MacroAssembler,
         F: FnMut(&mut M, &mut Self, &mut ControlStackFrame) -> Result<()>,
+        B: BranchState,
     {
         let state = dest.stack_state();
         let target_offset = state.target_offset;
         let base_offset = state.base_offset;
-        // Invariant: The SP, must be greater or equal to the target
-        // SP, given that we haven't popped any results by this point
-        // yet. But it may happen in the callback.
+        let results_size = dest.results::<M>()?.size();
+        // Invariant: The stack pointer, must be greater or equal to
+        // the destination frame base stack pointer offset, given that
+        // we haven't popped any results by this point yet. But it may
+        // happen in the callback below.
         ensure!(
             masm.sp_offset()?.as_u32() >= base_offset.as_u32(),
             CodeGenError::invalid_sp_offset()
         );
         f(masm, self, dest)?;
 
-        // The following snippet, pops the stack pointer to ensure that it
-        // is correctly placed according to the expectations of the destination
-        // branch.
+        // At jump sites, the machine stack might be left unbalanced,
+        // due to register spills.
+        // The following snippet, pops the stack pointer to ensure
+        // that it is correctly placed according to the expectations
+        // of the destination branch.
         //
-        // This is done in the context of unconditional jumps, as the machine
-        // stack might be left unbalanced at the jump site, due to register
-        // spills. Note that in some cases the stack pointer offset might be
-        // already less than or equal to the original stack pointer offset
-        // registered when entering the destination control stack frame, which
-        // effectively means that when reaching the jump site no extra space was
-        // allocated similar to what would happen in a fall through in which we
-        // assume that the program has allocated and deallocated the right
-        // amount of stack space.
+        // Note that in most branch cases (`return`, ` br`) the stack
+        // pointer will be already balanced, by virtue of calling
+        // [`ControlStackFrame::pop_abi_results`] through the
+        // callback.
         //
-        // More generally speaking the current stack pointer will be less than
-        // the original stack pointer offset in cases in which the top value in
-        // the value stack is a memory entry which needs to be popped into the
-        // return location according to the ABI (a register for single value
-        // returns and a memory slot for 1+ returns). This could happen in the
-        // callback invocation above if the callback invokes
-        // `ControlStackFrame::pop_abi_results` (e.g. `br` instruction).
+        // More generally speaking the current stack pointer will be
+        // less than the destination frame stack pointer offset in
+        // cases in which the top value in the value stack is a memory
+        // entry which needs to be popped into the return location
+        // according to the ABI (a register for single value returns
+        // and a memory slot for 1+ returns).
         //
-        // After an unconditional jump, the compiler will enter in an
+        // Stack balancing is mostly required for WebAssembly
+        // instructions that deal with multiple destination branches
+        // (e.g., `br_table`) or fall-through scenarios (e.g.,
+        // `br_if`). In order to ensure that multi-value returns are
+        // handled correctly we ensure that correct placing of stack
+        // results by emitting a [`MacroAssembler::memmove`]
+        // instruction, prior to claiming any excess stack space.
+        //
+        // Depening on the branch state, the compiler might enter in an
         // unreachable state; instead of immediately truncating the value stack
         // to the expected length of the destination branch, we let the
         // reachability analysis code decide what should happen with the length
         // of the value stack once reachability is actually restored. At that
         // point, the right stack pointer offset will also be restored, which
         // should match the contents of the value stack.
+        if dest.unbalanced::<M>(masm)? {
+            masm.memmove(
+                masm.sp_offset()?,
+                target_offset,
+                results_size,
+                MemMoveDirection::LowToHigh,
+            )?;
+        }
         masm.ensure_sp_for_jump(target_offset)?;
         dest.set_as_target();
         masm.jmp(*dest.label())?;
-        self.reachable = false;
+        if B::unreachable_state_after_emission() {
+            self.reachable = false;
+        }
         Ok(())
     }
 

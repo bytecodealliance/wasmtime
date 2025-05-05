@@ -6,16 +6,16 @@
 
 use crate::abi::RetArea;
 use crate::codegen::{
-    control_index, AtomicWaitKind, Callee, CodeGen, CodeGenError, ControlStackFrame, Emission,
-    FnCall,
+    control_index, AtomicWaitKind, Callee, CodeGen, CodeGenError, ConditionalBranch,
+    ControlStackFrame, Emission, FnCall, UnconditionalBranch,
 };
 use crate::masm::{
     DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
-    MemMoveDirection, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp,
-    RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind,
-    V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind,
-    V128LoadExtendKind, V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind, V128NegKind,
-    V128SubKind, V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
+    MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset,
+    ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind, V128AbsKind, V128AddKind,
+    V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind, V128LoadExtendKind,
+    V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind, V128NegKind, V128SubKind, V128TruncKind,
+    VectorCompareKind, VectorEqualityKind, Zero,
 };
 
 use crate::reg::{writable, Reg};
@@ -1962,7 +1962,7 @@ where
         let index = control_index(depth, self.control_frames.len())?;
         let frame = &mut self.control_frames[index];
         self.context
-            .unconditional_jump(frame, self.masm, |masm, cx, frame| {
+            .br::<_, _, UnconditionalBranch>(frame, self.masm, |masm, cx, frame| {
                 frame.pop_abi_results::<M, _>(cx, masm, |results, _, _| {
                     Ok(results.ret_area().copied())
                 })
@@ -2008,32 +2008,22 @@ where
             top
         };
 
-        // Emit instructions to balance the machine stack if the frame has
-        // a different offset.
+        // Emit instructions to balance the machine stack.
         let current_sp_offset = self.masm.sp_offset()?;
-        let results_size = frame.results::<M>()?.size();
-        let state = frame.stack_state();
-        let (label, cmp, needs_cleanup) = if current_sp_offset > state.target_offset {
-            (self.masm.get_label()?, IntCmpKind::Eq, true)
+        let unbalanced = frame.unbalanced(self.masm)?;
+        let (label, cmp) = if unbalanced {
+            (self.masm.get_label()?, IntCmpKind::Eq)
         } else {
-            (*frame.label(), IntCmpKind::Ne, false)
+            (*frame.label(), IntCmpKind::Ne)
         };
 
         self.masm
             .branch(cmp, top.reg.into(), top.reg.into(), label, OperandSize::S32)?;
         self.context.free_reg(top);
 
-        if needs_cleanup {
-            // Emit instructions to balance the stack and jump if not falling
-            // through.
-            self.masm.memmove(
-                current_sp_offset,
-                state.target_offset,
-                results_size,
-                MemMoveDirection::LowToHigh,
-            )?;
-            self.masm.ensure_sp_for_jump(state.target_offset)?;
-            self.masm.jmp(*frame.label())?;
+        if unbalanced {
+            self.context
+                .br::<_, _, ConditionalBranch>(frame, self.masm, |_, _, _| Ok(()))?;
 
             // Restore sp_offset to what it was for falling through and emit
             // fallthrough label.
@@ -2066,9 +2056,18 @@ where
                 |cx, masm| Ok((cx.pop_to_reg(masm, None)?, cx.any_gpr(masm)?)),
             )??;
 
-            // Materialize any constants or locals into their result representation,
-            // so that when reachability is restored, they are correctly located.
-            default_frame.top_abi_results::<M, _>(
+            // Materialize any constants or locals into their result
+            // representation, so that when reachability is restored,
+            // they are correctly located.  NB: the results are popped
+            // in function of the default branch specified for
+            // `br_table`, which implies that the machine stack will
+            // be correctly balanced, by virtue of calling
+            // `pop_abi_results`.
+
+            // It's possible that we need to balance the stack for the
+            // rest of the targets, which will be done before emitting
+            // the unconditional jump below.
+            default_frame.pop_abi_results::<M, _>(
                 &mut self.context,
                 self.masm,
                 |results, _, _| Ok(results.ret_area().copied()),
@@ -2102,10 +2101,8 @@ where
             self.masm.bind(*l)?;
             // Ensure that the stack pointer is correctly positioned before
             // jumping to the jump table code.
-            let state = frame.stack_state();
-            self.masm.ensure_sp_for_jump(state.target_offset)?;
-            self.masm.jmp(*frame.label())?;
-            frame.set_as_target();
+            self.context
+                .br::<_, _, UnconditionalBranch>(frame, self.masm, |_, _, _| Ok(()))?;
         }
         // Finally reset the stack pointer to the original location.
         // The reachability analysis, will ensure it's correctly located
@@ -2125,7 +2122,7 @@ where
         // index 0.
         let outermost = &mut self.control_frames[0];
         self.context
-            .unconditional_jump(outermost, self.masm, |masm, cx, frame| {
+            .br::<_, _, UnconditionalBranch>(outermost, self.masm, |masm, cx, frame| {
                 frame.pop_abi_results::<M, _>(cx, masm, |results, _, _| {
                     Ok(results.ret_area().copied())
                 })
