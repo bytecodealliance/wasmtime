@@ -176,8 +176,8 @@ block0(v0: i8):
 ;   sd s1,24(sp)
 ; block0:
 ;   li a7,42
-;   slli a3,a0,56; srai a3,a3,56
-;   sd a3,0(sp)
+;   slli a4,a0,56; srai a4,a4,56
+;   sd a4,0(sp)
 ;   load_sym s1,%g+0
 ;   mv a0,a7
 ;   mv a1,a7
@@ -204,9 +204,9 @@ block0(v0: i8):
 ;   sd s1, 0x18(sp)
 ; block1: ; offset 0x18
 ;   addi a7, zero, 0x2a
-;   slli a3, a0, 0x38
-;   srai a3, a3, 0x38
-;   sd a3, 0(sp)
+;   slli a4, a0, 0x38
+;   srai a4, a4, 0x38
+;   sd a4, 0(sp)
 ;   auipc s1, 0
 ;   ld s1, 0xc(s1)
 ;   j 0xc

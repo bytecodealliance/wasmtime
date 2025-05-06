@@ -779,34 +779,6 @@
 (decl pure trap_code_bad_conversion_to_integer () TrapCode)
 (extern constructor trap_code_bad_conversion_to_integer trap_code_bad_conversion_to_integer)
 
-;;;; Helpers for tail recursion loops ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; A range of integers to loop through.
-(type Range (primitive Range))
-
-;; Create a new range from `start` through `end` (exclusive).
-(decl pure range (usize usize) Range)
-(extern constructor range range)
-
-;; A view on the current state of the range.
-(type RangeView extern
-      (enum
-        (Empty)
-        (NonEmpty (index usize) (rest Range))))
-
-;; View the current state of the range.
-(decl range_view (RangeView) Range)
-(extern extractor infallible range_view range_view)
-
-;; Extractor to test whether a range is empty.
-(decl range_empty () Range)
-(extractor (range_empty) (range_view (RangeView.Empty)))
-
-;; Extractor to return the first value in the range, and a sub-range
-;; containing the remaining values.
-(decl range_unwrap (usize Range) Range)
-(extractor (range_unwrap index rest) (range_view (RangeView.NonEmpty index rest)))
-
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (convert Offset32 i32 offset32_to_i32)

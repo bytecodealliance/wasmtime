@@ -2,7 +2,7 @@
 
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
-use crate::{ir::types, ir::AtomicRmwOp, isa};
+use crate::{ir::types, ir::AtomicRmwOp};
 use generated_code::{AssemblerOutputs, Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
@@ -14,13 +14,12 @@ use crate::ir::types::*;
 use crate::ir::{
     BlockCall, Inst, InstructionData, LibCall, MemFlags, Opcode, TrapCode, Value, ValueList,
 };
-use crate::isa::x64::abi::X64CallSite;
 use crate::isa::x64::inst::{args::*, regs, ReturnCallInfo};
 use crate::isa::x64::lower::emit_vm_call;
 use crate::isa::x64::X64Backend;
 use crate::machinst::isle::*;
 use crate::machinst::{
-    ArgPair, CallInfo, InsnInput, InstOutput, IsTailCall, MachInst, VCodeConstant,
+    ArgPair, CallArgList, CallInfo, CallRetList, InsnInput, InstOutput, MachInst, VCodeConstant,
     VCodeConstantData,
 };
 use alloc::vec::Vec;
@@ -75,8 +74,85 @@ pub(crate) fn lower_branch(
 
 impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     isle_lower_prelude_methods!();
-    isle_prelude_caller_methods!(X64CallSite);
     isle_assembler_methods!();
+
+    fn gen_call_info(
+        &mut self,
+        sig: Sig,
+        dest: ExternalName,
+        uses: CallArgList,
+        defs: CallRetList,
+        try_call_info: Option<TryCallInfo>,
+    ) -> BoxCallInfo {
+        let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
+        let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
+
+        Box::new(
+            self.lower_ctx
+                .gen_call_info(sig, dest, uses, defs, try_call_info),
+        )
+    }
+
+    fn gen_call_ind_info(
+        &mut self,
+        sig: Sig,
+        dest: &RegMem,
+        uses: CallArgList,
+        defs: CallRetList,
+        try_call_info: Option<TryCallInfo>,
+    ) -> BoxCallIndInfo {
+        let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
+        let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
+
+        Box::new(
+            self.lower_ctx
+                .gen_call_info(sig, dest.clone(), uses, defs, try_call_info),
+        )
+    }
+
+    fn gen_return_call_info(
+        &mut self,
+        sig: Sig,
+        dest: ExternalName,
+        uses: CallArgList,
+    ) -> BoxReturnCallInfo {
+        let new_stack_arg_size = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_tail_args_size(new_stack_arg_size);
+
+        Box::new(ReturnCallInfo {
+            dest,
+            uses,
+            tmp: self.lower_ctx.temp_writable_gpr(),
+            new_stack_arg_size,
+        })
+    }
+
+    fn gen_return_call_ind_info(
+        &mut self,
+        sig: Sig,
+        dest: Reg,
+        uses: CallArgList,
+    ) -> BoxReturnCallIndInfo {
+        let new_stack_arg_size = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_tail_args_size(new_stack_arg_size);
+
+        Box::new(ReturnCallInfo {
+            dest,
+            uses,
+            tmp: self.lower_ctx.temp_writable_gpr(),
+            new_stack_arg_size,
+        })
+    }
 
     #[inline]
     fn operand_size_of_type_32_64(&mut self, ty: Type) -> OperandSize {
@@ -639,13 +715,13 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             &self.backend.flags,
             &self.backend.triple,
             *libcall,
-            &[a],
+            &[ValueRegs::one(a)],
         )
         .expect("Failed to emit LibCall");
 
         debug_assert_eq!(outputs.len(), 1);
 
-        outputs[0]
+        outputs[0].only_reg().unwrap()
     }
 
     fn libcall_2(&mut self, libcall: &LibCall, a: Reg, b: Reg) -> Reg {
@@ -654,13 +730,13 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             &self.backend.flags,
             &self.backend.triple,
             *libcall,
-            &[a, b],
+            &[ValueRegs::one(a), ValueRegs::one(b)],
         )
         .expect("Failed to emit LibCall");
 
         debug_assert_eq!(outputs.len(), 1);
 
-        outputs[0]
+        outputs[0].only_reg().unwrap()
     }
 
     fn libcall_3(&mut self, libcall: &LibCall, a: Reg, b: Reg, c: Reg) -> Reg {
@@ -669,13 +745,13 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             &self.backend.flags,
             &self.backend.triple,
             *libcall,
-            &[a, b, c],
+            &[ValueRegs::one(a), ValueRegs::one(b), ValueRegs::one(c)],
         )
         .expect("Failed to emit LibCall");
 
         debug_assert_eq!(outputs.len(), 1);
 
-        outputs[0]
+        outputs[0].only_reg().unwrap()
     }
 
     #[inline]

@@ -4,7 +4,6 @@ use crate::ir::{self, types, LibCall, MemFlags, Signature, TrapCode};
 use crate::ir::{types::*, ExternalName};
 use crate::isa;
 use crate::isa::winch;
-use crate::isa::x64::X64Backend;
 use crate::isa::{unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings, CallConv};
 use crate::machinst::abi::*;
 use crate::machinst::*;
@@ -20,9 +19,6 @@ use std::sync::OnceLock;
 
 /// Support for the x64 ABI from the callee side (within a function body).
 pub(crate) type X64Callee = Callee<X64ABIMachineSpec>;
-
-/// Support for the x64 ABI from the caller side (at a callsite).
-pub(crate) type X64CallSite = CallSite<X64ABIMachineSpec>;
 
 /// Implementation of ABI primitives for x64.
 pub struct X64ABIMachineSpec;
@@ -796,32 +792,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         insts
     }
 
-    /// Generate a call instruction/sequence.
-    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Self::I; 2]> {
-        let mut insts = SmallVec::new();
-        match dest {
-            &CallDest::ExtName(ref name, RelocDistance::Near) => {
-                let info = Box::new(info.map(|()| name.clone()));
-                insts.push(Inst::call_known(info));
-            }
-            &CallDest::ExtName(ref name, RelocDistance::Far) => {
-                insts.push(Inst::LoadExtName {
-                    dst: tmp,
-                    name: Box::new(name.clone()),
-                    offset: 0,
-                    distance: RelocDistance::Far,
-                });
-                let info = Box::new(info.map(|()| RegMem::reg(tmp.to_reg())));
-                insts.push(Inst::call_unknown(info));
-            }
-            &CallDest::Reg(reg) => {
-                let info = Box::new(info.map(|()| RegMem::reg(reg)));
-                insts.push(Inst::call_unknown(info));
-            }
-        }
-        insts
-    }
-
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
@@ -980,66 +950,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         match call_conv {
             isa::CallConv::SystemV | isa::CallConv::Tail => PAYLOAD_REGS,
             _ => &[],
-        }
-    }
-}
-
-impl X64CallSite {
-    pub fn emit_return_call(
-        mut self,
-        ctx: &mut Lower<Inst>,
-        args: isle::ValueSlice,
-        _backend: &X64Backend,
-    ) {
-        let new_stack_arg_size =
-            u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
-
-        ctx.abi_mut().accumulate_tail_args_size(new_stack_arg_size);
-
-        // Put all arguments in registers and stack slots (within that newly
-        // allocated stack space).
-        self.emit_args(ctx, args);
-        self.emit_stack_ret_arg_for_tail_call(ctx);
-
-        // Finally, do the actual tail call!
-        let dest = self.dest().clone();
-        let uses = self.take_uses();
-        let tmp = ctx.temp_writable_gpr();
-        match dest {
-            CallDest::ExtName(callee, RelocDistance::Near) => {
-                let info = Box::new(ReturnCallInfo {
-                    dest: callee,
-                    uses,
-                    tmp,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnCallKnown { info });
-            }
-            CallDest::ExtName(callee, RelocDistance::Far) => {
-                let tmp2 = ctx.temp_writable_gpr();
-                ctx.emit(Inst::LoadExtName {
-                    dst: tmp2.to_writable_reg(),
-                    name: Box::new(callee),
-                    offset: 0,
-                    distance: RelocDistance::Far,
-                });
-                let info = Box::new(ReturnCallInfo {
-                    dest: tmp2.to_reg().to_reg().into(),
-                    uses,
-                    tmp,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnCallUnknown { info });
-            }
-            CallDest::Reg(callee) => {
-                let info = Box::new(ReturnCallInfo {
-                    dest: callee.into(),
-                    uses,
-                    tmp,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnCallUnknown { info });
-            }
         }
     }
 }

@@ -70,7 +70,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
             // (https://github.com/bytecodealliance/regalloc2/issues/217).
         };
 
-        regalloc2::run(&vcode, vcode.machine_env(), &options)
+        regalloc2::run(&vcode, vcode.abi.machine_env(), &options)
             .map_err(|err| {
                 log::error!(
                     "Register allocation error for vcode\n{:?}\nError: {:?}\nCLIF for error:\n{:?}",
@@ -86,7 +86,7 @@ pub fn compile<B: LowerBackend + TargetIsa>(
     // Run the regalloc checker, if requested.
     if b.flags().regalloc_checker() {
         let _tt = timing::regalloc_checker();
-        let mut checker = regalloc2::checker::Checker::new(&vcode, vcode.machine_env());
+        let mut checker = regalloc2::checker::Checker::new(&vcode, vcode.abi.machine_env());
         checker.prepare(&regalloc_result);
         checker
             .run()
