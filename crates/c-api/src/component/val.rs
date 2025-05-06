@@ -118,7 +118,7 @@ pub enum wasmtime_component_val_t {
     U64(u64),
     F32(f32),
     F64(f64),
-    Char(char),
+    Char(u32),
     String(wasm_name_t),
     List(wasmtime_component_vallist_t),
     Record(wasmtime_component_valrecord_t),
@@ -138,7 +138,7 @@ impl From<&wasmtime_component_val_t> for Val {
             wasmtime_component_val_t::U64(x) => Val::U64(*x),
             wasmtime_component_val_t::F32(x) => Val::Float32(*x),
             wasmtime_component_val_t::F64(x) => Val::Float64(*x),
-            wasmtime_component_val_t::Char(x) => Val::Char(*x),
+            wasmtime_component_val_t::Char(x) => Val::Char(char::from_u32(*x).unwrap()),
             wasmtime_component_val_t::String(x) => {
                 Val::String(String::from_utf8(x.clone().take()).unwrap())
             }
@@ -162,7 +162,7 @@ impl From<&Val> for wasmtime_component_val_t {
             Val::U64(x) => wasmtime_component_val_t::U64(*x),
             Val::Float32(x) => wasmtime_component_val_t::F32(*x),
             Val::Float64(x) => wasmtime_component_val_t::F64(*x),
-            Val::Char(x) => wasmtime_component_val_t::Char(*x),
+            Val::Char(x) => wasmtime_component_val_t::Char(*x as _),
             Val::String(x) => wasmtime_component_val_t::String(wasm_name_t::from_name(x.clone())),
             Val::List(x) => wasmtime_component_val_t::List(x.as_slice().into()),
             Val::Record(x) => wasmtime_component_val_t::Record(x.as_slice().into()),
