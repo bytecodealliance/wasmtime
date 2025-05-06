@@ -84,5 +84,5 @@ pub use imm::{Extension, Imm16, Imm32, Imm8, Simm16, Simm32, Simm8};
 pub use mem::{
     Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, DeferredTarget, GprMem, Scale, XmmMem,
 };
-pub use rex::RexFlags;
+pub use rex::RexPrefix;
 pub use xmm::Xmm;

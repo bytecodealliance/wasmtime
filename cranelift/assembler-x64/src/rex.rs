@@ -24,96 +24,114 @@ pub fn encode_sib(scale: u8, enc_index: u8, enc_base: u8) -> u8 {
     ((scale & 3) << 6) | ((enc_index & 7) << 3) | (enc_base & 7)
 }
 
-/// A small bit field to record a REX prefix specification:
-/// - bit 0 set to 1 indicates REX.W must be 0 (cleared).
-/// - bit 1 set to 1 indicates the REX prefix must always be emitted.
-#[repr(transparent)]
+/// Force emission of the REX byte if the register is: `rsp`, `rbp`, `rsi`,
+/// `rdi`.
+const fn is_special(enc: u8) -> bool {
+    enc >= 4 && enc <= 7
+}
+
+/// Construct and emit the REX prefix byte.
+///
+/// For more details, see section 2.2.1, "REX Prefixes" in Intel's reference
+/// manual.
 #[derive(Clone, Copy)]
-pub struct RexFlags(u8);
+pub struct RexPrefix {
+    byte: u8,
+    must_emit: bool,
+}
 
-impl RexFlags {
-    /// By default, set the W field, and don't always emit.
+impl RexPrefix {
+    /// Construct the [`RexPrefix`] for a unary instruction.
+    ///
+    /// Used with a single register operand:
+    /// - `x` and `r` are unused.
+    /// - `b` extends the `reg` register, allowing access to r8-r15, or the top
+    ///   bit of the opcode digit.
     #[inline]
     #[must_use]
-    pub fn set_w() -> Self {
-        Self(0)
-    }
-
-    /// Creates a new REX prefix for which the REX.W bit will be cleared.
-    #[inline]
-    #[must_use]
-    pub fn clear_w() -> Self {
-        Self(1)
-    }
-
-    /// True if 64-bit operands are used.
-    #[inline]
-    #[must_use]
-    pub fn must_clear_w(self) -> bool {
-        (self.0 & 1) != 0
-    }
-
-    /// Require that the REX prefix is emitted.
-    #[inline]
-    pub fn always_emit(&mut self) -> &mut Self {
-        self.0 |= 2;
-        self
-    }
-
-    /// True if the REX prefix must always be emitted.
-    #[inline]
-    #[must_use]
-    pub fn must_always_emit(self) -> bool {
-        (self.0 & 2) != 0
-    }
-
-    /// Force emission of the REX byte if the register is: `rsp`, `rbp`, `rsi`,
-    /// `rdi`.
-    pub fn always_emit_if_8bit_needed(&mut self, enc: u8) {
-        if (4..=7).contains(&enc) {
-            self.always_emit();
-        }
-    }
-
-    /// Emit a unary instruction.
-    #[inline]
-    pub fn emit_one_op(self, sink: &mut impl CodeSink, enc_e: u8) {
-        // Register Operand coded in Opcode Byte
-        // REX.R and REX.X unused
-        // REX.B == 1 accesses r8-r15
-        let w = if self.must_clear_w() { 0 } else { 1 };
+    pub const fn one_op(self, enc: u8, w_bit: bool, uses_8bit: bool) -> Self {
+        let must_emit = uses_8bit && is_special(enc);
+        let w = if w_bit { 1 } else { 0 };
         let r = 0;
         let x = 0;
-        let b = (enc_e >> 3) & 1;
-        let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
-        if rex != 0x40 || self.must_always_emit() {
-            sink.put1(rex);
+        let b = (enc >> 3) & 1;
+        let flag = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
+        Self {
+            byte: flag,
+            must_emit,
         }
     }
 
-    /// Emit a binary instruction.
+    /// Construct the [`RexPrefix`] for a binary instruction.
+    ///
+    /// Used without a SIB byte or for register-to-register addressing:
+    /// - `r` extends the `reg` operand, allowing access to r8-r15.
+    /// - `x` is unused.
+    /// - `b` extends the `r/m` operand, allowing access to r8-r15.
     #[inline]
-    pub fn emit_two_op(self, sink: &mut impl CodeSink, enc_g: u8, enc_e: u8) {
-        let w = if self.must_clear_w() { 0 } else { 1 };
-        let r = (enc_g >> 3) & 1;
+    #[must_use]
+    pub const fn two_op(enc_reg: u8, enc_rm: u8, w_bit: bool, uses_8bit: bool) -> Self {
+        let must_emit = uses_8bit && (is_special(enc_rm) || is_special(enc_reg));
+        let w = if w_bit { 1 } else { 0 };
+        let r = (enc_reg >> 3) & 1;
         let x = 0;
-        let b = (enc_e >> 3) & 1;
-        let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
-        if rex != 0x40 || self.must_always_emit() {
-            sink.put1(rex);
+        let b = (enc_rm >> 3) & 1;
+        let flag = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
+        Self {
+            byte: flag,
+            must_emit,
         }
     }
 
-    /// Emit a ternary instruction.
+    /// Construct the [`RexPrefix`] for an instruction using an opcode digit.
+    ///
+    /// :
+    /// - `r` extends the opcode digit.
+    /// - `x` is unused.
+    /// - `b` extends the `reg` operand, allowing access to r8-r15.
     #[inline]
-    pub fn emit_three_op(self, sink: &mut impl CodeSink, enc_g: u8, enc_index: u8, enc_base: u8) {
-        let w = if self.must_clear_w() { 0 } else { 1 };
-        let r = (enc_g >> 3) & 1;
+    #[must_use]
+    pub const fn with_digit(digit: u8, enc_reg: u8, w_bit: bool, uses_8bit: bool) -> Self {
+        Self::two_op(digit, enc_reg, w_bit, uses_8bit)
+    }
+
+    /// Construct the [`RexPrefix`] for a ternary instruction, typically using a
+    /// memory address.
+    ///
+    /// Used with a SIB byte:
+    /// - `r` extends the `reg` operand, allowing access to r8-r15.
+    /// - `x` extends the index register, allowing access to r8-r15.
+    /// - `b` extends the base register, allowing access to r8-r15.
+    #[inline]
+    #[must_use]
+    pub const fn three_op(
+        enc_reg: u8,
+        enc_index: u8,
+        enc_base: u8,
+        w_bit: bool,
+        uses_8bit: bool,
+    ) -> Self {
+        let must_emit =
+            uses_8bit && (is_special(enc_reg) || is_special(enc_base) || is_special(enc_index));
+        let w = if w_bit { 1 } else { 0 };
+        let r = (enc_reg >> 3) & 1;
         let x = (enc_index >> 3) & 1;
         let b = (enc_base >> 3) & 1;
-        let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
-        if rex != 0x40 || self.must_always_emit() {
-            sink.put1(rex);
+        let flag = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
+        Self {
+            byte: flag,
+            must_emit,
+        }
+    }
+
+    /// Possibly emit the REX prefix byte.
+    ///
+    /// This will only be emitted if the REX prefix is not `0x40` (the default)
+    /// or if the instruction uses 8-bit operands.
+    #[inline]
+    pub fn encode(&self, sink: &mut impl CodeSink) {
+        if self.byte != 0x40 || self.must_emit {
+            sink.put1(self.byte);
         }
     }
 }
