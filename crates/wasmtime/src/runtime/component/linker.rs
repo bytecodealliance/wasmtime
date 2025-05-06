@@ -56,7 +56,7 @@ use wasmtime_environ::PrimaryMap;
 /// for guests to upgrade WASI. So long as the actual "meat" of the
 /// functionality is defined then it should align correctly and components can
 /// be instantiated.
-pub struct Linker<T> {
+pub struct Linker<T: 'static> {
     engine: Engine,
     strings: Strings,
     map: NameMap<usize, Definition>,
@@ -65,7 +65,7 @@ pub struct Linker<T> {
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-impl<T> Clone for Linker<T> {
+impl<T: 'static> Clone for Linker<T> {
     fn clone(&self) -> Linker<T> {
         Linker {
             engine: self.engine.clone(),
@@ -89,7 +89,7 @@ pub struct Strings {
 /// Instances do not need to be actual [`Instance`]s and instead are defined by
 /// a "bag of named items", so each [`LinkerInstance`] can further define items
 /// internally.
-pub struct LinkerInstance<'a, T> {
+pub struct LinkerInstance<'a, T: 'static> {
     engine: &'a Engine,
     path: &'a mut Vec<usize>,
     path_len: usize,
@@ -107,7 +107,7 @@ pub(crate) enum Definition {
     Resource(ResourceType, Arc<crate::func::HostFunc>),
 }
 
-impl<T> Linker<T> {
+impl<T: 'static> Linker<T> {
     /// Creates a new linker for the [`Engine`] specified with no items defined
     /// within it.
     pub fn new(engine: &Engine) -> Linker<T> {
@@ -377,7 +377,7 @@ impl<T> Linker<T> {
     }
 }
 
-impl<T> LinkerInstance<'_, T> {
+impl<T: 'static> LinkerInstance<'_, T> {
     fn as_mut(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
             engine: self.engine,

@@ -128,14 +128,11 @@ where
     ///
     /// [`Trap`]: crate::Trap
     #[cfg(feature = "async")]
-    pub async fn call_async<T>(
+    pub async fn call_async(
         &self,
-        mut store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data: Send>,
         params: Params,
-    ) -> Result<Results>
-    where
-        T: Send,
-    {
+    ) -> Result<Results> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),

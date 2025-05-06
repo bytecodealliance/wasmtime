@@ -847,7 +847,7 @@ async fn non_stacky_async_activations() -> Result<()> {
 
             let module2 = module2.clone();
             let mut store2 = Store::new(caller.engine(), ());
-            let mut linker2 = Linker::new(caller.engine());
+            let mut linker2 = Linker::<()>::new(caller.engine());
             linker2
                 .func_wrap_async("", "yield", {
                     let stacks = stacks.clone();
@@ -876,7 +876,7 @@ async fn non_stacky_async_activations() -> Result<()> {
                             .await?;
 
                         capture_stack(&stacks, &store2);
-                        Ok(())
+                        anyhow::Ok(())
                     }
                 }) as _)
                 .await
@@ -1042,7 +1042,7 @@ async fn async_gc_with_func_new_and_func_wrap() -> Result<()> {
         "#,
     )?;
 
-    let mut linker = Linker::new(&engine);
+    let mut linker = Linker::<()>::new(&engine);
     linker.func_wrap_async("", "a", |mut cx: Caller<'_, _>, ()| {
         Box::new(async move {
             let externref = ExternRef::new_async(&mut cx, 100).await?;

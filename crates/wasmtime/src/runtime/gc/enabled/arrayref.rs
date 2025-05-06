@@ -653,7 +653,7 @@ impl ArrayRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn elems<'a, T: 'a>(
+    pub fn elems<'a, T: 'static>(
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {

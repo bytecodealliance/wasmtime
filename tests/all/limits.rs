@@ -868,7 +868,7 @@ async fn custom_limiter_async_detect_grow_failure() -> Result<()> {
     config.async_support(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config).unwrap();
-    let linker = Linker::new(&engine);
+    let linker = Linker::<FailureDetector>::new(&engine);
 
     let module = Module::new(
         &engine,
@@ -1049,7 +1049,7 @@ async fn panic_in_async_memory_limiter() {
     let mut config = Config::new();
     config.async_support(true);
     let engine = Engine::new(&config).unwrap();
-    let linker = Linker::new(&engine);
+    let linker = Linker::<Panic>::new(&engine);
 
     let module = Module::new(&engine, r#"(module (memory (export "m") 0))"#).unwrap();
 
@@ -1071,7 +1071,7 @@ async fn panic_in_async_memory_limiter_wasm_stack() {
     let mut config = Config::new();
     config.async_support(true);
     let engine = Engine::new(&config).unwrap();
-    let linker = Linker::new(&engine);
+    let linker = Linker::<Panic>::new(&engine);
 
     let module = Module::new(
         &engine,
@@ -1101,7 +1101,7 @@ async fn panic_in_async_table_limiter() {
     let mut config = Config::new();
     config.async_support(true);
     let engine = Engine::new(&config).unwrap();
-    let linker = Linker::new(&engine);
+    let linker = Linker::<Panic>::new(&engine);
 
     let module = Module::new(&engine, r#"(module (table (export "t") 0 funcref))"#).unwrap();
 

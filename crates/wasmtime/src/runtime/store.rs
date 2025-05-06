@@ -178,7 +178,7 @@ mod gc;
 /// operations is incorrect. In other words it's considered a programmer error
 /// rather than a recoverable error for the wrong [`Store`] to be used when
 /// calling APIs.
-pub struct Store<T> {
+pub struct Store<T: 'static> {
     // for comments about `ManuallyDrop`, see `Store::into_data`
     inner: ManuallyDrop<Box<StoreInner<T>>>,
 }
@@ -219,7 +219,7 @@ impl CallHook {
 /// The members of this struct are those that need to be generic over `T`, the
 /// store's internal type storage. Otherwise all things that don't rely on `T`
 /// should go into `StoreOpaque`.
-pub struct StoreInner<T> {
+pub struct StoreInner<T: 'static> {
     /// Generic metadata about the store that doesn't need access to `T`.
     inner: StoreOpaque,
 
@@ -238,7 +238,7 @@ enum ResourceLimiterInner<T> {
     Async(Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync) + Send + Sync>),
 }
 
-enum CallHookInner<T> {
+enum CallHookInner<T: 'static> {
     #[cfg(feature = "call-hook")]
     Sync(Box<dyn FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync>),
     #[cfg(all(feature = "async", feature = "call-hook"))]

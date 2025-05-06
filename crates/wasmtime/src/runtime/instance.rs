@@ -145,14 +145,11 @@ impl Instance {
     /// This function will also panic, like [`Instance::new`], if any [`Extern`]
     /// specified does not belong to `store`.
     #[cfg(feature = "async")]
-    pub async fn new_async<T>(
-        mut store: impl AsContextMut<Data = T>,
+    pub async fn new_async(
+        mut store: impl AsContextMut<Data: Send>,
         module: &Module,
         imports: &[Extern],
-    ) -> Result<Instance>
-    where
-        T: Send,
-    {
+    ) -> Result<Instance> {
         let mut store = store.as_context_mut();
         let imports = Instance::typecheck_externs(store.0, module, imports)?;
         // See `new` for notes on this unsafety
@@ -221,7 +218,7 @@ impl Instance {
         imports: Imports<'_>,
     ) -> Result<Instance>
     where
-        T: Send,
+        T: Send + 'static,
     {
         assert!(
             store.0.async_support(),
@@ -374,7 +371,7 @@ impl Instance {
     }
 
     /// Get this instance's module.
-    pub fn module<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a Module {
+    pub fn module<'a, T: 'static>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a Module {
         self._module(store.into().0)
     }
 
@@ -388,7 +385,7 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn exports<'a, T: 'a>(
+    pub fn exports<'a, T: 'static>(
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
@@ -824,7 +821,7 @@ impl<T> Clone for InstancePre<T> {
     }
 }
 
-impl<T> InstancePre<T> {
+impl<T: 'static> InstancePre<T> {
     /// Creates a new `InstancePre` which type-checks the `items` provided and
     /// on success is ready to instantiate a new instance.
     ///
@@ -917,11 +914,8 @@ impl<T> InstancePre<T> {
     #[cfg(feature = "async")]
     pub async fn instantiate_async(
         &self,
-        mut store: impl AsContextMut<Data = T>,
-    ) -> Result<Instance>
-    where
-        T: Send,
-    {
+        mut store: impl AsContextMut<Data: Send>,
+    ) -> Result<Instance> {
         let mut store = store.as_context_mut();
         let imports = pre_instantiate_raw(
             &mut store.0,
