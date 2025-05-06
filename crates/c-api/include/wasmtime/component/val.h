@@ -25,6 +25,7 @@ typedef uint8_t wasmtime_component_valkind_t;
 #define WASMTIME_COMPONENT_CHAR 11
 #define WASMTIME_COMPONENT_STRING 12
 #define WASMTIME_COMPONENT_LIST 13
+#define WASMTIME_COMPONENT_RECORD 14
 
 struct wasmtime_component_val;
 
@@ -32,6 +33,13 @@ typedef struct {
   struct wasmtime_component_val *ptr;
   size_t len;
 } wasmtime_component_vallist_t;
+
+struct wasmtime_component_valrecord_entry;
+
+typedef struct {
+  struct wasmtime_component_valrecord_entry *ptr;
+  size_t len;
+} wasmtime_component_valrecord_t;
 
 typedef union {
   bool boolean;
@@ -48,12 +56,18 @@ typedef union {
   uint32_t character;
   wasm_name_t string;
   wasmtime_component_vallist_t list;
+  wasmtime_component_valrecord_t record;
 } wasmtime_component_valunion_t;
 
 typedef struct wasmtime_component_val {
   wasmtime_component_valkind_t kind;
   wasmtime_component_valunion_t of;
 } wasmtime_component_val_t;
+
+typedef struct wasmtime_component_valrecord_entry {
+  wasm_name_t name;
+  wasmtime_component_val_t val;
+} wasmtime_component_valrecord_entry_t;
 
 WASM_API_EXTERN void
 wasmtime_component_val_delete(wasmtime_component_val_t *value);
