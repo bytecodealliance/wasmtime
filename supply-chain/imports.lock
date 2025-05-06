@@ -1270,12 +1270,6 @@ user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
-[[publisher.spdx]]
-version = "0.10.1"
-when = "2023-04-06"
-user-id = 52553
-user-login = "embark-studios"
-
 [[publisher.syn]]
 version = "1.0.92"
 when = "2022-04-29"
@@ -1851,14 +1845,14 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.wit-bindgen]]
-version = "0.41.0"
-when = "2025-03-13"
+version = "0.42.1"
+when = "2025-05-06"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-core]]
-version = "0.41.0"
-when = "2025-03-13"
+version = "0.42.1"
+when = "2025-05-06"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1875,20 +1869,20 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rt]]
-version = "0.41.0"
-when = "2025-03-13"
+version = "0.42.1"
+when = "2025-05-06"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.41.0"
-when = "2025-03-13"
+version = "0.42.1"
+when = "2025-05-06"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.41.0"
-when = "2025-03-13"
+version = "0.42.1"
+when = "2025-05-06"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1926,7 +1920,7 @@ user-name = "Alex Crichton"
 [[audits.embark-studios.wildcard-audits.spdx]]
 who = "Jake Shadle <opensource@embark-studios.com>"
 criteria = "safe-to-deploy"
-user-id = 52553 # embark-studios
+user-id = 52553
 start = "2020-01-01"
 end = "2024-05-23"
 notes = "Maintained by Embark. No unsafe usage or ambient capabilities"
