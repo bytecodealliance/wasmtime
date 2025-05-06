@@ -25,7 +25,7 @@ pub unsafe extern "C" fn wasmtime_component_func_call(
 
     crate::handle_result(result, |_| {
         for (c_val, rust_val) in std::iter::zip(c_results, results) {
-            *c_val = wasmtime_component_val_t::from(rust_val);
+            *c_val = wasmtime_component_val_t::from(&rust_val);
         }
     })
 }

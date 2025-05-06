@@ -15,10 +15,10 @@ impl From<&wasmtime_component_vallist_t> for Vec<Val> {
     }
 }
 
-impl From<Vec<Val>> for wasmtime_component_vallist_t {
-    fn from(value: Vec<Val>) -> Self {
+impl From<&[Val]> for wasmtime_component_vallist_t {
+    fn from(value: &[Val]) -> Self {
         let a = value
-            .into_iter()
+            .iter()
             .map(wasmtime_component_val_t::from)
             .collect::<Box<[_]>>();
 
@@ -55,10 +55,10 @@ impl From<&wasmtime_component_valrecord_entry_t> for (String, Val) {
     }
 }
 
-impl From<(String, Val)> for wasmtime_component_valrecord_entry_t {
-    fn from((name, val): (String, Val)) -> Self {
+impl From<&(String, Val)> for wasmtime_component_valrecord_entry_t {
+    fn from((name, val): &(String, Val)) -> Self {
         Self {
-            name: wasm_name_t::from_name(name),
+            name: wasm_name_t::from_name(name.clone()),
             val: wasmtime_component_val_t::from(val),
         }
     }
@@ -77,10 +77,10 @@ impl From<&wasmtime_component_valrecord_t> for Vec<(String, Val)> {
     }
 }
 
-impl From<Vec<(String, Val)>> for wasmtime_component_valrecord_t {
-    fn from(value: Vec<(String, Val)>) -> Self {
+impl From<&[(String, Val)]> for wasmtime_component_valrecord_t {
+    fn from(value: &[(String, Val)]) -> Self {
         let a = value
-            .into_iter()
+            .iter()
             .map(wasmtime_component_valrecord_entry_t::from)
             .collect::<Box<[_]>>();
 
@@ -145,24 +145,24 @@ impl From<&wasmtime_component_val_t> for Val {
     }
 }
 
-impl From<Val> for wasmtime_component_val_t {
-    fn from(value: Val) -> Self {
+impl From<&Val> for wasmtime_component_val_t {
+    fn from(value: &Val) -> Self {
         match value {
-            Val::Bool(x) => wasmtime_component_val_t::Bool(x),
-            Val::S8(x) => wasmtime_component_val_t::S8(x),
-            Val::U8(x) => wasmtime_component_val_t::U8(x),
-            Val::S16(x) => wasmtime_component_val_t::S16(x),
-            Val::U16(x) => wasmtime_component_val_t::U16(x),
-            Val::S32(x) => wasmtime_component_val_t::S32(x),
-            Val::U32(x) => wasmtime_component_val_t::U32(x),
-            Val::S64(x) => wasmtime_component_val_t::S64(x),
-            Val::U64(x) => wasmtime_component_val_t::U64(x),
-            Val::Float32(x) => wasmtime_component_val_t::F32(x),
-            Val::Float64(x) => wasmtime_component_val_t::F64(x),
-            Val::Char(x) => wasmtime_component_val_t::Char(x),
-            Val::String(x) => wasmtime_component_val_t::String(wasm_name_t::from_name(x)),
-            Val::List(x) => wasmtime_component_val_t::List(x.into()),
-            Val::Record(x) => wasmtime_component_val_t::Record(x.into()),
+            Val::Bool(x) => wasmtime_component_val_t::Bool(*x),
+            Val::S8(x) => wasmtime_component_val_t::S8(*x),
+            Val::U8(x) => wasmtime_component_val_t::U8(*x),
+            Val::S16(x) => wasmtime_component_val_t::S16(*x),
+            Val::U16(x) => wasmtime_component_val_t::U16(*x),
+            Val::S32(x) => wasmtime_component_val_t::S32(*x),
+            Val::U32(x) => wasmtime_component_val_t::U32(*x),
+            Val::S64(x) => wasmtime_component_val_t::S64(*x),
+            Val::U64(x) => wasmtime_component_val_t::U64(*x),
+            Val::Float32(x) => wasmtime_component_val_t::F32(*x),
+            Val::Float64(x) => wasmtime_component_val_t::F64(*x),
+            Val::Char(x) => wasmtime_component_val_t::Char(*x),
+            Val::String(x) => wasmtime_component_val_t::String(wasm_name_t::from_name(x.clone())),
+            Val::List(x) => wasmtime_component_val_t::List(x.as_slice().into()),
+            Val::Record(x) => wasmtime_component_val_t::Record(x.as_slice().into()),
             Val::Tuple(_vals) => todo!(),
             Val::Variant(_, _val) => todo!(),
             Val::Enum(_) => todo!(),
