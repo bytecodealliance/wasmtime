@@ -61,7 +61,12 @@ pub mod bindings {
         // can't support in these special core-wasm adapters.
         // Instead, we manually define the bindings for these functions in
         // terms of raw pointers.
-        skip: ["run", "get-environment", "poll"],
+        skip: [
+            "run",
+            "get-environment",
+            "poll",
+            "[method]outgoing-datagram-stream.send",
+        ],
         generate_all,
         disable_custom_section_link_helpers: true,
     });
@@ -78,7 +83,11 @@ pub mod bindings {
         // can't support in these special core-wasm adapters.
         // Instead, we manually define the bindings for these functions in
         // terms of raw pointers.
-        skip: ["get-environment", "poll"],
+        skip: [
+            "get-environment",
+            "poll",
+            "[method]outgoing-datagram-stream.send",
+        ],
         generate_all,
         disable_custom_section_link_helpers: true,
     });
@@ -101,7 +110,7 @@ pub mod bindings {
         world: "wasmtime:adapter/adapter",
         raw_strings,
         runtime_path: "crate::bindings::wit_bindgen_rt_shim",
-        skip: ["poll"],
+        skip: ["poll", "[method]outgoing-datagram-stream.send"],
         generate_all,
         disable_custom_section_link_helpers: true,
     });
