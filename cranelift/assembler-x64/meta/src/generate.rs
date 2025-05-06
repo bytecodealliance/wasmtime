@@ -48,7 +48,10 @@ fn generate_inst_enum(f: &mut Formatter, insts: &[dsl::Inst]) {
 /// `#[derive(...)]`
 fn generate_derive(f: &mut Formatter) {
     fmtln!(f, "#[derive(Clone, Debug)]");
-    fmtln!(f, "#[cfg_attr(any(test, feature = \"fuzz\"), derive(arbitrary::Arbitrary))]");
+    fmtln!(
+        f,
+        "#[cfg_attr(any(test, feature = \"fuzz\"), derive(arbitrary::Arbitrary))]"
+    );
 }
 
 /// Adds a custom bound to the `Arbitrary` implementation which ensures that
@@ -60,28 +63,34 @@ fn generate_derive_arbitrary_bounds(f: &mut Formatter) {
 /// `impl std::fmt::Display for Inst { ... }`
 fn generate_inst_display_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
     f.add_block("impl<R: Registers> std::fmt::Display for Inst<R>", |f| {
-        f.add_block("fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result", |f| {
-            f.add_block("match self", |f| {
-                for inst in insts {
-                    let variant_name = inst.name();
-                    fmtln!(f, "Self::{variant_name}(i) => write!(f, \"{{i}}\"),");
-                }
-            });
-        });
+        f.add_block(
+            "fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result",
+            |f| {
+                f.add_block("match self", |f| {
+                    for inst in insts {
+                        let variant_name = inst.name();
+                        fmtln!(f, "Self::{variant_name}(i) => write!(f, \"{{i}}\"),");
+                    }
+                });
+            },
+        );
     });
 }
 
 /// `impl Inst { fn encode... }`
 fn generate_inst_encode_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
     f.add_block("impl<R: Registers> Inst<R>", |f| {
-        f.add_block("pub fn encode(&self, b: &mut impl CodeSink, o: &impl KnownOffsetTable)", |f| {
-            f.add_block("match self", |f| {
-                for inst in insts {
-                    let variant_name = inst.name();
-                    fmtln!(f, "Self::{variant_name}(i) => i.encode(b, o),");
-                }
-            });
-        });
+        f.add_block(
+            "pub fn encode(&self, b: &mut impl CodeSink, o: &impl KnownOffsetTable)",
+            |f| {
+                f.add_block("match self", |f| {
+                    for inst in insts {
+                        let variant_name = inst.name();
+                        fmtln!(f, "Self::{variant_name}(i) => i.encode(b, o),");
+                    }
+                });
+            },
+        );
     });
 }
 
@@ -89,7 +98,10 @@ fn generate_inst_encode_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
 fn generate_inst_visit_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
     fmtln!(f, "impl<R: Registers> Inst<R> {{");
     f.indent(|f| {
-        fmtln!(f, "pub fn visit(&mut self, v: &mut impl RegisterVisitor<R>) {{");
+        fmtln!(
+            f,
+            "pub fn visit(&mut self, v: &mut impl RegisterVisitor<R>) {{"
+        );
         f.indent(|f| {
             fmtln!(f, "match self {{");
             f.indent_push();

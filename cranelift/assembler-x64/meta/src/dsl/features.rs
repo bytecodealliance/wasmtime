@@ -36,7 +36,15 @@ impl Features {
 
 impl fmt::Display for Features {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0.iter().map(ToString::to_string).collect::<Vec<_>>().join(" | "))
+        write!(
+            f,
+            "{}",
+            self.0
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" | ")
+        )
     }
 }
 
@@ -66,7 +74,13 @@ pub enum Feature {
 /// transcribe each variant to an `enum` available in the generated layer above.
 /// If this list is incomplete, we will (fortunately) see compile errors for
 /// generated functions that use the missing variants.
-pub const ALL_FEATURES: &[Feature] = &[Feature::_64b, Feature::compat, Feature::sse, Feature::sse2, Feature::ssse3];
+pub const ALL_FEATURES: &[Feature] = &[
+    Feature::_64b,
+    Feature::compat,
+    Feature::sse,
+    Feature::sse2,
+    Feature::ssse3,
+];
 
 impl fmt::Display for Feature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

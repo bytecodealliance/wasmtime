@@ -9,13 +9,20 @@ mod features;
 pub mod format;
 
 pub use encoding::{rex, vex};
-pub use encoding::{Encoding, Group1Prefix, Group2Prefix, Group3Prefix, Group4Prefix, Opcodes, Prefixes, Rex};
+pub use encoding::{
+    Encoding, Group1Prefix, Group2Prefix, Group3Prefix, Group4Prefix, Opcodes, Prefixes, Rex,
+};
 pub use features::{Feature, Features, ALL_FEATURES};
 pub use format::{align, fmt, r, rw, sxl, sxq, sxw};
 pub use format::{Extension, Format, Location, Mutability, Operand, OperandKind};
 
 /// Abbreviated constructor for an x64 instruction.
-pub fn inst(mnemonic: impl Into<String>, format: Format, encoding: impl Into<Encoding>, features: impl Into<Features>) -> Inst {
+pub fn inst(
+    mnemonic: impl Into<String>,
+    format: Format,
+    encoding: impl Into<Encoding>,
+    features: impl Into<Features>,
+) -> Inst {
     let encoding = encoding.into();
     encoding.validate(&format.operands);
     Inst {
@@ -64,13 +71,22 @@ impl Inst {
     /// the format name (e.g., `sx*`) to keep this unique.
     #[must_use]
     pub fn name(&self) -> String {
-        format!("{}_{}", self.mnemonic.to_lowercase(), self.format.name.to_lowercase())
+        format!(
+            "{}_{}",
+            self.mnemonic.to_lowercase(),
+            self.format.name.to_lowercase()
+        )
     }
 }
 
 impl core::fmt::Display for Inst {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let Inst { mnemonic: name, format, encoding, features } = self;
+        let Inst {
+            mnemonic: name,
+            format,
+            encoding,
+            features,
+        } = self;
         write!(f, "{name}: {format} => {encoding}")?;
         if !features.is_empty() {
             write!(f, " [{features}]")?;
