@@ -1,6 +1,7 @@
 use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq};
 use crate::dsl::{Feature::*, Inst, Location::*};
 
+#[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
     vec![
         inst("addb", fmt("I", [rw(al), r(imm8)]), rex(0x4).ib(), _64b | compat),
@@ -74,5 +75,7 @@ pub fn list() -> Vec<Inst> {
         inst("paddsw", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xED]).r(), _64b | compat | sse2),
         inst("paddusb", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDC]).r(), _64b | compat | sse2),
         inst("paddusw", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDD]).r(), _64b | compat | sse2),
+        inst("phaddw", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x01]).r(), _64b | compat | ssse3),
+        inst("phaddd", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x02]).r(), _64b | compat | ssse3),
     ]
 }

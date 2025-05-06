@@ -11,7 +11,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   phaddw  %xmm0, %xmm1, %xmm0
+;   phaddw %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -36,7 +36,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   phaddd  %xmm0, %xmm1, %xmm0
+;   phaddd %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

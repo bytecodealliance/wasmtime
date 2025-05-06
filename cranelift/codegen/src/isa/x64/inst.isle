@@ -1023,8 +1023,6 @@
             Unpcklps
             Unpcklpd
             Unpckhps
-            Phaddw
-            Phaddd
             Punpckhdq
             Punpckldq
             Punpckhqdq
@@ -3487,19 +3485,17 @@
 
 ;; Helper for creating `phaddw` instructions.
 (decl x64_phaddw (Xmm XmmMem) Xmm)
-(rule 0 (x64_phaddw src1 src2)
-      (xmm_rm_r (SseOpcode.Phaddw) src1 src2))
 (rule 1 (x64_phaddw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vphaddw) src1 src2))
+(rule 0 (x64_phaddw src1 src2) (x64_phaddw_a src1 src2))
 
 ;; Helper for creating `phaddd` instructions.
 (decl x64_phaddd (Xmm XmmMem) Xmm)
-(rule 0 (x64_phaddd src1 src2)
-      (xmm_rm_r (SseOpcode.Phaddd) src1 src2))
 (rule 1 (x64_phaddd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vphaddd) src1 src2))
+(rule 0 (x64_phaddd src1 src2) (x64_phaddd_a src1 src2))
 
 ;; Helper for creating `paddusb` instructions.
 (decl x64_paddusb (Xmm XmmMem) Xmm)

@@ -200,6 +200,7 @@ impl Inst {
                         _64b | compat => {}
                         sse => features.push(InstructionSet::SSE),
                         sse2 => features.push(InstructionSet::SSE2),
+                        ssse3 => features.push(InstructionSet::SSSE3),
                     }
                 }
                 features

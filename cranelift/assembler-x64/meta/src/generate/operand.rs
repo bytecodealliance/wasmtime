@@ -56,7 +56,9 @@ impl dsl::Location {
                 Some(size) => format!("self.{self}.to_string({size})"),
                 None => unreachable!(),
             },
-            xmm | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => format!("self.{self}.to_string()"),
+            xmm | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => {
+                format!("self.{self}.to_string()")
+            }
         }
     }
 

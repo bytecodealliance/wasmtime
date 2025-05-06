@@ -1,6 +1,7 @@
 use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq};
 use crate::dsl::{Feature::*, Inst, Location::*};
 
+#[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
     // Note that some versions of the reference manual show `REX + <opcode>`
     // rows that (a) are only intended for documentation purposes, i.e., to note

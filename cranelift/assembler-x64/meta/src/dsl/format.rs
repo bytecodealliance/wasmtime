@@ -17,7 +17,10 @@
 ///
 /// These model what the reference manual calls "instruction operand encodings,"
 /// usually defined in a table after an instruction's opcodes.
-pub fn fmt(name: impl Into<String>, operands: impl IntoIterator<Item = impl Into<Operand>>) -> Format {
+pub fn fmt(
+    name: impl Into<String>,
+    operands: impl IntoIterator<Item = impl Into<Operand>>,
+) -> Format {
     Format {
         name: name.into(),
         operands: operands.into_iter().map(Into::into).collect(),
@@ -131,7 +134,13 @@ impl Format {
     /// Return the location of the operand that uses memory, if any; return
     /// `None` otherwise.
     pub fn uses_memory(&self) -> Option<Location> {
-        debug_assert!(self.locations().copied().filter(Location::uses_memory).count() <= 1);
+        debug_assert!(
+            self.locations()
+                .copied()
+                .filter(Location::uses_memory)
+                .count()
+                <= 1
+        );
         self.locations().copied().find(Location::uses_memory)
     }
 
@@ -188,7 +197,12 @@ pub struct Operand {
 
 impl core::fmt::Display for Operand {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let Self { location, mutability, extension, align } = self;
+        let Self {
+            location,
+            mutability,
+            extension,
+            align,
+        } = self;
         write!(f, "{location}")?;
         let mut flags = vec![];
         if !matches!(mutability, Mutability::Read) {
@@ -212,7 +226,12 @@ impl From<Location> for Operand {
         let mutability = Mutability::default();
         let extension = Extension::default();
         let align = false;
-        Self { location, mutability, extension, align }
+        Self {
+            location,
+            mutability,
+            extension,
+            align,
+        }
     }
 }
 
@@ -307,8 +326,8 @@ impl Location {
         use Location::*;
         match self {
             imm8 | imm16 | imm32 => false,
-            al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 | xmm | xmm_m32 | xmm_m64
-            | xmm_m128 | m8 | m16 | m32 | m64 => true,
+            al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 | xmm
+            | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => true,
         }
     }
 
@@ -334,7 +353,9 @@ impl Location {
         use Location::*;
         match self {
             imm8 | imm16 | imm32 | m8 | m16 | m32 | m64 => None,
-            al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 => Some(RegClass::Gpr),
+            al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 => {
+                Some(RegClass::Gpr)
+            }
             xmm | xmm_m32 | xmm_m64 | xmm_m128 => Some(RegClass::Xmm),
         }
     }
@@ -458,7 +479,10 @@ impl Extension {
     /// Check if the extension is sign-extended.
     #[must_use]
     pub fn is_sign_extended(&self) -> bool {
-        matches!(self, Self::SignExtendQuad | Self::SignExtendLong | Self::SignExtendWord)
+        matches!(
+            self,
+            Self::SignExtendQuad | Self::SignExtendLong | Self::SignExtendWord
+        )
     }
 }
 
