@@ -183,3 +183,10 @@ pub unsafe extern "C" fn wasmtime_component_val_delete(value: *mut wasmtime_comp
         std::ptr::drop_in_place(value);
     }
 }
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_valrecord_new(size: usize) -> wasmtime_component_val_t {
+    // TODO: Create `wasmtime_component_valrecord_entry_t`s manually instead of calling `::from()`
+    let vals = vec![(String::default(), Val::Bool(false)); size];
+    wasmtime_component_val_t::Record(wasmtime_component_valrecord_t::from(vals.as_slice()))
+}
