@@ -108,6 +108,15 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instance_add_module(
     wasmtime_component_linker_instance_t *linker_instance, const char *name,
     size_t name_len, const wasmtime_module_t *module);
 
+typedef wasmtime_error_t *(*wasmtime_component_func_callback_t)(
+    void *, wasmtime_context_t *, const wasmtime_component_val_t *, size_t,
+    wasmtime_component_val_t *, size_t);
+
+WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instance_add_func(
+    wasmtime_component_linker_instance_t *linker_instance, const char *name,
+    size_t name_len, wasmtime_component_func_callback_t callback, void *data,
+    void (*finalizer)());
+
 /**
  * \brief Deletes a #wasmtime_component_linker_instance_t
  *

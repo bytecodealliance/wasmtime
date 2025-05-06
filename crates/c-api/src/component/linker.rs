@@ -1,10 +1,12 @@
-use wasmtime::component::{Instance, Linker, LinkerInstance};
+use std::ffi::c_void;
+
+use wasmtime::component::{Instance, Linker, LinkerInstance, Val};
 
 use crate::{
     WasmtimeStoreContextMut, WasmtimeStoreData, wasm_engine_t, wasmtime_error_t, wasmtime_module_t,
 };
 
-use super::wasmtime_component_t;
+use super::{wasmtime_component_t, wasmtime_component_val_t};
 
 #[repr(transparent)]
 pub struct wasmtime_component_linker_t {
@@ -86,6 +88,66 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_module(
     let result = linker_instance
         .linker_instance
         .module(&name, &module.module);
+
+    crate::handle_result(result, |_| ())
+}
+
+pub type wasmtime_component_func_callback_t = extern "C" fn(
+    *mut c_void,
+    WasmtimeStoreContextMut<'_>,
+    *const wasmtime_component_val_t,
+    usize,
+    *mut wasmtime_component_val_t,
+    usize,
+) -> Option<Box<wasmtime_error_t>>;
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_linker_instance_add_func(
+    linker_instance: &mut wasmtime_component_linker_instance_t,
+    name: *const u8,
+    name_len: usize,
+    callback: wasmtime_component_func_callback_t,
+    data: *mut c_void,
+    finalizer: Option<extern "C" fn(*mut c_void)>,
+) -> Option<Box<wasmtime_error_t>> {
+    let name = unsafe { std::slice::from_raw_parts(name, name_len) };
+    let Ok(name) = std::str::from_utf8(name) else {
+        return crate::bad_utf8();
+    };
+
+    let foreign = crate::ForeignData { data, finalizer };
+
+    let result = linker_instance
+        .linker_instance
+        .func_new(&name, move |ctx, args, rets| {
+            let _ = &foreign;
+
+            let args = args
+                .iter()
+                .map(|x| wasmtime_component_val_t::from(x))
+                .collect::<Vec<_>>();
+
+            let mut c_rets = vec![wasmtime_component_val_t::Bool(false); rets.len()];
+
+            let res = callback(
+                foreign.data,
+                ctx,
+                args.as_ptr(),
+                args.len(),
+                c_rets.as_mut_ptr(),
+                c_rets.len(),
+            );
+
+            if let Some(res) = res {
+                return Err((*res).into());
+            }
+
+            for (rust_val, c_val) in std::iter::zip(rets, c_rets) {
+                *rust_val = Val::from(&c_val);
+            }
+
+            Ok(())
+        });
 
     crate::handle_result(result, |_| ())
 }

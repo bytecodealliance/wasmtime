@@ -3,6 +3,7 @@ use wasmtime::component::Val;
 use crate::wasm_name_t;
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct wasmtime_component_vallist_t {
     ptr: *mut wasmtime_component_val_t,
     len: usize,
@@ -65,6 +66,7 @@ impl From<&(String, Val)> for wasmtime_component_valrecord_entry_t {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct wasmtime_component_valrecord_t {
     ptr: *mut wasmtime_component_valrecord_entry_t,
     len: usize,
@@ -103,6 +105,7 @@ impl Drop for wasmtime_component_valrecord_t {
 }
 
 #[repr(C, u8)]
+#[derive(Clone)]
 pub enum wasmtime_component_val_t {
     Bool(bool),
     S8(i8),
