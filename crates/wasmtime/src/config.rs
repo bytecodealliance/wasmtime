@@ -2044,14 +2044,9 @@ impl Config {
                     | WasmFeatures::LEGACY_EXCEPTIONS;
                 match self.compiler_target().architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
-                        // no support for simd on aarch64
                         unsupported |= WasmFeatures::SIMD;
-
-                        // things like multi-table are technically supported on
-                        // winch on aarch64 but this helps gate most spec tests
-                        // by default which otherwise currently cause panics.
-                        unsupported |= WasmFeatures::REFERENCE_TYPES;
-                        unsupported |= WasmFeatures::THREADS
+                        unsupported |= WasmFeatures::THREADS;
+                        unsupported |= WasmFeatures::WIDE_ARITHMETIC;
                     }
 
                     // Winch doesn't support other non-x64 architectures at this
