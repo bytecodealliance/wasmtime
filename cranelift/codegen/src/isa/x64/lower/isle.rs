@@ -1035,6 +1035,13 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
+    fn is_imm8_xmm(&mut self, src: &XmmMemImm) -> Option<u8> {
+        match src.clone().to_reg_mem_imm() {
+            RegMemImm::Imm { simm32 } => Some(u8::try_from(simm32).ok()?),
+            _ => None,
+        }
+    }
+
     fn is_simm8(&mut self, src: &GprMemImm) -> Option<i8> {
         match src.clone().to_reg_mem_imm() {
             RegMemImm::Imm { simm32 } => Some(i8::try_from(simm32).ok()?),
@@ -1092,10 +1099,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
-    fn is_xmm_mem(&mut self, src: &XmmMem) -> Option<XmmMem> {
-        match src.clone().to_reg_mem() {
-            RegMem::Reg { reg } => XmmMem::new(RegMem::Reg { reg }),
-            RegMem::Mem { addr } => XmmMem::new(RegMem::Mem { addr }),
+    fn is_xmm_mem(&mut self, src: &XmmMemImm) -> Option<XmmMem> {
+        match src.clone().to_reg_mem_imm() {
+            RegMemImm::Reg { reg } => XmmMem::new(RegMem::Reg { reg }),
+            RegMemImm::Mem { addr } => XmmMem::new(RegMem::Mem { addr }),
+            _ => None,
         }
     }
 }

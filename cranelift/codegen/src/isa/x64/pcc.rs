@@ -314,16 +314,6 @@ pub(crate) fn check(
             undefined_result(ctx, vcode, dst, 64, size.to_bits().into())
         }
 
-        Inst::XmmRmiReg { dst, ref src2, .. } => {
-            match <&RegMemImm>::from(src2) {
-                RegMemImm::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
-                }
-                _ => {}
-            }
-            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
-        }
-
         Inst::CmpRmiR {
             size,
             src1,

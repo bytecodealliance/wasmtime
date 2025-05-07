@@ -384,11 +384,11 @@ block0(v0: i32x4):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa  %xmm0, %xmm3
-;   pslld   %xmm3, $16, %xmm3
-;   psrld   %xmm3, $16, %xmm3
+;   pslld $0x10, %xmm3
+;   psrld $0x10, %xmm3
 ;   psubd %xmm3, %xmm0
 ;   cvtdq2ps %xmm3, %xmm1
-;   psrld   %xmm0, $1, %xmm0
+;   psrld $0x1, %xmm0
 ;   cvtdq2ps %xmm0, %xmm0
 ;   addps %xmm0, %xmm0
 ;   addps %xmm1, %xmm0
@@ -1068,7 +1068,7 @@ block0(v0: f32x4):
 ;   xorps %xmm6, %xmm6
 ;   maxps   %xmm0, %xmm6, %xmm0
 ;   pcmpeqd %xmm6, %xmm6, %xmm6
-;   psrld   %xmm6, $1, %xmm6
+;   psrld $0x1, %xmm6
 ;   cvtdq2ps %xmm6, %xmm7
 ;   cvttps2dq %xmm0, %xmm6
 ;   subps %xmm7, %xmm0
@@ -1122,7 +1122,7 @@ block0(v0: f32x4):
 ;   cvttps2dq %xmm0, %xmm1
 ;   movdqa  %xmm1, %xmm0
 ;   pand %xmm4, %xmm0
-;   psrad   %xmm0, $31, %xmm0
+;   psrad $0x1f, %xmm0
 ;   pxor %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -1161,7 +1161,7 @@ block0(v0: i64x2):
 ;   movdqa  %xmm7, %xmm1
 ;   por (%rip), %xmm1
 ;   movdqa  %xmm1, %xmm7
-;   psrlq   %xmm0, $32, %xmm0
+;   psrlq $0x20, %xmm0
 ;   por (%rip), %xmm0
 ;   subpd (%rip), %xmm0
 ;   movdqa  %xmm0, %xmm1

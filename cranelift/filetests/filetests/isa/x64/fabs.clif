@@ -71,7 +71,7 @@ block0(v0: f32x4):
 ; block0:
 ;   uninit  %xmm4
 ;   pcmpeqd %xmm4, %xmm4, %xmm4
-;   psrld   %xmm4, $1, %xmm4
+;   psrld $0x1, %xmm4
 ;   andps %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -101,7 +101,7 @@ block0(v0: f64x2):
 ; block0:
 ;   uninit  %xmm4
 ;   pcmpeqd %xmm4, %xmm4, %xmm4
-;   psrlq   %xmm4, $1, %xmm4
+;   psrlq $0x1, %xmm4
 ;   andpd %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
