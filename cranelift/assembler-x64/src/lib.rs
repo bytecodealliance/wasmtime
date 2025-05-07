@@ -86,8 +86,3 @@ pub use mem::{
 };
 pub use rex::RexFlags;
 pub use xmm::Xmm;
-
-/// List the files generated to create this assembler.
-pub fn generated_files() -> Vec<std::path::PathBuf> {
-    include!(concat!(env!("OUT_DIR"), "/generated-files.rs"))
-}
