@@ -75,7 +75,9 @@ Unreleased.
 
 * Wasmtime will no longer emit calls to Cranelift-defined "libcalls" and instead
   everything goes through Wasmtime's libcall mechanism instead, paving the way
-  for a future change for more efficient stack limit checking in wasm.
+  for a future change for more efficient stack limit checking in wasm. This can
+  also improve deserialize-from-disk times and improve page cache usage for
+  modules that use libcalls as relocations are no longer necessary.
   [#10657](https://github.com/bytecodealliance/wasmtime/pull/10657)
 
 * Configuration of caching can now be done through an API instead of exclusively
