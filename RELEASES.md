@@ -4,6 +4,40 @@ Unreleased.
 
 ### Added
 
+* Cranelift now has initial support for `try_call` and `try_call_indirect`
+  instructions, to be used in the future for the WebAssembly exception-handling
+  proposal. Wasmtime does not yet implement this proposal yet.
+  [#10510](https://github.com/bytecodealliance/wasmtime/pull/10510)
+  [#10557](https://github.com/bytecodealliance/wasmtime/pull/10557)
+  [#10593](https://github.com/bytecodealliance/wasmtime/pull/10593)
+
+* Cranelift can now optimize some simple possibly-side-effectful instructions,
+  such as division.
+  [#10524](https://github.com/bytecodealliance/wasmtime/pull/10524)
+
+* Wasmtime now supports `--invoke` for components using the WAVE format.
+  [#10054](https://github.com/bytecodealliance/wasmtime/pull/10054)
+
+* Initial support for the Component Model has landed in Wasmtime's C API. Note
+  that the API is not yet feature-complete, however.
+  [#10566](https://github.com/bytecodealliance/wasmtime/pull/10566)
+  [#10598](https://github.com/bytecodealliance/wasmtime/pull/10598)
+  [#10651](https://github.com/bytecodealliance/wasmtime/pull/10651)
+  [#10675](https://github.com/bytecodealliance/wasmtime/pull/10675)
+
+* Wasmtime's C++ API is now available from this repository and the
+  bytecodealliance/wasmtime-cpp repository has been archived. Additionally the
+  monolithic `wasmtime.hh` header file has been split into separate header
+  files.
+  [#10582](https://github.com/bytecodealliance/wasmtime/pull/10582)
+  [#10600](https://github.com/bytecodealliance/wasmtime/pull/10600)
+
+* Wasmtime's cookbook-style documentation has been expanded.
+  [#10630](https://github.com/bytecodealliance/wasmtime/pull/10630)
+
+* Wasmtime's now supports custom yield behavior when using epoch interrupts.
+  [#10671](https://github.com/bytecodealliance/wasmtime/pull/10671)
+
 ### Changed
 
 * Wasmtime's bindgen now type-checks export functions in the constructor of
@@ -19,6 +53,63 @@ Unreleased.
 * On failure, `wasmtime serve` gives an internal server error response, rather
   than closing the connection.
   [#10645](https://github.com/bytecodealliance/wasmtime/pull/10645)
+
+* Cranelift's single-pass allocator has been disabled due to being unable to
+  support internal refactorings in preparation for the WebAssembly exceptions
+  proposal. Re-enabling this allocator is tracked at
+  [regalloc2#217](https://github.com/bytecodealliance/regalloc2/issues/217) for
+  those interested.
+  [#10554](https://github.com/bytecodealliance/wasmtime/pull/10554)
+
+* Wasmtime's `{Array,Extern,Struct}Ref` functions will now automatically trigger
+  a GC.
+  [#10560](https://github.com/bytecodealliance/wasmtime/pull/10560)
+
+* Wasmtime's GC heaps now use the same translation techniques as linear memories
+  meaning they have far fewer bounds-checks than before.
+  [#10503](https://github.com/bytecodealliance/wasmtime/pull/10503)
+
+* Wasmtime's implementation of WASIp2 has moved to `wasmtime_wasi::p2` from the
+  root of the crate.
+  [#10073](https://github.com/bytecodealliance/wasmtime/pull/10073)
+
+* Wasmtime will no longer emit calls to Cranelift-defined "libcalls" and instead
+  everything goes through Wasmtime's libcall mechanism instead, paving the way
+  for a future change for more efficient stack limit checking in wasm.
+  [#10657](https://github.com/bytecodealliance/wasmtime/pull/10657)
+
+* Configuration of caching can now be done through an API instead of exclusively
+  through a configuration file. Additionally cache-related APIs in `Config` have
+  changed.
+  [#10665](https://github.com/bytecodealliance/wasmtime/pull/10665)
+
+* Resources in the Component Model are now stored in a single table per-instance
+  instead of per-type tables. Guests will see a different pattern of index
+  allocation but this is not expected to cause any issues at runtime.
+  [#10701](https://github.com/bytecodealliance/wasmtime/pull/10701)
+
+### Fixed
+
+* Some math intrinsics have been fixed when compiled by Rust 1.87+.
+  [#10534](https://github.com/bytecodealliance/wasmtime/pull/10534)
+
+* Component model libcalls correctly handle platform-specific argument extension
+  in ABIs.
+  [#10540](https://github.com/bytecodealliance/wasmtime/pull/10540)
+
+* An off-by-one issue with DWARF debuginfo has been fixed.
+  [#10570](https://github.com/bytecodealliance/wasmtime/pull/10570)
+
+* The `Config::target` method is no longer gated by a `#[cfg]` for an enabled
+  compiler, it can be used when only the `runtime` feature is available.
+  [#10618](https://github.com/bytecodealliance/wasmtime/pull/10618)
+
+* An issue with "simulated" DWARF has been fixed.
+  [#10681](https://github.com/bytecodealliance/wasmtime/pull/10681)
+
+* C/C++ headers are now tested that they can be included in isolation, and a
+  number of issues have been fixed.
+  [#10694](https://github.com/bytecodealliance/wasmtime/pull/10694)
 
 --------------------------------------------------------------------------------
 
