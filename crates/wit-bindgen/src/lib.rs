@@ -1423,36 +1423,6 @@ impl Wasmtime {
         }
         uwriteln!(self.src, "}}");
 
-        // let get_host_bounds = if let CallStyle::Concurrent = self.opts.call_style() {
-        //     let constraints = world_imports_concurrent_constraints(resolve, world, &self.opts);
-
-        //     format!("{world_camel}Imports{}", constraints("D"))
-        // } else {
-        //     format!("{world_camel}Imports")
-        // };
-
-        // uwriteln!(
-        //     self.src,
-        //     "
-        //         pub trait {world_camel}ImportsGetHost<T>:
-        //             Fn(T) -> <Self as {world_camel}ImportsGetHost<T>>::Host
-        //                 + Send
-        //                 + Sync
-        //                 + Copy
-        //                 + 'static
-        //         {{
-        //             type Host;
-        //         }}
-
-        //         impl<F, T, O> {world_camel}ImportsGetHost<T> for F
-        //         where
-        //             F: Fn(T) -> O + Send + Sync + Copy + 'static,
-        //         {{
-        //             type Host = O;
-        //         }}
-        //     "
-        // );
-
         // Generate impl WorldImports for &mut WorldImports
         let maybe_send = if let CallStyle::Async = self.opts.call_style() {
             "+ Send"

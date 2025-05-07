@@ -115,7 +115,7 @@
 /// }
 /// ```
 ///
-/// # Too-much Detail
+/// # Too Much Detail
 ///
 /// The general idea behind this trait is that it expresses the ability to take
 /// a closure as a parameter which projects from a store's state, `T`, to a `U`
@@ -212,7 +212,7 @@
 /// ```
 ///
 /// This syntax technically compiles but [is
-/// unstable](https://github.com/rust-lang/rust/issues/97362). Alternatively on
+/// unstable](https://github.com/rust-lang/rust/issues/97362). Alternatively one
 /// might want to write:
 ///
 /// ```ignore
