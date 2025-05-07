@@ -488,42 +488,50 @@ impl WastTest {
 
         // Disable spec tests per target for proposals that Winch does not implement yet.
         if config.compiler == Compiler::Winch {
+            // Common list for tests that fail in all targets supported by Winch.
+            let unsupported = [
+                "extended-const/elem.wast",
+                "extended-const/global.wast",
+                "misc_testsuite/component-model/modules.wast",
+                "misc_testsuite/externref-id-function.wast",
+                "misc_testsuite/externref-segment.wast",
+                "misc_testsuite/externref-segments.wast",
+                "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
+                "misc_testsuite/linking-errors.wast",
+                "misc_testsuite/many_table_gets_lead_to_gc.wast",
+                "misc_testsuite/mutable_externref_globals.wast",
+                "misc_testsuite/no-mixup-stack-maps.wast",
+                "misc_testsuite/no-panic.wast",
+                "misc_testsuite/simple_ref_is_null.wast",
+                "misc_testsuite/table_grow_with_funcref.wast",
+                "spec_testsuite/br_table.wast",
+                "spec_testsuite/global.wast",
+                "spec_testsuite/ref_func.wast",
+                "spec_testsuite/ref_is_null.wast",
+                "spec_testsuite/ref_null.wast",
+                "spec_testsuite/select.wast",
+                "spec_testsuite/table_fill.wast",
+                "spec_testsuite/table_get.wast",
+                "spec_testsuite/table_grow.wast",
+                "spec_testsuite/table_set.wast",
+                "spec_testsuite/table_size.wast",
+                "spec_testsuite/elem.wast",
+                "spec_testsuite/linking.wast",
+            ];
+
+            if unsupported.iter().any(|part| self.path.ends_with(part)) {
+                return true;
+            }
+
             #[cfg(target_arch = "aarch64")]
             {
                 let unsupported = [
                     // Externref / GC related.
-                    "extended-const/elem.wast",
-                    "extended-const/global.wast",
-                    "spec_testsuite/br_table.wast",
-                    "spec_testsuite/global.wast",
-                    "spec_testsuite/linking.wast",
-                    "spec_testsuite/ref_func.wast",
-                    "spec_testsuite/ref_is_null.wast",
-                    "spec_testsuite/ref_null.wast",
-                    "spec_testsuite/select.wast",
-                    "spec_testsuite/table_fill.wast",
-                    "spec_testsuite/table_get.wast",
-                    "spec_testsuite/table_grow.wast",
-                    "spec_testsuite/table_set.wast",
-                    "spec_testsuite/table_size.wast",
-                    "misc_testsuite/table_grow_with_funcref.wast",
-                    "misc_testsuite/component-model/modules.wast",
                     "misc_testsuite/winch/table_get.wast",
                     "misc_testsuite/winch/table_set.wast",
                     "misc_testsuite/winch/table_fill.wast",
-                    "misc_testsuite/linking-errors.wast",
-                    "misc_testsuite/no-panic.wast",
-                    "misc_testsuite/externref-id-function.wast",
-                    "misc_testsuite/simple_ref_is_null.wast",
-                    "misc_testsuite/mutable_externref_globals.wast",
-                    "misc_testsuite/many_table_gets_lead_to_gc.wast",
-                    "misc_testsuite/no-mixup-stack-maps.wast",
-                    "misc_testsuite/externref-segment.wast",
-                    "misc_testsuite/externref-segments.wast",
-                    "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
                     // Known bugs that don't cause segfaults.
                     "spec_testsuite/call_indirect.wast",
-                    "spec_testsuite/elem.wast",
                     "spec_testsuite/f32_cmp.wast",
                     "spec_testsuite/f64_cmp.wast",
                     "spec_testsuite/func_ptrs.wast",
@@ -551,34 +559,6 @@ impl WastTest {
             {
                 let unsupported = [
                     // externref/reference-types related
-                    "component-model/modules.wast",
-                    "extended-const/elem.wast",
-                    "extended-const/global.wast",
-                    "misc_testsuite/externref-id-function.wast",
-                    "misc_testsuite/externref-segment.wast",
-                    "misc_testsuite/externref-segments.wast",
-                    "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
-                    "misc_testsuite/linking-errors.wast",
-                    "misc_testsuite/many_table_gets_lead_to_gc.wast",
-                    "misc_testsuite/mutable_externref_globals.wast",
-                    "misc_testsuite/no-mixup-stack-maps.wast",
-                    "misc_testsuite/no-panic.wast",
-                    "misc_testsuite/simple_ref_is_null.wast",
-                    "misc_testsuite/table_grow_with_funcref.wast",
-                    "spec_testsuite/br_table.wast",
-                    "spec_testsuite/data-invalid.wast",
-                    "spec_testsuite/elem.wast",
-                    "spec_testsuite/global.wast",
-                    "spec_testsuite/linking.wast",
-                    "spec_testsuite/ref_func.wast",
-                    "spec_testsuite/ref_is_null.wast",
-                    "spec_testsuite/ref_null.wast",
-                    "spec_testsuite/select.wast",
-                    "spec_testsuite/table_fill.wast",
-                    "spec_testsuite/table_get.wast",
-                    "spec_testsuite/table_grow.wast",
-                    "spec_testsuite/table_set.wast",
-                    "spec_testsuite/table_size.wast",
                     // simd-related failures
                     "misc_testsuite/simd/canonicalize-nan.wast",
                 ];
