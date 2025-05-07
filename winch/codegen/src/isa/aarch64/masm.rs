@@ -387,8 +387,12 @@ impl Masm for MacroAssembler {
         cc: IntCmpKind,
         _size: OperandSize,
     ) -> Result<()> {
-        self.asm.csel(src, dst.to_reg(), dst, Cond::from(cc));
-        Ok(())
+        match (src.class(), dst.to_reg().class()) {
+            (RegClass::Int, RegClass::Int) => {
+                Ok(self.asm.csel(src, dst.to_reg(), dst, Cond::from(cc)))
+            }
+            _ => Err(anyhow!(CodeGenError::invalid_operand_combination())),
+        }
     }
 
     fn add(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {

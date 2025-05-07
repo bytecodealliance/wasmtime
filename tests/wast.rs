@@ -19,6 +19,10 @@ fn main() {
     let mut trials = Vec::new();
 
     let mut add_trial = |test: &WastTest, config: WastConfig| {
+        if test.should_skip_entirely(&config) {
+            return;
+        }
+
         let trial = Trial::test(
             format!(
                 "{:?}/{}{}{}",

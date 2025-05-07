@@ -111,6 +111,10 @@ For each column in the above tables, this is a further explanation of its meanin
   must pass at least for Cranelift on all [tier 1](./stability-tiers.md)
   platforms, but missing other platforms is otherwise acceptable.
 
+  > For maintainers be sure to audit the `WastTest::should_skip_entirely`
+  > method to ensure that there are no tests which are listed there for this
+  > feature. If so remove them to ensure that the test is run on CI.
+
 * **Finished** - No open questions, design concerns, or serious known bugs. The
   implementation should be complete to the extent that is possible. Support
   must be implemented for all [tier 1](./stability-tiers.md) targets and

@@ -349,6 +349,8 @@ impl Compiler {
                     || config.gc_types()
                     || config.exceptions()
                     || config.legacy_exceptions()
+                    || (cfg!(target_arch = "aarch64")
+                        && (config.simd() || config.threads() || config.wide_arithmetic()))
             }
 
             Compiler::CraneliftPulley => config.threads() || config.legacy_exceptions(),
@@ -365,9 +367,7 @@ impl Compiler {
                     || cfg!(target_arch = "riscv64")
                     || cfg!(target_arch = "s390x")
             }
-            Compiler::Winch => {
-                cfg!(target_arch = "x86_64")
-            }
+            Compiler::Winch => cfg!(target_arch = "x86_64") || cfg!(target_arch = "aarch64"),
             Compiler::CraneliftPulley => true,
         }
     }
@@ -390,6 +390,47 @@ impl WastTest {
     /// Returns the optional spec proposal that this test is associated with.
     pub fn spec_proposal(&self) -> Option<&str> {
         spec_proposal_from_path(&self.path)
+    }
+
+    /// Returns whether this test should be skipped with this configuration
+    /// entirely, not running it at all.
+    ///
+    /// Ideally all tests should be run at all times, even if they're expected
+    /// to fail. This ensures that the expected failure is a controlled
+    /// failure, for example an error is returned, which is more desirable than
+    /// a panic or a segfault/crash. As implementations progress, however,
+    /// tests will naturally crash when an implementation is not yet complete
+    /// or fully finished. In the interest of still getting at least some test
+    /// coverage, however, this is an escape hatch to avoid running a test
+    /// entirely.
+    ///
+    /// Where possible avoid putting tests here. Instead add known and/or
+    /// expected failures to `should_fail`. Adding to `should_fail` means that
+    /// if a test is actually implemented then it'll require updating that
+    /// method to indicate that we expect success, not failure. Adding a test
+    /// here, however, means that someone will have to proactively review this
+    /// in the future to ensure that tests are removed here to start running
+    /// the tests.
+    pub fn should_skip_entirely(&self, config: &WastConfig) -> bool {
+        // FIXME(#8321): Winch on AArch64 is not yet fully complete. Most tests
+        // pass, there are some misc failures listed below, and this is a list
+        // of known tests that crash and thus cannot be run.
+        if config.compiler == Compiler::Winch && cfg!(target_arch = "aarch64") {
+            let unsupported = [
+                // different pass/fail result in release/debug mdoe
+                "misc_testsuite/issue4890.wast",
+                "misc_testsuite/memory64/offsets.wast",
+                // crashes, unsure why
+                "misc_testsuite/table_copy_on_imported_tables.wast",
+                // stack checks not implemented yet
+                "misc_testsuite/stack_overflow.wast",
+            ];
+            if unsupported.iter().any(|part| self.path.ends_with(part)) {
+                return true;
+            }
+        }
+
+        false
     }
 
     /// Returns whether this test should fail under the specified extra
@@ -468,6 +509,36 @@ impl WastTest {
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
                 return true;
+            }
+
+            // FIXME(#8321): Winch on AArch64 is not yet fully complete, these
+            // are currently tests that are known and expected to fail due to
+            // unimplemented features and/or bugs.
+            if cfg!(target_arch = "aarch64") {
+                let unsupported = [
+                    "misc_testsuite/call_indirect.wast",
+                    "misc_testsuite/component-model/fused.wast",
+                    "misc_testsuite/custom-page-sizes/custom-page-sizes.wast",
+                    "misc_testsuite/float-round-doesnt-load-too-much.wast",
+                    "misc_testsuite/imported-memory-copy.wast",
+                    "misc_testsuite/issue4840.wast",
+                    "misc_testsuite/memory-copy.wast",
+                    "misc_testsuite/multi-memory/simple.wast",
+                    "misc_testsuite/partial-init-memory-segment.wast",
+                    "misc_testsuite/sink-float-but-dont-trap.wast",
+                    "misc_testsuite/stack_overflow.wast",
+                    "misc_testsuite/table_copy_on_imported_tables.wast",
+                    "misc_testsuite/winch/global.wast",
+                    "misc_testsuite/winch/select.wast",
+                    "misc_testsuite/winch/table_fill.wast",
+                    "misc_testsuite/winch/table_get.wast",
+                    "misc_testsuite/winch/table_grow.wast",
+                    "misc_testsuite/winch/table_set.wast",
+                    "spec_testsuite/proposals/custom-page-sizes/custom-page-sizes.wast",
+                ];
+                if unsupported.iter().any(|part| self.path.ends_with(part)) {
+                    return true;
+                }
             }
 
             // SIMD on Winch requires AVX instructions.
