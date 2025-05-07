@@ -1,7 +1,8 @@
 //! Print the path to the generated code.
 
 fn main() {
-    for path in cranelift_assembler_x64::generated_files() {
+    let paths: Vec<std::path::PathBuf> = include!(concat!(env!("OUT_DIR"), "/generated-files.rs"));
+    for path in paths {
         println!("{}", path.display());
     }
 }
