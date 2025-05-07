@@ -166,7 +166,7 @@ fn in_int_reg(ty: Type) -> bool {
 
 fn in_flt_reg(ty: Type) -> bool {
     match ty {
-        types::F32 | types::F64 => true,
+        types::F16 | types::F32 | types::F64 => true,
         _ => false,
     }
 }
@@ -256,10 +256,11 @@ pub static REG_SAVE_AREA_SIZE: u32 = 160;
 impl Into<MemArg> for StackAMode {
     fn into(self) -> MemArg {
         match self {
-            // Argument area always begins at the initial SP.
-            StackAMode::IncomingArg(off, _) => MemArg::InitialSPOffset { off },
+            StackAMode::IncomingArg(off, stack_args_size) => MemArg::IncomingArgOffset {
+                off: off - stack_args_size as i64,
+            },
             StackAMode::Slot(off) => MemArg::SlotOffset { off },
-            StackAMode::OutgoingArg(off) => MemArg::NominalSPOffset { off },
+            StackAMode::OutgoingArg(off) => MemArg::OutgoingArgOffset { off },
         }
     }
 }
@@ -317,14 +318,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         let mut next_fpr = 0;
         let mut next_vr = 0;
         let mut next_stack: u32 = 0;
-
-        // The bottom of the stack frame holds the register save area.  To simplify
-        // offset computation, include this area as part of the argument area;
-        // however, this does not apply to the tail-call convention, which uses the
-        // callee frame instead to pass arguments.
-        if call_conv != isa::CallConv::Tail && args_or_rets == ArgsOrRets::Args {
-            next_stack = REG_SAVE_AREA_SIZE;
-        }
 
         let ret_area_ptr = if add_ret_area_ptr {
             debug_assert_eq!(args_or_rets, ArgsOrRets::Args);
@@ -471,30 +464,12 @@ impl ABIMachineSpec for S390xMachineDeps {
         }
 
         // With the tail-call convention, arguments are passed in the *callee*'s
-        // frame instead of the caller's frame.  Update all offsets accordingly
-        // (note that resulting offsets will all be negative).
+        // frame instead of the caller's frame.  This means that the register save
+        // area will lie between the incoming arguments and the return buffer.
+        // Include the size of the register area in the argument area size to
+        // match common code expectation that the return buffer resides immediately
+        // above the argument area.
         if call_conv == isa::CallConv::Tail && args_or_rets == ArgsOrRets::Args && next_stack != 0 {
-            for arg in args.args_mut() {
-                match arg {
-                    ABIArg::Slots { slots, .. } => {
-                        for slot in slots {
-                            match slot {
-                                ABIArgSlot::Reg { .. } => {}
-                                ABIArgSlot::Stack { offset, .. } => {
-                                    *offset -= next_stack as i64;
-                                }
-                            }
-                        }
-                    }
-                    ABIArg::StructArg { .. } => unreachable!(),
-                    ABIArg::ImplicitPtrArg { offset, .. } => {
-                        *offset -= next_stack as i64;
-                    }
-                }
-            }
-            // If we have any stack arguments, also allow for a temporary copy
-            // of the register save area.  This is only used until the callee
-            // has finished setting up its own frame.
             next_stack += REG_SAVE_AREA_SIZE;
         }
 
@@ -862,10 +837,6 @@ impl ABIMachineSpec for S390xMachineDeps {
         insts
     }
 
-    fn gen_call(_dest: &CallDest, _tmp: Writable<Reg>, _info: CallInfo<()>) -> SmallVec<[Inst; 2]> {
-        unreachable!();
-    }
-
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         _call_conv: isa::CallConv,
         _dst: Reg,
@@ -1063,43 +1034,12 @@ impl S390xMachineDeps {
         // Helper routine to lane-swap a register if needed.
         let lane_swap_if_needed = |insts: &mut SmallInstVec<Inst>, vreg, ty: Type| {
             if LaneOrder::from(info.caller_conv) != LaneOrder::from(info.callee_conv) {
-                if ty.is_vector() {
-                    if ty.lane_count() >= 2 {
-                        insts.push(Inst::VecPermuteDWImm {
-                            rd: vreg,
-                            rn: vreg.to_reg(),
-                            rm: vreg.to_reg(),
-                            idx1: 1,
-                            idx2: 0,
-                        });
-                    }
-                    if ty.lane_count() >= 4 {
-                        insts.push(Inst::VecShiftRR {
-                            shift_op: VecShiftOp::RotL64x2,
-                            rd: vreg,
-                            rn: vreg.to_reg(),
-                            shift_imm: 32,
-                            shift_reg: zero_reg(),
-                        });
-                    }
-                    if ty.lane_count() >= 8 {
-                        insts.push(Inst::VecShiftRR {
-                            shift_op: VecShiftOp::RotL32x4,
-                            rd: vreg,
-                            rn: vreg.to_reg(),
-                            shift_imm: 16,
-                            shift_reg: zero_reg(),
-                        });
-                    }
-                    if ty.lane_count() >= 16 {
-                        insts.push(Inst::VecShiftRR {
-                            shift_op: VecShiftOp::RotL16x8,
-                            rd: vreg,
-                            rn: vreg.to_reg(),
-                            shift_imm: 8,
-                            shift_reg: zero_reg(),
-                        });
-                    }
+                if ty.is_vector() && ty.lane_count() >= 2 {
+                    insts.push(Inst::VecEltRev {
+                        lane_count: ty.lane_count(),
+                        rd: vreg,
+                        rn: vreg.to_reg(),
+                    });
                 }
             }
         };

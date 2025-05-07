@@ -11,16 +11,20 @@ block0(v0: i64):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
-;   xorq    %rax, %rax, %rax
-;   xorq    %rdx, %rdx, %rdx
-;   xorq    %rbx, %rbx, %rbx
-;   xorq    %rcx, %rcx, %rcx
+;   uninit  %rax
+;   xorq %rax, %rax
+;   uninit  %rdx
+;   xorq %rdx, %rdx
+;   uninit  %rbx
+;   xorq %rbx, %rbx
+;   uninit  %rcx
+;   xorq %rcx, %rcx
 ;   lock cmpxchg16b 0(%rdi), replacement=%rcx:%rbx, expected=%rdx:%rax, dst_old=%rdx:%rax
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -52,7 +56,7 @@ block0(v0: i128, v1: i64):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rsi, %rcx
@@ -60,7 +64,7 @@ block0(v0: i128, v1: i64):
 ;   movq    %rdx, %r11
 ;   atomically { %rdx:%rax = 0(%r11); 0(%r11) = %rcx:%rbx }
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -94,7 +98,7 @@ block0(v0: i64, v1: i128, v2: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rcx, %rbx
@@ -102,7 +106,7 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   movq    %rsi, %rax
 ;   lock cmpxchg16b 0(%rdi), replacement=%rcx:%rbx, expected=%rdx:%rax, dst_old=%rdx:%rax
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -133,13 +137,13 @@ block0(v0: i64, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdx, %r11
 ;   atomically { %rdx:%rax = 0(%rdi); %rcx:%rbx = %rdx:%rax Add %r11:%rsi; 0(%rdi) = %rcx:%rbx }
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -175,13 +179,13 @@ block0(v0: i64, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdx, %r11
 ;   atomically { %rdx:%rax = 0(%rdi); %rcx:%rbx = %rdx:%rax Sub %r11:%rsi; 0(%rdi) = %rcx:%rbx }
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -217,13 +221,13 @@ block0(v0: i64, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdx, %r11
 ;   atomically { %rdx:%rax = 0(%rdi); %rcx:%rbx = %rdx:%rax And %r11:%rsi; 0(%rdi) = %rcx:%rbx }
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -259,13 +263,13 @@ block0(v0: i64, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdx, %r11
 ;   atomically { %rdx:%rax = 0(%rdi); %rcx:%rbx = %rdx:%rax Nand %r11:%rsi; 0(%rdi) = %rcx:%rbx }
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -303,13 +307,13 @@ block0(v0: i64, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdx, %r11
 ;   atomically { %rdx:%rax = 0(%rdi); %rcx:%rbx = %rdx:%rax Or %r11:%rsi; 0(%rdi) = %rcx:%rbx }
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -345,13 +349,13 @@ block0(v0: i64, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdx, %r11
 ;   atomically { %rdx:%rax = 0(%rdi); %rcx:%rbx = %rdx:%rax Xor %r11:%rsi; 0(%rdi) = %rcx:%rbx }
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -387,14 +391,14 @@ block0(v0: i64, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdx, %rcx
 ;   movq    %rsi, %rbx
 ;   atomically { %rdx:%rax = 0(%rdi); 0(%rdi) = %rcx:%rbx }
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -427,13 +431,13 @@ block0(v0: i64, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdx, %r11
 ;   atomically { %rdx:%rax = 0(%rdi); %rcx:%rbx = %rdx:%rax Umin %r11:%rsi; 0(%rdi) = %rcx:%rbx }
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -472,13 +476,13 @@ block0(v0: i64, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdx, %r11
 ;   atomically { %rdx:%rax = 0(%rdi); %rcx:%rbx = %rdx:%rax Umax %r11:%rsi; 0(%rdi) = %rcx:%rbx }
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -517,13 +521,13 @@ block0(v0: i64, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdx, %r11
 ;   atomically { %rdx:%rax = 0(%rdi); %rcx:%rbx = %rdx:%rax Smin %r11:%rsi; 0(%rdi) = %rcx:%rbx }
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -562,13 +566,13 @@ block0(v0: i64, v1: i128):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
 ; block0:
 ;   movq    %rdx, %r11
 ;   atomically { %rdx:%rax = 0(%rdi); %rcx:%rbx = %rdx:%rax Smax %r11:%rsi; 0(%rdi) = %rcx:%rbx }
 ;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

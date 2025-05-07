@@ -1,12 +1,31 @@
 test compile precise-output
+set enable_multi_ret_implicit_sret
 target s390x
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; F32CONST/F64CONST
+;; f16const/f32const/f64const/f128const
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; FIXME: should use FZERO instruction
 ; FIXME: should use out-of-line literal pool
+
+function %f16const_zero() -> f16 {
+block0:
+  v1 = f16const 0x0.0
+  return v1
+}
+
+; VCode:
+; block0:
+;   bras %r1, 8 ; data.f16 0.0 ; vleh %v0, 0(%r1), 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bras %r1, 6
+;   .byte 0x00, 0x00
+;   vleh %v0, 0(%r1), 0
+;   br %r14
 
 function %f32const_zero() -> f32 {
 block0:
@@ -48,6 +67,42 @@ block0:
 ;   ld %f0, 0(%r1)
 ;   br %r14
 
+function %f128const_zero() -> f128 {
+block0:
+  v1 = f128const 0x0.0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vgbm %v2, 0
+;   vst %v2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v2
+;   vst %v2, 0(%r2)
+;   br %r14
+
+function %f16const_one() -> f16 {
+block0:
+  v1 = f16const 0x1.0
+  return v1
+}
+
+; VCode:
+; block0:
+;   bras %r1, 8 ; data.f16 0x1.000p0 ; vleh %v0, 0(%r1), 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bras %r1, 6
+;   mder %f0, %f0
+;   vleh %v0, 0(%r1), 0
+;   br %r14
+
 function %f32const_one() -> f32 {
 block0:
   v1 = f32const 0x1.0
@@ -86,6 +141,33 @@ block0:
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   ld %f0, 0(%r1)
+;   br %r14
+
+function %f128const_one() -> f128 {
+block0:
+  v1 = f128const 0x1.0
+  return v1
+}
+
+; VCode:
+; block0:
+;   bras %r1, 20 ; data.u128 0x3fff0000000000000000000000000000 ; vl %v2, 0(%r1)
+;   vst %v2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   bras %r1, 0x14
+;   sur %f15, %f15
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   vl %v2, 0(%r1)
+;   vst %v2, 0(%r2)
 ;   br %r14
 
 function %fadd_f32(f32, f32) -> f32 {

@@ -1,4 +1,4 @@
-# Using `samply` on Linux/macOS
+# Using the `samply` Profiler on Linux and macOS
 
 One profiler supported by Wasmtime is [`samply`](https://github.com/mstange/samply) for Linux and macOS. As of 17th July 2023, the
 latest version of samply (on crates.io) is 0.11.0 which does not seem to support perfmaps. To use this, you either need a
@@ -25,8 +25,8 @@ your application's performance.
 
 For example if you're using the CLI, you'll execute:
 
-```sh
-$ samply record wasmtime --profile=perfmap foo.wasm
+```console
+samply record wasmtime --profile=perfmap foo.wasm
 ```
 
 This will record your application's performance and open the Firefox profiler UI to view the
@@ -36,5 +36,3 @@ Note that support for perfmap is still relatively new in Wasmtime, so if you
 have any problems, please don't hesitate to [file an issue]!
 
 [file an issue]: https://github.com/bytecodealliance/wasmtime/issues/new
-
-

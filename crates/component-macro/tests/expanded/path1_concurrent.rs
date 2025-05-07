@@ -27,7 +27,7 @@ impl<_T> Path1Pre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = Path1Indices::new(instance_pre.component())?;
+        let indices = Path1Indices::new(&instance_pre)?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -83,11 +83,6 @@ pub struct Path1Indices {}
 /// * If you've instantiated the instance yourself already
 ///   then you can use [`Path1::new`].
 ///
-/// * You can also access the guts of instantiation through
-///   [`Path1Indices::new_instance`] followed
-///   by [`Path1Indices::load`] to crate an instance of this
-///   type.
-///
 /// These methods are all equivalent to one another and move
 /// around the tradeoff of what work is performed when.
 ///
@@ -104,24 +99,11 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new(
-            component: &wasmtime::component::Component,
+        pub fn new<_T>(
+            _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
-            let _component = component;
-            Ok(Path1Indices {})
-        }
-        /// Creates a new instance of [`Path1Indices`] from an
-        /// instantiated component.
-        ///
-        /// This method of creating a [`Path1`] will perform string
-        /// lookups for all exports when this method is called. This
-        /// will only succeed if the provided instance matches the
-        /// requirements of [`Path1`].
-        pub fn new_instance(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let _instance = instance;
+            let _component = _instance_pre.component();
+            let _instance_type = _instance_pre.instance_type();
             Ok(Path1Indices {})
         }
         /// Uses the indices stored in `self` to load an instance
@@ -134,6 +116,7 @@ const _: () = {
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Path1> {
+            let _ = &mut store;
             let _instance = instance;
             Ok(Path1 {})
         }
@@ -142,7 +125,7 @@ const _: () = {
         /// Convenience wrapper around [`Path1Pre::new`] and
         /// [`Path1Pre::instantiate_async`].
         pub async fn instantiate_async<_T>(
-            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<Path1>
@@ -152,14 +135,14 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             Path1Pre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`Path1Indices::new_instance`] and
+        /// Convenience wrapper around [`Path1Indices::new`] and
         /// [`Path1Indices::load`].
         pub fn new(
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Path1> {
-            let indices = Path1Indices::new_instance(&mut store, instance)?;
-            indices.load(store, instance)
+            let indices = Path1Indices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
         }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,

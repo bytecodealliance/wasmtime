@@ -16,21 +16,18 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x48
+;;       ja      0x4e
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
-;;       vpshufd $0x44, 0x1b(%rip), %xmm0
-;;       vpshufd $0x44, 0x12(%rip), %xmm1
+;;       vpshufd $0x44, 0x18(%rip), %xmm0
+;;       vpshufd $0x44, 0xf(%rip), %xmm1
 ;;       vpaddq  %xmm1, %xmm0, %xmm0
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   48: ud2
-;;   4a: addb    %al, (%rax)
-;;   4c: addb    %al, (%rax)
-;;   4e: addb    %al, (%rax)
+;;   4e: ud2
 ;;   50: orb     (%rax), %al
 ;;   52: addb    %al, (%rax)
 ;;   54: addb    %al, (%rax)

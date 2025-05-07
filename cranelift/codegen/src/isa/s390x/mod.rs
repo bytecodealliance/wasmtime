@@ -183,6 +183,10 @@ impl TargetIsa for S390xBackend {
         true
     }
 
+    fn has_round(&self) -> bool {
+        true
+    }
+
     fn has_x86_blendv_lowering(&self, _: Type) -> bool {
         false
     }

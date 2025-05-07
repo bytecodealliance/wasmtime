@@ -68,7 +68,7 @@ pub(crate) enum LookupError {
     // enables the `all-arch` feature; in such case, this variant
     // will never be used. This is most likely going to change
     // in the future; this is one of the simplest options for now.
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "see comment")]
     SupportDisabled,
 }
 

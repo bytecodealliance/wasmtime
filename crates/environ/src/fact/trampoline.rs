@@ -2892,8 +2892,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
                         match ty {
                             ValType::I32 => self.instruction(I32Const(0)),
                             ValType::I64 => self.instruction(I64Const(0)),
-                            ValType::F32 => self.instruction(F32Const(0.0)),
-                            ValType::F64 => self.instruction(F64Const(0.0)),
+                            ValType::F32 => self.instruction(F32Const(0.0.into())),
+                            ValType::F64 => self.instruction(F64Const(0.0.into())),
                             _ => unreachable!(),
                         }
                     }

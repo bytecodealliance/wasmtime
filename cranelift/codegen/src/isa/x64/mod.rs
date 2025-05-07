@@ -1,6 +1,6 @@
 //! X86_64-bit Instruction Set Architecture.
 
-pub use self::inst::{args, AtomicRmwSeqOp, EmitInfo, EmitState, Inst};
+pub use self::inst::{args, external, AtomicRmwSeqOp, EmitInfo, EmitState, Inst};
 
 use super::{OwnedTargetIsa, TargetIsa};
 use crate::dominator_tree::DominatorTree;
@@ -165,6 +165,10 @@ impl TargetIsa for X64Backend {
 
     fn has_native_fma(&self) -> bool {
         self.x64_flags.use_fma()
+    }
+
+    fn has_round(&self) -> bool {
+        self.x64_flags.use_sse41()
     }
 
     fn has_x86_blendv_lowering(&self, ty: Type) -> bool {

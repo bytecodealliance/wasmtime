@@ -32,7 +32,9 @@ const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 mod libcalls;
 mod resources;
 
-pub use self::resources::{CallContexts, ResourceTable, ResourceTables};
+pub use self::resources::{
+    CallContexts, ResourceTable, ResourceTables, TypedResource, TypedResourceIndex,
+};
 
 /// Runtime representation of a component instance and all state necessary for
 /// the instance itself.
@@ -53,12 +55,11 @@ pub struct ComponentInstance {
     /// Runtime type information about this component.
     runtime_info: Arc<dyn ComponentRuntimeInfo>,
 
-    /// State of resources for all `TypeResourceTableIndex` values for this
-    /// component.
+    /// State of resources for this component.
     ///
     /// This is paired with other information to create a `ResourceTables` which
     /// is how this field is manipulated.
-    component_resource_tables: PrimaryMap<TypeResourceTableIndex, ResourceTable>,
+    instance_resource_tables: PrimaryMap<RuntimeComponentInstanceIndex, ResourceTable>,
 
     /// Storage for the type information about resources within this component
     /// instance.
@@ -206,10 +207,11 @@ impl ComponentInstance {
     ) {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
 
-        let num_tables = runtime_info.component().num_resource_tables;
-        let mut component_resource_tables = PrimaryMap::with_capacity(num_tables);
-        for _ in 0..num_tables {
-            component_resource_tables.push(ResourceTable::default());
+        let num_instances = runtime_info.component().num_runtime_component_instances;
+        let mut instance_resource_tables =
+            PrimaryMap::with_capacity(num_instances.try_into().unwrap());
+        for _ in 0..num_instances {
+            instance_resource_tables.push(ResourceTable::default());
         }
 
         ptr::write(
@@ -224,7 +226,7 @@ impl ComponentInstance {
                     )
                     .unwrap(),
                 ),
-                component_resource_tables,
+                instance_resource_tables,
                 runtime_info,
                 resource_types,
                 store: VMStoreRawPtr(store),
@@ -605,23 +607,22 @@ impl ComponentInstance {
 
     /// Implementation of the `resource.new` intrinsic for `i32`
     /// representations.
-    pub fn resource_new32(&mut self, resource: TypeResourceTableIndex, rep: u32) -> Result<u32> {
-        self.resource_tables().resource_new(Some(resource), rep)
+    pub fn resource_new32(&mut self, ty: TypeResourceTableIndex, rep: u32) -> Result<u32> {
+        self.resource_tables()
+            .resource_new(TypedResource::Component { ty, rep })
     }
 
     /// Implementation of the `resource.rep` intrinsic for `i32`
     /// representations.
-    pub fn resource_rep32(&mut self, resource: TypeResourceTableIndex, idx: u32) -> Result<u32> {
-        self.resource_tables().resource_rep(Some(resource), idx)
+    pub fn resource_rep32(&mut self, ty: TypeResourceTableIndex, index: u32) -> Result<u32> {
+        self.resource_tables()
+            .resource_rep(TypedResourceIndex::Component { ty, index })
     }
 
     /// Implementation of the `resource.drop` intrinsic.
-    pub fn resource_drop(
-        &mut self,
-        resource: TypeResourceTableIndex,
-        idx: u32,
-    ) -> Result<Option<u32>> {
-        self.resource_tables().resource_drop(Some(resource), idx)
+    pub fn resource_drop(&mut self, ty: TypeResourceTableIndex, index: u32) -> Result<Option<u32>> {
+        self.resource_tables()
+            .resource_drop(TypedResourceIndex::Component { ty, index })
     }
 
     /// NB: this is intended to be a private method. This does not have
@@ -635,16 +636,25 @@ impl ComponentInstance {
         ResourceTables {
             host_table: None,
             calls: unsafe { (&mut *self.store()).component_calls() },
-            tables: Some(&mut self.component_resource_tables),
+            guest: Some((
+                &mut self.instance_resource_tables,
+                self.runtime_info.component_types(),
+            )),
         }
     }
 
     /// Returns the runtime state of resources associated with this component.
     #[inline]
-    pub fn component_resource_tables(
+    pub fn guest_tables(
         &mut self,
-    ) -> &mut PrimaryMap<TypeResourceTableIndex, ResourceTable> {
-        &mut self.component_resource_tables
+    ) -> (
+        &mut PrimaryMap<RuntimeComponentInstanceIndex, ResourceTable>,
+        &ComponentTypes,
+    ) {
+        (
+            &mut self.instance_resource_tables,
+            self.runtime_info.component_types(),
+        )
     }
 
     /// Returns the destructor and instance flags for the specified resource
@@ -668,24 +678,24 @@ impl ComponentInstance {
 
     pub(crate) fn resource_transfer_own(
         &mut self,
-        idx: u32,
+        index: u32,
         src: TypeResourceTableIndex,
         dst: TypeResourceTableIndex,
     ) -> Result<u32> {
         let mut tables = self.resource_tables();
-        let rep = tables.resource_lift_own(Some(src), idx)?;
-        tables.resource_lower_own(Some(dst), rep)
+        let rep = tables.resource_lift_own(TypedResourceIndex::Component { ty: src, index })?;
+        tables.resource_lower_own(TypedResource::Component { ty: dst, rep })
     }
 
     pub(crate) fn resource_transfer_borrow(
         &mut self,
-        idx: u32,
+        index: u32,
         src: TypeResourceTableIndex,
         dst: TypeResourceTableIndex,
     ) -> Result<u32> {
         let dst_owns_resource = self.resource_owned_by_own_instance(dst);
         let mut tables = self.resource_tables();
-        let rep = tables.resource_lift_borrow(Some(src), idx)?;
+        let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
         // Implement `lower_borrow`'s special case here where if a borrow's
         // resource type is owned by `dst` then the destination receives the
         // representation directly rather than a handle to the representation.
@@ -697,7 +707,7 @@ impl ComponentInstance {
         if dst_owns_resource {
             return Ok(rep);
         }
-        tables.resource_lower_borrow(Some(dst), rep)
+        tables.resource_lower_borrow(TypedResource::Component { ty: dst, rep })
     }
 
     pub(crate) fn resource_enter_call(&mut self) {

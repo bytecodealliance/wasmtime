@@ -318,6 +318,12 @@
 (decl u16_replicated_u8 (u8) u64)
 (extern extractor u16_replicated_u8 u16_replicated_u8)
 
+;; Get the low and high bits of a `u128` as `u64`s.
+(decl u128_low_bits (u128) u64)
+(extern constructor u128_low_bits u128_low_bits)
+(decl u128_high_bits (u128) u64)
+(extern constructor u128_high_bits u128_high_bits)
+
 ;; Floating point operations
 
 (decl pure partial f16_min (Ieee16 Ieee16) Ieee16)
@@ -419,6 +425,7 @@
 (extern const $I32X4 Type)
 (extern const $I64X2 Type)
 
+(extern const $F16X8 Type)
 (extern const $F32X4 Type)
 (extern const $F64X2 Type)
 
@@ -558,6 +565,10 @@
 (decl fits_in_64 (Type) Type)
 (extern extractor fits_in_64 fits_in_64)
 
+;; An extractor that only matches types that fit in exactly 16 bits.
+(decl ty_16 (Type) Type)
+(extern extractor ty_16 ty_16)
+
 ;; An extractor that only matches types that fit in exactly 32 bits.
 (decl ty_32 (Type) Type)
 (extern extractor ty_32 ty_32)
@@ -565,6 +576,10 @@
 ;; An extractor that only matches types that fit in exactly 64 bits.
 (decl ty_64 (Type) Type)
 (extern extractor ty_64 ty_64)
+
+;; An extractor that only matches types that fit in exactly 128 bits.
+(decl ty_128 (Type) Type)
+(extern extractor ty_128 ty_128)
 
 ;; A pure constructor/extractor that only matches scalar integers, and
 ;; references that can fit in 64 bits.
@@ -611,7 +626,7 @@
 (decl ty_scalar (Type) Type)
 (extern extractor ty_scalar ty_scalar)
 
-;; An extractor that only matches scalar floating-point types--F32 or F64.
+;; An extractor that only matches scalar floating-point types.
 (decl ty_scalar_float (Type) Type)
 (extern extractor ty_scalar_float ty_scalar_float)
 
@@ -763,34 +778,6 @@
 
 (decl pure trap_code_bad_conversion_to_integer () TrapCode)
 (extern constructor trap_code_bad_conversion_to_integer trap_code_bad_conversion_to_integer)
-
-;;;; Helpers for tail recursion loops ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; A range of integers to loop through.
-(type Range (primitive Range))
-
-;; Create a new range from `start` through `end` (exclusive).
-(decl pure range (usize usize) Range)
-(extern constructor range range)
-
-;; A view on the current state of the range.
-(type RangeView extern
-      (enum
-        (Empty)
-        (NonEmpty (index usize) (rest Range))))
-
-;; View the current state of the range.
-(decl range_view (RangeView) Range)
-(extern extractor infallible range_view range_view)
-
-;; Extractor to test whether a range is empty.
-(decl range_empty () Range)
-(extractor (range_empty) (range_view (RangeView.Empty)))
-
-;; Extractor to return the first value in the range, and a sub-range
-;; containing the remaining values.
-(decl range_unwrap (usize Range) Range)
-(extractor (range_unwrap index rest) (range_view (RangeView.NonEmpty index rest)))
 
 ;;;; Automatic conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

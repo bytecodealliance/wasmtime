@@ -10,6 +10,7 @@ use crate::{settings, CodegenError, CodegenResult};
 use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};
 
 use alloc::vec::Vec;
+use core::slice;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Write;
 use std::string::{String, ToString};
@@ -231,31 +232,17 @@ impl Inst {
                 mem,
                 flags,
             },
-            F16 => Inst::FpuLoad16 {
-                rd: into_reg,
-                mem,
-                flags,
-            },
-            F32 => Inst::FpuLoad32 {
-                rd: into_reg,
-                mem,
-                flags,
-            },
-            F64 => Inst::FpuLoad64 {
-                rd: into_reg,
-                mem,
-                flags,
-            },
             _ => {
                 if ty.is_vector() || ty.is_float() {
                     let bits = ty_bits(ty);
                     let rd = into_reg;
 
-                    if bits == 128 {
-                        Inst::FpuLoad128 { rd, mem, flags }
-                    } else {
-                        assert_eq!(bits, 64);
-                        Inst::FpuLoad64 { rd, mem, flags }
+                    match bits {
+                        128 => Inst::FpuLoad128 { rd, mem, flags },
+                        64 => Inst::FpuLoad64 { rd, mem, flags },
+                        32 => Inst::FpuLoad32 { rd, mem, flags },
+                        16 => Inst::FpuLoad16 { rd, mem, flags },
+                        _ => unimplemented!("gen_load({})", ty),
                     }
                 } else {
                     unimplemented!("gen_load({})", ty);
@@ -287,31 +274,17 @@ impl Inst {
                 mem,
                 flags,
             },
-            F16 => Inst::FpuStore16 {
-                rd: from_reg,
-                mem,
-                flags,
-            },
-            F32 => Inst::FpuStore32 {
-                rd: from_reg,
-                mem,
-                flags,
-            },
-            F64 => Inst::FpuStore64 {
-                rd: from_reg,
-                mem,
-                flags,
-            },
             _ => {
                 if ty.is_vector() || ty.is_float() {
                     let bits = ty_bits(ty);
                     let rd = from_reg;
 
-                    if bits == 128 {
-                        Inst::FpuStore128 { rd, mem, flags }
-                    } else {
-                        assert_eq!(bits, 64);
-                        Inst::FpuStore64 { rd, mem, flags }
+                    match bits {
+                        128 => Inst::FpuStore128 { rd, mem, flags },
+                        64 => Inst::FpuStore64 { rd, mem, flags },
+                        32 => Inst::FpuStore32 { rd, mem, flags },
+                        16 => Inst::FpuStore16 { rd, mem, flags },
+                        _ => unimplemented!("gen_store({})", ty),
                     }
                 } else {
                     unimplemented!("gen_store({})", ty);
@@ -977,12 +950,18 @@ impl MachInst for Inst {
     }
 
     fn is_included_in_clobbers(&self) -> bool {
-        let (caller, callee) = match self {
+        let (caller, callee, is_exception) = match self {
             Inst::Args { .. } => return false,
-            Inst::Call { info } if info.try_call_info.is_some() => return true,
-            Inst::CallInd { info } if info.try_call_info.is_some() => return true,
-            Inst::Call { info } => (info.caller_conv, info.callee_conv),
-            Inst::CallInd { info } => (info.caller_conv, info.callee_conv),
+            Inst::Call { info } => (
+                info.caller_conv,
+                info.callee_conv,
+                info.try_call_info.is_some(),
+            ),
+            Inst::CallInd { info } => (
+                info.caller_conv,
+                info.callee_conv,
+                info.try_call_info.is_some(),
+            ),
             _ => return true,
         };
 
@@ -997,8 +976,8 @@ impl MachInst for Inst {
         //
         // See the note in [crate::isa::aarch64::abi::is_caller_save_reg] for
         // more information on this ABI-implementation hack.
-        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(caller, false);
-        let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(callee, false);
+        let caller_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(caller, is_exception);
+        let callee_clobbers = AArch64MachineDeps::get_regs_clobbered_by_call(callee, is_exception);
 
         let mut all_clobbers = caller_clobbers;
         all_clobbers.union_from(callee_clobbers);
@@ -1123,9 +1102,12 @@ impl MachInst for Inst {
             F64 => Ok((&[RegClass::Float], &[F64])),
             F128 => Ok((&[RegClass::Float], &[F128])),
             I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
-            _ if ty.is_vector() => {
-                assert!(ty.bits() <= 128);
-                Ok((&[RegClass::Float], &[I8X16]))
+            _ if ty.is_vector() && ty.bits() <= 128 => {
+                let types = &[types::I8X2, types::I8X4, types::I8X8, types::I8X16];
+                Ok((
+                    &[RegClass::Float],
+                    slice::from_ref(&types[ty.bytes().ilog2() as usize - 1]),
+                ))
             }
             _ if ty.is_dynamic_vector() => Ok((&[RegClass::Float], &[I8X16])),
             _ => Err(CodegenError::Unsupported(format!(

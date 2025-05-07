@@ -18,6 +18,7 @@ cranelift-bitset = { workspace = true }
 log = { workspace = true }
 wasmtime-math = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
+pulley-macros = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }

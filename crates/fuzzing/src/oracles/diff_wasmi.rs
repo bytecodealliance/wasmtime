@@ -19,6 +19,10 @@ impl WasmiEngine {
         config.exceptions_enabled = false;
         config.gc_enabled = false;
 
+        // FIXME: once the active fuzz bug for wasmi's simd differential fuzzing
+        // has been fixed and we've updated then this should be re-enabled.
+        config.simd_enabled = false;
+
         let mut wasmi_config = wasmi::Config::default();
         wasmi_config
             .consume_fuel(false)

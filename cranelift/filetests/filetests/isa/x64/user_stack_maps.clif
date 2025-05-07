@@ -35,41 +35,43 @@ block0:
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $48, %rsp
+;   subq $0x30, %rsp
 ;   movq    %rbx, 16(%rsp)
 ;   movq    %r14, 24(%rsp)
 ;   movq    %r15, 32(%rsp)
 ; block0:
-;   xorl    %ebx, %ebx, %ebx
-;   movl    $1, %r14d
-;   movl    $2, %r15d
-;   lea     rsp(0 + virtual offset), %r11
-;   movl    $0, 0(%r11)
-;   lea     rsp(4 + virtual offset), %rsi
-;   movl    $1, 0(%rsi)
-;   lea     rsp(8 + virtual offset), %rdi
-;   movl    $2, 0(%rdi)
-;   movq    %rbx, %rdi
-;   call    User(userextname0)
-;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4, 8})], sp_to_sized_stack_slots: None }
-;   lea     rsp(0 + virtual offset), %rcx
-;   movl    $1, 0(%rcx)
-;   lea     rsp(4 + virtual offset), %rdx
-;   movl    $2, 0(%rdx)
-;   movq    %rbx, %rdi
-;   call    User(userextname0)
-;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})], sp_to_sized_stack_slots: None }
-;   lea     rsp(0 + virtual offset), %r9
-;   movl    $2, 0(%r9)
+;   uninit  %rdi
+;   xorl %edi, %edi
+;   movq    %rdi, %r14
+;   movl    $1, %r15d
+;   movl    $2, %ebx
+;   lea     rsp(0 + virtual offset), %rsi
+;   movl    $0, 0(%rsi)
+;   lea     rsp(4 + virtual offset), %rdi
+;   movl    $1, 0(%rdi)
+;   lea     rsp(8 + virtual offset), %rax
+;   movl    $2, 0(%rax)
 ;   movq    %r14, %rdi
 ;   call    User(userextname0)
-;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4, 8})], sp_to_sized_stack_slots: None }
+;   lea     rsp(0 + virtual offset), %rdx
+;   movl    $1, 0(%rdx)
+;   lea     rsp(4 + virtual offset), %r8
+;   movl    $2, 0(%r8)
+;   movq    %r14, %rdi
+;   call    User(userextname0)
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0, 4})], sp_to_sized_stack_slots: None }
+;   lea     rsp(0 + virtual offset), %r10
+;   movl    $2, 0(%r10)
 ;   movq    %r15, %rdi
+;   call    User(userextname0)
+;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
+;   movq    %rbx, %rdi
 ;   call    User(userextname0)
 ;   movq    16(%rsp), %rbx
 ;   movq    24(%rsp), %r14
 ;   movq    32(%rsp), %r15
-;   addq    %rsp, $48, %rsp
+;   addq $0x30, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -83,29 +85,30 @@ block0:
 ;   movq %r14, 0x18(%rsp)
 ;   movq %r15, 0x20(%rsp)
 ; block1: ; offset 0x17
-;   xorl %ebx, %ebx
-;   movl $1, %r14d
-;   movl $2, %r15d
-;   leaq (%rsp), %r11
-;   movl $0, (%r11)
-;   leaq 4(%rsp), %rsi
-;   movl $1, (%rsi)
-;   leaq 8(%rsp), %rdi
-;   movl $2, (%rdi)
-;   movq %rbx, %rdi
-;   callq 0x4e ; reloc_external CallPCRel4 u0:0 -4
-;   leaq (%rsp), %rcx
-;   movl $1, (%rcx)
-;   leaq 4(%rsp), %rdx
-;   movl $2, (%rdx)
-;   movq %rbx, %rdi
-;   callq 0x6b ; reloc_external CallPCRel4 u0:0 -4
-;   leaq (%rsp), %r9
-;   movl $2, (%r9)
+;   xorl %edi, %edi
+;   movq %rdi, %r14
+;   movl $1, %r15d
+;   movl $2, %ebx
+;   leaq (%rsp), %rsi
+;   movl $0, (%rsi)
+;   leaq 4(%rsp), %rdi
+;   movl $1, (%rdi)
+;   leaq 8(%rsp), %rax
+;   movl $2, (%rax)
 ;   movq %r14, %rdi
-;   callq 0x7e ; reloc_external CallPCRel4 u0:0 -4
+;   callq 0x4f ; reloc_external CallPCRel4 u0:0 -4
+;   leaq (%rsp), %rdx
+;   movl $1, (%rdx)
+;   leaq 4(%rsp), %r8
+;   movl $2, (%r8)
+;   movq %r14, %rdi
+;   callq 0x6d ; reloc_external CallPCRel4 u0:0 -4
+;   leaq (%rsp), %r10
+;   movl $2, (%r10)
 ;   movq %r15, %rdi
-;   callq 0x86 ; reloc_external CallPCRel4 u0:0 -4
+;   callq 0x80 ; reloc_external CallPCRel4 u0:0 -4
+;   movq %rbx, %rdi
+;   callq 0x88 ; reloc_external CallPCRel4 u0:0 -4
 ;   movq 0x10(%rsp), %rbx
 ;   movq 0x18(%rsp), %r14
 ;   movq 0x20(%rsp), %r15
@@ -137,7 +140,7 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $176, %rsp
+;   subq $0xb0, %rsp
 ;   movq    %rbx, 128(%rsp)
 ;   movq    %r12, 136(%rsp)
 ;   movq    %r13, 144(%rsp)
@@ -179,7 +182,7 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ;   movq    144(%rsp), %r13
 ;   movq    152(%rsp), %r14
 ;   movq    160(%rsp), %r15
-;   addq    %rsp, $176, %rsp
+;   addq $0xb0, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

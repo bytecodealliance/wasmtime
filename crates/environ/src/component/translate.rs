@@ -1219,6 +1219,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                     let idx = FuncIndex::from_u32(*idx);
                     ret.callback = Some(idx);
                 }
+                wasmparser::CanonicalOption::CoreType(_) => todo!(),
             }
         }
         return ret;

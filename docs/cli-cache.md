@@ -2,8 +2,8 @@
 
 The configuration file uses the [toml] format.
 You can create a configuration file at the default location with:
-```sh
-$ wasmtime config new
+```console
+wasmtime config new
 ```
 It will print the location regardless of the success.
 Please refer to the  `--help` message for using a custom location.
@@ -18,7 +18,6 @@ Wasmtime assumes all the options are in the `cache` section.
 Example config:
 ```toml
 [cache]
-enabled = true
 directory = "/nfs-share/wasmtime-cache/"
 cleanup-interval = "30m"
 files-total-size-soft-limit = "1Gi"

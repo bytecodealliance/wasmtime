@@ -156,49 +156,6 @@ pub const ELF_NAME_DATA: &'static str = ".name.wasm";
 /// metadata.
 pub const ELF_WASMTIME_DWARF: &str = ".wasmtime.dwarf";
 
-macro_rules! libcalls {
-    ($($rust:ident = $sym:tt)*) => (
-        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
-        #[expect(missing_docs, reason = "self-describing variants")]
-        pub enum LibCall {
-            $($rust,)*
-        }
-
-        impl LibCall {
-            /// Returns the libcall corresponding to the provided symbol name,
-            /// if one matches.
-            pub fn from_str(s: &str) -> Option<LibCall> {
-                match s {
-                    $($sym => Some(LibCall::$rust),)*
-                    _ => None,
-                }
-            }
-
-            /// Returns the symbol name in object files associated with this
-            /// libcall.
-            pub fn symbol(&self) -> &'static str {
-                match self {
-                    $(LibCall::$rust => $sym,)*
-                }
-            }
-        }
-    )
-}
-
-libcalls! {
-    FloorF32 = "libcall_floor32"
-    FloorF64 = "libcall_floor64"
-    NearestF32 = "libcall_nearestf32"
-    NearestF64 = "libcall_nearestf64"
-    CeilF32 = "libcall_ceilf32"
-    CeilF64 = "libcall_ceilf64"
-    TruncF32 = "libcall_truncf32"
-    TruncF64 = "libcall_truncf64"
-    FmaF32 = "libcall_fmaf32"
-    FmaF64 = "libcall_fmaf64"
-    X86Pshufb = "libcall_x86_pshufb"
-}
-
 /// Workaround to implement `core::error::Error` until
 /// gimli-rs/object#747 is settled.
 pub struct ObjectCrateErrorWrapper(pub object::Error);

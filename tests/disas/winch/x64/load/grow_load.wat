@@ -34,7 +34,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x70, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x118
+;;       ja      0x136
 ;;   1c: movq    %rsi, %r14
 ;;       subq    $0x60, %rsp
 ;;       movq    %rsi, 0x58(%rsp)
@@ -52,8 +52,8 @@
 ;;       movl    $0, %eax
 ;;       sete    %al
 ;;       testl   %eax, %eax
-;;       je      0x74
-;;   72: ud2
+;;       je      0x77
+;;   75: ud2
 ;;       movl    0x60(%r14), %eax
 ;;       subl    $1, %eax
 ;;       movl    %eax, 0x60(%r14)
@@ -65,7 +65,7 @@
 ;;       movq    %r14, %rdi
 ;;       movl    0xc(%rsp), %esi
 ;;       movl    $0, %edx
-;;       callq   0x2d3
+;;       callq   0x2eb
 ;;       addq    $0xc, %rsp
 ;;       addq    $4, %rsp
 ;;       movq    0x58(%rsp), %r14
@@ -74,11 +74,11 @@
 ;;       addq    %rax, %rcx
 ;;       addq    $0x23024, %rcx
 ;;       movsbq  (%rcx), %rax
-;;       movss   0x55(%rip), %xmm0
+;;       movss   0x5b(%rip), %xmm0
 ;;       subq    $0xc, %rsp
-;;       movsd   0x50(%rip), %xmm15
+;;       movsd   0x53(%rip), %xmm15
 ;;       movsd   %xmm15, (%rsp)
-;;       movss   0x39(%rip), %xmm15
+;;       movss   0x3c(%rip), %xmm15
 ;;       movss   %xmm15, 8(%rsp)
 ;;       movq    0x14(%rsp), %rax
 ;;       movsd   (%rsp), %xmm15
@@ -90,15 +90,12 @@
 ;;       addq    $0x60, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  118: ud2
-;;  11a: addb    %al, (%rax)
-;;  11c: addb    %al, (%rax)
-;;  11e: addb    %al, (%rax)
-;;  120: addb    %al, (%rax)
-;;  122: addb    %al, (%rax)
-;;  124: addb    %al, (%rax)
-;;  126: addb    %al, (%rax)
-;;  128: addb    %al, (%rax)
-;;  12a: addb    %al, (%rax)
-;;  12c: addb    %al, (%rax)
-;;  12e: addb    %al, (%rax)
+;;  136: ud2
+;;  138: addb    %al, (%rax)
+;;  13a: addb    %al, (%rax)
+;;  13c: addb    %al, (%rax)
+;;  13e: addb    %al, (%rax)
+;;  140: addb    %al, (%rax)
+;;  142: addb    %al, (%rax)
+;;  144: addb    %al, (%rax)
+;;  146: addb    %al, (%rax)

@@ -12,6 +12,8 @@ use crate::{machinst::*, trace};
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::slice;
+use cranelift_assembler_x64 as asm;
 use smallvec::{smallvec, SmallVec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
@@ -57,7 +59,7 @@ pub struct ReturnCallInfo<T> {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(56, std::mem::size_of::<Inst>());
+    assert_eq!(48, std::mem::size_of::<Inst>());
 }
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
@@ -74,8 +76,7 @@ impl Inst {
         match self {
             // These instructions are part of SSE2, which is a basic requirement in Cranelift, and
             // don't have to be checked.
-            Inst::AluRmiR { .. }
-            | Inst::AtomicRmwSeq { .. }
+            Inst::AtomicRmwSeq { .. }
             | Inst::Bswap { .. }
             | Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
@@ -137,12 +138,12 @@ impl Inst {
             | Inst::XmmCmpRmR { .. }
             | Inst::XmmMinMaxSeq { .. }
             | Inst::XmmUninitializedValue { .. }
+            | Inst::GprUninitializedValue { .. }
             | Inst::ElfTlsGetAddr { .. }
             | Inst::MachOTlsGetAddr { .. }
             | Inst::CoffTlsGetAddr { .. }
             | Inst::Unwind { .. }
-            | Inst::DummyUse { .. }
-            | Inst::AluConstOp { .. } => smallvec![],
+            | Inst::DummyUse { .. } => smallvec![],
 
             Inst::LockCmpxchg16b { .. }
             | Inst::Atomic128RmwSeq { .. }
@@ -198,6 +199,8 @@ impl Inst {
                     match f {
                         _64b | compat => {}
                         sse => features.push(InstructionSet::SSE),
+                        sse2 => features.push(InstructionSet::SSE2),
+                        ssse3 => features.push(InstructionSet::SSSE3),
                     }
                 }
                 features
@@ -214,21 +217,22 @@ impl Inst {
         Self::Nop { len }
     }
 
-    pub(crate) fn alu_rmi_r(
-        size: OperandSize,
-        op: AluRmiROpcode,
-        src: RegMemImm,
-        dst: Writable<Reg>,
-    ) -> Self {
-        src.assert_regclass_is(RegClass::Int);
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Self::AluRmiR {
-            size,
-            op,
-            src1: Gpr::unwrap_new(dst.to_reg()),
-            src2: GprMemImm::unwrap_new(src),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-        }
+    pub(crate) fn addq_mi(dst: Writable<Reg>, simm32: i32) -> Self {
+        let inst = if let Ok(simm8) = i8::try_from(simm32) {
+            asm::inst::addq_mi_sxb::new(dst, simm8).into()
+        } else {
+            asm::inst::addq_mi_sxl::new(dst, simm32).into()
+        };
+        Inst::External { inst }
+    }
+
+    pub(crate) fn subq_mi(dst: Writable<Reg>, simm32: i32) -> Self {
+        let inst = if let Ok(simm8) = i8::try_from(simm32) {
+            asm::inst::subq_mi_sxb::new(dst, simm8).into()
+        } else {
+            asm::inst::subq_mi_sxl::new(dst, simm32).into()
+        };
+        Inst::External { inst }
     }
 
     #[allow(dead_code)]
@@ -607,9 +611,11 @@ impl Inst {
             }
             RegClass::Float => {
                 let opcode = match ty {
-                    types::F16 => panic!("loading a f16 requires multiple instructions"),
-                    types::F32 => SseOpcode::Movss,
-                    types::F64 => SseOpcode::Movsd,
+                    types::F16 | types::I8X2 => {
+                        panic!("loading a f16 or i8x2 requires multiple instructions")
+                    }
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 32 => SseOpcode::Movss,
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 64 => SseOpcode::Movsd,
                     types::F32X4 => SseOpcode::Movups,
                     types::F64X2 => SseOpcode::Movupd,
                     _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => SseOpcode::Movdqu,
@@ -628,9 +634,11 @@ impl Inst {
             RegClass::Int => Inst::mov_r_m(OperandSize::from_ty(ty), from_reg, to_addr),
             RegClass::Float => {
                 let opcode = match ty {
-                    types::F16 => panic!("storing a f16 requires multiple instructions"),
-                    types::F32 => SseOpcode::Movss,
-                    types::F64 => SseOpcode::Movsd,
+                    types::F16 | types::I8X2 => {
+                        panic!("storing a f16 or i8x2 requires multiple instructions")
+                    }
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 32 => SseOpcode::Movss,
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 64 => SseOpcode::Movsd,
                     types::F32X4 => SseOpcode::Movups,
                     types::F64X2 => SseOpcode::Movupd,
                     _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => SseOpcode::Movdqu,
@@ -693,26 +701,6 @@ impl PrettyPrint for Inst {
         match self {
             Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
 
-            Inst::AluRmiR {
-                size,
-                op,
-                src1,
-                src2,
-                dst,
-            } => {
-                let size_bytes = size.to_bytes();
-                let src1 = pretty_print_reg(src1.to_reg(), size_bytes);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size_bytes);
-                let src2 = src2.pretty_print(size_bytes);
-                let op = ljustify2(op.to_string(), suffix_bwlq(*size));
-                format!("{op} {src1}, {src2}, {dst}")
-            }
-            Inst::AluConstOp { op, dst, size } => {
-                let size_bytes = size.to_bytes();
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size_bytes);
-                let op = ljustify2(op.to_string(), suffix_lqb(*size));
-                format!("{op} {dst}, {dst}, {dst}")
-            }
             Inst::AluRmRVex {
                 size,
                 op,
@@ -1230,6 +1218,12 @@ impl PrettyPrint for Inst {
             }
 
             Inst::XmmUninitializedValue { dst } => {
+                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
+                let op = ljustify("uninit".into());
+                format!("{op} {dst}")
+            }
+
+            Inst::GprUninitializedValue { dst } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
                 let op = ljustify("uninit".into());
                 format!("{op} {dst}")
@@ -2010,14 +2004,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
     // in `emit.rs`, and (ii) pretty-printing, in the `pretty_print`
     // method above.
     match inst {
-        Inst::AluRmiR {
-            src1, src2, dst, ..
-        } => {
-            collector.reg_use(src1);
-            collector.reg_reuse_def(dst, 0);
-            src2.get_operands(collector);
-        }
-        Inst::AluConstOp { dst, .. } => collector.reg_def(dst),
         Inst::AluRmRVex {
             src1, src2, dst, ..
         } => {
@@ -2268,6 +2254,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             src2.get_operands(collector);
         }
         Inst::XmmUninitializedValue { dst } => collector.reg_def(dst),
+        Inst::GprUninitializedValue { dst } => collector.reg_def(dst),
         Inst::XmmMinMaxSeq { lhs, rhs, dst, .. } => {
             collector.reg_use(rhs);
             collector.reg_use(lhs);
@@ -2862,7 +2849,7 @@ impl MachInst for Inst {
                 let opcode = match ty {
                     types::F16 | types::F32 | types::F64 | types::F32X4 => SseOpcode::Movaps,
                     types::F64X2 => SseOpcode::Movapd,
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => SseOpcode::Movdqa,
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() <= 128 => SseOpcode::Movdqa,
                     _ => unimplemented!("unable to move type: {}", ty),
                 };
                 Inst::xmm_unary_rm_r(opcode, RegMem::reg(src_reg), dst_reg)
@@ -2886,9 +2873,12 @@ impl MachInst for Inst {
             types::F64 => Ok((&[RegClass::Float], &[types::F64])),
             types::F128 => Ok((&[RegClass::Float], &[types::F128])),
             types::I128 => Ok((&[RegClass::Int, RegClass::Int], &[types::I64, types::I64])),
-            _ if ty.is_vector() => {
-                assert!(ty.bits() <= 128);
-                Ok((&[RegClass::Float], &[types::I8X16]))
+            _ if ty.is_vector() && ty.bits() <= 128 => {
+                let types = &[types::I8X2, types::I8X4, types::I8X8, types::I8X16];
+                Ok((
+                    &[RegClass::Float],
+                    slice::from_ref(&types[ty.bytes().ilog2() as usize - 1]),
+                ))
             }
             _ => Err(CodegenError::Unsupported(format!(
                 "Unexpected SSA-value type: {ty}"

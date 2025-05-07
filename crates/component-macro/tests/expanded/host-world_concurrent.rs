@@ -27,7 +27,7 @@ impl<_T> Host_Pre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = Host_Indices::new(instance_pre.component())?;
+        let indices = Host_Indices::new(&instance_pre)?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -82,11 +82,6 @@ pub struct Host_Indices {}
 ///
 /// * If you've instantiated the instance yourself already
 ///   then you can use [`Host_::new`].
-///
-/// * You can also access the guts of instantiation through
-///   [`Host_Indices::new_instance`] followed
-///   by [`Host_Indices::load`] to crate an instance of this
-///   type.
 ///
 /// These methods are all equivalent to one another and move
 /// around the tradeoff of what work is performed when.
@@ -144,24 +139,11 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new(
-            component: &wasmtime::component::Component,
+        pub fn new<_T>(
+            _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
-            let _component = component;
-            Ok(Host_Indices {})
-        }
-        /// Creates a new instance of [`Host_Indices`] from an
-        /// instantiated component.
-        ///
-        /// This method of creating a [`Host_`] will perform string
-        /// lookups for all exports when this method is called. This
-        /// will only succeed if the provided instance matches the
-        /// requirements of [`Host_`].
-        pub fn new_instance(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let _instance = instance;
+            let _component = _instance_pre.component();
+            let _instance_type = _instance_pre.instance_type();
             Ok(Host_Indices {})
         }
         /// Uses the indices stored in `self` to load an instance
@@ -174,6 +156,7 @@ const _: () = {
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Host_> {
+            let _ = &mut store;
             let _instance = instance;
             Ok(Host_ {})
         }
@@ -182,7 +165,7 @@ const _: () = {
         /// Convenience wrapper around [`Host_Pre::new`] and
         /// [`Host_Pre::instantiate_async`].
         pub async fn instantiate_async<_T>(
-            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<Host_>
@@ -192,14 +175,14 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             Host_Pre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`Host_Indices::new_instance`] and
+        /// Convenience wrapper around [`Host_Indices::new`] and
         /// [`Host_Indices::load`].
         pub fn new(
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Host_> {
-            let indices = Host_Indices::new_instance(&mut store, instance)?;
-            indices.load(store, instance)
+            let indices = Host_Indices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
         }
         pub fn add_to_linker_imports_get_host<
             T,

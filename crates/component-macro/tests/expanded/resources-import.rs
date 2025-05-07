@@ -54,7 +54,7 @@ impl<_T> TheWorldPre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = TheWorldIndices::new(instance_pre.component())?;
+        let indices = TheWorldIndices::new(&instance_pre)?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -110,11 +110,6 @@ pub struct TheWorldIndices {
 /// * If you've instantiated the instance yourself already
 ///   then you can use [`TheWorld::new`].
 ///
-/// * You can also access the guts of instantiation through
-///   [`TheWorldIndices::new_instance`] followed
-///   by [`TheWorldIndices::load`] to crate an instance of this
-///   type.
-///
 /// These methods are all equivalent to one another and move
 /// around the tradeoff of what work is performed when.
 ///
@@ -155,44 +150,41 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new(
-            component: &wasmtime::component::Component,
+        pub fn new<_T>(
+            _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
-            let _component = component;
+            let _component = _instance_pre.component();
+            let _instance_type = _instance_pre.instance_type();
             let interface1 = exports::foo::foo::uses_resource_transitively::GuestIndices::new(
-                _component,
+                _instance_pre,
             )?;
-            let some_world_func2 = _component
-                .get_export_index(None, "some-world-func2")
-                .ok_or_else(|| {
-                    anyhow::anyhow!("no function export `some-world-func2` found")
-                })?;
-            Ok(TheWorldIndices {
-                interface1,
-                some_world_func2,
-            })
-        }
-        /// Creates a new instance of [`TheWorldIndices`] from an
-        /// instantiated component.
-        ///
-        /// This method of creating a [`TheWorld`] will perform string
-        /// lookups for all exports when this method is called. This
-        /// will only succeed if the provided instance matches the
-        /// requirements of [`TheWorld`].
-        pub fn new_instance(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let _instance = instance;
-            let interface1 = exports::foo::foo::uses_resource_transitively::GuestIndices::new_instance(
-                &mut store,
-                _instance,
-            )?;
-            let some_world_func2 = _instance
-                .get_export_index(&mut store, None, "some-world-func2")
-                .ok_or_else(|| {
-                    anyhow::anyhow!("no function export `some-world-func2` found")
-                })?;
+            let some_world_func2 = {
+                let (item, index) = _component
+                    .get_export(None, "some-world-func2")
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("no export `some-world-func2` found")
+                    })?;
+                match item {
+                    wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
+                        anyhow::Context::context(
+                            func
+                                .typecheck::<
+                                    (),
+                                    (wasmtime::component::Resource<WorldResource>,),
+                                >(&_instance_type),
+                            "type-checking export func `some-world-func2`",
+                        )?;
+                        index
+                    }
+                    _ => {
+                        Err(
+                            anyhow::anyhow!(
+                                "export `some-world-func2` is not a function"
+                            ),
+                        )?
+                    }
+                }
+            };
             Ok(TheWorldIndices {
                 interface1,
                 some_world_func2,
@@ -208,6 +200,7 @@ const _: () = {
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<TheWorld> {
+            let _ = &mut store;
             let _instance = instance;
             let interface1 = self.interface1.load(&mut store, &_instance)?;
             let some_world_func2 = *_instance
@@ -226,21 +219,21 @@ const _: () = {
         /// Convenience wrapper around [`TheWorldPre::new`] and
         /// [`TheWorldPre::instantiate`].
         pub fn instantiate<_T>(
-            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<TheWorld> {
             let pre = linker.instantiate_pre(component)?;
             TheWorldPre::new(pre)?.instantiate(store)
         }
-        /// Convenience wrapper around [`TheWorldIndices::new_instance`] and
+        /// Convenience wrapper around [`TheWorldIndices::new`] and
         /// [`TheWorldIndices::load`].
         pub fn new(
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<TheWorld> {
-            let indices = TheWorldIndices::new_instance(&mut store, instance)?;
-            indices.load(store, instance)
+            let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
         }
         pub fn add_to_linker_imports_get_host<
             T,
@@ -259,6 +252,15 @@ const _: () = {
                             &mut host_getter(store.data_mut()),
                             wasmtime::component::Resource::new_own(rep),
                         )
+                    },
+                )?;
+            linker
+                .func_wrap(
+                    "some-world-func",
+                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let host = &mut host_getter(caller.data_mut());
+                        let r = TheWorldImports::some_world_func(host);
+                        Ok((r,))
                     },
                 )?;
             linker
@@ -291,15 +293,6 @@ const _: () = {
                         Ok(r)
                     },
                 )?;
-            linker
-                .func_wrap(
-                    "some-world-func",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = TheWorldImports::some_world_func(host);
-                        Ok((r,))
-                    },
-                )?;
             Ok(())
         }
         pub fn add_to_linker<T, U>(
@@ -324,10 +317,7 @@ const _: () = {
         pub fn call_some_world_func2<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
-        ) -> wasmtime::Result<wasmtime::component::Resource<WorldResource>>
-        where
-            <S as wasmtime::AsContext>::Data: Send,
-        {
+        ) -> wasmtime::Result<wasmtime::component::Resource<WorldResource>> {
             let callee = unsafe {
                 wasmtime::component::TypedFunc::<
                     (),
@@ -1154,53 +1144,25 @@ pub mod exports {
                     ///
                     /// This constructor can be used to front-load string lookups to find exports
                     /// within a component.
-                    pub fn new(
-                        component: &wasmtime::component::Component,
+                    pub fn new<_T>(
+                        _instance_pre: &wasmtime::component::InstancePre<_T>,
                     ) -> wasmtime::Result<GuestIndices> {
-                        let instance = component
+                        let instance = _instance_pre
+                            .component()
                             .get_export_index(None, "foo:foo/uses-resource-transitively")
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `foo:foo/uses-resource-transitively`"
                                 )
                             })?;
-                        Self::_new(|name| {
-                            component.get_export_index(Some(&instance), name)
-                        })
-                    }
-                    /// This constructor is similar to [`GuestIndices::new`] except that it
-                    /// performs string lookups after instantiation time.
-                    pub fn new_instance(
-                        mut store: impl wasmtime::AsContextMut,
-                        instance: &wasmtime::component::Instance,
-                    ) -> wasmtime::Result<GuestIndices> {
-                        let instance_export = instance
-                            .get_export_index(
-                                &mut store,
-                                None,
-                                "foo:foo/uses-resource-transitively",
-                            )
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "no exported instance named `foo:foo/uses-resource-transitively`"
-                                )
-                            })?;
-                        Self::_new(|name| {
-                            instance
-                                .get_export_index(&mut store, Some(&instance_export), name)
-                        })
-                    }
-                    fn _new(
-                        mut lookup: impl FnMut(
-                            &str,
-                        ) -> Option<wasmtime::component::ComponentExportIndex>,
-                    ) -> wasmtime::Result<GuestIndices> {
                         let mut lookup = move |name| {
-                            lookup(name)
+                            _instance_pre
+                                .component()
+                                .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/uses-resource-transitively` does \
-                        not have export `{name}`"
+                      not have export `{name}`"
                                     )
                                 })
                         };
@@ -1213,9 +1175,11 @@ pub mod exports {
                         mut store: impl wasmtime::AsContextMut,
                         instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<Guest> {
+                        let _instance = instance;
+                        let _instance_pre = _instance.instance_pre(&store);
+                        let _instance_type = _instance_pre.instance_type();
                         let mut store = store.as_context_mut();
                         let _ = &mut store;
-                        let _instance = instance;
                         let handle = *_instance
                             .get_typed_func::<
                                 (wasmtime::component::Resource<Foo>,),
@@ -1230,10 +1194,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: wasmtime::component::Resource<Foo>,
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (wasmtime::component::Resource<Foo>,),

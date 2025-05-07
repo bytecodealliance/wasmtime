@@ -382,6 +382,33 @@ async fn epoch_callback_yield(config: &mut Config) {
 }
 
 #[wasmtime_test(with = "#[tokio::test]")]
+async fn epoch_callback_yield_custom(config: &mut Config) {
+    assert_eq!(
+        Some((1, 1)),
+        run_and_count_yields_or_trap(
+            config,
+            "
+            (module
+                (import \"\" \"bump_epoch\" (func $bump))
+                (func (export \"run\")
+                    call $bump  ;; bump epoch
+                    call $subfunc) ;; call func; will notice new epoch and yield
+                (func $subfunc))
+            ",
+            1,
+            InterruptMode::Callback(|mut cx| {
+                let s = cx.data_mut();
+                *s += 1;
+                let fut = Box::pin(tokio::task::yield_now());
+                Ok(UpdateDeadline::YieldCustom(1, fut))
+            }),
+            |_| {},
+        )
+        .await
+    );
+}
+
+#[wasmtime_test(with = "#[tokio::test]")]
 async fn epoch_callback_trap(config: &mut Config) {
     assert_eq!(
         None,

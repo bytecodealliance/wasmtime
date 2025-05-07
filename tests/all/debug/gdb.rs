@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use anyhow::{bail, format_err, Result};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use std::env;
@@ -53,8 +51,7 @@ fn check_gdb_output(output: &str, directives: &str) -> Result<()> {
 
 #[test]
 #[ignore]
-#[cfg(all(target_os = "linux", target_pointer_width = "64"))]
-pub fn test_debug_dwarf_gdb() -> Result<()> {
+fn test_debug_dwarf_gdb() -> Result<()> {
     let output = gdb_with_script(
         &[
             "-Ccache=n",
@@ -62,7 +59,7 @@ pub fn test_debug_dwarf_gdb() -> Result<()> {
             "-Oopt-level=0",
             "--invoke",
             "fib",
-            "tests/all/debug/testsuite/fib-wasm.wasm",
+            test_programs_artifacts::DWARF_FIB_WASM,
             "3",
         ],
         r#"set breakpoint pending on

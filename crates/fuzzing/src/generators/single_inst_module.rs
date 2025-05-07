@@ -113,8 +113,8 @@ impl<'a> SingleInstModule<'a> {
             const CANON_64BIT_NAN: u64 =
                 0b0111111111111000000000000000000000000000000000000000000000000000;
             let mask = match ty {
-                NanType::F32 => Instruction::F32Const(f32::from_bits(CANON_32BIT_NAN)),
-                NanType::F64 => Instruction::F64Const(f64::from_bits(CANON_64BIT_NAN)),
+                NanType::F32 => Instruction::F32Const(f32::from_bits(CANON_32BIT_NAN).into()),
+                NanType::F64 => Instruction::F64Const(f64::from_bits(CANON_64BIT_NAN).into()),
                 NanType::F32x4 => {
                     let nan = CANON_32BIT_NAN as i128;
                     Instruction::V128Const(nan | (nan << 32) | (nan << 64) | (nan << 96))

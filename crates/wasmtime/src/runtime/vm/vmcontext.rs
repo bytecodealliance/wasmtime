@@ -5,7 +5,7 @@ mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
-use crate::runtime::vm::{GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe};
+use crate::runtime::vm::{f32x4, f64x2, i8x16, GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe};
 use crate::store::StoreOpaque;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
@@ -454,6 +454,8 @@ mod test_vmglobal_definition {
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<f32>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<f64>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<[u8; 16]>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<[f32; 4]>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<[f64; 2]>());
     }
 
     #[test]
@@ -833,6 +835,7 @@ impl VMFuncRef {
     ///
     /// Note that the unsafety invariants to maintain here are not currently
     /// exhaustively documented.
+    #[inline]
     pub unsafe fn array_call(
         &self,
         pulley: Option<InterpreterRef<'_>>,
@@ -867,6 +870,7 @@ impl VMFuncRef {
         )
     }
 
+    #[inline]
     unsafe fn array_call_native(
         &self,
         caller: NonNull<VMOpaqueContext>,
@@ -932,9 +936,12 @@ macro_rules! define_builtin_array {
     ) => {
         /// An array that stores addresses of builtin functions. We translate code
         /// to use indirect calls. This way, we don't have to patch the code.
+        ///
+        /// Ignore improper ctypes to permit `__m128i` on x86_64.
         #[repr(C)]
         pub struct VMBuiltinFunctionsArray {
             $(
+                #[allow(improper_ctypes_definitions)]
                 $name: unsafe extern "C" fn(
                     $(define_builtin_array!(@ty $param)),*
                 ) $( -> define_builtin_array!(@ty $result))?,
@@ -969,7 +976,12 @@ macro_rules! define_builtin_array {
 
     (@ty u32) => (u32);
     (@ty u64) => (u64);
+    (@ty f32) => (f32);
+    (@ty f64) => (f64);
     (@ty u8) => (u8);
+    (@ty i8x16) => (i8x16);
+    (@ty f32x4) => (f32x4);
+    (@ty f64x2) => (f64x2);
     (@ty bool) => (bool);
     (@ty pointer) => (*mut u8);
     (@ty vmctx) => (NonNull<VMContext>);
@@ -1034,7 +1046,7 @@ pub struct VMStoreContext {
     /// This member is `0` when Wasm is actively running and has not called out
     /// to the host.
     ///
-    /// Used to find the start of a a contiguous sequence of Wasm frames when
+    /// Used to find the start of a contiguous sequence of Wasm frames when
     /// walking the stack.
     pub last_wasm_exit_fp: UnsafeCell<usize>,
 

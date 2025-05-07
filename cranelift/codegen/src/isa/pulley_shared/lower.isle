@@ -138,28 +138,86 @@
 (rule (lower (return args))
       (lower_return args))
 
-;;;; Rules for calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (call (func_ref_data sig_ref extname dist) inputs))
-      (gen_call sig_ref extname dist inputs))
+;; Direct call to a pulley function.
+(rule 1 (lower (call (func_ref_data sig_ref name (reloc_distance_near)) args))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_call_rets abi output))
+            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none)))
+            (_ Unit (emit_side_effect (call_impl info))))
+        output))
 
-(rule (lower (call_indirect sig_ref val inputs))
-      (gen_call_indirect sig_ref val inputs))
+;; Direct call to a host function.
+(rule (lower (call (func_ref_data sig_ref name _) args))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_call_rets abi output))
+            (info BoxCallIndirectHostInfo (gen_call_host_info abi name uses defs (try_call_none)))
+            (_ Unit (emit_side_effect (indirect_call_host_impl info))))
+        output))
 
-(rule (lower_branch (try_call (func_ref_data sig_ref extname dist) inputs et) targets)
-      (gen_try_call sig_ref extname dist et inputs targets))
+;; Indirect call (assumed to be pulley->pulley).
+(rule (lower (call_indirect sig_ref ptr args))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
+            (target Reg (put_in_reg ptr))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_call_rets abi output))
+            (info BoxCallIndInfo (gen_call_ind_info abi target uses defs (try_call_none)))
+            (_ Unit (emit_side_effect (indirect_call_impl info))))
+        output))
 
-(rule (lower_branch (try_call_indirect val inputs et) targets)
+;;;; Rules for `try_call` and `try_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Direct call to a pulley function.
+(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (reloc_distance_near)) args et) targets)
+      (let ((abi Sig (abi_sig sig_ref))
+            (trycall OptionTryCallInfo (try_call_info et targets))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_try_call_rets abi))
+            (info BoxCallInfo (gen_call_info abi name uses defs trycall)))
+        (emit_side_effect (call_impl info))))
+
+;; Direct call to a host function.
+(rule (lower_branch (try_call (func_ref_data sig_ref name _) args et) targets)
+      (let ((abi Sig (abi_sig sig_ref))
+            (trycall OptionTryCallInfo (try_call_info et targets))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_try_call_rets abi))
+            (info BoxCallIndirectHostInfo (gen_call_host_info abi name uses defs trycall)))
+        (emit_side_effect (indirect_call_host_impl info))))
+
+;; Indirect call (assumed to be pulley->pulley).
+(rule (lower_branch (try_call_indirect ptr args et) targets)
       (if-let (exception_sig sig_ref) et)
-      (gen_try_call_indirect sig_ref val et inputs targets))
+      (let ((abi Sig (abi_sig sig_ref))
+            (trycall OptionTryCallInfo (try_call_info et targets))
+            (target Reg (put_in_reg ptr))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_try_call_rets abi))
+            (info BoxCallIndInfo (gen_call_ind_info abi target uses defs trycall)))
+        (emit_side_effect (indirect_call_impl info))))
 
 ;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (return_call (func_ref_data sig_ref extname dist) args))
-      (gen_return_call sig_ref extname dist args))
+;; Direct call to a pulley function.
+(rule 1 (lower (return_call (func_ref_data sig_ref name (reloc_distance_near)) args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_return_call_args abi args))
+            (info BoxReturnCallInfo (gen_return_call_info abi name uses)))
+        (side_effect (return_call_impl info))))
 
-(rule (lower (return_call_indirect sig_ref callee args))
-      (gen_return_call_indirect sig_ref callee args))
+;; Indirect call (assumed to be pulley->pulley).
+(rule (lower (return_call_indirect sig_ref ptr args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (target Reg (put_in_reg ptr))
+            (uses CallArgList (gen_return_call_args abi args))
+            (info BoxReturnCallIndInfo (gen_return_call_ind_info abi target uses)))
+        (side_effect (return_indirect_call_impl info))))
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

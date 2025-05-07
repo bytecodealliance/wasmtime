@@ -1,3 +1,5 @@
+#include <wasmtime/func.hh>
+
 #include <gtest/gtest.h>
 #include <wasmtime.hh>
 
@@ -87,7 +89,8 @@ TEST(TypedFunc, Call) {
     Func f(store, ty, [](auto caller, auto params, auto results) {
       caller.context().gc();
       EXPECT_TRUE(params[0].externref(caller));
-      EXPECT_EQ(std::any_cast<int>(params[0].externref(caller)->data(caller)), 100);
+      EXPECT_EQ(std::any_cast<int>(params[0].externref(caller)->data(caller)),
+                100);
       EXPECT_FALSE(params[1].externref(caller));
       results[0] = ExternRef(caller, int(3));
       results[1] = std::optional<ExternRef>(std::nullopt);

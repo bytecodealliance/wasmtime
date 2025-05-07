@@ -6,7 +6,6 @@ use crate::{
     CallingConvention,
 };
 use anyhow::Result;
-use cranelift_codegen::ir::LibCall;
 use std::sync::Arc;
 use wasmtime_environ::{BuiltinFunctionIndex, PtrSize, VMOffsets, WasmValType};
 
@@ -14,9 +13,6 @@ use wasmtime_environ::{BuiltinFunctionIndex, PtrSize, VMOffsets, WasmValType};
 pub(crate) enum BuiltinType {
     /// Dynamic built-in function, derived from the VMContext.
     Builtin(BuiltinFunctionIndex),
-    /// A known libcall.
-    /// See [`cranelift_codegen::ir::LibCall`] for more details.
-    LibCall(LibCall),
 }
 
 impl BuiltinType {
@@ -24,12 +20,6 @@ impl BuiltinType {
     /// enumerated with a [`BuiltinFunctionIndex`].
     pub fn builtin(idx: BuiltinFunctionIndex) -> Self {
         Self::Builtin(idx)
-    }
-
-    /// Creates a new builtin from a Compiler-defined [`LibCall`] typically used
-    /// late in lowering.
-    pub fn libcall(libcall: LibCall) -> Self {
-        Self::LibCall(libcall)
     }
 }
 
@@ -72,30 +62,13 @@ macro_rules! declare_function_sig {
             wasm_call_conv: CallingConvention,
             /// The target pointer type, as a WebAssembly type.
             ptr_type: WasmValType,
-            /// F32 Ceil.
-            ceil_f32: Option<BuiltinFunction>,
-            /// F64 Ceil.
-            ceil_f64: Option<BuiltinFunction>,
-            /// F32 Floor.
-            floor_f32: Option<BuiltinFunction>,
-            /// F64 Floor.
-            floor_f64: Option<BuiltinFunction>,
-            /// F32 Trunc.
-            trunc_f32: Option<BuiltinFunction>,
-            /// F64 Trunc.
-            trunc_f64: Option<BuiltinFunction>,
-            /// F32 Nearest.
-            nearest_f32: Option<BuiltinFunction>,
-            /// F64 Nearest.
-            nearest_f64: Option<BuiltinFunction>,
             $(
                 $( #[ $attr ] )*
                 $name: Option<BuiltinFunction>,
             )*
         }
 
-        // Until all the builtin functions are used.
-        #[allow(dead_code)]
+        #[expect(dead_code, reason = "not all functions used yet")]
         impl BuiltinFunctions {
             pub fn new<P: PtrSize>(
                 vmoffsets: &VMOffsets<P>,
@@ -103,19 +76,10 @@ macro_rules! declare_function_sig {
                 wasm_call_conv: CallingConvention,
             ) -> Self {
                 let size = vmoffsets.ptr.size();
-                #[allow(unused_doc_comments)]
                 Self {
                     host_call_conv,
                     wasm_call_conv,
                     ptr_type: ptr_type_from_ptr_size(size),
-                    ceil_f32: None,
-                    ceil_f64: None,
-                    floor_f32: None,
-                    floor_f64: None,
-                    trunc_f32: None,
-                    trunc_f64: None,
-                    nearest_f32: None,
-                    nearest_f64: None,
                     $(
                         $( #[ $attr ] )*
                         $name: None,
@@ -155,6 +119,18 @@ macro_rules! declare_function_sig {
                 WasmValType::I64
             }
 
+            fn i8x16(&self) -> WasmValType {
+                WasmValType::V128
+            }
+
+            fn f32x4(&self) -> WasmValType {
+                WasmValType::V128
+            }
+
+            fn f64x2(&self) -> WasmValType {
+                WasmValType::V128
+            }
+
             fn bool(&self) -> WasmValType {
                 WasmValType::I32
             }
@@ -165,94 +141,6 @@ macro_rules! declare_function_sig {
 
             fn over_f32<A: ABI>(&self) -> Result<ABISig> {
                 A::sig_from(&[self.f64()], &[self.f64()], &self.host_call_conv)
-            }
-
-            pub(crate) fn ceil_f32<A: ABI>(&mut self) -> Result<BuiltinFunction> {
-                if self.ceil_f32.is_none() {
-                    let sig = self.over_f32::<A>()?;
-                    let inner = Arc::new(BuiltinFunctionInner { sig, ty: BuiltinType::libcall(LibCall::CeilF32) });
-                    self.ceil_f32 = Some(BuiltinFunction {
-                        inner,
-                    });
-                }
-                Ok(self.ceil_f32.as_ref().unwrap().clone())
-            }
-
-            pub(crate) fn ceil_f64<A: ABI>(&mut self) -> Result<BuiltinFunction> {
-                if self.ceil_f64.is_none() {
-                    let sig = self.over_f64::<A>()?;
-                    let inner = Arc::new(BuiltinFunctionInner { sig, ty: BuiltinType::libcall(LibCall::CeilF64) });
-                    self.ceil_f64 = Some(BuiltinFunction {
-                        inner,
-                    });
-                }
-                Ok(self.ceil_f64.as_ref().unwrap().clone())
-            }
-
-            pub(crate) fn floor_f32<A: ABI>(&mut self) -> Result<BuiltinFunction> {
-                if self.floor_f32.is_none() {
-                    let sig = self.over_f32::<A>()?;
-                    let inner = Arc::new(BuiltinFunctionInner { sig, ty: BuiltinType::libcall(LibCall::FloorF32) });
-                    self.floor_f32 = Some(BuiltinFunction {
-                        inner,
-                    });
-                }
-                Ok(self.floor_f32.as_ref().unwrap().clone())
-            }
-
-            pub(crate) fn floor_f64<A: ABI>(&mut self) -> Result<BuiltinFunction> {
-                if self.floor_f64.is_none() {
-                    let sig = self.over_f64::<A>()?;
-                    let inner = Arc::new(BuiltinFunctionInner { sig, ty: BuiltinType::libcall(LibCall::FloorF64) });
-                    self.floor_f64 = Some(BuiltinFunction {
-                        inner,
-                    });
-                }
-                Ok(self.floor_f64.as_ref().unwrap().clone())
-            }
-
-            pub(crate) fn trunc_f32<A: ABI>(&mut self) -> Result<BuiltinFunction> {
-                if self.trunc_f32.is_none() {
-                    let sig = self.over_f32::<A>()?;
-                    let inner = Arc::new(BuiltinFunctionInner { sig, ty: BuiltinType::libcall(LibCall::TruncF32) });
-                    self.trunc_f32 = Some(BuiltinFunction {
-                        inner,
-                    });
-                }
-                Ok(self.trunc_f32.as_ref().unwrap().clone())
-            }
-
-            pub(crate) fn trunc_f64<A: ABI>(&mut self) -> Result<BuiltinFunction> {
-                if self.trunc_f64.is_none() {
-                    let sig = self.over_f64::<A>()?;
-                    let inner = Arc::new(BuiltinFunctionInner { sig, ty: BuiltinType::libcall(LibCall::TruncF64) });
-                    self.trunc_f64 = Some(BuiltinFunction {
-                        inner,
-                    });
-                }
-                Ok(self.trunc_f64.as_ref().unwrap().clone())
-            }
-
-            pub(crate) fn nearest_f32<A: ABI>(&mut self) -> Result<BuiltinFunction> {
-                if self.nearest_f32.is_none() {
-                    let sig = self.over_f32::<A>()?;
-                    let inner = Arc::new(BuiltinFunctionInner { sig, ty: BuiltinType::libcall(LibCall::NearestF32) });
-                    self.nearest_f32 = Some(BuiltinFunction {
-                        inner,
-                    });
-                }
-                Ok(self.nearest_f32.as_ref().unwrap().clone())
-            }
-
-            pub(crate) fn nearest_f64<A: ABI>(&mut self) -> Result<BuiltinFunction> {
-                if self.nearest_f64.is_none() {
-                    let sig = self.over_f64::<A>()?;
-                    let inner = Arc::new(BuiltinFunctionInner { sig, ty: BuiltinType::libcall(LibCall::NearestF64) });
-                    self.nearest_f64 = Some(BuiltinFunction {
-                        inner,
-                    });
-                }
-                Ok(self.nearest_f64.as_ref().unwrap().clone())
             }
 
             $(

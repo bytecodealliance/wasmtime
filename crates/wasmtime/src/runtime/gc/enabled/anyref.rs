@@ -278,7 +278,11 @@ impl AnyRef {
     // (Not actually memory unsafe since we have indexed GC heaps.)
     pub(crate) fn _from_raw(store: &mut AutoAssertNoGc, raw: u32) -> Option<Rooted<Self>> {
         let gc_ref = VMGcRef::from_raw_u32(raw)?;
-        let gc_ref = store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref);
+        let gc_ref = if gc_ref.is_i31() {
+            gc_ref.copy_i31()
+        } else {
+            store.unwrap_gc_store_mut().clone_gc_ref(&gc_ref)
+        };
         Some(Self::from_cloned_gc_ref(store, gc_ref))
     }
 
@@ -331,7 +335,11 @@ impl AnyRef {
 
     pub(crate) unsafe fn _to_raw(&self, store: &mut AutoAssertNoGc<'_>) -> Result<u32> {
         let gc_ref = self.inner.try_clone_gc_ref(store)?;
-        let raw = store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+        let raw = if gc_ref.is_i31() {
+            gc_ref.as_raw_non_zero_u32()
+        } else {
+            store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref)
+        };
         Ok(raw.get())
     }
 

@@ -19,7 +19,6 @@ use std::marker::PhantomData;
 
 #[allow(dead_code)]
 pub type Unit = ();
-pub type Range = (usize, usize);
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 

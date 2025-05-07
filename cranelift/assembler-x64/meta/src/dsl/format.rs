@@ -17,7 +17,10 @@
 ///
 /// These model what the reference manual calls "instruction operand encodings,"
 /// usually defined in a table after an instruction's opcodes.
-pub fn fmt(name: impl Into<String>, operands: impl IntoIterator<Item = impl Into<Operand>>) -> Format {
+pub fn fmt(
+    name: impl Into<String>,
+    operands: impl IntoIterator<Item = impl Into<Operand>>,
+) -> Format {
     Format {
         name: name.into(),
         operands: operands.into_iter().map(Into::into).collect(),
@@ -131,15 +134,21 @@ impl Format {
     /// Return the location of the operand that uses memory, if any; return
     /// `None` otherwise.
     pub fn uses_memory(&self) -> Option<Location> {
-        debug_assert!(self.locations().copied().filter(Location::uses_memory).count() <= 1);
+        debug_assert!(
+            self.locations()
+                .copied()
+                .filter(Location::uses_memory)
+                .count()
+                <= 1
+        );
         self.locations().copied().find(Location::uses_memory)
     }
 
-    /// Return `true` if any of the operands accepts a variable register (i.e.,
-    /// not a fixed register, immediate); return `false` otherwise.
+    /// Return `true` if any of the operands accepts a register (i.e., not an
+    /// immediate); return `false` otherwise.
     #[must_use]
-    pub fn uses_variable_register(&self) -> bool {
-        self.locations().any(Location::uses_variable_register)
+    pub fn uses_register(&self) -> bool {
+        self.locations().any(Location::uses_register)
     }
 
     /// Collect into operand kinds.
@@ -170,7 +179,7 @@ impl core::fmt::Display for Format {
 /// assert_eq!(r(r8).to_string(), "r8");
 /// assert_eq!(rw(rm16).to_string(), "rm16[rw]");
 /// assert_eq!(sxq(imm32).to_string(), "imm32[sxq]");
-/// assert_eq!(align(rm128).to_string(), "rm128[align]");
+/// assert_eq!(align(xmm_m128).to_string(), "xmm_m128[align]");
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub struct Operand {
@@ -188,7 +197,12 @@ pub struct Operand {
 
 impl core::fmt::Display for Operand {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let Self { location, mutability, extension, align } = self;
+        let Self {
+            location,
+            mutability,
+            extension,
+            align,
+        } = self;
         write!(f, "{location}")?;
         let mut flags = vec![];
         if !matches!(mutability, Mutability::Read) {
@@ -212,7 +226,27 @@ impl From<Location> for Operand {
         let mutability = Mutability::default();
         let extension = Extension::default();
         let align = false;
-        Self { location, mutability, extension, align }
+        Self {
+            location,
+            mutability,
+            extension,
+            align,
+        }
+    }
+}
+
+/// The kind of register used in a [`Location`].
+pub enum RegClass {
+    Gpr,
+    Xmm,
+}
+
+impl core::fmt::Display for RegClass {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        match self {
+            RegClass::Gpr => write!(f, "Gpr"),
+            RegClass::Xmm => write!(f, "Xmm"),
+        }
     }
 }
 
@@ -220,30 +254,35 @@ impl From<Location> for Operand {
 #[derive(Clone, Copy, Debug)]
 #[allow(non_camel_case_types, reason = "makes DSL definitions easier to read")]
 pub enum Location {
+    // Fixed registers.
     al,
     ax,
     eax,
     rax,
-
     cl,
 
+    // Immediate values.
     imm8,
     imm16,
     imm32,
 
+    // General-purpose registers, and their memory forms.
     r8,
     r16,
     r32,
     r64,
-
-    xmm,
-
     rm8,
     rm16,
     rm32,
     rm64,
-    rm128,
 
+    // XMM registers, and their memory forms.
+    xmm,
+    xmm_m32,
+    xmm_m64,
+    xmm_m128,
+
+    // Memory-only locations.
     m8,
     m16,
     m32,
@@ -258,9 +297,9 @@ impl Location {
         match self {
             al | cl | imm8 | r8 | rm8 | m8 => 8,
             ax | imm16 | r16 | rm16 | m16 => 16,
-            eax | imm32 | r32 | rm32 | m32 => 32,
-            rax | r64 | rm64 | m64 => 64,
-            xmm | rm128 => 128,
+            eax | imm32 | r32 | rm32 | m32 | xmm_m32 => 32,
+            rax | r64 | rm64 | m64 | xmm_m64 => 64,
+            xmm | xmm_m128 => 128,
         }
     }
 
@@ -276,18 +315,19 @@ impl Location {
         use Location::*;
         match self {
             al | cl | ax | eax | rax | imm8 | imm16 | imm32 | r8 | r16 | r32 | r64 | xmm => false,
-            rm8 | rm16 | rm32 | rm64 | rm128 | m8 | m16 | m32 | m64 => true,
+            rm8 | rm16 | rm32 | rm64 | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => true,
         }
     }
 
-    /// Return `true` if the location accepts a variable register (i.e., not a
-    /// fixed register, immediate); return `false` otherwise.
+    /// Return `true` if any of the operands accepts a register (i.e., not an
+    /// immediate); return `false` otherwise.
     #[must_use]
-    pub fn uses_variable_register(&self) -> bool {
+    pub fn uses_register(&self) -> bool {
         use Location::*;
         match self {
-            al | ax | eax | rax | cl | imm8 | imm16 | imm32 => false,
-            r8 | r16 | r32 | r64 | xmm | rm8 | rm16 | rm32 | rm64 | rm128 | m8 | m16 | m32 | m64 => true,
+            imm8 | imm16 | imm32 => false,
+            al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 | xmm
+            | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => true,
         }
     }
 
@@ -299,8 +339,24 @@ impl Location {
             al | ax | eax | rax | cl => OperandKind::FixedReg(*self),
             imm8 | imm16 | imm32 => OperandKind::Imm(*self),
             r8 | r16 | r32 | r64 | xmm => OperandKind::Reg(*self),
-            rm8 | rm16 | rm32 | rm64 | rm128 => OperandKind::RegMem(*self),
+            rm8 | rm16 | rm32 | rm64 | xmm_m32 | xmm_m64 | xmm_m128 => OperandKind::RegMem(*self),
             m8 | m16 | m32 | m64 => OperandKind::Mem(*self),
+        }
+    }
+
+    /// If a location directly uses data from a register, return the register
+    /// class; otherwise, return `None`. Memory-only locations, though their
+    /// address is stored in a register, use data from memory and thus also
+    /// return `None`.
+    #[must_use]
+    pub fn reg_class(&self) -> Option<RegClass> {
+        use Location::*;
+        match self {
+            imm8 | imm16 | imm32 | m8 | m16 | m32 | m64 => None,
+            al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 => {
+                Some(RegClass::Gpr)
+            }
+            xmm | xmm_m32 | xmm_m64 | xmm_m128 => Some(RegClass::Xmm),
         }
     }
 }
@@ -309,29 +365,29 @@ impl core::fmt::Display for Location {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         use Location::*;
         match self {
+            imm8 => write!(f, "imm8"),
+            imm16 => write!(f, "imm16"),
+            imm32 => write!(f, "imm32"),
+
             al => write!(f, "al"),
             ax => write!(f, "ax"),
             eax => write!(f, "eax"),
             rax => write!(f, "rax"),
-
             cl => write!(f, "cl"),
-
-            imm8 => write!(f, "imm8"),
-            imm16 => write!(f, "imm16"),
-            imm32 => write!(f, "imm32"),
 
             r8 => write!(f, "r8"),
             r16 => write!(f, "r16"),
             r32 => write!(f, "r32"),
             r64 => write!(f, "r64"),
-
-            xmm => write!(f, "xmm"),
-
             rm8 => write!(f, "rm8"),
             rm16 => write!(f, "rm16"),
             rm32 => write!(f, "rm32"),
             rm64 => write!(f, "rm64"),
-            rm128 => write!(f, "rm128"),
+
+            xmm => write!(f, "xmm"),
+            xmm_m32 => write!(f, "xmm_m32"),
+            xmm_m64 => write!(f, "xmm_m64"),
+            xmm_m128 => write!(f, "xmm_m128"),
 
             m8 => write!(f, "m8"),
             m16 => write!(f, "m16"),
@@ -423,7 +479,10 @@ impl Extension {
     /// Check if the extension is sign-extended.
     #[must_use]
     pub fn is_sign_extended(&self) -> bool {
-        matches!(self, Self::SignExtendQuad | Self::SignExtendLong | Self::SignExtendWord)
+        matches!(
+            self,
+            Self::SignExtendQuad | Self::SignExtendLong | Self::SignExtendWord
+        )
     }
 }
 

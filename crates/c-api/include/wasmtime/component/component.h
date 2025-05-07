@@ -108,6 +108,33 @@ wasmtime_component_clone(const wasmtime_component_t *component);
  */
 WASM_API_EXTERN void wasmtime_component_delete(wasmtime_component_t *component);
 
+typedef struct wasmtime_component_export_index_t
+    wasmtime_component_export_index_t;
+
+/**
+ * \brief Looks up a specific export of this component by \p name optionally
+ * nested within the \p instance provided.
+ *
+ * \param component the component to look up \p name in
+ * \param instance_export_index optional (i.e. nullable) instance to look up in
+ * \param name the name of the export
+ * \param name_len length of \p name in bytes
+ * \return export index if found, else NULL
+ */
+WASM_API_EXTERN wasmtime_component_export_index_t *
+wasmtime_component_get_export_index(
+    const wasmtime_component_t *component,
+    const wasmtime_component_export_index_t *instance_export_index,
+    const char *name, size_t name_len);
+
+/**
+ * \brief Deletes a #wasmtime_component_export_index_t
+ *
+ * \param export_index the export index to delete
+ */
+WASM_API_EXTERN void wasmtime_component_export_index_delete(
+    wasmtime_component_export_index_t *export_index);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

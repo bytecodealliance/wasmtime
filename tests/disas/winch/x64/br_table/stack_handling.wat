@@ -18,7 +18,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x24, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x82
+;;       ja      0x91
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x20, %rsp
 ;;       movq    %rdi, 0x18(%rsp)
@@ -35,17 +35,15 @@
 ;;       movslq  (%r11, %rax, 4), %rcx
 ;;       addq    %rcx, %r11
 ;;       jmpq    *%r11
-;;   5e: sbbb    (%rax), %al
+;;   64: sbbl    $0x11000000, %eax
 ;;       addb    %al, (%rax)
-;;       adcl    %eax, (%rax)
+;;       addb    %bl, -0x17000000(%rip)
+;;       orb     $0, %al
 ;;       addb    %al, (%rax)
-;;       sbbb    (%rax), %al
-;;       addb    %al, (%rax)
-;;       jmp     0x78
-;;   6f: addq    $4, %rsp
-;;       jmp     0x7c
-;;   78: addq    $4, %rsp
+;;       addq    $4, %rsp
+;;       jmp     0x88
+;;   81: addq    $4, %rsp
 ;;       addq    $0x20, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   82: ud2
+;;   91: ud2

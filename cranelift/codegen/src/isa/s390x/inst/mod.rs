@@ -1,6 +1,7 @@
 //! This module defines s390x-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
+use crate::ir::immediates::Ieee16;
 use crate::ir::{types, ExternalName, Type};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::{CallConv, FunctionAlignment};
@@ -8,7 +9,6 @@ use crate::machinst::*;
 use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
-use regalloc2::{PReg, PRegSet};
 use smallvec::SmallVec;
 use std::fmt::Write;
 use std::string::{String, ToString};
@@ -29,10 +29,19 @@ mod emit_tests;
 // Instructions (top level): definition
 
 pub use crate::isa::s390x::lower::isle::generated_code::{
-    ALUOp, CallInstDest, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuRoundOp, LaneOrder,
-    MInst as Inst, RxSBGOp, ShiftOp, SymbolReloc, UnaryOp, VecBinaryOp, VecFloatCmpOp, VecIntCmpOp,
-    VecShiftOp, VecUnaryOp,
+    ALUOp, CmpOp, FPUOp1, FPUOp2, FPUOp3, FpuRoundMode, FpuRoundOp, LaneOrder, MInst as Inst,
+    RxSBGOp, ShiftOp, SymbolReloc, UnaryOp, VecBinaryOp, VecFloatCmpOp, VecIntCmpOp, VecShiftOp,
+    VecUnaryOp,
 };
+
+/// The destination of a call instruction.
+#[derive(Clone, Debug)]
+pub enum CallInstDest {
+    /// Direct call.
+    Direct { name: ExternalName },
+    /// Indirect call.
+    Indirect { reg: Reg },
+}
 
 /// Additional information for (direct) ReturnCall instructions, left out of line to lower the size of
 /// the Inst enum.
@@ -177,6 +186,7 @@ impl Inst {
             | Inst::FpuRRRR { .. }
             | Inst::FpuCmp32 { .. }
             | Inst::FpuCmp64 { .. }
+            | Inst::LoadFpuConst16 { .. }
             | Inst::LoadFpuConst32 { .. }
             | Inst::LoadFpuConst64 { .. }
             | Inst::VecRRR { .. }
@@ -210,6 +220,7 @@ impl Inst {
             | Inst::VecExtractLane { .. }
             | Inst::VecInsertLaneImm { .. }
             | Inst::VecReplicateLane { .. }
+            | Inst::VecEltRev { .. }
             | Inst::AllocateArgs { .. }
             | Inst::Call { .. }
             | Inst::ReturnCall { .. }
@@ -324,6 +335,12 @@ impl Inst {
             types::I16 => Inst::Load64ZExt16 { rd: into_reg, mem },
             types::I32 => Inst::Load64ZExt32 { rd: into_reg, mem },
             types::I64 => Inst::Load64 { rd: into_reg, mem },
+            types::F16 => Inst::VecLoadLaneUndef {
+                size: 16,
+                rd: into_reg,
+                mem,
+                lane_imm: 0,
+            },
             types::F32 => Inst::VecLoadLaneUndef {
                 size: 32,
                 rd: into_reg,
@@ -336,8 +353,7 @@ impl Inst {
                 mem,
                 lane_imm: 0,
             },
-            _ if ty.is_vector() && ty.bits() == 128 => Inst::VecLoad { rd: into_reg, mem },
-            types::I128 => Inst::VecLoad { rd: into_reg, mem },
+            _ if ty.bits() == 128 => Inst::VecLoad { rd: into_reg, mem },
             _ => unimplemented!("gen_load({})", ty),
         }
     }
@@ -349,6 +365,12 @@ impl Inst {
             types::I16 => Inst::Store16 { rd: from_reg, mem },
             types::I32 => Inst::Store32 { rd: from_reg, mem },
             types::I64 => Inst::Store64 { rd: from_reg, mem },
+            types::F16 => Inst::VecStoreLane {
+                size: 16,
+                rd: from_reg,
+                mem,
+                lane_imm: 0,
+            },
             types::F32 => Inst::VecStoreLane {
                 size: 32,
                 rd: from_reg,
@@ -361,8 +383,7 @@ impl Inst {
                 mem,
                 lane_imm: 0,
             },
-            _ if ty.is_vector() && ty.bits() == 128 => Inst::VecStore { rd: from_reg, mem },
-            types::I128 => Inst::VecStore { rd: from_reg, mem },
+            _ if ty.bits() == 128 => Inst::VecStore { rd: from_reg, mem },
             _ => unimplemented!("gen_store({})", ty),
         }
     }
@@ -382,7 +403,8 @@ fn memarg_operands(memarg: &mut MemArg, collector: &mut impl OperandVisitor) {
             collector.reg_use(reg);
         }
         MemArg::InitialSPOffset { .. }
-        | MemArg::NominalSPOffset { .. }
+        | MemArg::IncomingArgOffset { .. }
+        | MemArg::OutgoingArgOffset { .. }
         | MemArg::SlotOffset { .. }
         | MemArg::SpillOffset { .. } => {}
     }
@@ -646,7 +668,9 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_use(rn);
             collector.reg_use(rm);
         }
-        Inst::LoadFpuConst32 { rd, .. } | Inst::LoadFpuConst64 { rd, .. } => {
+        Inst::LoadFpuConst16 { rd, .. }
+        | Inst::LoadFpuConst32 { rd, .. }
+        | Inst::LoadFpuConst64 { rd, .. } => {
             collector.reg_def(rd);
             collector.reg_fixed_nonallocatable(gpr_preg(1));
         }
@@ -861,6 +885,10 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             collector.reg_def(rd);
             collector.reg_use(rn);
         }
+        Inst::VecEltRev { rd, rn, .. } => {
+            collector.reg_def(rd);
+            collector.reg_use(rn);
+        }
         Inst::Extend { rd, rn, .. } => {
             collector.reg_def(rd);
             collector.reg_use(rn);
@@ -881,17 +909,14 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
             }
-            let mut clobbers = *clobbers;
-            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
             for CallRetPair { vreg, location } in defs {
                 match location {
-                    RetLocation::Reg(preg, ..) => {
-                        clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
-                        collector.reg_fixed_def(vreg, *preg);
-                    }
+                    RetLocation::Reg(preg, ..) => collector.reg_fixed_def(vreg, *preg),
                     RetLocation::Stack(..) => collector.any_def(vreg),
                 }
             }
+            let mut clobbers = *clobbers;
+            clobbers.add(link.to_reg().to_real_reg().unwrap().into());
             collector.reg_clobbers(clobbers);
         }
         Inst::ReturnCall { info } => {
@@ -1002,7 +1027,7 @@ impl<T: OperandVisitor> OperandVisitor for DenyReuseVisitor<'_, T> {
         self.inner.debug_assert_is_allocatable_preg(reg, expected);
     }
 
-    fn reg_clobbers(&mut self, regs: PRegSet) {
+    fn reg_clobbers(&mut self, regs: regalloc2::PRegSet) {
         self.inner.reg_clobbers(regs);
     }
 }
@@ -1119,8 +1144,10 @@ impl MachInst for Inst {
             types::I16 => Ok((&[RegClass::Int], &[types::I16])),
             types::I32 => Ok((&[RegClass::Int], &[types::I32])),
             types::I64 => Ok((&[RegClass::Int], &[types::I64])),
+            types::F16 => Ok((&[RegClass::Float], &[types::F16])),
             types::F32 => Ok((&[RegClass::Float], &[types::F32])),
             types::F64 => Ok((&[RegClass::Float], &[types::F64])),
+            types::F128 => Ok((&[RegClass::Float], &[types::F128])),
             types::I128 => Ok((&[RegClass::Float], &[types::I128])),
             _ if ty.is_vector() && ty.bits() == 128 => Ok((&[RegClass::Float], &[types::I8X16])),
             _ => Err(CodegenError::Unsupported(format!(
@@ -2267,6 +2294,18 @@ impl Inst {
                     format!("wfcdb {}, {}", rn_fpr.unwrap_or(rn), rm_fpr.unwrap_or(rm))
                 }
             }
+            &Inst::LoadFpuConst16 { rd, const_data } => {
+                let (rd, _rd_fpr) = pretty_print_fpr(rd.to_reg());
+                let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg());
+                // FIXME(#8312): Use `f16::from_bits` once it is stabilised.
+                format!(
+                    "bras {}, 8 ; data.f16 {} ; vleh {}, 0({}), 0",
+                    tmp,
+                    Ieee16::with_bits(const_data),
+                    rd,
+                    tmp
+                )
+            }
             &Inst::LoadFpuConst32 { rd, const_data } => {
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg());
                 let tmp = pretty_print_reg(writable_spilltmp_reg().to_reg());
@@ -3073,6 +3112,22 @@ impl Inst {
                 let rn = pretty_print_reg(rn);
                 format!("{op} {rd}, {rn}, {lane_imm}")
             }
+            &Inst::VecEltRev { lane_count, rd, rn } => {
+                assert!(lane_count >= 2 && lane_count <= 16);
+                let rd = pretty_print_reg(rd.to_reg());
+                let rn = pretty_print_reg(rn);
+                let mut print = format!("vpdi {rd}, {rn}, {rn}, 4");
+                if lane_count >= 4 {
+                    print = format!("{print} ; verllg {rn}, {rn}, 32");
+                }
+                if lane_count >= 8 {
+                    print = format!("{print} ; verllf {rn}, {rn}, 16");
+                }
+                if lane_count >= 16 {
+                    print = format!("{print} ; verllh {rn}, {rn}, 8");
+                }
+                print
+            }
             &Inst::Extend {
                 rd,
                 rn,
@@ -3100,6 +3155,7 @@ impl Inst {
                 format!("{op} {rd}, {rn}")
             }
             &Inst::AllocateArgs { size } => {
+                state.nominal_sp_offset = size;
                 if let Ok(size) = i16::try_from(size) {
                     format!("aghi {}, {}", show_reg(stack_reg()), -size)
                 } else {
@@ -3107,11 +3163,13 @@ impl Inst {
                 }
             }
             &Inst::Call { link, ref info } => {
+                state.nominal_sp_offset = 0;
                 let link = link.to_reg();
                 let (opcode, dest) = match &info.dest {
                     CallInstDest::Direct { name } => ("brasl", name.display(None).to_string()),
                     CallInstDest::Indirect { reg } => ("basr", pretty_print_reg(*reg)),
                 };
+                state.outgoing_sp_offset = info.callee_pop_size;
                 let mut retval_loads = S390xMachineDeps::gen_retval_loads(info)
                     .into_iter()
                     .map(|inst| inst.print_with_state(state))
@@ -3120,6 +3178,7 @@ impl Inst {
                 if !retval_loads.is_empty() {
                     retval_loads = " ; ".to_string() + &retval_loads;
                 }
+                state.outgoing_sp_offset = 0;
                 let try_call = if let Some(try_call_info) = &info.try_call_info {
                     let dests = try_call_info
                         .exception_dests

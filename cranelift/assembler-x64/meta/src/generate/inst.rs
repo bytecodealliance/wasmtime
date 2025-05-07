@@ -18,16 +18,15 @@ impl dsl::Inst {
         }
         f.add_block(&format!("pub struct {struct_name} {where_clause}"), |f| {
             for k in &self.format.operands {
-                if let Some(ty) = k.generate_type() {
-                    let loc = k.location;
-                    fmtln!(f, "pub {loc}: {ty},");
-                }
+                let loc = k.location;
+                let ty = k.generate_type();
+                fmtln!(f, "pub {loc}: {ty},");
             }
         });
     }
 
     fn requires_generic(&self) -> bool {
-        self.format.uses_variable_register()
+        self.format.uses_register()
     }
 
     /// `<struct_name><R>`
@@ -70,19 +69,16 @@ impl dsl::Inst {
             self.format
                 .operands
                 .iter()
-                .filter_map(|o| o.generate_type().map(|t| format!("{}: {}", o.location, t))),
+                .map(|o| format!("{}: impl Into<{}>", o.location, o.generate_type())),
         );
-        let args = comma_join(
-            self.format
-                .operands
-                .iter()
-                .filter(|o| !matches!(o.location.kind(), dsl::OperandKind::FixedReg(_)))
-                .map(|o| o.location.to_string()),
-        );
-
         fmtln!(f, "#[must_use]");
         f.add_block(&format!("pub fn new({params}) -> Self"), |f| {
-            fmtln!(f, "Self {{ {args} }}",);
+            f.add_block("Self", |f| {
+                for o in &self.format.operands {
+                    let loc = o.location;
+                    fmtln!(f, "{loc}: {loc}.into(),");
+                }
+            });
         });
     }
 
@@ -93,102 +89,86 @@ impl dsl::Inst {
         } else {
             "_"
         };
-        f.add_block(&format!("pub fn encode(&self, buf: &mut impl CodeSink, {off}: &impl KnownOffsetTable)"), |f| {
-            // Emit trap.
-            if let Some(op) = self.format.uses_memory() {
-                use dsl::OperandKind::*;
-                f.comment("Emit trap.");
-                match op.kind() {
-                    Mem(_) => {
-                        f.add_block(&format!("if let Some(trap_code) = self.{op}.trap_code()"), |f| {
-                            fmtln!(f, "buf.add_trap(trap_code);");
-                        });
-                    }
-                    RegMem(_) => {
-                        let ty = match op.bits() {
-                            128 => "XmmMem",
-                            _ => "GprMem",
-                        };
-                        f.add_block(&format!("if let {ty}::Mem({op}) = &self.{op}"), |f| {
-                            f.add_block(&format!("if let Some(trap_code) = {op}.trap_code()"), |f| {
-                                fmtln!(f, "buf.add_trap(trap_code);");
+        f.add_block(
+            &format!(
+                "pub fn encode(&self, buf: &mut impl CodeSink, {off}: &impl KnownOffsetTable)"
+            ),
+            |f| {
+                // Emit trap.
+                if let Some(op) = self.format.uses_memory() {
+                    use dsl::OperandKind::*;
+                    f.comment("Emit trap.");
+                    match op.kind() {
+                        Mem(_) => {
+                            f.add_block(
+                                &format!("if let Some(trap_code) = self.{op}.trap_code()"),
+                                |f| {
+                                    fmtln!(f, "buf.add_trap(trap_code);");
+                                },
+                            );
+                        }
+                        RegMem(_) => {
+                            let ty = op.reg_class().unwrap();
+                            f.add_block(&format!("if let {ty}Mem::Mem({op}) = &self.{op}"), |f| {
+                                f.add_block(
+                                    &format!("if let Some(trap_code) = {op}.trap_code()"),
+                                    |f| {
+                                        fmtln!(f, "buf.add_trap(trap_code);");
+                                    },
+                                );
                             });
-                        });
+                        }
+                        _ => unreachable!(),
                     }
-                    _ => unreachable!(),
                 }
-            }
 
-            match &self.encoding {
-                dsl::Encoding::Rex(rex) => self.format.generate_rex_encoding(f, rex),
-                dsl::Encoding::Vex(_) => todo!(),
-            }
-        });
+                match &self.encoding {
+                    dsl::Encoding::Rex(rex) => self.format.generate_rex_encoding(f, rex),
+                    dsl::Encoding::Vex(_) => todo!(),
+                }
+            },
+        );
     }
 
     /// `fn visit(&self, ...) { ... }`
     fn generate_visit_function(&self, f: &mut Formatter) {
         use dsl::OperandKind::*;
-        let extra_generic_bound = if self.requires_generic() { "" } else { "<R: Registers>" };
-        f.add_block(
-            &format!("pub fn visit{extra_generic_bound}(&mut self, visitor: &mut impl RegisterVisitor<R>)"),
-            |f| {
-                for o in &self.format.operands {
-                    match o.location.kind() {
-                        Imm(_) => {
-                            // Immediates do not need register allocation.
-                        }
-                        FixedReg(_) => {
-                            let call = o.mutability.generate_regalloc_call();
-                            let ty = o.mutability.generate_type();
-                            let Some(fixed) = o.location.generate_fixed_reg() else {
-                                unreachable!()
-                            };
-                            fmtln!(f, "visitor.fixed_{call}(&R::{ty}Gpr::new({fixed}));");
-                        }
-                        Reg(reg) => {
-                            match reg.bits() {
-                                128 => {
-                                    let call = o.mutability.generate_xmm_regalloc_call();
-                                    fmtln!(f, "visitor.{call}(self.{reg}.as_mut());");
-                                }
-                                _ => {
-                                    let call = o.mutability.generate_regalloc_call();
-                                    fmtln!(f, "visitor.{call}(self.{reg}.as_mut());");
-                                }
-                            };
-                        }
-                        RegMem(rm) => {
-                            match rm.bits() {
-                                128 => {
-                                    let call = o.mutability.generate_xmm_regalloc_call();
-                                    f.add_block(&format!("match &mut self.{rm}"), |f| {
-                                        fmtln!(f, "XmmMem::Xmm(r) => visitor.{call}(r),");
-                                        fmtln!(
-                                        f,
-                                        "XmmMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
-                                    );
-                                    });
-                                }
-                                _ => {
-                                    let call = o.mutability.generate_regalloc_call();
-                                    f.add_block(&format!("match &mut self.{rm}"), |f| {
-                                        fmtln!(f, "GprMem::Gpr(r) => visitor.{call}(r),");
-                                        fmtln!(
-                                        f,
-                                        "GprMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
-                                    );
-                                    });
-                                }
-                            };
-                        }
-                        Mem(m) => {
-                            fmtln!(f, "self.{m}.registers_mut().iter_mut().for_each(|r| visitor.read(r));");
-                        }
+        let extra_generic_bound = if self.requires_generic() {
+            ""
+        } else {
+            "<R: Registers>"
+        };
+        f.add_block(&format!("pub fn visit{extra_generic_bound}(&mut self, visitor: &mut impl RegisterVisitor<R>)"), |f| {
+            for o in &self.format.operands {
+                let mutability = o.mutability.generate_snake_case();
+                let reg = o.location.reg_class();
+                match o.location.kind() {
+                    Imm(_) => {
+                        // Immediates do not need register allocation.
+                    }
+                    FixedReg(loc) => {
+                        let reg_lower = reg.unwrap().to_string().to_lowercase();
+                        fmtln!(f, "let enc = self.{loc}.expected_enc();");
+                        fmtln!(f, "visitor.fixed_{mutability}_{reg_lower}(&mut self.{loc}.0, enc);");
+                    }
+                    Reg(loc) => {
+                        let reg_lower = reg.unwrap().to_string().to_lowercase();
+                        fmtln!(f, "visitor.{mutability}_{reg_lower}(self.{loc}.as_mut());");
+                    }
+                    RegMem(loc) => {
+                        let reg = reg.unwrap();
+                        let reg_lower = reg.to_string().to_lowercase();
+                        f.add_block(&format!("match &mut self.{loc}"), |f| {
+                            fmtln!(f, "{reg}Mem::{reg}(r) => visitor.{mutability}_{reg_lower}(r),");
+                            fmtln!(f, "{reg}Mem::Mem(m) => visit_amode(m, visitor),");
+                        });
+                    }
+                    Mem(loc) => {
+                        fmtln!(f, "visit_amode(&mut self.{loc}, visitor);");
                     }
                 }
-            },
-        );
+            }
+        });
     }
 
     /// `fn features(&self) -> Vec<Flag> { ... }`
@@ -208,38 +188,47 @@ impl dsl::Inst {
     pub fn generate_display_impl(&self, f: &mut Formatter) {
         let impl_block = self.generate_impl_block_start();
         let struct_name = self.struct_name_with_generic();
-        f.add_block(&format!("{impl_block} std::fmt::Display for {struct_name}"), |f| {
-            f.add_block("fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result", |f| {
-                for op in &self.format.operands {
-                    let location = op.location;
-                    let to_string = location.generate_to_string(op.extension);
-                    fmtln!(f, "let {location} = {to_string};");
-                }
-                // Fix up the mnemonic for locked instructions: we want to print
-                // "lock <inst>", not "lock_<inst>".
-                let inst_name = if self.mnemonic.starts_with("lock_") {
-                    &format!("lock {}", &self.mnemonic[5..])
-                } else {
-                    &self.mnemonic
-                };
-                let ordered_ops = self.format.generate_att_style_operands();
-                fmtln!(f, "write!(f, \"{inst_name} {ordered_ops}\")");
-            });
-        });
+        f.add_block(
+            &format!("{impl_block} std::fmt::Display for {struct_name}"),
+            |f| {
+                f.add_block(
+                    "fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result",
+                    |f| {
+                        for op in &self.format.operands {
+                            let location = op.location;
+                            let to_string = location.generate_to_string(op.extension);
+                            fmtln!(f, "let {location} = {to_string};");
+                        }
+                        // Fix up the mnemonic for locked instructions: we want to print
+                        // "lock <inst>", not "lock_<inst>".
+                        let inst_name = if self.mnemonic.starts_with("lock_") {
+                            &format!("lock {}", &self.mnemonic[5..])
+                        } else {
+                            &self.mnemonic
+                        };
+                        let ordered_ops = self.format.generate_att_style_operands();
+                        fmtln!(f, "write!(f, \"{inst_name} {ordered_ops}\")");
+                    },
+                );
+            },
+        );
     }
 
     /// `impl From<struct> for Inst { ... }`
     pub fn generate_from_impl(&self, f: &mut Formatter) {
         let struct_name_r = self.struct_name_with_generic();
         let variant_name = self.name();
-        f.add_block(&format!("impl<R: Registers> From<{struct_name_r}> for Inst<R>"), |f| {
-            f.add_block(&format!("fn from(inst: {struct_name_r}) -> Self"), |f| {
-                fmtln!(f, "Self::{variant_name}(inst)");
-            });
-        });
+        f.add_block(
+            &format!("impl<R: Registers> From<{struct_name_r}> for Inst<R>"),
+            |f| {
+                f.add_block(&format!("fn from(inst: {struct_name_r}) -> Self"), |f| {
+                    fmtln!(f, "Self::{variant_name}(inst)");
+                });
+            },
+        );
     }
 }
 
-fn comma_join<I: Into<String>>(items: impl Iterator<Item = I>) -> String {
+fn comma_join<S: Into<String>>(items: impl Iterator<Item = S>) -> String {
     items.map(Into::into).collect::<Vec<_>>().join(", ")
 }

@@ -92,6 +92,10 @@ pub enum Trap {
     /// Async-lifted export failed to produce a result by calling `task.return`
     /// before returning `STATUS_DONE` and/or after all host tasks completed.
     NoAsyncResult,
+
+    /// A Pulley opcode was executed at runtime when the opcode was disabled at
+    /// compile time.
+    DisabledOpcode,
     // if adding a variant here be sure to update the `check!` macro below
 }
 
@@ -129,6 +133,7 @@ impl Trap {
             CastFailure
             CannotEnterComponent
             NoAsyncResult
+            DisabledOpcode
         }
 
         None
@@ -160,6 +165,7 @@ impl fmt::Display for Trap {
             CastFailure => "cast failure",
             CannotEnterComponent => "cannot enter component instance",
             NoAsyncResult => "async-lifted export failed to produce a result",
+            DisabledOpcode => "pulley opcode disabled at compile time was executed",
         };
         write!(f, "wasm trap: {desc}")
     }

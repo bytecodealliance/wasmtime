@@ -80,7 +80,7 @@ jobs:
       with:
         submodules: true
     - run: |
-        git ls-files '*.h' '*.c' '*.cpp' | \
+        git ls-files '*.h' '*.c' '*.cpp' '*.hh' '*.cc' | \
           grep -v wasmtime-platform.h | \
           grep -v wasm.h | \
           xargs clang-format-18 --dry-run --Werror --verbose
@@ -103,7 +103,7 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: |
         set -e
-        curl -L https://github.com/EmbarkStudios/cargo-deny/releases/download/0.14.5/cargo-deny-0.14.5-x86_64-unknown-linux-musl.tar.gz | tar xzf -
+        curl -L https://github.com/EmbarkStudios/cargo-deny/releases/download/0.18.2/cargo-deny-0.18.2-x86_64-unknown-linux-musl.tar.gz | tar xzf -
         mv cargo-deny-*-x86_64-unknown-linux-musl/cargo-deny cargo-deny
         echo `pwd` >> $GITHUB_PATH
     - run: cargo deny check bans licenses
@@ -624,6 +624,9 @@ jobs:
     - run: cargo check -p pulley-interpreter --all-features
       env:
         RUSTFLAGS: "--cfg pulley_tail_calls"
+    - run: cargo check -p pulley-interpreter --all-features
+      env:
+        RUSTFLAGS: "--cfg pulley_disable_interp_simd"
     - run: cargo test -p pulley-interpreter --all-features --release
       env:
         RUSTFLAGS: "--cfg pulley_assume_llvm_makes_tail_calls"
@@ -895,9 +898,9 @@ jobs:
     - run: |
         rustup target add wasm32-wasip1 wasm32-unknown-unknown
         cd /tmp
-        curl -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-24/wasi-sdk-24.0-x86_64-linux.tar.gz
-        tar -xzf wasi-sdk-24.0-x86_64-linux.tar.gz
-        mv wasi-sdk-24.0-x86_64-linux wasi-sdk
+        curl -OL https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-25/wasi-sdk-25.0-x86_64-linux.tar.gz
+        tar -xzf wasi-sdk-25.0-x86_64-linux.tar.gz
+        mv wasi-sdk-25.0-x86_64-linux wasi-sdk
     - run: |
         sudo apt-get update && sudo apt-get install -y gdb lldb-15 llvm
         # workaround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855

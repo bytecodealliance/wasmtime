@@ -795,7 +795,8 @@ impl MachInst for Inst {
             F16 => Ok((&[RegClass::Float], &[F16])),
             F32 => Ok((&[RegClass::Float], &[F32])),
             F64 => Ok((&[RegClass::Float], &[F64])),
-            I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
+            // FIXME(#8312): Add support for Q extension
+            F128 | I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
             _ if ty.is_vector() => {
                 debug_assert!(ty.bits() <= 512);
 
@@ -1108,16 +1109,10 @@ impl Inst {
             &Inst::Lui { rd, ref imm } => {
                 format!("{} {},{}", "lui", format_reg(rd.to_reg()), imm.as_i32())
             }
-            &Inst::Fli { rd, ty, imm } => {
+            &Inst::Fli { rd, width, imm } => {
                 let rd_s = format_reg(rd.to_reg());
                 let imm_s = imm.format();
-                let suffix = match ty {
-                    F32 => "s",
-                    F64 => "d",
-                    _ => unreachable!(),
-                };
-
-                format!("fli.{suffix} {rd_s},{imm_s}")
+                format!("fli.{width} {rd_s},{imm_s}")
             }
             &Inst::LoadInlineConst { rd, imm, .. } => {
                 let rd = format_reg(rd.to_reg());

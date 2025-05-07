@@ -11,27 +11,28 @@ use crate::{
 };
 use cranelift_codegen::{
     ir::{
-        types, ConstantPool, ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, Type,
-        UserExternalNameRef,
+        types, ConstantPool, ExternalName, MemFlags, SourceLoc, TrapCode, Type, UserExternalNameRef,
     },
     isa::{
         unwind::UnwindInst,
         x64::{
             args::{
-                self, AluRmiROpcode, Amode, Avx512Opcode, AvxOpcode, CmpOpcode, DivSignedness,
-                ExtMode, FenceKind, FromWritableReg, Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg,
-                RegMem, RegMemImm, ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode,
-                WritableGpr, WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm, CC,
+                self, Amode, Avx512Opcode, AvxOpcode, CmpOpcode, DivSignedness, ExtMode, FenceKind,
+                FromWritableReg, Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
+                ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
+                WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm, CC,
             },
             encoding::rex::{encode_modrm, RexFlags},
+            external::{PairedGpr, PairedXmm},
             settings as x64_settings, AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
         },
     },
     settings, CallInfo, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState,
-    MachLabel, PatchRegion, RelocDistance, VCodeConstantData, VCodeConstants, Writable,
+    MachLabel, PatchRegion, VCodeConstantData, VCodeConstants, Writable,
 };
 
 use crate::reg::WritableReg;
+use cranelift_assembler_x64 as asm;
 
 use super::address::Address;
 use smallvec::SmallVec;
@@ -61,6 +62,36 @@ impl From<Reg> for WritableXmm {
     fn from(reg: Reg) -> Self {
         let writable = Writable::from_reg(reg.into());
         WritableXmm::from_writable_reg(writable).expect("valid writable xmm")
+    }
+}
+
+/// Convert a writable GPR register to the read-write pair expected by
+/// `cranelift-codegen`.
+fn pair_gpr(reg: WritableReg) -> PairedGpr {
+    assert!(reg.to_reg().is_int());
+    let read = Gpr::unwrap_new(reg.to_reg().into());
+    let write = WritableGpr::from_reg(reg.to_reg().into());
+    PairedGpr { read, write }
+}
+
+impl From<Reg> for asm::GprMem<Gpr, Gpr> {
+    fn from(reg: Reg) -> Self {
+        asm::GprMem::Gpr(reg.into())
+    }
+}
+
+/// Convert a writable XMM register to the read-write pair expected by
+/// `cranelift-codegen`.
+fn pair_xmm(reg: WritableReg) -> PairedXmm {
+    assert!(reg.to_reg().is_float());
+    let read = Xmm::unwrap_new(reg.to_reg().into());
+    let write = WritableXmm::from_reg(reg.to_reg().into());
+    PairedXmm { read, write }
+}
+
+impl From<Reg> for asm::XmmMem<Xmm, Gpr> {
+    fn from(reg: Reg) -> Self {
+        asm::XmmMem::Xmm(reg.into())
     }
 }
 
@@ -773,80 +804,75 @@ impl Assembler {
 
     /// Subtract register and register
     pub fn sub_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::Sub,
-            src1: dst.to_reg().into(),
-            src2: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::subb_rm::new(dst, src).into(),
+            OperandSize::S16 => asm::inst::subw_rm::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::subl_rm::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::subq_rm::new(dst, src).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
-    /// Subtact immediate register.
+    /// Subtract immediate register.
     pub fn sub_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let imm = RegMemImm::imm(imm as u32);
-
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::Sub,
-            src1: dst.to_reg().into(),
-            src2: GprMemImm::unwrap_new(imm),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::subb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
+            OperandSize::S16 => asm::inst::subw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
+            OperandSize::S32 => asm::inst::subl_mi::new(dst, imm as u32).into(),
+            OperandSize::S64 => asm::inst::subq_mi_sxl::new(dst, imm).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// "and" two registers.
     pub fn and_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::And,
-            src1: dst.to_reg().into(),
-            src2: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::andb_rm::new(dst, src).into(),
+            OperandSize::S16 => asm::inst::andw_rm::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::andl_rm::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::andq_rm::new(dst, src).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     pub fn and_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let imm = RegMemImm::imm(imm as u32);
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::And,
-            src1: dst.to_reg().into(),
-            src2: GprMemImm::unwrap_new(imm),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::andb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
+            OperandSize::S16 => asm::inst::andw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
+            OperandSize::S32 => asm::inst::andl_mi::new(dst, imm as u32).into(),
+            OperandSize::S64 => asm::inst::andq_mi_sxl::new(dst, imm).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// "and" two float registers.
     pub fn xmm_and_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Andps,
-            OperandSize::S64 => SseOpcode::Andpd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::andps_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::andpd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmR {
-            op,
-            src1: dst.to_reg().into(),
-            src2: XmmMemAligned::from(Xmm::from(src)),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// "and not" two float registers.
     pub fn xmm_andn_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Andnps,
-            OperandSize::S64 => SseOpcode::Andnpd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::andnps_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::andnpd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmR {
-            op,
-            src1: dst.to_reg().into(),
-            src2: Xmm::from(src).into(),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     pub fn gpr_to_xmm(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
@@ -988,79 +1014,73 @@ impl Assembler {
     }
 
     pub fn or_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::Or,
-            src1: dst.to_reg().into(),
-            src2: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::orb_rm::new(dst, src).into(),
+            OperandSize::S16 => asm::inst::orw_rm::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::orl_rm::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::orq_rm::new(dst, src).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     pub fn or_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let imm = RegMemImm::imm(imm as u32);
-
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::Or,
-            src1: dst.to_reg().into(),
-            src2: GprMemImm::unwrap_new(imm),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::orb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
+            OperandSize::S16 => asm::inst::orw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
+            OperandSize::S32 => asm::inst::orl_mi::new(dst, imm as u32).into(),
+            OperandSize::S64 => asm::inst::orq_mi_sxl::new(dst, imm).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     pub fn xmm_or_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Orps,
-            OperandSize::S64 => SseOpcode::Orpd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::orps_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::orpd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmR {
-            op,
-            src1: dst.to_reg().into(),
-            src2: XmmMemAligned::from(Xmm::from(src)),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Logical exclusive or with registers.
     pub fn xor_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::Xor,
-            src1: dst.to_reg().into(),
-            src2: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::xorb_rm::new(dst, src).into(),
+            OperandSize::S16 => asm::inst::xorw_rm::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::xorl_rm::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::xorq_rm::new(dst, src).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     pub fn xor_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let imm = RegMemImm::imm(imm as u32);
-
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::Xor,
-            src1: dst.to_reg().into(),
-            src2: GprMemImm::unwrap_new(imm),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::xorb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
+            OperandSize::S16 => asm::inst::xorw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
+            OperandSize::S32 => asm::inst::xorl_mi::new(dst, imm as u32).into(),
+            OperandSize::S64 => asm::inst::xorq_mi_sxl::new(dst, imm).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Logical exclusive or with float registers.
     pub fn xmm_xor_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Xorps,
-            OperandSize::S64 => SseOpcode::Xorpd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::xorps_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::xorpd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmR {
-            op,
-            src1: dst.to_reg().into(),
-            src2: XmmMemAligned::from(Xmm::from(src)),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Shift with register and register.
@@ -1125,13 +1145,7 @@ impl Assembler {
             // The divisor_hi reg is initialized with zero through an
             // xor-against-itself op.
             DivKind::Unsigned => {
-                self.emit(Inst::AluRmiR {
-                    size: size.into(),
-                    op: AluRmiROpcode::Xor,
-                    src1: dst.1.into(),
-                    src2: dst.1.into(),
-                    dst: dst.1.into(),
-                });
+                self.xor_rr(dst.1, writable!(dst.1), size);
                 TrapCode::INTEGER_DIVISION_BY_ZERO
             }
         };
@@ -1178,13 +1192,7 @@ impl Assembler {
             // Unsigned remainder initializes `dividend_hi` with zero and
             // then executes a normal `div` instruction.
             RemKind::Unsigned => {
-                self.emit(Inst::AluRmiR {
-                    size: size.into(),
-                    op: AluRmiROpcode::Xor,
-                    src1: dst.1.into(),
-                    src2: dst.1.into(),
-                    dst: dst.1.into(),
-                });
+                self.xor_rr(dst.1, writable!(dst.1), size);
                 self.emit(Inst::Div {
                     sign: DivSignedness::Unsigned,
                     trap: TrapCode::INTEGER_DIVISION_BY_ZERO,
@@ -1221,26 +1229,28 @@ impl Assembler {
 
     /// Add immediate and register.
     pub fn add_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        let imm = RegMemImm::imm(imm as u32);
-
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::Add,
-            src1: dst.to_reg().into(),
-            src2: GprMemImm::unwrap_new(imm),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::addb_mi::new(dst, u8::try_from(imm).unwrap()).into(),
+            OperandSize::S16 => asm::inst::addw_mi::new(dst, u16::try_from(imm).unwrap()).into(),
+            OperandSize::S32 => asm::inst::addl_mi::new(dst, imm as u32).into(),
+            OperandSize::S64 => asm::inst::addq_mi_sxl::new(dst, imm).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Add register and register.
     pub fn add_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::Add,
-            src1: dst.to_reg().into(),
-            src2: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::addb_rm::new(dst, src).into(),
+            OperandSize::S16 => asm::inst::addw_rm::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::addl_rm::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::addq_rm::new(dst, src).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     pub fn lock_xadd(
@@ -1495,34 +1505,24 @@ impl Assembler {
 
     /// Performs float addition on src and dst and places result in dst.
     pub fn xmm_add_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Addss,
-            OperandSize::S64 => SseOpcode::Addsd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::addss_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::addsd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmRUnaligned {
-            op,
-            src1: Xmm::from(dst.to_reg()).into(),
-            src2: Xmm::from(src).into(),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Performs float subtraction on src and dst and places result in dst.
     pub fn xmm_sub_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Subss,
-            OperandSize::S64 => SseOpcode::Subsd,
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::subss_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::subsd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmRUnaligned {
-            op,
-            src1: Xmm::from(dst.to_reg()).into(),
-            src2: Xmm::from(src).into(),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Performs float multiplication on src and dst and places result in dst.
@@ -1638,26 +1638,6 @@ impl Assembler {
         });
     }
 
-    /// Emit a call to a well-known libcall.
-    pub fn call_with_lib(&mut self, cc: CallingConvention, lib: LibCall, dst: Reg) {
-        let dest = ExternalName::LibCall(lib);
-
-        // `use_colocated_libcalls` is never `true` from within Wasmtime,
-        // so always require loading the libcall to a register and use
-        // a `Far` relocation distance to ensure the right relocation when
-        // emitting to binary.
-        //
-        // See [wasmtime::engine::Engine::check_compatible_with_shared_flag] and
-        // [wasmtime_cranelift::obj::ModuleTextBuilder::append_func]
-        self.emit(Inst::LoadExtName {
-            dst: Writable::from_reg(dst.into()),
-            name: Box::new(dest),
-            offset: 0,
-            distance: RelocDistance::Far,
-        });
-        self.call_with_reg(cc, dst);
-    }
-
     /// Emits a conditional jump to the given label.
     pub fn jmp_if(&mut self, cc: impl Into<CC>, taken: MachLabel) {
         self.emit(Inst::WinchJmpIf {
@@ -1719,23 +1699,27 @@ impl Assembler {
     }
 
     pub fn adc_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::Adc,
-            src1: dst.to_reg().into(),
-            src2: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::adcb_rm::new(dst, src).into(),
+            OperandSize::S16 => asm::inst::adcw_rm::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::adcl_rm::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::adcq_rm::new(dst, src).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     pub fn sbb_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::AluRmiR {
-            size: size.into(),
-            op: AluRmiROpcode::Sbb,
-            src1: dst.to_reg().into(),
-            src2: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::sbbb_rm::new(dst, src).into(),
+            OperandSize::S16 => asm::inst::sbbw_rm::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::sbbl_rm::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::sbbq_rm::new(dst, src).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     pub fn mul_wide(

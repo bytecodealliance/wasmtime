@@ -36,77 +36,72 @@ fn generate_inst_enum(f: &mut Formatter, insts: &[dsl::Inst]) {
     fmtln!(f, "#[doc(hidden)]");
     generate_derive(f);
     generate_derive_arbitrary_bounds(f);
-    fmtln!(f, "pub enum Inst<R: Registers> {{");
-    f.indent_push();
-    for inst in insts {
-        let variant_name = inst.name();
-        let struct_name = inst.struct_name_with_generic();
-        fmtln!(f, "{variant_name}({struct_name}),");
-    }
-    f.indent_pop();
-    fmtln!(f, "}}");
+    f.add_block("pub enum Inst<R: Registers>", |f| {
+        for inst in insts {
+            let variant_name = inst.name();
+            let struct_name = inst.struct_name_with_generic();
+            fmtln!(f, "{variant_name}({struct_name}),");
+        }
+    });
 }
 
 /// `#[derive(...)]`
 fn generate_derive(f: &mut Formatter) {
     fmtln!(f, "#[derive(Clone, Debug)]");
-    fmtln!(f, "#[cfg_attr(any(test, feature = \"fuzz\"), derive(arbitrary::Arbitrary))]");
+    fmtln!(
+        f,
+        "#[cfg_attr(any(test, feature = \"fuzz\"), derive(arbitrary::Arbitrary))]"
+    );
 }
 
 /// Adds a custom bound to the `Arbitrary` implementation which ensures that
 /// the associated registers are all `Arbitrary` as well.
 fn generate_derive_arbitrary_bounds(f: &mut Formatter) {
-    fmtln!(
-        f,
-        "#[cfg_attr(any(test, feature = \"fuzz\"), arbitrary(bound = \"R: crate::fuzz::RegistersArbitrary\"))]"
-    );
+    fmtln!(f, "#[cfg_attr(any(test, feature = \"fuzz\"), arbitrary(bound = \"R: crate::fuzz::RegistersArbitrary\"))]");
 }
 
 /// `impl std::fmt::Display for Inst { ... }`
 fn generate_inst_display_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
-    fmtln!(f, "impl<R: Registers> std::fmt::Display for Inst<R> {{");
-    f.indent(|f| {
-        fmtln!(f, "fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{");
-        f.indent(|f| {
-            fmtln!(f, "match self {{");
-            f.indent_push();
-            for inst in insts {
-                let variant_name = inst.name();
-                fmtln!(f, "Self::{variant_name}(i) => write!(f, \"{{i}}\"),");
-            }
-            f.indent_pop();
-            fmtln!(f, "}}");
-        });
-        fmtln!(f, "}}");
+    f.add_block("impl<R: Registers> std::fmt::Display for Inst<R>", |f| {
+        f.add_block(
+            "fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result",
+            |f| {
+                f.add_block("match self", |f| {
+                    for inst in insts {
+                        let variant_name = inst.name();
+                        fmtln!(f, "Self::{variant_name}(i) => write!(f, \"{{i}}\"),");
+                    }
+                });
+            },
+        );
     });
-    fmtln!(f, "}}");
 }
 
 /// `impl Inst { fn encode... }`
 fn generate_inst_encode_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
-    fmtln!(f, "impl<R: Registers> Inst<R> {{");
-    f.indent(|f| {
-        fmtln!(f, "pub fn encode(&self, b: &mut impl CodeSink, o: &impl KnownOffsetTable) {{");
-        f.indent(|f| {
-            fmtln!(f, "match self {{");
-            f.indent_push();
-            for inst in insts {
-                let variant_name = inst.name();
-                fmtln!(f, "Self::{variant_name}(i) => i.encode(b, o),");
-            }
-            f.indent_pop();
-            fmtln!(f, "}}");
-        });
-        fmtln!(f, "}}");
+    f.add_block("impl<R: Registers> Inst<R>", |f| {
+        f.add_block(
+            "pub fn encode(&self, b: &mut impl CodeSink, o: &impl KnownOffsetTable)",
+            |f| {
+                f.add_block("match self", |f| {
+                    for inst in insts {
+                        let variant_name = inst.name();
+                        fmtln!(f, "Self::{variant_name}(i) => i.encode(b, o),");
+                    }
+                });
+            },
+        );
     });
-    fmtln!(f, "}}");
 }
 
 /// `impl Inst { fn visit... }`
 fn generate_inst_visit_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
     fmtln!(f, "impl<R: Registers> Inst<R> {{");
     f.indent(|f| {
-        fmtln!(f, "pub fn visit(&mut self, v: &mut impl RegisterVisitor<R>) {{");
+        fmtln!(
+            f,
+            "pub fn visit(&mut self, v: &mut impl RegisterVisitor<R>) {{"
+        );
         f.indent(|f| {
             fmtln!(f, "match self {{");
             f.indent_push();
@@ -124,21 +119,14 @@ fn generate_inst_visit_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
 
 /// `impl Inst { fn features... }`
 fn generate_inst_features_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
-    fmtln!(f, "impl<R: Registers> Inst<R> {{");
-    f.indent(|f| {
-        fmtln!(f, "#[must_use]");
-        fmtln!(f, "pub fn features(&self) -> Vec<Feature> {{");
-        f.indent(|f| {
-            fmtln!(f, "match self {{");
-            f.indent_push();
-            for inst in insts {
-                let variant_name = inst.name();
-                fmtln!(f, "Self::{variant_name}(i) => i.features(),");
-            }
-            f.indent_pop();
-            fmtln!(f, "}}");
+    f.add_block("impl<R: Registers> Inst<R>", |f| {
+        f.add_block("pub fn features(&self) -> Vec<Feature>", |f| {
+            f.add_block("match self", |f| {
+                for inst in insts {
+                    let variant_name = inst.name();
+                    fmtln!(f, "Self::{variant_name}(i) => i.features(),");
+                }
+            });
         });
-        fmtln!(f, "}}");
     });
-    fmtln!(f, "}}");
 }

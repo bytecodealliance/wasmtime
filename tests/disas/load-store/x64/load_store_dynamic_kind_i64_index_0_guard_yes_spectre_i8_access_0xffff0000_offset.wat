@@ -21,50 +21,42 @@
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    %rdx, %r8
-;;       addq    0x32(%rip), %r8
-;;       jb      0x37
+;;       movq    %rdx, %rax
+;;       addq    0x2a(%rip), %rax
+;;       jb      0x36
 ;;   14: movq    0x48(%rdi), %r9
-;;       xorq    %rax, %rax
+;;       xorq    %r8, %r8
 ;;       addq    0x40(%rdi), %rdx
 ;;       movl    $0xffff0000, %r10d
-;;       leaq    (%rdx, %r10), %rdi
-;;       cmpq    %r9, %r8
-;;       cmovaq  %rax, %rdi
-;;       movb    %cl, (%rdi)
+;;       addq    %r10, %rdx
+;;       cmpq    %r9, %rax
+;;       cmovaq  %r8, %rdx
+;;       movb    %cl, (%rdx)
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   37: ud2
-;;   39: addb    %al, (%rax)
-;;   3b: addb    %al, (%rax)
-;;   3d: addb    %al, (%rax)
-;;   3f: addb    %al, (%rcx)
-;;   41: addb    %bh, %bh
-;;   43: incl    (%rax)
-;;   45: addb    %al, (%rax)
+;;   36: ud2
+;;   38: addl    %eax, (%rax)
 ;;
 ;; wasm[0]::function[1]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    %rdx, %rcx
-;;       addq    0x32(%rip), %rcx
-;;       jb      0x99
-;;   74: movq    0x48(%rdi), %r8
-;;       xorq    %rax, %rax
+;;       movq    %rdx, %rax
+;;       addq    0x32(%rip), %rax
+;;       jb      0x78
+;;   54: movq    0x48(%rdi), %r8
+;;       xorq    %rcx, %rcx
 ;;       addq    0x40(%rdi), %rdx
 ;;       movl    $0xffff0000, %r9d
-;;       leaq    (%rdx, %r9), %rdi
-;;       cmpq    %r8, %rcx
-;;       cmovaq  %rax, %rdi
-;;       movzbq  (%rdi), %rax
+;;       addq    %r9, %rdx
+;;       cmpq    %r8, %rax
+;;       cmovaq  %rcx, %rdx
+;;       movzbq  (%rdx), %rax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   99: ud2
-;;   9b: addb    %al, (%rax)
-;;   9d: addb    %al, (%rax)
-;;   9f: addb    %al, (%rcx)
-;;   a1: addb    %bh, %bh
-;;   a3: incl    (%rax)
-;;   a5: addb    %al, (%rax)
+;;   78: ud2
+;;   7a: addb    %al, (%rax)
+;;   7c: addb    %al, (%rax)
+;;   7e: addb    %al, (%rax)
+;;   80: addl    %eax, (%rax)

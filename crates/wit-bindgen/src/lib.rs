@@ -96,8 +96,7 @@ struct ExportField {
     ty: String,
     ty_index: String,
     load: String,
-    get_index_from_component: String,
-    get_index_from_instance: String,
+    get_index: String,
 }
 
 #[derive(Default, Debug, Clone, Copy)]
@@ -613,26 +612,36 @@ impl Wasmtime {
         let ty;
         let ty_index;
         let load;
-        let get_index_from_component;
-        let get_index_from_instance;
+        let get_index;
         match item {
             WorldItem::Function(func) => {
                 generator.define_rust_guest_export(resolve, None, func);
                 let body = mem::take(&mut generator.src).into();
                 load = generator.extract_typed_function(func).1;
                 assert!(generator.src.is_empty());
-                self.exports.funcs.push(body);
+                generator.generator.exports.funcs.push(body);
                 ty_index = format!("{wt}::component::ComponentExportIndex");
                 field = func_field_name(resolve, func);
                 ty = format!("{wt}::component::Func");
-                get_index_from_component = format!(
-                    "_component.get_export_index(None, \"{}\")
-                        .ok_or_else(|| anyhow::anyhow!(\"no function export `{0}` found\"))?",
+                let sig = generator.typedfunc_sig(func, TypeMode::AllBorrowed("'_"));
+                let typecheck = format!(
+                    "match item {{
+                            {wt}::component::types::ComponentItem::ComponentFunc(func) => {{
+                                anyhow::Context::context(
+                                    func.typecheck::<{sig}>(&_instance_type),
+                                    \"type-checking export func `{0}`\"
+                                )?;
+                                index
+                            }}
+                            _ => Err(anyhow::anyhow!(\"export `{0}` is not a function\"))?,
+                        }}",
                     func.name
                 );
-                get_index_from_instance = format!(
-                    "_instance.get_export_index(&mut store, None, \"{}\")
-                        .ok_or_else(|| anyhow::anyhow!(\"no function export `{0}` found\"))?",
+                get_index = format!(
+                    "{{ let (item, index) = _component.get_export(None, \"{}\")
+                        .ok_or_else(|| anyhow::anyhow!(\"no export `{0}` found\"))?;
+                        {typecheck}
+                     }}",
                     func.name
                 );
             }
@@ -683,30 +692,13 @@ impl Wasmtime {
 ///
 /// This constructor can be used to front-load string lookups to find exports
 /// within a component.
-pub fn new(
-    component: &{wt}::component::Component,
+pub fn new<_T>(
+    _instance_pre: &{wt}::component::InstancePre<_T>,
 ) -> {wt}::Result<{struct_name}Indices> {{
-    let instance = component.get_export_index(None, \"{instance_name}\")
+    let instance = _instance_pre.component().get_export_index(None, \"{instance_name}\")
         .ok_or_else(|| anyhow::anyhow!(\"no exported instance named `{instance_name}`\"))?;
-    Self::_new(|name| component.get_export_index(Some(&instance), name))
-}}
-
-/// This constructor is similar to [`{struct_name}Indices::new`] except that it
-/// performs string lookups after instantiation time.
-pub fn new_instance(
-    mut store: impl {wt}::AsContextMut,
-    instance: &{wt}::component::Instance,
-) -> {wt}::Result<{struct_name}Indices> {{
-    let instance_export = instance.get_export_index(&mut store, None, \"{instance_name}\")
-        .ok_or_else(|| anyhow::anyhow!(\"no exported instance named `{instance_name}`\"))?;
-    Self::_new(|name| instance.get_export_index(&mut store, Some(&instance_export), name))
-}}
-
-fn _new(
-    mut lookup: impl FnMut (&str) -> Option<{wt}::component::ComponentExportIndex>,
-) -> {wt}::Result<{struct_name}Indices> {{
     let mut lookup = move |name| {{
-        lookup(name).ok_or_else(|| {{
+        _instance_pre.component().get_export_index(Some(&instance), name).ok_or_else(|| {{
             anyhow::anyhow!(
                 \"instance export `{instance_name}` does \\
                   not have export `{{name}}`\"
@@ -737,9 +729,11 @@ fn _new(
                             mut store: impl {wt}::AsContextMut,
                             instance: &{wt}::component::Instance,
                         ) -> {wt}::Result<{struct_name}> {{
+                            let _instance = instance;
+                            let _instance_pre = _instance.instance_pre(&store);
+                            let _instance_type = _instance_pre.instance_type();
                             let mut store = store.as_context_mut();
                             let _ = &mut store;
-                            let _instance = instance;
                     "
                 );
                 let mut fields = Vec::new();
@@ -844,9 +838,7 @@ fn _new(
                 ));
                 ty_index = format!("{path}Indices");
                 ty = path;
-                get_index_from_component = format!("{ty_index}::new(_component)?");
-                get_index_from_instance =
-                    format!("{ty_index}::new_instance(&mut store, _instance)?");
+                get_index = format!("{ty_index}::new(_instance_pre)?");
             }
         }
         let prev = self.exports.fields.insert(
@@ -855,8 +847,7 @@ fn _new(
                 ty,
                 ty_index,
                 load,
-                get_index_from_component,
-                get_index_from_instance,
+                get_index,
             },
         );
         assert!(prev.is_none());
@@ -903,7 +894,7 @@ impl<_T> {camel}Pre<_T> {{
     /// This method may fail if the component behind `instance_pre`
     /// does not have the required exports.
     pub fn new(instance_pre: {wt}::component::InstancePre<_T>) -> {wt}::Result<Self> {{
-        let indices = {camel}Indices::new(instance_pre.component())?;
+        let indices = {camel}Indices::new(&instance_pre)?;
         Ok(Self {{ instance_pre, indices }})
     }}
 
@@ -976,11 +967,6 @@ impl<_T> {camel}Pre<_T> {{
                 /// * If you've instantiated the instance yourself already
                 ///   then you can use [`{camel}::new`].
                 ///
-                /// * You can also access the guts of instantiation through
-                ///   [`{camel}Indices::new_instance`] followed
-                ///   by [`{camel}Indices::load`] to crate an instance of this
-                ///   type.
-                ///
                 /// These methods are all equivalent to one another and move
                 /// around the tradeoff of what work is performed when.
                 ///
@@ -1013,12 +999,13 @@ impl<_T> {camel}Pre<_T> {{
                 ///
                 /// This method may fail if the component does not have the
                 /// required exports.
-                pub fn new(component: &{wt}::component::Component) -> {wt}::Result<Self> {{
-                    let _component = component;
+                pub fn new<_T>(_instance_pre: &{wt}::component::InstancePre<_T>) -> {wt}::Result<Self> {{
+                    let _component = _instance_pre.component();
+                    let _instance_type = _instance_pre.instance_type();
             ",
         );
         for (name, field) in self.exports.fields.iter() {
-            uwriteln!(self.src, "let {name} = {};", field.get_index_from_component);
+            uwriteln!(self.src, "let {name} = {};", field.get_index);
         }
         uwriteln!(self.src, "Ok({camel}Indices {{");
         for (name, _) in self.exports.fields.iter() {
@@ -1026,33 +1013,6 @@ impl<_T> {camel}Pre<_T> {{
         }
         uwriteln!(self.src, "}})");
         uwriteln!(self.src, "}}"); // close `fn new`
-
-        uwriteln!(
-            self.src,
-            "
-                /// Creates a new instance of [`{camel}Indices`] from an
-                /// instantiated component.
-                ///
-                /// This method of creating a [`{camel}`] will perform string
-                /// lookups for all exports when this method is called. This
-                /// will only succeed if the provided instance matches the
-                /// requirements of [`{camel}`].
-                pub fn new_instance(
-                    mut store: impl {wt}::AsContextMut,
-                    instance: &{wt}::component::Instance,
-                ) -> {wt}::Result<Self> {{
-                    let _instance = instance;
-            ",
-        );
-        for (name, field) in self.exports.fields.iter() {
-            uwriteln!(self.src, "let {name} = {};", field.get_index_from_instance);
-        }
-        uwriteln!(self.src, "Ok({camel}Indices {{");
-        for (name, _) in self.exports.fields.iter() {
-            uwriteln!(self.src, "{name},");
-        }
-        uwriteln!(self.src, "}})");
-        uwriteln!(self.src, "}}"); // close `fn new_instance`
 
         uwriteln!(
             self.src,
@@ -1067,6 +1027,7 @@ impl<_T> {camel}Pre<_T> {{
                     mut store: impl {wt}::AsContextMut,
                     instance: &{wt}::component::Instance,
                 ) -> {wt}::Result<{camel}> {{
+                    let _ = &mut store;
                     let _instance = instance;
             ",
         );
@@ -1087,7 +1048,7 @@ impl<_T> {camel}Pre<_T> {{
                 /// Convenience wrapper around [`{camel}Pre::new`] and
                 /// [`{camel}Pre::instantiate{async__}`].
                 pub {async_} fn instantiate{async__}<_T>(
-                    mut store: impl {wt}::AsContextMut<Data = _T>,
+                    store: impl {wt}::AsContextMut<Data = _T>,
                     component: &{wt}::component::Component,
                     linker: &{wt}::component::Linker<_T>,
                 ) -> {wt}::Result<{camel}>
@@ -1097,14 +1058,14 @@ impl<_T> {camel}Pre<_T> {{
                     {camel}Pre::new(pre)?.instantiate{async__}(store){await_}
                 }}
 
-                /// Convenience wrapper around [`{camel}Indices::new_instance`] and
+                /// Convenience wrapper around [`{camel}Indices::new`] and
                 /// [`{camel}Indices::load`].
                 pub fn new(
                     mut store: impl {wt}::AsContextMut,
                     instance: &{wt}::component::Instance,
                 ) -> {wt}::Result<{camel}> {{
-                    let indices = {camel}Indices::new_instance(&mut store, instance)?;
-                    indices.load(store, instance)
+                    let indices = {camel}Indices::new(&instance.instance_pre(&store))?;
+                    indices.load(&mut store, instance)
                 }}
             ",
         );
@@ -1843,6 +1804,7 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Handle(handle) => self.type_handle(id, name, handle, &ty.docs),
             TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs),
             TypeDefKind::Unknown => unreachable!(),
+            TypeDefKind::FixedSizeList(..) => todo!(),
         }
     }
 
@@ -3215,13 +3177,21 @@ impl<'a> InterfaceGenerator<'a> {
         if concurrent {
             uwrite!(self.src, ">");
         }
+        uwrite!(self.src, ">");
 
-        let maybe_static = if concurrent { " + 'static" } else { "" };
-
-        uwrite!(
-            self.src,
-            "> where <S as {wt}::AsContext>::Data: Send{maybe_static} {{\n"
-        );
+        match style {
+            CallStyle::Concurrent => {
+                uwrite!(
+                    self.src,
+                    " where <S as {wt}::AsContext>::Data: Send + 'static",
+                );
+            }
+            CallStyle::Async => {
+                uwrite!(self.src, " where <S as {wt}::AsContext>::Data: Send");
+            }
+            CallStyle::Sync => {}
+        }
+        uwrite!(self.src, "{{\n");
 
         // TODO: support tracing concurrent calls
         if self.generator.opts.tracing && !concurrent {
@@ -3625,6 +3595,7 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
                 .any(|case| option_type_contains_lists(case.ty, resolve)),
             TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
             TypeDefKind::List(_) => true,
+            TypeDefKind::FixedSizeList(..) => todo!(),
         },
 
         // Technically strings are lists too, but we ignore that here because

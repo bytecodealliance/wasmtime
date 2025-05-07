@@ -173,12 +173,19 @@ impl BlockLoweringOrder {
                 }
             });
 
-            // Ensure that blocks terminated by br_table instructions with an empty jump table are
-            // still treated like conditional blocks from the point of view of critical edge
-            // splitting.
+            // Ensure that blocks terminated by br_table instructions
+            // with an empty jump table are still treated like
+            // conditional blocks from the point of view of critical
+            // edge splitting. Also do the same for TryCall and
+            // TryCallIndirect: we cannot have edge moves before the
+            // branch, even if they have empty handler tables and thus
+            // would otherwise have only one successor.
             if let Some(inst) = f.layout.last_inst(block) {
-                if Opcode::BrTable == f.dfg.insts[inst].opcode() {
-                    block_out_count[block] = block_out_count[block].max(2);
+                match f.dfg.insts[inst].opcode() {
+                    Opcode::BrTable | Opcode::TryCall | Opcode::TryCallIndirect => {
+                        block_out_count[block] = block_out_count[block].max(2);
+                    }
+                    _ => {}
                 }
             }
 

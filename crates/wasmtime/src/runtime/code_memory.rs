@@ -1,13 +1,13 @@
 //! Memory management for executable code.
 
 use crate::prelude::*;
-use crate::runtime::vm::{libcalls, MmapVec};
+use crate::runtime::vm::MmapVec;
 use crate::Engine;
 use alloc::sync::Arc;
 use core::ops::Range;
 use object::endian::Endianness;
 use object::read::{elf::ElfFile64, Object, ObjectSection};
-use object::{ObjectSymbol, SectionFlags};
+use object::SectionFlags;
 use wasmtime_environ::{lookup_trap_code, obj, Trap};
 
 /// Management of executable memory within a `MmapVec`
@@ -26,8 +26,6 @@ pub struct CodeMemory {
     #[cfg(feature = "debug-builtins")]
     has_native_debug_info: bool,
     custom_code_memory: Option<Arc<dyn CustomCodeMemory>>,
-
-    relocations: Vec<(usize, obj::LibCall)>,
 
     // Ranges within `self.mmap` of where the particular sections lie.
     text: Range<usize>,
@@ -114,7 +112,6 @@ impl CodeMemory {
             .map_err(obj::ObjectCrateErrorWrapper)
             .with_context(|| "failed to parse internal compilation artifact")?;
 
-        let mut relocations = Vec::new();
         let mut text = 0..0;
         let mut unwind = 0..0;
         let mut enable_branch_protection = None;
@@ -158,28 +155,12 @@ impl CodeMemory {
                         }
                     }
 
-                    // The text section might have relocations for things like
-                    // libcalls which need to be applied, so handle those here.
-                    //
-                    // Note that only a small subset of possible relocations are
-                    // handled. Only those required by the compiler side of
-                    // things are processed.
-                    for (offset, reloc) in section.relocations() {
-                        assert_eq!(reloc.kind(), object::RelocationKind::Absolute);
-                        assert_eq!(reloc.encoding(), object::RelocationEncoding::Generic);
-                        assert_eq!(usize::from(reloc.size()), core::mem::size_of::<usize>() * 8);
-                        assert_eq!(reloc.addend(), 0);
-                        let sym = match reloc.target() {
-                            object::RelocationTarget::Symbol(id) => id,
-                            other => panic!("unknown relocation target {other:?}"),
-                        };
-                        let sym = obj.symbol_by_index(sym).unwrap().name().unwrap();
-                        let libcall = obj::LibCall::from_str(sym)
-                            .unwrap_or_else(|| panic!("unknown symbol relocation: {sym}"));
-
-                        let offset = usize::try_from(offset).unwrap();
-                        relocations.push((offset, libcall));
-                    }
+                    // Assert that Cranelift hasn't inserted any calls that need to be
+                    // relocated. We avoid using things like Cranelift's floor/ceil/etc.
+                    // operators in the Wasm-to-Cranelift translator specifically to
+                    // avoid having to do any relocations here. This also ensures that
+                    // all builtins use the same trampoline mechanism.
+                    assert!(section.relocations().next().is_none());
                 }
                 #[cfg(has_host_compiler_backend)]
                 crate::runtime::vm::UnwindRegistration::SECTION_NAME => unwind = range,
@@ -223,7 +204,6 @@ impl CodeMemory {
             wasm_dwarf,
             info_data,
             wasm_data,
-            relocations,
         })
     }
 
@@ -317,13 +297,6 @@ impl CodeMemory {
         //   both the actual unwinding tables as well as the validity of the
         //   pointers we pass in itself.
         unsafe {
-            // First, if necessary, apply relocations. This can happen for
-            // things like libcalls which happen late in the lowering process
-            // that don't go through the Wasm-based libcalls layer that's
-            // indirected through the `VMContext`. Note that most modules won't
-            // have relocations, so this typically doesn't do anything.
-            self.apply_relocations()?;
-
             // Next freeze the contents of this image by making all of the
             // memory readonly. Nothing after this point should ever be modified
             // so commit everything. For a compiled-in-memory image this will
@@ -404,44 +377,6 @@ impl CodeMemory {
         } else {
             Ok(false)
         }
-    }
-
-    unsafe fn apply_relocations(&mut self) -> Result<()> {
-        if self.relocations.is_empty() {
-            return Ok(());
-        }
-
-        if self.mmap.is_always_readonly() {
-            bail!("Unable to apply relocations to readonly MmapVec");
-        }
-
-        for (offset, libcall) in self.relocations.iter() {
-            let offset = self.text.start + offset;
-            let libcall = match libcall {
-                obj::LibCall::FloorF32 => libcalls::relocs::floorf32 as usize,
-                obj::LibCall::FloorF64 => libcalls::relocs::floorf64 as usize,
-                obj::LibCall::NearestF32 => libcalls::relocs::nearestf32 as usize,
-                obj::LibCall::NearestF64 => libcalls::relocs::nearestf64 as usize,
-                obj::LibCall::CeilF32 => libcalls::relocs::ceilf32 as usize,
-                obj::LibCall::CeilF64 => libcalls::relocs::ceilf64 as usize,
-                obj::LibCall::TruncF32 => libcalls::relocs::truncf32 as usize,
-                obj::LibCall::TruncF64 => libcalls::relocs::truncf64 as usize,
-                obj::LibCall::FmaF32 => libcalls::relocs::fmaf32 as usize,
-                obj::LibCall::FmaF64 => libcalls::relocs::fmaf64 as usize,
-                #[cfg(target_arch = "x86_64")]
-                obj::LibCall::X86Pshufb => libcalls::relocs::x86_pshufb as usize,
-                #[cfg(not(target_arch = "x86_64"))]
-                obj::LibCall::X86Pshufb => unreachable!(),
-            };
-
-            self.mmap
-                .as_mut_slice()
-                .as_mut_ptr()
-                .add(offset)
-                .cast::<usize>()
-                .write_unaligned(libcall);
-        }
-        Ok(())
     }
 
     unsafe fn register_unwind_info(&mut self) -> Result<()> {

@@ -307,8 +307,9 @@ fn mach_reloc_to_reloc(
             }
         }
         FinalizedRelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
-            let libcall = libcall_cranelift_to_wasmtime(libcall);
-            RelocationTarget::HostLibcall(libcall)
+            // We should have avoided any code that needs this style of libcalls
+            // in the Wasm-to-Cranelift translator.
+            panic!("unexpected libcall {libcall:?}");
         }
         _ => panic!("unrecognized external name"),
     };
@@ -317,24 +318,6 @@ fn mach_reloc_to_reloc(
         reloc_target,
         offset,
         addend,
-    }
-}
-
-fn libcall_cranelift_to_wasmtime(call: ir::LibCall) -> wasmtime_environ::obj::LibCall {
-    use wasmtime_environ::obj::LibCall as LC;
-    match call {
-        ir::LibCall::FloorF32 => LC::FloorF32,
-        ir::LibCall::FloorF64 => LC::FloorF64,
-        ir::LibCall::NearestF32 => LC::NearestF32,
-        ir::LibCall::NearestF64 => LC::NearestF64,
-        ir::LibCall::CeilF32 => LC::CeilF32,
-        ir::LibCall::CeilF64 => LC::CeilF64,
-        ir::LibCall::TruncF32 => LC::TruncF32,
-        ir::LibCall::TruncF64 => LC::TruncF64,
-        ir::LibCall::FmaF32 => LC::FmaF32,
-        ir::LibCall::FmaF64 => LC::FmaF64,
-        ir::LibCall::X86Pshufb => LC::X86Pshufb,
-        _ => panic!("cranelift emitted a libcall wasmtime does not support: {call:?}"),
     }
 }
 
@@ -373,8 +356,28 @@ impl BuiltinFunctionSignatures {
         AbiParam::new(ir::types::I64)
     }
 
+    fn f32(&self) -> AbiParam {
+        AbiParam::new(ir::types::F32)
+    }
+
+    fn f64(&self) -> AbiParam {
+        AbiParam::new(ir::types::F64)
+    }
+
     fn u8(&self) -> AbiParam {
         AbiParam::new(ir::types::I8)
+    }
+
+    fn i8x16(&self) -> AbiParam {
+        AbiParam::new(ir::types::I8X16)
+    }
+
+    fn f32x4(&self) -> AbiParam {
+        AbiParam::new(ir::types::F32X4)
+    }
+
+    fn f64x2(&self) -> AbiParam {
+        AbiParam::new(ir::types::F64X2)
     }
 
     fn bool(&self) -> AbiParam {

@@ -397,6 +397,15 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_16(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 16 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
         fn ty_32(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() == 32 {
                 Some(ty)
@@ -408,6 +417,15 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn ty_64(&mut self, ty: Type) -> Option<Type> {
             if ty.bits() == 64 {
+                Some(ty)
+            } else {
+                None
+            }
+        }
+
+        #[inline]
+        fn ty_128(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 128 {
                 Some(ty)
             } else {
                 None
@@ -827,21 +845,6 @@ macro_rules! isle_common_prelude_methods {
             Offset32::new(offset)
         }
 
-        fn range(&mut self, start: usize, end: usize) -> Range {
-            (start, end)
-        }
-
-        fn range_view(&mut self, (start, end): Range) -> RangeView {
-            if start >= end {
-                RangeView::Empty
-            } else {
-                RangeView::NonEmpty {
-                    index: start,
-                    rest: (start + 1, end),
-                }
-            }
-        }
-
         #[inline]
         fn mem_flags_trusted(&mut self) -> MemFlags {
             MemFlags::trusted()
@@ -1038,6 +1041,14 @@ macro_rules! isle_common_prelude_methods {
             } else {
                 None
             }
+        }
+
+        fn u128_low_bits(&mut self, val: u128) -> u64 {
+            val as u64
+        }
+
+        fn u128_high_bits(&mut self, val: u128) -> u64 {
+            (val >> 64) as u64
         }
 
         fn f16_min(&mut self, a: Ieee16, b: Ieee16) -> Option<Ieee16> {

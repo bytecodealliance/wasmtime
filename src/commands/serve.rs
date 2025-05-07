@@ -1,6 +1,8 @@
 use crate::common::{Profile, RunCommon, RunTarget};
 use anyhow::{anyhow, bail, Result};
 use clap::Parser;
+use http::{Response, StatusCode};
+use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::time::Instant;
 use std::{
@@ -15,7 +17,7 @@ use tokio::sync::Notify;
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Engine, Store, StoreLimits, UpdateDeadline};
 use wasmtime_wasi::p2::{IoView, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
-use wasmtime_wasi_http::bindings::http::types::Scheme;
+use wasmtime_wasi_http::bindings::http::types::{ErrorCode, Scheme};
 use wasmtime_wasi_http::bindings::ProxyPre;
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
@@ -432,7 +434,28 @@ impl ServeCommand {
                     .serve_connection(
                         stream,
                         hyper::service::service_fn(move |req| {
-                            handle_request(h.clone(), req, comp.clone())
+                            let comp = comp.clone();
+                            let h = h.clone();
+                            async move {
+                                use http_body_util::{BodyExt, Full};
+                                fn to_errorcode(_: Infallible) -> ErrorCode {
+                                    unreachable!()
+                                }
+                                match handle_request(h, req, comp).await {
+                                    Ok(r) => Ok::<_, Infallible>(r),
+                                    Err(e) => {
+                                        eprintln!("error: {e:?}");
+                                        Ok(Response::builder()
+                                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                            .body(
+                                                Full::new(bytes::Bytes::new())
+                                                    .map_err(to_errorcode)
+                                                    .boxed(),
+                                            )
+                                            .unwrap())
+                                    }
+                                }
+                            }
                         }),
                     )
                     .await

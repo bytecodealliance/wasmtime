@@ -552,8 +552,12 @@ fn run_cwasm_from_stdin() -> Result<()> {
 #[cfg(feature = "wasi-threads")]
 #[test]
 fn run_threads() -> Result<()> {
-    // Skip this test on platforms that don't support threads.
-    if crate::threads::engine().is_none() {
+    // Only run threaded tests on platforms that support threads. Also skip
+    // these tests with ASAN as it, rightfully, complains about a memory leak.
+    // The memory leak at this time is that child threads aren't joined with the
+    // main thread, meaning that allocations done on child threads are indeed
+    // leaked.
+    if crate::threads::engine().is_none() || cfg!(asan) {
         return Ok(());
     }
     let wasm = build_wasm("tests/all/cli_tests/threads.wat")?;
@@ -1111,7 +1115,7 @@ mod test_programs {
 
     macro_rules! assert_test_exists {
         ($name:ident) => {
-            #[allow(unused_imports)]
+            #[expect(unused_imports, reason = "just here to assert the test is here")]
             use self::$name as _;
         };
     }
@@ -2092,8 +2096,9 @@ after empty
                         .body(String::new())
                         .context("failed to make request")?,
                 )
-                .await;
-            assert!(res.is_err());
+                .await
+                .expect("got response from wasmtime");
+            assert_eq!(res.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
         }
 
         let (stdout, stderr) = server.finish()?;

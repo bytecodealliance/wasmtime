@@ -637,7 +637,7 @@ impl Func {
             ResourceTables {
                 calls,
                 host_table: Some(host_table),
-                tables: Some((*instance).component_resource_tables()),
+                guest: Some((*instance).guest_tables()),
             }
             .exit_call()?;
         }
