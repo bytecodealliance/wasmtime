@@ -102,19 +102,6 @@ pub trait Host_Imports {
     where
         Self: Sized;
 }
-pub trait Host_ImportsGetHost<
-    T,
-    D,
->: Fn(T) -> <Self as Host_ImportsGetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-    type Host: Host_Imports<Data = D>;
-}
-impl<F, T, D, O> Host_ImportsGetHost<T, D> for F
-where
-    F: Fn(T) -> O + Send + Sync + Copy + 'static,
-    O: Host_Imports<Data = D>,
-{
-    type Host = O;
-}
 impl<_T: Host_Imports> Host_Imports for &mut _T {
     type Data = _T::Data;
     fn foo(
@@ -184,14 +171,15 @@ const _: () = {
             let indices = Host_Indices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker_imports_get_host<
-            T,
-            G: for<'a> Host_ImportsGetHost<&'a mut T, T, Host: Host_Imports<Data = T>>,
-        >(
+        pub fn add_to_linker_imports_get_host<T, G>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: G,
         ) -> wasmtime::Result<()>
         where
+            G: for<'a> wasmtime::component::GetHost<
+                &'a mut T,
+                Host: Host_Imports<Data = T>,
+            >,
             T: Send + 'static,
         {
             let mut linker = linker.root();

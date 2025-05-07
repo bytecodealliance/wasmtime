@@ -1423,36 +1423,35 @@ impl Wasmtime {
         }
         uwriteln!(self.src, "}}");
 
-        let get_host_bounds = if let CallStyle::Concurrent = self.opts.call_style() {
-            let constraints = world_imports_concurrent_constraints(resolve, world, &self.opts);
+        // let get_host_bounds = if let CallStyle::Concurrent = self.opts.call_style() {
+        //     let constraints = world_imports_concurrent_constraints(resolve, world, &self.opts);
 
-            format!("{world_camel}Imports{}", constraints("D"))
-        } else {
-            format!("{world_camel}Imports")
-        };
+        //     format!("{world_camel}Imports{}", constraints("D"))
+        // } else {
+        //     format!("{world_camel}Imports")
+        // };
 
-        uwriteln!(
-            self.src,
-            "
-                pub trait {world_camel}ImportsGetHost<T, D>:
-                    Fn(T) -> <Self as {world_camel}ImportsGetHost<T, D>>::Host
-                        + Send
-                        + Sync
-                        + Copy
-                        + 'static
-                {{
-                    type Host: {get_host_bounds};
-                }}
+        // uwriteln!(
+        //     self.src,
+        //     "
+        //         pub trait {world_camel}ImportsGetHost<T>:
+        //             Fn(T) -> <Self as {world_camel}ImportsGetHost<T>>::Host
+        //                 + Send
+        //                 + Sync
+        //                 + Copy
+        //                 + 'static
+        //         {{
+        //             type Host;
+        //         }}
 
-                impl<F, T, D, O> {world_camel}ImportsGetHost<T, D> for F
-                where
-                    F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                    O: {get_host_bounds},
-                {{
-                    type Host = O;
-                }}
-            "
-        );
+        //         impl<F, T, O> {world_camel}ImportsGetHost<T> for F
+        //         where
+        //             F: Fn(T) -> O + Send + Sync + Copy + 'static,
+        //         {{
+        //             type Host = O;
+        //         }}
+        //     "
+        // );
 
         // Generate impl WorldImports for &mut WorldImports
         let maybe_send = if let CallStyle::Async = self.opts.call_style() {
@@ -1584,15 +1583,14 @@ impl Wasmtime {
             uwrite!(
                 self.src,
                 "
-                    pub fn add_to_linker_imports_get_host<
-                        T,
-                        G: for<'a> {camel}ImportsGetHost<&'a mut T, T, Host: {host_bounds}>
-                    >(
+                    pub fn add_to_linker_imports_get_host<T, G>(
                         linker: &mut {wt}::component::Linker<T>,
                         {options_param}
                         host_getter: G,
                     ) -> {wt}::Result<()>
-                        where {data_bounds}
+                        where
+                            G: for<'a> {wt}::component::GetHost<&'a mut T, Host: {host_bounds}>,
+                            {data_bounds}
                     {{
                         let mut linker = linker.root();
                 "
@@ -2699,30 +2697,14 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(
             self.src,
             "
-                pub trait GetHost<T, D>:
-                    Fn(T) -> <Self as GetHost<T, D>>::Host
-                        + Send
-                        + Sync
-                        + Copy
-                        + 'static
-                {{
-                    type Host: {get_host_bounds};
-                }}
-
-                impl<F, T, D, O> GetHost<T, D> for F
-                where
-                    F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                    O: {get_host_bounds},
-                {{
-                    type Host = O;
-                }}
-
-                pub fn add_to_linker_get_host<T, G: for<'a> GetHost<&'a mut T, T, Host: {host_bounds}>>(
+                pub fn add_to_linker_get_host<T, G>(
                     linker: &mut {wt}::component::Linker<T>,
                     {options_param}
                     host_getter: G,
                 ) -> {wt}::Result<()>
-                    where {data_bounds}
+                    where
+                        G: for<'a> {wt}::component::GetHost<&'a mut T, Host: {host_bounds}>,
+                        {data_bounds}
                 {{
             "
         );

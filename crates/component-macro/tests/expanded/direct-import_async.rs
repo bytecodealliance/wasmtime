@@ -94,19 +94,6 @@ pub struct Foo {}
 pub trait FooImports: Send {
     async fn foo(&mut self) -> ();
 }
-pub trait FooImportsGetHost<
-    T,
-    D,
->: Fn(T) -> <Self as FooImportsGetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-    type Host: FooImports;
-}
-impl<F, T, D, O> FooImportsGetHost<T, D> for F
-where
-    F: Fn(T) -> O + Send + Sync + Copy + 'static,
-    O: FooImports,
-{
-    type Host = O;
-}
 impl<_T: FooImports + ?Sized + Send> FooImports for &mut _T {
     async fn foo(&mut self) -> () {
         FooImports::foo(*self).await
@@ -166,14 +153,12 @@ const _: () = {
             let indices = FooIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker_imports_get_host<
-            T,
-            G: for<'a> FooImportsGetHost<&'a mut T, T, Host: FooImports>,
-        >(
+        pub fn add_to_linker_imports_get_host<T, G>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: G,
         ) -> wasmtime::Result<()>
         where
+            G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: FooImports>,
             T: Send,
         {
             let mut linker = linker.root();

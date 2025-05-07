@@ -248,27 +248,15 @@ pub mod foo {
                 where
                     Self: Sized;
             }
-            pub trait GetHost<
-                T,
-                D,
-            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host<Data = D> + Send;
-            }
-            impl<F, T, D, O> GetHost<T, D> for F
-            where
-                F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host<Data = D> + Send,
-            {
-                type Host = O;
-            }
-            pub fn add_to_linker_get_host<
-                T,
-                G: for<'a> GetHost<&'a mut T, T, Host: Host<Data = T> + Send>,
-            >(
+            pub fn add_to_linker_get_host<T, G>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                G: for<'a> wasmtime::component::GetHost<
+                    &'a mut T,
+                    Host: Host<Data = T> + Send,
+                >,
                 T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/wasi-filesystem")?;
@@ -400,27 +388,12 @@ pub mod foo {
                 );
             };
             pub trait Host {}
-            pub trait GetHost<
-                T,
-                D,
-            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host + Send;
-            }
-            impl<F, T, D, O> GetHost<T, D> for F
-            where
-                F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host + Send,
-            {
-                type Host = O;
-            }
-            pub fn add_to_linker_get_host<
-                T,
-                G: for<'a> GetHost<&'a mut T, T, Host: Host + Send>,
-            >(
+            pub fn add_to_linker_get_host<T, G>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/wall-clock")?;

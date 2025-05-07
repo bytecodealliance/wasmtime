@@ -190,19 +190,6 @@ pub trait TheWorldImports: HostWorldResource {
     where
         Self: Sized;
 }
-pub trait TheWorldImportsGetHost<
-    T,
-    D,
->: Fn(T) -> <Self as TheWorldImportsGetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-    type Host: TheWorldImports<WorldResourceData = D, Data = D>;
-}
-impl<F, T, D, O> TheWorldImportsGetHost<T, D> for F
-where
-    F: Fn(T) -> O + Send + Sync + Copy + 'static,
-    O: TheWorldImports<WorldResourceData = D, Data = D>,
-{
-    type Host = O;
-}
 impl<_T: TheWorldImports> TheWorldImports for &mut _T {
     type Data = _T::Data;
     fn some_world_func(
@@ -315,18 +302,15 @@ const _: () = {
             let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker_imports_get_host<
-            T,
-            G: for<'a> TheWorldImportsGetHost<
-                    &'a mut T,
-                    T,
-                    Host: TheWorldImports<WorldResourceData = T, Data = T>,
-                >,
-        >(
+        pub fn add_to_linker_imports_get_host<T, G>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: G,
         ) -> wasmtime::Result<()>
         where
+            G: for<'a> wasmtime::component::GetHost<
+                &'a mut T,
+                Host: TheWorldImports<WorldResourceData = T, Data = T>,
+            >,
             T: Send + 'static,
         {
             let mut linker = linker.root();
@@ -874,31 +858,15 @@ pub mod foo {
                 where
                     Self: Sized;
             }
-            pub trait GetHost<
-                T,
-                D,
-            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host<BarData = D, Data = D> + Send;
-            }
-            impl<F, T, D, O> GetHost<T, D> for F
-            where
-                F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host<BarData = D, Data = D> + Send,
-            {
-                type Host = O;
-            }
-            pub fn add_to_linker_get_host<
-                T,
-                G: for<'a> GetHost<
-                        &'a mut T,
-                        T,
-                        Host: Host<BarData = T, Data = T> + Send,
-                    >,
-            >(
+            pub fn add_to_linker_get_host<T, G>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                G: for<'a> wasmtime::component::GetHost<
+                    &'a mut T,
+                    Host: Host<BarData = T, Data = T> + Send,
+                >,
                 T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/resources")?;
@@ -1949,27 +1917,12 @@ pub mod foo {
                 }
             }
             pub trait Host: HostA + Sized {}
-            pub trait GetHost<
-                T,
-                D,
-            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host + Send;
-            }
-            impl<F, T, D, O> GetHost<T, D> for F
-            where
-                F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host + Send,
-            {
-                type Host = O;
-            }
-            pub fn add_to_linker_get_host<
-                T,
-                G: for<'a> GetHost<&'a mut T, T, Host: Host + Send>,
-            >(
+            pub fn add_to_linker_get_host<T, G>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain1")?;
@@ -2003,27 +1956,12 @@ pub mod foo {
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain1::A;
             pub trait Host {}
-            pub trait GetHost<
-                T,
-                D,
-            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host + Send;
-            }
-            impl<F, T, D, O> GetHost<T, D> for F
-            where
-                F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host + Send,
-            {
-                type Host = O;
-            }
-            pub fn add_to_linker_get_host<
-                T,
-                G: for<'a> GetHost<&'a mut T, T, Host: Host + Send>,
-            >(
+            pub fn add_to_linker_get_host<T, G>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain2")?;
@@ -2047,27 +1985,12 @@ pub mod foo {
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain2::A;
             pub trait Host {}
-            pub trait GetHost<
-                T,
-                D,
-            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host + Send;
-            }
-            impl<F, T, D, O> GetHost<T, D> for F
-            where
-                F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host + Send,
-            {
-                type Host = O;
-            }
-            pub fn add_to_linker_get_host<
-                T,
-                G: for<'a> GetHost<&'a mut T, T, Host: Host + Send>,
-            >(
+            pub fn add_to_linker_get_host<T, G>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain3")?;
@@ -2102,27 +2025,15 @@ pub mod foo {
                 where
                     Self: Sized;
             }
-            pub trait GetHost<
-                T,
-                D,
-            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host<Data = D> + Send;
-            }
-            impl<F, T, D, O> GetHost<T, D> for F
-            where
-                F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host<Data = D> + Send,
-            {
-                type Host = O;
-            }
-            pub fn add_to_linker_get_host<
-                T,
-                G: for<'a> GetHost<&'a mut T, T, Host: Host<Data = T> + Send>,
-            >(
+            pub fn add_to_linker_get_host<T, G>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                G: for<'a> wasmtime::component::GetHost<
+                    &'a mut T,
+                    Host: Host<Data = T> + Send,
+                >,
                 T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain4")?;
@@ -2208,27 +2119,12 @@ pub mod foo {
                 }
             }
             pub trait Host: HostFoo + Sized {}
-            pub trait GetHost<
-                T,
-                D,
-            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host + Send;
-            }
-            impl<F, T, D, O> GetHost<T, D> for F
-            where
-                F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host + Send,
-            {
-                type Host = O;
-            }
-            pub fn add_to_linker_get_host<
-                T,
-                G: for<'a> GetHost<&'a mut T, T, Host: Host + Send>,
-            >(
+            pub fn add_to_linker_get_host<T, G>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send + 'static,
             {
                 let mut inst = linker
