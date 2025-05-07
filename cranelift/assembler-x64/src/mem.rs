@@ -2,7 +2,7 @@
 
 use crate::api::{AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, TrapCode};
 use crate::gpr::{self, NonRspGpr, Size};
-use crate::rex::{encode_modrm, encode_sib, Imm, RexFlags};
+use crate::rex::{encode_modrm, encode_sib, Imm, RexPrefix};
 use crate::{RegisterVisitor, Registers};
 
 /// x64 memory addressing modes.
@@ -35,22 +35,17 @@ impl<R: AsReg> Amode<R> {
         }
     }
 
-    /// Encode the [`Amode`] into a ModRM/SIB/displacement sequence.
-    pub fn emit_rex_prefix(&self, rex: RexFlags, enc_g: u8, sink: &mut impl CodeSink) {
+    /// Return the [`RexPrefix`] for each variant of this [`Amode`].
+    #[must_use]
+    pub(crate) fn as_rex_prefix(&self, enc_reg: u8, has_w_bit: bool, uses_8bit: bool) -> RexPrefix {
         match self {
             Amode::ImmReg { base, .. } => {
-                let enc_e = base.enc();
-                rex.emit_two_op(sink, enc_g, enc_e);
+                RexPrefix::two_op(enc_reg, base.enc(), has_w_bit, uses_8bit)
             }
             Amode::ImmRegRegShift { base, index, .. } => {
-                let enc_base = base.enc();
-                let enc_index = index.enc();
-                rex.emit_three_op(sink, enc_g, enc_index, enc_base);
+                RexPrefix::three_op(enc_reg, index.enc(), base.enc(), has_w_bit, uses_8bit)
             }
-            Amode::RipRelative { .. } => {
-                // note REX.B = 0.
-                rex.emit_two_op(sink, enc_g, 0);
-            }
+            Amode::RipRelative { .. } => RexPrefix::two_op(enc_reg, 0, has_w_bit, uses_8bit),
         }
     }
 }
@@ -265,14 +260,12 @@ impl<R: AsReg, M: AsReg> GprMem<R, M> {
         }
     }
 
-    /// Proxy on the 8-bit REX flag emission; helpful for simplifying generated
-    /// code.
-    pub(crate) fn always_emit_if_8bit_needed(&self, rex: &mut RexFlags) {
+    /// Return the [`RexPrefix`] for each variant of this [`GprMem`].
+    #[must_use]
+    pub(crate) fn as_rex_prefix(&self, enc_reg: u8, has_w_bit: bool, uses_8bit: bool) -> RexPrefix {
         match self {
-            GprMem::Gpr(gpr) => {
-                rex.always_emit_if_8bit_needed(gpr.enc());
-            }
-            GprMem::Mem(_) => {}
+            GprMem::Gpr(rm) => RexPrefix::two_op(enc_reg, rm.enc(), has_w_bit, uses_8bit),
+            GprMem::Mem(amode) => amode.as_rex_prefix(enc_reg, has_w_bit, uses_8bit),
         }
     }
 }
@@ -295,6 +288,15 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
         match self {
             XmmMem::Xmm(xmm) => xmm.to_string(None),
             XmmMem::Mem(amode) => amode.to_string(),
+        }
+    }
+
+    /// Return the [`RexPrefix`] for each variant of this [`XmmMem`].
+    #[must_use]
+    pub(crate) fn as_rex_prefix(&self, enc_reg: u8, has_w_bit: bool, uses_8bit: bool) -> RexPrefix {
+        match self {
+            XmmMem::Xmm(rm) => RexPrefix::two_op(enc_reg, rm.enc(), has_w_bit, uses_8bit),
+            XmmMem::Mem(amode) => amode.as_rex_prefix(enc_reg, has_w_bit, uses_8bit),
         }
     }
 }
