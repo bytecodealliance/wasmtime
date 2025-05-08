@@ -1483,13 +1483,20 @@ impl Assembler {
         });
     }
 
-    /// Performs integer negation on src and places result in dst.
-    pub fn neg(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::Neg {
-            size: size.into(),
-            src: src.into(),
-            dst: dst.map(Into::into),
-        });
+    /// Performs integer negation on `src` and places result in `dst`.
+    pub fn neg(&mut self, read: Reg, write: WritableReg, size: OperandSize) {
+        let gpr = PairedGpr {
+            read: read.into(),
+            write: WritableGpr::from_reg(write.to_reg().into()),
+        };
+        let inst = match size {
+            OperandSize::S8 => asm::inst::negb_m::new(gpr).into(),
+            OperandSize::S16 => asm::inst::negw_m::new(gpr).into(),
+            OperandSize::S32 => asm::inst::negl_m::new(gpr).into(),
+            OperandSize::S64 => asm::inst::negq_m::new(gpr).into(),
+            OperandSize::S128 => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Stores position of the least significant bit set in src in dst.

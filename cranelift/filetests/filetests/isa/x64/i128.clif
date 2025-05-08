@@ -169,9 +169,9 @@ block0(v0: i128):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   notq    %rax, %rax
+;   notq %rax
 ;   movq    %rsi, %rdx
-;   notq    %rdx, %rdx
+;   notq %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1864,10 +1864,10 @@ block0(v0: i128):
 ;   uninit  %r8
 ;   xorq %r8, %r8
 ;   movq    %rdi, %rax
-;   negq    %rax, %rax
+;   negq %rax
 ;   movq    %rsi, %rdx
 ;   adcq %r8, %rdx
-;   negq    %rdx, %rdx
+;   negq %rdx
 ;   cmovsq  %rdi, %rax, %rax
 ;   cmovsq  %rsi, %rdx, %rdx
 ;   movq    %rbp, %rsp

@@ -287,40 +287,6 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
-        Inst::Not { size, src, dst } => {
-            let src = src.to_reg();
-            let dst = dst.to_reg().to_reg();
-            debug_assert_eq!(src, dst);
-            let rex_flags = RexFlags::from((*size, dst));
-            let (opcode, prefix) = match size {
-                OperandSize::Size8 => (0xF6, LegacyPrefixes::None),
-                OperandSize::Size16 => (0xF7, LegacyPrefixes::_66),
-                OperandSize::Size32 => (0xF7, LegacyPrefixes::None),
-                OperandSize::Size64 => (0xF7, LegacyPrefixes::None),
-            };
-
-            let subopcode = 2;
-            let enc_src = int_reg_enc(dst);
-            emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, enc_src, rex_flags)
-        }
-
-        Inst::Neg { size, src, dst } => {
-            let src = src.to_reg();
-            let dst = dst.to_reg().to_reg();
-            debug_assert_eq!(src, dst);
-            let rex_flags = RexFlags::from((*size, dst));
-            let (opcode, prefix) = match size {
-                OperandSize::Size8 => (0xF6, LegacyPrefixes::None),
-                OperandSize::Size16 => (0xF7, LegacyPrefixes::_66),
-                OperandSize::Size32 => (0xF7, LegacyPrefixes::None),
-                OperandSize::Size64 => (0xF7, LegacyPrefixes::None),
-            };
-
-            let subopcode = 3;
-            let enc_src = int_reg_enc(dst);
-            emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, enc_src, rex_flags)
-        }
-
         Inst::Div {
             sign,
             trap,
@@ -4089,8 +4055,10 @@ pub(crate) fn emit(
                     .emit(sink, info, state);
 
                     // notq %r_temp
-                    let i4 = Inst::not(OperandSize::Size64, temp);
-                    i4.emit(sink, info, state);
+                    Inst::External {
+                        inst: asm::inst::notq_m::new(temp).into(),
+                    }
+                    .emit(sink, info, state);
                 }
                 RmwOp::Umin | RmwOp::Umax | RmwOp::Smin | RmwOp::Smax => {
                     // cmp %r_temp, %r_operand
@@ -4205,8 +4173,14 @@ pub(crate) fn emit(
                     .emit(sink, info, state);
 
                     // temp = !temp
-                    Inst::not(OperandSize::Size64, temp_low).emit(sink, info, state);
-                    Inst::not(OperandSize::Size64, temp_high).emit(sink, info, state);
+                    Inst::External {
+                        inst: asm::inst::notq_m::new(temp_low).into(),
+                    }
+                    .emit(sink, info, state);
+                    Inst::External {
+                        inst: asm::inst::notq_m::new(temp_high).into(),
+                    }
+                    .emit(sink, info, state);
                 }
                 RmwOp::Umin | RmwOp::Umax | RmwOp::Smin | RmwOp::Smax => {
                     // Do a comparison with LHS temp and RHS operand.

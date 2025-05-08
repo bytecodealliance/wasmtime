@@ -80,25 +80,13 @@ impl dsl::Format {
         match self.operands_by_kind().as_slice() {
             [FixedReg(dst), Imm(_)] => {
                 // TODO: don't emit REX byte here.
-                assert_eq!(
-                    rex.digit, None,
-                    "we expect no digit for operands: [FixedReg, Imm]"
-                );
+                assert_eq!(rex.digit, None);
                 fmtln!(f, "let digit = 0;");
                 fmtln!(f, "let dst = self.{dst}.enc();");
                 fmtln!(f, "let rex = RexPrefix::with_digit(digit, dst, {bits});");
             }
-            [Mem(dst), Imm(_)] => {
-                let digit = rex
-                    .digit
-                    .expect("REX digit must be set for operands: [Mem, Imm]");
-                fmtln!(f, "let digit = 0x{digit:x};");
-                fmtln!(f, "let rex = self.{dst}.as_rex_prefix(digit, {bits});");
-            }
-            [RegMem(dst), Imm(_)] => {
-                let digit = rex
-                    .digit
-                    .expect("REX digit must be set for operands: [RegMem, Imm]");
+            [Mem(dst), Imm(_)] | [RegMem(dst), Imm(_)] | [RegMem(dst)] => {
+                let digit = rex.digit.unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "let rex = self.{dst}.as_rex_prefix(digit, {bits});");
             }
@@ -146,7 +134,7 @@ impl dsl::Format {
                     "emit_modrm_sib_disp(buf, off, digit, &self.{dst}, 0, None);"
                 );
             }
-            [RegMem(dst), Imm(_)] => {
+            [RegMem(dst), Imm(_)] | [RegMem(dst)] => {
                 let digit = rex
                     .digit
                     .expect("REX digit must be set for operands: [RegMem, Imm]");

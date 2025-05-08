@@ -117,8 +117,6 @@ impl Inst {
             | Inst::Mul8 { .. }
             | Inst::IMul { .. }
             | Inst::IMulImm { .. }
-            | Inst::Neg { .. }
-            | Inst::Not { .. }
             | Inst::Nop { .. }
             | Inst::Pop64 { .. }
             | Inst::Push64 { .. }
@@ -254,15 +252,6 @@ impl Inst {
             op,
             src: GprMem::unwrap_new(src),
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
-        }
-    }
-
-    pub(crate) fn not(size: OperandSize, src: Writable<Reg>) -> Inst {
-        debug_assert_eq!(src.to_reg().class(), RegClass::Int);
-        Inst::Not {
-            size,
-            src: Gpr::unwrap_new(src.to_reg()),
-            dst: WritableGpr::from_writable_reg(src).unwrap(),
         }
     }
 
@@ -742,20 +731,6 @@ impl PrettyPrint for Inst {
                     "{} ${imm}, {src}, {dst}",
                     ljustify2(op.to_string(), suffix_bwlq(*size))
                 )
-            }
-
-            Inst::Not { size, src, dst } => {
-                let src = pretty_print_reg(src.to_reg(), size.to_bytes());
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let op = ljustify2("not".to_string(), suffix_bwlq(*size));
-                format!("{op} {src}, {dst}")
-            }
-
-            Inst::Neg { size, src, dst } => {
-                let src = pretty_print_reg(src.to_reg(), size.to_bytes());
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let op = ljustify2("neg".to_string(), suffix_bwlq(*size));
-                format!("{op} {src}, {dst}")
             }
 
             Inst::Div {
@@ -2010,14 +1985,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_def(dst);
             collector.reg_use(src1);
             src2.get_operands(collector);
-        }
-        Inst::Not { src, dst, .. } => {
-            collector.reg_use(src);
-            collector.reg_reuse_def(dst, 0);
-        }
-        Inst::Neg { src, dst, .. } => {
-            collector.reg_use(src);
-            collector.reg_reuse_def(dst, 0);
         }
         Inst::Div {
             divisor,

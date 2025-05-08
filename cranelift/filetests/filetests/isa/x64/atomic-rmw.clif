@@ -219,7 +219,7 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   negq    %rsi, %rsi
+;   negq %rsi
 ;   movq    %rsi, %rax
 ;   lock xaddq %rax, 0(%rdi), dst_old=%rax
 ;   movq    %rbp, %rsp
@@ -248,7 +248,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   negl    %esi, %esi
+;   negl %esi
 ;   movq    %rsi, %rax
 ;   lock xaddl %eax, 0(%rdi), dst_old=%eax
 ;   movq    %rbp, %rsp
@@ -277,7 +277,7 @@ block0(v0: i64, v1: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   negw    %si, %si
+;   negw %si
 ;   movq    %rsi, %rax
 ;   lock xaddw %ax, 0(%rdi), dst_old=%ax
 ;   movq    %rbp, %rsp
@@ -306,7 +306,7 @@ block0(v0: i64, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   negb    %sil, %sil
+;   negb %sil
 ;   movq    %rsi, %rax
 ;   lock xaddb %al, 0(%rdi), dst_old=%al
 ;   movq    %rbp, %rsp
