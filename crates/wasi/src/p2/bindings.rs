@@ -17,7 +17,7 @@
 //! ```rust
 //! use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
 //! use wasmtime::{Result, Engine, Config};
-//! use wasmtime::component::{Linker, ResourceTable};
+//! use wasmtime::component::{Linker, ResourceTable, HasSelf};
 //!
 //! wasmtime::component::bindgen!({
 //!     inline: "
@@ -66,7 +66,7 @@
 //!     let engine = Engine::new(&config)?;
 //!     let mut linker: Linker<MyState> = Linker::new(&engine);
 //!     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
-//!     example::wasi::custom_host::add_to_linker(&mut linker, |state| state)?;
+//!     example::wasi::custom_host::add_to_linker::<_, HasSelf<_>>(&mut linker, |state| state)?;
 //!
 //!     // .. use `Linker` to instantiate component ...
 //!
@@ -88,7 +88,7 @@
 /// ```rust
 /// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
 /// use wasmtime::{Result, Engine};
-/// use wasmtime::component::{Linker, ResourceTable};
+/// use wasmtime::component::{Linker, ResourceTable, HasSelf};
 ///
 /// wasmtime::component::bindgen!({
 ///     inline: "
@@ -137,7 +137,7 @@
 ///     let engine = Engine::default();
 ///     let mut linker: Linker<MyState> = Linker::new(&engine);
 ///     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
-///     example::wasi::custom_host::add_to_linker(&mut linker, |state| state)?;
+///     example::wasi::custom_host::add_to_linker::<_, HasSelf<_>>(&mut linker, |state| state)?;
 ///
 ///     // .. use `Linker` to instantiate component ...
 ///

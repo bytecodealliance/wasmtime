@@ -7,6 +7,8 @@ use wasmtime::{
 
 mod empty_error {
     use super::*;
+    use wasmtime::component::HasSelf;
+
     wasmtime::component::bindgen!({
         inline: "
         package inline:inline;
@@ -75,7 +77,7 @@ mod empty_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -109,6 +111,8 @@ mod empty_error {
 
 mod string_error {
     use super::*;
+    use wasmtime::component::HasSelf;
+
     wasmtime::component::bindgen!({
         inline: "
         package inline:inline;
@@ -188,7 +192,7 @@ mod string_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -225,6 +229,7 @@ mod enum_error {
     use super::*;
     use exports::foo;
     use inline::inline::imports;
+    use wasmtime::component::HasSelf;
 
     wasmtime::component::bindgen!({
         inline: "
@@ -364,7 +369,7 @@ mod enum_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -406,6 +411,7 @@ mod record_error {
     use super::*;
     use exports::foo;
     use inline::inline::imports;
+    use wasmtime::component::HasSelf;
 
     wasmtime::component::bindgen!({
         inline: "
@@ -528,7 +534,7 @@ mod record_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -574,6 +580,7 @@ mod variant_error {
     use super::*;
     use exports::foo;
     use inline::inline::imports;
+    use wasmtime::component::HasSelf;
 
     wasmtime::component::bindgen!({
         inline: "
@@ -723,7 +730,7 @@ mod variant_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -770,6 +777,7 @@ mod multiple_interfaces_error {
     use exports::foo;
     use inline::inline::imports;
     use inline::inline::types;
+    use wasmtime::component::HasSelf;
 
     wasmtime::component::bindgen!({
         inline: "
@@ -926,7 +934,7 @@ mod multiple_interfaces_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -966,6 +974,7 @@ mod multiple_interfaces_error {
 
 mod with_remapping {
     use super::*;
+    use wasmtime::component::HasSelf;
 
     mod interfaces {
         wasmtime::component::bindgen!({
@@ -1048,7 +1057,7 @@ mod with_remapping {
         }
 
         let mut linker = Linker::new(&engine);
-        interfaces::imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        interfaces::imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;

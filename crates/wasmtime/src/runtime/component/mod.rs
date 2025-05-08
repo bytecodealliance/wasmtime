@@ -104,7 +104,7 @@ mod component;
 #[cfg(feature = "component-model-async")]
 pub(crate) mod concurrent;
 mod func;
-mod get_host;
+mod has_data;
 mod instance;
 mod linker;
 mod matching;
@@ -122,7 +122,7 @@ pub use self::concurrent::{
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
-pub use self::get_host::GetHost;
+pub use self::has_data::*;
 pub use self::instance::{Instance, InstanceExportLookup, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
 pub use self::resource_table::{ResourceTable, ResourceTableError};

@@ -226,7 +226,7 @@
 //! [async]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
 //! [`ResourceTable`]: wasmtime::component::ResourceTable
 
-use wasmtime::component::Linker;
+use wasmtime::component::{HasData, Linker};
 
 pub mod bindings;
 mod ctx;
@@ -318,45 +318,96 @@ pub use wasmtime_wasi_io::{IoImpl, IoView};
 ///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
 /// }
 /// ```
-pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Result<()> {
-    let options = crate::p2::bindings::LinkOptions::default();
+pub fn add_to_linker_async<T: WasiView + 'static>(linker: &mut Linker<T>) -> anyhow::Result<()> {
+    let options = bindings::LinkOptions::default();
     add_to_linker_with_options_async(linker, &options)
 }
 
 /// Similar to [`add_to_linker_async`], but with the ability to enable unstable features.
-pub fn add_to_linker_with_options_async<T: WasiView>(
+pub fn add_to_linker_with_options_async<T: WasiView + 'static>(
     linker: &mut Linker<T>,
-    options: &crate::p2::bindings::LinkOptions,
+    options: &bindings::LinkOptions,
 ) -> anyhow::Result<()> {
+    wasmtime_wasi_io::add_to_linker_async(linker)?;
+    add_nonblocking_to_linker(linker, options)?;
+
     let l = linker;
-    wasmtime_wasi_io::add_to_linker_async(l)?;
+    let f: fn(&mut T) -> WasiImpl<&mut T> = |t| WasiImpl(IoImpl(t));
+    bindings::filesystem::types::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    bindings::sockets::tcp::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    bindings::sockets::udp::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    Ok(())
+}
 
-    let closure = type_annotate::<T, _>(|t| WasiImpl(IoImpl(t)));
+/// Shared functionality for [`add_to_linker_async`] and [`add_to_linker_sync`].
+fn add_nonblocking_to_linker<'a, T: WasiView + 'static, O>(
+    linker: &mut Linker<T>,
+    options: &'a O,
+) -> anyhow::Result<()>
+where
+    bindings::sockets::network::LinkOptions: From<&'a O>,
+    bindings::cli::exit::LinkOptions: From<&'a O>,
+{
+    use crate::p2::bindings::{cli, clocks, filesystem, random, sockets};
 
-    crate::p2::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::filesystem::types::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::random::random::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::exit::add_to_linker_get_host(l, &options.into(), closure)?;
-    crate::p2::bindings::cli::environment::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::terminal_input::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::terminal_output::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::terminal_stdin::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::terminal_stdout::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::terminal_stderr::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::sockets::tcp::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::sockets::tcp_create_socket::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::sockets::udp::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::sockets::udp_create_socket::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::sockets::instance_network::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::sockets::network::add_to_linker_get_host(l, &options.into(), closure)?;
-    crate::p2::bindings::sockets::ip_name_lookup::add_to_linker_get_host(l, closure)?;
+    let l = linker;
+    let f: fn(&mut T) -> WasiImpl<&mut T> = |t| WasiImpl(IoImpl(t));
+    clocks::wall_clock::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    clocks::monotonic_clock::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    filesystem::preopens::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    random::random::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    random::insecure::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    random::insecure_seed::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    cli::exit::add_to_linker::<T, HasWasi<T>>(l, &options.into(), f)?;
+    cli::environment::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    cli::stdin::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    cli::stdout::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    cli::stderr::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    cli::terminal_input::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    cli::terminal_output::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    cli::terminal_stdin::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    cli::terminal_stdout::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    cli::terminal_stderr::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    sockets::tcp_create_socket::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    sockets::udp_create_socket::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    sockets::instance_network::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    sockets::network::add_to_linker::<T, HasWasi<T>>(l, &options.into(), f)?;
+    sockets::ip_name_lookup::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    Ok(())
+}
+
+/// Same as [`add_to_linker_async`] except that this only adds interfaces
+/// present in the `wasi:http/proxy` world.
+pub fn add_to_linker_proxy_interfaces_async<T: WasiView + 'static>(
+    linker: &mut Linker<T>,
+) -> anyhow::Result<()> {
+    wasmtime_wasi_io::add_to_linker_async(linker)?;
+    add_proxy_interfaces_nonblocking(linker)
+}
+
+/// Same as [`add_to_linker_sync`] except that this only adds interfaces
+/// present in the `wasi:http/proxy` world.
+#[doc(hidden)]
+pub fn add_to_linker_proxy_interfaces_sync<T: WasiView + 'static>(
+    linker: &mut Linker<T>,
+) -> anyhow::Result<()> {
+    add_sync_wasi_io(linker)?;
+    add_proxy_interfaces_nonblocking(linker)
+}
+
+fn add_proxy_interfaces_nonblocking<T: WasiView + 'static>(
+    linker: &mut Linker<T>,
+) -> anyhow::Result<()> {
+    use crate::p2::bindings::{cli, clocks, random};
+
+    let l = linker;
+    let f: fn(&mut T) -> WasiImpl<&mut T> = |t| WasiImpl(IoImpl(t));
+    clocks::wall_clock::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    clocks::monotonic_clock::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    random::random::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    cli::stdin::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    cli::stdout::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    cli::stderr::add_to_linker::<T, HasWasi<T>>(l, f)?;
     Ok(())
 }
 
@@ -415,65 +466,50 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
 ///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
 /// }
 /// ```
-pub fn add_to_linker_sync<T: WasiView>(
+pub fn add_to_linker_sync<T: WasiView + 'static>(
     linker: &mut wasmtime::component::Linker<T>,
 ) -> anyhow::Result<()> {
-    let options = crate::p2::bindings::sync::LinkOptions::default();
+    let options = bindings::sync::LinkOptions::default();
     add_to_linker_with_options_sync(linker, &options)
 }
 
 /// Similar to [`add_to_linker_sync`], but with the ability to enable unstable features.
-pub fn add_to_linker_with_options_sync<T: WasiView>(
+pub fn add_to_linker_with_options_sync<T: WasiView + 'static>(
     linker: &mut wasmtime::component::Linker<T>,
-    options: &crate::p2::bindings::sync::LinkOptions,
+    options: &bindings::sync::LinkOptions,
 ) -> anyhow::Result<()> {
+    add_nonblocking_to_linker(linker, options)?;
+    add_sync_wasi_io(linker)?;
+
     let l = linker;
-    let io_closure = io_type_annotate::<T, _>(|t| IoImpl(t));
-    wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker_get_host(l, io_closure)?;
-
-    crate::p2::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
-    crate::p2::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
-
-    let closure = type_annotate::<T, _>(|t| WasiImpl(IoImpl(t)));
-
-    crate::p2::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::sync::filesystem::types::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::random::random::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::exit::add_to_linker_get_host(l, &options.into(), closure)?;
-    crate::p2::bindings::cli::environment::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::terminal_input::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::terminal_output::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::terminal_stdin::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::terminal_stdout::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::cli::terminal_stderr::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::sync::sockets::tcp::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::sockets::tcp_create_socket::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::sync::sockets::udp::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::sockets::udp_create_socket::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::sockets::instance_network::add_to_linker_get_host(l, closure)?;
-    crate::p2::bindings::sockets::network::add_to_linker_get_host(l, &options.into(), closure)?;
-    crate::p2::bindings::sockets::ip_name_lookup::add_to_linker_get_host(l, closure)?;
+    let f: fn(&mut T) -> WasiImpl<&mut T> = |t| WasiImpl(IoImpl(t));
+    bindings::sync::filesystem::types::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    bindings::sync::sockets::tcp::add_to_linker::<T, HasWasi<T>>(l, f)?;
+    bindings::sync::sockets::udp::add_to_linker::<T, HasWasi<T>>(l, f)?;
     Ok(())
 }
 
-// NB: workaround some rustc inference - a future refactoring may make this
-// obsolete.
-fn io_type_annotate<T: IoView, F>(val: F) -> F
-where
-    F: Fn(&mut T) -> IoImpl<&mut T>,
-{
-    val
+/// Shared functionality of [`add_to_linker_sync`]` and
+/// [`add_to_linker_proxy_interfaces_sync`].
+fn add_sync_wasi_io<T: WasiView + 'static>(
+    linker: &mut wasmtime::component::Linker<T>,
+) -> anyhow::Result<()> {
+    let l = linker;
+    let f: fn(&mut T) -> IoImpl<&mut T> = |t| IoImpl(t);
+    wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker::<T, HasIo<T>>(l, f)?;
+    bindings::sync::io::poll::add_to_linker::<T, HasIo<T>>(l, f)?;
+    bindings::sync::io::streams::add_to_linker::<T, HasIo<T>>(l, f)?;
+    Ok(())
 }
-fn type_annotate<T: WasiView, F>(val: F) -> F
-where
-    F: Fn(&mut T) -> WasiImpl<&mut T>,
-{
-    val
+
+struct HasIo<T>(T);
+
+impl<T: 'static> HasData for HasIo<T> {
+    type Data<'a> = IoImpl<&'a mut T>;
+}
+
+struct HasWasi<T>(T);
+
+impl<T: 'static> HasData for HasWasi<T> {
+    type Data<'a> = WasiImpl<&'a mut T>;
 }

@@ -212,16 +212,18 @@ impl ExampleCtx {
 // wasi:cli/command world. Many of these impls are bare-bones and some are
 // intentionally broken, see notes below.
 pub fn add_to_linker_async(linker: &mut Linker<ExampleCtx>) -> Result<()> {
-    wasi::clocks::monotonic_clock::add_to_linker(linker, |t| t)?;
-    wasi::clocks::wall_clock::add_to_linker(linker, |t| t)?;
-    wasi::cli::environment::add_to_linker(linker, |t| t)?;
-    wasi::cli::exit::add_to_linker(linker, &wasi::cli::exit::LinkOptions::default(), |t| t)?;
-    wasi::cli::stdin::add_to_linker(linker, |t| t)?;
-    wasi::cli::stdout::add_to_linker(linker, |t| t)?;
-    wasi::cli::stderr::add_to_linker(linker, |t| t)?;
-    wasi::random::random::add_to_linker(linker, |t| t)?;
-    wasi::filesystem::preopens::add_to_linker(linker, |t| t)?;
-    wasi::filesystem::types::add_to_linker(linker, |t| t)?;
+    type Data = wasmtime::component::HasSelf<ExampleCtx>;
+
+    wasi::clocks::monotonic_clock::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::clocks::wall_clock::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::cli::environment::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::cli::exit::add_to_linker::<_, Data>(linker, &Default::default(), |t| t)?;
+    wasi::cli::stdin::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::cli::stdout::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::cli::stderr::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::random::random::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::filesystem::preopens::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::filesystem::types::add_to_linker::<_, Data>(linker, |t| t)?;
     Ok(())
 }
 

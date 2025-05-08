@@ -69,6 +69,7 @@
 
 use anyhow::Result;
 use std::collections::HashMap;
+use wasmtime::component::HasData;
 
 mod gen_ {
     wasmtime::component::bindgen!({
@@ -140,10 +141,16 @@ impl generated::Host for WasiConfig<'_> {
 }
 
 /// Add all the `wasi-config` world's interfaces to a [`wasmtime::component::Linker`].
-pub fn add_to_linker<T>(
+pub fn add_to_linker<T: 'static>(
     l: &mut wasmtime::component::Linker<T>,
-    f: impl Fn(&mut T) -> WasiConfig<'_> + Send + Sync + Copy + 'static,
+    f: fn(&mut T) -> WasiConfig<'_>,
 ) -> Result<()> {
-    generated::add_to_linker_get_host(l, f)?;
+    generated::add_to_linker::<T, HasWasiConfig>(l, f)?;
     Ok(())
+}
+
+struct HasWasiConfig;
+
+impl HasData for HasWasiConfig {
+    type Data<'a> = WasiConfig<'a>;
 }
