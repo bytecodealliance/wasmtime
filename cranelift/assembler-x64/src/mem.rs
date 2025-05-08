@@ -2,7 +2,7 @@
 
 use crate::api::{AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, TrapCode};
 use crate::gpr::{self, NonRspGpr, Size};
-use crate::rex::{encode_modrm, encode_sib, Imm, RexPrefix};
+use crate::rex::{encode_modrm, encode_sib, Disp, RexPrefix};
 use crate::{RegisterVisitor, Registers};
 
 /// x64 memory addressing modes.
@@ -47,6 +47,18 @@ impl<R: AsReg> Amode<R> {
             }
             Amode::RipRelative { .. } => RexPrefix::two_op(enc_reg, 0, has_w_bit, uses_8bit),
         }
+    }
+
+    /// Emit the ModR/M, SIB, and displacement suffixes as neeeded for this
+    /// `Amode`.
+    pub(crate) fn encode_rex_suffixes(
+        &self,
+        sink: &mut impl CodeSink,
+        offsets: &impl KnownOffsetTable,
+        enc_reg: u8,
+        bytes_at_end: u8,
+    ) {
+        emit_modrm_sib_disp(sink, offsets, enc_reg, self, bytes_at_end, None);
     }
 }
 
@@ -268,6 +280,24 @@ impl<R: AsReg, M: AsReg> GprMem<R, M> {
             GprMem::Mem(amode) => amode.as_rex_prefix(enc_reg, has_w_bit, uses_8bit),
         }
     }
+
+    /// Emit the ModR/M, SIB, and displacement suffixes for this [`GprMem`].
+    pub(crate) fn encode_rex_suffixes(
+        &self,
+        sink: &mut impl CodeSink,
+        offsets: &impl KnownOffsetTable,
+        enc_reg: u8,
+        bytes_at_end: u8,
+    ) {
+        match self {
+            GprMem::Gpr(gpr) => {
+                sink.put1(encode_modrm(0b11, enc_reg & 0b111, gpr.enc() & 0b111));
+            }
+            GprMem::Mem(amode) => {
+                amode.encode_rex_suffixes(sink, offsets, enc_reg, bytes_at_end);
+            }
+        }
+    }
 }
 
 /// An XMM register or memory operand.
@@ -299,10 +329,28 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
             XmmMem::Mem(amode) => amode.as_rex_prefix(enc_reg, has_w_bit, uses_8bit),
         }
     }
+
+    /// Emit the ModR/M, SIB, and displacement suffixes for this [`XmmMem`].
+    pub(crate) fn encode_rex_suffixes(
+        &self,
+        sink: &mut impl CodeSink,
+        offsets: &impl KnownOffsetTable,
+        enc_reg: u8,
+        bytes_at_end: u8,
+    ) {
+        match self {
+            XmmMem::Xmm(xmm) => {
+                sink.put1(encode_modrm(0b11, enc_reg & 0b111, xmm.enc() & 0b111));
+            }
+            XmmMem::Mem(amode) => {
+                amode.encode_rex_suffixes(sink, offsets, enc_reg, bytes_at_end);
+            }
+        }
+    }
 }
 
 /// Emit the ModRM/SIB/displacement sequence for a memory operand.
-pub fn emit_modrm_sib_disp<R: AsReg>(
+fn emit_modrm_sib_disp<R: AsReg>(
     sink: &mut impl CodeSink,
     offsets: &impl KnownOffsetTable,
     enc_g: u8,
@@ -313,7 +361,7 @@ pub fn emit_modrm_sib_disp<R: AsReg>(
     match mem_e.clone() {
         Amode::ImmReg { simm32, base, .. } => {
             let enc_e = base.enc();
-            let mut imm = Imm::new(simm32.value(offsets), evex_scaling);
+            let mut imm = Disp::new(simm32.value(offsets), evex_scaling);
 
             // Most base registers allow for a single ModRM byte plus an
             // optional immediate. If rsp is the base register, however, then a
@@ -360,7 +408,7 @@ pub fn emit_modrm_sib_disp<R: AsReg>(
             // that if the base register's lower three bits are `101` then an
             // offset must be present. This is a special case in the encoding of
             // the SIB byte and requires an explicit displacement with rbp/r13.
-            let mut imm = Imm::new(simm32.value(), evex_scaling);
+            let mut imm = Disp::new(simm32.value(), evex_scaling);
             if enc_base & 7 == gpr::enc::RBP {
                 imm.force_immediate();
             }
