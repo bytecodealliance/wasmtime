@@ -20,15 +20,6 @@ use alloc::vec::Vec;
 use cranelift_entity::EntityRef as _;
 
 impl Inst {
-    fn neg(size: OperandSize, src: Writable<Reg>) -> Inst {
-        debug_assert_eq!(src.to_reg().class(), RegClass::Int);
-        Inst::Neg {
-            size,
-            src: Gpr::unwrap_new(src.to_reg()),
-            dst: WritableGpr::from_writable_reg(src).unwrap(),
-        }
-    }
-
     fn xmm_unary_rm_r_imm(op: SseOpcode, src: RegMem, dst: Writable<Reg>, imm: u8) -> Inst {
         src.assert_regclass_is(RegClass::Float);
         debug_assert!(dst.to_reg().class() == RegClass::Float);
@@ -1123,72 +1114,6 @@ fn test_x64_emit() {
         ),
         "490FBDC7",
         "bsrq    %r15, %rax",
-    ));
-
-    // ========================================================
-    // Not
-    insns.push((
-        Inst::not(OperandSize::Size32, Writable::from_reg(regs::rsi())),
-        "F7D6",
-        "notl    %esi, %esi",
-    ));
-    insns.push((
-        Inst::not(OperandSize::Size64, Writable::from_reg(regs::r15())),
-        "49F7D7",
-        "notq    %r15, %r15",
-    ));
-    insns.push((
-        Inst::not(OperandSize::Size32, Writable::from_reg(regs::r14())),
-        "41F7D6",
-        "notl    %r14d, %r14d",
-    ));
-    insns.push((
-        Inst::not(OperandSize::Size16, Writable::from_reg(regs::rdi())),
-        "66F7D7",
-        "notw    %di, %di",
-    ));
-    insns.push((
-        Inst::not(OperandSize::Size8, Writable::from_reg(regs::rdi())),
-        "40F6D7",
-        "notb    %dil, %dil",
-    ));
-    insns.push((
-        Inst::not(OperandSize::Size8, Writable::from_reg(regs::rax())),
-        "F6D0",
-        "notb    %al, %al",
-    ));
-
-    // ========================================================
-    // Neg
-    insns.push((
-        Inst::neg(OperandSize::Size32, Writable::from_reg(regs::rsi())),
-        "F7DE",
-        "negl    %esi, %esi",
-    ));
-    insns.push((
-        Inst::neg(OperandSize::Size64, Writable::from_reg(regs::r15())),
-        "49F7DF",
-        "negq    %r15, %r15",
-    ));
-    insns.push((
-        Inst::neg(OperandSize::Size32, Writable::from_reg(regs::r14())),
-        "41F7DE",
-        "negl    %r14d, %r14d",
-    ));
-    insns.push((
-        Inst::neg(OperandSize::Size16, Writable::from_reg(regs::rdi())),
-        "66F7DF",
-        "negw    %di, %di",
-    ));
-    insns.push((
-        Inst::neg(OperandSize::Size8, Writable::from_reg(regs::rdi())),
-        "40F6DF",
-        "negb    %dil, %dil",
-    ));
-    insns.push((
-        Inst::neg(OperandSize::Size8, Writable::from_reg(regs::rax())),
-        "F6D8",
-        "negb    %al, %al",
     ));
 
     // ========================================================

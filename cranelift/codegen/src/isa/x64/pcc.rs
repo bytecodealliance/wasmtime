@@ -95,10 +95,6 @@ pub(crate) fn check(
             RegMem::Reg { .. } => undefined_result(ctx, vcode, dst, 64, size.to_bits().into()),
         },
 
-        Inst::Not { size, dst, .. } | Inst::Neg { size, dst, .. } => {
-            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())
-        }
-
         Inst::Div {
             size,
             ref divisor,

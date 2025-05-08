@@ -42,16 +42,6 @@
                        (dst WritableGpr)
                        (imm u8))
 
-       ;; Bitwise not.
-       (Not (size OperandSize) ;; 1, 2, 4, or 8
-            (src Gpr)
-            (dst WritableGpr))
-
-       ;; Integer negation.
-       (Neg (size OperandSize) ;; 1, 2, 4, or 8
-            (src Gpr)
-            (dst WritableGpr))
-
        ;; Integer quotient and remainder: (div idiv) $rax $rdx (reg addr)
        ;;
        ;; Note that this isn't used for 8-bit division which has its own `Div8`
@@ -4568,27 +4558,25 @@
 
 ;; Helper for creating `not` instructions.
 (decl x64_not (Type Gpr) Gpr)
-(rule (x64_not ty src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.Not size src dst))))
-        dst))
+(rule (x64_not $I8 src)  (x64_notb_m src))
+(rule (x64_not $I16 src) (x64_notw_m src))
+(rule (x64_not $I32 src) (x64_notl_m src))
+(rule (x64_not $I64 src) (x64_notq_m src))
 
-;; Helper for creating `neg` instructions.
+;; Helpers for creating `neg` instructions.
+(decl x64_neg_raw (Type Gpr) AssemblerOutputs)
+(rule (x64_neg_raw $I8 src)  (x64_negb_m_raw src))
+(rule (x64_neg_raw $I16 src) (x64_negw_m_raw src))
+(rule (x64_neg_raw $I32 src) (x64_negl_m_raw src))
+(rule (x64_neg_raw $I64 src) (x64_negq_m_raw src))
+
 (decl x64_neg (Type Gpr) Gpr)
 (rule (x64_neg ty src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.Neg size src dst))))
-        dst))
+      (emit_ret_gpr (x64_neg_raw ty src)))
 
-;; Helper for creating `neg` instructions whose flags are also used.
 (decl x64_neg_paired (Type Gpr) ProducesFlags)
 (rule (x64_neg_paired ty src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty))
-            (inst MInst (MInst.Neg size src dst)))
-        (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst dst)))
+      (asm_produce_flags (x64_neg_raw ty src)))
 
 (spec (x64_lea ty amode)
       (provide (= result amode))
