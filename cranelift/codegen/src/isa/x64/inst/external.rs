@@ -90,6 +90,14 @@ impl From<Writable<Reg>> for asm::Gpr<PairedGpr> {
     }
 }
 
+impl From<Writable<Reg>> for asm::Gpr<WritableGpr> {
+    fn from(wgpr: Writable<Reg>) -> Self {
+        assert!(wgpr.to_reg().class() == RegClass::Int);
+        let wgpr = WritableGpr::from_writable_reg(wgpr).unwrap();
+        Self::new(wgpr)
+    }
+}
+
 // For Winch ergonomics.
 impl From<PairedGpr> for asm::Gpr<PairedGpr> {
     fn from(pair: PairedGpr) -> Self {
