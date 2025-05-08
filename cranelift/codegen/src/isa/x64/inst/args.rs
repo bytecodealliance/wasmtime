@@ -1001,8 +1001,6 @@ pub enum SseOpcode {
     Packusdw,
     Packuswb,
     Palignr,
-    Pand,
-    Pandn,
     Pavgb,
     Pavgw,
     Pblendvb,
@@ -1055,7 +1053,6 @@ pub enum SseOpcode {
     Pmulld,
     Pmullw,
     Pmuludq,
-    Por,
     Pshufb,
     Pshufd,
     Psllw,
@@ -1071,7 +1068,6 @@ pub enum SseOpcode {
     Punpckhwd,
     Punpcklbw,
     Punpcklwd,
-    Pxor,
     Rcpss,
     Roundps,
     Roundpd,
@@ -1164,8 +1160,6 @@ impl SseOpcode {
             | SseOpcode::Packssdw
             | SseOpcode::Packsswb
             | SseOpcode::Packuswb
-            | SseOpcode::Pand
-            | SseOpcode::Pandn
             | SseOpcode::Pavgb
             | SseOpcode::Pavgw
             | SseOpcode::Pcmpeqb
@@ -1186,7 +1180,6 @@ impl SseOpcode {
             | SseOpcode::Pmulhuw
             | SseOpcode::Pmullw
             | SseOpcode::Pmuludq
-            | SseOpcode::Por
             | SseOpcode::Pshufd
             | SseOpcode::Psllw
             | SseOpcode::Pslld
@@ -1200,7 +1193,6 @@ impl SseOpcode {
             | SseOpcode::Punpckhwd
             | SseOpcode::Punpcklbw
             | SseOpcode::Punpcklwd
-            | SseOpcode::Pxor
             | SseOpcode::Sqrtpd
             | SseOpcode::Sqrtsd
             | SseOpcode::Ucomisd
@@ -1357,8 +1349,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Packusdw => "packusdw",
             SseOpcode::Packuswb => "packuswb",
             SseOpcode::Palignr => "palignr",
-            SseOpcode::Pand => "pand",
-            SseOpcode::Pandn => "pandn",
             SseOpcode::Pavgb => "pavgb",
             SseOpcode::Pavgw => "pavgw",
             SseOpcode::Pblendvb => "pblendvb",
@@ -1411,7 +1401,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pmulld => "pmulld",
             SseOpcode::Pmullw => "pmullw",
             SseOpcode::Pmuludq => "pmuludq",
-            SseOpcode::Por => "por",
             SseOpcode::Pshufb => "pshufb",
             SseOpcode::Pshufd => "pshufd",
             SseOpcode::Psllw => "psllw",
@@ -1427,7 +1416,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Punpckhwd => "punpckhwd",
             SseOpcode::Punpcklbw => "punpcklbw",
             SseOpcode::Punpcklwd => "punpcklwd",
-            SseOpcode::Pxor => "pxor",
             SseOpcode::Rcpss => "rcpss",
             SseOpcode::Roundps => "roundps",
             SseOpcode::Roundpd => "roundpd",

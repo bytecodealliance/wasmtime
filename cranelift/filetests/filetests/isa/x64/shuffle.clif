@@ -626,7 +626,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm4
-;   pxor    %xmm4, %xmm4, %xmm4
+;   pxor %xmm4, %xmm4
 ;   pshufb  %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
