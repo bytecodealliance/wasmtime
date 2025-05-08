@@ -82,12 +82,12 @@ block0(v0: i8x16, v1: i8x16, v2: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pand    %xmm0, %xmm2, %xmm0
+;   pand %xmm2, %xmm0
 ;   movdqa  %xmm0, %xmm7
-;   pandn   %xmm2, %xmm1, %xmm2
+;   pandn %xmm1, %xmm2
 ;   movdqa  %xmm7, %xmm1
 ;   movdqa  %xmm2, %xmm0
-;   por     %xmm0, %xmm1, %xmm0
+;   por %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -216,9 +216,9 @@ block0(v0: i8x16, v1: i8x16):
 ;   movdqa  %xmm0, %xmm7
 ;   movdqu  const(0), %xmm0
 ;   movdqa  %xmm7, %xmm2
-;   pand    %xmm2, %xmm0, %xmm2
-;   pandn   %xmm0, %xmm1, %xmm0
-;   por     %xmm0, %xmm2, %xmm0
+;   pand %xmm0, %xmm2
+;   pandn %xmm1, %xmm0
+;   por %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

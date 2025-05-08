@@ -45,5 +45,7 @@ pub fn list() -> Vec<Inst> {
         inst("andpd", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x54]).r(), _64b | compat | sse2),
         inst("andnps", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x0F, 0x55]).r(), _64b | compat | sse),
         inst("andnpd", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x55]).r(), _64b | compat | sse2),
+        inst("pand", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDB]).r(), _64b | compat | sse2),
+        inst("pandn", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDF]).r(), _64b | compat | sse2),
     ]
 }

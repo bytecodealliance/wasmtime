@@ -139,7 +139,7 @@ block0(v0: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pxor    %xmm0, const(0), %xmm0
+;   pxor (%rip), %xmm0
 ;   pmaddwd %xmm0, const(1), %xmm0
 ;   paddd (%rip), %xmm0
 ;   movq    %rbp, %rsp

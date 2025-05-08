@@ -13,7 +13,7 @@ block0(v0: i8):
 ; block0:
 ;   movd    %edi, %xmm0
 ;   uninit  %xmm5
-;   pxor    %xmm5, %xmm5, %xmm5
+;   pxor %xmm5, %xmm5
 ;   pshufb  %xmm0, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -178,7 +178,7 @@ block0(v0: i64):
 ;   uninit  %xmm0
 ;   pinsrb  $0, %xmm0, 0(%rdi), %xmm0
 ;   uninit  %xmm7
-;   pxor    %xmm7, %xmm7, %xmm7
+;   pxor %xmm7, %xmm7
 ;   pshufb  %xmm0, %xmm7, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

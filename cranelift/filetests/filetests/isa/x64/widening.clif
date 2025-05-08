@@ -243,7 +243,7 @@ block0(v0: i8x16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm3
-;   pxor    %xmm3, %xmm3, %xmm3
+;   pxor %xmm3, %xmm3
 ;   punpckhbw %xmm0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -271,7 +271,7 @@ block0(v0: i16x8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm3
-;   pxor    %xmm3, %xmm3, %xmm3
+;   pxor %xmm3, %xmm3
 ;   punpckhwd %xmm0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

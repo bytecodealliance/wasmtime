@@ -3349,12 +3349,6 @@ fn test_x64_emit() {
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pxor, RegMem::reg(xmm11), w_xmm2),
-        "66410FEFD3",
-        "pxor    %xmm2, %xmm11, %xmm2",
-    ));
-
-    insns.push((
         Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::reg(xmm11), w_xmm2),
         "66410F3800D3",
         "pshufb  %xmm2, %xmm11, %xmm2",

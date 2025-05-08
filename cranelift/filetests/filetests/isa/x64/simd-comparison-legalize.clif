@@ -14,7 +14,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   pcmpeqd %xmm0, %xmm1, %xmm0
 ;   uninit  %xmm6
 ;   pcmpeqd %xmm6, %xmm6, %xmm6
-;   pxor    %xmm0, %xmm6, %xmm0
+;   pxor %xmm6, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -45,7 +45,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   pcmpeqd %xmm0, %xmm1, %xmm0
 ;   uninit  %xmm1
 ;   pcmpeqd %xmm1, %xmm1, %xmm1
-;   pxor    %xmm0, %xmm1, %xmm0
+;   pxor %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

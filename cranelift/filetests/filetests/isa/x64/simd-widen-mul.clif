@@ -216,10 +216,10 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm2
-;   pxor    %xmm2, %xmm2, %xmm2
+;   pxor %xmm2, %xmm2
 ;   punpckhbw %xmm0, %xmm2, %xmm0
 ;   uninit  %xmm2
-;   pxor    %xmm2, %xmm2, %xmm2
+;   pxor %xmm2, %xmm2
 ;   punpckhbw %xmm1, %xmm2, %xmm1
 ;   pmullw  %xmm0, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
