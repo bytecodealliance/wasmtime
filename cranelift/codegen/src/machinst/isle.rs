@@ -413,8 +413,20 @@ macro_rules! isle_lower_prelude_methods {
         }
 
         #[inline]
+        fn emit_u64_be_const(&mut self, value: u64) -> VCodeConstant {
+            let data = VCodeConstantData::U64(value.to_be_bytes());
+            self.lower_ctx.use_constant(data)
+        }
+
+        #[inline]
         fn emit_u128_le_const(&mut self, value: u128) -> VCodeConstant {
             let data = VCodeConstantData::Generated(value.to_le_bytes().as_slice().into());
+            self.lower_ctx.use_constant(data)
+        }
+
+        #[inline]
+        fn emit_u128_be_const(&mut self, value: u128) -> VCodeConstant {
+            let data = VCodeConstantData::Generated(value.to_be_bytes().as_slice().into());
             self.lower_ctx.use_constant(data)
         }
 

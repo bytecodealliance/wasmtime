@@ -41,19 +41,20 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x3f800000400000004040000040800000 ; vl %v24, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v24, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x10
+;   vl %v24, 0(%r1)
+;   br %r14
+;   .byte 0x00, 0x00
 ;   sur %f8, %f0
 ;   .byte 0x00, 0x00
 ;   sth %r0, 0
 ;   sth %r4, 0
 ;   sth %r8, 0
-;   vl %v24, 0(%r1)
-;   br %r14
 
 function %vconst_f32x4_mixed_le() -> f32x4 tail {
 block0:
@@ -63,19 +64,20 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x4080000040400000400000003f800000 ; vl %v24, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v24, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x10
+;   vl %v24, 0(%r1)
+;   br %r14
+;   .byte 0x00, 0x00
 ;   sth %r8, 0
 ;   sth %r4, 0
 ;   sth %r0, 0
 ;   sur %f8, %f0
 ;   .byte 0x00, 0x00
-;   vl %v24, 0(%r1)
-;   br %r14
 
 function %vconst_f64x2_mixed_be() -> f64x2 {
 block0:
@@ -85,12 +87,15 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x3ff00000000000004000000000000000 ; vl %v24, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v24, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x10
+;   vl %v24, 0(%r1)
+;   br %r14
+;   .byte 0x00, 0x00
 ;   sur %f15, %f0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
@@ -98,8 +103,6 @@ block0:
 ;   sth %r0, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   vl %v24, 0(%r1)
-;   br %r14
 
 function %vconst_f64x2_mixed_le() -> f64x2 tail {
 block0:
@@ -109,12 +112,15 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x40000000000000003ff0000000000000 ; vl %v24, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v24, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x10
+;   vl %v24, 0(%r1)
+;   br %r14
+;   .byte 0x00, 0x00
 ;   sth %r0, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
@@ -122,8 +128,6 @@ block0:
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   vl %v24, 0(%r1)
-;   br %r14
 
 function %fadd_f32x4(f32x4, f32x4) -> f32x4 {
 block0(v0: f32x4, v1: f32x4):
@@ -775,7 +779,7 @@ block0(v0: i32x4):
 ;   vupllf %v16, %v24
 ;   vcdlgb %v18, %v16, 0, 3
 ;   vledb %v20, %v18, 0, 4
-;   bras %r1, 20 ; data.u128 0x0001020308090a0b1011121318191a1b ; vl %v22, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v22, 0(%r1)
 ;   vperm %v24, %v6, %v20, %v22
 ;   br %r14
 ;
@@ -787,7 +791,14 @@ block0(v0: i32x4):
 ;   vupllf %v16, %v24
 ;   vcdlgb %v18, %v16, 0, 3
 ;   vledb %v20, %v18, 0, 4
-;   bras %r1, 0x38
+;   larl %r1, 0x40
+;   vl %v22, 0(%r1)
+;   vperm %v24, %v6, %v20, %v22
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x01
 ;   .byte 0x02, 0x03
 ;   .byte 0x08, 0x09
@@ -796,9 +807,6 @@ block0(v0: i32x4):
 ;   ltr %r1, %r3
 ;   lr %r1, %r9
 ;   ar %r1, %r11
-;   vl %v22, 0(%r1)
-;   vperm %v24, %v6, %v20, %v22
-;   br %r14
 
 function %fcvt_from_sint_i32x4_f32x4(i32x4) -> f32x4 {
 block0(v0: i32x4):
@@ -814,7 +822,7 @@ block0(v0: i32x4):
 ;   vuplf %v16, %v24
 ;   vcdgb %v18, %v16, 0, 3
 ;   vledb %v20, %v18, 0, 4
-;   bras %r1, 20 ; data.u128 0x0001020308090a0b1011121318191a1b ; vl %v22, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v22, 0(%r1)
 ;   vperm %v24, %v6, %v20, %v22
 ;   br %r14
 ;
@@ -826,7 +834,14 @@ block0(v0: i32x4):
 ;   vuplf %v16, %v24
 ;   vcdgb %v18, %v16, 0, 3
 ;   vledb %v20, %v18, 0, 4
-;   bras %r1, 0x38
+;   larl %r1, 0x40
+;   vl %v22, 0(%r1)
+;   vperm %v24, %v6, %v20, %v22
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x01
 ;   .byte 0x02, 0x03
 ;   .byte 0x08, 0x09
@@ -835,9 +850,6 @@ block0(v0: i32x4):
 ;   ltr %r1, %r3
 ;   lr %r1, %r9
 ;   ar %r1, %r11
-;   vl %v22, 0(%r1)
-;   vperm %v24, %v6, %v20, %v22
-;   br %r14
 
 function %fcvt_from_uint_i64x2_f64x2(i64x2) -> f64x2 {
 block0(v0: i64x2):

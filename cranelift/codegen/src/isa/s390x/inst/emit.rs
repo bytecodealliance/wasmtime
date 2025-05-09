@@ -151,7 +151,8 @@ pub fn mem_finalize(
 
     // If this addressing mode cannot be handled by the instruction, use load-address.
     let need_load_address = match &mem {
-        &MemArg::Label { .. } | &MemArg::Symbol { .. } if !mi.have_pcrel => true,
+        &MemArg::Label { .. } | &MemArg::Constant { .. } if !mi.have_pcrel => true,
+        &MemArg::Symbol { .. } if !mi.have_pcrel => true,
         &MemArg::Symbol { flags, .. } if !mi.have_unaligned_pcrel && !flags.aligned() => true,
         &MemArg::BXD20 { .. } if !mi.have_d20 => true,
         &MemArg::BXD12 { index, .. } | &MemArg::BXD20 { index, .. } if !mi.have_index => {
@@ -240,6 +241,11 @@ pub fn mem_emit(
             );
         }
         &MemArg::Label { target } => {
+            sink.use_label_at_offset(sink.cur_offset(), target, LabelUse::BranchRIL);
+            put(sink, &enc_ril_b(opcode_ril.unwrap(), rd, 0));
+        }
+        &MemArg::Constant { constant } => {
+            let target = sink.get_label_for_constant(constant);
             sink.use_label_at_offset(sink.cur_offset(), target, LabelUse::BranchRIL);
             put(sink, &enc_ril_b(opcode_ril.unwrap(), rd, 0));
         }
@@ -2386,42 +2392,6 @@ impl Inst {
                     put(sink, &enc_vrr_a(OPCODE_VLR, rd.to_reg(), rm, 0, 0, 0));
                 }
             }
-            &Inst::LoadFpuConst16 { rd, const_data } => {
-                let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(OPCODE_BRAS, reg, 6));
-                sink.put2(const_data.swap_bytes());
-                let inst = Inst::VecLoadLaneUndef {
-                    size: 16,
-                    rd,
-                    mem: MemArg::reg(reg, MemFlags::trusted()),
-                    lane_imm: 0,
-                };
-                inst.emit(sink, emit_info, state);
-            }
-            &Inst::LoadFpuConst32 { rd, const_data } => {
-                let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(OPCODE_BRAS, reg, 8));
-                sink.put4(const_data.swap_bytes());
-                let inst = Inst::VecLoadLaneUndef {
-                    size: 32,
-                    rd,
-                    mem: MemArg::reg(reg, MemFlags::trusted()),
-                    lane_imm: 0,
-                };
-                inst.emit(sink, emit_info, state);
-            }
-            &Inst::LoadFpuConst64 { rd, const_data } => {
-                let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(OPCODE_BRAS, reg, 12));
-                sink.put8(const_data.swap_bytes());
-                let inst = Inst::VecLoadLaneUndef {
-                    size: 64,
-                    rd,
-                    mem: MemArg::reg(reg, MemFlags::trusted()),
-                    lane_imm: 0,
-                };
-                inst.emit(sink, emit_info, state);
-            }
             &Inst::FpuRR { fpu_op, rd, rn } => {
                 let (opcode, m3, m4, m5, opcode_fpr) = match fpu_op {
                     FPUOp1::Abs32 => (0xe7cc, 2, 8, 2, Some(0xb300)), // WFPSO, LPEBR
@@ -2909,35 +2879,6 @@ impl Inst {
                 let opcode = 0xe762; // VLVGP
                 put(sink, &enc_vrr_f(opcode, rd.to_reg(), rn, rm));
             }
-            &Inst::VecLoadConst { rd, const_data } => {
-                let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(OPCODE_BRAS, reg, 20));
-                for i in const_data.to_be_bytes().iter() {
-                    sink.put1(*i);
-                }
-                let inst = Inst::VecLoad {
-                    rd,
-                    mem: MemArg::reg(reg, MemFlags::trusted()),
-                };
-                inst.emit(sink, emit_info, state);
-            }
-            &Inst::VecLoadConstReplicate {
-                size,
-                rd,
-                const_data,
-            } => {
-                let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(OPCODE_BRAS, reg, (4 + size / 8) as i32));
-                for i in 0..size / 8 {
-                    sink.put1((const_data >> (size - 8 - 8 * i)) as u8);
-                }
-                let inst = Inst::VecLoadReplicate {
-                    size,
-                    rd,
-                    mem: MemArg::reg(reg, MemFlags::trusted()),
-                };
-                inst.emit(sink, emit_info, state);
-            }
             &Inst::VecImmByteMask { rd, mask } => {
                 let opcode = 0xe744; // VGBM
                 put(sink, &enc_vri_a(opcode, rd.to_reg(), mask, 0));
@@ -3178,7 +3119,25 @@ impl Inst {
 
                 let opcode = match size {
                     8 => 0xe740,  // VLEIB
-                    16 => 0xe741, // LEIVH
+                    16 => 0xe741, // VLEIH
+                    32 => 0xe743, // VLEIF
+                    64 => 0xe742, // VLEIG
+                    _ => unreachable!(),
+                };
+                put(
+                    sink,
+                    &enc_vri_a(opcode, rd.to_reg(), imm as u16, lane_imm.into()),
+                );
+            }
+            &Inst::VecInsertLaneImmUndef {
+                size,
+                rd,
+                imm,
+                lane_imm,
+            } => {
+                let opcode = match size {
+                    8 => 0xe740,  // VLEIB
+                    16 => 0xe741, // VLEIH
                     32 => 0xe743, // VLEIF
                     64 => 0xe742, // VLEIG
                     _ => unreachable!(),
