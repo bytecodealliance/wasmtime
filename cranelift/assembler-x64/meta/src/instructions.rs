@@ -5,6 +5,7 @@ mod and;
 mod neg;
 mod or;
 mod shld;
+mod sqrt;
 mod sub;
 mod xor;
 
@@ -18,6 +19,7 @@ pub fn list() -> Vec<Inst> {
     all.extend(or::list());
     all.extend(neg::list());
     all.extend(shld::list());
+    all.extend(sqrt::list());
     all.extend(sub::list());
     all.extend(xor::list());
     all
