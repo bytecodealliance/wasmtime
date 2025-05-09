@@ -88,6 +88,7 @@ impl dsl::Mutability {
         match self {
             dsl::Mutability::Read => "Read",
             dsl::Mutability::ReadWrite => "ReadWrite",
+            dsl::Mutability::Write => "Write",
         }
     }
 
@@ -96,6 +97,7 @@ impl dsl::Mutability {
         match self {
             dsl::Mutability::Read => "read",
             dsl::Mutability::ReadWrite => "read_write",
+            dsl::Mutability::Write => "write",
         }
     }
 }
