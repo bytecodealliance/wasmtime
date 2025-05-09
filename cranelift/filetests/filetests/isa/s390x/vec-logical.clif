@@ -1025,27 +1025,30 @@ block0(v0: i64x2):
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080808080808080804000 ; vl %v2, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v2, 0(%r1)
 ;   vbperm %v4, %v24, %v2
 ;   lgdr %r2, %f4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
-;   .byte 0x80, 0x80
-;   .byte 0x80, 0x80
-;   .byte 0x80, 0x80
-;   .byte 0x80, 0x80
-;   .byte 0x80, 0x80
-;   .byte 0x80, 0x80
-;   .byte 0x80, 0x80
-;   sth %r0, 0x720(%r14)
-;   lpr %r0, %r0
-;   .byte 0x00, 0x06
+;   larl %r1, 0x20
+;   vl %v2, 0(%r1)
 ;   vbperm %v4, %v24, %v2
 ;   lgdr %r2, %f4
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x80, 0x80
+;   .byte 0x80, 0x80
+;   .byte 0x80, 0x80
+;   .byte 0x80, 0x80
+;   .byte 0x80, 0x80
+;   .byte 0x80, 0x80
+;   .byte 0x80, 0x80
+;   .byte 0x40, 0x00
 
 function %vhigh_bits_be(i32x4) -> i64 {
 block0(v0: i32x4):
@@ -1055,14 +1058,22 @@ block0(v0: i32x4):
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080808080808060402000 ; vl %v2, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v2, 0(%r1)
 ;   vbperm %v4, %v24, %v2
 ;   lgdr %r2, %f4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x20
+;   vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   .byte 0x80, 0x80
 ;   .byte 0x80, 0x80
 ;   .byte 0x80, 0x80
@@ -1070,10 +1081,6 @@ block0(v0: i32x4):
 ;   .byte 0x80, 0x80
 ;   .byte 0x80, 0x80
 ;   std %f4, 0(%r2)
-;   vl %v2, 0(%r1)
-;   vbperm %v4, %v24, %v2
-;   lgdr %r2, %f4
-;   br %r14
 
 function %vhigh_bits_be(i16x8) -> i64 {
 block0(v0: i16x8):
@@ -1083,14 +1090,22 @@ block0(v0: i16x8):
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080807060504030201000 ; vl %v2, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v2, 0(%r1)
 ;   vbperm %v4, %v24, %v2
 ;   lgdr %r2, %f4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x20
+;   vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   .byte 0x80, 0x80
 ;   .byte 0x80, 0x80
 ;   .byte 0x80, 0x80
@@ -1098,10 +1113,6 @@ block0(v0: i16x8):
 ;   ste %f6, 0x40(%r5)
 ;   lper %f2, %f0
 ;   lpr %r0, %r0
-;   vl %v2, 0(%r1)
-;   vbperm %v4, %v24, %v2
-;   lgdr %r2, %f4
-;   br %r14
 
 function %vhigh_bits_be(i8x16) -> i64 {
 block0(v0: i8x16):
@@ -1111,24 +1122,28 @@ block0(v0: i8x16):
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x78706860585048403830282018100800 ; vl %v2, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v2, 0(%r1)
 ;   vbperm %v4, %v24, %v2
 ;   lgdr %r2, %f4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x20
+;   vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   le %f7, 0x860(%r6)
 ;   l %r5, 0x840(%r4)
 ;   ler %f3, %f0
 ;   ldr %f2, %f0
 ;   lr %r1, %r0
 ;   .byte 0x08, 0x00
-;   vl %v2, 0(%r1)
-;   vbperm %v4, %v24, %v2
-;   lgdr %r2, %f4
-;   br %r14
 
 function %vhigh_bits_le(i64x2) -> i64 tail {
 block0(v0: i64x2):
@@ -1138,14 +1153,22 @@ block0(v0: i64x2):
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080808080808080800040 ; vl %v2, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v2, 0(%r1)
 ;   vbperm %v4, %v24, %v2
 ;   lgdr %r2, %f4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x20
+;   vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   .byte 0x80, 0x80
 ;   .byte 0x80, 0x80
 ;   .byte 0x80, 0x80
@@ -1154,10 +1177,6 @@ block0(v0: i64x2):
 ;   .byte 0x80, 0x80
 ;   .byte 0x80, 0x80
 ;   .byte 0x00, 0x40
-;   vl %v2, 0(%r1)
-;   vbperm %v4, %v24, %v2
-;   lgdr %r2, %f4
-;   br %r14
 
 function %vhigh_bits_le(i32x4) -> i64 tail {
 block0(v0: i32x4):
@@ -1167,14 +1186,22 @@ block0(v0: i32x4):
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080808080808000204060 ; vl %v2, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v2, 0(%r1)
 ;   vbperm %v4, %v24, %v2
 ;   lgdr %r2, %f4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x20
+;   vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   .byte 0x80, 0x80
 ;   .byte 0x80, 0x80
 ;   .byte 0x80, 0x80
@@ -1182,12 +1209,7 @@ block0(v0: i32x4):
 ;   .byte 0x80, 0x80
 ;   .byte 0x80, 0x80
 ;   .byte 0x00, 0x20
-;   sth %r6, 0x720(%r14)
-;   lpr %r0, %r0
-;   .byte 0x00, 0x06
-;   vbperm %v4, %v24, %v2
-;   lgdr %r2, %f4
-;   br %r14
+;   .byte 0x40, 0x60
 
 function %vhigh_bits_le(i16x8) -> i64 tail {
 block0(v0: i16x8):
@@ -1197,14 +1219,22 @@ block0(v0: i16x8):
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x80808080808080800010203040506070 ; vl %v2, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v2, 0(%r1)
 ;   vbperm %v4, %v24, %v2
 ;   lgdr %r2, %f4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x20
+;   vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   .byte 0x80, 0x80
 ;   .byte 0x80, 0x80
 ;   .byte 0x80, 0x80
@@ -1212,10 +1242,6 @@ block0(v0: i16x8):
 ;   .byte 0x00, 0x10
 ;   lpdr %f3, %f0
 ;   sth %r5, 0x70(%r6)
-;   vl %v2, 0(%r1)
-;   vbperm %v4, %v24, %v2
-;   lgdr %r2, %f4
-;   br %r14
 
 function %vhigh_bits_le(i8x16) -> i64 tail {
 block0(v0: i8x16):
@@ -1225,22 +1251,26 @@ block0(v0: i8x16):
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x00081018202830384048505860687078 ; vl %v2, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v2, 0(%r1)
 ;   vbperm %v4, %v24, %v2
 ;   lgdr %r2, %f4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x20
+;   vl %v2, 0(%r1)
+;   vbperm %v4, %v24, %v2
+;   lgdr %r2, %f4
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x08
 ;   lpr %r1, %r8
 ;   lpdr %f2, %f8
 ;   lper %f3, %f8
 ;   sth %r4, 0x58(%r8, %r5)
 ;   std %f6, 0x78(%r8, %r7)
-;   vl %v2, 0(%r1)
-;   vbperm %v4, %v24, %v2
-;   lgdr %r2, %f4
-;   br %r14
 

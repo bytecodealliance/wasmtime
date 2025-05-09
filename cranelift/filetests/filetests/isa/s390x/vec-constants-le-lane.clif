@@ -57,19 +57,19 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 12 ; data.u64 0x0000000000008000 ; vlrepg %v24, 0(%r1)
+;   larl %r1, [const(0)] ; vlrepg %v24, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0xc
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
-;   ssm 0x780(%r14)
-;   lpr %r0, %r0
-;   ler %f0, %f5
+;   larl %r1, 0x10
+;   vlrepg %v24, 0(%r1)
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x80, 0x00
 
 function %vconst_i64x2_splat4() -> i64x2 tail {
 block0:
@@ -79,19 +79,19 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 12 ; data.u64 0xffffffffffff7fff ; vlrepg %v24, 0(%r1)
+;   larl %r1, [const(0)] ; vlrepg %v24, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0xc
-;   .byte 0xff, 0xff
-;   .byte 0xff, 0xff
-;   .byte 0xff, 0xff
-;   su %f15, 0x780(%r15, %r14)
-;   lpr %r0, %r0
-;   ler %f0, %f5
+;   larl %r1, 0x10
+;   vlrepg %v24, 0(%r1)
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0xff, 0xff
+;   .byte 0xff, 0xff
+;   .byte 0xff, 0xff
+;   .byte 0x7f, 0xff
 
 function %vconst_i64x2_mixed() -> i64x2 tail {
 block0:
@@ -101,12 +101,15 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x00000000000000020000000000000001 ; vl %v24, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v24, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x10
+;   vl %v24, 0(%r1)
+;   br %r14
+;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
@@ -115,8 +118,6 @@ block0:
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x01
-;   vl %v24, 0(%r1)
-;   br %r14
 
 function %vconst_i32x4_zero() -> i32x4 tail {
 block0:
@@ -174,17 +175,18 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 8 ; data.u32 0x00008000 ; vlrepf %v24, 0(%r1)
+;   larl %r1, [const(0)] ; vlrepf %v24, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 8
-;   .byte 0x00, 0x00
-;   ssm 0x780(%r14)
-;   lpr %r0, %r0
-;   ldr %f0, %f5
+;   larl %r1, 0x10
+;   vlrepf %v24, 0(%r1)
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ssm 0
+;   .byte 0x00, 0x00
 
 function %vconst_i32x4_splat4() -> i32x4 tail {
 block0:
@@ -194,17 +196,18 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 8 ; data.u32 0xffff7fff ; vlrepf %v24, 0(%r1)
+;   larl %r1, [const(0)] ; vlrepf %v24, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 8
-;   .byte 0xff, 0xff
-;   su %f15, 0x780(%r15, %r14)
-;   lpr %r0, %r0
-;   ldr %f0, %f5
+;   larl %r1, 0x10
+;   vlrepf %v24, 0(%r1)
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0xff, 0xff
+;   su %f15, 0(%r15)
+;   .byte 0x00, 0x00
 
 function %vconst_i32x4_splat_i64() -> i32x4 tail {
 block0:
@@ -214,18 +217,19 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 12 ; data.u64 0x0000000200000001 ; vlrepg %v24, 0(%r1)
+;   larl %r1, [const(0)] ; vlrepg %v24, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0xc
+;   larl %r1, 0x10
+;   vlrepg %v24, 0(%r1)
+;   br %r14
+;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x02
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x01
-;   vlrepg %v24, 0(%r1)
-;   br %r14
 
 function %vconst_i32x4_mixed() -> i32x4 tail {
 block0:
@@ -235,12 +239,15 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x00000004000000030000000200000001 ; vl %v24, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v24, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x10
+;   vl %v24, 0(%r1)
+;   br %r14
+;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x04
 ;   .byte 0x00, 0x00
@@ -249,8 +256,6 @@ block0:
 ;   .byte 0x00, 0x02
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x01
-;   vl %v24, 0(%r1)
-;   br %r14
 
 function %vconst_i16x8_zero() -> i16x8 tail {
 block0:
@@ -308,12 +313,15 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x00080007000600050004000300020001 ; vl %v24, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v24, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x10
+;   vl %v24, 0(%r1)
+;   br %r14
+;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x08
 ;   .byte 0x00, 0x07
 ;   .byte 0x00, 0x06
@@ -322,8 +330,6 @@ block0:
 ;   .byte 0x00, 0x03
 ;   .byte 0x00, 0x02
 ;   .byte 0x00, 0x01
-;   vl %v24, 0(%r1)
-;   br %r14
 
 function %vconst_i8x16_zero() -> i8x16 tail {
 block0:
@@ -381,12 +387,15 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x100f0e0d0c0b0a090807060504030201 ; vl %v24, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v24, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x10
+;   vl %v24, 0(%r1)
+;   br %r14
+;   .byte 0x00, 0x00
 ;   lpr %r0, %r15
 ;   .byte 0x0e, 0x0d
 ;   bassm %r0, %r11
@@ -395,6 +404,4 @@ block0:
 ;   bctr %r0, %r5
 ;   .byte 0x04, 0x03
 ;   .byte 0x02, 0x01
-;   vl %v24, 0(%r1)
-;   br %r14
 
