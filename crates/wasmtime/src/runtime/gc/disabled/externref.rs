@@ -18,7 +18,7 @@ impl ExternRef {
         unreachable!()
     }
 
-    pub fn data<'a, T>(
+    pub fn data<'a, T: 'static>(
         &self,
         _store: impl Into<StoreContext<'a, T>>,
     ) -> Result<&'a (dyn Any + Send + Sync)>
@@ -28,7 +28,7 @@ impl ExternRef {
         match *self {}
     }
 
-    pub fn data_mut<'a, T>(
+    pub fn data_mut<'a, T: 'static>(
         &self,
         _store: impl Into<StoreContextMut<'a, T>>,
     ) -> Result<&'a mut (dyn Any + Send + Sync)>
