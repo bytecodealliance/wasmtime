@@ -363,7 +363,7 @@ impl Instance {
         ))
     }
 
-    #[doc(hidden)]
+    /// Returns the [`InstancePre`] that was used to create this instance.
     pub fn instance_pre<T>(&self, store: &impl AsContext<Data = T>) -> InstancePre<T> {
         // This indexing operation asserts the Store owns the Instance.
         // Therefore, the InstancePre<T> must match the Store<T>.
