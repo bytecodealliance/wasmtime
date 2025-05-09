@@ -344,7 +344,7 @@ impl StoreOpaque {
         // be ready for TLS to change while we're executing wasm code between
         // suspension points).
         //
-        // While somewhat onerous it shouldn't be too too hard (the TLS bit is
+        // While somewhat onerous it shouldn't be too hard (the TLS bit is
         // the hardest bit so far). This does mean, though, that no user should
         // ever have to worry about the `Send`-ness of Wasmtime. If rustc says
         // it's ok, then it's ok.
