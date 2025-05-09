@@ -41,17 +41,6 @@ impl Inst {
         }
     }
 
-    fn xmm_rmi_reg(opcode: SseOpcode, src: RegMemImm, dst: Writable<Reg>) -> Inst {
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmRmiReg {
-            opcode,
-            src1: Xmm::unwrap_new(dst.to_reg()),
-            src2: XmmMemAlignedImm::unwrap_new(src),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     fn xmm_rm_r_evex(op: Avx512Opcode, src1: Reg, src2: RegMem, dst: Writable<Reg>) -> Self {
         debug_assert_ne!(op, Avx512Opcode::Vpermi2b);
         src2.assert_regclass_is(RegClass::Float);
@@ -3710,24 +3699,6 @@ fn test_x64_emit() {
         ),
         "664C0F6EFF",
         "movq    %rdi, %xmm15",
-    ));
-
-    // ========================================================
-    // XmmRmi
-    insns.push((
-        Inst::xmm_rmi_reg(SseOpcode::Psraw, RegMemImm::reg(xmm10), w_xmm1),
-        "66410FE1CA",
-        "psraw   %xmm1, %xmm10, %xmm1",
-    ));
-    insns.push((
-        Inst::xmm_rmi_reg(SseOpcode::Pslld, RegMemImm::imm(31), w_xmm1),
-        "660F72F11F",
-        "pslld   %xmm1, $31, %xmm1",
-    ));
-    insns.push((
-        Inst::xmm_rmi_reg(SseOpcode::Psrlq, RegMemImm::imm(1), w_xmm3),
-        "660F73D301",
-        "psrlq   %xmm3, $1, %xmm3",
     ));
 
     // ========================================================

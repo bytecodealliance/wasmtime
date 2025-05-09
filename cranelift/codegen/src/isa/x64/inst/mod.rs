@@ -156,7 +156,6 @@ impl Inst {
             Inst::GprToXmm { op, .. }
             | Inst::XmmMovRM { op, .. }
             | Inst::XmmMovRMImm { op, .. }
-            | Inst::XmmRmiReg { opcode: op, .. }
             | Inst::XmmRmR { op, .. }
             | Inst::XmmRmRUnaligned { op, .. }
             | Inst::XmmRmRBlend { op, .. }
@@ -1505,20 +1504,6 @@ impl PrettyPrint for Inst {
                 }
             }
 
-            Inst::XmmRmiReg {
-                opcode,
-                src1,
-                src2,
-                dst,
-                ..
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), 8);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let src2 = src2.pretty_print(8);
-                let op = ljustify(opcode.to_string());
-                format!("{op} {src1}, {src2}, {dst}")
-            }
-
             Inst::CmpRmiR {
                 size,
                 src1,
@@ -2226,13 +2211,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(rhs);
             collector.reg_use(lhs);
             collector.reg_reuse_def(dst, 0); // Reuse RHS.
-        }
-        Inst::XmmRmiReg {
-            src1, src2, dst, ..
-        } => {
-            collector.reg_use(src1);
-            collector.reg_reuse_def(dst, 0); // Reuse RHS.
-            src2.get_operands(collector);
         }
         Inst::XmmMovRM { src, dst, .. }
         | Inst::XmmMovRMVex { src, dst, .. }

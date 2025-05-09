@@ -1078,62 +1078,6 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::XmmRmiReg {
-            opcode,
-            src1,
-            src2,
-            dst,
-        } => {
-            let src1 = src1.to_reg();
-            let dst = dst.to_reg().to_reg();
-            debug_assert_eq!(src1, dst);
-            let rex = RexFlags::clear_w();
-            let prefix = LegacyPrefixes::_66;
-            let src2 = src2.clone().to_reg_mem_imm();
-            if let RegMemImm::Imm { simm32 } = src2 {
-                let (opcode_bytes, reg_digit) = match opcode {
-                    SseOpcode::Psllw => (0x0F71, 6),
-                    SseOpcode::Pslld => (0x0F72, 6),
-                    SseOpcode::Psllq => (0x0F73, 6),
-                    SseOpcode::Psraw => (0x0F71, 4),
-                    SseOpcode::Psrad => (0x0F72, 4),
-                    SseOpcode::Psrlw => (0x0F71, 2),
-                    SseOpcode::Psrld => (0x0F72, 2),
-                    SseOpcode::Psrlq => (0x0F73, 2),
-                    _ => panic!("invalid opcode: {opcode}"),
-                };
-                let dst_enc = reg_enc(dst);
-                emit_std_enc_enc(sink, prefix, opcode_bytes, 2, reg_digit, dst_enc, rex);
-                let imm = (simm32)
-                    .try_into()
-                    .expect("the immediate must be convertible to a u8");
-                sink.put1(imm);
-            } else {
-                let opcode_bytes = match opcode {
-                    SseOpcode::Psllw => 0x0FF1,
-                    SseOpcode::Pslld => 0x0FF2,
-                    SseOpcode::Psllq => 0x0FF3,
-                    SseOpcode::Psraw => 0x0FE1,
-                    SseOpcode::Psrad => 0x0FE2,
-                    SseOpcode::Psrlw => 0x0FD1,
-                    SseOpcode::Psrld => 0x0FD2,
-                    SseOpcode::Psrlq => 0x0FD3,
-                    _ => panic!("invalid opcode: {opcode}"),
-                };
-
-                match src2 {
-                    RegMemImm::Reg { reg } => {
-                        emit_std_reg_reg(sink, prefix, opcode_bytes, 2, dst, reg, rex);
-                    }
-                    RegMemImm::Mem { addr } => {
-                        let addr = &addr.finalize(state.frame_layout(), sink).clone();
-                        emit_std_reg_mem(sink, prefix, opcode_bytes, 2, dst, addr, rex, 0);
-                    }
-                    RegMemImm::Imm { .. } => unreachable!(),
-                }
-            };
-        }
-
         Inst::CmpRmiR {
             size,
             src1: reg_g,
