@@ -6,11 +6,11 @@
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
 /// For more information see [`Wasi`] as well.
-pub struct WasiPre<T> {
+pub struct WasiPre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
     indices: WasiIndices,
 }
-impl<T> Clone for WasiPre<T> {
+impl<T: 'static> Clone for WasiPre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,7 +18,7 @@ impl<T> Clone for WasiPre<T> {
         }
     }
 }
-impl<_T> WasiPre<_T> {
+impl<_T: 'static> WasiPre<_T> {
     /// Creates a new copy of `WasiPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -143,6 +143,7 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
+            T: 'static,
             U: foo::foo::wasi_filesystem::Host + foo::foo::wall_clock::Host,
         {
             foo::foo::wasi_filesystem::add_to_linker(linker, get)?;
@@ -227,6 +228,7 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host>,
             {
                 let mut inst = linker.instance("foo:foo/wasi-filesystem")?;
@@ -253,6 +255,7 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host,
             {
                 add_to_linker_get_host(linker, get)
@@ -295,6 +298,7 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host>,
             {
                 let mut inst = linker.instance("foo:foo/wall-clock")?;
@@ -305,6 +309,7 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host,
             {
                 add_to_linker_get_host(linker, get)

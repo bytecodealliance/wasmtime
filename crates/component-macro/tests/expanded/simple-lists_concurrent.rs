@@ -6,11 +6,11 @@
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
 /// For more information see [`MyWorld`] as well.
-pub struct MyWorldPre<T> {
+pub struct MyWorldPre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
     indices: MyWorldIndices,
 }
-impl<T> Clone for MyWorldPre<T> {
+impl<T: 'static> Clone for MyWorldPre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,7 +18,7 @@ impl<T> Clone for MyWorldPre<T> {
         }
     }
 }
-impl<_T> MyWorldPre<_T> {
+impl<_T: 'static> MyWorldPre<_T> {
     /// Creates a new copy of `MyWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -157,7 +157,8 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
-            T: Send + foo::foo::simple_lists::Host<Data = T> + 'static,
+            T: 'static,
+            T: Send + foo::foo::simple_lists::Host<Data = T>,
             U: Send + foo::foo::simple_lists::Host<Data = T>,
         {
             foo::foo::simple_lists::add_to_linker(linker, get)?;
@@ -231,6 +232,7 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 G: for<'a> wasmtime::component::GetHost<
                     &'a mut T,
                     Host: Host<Data = T> + Send,
@@ -416,6 +418,7 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host<Data = T> + Send,
                 T: Send + 'static,
             {
