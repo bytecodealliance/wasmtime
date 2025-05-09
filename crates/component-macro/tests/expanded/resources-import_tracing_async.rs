@@ -34,11 +34,11 @@ impl<_T: HostWorldResource + ?Sized + Send> HostWorldResource for &mut _T {
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
 /// For more information see [`TheWorld`] as well.
-pub struct TheWorldPre<T> {
+pub struct TheWorldPre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
     indices: TheWorldIndices,
 }
-impl<T> Clone for TheWorldPre<T> {
+impl<T: 'static> Clone for TheWorldPre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -46,7 +46,7 @@ impl<T> Clone for TheWorldPre<T> {
         }
     }
 }
-impl<_T> TheWorldPre<_T> {
+impl<_T: 'static> TheWorldPre<_T> {
     /// Creates a new copy of `TheWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -230,7 +230,7 @@ const _: () = {
             let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker_imports_get_host<T, G>(
+        pub fn add_to_linker_imports_get_host<T: 'static, G>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: G,
         ) -> wasmtime::Result<()>
@@ -362,6 +362,7 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
+            T: 'static,
             T: Send,
             U: foo::foo::resources::Host + foo::foo::long_use_chain1::Host
                 + foo::foo::long_use_chain2::Host + foo::foo::long_use_chain3::Host
@@ -576,6 +577,7 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send,
             {
@@ -1202,6 +1204,7 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host + Send,
                 T: Send,
             {
@@ -1338,6 +1341,7 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send,
             {
@@ -1362,6 +1366,7 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host + Send,
                 T: Send,
             {
@@ -1381,6 +1386,7 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send,
             {
@@ -1392,6 +1398,7 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host + Send,
                 T: Send,
             {
@@ -1411,6 +1418,7 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send,
             {
@@ -1422,6 +1430,7 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host + Send,
                 T: Send,
             {
@@ -1443,6 +1452,7 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send,
             {
@@ -1477,6 +1487,7 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host + Send,
                 T: Send,
             {
@@ -1515,6 +1526,7 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send,
             {
@@ -1540,6 +1552,7 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host + Send,
                 T: Send,
             {

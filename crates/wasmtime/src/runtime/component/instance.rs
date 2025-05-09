@@ -826,7 +826,7 @@ impl<'a> Instantiator<'a> {
 /// type is created. This type is primarily created through the
 /// [`Linker::instantiate_pre`](crate::component::Linker::instantiate_pre)
 /// method.
-pub struct InstancePre<T> {
+pub struct InstancePre<T: 'static> {
     component: Component,
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
@@ -834,7 +834,7 @@ pub struct InstancePre<T> {
 }
 
 // `InstancePre`'s clone does not require `T: Clone`
-impl<T> Clone for InstancePre<T> {
+impl<T: 'static> Clone for InstancePre<T> {
     fn clone(&self) -> Self {
         Self {
             component: self.component.clone(),
@@ -845,7 +845,7 @@ impl<T> Clone for InstancePre<T> {
     }
 }
 
-impl<T> InstancePre<T> {
+impl<T: 'static> InstancePre<T> {
     /// This function is `unsafe` since there's no guarantee that the
     /// `RuntimeImport` items provided are guaranteed to work with the `T` of
     /// the store.

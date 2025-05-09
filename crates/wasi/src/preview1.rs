@@ -739,7 +739,7 @@ enum FdWrite {
 ///     Ok(())
 /// }
 /// ```
-pub fn add_to_linker_async<T: Send>(
+pub fn add_to_linker_async<T: Send + 'static>(
     linker: &mut wasmtime::Linker<T>,
     f: impl Fn(&mut T) -> &mut WasiP1Ctx + Copy + Send + Sync + 'static,
 ) -> anyhow::Result<()> {
@@ -813,7 +813,7 @@ pub fn add_to_linker_async<T: Send>(
 ///     Ok(())
 /// }
 /// ```
-pub fn add_to_linker_sync<T: Send>(
+pub fn add_to_linker_sync<T: Send + 'static>(
     linker: &mut wasmtime::Linker<T>,
     f: impl Fn(&mut T) -> &mut WasiP1Ctx + Copy + Send + Sync + 'static,
 ) -> anyhow::Result<()> {

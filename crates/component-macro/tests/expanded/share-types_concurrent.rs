@@ -6,11 +6,11 @@
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
 /// For more information see [`HttpInterface`] as well.
-pub struct HttpInterfacePre<T> {
+pub struct HttpInterfacePre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
     indices: HttpInterfaceIndices,
 }
-impl<T> Clone for HttpInterfacePre<T> {
+impl<T: 'static> Clone for HttpInterfacePre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,7 +18,7 @@ impl<T> Clone for HttpInterfacePre<T> {
         }
     }
 }
-impl<_T> HttpInterfacePre<_T> {
+impl<_T: 'static> HttpInterfacePre<_T> {
     /// Creates a new copy of `HttpInterfacePre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -155,7 +155,8 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
-            T: Send + foo::foo::http_types::Host + http_fetch::Host<Data = T> + 'static,
+            T: 'static,
+            T: Send + foo::foo::http_types::Host + http_fetch::Host<Data = T>,
             U: Send + foo::foo::http_types::Host + http_fetch::Host<Data = T>,
         {
             foo::foo::http_types::add_to_linker(linker, get)?;
@@ -217,6 +218,7 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send + 'static,
             {
@@ -228,6 +230,7 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host + Send,
                 T: Send + 'static,
             {
@@ -269,6 +272,7 @@ pub mod http_fetch {
         host_getter: G,
     ) -> wasmtime::Result<()>
     where
+        T: 'static,
         G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host<Data = T> + Send>,
         T: Send + 'static,
     {
@@ -310,6 +314,7 @@ pub mod http_fetch {
         get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
     ) -> wasmtime::Result<()>
     where
+        T: 'static,
         U: Host<Data = T> + Send,
         T: Send + 'static,
     {

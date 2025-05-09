@@ -179,7 +179,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     #[cfg(feature = "gc")]
     pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()>
     where
-        T: Send,
+        T: Send + 'static,
     {
         self.0.gc_async(why).await
     }
@@ -720,7 +720,7 @@ impl<T> StoreContextMut<'_, T> {
         func: impl FnOnce(&mut StoreContextMut<'_, T>) -> R + Send,
     ) -> Result<R>
     where
-        T: Send,
+        T: Send + 'static,
     {
         self.0
             .on_fiber(|opaque| {

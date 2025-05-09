@@ -1,6 +1,7 @@
 use super::*;
 use test_programs_artifacts::*;
 use wasi_common::tokio::{add_to_linker, WasiCtxBuilder};
+use wasi_common::WasiCtx;
 
 foreach_preview1!(assert_test_exists);
 
@@ -20,7 +21,7 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
         let engine = test_programs_artifacts::engine(|config| {
             config.async_support(true);
         });
-        let mut linker = Linker::new(&engine);
+        let mut linker = Linker::<WasiCtx>::new(&engine);
         add_to_linker(&mut linker, |cx| cx)?;
 
         // Create our wasi context.

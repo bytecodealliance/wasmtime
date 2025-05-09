@@ -58,6 +58,7 @@ pub fn link_module(
             get_cx: impl Fn(&mut T) -> #u + Send + Sync + Copy + 'static,
         ) -> wiggle::anyhow::Result<()>
             where
+                T: 'static,
                 U: #ctx_bound #send_bound
         {
             #(#bodies)*

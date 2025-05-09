@@ -254,13 +254,10 @@ impl Memory {
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
-    pub async fn new_async<T>(
-        mut store: impl AsContextMut<Data = T>,
+    pub async fn new_async(
+        mut store: impl AsContextMut<Data: Send>,
         ty: MemoryType,
-    ) -> Result<Memory>
-    where
-        T: Send,
-    {
+    ) -> Result<Memory> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
@@ -362,7 +359,7 @@ impl Memory {
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
-    pub fn data<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [u8] {
+    pub fn data<'a, T: 'static>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [u8] {
         unsafe {
             let store = store.into();
             let definition = store[self.0].definition.as_ref();
@@ -379,7 +376,10 @@ impl Memory {
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
-    pub fn data_mut<'a, T: 'a>(&self, store: impl Into<StoreContextMut<'a, T>>) -> &'a mut [u8] {
+    pub fn data_mut<'a, T: 'static>(
+        &self,
+        store: impl Into<StoreContextMut<'a, T>>,
+    ) -> &'a mut [u8] {
         unsafe {
             let store = store.into();
             let definition = store[self.0].definition.as_ref();
@@ -400,7 +400,7 @@ impl Memory {
     /// # Panics
     ///
     /// Panics if this memory doesn't belong to `store`.
-    pub fn data_and_store_mut<'a, T: 'a>(
+    pub fn data_and_store_mut<'a, T: 'static>(
         &self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> (&'a mut [u8], &'a mut T) {
@@ -605,14 +605,11 @@ impl Memory {
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
-    pub async fn grow_async<T>(
+    pub async fn grow_async(
         &self,
-        mut store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data: Send>,
         delta: u64,
-    ) -> Result<u64>
-    where
-        T: Send,
-    {
+    ) -> Result<u64> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),

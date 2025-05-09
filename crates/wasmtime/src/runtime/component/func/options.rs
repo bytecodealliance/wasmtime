@@ -173,7 +173,7 @@ impl Options {
 /// contextual information necessary related to the context in which the
 /// lowering is happening.
 #[doc(hidden)]
-pub struct LowerContext<'a, T> {
+pub struct LowerContext<'a, T: 'static> {
     /// Lowering may involve invoking memory allocation functions so part of the
     /// context here is carrying access to the entire store that wasm is
     /// executing within. This store serves as proof-of-ability to actually
@@ -201,7 +201,7 @@ pub struct LowerContext<'a, T> {
 }
 
 #[doc(hidden)]
-impl<'a, T> LowerContext<'a, T> {
+impl<'a, T: 'static> LowerContext<'a, T> {
     /// Creates a new lowering context from the specified parameters.
     ///
     /// # Unsafety

@@ -117,6 +117,7 @@ macro_rules! define_wasi {
         where U: Send
                 + crate::snapshots::preview_0::wasi_unstable::WasiUnstable
                 + crate::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1,
+              T: 'static,
             $($bounds)*
     {
         snapshots::preview_1::add_wasi_snapshot_preview1_to_linker(linker, get_cx)?;

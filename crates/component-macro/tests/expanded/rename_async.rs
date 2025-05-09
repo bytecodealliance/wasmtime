@@ -6,11 +6,11 @@
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
 /// For more information see [`Neptune`] as well.
-pub struct NeptunePre<T> {
+pub struct NeptunePre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
     indices: NeptuneIndices,
 }
-impl<T> Clone for NeptunePre<T> {
+impl<T: 'static> Clone for NeptunePre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,7 +18,7 @@ impl<T> Clone for NeptunePre<T> {
         }
     }
 }
-impl<_T> NeptunePre<_T> {
+impl<_T: 'static> NeptunePre<_T> {
     /// Creates a new copy of `NeptunePre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -149,6 +149,7 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
+            T: 'static,
             T: Send,
             U: foo::foo::green::Host + foo::foo::red::Host + Send,
         {
@@ -176,6 +177,7 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send,
             {
@@ -187,6 +189,7 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host + Send,
                 T: Send,
             {
@@ -212,6 +215,7 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send,
             {
@@ -233,6 +237,7 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host + Send,
                 T: Send,
             {

@@ -873,12 +873,12 @@ pub fn new<_T>(
 /// has been created through a [`Linker`]({wt}::component::Linker).
 ///
 /// For more information see [`{camel}`] as well.
-pub struct {camel}Pre<T> {{
+pub struct {camel}Pre<T: 'static> {{
     instance_pre: {wt}::component::InstancePre<T>,
     indices: {camel}Indices,
 }}
 
-impl<T> Clone for {camel}Pre<T> {{
+impl<T: 'static> Clone for {camel}Pre<T> {{
     fn clone(&self) -> Self {{
         Self {{
             instance_pre: self.instance_pre.clone(),
@@ -887,7 +887,7 @@ impl<T> Clone for {camel}Pre<T> {{
     }}
 }}
 
-impl<_T> {camel}Pre<_T> {{
+impl<_T: 'static> {camel}Pre<_T> {{
     /// Creates a new copy of `{camel}Pre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -1532,11 +1532,7 @@ impl Wasmtime {
         let camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
 
         let data_bounds = if self.opts.is_store_data_send() {
-            if let CallStyle::Concurrent = self.opts.call_style() {
-                "T: Send + 'static,"
-            } else {
-                "T: Send,"
-            }
+            "T: Send,"
         } else {
             ""
         };
@@ -1553,7 +1549,7 @@ impl Wasmtime {
             uwrite!(
                 self.src,
                 "
-                    pub fn add_to_linker_imports_get_host<T, G>(
+                    pub fn add_to_linker_imports_get_host<T: 'static, G>(
                         linker: &mut {wt}::component::Linker<T>,
                         {options_param}
                         host_getter: G,
@@ -1621,10 +1617,7 @@ impl Wasmtime {
                 .collect::<Vec<_>>()
                 .concat();
 
-            (
-                format!("U: Send{bounds}"),
-                format!("T: Send{bounds} + 'static,"),
-            )
+            (format!("U: Send{bounds}"), format!("T: Send{bounds},"))
         } else {
             (
                 format!("U: {}", self.world_host_traits(resolve, world).join(" + ")),
@@ -1642,6 +1635,7 @@ impl Wasmtime {
                         get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
                     ) -> {wt}::Result<()>
                         where
+                            T: 'static,
                             {data_bounds}
                             {host_bounds}
                     {{
@@ -2673,6 +2667,7 @@ impl<'a> InterfaceGenerator<'a> {
                     host_getter: G,
                 ) -> {wt}::Result<()>
                     where
+                        T: 'static,
                         G: for<'a> {wt}::component::GetHost<&'a mut T, Host: {host_bounds}>,
                         {data_bounds}
                 {{
@@ -2711,7 +2706,7 @@ impl<'a> InterfaceGenerator<'a> {
                     get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
                 ) -> {wt}::Result<()>
                     where
-                        U: {host_bounds}, {data_bounds}
+                        T: 'static, U: {host_bounds}, {data_bounds}
                 {{
                     add_to_linker_get_host(linker {options_arg}, get)
                 }}

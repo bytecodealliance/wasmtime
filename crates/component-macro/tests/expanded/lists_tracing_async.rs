@@ -6,11 +6,11 @@
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
 /// For more information see [`TheLists`] as well.
-pub struct TheListsPre<T> {
+pub struct TheListsPre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
     indices: TheListsIndices,
 }
-impl<T> Clone for TheListsPre<T> {
+impl<T: 'static> Clone for TheListsPre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,7 +18,7 @@ impl<T> Clone for TheListsPre<T> {
         }
     }
 }
-impl<_T> TheListsPre<_T> {
+impl<_T: 'static> TheListsPre<_T> {
     /// Creates a new copy of `TheListsPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -155,6 +155,7 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
+            T: 'static,
             T: Send,
             U: foo::foo::lists::Host + Send,
         {
@@ -477,6 +478,7 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send,
             {
@@ -1281,6 +1283,7 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host + Send,
                 T: Send,
             {

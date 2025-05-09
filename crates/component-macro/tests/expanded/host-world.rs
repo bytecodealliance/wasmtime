@@ -6,11 +6,11 @@
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
 /// For more information see [`Host_`] as well.
-pub struct Host_Pre<T> {
+pub struct Host_Pre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
     indices: Host_Indices,
 }
-impl<T> Clone for Host_Pre<T> {
+impl<T: 'static> Clone for Host_Pre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,7 +18,7 @@ impl<T> Clone for Host_Pre<T> {
         }
     }
 }
-impl<_T> Host_Pre<_T> {
+impl<_T: 'static> Host_Pre<_T> {
     /// Creates a new copy of `Host_Pre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -146,7 +146,7 @@ const _: () = {
             let indices = Host_Indices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker_imports_get_host<T, G>(
+        pub fn add_to_linker_imports_get_host<T: 'static, G>(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: G,
         ) -> wasmtime::Result<()>
@@ -170,6 +170,7 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
+            T: 'static,
             U: Host_Imports,
         {
             Self::add_to_linker_imports_get_host(linker, get)?;
