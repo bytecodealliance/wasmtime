@@ -692,3 +692,17 @@ mod tests {
         assert!(<u32 as WasmtimeOptionValue>::parse(Some("1_2_3")).is_ok_and(|v| v == 123));
     }
 }
+
+impl WasmtimeOptionValue for wasmtime::ProfilingStrategy {
+    const VAL_HELP: &'static str = "=VTune|JitDump|PerfMap";
+    fn parse(val: Option<&str>) -> Result<Self> {
+        match String::parse(val)?.as_str() {
+            "VTune" | "vtune" => Ok(wasmtime::ProfilingStrategy::VTune),
+            "JitDump" | "jitdump" => Ok(wasmtime::ProfilingStrategy::JitDump),
+            "PerfMap" | "perfmap" => Ok(wasmtime::ProfilingStrategy::PerfMap),
+            other => bail!(
+                "unknown profiler `{other}` only `VTune`,`JitDump`, or `PerfMap` are accepted",
+            ),
+        }
+    }
+}
