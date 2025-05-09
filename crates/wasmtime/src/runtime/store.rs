@@ -599,16 +599,7 @@ impl<T> Store<T> {
             data: ManuallyDrop::new(data),
         });
 
-        // Note the erasure of the lifetime here into `'static`, so in general
-        // usage of this trait object must be strictly bounded to the `Store`
-        // itself, and this is an invariant that we have to maintain throughout
-        // Wasmtime.
-        inner.traitobj = StorePtr::new(unsafe {
-            mem::transmute::<
-                NonNull<dyn crate::runtime::vm::VMStore + '_>,
-                NonNull<dyn crate::runtime::vm::VMStore + 'static>,
-            >(NonNull::from(&mut *inner))
-        });
+        inner.traitobj = StorePtr::new(NonNull::from(&mut *inner));
 
         // Wasmtime uses the callee argument to host functions to learn about
         // the original pointer to the `Store` itself, allowing it to
