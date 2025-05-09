@@ -52,6 +52,17 @@ pub fn r(op: impl Into<Operand>) -> Operand {
     op
 }
 
+/// An abbreviated constructor for a "write" operand.
+#[must_use]
+pub fn w(location: Location) -> Operand {
+    Operand {
+        location,
+        mutability: Mutability::Write,
+        extension: Extension::None,
+        align: false,
+    }
+}
+
 /// An abbreviated constructor for a memory operand that requires alignment.
 pub fn align(location: Location) -> Operand {
     assert!(location.uses_memory());
@@ -423,6 +434,7 @@ pub enum OperandKind {
 pub enum Mutability {
     Read,
     ReadWrite,
+    Write,
 }
 
 impl Mutability {
@@ -432,6 +444,7 @@ impl Mutability {
     pub fn is_read(&self) -> bool {
         match self {
             Mutability::Read | Mutability::ReadWrite => true,
+            Mutability::Write => false,
         }
     }
 
@@ -441,7 +454,7 @@ impl Mutability {
     pub fn is_write(&self) -> bool {
         match self {
             Mutability::Read => false,
-            Mutability::ReadWrite => true,
+            Mutability::ReadWrite | Mutability::Write => true,
         }
     }
 }
@@ -457,6 +470,7 @@ impl core::fmt::Display for Mutability {
         match self {
             Self::Read => write!(f, "r"),
             Self::ReadWrite => write!(f, "rw"),
+            Self::Write => write!(f, "w"),
         }
     }
 }

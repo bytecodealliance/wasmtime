@@ -175,8 +175,10 @@ pub struct FuzzRegs;
 impl Registers for FuzzRegs {
     type ReadGpr = FuzzReg;
     type ReadWriteGpr = FuzzReg;
+    type WriteGpr = FuzzReg;
     type ReadXmm = FuzzReg;
     type ReadWriteXmm = FuzzReg;
+    type WriteXmm = FuzzReg;
 }
 
 /// A simple `u8` register type for fuzzing only.
@@ -240,8 +242,10 @@ pub trait RegistersArbitrary:
     Registers<
     ReadGpr: for<'a> Arbitrary<'a>,
     ReadWriteGpr: for<'a> Arbitrary<'a>,
+    WriteGpr: for<'a> Arbitrary<'a>,
     ReadXmm: for<'a> Arbitrary<'a>,
     ReadWriteXmm: for<'a> Arbitrary<'a>,
+    WriteXmm: for<'a> Arbitrary<'a>,
 >
 {
 }
@@ -251,8 +255,10 @@ where
     R: Registers,
     R::ReadGpr: for<'a> Arbitrary<'a>,
     R::ReadWriteGpr: for<'a> Arbitrary<'a>,
+    R::WriteGpr: for<'a> Arbitrary<'a>,
     R::ReadXmm: for<'a> Arbitrary<'a>,
     R::ReadWriteXmm: for<'a> Arbitrary<'a>,
+    R::WriteXmm: for<'a> Arbitrary<'a>,
 {
 }
 

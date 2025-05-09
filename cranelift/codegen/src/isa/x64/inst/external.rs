@@ -15,8 +15,10 @@ pub struct CraneliftRegisters;
 impl asm::Registers for CraneliftRegisters {
     type ReadGpr = Gpr;
     type ReadWriteGpr = PairedGpr;
+    type WriteGpr = WritableGpr;
     type ReadXmm = Xmm;
     type ReadWriteXmm = PairedXmm;
+    type WriteXmm = WritableXmm;
 }
 
 /// A pair of registers, one for reading and one for writing.
@@ -288,6 +290,10 @@ impl<'a, T: OperandVisitor> asm::RegisterVisitor<CraneliftRegisters> for Regallo
         self.collector.reg_reuse_def(write, 0);
     }
 
+    fn write_gpr(&mut self, reg: &mut WritableGpr) {
+        self.collector.reg_def(reg);
+    }
+
     fn fixed_read_gpr(&mut self, reg: &mut Gpr, enc: u8) {
         self.collector
             .reg_fixed_use(reg, fixed_reg(enc, RegClass::Int));
@@ -301,6 +307,11 @@ impl<'a, T: OperandVisitor> asm::RegisterVisitor<CraneliftRegisters> for Regallo
             .reg_fixed_def(write, fixed_reg(enc, RegClass::Int));
     }
 
+    fn fixed_write_gpr(&mut self, reg: &mut WritableGpr, enc: u8) {
+        self.collector
+            .reg_fixed_def(reg, fixed_reg(enc, RegClass::Int));
+    }
+
     fn read_xmm(&mut self, reg: &mut Xmm) {
         self.collector.reg_use(reg);
     }
@@ -309,6 +320,10 @@ impl<'a, T: OperandVisitor> asm::RegisterVisitor<CraneliftRegisters> for Regallo
         let PairedXmm { read, write } = reg;
         self.collector.reg_use(read);
         self.collector.reg_reuse_def(write, 0);
+    }
+
+    fn write_xmm(&mut self, reg: &mut WritableXmm) {
+        self.collector.reg_def(reg);
     }
 
     fn fixed_read_xmm(&mut self, reg: &mut Xmm, enc: u8) {
@@ -322,6 +337,11 @@ impl<'a, T: OperandVisitor> asm::RegisterVisitor<CraneliftRegisters> for Regallo
             .reg_fixed_use(read, fixed_reg(enc, RegClass::Float));
         self.collector
             .reg_fixed_def(write, fixed_reg(enc, RegClass::Float));
+    }
+
+    fn fixed_write_xmm(&mut self, reg: &mut WritableXmm, enc: u8) {
+        self.collector
+            .reg_fixed_def(reg, fixed_reg(enc, RegClass::Float));
     }
 }
 

@@ -1,7 +1,12 @@
 //! Generate the Cranelift-specific integration of the x64 assembler.
 
-use cranelift_assembler_x64_meta::dsl::{Format, Inst, Mutability, Operand, OperandKind};
+use cranelift_assembler_x64_meta::dsl::{
+    format::RegClass, Format, Inst, Mutability, Operand, OperandKind,
+};
 use cranelift_srcgen::{fmtln, Formatter};
+
+/// This factors out use of the assembler crate name.
+const ASM: &str = "cranelift_assembler_x64";
 
 /// Returns the Rust type used for the `IsleConstructorRaw` variants.
 pub fn rust_param_raw(op: &Operand) -> String {
@@ -38,14 +43,17 @@ pub fn rust_convert_isle_to_assembler(op: &Operand) -> String {
             } else {
                 "Imm"
             };
-            format!("cranelift_assembler_x64::{ty}{bits}::new")
+            format!("{ASM}::{ty}{bits}::new({loc})")
         }
         OperandKind::FixedReg(r) => {
             let reg = r.reg_class().unwrap().to_string().to_lowercase();
             match op.mutability {
-                Mutability::Read => "cranelift_assembler_x64::Fixed".to_string(),
+                Mutability::Read => format!("{ASM}::Fixed({r})"),
+                Mutability::Write => {
+                    format!("{ASM}::Fixed(self.temp_writable_{reg}())")
+                }
                 Mutability::ReadWrite => {
-                    format!("self.convert_{reg}_to_assembler_fixed_read_write_{reg}")
+                    format!("self.convert_{reg}_to_assembler_fixed_read_write_{reg}({r})")
                 }
             }
         }
@@ -53,19 +61,24 @@ pub fn rust_convert_isle_to_assembler(op: &Operand) -> String {
             let reg = r.reg_class().unwrap();
             let reg_lower = reg.to_string().to_lowercase();
             match op.mutability {
-                Mutability::Read => format!("cranelift_assembler_x64::{reg}::new"),
+                Mutability::Read => {
+                    format!("{ASM}::{reg}::new({r})")
+                }
+                Mutability::Write => {
+                    format!("{ASM}::{reg}::new(self.temp_writable_{reg_lower}())")
+                }
                 Mutability::ReadWrite => {
-                    format!("self.convert_{reg_lower}_to_assembler_read_write_{reg_lower}")
+                    format!("self.convert_{reg_lower}_to_assembler_read_write_{reg_lower}({r})")
                 }
             }
         }
-        OperandKind::RegMem(r) => {
-            let reg = r.reg_class().unwrap().to_string().to_lowercase();
+        OperandKind::RegMem(rm) => {
+            let reg = rm.reg_class().unwrap().to_string().to_lowercase();
             let mut_ = op.mutability.generate_snake_case();
             let align = if op.align { "_aligned" } else { "" };
-            format!("self.convert_{reg}_mem_to_assembler_{mut_}_{reg}_mem{align}")
+            format!("self.convert_{reg}_mem_to_assembler_{mut_}_{reg}_mem{align}({rm})")
         }
-        OperandKind::Mem(_) => "self.convert_amode_to_assembler_amode".to_string(),
+        OperandKind::Mem(mem) => format!("self.convert_amode_to_assembler_amode({mem})"),
     }
 }
 
@@ -76,39 +89,35 @@ pub fn rust_convert_isle_to_assembler(op: &Operand) -> String {
 /// This function panics if the instruction has no operands.
 pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
     let struct_name = inst.name();
-    let params = inst
-        .format
-        .operands
-        .iter()
-        .filter(|o| o.mutability.is_read())
-        .collect::<Vec<_>>();
+    let operands = inst.format.operands.iter().collect::<Vec<_>>();
     let results = inst
         .format
         .operands
         .iter()
         .filter(|o| o.mutability.is_write())
         .collect::<Vec<_>>();
-    let rust_params = params
+    let rust_params = operands
         .iter()
+        .filter(|o| o.mutability.is_read())
         .map(|o| format!("{}: {}", o.location, rust_param_raw(o)))
         .collect::<Vec<_>>()
         .join(", ");
     f.add_block(
         &format!("fn x64_{struct_name}_raw(&mut self, {rust_params}) -> AssemblerOutputs"),
         |f| {
-            for o in params.iter() {
-                let l = o.location;
-                let cvt = rust_convert_isle_to_assembler(o);
-                fmtln!(f, "let {l} = {cvt}({l});");
+            for op in operands.iter() {
+                let loc = op.location;
+                let cvt = rust_convert_isle_to_assembler(op);
+                fmtln!(f, "let {loc} = {cvt};");
             }
-            let args = params
+            let args = operands
                 .iter()
                 .map(|o| format!("{}.clone()", o.location))
                 .collect::<Vec<_>>();
             let args = args.join(", ");
             fmtln!(
                 f,
-                "let inst = cranelift_assembler_x64::inst::{struct_name}::new({args}).into();"
+                "let inst = {ASM}::inst::{struct_name}::new({args}).into();"
             );
             fmtln!(f, "let inst = MInst::External {{ inst }};");
 
@@ -117,6 +126,17 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                 [] => fmtln!(f, "SideEffectNoResult::Inst(inst)"),
                 [one] => match one.mutability {
                     Read => unreachable!(),
+                    Write => match one.location.kind() {
+                        // One write-only register output? Output the
+                        // instruction and that register.
+                        OperandKind::Reg(r) => {
+                            let ty = r.reg_class().unwrap().to_string();
+                            let var = ty.to_lowercase();
+                            fmtln!(f, "let {var} = {r}.as_ref().clone();");
+                            fmtln!(f, "AssemblerOutputs::Ret{ty} {{ inst, {var} }}");
+                        }
+                        _ => unimplemented!(),
+                    },
                     ReadWrite => match one.location.kind() {
                         OperandKind::Imm(_) => unreachable!(),
                         // One read/write register output? Output the instruction
@@ -290,21 +310,21 @@ pub fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
             [] => unimplemented!("if you truly need this (and not a `SideEffect*`), add a `NoReturn` variant to `AssemblerOutputs`"),
             [one] => match one.mutability {
                 Read => unreachable!(),
-                ReadWrite => match one.location.kind() {
+                ReadWrite | Write => match one.location.kind() {
                     Imm(_) => unreachable!(),
                     // One read/write register output? Output the instruction
                     // and that register.
-                    Reg(r) | FixedReg(r) => match r.bits() {
-                        128 => vec![IsleConstructor::RetXmm],
-                        _ => vec![IsleConstructor::RetGpr],
+                    Reg(r) | FixedReg(r) => match r.reg_class().unwrap() {
+                        RegClass::Xmm => vec![IsleConstructor::RetXmm],
+                        RegClass::Gpr => vec![IsleConstructor::RetGpr],
                     },
                     // One read/write memory operand? Output a side effect.
                     Mem(_) => vec![IsleConstructor::RetMemorySideEffect],
                     // One read/write reg-mem output? We need constructors for
                     // both variants.
-                    RegMem(rm) => match rm.bits() {
-                        128 => vec![IsleConstructor::RetXmm, IsleConstructor::RetMemorySideEffect],
-                        _ => vec![IsleConstructor::RetGpr, IsleConstructor::RetMemorySideEffect],
+                    RegMem(rm) => match rm.reg_class().unwrap() {
+                        RegClass::Xmm => vec![IsleConstructor::RetXmm, IsleConstructor::RetMemorySideEffect],
+                        RegClass::Gpr => vec![IsleConstructor::RetGpr, IsleConstructor::RetMemorySideEffect],
                     },
                 }
             },
