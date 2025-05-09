@@ -47,13 +47,16 @@ pub fn rust_convert_isle_to_assembler(op: &Operand) -> String {
                 Mutability::ReadWrite => {
                     format!("self.convert_{reg}_to_assembler_fixed_read_write_{reg}")
                 }
+                Mutability::Write => unimplemented!(),
             }
         }
         OperandKind::Reg(r) => {
             let reg = r.reg_class().unwrap();
             let reg_lower = reg.to_string().to_lowercase();
             match op.mutability {
-                Mutability::Read => format!("cranelift_assembler_x64::{reg}::new"),
+                Mutability::Read | Mutability::Write => {
+                    format!("cranelift_assembler_x64::{reg}::new")
+                }
                 Mutability::ReadWrite => {
                     format!("self.convert_{reg_lower}_to_assembler_read_write_{reg_lower}")
                 }
@@ -80,7 +83,7 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
         .format
         .operands
         .iter()
-        .filter(|o| o.mutability.is_read())
+        //.filter(|o| o.mutability.is_read())
         .collect::<Vec<_>>();
     let results = inst
         .format
@@ -148,6 +151,15 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                                 });
                             });
                         }
+                    },
+                    Write => match one.location.kind() {
+                        OperandKind::Reg(r) => {
+                            let ty = r.reg_class().unwrap().to_string();
+                            let var = ty.to_lowercase();
+                            fmtln!(f, "let {var} = {r}.as_ref().clone();");
+                            fmtln!(f, "AssemblerOutputs::Ret{ty} {{ inst, {var} }}");
+                        }
+                        _ => unimplemented!(),
                     },
                 },
                 _ => panic!("instruction has more than one result"),
@@ -290,7 +302,7 @@ pub fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
             [] => unimplemented!("if you truly need this (and not a `SideEffect*`), add a `NoReturn` variant to `AssemblerOutputs`"),
             [one] => match one.mutability {
                 Read => unreachable!(),
-                ReadWrite => match one.location.kind() {
+                ReadWrite | Write => match one.location.kind() {
                     Imm(_) => unreachable!(),
                     // One read/write register output? Output the instruction
                     // and that register.
@@ -306,7 +318,7 @@ pub fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
                         128 => vec![IsleConstructor::RetXmm, IsleConstructor::RetMemorySideEffect],
                         _ => vec![IsleConstructor::RetGpr, IsleConstructor::RetMemorySideEffect],
                     },
-                }
+                },
             },
             other => panic!("unsupported number of write operands {other:?}"),
         }
@@ -351,7 +363,7 @@ pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
         .format
         .operands
         .iter()
-        .filter(|o| o.mutability.is_read())
+        //.filter(|o| o.mutability.is_read())
         .collect::<Vec<_>>();
     let raw_param_tys = params
         .iter()

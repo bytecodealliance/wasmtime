@@ -714,7 +714,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vaddps  %xmm0, %xmm1, %xmm0
+;   vaddps %xmm1, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

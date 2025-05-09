@@ -8,6 +8,7 @@ use crate::gpr::{self, Gpr, Size};
 use crate::imm::{Extension, Imm16, Imm32, Imm8, Simm32, Simm8};
 use crate::mem::{visit_amode, Amode, GprMem, XmmMem};
 use crate::rex::RexPrefix;
+use crate::vex::{vex_instruction, LegacyPrefix, OpcodeMap, VexInstruction};
 use crate::xmm::Xmm;
 use crate::Fixed;
 
