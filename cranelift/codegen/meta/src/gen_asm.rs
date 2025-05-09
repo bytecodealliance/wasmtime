@@ -132,7 +132,7 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                         OperandKind::Reg(r) => {
                             let ty = r.reg_class().unwrap().to_string();
                             let var = ty.to_lowercase();
-                            fmtln!(f, "let {var} = {r}.as_ref().clone();");
+                            fmtln!(f, "let {var} = {r}.as_ref().to_reg();");
                             fmtln!(f, "AssemblerOutputs::Ret{ty} {{ inst, {var} }}");
                         }
                         _ => unimplemented!(),
