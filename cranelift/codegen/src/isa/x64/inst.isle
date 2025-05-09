@@ -4728,17 +4728,19 @@
 
 ;; Helper for creating `sqrtps` instructions.
 (decl x64_sqrtps (XmmMem) Xmm)
-(rule (x64_sqrtps x) (xmm_unary_rm_r (SseOpcode.Sqrtps) x))
 (rule 1 (x64_sqrtps x)
         (if-let true (use_avx))
         (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtps) x))
+(rule 0 (x64_sqrtps x)
+      (x64_sqrtps_a x))
 
 ;; Helper for creating `sqrtpd` instructions.
 (decl x64_sqrtpd (XmmMem) Xmm)
-(rule (x64_sqrtpd x) (xmm_unary_rm_r (SseOpcode.Sqrtpd) x))
 (rule 1 (x64_sqrtpd x)
         (if-let true (use_avx))
         (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtpd) x))
+(rule 0 (x64_sqrtpd x)
+      (x64_sqrtpd_a x))
 
 ;; Helper for creating `cvtss2sd` instructions.
 ;;
