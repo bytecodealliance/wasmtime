@@ -292,7 +292,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
         if wasmtime_test_util::wast::Compiler::#strategy_ident.should_fail(&#test_config) {
             assert!(result.is_err());
         } else {
-            assert!(result.is_ok());
+            result.unwrap();
         }
             }
         };
