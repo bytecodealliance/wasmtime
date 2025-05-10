@@ -154,6 +154,9 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             error_context_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
 
+            #[cfg(feature = "threads")]
+            thread_spawn_indirect(vmctx: vmctx, func_ty: u32, table: u32, element: u32, context: u32 ) -> u64;
+
             trap(vmctx: vmctx, code: u8);
 
             utf8_to_utf8(src: ptr_u8, len: size, dst: ptr_u8) -> bool;
