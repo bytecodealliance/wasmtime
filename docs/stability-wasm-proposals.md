@@ -46,8 +46,8 @@ column is below.
 
 |  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API |
 |--------------------------|---------|-------|----------|--------|-----|-------|
-| [`function-references`]  | ✅      | ✅    | ❌       | ❌     | ✅  | ❌    |
-| [`gc`] [^6]              | ✅      | ✅    | ⚠️[^7]   | ⚠️[^8] | ✅  | ❌    |
+| [`function-references`]  | ✅      | ✅    | ✅       | ⚠️      | ✅  | ❌    |
+| [`gc`] [^6]              | ✅      | ✅    | ⚠️[^7]    | ⚠️[^8]  | ✅  | ❌    |
 | [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ❌    |
 
