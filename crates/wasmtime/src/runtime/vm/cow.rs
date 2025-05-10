@@ -8,6 +8,13 @@ use crate::runtime::vm::{HostAlignedByteCount, MmapOffset, MmapVec, host_page_si
 use alloc::sync::Arc;
 use core::ops::Range;
 use core::ptr;
+use std::fs::File;
+use std::fmt;
+use std::mem::MaybeUninit;
+use std::os::raw::c_void;
+use std::os::unix::fs::FileExt;
+use std::sync::LazyLock;
+use rustix::ioctl::{ioctl, opcode, Ioctl, IoctlOutput, Opcode};
 use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, Module, PrimaryMap, Tunables};
 
 /// Backing images for memories in a module.
@@ -325,6 +332,146 @@ pub struct MemoryImageSlot {
     clear_on_drop: bool,
 }
 
+bitflags::bitflags! {
+    #[derive(Debug)]
+    struct PageMapBits: u64 {
+        const PRESENT = 1 << 63;
+        const SWAPPED = 1 << 62;
+        const FILE = 1 << 61;
+        const GUARD = 1 << 58;
+        const WP = 1 << 57;
+        const EXCL = 1 << 56;
+        const SOFT_DIRTY = 1 << 55;
+    }
+}
+
+impl fmt::Display for PageMapBits {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        bitflags::parser::to_writer(self, f)
+    }
+}
+
+bitflags::bitflags! {
+    #[derive(Copy, Clone)]
+    #[repr(transparent)]
+    struct Categories: u64 {
+        const WPALLOWED = 1 << 0;
+        const WRITTEN = 1 << 1;
+        const FILE = 1 << 2;
+        const PRESENT = 1 << 3;
+        const SWAPPED = 1 << 4;
+        const PFNZERO = 1 << 5;
+        const HUGE = 1 << 6;
+        const SOFT_DIRTY = 1 << 7;
+    }
+}
+
+impl fmt::Debug for Categories {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        bitflags::parser::to_writer(self, f)
+    }
+}
+impl fmt::Display for Categories {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        bitflags::parser::to_writer(self, f)
+    }
+}
+
+struct PageMapScan<'a> {
+    pm_scan_arg: pm_scan_arg,
+    _regions: &'a mut [MaybeUninit<page_region>],
+}
+
+impl<'a> PageMapScan<'a> {
+    fn new(region: *const [u8], regions: &'a mut [MaybeUninit<page_region>]) -> PageMapScan<'a> {
+        PageMapScan {
+            pm_scan_arg: pm_scan_arg {
+                size: size_of::<pm_scan_arg>() as u64,
+                flags: 0,
+                start: unsafe { (*region).as_ptr() as u64 },
+                end: unsafe { (*region).as_ptr().wrapping_add((*region).len()) as u64 },
+                walk_end: 0,
+                vec: regions.as_mut_ptr() as u64,
+                vec_len: regions.len() as u64,
+                max_pages: 0,
+                category_inverted: Categories::FILE | Categories::PFNZERO,
+                category_anyof_mask: Categories::empty(),
+                category_mask: Categories::WRITTEN | Categories::FILE | Categories::PFNZERO,
+                return_mask: Categories::all(),
+            },
+            _regions: regions,
+        }
+    }
+}
+
+#[derive(Debug)]
+#[allow(dead_code)]
+struct PageMapScanResult<'a> {
+    walk_end: usize,
+    regions: &'a mut [page_region],
+}
+
+#[repr(C)]
+struct pm_scan_arg {
+    size: u64,
+    flags: u64,
+    start: u64,
+    end: u64,
+    walk_end: u64,
+    vec: u64,
+    vec_len: u64,
+    max_pages: u64,
+    category_inverted: Categories,
+    category_mask: Categories,
+    category_anyof_mask: Categories,
+    return_mask: Categories,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+struct page_region {
+    start: u64,
+    end: u64,
+    categories: Categories,
+}
+
+const PAGEMAP_SCAN: Opcode = opcode::read_write::<pm_scan_arg>(b'f', 16);
+
+unsafe impl<'a> Ioctl for PageMapScan<'a> {
+    type Output = PageMapScanResult<'a>;
+
+    const IS_MUTATING: bool = true;
+
+    fn opcode(&self) -> Opcode {
+        PAGEMAP_SCAN
+    }
+
+    fn as_ptr(&mut self) -> *mut c_void {
+        (&raw mut self.pm_scan_arg).cast()
+    }
+
+    unsafe fn output_from_ptr(
+        out: IoctlOutput,
+        extract_output: *mut c_void,
+    ) -> rustix::io::Result<Self::Output> {
+        let extract_output = extract_output.cast::<pm_scan_arg>();
+        let len = usize::try_from(out).unwrap();
+        let regions = unsafe {
+            assert!((len as u64) <= (*extract_output).vec_len);
+            std::slice::from_raw_parts_mut((*extract_output).vec as *mut page_region, len)
+        };
+        Ok(PageMapScanResult {
+            regions,
+            walk_end: unsafe { (*extract_output).walk_end.try_into().unwrap() },
+        })
+    }
+}
+
+// #[cfg(target_os = "linux")]
+static PAGEMAP: LazyLock<File> = LazyLock::new(|| {
+    File::open("/proc/self/pagemap").expect("failed to open /proc/self/pagemap")
+});
+
 impl MemoryImageSlot {
     /// Create a new MemoryImageSlot. Assumes that there is an anonymous
     /// mmap backing in the given range to start.
@@ -544,6 +691,59 @@ impl MemoryImageSlot {
         keep_resident: HostAlignedByteCount,
         mut decommit: impl FnMut(*mut u8, usize),
     ) {
+        #[cfg(target_os = "linux")]
+        {
+            let heap_base = self.base.as_mut_ptr();
+            let heap_start = heap_base as u64;
+            let len = self.accessible.byte_count();
+            let heap_end = heap_start + len as u64;
+            // TODO: settle on a number of pages to report and bound storage to that.
+            let mut storage = vec![MaybeUninit::uninit(); len / host_page_size()];
+            let scan_arg = PageMapScan::new(
+                ptr::slice_from_raw_parts(heap_base, len),
+                &mut storage,
+            );
+            if let Ok(result) = ioctl(&*PAGEMAP, scan_arg) {
+                let (image_start, image_end, image_source_offset, file) = match &self.image {
+                    Some(image) => {
+                        let image_start = heap_base.add(image.linear_memory_offset.byte_count()) as u64;
+                        let image_end = image_start
+                            .checked_add(image.len.byte_count() as u64)
+                            .expect("image is in bounds");
+                        let file = match &image.source {
+                            MemoryImageSource::Mmap(mmap) => {
+                                mmap
+                            }
+                            MemoryImageSource::Memfd(memfd) => {
+                                memfd.as_file()
+                            }
+                        };
+                        (image_start, image_end, image.source_offset, Some(file))
+                    }
+                    None => { (heap_end, heap_end, 0, None) }
+                };
+                for region in result.regions.iter() {
+                    let region_len = region.end - region.start;
+                    let mut region_slice =
+                        core::slice::from_raw_parts_mut(region.start as *mut u8, region_len as usize);
+                    if region.end < image_start || region.start >= image_end {
+                        // If the region doesn't overlap with the image, zero it out.
+                        region_slice.fill(0);
+                    } else if region.start >= image_start && region.end <= image_end {
+                        // If the region is fully contained within the image, copy the original
+                        // bytes from the image.
+                        let image_offset = region.start - image_start + image_source_offset;
+                        // TODO: Can we avoid this syscall by doing a memcpy from the mapped region instead?
+                        file.unwrap().read_exact_at(&mut region_slice, image_offset)
+                            .expect("failed to read from image");
+                    } else {
+                        unreachable!("Regions partially overlapping images not yet supported");
+                    }
+                }
+                return;
+            }
+        }
+
         match &self.image {
             Some(image) => {
                 if image.linear_memory_offset < keep_resident {
