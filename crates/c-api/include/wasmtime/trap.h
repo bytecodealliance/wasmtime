@@ -52,7 +52,7 @@ enum wasmtime_trap_code_enum {
 };
 
 /**
- * \brief Creates a new trap.
+ * \brief Creates a new trap with the given message.
  *
  * \param msg the message to associate with this trap
  * \param msg_len the byte length of `msg`
@@ -60,6 +60,16 @@ enum wasmtime_trap_code_enum {
  * The #wasm_trap_t returned is owned by the caller.
  */
 WASM_API_EXTERN wasm_trap_t *wasmtime_trap_new(const char *msg, size_t msg_len);
+
+/**
+ * \brief Creates a new trap from the given trap code.
+ *
+ * \param code the trap code to associate with this trap
+ *
+ * Returns `null` if the code argument isn't a valid trap code. If non-null,
+ * the #wasm_trap_t returned is owned by the caller.
+ */
+WASM_API_EXTERN wasm_trap_t *wasmtime_trap_new_code(wasmtime_trap_code_t code);
 
 /**
  * \brief Attempts to extract the trap code from this trap.

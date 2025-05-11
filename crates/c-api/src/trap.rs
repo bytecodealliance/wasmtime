@@ -66,6 +66,14 @@ pub unsafe extern "C" fn wasmtime_trap_new(message: *const u8, len: usize) -> Bo
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_trap_new_code(code: u8) -> Option<Box<wasm_trap_t>> {
+    let trap = Trap::from_u8(code)?;
+    Some(Box::new(wasm_trap_t {
+        error: Error::new(trap),
+    }))
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_trap_message(trap: &wasm_trap_t, out: &mut wasm_message_t) {
     let mut buffer = Vec::new();
     buffer.extend_from_slice(format!("{:?}", trap.error).as_bytes());

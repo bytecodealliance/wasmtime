@@ -5,6 +5,8 @@
 #ifndef WASMTIME_TRAP_HH
 #define WASMTIME_TRAP_HH
 
+#include "trap.h"
+#include <cstdlib>
 #include <wasmtime/error.hh>
 #include <wasmtime/trap.h>
 
@@ -129,7 +131,12 @@ public:
   explicit Trap(std::string_view msg)
       : Trap(wasmtime_trap_new(msg.data(), msg.size())) {}
 
-  /// Returns the descriptive message associated with this trap
+  /// Creates a new trap with the given wasmtime trap code.
+  Trap(wasmtime_trap_code_enum code) : Trap(wasmtime_trap_new_code(code)) {
+    assert(ptr != nullptr);
+  }
+
+  /// Returns the descriptive message associated with this trap.
   std::string message() const {
     wasm_byte_vec_t msg;
     wasm_trap_message(ptr.get(), &msg);

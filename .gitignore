@@ -33,3 +33,4 @@ testcase*.wasm
 testcase*.dna
 testcase*.json
 perf.data*
+.zed/
