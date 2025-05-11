@@ -224,7 +224,7 @@ impl TablePool {
 
                 // And decommit the rest of it.
                 decommit(
-                    dirty_pages.checked_bytes as *mut u8,
+                    base.add(dirty_pages.checked_bytes),
                     size.byte_count() - dirty_pages.checked_bytes,
                 );
             }

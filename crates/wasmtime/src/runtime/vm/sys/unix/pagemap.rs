@@ -85,12 +85,21 @@ mod internal {
         len: HostAlignedByteCount,
         max_bytes: HostAlignedByteCount,
     ) -> Result<DirtyPages<'a>> {
+        // The `pagemap_scan` ioctl interprets max_pages == 0 as "no limit",
+        // whereas we want to interpret it as "don't scan any pages".
+        let max_pages = max_bytes.byte_count() / host_page_size();
+        if max_pages == 0 {
+            return Ok(DirtyPages {
+                regions: &[],
+                checked_bytes: 0,
+                region_storage: vec![],
+            });
+        }
         let pagemap = match &*PAGEMAP {
             Some(pagemap) => pagemap,
             None => return Err(anyhow!("pagemap_scan ioctl not supported")),
         };
 
-        let max_pages = max_bytes.byte_count() / host_page_size();
         let mut storage = vec![MaybeUninit::uninit(); max_pages];
         let scan_arg = PageMapScan::new(
             ptr::slice_from_raw_parts(base, len.byte_count()),
