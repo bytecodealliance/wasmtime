@@ -9,7 +9,7 @@ use crate::{
     NonRspGpr, Registers, TrapCode, Xmm,
 };
 use arbitrary::{Arbitrary, Result, Unstructured};
-use capstone::{arch::x86, arch::BuildsCapstone, arch::BuildsCapstoneSyntax, Capstone};
+use capstone::{Capstone, arch::BuildsCapstone, arch::BuildsCapstoneSyntax, arch::x86};
 
 /// Take a random assembly instruction and check its encoding and
 /// pretty-printing against a known-good disassembler.
@@ -333,13 +333,13 @@ impl<'a, R: AsReg> Arbitrary<'a> for Xmm<R> {
 /// `for<'a> Arbitrary<'a>` bound on all of the associated types.
 pub trait RegistersArbitrary:
     Registers<
-    ReadGpr: for<'a> Arbitrary<'a>,
-    ReadWriteGpr: for<'a> Arbitrary<'a>,
-    WriteGpr: for<'a> Arbitrary<'a>,
-    ReadXmm: for<'a> Arbitrary<'a>,
-    ReadWriteXmm: for<'a> Arbitrary<'a>,
-    WriteXmm: for<'a> Arbitrary<'a>,
->
+        ReadGpr: for<'a> Arbitrary<'a>,
+        ReadWriteGpr: for<'a> Arbitrary<'a>,
+        WriteGpr: for<'a> Arbitrary<'a>,
+        ReadXmm: for<'a> Arbitrary<'a>,
+        ReadWriteXmm: for<'a> Arbitrary<'a>,
+        WriteXmm: for<'a> Arbitrary<'a>,
+    >
 {
 }
 

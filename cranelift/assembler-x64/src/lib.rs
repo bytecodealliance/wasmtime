@@ -51,9 +51,9 @@ mod fixed;
 pub mod gpr;
 mod imm;
 pub mod inst;
-pub mod mem;
-pub mod rex;
-pub mod vex;
+mod mem;
+mod rex;
+mod vex;
 pub mod xmm;
 
 #[cfg(any(test, feature = "fuzz"))]

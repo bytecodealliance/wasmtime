@@ -1,10 +1,10 @@
 //! Interface with the external assembler crate.
 
 use super::{
-    args::FromWritableReg, regs, Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor,
-    OperandVisitorImpl, SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm,
+    Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor, OperandVisitorImpl,
+    SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm, args::FromWritableReg, regs,
 };
-use crate::{ir::TrapCode, Reg, Writable};
+use crate::{Reg, Writable, ir::TrapCode};
 use cranelift_assembler_x64 as asm;
 use regalloc2::{PReg, RegClass};
 use std::string::String;
@@ -323,14 +323,6 @@ impl<'a, T: OperandVisitor> asm::RegisterVisitor<CraneliftRegisters> for Regallo
         self.collector
             .reg_fixed_def(reg, fixed_reg(enc, RegClass::Float));
     }
-    fn write_xmm(&mut self, reg: &mut Xmm) {
-        let mut reg = Writable::from_reg(reg);
-        self.collector.reg_def(&mut reg);
-    }
-
-    fn fixed_write_xmm(&mut self, _reg: &mut Xmm, _enc: u8) {
-        todo!()
-    }
 }
 
 /// A helper for building a fixed register from its hardware encoding.
@@ -481,8 +473,8 @@ pub(crate) use isle_assembler_methods;
 
 #[cfg(test)]
 mod tests {
-    use super::asm::{AsReg, Size};
     use super::PairedGpr;
+    use super::asm::{AsReg, Size};
     use crate::isa::x64::args::{FromWritableReg, Gpr, WritableGpr, WritableXmm, Xmm};
     use crate::isa::x64::inst::external::PairedXmm;
     use crate::{Reg, Writable};

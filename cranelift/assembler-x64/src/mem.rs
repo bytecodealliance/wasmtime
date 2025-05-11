@@ -337,9 +337,6 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
             }
         }
     }
-    pub fn default() -> Self {
-        XmmMem::Xmm(R::new(0))
-    }
 }
 
 impl<R: AsReg, M: AsReg> From<R> for XmmMem<R, M> {

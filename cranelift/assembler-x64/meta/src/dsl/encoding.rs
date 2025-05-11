@@ -36,12 +36,9 @@ pub fn vex(opcode: impl Into<Opcodes>) -> Vex {
     Vex {
         opcodes: opcode.into(),
         w: false,
-        wig: false,
-        length: VexLength::default(),
+        length: VexLength::_128,
         mmmmm: VexMMMMM::None,
         pp: VexPP::None,
-        reg: 0x00,
-        vvvv: None,
         imm: None,
     }
 }
@@ -418,23 +415,6 @@ impl Prefixes {
             && self.group3.is_none()
             && self.group4.is_none()
     }
-
-    pub fn bits(&self) -> u8 {
-        let mut bits = 0;
-        if self.group1.is_some() {
-            bits |= 0b0001;
-        }
-        if self.group2.is_some() {
-            bits |= 0b0010;
-        }
-        if self.group3.is_some() {
-            bits |= 0b0100;
-        }
-        if self.group4.is_some() {
-            bits |= 0b1000;
-        }
-        bits
-    }
 }
 
 pub enum Group1Prefix {
@@ -637,12 +617,9 @@ impl fmt::Display for Imm {
 pub struct Vex {
     pub opcodes: Opcodes,
     pub w: bool,
-    pub wig: bool,
     pub length: VexLength,
     pub mmmmm: VexMMMMM,
     pub pp: VexPP,
-    pub reg: u8,
-    pub vvvv: Option<Register>,
     pub imm: Option<u8>,
 }
 
@@ -668,6 +645,18 @@ impl fmt::Display for VexPP {
     }
 }
 
+pub enum VexLength {
+    _128,
+}
+
+impl fmt::Display for VexLength {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            VexLength::_128 => write!(f, "_128"),
+        }
+    }
+}
+
 #[derive(PartialEq)]
 pub enum VexMMMMM {
     None,
@@ -686,27 +675,6 @@ impl fmt::Display for VexMMMMM {
             VexMMMMM::_OF3A => write!(f, "_OF3A"),
             VexMMMMM::_OF38 => write!(f, "_OF38"),
         }
-    }
-}
-
-pub enum VexLength {
-    _128,
-    _256,
-}
-
-impl VexLength {
-    /// Encode the `L` bit.
-    pub fn bits(&self) -> u8 {
-        match self {
-            Self::_128 => 0b0,
-            Self::_256 => 0b1,
-        }
-    }
-}
-
-impl Default for VexLength {
-    fn default() -> Self {
-        Self::_128
     }
 }
 
@@ -751,7 +719,6 @@ impl fmt::Display for Vex {
         write!(f, "VEX")?;
         match self.length {
             VexLength::_128 => write!(f, ".128")?,
-            VexLength::_256 => write!(f, ".256")?,
         }
         write!(f, " {:#04x}", self.opcodes.primary)?;
         Ok(())

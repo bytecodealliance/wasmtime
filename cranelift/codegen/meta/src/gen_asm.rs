@@ -3,7 +3,7 @@
 use cranelift_assembler_x64_meta::dsl::{
     Format, Inst, Location, Mutability, Operand, OperandKind, RegClass,
 };
-use cranelift_srcgen::{fmtln, Formatter};
+use cranelift_srcgen::{Formatter, fmtln};
 
 /// This factors out use of the assembler crate name.
 const ASM: &str = "cranelift_assembler_x64";
@@ -55,7 +55,6 @@ pub fn rust_convert_isle_to_assembler(op: &Operand) -> String {
                 Mutability::ReadWrite => {
                     format!("self.convert_{reg}_to_assembler_fixed_read_write_{reg}({r})")
                 }
-                Mutability::Write => unimplemented!(),
             }
         }
         OperandKind::Reg(r) => {
@@ -415,7 +414,7 @@ pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
         .format
         .operands
         .iter()
-        //.filter(|o| o.mutability.is_read())
+        .filter(|o| o.mutability.is_read())
         .collect::<Vec<_>>();
     let raw_param_tys = params
         .iter()

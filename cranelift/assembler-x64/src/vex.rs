@@ -1,15 +1,14 @@
 //! Encoding logic for VEX instructions.
-use super::rex;
 use super::XmmMem;
+use super::rex;
+use crate::Amode;
 use crate::api::{AsReg, CodeSink, KnownOffsetTable, Registers};
 use crate::mem::emit_modrm_sib_disp;
-use crate::Amode;
 
 /// Allows using the same opcode byte in different "opcode maps" to allow for more instruction
 /// encodings. See appendix A in the Intel Software Developer's Manual, volume 2A, for more details.
 #[derive(PartialEq)]
 pub enum OpcodeMap {
-    None,
     _0F,
     _0F38,
     _0F3A,
@@ -20,7 +19,6 @@ impl OpcodeMap {
     /// formats pack this information as bits in a prefix (e.g. VEX / EVEX).
     pub fn bits(&self) -> u8 {
         match self {
-            OpcodeMap::None => 0b00,
             OpcodeMap::_0F => 0b01,
             OpcodeMap::_0F38 => 0b10,
             OpcodeMap::_0F3A => 0b11,
@@ -28,33 +26,21 @@ impl OpcodeMap {
     }
 }
 
-impl Default for OpcodeMap {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
 /// We may need to include one or more legacy prefix bytes before the REX prefix.  This enum
 /// covers only the small set of possibilities that we actually need.
 #[derive(PartialEq)]
-pub enum LegacyPrefix {
+pub enum VexPP {
     /// No prefix bytes.
     None,
     /// Operand Size Override -- here, denoting "16-bit operation".
     _66,
-    /// The Lock prefix.
-    _F0,
-    /// Operand size override and Lock.
-    _66F0,
     /// REPNE, but no specific meaning here -- is just an opcode extension.
     _F2,
     /// REP/REPE, but no specific meaning here -- is just an opcode extension.
     _F3,
-    /// Operand size override and same effect as F3.
-    _66F3,
 }
 
-impl LegacyPrefix {
+impl VexPP {
     /// Emit the legacy prefix as bits (e.g. for EVEX instructions).
     #[inline(always)]
     pub(crate) fn bits(&self) -> u8 {
@@ -63,37 +49,42 @@ impl LegacyPrefix {
             Self::_66 => 0b01,
             Self::_F3 => 0b10,
             Self::_F2 => 0b11,
-            _ => panic!(
-                "VEX and EVEX bits can only be extracted from single prefixes: None, 66, F3, F2"
-            ),
         }
     }
 }
 
 pub struct VexInstruction<R: Registers> {
-    pub length: VexVectorLength,
-    pub prefix: LegacyPrefix,
-    pub map: OpcodeMap,
     pub opcode: u8,
-    pub w: bool,
+    pub length: VexVectorLength,
+    pub prefix: VexPP,
+    pub map: OpcodeMap,
     pub reg: u8,
-    //pub rm: XmmMem<R::ReadXmm, R::ReadGpr>,
-    pub rm: Option<XmmMem<R::ReadXmm, R::ReadGpr>>,
     pub vvvv: Option<u8>,
+    pub rm: Option<XmmMem<R::ReadXmm, R::ReadGpr>>,
     pub imm: Option<u8>,
+    pub w: bool,
 }
 
-pub fn vex_instruction<R: Registers>(opcode: u8) -> VexInstruction<R> {
+pub fn vex_instruction<R: Registers>(
+    opcode: u8,
+    length: VexVectorLength,
+    prefix: VexPP,
+    map: OpcodeMap,
+    reg: u8,
+    vvvv: Option<u8>,
+    rm: Option<XmmMem<R::ReadXmm, R::ReadGpr>>,
+    imm: Option<u8>,
+) -> VexInstruction<R> {
     VexInstruction {
-        opcode: opcode,
-        length: VexVectorLength::default(),
-        prefix: LegacyPrefix::None,
-        map: OpcodeMap::None,
+        opcode,
+        length,
+        prefix,
+        map,
+        reg,
+        vvvv,
+        rm,
+        imm,
         w: false,
-        reg: 0,
-        rm: None,
-        vvvv: None,
-        imm: None,
     }
 }
 
@@ -234,22 +225,20 @@ impl<R: Registers> VexInstruction<R> {
 
 /// The VEX format allows choosing a vector length in the `L` bit.
 pub enum VexVectorLength {
-    V128,
-    V256,
+    _128,
 }
 
 impl VexVectorLength {
     /// Encode the `L` bit.
     fn bits(&self) -> u8 {
         match self {
-            Self::V128 => 0b0,
-            Self::V256 => 0b1,
+            Self::_128 => 0b0,
         }
     }
 }
 
 impl Default for VexVectorLength {
     fn default() -> Self {
-        Self::V128
+        Self::_128
     }
 }

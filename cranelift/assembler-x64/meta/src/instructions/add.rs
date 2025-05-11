@@ -1,5 +1,5 @@
-use crate::dsl::{Feature::*, Inst, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq};
+use crate::dsl::{Feature::*, Inst, Location::*, VexLength::*, VexMMMMM::*, VexPP::*};
+use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -77,5 +77,8 @@ pub fn list() -> Vec<Inst> {
         inst("paddusw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDD]).r(), _64b | compat | sse2),
         inst("phaddw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x01]).r(), _64b | compat | ssse3),
         inst("phaddd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x02]).r(), _64b | compat | ssse3),
+        // Vex instructions
+        inst("vaddps", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(0x58).length(_128).mmmmm(_OF), _64b | compat | sse2),
+        inst("vaddpd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(0x58).length(_128).pp(_66).mmmmm(_OF), _64b | compat | sse2)
     ]
 }
