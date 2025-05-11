@@ -132,9 +132,7 @@ public:
       : Trap(wasmtime_trap_new(msg.data(), msg.size())) {}
 
   /// Creates a new trap with the given wasmtime trap code.
-  Trap(wasmtime_trap_code_enum code) : Trap(wasmtime_trap_new_code(code)) {
-    assert(ptr != nullptr);
-  }
+  Trap(wasmtime_trap_code_enum code) : Trap(wasmtime_trap_new_code(code)) {}
 
   /// Returns the descriptive message associated with this trap.
   std::string message() const {

@@ -66,11 +66,11 @@ pub unsafe extern "C" fn wasmtime_trap_new(message: *const u8, len: usize) -> Bo
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_trap_new_code(code: u8) -> Option<Box<wasm_trap_t>> {
-    let trap = Trap::from_u8(code)?;
-    Some(Box::new(wasm_trap_t {
+pub unsafe extern "C" fn wasmtime_trap_new_code(code: u8) -> Box<wasm_trap_t> {
+    let trap = Trap::from_u8(code).unwrap();
+    Box::new(wasm_trap_t {
         error: Error::new(trap),
-    }))
+    })
 }
 
 #[unsafe(no_mangle)]
@@ -129,22 +129,7 @@ pub extern "C" fn wasmtime_trap_code(raw: &wasm_trap_t, code: &mut u8) -> bool {
         Some(trap) => trap,
         None => return false,
     };
-    *code = match trap {
-        Trap::StackOverflow => 0,
-        Trap::MemoryOutOfBounds => 1,
-        Trap::HeapMisaligned => 2,
-        Trap::TableOutOfBounds => 3,
-        Trap::IndirectCallToNull => 4,
-        Trap::BadSignature => 5,
-        Trap::IntegerOverflow => 6,
-        Trap::IntegerDivisionByZero => 7,
-        Trap::BadConversionToInteger => 8,
-        Trap::UnreachableCodeReached => 9,
-        Trap::Interrupt => 10,
-        Trap::OutOfFuel => 11,
-        Trap::AlwaysTrapAdapter => unreachable!("component model not supported"),
-        _ => unreachable!(),
-    };
+    *code = *trap as u8;
     true
 }
 
