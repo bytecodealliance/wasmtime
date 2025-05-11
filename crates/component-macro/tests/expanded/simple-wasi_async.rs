@@ -144,17 +144,19 @@ const _: () = {
             let indices = WasiIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker<T, U>(
+        pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            get: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            T: 'static,
-            T: Send,
-            U: foo::foo::wasi_filesystem::Host + foo::foo::wall_clock::Host + Send,
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<
+                'a,
+            >: foo::foo::wasi_filesystem::Host + foo::foo::wall_clock::Host + Send,
+            T: Send + 'static,
         {
-            foo::foo::wasi_filesystem::add_to_linker(linker, get)?;
-            foo::foo::wall_clock::add_to_linker(linker, get)?;
+            foo::foo::wasi_filesystem::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::wall_clock::add_to_linker::<T, D>(linker, get)?;
             Ok(())
         }
     }
@@ -231,14 +233,14 @@ pub mod foo {
                 async fn create_directory_at(&mut self) -> Result<(), Errno>;
                 async fn stat(&mut self) -> Result<DescriptorStat, Errno>;
             }
-            pub fn add_to_linker_get_host<T, G>(
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
+                host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                T: 'static,
-                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
-                T: Send,
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/wasi-filesystem")?;
                 inst.func_wrap_async(
@@ -262,17 +264,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                T: 'static,
-                U: Host + Send,
-                T: Send,
-            {
-                add_to_linker_get_host(linker, get)
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 async fn create_directory_at(&mut self) -> Result<(), Errno> {
@@ -308,28 +299,17 @@ pub mod foo {
             };
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {}
-            pub fn add_to_linker_get_host<T, G>(
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
+                host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                T: 'static,
-                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
-                T: Send,
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/wall-clock")?;
                 Ok(())
-            }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                T: 'static,
-                U: Host + Send,
-                T: Send,
-            {
-                add_to_linker_get_host(linker, get)
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
         }

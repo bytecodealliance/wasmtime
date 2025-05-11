@@ -152,16 +152,16 @@ const _: () = {
             let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker<T, U>(
+        pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            get: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            T: 'static,
-            T: Send,
-            U: foo::foo::manyarg::Host + Send,
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<'a>: foo::foo::manyarg::Host + Send,
+            T: Send + 'static,
         {
-            foo::foo::manyarg::add_to_linker(linker, get)?;
+            foo::foo::manyarg::add_to_linker::<T, D>(linker, get)?;
             Ok(())
         }
         pub fn foo_foo_manyarg(&self) -> &exports::foo::foo::manyarg::Guest {
@@ -279,14 +279,14 @@ pub mod foo {
                 ) -> ();
                 async fn big_argument(&mut self, x: BigStruct) -> ();
             }
-            pub fn add_to_linker_get_host<T, G>(
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
+                host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                T: 'static,
-                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
-                T: Send,
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/manyarg")?;
                 inst.func_wrap_async(
@@ -412,17 +412,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                T: 'static,
-                U: Host + Send,
-                T: Send,
-            {
-                add_to_linker_get_host(linker, get)
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 async fn many_args(
