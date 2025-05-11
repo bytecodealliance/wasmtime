@@ -2,6 +2,7 @@ use super::{
     TableAllocationIndex,
     index_allocator::{SimpleIndexAllocator, SlotId},
 };
+use crate::runtime::vm::sys::pagemap::dirty_pages_in_region;
 use crate::runtime::vm::sys::vm::commit_pages;
 use crate::runtime::vm::{
     InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig, SendSyncPtr, Table,
@@ -208,26 +209,39 @@ impl TablePool {
         let table_byte_size_page_aligned = HostAlignedByteCount::new_rounded_up(table_byte_size)
             .expect("table entry size doesn't overflow");
 
-        // `memset` the first `keep_resident` bytes.
-        let size_to_memset = table_byte_size_page_aligned.min(self.keep_resident);
+        // If possible, use `dirty_pages_in_region` to find specific dirty pages instead of
+        // unconditionally zeroing `self.keep_resident` bytes at the table's start.
+        match dirty_pages_in_region(base, size, self.keep_resident) {
+            Ok(dirty_pages) => {
+                // `memset` dirty pages up to `keep_resident` bytes.
+                for region in dirty_pages.regions.iter() {
+                    std::ptr::write_bytes(
+                        region.start as *mut u8,
+                        0,
+                        (region.end - region.start) as usize,
+                    );
+                }
 
-        // SAFETY: the contract of this function requires that the table is not
-        // actively in use so it's safe to pave over its allocation with zero
-        // bytes.
-        unsafe {
-            std::ptr::write_bytes(base, 0, size_to_memset.byte_count());
+                // And decommit the rest of it.
+                decommit(
+                    dirty_pages.checked_bytes as *mut u8,
+                    size.byte_count() - dirty_pages.checked_bytes,
+                );
+            }
+            Err(_) => {
+                // `memset` the first `keep_resident` bytes.
+                let size_to_memset = size.min(self.keep_resident);
+                std::ptr::write_bytes(base, 0, size_to_memset.byte_count());
+
+                // And decommit the rest of it.
+                decommit(
+                    base.add(size_to_memset.byte_count()),
+                    size.checked_sub(size_to_memset)
+                        .expect("size_to_memset <= size")
+                        .byte_count(),
+                );
+            }
         }
-
-        // And decommit the rest of it.
-        decommit(
-            // SAFETY: `size_to_memset` is less than the size of the allocation,
-            // so it's safe to use the `add` intrinsic.
-            unsafe { base.add(size_to_memset.byte_count()) },
-            table_byte_size_page_aligned
-                .checked_sub(size_to_memset)
-                .expect("size_to_memset <= size")
-                .byte_count(),
-        );
     }
 }
 

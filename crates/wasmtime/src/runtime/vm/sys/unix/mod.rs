@@ -12,6 +12,8 @@ pub mod traphandlers;
 pub mod unwind;
 #[cfg(has_virtual_memory)]
 pub mod vm;
+#[cfg(has_virtual_memory)]
+pub mod pagemap;
 
 #[cfg(all(has_native_signals, target_vendor = "apple"))]
 pub mod machports;
