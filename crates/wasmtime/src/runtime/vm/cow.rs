@@ -9,7 +9,7 @@ use crate::runtime::vm::{HostAlignedByteCount, MmapOffset, MmapVec, host_page_si
 use alloc::sync::Arc;
 use core::ops::Range;
 use core::ptr;
-use std::os::unix::fs::FileExt;
+use std::io::Write;
 use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, Module, PrimaryMap, Tunables};
 
 /// Backing images for memories in a module.
@@ -36,6 +36,8 @@ pub struct MemoryImage {
     /// `Memfd` as an anonymous file in memory on Linux. In either case this is
     /// used as the backing-source for the CoW image.
     source: MemoryImageSource,
+
+    source_ptr: usize,
 
     /// Length of image, in bytes.
     ///
@@ -106,6 +108,7 @@ impl MemoryImage {
                 if let Some(source) = MemoryImageSource::from_file(file) {
                     return Ok(Some(MemoryImage {
                         source,
+                        source_ptr: mmap.as_ptr() as usize,
                         source_offset: u64::try_from(data_start - start).unwrap(),
                         linear_memory_offset,
                         len,
@@ -119,6 +122,7 @@ impl MemoryImage {
         if let Some(source) = MemoryImageSource::from_data(data)? {
             return Ok(Some(MemoryImage {
                 source,
+                source_ptr: data.as_ptr() as usize,
                 source_offset: 0,
                 linear_memory_offset,
                 len,
@@ -562,12 +566,9 @@ impl MemoryImageSlot {
                         let image_end = image_start
                             .checked_add(image.len.byte_count() as u64)
                             .expect("image is in bounds");
-                        let file = match &image.source {
-                            MemoryImageSource::Mmap(mmap) => mmap,
-                            #[cfg(target_os = "linux")]
-                            MemoryImageSource::Memfd(memfd) => memfd.as_file(),
-                        };
-                        (image_start, image_end, image.source_offset, Some(file))
+                        let image_slice =
+                            core::slice::from_raw_parts(image.source_ptr as *const u8, image.len.byte_count());
+                        (image_start, image_end, image.source_offset, Some(image_slice))
                     }
                     None => {
                         // To simplify things in the loop below, treat an absent image
@@ -603,10 +604,7 @@ impl MemoryImageSlot {
                             (end - start) as usize,
                         );
                         let image_offset = start - image_start + image_source_offset;
-                        // TODO: Make the memfd's underlying bytes accessible and memcpy them.
-                        file.expect("region overlapping image")
-                            .read_exact_at(&mut region_slice, image_offset)
-                            .expect("failed to read from image");
+                        region_slice.write(&file.unwrap()[image_offset as usize..(image_offset + end - start) as usize]).unwrap();
                     }
 
                     // 3. Zero out the part after the image (if any).
@@ -908,6 +906,7 @@ mod test {
 
         Ok(MemoryImage {
             source: MemoryImageSource::from_data(data)?.unwrap(),
+            source_ptr: data.as_ptr() as usize,
             len: image_len,
             source_offset: 0,
             linear_memory_offset,
