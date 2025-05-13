@@ -1297,17 +1297,20 @@ pub(crate) struct PatchableAddToReg {
     region: PatchRegion,
 
     // The destination register for the add instruction.
-    reg: Reg,
+    reg: Writable<Reg>,
 
     // The temporary register used to hold the immediate value.
-    tmp: Reg,
+    tmp: Writable<Reg>,
 }
 
 impl PatchableAddToReg {
-    /// Create a new [`PatchableAddToReg`] by capturing a region in the output buffer where the
-    /// add-with-immediate sequence occurs. The [`MachBuffer`] will have and add-with-immediate instruction
-    /// sequence present in that region, though it will add `0` until the `::finalize` method is called.
-    pub(crate) fn new(reg: Reg, tmp: Reg, buf: &mut MachBuffer<Inst>) -> Self {
+    /// Create a new [`PatchableAddToReg`] by capturing a region in the output
+    /// buffer containing an instruction sequence that loads an immediate into a
+    /// register `tmp`, then adds it to a register `reg`. The [`MachBuffer`]
+    /// will have that instruction sequence written to the region, though the
+    /// immediate loaded into `tmp` will be `0` until the `::finalize` method is
+    /// called.
+    pub(crate) fn new(reg: Writable<Reg>, tmp: Writable<Reg>, buf: &mut MachBuffer<Inst>) -> Self {
         let insns = Self::add_immediate_instruction_sequence(reg, tmp, 0);
         let open = buf.start_patchable();
         buf.put_data(&insns);
@@ -1316,7 +1319,11 @@ impl PatchableAddToReg {
         Self { region, reg, tmp }
     }
 
-    fn add_immediate_instruction_sequence(reg: Reg, tmp: Reg, imm: i32) -> [u8; 12] {
+    fn add_immediate_instruction_sequence(
+        reg: Writable<Reg>,
+        tmp: Writable<Reg>,
+        imm: i32,
+    ) -> [u8; 12] {
         let imm_hi = imm as u64 & 0xffff_0000;
         let imm_hi = MoveWideConst::maybe_from_u64(imm_hi).unwrap();
 
@@ -1325,17 +1332,14 @@ impl PatchableAddToReg {
 
         let size = OperandSize::S64.into();
 
-        let tmp = writable!(tmp);
         let tmp = tmp.map(Into::into);
+        let rd = reg.map(Into::into);
 
         // This is "movz to bits 16-31 of 64 bit reg tmp and zero the rest"
         let mov_insn = enc_move_wide(inst::MoveWideOp::MovZ, tmp, imm_hi, size);
 
         // This is "movk to bits 0-15 of 64 bit reg tmp"
         let movk_insn = enc_movk(tmp, imm_lo, size);
-
-        let rd = writable!(reg);
-        let rd = rd.map(Into::into);
 
         // This is "add tmp to rd". The opcodes are somewhat buried in the
         // instruction encoder so we just repeat them here.

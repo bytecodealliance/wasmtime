@@ -69,7 +69,7 @@ impl MacroAssembler {
     /// Add the maximum stack used to a register, recording an obligation to update the
     /// add-with-immediate instruction emitted to use the real stack max when the masm is being
     /// finalized.
-    fn add_stack_max(&mut self, reg: Reg, tmp: Reg) {
+    fn add_stack_max(&mut self, reg: WritableReg, tmp: WritableReg) {
         assert!(self.stack_max_use_add.is_none());
         let patch = PatchableAddToReg::new(reg, tmp, self.asm.buffer_mut());
         self.stack_max_use_add.replace(patch);
@@ -172,11 +172,11 @@ impl Masm for MacroAssembler {
             writable!(scratch_stk_limit),
         )?;
 
-        self.add_stack_max(scratch_stk_limit, scratch_tmp);
+        self.add_stack_max(writable!(scratch_stk_limit), writable!(scratch_tmp));
 
         self.asm
             .subs_rrr(scratch_stk_limit, regs::sp(), OperandSize::S64);
-        self.asm.trapif(Cond::Gt, TrapCode::STACK_OVERFLOW);
+        self.trapif(IntCmpKind::GtU, TrapCode::STACK_OVERFLOW)?;
 
         Ok(())
     }
