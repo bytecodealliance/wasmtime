@@ -85,14 +85,11 @@ impl Table {
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`)
     #[cfg(feature = "async")]
-    pub async fn new_async<T>(
-        mut store: impl AsContextMut<Data = T>,
+    pub async fn new_async(
+        mut store: impl AsContextMut<Data: Send>,
         ty: TableType,
         init: Ref,
-    ) -> Result<Table>
-    where
-        T: Send,
-    {
+    ) -> Result<Table> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
@@ -278,15 +275,12 @@ impl Table {
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
-    pub async fn grow_async<T>(
+    pub async fn grow_async(
         &self,
-        mut store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data: Send>,
         delta: u64,
         init: Ref,
-    ) -> Result<u64>
-    where
-        T: Send,
-    {
+    ) -> Result<u64> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),

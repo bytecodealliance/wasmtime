@@ -13,7 +13,7 @@ fn build_engine(config: &mut Config) -> Arc<Engine> {
     Arc::new(Engine::new(&config).unwrap())
 }
 
-fn make_env<T>(engine: &Engine) -> Linker<T> {
+fn make_env<T: 'static>(engine: &Engine) -> Linker<T> {
     let mut linker = Linker::new(engine);
     let engine = engine.clone();
 
@@ -53,7 +53,7 @@ async fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
     setup_func: F,
 ) -> Option<(usize, usize)> {
     let engine = build_engine(config);
-    let linker = make_env(&engine);
+    let linker = make_env::<usize>(&engine);
     let module = Module::new(&engine, wasm).unwrap();
     let mut store = Store::new(&engine, 0);
     store.set_epoch_deadline(initial);
@@ -457,7 +457,7 @@ async fn drop_future_on_epoch_yield(config: &mut Config) -> Result<()> {
     ";
 
     let engine = build_engine(config);
-    let mut linker = make_env(&engine);
+    let mut linker = make_env::<()>(&engine);
 
     // Create a few helpers for the Wasm to call.
     let alive_flag = Arc::new(AtomicBool::new(false));

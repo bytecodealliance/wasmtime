@@ -41,7 +41,7 @@ impl atoms::Atoms for Ctx {
 #[tokio::test]
 async fn test_sync_host_func() {
     let mut store = async_store();
-    let mut linker = Linker::new(store.engine());
+    let mut linker = Linker::<Ctx>::new(store.engine());
     atoms::add_to_linker(&mut linker, |cx| cx).unwrap();
     let shim_mod = shim_module(linker.engine());
     let shim_inst = linker
@@ -67,7 +67,7 @@ async fn test_sync_host_func() {
 #[tokio::test]
 async fn test_async_host_func() {
     let mut store = async_store();
-    let mut linker = Linker::new(store.engine());
+    let mut linker = Linker::<Ctx>::new(store.engine());
     atoms::add_to_linker(&mut linker, |cx| cx).unwrap();
 
     let shim_mod = shim_module(linker.engine());

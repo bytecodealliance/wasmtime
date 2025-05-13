@@ -360,7 +360,7 @@ fn wasm_to_host(c: &mut Criterion) {
             return;
         }
 
-        let mut typed = Linker::new(&engine);
+        let mut typed = Linker::<()>::new(&engine);
         typed
             .func_wrap_async("", "nop", |caller, _: ()| {
                 Box::new(async {

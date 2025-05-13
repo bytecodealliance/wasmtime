@@ -459,7 +459,7 @@ impl StructRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn fields<'a, T: 'a>(
+    pub fn fields<'a, T: 'static>(
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
