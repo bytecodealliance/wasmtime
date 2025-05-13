@@ -5,8 +5,6 @@
 #ifndef WASMTIME_TRAP_HH
 #define WASMTIME_TRAP_HH
 
-#include "trap.h"
-#include <cstdlib>
 #include <wasmtime/error.hh>
 #include <wasmtime/trap.h>
 
