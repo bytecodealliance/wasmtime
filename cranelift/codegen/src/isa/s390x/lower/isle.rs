@@ -747,6 +747,11 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
+    fn memarg_const(&mut self, constant: VCodeConstant) -> MemArg {
+        MemArg::Constant { constant }
+    }
+
+    #[inline]
     fn memarg_symbol_offset_sum(&mut self, off1: i64, off2: i64) -> Option<i32> {
         let off = i32::try_from(off1 + off2).ok()?;
         if off & 1 == 0 {

@@ -7817,57 +7817,6 @@ fn test_s390x_binemit() {
         "wfcdb %v24, %f12",
     ));
 
-    // FIXME(#8312): Use `1.0_f16.to_bits()` once `f16` is stabilised.
-    let f16_1_0 = 0x3c00;
-    insns.push((
-        Inst::LoadFpuConst16 {
-            rd: writable_vr(8),
-            const_data: f16_1_0,
-        },
-        "A71500033C00E78010000001",
-        "bras %r1, 8 ; data.f16 0x1.000p0 ; vleh %v8, 0(%r1), 0",
-    ));
-    insns.push((
-        Inst::LoadFpuConst16 {
-            rd: writable_vr(24),
-            const_data: f16_1_0,
-        },
-        "A71500033C00E78010000801",
-        "bras %r1, 8 ; data.f16 0x1.000p0 ; vleh %v24, 0(%r1), 0",
-    ));
-    insns.push((
-        Inst::LoadFpuConst32 {
-            rd: writable_vr(8),
-            const_data: 1.0_f32.to_bits(),
-        },
-        "A71500043F80000078801000",
-        "bras %r1, 8 ; data.f32 1 ; le %f8, 0(%r1)",
-    ));
-    insns.push((
-        Inst::LoadFpuConst32 {
-            rd: writable_vr(24),
-            const_data: 1.0_f32.to_bits(),
-        },
-        "A71500043F800000E78010000803",
-        "bras %r1, 8 ; data.f32 1 ; vlef %v24, 0(%r1), 0",
-    ));
-    insns.push((
-        Inst::LoadFpuConst64 {
-            rd: writable_vr(8),
-            const_data: 1.0_f64.to_bits(),
-        },
-        "A71500063FF000000000000068801000",
-        "bras %r1, 12 ; data.f64 1 ; ld %f8, 0(%r1)",
-    ));
-    insns.push((
-        Inst::LoadFpuConst64 {
-            rd: writable_vr(24),
-            const_data: 1.0_f64.to_bits(),
-        },
-        "A71500063FF0000000000000E78010000802",
-        "bras %r1, 12 ; data.f64 1 ; vleg %v24, 0(%r1), 0",
-    ));
-
     insns.push((
         Inst::FpuRound {
             op: FpuRoundOp::Cvt64To32,
@@ -10811,32 +10760,6 @@ fn test_s390x_binemit() {
         "E74560000862",
         "vlvgp %v20, %r5, %r6",
     ));
-    insns.push((
-        Inst::VecLoadConst {
-            rd: writable_vr(24),
-            const_data: 0x0102030405060708090a0b0c0d0e0fu128,
-        },
-        "A715000A000102030405060708090A0B0C0D0E0FE78010000806",
-        "bras %r1, 20 ; data.u128 0x000102030405060708090a0b0c0d0e0f ; vl %v24, 0(%r1)",
-    ));
-    insns.push((
-        Inst::VecLoadConstReplicate {
-            size: 64,
-            rd: writable_vr(24),
-            const_data: 0x01020304050607u64,
-        },
-        "A71500060001020304050607E78010003805",
-        "bras %r1, 12 ; data.u64 0x0001020304050607 ; vlrepg %v24, 0(%r1)",
-    ));
-    insns.push((
-        Inst::VecLoadConstReplicate {
-            size: 32,
-            rd: writable_vr(24),
-            const_data: 0x010203u64,
-        },
-        "A715000400010203E78010002805",
-        "bras %r1, 8 ; data.u32 0x00010203 ; vlrepf %v24, 0(%r1)",
-    ));
 
     insns.push((
         Inst::VecImmByteMask {
@@ -13187,6 +13110,46 @@ fn test_s390x_binemit() {
             size: 64,
             rd: writable_vr(20),
             ri: vr(20),
+            imm: 0x1234,
+            lane_imm: 1,
+        },
+        "E74012341842",
+        "vleig %v20, 4660, 1",
+    ));
+    insns.push((
+        Inst::VecInsertLaneImmUndef {
+            size: 8,
+            rd: writable_vr(20),
+            imm: 0x1234,
+            lane_imm: 15,
+        },
+        "E7401234F840",
+        "vleib %v20, 4660, 15",
+    ));
+    insns.push((
+        Inst::VecInsertLaneImmUndef {
+            size: 16,
+            rd: writable_vr(20),
+            imm: 0x1234,
+            lane_imm: 7,
+        },
+        "E74012347841",
+        "vleih %v20, 4660, 7",
+    ));
+    insns.push((
+        Inst::VecInsertLaneImmUndef {
+            size: 32,
+            rd: writable_vr(20),
+            imm: 0x1234,
+            lane_imm: 3,
+        },
+        "E74012343843",
+        "vleif %v20, 4660, 3",
+    ));
+    insns.push((
+        Inst::VecInsertLaneImmUndef {
+            size: 64,
+            rd: writable_vr(20),
             imm: 0x1234,
             lane_imm: 1,
         },

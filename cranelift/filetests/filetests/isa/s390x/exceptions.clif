@@ -32,7 +32,7 @@ function %f0(i32) -> i32, f32, f64 {
 ;   std %f14, 224(%r15)
 ;   std %f15, 232(%r15)
 ; block0:
-;   bras %r1, 12 ; data.f64 1 ; ld %f2, 0(%r1)
+;   larl %r1, [const(1)] ; ld %f2, 0(%r1)
 ;   vst %v2, 160(%r15)
 ;   brasl %r14, %g; jg MachLabel(1); catch [None: MachLabel(2)]
 ; block1:
@@ -51,7 +51,7 @@ function %f0(i32) -> i32, f32, f64 {
 ; block2:
 ;   vl %v2, 160(%r15)
 ;   ahik %r2, %r6, 1
-;   bras %r1, 8 ; data.f32 0 ; le %f0, 0(%r1)
+;   larl %r1, [const(0)] ; le %f0, 0(%r1)
 ;   ld %f8, 176(%r15)
 ;   ld %f9, 184(%r15)
 ;   ld %f10, 192(%r15)
@@ -76,15 +76,11 @@ function %f0(i32) -> i32, f32, f64 {
 ;   std %f14, 0xe0(%r15)
 ;   std %f15, 0xe8(%r15)
 ; block1: ; offset 0x2a
-;   bras %r1, 0x36
-;   sur %f15, %f0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0xb0
 ;   ld %f2, 0(%r1)
 ;   vst %v2, 0xa0(%r15)
-;   brasl %r14, 0x40 ; reloc_external PLTRel32Dbl %g 2
-; block2: ; offset 0x46
+;   brasl %r14, 0x3a ; reloc_external PLTRel32Dbl %g 2
+; block2: ; offset 0x40
 ;   lhi %r2, 1
 ;   vl %v2, 0xa0(%r15)
 ;   ld %f8, 0xb0(%r15)
@@ -97,12 +93,10 @@ function %f0(i32) -> i32, f32, f64 {
 ;   ld %f15, 0xe8(%r15)
 ;   lmg %r6, %r15, 0x120(%r15)
 ;   br %r14
-; block3: ; offset 0x78
+; block3: ; offset 0x72
 ;   vl %v2, 0xa0(%r15)
 ;   ahik %r2, %r6, 1
-;   bras %r1, 0x8c
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0xb8
 ;   le %f0, 0(%r1)
 ;   ld %f8, 0xb0(%r15)
 ;   ld %f9, 0xb8(%r15)
@@ -114,6 +108,14 @@ function %f0(i32) -> i32, f32, f64 {
 ;   ld %f15, 0xe8(%r15)
 ;   lmg %r6, %r15, 0x120(%r15)
 ;   br %r14
+;   sur %f15, %f0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %f2(i32) -> i32, f32, f64 {
     sig0 = (i32) -> f32 tail
@@ -147,7 +149,7 @@ function %f2(i32) -> i32, f32, f64 {
 ;   std %f14, 224(%r15)
 ;   std %f15, 232(%r15)
 ; block0:
-;   bras %r1, 12 ; data.f64 1 ; ld %f2, 0(%r1)
+;   larl %r1, [const(1)] ; ld %f2, 0(%r1)
 ;   vst %v2, 160(%r15)
 ;   bras %r1, 12 ; data %g + 0 ; lg %r5, 0(%r1)
 ;   basr %r14, %r5; jg MachLabel(1); catch [None: MachLabel(2)]
@@ -167,7 +169,7 @@ function %f2(i32) -> i32, f32, f64 {
 ; block2:
 ;   vl %v2, 160(%r15)
 ;   ahik %r2, %r6, 1
-;   bras %r1, 8 ; data.f32 0 ; le %f0, 0(%r1)
+;   larl %r1, [const(0)] ; le %f0, 0(%r1)
 ;   ld %f8, 176(%r15)
 ;   ld %f9, 184(%r15)
 ;   ld %f10, 192(%r15)
@@ -192,21 +194,17 @@ function %f2(i32) -> i32, f32, f64 {
 ;   std %f14, 0xe0(%r15)
 ;   std %f15, 0xe8(%r15)
 ; block1: ; offset 0x2a
-;   bras %r1, 0x36
-;   sur %f15, %f0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0xc0
 ;   ld %f2, 0(%r1)
 ;   vst %v2, 0xa0(%r15)
-;   bras %r1, 0x4c
+;   bras %r1, 0x46
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %g 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   lg %r5, 0(%r1)
 ;   basr %r14, %r5
-; block2: ; offset 0x54
+; block2: ; offset 0x4e
 ;   lhi %r2, 1
 ;   vl %v2, 0xa0(%r15)
 ;   ld %f8, 0xb0(%r15)
@@ -219,12 +217,10 @@ function %f2(i32) -> i32, f32, f64 {
 ;   ld %f15, 0xe8(%r15)
 ;   lmg %r6, %r15, 0x120(%r15)
 ;   br %r14
-; block3: ; offset 0x86
+; block3: ; offset 0x80
 ;   vl %v2, 0xa0(%r15)
 ;   ahik %r2, %r6, 1
-;   bras %r1, 0x9a
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0xc8
 ;   le %f0, 0(%r1)
 ;   ld %f8, 0xb0(%r15)
 ;   ld %f9, 0xb8(%r15)
@@ -236,4 +232,13 @@ function %f2(i32) -> i32, f32, f64 {
 ;   ld %f15, 0xe8(%r15)
 ;   lmg %r6, %r15, 0x120(%r15)
 ;   br %r14
+;   .byte 0x00, 0x00
+;   sur %f15, %f0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 

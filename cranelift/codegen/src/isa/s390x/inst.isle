@@ -552,21 +552,6 @@
       (rn Reg)
       (rm Reg))
 
-    ;; Load floating-point constant, half-precision (16 bit).
-    (LoadFpuConst16
-      (rd WritableReg)
-      (const_data u16))
-
-    ;; Load floating-point constant, single-precision (32 bit).
-    (LoadFpuConst32
-      (rd WritableReg)
-      (const_data u32))
-
-    ;; Load floating-point constant, double-precision (64 bit).
-    (LoadFpuConst64
-      (rd WritableReg)
-      (const_data u64))
-
     ;; A binary vector operation with two vector register sources.
     (VecRRR
       (op VecBinaryOp)
@@ -765,17 +750,6 @@
       (rn Reg)
       (rm Reg))
 
-    ;; Load 128-bit (big-endian) vector constant.
-    (VecLoadConst
-      (rd WritableReg)
-      (const_data u128))
-
-    ;; Load 128-bit (big-endian) replicated vector constant.
-    (VecLoadConstReplicate
-      (size u32)
-      (rd WritableReg)
-      (const_data u64))
-
     ;; Load vector immediate generated via byte mask.
     (VecImmByteMask
       (rd WritableReg)
@@ -875,6 +849,13 @@
       (size u32)
       (rd WritableReg)
       (ri Reg)
+      (imm i16)
+      (lane_imm u8))
+
+    ;; Same as VecInsertLaneImm, but allow undefined input VR.
+    (VecInsertLaneImmUndef
+      (size u32)
+      (rd WritableReg)
       (imm i16)
       (lane_imm u8))
 
@@ -1787,6 +1768,9 @@
 (decl memarg_got () MemArg)
 (extern constructor memarg_got memarg_got)
 
+(decl memarg_const (VCodeConstant) MemArg)
+(extern constructor memarg_const memarg_const)
+
 ;; Form the sum of two offset values, and check that the result is
 ;; a valid `MemArg::Symbol` offset (i.e. is even and fits into i32).
 (decl pure partial memarg_symbol_offset_sum (i64 i64) i32)
@@ -2544,20 +2528,6 @@
             (_ Unit (emit (MInst.MovToVec128 dst src1 src2))))
         dst))
 
-;; Helper for emitting `MInst.VecLoadConst` instructions.
-(decl vec_load_const (Type u128) Reg)
-(rule (vec_load_const (vr128_ty ty) n)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.VecLoadConst dst n))))
-        dst))
-
-;; Helper for emitting `MInst.VecLoadConstReplicate` instructions.
-(decl vec_load_const_replicate (Type u64) Reg)
-(rule (vec_load_const_replicate ty @ (multi_lane size _) n)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.VecLoadConstReplicate size dst n))))
-        dst))
-
 ;; Helper for emitting `MInst.VecImmByteMask` instructions.
 (decl vec_imm_byte_mask (Type u16) Reg)
 (rule (vec_imm_byte_mask (vr128_ty ty) n)
@@ -2643,6 +2613,13 @@
 (rule (vec_insert_lane_imm ty @ (multi_lane size _) src imm lane_imm)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.VecInsertLaneImm size dst src imm lane_imm))))
+        dst))
+
+;; Helper for emitting `MInst.VecInsertLaneImmUndef` instructions.
+(decl vec_insert_lane_imm_undef (Type i16 u8) Reg)
+(rule (vec_insert_lane_imm_undef ty @ (multi_lane size _) imm lane_imm)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecInsertLaneImmUndef size dst imm lane_imm))))
         dst))
 
 ;; Helper for emitting `MInst.VecReplicateLane` instructions.
@@ -2902,26 +2879,21 @@
             (_ Unit (emit (MInst.Insert64UImm32Shifted dst src n))))
         dst))
 
-;; 16-bit floating-point type, any value.  Loaded from literal pool.
-;; TODO: use LZER to load 0.0
+;; 16-bit floating-point type, any value.
 (rule 8 (imm $F16 n)
-      (let ((dst WritableReg (temp_writable_reg $F16))
-            (_ Unit (emit (MInst.LoadFpuConst16 dst (u64_as_u16 n)))))
-        dst))
+      (vec_insert_lane_imm_undef $F16X8 (u64_as_i16 n) 0))
 
 ;; 32-bit floating-point type, any value.  Loaded from literal pool.
+;; FIXME: This wastes 4 bytes of constant pool space.
 ;; TODO: use LZER to load 0.0
 (rule 8 (imm $F32 n)
-      (let ((dst WritableReg (temp_writable_reg $F32))
-            (_ Unit (emit (MInst.LoadFpuConst32 dst (u64_truncate_to_u32 n)))))
-        dst))
+      (vec_load_lane_undef $F32X4
+        (memarg_const (emit_u64_be_const (u32_pair (u64_truncate_to_u32 n) 0))) 0))
 
 ;; 64-bit floating-point type, any value.  Loaded from literal pool.
 ;; TODO: use LZDR to load 0.0
 (rule 8 (imm $F64 n)
-      (let ((dst WritableReg (temp_writable_reg $F64))
-            (_ Unit (emit (MInst.LoadFpuConst64 dst n))))
-        dst))
+      (vec_load_lane_undef $F64X2 (memarg_const (emit_u64_be_const n)) 0))
 
 ;; Variant used for negative constants.
 (decl imm32 (Type i32) Reg)
@@ -2937,7 +2909,7 @@
 (rule 1 (vec_imm (vr128_ty ty) (u64_pair n n))
       (vec_imm_splat $I64X2 n))
 (rule (vec_imm (vr128_ty ty) n)
-      (vec_load_const ty n))
+      (vec_load ty (memarg_const (emit_u128_be_const n))))
 
 ;; Variant with replicated immediate.
 (decl vec_imm_splat (Type u64) Reg)
@@ -2957,9 +2929,12 @@
       (vec_imm_splat $I16X8 (u16_as_u64 n)))
 (rule 3 (vec_imm_splat (multi_lane 64 _) (u32_pair n n))
       (vec_imm_splat $I32X4 (u32_as_u64 n)))
-(rule 0 (vec_imm_splat (ty_vec128 ty) n)
-      (vec_load_const_replicate ty n))
-
+;; FIXME: This wastes 4 bytes of constant pool space.
+(rule 0 (vec_imm_splat ty @ (multi_lane 32 _) n)
+      (vec_load_replicate ty
+        (memarg_const (emit_u64_be_const (u32_pair (u64_truncate_to_u32 n) 0)))))
+(rule 0 (vec_imm_splat ty @ (multi_lane 64 _) n)
+      (vec_load_replicate ty (memarg_const (emit_u64_be_const n))))
 
 ;; Helpers for generating extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
