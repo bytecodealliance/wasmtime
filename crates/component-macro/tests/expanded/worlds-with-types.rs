@@ -185,15 +185,16 @@ const _: () = {
             let indices = FooIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker<T, U>(
+        pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            get: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<'a>: foo::foo::i::Host,
             T: 'static,
-            U: foo::foo::i::Host,
         {
-            foo::foo::i::add_to_linker(linker, get)?;
+            foo::foo::i::add_to_linker::<T, D>(linker, get)?;
             Ok(())
         }
         pub fn call_f<S: wasmtime::AsContextMut>(
@@ -221,26 +222,17 @@ pub mod foo {
                 assert!(2 == < T as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait Host {}
-            pub fn add_to_linker_get_host<T, G>(
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
+                host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host,
                 T: 'static,
-                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host>,
             {
                 let mut inst = linker.instance("foo:foo/i")?;
                 Ok(())
-            }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                T: 'static,
-                U: Host,
-            {
-                add_to_linker_get_host(linker, get)
             }
             impl<_T: Host + ?Sized> Host for &mut _T {}
         }

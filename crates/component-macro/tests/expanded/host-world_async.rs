@@ -153,13 +153,14 @@ const _: () = {
             let indices = Host_Indices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker_imports_get_host<T: 'static, G>(
+        pub fn add_to_linker_imports<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            host_getter: G,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host_Imports>,
-            T: Send,
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<'a>: Host_Imports,
+            T: Send + 'static,
         {
             let mut linker = linker.root();
             linker
@@ -175,16 +176,16 @@ const _: () = {
                 )?;
             Ok(())
         }
-        pub fn add_to_linker<T, U>(
+        pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            get: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            T: 'static,
-            T: Send,
-            U: Host_Imports + Send,
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<'a>: Host_Imports + Send,
+            T: Send + 'static,
         {
-            Self::add_to_linker_imports_get_host(linker, get)?;
+            Self::add_to_linker_imports::<T, D>(linker, get)?;
             Ok(())
         }
     }

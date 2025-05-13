@@ -81,7 +81,7 @@ use std::{future::Future, mem, pin::Pin, sync::LazyLock};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::sync::Mutex;
 use tokio_rustls::client::TlsStream;
-use wasmtime::component::{Resource, ResourceTable};
+use wasmtime::component::{HasData, Resource, ResourceTable};
 use wasmtime_wasi::async_trait;
 use wasmtime_wasi::p2::bindings::io::{
     error::Error as HostIoError,
@@ -139,13 +139,19 @@ impl<'a> WasiTlsCtx<'a> {
 impl<'a> generated::types::Host for WasiTlsCtx<'a> {}
 
 /// Add the `wasi-tls` world's types to a [`wasmtime::component::Linker`].
-pub fn add_to_linker<T: Send>(
+pub fn add_to_linker<T: Send + 'static>(
     l: &mut wasmtime::component::Linker<T>,
     opts: &mut LinkOptions,
-    f: impl Fn(&mut T) -> WasiTlsCtx + Send + Sync + Copy + 'static,
+    f: fn(&mut T) -> WasiTlsCtx<'_>,
 ) -> Result<()> {
-    generated::types::add_to_linker_get_host(l, &opts, f)?;
+    generated::types::add_to_linker::<_, WasiTls>(l, &opts, f)?;
     Ok(())
+}
+
+struct WasiTls;
+
+impl HasData for WasiTls {
+    type Data<'a> = WasiTlsCtx<'a>;
 }
 
 enum TlsError {

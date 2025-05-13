@@ -191,16 +191,16 @@ const _: () = {
             let indices = FooIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker<T, U>(
+        pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            get: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            T: 'static,
-            T: Send,
-            U: foo::foo::i::Host + Send,
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<'a>: foo::foo::i::Host + Send,
+            T: Send + 'static,
         {
-            foo::foo::i::add_to_linker(linker, get)?;
+            foo::foo::i::add_to_linker::<T, D>(linker, get)?;
             Ok(())
         }
         pub async fn call_f<S: wasmtime::AsContextMut>(
@@ -232,28 +232,17 @@ pub mod foo {
             };
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {}
-            pub fn add_to_linker_get_host<T, G>(
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
+                host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                T: 'static,
-                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
-                T: Send,
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host + Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/i")?;
                 Ok(())
-            }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                T: 'static,
-                U: Host + Send,
-                T: Send,
-            {
-                add_to_linker_get_host(linker, get)
             }
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
         }

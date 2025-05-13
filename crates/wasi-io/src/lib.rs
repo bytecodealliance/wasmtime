@@ -36,7 +36,7 @@ pub use async_trait::async_trait;
 pub use ::bytes;
 
 use alloc::boxed::Box;
-use wasmtime::component::ResourceTable;
+use wasmtime::component::{HasData, ResourceTable};
 
 /// A trait which provides access to the [`ResourceTable`] inside the
 /// embedder's `T` of [`Store<T>`][`Store`].
@@ -168,21 +168,17 @@ impl<T: IoView> IoView for IoImpl<T> {
 ///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
 /// ```
-pub fn add_to_linker_async<T: IoView>(
+pub fn add_to_linker_async<T: IoView + 'static>(
     l: &mut wasmtime::component::Linker<T>,
 ) -> wasmtime::Result<()> {
-    let closure = io_type_annotate::<T, _>(|t| IoImpl(t));
-    crate::bindings::wasi::io::error::add_to_linker_get_host(l, closure)?;
-    crate::bindings::wasi::io::poll::add_to_linker_get_host(l, closure)?;
-    crate::bindings::wasi::io::streams::add_to_linker_get_host(l, closure)?;
+    crate::bindings::wasi::io::error::add_to_linker::<T, HasIo<T>>(l, |x| IoImpl(x))?;
+    crate::bindings::wasi::io::poll::add_to_linker::<T, HasIo<T>>(l, |x| IoImpl(x))?;
+    crate::bindings::wasi::io::streams::add_to_linker::<T, HasIo<T>>(l, |x| IoImpl(x))?;
     Ok(())
 }
 
-// NB: workaround some rustc inference - a future refactoring may make this
-// obsolete.
-fn io_type_annotate<T: IoView, F>(val: F) -> F
-where
-    F: Fn(&mut T) -> IoImpl<&mut T>,
-{
-    val
+struct HasIo<T>(T);
+
+impl<T: 'static> HasData for HasIo<T> {
+    type Data<'a> = IoImpl<&'a mut T>;
 }

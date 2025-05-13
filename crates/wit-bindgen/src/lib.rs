@@ -1532,9 +1532,9 @@ impl Wasmtime {
         let camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
 
         let data_bounds = if self.opts.is_store_data_send() {
-            "T: Send,"
+            "Send + 'static"
         } else {
-            ""
+            "'static"
         };
         let wt = self.wasmtime_path();
         if has_world_imports_trait {
@@ -1549,14 +1549,15 @@ impl Wasmtime {
             uwrite!(
                 self.src,
                 "
-                    pub fn add_to_linker_imports_get_host<T: 'static, G>(
+                    pub fn add_to_linker_imports<T, D>(
                         linker: &mut {wt}::component::Linker<T>,
                         {options_param}
-                        host_getter: G,
+                        host_getter: fn(&mut T) -> D::Data<'_>,
                     ) -> {wt}::Result<()>
                         where
-                            G: for<'a> {wt}::component::GetHost<&'a mut T, Host: {host_bounds}>,
-                            {data_bounds}
+                            D: {wt}::component::HasData,
+                            for<'a> D::Data<'a>: {host_bounds},
+                            T: {data_bounds}
                     {{
                         let mut linker = linker.root();
                 "
@@ -1617,66 +1618,64 @@ impl Wasmtime {
                 .collect::<Vec<_>>()
                 .concat();
 
-            (format!("U: Send{bounds}"), format!("T: Send{bounds},"))
+            (format!("Send{bounds}"), format!("Send{bounds} + 'static,"))
         } else {
             (
-                format!("U: {}", self.world_host_traits(resolve, world).join(" + ")),
+                format!("{}", self.world_host_traits(resolve, world).join(" + ")),
                 data_bounds.to_string(),
             )
         };
 
-        if !self.opts.skip_mut_forwarding_impls {
+        uwriteln!(
+            self.src,
+            "
+                pub fn add_to_linker<T, D>(
+                    linker: &mut {wt}::component::Linker<T>,
+                    {options_param}
+                    get: fn(&mut T) -> D::Data<'_>,
+                ) -> {wt}::Result<()>
+                    where
+                        D: {wt}::component::HasData,
+                        for<'a> D::Data<'a>: {host_bounds},
+                        T: {data_bounds}
+                {{
+            "
+        );
+        let gate = FeatureGate::open(&mut self.src, &resolve.worlds[world].stability);
+        if has_world_imports_trait {
             uwriteln!(
                 self.src,
-                "
-                    pub fn add_to_linker<T, U>(
-                        linker: &mut {wt}::component::Linker<T>,
-                        {options_param}
-                        get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-                    ) -> {wt}::Result<()>
-                        where
-                            T: 'static,
-                            {data_bounds}
-                            {host_bounds}
-                    {{
-                "
+                "Self::add_to_linker_imports::<T, D>(linker {options_arg}, get)?;"
             );
-            let gate = FeatureGate::open(&mut self.src, &resolve.worlds[world].stability);
-            if has_world_imports_trait {
-                uwriteln!(
-                    self.src,
-                    "Self::add_to_linker_imports_get_host(linker {options_arg}, get)?;"
-                );
-            }
-            for (interface_id, path) in self.import_interface_paths() {
-                let options_arg = if self.interface_link_options[&interface_id].has_any() {
-                    ", &options.into()"
-                } else {
-                    ""
-                };
-
-                let import_stability = resolve.worlds[world]
-                    .imports
-                    .iter()
-                    .filter_map(|(_, i)| match i {
-                        WorldItem::Interface { id, stability } if *id == interface_id => {
-                            Some(stability.clone())
-                        }
-                        _ => None,
-                    })
-                    .next()
-                    .unwrap_or(Stability::Unknown);
-
-                let gate = FeatureGate::open(&mut self.src, &import_stability);
-                uwriteln!(
-                    self.src,
-                    "{path}::add_to_linker(linker {options_arg}, get)?;"
-                );
-                gate.close(&mut self.src);
-            }
-            gate.close(&mut self.src);
-            uwriteln!(self.src, "Ok(())\n}}");
         }
+        for (interface_id, path) in self.import_interface_paths() {
+            let options_arg = if self.interface_link_options[&interface_id].has_any() {
+                ", &options.into()"
+            } else {
+                ""
+            };
+
+            let import_stability = resolve.worlds[world]
+                .imports
+                .iter()
+                .filter_map(|(_, i)| match i {
+                    WorldItem::Interface { id, stability } if *id == interface_id => {
+                        Some(stability.clone())
+                    }
+                    _ => None,
+                })
+                .next()
+                .unwrap_or(Stability::Unknown);
+
+            let gate = FeatureGate::open(&mut self.src, &import_stability);
+            uwriteln!(
+                self.src,
+                "{path}::add_to_linker::<T, D>(linker {options_arg}, get)?;"
+            );
+            gate.close(&mut self.src);
+        }
+        gate.close(&mut self.src);
+        uwriteln!(self.src, "Ok(())\n}}");
     }
 
     fn generate_add_resource_to_linker(
@@ -2626,7 +2625,7 @@ impl<'a> InterfaceGenerator<'a> {
         let (data_bounds, mut host_bounds, mut get_host_bounds) =
             match self.generator.opts.call_style() {
                 CallStyle::Async => (
-                    "T: Send,".to_string(),
+                    "Send + 'static,",
                     "Host + Send".to_string(),
                     "Host + Send".to_string(),
                 ),
@@ -2639,12 +2638,12 @@ impl<'a> InterfaceGenerator<'a> {
                     );
 
                     (
-                        "T: Send + 'static,".to_string(),
+                        "Send + 'static,",
                         format!("Host{} + Send", constraints("T")),
                         format!("Host{} + Send", constraints("D")),
                     )
                 }
-                CallStyle::Sync => (String::new(), "Host".to_string(), "Host".to_string()),
+                CallStyle::Sync => ("'static", "Host".to_string(), "Host".to_string()),
             };
 
         for ty in required_conversion_traits {
@@ -2652,24 +2651,24 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(get_host_bounds, " + {ty}");
         }
 
-        let (options_param, options_arg) = if self.generator.interface_link_options[&id].has_any() {
-            ("options: &LinkOptions,", ", options")
+        let options_param = if self.generator.interface_link_options[&id].has_any() {
+            "options: &LinkOptions,"
         } else {
-            ("", "")
+            ""
         };
 
         uwriteln!(
             self.src,
             "
-                pub fn add_to_linker_get_host<T, G>(
+                pub fn add_to_linker<T, D>(
                     linker: &mut {wt}::component::Linker<T>,
                     {options_param}
-                    host_getter: G,
+                    host_getter: fn(&mut T) -> D::Data<'_>,
                 ) -> {wt}::Result<()>
                     where
-                        T: 'static,
-                        G: for<'a> {wt}::component::GetHost<&'a mut T, Host: {host_bounds}>,
-                        {data_bounds}
+                        D: {wt}::component::HasData,
+                        for<'a> D::Data<'a>: {host_bounds},
+                        T: {data_bounds}
                 {{
             "
         );
@@ -2696,23 +2695,6 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(self.src, "}}");
 
         if !self.generator.opts.skip_mut_forwarding_impls {
-            // Generate add_to_linker (with closure)
-            uwriteln!(
-                self.src,
-                "
-                pub fn add_to_linker<T, U>(
-                    linker: &mut {wt}::component::Linker<T>,
-                    {options_param}
-                    get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-                ) -> {wt}::Result<()>
-                    where
-                        T: 'static, U: {host_bounds}, {data_bounds}
-                {{
-                    add_to_linker_get_host(linker {options_arg}, get)
-                }}
-                "
-            );
-
             // Generate impl Host for &mut Host
             let maybe_send = if is_maybe_async { "+ Send" } else { "" };
 
@@ -2914,7 +2896,7 @@ impl<'a> InterfaceGenerator<'a> {
         if let CallStyle::Concurrent = &style {
             uwrite!(
                 self.src,
-                "let r = <G::Host as {host_trait}>::{func_name}(host, "
+                "let r = <D::Data<'_> as {host_trait}>::{func_name}(host, "
             );
         } else {
             uwrite!(self.src, "let r = {host_trait}::{func_name}(host, ");

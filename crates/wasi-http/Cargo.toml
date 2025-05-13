@@ -27,6 +27,7 @@ http-body = { workspace = true }
 http-body-util = { workspace = true }
 tracing = { workspace = true }
 wasmtime-wasi = { workspace = true }
+wasmtime-wasi-io = { workspace = true }
 wasmtime = { workspace = true, features = ['component-model'] }
 tokio-rustls = { workspace = true }
 rustls = { workspace = true }

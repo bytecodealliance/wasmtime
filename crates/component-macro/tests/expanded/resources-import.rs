@@ -222,12 +222,14 @@ const _: () = {
             let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker_imports_get_host<T: 'static, G>(
+        pub fn add_to_linker_imports<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            host_getter: G,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: TheWorldImports>,
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<'a>: TheWorldImports,
+            T: 'static,
         {
             let mut linker = linker.root();
             linker
@@ -282,24 +284,30 @@ const _: () = {
                 )?;
             Ok(())
         }
-        pub fn add_to_linker<T, U>(
+        pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            get: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            T: 'static,
-            U: foo::foo::resources::Host + foo::foo::long_use_chain1::Host
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<
+                'a,
+            >: foo::foo::resources::Host + foo::foo::long_use_chain1::Host
                 + foo::foo::long_use_chain2::Host + foo::foo::long_use_chain3::Host
                 + foo::foo::long_use_chain4::Host
                 + foo::foo::transitive_interface_with_resource::Host + TheWorldImports,
+            T: 'static,
         {
-            Self::add_to_linker_imports_get_host(linker, get)?;
-            foo::foo::resources::add_to_linker(linker, get)?;
-            foo::foo::long_use_chain1::add_to_linker(linker, get)?;
-            foo::foo::long_use_chain2::add_to_linker(linker, get)?;
-            foo::foo::long_use_chain3::add_to_linker(linker, get)?;
-            foo::foo::long_use_chain4::add_to_linker(linker, get)?;
-            foo::foo::transitive_interface_with_resource::add_to_linker(linker, get)?;
+            Self::add_to_linker_imports::<T, D>(linker, get)?;
+            foo::foo::resources::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::long_use_chain1::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::long_use_chain2::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::long_use_chain3::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::long_use_chain4::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::transitive_interface_with_resource::add_to_linker::<
+                T,
+                D,
+            >(linker, get)?;
             Ok(())
         }
         pub fn call_some_world_func2<S: wasmtime::AsContextMut>(
@@ -474,13 +482,14 @@ pub mod foo {
                 fn record_result(&mut self) -> NestedOwn;
                 fn func_with_handle_typedef(&mut self, x: SomeHandle) -> ();
             }
-            pub fn add_to_linker_get_host<T, G>(
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
+                host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host,
                 T: 'static,
-                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host>,
             {
                 let mut inst = linker.instance("foo:foo/resources")?;
                 inst.resource(
@@ -725,16 +734,6 @@ pub mod foo {
                 )?;
                 Ok(())
             }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                T: 'static,
-                U: Host,
-            {
-                add_to_linker_get_host(linker, get)
-            }
             impl<_T: Host + ?Sized> Host for &mut _T {
                 fn bar_own_arg(&mut self, x: wasmtime::component::Resource<Bar>) -> () {
                     Host::bar_own_arg(*self, x)
@@ -854,13 +853,14 @@ pub mod foo {
                 }
             }
             pub trait Host: HostA + Sized {}
-            pub fn add_to_linker_get_host<T, G>(
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
+                host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host,
                 T: 'static,
-                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host>,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain1")?;
                 inst.resource(
@@ -875,16 +875,6 @@ pub mod foo {
                 )?;
                 Ok(())
             }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                T: 'static,
-                U: Host,
-            {
-                add_to_linker_get_host(linker, get)
-            }
             impl<_T: Host + ?Sized> Host for &mut _T {}
         }
         #[allow(clippy::all)]
@@ -893,26 +883,17 @@ pub mod foo {
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain1::A;
             pub trait Host {}
-            pub fn add_to_linker_get_host<T, G>(
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
+                host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host,
                 T: 'static,
-                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host>,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain2")?;
                 Ok(())
-            }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                T: 'static,
-                U: Host,
-            {
-                add_to_linker_get_host(linker, get)
             }
             impl<_T: Host + ?Sized> Host for &mut _T {}
         }
@@ -922,26 +903,17 @@ pub mod foo {
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain2::A;
             pub trait Host {}
-            pub fn add_to_linker_get_host<T, G>(
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
+                host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host,
                 T: 'static,
-                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host>,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain3")?;
                 Ok(())
-            }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                T: 'static,
-                U: Host,
-            {
-                add_to_linker_get_host(linker, get)
             }
             impl<_T: Host + ?Sized> Host for &mut _T {}
         }
@@ -953,13 +925,14 @@ pub mod foo {
             pub trait Host {
                 fn foo(&mut self) -> wasmtime::component::Resource<A>;
             }
-            pub fn add_to_linker_get_host<T, G>(
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
+                host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host,
                 T: 'static,
-                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host>,
             {
                 let mut inst = linker.instance("foo:foo/long-use-chain4")?;
                 inst.func_wrap(
@@ -971,16 +944,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                T: 'static,
-                U: Host,
-            {
-                add_to_linker_get_host(linker, get)
             }
             impl<_T: Host + ?Sized> Host for &mut _T {
                 fn foo(&mut self) -> wasmtime::component::Resource<A> {
@@ -1008,13 +971,14 @@ pub mod foo {
                 }
             }
             pub trait Host: HostFoo + Sized {}
-            pub fn add_to_linker_get_host<T, G>(
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
+                host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host,
                 T: 'static,
-                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host>,
             {
                 let mut inst = linker
                     .instance("foo:foo/transitive-interface-with-resource")?;
@@ -1029,16 +993,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                T: 'static,
-                U: Host,
-            {
-                add_to_linker_get_host(linker, get)
             }
             impl<_T: Host + ?Sized> Host for &mut _T {}
         }

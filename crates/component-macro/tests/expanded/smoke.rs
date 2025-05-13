@@ -138,15 +138,16 @@ const _: () = {
             let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker<T, U>(
+        pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            get: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<'a>: imports::Host,
             T: 'static,
-            U: imports::Host,
         {
-            imports::add_to_linker(linker, get)?;
+            imports::add_to_linker::<T, D>(linker, get)?;
             Ok(())
         }
     }
@@ -158,13 +159,14 @@ pub mod imports {
     pub trait Host {
         fn y(&mut self) -> ();
     }
-    pub fn add_to_linker_get_host<T, G>(
+    pub fn add_to_linker<T, D>(
         linker: &mut wasmtime::component::Linker<T>,
-        host_getter: G,
+        host_getter: fn(&mut T) -> D::Data<'_>,
     ) -> wasmtime::Result<()>
     where
+        D: wasmtime::component::HasData,
+        for<'a> D::Data<'a>: Host,
         T: 'static,
-        G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host>,
     {
         let mut inst = linker.instance("imports")?;
         inst.func_wrap(
@@ -176,16 +178,6 @@ pub mod imports {
             },
         )?;
         Ok(())
-    }
-    pub fn add_to_linker<T, U>(
-        linker: &mut wasmtime::component::Linker<T>,
-        get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-    ) -> wasmtime::Result<()>
-    where
-        T: 'static,
-        U: Host,
-    {
-        add_to_linker_get_host(linker, get)
     }
     impl<_T: Host + ?Sized> Host for &mut _T {
         fn y(&mut self) -> () {
