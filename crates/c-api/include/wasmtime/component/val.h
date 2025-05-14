@@ -73,6 +73,9 @@ WASM_API_EXTERN void
 wasmtime_component_val_delete(wasmtime_component_val_t *value);
 
 WASM_API_EXTERN wasmtime_component_val_t
+wasmtime_component_vallist_new(size_t size);
+
+WASM_API_EXTERN wasmtime_component_val_t
 wasmtime_component_valrecord_new(size_t size);
 
 #ifdef __cplusplus
