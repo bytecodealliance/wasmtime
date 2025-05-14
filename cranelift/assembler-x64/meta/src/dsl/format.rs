@@ -131,7 +131,7 @@ pub struct Format {
     /// identifies an instruction. The reference manual uses this name in the
     /// "Instruction Operand Encoding" table.
     pub name: String,
-    /// These operands should match the "Instruction" column ing the reference
+    /// These operands should match the "Instruction" column in the reference
     /// manual.
     pub operands: Vec<Operand>,
 }
