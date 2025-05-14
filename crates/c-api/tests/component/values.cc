@@ -4,6 +4,7 @@
 #include <wasmtime.h>
 
 #include <format>
+#include <span>
 
 static std::string echo_component(std::string_view type, std::string_view func,
                                   std::string_view host_params) {
@@ -256,6 +257,79 @@ local.get $res
   CHECK_ERR(err);
 
   check(res, "hello from B!");
+
+  wasmtime_component_val_delete(&arg);
+  wasmtime_component_val_delete(&res);
+
+  destroy(ctx);
+}
+
+TEST(component, value_list) {
+  static const auto check = [](const wasmtime_component_val_t &val,
+                               std::vector<uint32_t> data) {
+    EXPECT_EQ(val.kind, WASMTIME_COMPONENT_LIST);
+    auto vals = std::span{val.of.list.ptr, val.of.list.len};
+    EXPECT_EQ(vals.size(), data.size());
+    for (auto i = 0; i < data.size(); i++) {
+      EXPECT_EQ(vals[i].kind, WASMTIME_COMPONENT_U32);
+      EXPECT_EQ(vals[i].of.u32, data[i]);
+    }
+  };
+
+  static const auto make =
+      [](std::vector<uint32_t> data) -> wasmtime_component_val_t {
+    auto val = wasmtime_component_vallist_new(data.size());
+    EXPECT_EQ(val.kind, WASMTIME_COMPONENT_LIST);
+    EXPECT_EQ(val.of.list.len, data.size());
+
+    for (auto i = 0; i < data.size(); i++) {
+      val.of.list.ptr[i] = wasmtime_component_val_t{
+          .kind = WASMTIME_COMPONENT_U32,
+          .of = {.u32 = data[i]},
+      };
+    }
+
+    return val;
+  };
+
+  auto ctx = create(
+      R"((list u32))", R"(
+(param $x i32)
+(param $y i32)
+(result i32)
+(local $res i32)
+local.get $x
+local.get $y
+(call $realloc
+	(i32.const 0)
+	(i32.const 0)
+	(i32.const 4)
+	(i32.const 8))
+local.tee $res
+call $do
+local.get $res
+	  )",
+      "i32 i32 i32",
+      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
+          size_t args_len, wasmtime_component_val_t *rets,
+          size_t rets_len) -> wasmtime_error_t * {
+        EXPECT_EQ(args_len, 1);
+        check(args[0], {1, 2, 3});
+
+        EXPECT_EQ(rets_len, 1);
+        rets[0] = make({4, 5, 6, 7});
+
+        return nullptr;
+      });
+
+  auto arg = make({1, 2, 3});
+  auto res = wasmtime_component_val_t{};
+
+  auto err =
+      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  CHECK_ERR(err);
+
+  check(res, {4, 5, 6, 7});
 
   wasmtime_component_val_delete(&arg);
   wasmtime_component_val_delete(&res);
