@@ -128,31 +128,34 @@ macro_rules! newtype_of_reg {
         }
 
         $(
-            /// A newtype wrapper around `RegMem` for general-purpose registers.
+            /// A newtype wrapper around `RegMem`; these variants should match
+            /// the `RegMem` variants exactly.
             #[derive(Clone, Debug)]
-            pub struct $newtype_reg_mem(RegMem);
+            #[expect(missing_docs, reason = "see `RegMem`")]
+            pub enum $newtype_reg_mem {
+                Reg { reg: Reg },
+                Mem { addr: SyntheticAmode },
+            }
 
             impl From<$newtype_reg_mem> for RegMem {
                 fn from(rm: $newtype_reg_mem) -> Self {
-                    rm.0
-                }
-            }
-            impl<'a> From<&'a $newtype_reg_mem> for &'a RegMem {
-                fn from(rm: &'a $newtype_reg_mem) -> &'a RegMem {
-                    &rm.0
+                    match rm {
+                        $newtype_reg_mem::Reg { reg } => RegMem::Reg { reg },
+                        $newtype_reg_mem::Mem { addr } => RegMem::Mem { addr },
+                    }
                 }
             }
 
             impl From<$newtype_reg> for $newtype_reg_mem {
                 fn from(r: $newtype_reg) -> Self {
-                    $newtype_reg_mem(RegMem::reg(r.into()))
+                    $newtype_reg_mem::Reg { reg: r.into() }
                 }
             }
 
             impl $newtype_reg_mem {
-                /// Construct a `RegMem` newtype from the given `RegMem`, or return
-                /// `None` if the `RegMem` is not a valid instance of this `RegMem`
-                /// newtype.
+                /// Construct a `RegMem` newtype from the given `RegMem`, or
+                /// return `None` if the `RegMem` is not a valid instance of
+                /// this `RegMem` newtype.
                 pub fn new(rm: RegMem) -> Option<Self> {
                     match rm {
                         RegMem::Mem { addr } => {
@@ -163,7 +166,7 @@ macro_rules! newtype_of_reg {
                                 }
                             )?
                             if _allow {
-                                Some(Self(RegMem::Mem { addr }))
+                                Some(Self::Mem { addr })
                             } else {
                                 None
                             }
@@ -185,7 +188,7 @@ macro_rules! newtype_of_reg {
                                     );
                                 }
                             )?
-                            Self(RegMem::Mem { addr })
+                            Self::Mem { addr }
                         }
                         RegMem::Reg { reg } => $newtype_reg::unwrap_new(reg).into(),
                     }
@@ -193,40 +196,51 @@ macro_rules! newtype_of_reg {
 
                 /// Convert this newtype into its underlying `RegMem`.
                 pub fn to_reg_mem(self) -> RegMem {
-                    self.0
+                    self.into()
                 }
 
                 #[allow(dead_code)] // Used by some newtypes and not others.
                 pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
-                    self.0.get_operands(collector);
+                    match self {
+                        Self::Reg { reg } => collector.reg_use(reg),
+                        Self::Mem { addr } => addr.get_operands(collector),
+                    }
                 }
             }
             impl PrettyPrint for $newtype_reg_mem {
                 fn pretty_print(&self, size: u8) -> String {
-                    self.0.pretty_print(size)
+                     match self {
+                        Self::Reg { reg } => pretty_print_reg(*reg, size),
+                        Self::Mem { addr } => addr.pretty_print(size),
+                    }
                 }
             }
         )*
 
         $(
-            /// A newtype wrapper around `RegMemImm`.
+            /// A newtype wrapper imitating `RegMemImm`; these variants should
+            /// match the `RegMemImm` variants exactly.
             #[derive(Clone, Debug)]
-            pub struct $newtype_reg_mem_imm(RegMemImm);
+            #[expect(missing_docs, reason = "see `RegMemImm`")]
+            pub enum $newtype_reg_mem_imm {
+                Reg { reg: Reg },
+                Mem { addr: SyntheticAmode },
+                Imm { simm32: u32 },
+            }
 
             impl From<$newtype_reg_mem_imm> for RegMemImm {
                 fn from(rmi: $newtype_reg_mem_imm) -> RegMemImm {
-                    rmi.0
-                }
-            }
-            impl<'a> From<&'a $newtype_reg_mem_imm> for &'a RegMemImm {
-                fn from(rmi: &'a $newtype_reg_mem_imm) -> &'a RegMemImm {
-                    &rmi.0
+                    match rmi {
+                        $newtype_reg_mem_imm::Reg { reg } => RegMemImm::Reg { reg },
+                        $newtype_reg_mem_imm::Mem { addr } => RegMemImm::Mem { addr },
+                        $newtype_reg_mem_imm::Imm { simm32 } => RegMemImm::Imm { simm32 },
+                    }
                 }
             }
 
             impl From<$newtype_reg> for $newtype_reg_mem_imm {
                 fn from(r: $newtype_reg) -> Self {
-                    $newtype_reg_mem_imm(RegMemImm::reg(r.into()))
+                    $newtype_reg_mem_imm::Reg { reg: r.into() }
                 }
             }
 
@@ -236,7 +250,7 @@ macro_rules! newtype_of_reg {
                 /// newtype.
                 pub fn new(rmi: RegMemImm) -> Option<Self> {
                     match rmi {
-                        RegMemImm::Imm { .. } => Some(Self(rmi)),
+                        RegMemImm::Imm { simm32 } => Some(Self::Imm { simm32 }),
                         RegMemImm::Mem { addr } => {
                             let mut _allow = true;
                             $(
@@ -245,7 +259,7 @@ macro_rules! newtype_of_reg {
                                 }
                             )?
                             if _allow {
-                                Some(Self(RegMemImm::Mem { addr }))
+                                Some(Self::Mem { addr })
                             } else {
                                 None
                             }
@@ -258,7 +272,7 @@ macro_rules! newtype_of_reg {
                 /// messages in case of failure.
                 pub fn unwrap_new(rmi: RegMemImm) -> Self {
                     match rmi {
-                        RegMemImm::Imm { .. } => Self(rmi),
+                        RegMemImm::Imm { simm32 } => Self::Imm { simm32 },
                         RegMemImm::Mem { addr } => {
                             $(
                                 if $aligned_imm && !addr.aligned() {
@@ -269,7 +283,7 @@ macro_rules! newtype_of_reg {
                                     );
                                 }
                             )?
-                            Self(RegMemImm::Mem { addr })
+                            Self::Mem { addr }
 
                         }
                         RegMemImm::Reg { reg } => $newtype_reg::unwrap_new(reg).into(),
@@ -279,18 +293,26 @@ macro_rules! newtype_of_reg {
                 /// Convert this newtype into its underlying `RegMemImm`.
                 #[allow(dead_code)] // Used by some newtypes and not others.
                 pub fn to_reg_mem_imm(self) -> RegMemImm {
-                    self.0
+                    self.into()
                 }
 
                 #[allow(dead_code)] // Used by some newtypes and not others.
                 pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
-                    self.0.get_operands(collector);
+                    match self {
+                        Self::Reg { reg } => collector.reg_use(reg),
+                        Self::Mem { addr } => addr.get_operands(collector),
+                        Self::Imm { .. } => {}
+                    }
                 }
             }
 
             impl PrettyPrint for $newtype_reg_mem_imm {
                 fn pretty_print(&self, size: u8) -> String {
-                    self.0.pretty_print(size)
+                    match self {
+                        Self::Reg { reg } => pretty_print_reg(*reg, size),
+                        Self::Mem { addr } => addr.pretty_print(size),
+                        Self::Imm { simm32 } => format!("${}", *simm32 as i32),
+                    }
                 }
             }
         )*
@@ -677,15 +699,6 @@ impl RegMemImm {
     pub(crate) fn assert_regclass_is(&self, expected_reg_class: RegClass) {
         if let Self::Reg { reg } = self {
             debug_assert_eq!(reg.class(), expected_reg_class);
-        }
-    }
-
-    /// Add the regs mentioned by `self` to `collector`.
-    pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
-        match self {
-            Self::Reg { reg } => collector.reg_use(reg),
-            Self::Mem { addr } => addr.get_operands(collector),
-            Self::Imm { .. } => {}
         }
     }
 }

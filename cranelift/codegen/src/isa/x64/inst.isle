@@ -1553,17 +1553,38 @@
 (type Gpr (primitive Gpr))
 (type WritableGpr (primitive WritableGpr))
 (type OptionWritableGpr (primitive OptionWritableGpr))
-(type GprMem extern (enum))
-(type GprMemImm extern (enum))
+(type GprMem extern
+      (enum
+       (Reg (reg Reg))
+       (Mem (addr SyntheticAmode))))
+(type GprMemImm extern
+      (enum
+       (Reg (reg Reg))
+       (Mem (addr SyntheticAmode))
+       (Imm (simm32 u32))))
 (type Imm8Gpr extern (enum))
 
 (type Xmm (primitive Xmm))
 (type WritableXmm (primitive WritableXmm))
 (type OptionWritableXmm (primitive OptionWritableXmm))
-(type XmmMem extern (enum))
-(type XmmMemAligned extern (enum))
-(type XmmMemImm extern (enum))
-(type XmmMemAlignedImm extern (enum))
+(type XmmMem extern
+      (enum
+       (Reg (reg Reg))
+       (Mem (addr SyntheticAmode))))
+(type XmmMemAligned extern
+      (enum
+       (Reg (reg Reg))
+       (Mem (addr SyntheticAmode))))
+(type XmmMemImm extern
+      (enum
+       (Reg (reg Reg))
+       (Mem (addr SyntheticAmode))
+       (Imm (simm32 u32))))
+(type XmmMemAlignedImm extern
+      (enum
+       (Reg (reg Reg))
+       (Mem (addr SyntheticAmode))
+       (Imm (simm32 u32))))
 
 ;; Convert an `Imm8Reg` into an `Imm8Gpr`.
 (decl imm8_reg_to_imm8_gpr (Imm8Reg) Imm8Gpr)
