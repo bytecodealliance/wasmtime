@@ -13,7 +13,7 @@ pub use encoding::{
 };
 pub use encoding::{rex, vex};
 pub use features::{ALL_FEATURES, Feature, Features};
-pub use format::{Extension, Format, Location, Mutability, Operand, OperandKind};
+pub use format::{Extension, Format, Location, Mutability, Operand, OperandKind, RegClass};
 pub use format::{align, fmt, implicit, r, rw, sxl, sxq, sxw, w};
 
 /// Abbreviated constructor for an x64 instruction.
