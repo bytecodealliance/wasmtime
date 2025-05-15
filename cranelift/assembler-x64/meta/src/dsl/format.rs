@@ -34,13 +34,12 @@ pub fn fmt(
 /// This function panics if the location is an immediate (i.e., an immediate
 /// cannot be written to).
 #[must_use]
-pub fn rw(location: Location) -> Operand {
-    assert!(!matches!(location.kind(), OperandKind::Imm(_)));
+pub fn rw(op: impl Into<Operand>) -> Operand {
+    let op = op.into();
+    assert!(!matches!(op.location.kind(), OperandKind::Imm(_)));
     Operand {
-        location,
         mutability: Mutability::ReadWrite,
-        extension: Extension::default(),
-        align: false,
+        ..op
     }
 }
 
@@ -54,12 +53,11 @@ pub fn r(op: impl Into<Operand>) -> Operand {
 
 /// An abbreviated constructor for a "write" operand.
 #[must_use]
-pub fn w(location: Location) -> Operand {
+pub fn w(op: impl Into<Operand>) -> Operand {
+    let op = op.into();
     Operand {
-        location,
         mutability: Mutability::Write,
-        extension: Extension::None,
-        align: false,
+        ..op
     }
 }
 
@@ -67,10 +65,8 @@ pub fn w(location: Location) -> Operand {
 pub fn align(location: Location) -> Operand {
     assert!(location.uses_memory());
     Operand {
-        location,
-        mutability: Mutability::Read,
-        extension: Extension::None,
         align: true,
+        ..Operand::from(location)
     }
 }
 
@@ -84,10 +80,8 @@ pub fn align(location: Location) -> Operand {
 pub fn sxq(location: Location) -> Operand {
     assert!(location.bits() <= 64);
     Operand {
-        location,
-        mutability: Mutability::Read,
         extension: Extension::SignExtendQuad,
-        align: false,
+        ..Operand::from(location)
     }
 }
 
@@ -101,10 +95,8 @@ pub fn sxq(location: Location) -> Operand {
 pub fn sxl(location: Location) -> Operand {
     assert!(location.bits() <= 32);
     Operand {
-        location,
-        mutability: Mutability::Read,
         extension: Extension::SignExtendLong,
-        align: false,
+        ..Operand::from(location)
     }
 }
 
@@ -118,10 +110,8 @@ pub fn sxl(location: Location) -> Operand {
 pub fn sxw(location: Location) -> Operand {
     assert!(location.bits() <= 16);
     Operand {
-        location,
-        mutability: Mutability::Read,
         extension: Extension::SignExtendWord,
-        align: false,
+        ..Operand::from(location)
     }
 }
 
