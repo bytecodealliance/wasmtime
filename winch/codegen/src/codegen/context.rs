@@ -664,7 +664,7 @@ impl<'a> CodeGenContext<'a, Emission> {
         &mut self,
         dest: &mut ControlStackFrame,
         masm: &mut M,
-        mut f: F,
+        mut maybe_pop_results: F,
     ) -> Result<()>
     where
         M: MacroAssembler,
@@ -675,15 +675,35 @@ impl<'a> CodeGenContext<'a, Emission> {
         let target_offset = state.target_offset;
         let base_offset = state.base_offset;
         let results_size = dest.results::<M>()?.size();
-        // Invariant: The stack pointer, must be greater or equal to
-        // the destination frame base stack pointer offset, given that
-        // we haven't popped any results by this point yet. But it may
-        // happen in the callback below.
+
+        maybe_pop_results(masm, self, dest)?;
+        // After calling `maybe_pop_results`, the stack pointer plus
+        // any result space needed, must be greater or equal to the
+        // destination frame base stack pointer offset.
+        //
+        // We check
+        //   current_sp + results >= base_offset
+        // as opposed to
+        //   current_sp >= base_offset
+        //
+        // To:
+        //  - Verify that `maybe_pop_results` popped exactly the right
+        //    amount relative to the base offset.
+        //  - Accomodate for multi-branch cases (i.e., `br_table`) in which
+        //    result handling happens only once and _could_ happen outside of
+        //    `maybe_pop_results` callback.
+        //
+        //
+        // Ensuring that the current stack pointer offset plus any
+        // result space is equal to or greater than the target branch
+        // base offset is the the most deterministic check at branch
+        // emission time since we can be certain that the base offset
+        // is the value recorded when a new control frame was pushed,
+        // upon which the expected target offset is calculated.
         ensure!(
-            masm.sp_offset()?.as_u32() >= base_offset.as_u32(),
+            (masm.sp_offset()?.as_u32() + results_size) >= base_offset.as_u32(),
             CodeGenError::invalid_sp_offset()
         );
-        f(masm, self, dest)?;
 
         // At jump sites, the machine stack might be left unbalanced,
         // due to register spills.
