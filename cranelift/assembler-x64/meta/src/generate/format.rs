@@ -18,6 +18,7 @@ impl dsl::Format {
         let ordered_ops: Vec<_> = self
             .operands
             .iter()
+            .filter(|o| !o.implicit)
             .rev()
             .map(|o| format!("{{{}}}", o.location))
             .collect();
