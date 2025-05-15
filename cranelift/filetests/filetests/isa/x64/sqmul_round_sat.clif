@@ -11,7 +11,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pmulhrsw %xmm0, %xmm1, %xmm0
+;   pmulhrsw %xmm1, %xmm0
 ;   movdqa  %xmm0, %xmm5
 ;   pcmpeqw %xmm5, const(0), %xmm5
 ;   pxor %xmm5, %xmm0
