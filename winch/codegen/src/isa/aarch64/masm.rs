@@ -142,7 +142,7 @@ impl Masm for MacroAssembler {
     }
 
     fn check_stack(&mut self, vmctx: Reg) -> Result<()> {
-        let ptr_size: u8 = self.ptr_size.bytes().try_into().unwrap();
+        let ptr_size_u8: u8 = self.ptr_size.bytes().try_into().unwrap();
 
         // The PatchableAddToReg construct on aarch64 is not a single
         // add-immediate instruction, but a 3-instruction sequence that loads an
@@ -160,24 +160,29 @@ impl Masm for MacroAssembler {
         let scratch_tmp = regs::ip1();
 
         self.load_ptr(
-            self.address_at_reg(vmctx, ptr_size.vmcontext_store_context().into())?,
+            self.address_at_reg(vmctx, ptr_size_u8.vmcontext_store_context().into())?,
             writable!(scratch_stk_limit),
         )?;
 
         self.load_ptr(
             Address::offset(
                 scratch_stk_limit,
-                ptr_size.vmstore_context_stack_limit().into(),
+                ptr_size_u8.vmstore_context_stack_limit().into(),
             ),
             writable!(scratch_stk_limit),
         )?;
 
         self.add_stack_max(writable!(scratch_stk_limit), writable!(scratch_tmp));
 
-        self.asm
-            .subs_rrr(scratch_stk_limit, regs::sp(), OperandSize::S64);
-        self.trapif(IntCmpKind::GtU, TrapCode::STACK_OVERFLOW)?;
-
+        let ptr_size = self.ptr_size;
+        self.with_aligned_sp(|masm| {
+            // Aarch can only do a cmp with sp in the first operand, which means we
+            // use a less-than comparison, not a greater-than (stack grows down).
+            masm.cmp(regs::sp(), scratch_stk_limit.into(), ptr_size)?;
+            masm.asm
+                .trapif(IntCmpKind::LtU.into(), TrapCode::STACK_OVERFLOW);
+            Ok(())
+        })?;
         Ok(())
     }
 
