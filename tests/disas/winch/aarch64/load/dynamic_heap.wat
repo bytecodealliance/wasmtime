@@ -24,7 +24,14 @@
 ;;       mov     x29, sp
 ;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
-;;       mov     x9, x1
+;;       ldur    x16, [x1, #8]
+;;       ldur    x16, [x16, #0x10]
+;;       mov     x17, #0
+;;       movk    x17, #0x28
+;;       add     x16, x16, x17
+;;       cmp     sp, x16
+;;       b.lo    #0x15c
+;;   2c: mov     x9, x1
 ;;       sub     x28, x28, #0x20
 ;;       mov     sp, x28
 ;;       stur    x1, [x28, #0x18]
@@ -35,10 +42,10 @@
 ;;       ldur    x1, [x9, #0x48]
 ;;       mov     w2, w0
 ;;       add     x2, x2, #4
-;;       b.hs    #0x140
-;;   40: cmp     x2, x1, uxtx
-;;       b.hi    #0x144
-;;   48: ldur    x3, [x9, #0x40]
+;;       b.hs    #0x160
+;;   5c: cmp     x2, x1, uxtx
+;;       b.hi    #0x164
+;;   64: ldur    x3, [x9, #0x40]
 ;;       add     x3, x3, x0, uxtx
 ;;       mov     x16, #0
 ;;       mov     x4, x16
@@ -49,10 +56,10 @@
 ;;       ldur    x2, [x9, #0x48]
 ;;       mov     w3, w1
 ;;       add     x3, x3, #8
-;;       b.hs    #0x148
-;;   78: cmp     x3, x2, uxtx
-;;       b.hi    #0x14c
-;;   80: ldur    x4, [x9, #0x40]
+;;       b.hs    #0x168
+;;   94: cmp     x3, x2, uxtx
+;;       b.hi    #0x16c
+;;   9c: ldur    x4, [x9, #0x40]
 ;;       add     x4, x4, x1, uxtx
 ;;       add     x4, x4, #4
 ;;       mov     x16, #0
@@ -66,10 +73,10 @@
 ;;       mov     w16, #3
 ;;       movk    w16, #0x10, lsl #16
 ;;       add     x4, x4, x16, uxtx
-;;       b.hs    #0x150
-;;   bc: cmp     x4, x3, uxtx
-;;       b.hi    #0x154
-;;   c4: ldur    x5, [x9, #0x40]
+;;       b.hs    #0x170
+;;   d8: cmp     x4, x3, uxtx
+;;       b.hi    #0x174
+;;   e0: ldur    x5, [x9, #0x40]
 ;;       add     x5, x5, x2, uxtx
 ;;       orr     x16, xzr, #0xfffff
 ;;       add     x5, x5, x16, uxtx
@@ -100,9 +107,10 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  140: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  144: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  148: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  14c: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  150: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  154: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  15c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  160: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  164: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  168: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  16c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  170: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  174: .byte   0x1f, 0xc1, 0x00, 0x00

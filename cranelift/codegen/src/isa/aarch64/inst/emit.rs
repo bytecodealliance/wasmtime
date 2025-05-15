@@ -107,13 +107,8 @@ fn machreg_to_gpr_or_vec(m: Reg) -> u32 {
     u32::from(m.to_real_reg().unwrap().hw_enc() & 31)
 }
 
-pub(crate) fn enc_arith_rrr(
-    bits_31_21: u32,
-    bits_15_10: u32,
-    rd: Writable<Reg>,
-    rn: Reg,
-    rm: Reg,
-) -> u32 {
+/// Encode a 3-register aeithmeric instruction.
+pub fn enc_arith_rrr(bits_31_21: u32, bits_15_10: u32, rd: Writable<Reg>, rn: Reg, rm: Reg) -> u32 {
     (bits_31_21 << 21)
         | (bits_15_10 << 10)
         | machreg_to_gpr(rd.to_reg())
@@ -204,7 +199,13 @@ fn enc_test_bit_and_branch(
         | machreg_to_gpr(reg)
 }
 
-fn enc_move_wide(op: MoveWideOp, rd: Writable<Reg>, imm: MoveWideConst, size: OperandSize) -> u32 {
+/// Encode a move-wide instruction.
+pub fn enc_move_wide(
+    op: MoveWideOp,
+    rd: Writable<Reg>,
+    imm: MoveWideConst,
+    size: OperandSize,
+) -> u32 {
     assert!(imm.shift <= 0b11);
     let op = match op {
         MoveWideOp::MovN => 0b00,
@@ -218,7 +219,8 @@ fn enc_move_wide(op: MoveWideOp, rd: Writable<Reg>, imm: MoveWideConst, size: Op
         | machreg_to_gpr(rd.to_reg())
 }
 
-fn enc_movk(rd: Writable<Reg>, imm: MoveWideConst, size: OperandSize) -> u32 {
+/// Encode a move-keep immediate instruction.
+pub fn enc_movk(rd: Writable<Reg>, imm: MoveWideConst, size: OperandSize) -> u32 {
     assert!(imm.shift <= 0b11);
     0x72800000
         | size.sf_bit() << 31

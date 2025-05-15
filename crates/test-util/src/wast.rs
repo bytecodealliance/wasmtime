@@ -418,11 +418,6 @@ impl WastTest {
         if config.compiler == Compiler::Winch {
             if cfg!(target_arch = "aarch64") {
                 let unsupported = [
-                    // Missing stack checks (#8321)
-                    "spec_testsuite/call.wast",
-                    "spec_testsuite/fac.wast",
-                    "spec_testsuite/skip-stack-guard-page.wast",
-                    "misc_testsuite/stack_overflow.wast",
                     // Fails intermittently
                     "misc_testsuite/table_copy_on_imported_tables.wast",
                     // Segfault

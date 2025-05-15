@@ -1,4 +1,9 @@
-use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs, ABI};
+use super::{
+    abi::Aarch64ABI,
+    address::Address,
+    asm::{Assembler, PatchableAddToReg},
+    regs, ABI,
+};
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, local::LocalSlot, vmctx},
     codegen::{ptr_type_from_ptr_size, CodeGenContext, CodeGenError, Emission, FuncEnv},
@@ -30,6 +35,17 @@ use wasmtime_environ::{PtrSize, WasmValType};
 
 /// Aarch64 MacroAssembler.
 pub(crate) struct MacroAssembler {
+    /// This value represents the maximum stack size seen while compiling the
+    /// function. While the function is still being compiled its value will not
+    /// be valid (the stack will grow and shrink as space is reserved and freed
+    /// during compilation), but once all instructions have been seen this value
+    /// will be the maximum stack usage seen.
+    sp_max: u32,
+
+    /// Add-with-immediate patchable instruction sequence used to add the
+    /// constant stack max to a register.
+    stack_max_use_add: Option<PatchableAddToReg>,
+
     /// Low level assembler.
     asm: Assembler,
     /// Stack pointer offset.
@@ -42,10 +58,21 @@ impl MacroAssembler {
     /// Create an Aarch64 MacroAssembler.
     pub fn new(ptr_size: impl PtrSize, shared_flags: settings::Flags) -> Result<Self> {
         Ok(Self {
+            sp_max: 0,
+            stack_max_use_add: None,
             asm: Assembler::new(shared_flags),
             sp_offset: 0u32,
             ptr_size: ptr_type_from_ptr_size(ptr_size.size()).try_into()?,
         })
+    }
+
+    /// Add the maximum stack used to a register, recording an obligation to update the
+    /// add-with-immediate instruction emitted to use the real stack max when the masm is being
+    /// finalized.
+    fn add_stack_max(&mut self, reg: WritableReg, tmp: WritableReg) {
+        assert!(self.stack_max_use_add.is_none());
+        let patch = PatchableAddToReg::new(reg, tmp, self.asm.buffer_mut());
+        self.stack_max_use_add.replace(patch);
     }
 
     /// Ensures that the stack pointer remains 16-byte aligned for the duration
@@ -114,8 +141,48 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn check_stack(&mut self, _vmctx: Reg) -> Result<()> {
-        // TODO: Implement when we have more complete assembler support.
+    fn check_stack(&mut self, vmctx: Reg) -> Result<()> {
+        let ptr_size_u8: u8 = self.ptr_size.bytes().try_into().unwrap();
+
+        // The PatchableAddToReg construct on aarch64 is not a single
+        // add-immediate instruction, but a 3-instruction sequence that loads an
+        // immediate using 2 mov-immediate instructions into _another_ scratch
+        // register before adding it into the target scratch register.
+        //
+        // In other words, to make this work we use _two_ scratch registers, one
+        // to hold the limit we're calculating and one helper that's just used
+        // to load the immediate.
+        //
+        // Luckily on aarch64 we have 2 available scratch registers, ip0 and
+        // ip1.
+
+        let scratch_stk_limit = regs::scratch();
+        let scratch_tmp = regs::ip1();
+
+        self.load_ptr(
+            self.address_at_reg(vmctx, ptr_size_u8.vmcontext_store_context().into())?,
+            writable!(scratch_stk_limit),
+        )?;
+
+        self.load_ptr(
+            Address::offset(
+                scratch_stk_limit,
+                ptr_size_u8.vmstore_context_stack_limit().into(),
+            ),
+            writable!(scratch_stk_limit),
+        )?;
+
+        self.add_stack_max(writable!(scratch_stk_limit), writable!(scratch_tmp));
+
+        let ptr_size = self.ptr_size;
+        self.with_aligned_sp(|masm| {
+            // Aarch can only do a cmp with sp in the first operand, which means we
+            // use a less-than comparison, not a greater-than (stack grows down).
+            masm.cmp(regs::sp(), scratch_stk_limit.into(), ptr_size)?;
+            masm.asm
+                .trapif(IntCmpKind::LtU.into(), TrapCode::STACK_OVERFLOW);
+            Ok(())
+        })?;
         Ok(())
     }
 
@@ -348,7 +415,11 @@ impl Masm for MacroAssembler {
         Ok(SPOffset::from_u32(self.sp_offset))
     }
 
-    fn finalize(self, base: Option<SourceLoc>) -> Result<MachBufferFinalized<Final>> {
+    fn finalize(mut self, base: Option<SourceLoc>) -> Result<MachBufferFinalized<Final>> {
+        if let Some(patch) = self.stack_max_use_add {
+            patch.finalize(i32::try_from(self.sp_max).unwrap(), self.asm.buffer_mut());
+        }
+
         Ok(self.asm.finalize(base))
     }
 
@@ -1343,6 +1414,11 @@ impl Masm for MacroAssembler {
 impl MacroAssembler {
     fn increment_sp(&mut self, bytes: u32) {
         self.sp_offset += bytes;
+
+        // NOTE: we use `max` here to track the largest stack allocation in `sp_max`. Once we have
+        // seen the entire function, this value will represent the maximum size for the stack
+        // frame.
+        self.sp_max = self.sp_max.max(self.sp_offset);
     }
 
     fn decrement_sp(&mut self, bytes: u32) {

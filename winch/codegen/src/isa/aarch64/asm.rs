@@ -11,7 +11,11 @@ use crate::{
     reg::{writable, Reg, WritableReg},
 };
 
-use cranelift_codegen::isa::aarch64::inst::{ASIMDFPModImm, FpuToIntOp, UImm5, NZCV};
+use cranelift_codegen::isa::aarch64::inst::emit::{enc_arith_rrr, enc_move_wide, enc_movk};
+use cranelift_codegen::isa::aarch64::inst::{
+    ASIMDFPModImm, FpuToIntOp, MoveWideConst, UImm5, NZCV,
+};
+use cranelift_codegen::PatchRegion;
 use cranelift_codegen::{
     ir::{ExternalName, MemFlags, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
@@ -1282,5 +1286,87 @@ impl Assembler {
             rd: dst.map(Into::into),
             rn: src.into(),
         });
+    }
+}
+
+/// Captures the region in a MachBuffer where an add-with-immediate instruction would be emitted,
+/// but the immediate is not yet known.
+pub(crate) struct PatchableAddToReg {
+    /// The region to be patched in the [`MachBuffer`]. It contains
+    /// space for 3 32-bit instructions, i.e. it's 12 bytes long.
+    region: PatchRegion,
+
+    // The destination register for the add instruction.
+    reg: Writable<Reg>,
+
+    // The temporary register used to hold the immediate value.
+    tmp: Writable<Reg>,
+}
+
+impl PatchableAddToReg {
+    /// Create a new [`PatchableAddToReg`] by capturing a region in the output
+    /// buffer containing an instruction sequence that loads an immediate into a
+    /// register `tmp`, then adds it to a register `reg`. The [`MachBuffer`]
+    /// will have that instruction sequence written to the region, though the
+    /// immediate loaded into `tmp` will be `0` until the `::finalize` method is
+    /// called.
+    pub(crate) fn new(reg: Writable<Reg>, tmp: Writable<Reg>, buf: &mut MachBuffer<Inst>) -> Self {
+        let insns = Self::add_immediate_instruction_sequence(reg, tmp, 0);
+        let open = buf.start_patchable();
+        buf.put_data(&insns);
+        let region = buf.end_patchable(open);
+
+        Self { region, reg, tmp }
+    }
+
+    fn add_immediate_instruction_sequence(
+        reg: Writable<Reg>,
+        tmp: Writable<Reg>,
+        imm: i32,
+    ) -> [u8; 12] {
+        let imm_hi = imm as u64 & 0xffff_0000;
+        let imm_hi = MoveWideConst::maybe_from_u64(imm_hi).unwrap();
+
+        let imm_lo = imm as u64 & 0x0000_ffff;
+        let imm_lo = MoveWideConst::maybe_from_u64(imm_lo).unwrap();
+
+        let size = OperandSize::S64.into();
+
+        let tmp = tmp.map(Into::into);
+        let rd = reg.map(Into::into);
+
+        // This is "movz to bits 16-31 of 64 bit reg tmp and zero the rest"
+        let mov_insn = enc_move_wide(inst::MoveWideOp::MovZ, tmp, imm_hi, size);
+
+        // This is "movk to bits 0-15 of 64 bit reg tmp"
+        let movk_insn = enc_movk(tmp, imm_lo, size);
+
+        // This is "add tmp to rd". The opcodes are somewhat buried in the
+        // instruction encoder so we just repeat them here.
+        let add_bits_31_21: u32 = 0b00001011_000 | (size.sf_bit() << 10);
+        let add_bits_15_10: u32 = 0;
+        let add_insn = enc_arith_rrr(
+            add_bits_31_21,
+            add_bits_15_10,
+            rd,
+            rd.to_reg(),
+            tmp.to_reg(),
+        );
+
+        let mut buf = [0u8; 12];
+        buf[0..4].copy_from_slice(&mov_insn.to_le_bytes());
+        buf[4..8].copy_from_slice(&movk_insn.to_le_bytes());
+        buf[8..12].copy_from_slice(&add_insn.to_le_bytes());
+        buf
+    }
+
+    /// Patch the [`MachBuffer`] with the known constant to be added to the register. The final
+    /// value is passed in as an i32, but the instruction encoding is fixed when
+    /// [`PatchableAddToReg::new`] is called.
+    pub(crate) fn finalize(self, val: i32, buffer: &mut MachBuffer<Inst>) {
+        let insns = Self::add_immediate_instruction_sequence(self.reg, self.tmp, val);
+        let slice = self.region.patch(buffer);
+        assert_eq!(slice.len(), insns.len());
+        slice.copy_from_slice(&insns);
     }
 }
