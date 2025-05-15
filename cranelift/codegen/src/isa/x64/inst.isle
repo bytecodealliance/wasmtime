@@ -1810,12 +1810,18 @@
 (extern extractor is_imm8_xmm is_imm8_xmm)
 (decl is_simm8 (i8) GprMemImm)
 (extern extractor is_simm8 is_simm8)
+(decl is_rust_simm8 (i8) i32)
+(extern extractor is_rust_simm8 is_rust_simm8)
 (decl is_imm16 (u16) GprMemImm)
 (extern extractor is_imm16 is_imm16)
+(decl is_rust_imm16 (u16) i32)
+(extern extractor is_rust_imm16 is_rust_imm16)
 (decl is_simm16 (i16) GprMemImm)
 (extern extractor is_simm16 is_simm16)
 (decl is_imm32 (u32) GprMemImm)
 (extern extractor is_imm32 is_imm32)
+(decl is_rust_imm32 (u32) i32)
+(extern extractor is_rust_imm32 is_rust_imm32)
 (decl is_simm32 (i32) GprMemImm)
 (extern extractor is_simm32 is_simm32)
 (decl is_gpr (Gpr) GprMemImm)
@@ -2693,6 +2699,8 @@
 (decl asm_produce_flags (AssemblerOutputs) ProducesFlags)
 (rule (asm_produce_flags (AssemblerOutputs.RetGpr inst gpr))
       (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst gpr))
+(rule (asm_produce_flags (AssemblerOutputs.RetValueRegs inst regs))
+      (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst (value_regs_get_gpr regs 0)))
 
 ;; Other operations consume _and_ produce flags--"chaining".
 (type ChainFlagsOp (enum (Adc) (Sbb)))
@@ -2883,15 +2891,18 @@
 
 
 ;; Helper for creating `mul` instructions or `imul` instructions (depending
-;; on `signed`)
-(decl x64_mul (Type bool Gpr GprMem) ValueRegs)
-(rule (x64_mul ty signed src1 src2)
-      (let ((dst_lo WritableGpr (temp_writable_gpr))
-            (dst_hi WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.Mul size signed src1 src2 dst_lo dst_hi))))
-        (value_gprs dst_lo dst_hi)))
+;; on `signed`). For the 8-bit rules, see `x64_mul8`.
+(decl x64_mul_raw (Type bool Gpr GprMem) AssemblerOutputs)
+(rule (x64_mul_raw $I16 false src1 src2) (x64_mulw_m_raw src1 src2))
+(rule (x64_mul_raw $I32 false src1 src2) (x64_mull_m_raw src1 src2))
+(rule (x64_mul_raw $I64 false src1 src2) (x64_mulq_m_raw src1 src2))
+(rule (x64_mul_raw $I16 true src1 src2)  (x64_imulw_m_raw src1 src2))
+(rule (x64_mul_raw $I32 true src1 src2)  (x64_imull_m_raw src1 src2))
+(rule (x64_mul_raw $I64 true src1 src2)  (x64_imulq_m_raw src1 src2))
 
+(decl x64_mul (Type bool Gpr GprMem) ValueRegs)
+(rule 0 (x64_mul ty signed src1 src2)
+      (emit_ret_value_regs (x64_mul_raw ty signed src1 src2)))
 ;; Special case the `mulx` pattern with the BMI2 instruction set.
 (rule 1 (x64_mul (ty_32_or_64 ty) false src1 src2)
   (if-let true (use_bmi2))
@@ -2908,49 +2919,43 @@
         (_ Unit (emit (MInst.MulX size src1 src2 (writable_invalid_gpr) dst))))
     dst))
 
+(decl x64_mul_lo_with_flags_paired (Type bool Gpr GprMem) ProducesFlags)
+(rule (x64_mul_lo_with_flags_paired ty signed src1 src2)
+      (asm_produce_flags (x64_mul_raw ty signed src1 src2)))
+
 ;; Get the invalid register as writable
 (decl writable_invalid_gpr () WritableGpr)
 (extern constructor writable_invalid_gpr writable_invalid_gpr)
 
-;; Helper for creating `mul` instructions or `imul` instructions (depending
-;; on `signed`) for 8-bit operands.
-(decl x64_mul8 (bool Gpr GprMem) Gpr)
-(rule (x64_mul8 signed src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.Mul8 signed src1 src2 dst))))
-        dst))
-
 ;; Helper for creating `imul` instructions.
 (decl x64_imul (Type Gpr GprMem) Gpr)
-(rule (x64_imul ty src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.IMul size src1 src2 dst))))
-        dst))
+(rule (x64_imul $I16 src1 src2) (x64_imulw_rm src1 src2))
+(rule (x64_imul $I32 src1 src2) (x64_imull_rm src1 src2))
+(rule (x64_imul $I64 src1 src2) (x64_imulq_rm src1 src2))
 
-;; Helper for creating `imul` instructions with an immediate operand.
+;; Helper for creating `imul` instructions with an immediate operand. Match
+;; 8-bit immediates first to allow a smaller instruction encoding.
 (decl x64_imul_imm (Type GprMem i32) Gpr)
-(rule (x64_imul_imm ty src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.IMulImm size src1 src2 dst))))
-        dst))
+(rule 2 (x64_imul_imm $I16 src1 (is_rust_simm8 src2)) (x64_imulw_rmi_sxb src1 src2))
+(rule 2 (x64_imul_imm $I32 src1 (is_rust_simm8 src2)) (x64_imull_rmi_sxb src1 src2))
+(rule 2 (x64_imul_imm $I64 src1 (is_rust_simm8 src2)) (x64_imulq_rmi_sxb src1 src2))
+(rule 1 (x64_imul_imm $I16 src1 (is_rust_imm16 src2)) (x64_imulw_rmi src1 src2))
+(rule 1 (x64_imul_imm $I32 src1 (is_rust_imm32 src2)) (x64_imull_rmi src1 src2))
+(rule 1 (x64_imul_imm $I64 src1 src2)                 (x64_imulq_rmi_sxl src1 src2))
+
+;; Helper for creating `mul` instructions or `imul` instructions (depending
+;; on `signed`) for 8-bit operands.
+(decl x64_mul8_raw (bool Gpr GprMem) AssemblerOutputs)
+(rule (x64_mul8_raw false src1 src2) (x64_mulb_m_raw src1 src2))
+(rule (x64_mul8_raw true src1 src2)  (x64_imulb_m_raw src1 src2))
+
+(decl x64_mul8 (bool Gpr GprMem) Gpr)
+(rule (x64_mul8 signed src1 src2)
+      (emit_ret_gpr (x64_mul8_raw signed src1 src2)))
 
 (decl x64_mul8_with_flags_paired (bool Gpr GprMem) ProducesFlags)
 (rule (x64_mul8_with_flags_paired signed src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr)))
-           (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
-                 (MInst.Mul8 signed src1 src2 dst)
-                 dst)))
-
-(decl x64_mul_lo_with_flags_paired (Type bool Gpr GprMem) ProducesFlags)
-(rule (x64_mul_lo_with_flags_paired ty signed src1 src2)
-      (let ((dst_lo WritableGpr (temp_writable_gpr))
-            (dst_hi WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty)))
-           (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
-                 (MInst.Mul size signed src1 src2 dst_lo dst_hi)
-                 dst_lo)))
+      (asm_produce_flags (x64_mul8_raw signed src1 src2)))
 
 
 

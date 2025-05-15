@@ -1045,11 +1045,19 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
+    fn is_rust_simm8(&mut self, simm32: i32) -> Option<i8> {
+        Some(i8::try_from(simm32).ok()?)
+    }
+
     fn is_imm16(&mut self, src: &GprMemImm) -> Option<u16> {
         match src.clone().to_reg_mem_imm() {
             RegMemImm::Imm { simm32 } => Some(u16::try_from(simm32).ok()?),
             _ => None,
         }
+    }
+
+    fn is_rust_imm16(&mut self, simm32: i32) -> Option<u16> {
+        Some(u16::try_from(simm32).ok()?)
     }
 
     fn is_simm16(&mut self, src: &GprMemImm) -> Option<i16> {
@@ -1064,6 +1072,10 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             RegMemImm::Imm { simm32 } => Some(simm32),
             _ => None,
         }
+    }
+
+    fn is_rust_imm32(&mut self, simm32: i32) -> Option<u32> {
+        Some(simm32 as u32)
     }
 
     fn is_simm32(&mut self, src: &GprMemImm) -> Option<i32> {
