@@ -14,7 +14,7 @@ pub use encoding::{
 };
 pub use features::{Feature, Features, ALL_FEATURES};
 pub use format::{align, fmt, implicit, r, rw, sxl, sxq, sxw, w};
-pub use format::{Extension, Format, Location, Mutability, Operand, OperandKind};
+pub use format::{Extension, Format, Location, Mutability, Operand, OperandKind, RegClass};
 
 /// Abbreviated constructor for an x64 instruction.
 pub fn inst(
