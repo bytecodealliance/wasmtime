@@ -3587,59 +3587,52 @@
 
 ;; Helper for creating `pmullw` instructions.
 (decl x64_pmullw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmullw src1 src2)
-      (xmm_rm_r (SseOpcode.Pmullw) src1 src2))
 (rule 1 (x64_pmullw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmullw) src1 src2))
+(rule 0 (x64_pmullw src1 src2) (x64_pmullw_a src1 src2))
 
 ;; Helper for creating `pmulld` instructions.
 (decl x64_pmulld (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmulld src1 src2)
-      (xmm_rm_r (SseOpcode.Pmulld) src1 src2))
 (rule 1 (x64_pmulld src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmulld) src1 src2))
+(rule 0 (x64_pmulld src1 src2) (x64_pmulld_a src1 src2))
 
 ;; Helper for creating `pmulhw` instructions.
 (decl x64_pmulhw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmulhw src1 src2)
-      (xmm_rm_r (SseOpcode.Pmulhw) src1 src2))
 (rule 1 (x64_pmulhw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmulhw) src1 src2))
+(rule 0 (x64_pmulhw src1 src2) (x64_pmulhw_a src1 src2))
 
 ;; Helper for creating `pmulhrsw` instructions.
 (decl x64_pmulhrsw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmulhrsw src1 src2)
-      (xmm_rm_r (SseOpcode.Pmulhrsw) src1 src2))
 (rule 1 (x64_pmulhrsw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmulhrsw) src1 src2))
+(rule 0 (x64_pmulhrsw src1 src2) (x64_pmulhrsw_a src1 src2))
 
 ;; Helper for creating `pmulhuw` instructions.
 (decl x64_pmulhuw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmulhuw src1 src2)
-      (xmm_rm_r (SseOpcode.Pmulhuw) src1 src2))
 (rule 1 (x64_pmulhuw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmulhuw) src1 src2))
+(rule 0 (x64_pmulhuw src1 src2) (x64_pmulhuw_a src1 src2))
 
 ;; Helper for creating `pmuldq` instructions.
 (decl x64_pmuldq (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmuldq src1 src2)
-      (xmm_rm_r (SseOpcode.Pmuldq) src1 src2))
 (rule 1 (x64_pmuldq src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmuldq) src1 src2))
+(rule 0 (x64_pmuldq src1 src2) (x64_pmuldq_a src1 src2))
 
 ;; Helper for creating `pmuludq` instructions.
 (decl x64_pmuludq (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmuludq src1 src2)
-      (xmm_rm_r (SseOpcode.Pmuludq) src1 src2))
 (rule 1 (x64_pmuludq src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmuludq) src1 src2))
+(rule 0 (x64_pmuludq src1 src2) (x64_pmuludq_a src1 src2))
 
 ;; Helper for creating `punpckhwd` instructions.
 (decl x64_punpckhwd (Xmm XmmMem) Xmm)
@@ -3792,35 +3785,31 @@
 
 ;; Helper for creating `mulss` instructions.
 (decl x64_mulss (Xmm XmmMem) Xmm)
-(rule (x64_mulss src1 src2)
-      (xmm_rm_r_unaligned (SseOpcode.Mulss) src1 src2))
 (rule 1 (x64_mulss src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmulss) src1 src2))
+(rule 0 (x64_mulss src1 src2) (x64_mulss_a src1 src2))
 
 ;; Helper for creating `mulsd` instructions.
 (decl x64_mulsd (Xmm XmmMem) Xmm)
-(rule (x64_mulsd src1 src2)
-      (xmm_rm_r_unaligned (SseOpcode.Mulsd) src1 src2))
 (rule 1 (x64_mulsd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmulsd) src1 src2))
+(rule 0 (x64_mulsd src1 src2) (x64_mulsd_a src1 src2))
 
 ;; Helper for creating `mulps` instructions.
 (decl x64_mulps (Xmm XmmMem) Xmm)
-(rule 0 (x64_mulps src1 src2)
-      (xmm_rm_r (SseOpcode.Mulps) src1 src2))
 (rule 1 (x64_mulps src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmulps) src1 src2))
+(rule 0 (x64_mulps src1 src2) (x64_mulps_a src1 src2))
 
 ;; Helper for creating `mulpd` instructions.
 (decl x64_mulpd (Xmm XmmMem) Xmm)
-(rule (x64_mulpd src1 src2)
-      (xmm_rm_r (SseOpcode.Mulpd) src1 src2))
 (rule 1 (x64_mulpd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmulpd) src1 src2))
+(rule 0 (x64_mulpd src1 src2) (x64_mulpd_a src1 src2))
 
 ;; Helper for creating `divss` instructions.
 (decl x64_divss (Xmm XmmMem) Xmm)
