@@ -85,6 +85,12 @@ impl dsl::Format {
                 fmtln!(f, "let dst = self.{dst}.enc();");
                 fmtln!(f, "let rex = RexPrefix::with_digit(digit, dst, {bits});");
             }
+            [Reg(dst), Imm(_)] => {
+                let digit = rex.digit.unwrap();
+                fmtln!(f, "let digit = 0x{digit:x};");
+                fmtln!(f, "let dst = self.{dst}.enc();");
+                fmtln!(f, "let rex = RexPrefix::two_op(digit, dst, {bits});");
+            }
             [Mem(dst), Imm(_)] | [RegMem(dst), Imm(_)] | [RegMem(dst)] => {
                 let digit = rex.digit.unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");
@@ -123,6 +129,11 @@ impl dsl::Format {
         match self.operands_by_kind().as_slice() {
             [FixedReg(_), Imm(_)] => {
                 // No need to emit a ModRM byte: we know the register used.
+            }
+            [Reg(reg), Imm(_)] => {
+                let digit = rex.digit.unwrap();
+                fmtln!(f, "let digit = 0x{digit:x};");
+                fmtln!(f, "self.{reg}.encode_modrm(buf, digit);");
             }
             [Mem(mem), Imm(_)] | [RegMem(mem), Imm(_)] | [RegMem(mem)] => {
                 let digit = rex.digit.unwrap();

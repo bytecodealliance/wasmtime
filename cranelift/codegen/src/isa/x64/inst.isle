@@ -196,12 +196,6 @@
                (num_bits Imm8Gpr)
                (dst WritableGpr))
 
-       ;; Arithmetic SIMD shifts.
-       (XmmRmiReg (opcode SseOpcode)
-                  (src1 Xmm)
-                  (src2 XmmMemAlignedImm)
-                  (dst WritableXmm))
-
        ;; Integer comparisons/tests: cmp or test (b w l q) (reg addr imm) reg.
        (CmpRmiR (size OperandSize) ;; 1, 2, 4, or 8
                 (opcode CmpOpcode)
@@ -980,14 +974,6 @@
             Pmuludq
             Pshufb
             Pshufd
-            Psllw
-            Pslld
-            Psllq
-            Psraw
-            Psrad
-            Psrlw
-            Psrld
-            Psrlq
             Ptest
             Punpckhbw
             Punpckhwd
@@ -1839,6 +1825,8 @@
 
 (decl is_imm8 (u8) GprMemImm)
 (extern extractor is_imm8 is_imm8)
+(decl is_imm8_xmm (u8) XmmMemImm)
+(extern extractor is_imm8_xmm is_imm8_xmm)
 (decl is_simm8 (i8) GprMemImm)
 (extern extractor is_simm8 is_simm8)
 (decl is_imm16 (u16) GprMemImm)
@@ -1853,7 +1841,7 @@
 (extern extractor is_gpr is_gpr)
 (decl is_gpr_mem (GprMem) GprMemImm)
 (extern extractor is_gpr_mem is_gpr_mem)
-(decl is_xmm_mem (XmmMem) XmmMem)
+(decl is_xmm_mem (XmmMem) XmmMemImm)
 (extern extractor is_xmm_mem is_xmm_mem)
 (decl is_xmm (Xmm) XmmMem)
 (extern extractor is_xmm is_xmm)
@@ -2130,16 +2118,6 @@
 (rule (xmm_unary_rm_r_imm_evex op src imm)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmUnaryRmRImmEvex op src dst imm))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmiXmm` instructions.
-(decl xmm_rmi_xmm (SseOpcode Xmm XmmMemAlignedImm) Xmm)
-(rule (xmm_rmi_xmm op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmiReg op
-                                           src1
-                                           src2
-                                           dst))))
         dst))
 
 ;; Helper for creating `MInst.XmmToGprImm` instructions.
@@ -3609,7 +3587,7 @@
 (rule 1 (x64_orpd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vorpd) src1 src2))
-(rule 0 (x64_orpd src1 (is_xmm_mem src2)) (x64_orpd_a src1 src2))
+(rule 0 (x64_orpd src1 src2) (x64_orpd_a src1 src2))
 
 ;; Helper fxor creating `pxor` instructions.
 (decl x64_pxor (Xmm XmmMem) Xmm)
@@ -4392,67 +4370,67 @@
 
 ;; Helper for creating `psllw` instructions.
 (decl x64_psllw (Xmm XmmMemImm) Xmm)
-(rule 0 (x64_psllw src1 src2)
-      (xmm_rmi_xmm (SseOpcode.Psllw) src1 src2))
-(rule 1 (x64_psllw src1 src2)
+(rule 2 (x64_psllw src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpsllw) src1 src2))
+(rule 1 (x64_psllw src1 (is_xmm_mem src2))  (x64_psllw_a src1 src2))
+(rule 0 (x64_psllw src1 (is_imm8_xmm src2)) (x64_psllw_b src1 src2))
 
 ;; Helper for creating `pslld` instructions.
 (decl x64_pslld (Xmm XmmMemImm) Xmm)
-(rule 0 (x64_pslld src1 src2)
-      (xmm_rmi_xmm (SseOpcode.Pslld) src1 src2))
-(rule 1 (x64_pslld src1 src2)
+(rule 2 (x64_pslld src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpslld) src1 src2))
+(rule 1 (x64_pslld src1 (is_xmm_mem src2))  (x64_pslld_a src1 src2))
+(rule 0 (x64_pslld src1 (is_imm8_xmm src2)) (x64_pslld_b src1 src2))
 
 ;; Helper for creating `psllq` instructions.
 (decl x64_psllq (Xmm XmmMemImm) Xmm)
-(rule 0 (x64_psllq src1 src2)
-      (xmm_rmi_xmm (SseOpcode.Psllq) src1 src2))
-(rule 1 (x64_psllq src1 src2)
+(rule 2 (x64_psllq src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpsllq) src1 src2))
+(rule 1 (x64_psllq src1 (is_xmm_mem src2))  (x64_psllq_a src1 src2))
+(rule 0 (x64_psllq src1 (is_imm8_xmm src2)) (x64_psllq_b src1 src2))
 
 ;; Helper for creating `psrlw` instructions.
 (decl x64_psrlw (Xmm XmmMemImm) Xmm)
-(rule 0 (x64_psrlw src1 src2)
-      (xmm_rmi_xmm (SseOpcode.Psrlw) src1 src2))
-(rule 1 (x64_psrlw src1 src2)
+(rule 2 (x64_psrlw src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpsrlw) src1 src2))
+(rule 1 (x64_psrlw src1 (is_xmm_mem src2))  (x64_psrlw_a src1 src2))
+(rule 0 (x64_psrlw src1 (is_imm8_xmm src2)) (x64_psrlw_b src1 src2))
 
 ;; Helper for creating `psrld` instructions.
 (decl x64_psrld (Xmm XmmMemImm) Xmm)
-(rule 0 (x64_psrld src1 src2)
-      (xmm_rmi_xmm (SseOpcode.Psrld) src1 src2))
-(rule 1 (x64_psrld src1 src2)
+(rule 2 (x64_psrld src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpsrld) src1 src2))
+(rule 1 (x64_psrld src1 (is_xmm_mem src2))  (x64_psrld_a src1 src2))
+(rule 0 (x64_psrld src1 (is_imm8_xmm src2)) (x64_psrld_b src1 src2))
 
 ;; Helper for creating `psrlq` instructions.
 (decl x64_psrlq (Xmm XmmMemImm) Xmm)
-(rule 0 (x64_psrlq src1 src2)
-      (xmm_rmi_xmm (SseOpcode.Psrlq) src1 src2))
-(rule 1 (x64_psrlq src1 src2)
+(rule 2 (x64_psrlq src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpsrlq) src1 src2))
+(rule 1 (x64_psrlq src1 (is_xmm_mem src2))  (x64_psrlq_a src1 src2))
+(rule 0 (x64_psrlq src1 (is_imm8_xmm src2)) (x64_psrlq_b src1 src2))
 
 ;; Helper for creating `psraw` instructions.
 (decl x64_psraw (Xmm XmmMemImm) Xmm)
-(rule 0 (x64_psraw src1 src2)
-      (xmm_rmi_xmm (SseOpcode.Psraw) src1 src2))
-(rule 1 (x64_psraw src1 src2)
+(rule 2 (x64_psraw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpsraw) src1 src2))
+(rule 1 (x64_psraw src1 (is_xmm_mem src2))  (x64_psraw_a src1 src2))
+(rule 0 (x64_psraw src1 (is_imm8_xmm src2)) (x64_psraw_b src1 src2))
 
 ;; Helper for creating `psrad` instructions.
 (decl x64_psrad (Xmm XmmMemImm) Xmm)
-(rule 0 (x64_psrad src1 src2)
-      (xmm_rmi_xmm (SseOpcode.Psrad) src1 src2))
-(rule 1 (x64_psrad src1 src2)
+(rule 2 (x64_psrad src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpsrad) src1 src2))
+(rule 1 (x64_psrad src1 (is_xmm_mem src2))  (x64_psrad_a src1 src2))
+(rule 0 (x64_psrad src1 (is_imm8_xmm src2)) (x64_psrad_b src1 src2))
 
 ;; Helper for creating `vpsraq` instructions.
 (decl x64_vpsraq (Xmm XmmMem) Xmm)
