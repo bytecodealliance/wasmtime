@@ -92,12 +92,17 @@ impl dsl::Format {
                 fmtln!(f, "let dst = self.{dst}.enc();");
                 fmtln!(f, "let rex = RexPrefix::two_op(digit, dst, {bits});");
             }
+            [FixedReg(_), RegMem(mem)] | [FixedReg(_), FixedReg(_), RegMem(mem)] => {
+                let digit = rex.digit.unwrap();
+                fmtln!(f, "let digit = 0x{digit:x};");
+                fmtln!(f, "let rex = self.{mem}.as_rex_prefix(digit, {bits});");
+            }
             [Mem(dst), Imm(_)] | [RegMem(dst), Imm(_)] | [RegMem(dst)] => {
                 let digit = rex.digit.unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "let rex = self.{dst}.as_rex_prefix(digit, {bits});");
             }
-            [Reg(dst), RegMem(src)] => {
+            [Reg(dst), RegMem(src)] | [Reg(dst), RegMem(src), Imm(_)] => {
                 fmtln!(f, "let dst = self.{dst}.enc();");
                 fmtln!(f, "let rex = self.{src}.as_rex_prefix(dst, {bits});");
             }
@@ -136,12 +141,17 @@ impl dsl::Format {
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "self.{reg}.encode_modrm(buf, digit);");
             }
-            [Mem(mem), Imm(_)] | [RegMem(mem), Imm(_)] | [RegMem(mem)] => {
+            [Mem(mem), Imm(_)]
+            | [RegMem(mem), Imm(_)]
+            | [RegMem(mem)]
+            | [FixedReg(_), RegMem(mem)]
+            | [FixedReg(_), FixedReg(_), RegMem(mem)] => {
                 let digit = rex.digit.unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "self.{mem}.encode_rex_suffixes(buf, off, digit, 0);");
             }
             [Reg(reg), RegMem(mem)]
+            | [Reg(reg), RegMem(mem), Imm(_)]
             | [Mem(mem), Reg(reg)]
             | [RegMem(mem), Reg(reg)]
             | [RegMem(mem), Reg(reg), Imm(_)]
