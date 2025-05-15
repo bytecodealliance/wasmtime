@@ -316,10 +316,6 @@ criteria = "safe-to-deploy"
 version = "0.2.6"
 criteria = "safe-to-deploy"
 
-[[exemptions.gimli]]
-version = "0.26.1"
-criteria = "safe-to-deploy"
-
 [[exemptions.h2]]
 version = "0.4.4"
 criteria = "safe-to-deploy"
