@@ -19,7 +19,7 @@
 ;;       movk    x17, #0x10
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.hi    #0x88
+;;       b.lo    #0x88
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x10
 ;;       mov     sp, x28
