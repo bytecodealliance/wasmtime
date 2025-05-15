@@ -70,6 +70,16 @@ pub fn align(location: Location) -> Operand {
     }
 }
 
+/// An abbreviated constructor for an operand that is used by the instruction
+/// but not visible in its disassembly.
+pub fn implicit(location: Location) -> Operand {
+    assert!(matches!(location.kind(), OperandKind::FixedReg(_)));
+    Operand {
+        implicit: true,
+        ..Operand::from(location)
+    }
+}
+
 /// An abbreviated constructor for a "read" operand that is sign-extended to 64
 /// bits (quadword).
 ///
@@ -194,6 +204,9 @@ pub struct Operand {
     /// address used in the operand must align to the size of the operand (e.g.,
     /// `m128` must be 16-byte aligned).
     pub align: bool,
+    /// Some register operands are implicit: that is, they do not appear in the
+    /// disassembled output even though they are used in the instruction.
+    pub implicit: bool,
 }
 
 impl core::fmt::Display for Operand {
@@ -203,6 +216,7 @@ impl core::fmt::Display for Operand {
             mutability,
             extension,
             align,
+            implicit,
         } = self;
         write!(f, "{location}")?;
         let mut flags = vec![];
@@ -214,6 +228,9 @@ impl core::fmt::Display for Operand {
         }
         if *align != false {
             flags.push("align".to_owned());
+        }
+        if *implicit {
+            flags.push("implicit".to_owned());
         }
         if !flags.is_empty() {
             write!(f, "[{}]", flags.join(","))?;
@@ -227,11 +244,13 @@ impl From<Location> for Operand {
         let mutability = Mutability::default();
         let extension = Extension::default();
         let align = false;
+        let implicit = false;
         Self {
             location,
             mutability,
             extension,
             align,
+            implicit,
         }
     }
 }
