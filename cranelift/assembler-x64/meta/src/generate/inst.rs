@@ -194,7 +194,7 @@ impl dsl::Inst {
                 f.add_block(
                     "fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result",
                     |f| {
-                        for op in &self.format.operands {
+                        for op in self.format.operands.iter().filter(|o| !o.implicit) {
                             let location = op.location;
                             let to_string = location.generate_to_string(op.extension);
                             fmtln!(f, "let {location} = {to_string};");

@@ -1044,7 +1044,7 @@
 (rule -5 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (sinkable_load x) y)))
          (x64_imul ty y x))
 
-;; lift out constants to use 3-operand form
+;; Lift out constants to use 3-operand form.
 (rule -4 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x (i32_from_iconst y))))
          (x64_imul_imm ty x y))
 (rule -3 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (i32_from_iconst x) y)))

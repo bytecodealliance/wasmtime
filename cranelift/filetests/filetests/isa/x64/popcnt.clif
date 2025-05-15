@@ -28,7 +28,7 @@ block0(v0: i64):
 ;   movabsq $1085102592571150095, %r11
 ;   andq %r11, %rax
 ;   movabsq $72340172838076673, %rcx
-;   imulq   %rax, %rcx, %rax
+;   imulq %rcx, %rax
 ;   shrq    $56, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -91,7 +91,7 @@ block0(v0: i64):
 ;   movabsq $1085102592571150095, %rsi
 ;   andq %rsi, %rax
 ;   movabsq $72340172838076673, %rdx
-;   imulq   %rax, %rdx, %rax
+;   imulq %rdx, %rax
 ;   shrq    $56, %rax, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -151,7 +151,7 @@ block0(v0: i32):
 ;   shrl    $4, %r9d, %r9d
 ;   addl %edi, %r9d
 ;   andl $0xf0f0f0f, %r9d
-;   imull   %r9d, 0x1010101, %eax
+;   imull $0x1010101, %r9d, %eax
 ;   shrl    $24, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -210,7 +210,7 @@ block0(v0: i64):
 ;   shrl    $4, %r10d, %r10d
 ;   addl %eax, %r10d
 ;   andl $0xf0f0f0f, %r10d
-;   imull   %r10d, 0x1010101, %eax
+;   imull $0x1010101, %r10d, %eax
 ;   shrl    $24, %eax, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
