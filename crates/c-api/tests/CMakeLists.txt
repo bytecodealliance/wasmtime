@@ -34,6 +34,8 @@ add_capi_test(tests FILES
   component/instantiate.cc
   component/define_module.cc
   component/lookup_func.cc
+  component/call_func.cc
+  component/values.cc
   error.cc
   config.cc
   wat.cc
