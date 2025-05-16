@@ -2,6 +2,7 @@
 
 mod add;
 mod and;
+mod cvt;
 mod neg;
 mod or;
 mod shift;
@@ -15,6 +16,7 @@ pub fn list() -> Vec<Inst> {
     let mut all = vec![];
     all.extend(add::list());
     all.extend(and::list());
+    all.extend(cvt::list());
     all.extend(neg::list());
     all.extend(or::list());
     all.extend(shift::list());

@@ -949,20 +949,6 @@ pub enum SseOpcode {
     Cmppd,
     Cmpss,
     Cmpsd,
-    Cvtdq2ps,
-    Cvtdq2pd,
-    Cvtpd2ps,
-    Cvtps2pd,
-    Cvtsd2ss,
-    Cvtsd2si,
-    Cvtsi2ss,
-    Cvtsi2sd,
-    Cvtss2si,
-    Cvtss2sd,
-    Cvttpd2dq,
-    Cvttps2dq,
-    Cvttss2si,
-    Cvttsd2si,
     Divps,
     Divpd,
     Divss,
@@ -1094,9 +1080,6 @@ impl SseOpcode {
             SseOpcode::Comiss
             | SseOpcode::Cmpps
             | SseOpcode::Cmpss
-            | SseOpcode::Cvtsi2ss
-            | SseOpcode::Cvtss2si
-            | SseOpcode::Cvttss2si
             | SseOpcode::Divps
             | SseOpcode::Divss
             | SseOpcode::Maxps
@@ -1122,17 +1105,6 @@ impl SseOpcode {
             SseOpcode::Cmppd
             | SseOpcode::Cmpsd
             | SseOpcode::Comisd
-            | SseOpcode::Cvtdq2ps
-            | SseOpcode::Cvtdq2pd
-            | SseOpcode::Cvtpd2ps
-            | SseOpcode::Cvtps2pd
-            | SseOpcode::Cvtsd2ss
-            | SseOpcode::Cvtsd2si
-            | SseOpcode::Cvtsi2sd
-            | SseOpcode::Cvtss2sd
-            | SseOpcode::Cvttpd2dq
-            | SseOpcode::Cvttps2dq
-            | SseOpcode::Cvttsd2si
             | SseOpcode::Divpd
             | SseOpcode::Divsd
             | SseOpcode::Maxpd
@@ -1281,20 +1253,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Cmpsd => "cmpsd",
             SseOpcode::Comiss => "comiss",
             SseOpcode::Comisd => "comisd",
-            SseOpcode::Cvtdq2ps => "cvtdq2ps",
-            SseOpcode::Cvtdq2pd => "cvtdq2pd",
-            SseOpcode::Cvtpd2ps => "cvtpd2ps",
-            SseOpcode::Cvtps2pd => "cvtps2pd",
-            SseOpcode::Cvtsd2ss => "cvtsd2ss",
-            SseOpcode::Cvtsd2si => "cvtsd2si",
-            SseOpcode::Cvtsi2ss => "cvtsi2ss",
-            SseOpcode::Cvtsi2sd => "cvtsi2sd",
-            SseOpcode::Cvtss2si => "cvtss2si",
-            SseOpcode::Cvtss2sd => "cvtss2sd",
-            SseOpcode::Cvttpd2dq => "cvttpd2dq",
-            SseOpcode::Cvttps2dq => "cvttps2dq",
-            SseOpcode::Cvttss2si => "cvttss2si",
-            SseOpcode::Cvttsd2si => "cvttsd2si",
             SseOpcode::Divps => "divps",
             SseOpcode::Divpd => "divpd",
             SseOpcode::Divss => "divss",

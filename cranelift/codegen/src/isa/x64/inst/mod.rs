@@ -164,8 +164,7 @@ impl Inst {
             | Inst::XmmToGprImm { op, .. }
             | Inst::XmmUnaryRmRImm { op, .. }
             | Inst::XmmUnaryRmRUnaligned { op, .. }
-            | Inst::XmmUnaryRmR { op, .. }
-            | Inst::CvtIntToFloat { op, .. } => smallvec![op.available_from()],
+            | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
 
             Inst::XmmUnaryRmREvex { op, .. }
             | Inst::XmmRmREvex { op, .. }
@@ -364,6 +363,7 @@ impl Inst {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn xmm_to_gpr(
         op: SseOpcode,
         src: Reg,
@@ -1272,20 +1272,6 @@ impl PrettyPrint for Inst {
                 let src2 = src2.pretty_print(8);
                 let op = ljustify(op.to_string());
                 format!("{op} {src2}, {src1}")
-            }
-
-            Inst::CvtIntToFloat {
-                op,
-                src1,
-                src2,
-                dst,
-                src2_size,
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), 8);
-                let dst = pretty_print_reg(*dst.to_reg(), 8);
-                let src2 = src2.pretty_print(src2_size.to_bytes());
-                let op = ljustify(op.to_string());
-                format!("{op} {src1}, {src2}, {dst}")
             }
 
             Inst::CvtIntToFloatVex {
@@ -2254,13 +2240,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::GprToXmm { src, dst, .. } | Inst::GprToXmmVex { src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
-        }
-        Inst::CvtIntToFloat {
-            src1, src2, dst, ..
-        } => {
-            collector.reg_use(src1);
-            collector.reg_reuse_def(dst, 0);
-            src2.get_operands(collector);
         }
         Inst::CvtIntToFloatVex {
             src1, src2, dst, ..

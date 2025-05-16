@@ -959,18 +959,16 @@ impl Assembler {
         src_size: OperandSize,
         dst_size: OperandSize,
     ) {
-        let op = match dst_size {
-            OperandSize::S32 => SseOpcode::Cvtsi2ss,
-            OperandSize::S64 => SseOpcode::Cvtsi2sd,
-            OperandSize::S16 | OperandSize::S8 | OperandSize::S128 => unreachable!(),
+        use OperandSize::*;
+        let dst = pair_xmm(dst);
+        let inst = match (src_size, dst_size) {
+            (S32, S32) => asm::inst::cvtsi2ssl_a::new(dst, src).into(),
+            (S32, S64) => asm::inst::cvtsi2sdl_a::new(dst, src).into(),
+            (S64, S32) => asm::inst::cvtsi2ssq_a::new(dst, src).into(),
+            (S64, S64) => asm::inst::cvtsi2sdq_a::new(dst, src).into(),
+            _ => unreachable!(),
         };
-        self.emit(Inst::CvtIntToFloat {
-            op,
-            src1: dst.to_reg().into(),
-            src2: src.into(),
-            dst: dst.map(Into::into),
-            src2_size: src_size.into(),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Convert unsigned 64-bit int to float.
@@ -999,18 +997,14 @@ impl Assembler {
         src_size: OperandSize,
         dst_size: OperandSize,
     ) {
-        let op = match (src_size, dst_size) {
-            (OperandSize::S32, OperandSize::S64) => SseOpcode::Cvtss2sd,
-            (OperandSize::S64, OperandSize::S32) => SseOpcode::Cvtsd2ss,
+        use OperandSize::*;
+        let dst = pair_xmm(dst);
+        let inst = match (src_size, dst_size) {
+            (S32, S64) => asm::inst::cvtss2sd_a::new(dst, src).into(),
+            (S64, S32) => asm::inst::cvtsd2ss_a::new(dst, src).into(),
             _ => unimplemented!(),
         };
-
-        self.emit(Inst::XmmRmRUnaligned {
-            op,
-            src2: Xmm::unwrap_new(src.into()).into(),
-            src1: dst.to_reg().into(),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     pub fn or_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {

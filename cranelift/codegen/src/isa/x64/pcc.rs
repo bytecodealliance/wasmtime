@@ -597,8 +597,7 @@ pub(crate) fn check(
             undefined_result(ctx, vcode, dst, 64, 64)
         }
 
-        Inst::CvtIntToFloat { dst, ref src2, .. }
-        | Inst::CvtIntToFloatVex { dst, ref src2, .. } => {
+        Inst::CvtIntToFloatVex { dst, ref src2, .. } => {
             match <&RegMem>::from(src2) {
                 RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I64, 64)?;

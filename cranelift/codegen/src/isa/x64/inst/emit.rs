@@ -17,27 +17,22 @@ fn emit_signed_cvt(
     sink: &mut MachBuffer<Inst>,
     info: &EmitInfo,
     state: &mut EmitState,
-    // Required to be RealRegs.
     src: Reg,
     dst: Writable<Reg>,
     to_f64: bool,
 ) {
-    // Handle an unsigned int, which is the "easy" case: a signed conversion will do the
-    // right thing.
-    let op = if to_f64 {
-        SseOpcode::Cvtsi2sd
-    } else {
-        SseOpcode::Cvtsi2ss
-    };
+    assert!(src.is_real());
+    assert!(dst.to_reg().is_real());
+
+    // Handle an unsigned int, which is the "easy" case: a signed conversion
+    // will do the right thing.
     let dst = WritableXmm::from_writable_reg(dst).unwrap();
-    Inst::CvtIntToFloat {
-        op,
-        dst,
-        src1: dst.to_reg(),
-        src2: GprMem::unwrap_new(RegMem::reg(src)),
-        src2_size: OperandSize::Size64,
-    }
-    .emit(sink, info, state);
+    let inst = if to_f64 {
+        asm::inst::cvtsi2sdq_a::new(dst, src).into()
+    } else {
+        asm::inst::cvtsi2ssq_a::new(dst, src).into()
+    };
+    Inst::External { inst }.emit(sink, info, state);
 }
 
 /// Emits a one way conditional jump if CC is set (true).
@@ -1953,12 +1948,6 @@ pub(crate) fn emit(
             let rex = RexFlags::clear_w();
 
             let (prefix, opcode, num_opcodes) = match op {
-                SseOpcode::Cvtdq2pd => (LegacyPrefixes::_F3, 0x0FE6, 2),
-                SseOpcode::Cvtpd2ps => (LegacyPrefixes::_66, 0x0F5A, 2),
-                SseOpcode::Cvtps2pd => (LegacyPrefixes::None, 0x0F5A, 2),
-                SseOpcode::Cvtdq2ps => (LegacyPrefixes::None, 0x0F5B, 2),
-                SseOpcode::Cvttpd2dq => (LegacyPrefixes::_66, 0x0FE6, 2),
-                SseOpcode::Cvttps2dq => (LegacyPrefixes::_F3, 0x0F5B, 2),
                 SseOpcode::Movaps => (LegacyPrefixes::None, 0x0F28, 2),
                 SseOpcode::Movapd => (LegacyPrefixes::_66, 0x0F28, 2),
                 SseOpcode::Movdqa => (LegacyPrefixes::_66, 0x0F6F, 2),
@@ -2180,8 +2169,6 @@ pub(crate) fn emit(
                 SseOpcode::Unpcklps => (LegacyPrefixes::None, 0x0F14, 2),
                 SseOpcode::Unpckhps => (LegacyPrefixes::None, 0x0F15, 2),
                 SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F10, 2),
-                SseOpcode::Cvtss2sd => (LegacyPrefixes::_F3, 0x0F5A, 2),
-                SseOpcode::Cvtsd2ss => (LegacyPrefixes::_F2, 0x0F5A, 2),
                 SseOpcode::Sqrtss => (LegacyPrefixes::_F3, 0x0F51, 2),
                 SseOpcode::Sqrtsd => (LegacyPrefixes::_F2, 0x0F51, 2),
                 SseOpcode::Unpcklpd => (LegacyPrefixes::_66, 0x0F14, 2),
@@ -3151,8 +3138,6 @@ pub(crate) fn emit(
             let dst = dst.to_reg().to_reg();
 
             let (prefix, opcode, dst_first) = match op {
-                SseOpcode::Cvttss2si => (LegacyPrefixes::_F3, 0x0F2C, true),
-                SseOpcode::Cvttsd2si => (LegacyPrefixes::_F2, 0x0F2C, true),
                 // Movd and movq use the same opcode; the presence of the REX prefix (set below)
                 // actually determines which is used.
                 SseOpcode::Movd | SseOpcode::Movq => (LegacyPrefixes::_66, 0x0F7E, false),
@@ -3233,35 +3218,6 @@ pub(crate) fn emit(
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state.frame_layout(), sink);
                     emit_std_reg_mem(sink, prefix, opcode, len, src1, addr, rex, 0);
-                }
-            }
-        }
-
-        Inst::CvtIntToFloat {
-            op,
-            src1,
-            src2,
-            dst,
-            src2_size,
-        } => {
-            let src1 = src1.to_reg();
-            let dst = dst.to_reg().to_reg();
-            assert_eq!(src1, dst);
-            let src2 = src2.clone().to_reg_mem().clone();
-
-            let (prefix, opcode) = match op {
-                SseOpcode::Cvtsi2ss => (LegacyPrefixes::_F3, 0x0F2A),
-                SseOpcode::Cvtsi2sd => (LegacyPrefixes::_F2, 0x0F2A),
-                _ => panic!("unexpected opcode {op:?}"),
-            };
-            let rex = RexFlags::from(*src2_size);
-            match src2 {
-                RegMem::Reg { reg: src2 } => {
-                    emit_std_reg_reg(sink, prefix, opcode, 2, dst, src2, rex);
-                }
-                RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state.frame_layout(), sink);
-                    emit_std_reg_mem(sink, prefix, opcode, 2, dst, addr, rex, 0);
                 }
             }
         }
@@ -3427,6 +3383,8 @@ pub(crate) fn emit(
             tmp_gpr,
             tmp_xmm,
         } => {
+            use OperandSize::*;
+
             let src = src.to_reg();
             let dst = dst.to_writable_reg();
             let tmp_gpr = tmp_gpr.to_writable_reg();
@@ -3478,17 +3436,26 @@ pub(crate) fn emit(
             //
             // done:
 
-            let (cast_op, cmp_op, trunc_op) = match src_size {
-                OperandSize::Size64 => (SseOpcode::Movq, SseOpcode::Ucomisd, SseOpcode::Cvttsd2si),
-                OperandSize::Size32 => (SseOpcode::Movd, SseOpcode::Ucomiss, SseOpcode::Cvttss2si),
+            let (cast_op, cmp_op) = match src_size {
+                Size64 => (SseOpcode::Movq, SseOpcode::Ucomisd),
+                Size32 => (SseOpcode::Movd, SseOpcode::Ucomiss),
                 _ => unreachable!(),
+            };
+
+            let cvtt_op = |dst, src| Inst::External {
+                inst: match (*src_size, *dst_size) {
+                    (Size32, Size32) => asm::inst::cvttss2si_a::new(dst, src).into(),
+                    (Size32, Size64) => asm::inst::cvttss2si_aq::new(dst, src).into(),
+                    (Size64, Size32) => asm::inst::cvttsd2si_a::new(dst, src).into(),
+                    (Size64, Size64) => asm::inst::cvttsd2si_aq::new(dst, src).into(),
+                    _ => unreachable!(),
+                },
             };
 
             let done = sink.get_label();
 
             // The truncation.
-            let inst = Inst::xmm_to_gpr(trunc_op, src, dst, *dst_size);
-            inst.emit(sink, info, state);
+            cvtt_op(dst, src).emit(sink, info, state);
 
             // Compare against 1, in case of overflow the dst operand was INT_MIN.
             let inst = Inst::cmp_rmi_r(*dst_size, dst.to_reg(), RegMemImm::imm(1));
@@ -3609,6 +3576,8 @@ pub(crate) fn emit(
             tmp_xmm,
             tmp_xmm2,
         } => {
+            use OperandSize::*;
+
             let src = src.to_reg();
             let dst = dst.to_writable_reg();
             let tmp_gpr = tmp_gpr.to_writable_reg();
@@ -3651,20 +3620,36 @@ pub(crate) fn emit(
 
             assert_ne!(tmp_xmm.to_reg(), src, "tmp_xmm clobbers src!");
 
-            let (sub_op, cast_op, cmp_op, trunc_op) = match src_size {
-                OperandSize::Size32 => (
-                    asm::inst::subss_a::new(tmp_xmm2, tmp_xmm.to_reg()).into(),
-                    SseOpcode::Movd,
-                    SseOpcode::Ucomiss,
-                    SseOpcode::Cvttss2si,
-                ),
-                OperandSize::Size64 => (
-                    asm::inst::subsd_a::new(tmp_xmm2, tmp_xmm.to_reg()).into(),
-                    SseOpcode::Movq,
-                    SseOpcode::Ucomisd,
-                    SseOpcode::Cvttsd2si,
-                ),
+            let (cast_op, cmp_op) = match src_size {
+                Size32 => (SseOpcode::Movd, SseOpcode::Ucomiss),
+                Size64 => (SseOpcode::Movq, SseOpcode::Ucomisd),
                 _ => unreachable!(),
+            };
+
+            let xor_op = |dst, src| Inst::External {
+                inst: match *dst_size {
+                    Size32 => asm::inst::xorl_rm::new(dst, src).into(),
+                    Size64 => asm::inst::xorq_rm::new(dst, src).into(),
+                    _ => unreachable!(),
+                },
+            };
+
+            let subs_op = |dst, src| Inst::External {
+                inst: match *src_size {
+                    Size32 => asm::inst::subss_a::new(dst, src).into(),
+                    Size64 => asm::inst::subsd_a::new(dst, src).into(),
+                    _ => unreachable!(),
+                },
+            };
+
+            let cvtt_op = |dst, src| Inst::External {
+                inst: match (*src_size, *dst_size) {
+                    (Size32, Size32) => asm::inst::cvttss2si_a::new(dst, src).into(),
+                    (Size32, Size64) => asm::inst::cvttss2si_aq::new(dst, src).into(),
+                    (Size64, Size32) => asm::inst::cvttsd2si_a::new(dst, src).into(),
+                    (Size64, Size64) => asm::inst::cvttsd2si_aq::new(dst, src).into(),
+                    _ => unreachable!(),
+                },
             };
 
             let done = sink.get_label();
@@ -3692,12 +3677,7 @@ pub(crate) fn emit(
                 let not_nan = sink.get_label();
                 one_way_jmp(sink, CC::NP, not_nan);
 
-                let inst = match *dst_size {
-                    OperandSize::Size32 => asm::inst::xorl_rm::new(dst, dst).into(),
-                    OperandSize::Size64 => asm::inst::xorq_rm::new(dst, dst).into(),
-                    _ => unreachable!(),
-                };
-                Inst::External { inst }.emit(sink, info, state);
+                xor_op(dst, dst).emit(sink, info, state);
 
                 let inst = Inst::jmp_known(done);
                 inst.emit(sink, info, state);
@@ -3711,8 +3691,7 @@ pub(crate) fn emit(
             // Actual truncation for small inputs: if the result is not positive, then we had an
             // overflow.
 
-            let inst = Inst::xmm_to_gpr(trunc_op, src, dst, *dst_size);
-            inst.emit(sink, info, state);
+            cvtt_op(dst, src).emit(sink, info, state);
 
             let inst = Inst::cmp_rmi_r(*dst_size, dst.to_reg(), RegMemImm::imm(0));
             inst.emit(sink, info, state);
@@ -3744,10 +3723,9 @@ pub(crate) fn emit(
             let inst = Inst::gen_move(tmp_xmm2, src, types::F64);
             inst.emit(sink, info, state);
 
-            Inst::External { inst: sub_op }.emit(sink, info, state);
+            subs_op(tmp_xmm2, tmp_xmm.to_reg()).emit(sink, info, state);
 
-            let inst = Inst::xmm_to_gpr(trunc_op, tmp_xmm2.to_reg(), dst, *dst_size);
-            inst.emit(sink, info, state);
+            cvtt_op(dst, tmp_xmm2.to_reg()).emit(sink, info, state);
 
             let inst = Inst::cmp_rmi_r(*dst_size, dst.to_reg(), RegMemImm::imm(0));
             inst.emit(sink, info, state);
