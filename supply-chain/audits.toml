@@ -1513,6 +1513,12 @@ criteria = "safe-to-deploy"
 delta = "1.2.12 -> 1.2.19"
 notes = "Trusted crate from rust-lang/rust, diff skimmed and generally looks ok as well."
 
+[[audits.cc]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.2.19 -> 1.2.22"
+notes = "Minor changes, nothing related to `unsafe`"
+
 [[audits.cfg-if]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
