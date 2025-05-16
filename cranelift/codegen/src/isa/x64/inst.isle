@@ -62,15 +62,6 @@
              (dividend Gpr)
              (dst WritableGpr))
 
-       ;; Unsigned multiplication producing the high bits of the result in one
-       ;; register and the low bits in another register.
-       (Mul (size OperandSize)
-            (signed bool)
-            (src1 Gpr)
-            (src2 GprMem)
-            (dst_lo WritableGpr)
-            (dst_hi WritableGpr))
-
        ;; Same as `Mul`, but for the BMI2 `mulx` instruction. This is different
        ;; where the two `dst_*` registers can be arbitrary registers and it
        ;; is always unsigned multiplication. Note that this instruction does
@@ -85,26 +76,6 @@
              (src2 GprMem)
              (dst_lo WritableGpr)
              (dst_hi WritableGpr))
-
-       ;; Same as `Mul` but the 16-bit multiplication result is stored in `AX`.
-       (Mul8 (signed bool)
-             (src1 Gpr)
-             (src2 GprMem)
-             (dst WritableGpr))
-
-       ;; The two-operand form of `imul` which produces a truncated same-size
-       ;; result as the operands.
-       (IMul (size OperandSize)
-             (src1 Gpr)
-             (src2 GprMem)
-             (dst WritableGpr))
-
-       ;; The three-operand form of `imul` where the third operand must be
-       ;; a constant.
-       (IMulImm (size OperandSize)
-                (src1 GprMem)
-                (src2 i32)
-                (dst WritableGpr))
 
        ;; A synthetic instruction sequence used as part of the lowering of the
        ;; `srem` instruction which returns 0 if the divisor is -1 and

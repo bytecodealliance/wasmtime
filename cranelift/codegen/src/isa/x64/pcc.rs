@@ -126,14 +126,7 @@ pub(crate) fn check(
             undefined_result(ctx, vcode, dst, 64, 64)?;
             Ok(())
         }
-        Inst::Mul {
-            size,
-            dst_lo,
-            dst_hi,
-            ref src2,
-            ..
-        }
-        | Inst::MulX {
+        Inst::MulX {
             size,
             dst_lo,
             dst_hi,
@@ -148,46 +141,6 @@ pub(crate) fn check(
             }
             undefined_result(ctx, vcode, dst_lo, 64, size.to_bits().into())?;
             undefined_result(ctx, vcode, dst_hi, 64, size.to_bits().into())?;
-            Ok(())
-        }
-        Inst::Mul8 { dst, ref src2, .. } => {
-            match <&RegMem>::from(src2) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, I8, 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            undefined_result(ctx, vcode, dst, 64, 16)?;
-            Ok(())
-        }
-        Inst::IMul {
-            size,
-            dst,
-            ref src2,
-            ..
-        } => {
-            match <&RegMem>::from(src2) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())?;
-            Ok(())
-        }
-        Inst::IMulImm {
-            size,
-            dst,
-            ref src1,
-            ..
-        } => {
-            match <&RegMem>::from(src1) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())?;
             Ok(())
         }
         Inst::CheckedSRemSeq {
