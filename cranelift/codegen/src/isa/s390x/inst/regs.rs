@@ -121,6 +121,24 @@ pub fn pretty_print_regpair(pair: RegPair) -> String {
     format!("{}/{}", show_reg(hi), show_reg(lo))
 }
 
+pub fn pretty_print_fp_regpair(pair: RegPair) -> String {
+    let hi = pair.hi;
+    let lo = pair.lo;
+    if let Some(hi_reg) = hi.to_real_reg() {
+        if let Some(lo_reg) = lo.to_real_reg() {
+            assert!(
+                hi_reg.hw_enc() + 2 == lo_reg.hw_enc(),
+                "Invalid regpair: {} {}",
+                show_reg(hi),
+                show_reg(lo)
+            );
+            return maybe_show_fpr(hi).unwrap();
+        }
+    }
+
+    format!("{}/{}", show_reg(hi), show_reg(lo))
+}
+
 pub fn pretty_print_reg_mod(rd: Writable<Reg>, ri: Reg) -> String {
     let output = rd.to_reg();
     let input = ri;

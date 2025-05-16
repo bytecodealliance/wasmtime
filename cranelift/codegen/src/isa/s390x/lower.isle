@@ -1420,6 +1420,9 @@
       (vec_select $F32 x y (imm $F32 2147483647)))
 (rule (lower (has_type $F64 (fcopysign x y)))
       (vec_select $F64 x y (imm $F64 9223372036854775807)))
+(rule (lower (has_type $F128 (fcopysign x y)))
+      (vec_select $F128 x y (vec_imm $F128 (imm8x16 127 255 255 255 255 255 255 255
+                                                    255 255 255 255 255 255 255 255))))
 (rule (lower (has_type $F32X4 (fcopysign x y)))
       (vec_select $F32X4 x y (vec_imm_bit_mask $F32X4 1 31)))
 (rule (lower (has_type $F64X2 (fcopysign x y)))
@@ -1485,8 +1488,11 @@
 ;;;; Rules for `fpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Promote a register.
-(rule (lower (has_type (fits_in_64 dst_ty) (fpromote x @ (value_type src_ty))))
+(rule (lower (has_type dst_ty (fpromote x @ (value_type src_ty))))
       (fpromote_reg dst_ty src_ty x))
+
+(rule 1 (lower (has_type $F128 (fpromote x @ (value_type $F32))))
+      (fpromote_reg $F128 $F64 (fpromote_reg $F64 $F32 x)))
 
 
 ;;;; Rules for `fvpromote_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1499,8 +1505,12 @@
 ;;;; Rules for `fdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Demote a register.
-(rule (lower (has_type (fits_in_64 dst_ty) (fdemote x @ (value_type src_ty))))
+(rule (lower (has_type dst_ty (fdemote x @ (value_type src_ty))))
       (fdemote_reg dst_ty src_ty (FpuRoundMode.Current) x))
+
+(rule 1 (lower (has_type $F32 (fdemote x @ (value_type $F128))))
+      (fdemote_reg $F32 $F64 (FpuRoundMode.Current)
+                   (fdemote_reg $F64 $F128 (FpuRoundMode.ShorterPrecision) x)))
 
 
 ;;;; Rules for `fvdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1517,40 +1527,50 @@
 ;; Convert a 32-bit or smaller unsigned integer to $F32 (z15 instruction).
 (rule 1 (lower (has_type $F32
         (fcvt_from_uint x @ (value_type (and (vxrs_ext2_enabled) (fits_in_32 ty))))))
-      (fcvt_from_uint_reg $F32 (FpuRoundMode.ToNearestTiesToEven)
+      (fcvt_from_uint_reg $F32 $I32 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_zext32 x)))
 
 ;; Convert a 64-bit or smaller unsigned integer to $F32, via an intermediate $F64.
 (rule (lower (has_type $F32 (fcvt_from_uint x @ (value_type (fits_in_64 ty)))))
       (fdemote_reg $F32 $F64 (FpuRoundMode.ToNearestTiesToEven)
-                   (fcvt_from_uint_reg $F64 (FpuRoundMode.ShorterPrecision)
+                   (fcvt_from_uint_reg $F64 $I64 (FpuRoundMode.ShorterPrecision)
                                        (put_in_reg_zext64 x))))
 
 ;; Convert a 64-bit or smaller unsigned integer to $F64.
 (rule (lower (has_type $F64 (fcvt_from_uint x @ (value_type (fits_in_64 ty)))))
-      (fcvt_from_uint_reg $F64 (FpuRoundMode.ToNearestTiesToEven)
+      (fcvt_from_uint_reg $F64 $I64 (FpuRoundMode.ToNearestTiesToEven)
+                          (put_in_reg_zext64 x)))
+
+;; Convert a 32-bit or smaller unsigned integer to $F128.
+(rule 1 (lower (has_type $F128 (fcvt_from_uint x @ (value_type (fits_in_32 ty)))))
+      (fcvt_from_uint_reg $F128 $I32 (FpuRoundMode.ToNearestTiesToEven)
+                          (put_in_reg_zext32 x)))
+
+;; Convert a 64-bit or smaller unsigned integer to $F128.
+(rule (lower (has_type $F128 (fcvt_from_uint x @ (value_type (fits_in_64 ty)))))
+      (fcvt_from_uint_reg $F128 $I64 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_zext64 x)))
 
 ;; Convert $I32X4 to $F32X4 (z15 instruction).
 (rule 1 (lower (has_type (and (vxrs_ext2_enabled) $F32X4)
                        (fcvt_from_uint x @ (value_type $I32X4))))
-      (fcvt_from_uint_reg $F32X4 (FpuRoundMode.ToNearestTiesToEven) x))
+      (fcvt_from_uint_reg $F32X4 $I32X4 (FpuRoundMode.ToNearestTiesToEven) x))
 
 ;; Convert $I32X4 to $F32X4 (via two $F64X2 on z14).
 (rule (lower (has_type (and (vxrs_ext2_disabled) $F32X4)
                        (fcvt_from_uint x @ (value_type $I32X4))))
       (vec_permute $F32X4
         (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.ToNearestTiesToEven)
-          (fcvt_from_uint_reg $F64X2 (FpuRoundMode.ShorterPrecision)
+          (fcvt_from_uint_reg $F64X2 $I64X2 (FpuRoundMode.ShorterPrecision)
                               (vec_unpacku_high $I32X4 x)))
         (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.ToNearestTiesToEven)
-          (fcvt_from_uint_reg $F64X2 (FpuRoundMode.ShorterPrecision)
+          (fcvt_from_uint_reg $F64X2 $I64X2 (FpuRoundMode.ShorterPrecision)
                               (vec_unpacku_low $I32X4 x)))
         (vec_imm $I8X16 (imm8x16 0 1 2 3 8 9 10 11 16 17 18 19 24 25 26 27))))
 
 ;; Convert $I64X2 to $F64X2.
 (rule (lower (has_type $F64X2 (fcvt_from_uint x @ (value_type $I64X2))))
-      (fcvt_from_uint_reg $F64X2 (FpuRoundMode.ToNearestTiesToEven) x))
+      (fcvt_from_uint_reg $F64X2 $I64X2 (FpuRoundMode.ToNearestTiesToEven) x))
 
 
 ;;;; Rules for `fcvt_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1558,40 +1578,50 @@
 ;; Convert a 32-bit or smaller signed integer to $F32 (z15 instruction).
 (rule 1 (lower (has_type $F32
         (fcvt_from_sint x @ (value_type (and (vxrs_ext2_enabled) (fits_in_32 ty))))))
-      (fcvt_from_sint_reg $F32 (FpuRoundMode.ToNearestTiesToEven)
+      (fcvt_from_sint_reg $F32 $I32 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_sext32 x)))
 
 ;; Convert a 64-bit or smaller signed integer to $F32, via an intermediate $F64.
 (rule (lower (has_type $F32 (fcvt_from_sint x @ (value_type (fits_in_64 ty)))))
       (fdemote_reg $F32 $F64 (FpuRoundMode.ToNearestTiesToEven)
-                   (fcvt_from_sint_reg $F64 (FpuRoundMode.ShorterPrecision)
+                   (fcvt_from_sint_reg $F64 $I64 (FpuRoundMode.ShorterPrecision)
                                        (put_in_reg_sext64 x))))
 
 ;; Convert a 64-bit or smaller signed integer to $F64.
 (rule (lower (has_type $F64 (fcvt_from_sint x @ (value_type (fits_in_64 ty)))))
-      (fcvt_from_sint_reg $F64 (FpuRoundMode.ToNearestTiesToEven)
+      (fcvt_from_sint_reg $F64 $I64 (FpuRoundMode.ToNearestTiesToEven)
+                          (put_in_reg_sext64 x)))
+
+;; Convert a 32-bit or smaller signed integer to $F128.
+(rule 1 (lower (has_type $F128 (fcvt_from_sint x @ (value_type (fits_in_32 ty)))))
+      (fcvt_from_sint_reg $F128 $I32 (FpuRoundMode.ToNearestTiesToEven)
+                          (put_in_reg_sext32 x)))
+
+;; Convert a 64-bit or smaller signed integer to $F128.
+(rule (lower (has_type $F128 (fcvt_from_sint x @ (value_type (fits_in_64 ty)))))
+      (fcvt_from_sint_reg $F128 $I64 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_sext64 x)))
 
 ;; Convert $I32X4 to $F32X4 (z15 instruction).
 (rule 1 (lower (has_type (and (vxrs_ext2_enabled) $F32X4)
                        (fcvt_from_sint x @ (value_type $I32X4))))
-      (fcvt_from_sint_reg $F32X4 (FpuRoundMode.ToNearestTiesToEven) x))
+      (fcvt_from_sint_reg $F32X4 $I32X4 (FpuRoundMode.ToNearestTiesToEven) x))
 
 ;; Convert $I32X4 to $F32X4 (via two $F64X2 on z14).
 (rule (lower (has_type (and (vxrs_ext2_disabled) $F32X4)
                        (fcvt_from_sint x @ (value_type $I32X4))))
       (vec_permute $F32X4
         (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.ToNearestTiesToEven)
-          (fcvt_from_sint_reg $F64X2 (FpuRoundMode.ShorterPrecision)
+          (fcvt_from_sint_reg $F64X2 $I64X2 (FpuRoundMode.ShorterPrecision)
                               (vec_unpacks_high $I32X4 x)))
         (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.ToNearestTiesToEven)
-          (fcvt_from_sint_reg $F64X2 (FpuRoundMode.ShorterPrecision)
+          (fcvt_from_sint_reg $F64X2 $I64X2 (FpuRoundMode.ShorterPrecision)
                               (vec_unpacks_low $I32X4 x)))
         (vec_imm $I8X16 (imm8x16 0 1 2 3 8 9 10 11 16 17 18 19 24 25 26 27))))
 
 ;; Convert $I64X2 to $F64X2.
 (rule (lower (has_type $F64X2 (fcvt_from_sint x @ (value_type $I64X2))))
-      (fcvt_from_sint_reg $F64X2 (FpuRoundMode.ToNearestTiesToEven) x))
+      (fcvt_from_sint_reg $F64X2 $I64X2 (FpuRoundMode.ToNearestTiesToEven) x))
 
 
 ;;;; Rules for `fcvt_to_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1614,8 +1644,9 @@
                             (trap_code_integer_overflow)))
             ;; Perform the conversion using the larger type size.
             (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
+            (int_ty Type (fcvt_int_ty dst_ty src_ty))
             (src_ext Reg (fpromote_reg flt_ty src_ty src)))
-        (fcvt_to_uint_reg flt_ty (FpuRoundMode.ToZero) src_ext)))
+        (fcvt_to_uint_reg int_ty flt_ty (FpuRoundMode.ToZero) src_ext)))
 
 
 ;;;; Rules for `fcvt_to_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1638,9 +1669,10 @@
                             (trap_code_integer_overflow)))
             ;; Perform the conversion using the larger type size.
             (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
+            (int_ty Type (fcvt_int_ty dst_ty src_ty))
             (src_ext Reg (fpromote_reg flt_ty src_ty src)))
         ;; Perform the conversion.
-        (fcvt_to_sint_reg flt_ty (FpuRoundMode.ToZero) src_ext)))
+        (fcvt_to_sint_reg int_ty flt_ty (FpuRoundMode.ToZero) src_ext)))
 
 
 ;;;; Rules for `fcvt_to_uint_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1653,27 +1685,27 @@
             (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
             (int_ty Type (fcvt_int_ty dst_ty src_ty))
             (src_ext Reg (fpromote_reg flt_ty src_ty src))
-            (dst Reg (fcvt_to_uint_reg flt_ty (FpuRoundMode.ToZero) src_ext)))
+            (dst Reg (fcvt_to_uint_reg int_ty flt_ty (FpuRoundMode.ToZero) src_ext)))
         ;; Clamp the output to the destination type bounds.
         (uint_sat_reg dst_ty int_ty dst)))
 
 ;; Convert $F32X4 to $I32X4 (z15 instruction).
 (rule 1 (lower (has_type (and (vxrs_ext2_enabled) $I32X4)
                        (fcvt_to_uint_sat x @ (value_type $F32X4))))
-      (fcvt_to_uint_reg $F32X4 (FpuRoundMode.ToZero) x))
+      (fcvt_to_uint_reg $I32X4 $F32X4 (FpuRoundMode.ToZero) x))
 
 ;; Convert $F32X4 to $I32X4 (via two $F64X2 on z14).
 (rule (lower (has_type (and (vxrs_ext2_disabled) $I32X4)
                        (fcvt_to_uint_sat x @ (value_type $F32X4))))
       (vec_pack_usat $I64X2
-        (fcvt_to_uint_reg $F64X2 (FpuRoundMode.ToZero)
+        (fcvt_to_uint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero)
           (fpromote_reg $F64X2 $F32X4 (vec_merge_high $I32X4 x x)))
-        (fcvt_to_uint_reg $F64X2 (FpuRoundMode.ToZero)
+        (fcvt_to_uint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero)
           (fpromote_reg $F64X2 $F32X4 (vec_merge_low $I32X4 x x)))))
 
 ;; Convert $F64X2 to $I64X2.
 (rule (lower (has_type $I64X2 (fcvt_to_uint_sat x @ (value_type $F64X2))))
-      (fcvt_to_uint_reg $F64X2 (FpuRoundMode.ToZero) x))
+      (fcvt_to_uint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero) x))
 
 
 ;;;; Rules for `fcvt_to_sint_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1686,7 +1718,7 @@
             (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
             (int_ty Type (fcvt_int_ty dst_ty src_ty))
             (src_ext Reg (fpromote_reg flt_ty src_ty src))
-            (dst Reg (fcvt_to_sint_reg flt_ty (FpuRoundMode.ToZero) src_ext))
+            (dst Reg (fcvt_to_sint_reg int_ty flt_ty (FpuRoundMode.ToZero) src_ext))
             ;; In most special cases, the Z instruction already yields the
             ;; result expected by Cranelift semantics.  The only exception
             ;; it the case where the input was a NaN.  We explicitly check
@@ -1702,7 +1734,7 @@
                        (fcvt_to_sint_sat src @ (value_type $F32X4))))
       ;; See above for why we need to handle NaNs specially.
       (vec_select $I32X4
-        (fcvt_to_sint_reg $F32X4 (FpuRoundMode.ToZero) src)
+        (fcvt_to_sint_reg $I32X4 $F32X4 (FpuRoundMode.ToZero) src)
         (vec_imm $I32X4 0) (vec_fcmpeq $F32X4 src src)))
 
 ;; Convert $F32X4 to $I32X4 (via two $F64X2 on z14).
@@ -1711,9 +1743,9 @@
       ;; See above for why we need to handle NaNs specially.
       (vec_select $I32X4
         (vec_pack_ssat $I64X2
-          (fcvt_to_sint_reg $F64X2 (FpuRoundMode.ToZero)
+          (fcvt_to_sint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero)
             (fpromote_reg $F64X2 $F32X4 (vec_merge_high $I32X4 src src)))
-          (fcvt_to_sint_reg $F64X2 (FpuRoundMode.ToZero)
+          (fcvt_to_sint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero)
             (fpromote_reg $F64X2 $F32X4 (vec_merge_low $I32X4 src src))))
         (vec_imm $I32X4 0) (vec_fcmpeq $F32X4 src src)))
 
@@ -1721,7 +1753,7 @@
 (rule (lower (has_type $I64X2 (fcvt_to_sint_sat src @ (value_type $F64X2))))
       ;; See above for why we need to handle NaNs specially.
       (vec_select $I64X2
-        (fcvt_to_sint_reg $F64X2 (FpuRoundMode.ToZero) src)
+        (fcvt_to_sint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero) src)
         (vec_imm $I64X2 0) (vec_fcmpeq $F64X2 src src)))
 
 

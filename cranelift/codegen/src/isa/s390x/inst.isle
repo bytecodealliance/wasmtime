@@ -552,6 +552,25 @@
       (rn Reg)
       (rm Reg))
 
+    ;; FPU comparison, extended-precision (128 bit).
+    (FpuCmp128
+      (rn Reg)
+      (rm Reg))
+
+    ;; FPU integer to extended-precision conversion using FP reg pair.
+    (FpuConv128FromInt
+      (op FpuConv128Op)
+      (mode FpuRoundMode)
+      (rd WritableRegPair)
+      (rn Reg))
+
+    ;; FPU extended-precision to integer conversion using FP reg pair.
+    (FpuConv128ToInt
+      (op FpuConv128Op)
+      (mode FpuRoundMode)
+      (rd WritableReg)
+      (rn RegPair))
+
     ;; A binary vector operation with two vector register sources.
     (VecRRR
       (op VecBinaryOp)
@@ -1327,22 +1346,27 @@
   (enum
     (Abs32)
     (Abs64)
+    (Abs128)
     (Abs32x4)
     (Abs64x2)
     (Neg32)
     (Neg64)
+    (Neg128)
     (Neg32x4)
     (Neg64x2)
     (NegAbs32)
     (NegAbs64)
+    (NegAbs128)
     (NegAbs32x4)
     (NegAbs64x2)
     (Sqrt32)
     (Sqrt64)
+    (Sqrt128)
     (Sqrt32x4)
     (Sqrt64x2)
     (Cvt32To64)
     (Cvt32x4To64x2)
+    (Cvt64To128)
 ))
 
 ;; A floating-point unit (FPU) operation with two args.
@@ -1350,34 +1374,42 @@
   (enum
     (Add32)
     (Add64)
+    (Add128)
     (Add32x4)
     (Add64x2)
     (Sub32)
     (Sub64)
+    (Sub128)
     (Sub32x4)
     (Sub64x2)
     (Mul32)
     (Mul64)
+    (Mul128)
     (Mul32x4)
     (Mul64x2)
     (Div32)
     (Div64)
+    (Div128)
     (Div32x4)
     (Div64x2)
     (Max32)
     (Max64)
+    (Max128)
     (Max32x4)
     (Max64x2)
     (Min32)
     (Min64)
+    (Min128)
     (Min32x4)
     (Min64x2)
     (MaxPseudo32)
     (MaxPseudo64)
+    (MaxPseudo128)
     (MaxPseudo32x4)
     (MaxPseudo64x2)
     (MinPseudo32)
     (MinPseudo64)
+    (MinPseudo128)
     (MinPseudo32x4)
     (MinPseudo64x2)
 ))
@@ -1387,10 +1419,12 @@
   (enum
     (MAdd32)
     (MAdd64)
+    (MAdd128)
     (MAdd32x4)
     (MAdd64x2)
     (MSub32)
     (MSub64)
+    (MSub128)
     (MSub32x4)
     (MSub64x2)
 ))
@@ -1400,8 +1434,10 @@
   (enum
     (Cvt64To32)
     (Cvt64x2To32x4)
+    (Cvt128To64)
     (Round32)
     (Round64)
+    (Round128)
     (Round32x4)
     (Round64x2)
     (ToSInt32)
@@ -1420,6 +1456,15 @@
     (FromSInt64x2)
     (FromUInt32x4)
     (FromUInt64x2)
+))
+
+;; An extended-precision vs. integer conversion operation.
+(type FpuConv128Op
+  (enum
+    (SInt32)
+    (UInt32)
+    (SInt64)
+    (UInt64)
 ))
 
 ;; Rounding modes for floating-point ops.
@@ -1948,9 +1993,9 @@
 (extern constructor writable_regpair writable_regpair)
 
 ;; Allocate a writable register pair.
-(decl temp_writable_regpair () WritableRegPair)
-(rule (temp_writable_regpair)
-      (writable_regpair (temp_writable_reg $I64) (temp_writable_reg $I64)))
+(decl temp_writable_regpair (Type) WritableRegPair)
+(rule (temp_writable_regpair ty)
+      (writable_regpair (temp_writable_reg ty) (temp_writable_reg ty)))
 
 ;; Retrieve the high word of the writable register pair.
 (decl writable_regpair_hi (WritableRegPair) WritableReg)
@@ -1979,6 +2024,12 @@
 ;; Retrieve the low word of the register pair.
 (decl regpair_lo (RegPair) Reg)
 (extern constructor regpair_lo regpair_lo)
+
+;; Move a $F128 value between a single VR and a pair of FPRs.
+(decl fp_reg_to_regpair (Reg) RegPair)
+(rule (fp_reg_to_regpair x) (regpair x (vec_replicate_lane $I64X2 x 1)))
+(decl fp_regpair_to_reg (RegPair) Reg)
+(rule (fp_regpair_to_reg x) (vec_merge_high $I64X2 (regpair_hi x) (regpair_lo x)))
 
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2077,42 +2128,42 @@
 ;; Helper for emitting `MInst.SMulWide` instructions.
 (decl smul_wide (Reg Reg) RegPair)
 (rule (smul_wide src1 src2)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.SMulWide dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.UMulWide` instructions.
 (decl umul_wide (Reg Reg) RegPair)
 (rule (umul_wide src1 src2)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.UMulWide dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.SDivMod32` instructions.
 (decl sdivmod32 (Reg Reg) RegPair)
 (rule (sdivmod32 src1 src2)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.SDivMod32 dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.SDivMod64` instructions.
 (decl sdivmod64 (Reg Reg) RegPair)
 (rule (sdivmod64 src1 src2)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.SDivMod64 dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.UDivMod32` instructions.
 (decl udivmod32 (RegPair Reg) RegPair)
 (rule (udivmod32 src1 src2)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.UDivMod32 dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.UDivMod64` instructions.
 (decl udivmod64 (RegPair Reg) RegPair)
 (rule (udivmod64 src1 src2)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.UDivMod64 dst src1 src2))))
         dst))
 
@@ -2322,11 +2373,30 @@
 (rule (fpu_cmp64 src1 src2)
       (ProducesFlags.ProducesFlagsSideEffect (MInst.FpuCmp64 src1 src2)))
 
+;; Helper for emitting `MInst.FpuCmp128` instructions.
+(decl fpu_cmp128 (Reg Reg) ProducesFlags)
+(rule (fpu_cmp128 src1 src2)
+      (ProducesFlags.ProducesFlagsSideEffect (MInst.FpuCmp128 src1 src2)))
+
 ;; Helper for emitting `MInst.FpuRound` instructions.
 (decl fpu_round (Type FpuRoundOp FpuRoundMode Reg) Reg)
 (rule (fpu_round ty op mode src)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.FpuRound op mode dst src))))
+        dst))
+
+;; Helper for emitting `MInst.FpuConv128FromInt` instructions.
+(decl fpu_conv128_from_int (FpuConv128Op FpuRoundMode Reg) RegPair)
+(rule (fpu_conv128_from_int op mode src)
+      (let ((dst WritableRegPair (temp_writable_regpair $F64))
+            (_ Unit (emit (MInst.FpuConv128FromInt op mode dst src))))
+        dst))
+
+;; Helper for emitting `MInst.FpuConv128ToInt` instructions.
+(decl fpu_conv128_to_int (Type FpuConv128Op FpuRoundMode RegPair) Reg)
+(rule (fpu_conv128_to_int ty op mode src)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.FpuConv128ToInt op mode dst src))))
         dst))
 
 ;; Helper for emitting `MInst.VecRRR` instructions.
@@ -3559,13 +3629,13 @@
 
 ;; The flogr instruction returns 64 for zero input by default.
 (rule (clz_reg 64 x)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.Flogr dst x))))
         (regpair_hi dst)))
 
 ;; If another zero return value was requested, we need to override the flogr result.
 (rule -1 (clz_reg zeroval x)
-      (let ((tmp WritableRegPair (temp_writable_regpair)))
+      (let ((tmp WritableRegPair (temp_writable_regpair $I64)))
         (with_flags_reg
           (ProducesFlags.ProducesFlagsSideEffect (MInst.Flogr tmp x))
           (cmov_imm $I64 (intcc_as_cond (IntCC.Equal)) zeroval (regpair_hi tmp)))))
@@ -4391,6 +4461,7 @@
 (decl fpuop2_add (Type) FPUOp2)
 (rule (fpuop2_add $F32) (FPUOp2.Add32))
 (rule (fpuop2_add $F64) (FPUOp2.Add64))
+(rule (fpuop2_add $F128) (FPUOp2.Add128))
 (rule (fpuop2_add $F32X4) (FPUOp2.Add32x4))
 (rule (fpuop2_add $F64X2) (FPUOp2.Add64x2))
 
@@ -4403,6 +4474,7 @@
 (decl fpuop2_sub (Type) FPUOp2)
 (rule (fpuop2_sub $F32) (FPUOp2.Sub32))
 (rule (fpuop2_sub $F64) (FPUOp2.Sub64))
+(rule (fpuop2_sub $F128) (FPUOp2.Sub128))
 (rule (fpuop2_sub $F32X4) (FPUOp2.Sub32x4))
 (rule (fpuop2_sub $F64X2) (FPUOp2.Sub64x2))
 
@@ -4415,6 +4487,7 @@
 (decl fpuop2_mul (Type) FPUOp2)
 (rule (fpuop2_mul $F32) (FPUOp2.Mul32))
 (rule (fpuop2_mul $F64) (FPUOp2.Mul64))
+(rule (fpuop2_mul $F128) (FPUOp2.Mul128))
 (rule (fpuop2_mul $F32X4) (FPUOp2.Mul32x4))
 (rule (fpuop2_mul $F64X2) (FPUOp2.Mul64x2))
 
@@ -4427,6 +4500,7 @@
 (decl fpuop2_div (Type) FPUOp2)
 (rule (fpuop2_div $F32) (FPUOp2.Div32))
 (rule (fpuop2_div $F64) (FPUOp2.Div64))
+(rule (fpuop2_div $F128) (FPUOp2.Div128))
 (rule (fpuop2_div $F32X4) (FPUOp2.Div32x4))
 (rule (fpuop2_div $F64X2) (FPUOp2.Div64x2))
 
@@ -4439,6 +4513,7 @@
 (decl fpuop2_min (Type) FPUOp2)
 (rule (fpuop2_min $F32) (FPUOp2.Min32))
 (rule (fpuop2_min $F64) (FPUOp2.Min64))
+(rule (fpuop2_min $F128) (FPUOp2.Min128))
 (rule (fpuop2_min $F32X4) (FPUOp2.Min32x4))
 (rule (fpuop2_min $F64X2) (FPUOp2.Min64x2))
 
@@ -4451,6 +4526,7 @@
 (decl fpuop2_max (Type) FPUOp2)
 (rule (fpuop2_max $F32) (FPUOp2.Max32))
 (rule (fpuop2_max $F64) (FPUOp2.Max64))
+(rule (fpuop2_max $F128) (FPUOp2.Max128))
 (rule (fpuop2_max $F32X4) (FPUOp2.Max32x4))
 (rule (fpuop2_max $F64X2) (FPUOp2.Max64x2))
 
@@ -4463,6 +4539,7 @@
 (decl fpuop2_min_pseudo (Type) FPUOp2)
 (rule (fpuop2_min_pseudo $F32) (FPUOp2.MinPseudo32))
 (rule (fpuop2_min_pseudo $F64) (FPUOp2.MinPseudo64))
+(rule (fpuop2_min_pseudo $F128) (FPUOp2.MinPseudo128))
 (rule (fpuop2_min_pseudo $F32X4) (FPUOp2.MinPseudo32x4))
 (rule (fpuop2_min_pseudo $F64X2) (FPUOp2.MinPseudo64x2))
 
@@ -4475,6 +4552,7 @@
 (decl fpuop2_max_pseudo (Type) FPUOp2)
 (rule (fpuop2_max_pseudo $F32) (FPUOp2.MaxPseudo32))
 (rule (fpuop2_max_pseudo $F64) (FPUOp2.MaxPseudo64))
+(rule (fpuop2_max_pseudo $F128) (FPUOp2.MaxPseudo128))
 (rule (fpuop2_max_pseudo $F32X4) (FPUOp2.MaxPseudo32x4))
 (rule (fpuop2_max_pseudo $F64X2) (FPUOp2.MaxPseudo64x2))
 
@@ -4487,6 +4565,7 @@
 (decl fpuop3_fma (Type) FPUOp3)
 (rule (fpuop3_fma $F32) (FPUOp3.MAdd32))
 (rule (fpuop3_fma $F64) (FPUOp3.MAdd64))
+(rule (fpuop3_fma $F128) (FPUOp3.MAdd128))
 (rule (fpuop3_fma $F32X4) (FPUOp3.MAdd32x4))
 (rule (fpuop3_fma $F64X2) (FPUOp3.MAdd64x2))
 
@@ -4499,6 +4578,7 @@
 (decl fpuop1_sqrt (Type) FPUOp1)
 (rule (fpuop1_sqrt $F32) (FPUOp1.Sqrt32))
 (rule (fpuop1_sqrt $F64) (FPUOp1.Sqrt64))
+(rule (fpuop1_sqrt $F128) (FPUOp1.Sqrt128))
 (rule (fpuop1_sqrt $F32X4) (FPUOp1.Sqrt32x4))
 (rule (fpuop1_sqrt $F64X2) (FPUOp1.Sqrt64x2))
 
@@ -4511,6 +4591,7 @@
 (decl fpuop1_neg (Type) FPUOp1)
 (rule (fpuop1_neg $F32) (FPUOp1.Neg32))
 (rule (fpuop1_neg $F64) (FPUOp1.Neg64))
+(rule (fpuop1_neg $F128) (FPUOp1.Neg128))
 (rule (fpuop1_neg $F32X4) (FPUOp1.Neg32x4))
 (rule (fpuop1_neg $F64X2) (FPUOp1.Neg64x2))
 
@@ -4523,6 +4604,7 @@
 (decl fpuop1_abs (Type) FPUOp1)
 (rule (fpuop1_abs $F32) (FPUOp1.Abs32))
 (rule (fpuop1_abs $F64) (FPUOp1.Abs64))
+(rule (fpuop1_abs $F128) (FPUOp1.Abs128))
 (rule (fpuop1_abs $F32X4) (FPUOp1.Abs32x4))
 (rule (fpuop1_abs $F64X2) (FPUOp1.Abs64x2))
 
@@ -4535,6 +4617,7 @@
 (decl fpuroundop_round (Type) FpuRoundOp)
 (rule (fpuroundop_round $F32) (FpuRoundOp.Round32))
 (rule (fpuroundop_round $F64) (FpuRoundOp.Round64))
+(rule (fpuroundop_round $F128) (FpuRoundOp.Round128))
 (rule (fpuroundop_round $F32X4) (FpuRoundOp.Round32x4))
 (rule (fpuroundop_round $F64X2) (FpuRoundOp.Round64x2))
 
@@ -4563,6 +4646,8 @@
       (fpu_rr $F64 (FPUOp1.Cvt32To64) x))
 (rule (fpromote_reg $F64X2 $F32X4 x)
       (fpu_rr $F64 (FPUOp1.Cvt32x4To64x2) x))
+(rule (fpromote_reg $F128 $F64 x)
+      (fpu_rr $F128 (FPUOp1.Cvt64To128) x))
 
 
 ;; Helpers for generating `fdemote` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -4573,32 +4658,42 @@
       (fpu_round $F32 (FpuRoundOp.Cvt64To32) mode x))
 (rule (fdemote_reg $F32X4 $F64X2 mode x)
       (fpu_round $F32X4 (FpuRoundOp.Cvt64x2To32x4) mode x))
+(rule (fdemote_reg $F64 $F128 mode x)
+      (fpu_round $F64 (FpuRoundOp.Cvt128To64) mode x))
 
 
 ;; Helpers for generating `fcvt_from_uint` instructions ;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl fcvt_from_uint_reg (Type FpuRoundMode Reg) Reg)
-(rule (fcvt_from_uint_reg $F32 mode x)
+(decl fcvt_from_uint_reg (Type Type FpuRoundMode Reg) Reg)
+(rule (fcvt_from_uint_reg $F32 $I32 mode x)
       (fpu_round $F32 (FpuRoundOp.FromUInt32) mode (vec_insert_lane_undef $I32X4 x 0 (zero_reg))))
-(rule (fcvt_from_uint_reg $F64 mode x)
+(rule (fcvt_from_uint_reg $F64 $I64 mode x)
       (fpu_round $F64 (FpuRoundOp.FromUInt64) mode (vec_insert_lane_undef $I64X2 x 0 (zero_reg))))
-(rule (fcvt_from_uint_reg $F32X4 mode x)
+(rule (fcvt_from_uint_reg $F32X4 $I32X4 mode x)
       (fpu_round $F32X4 (FpuRoundOp.FromUInt32x4) mode x))
-(rule (fcvt_from_uint_reg $F64X2 mode x)
+(rule (fcvt_from_uint_reg $F64X2 $I64X2 mode x)
       (fpu_round $F64X2 (FpuRoundOp.FromUInt64x2) mode x))
+(rule (fcvt_from_uint_reg $F128 $I32 mode x)
+      (fp_regpair_to_reg (fpu_conv128_from_int (FpuConv128Op.UInt32) mode x)))
+(rule (fcvt_from_uint_reg $F128 $I64 mode x)
+      (fp_regpair_to_reg (fpu_conv128_from_int (FpuConv128Op.UInt64) mode x)))
 
 
 ;; Helpers for generating `fcvt_from_sint` instructions ;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl fcvt_from_sint_reg (Type FpuRoundMode Reg) Reg)
-(rule (fcvt_from_sint_reg $F32 mode x)
+(decl fcvt_from_sint_reg (Type Type FpuRoundMode Reg) Reg)
+(rule (fcvt_from_sint_reg $F32 $I32 mode x)
       (fpu_round $F32 (FpuRoundOp.FromSInt32) mode (vec_insert_lane_undef $I32X4 x 0 (zero_reg))))
-(rule (fcvt_from_sint_reg $F64 mode x)
+(rule (fcvt_from_sint_reg $F64 $I64 mode x)
       (fpu_round $F64 (FpuRoundOp.FromSInt64) mode (vec_insert_lane_undef $I64X2 x 0 (zero_reg))))
-(rule (fcvt_from_sint_reg $F32X4 mode x)
+(rule (fcvt_from_sint_reg $F32X4 $I32X4 mode x)
       (fpu_round $F32X4 (FpuRoundOp.FromSInt32x4) mode x))
-(rule (fcvt_from_sint_reg $F64X2 mode x)
+(rule (fcvt_from_sint_reg $F64X2 $I64X2 mode x)
       (fpu_round $F64X2 (FpuRoundOp.FromSInt64x2) mode x))
+(rule (fcvt_from_sint_reg $F128 $I32 mode x)
+      (fp_regpair_to_reg (fpu_conv128_from_int (FpuConv128Op.SInt32) mode x)))
+(rule (fcvt_from_sint_reg $F128 $I64 mode x)
+      (fp_regpair_to_reg (fpu_conv128_from_int (FpuConv128Op.SInt64) mode x)))
 
 
 ;; Helpers for generating `fcvt_to_[us]int` instructions ;;;;;;;;;;;;;;;;;;;;;;;
@@ -4607,34 +4702,44 @@
 (rule 1 (fcvt_flt_ty (fits_in_32 ty) (and (vxrs_ext2_enabled) $F32)) $F32)
 (rule (fcvt_flt_ty (fits_in_64 ty) $F32) $F64)
 (rule (fcvt_flt_ty (fits_in_64 ty) $F64) $F64)
+(rule (fcvt_flt_ty (fits_in_64 ty) $F128) $F128)
 
 (decl fcvt_int_ty (Type Type) Type)
 (rule 1 (fcvt_int_ty (fits_in_32 ty) (and (vxrs_ext2_enabled) $F32)) $I32)
 (rule (fcvt_int_ty (fits_in_64 ty) $F32) $I64)
 (rule (fcvt_int_ty (fits_in_64 ty) $F64) $I64)
+(rule 1 (fcvt_int_ty (fits_in_32 ty) $F128) $I32)
+(rule (fcvt_int_ty (fits_in_64 ty) $F128) $I64)
 
 
 ;; Helpers for generating `fcvt_to_uint` instructions ;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl fcvt_to_uint_reg (Type FpuRoundMode Reg) Reg)
-(rule (fcvt_to_uint_reg $F32 mode x)
+(decl fcvt_to_uint_reg (Type Type FpuRoundMode Reg) Reg)
+(rule (fcvt_to_uint_reg $I32 $F32 mode x)
       (vec_extract_lane $I32X4 (fpu_round $F32 (FpuRoundOp.ToUInt32) mode x) 0 (zero_reg)))
-(rule (fcvt_to_uint_reg $F64 mode x)
+(rule (fcvt_to_uint_reg $I64 $F64 mode x)
       (vec_extract_lane $I64X2 (fpu_round $F64 (FpuRoundOp.ToUInt64) mode x) 0 (zero_reg)))
-(rule (fcvt_to_uint_reg $F32X4 mode x)
+(rule (fcvt_to_uint_reg $I32X4 $F32X4 mode x)
       (fpu_round $F32X4 (FpuRoundOp.ToUInt32x4) mode x))
-(rule (fcvt_to_uint_reg $F64X2 mode x)
+(rule (fcvt_to_uint_reg $I64X2 $F64X2 mode x)
       (fpu_round $F64X2 (FpuRoundOp.ToUInt64x2) mode x))
+(rule (fcvt_to_uint_reg $I32 $F128 mode x)
+      (fpu_conv128_to_int $I32 (FpuConv128Op.UInt32) mode (fp_reg_to_regpair x)))
+(rule (fcvt_to_uint_reg $I64 $F128 mode x)
+      (fpu_conv128_to_int $I64 (FpuConv128Op.UInt64) mode (fp_reg_to_regpair x)))
 
 (decl fcvt_to_uint_ub (Type Type) Reg)
 (rule (fcvt_to_uint_ub $F32 dst_ty)
       (imm $F32 (fcvt_to_uint_ub32 (ty_bits dst_ty))))
 (rule (fcvt_to_uint_ub $F64 dst_ty)
       (imm $F64 (fcvt_to_uint_ub64 (ty_bits dst_ty))))
+(rule (fcvt_to_uint_ub $F128 dst_ty)
+      (vec_imm $F128 (fcvt_to_uint_ub128 (ty_bits dst_ty))))
 
 (decl fcvt_to_uint_lb (Type) Reg)
 (rule (fcvt_to_uint_lb $F32) (imm $F32 (fcvt_to_uint_lb32)))
 (rule (fcvt_to_uint_lb $F64) (imm $F64 (fcvt_to_uint_lb64)))
+(rule (fcvt_to_uint_lb $F128) (vec_imm $F128 (fcvt_to_uint_lb128)))
 
 (decl fcvt_to_uint_ub32 (u8) u64)
 (extern constructor fcvt_to_uint_ub32 fcvt_to_uint_ub32)
@@ -4644,31 +4749,43 @@
 (extern constructor fcvt_to_uint_ub64 fcvt_to_uint_ub64)
 (decl fcvt_to_uint_lb64 () u64)
 (extern constructor fcvt_to_uint_lb64 fcvt_to_uint_lb64)
+(decl fcvt_to_uint_ub128 (u8) u128)
+(extern constructor fcvt_to_uint_ub128 fcvt_to_uint_ub128)
+(decl fcvt_to_uint_lb128 () u128)
+(extern constructor fcvt_to_uint_lb128 fcvt_to_uint_lb128)
 
 
 ;; Helpers for generating `fcvt_to_sint` instructions ;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl fcvt_to_sint_reg (Type FpuRoundMode Reg) Reg)
-(rule (fcvt_to_sint_reg $F32 mode x)
+(decl fcvt_to_sint_reg (Type Type FpuRoundMode Reg) Reg)
+(rule (fcvt_to_sint_reg $I32 $F32 mode x)
       (vec_extract_lane $F32X4 (fpu_round $F32 (FpuRoundOp.ToSInt32) mode x) 0 (zero_reg)))
-(rule (fcvt_to_sint_reg $F64 mode x)
+(rule (fcvt_to_sint_reg $I64 $F64 mode x)
       (vec_extract_lane $F64X2 (fpu_round $F64 (FpuRoundOp.ToSInt64) mode x) 0 (zero_reg)))
-(rule (fcvt_to_sint_reg $F32X4 mode x)
+(rule (fcvt_to_sint_reg $I32X4 $F32X4 mode x)
       (fpu_round $F32X4 (FpuRoundOp.ToSInt32x4) mode x))
-(rule (fcvt_to_sint_reg $F64X2 mode x)
+(rule (fcvt_to_sint_reg $I64X2 $F64X2 mode x)
       (fpu_round $F64X2 (FpuRoundOp.ToSInt64x2) mode x))
+(rule (fcvt_to_sint_reg $I32 $F128 mode x)
+      (fpu_conv128_to_int $I32 (FpuConv128Op.SInt32) mode (fp_reg_to_regpair x)))
+(rule (fcvt_to_sint_reg $I64 $F128 mode x)
+      (fpu_conv128_to_int $I64 (FpuConv128Op.SInt64) mode (fp_reg_to_regpair x)))
 
 (decl fcvt_to_sint_ub (Type Type) Reg)
 (rule (fcvt_to_sint_ub $F32 dst_ty)
       (imm $F32 (fcvt_to_sint_ub32 (ty_bits dst_ty))))
 (rule (fcvt_to_sint_ub $F64 dst_ty)
       (imm $F64 (fcvt_to_sint_ub64 (ty_bits dst_ty))))
+(rule (fcvt_to_sint_ub $F128 dst_ty)
+      (vec_imm $F128 (fcvt_to_sint_ub128 (ty_bits dst_ty))))
 
 (decl fcvt_to_sint_lb (Type Type) Reg)
 (rule (fcvt_to_sint_lb $F32 dst_ty)
       (imm $F32 (fcvt_to_sint_lb32 (ty_bits dst_ty))))
 (rule (fcvt_to_sint_lb $F64 dst_ty)
       (imm $F64 (fcvt_to_sint_lb64 (ty_bits dst_ty))))
+(rule (fcvt_to_sint_lb $F128 dst_ty)
+      (vec_imm $F128 (fcvt_to_sint_lb128 (ty_bits dst_ty))))
 
 (decl fcvt_to_sint_ub32 (u8) u64)
 (extern constructor fcvt_to_sint_ub32 fcvt_to_sint_ub32)
@@ -4678,6 +4795,10 @@
 (extern constructor fcvt_to_sint_ub64 fcvt_to_sint_ub64)
 (decl fcvt_to_sint_lb64 (u8) u64)
 (extern constructor fcvt_to_sint_lb64 fcvt_to_sint_lb64)
+(decl fcvt_to_sint_ub128 (u8) u128)
+(extern constructor fcvt_to_sint_ub128 fcvt_to_sint_ub128)
+(decl fcvt_to_sint_lb128 (u8) u128)
+(extern constructor fcvt_to_sint_lb128 fcvt_to_sint_lb128)
 
 
 ;; Helpers for generating signed `icmp` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -4788,6 +4909,7 @@
 (decl fcmp_reg (Type Reg Reg) ProducesFlags)
 (rule (fcmp_reg $F32 src1 src2) (fpu_cmp32 src1 src2))
 (rule (fcmp_reg $F64 src1 src2) (fpu_cmp64 src1 src2))
+(rule (fcmp_reg $F128 src1 src2) (fpu_cmp128 src1 src2))
 
 
 ;; Helpers for generating vector `fcmp` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;
