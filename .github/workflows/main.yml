@@ -813,7 +813,8 @@ jobs:
       uses: abrown/install-vtune-action@v1
 
     # Build and test all features
-    - run: ./ci/run-tests.sh --locked ${{ matrix.bucket }}
+    - run: ./ci/run-tests.py --locked ${{ matrix.bucket }}
+      shell: python
 
     # common logic to cancel the entire run if this job fails
     - uses: ./.github/actions/cancel-on-failure
