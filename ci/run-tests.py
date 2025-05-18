@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
 
 # Excludes:
 #
@@ -13,11 +13,15 @@
 # - wasm-spec-interpreter: brings in OCaml which is a pain to configure for all
 #   targets, tested as part of the wastime-fuzzing CI job.
 
-cargo test \
-      --workspace \
-      --all-features \
-      --exclude test-programs \
-      --exclude wasmtime-wasi-nn \
-      --exclude wasmtime-fuzzing \
-      --exclude wasm-spec-interpreter \
-      $@
+import subprocess
+import sys
+
+args = ['cargo', 'test', '--workspace', '--all-features']
+args.append('--exclude=test-programs')
+args.append('--exclude=wasmtime-wasi-nn')
+args.append('--exclude=wasmtime-fuzzing')
+args.append('--exclude=wasm-spec-interpreter')
+args.extend(sys.argv[1:])
+
+result = subprocess.run(args)
+sys.exit(result.returncode)
