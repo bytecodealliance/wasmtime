@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
 
 # Excludes:
 #
@@ -15,12 +15,16 @@
 #
 # - veri_engine: requires an SMT solver (z3)
 
-cargo test \
-      --workspace \
-      --all-features \
-      --exclude test-programs \
-      --exclude wasmtime-wasi-nn \
-      --exclude wasmtime-fuzzing \
-      --exclude wasm-spec-interpreter \
-      --exclude veri_engine \
-      $@
+import subprocess
+import sys
+
+args = ['cargo', 'test', '--workspace', '--all-features']
+args.append('--exclude=test-programs')
+args.append('--exclude=wasmtime-wasi-nn')
+args.append('--exclude=wasmtime-fuzzing')
+args.append('--exclude=wasm-spec-interpreter')
+args.append('--exclude=veri_engine')
+args.extend(sys.argv[1:])
+
+result = subprocess.run(args)
+sys.exit(result.returncode)
