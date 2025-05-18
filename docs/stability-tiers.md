@@ -25,7 +25,8 @@ For explanations of what each tier means see below.
 | Target               | `x86_64-apple-darwin`                      |
 | Target               | `x86_64-pc-windows-msvc`                   |
 | Target               | `x86_64-unknown-linux-gnu`                 |
-| Compiler Backend     | Cranelift                                  |
+| Compiler             | Cranelift [^support]                       |
+| Compiler             | Winch [^support]                           |
 | WebAssembly Proposal | [`mutable-globals`]                        |
 | WebAssembly Proposal | [`sign-extension-ops`]                     |
 | WebAssembly Proposal | [`nontrapping-float-to-int-conversion`]    |
@@ -38,6 +39,7 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`multi-memory`]                           |
 | WebAssembly Proposal | [`threads`]                                |
 | WebAssembly Proposal | [`tail-call`]                              |
+| WebAssembly Proposal | [`extended-const`]                         |
 | WebAssembly Proposal | [`memory64`]                               |
 | WASI Proposal        | [`wasi-io`]                                |
 | WASI Proposal        | [`wasi-clocks`]                            |
@@ -53,6 +55,7 @@ For explanations of what each tier means see below.
 [`nontrapping-float-to-int-conversion`]: https://github.com/WebAssembly/spec/blob/master/proposals/nontrapping-float-to-int-conversion/Overview.md
 [`multi-value`]: https://github.com/WebAssembly/spec/blob/master/proposals/multi-value/Overview.md
 [`bulk-memory`]: https://github.com/WebAssembly/bulk-memory-operations/blob/master/proposals/bulk-memory-operations/Overview.md
+[`extended-const`]: https://github.com/WebAssembly/extended-const
 [`reference-types`]: https://github.com/WebAssembly/reference-types/blob/master/proposals/reference-types/Overview.md
 [`simd`]: https://github.com/WebAssembly/simd/blob/master/proposals/simd/SIMD.md
 [`wasi-clocks`]: https://github.com/WebAssembly/wasi-clocks
@@ -63,6 +66,10 @@ For explanations of what each tier means see below.
 [`wasi-http`]: https://github.com/WebAssembly/wasi-http
 [`tail-call`]: https://github.com/WebAssembly/tail-call/blob/main/proposals/tail-call/Overview.md
 
+[^support]: Compiler support is further broken down [below](#compiler-support)
+  into finer-grained target/wasm proposal combinations. Compilers are not
+  required to support the full matrix of all tier 1 targets/proposals.
+
 #### Tier 2
 
 | Category             | Description                | Missing Tier 1 Requirements |
@@ -72,11 +79,14 @@ For explanations of what each tier means see below.
 | Target               | `s390x-unknown-linux-gnu`  | Continuous fuzzing          |
 | Target               | `x86_64-pc-windows-gnu`    | Clear owner of the target   |
 | Target               | Support for `#![no_std]`   | Support beyond CI checks    |
-| WebAssembly Proposal | [`function-references`]    | Unstable wasm proposal      |
+| WebAssembly Proposal | [`function-references`]    | production quality          |
+| WebAssembly Proposal | [`gc`]                     | production quality          |
 | WebAssembly Proposal | [`wide-arithmetic`]        | Unstable wasm proposal      |
+| WebAssembly Proposal | [`custom-page-sizes`]      | Unstable wasm proposal      |
 | Execution Backend    | Pulley                     | More time fuzzing/baking    |
 
 [`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
+[`custom-page-sizes`]: https://github.com/WebAssembly/custom-page-sizes
 [`multi-memory`]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
 [`threads`]: https://github.com/WebAssembly/threads/blob/master/proposals/threads/Overview.md
 [`component-model`]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Explainer.md
@@ -104,9 +114,6 @@ For explanations of what each tier means see below.
 | Target               | `x86_64-unknown-illumos`          | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-linux-musl` [^4]  | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-none` [^5]        | CI testing, full-time maintainer |
-| Compiler Backend     | Winch on x86\_64                  | WebAssembly proposals ([`relaxed-simd`], [`tail-call`], [`reference-types`])     |
-| Compiler Backend     | Winch on aarch64                  | Complete implementation     |
-| WebAssembly Proposal | [`gc`]                            | Complete implementation     |
 | WASI Proposal        | [`wasi-nn`]                       | More expansive CI testing   |
 | WASI Proposal        | [`wasi-threads`]                  | More CI, unstable proposal  |
 | WASI Proposal        | [`wasi-config`]                   | unstable proposal           |
@@ -182,6 +189,150 @@ features to figure out how best to implement them and at least move them to Tier
 * [WASI proposal: `wasi-pubsub`](https://github.com/WebAssembly/wasi-pubsub)
 * [WASI proposal: `wasi-sql`](https://github.com/WebAssembly/wasi-sql)
 * [WASI proposal: `wasi-url`](https://github.com/WebAssembly/wasi-url)
+
+#### Compiler Support
+
+Compiler backends of Wasmtime, at this time Cranelift and Winch, are further
+refined in the below table in their support for various architectures and
+WebAssembly features. Tier 1 WebAssembly feature are required to be supported by
+at least one compiler on all Tier 1 targets, and similarly for Tier 2 features
+and so on.  Note that architecture here is independent of OS, meaning that
+support is uniform across Wasmtime's supported target for each tier. The legend
+here is:
+
+* ✅ - fully supported
+* 🚧 - work-in-progress
+* ❌ - not supported yet
+
+##### x86\_64
+
+| Feature                                 | Cranelift | Winch  |
+|-----------------------------------------|-----------|--------|
+| [`mutable-globals`]                     | ✅        | ✅     |
+| [`sign-extension-ops`]                  | ✅        | ✅     |
+| [`nontrapping-float-to-int-conversion`] | ✅        | ✅     |
+| [`multi-value`]                         | ✅        | ✅     |
+| [`bulk-memory`]                         | ✅        | ✅     |
+| [`reference-types`]                     | ✅        | ❌[^a] |
+| [`simd`]                                | ✅        | ✅     |
+| [`component-model`]                     | ✅        | ✅     |
+| [`relaxed-simd`]                        | ✅        | ❌     |
+| [`multi-memory`]                        | ✅        | ✅     |
+| [`threads`]                             | ✅        | ✅     |
+| [`tail-call`]                           | ✅        | ❌     |
+| [`extended-const`]                      | ✅        | ✅     |
+| [`memory64`]                            | ✅        | ✅     |
+| [`function-references`]                 | ✅        | ❌     |
+| [`gc`]                                  | ✅        | ❌     |
+| [`wide-arithmetic`]                     | ✅        | ✅     |
+| [`custom-page-sizes`]                   | ✅        | ✅     |
+
+##### aarch64
+
+| Feature                                 | Cranelift | Winch[^c] |
+|-----------------------------------------|-----------|-----------|
+| [`mutable-globals`]                     | ✅        | 🚧        |
+| [`sign-extension-ops`]                  | ✅        | 🚧        |
+| [`nontrapping-float-to-int-conversion`] | ✅        | 🚧        |
+| [`multi-value`]                         | ✅        | 🚧        |
+| [`bulk-memory`]                         | ✅        | 🚧        |
+| [`reference-types`]                     | ✅        | ❌[^a]    |
+| [`simd`]                                | ✅        | ❌        |
+| [`component-model`]                     | ✅        | 🚧        |
+| [`relaxed-simd`]                        | ✅        | ❌        |
+| [`multi-memory`]                        | ✅        | 🚧        |
+| [`threads`]                             | ✅        | ❌        |
+| [`tail-call`]                           | ✅        | ❌        |
+| [`extended-const`]                      | ✅        | 🚧        |
+| [`memory64`]                            | ✅        | 🚧        |
+| [`function-references`]                 | ✅        | ❌        |
+| [`gc`]                                  | ✅        | ❌        |
+| [`wide-arithmetic`]                     | ✅        | ❌        |
+| [`custom-page-sizes`]                   | ✅        | 🚧        |
+
+##### s390x
+
+| Feature                                 | Cranelift | Winch  |
+|-----------------------------------------|-----------|--------|
+| [`mutable-globals`]                     | ✅        | ❌     |
+| [`sign-extension-ops`]                  | ✅        | ❌     |
+| [`nontrapping-float-to-int-conversion`] | ✅        | ❌     |
+| [`multi-value`]                         | ✅        | ❌     |
+| [`bulk-memory`]                         | ✅        | ❌     |
+| [`reference-types`]                     | ✅        | ❌[^a] |
+| [`simd`]                                | ✅        | ❌     |
+| [`component-model`]                     | ✅        | ❌     |
+| [`relaxed-simd`]                        | ✅        | ❌     |
+| [`multi-memory`]                        | ✅        | ❌     |
+| [`threads`]                             | ✅        | ❌     |
+| [`tail-call`]                           | ✅        | ❌     |
+| [`extended-const`]                      | ✅        | ❌     |
+| [`memory64`]                            | ✅        | ❌     |
+| [`function-references`]                 | ✅        | ❌     |
+| [`gc`]                                  | ✅        | ❌     |
+| [`wide-arithmetic`]                     | ✅        | ❌     |
+| [`custom-page-sizes`]                   | ✅        | ❌     |
+
+##### riscv64
+
+| Feature                                 | Cranelift | Winch  |
+|-----------------------------------------|-----------|--------|
+| [`mutable-globals`]                     | ✅        | ❌     |
+| [`sign-extension-ops`]                  | ✅        | ❌     |
+| [`nontrapping-float-to-int-conversion`] | ✅        | ❌     |
+| [`multi-value`]                         | ✅        | ❌     |
+| [`bulk-memory`]                         | ✅        | ❌     |
+| [`reference-types`]                     | ✅        | ❌[^a] |
+| [`simd`]                                | ✅        | ❌     |
+| [`component-model`]                     | ✅        | ❌     |
+| [`relaxed-simd`]                        | ✅        | ❌     |
+| [`multi-memory`]                        | ✅        | ❌     |
+| [`threads`]                             | ✅        | ❌     |
+| [`tail-call`]                           | ✅        | ❌     |
+| [`extended-const`]                      | ✅        | ❌     |
+| [`memory64`]                            | ✅        | ❌     |
+| [`function-references`]                 | ✅        | ❌     |
+| [`gc`]                                  | ✅        | ❌     |
+| [`wide-arithmetic`]                     | ✅        | ❌     |
+| [`custom-page-sizes`]                   | ✅        | ❌     |
+
+##### Pulley
+
+Note that the pulley "architecture" is a stand-in for Wasmtime's baseline
+support for all platforms. This is how Wasmtime's interpreter works and this is
+intended to work on all platforms. The columns here are for compiler support for
+emitting Pulley bytecode.
+
+| Feature                                 | Cranelift | Winch  |
+|-----------------------------------------|-----------|--------|
+| [`mutable-globals`]                     | ✅        | ❌     |
+| [`sign-extension-ops`]                  | ✅        | ❌     |
+| [`nontrapping-float-to-int-conversion`] | ✅        | ❌     |
+| [`multi-value`]                         | ✅        | ❌     |
+| [`bulk-memory`]                         | ✅        | ❌     |
+| [`reference-types`]                     | ✅        | ❌[^a] |
+| [`simd`]                                | ✅        | ❌     |
+| [`component-model`]                     | ✅        | ❌     |
+| [`relaxed-simd`]                        | ✅        | ❌     |
+| [`multi-memory`]                        | ✅        | ❌     |
+| [`threads`]                             | ❌[^b]    | ❌     |
+| [`tail-call`]                           | ✅        | ❌     |
+| [`extended-const`]                      | ✅        | ❌     |
+| [`memory64`]                            | ✅        | ❌     |
+| [`function-references`]                 | ✅        | ❌     |
+| [`gc`]                                  | ✅        | ❌     |
+| [`wide-arithmetic`]                     | ✅        | ❌     |
+| [`custom-page-sizes`]                   | ✅        | ❌     |
+
+[^a]: Winch supports some features of the [`reference-types`] proposal such as
+  the change to support multiple tables and LEB-encoding table indices in
+  instructions, but it does not support GC types such as `externref` or the
+  new table opcodes in the [`reference-types`] proposal.
+[^b]: Pulley does not support the [`threads`] proposal because there is no known
+  safe way to implement this with Rust's memory model.
+[^c]: Winch's support for aarch64 is a work-in-progress. Most of the
+  implementation is filled out but it is not yet at a feature-complete status
+  or running tests in CI.
 
 ## Tier Details
 
@@ -259,32 +410,47 @@ well-maintained, tested well, but don't necessarily meet the stringent criteria
 for Tier 1. Features in this category may already be "production ready" and safe
 to use.
 
-Tier 2 features include:
+Tier 2 features, organized by category, include:
 
-* Tests are run in CI for the Wasmtime project for this feature and everything
-  passes. For example a Tier 2 platform runs in CI directly or via emulation.
-  Features are otherwise fully tested on CI.
+* **Target**
+  * Tests are run in CI for this platform with a compiler, either
+    directly or via emulation. This ensures that all changes to Wasmtime are
+    tested against this target, and this additionally means that all applicable
+    Tier 1/2 features are tested on this target in CI.
 
-* Complete implementations for anything that's part of Tier 1. For example
-  all Tier 2 targets must implement all of the Tier 1 WebAssembly proposals,
-  and all Tier 2 features must be implemented on all Tier 1 targets.
+  * Complete implementations for anything that's part of Tier 1. For
+    example all Tier 2 targets must implement all of the applicable Tier 1
+    WebAssembly proposals, and all Tier 2 features must be implemented on all
+    Tier 1 targets.
 
-* All existing developers are expected to handle minor changes which affect Tier
-  2 components. For example if Cranelift's interfaces change then the developer
-  changing the interface is expected to handle the changes for Tier 2
-  architectures so long as the affected part is relatively minor. Note that if a
-  more substantial change is required to a Tier 2 component then that falls
-  under the next bullet.
+* **WebAssembly Proposal**
+  * Must be fully tested on CI. This means that it must pass tests on all
+    applicable Tier 1 and Tier 2 target/compiler combos. Note that only one
+    compiler is required to implement the feature at this time, but it must run,
+    via some compiler, on all targets.
+  * The upstream WebAssembly proposal is stage 3+.
 
-* Maintainers of a Tier 2 feature are responsive (reply to requests within a
-  week) and are available to accommodate architectural changes that affect their
-  component. For example more expansive work beyond the previous bullet where
-  contributors can't easily handle changes are expected to be guided or
-  otherwise implemented by Tier 2 maintainers.
+* **WASI Proposal**
+  * Similar to WebAssembly proposals this must be fully tested on CI. WASI
+    proposals at Tier 2 must support all Tier 1/2 targets, however.
 
-* Major changes otherwise requiring an RFC that affect Tier 2 components are
-  required to consult Tier 2 maintainers in the course of the RFC. Major changes
-  to Tier 2 components themselves do not require an RFC, however.
+* **Maintenance**
+  * All existing developers are expected to handle minor changes which affect
+    Tier 2 components. For example if Cranelift's interfaces change then the
+    developer changing the interface is expected to handle the changes for Tier
+    2 architectures so long as the affected part is relatively minor.  Note that
+    if a more substantial change is required to a Tier 2 component then that
+        falls under the next bullet.
+
+  * Maintainers of a Tier 2 feature are responsive (reply to requests within a
+    week) and are available to accommodate architectural changes that affect
+    their component. For example more expansive work beyond the previous bullet
+    where contributors can't easily handle changes are expected to be guided or
+    otherwise implemented by Tier 2 maintainers.
+
+  * Major changes otherwise requiring an RFC that affect Tier 2 components are
+    required to consult Tier 2 maintainers in the course of the RFC. Major
+    changes to Tier 2 components themselves do not require an RFC, however.
 
 Features at this tier generally are not turned off or disabled for very long.
 Maintainers are already required to be responsive to changes and will be
@@ -300,30 +466,36 @@ particular feature, indicating that it is suitable for production environments.
 This conveys a high level of confidence in the Wasmtime project about the
 specified features.
 
-Tier 1 features include:
+Tier 1 features, broken down by category, include:
 
-* Continuous fuzzing is required for WebAssembly proposals. This means that any
-  WebAssembly proposal must have support in the `wasm-smith` crate and existing
-  fuzz targets must be running and exercising the new code paths. Where possible
-  differential fuzzing should also be implemented to compare results with other
-  implementations.
+* **WebAssembly Proposal**
+  * Continuous fuzzing is required for at least one target. This means that any
+    WebAssembly proposal must have support in the `wasm-smith` crate and
+    existing fuzz targets must be running and exercising the new code paths.
+    Where possible differential fuzzing should also be implemented to compare
+    results with other implementations.
 
-* Continuous fuzzing is required for the architecture of supported targets. For
-  example currently there are three x86\_64 targets that are considered Tier 1
-  but only `x86_64-unknown-linux-gnu` is fuzzed.
+  * Must meet [all stabilization requirements](./stability-wasm-proposals.md).
 
-* CVEs and security releases will be performed as necessary for any bugs found
-  in features and targets.
+* **Target**
+  * A target's architecture must be continuously fuzzing via at least one
+    Rust target. For example currently there are three x86\_64 targets that are
+    considered Tier 1 but only `x86_64-unknown-linux-gnu` is fuzzed.
 
-* Major changes affecting this component may require help from maintainers with
-  specialized expertise, but otherwise it should be reasonable to expect most
-  Wasmtime developers to be able to maintain Tier 1 features.
+* **Compiler**
+  * A compiler, like a target, must be continuously fuzzed on at least one
+    target to be considered Tier 1 for a particular target.
 
-* Major changes affecting Tier 1 features require an RFC and prior agreement on
-  the change before an implementation is committed.
+* **Maintenance**
+  * CVEs and security releases will be performed as necessary for any bugs found
+    in features and targets.
 
-* WebAssembly proposals meet [all stabilization
-  requirements](./stability-wasm-proposals.md).
+  * Major changes affecting this component may require help from maintainers
+    with specialized expertise, but otherwise it should be reasonable to expect
+    most Wasmtime developers to be able to maintain Tier 1 features.
+
+  * Major changes affecting Tier 1 features require an RFC and prior agreement
+    on the change before an implementation is committed.
 
 A major inclusion point for this tier is intended to be the continuous fuzzing
 of Wasmtime. This implies a significant commitment of resources for fixing
