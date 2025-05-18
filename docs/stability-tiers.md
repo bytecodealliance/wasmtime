@@ -412,41 +412,45 @@ to use.
 
 Tier 2 features, organized by category, include:
 
-* **Target**: tests are run in CI for this platform with a compiler, either
-  directly or via emulation. This ensures that all changes to Wasmtime are
-  tested against this target, and this additionally means that all applicable
-  Tier 1/2 features are tested on this target in CI.
+* **Target**
+  * Tests are run in CI for this platform with a compiler, either
+    directly or via emulation. This ensures that all changes to Wasmtime are
+    tested against this target, and this additionally means that all applicable
+    Tier 1/2 features are tested on this target in CI.
 
-* **Target**: Complete implementations for anything that's part of Tier 1. For
-  example all Tier 2 targets must implement all of the applicable Tier 1
-  WebAssembly proposals, and all Tier 2 features must be implemented on all Tier
-  1 targets.
+  * Complete implementations for anything that's part of Tier 1. For
+    example all Tier 2 targets must implement all of the applicable Tier 1
+    WebAssembly proposals, and all Tier 2 features must be implemented on all
+    Tier 1 targets.
 
-* **WebAssembly Proposal**: must be fully tested on CI. This means that it must
-  pass tests on all applicable Tier 1 and Tier 2 target/compiler combos. Note
-  that only one compiler is required to implement the feature at this time, but
-  it must run, via some compiler, on all targets.
+* **WebAssembly Proposal**
+  * Must be fully tested on CI. This means that it must pass tests on all
+    applicable Tier 1 and Tier 2 target/compiler combos. Note that only one
+    compiler is required to implement the feature at this time, but it must run,
+    via some compiler, on all targets.
+  * The upstream WebAssembly proposal is stage 3+.
 
-* **WASI Proposal**: similar to WebAssembly proposals this must be fully tested
-  on CI. WASI proposals at Tier 2 must support all Tier 1/2 targets, however.
+* **WASI Proposal**
+  * Similar to WebAssembly proposals this must be fully tested on CI. WASI
+    proposals at Tier 2 must support all Tier 1/2 targets, however.
 
-* **Maintenance**: All existing developers are expected to handle minor changes
-  which affect Tier 2 components. For example if Cranelift's interfaces change
-  then the developer changing the interface is expected to handle the changes
-  for Tier 2 architectures so long as the affected part is relatively minor.
-  Note that if a more substantial change is required to a Tier 2 component
-  then that falls under the next bullet.
+* **Maintenance**
+  * All existing developers are expected to handle minor changes which affect
+    Tier 2 components. For example if Cranelift's interfaces change then the
+    developer changing the interface is expected to handle the changes for Tier
+    2 architectures so long as the affected part is relatively minor.  Note that
+    if a more substantial change is required to a Tier 2 component then that
+        falls under the next bullet.
 
-* **Maintenance**: Maintainers of a Tier 2 feature are responsive (reply to
-  requests within a week) and are available to accommodate architectural changes
-  that affect their component. For example more expansive work beyond the
-  previous bullet where contributors can't easily handle changes are expected to
-  be guided or otherwise implemented by Tier 2 maintainers.
+  * Maintainers of a Tier 2 feature are responsive (reply to requests within a
+    week) and are available to accommodate architectural changes that affect
+    their component. For example more expansive work beyond the previous bullet
+    where contributors can't easily handle changes are expected to be guided or
+    otherwise implemented by Tier 2 maintainers.
 
-* **Maintenance**: Major changes otherwise requiring an RFC that affect Tier 2
-  components are required to consult Tier 2 maintainers in the course of the
-  RFC. Major changes to Tier 2 components themselves do not require an RFC,
-  however.
+  * Major changes otherwise requiring an RFC that affect Tier 2 components are
+    required to consult Tier 2 maintainers in the course of the RFC. Major
+    changes to Tier 2 components themselves do not require an RFC, however.
 
 Features at this tier generally are not turned off or disabled for very long.
 Maintainers are already required to be responsive to changes and will be
@@ -464,31 +468,34 @@ specified features.
 
 Tier 1 features, broken down by category, include:
 
-* **WebAssembly Proposal**: Continuous fuzzing is required for at least one
-  target. This means that any WebAssembly proposal must have support in the
-  `wasm-smith` crate and existing fuzz targets must be running and exercising
-  the new code paths. Where possible differential fuzzing should also be
-  implemented to compare results with other implementations.
+* **WebAssembly Proposal**
+  * Continuous fuzzing is required for at least one target. This means that any
+    WebAssembly proposal must have support in the `wasm-smith` crate and
+    existing fuzz targets must be running and exercising the new code paths.
+    Where possible differential fuzzing should also be implemented to compare
+    results with other implementations.
 
-* **WebAssembly proposal**: must meet [all stabilization
-  requirements](./stability-wasm-proposals.md).
+  * Must meet [all stabilization requirements](./stability-wasm-proposals.md).
 
-* **Target**: a target's architecture must be continuously fuzzing via at least
-  one target. For example currently there are three x86\_64 targets that are
-  considered Tier 1 but only `x86_64-unknown-linux-gnu` is fuzzed.
+* **Target**
+  * A target's architecture must be continuously fuzzing via at least one
+    Rust target. For example currently there are three x86\_64 targets that are
+    considered Tier 1 but only `x86_64-unknown-linux-gnu` is fuzzed.
 
-* **Compiler**: a compiler, like a target, must be continuously fuzzed on at
-  least one target to be considered Tier 1 for a particular target.
+* **Compiler**
+  * A compiler, like a target, must be continuously fuzzed on at least one
+    target to be considered Tier 1 for a particular target.
 
-* **Maintenance**: CVEs and security releases will be performed as necessary for
-  any bugs found in features and targets.
+* **Maintenance**
+  * CVEs and security releases will be performed as necessary for any bugs found
+    in features and targets.
 
-* **Maintenance**: Major changes affecting this component may require help from
-  maintainers with specialized expertise, but otherwise it should be reasonable
-  to expect most Wasmtime developers to be able to maintain Tier 1 features.
+  * Major changes affecting this component may require help from maintainers
+    with specialized expertise, but otherwise it should be reasonable to expect
+    most Wasmtime developers to be able to maintain Tier 1 features.
 
-* **Maintenance**: Major changes affecting Tier 1 features require an RFC and
-  prior agreement on the change before an implementation is committed.
+  * Major changes affecting Tier 1 features require an RFC and prior agreement
+    on the change before an implementation is committed.
 
 A major inclusion point for this tier is intended to be the continuous fuzzing
 of Wasmtime. This implies a significant commitment of resources for fixing
