@@ -26,4 +26,5 @@ args.append('--exclude=wasm-spec-interpreter')
 args.append('--exclude=veri_engine')
 args.extend(sys.argv[1:])
 
-subprocess.run(args)
+result = subprocess.run(args)
+sys.exit(result.returncode)
