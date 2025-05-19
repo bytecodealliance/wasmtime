@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail};
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll, RawWaker, RawWakerVTable, Waker};
+use std::task::{Context, Poll, Waker};
 use wasmtime::*;
 
 fn async_store() -> Store<()> {
@@ -206,7 +206,7 @@ async fn suspend_while_suspending() {
             let mut future = Box::pin(async_thunk.call_async(&mut caller, &[], &mut []));
             let poll = future
                 .as_mut()
-                .poll(&mut Context::from_waker(&noop_waker()));
+                .poll(&mut Context::from_waker(Waker::noop()));
             assert!(poll.is_ready());
             Ok(())
         });
@@ -593,7 +593,7 @@ async fn resume_separate_thread3() {
         let mut future = Box::pin(f);
         let poll = future
             .as_mut()
-            .poll(&mut Context::from_waker(&noop_waker()));
+            .poll(&mut Context::from_waker(Waker::noop()));
         assert!(poll.is_pending());
 
         // ... so at this point our call into wasm is suspended. The call into
@@ -778,13 +778,6 @@ where
             Poll::Ready(val) => Poll::Ready(Ok(val)),
         }
     }
-}
-
-fn noop_waker() -> Waker {
-    const VTABLE: RawWakerVTable =
-        RawWakerVTable::new(|ptr| RawWaker::new(ptr, &VTABLE), |_| {}, |_| {}, |_| {});
-    const RAW: RawWaker = RawWaker::new(0 as *const (), &VTABLE);
-    unsafe { Waker::from_raw(RAW) }
 }
 
 #[tokio::test]

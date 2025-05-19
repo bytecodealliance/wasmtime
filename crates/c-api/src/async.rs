@@ -5,7 +5,7 @@ use std::num::NonZeroU64;
 use std::ops::Range;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::task::{Context, Poll, Waker};
 use std::{ptr, str};
 use wasmtime::{
     AsContextMut, Func, Instance, Result, RootScope, StackCreator, StackMemory, Trap, Val,
@@ -199,8 +199,11 @@ pub extern "C" fn wasmtime_call_future_delete(_future: Box<wasmtime_call_future_
 
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_call_future_poll(future: &mut wasmtime_call_future_t) -> bool {
-    let w = futures::task::noop_waker_ref();
-    match future.underlying.as_mut().poll(&mut Context::from_waker(w)) {
+    match future
+        .underlying
+        .as_mut()
+        .poll(&mut Context::from_waker(Waker::noop()))
+    {
         Poll::Ready(()) => true,
         Poll::Pending => false,
     }

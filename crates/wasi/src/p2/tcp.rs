@@ -18,7 +18,7 @@ use std::mem;
 use std::net::{Shutdown, SocketAddr};
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::Poll;
+use std::task::{Poll, Waker};
 use tokio::sync::Mutex;
 
 /// The state of a TCP socket.
@@ -265,7 +265,7 @@ impl TcpSocket {
         let result = match previous_state {
             TcpState::ConnectReady(result) => result,
             TcpState::Connecting(mut future) => {
-                let mut cx = std::task::Context::from_waker(futures::task::noop_waker_ref());
+                let mut cx = std::task::Context::from_waker(Waker::noop());
                 match with_ambient_tokio_runtime(|| future.as_mut().poll(&mut cx)) {
                     Poll::Ready(result) => result,
                     Poll::Pending => {
@@ -369,7 +369,7 @@ impl TcpSocket {
         let result = match pending_accept.take() {
             Some(result) => result,
             None => {
-                let mut cx = std::task::Context::from_waker(futures::task::noop_waker_ref());
+                let mut cx = std::task::Context::from_waker(Waker::noop());
                 match with_ambient_tokio_runtime(|| listener.poll_accept(&mut cx))
                     .map_ok(|(stream, _)| stream)
                 {
