@@ -1006,7 +1006,7 @@ impl Masm for MacroAssembler {
     fn popcnt(&mut self, context: &mut CodeGenContext<Emission>, size: OperandSize) -> Result<()> {
         let src = context.pop_to_reg(self, None)?;
         if self.flags.has_popcnt() && self.flags.has_sse42() {
-            self.asm.popcnt(src.into(), size);
+            self.asm.popcnt(src.into(), writable!(src.into()), size);
             context.stack.push(src.into());
             Ok(())
         } else {

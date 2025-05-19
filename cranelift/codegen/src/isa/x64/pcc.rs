@@ -77,10 +77,7 @@ pub(crate) fn check(
             RegMem::Reg { .. } => undefined_result(ctx, vcode, dst, 64, size.to_bits().into()),
         },
 
-        Inst::UnaryRmR {
-            size, ref src, dst, ..
-        }
-        | Inst::UnaryRmRVex {
+        Inst::UnaryRmRVex {
             size, ref src, dst, ..
         }
         | Inst::UnaryRmRImmVex {

@@ -144,7 +144,6 @@ impl Inst {
             | Inst::Atomic128XchgSeq { .. } => smallvec![InstructionSet::CMPXCHG16b],
 
             Inst::AluRmRVex { op, .. } => op.available_from(),
-            Inst::UnaryRmR { op, .. } => op.available_from(),
             Inst::UnaryRmRVex { op, .. } => op.available_from(),
             Inst::UnaryRmRImmVex { op, .. } => op.available_from(),
 
@@ -194,6 +193,9 @@ impl Inst {
                         sse2 => features.push(InstructionSet::SSE2),
                         ssse3 => features.push(InstructionSet::SSSE3),
                         sse41 => features.push(InstructionSet::SSE41),
+                        bmi1 => features.push(InstructionSet::BMI1),
+                        lzcnt => features.push(InstructionSet::Lzcnt),
+                        popcnt => features.push(InstructionSet::Popcnt),
                     }
                 }
                 features
@@ -226,28 +228,6 @@ impl Inst {
             asm::inst::subq_mi_sxl::new(dst, simm32).into()
         };
         Inst::External { inst }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn unary_rm_r(
-        size: OperandSize,
-        op: UnaryRmROpcode,
-        src: RegMem,
-        dst: Writable<Reg>,
-    ) -> Self {
-        src.assert_regclass_is(RegClass::Int);
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        debug_assert!(size.is_one_of(&[
-            OperandSize::Size16,
-            OperandSize::Size32,
-            OperandSize::Size64
-        ]));
-        Self::UnaryRmR {
-            size,
-            op,
-            src: GprMem::unwrap_new(src),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-        }
     }
 
     pub(crate) fn div(
@@ -699,12 +679,6 @@ impl PrettyPrint for Inst {
                 let src2 = src2.pretty_print(size_bytes);
                 let op = ljustify2(op.to_string(), String::new());
                 format!("{op} {src2}, {src1}, {dst}")
-            }
-            Inst::UnaryRmR { src, dst, op, size } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let src = src.pretty_print(size.to_bytes());
-                let op = ljustify2(op.to_string(), suffix_bwlq(*size));
-                format!("{op} {src}, {dst}")
             }
 
             Inst::UnaryRmRVex { src, dst, op, size } => {
@@ -1973,9 +1947,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 }
             }
         }
-        Inst::UnaryRmR { src, dst, .. }
-        | Inst::UnaryRmRVex { src, dst, .. }
-        | Inst::UnaryRmRImmVex { src, dst, .. } => {
+        Inst::UnaryRmRVex { src, dst, .. } | Inst::UnaryRmRImmVex { src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
         }

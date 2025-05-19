@@ -300,6 +300,18 @@ impl<R: AsReg, M: AsReg> GprMem<R, M> {
     }
 }
 
+impl<R: AsReg, M: AsReg> From<R> for GprMem<R, M> {
+    fn from(reg: R) -> GprMem<R, M> {
+        GprMem::Gpr(reg)
+    }
+}
+
+impl<R: AsReg, M: AsReg> From<Amode<M>> for GprMem<R, M> {
+    fn from(amode: Amode<M>) -> GprMem<R, M> {
+        GprMem::Mem(amode)
+    }
+}
+
 /// An XMM register or memory operand.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
@@ -346,6 +358,18 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
                 amode.encode_rex_suffixes(sink, offsets, enc_reg, bytes_at_end);
             }
         }
+    }
+}
+
+impl<R: AsReg, M: AsReg> From<R> for XmmMem<R, M> {
+    fn from(reg: R) -> XmmMem<R, M> {
+        XmmMem::Xmm(reg)
+    }
+}
+
+impl<R: AsReg, M: AsReg> From<Amode<M>> for XmmMem<R, M> {
+    fn from(amode: Amode<M>) -> XmmMem<R, M> {
+        XmmMem::Mem(amode)
     }
 }
 

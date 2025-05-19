@@ -824,50 +824,6 @@ impl fmt::Display for AluRmROpcode {
     }
 }
 
-#[derive(Clone, PartialEq)]
-/// Unary operations requiring register or memory and register operands.
-pub enum UnaryRmROpcode {
-    /// Bit-scan reverse.
-    Bsr,
-    /// Bit-scan forward.
-    Bsf,
-    /// Counts leading zeroes (Leading Zero CouNT).
-    Lzcnt,
-    /// Counts trailing zeroes (Trailing Zero CouNT).
-    Tzcnt,
-    /// Counts the number of ones (POPulation CouNT).
-    Popcnt,
-}
-
-impl UnaryRmROpcode {
-    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
-        match self {
-            UnaryRmROpcode::Bsr | UnaryRmROpcode::Bsf => smallvec![],
-            UnaryRmROpcode::Lzcnt => smallvec![InstructionSet::Lzcnt],
-            UnaryRmROpcode::Tzcnt => smallvec![InstructionSet::BMI1],
-            UnaryRmROpcode::Popcnt => smallvec![InstructionSet::Popcnt],
-        }
-    }
-}
-
-impl fmt::Debug for UnaryRmROpcode {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            UnaryRmROpcode::Bsr => write!(fmt, "bsr"),
-            UnaryRmROpcode::Bsf => write!(fmt, "bsf"),
-            UnaryRmROpcode::Lzcnt => write!(fmt, "lzcnt"),
-            UnaryRmROpcode::Tzcnt => write!(fmt, "tzcnt"),
-            UnaryRmROpcode::Popcnt => write!(fmt, "popcnt"),
-        }
-    }
-}
-
-impl fmt::Display for UnaryRmROpcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Debug::fmt(self, f)
-    }
-}
-
 pub use crate::isa::x64::lower::isle::generated_code::UnaryRmRVexOpcode;
 
 impl UnaryRmRVexOpcode {

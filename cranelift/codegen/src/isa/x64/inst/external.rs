@@ -59,13 +59,6 @@ impl From<Writable<Reg>> for asm::GprMem<PairedGpr, Gpr> {
 }
 
 // For ABI ergonomics.
-impl From<Gpr> for asm::GprMem<Gpr, Gpr> {
-    fn from(gpr: Gpr) -> Self {
-        Self::Gpr(gpr)
-    }
-}
-
-// For ABI ergonomics.
 impl From<Reg> for asm::GprMem<Gpr, Gpr> {
     fn from(gpr: Reg) -> Self {
         assert!(gpr.class() == RegClass::Int);
@@ -95,27 +88,6 @@ impl From<Writable<Reg>> for asm::Gpr<WritableGpr> {
         assert!(wgpr.to_reg().class() == RegClass::Int);
         let wgpr = WritableGpr::from_writable_reg(wgpr).unwrap();
         Self::new(wgpr)
-    }
-}
-
-// For Winch ergonomics.
-impl From<PairedGpr> for asm::Gpr<PairedGpr> {
-    fn from(pair: PairedGpr) -> Self {
-        Self::new(pair)
-    }
-}
-
-// For Winch ergonomics.
-impl From<PairedGpr> for asm::GprMem<PairedGpr, Gpr> {
-    fn from(pair: PairedGpr) -> Self {
-        Self::Gpr(pair)
-    }
-}
-
-// For Winch ergonomics.
-impl From<WritableGpr> for asm::Gpr<WritableGpr> {
-    fn from(gpr: WritableGpr) -> Self {
-        Self::new(gpr)
     }
 }
 
@@ -190,13 +162,6 @@ impl From<Reg> for asm::XmmMem<Xmm, Gpr> {
         assert!(xmm.class() == RegClass::Float);
         let xmm = Xmm::unwrap_new(xmm);
         Self::Xmm(xmm)
-    }
-}
-
-// For Winch ergonomics.
-impl From<PairedXmm> for asm::Xmm<PairedXmm> {
-    fn from(pair: PairedXmm) -> Self {
-        Self::new(pair)
     }
 }
 
