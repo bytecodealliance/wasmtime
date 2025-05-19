@@ -1082,30 +1082,6 @@ fn test_x64_emit() {
     //
 
     // ========================================================
-    // UnaryRmR
-
-    insns.push((
-        Inst::unary_rm_r(
-            OperandSize::Size32,
-            UnaryRmROpcode::Bsr,
-            RegMem::reg(rsi),
-            w_rdi,
-        ),
-        "0FBDFE",
-        "bsrl    %esi, %edi",
-    ));
-    insns.push((
-        Inst::unary_rm_r(
-            OperandSize::Size64,
-            UnaryRmROpcode::Bsr,
-            RegMem::reg(r15),
-            w_rax,
-        ),
-        "490FBDC7",
-        "bsrq    %r15, %rax",
-    ));
-
-    // ========================================================
     // Div
     insns.push((
         Inst::div(
