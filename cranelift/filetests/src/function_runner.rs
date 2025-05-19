@@ -114,7 +114,7 @@ impl TestFileCompiler {
             unsafe extern "C" {
                 safe fn cosf(f: f32) -> f32;
             }
-            let f = 1.2_f32;
+            let f = std::hint::black_box(1.2_f32);
             assert_eq!(f.cos(), cosf(f));
         }
 

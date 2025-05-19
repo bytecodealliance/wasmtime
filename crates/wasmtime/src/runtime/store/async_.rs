@@ -757,7 +757,7 @@ impl AsyncCx {
     /// which represents that the asynchronous computation was cancelled. It is
     /// not recommended to catch the trap and try to keep executing wasm, so
     /// we've tried to liberally document this.
-    pub unsafe fn block_on<F>(&self, mut future: F) -> Result<F::Output>
+    pub unsafe fn block_on<F>(&self, future: F) -> Result<F::Output>
     where
         F: Future + Send,
     {
