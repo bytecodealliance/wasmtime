@@ -22,7 +22,7 @@ use crate::AsReg;
 /// let fixed = Fixed::<u8, { gpr::enc::RAX }>(invalid_reg);
 /// fixed.enc(); // Will panic because `invalid_reg` does not match `RAX`.
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct Fixed<R, const E: u8>(pub R);
 
 impl<R, const E: u8> Fixed<R, E> {
@@ -50,5 +50,11 @@ impl<R: AsReg, const E: u8> AsReg for Fixed<R, E> {
 impl<R, const E: u8> AsRef<R> for Fixed<R, E> {
     fn as_ref(&self) -> &R {
         &self.0
+    }
+}
+
+impl<R, const E: u8> From<R> for Fixed<R, E> {
+    fn from(reg: R) -> Fixed<R, E> {
+        Fixed(reg)
     }
 }

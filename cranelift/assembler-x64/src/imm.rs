@@ -107,7 +107,7 @@ impl TryFrom<i32> for Simm8 {
 }
 
 /// A 16-bit immediate operand.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct Imm16(u16);
 
@@ -147,7 +147,7 @@ impl fmt::Display for Imm16 {
 }
 
 /// A _signed_ 16-bit immediate operand (suitable for sign extension).
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct Simm16(i16);
 
@@ -196,7 +196,7 @@ impl TryFrom<i32> for Simm16 {
 /// Note that, "in 64-bit mode, the typical size of immediate operands remains
 /// 32 bits. When the operand size is 64 bits, the processor sign-extends all
 /// immediates to 64 bits prior to their use" (Intel SDM Vol. 2, 2.2.1.5).
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct Imm32(u32);
 
@@ -240,7 +240,7 @@ impl fmt::Display for Imm32 {
 /// Note that, "in 64-bit mode, the typical size of immediate operands remains
 /// 32 bits. When the operand size is 64 bits, the processor sign-extends all
 /// immediates to 64 bits prior to their use" (Intel SDM Vol. 2, 2.2.1.5).
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct Simm32(i32);
 

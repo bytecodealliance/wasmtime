@@ -11,7 +11,7 @@ impl dsl::Feature {
     pub fn generate_enum(f: &mut Formatter) {
         fmtln!(f, "#[doc(hidden)]");
         generate_derive(f);
-        fmtln!(f, "#[derive(Copy, PartialEq)]"); // Add a couple more helpful derives.
+        fmtln!(f, "#[derive(PartialEq)]"); // Add more helpful derives.
         f.add_block("pub enum Feature", |f| {
             for feature in dsl::ALL_FEATURES {
                 fmtln!(f, "{feature},");
