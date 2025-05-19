@@ -678,10 +678,15 @@ jobs:
           echo "::warning::This CI run will not test MPK; it has been detected as not available on this machine (\`cargo run --example mpk-available\`)."
         fi
 
-    # Build and test all features
-    - run: ./ci/run-tests.sh --locked ${{ matrix.bucket }}
-      env:
-        RUST_BACKTRACE: 1
+    # Build and test all features.
+    #
+    # Note that this uses a different shell, notably not `bash` on Windows. In
+    # the past `bash` would add more items to `PATH` on Windows which would
+    # interfere and cause the `gcc.exe` executable to fail and exit with 1 and
+    # no output. It's believed that `bash` adds things like `/usr/bin` to PATH
+    # which is the wrong DLL or something like that.
+    - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }}
+      shell: pwsh
 
     # NB: the test job here is explicitly lacking in cancellation of this run if
     # something goes wrong. These take the longest anyway and otherwise if
