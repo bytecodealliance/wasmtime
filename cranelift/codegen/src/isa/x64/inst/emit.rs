@@ -188,41 +188,6 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
-        Inst::UnaryRmR { size, op, src, dst } => {
-            let dst = dst.to_reg().to_reg();
-            let rex_flags = RexFlags::from(*size);
-            use UnaryRmROpcode::*;
-            let prefix = match size {
-                OperandSize::Size16 => match op {
-                    Bsr | Bsf => LegacyPrefixes::_66,
-                    Lzcnt | Tzcnt | Popcnt => LegacyPrefixes::_66F3,
-                },
-                OperandSize::Size32 | OperandSize::Size64 => match op {
-                    Bsr | Bsf => LegacyPrefixes::None,
-                    Lzcnt | Tzcnt | Popcnt => LegacyPrefixes::_F3,
-                },
-                _ => unreachable!(),
-            };
-
-            let (opcode, num_opcodes) = match op {
-                Bsr => (0x0fbd, 2),
-                Bsf => (0x0fbc, 2),
-                Lzcnt => (0x0fbd, 2),
-                Tzcnt => (0x0fbc, 2),
-                Popcnt => (0x0fb8, 2),
-            };
-
-            match src.clone().into() {
-                RegMem::Reg { reg: src } => {
-                    emit_std_reg_reg(sink, prefix, opcode, num_opcodes, dst, src, rex_flags);
-                }
-                RegMem::Mem { addr: src } => {
-                    let amode = src.finalize(state.frame_layout(), sink).clone();
-                    emit_std_reg_mem(sink, prefix, opcode, num_opcodes, dst, &amode, rex_flags, 0);
-                }
-            }
-        }
-
         Inst::UnaryRmRVex { size, op, src, dst } => {
             let dst = dst.to_reg().to_reg();
             let src = match src.clone().to_reg_mem().clone() {

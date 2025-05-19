@@ -46,6 +46,12 @@ impl<R: AsReg> AsMut<R> for Gpr<R> {
     }
 }
 
+impl<R: AsReg> From<R> for Gpr<R> {
+    fn from(reg: R) -> Gpr<R> {
+        Gpr(reg)
+    }
+}
+
 /// A single x64 register encoding can access a different number of bits.
 #[derive(Copy, Clone, Debug)]
 pub enum Size {
@@ -93,6 +99,12 @@ impl<R: AsReg> NonRspGpr<R> {
 impl<R: AsReg> AsMut<R> for NonRspGpr<R> {
     fn as_mut(&mut self) -> &mut R {
         &mut self.0
+    }
+}
+
+impl<R: AsReg> From<R> for NonRspGpr<R> {
+    fn from(reg: R) -> NonRspGpr<R> {
+        NonRspGpr(reg)
     }
 }
 

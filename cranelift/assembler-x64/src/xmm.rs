@@ -47,6 +47,12 @@ impl<R: AsReg> AsMut<R> for Xmm<R> {
     }
 }
 
+impl<R: AsReg> From<R> for Xmm<R> {
+    fn from(reg: R) -> Xmm<R> {
+        Xmm(reg)
+    }
+}
+
 /// Encode xmm registers.
 pub mod enc {
     pub const XMM0: u8 = 0;

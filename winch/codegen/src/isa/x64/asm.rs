@@ -1395,17 +1395,19 @@ impl Assembler {
         });
     }
 
-    pub fn popcnt(&mut self, src: Reg, size: OperandSize) {
+    pub fn popcnt(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
         assert!(
             self.isa_flags.has_popcnt() && self.isa_flags.has_sse42(),
             "Requires has_popcnt and has_sse42 flags"
         );
-        self.emit(Inst::UnaryRmR {
-            size: size.into(),
-            op: args::UnaryRmROpcode::Popcnt,
-            src: src.into(),
-            dst: src.into(),
-        });
+        let dst = WritableGpr::from_reg(dst.to_reg().into());
+        let inst = match size {
+            OperandSize::S16 => asm::inst::popcntw_rm::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::popcntl_rm::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::popcntq_rm::new(dst, src).into(),
+            OperandSize::S8 | OperandSize::S128 => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Emit a test instruction with two register operands.
@@ -1455,35 +1457,41 @@ impl Assembler {
     /// Requires `has_lzcnt` flag.
     pub fn lzcnt(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
         assert!(self.isa_flags.has_lzcnt(), "Requires has_lzcnt flag");
-        self.emit(Inst::UnaryRmR {
-            size: size.into(),
-            op: args::UnaryRmROpcode::Lzcnt,
-            src: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst = WritableGpr::from_reg(dst.to_reg().into());
+        let inst = match size {
+            OperandSize::S16 => asm::inst::lzcntw_rm::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::lzcntl_rm::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::lzcntq_rm::new(dst, src).into(),
+            OperandSize::S8 | OperandSize::S128 => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Store the count of trailing zeroes in src in dst.
     /// Requires `has_bmi1` flag.
     pub fn tzcnt(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
         assert!(self.isa_flags.has_bmi1(), "Requires has_bmi1 flag");
-        self.emit(Inst::UnaryRmR {
-            size: size.into(),
-            op: args::UnaryRmROpcode::Tzcnt,
-            src: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst = WritableGpr::from_reg(dst.to_reg().into());
+        let inst = match size {
+            OperandSize::S16 => asm::inst::tzcntw_a::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::tzcntl_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::tzcntq_a::new(dst, src).into(),
+            OperandSize::S8 | OperandSize::S128 => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Stores position of the most significant bit set in src in dst.
     /// Zero flag is set if src is equal to 0.
     pub fn bsr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::UnaryRmR {
-            size: size.into(),
-            op: args::UnaryRmROpcode::Bsr,
-            src: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst: WritableGpr = WritableGpr::from_reg(dst.to_reg().into());
+        let inst = match size {
+            OperandSize::S16 => asm::inst::bsrw_rm::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::bsrl_rm::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::bsrq_rm::new(dst, src).into(),
+            OperandSize::S8 | OperandSize::S128 => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Performs integer negation on `src` and places result in `dst`.
@@ -1505,12 +1513,14 @@ impl Assembler {
     /// Stores position of the least significant bit set in src in dst.
     /// Zero flag is set if src is equal to 0.
     pub fn bsf(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::UnaryRmR {
-            size: size.into(),
-            op: args::UnaryRmROpcode::Bsf,
-            src: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst: WritableGpr = WritableGpr::from_reg(dst.to_reg().into());
+        let inst = match size {
+            OperandSize::S16 => asm::inst::bsfw_rm::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::bsfl_rm::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::bsfq_rm::new(dst, src).into(),
+            OperandSize::S8 | OperandSize::S128 => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Performs float addition on src and dst and places result in dst.

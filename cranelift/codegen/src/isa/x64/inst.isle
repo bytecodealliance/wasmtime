@@ -22,13 +22,6 @@
                   (src2 GprMem)
                   (dst WritableGpr))
 
-       ;; Instructions on general-purpose registers that only read src and
-       ;; defines dst (dst is not modified). `bsr`, etc.
-       (UnaryRmR (size OperandSize) ;; 2, 4, or 8
-                 (op UnaryRmROpcode)
-                 (src GprMem)
-                 (dst WritableGpr))
-
        ;; Same as `UnaryRmR` but with the VEX prefix for BMI1 instructions.
        (UnaryRmRVex (size OperandSize)
                     (op UnaryRmRVexOpcode)
@@ -2141,13 +2134,6 @@
 (rule (xmm_rmr_vex3 op src1 src2 src3)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmRVex3 op src1 src2 src3 dst))))
-        dst))
-
-;; Helper for creating `MInst.UnaryRmR` instructions.
-(decl unary_rm_r (UnaryRmROpcode Gpr OperandSize) Gpr)
-(rule (unary_rm_r op src size)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.UnaryRmR size op src dst))))
         dst))
 
 ;; Helper for creating `MInst.UnaryRmRVex` instructions.
@@ -4502,22 +4488,22 @@
       (SideEffectNoResult.Inst (MInst.Hlt)))
 
 ;; Helper for creating `lzcnt` instructions.
-(decl x64_lzcnt (Type Gpr) Gpr)
-(rule (x64_lzcnt ty src)
-      (unary_rm_r (UnaryRmROpcode.Lzcnt) src (operand_size_of_type_32_64 ty)))
+(decl x64_lzcnt (Type GprMem) Gpr)
+(rule (x64_lzcnt $I16 src) (x64_lzcntw_rm src))
+(rule (x64_lzcnt $I32 src) (x64_lzcntl_rm src))
+(rule (x64_lzcnt $I64 src) (x64_lzcntq_rm src))
 
 ;; Helper for creating `tzcnt` instructions.
-(decl x64_tzcnt (Type Gpr) Gpr)
-(rule (x64_tzcnt ty src)
-      (unary_rm_r (UnaryRmROpcode.Tzcnt) src (operand_size_of_type_32_64 ty)))
+(decl x64_tzcnt (Type GprMem) Gpr)
+(rule (x64_tzcnt $I16 src) (x64_tzcntw_a src))
+(rule (x64_tzcnt $I32 src) (x64_tzcntl_a src))
+(rule (x64_tzcnt $I64 src) (x64_tzcntq_a src))
 
 ;; Helper for creating `bsr` instructions.
-(decl x64_bsr (Type Gpr) ProducesFlags)
-(rule (x64_bsr ty src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (inst MInst (MInst.UnaryRmR size (UnaryRmROpcode.Bsr) src dst)))
-        (ProducesFlags.ProducesFlagsReturnsReg inst dst)))
+(decl x64_bsr (Type GprMem) ProducesFlags)
+(rule (x64_bsr $I16 src) (asm_produce_flags (x64_bsrw_rm_raw src)))
+(rule (x64_bsr $I32 src) (asm_produce_flags (x64_bsrl_rm_raw src)))
+(rule (x64_bsr $I64 src) (asm_produce_flags (x64_bsrq_rm_raw src)))
 
 ;; Helper for creating `bsr + cmov` instruction pairs that produce the
 ;; result of the `bsr`, or `alt` if the input was zero.
@@ -4532,12 +4518,10 @@
         (with_flags_reg (produces_flags_ignore bsr) cmove)))
 
 ;; Helper for creating `bsf` instructions.
-(decl x64_bsf (Type Gpr) ProducesFlags)
-(rule (x64_bsf ty src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (inst MInst (MInst.UnaryRmR size (UnaryRmROpcode.Bsf) src dst)))
-        (ProducesFlags.ProducesFlagsReturnsReg inst dst)))
+(decl x64_bsf (Type GprMem) ProducesFlags)
+(rule (x64_bsf $I16 src) (asm_produce_flags (x64_bsfw_rm_raw src)))
+(rule (x64_bsf $I32 src) (asm_produce_flags (x64_bsfl_rm_raw src)))
+(rule (x64_bsf $I64 src) (asm_produce_flags (x64_bsfq_rm_raw src)))
 
 ;; Helper for creating `bsf + cmov` instruction pairs that produce the
 ;; result of the `bsf`, or `alt` if the input was zero.
@@ -4590,9 +4574,10 @@
                           imm))
 
 ;; Helper for creating `popcnt` instructions.
-(decl x64_popcnt (Type Gpr) Gpr)
-(rule (x64_popcnt ty src)
-      (unary_rm_r (UnaryRmROpcode.Popcnt) src (operand_size_of_type_32_64 ty)))
+(decl x64_popcnt (Type GprMem) Gpr)
+(rule (x64_popcnt $I16 src) (x64_popcntw_rm src))
+(rule (x64_popcnt $I32 src) (x64_popcntl_rm src))
+(rule (x64_popcnt $I64 src) (x64_popcntq_rm src))
 
 ;; Helper for creating `minss` instructions.
 (decl x64_minss (Xmm XmmMem) Xmm)
