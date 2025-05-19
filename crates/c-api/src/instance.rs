@@ -1,6 +1,7 @@
 use crate::{
-    wasm_extern_t, wasm_extern_vec_t, wasm_module_t, wasm_store_t, wasm_trap_t, wasmtime_error_t,
-    wasmtime_extern_t, wasmtime_module_t, WasmStoreRef, WasmtimeStoreContextMut, WasmtimeStoreData,
+    WasmStoreRef, WasmtimeStoreContextMut, WasmtimeStoreData, wasm_extern_t, wasm_extern_vec_t,
+    wasm_module_t, wasm_store_t, wasm_trap_t, wasmtime_error_t, wasmtime_extern_t,
+    wasmtime_module_t,
 };
 use std::mem::MaybeUninit;
 use wasmtime::{Instance, InstancePre, Trap};

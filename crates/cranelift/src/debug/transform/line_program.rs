@@ -1,7 +1,7 @@
 use super::address_transform::AddressTransform;
 use super::{Reader, TransformError};
-use anyhow::{bail, Error};
-use gimli::{write, DebugLineOffset, LineEncoding, Unit};
+use anyhow::{Error, bail};
+use gimli::{DebugLineOffset, LineEncoding, Unit, write};
 use wasmtime_environ::DefinedFuncIndex;
 
 #[derive(Debug)]

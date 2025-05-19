@@ -98,12 +98,12 @@
 //! registers. In some cases this is an extension of the base system
 //! ABI. See each platform's `abi.rs` implementation for details.
 
+use crate::CodegenError;
 use crate::entity::SecondaryMap;
 use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, ExceptionTag, Signature};
 use crate::isa::TargetIsa;
 use crate::settings::ProbestackStrategy;
-use crate::CodegenError;
 use crate::{ir, isa};
 use crate::{machinst::*, trace};
 use alloc::boxed::Box;
@@ -2408,11 +2408,10 @@ impl<T> CallInfo<T> {
 
         let temp = M::retval_temp_reg(self.callee_conv);
         // The temporary must be noted as clobbered.
-        debug_assert!(M::get_regs_clobbered_by_call(
-            self.callee_conv,
-            self.try_call_info.is_some()
-        )
-        .contains(PReg::from(temp.to_reg().to_real_reg().unwrap())));
+        debug_assert!(
+            M::get_regs_clobbered_by_call(self.callee_conv, self.try_call_info.is_some())
+                .contains(PReg::from(temp.to_reg().to_real_reg().unwrap()))
+        );
 
         for CallRetPair { vreg, location } in &self.defs {
             match location {

@@ -21,8 +21,8 @@ use crate::runtime::vm::{GcHeap, GcRuntime};
 
 #[cfg(feature = "component-model")]
 use wasmtime_environ::{
-    component::{Component, VMComponentOffsets},
     StaticModuleIndex,
+    component::{Component, VMComponentOffsets},
 };
 
 mod on_demand;

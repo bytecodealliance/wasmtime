@@ -2,10 +2,10 @@
 //!
 //! [`wasi-threads`]: https://github.com/WebAssembly/wasi-threads
 
-use anyhow::{anyhow, Result};
-use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::atomic::{AtomicI32, Ordering};
+use anyhow::{Result, anyhow};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI32, Ordering};
 use std::thread;
 use wasmtime::{Caller, ExternType, InstancePre, Linker, Module, SharedMemory, Store};
 
@@ -38,11 +38,15 @@ impl<T: Clone + Send + 'static> WasiThreadsCtx<T> {
         // As defined in the wasi-threads specification, returning a negative
         // result here indicates to the guest module that the spawn failed.
         if !has_entry_point(instance_pre.module()) {
-            log::error!("failed to find a wasi-threads entry point function; expected an export with name: {WASI_ENTRY_POINT}");
+            log::error!(
+                "failed to find a wasi-threads entry point function; expected an export with name: {WASI_ENTRY_POINT}"
+            );
             return Ok(-1);
         }
         if !has_correct_signature(instance_pre.module()) {
-            log::error!("the exported entry point function has an incorrect signature: expected `(i32, i32) -> ()`");
+            log::error!(
+                "the exported entry point function has an incorrect signature: expected `(i32, i32) -> ()`"
+            );
             return Ok(-1);
         }
 

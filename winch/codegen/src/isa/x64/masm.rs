@@ -4,43 +4,45 @@ use super::{
     asm::{Assembler, PatchableAddToReg, VcmpKind, VcvtKind, VroundMode},
     regs::{self, rbp, rsp},
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 
 use crate::masm::{
     DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LaneSelector,
     LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind,
-    RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode, TruncKind, V128AbsKind,
-    V128AddKind, V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind, V128MaxKind,
-    V128MinKind, V128MulKind, V128NarrowKind, V128NegKind, V128SubKind, V128TruncKind,
-    VectorCompareKind, VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TRUSTED_FLAGS, TrapCode, TruncKind,
+    UNTRUSTED_FLAGS, V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind, V128ExtMulKind,
+    V128ExtendKind, V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind, V128NegKind,
+    V128SubKind, V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
 };
 use crate::{
-    abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
-    codegen::{ptr_type_from_ptr_size, CodeGenContext, CodeGenError, Emission, FuncEnv},
+    abi::{self, LocalSlot, align_to, calculate_frame_adjustment},
+    codegen::{CodeGenContext, CodeGenError, Emission, FuncEnv, ptr_type_from_ptr_size},
     stack::{TypedReg, Val},
 };
 use crate::{
-    abi::{vmctx, ABI},
+    abi::{ABI, vmctx},
     masm::{SPOffset, StackSlot},
 };
 use crate::{
     isa::{
-        reg::{writable, Reg, RegClass, WritableReg},
         CallingConvention,
+        reg::{Reg, RegClass, WritableReg, writable},
     },
     masm::CalleeKind,
 };
 use cranelift_codegen::{
+    Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
     ir::{MemFlags, RelSourceLoc, SourceLoc},
     isa::{
         unwind::UnwindInst,
         x64::{
-            args::{Avx512Opcode, AvxOpcode, FenceKind, CC},
-            settings as x64_settings, AtomicRmwSeqOp,
+            AtomicRmwSeqOp,
+            args::{Avx512Opcode, AvxOpcode, CC, FenceKind},
+            settings as x64_settings,
         },
     },
-    settings, Final, MachBufferFinalized, MachLabel,
+    settings,
 };
 use wasmtime_cranelift::TRAP_UNREACHABLE;
 use wasmtime_environ::{PtrSize, WasmValType};

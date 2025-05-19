@@ -2,7 +2,7 @@
 
 use crate::runone::FileUpdate;
 use anyhow::Context as _;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::settings::{Flags, FlagsOrIsa};

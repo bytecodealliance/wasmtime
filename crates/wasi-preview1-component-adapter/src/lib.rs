@@ -22,7 +22,7 @@ use core::cell::{Cell, RefCell, RefMut, UnsafeCell};
 use core::cmp::min;
 use core::ffi::c_void;
 use core::hint::black_box;
-use core::mem::{self, align_of, forget, size_of, ManuallyDrop, MaybeUninit};
+use core::mem::{self, ManuallyDrop, MaybeUninit, align_of, forget, size_of};
 use core::num::NonZeroUsize;
 use core::ops::{Deref, DerefMut};
 use core::ptr::{self, null_mut};
@@ -2580,7 +2580,7 @@ impl BlockingMode {
                         Ok(()) => {}
                         Err(streams::StreamError::Closed) => return Err(ERRNO_IO),
                         Err(streams::StreamError::LastOperationFailed(e)) => {
-                            return Err(stream_error_to_errno(e))
+                            return Err(stream_error_to_errno(e));
                         }
                     }
                 }
@@ -2592,7 +2592,7 @@ impl BlockingMode {
                     Ok(n) => n,
                     Err(streams::StreamError::Closed) => 0,
                     Err(streams::StreamError::LastOperationFailed(e)) => {
-                        return Err(stream_error_to_errno(e))
+                        return Err(stream_error_to_errno(e));
                     }
                 };
 
@@ -2602,7 +2602,7 @@ impl BlockingMode {
                     Ok(_) => {}
                     Err(streams::StreamError::Closed) => return Ok(0),
                     Err(streams::StreamError::LastOperationFailed(e)) => {
-                        return Err(stream_error_to_errno(e))
+                        return Err(stream_error_to_errno(e));
                     }
                 }
 
@@ -2610,7 +2610,7 @@ impl BlockingMode {
                     Ok(_) => {}
                     Err(streams::StreamError::Closed) => return Ok(0),
                     Err(streams::StreamError::LastOperationFailed(e)) => {
-                        return Err(stream_error_to_errno(e))
+                        return Err(stream_error_to_errno(e));
                     }
                 }
 

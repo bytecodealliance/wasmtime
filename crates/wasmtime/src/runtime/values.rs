@@ -1,8 +1,8 @@
 use crate::runtime::vm::TableElement;
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
-    prelude::*, AnyRef, ArrayRef, AsContext, AsContextMut, ExternRef, Func, HeapType, RefType,
-    Rooted, RootedGcRefImpl, StructRef, ValType, V128,
+    AnyRef, ArrayRef, AsContext, AsContextMut, ExternRef, Func, HeapType, RefType, Rooted,
+    RootedGcRefImpl, StructRef, V128, ValType, prelude::*,
 };
 use core::ptr;
 

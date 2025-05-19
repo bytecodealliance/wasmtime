@@ -8,13 +8,13 @@
 //! - ensuring alignment of constants within the pool,
 //! - bucketing constants by size.
 
-use crate::ir::immediates::{Ieee128, IntoBytes, V128Imm};
 use crate::ir::Constant;
+use crate::ir::immediates::{Ieee128, IntoBytes, V128Imm};
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::fmt;
 use core::slice::Iter;
-use core::str::{from_utf8, FromStr};
+use core::str::{FromStr, from_utf8};
 use cranelift_entity::EntityRef;
 
 #[cfg(feature = "enable-serde")]
@@ -478,7 +478,9 @@ mod tests {
         let constant = ConstantData::from(value);
         assert_eq!(
             constant.as_slice(),
-            &[0xf, 0xe, 0xd, 0xc, 0xb, 0xa, 0x9, 0x8, 0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0x0]
+            &[
+                0xf, 0xe, 0xd, 0xc, 0xb, 0xa, 0x9, 0x8, 0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0x0
+            ]
         );
         assert_eq!(Ieee128::try_from(&constant).unwrap().bits(), value.bits());
     }

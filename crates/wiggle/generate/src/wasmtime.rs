@@ -1,7 +1,7 @@
+use crate::CodegenSettings;
 use crate::config::Asyncness;
 use crate::funcs::func_bounds;
 use crate::names;
-use crate::CodegenSettings;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
 use std::collections::HashSet;

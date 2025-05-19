@@ -1,8 +1,8 @@
 use crate::runtime::vm::{GcStore, VMGcRef};
 use crate::{
+    AsContext, AsContextMut, GcRef, Result, RootedGcRef,
     runtime::Uninhabited,
     store::{AutoAssertNoGc, StoreOpaque},
-    AsContext, AsContextMut, GcRef, Result, RootedGcRef,
 };
 use core::fmt::{self, Debug};
 use core::hash::{Hash, Hasher};

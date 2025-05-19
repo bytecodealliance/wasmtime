@@ -8,11 +8,11 @@ use crate::value::{DataValueExt, ValueConversionKind, ValueError, ValueResult};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::{
-    types, AbiParam, AtomicRmwOp, Block, BlockArg, BlockCall, Endianness, ExternalName, FuncRef,
-    Function, InstructionData, MemFlags, Opcode, TrapCode, Type, Value as ValueRef,
+    AbiParam, AtomicRmwOp, Block, BlockArg, BlockCall, Endianness, ExternalName, FuncRef, Function,
+    InstructionData, MemFlags, Opcode, TrapCode, Type, Value as ValueRef, types,
 };
 use log::trace;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::fmt::Debug;
 use std::ops::RangeFrom;
 use thiserror::Error;
@@ -105,12 +105,24 @@ where
                     .constants
                     .get(constant_handle);
                 match (ctrl_ty.bytes(), opcode) {
-                    (_, Opcode::F128const) => DataValue::F128(buffer.try_into().expect("a 16-byte data buffer")),
-                    (16, Opcode::Vconst) => DataValue::V128(buffer.as_slice().try_into().expect("a 16-byte data buffer")),
-                    (8, Opcode::Vconst) => DataValue::V64(buffer.as_slice().try_into().expect("an 8-byte data buffer")),
-                    (4, Opcode::Vconst) => DataValue::V32(buffer.as_slice().try_into().expect("a 4-byte data buffer")),
-                    (2, Opcode::Vconst) => DataValue::V16(buffer.as_slice().try_into().expect("a 2-byte data buffer")),
-                    (length, opcode) => panic!("unexpected UnaryConst controlling type size {length} for opcode {opcode:?}"),
+                    (_, Opcode::F128const) => {
+                        DataValue::F128(buffer.try_into().expect("a 16-byte data buffer"))
+                    }
+                    (16, Opcode::Vconst) => DataValue::V128(
+                        buffer.as_slice().try_into().expect("a 16-byte data buffer"),
+                    ),
+                    (8, Opcode::Vconst) => {
+                        DataValue::V64(buffer.as_slice().try_into().expect("an 8-byte data buffer"))
+                    }
+                    (4, Opcode::Vconst) => {
+                        DataValue::V32(buffer.as_slice().try_into().expect("a 4-byte data buffer"))
+                    }
+                    (2, Opcode::Vconst) => {
+                        DataValue::V16(buffer.as_slice().try_into().expect("a 2-byte data buffer"))
+                    }
+                    (length, opcode) => panic!(
+                        "unexpected UnaryConst controlling type size {length} for opcode {opcode:?}"
+                    ),
                 }
             }
             InstructionData::Shuffle { imm, .. } => {

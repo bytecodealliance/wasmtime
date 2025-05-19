@@ -470,12 +470,12 @@ where
             SendState::Permitted(_) => {
                 return Err(SocketError::trap(anyhow::anyhow!(
                     "unpermitted: argument exceeds permitted size"
-                )))
+                )));
             }
             SendState::Idle | SendState::Waiting => {
                 return Err(SocketError::trap(anyhow::anyhow!(
                     "unpermitted: must call check-send first"
-                )))
+                )));
             }
         }
 
@@ -545,6 +545,7 @@ pub mod sync {
     use wasmtime::component::Resource;
 
     use crate::p2::{
+        SocketError, WasiImpl, WasiView,
         bindings::{
             sockets::{
                 network::Network,
@@ -562,7 +563,6 @@ pub mod sync {
                 UdpSocket,
             },
         },
-        SocketError, WasiImpl, WasiView,
     };
     use crate::runtime::in_tokio;
 

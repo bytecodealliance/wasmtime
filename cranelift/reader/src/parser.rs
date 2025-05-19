@@ -11,7 +11,7 @@ use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType, MemoryType};
 use cranelift_codegen::ir::immediates::{
-    Ieee128, Ieee16, Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64,
+    Ieee16, Ieee32, Ieee64, Ieee128, Imm64, Offset32, Uimm32, Uimm64,
 };
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::pcc::{BaseExpr, Expr, Fact};
@@ -19,11 +19,11 @@ use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, UserExternalNameRef};
 
 use cranelift_codegen::ir::{
-    types, AbiParam, ArgumentExtension, ArgumentPurpose, Block, BlockArg, Constant, ConstantData,
+    AbiParam, ArgumentExtension, ArgumentPurpose, Block, BlockArg, Constant, ConstantData,
     DynamicStackSlot, DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef,
     Function, GlobalValue, GlobalValueData, JumpTableData, MemFlags, MemoryTypeData,
     MemoryTypeField, Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind,
-    UserFuncName, Value,
+    UserFuncName, Value, types,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -1066,11 +1066,7 @@ impl<'a> Parser<'a> {
         let mut flag_builder = settings::builder();
 
         let bool_to_str = |val: bool| {
-            if val {
-                "true"
-            } else {
-                "false"
-            }
+            if val { "true" } else { "false" }
         };
 
         // default to enabling cfg info
@@ -1165,7 +1161,7 @@ impl<'a> Parser<'a> {
                     return err!(
                         self.loc,
                         format!("Expected feature flag string, got {:?}", tok)
-                    )
+                    );
                 }
             }
             self.consume();
@@ -1786,7 +1782,7 @@ impl<'a> Parser<'a> {
                     self.loc,
                     "Unknown memory type declaration kind '{:?}'",
                     other
-                )
+                );
             }
         };
 
@@ -2926,7 +2922,7 @@ impl<'a> Parser<'a> {
                     _ => {
                         return Err(
                             self.error("vectors larger than 128 bits are not currently supported")
-                        )
+                        );
                     }
                 }
             }
@@ -2959,7 +2955,7 @@ impl<'a> Parser<'a> {
                         return err!(
                             self.loc,
                             "expected one of the following type: i8, i16, i32 or i64"
-                        )
+                        );
                     }
                 };
                 InstructionData::UnaryImm {
@@ -3711,20 +3707,24 @@ mod tests {
 
     #[test]
     fn isa_spec() {
-        assert!(parse_test(
-            "target
+        assert!(
+            parse_test(
+                "target
                             function %foo() system_v {}",
-            ParseOptions::default()
-        )
-        .is_err());
+                ParseOptions::default()
+            )
+            .is_err()
+        );
 
-        assert!(parse_test(
-            "target x86_64
+        assert!(
+            parse_test(
+                "target x86_64
                             set enable_float=false
                             function %foo() system_v {}",
-            ParseOptions::default()
-        )
-        .is_err());
+                ParseOptions::default()
+            )
+            .is_err()
+        );
 
         match parse_test(
             "set enable_float=false
@@ -3901,19 +3901,13 @@ mod tests {
     #[test]
     fn uimm128() {
         macro_rules! parse_as_constant_data {
-            ($text:expr, $type:expr) => {{
-                Parser::new($text).parse_literals_to_constant_data($type)
-            }};
+            ($text:expr, $type:expr) => {{ Parser::new($text).parse_literals_to_constant_data($type) }};
         }
         macro_rules! can_parse_as_constant_data {
-            ($text:expr, $type:expr) => {{
-                assert!(parse_as_constant_data!($text, $type).is_ok())
-            }};
+            ($text:expr, $type:expr) => {{ assert!(parse_as_constant_data!($text, $type).is_ok()) }};
         }
         macro_rules! cannot_parse_as_constant_data {
-            ($text:expr, $type:expr) => {{
-                assert!(parse_as_constant_data!($text, $type).is_err())
-            }};
+            ($text:expr, $type:expr) => {{ assert!(parse_as_constant_data!($text, $type).is_err()) }};
         }
 
         can_parse_as_constant_data!("1 2 3 4", I32X4);
@@ -3936,7 +3930,9 @@ mod tests {
             .unwrap();
         assert_eq!(
             c.into_vec(),
-            [0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0]
+            [
+                0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0
+            ]
         )
     }
 
@@ -3951,9 +3947,11 @@ mod tests {
         );
 
         // Only parse hexadecimal constants:
-        assert!(Parser::new("228")
-            .match_hexadecimal_constant("err message")
-            .is_err());
+        assert!(
+            Parser::new("228")
+                .match_hexadecimal_constant("err message")
+                .is_err()
+        );
     }
 
     #[test]

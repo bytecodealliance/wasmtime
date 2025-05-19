@@ -141,7 +141,7 @@ use clap::Parser;
 use std::os::raw::{c_int, c_void};
 use std::slice;
 use std::{env, path::PathBuf};
-use wasi_common::{sync::WasiCtxBuilder, I32Exit, WasiCtx};
+use wasi_common::{I32Exit, WasiCtx, sync::WasiCtxBuilder};
 use wasmtime::{Engine, Instance, Linker, Module, Store};
 use wasmtime_cli_flags::CommonOptions;
 

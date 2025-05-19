@@ -197,7 +197,7 @@ pub type SuccIter<'a> = bforest::SetIter<'a, Block>;
 mod tests {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::{types, InstBuilder};
+    use crate::ir::{InstBuilder, types};
     use alloc::vec::Vec;
 
     #[test]

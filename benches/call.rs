@@ -1,5 +1,5 @@
 use criterion::measurement::WallTime;
-use criterion::{criterion_group, criterion_main, BenchmarkGroup, Criterion};
+use criterion::{BenchmarkGroup, Criterion, criterion_group, criterion_main};
 use std::fmt::Debug;
 use std::future::Future;
 use std::pin::Pin;

@@ -1,6 +1,6 @@
 use crate::clocks::{WasiClocks, WasiMonotonicClock, WasiSystemClock};
 use cap_std::time::{Duration, Instant, SystemTime};
-use cap_std::{ambient_authority, AmbientAuthority};
+use cap_std::{AmbientAuthority, ambient_authority};
 use cap_time_ext::{MonotonicClockExt, SystemClockExt};
 
 pub struct SystemClock(cap_std::time::SystemClock);

@@ -10,10 +10,10 @@
 //! available on Windows.
 
 #[cfg(has_native_signals)]
-use crate::prelude::*;
-#[cfg(has_native_signals)]
 use crate::AsContextMut;
 use crate::Store;
+#[cfg(has_native_signals)]
+use crate::prelude::*;
 #[cfg(has_native_signals)]
 use windows_sys::Win32::System::Diagnostics::Debug::EXCEPTION_POINTERS;
 

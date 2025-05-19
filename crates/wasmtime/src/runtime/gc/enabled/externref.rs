@@ -4,9 +4,9 @@ use super::{AnyRef, RootedGcRefImpl};
 use crate::prelude::*;
 use crate::runtime::vm::VMGcRef;
 use crate::{
-    store::{AutoAssertNoGc, StoreOpaque},
     AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType,
     Result, Rooted, StoreContext, StoreContextMut, ValRaw, ValType, WasmTy,
+    store::{AutoAssertNoGc, StoreOpaque},
 };
 use core::any::Any;
 use core::mem;

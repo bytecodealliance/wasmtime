@@ -1,18 +1,19 @@
 //! Implementation of a standard Pulley ABI.
 
-use super::{inst::*, PulleyFlags, PulleyTargetKind};
+use super::{PulleyFlags, PulleyTargetKind, inst::*};
 use crate::isa::pulley_shared::PointerWidth;
 use crate::{
-    ir::{self, types::*, MemFlags, Signature},
+    CodegenResult,
+    ir::{self, MemFlags, Signature, types::*},
     isa,
     machinst::*,
-    settings, CodegenResult,
+    settings,
 };
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use cranelift_bitset::ScalarBitSet;
 use regalloc2::{MachineEnv, PReg, PRegSet};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::borrow::ToOwned;
 use std::sync::OnceLock;
 

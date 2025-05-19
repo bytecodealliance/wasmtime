@@ -1,11 +1,11 @@
 //! This module defines s390x-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::{types, ExternalName, Type};
+use crate::ir::{ExternalName, Type, types};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
-use crate::{settings, CodegenError, CodegenResult};
+use crate::{CodegenError, CodegenResult, settings};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use smallvec::SmallVec;
@@ -3293,7 +3293,9 @@ impl Inst {
             } => {
                 let probe_count = pretty_print_reg(probe_count.to_reg());
                 let stack_reg = pretty_print_reg(stack_reg());
-                format!("0: aghi {stack_reg}, -{guard_size} ; mvi 0({stack_reg}), 0 ; brct {probe_count}, 0b")
+                format!(
+                    "0: aghi {stack_reg}, -{guard_size} ; mvi 0({stack_reg}), 0 ; brct {probe_count}, 0b"
+                )
             }
             &Inst::Loop { ref body, cond } => {
                 let body = body

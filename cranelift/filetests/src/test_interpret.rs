@@ -14,7 +14,7 @@ use cranelift_codegen::settings::Flags;
 use cranelift_interpreter::environment::FunctionStore;
 use cranelift_interpreter::interpreter::{Interpreter, InterpreterState, LibCallValues};
 use cranelift_interpreter::step::ControlFlow;
-use cranelift_reader::{parse_run_command, Details, TestCommand, TestFile};
+use cranelift_reader::{Details, TestCommand, TestFile, parse_run_command};
 use log::{info, trace};
 use smallvec::smallvec;
 use std::borrow::Cow;

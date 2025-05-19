@@ -1,6 +1,6 @@
+use crate::Error;
 use crate::clocks::WasiMonotonicClock;
 use crate::file::WasiFile;
-use crate::Error;
 use cap_std::time::Instant;
 pub mod subscription;
 pub use cap_std::time::Duration;

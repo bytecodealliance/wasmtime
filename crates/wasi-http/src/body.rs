@@ -4,15 +4,15 @@ use crate::{bindings::http::types, types::FieldMap};
 use anyhow::anyhow;
 use bytes::Bytes;
 use http_body::{Body, Frame};
-use http_body_util::combinators::BoxBody;
 use http_body_util::BodyExt;
+use http_body_util::combinators::BoxBody;
 use std::future::Future;
 use std::mem;
 use std::task::{Context, Poll};
 use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
 use wasmtime_wasi::p2::{InputStream, OutputStream, Pollable, StreamError};
-use wasmtime_wasi::runtime::{poll_noop, AbortOnDropJoinHandle};
+use wasmtime_wasi::runtime::{AbortOnDropJoinHandle, poll_noop};
 
 /// Common type for incoming bodies.
 pub type HyperIncomingBody = BoxBody<Bytes, types::ErrorCode>;
@@ -613,9 +613,9 @@ impl OutputStream for BodyWriteStream {
                 if let Some(written) = self.written.as_ref() {
                     if !written.update(len) {
                         let total = written.written();
-                        return Err(StreamError::LastOperationFailed(anyhow!(self
-                            .context
-                            .as_body_size_error(total))));
+                        return Err(StreamError::LastOperationFailed(anyhow!(
+                            self.context.as_body_size_error(total)
+                        )));
                     }
                 }
 

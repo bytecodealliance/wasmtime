@@ -1043,7 +1043,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
     use wasmtime::component::{Component, Linker, Val};
     use wasmtime_test_util::component::FuncExt;
     use wasmtime_test_util::component_fuzz::{
-        TestCase, Type, EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH,
+        EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH, TestCase, Type,
     };
 
     crate::init_fuzzing();

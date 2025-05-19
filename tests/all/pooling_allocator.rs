@@ -1,4 +1,4 @@
-use super::{skip_pooling_allocator_tests, ErrorExt};
+use super::{ErrorExt, skip_pooling_allocator_tests};
 use wasmtime::*;
 
 #[test]

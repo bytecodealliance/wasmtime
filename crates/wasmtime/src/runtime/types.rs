@@ -1,9 +1,9 @@
 use crate::prelude::*;
+use crate::runtime::Memory as RuntimeMemory;
 use crate::runtime::externals::Global as RuntimeGlobal;
 use crate::runtime::externals::Table as RuntimeTable;
-use crate::runtime::Memory as RuntimeMemory;
-use crate::{type_registry::RegisteredType, Engine};
 use crate::{AsContextMut, Extern, Func, Val};
+use crate::{Engine, type_registry::RegisteredType};
 use core::fmt::{self, Display, Write};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes, Table,

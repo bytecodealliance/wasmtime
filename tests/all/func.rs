@@ -1,7 +1,7 @@
 use anyhow::bail;
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
-use std::sync::Arc;
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
@@ -397,31 +397,61 @@ fn func_constructors() {
     Func::wrap(&mut store, || -> i64 { 0 });
     Func::wrap(&mut store, || -> f32 { 0.0 });
     Func::wrap(&mut store, || -> f64 { 0.0 });
-    Func::wrap(&mut store, || -> Rooted<ExternRef> { loop {} });
+    Func::wrap(&mut store, || -> Rooted<ExternRef> {
+        loop {}
+    });
     Func::wrap(&mut store, || -> Option<Rooted<ExternRef>> { None });
-    Func::wrap(&mut store, || -> ManuallyRooted<ExternRef> { loop {} });
+    Func::wrap(&mut store, || -> ManuallyRooted<ExternRef> {
+        loop {}
+    });
     Func::wrap(&mut store, || -> Option<ManuallyRooted<ExternRef>> { None });
-    Func::wrap(&mut store, || -> Rooted<AnyRef> { loop {} });
+    Func::wrap(&mut store, || -> Rooted<AnyRef> {
+        loop {}
+    });
     Func::wrap(&mut store, || -> Option<Rooted<AnyRef>> { None });
-    Func::wrap(&mut store, || -> ManuallyRooted<AnyRef> { loop {} });
+    Func::wrap(&mut store, || -> ManuallyRooted<AnyRef> {
+        loop {}
+    });
     Func::wrap(&mut store, || -> Option<ManuallyRooted<AnyRef>> { None });
-    Func::wrap(&mut store, || -> I31 { loop {} });
+    Func::wrap(&mut store, || -> I31 {
+        loop {}
+    });
     Func::wrap(&mut store, || -> Option<I31> { None });
-    Func::wrap(&mut store, || -> Func { loop {} });
+    Func::wrap(&mut store, || -> Func {
+        loop {}
+    });
     Func::wrap(&mut store, || -> Option<Func> { None });
-    Func::wrap(&mut store, || -> NoFunc { loop {} });
+    Func::wrap(&mut store, || -> NoFunc {
+        loop {}
+    });
     Func::wrap(&mut store, || -> Option<NoFunc> { None });
-    Func::wrap(&mut store, || -> NoExtern { loop {} });
+    Func::wrap(&mut store, || -> NoExtern {
+        loop {}
+    });
     Func::wrap(&mut store, || -> Option<NoExtern> { None });
-    Func::wrap(&mut store, || -> NoneRef { loop {} });
+    Func::wrap(&mut store, || -> NoneRef {
+        loop {}
+    });
     Func::wrap(&mut store, || -> Option<NoneRef> { None });
 
-    Func::wrap(&mut store, || -> Result<()> { loop {} });
-    Func::wrap(&mut store, || -> Result<i32> { loop {} });
-    Func::wrap(&mut store, || -> Result<i64> { loop {} });
-    Func::wrap(&mut store, || -> Result<f32> { loop {} });
-    Func::wrap(&mut store, || -> Result<f64> { loop {} });
-    Func::wrap(&mut store, || -> Result<Rooted<ExternRef>> { loop {} });
+    Func::wrap(&mut store, || -> Result<()> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<i32> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<i64> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<f32> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<f64> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<Rooted<ExternRef>> {
+        loop {}
+    });
     Func::wrap(&mut store, || -> Result<Option<Rooted<ExternRef>>> {
         loop {}
     });
@@ -432,22 +462,48 @@ fn func_constructors() {
         &mut store,
         || -> Result<Option<ManuallyRooted<ExternRef>>> { loop {} },
     );
-    Func::wrap(&mut store, || -> Result<Rooted<AnyRef>> { loop {} });
-    Func::wrap(&mut store, || -> Result<Option<Rooted<AnyRef>>> { loop {} });
-    Func::wrap(&mut store, || -> Result<ManuallyRooted<AnyRef>> { loop {} });
+    Func::wrap(&mut store, || -> Result<Rooted<AnyRef>> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<Option<Rooted<AnyRef>>> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<ManuallyRooted<AnyRef>> {
+        loop {}
+    });
     Func::wrap(&mut store, || -> Result<Option<ManuallyRooted<AnyRef>>> {
         loop {}
     });
-    Func::wrap(&mut store, || -> Result<I31> { loop {} });
-    Func::wrap(&mut store, || -> Result<Option<I31>> { loop {} });
-    Func::wrap(&mut store, || -> Result<Func> { loop {} });
-    Func::wrap(&mut store, || -> Result<Option<Func>> { loop {} });
-    Func::wrap(&mut store, || -> Result<NoFunc> { loop {} });
-    Func::wrap(&mut store, || -> Result<Option<NoFunc>> { loop {} });
-    Func::wrap(&mut store, || -> Result<NoExtern> { loop {} });
-    Func::wrap(&mut store, || -> Result<Option<NoExtern>> { loop {} });
-    Func::wrap(&mut store, || -> Result<NoneRef> { loop {} });
-    Func::wrap(&mut store, || -> Result<Option<NoneRef>> { loop {} });
+    Func::wrap(&mut store, || -> Result<I31> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<Option<I31>> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<Func> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<Option<Func>> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<NoFunc> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<Option<NoFunc>> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<NoExtern> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<Option<NoExtern>> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<NoneRef> {
+        loop {}
+    });
+    Func::wrap(&mut store, || -> Result<Option<NoneRef>> {
+        loop {}
+    });
 }
 
 #[test]
@@ -509,22 +565,30 @@ fn signatures_match() {
     assert_eq!(f.ty(&store).params().len(), 0);
     assert_eq!(f.ty(&store).results().len(), 0);
 
-    let f = Func::wrap(&mut store, || -> i32 { loop {} });
+    let f = Func::wrap(&mut store, || -> i32 {
+        loop {}
+    });
     assert_eq!(f.ty(&store).params().len(), 0);
     assert_eq!(f.ty(&store).results().len(), 1);
     assert!(f.ty(&store).results().nth(0).unwrap().is_i32());
 
-    let f = Func::wrap(&mut store, || -> i64 { loop {} });
+    let f = Func::wrap(&mut store, || -> i64 {
+        loop {}
+    });
     assert_eq!(f.ty(&store).params().len(), 0);
     assert_eq!(f.ty(&store).results().len(), 1);
     assert!(f.ty(&store).results().nth(0).unwrap().is_i64());
 
-    let f = Func::wrap(&mut store, || -> f32 { loop {} });
+    let f = Func::wrap(&mut store, || -> f32 {
+        loop {}
+    });
     assert_eq!(f.ty(&store).params().len(), 0);
     assert_eq!(f.ty(&store).results().len(), 1);
     assert!(f.ty(&store).results().nth(0).unwrap().is_f32());
 
-    let f = Func::wrap(&mut store, || -> f64 { loop {} });
+    let f = Func::wrap(&mut store, || -> f64 {
+        loop {}
+    });
     assert_eq!(f.ty(&store).params().len(), 0);
     assert_eq!(f.ty(&store).results().len(), 1);
     assert!(f.ty(&store).results().nth(0).unwrap().is_f64());
@@ -736,41 +800,71 @@ fn get_from_wrapper() {
     assert!(f.typed::<(i32, i32), ()>(&store).is_err());
     assert!(f.typed::<(i32, i32), i32>(&store).is_err());
 
-    let f = Func::wrap(&mut store, || -> i32 { loop {} });
+    let f = Func::wrap(&mut store, || -> i32 {
+        loop {}
+    });
     assert!(f.typed::<(), i32>(&store).is_ok());
-    let f = Func::wrap(&mut store, || -> f32 { loop {} });
+    let f = Func::wrap(&mut store, || -> f32 {
+        loop {}
+    });
     assert!(f.typed::<(), f32>(&store).is_ok());
-    let f = Func::wrap(&mut store, || -> f64 { loop {} });
+    let f = Func::wrap(&mut store, || -> f64 {
+        loop {}
+    });
     assert!(f.typed::<(), f64>(&store).is_ok());
-    let f = Func::wrap(&mut store, || -> Rooted<ExternRef> { loop {} });
+    let f = Func::wrap(&mut store, || -> Rooted<ExternRef> {
+        loop {}
+    });
     assert!(f.typed::<(), Rooted<ExternRef>>(&store).is_ok());
-    let f = Func::wrap(&mut store, || -> Option<Rooted<ExternRef>> { loop {} });
+    let f = Func::wrap(&mut store, || -> Option<Rooted<ExternRef>> {
+        loop {}
+    });
     assert!(f.typed::<(), Option<Rooted<ExternRef>>>(&store).is_ok());
-    let f = Func::wrap(&mut store, || -> ManuallyRooted<ExternRef> { loop {} });
+    let f = Func::wrap(&mut store, || -> ManuallyRooted<ExternRef> {
+        loop {}
+    });
     assert!(f.typed::<(), ManuallyRooted<ExternRef>>(&store).is_ok());
     let f = Func::wrap(&mut store, || -> Option<ManuallyRooted<ExternRef>> {
         loop {}
     });
-    assert!(f
-        .typed::<(), Option<ManuallyRooted<ExternRef>>>(&store)
-        .is_ok());
-    let f = Func::wrap(&mut store, || -> Rooted<AnyRef> { loop {} });
+    assert!(
+        f.typed::<(), Option<ManuallyRooted<ExternRef>>>(&store)
+            .is_ok()
+    );
+    let f = Func::wrap(&mut store, || -> Rooted<AnyRef> {
+        loop {}
+    });
     assert!(f.typed::<(), Rooted<AnyRef>>(&store).is_ok());
-    let f = Func::wrap(&mut store, || -> Option<Rooted<AnyRef>> { loop {} });
+    let f = Func::wrap(&mut store, || -> Option<Rooted<AnyRef>> {
+        loop {}
+    });
     assert!(f.typed::<(), Option<Rooted<AnyRef>>>(&store).is_ok());
-    let f = Func::wrap(&mut store, || -> ManuallyRooted<AnyRef> { loop {} });
+    let f = Func::wrap(&mut store, || -> ManuallyRooted<AnyRef> {
+        loop {}
+    });
     assert!(f.typed::<(), ManuallyRooted<AnyRef>>(&store).is_ok());
-    let f = Func::wrap(&mut store, || -> Option<ManuallyRooted<AnyRef>> { loop {} });
-    assert!(f
-        .typed::<(), Option<ManuallyRooted<AnyRef>>>(&store)
-        .is_ok());
-    let f = Func::wrap(&mut store, || -> I31 { loop {} });
+    let f = Func::wrap(&mut store, || -> Option<ManuallyRooted<AnyRef>> {
+        loop {}
+    });
+    assert!(
+        f.typed::<(), Option<ManuallyRooted<AnyRef>>>(&store)
+            .is_ok()
+    );
+    let f = Func::wrap(&mut store, || -> I31 {
+        loop {}
+    });
     assert!(f.typed::<(), I31>(&store).is_ok());
-    let f = Func::wrap(&mut store, || -> Option<I31> { loop {} });
+    let f = Func::wrap(&mut store, || -> Option<I31> {
+        loop {}
+    });
     assert!(f.typed::<(), Option<I31>>(&store).is_ok());
-    let f = Func::wrap(&mut store, || -> Func { loop {} });
+    let f = Func::wrap(&mut store, || -> Func {
+        loop {}
+    });
     assert!(f.typed::<(), Func>(&store).is_ok());
-    let f = Func::wrap(&mut store, || -> Option<Func> { loop {} });
+    let f = Func::wrap(&mut store, || -> Option<Func> {
+        loop {}
+    });
     assert!(f.typed::<(), Option<Func>>(&store).is_ok());
 
     let f = Func::wrap(&mut store, |_: i32| {});
@@ -791,9 +885,10 @@ fn get_from_wrapper() {
     let f = Func::wrap(&mut store, |_: ManuallyRooted<ExternRef>| {});
     assert!(f.typed::<ManuallyRooted<ExternRef>, ()>(&store).is_ok());
     let f = Func::wrap(&mut store, |_: Option<ManuallyRooted<ExternRef>>| {});
-    assert!(f
-        .typed::<Option<ManuallyRooted<ExternRef>>, ()>(&store)
-        .is_ok());
+    assert!(
+        f.typed::<Option<ManuallyRooted<ExternRef>>, ()>(&store)
+            .is_ok()
+    );
     let f = Func::wrap(&mut store, |_: Rooted<AnyRef>| {});
     assert!(f.typed::<Rooted<AnyRef>, ()>(&store).is_ok());
     let f = Func::wrap(&mut store, |_: Option<Rooted<AnyRef>>| {});
@@ -801,9 +896,10 @@ fn get_from_wrapper() {
     let f = Func::wrap(&mut store, |_: ManuallyRooted<AnyRef>| {});
     assert!(f.typed::<ManuallyRooted<AnyRef>, ()>(&store).is_ok());
     let f = Func::wrap(&mut store, |_: Option<ManuallyRooted<AnyRef>>| {});
-    assert!(f
-        .typed::<Option<ManuallyRooted<AnyRef>>, ()>(&store)
-        .is_ok());
+    assert!(
+        f.typed::<Option<ManuallyRooted<AnyRef>>, ()>(&store)
+            .is_ok()
+    );
     let f = Func::wrap(&mut store, |_: I31| {});
     assert!(f.typed::<I31, ()>(&store).is_ok());
     let f = Func::wrap(&mut store, |_: Option<I31>| {});
@@ -979,9 +1075,10 @@ fn func_write_nothing() -> anyhow::Result<()> {
     let ty = FuncType::new(store.engine(), None, Some(ValType::I32));
     let f = Func::new(&mut store, ty, |_, _, _| Ok(()));
     let err = f.call(&mut store, &[], &mut [Val::I32(0)]).unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("function attempted to return an incompatible value"));
+    assert!(
+        err.to_string()
+            .contains("function attempted to return an incompatible value")
+    );
     Ok(())
 }
 
@@ -1029,9 +1126,11 @@ fn pass_cross_store_arg(config: &mut Config) -> anyhow::Result<()> {
     let store2_func = Func::wrap(&mut store2, || {});
 
     // Using regular `.call` fails with cross-Store arguments.
-    assert!(store1_func
-        .call(&mut store1, &[Val::FuncRef(Some(store2_func))], &mut [])
-        .is_err());
+    assert!(
+        store1_func
+            .call(&mut store1, &[Val::FuncRef(Some(store2_func))], &mut [])
+            .is_err()
+    );
 
     // And using `.get` followed by a function call also fails with cross-Store
     // arguments.

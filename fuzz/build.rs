@@ -5,7 +5,7 @@ fn main() -> anyhow::Result<()> {
 }
 
 mod component {
-    use anyhow::{anyhow, Context, Error, Result};
+    use anyhow::{Context, Error, Result, anyhow};
     use arbitrary::Unstructured;
     use proc_macro2::TokenStream;
     use quote::quote;
@@ -17,7 +17,7 @@ mod component {
     use std::iter;
     use std::path::PathBuf;
     use std::process::Command;
-    use wasmtime_test_util::component_fuzz::{Declarations, TestCase, Type, MAX_TYPE_DEPTH};
+    use wasmtime_test_util::component_fuzz::{Declarations, MAX_TYPE_DEPTH, TestCase, Type};
 
     pub fn generate_static_api_tests() -> Result<()> {
         println!("cargo:rerun-if-changed=build.rs");

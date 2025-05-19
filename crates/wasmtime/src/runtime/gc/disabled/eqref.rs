@@ -1,6 +1,6 @@
 use crate::{
-    store::StoreOpaque, ArrayRef, AsContext, GcRefImpl, HeapType, ManuallyRooted, Result, Rooted,
-    StructRef, I31,
+    ArrayRef, AsContext, GcRefImpl, HeapType, I31, ManuallyRooted, Result, Rooted, StructRef,
+    store::StoreOpaque,
 };
 
 /// Support for `eqref` disabled at compile time because the `gc` cargo feature

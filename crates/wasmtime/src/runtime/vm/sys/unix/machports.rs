@@ -42,7 +42,7 @@
 
 use crate::runtime::module::lookup_code;
 use crate::runtime::vm::sys::traphandlers::wasmtime_longjmp;
-use crate::runtime::vm::traphandlers::{tls, TrapRegisters};
+use crate::runtime::vm::traphandlers::{TrapRegisters, tls};
 use mach2::exc::*;
 use mach2::exception_types::*;
 use mach2::kern_return::*;

@@ -2,8 +2,8 @@
 
 use crate::async_functions::{CountPending, PollOnce};
 use anyhow::anyhow;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 

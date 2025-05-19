@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::borrow::Cow;
 use std::cell::UnsafeCell;
 use std::fmt;
@@ -577,8 +577,9 @@ pub fn run_in_dummy_executor<F: std::future::Future>(future: F) -> Result<F::Out
     let mut cx = Context::from_waker(&waker);
     match f.as_mut().poll(&mut cx) {
         Poll::Ready(val) => return Ok(val),
-        Poll::Pending =>
-            bail!("Cannot wait on pending future: must enable wiggle \"async\" future and execute on an async Store"),
+        Poll::Pending => bail!(
+            "Cannot wait on pending future: must enable wiggle \"async\" future and execute on an async Store"
+        ),
     }
 
     fn dummy_waker() -> Waker {

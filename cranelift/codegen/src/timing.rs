@@ -117,7 +117,7 @@ pub use enabled::*;
 
 #[cfg(feature = "timing")]
 mod enabled {
-    use super::{DefaultProfiler, Pass, Profiler, DESCRIPTIONS, NUM_PASSES};
+    use super::{DESCRIPTIONS, DefaultProfiler, NUM_PASSES, Pass, Profiler};
     use std::any::Any;
     use std::boxed::Box;
     use std::cell::{Cell, RefCell};

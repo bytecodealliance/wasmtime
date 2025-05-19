@@ -2,7 +2,7 @@
 mod not_for_windows {
     use wasmtime::*;
 
-    use rustix::mm::{mmap_anonymous, mprotect, munmap, MapFlags, MprotectFlags, ProtFlags};
+    use rustix::mm::{MapFlags, MprotectFlags, ProtFlags, mmap_anonymous, mprotect, munmap};
 
     use std::ptr::null_mut;
     use std::sync::{Arc, Mutex};

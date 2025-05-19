@@ -1,9 +1,9 @@
 use crate::prelude::*;
+use crate::runtime::Uninhabited;
 use crate::runtime::vm::{
     ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext,
     VMFuncRef, VMFunctionImport, VMOpaqueContext, VMStoreContext,
 };
-use crate::runtime::Uninhabited;
 use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
 use crate::type_registry::RegisteredType;
 use crate::{
@@ -1339,10 +1339,13 @@ impl Func {
                     let _ = VMArrayCallHostFuncContext::from_opaque(f.as_ref().vmctx.as_non_null());
 
                     let sig = self.type_index(store.store_data());
-                    module.wasm_to_array_trampoline(sig).expect(
-                        "if the wasm is importing a function of a given type, it must have the \
+                    module
+                        .wasm_to_array_trampoline(sig)
+                        .expect(
+                            "if the wasm is importing a function of a given type, it must have the \
                          type's trampoline",
-                    ).into()
+                        )
+                        .into()
                 },
                 array_call: f.as_ref().array_call,
                 vmctx: f.as_ref().vmctx,

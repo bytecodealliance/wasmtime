@@ -1,7 +1,7 @@
 use crate::file::TableFileExt;
 use crate::sched::{
-    subscription::{RwEventFlags, SubscriptionResult},
     Poll, Userdata,
+    subscription::{RwEventFlags, SubscriptionResult},
 };
 use crate::snapshots::preview_1::types as snapshot1_types;
 use crate::snapshots::preview_1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;

@@ -38,9 +38,7 @@ pub(crate) fn clamp_range(
     };
     trace!(
         "clamp_range: fact {:?} from {} to {}",
-        fact,
-        from_bits,
-        to_bits
+        fact, from_bits, to_bits
     );
     Ok(fact
         .and_then(|f| ctx.uextend(&f, from_bits, to_bits))
@@ -66,8 +64,7 @@ pub(crate) fn check_subsumes_optionals(
 ) -> PccResult<()> {
     trace!(
         "checking if derived fact {:?} subsumes stated fact {:?}",
-        subsumer,
-        subsumee
+        subsumer, subsumee
     );
 
     if ctx.subsumes_fact_optionals(subsumer, subsumee) {

@@ -1,4 +1,4 @@
-use crate::subtest::{run_filecheck, Context, SubTest};
+use crate::subtest::{Context, SubTest, run_filecheck};
 use cranelift_codegen::ir::Function;
 use cranelift_reader::TestCommand;
 use std::borrow::Cow;

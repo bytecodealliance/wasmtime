@@ -1,10 +1,10 @@
 //! S390x ISA: binary code emission.
 
 use crate::ir::{self, LibCall, MemFlags, TrapCode};
+use crate::isa::CallConv;
 use crate::isa::s390x::abi::REG_SAVE_AREA_SIZE;
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
-use crate::isa::CallConv;
 use cranelift_control::ControlPlane;
 
 /// Debug macro for testing that a regpair is valid: that the high register is even, and the low

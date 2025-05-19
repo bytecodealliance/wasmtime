@@ -6,8 +6,8 @@
 #![deny(missing_docs)]
 
 pub use crate::error::{Location, ParseError, ParseResult};
-pub use crate::isaspec::{parse_option, parse_options, IsaSpec, ParseOptionError};
-pub use crate::parser::{parse_functions, parse_run_command, parse_test, ParseOptions};
+pub use crate::isaspec::{IsaSpec, ParseOptionError, parse_option, parse_options};
+pub use crate::parser::{ParseOptions, parse_functions, parse_run_command, parse_test};
 pub use crate::run_command::{Comparison, Invocation, RunCommand};
 pub use crate::sourcemap::SourceMap;
 pub use crate::testcommand::{TestCommand, TestOption};

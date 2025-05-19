@@ -234,7 +234,7 @@ impl<'src> Lexer<'src> {
 
                 let num = match (neg, num) {
                     (true, 0x80000000000000000000000000000000) => {
-                        return Err(self.error(start_pos, "integer literal cannot fit in i128"))
+                        return Err(self.error(start_pos, "integer literal cannot fit in i128"));
                     }
                     (true, _) => -(num as i128),
                     (false, _) => num as i128,
@@ -309,7 +309,9 @@ mod test {
     #[test]
     fn lexer_basic() {
         assert_eq!(
-            lex(";; comment\n; another\r\n   \t(one two three (; block comment ;) 23 (; nested (; block ;) comment ;) -568  )\n"),
+            lex(
+                ";; comment\n; another\r\n   \t(one two three (; block comment ;) 23 (; nested (; block ;) comment ;) -568  )\n"
+            ),
             [
                 Token::LParen,
                 Token::Symbol("one".to_string()),

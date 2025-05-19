@@ -1,7 +1,7 @@
 use wasmtime::component::{Instance, Linker, LinkerInstance};
 
 use crate::{
-    wasm_engine_t, wasmtime_error_t, wasmtime_module_t, WasmtimeStoreContextMut, WasmtimeStoreData,
+    WasmtimeStoreContextMut, WasmtimeStoreData, wasm_engine_t, wasmtime_error_t, wasmtime_module_t,
 };
 
 use super::wasmtime_component_t;

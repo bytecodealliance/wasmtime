@@ -15,9 +15,9 @@
 //! Software Development Manual, volume 2A).
 
 use super::rex::{self, LegacyPrefixes, OpcodeMap};
+use crate::MachBuffer;
 use crate::isa::x64::args::{Amode, Avx512TupleType};
 use crate::isa::x64::inst::Inst;
-use crate::MachBuffer;
 use core::ops::RangeInclusive;
 
 /// Constructs an EVEX-encoded instruction using a builder pattern. This approach makes it visually
@@ -293,11 +293,7 @@ impl EvexInstruction {
         match self.tuple_type {
             Some(Full) => {
                 if self.read(Self::b) == 1 {
-                    if self.read(Self::W) == 0 {
-                        4
-                    } else {
-                        8
-                    }
+                    if self.read(Self::W) == 0 { 4 } else { 8 }
                 } else {
                     vector_size_scaling()
                 }

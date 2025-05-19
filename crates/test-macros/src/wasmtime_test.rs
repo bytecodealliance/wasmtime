@@ -38,12 +38,12 @@
 //! If the wasm feature is not supported by any of the compiler strategies, no
 //! tests will be generated for such strategy.
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::{
-    braced,
+    Attribute, Ident, Result, ReturnType, Signature, Visibility, braced,
     meta::ParseNestedMeta,
     parse::{Parse, ParseStream},
-    parse_macro_input, token, Attribute, Ident, Result, ReturnType, Signature, Visibility,
+    parse_macro_input, token,
 };
 use wasmtime_test_util::wast::Compiler;
 
@@ -255,7 +255,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
         let func_name = &func.sig.ident;
         match &func.sig.output {
             ReturnType::Default => {
-                return Err(syn::Error::new(func_name.span(), "Expected `Restult<()>`"))
+                return Err(syn::Error::new(func_name.span(), "Expected `Restult<()>`"));
             }
             ReturnType::Type(..) => {}
         };

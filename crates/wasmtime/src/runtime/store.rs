@@ -76,21 +76,21 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+use crate::RootSet;
 use crate::instance::InstanceData;
 use crate::linker::Definition;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
-use crate::runtime::vm::mpk::ProtectionKey;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::GcRootsList;
+use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     ExportGlobal, GcStore, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SignalHandler,
     StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
-use crate::RootSet;
-use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
+use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
 use crate::{Global, Instance, Memory, Table, Uninhabited};
 use alloc::sync::Arc;
 use core::fmt;

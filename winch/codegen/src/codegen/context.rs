@@ -1,10 +1,10 @@
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 use wasmparser::{Ieee32, Ieee64};
 use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
 
 use super::ControlStackFrame;
 use crate::{
-    abi::{scratch, vmctx, ABIOperand, ABIResults, RetArea},
+    abi::{ABIOperand, ABIResults, RetArea, scratch, vmctx},
     codegen::{BranchState, CodeGenError, CodeGenPhase, Emission, Prologue},
     frame::Frame,
     isa::reg::RegClass,
@@ -12,7 +12,7 @@ use crate::{
         ExtractLaneKind, MacroAssembler, MemMoveDirection, OperandSize, RegImm, ReplaceLaneKind,
         SPOffset, ShiftKind, StackSlot,
     },
-    reg::{writable, Reg, WritableReg},
+    reg::{Reg, WritableReg, writable},
     regalloc::RegAlloc,
     stack::{Stack, TypedReg, Val},
 };

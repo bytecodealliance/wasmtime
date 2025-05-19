@@ -7,9 +7,9 @@ use core::num::NonZeroUsize;
 use wasi::{Errno, Fd};
 
 #[cfg(not(feature = "proxy"))]
-use crate::bindings::wasi::filesystem::types as filesystem;
-#[cfg(not(feature = "proxy"))]
 use crate::File;
+#[cfg(not(feature = "proxy"))]
+use crate::bindings::wasi::filesystem::types as filesystem;
 
 pub const MAX_DESCRIPTORS: usize = 128;
 

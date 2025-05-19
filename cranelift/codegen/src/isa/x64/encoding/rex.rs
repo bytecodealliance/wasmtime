@@ -12,7 +12,7 @@
 
 use super::ByteSink;
 use crate::isa::x64::inst::args::{Amode, OperandSize};
-use crate::isa::x64::inst::{regs, Inst, LabelUse};
+use crate::isa::x64::inst::{Inst, LabelUse, regs};
 use crate::machinst::{MachBuffer, Reg, RegClass};
 
 pub(crate) fn low8_will_sign_extend_to_64(x: u32) -> bool {

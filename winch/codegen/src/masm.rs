@@ -1,14 +1,14 @@
-use crate::abi::{self, align_to, scratch, LocalSlot};
+use crate::abi::{self, LocalSlot, align_to, scratch};
 use crate::codegen::{CodeGenContext, Emission, FuncEnv};
 use crate::isa::{
-    reg::{writable, Reg, WritableReg},
     CallingConvention,
+    reg::{Reg, WritableReg, writable},
 };
 use anyhow::Result;
 use cranelift_codegen::{
+    Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
     ir::{Endianness, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
-    Final, MachBufferFinalized, MachLabel,
 };
 use std::{fmt::Debug, ops::Range};
 use wasmtime_environ::PtrSize;
@@ -1433,7 +1433,7 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a conditional move.
     fn cmov(&mut self, dst: WritableReg, src: Reg, cc: IntCmpKind, size: OperandSize)
-        -> Result<()>;
+    -> Result<()>;
 
     /// Performs a memory move of bytes from src to dest.
     /// Bytes are moved in blocks of 8 bytes, where possible.
@@ -1926,7 +1926,7 @@ pub(crate) trait MacroAssembler {
     /// Note that some platforms require special handling of registers in this
     /// instruction (e.g. x64) so full access to `CodeGenContext` is provided.
     fn mul_wide(&mut self, context: &mut CodeGenContext<Emission>, kind: MulWideKind)
-        -> Result<()>;
+    -> Result<()>;
 
     /// Takes the value in a src operand and replicates it across lanes of
     /// `size` in a destination result.
@@ -2113,7 +2113,7 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a vector lane-wise mul between `lhs` and `rhs`, placing the result in `dst`.
     fn v128_mul(&mut self, context: &mut CodeGenContext<Emission>, kind: V128MulKind)
-        -> Result<()>;
+    -> Result<()>;
 
     /// Perform an absolute operation on a vector.
     fn v128_abs(&mut self, src: Reg, dst: WritableReg, kind: V128AbsKind) -> Result<()>;
@@ -2166,11 +2166,11 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a lane-wise `min` operation between `src1` and `src2`.
     fn v128_min(&mut self, src1: Reg, src2: Reg, dst: WritableReg, kind: V128MinKind)
-        -> Result<()>;
+    -> Result<()>;
 
     /// Perform a lane-wise `max` operation between `src1` and `src2`.
     fn v128_max(&mut self, src1: Reg, src2: Reg, dst: WritableReg, kind: V128MaxKind)
-        -> Result<()>;
+    -> Result<()>;
 
     /// Perform the lane-wise integer extended multiplication producing twice wider result than the
     /// inputs. This is equivalent to an extend followed by a multiply.

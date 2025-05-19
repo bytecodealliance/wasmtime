@@ -12,7 +12,7 @@ use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::{Configurable, Flags};
 use cranelift_codegen::{ir, settings};
 use cranelift_reader::TestCommand;
-use cranelift_reader::{parse_run_command, TestFile};
+use cranelift_reader::{TestFile, parse_run_command};
 use log::{info, trace};
 use std::borrow::Cow;
 use target_lexicon::Architecture;
@@ -84,7 +84,7 @@ fn is_isa_compatible(
         _ => {
             return Err(format!(
                 "skipped {file_path}: host can't run {requested_arch:?} programs"
-            ))
+            ));
         }
     }
 
@@ -105,7 +105,7 @@ fn is_isa_compatible(
             None => {
                 return Err(format!(
                     "host not available on this platform for isa-specific flag"
-                ))
+                ));
             }
         };
         let available_in_host = host_isa_flags
@@ -225,11 +225,13 @@ impl SubTest for TestRun {
         // Disable runtests with pinned reg enabled.
         // We've had some abi issues that the trampoline isn't quite ready for.
         if flags.enable_pinned_reg() {
-            return Err(anyhow::anyhow!([
-                "Cannot run runtests with pinned_reg enabled.",
-                "See https://github.com/bytecodealliance/wasmtime/issues/4376 for more info"
-            ]
-            .join("\n")));
+            return Err(anyhow::anyhow!(
+                [
+                    "Cannot run runtests with pinned_reg enabled.",
+                    "See https://github.com/bytecodealliance/wasmtime/issues/4376 for more info"
+                ]
+                .join("\n")
+            ));
         }
 
         // Check that the host machine can run this test case (i.e. has all extensions)

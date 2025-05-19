@@ -12,8 +12,8 @@ use alloc::vec::Vec;
 use core::mem;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntityList, EntitySet, ListPool, SecondaryMap};
-use cranelift_codegen::ir::immediates::{Ieee128, Ieee16, Ieee32, Ieee64};
-use cranelift_codegen::ir::types::{F128, F16, F32, F64, I128, I64};
+use cranelift_codegen::ir::immediates::{Ieee16, Ieee32, Ieee64, Ieee128};
+use cranelift_codegen::ir::types::{F16, F32, F64, F128, I64, I128};
 use cranelift_codegen::ir::{Block, Function, Inst, InstBuilder, Type, Value};
 use cranelift_codegen::packed_option::PackedOption;
 
@@ -623,8 +623,8 @@ impl SSABuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::ssa::SSABuilder;
     use crate::Variable;
+    use crate::ssa::SSABuilder;
     use cranelift_codegen::cursor::{Cursor, FuncCursor};
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir;

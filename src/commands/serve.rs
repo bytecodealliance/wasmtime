@@ -1,5 +1,5 @@
 use crate::common::{Profile, RunCommon, RunTarget};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use clap::Parser;
 use http::{Response, StatusCode};
 use std::convert::Infallible;
@@ -8,8 +8,8 @@ use std::time::Instant;
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
 };
@@ -17,12 +17,12 @@ use tokio::sync::Notify;
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Engine, Store, StoreLimits, UpdateDeadline};
 use wasmtime_wasi::p2::{IoView, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
-use wasmtime_wasi_http::bindings::http::types::{ErrorCode, Scheme};
 use wasmtime_wasi_http::bindings::ProxyPre;
+use wasmtime_wasi_http::bindings::http::types::{ErrorCode, Scheme};
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
-    body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView, DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS,
-    DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
+    DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
+    WasiHttpView, body::HyperOutgoingBody,
 };
 
 #[cfg(feature = "wasi-config")]

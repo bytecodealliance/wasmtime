@@ -1,7 +1,7 @@
 //! Densely numbered entity references as set keys.
 
-use crate::keys::Keys;
 use crate::EntityRef;
+use crate::keys::Keys;
 use core::fmt;
 use core::marker::PhantomData;
 use cranelift_bitset::CompoundBitSet;

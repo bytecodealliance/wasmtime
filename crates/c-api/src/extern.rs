@@ -1,6 +1,6 @@
 use crate::{
-    wasm_externkind_t, wasm_externtype_t, wasm_func_t, wasm_global_t, wasm_memory_t, wasm_table_t,
-    WasmStoreRef, WasmtimeStoreContext,
+    WasmStoreRef, WasmtimeStoreContext, wasm_externkind_t, wasm_externtype_t, wasm_func_t,
+    wasm_global_t, wasm_memory_t, wasm_table_t,
 };
 use std::mem::ManuallyDrop;
 use wasmtime::{Extern, Func, Global, Memory, SharedMemory, Table};

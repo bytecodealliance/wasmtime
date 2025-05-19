@@ -1,8 +1,8 @@
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
 use crate::component::{
-    types::ComponentItem, Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower,
-    ResourceType, TypedFunc,
+    Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower, ResourceType,
+    TypedFunc, types::ComponentItem,
 };
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
@@ -14,7 +14,7 @@ use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
 use core::ptr::NonNull;
-use wasmtime_environ::{component::*, EngineOrModuleTypeIndex};
+use wasmtime_environ::{EngineOrModuleTypeIndex, component::*};
 use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
 
 /// An instantiated component.

@@ -12,8 +12,8 @@ use alloc::sync::Arc;
 use core::marker;
 #[cfg(feature = "async")]
 use core::{future::Future, pin::Pin};
-use wasmtime_environ::component::{NameMap, NameMapIntern};
 use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::component::{NameMap, NameMapIntern};
 
 /// A type used to instantiate [`Component`]s.
 ///

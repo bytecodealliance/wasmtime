@@ -1,8 +1,8 @@
 use crate::{code_memory::CodeMemory, type_registry::TypeCollection};
 use alloc::sync::Arc;
+use wasmtime_environ::ModuleTypes;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::ComponentTypes;
-use wasmtime_environ::ModuleTypes;
 
 /// Metadata in Wasmtime about a loaded compiled artifact in memory which is
 /// ready to execute.

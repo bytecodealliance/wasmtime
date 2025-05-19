@@ -1,4 +1,4 @@
-use super::{fmtln, generate_derive, generate_derive_arbitrary_bounds, Formatter};
+use super::{Formatter, fmtln, generate_derive, generate_derive_arbitrary_bounds};
 use crate::dsl;
 
 impl dsl::Inst {

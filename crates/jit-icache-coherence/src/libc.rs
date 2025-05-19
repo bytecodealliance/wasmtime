@@ -16,7 +16,7 @@ mod details {
     extern crate std;
 
     use super::*;
-    use libc::{syscall, EINVAL, EPERM};
+    use libc::{EINVAL, EPERM, syscall};
     use std::io::Error;
 
     const MEMBARRIER_CMD_GLOBAL: libc::c_int = 1;

@@ -2,21 +2,21 @@
 
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
-use crate::{ir::types, ir::AtomicRmwOp};
+use crate::{ir::AtomicRmwOp, ir::types};
 use generated_code::{AssemblerOutputs, Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
-use super::external::{isle_assembler_methods, CraneliftRegisters, PairedGpr, PairedXmm};
-use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, MergeableLoadSize};
+use super::external::{CraneliftRegisters, PairedGpr, PairedXmm, isle_assembler_methods};
+use super::{MergeableLoadSize, is_int_or_ref_ty, is_mergeable_load, lower_to_amode};
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::immediates::*;
 use crate::ir::types::*;
 use crate::ir::{
     BlockCall, Inst, InstructionData, LibCall, MemFlags, Opcode, TrapCode, Value, ValueList,
 };
-use crate::isa::x64::inst::{args::*, regs, ReturnCallInfo};
-use crate::isa::x64::lower::emit_vm_call;
 use crate::isa::x64::X64Backend;
+use crate::isa::x64::inst::{ReturnCallInfo, args::*, regs};
+use crate::isa::x64::lower::emit_vm_call;
 use crate::machinst::isle::*;
 use crate::machinst::{
     ArgPair, CallArgList, CallInfo, CallRetList, InsnInput, InstOutput, MachInst, VCodeConstant,
@@ -985,11 +985,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         // corresponding bit.
         let bit = |x: u8, c: u8| {
             if x % 8 == c {
-                if x < 8 {
-                    Some(0)
-                } else {
-                    Some(1 << c)
-                }
+                if x < 8 { Some(0) } else { Some(1 << c) }
             } else {
                 None
             }

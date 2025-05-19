@@ -368,8 +368,7 @@ impl DynamicVectorType {
     pub fn doc(&self) -> String {
         format!(
             "A dynamically-scaled SIMD vector with a minimum of {} lanes containing `{}` bits each.",
-            self.unscaled_lanes,
-            self.base
+            self.unscaled_lanes, self.base
         )
     }
 

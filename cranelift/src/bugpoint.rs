@@ -4,17 +4,17 @@ use crate::utils::read_to_string;
 use anyhow::{Context as _, Result};
 use clap::Parser;
 use cranelift::prelude::Value;
+use cranelift_codegen::Context;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::flowgraph::ControlFlowGraph;
-use cranelift_codegen::ir::types::{F32, F64, I128, I64};
+use cranelift_codegen::ir::types::{F32, F64, I64, I128};
 use cranelift_codegen::ir::{
     self, Block, FuncRef, Function, GlobalValueData, Inst, InstBuilder, InstructionData,
     StackSlots, TrapCode,
 };
 use cranelift_codegen::isa::TargetIsa;
-use cranelift_codegen::Context;
 use cranelift_entity::PrimaryMap;
-use cranelift_reader::{parse_sets_and_triple, parse_test, ParseOptions};
+use cranelift_reader::{ParseOptions, parse_sets_and_triple, parse_test};
 use indicatif::{ProgressBar, ProgressDrawTarget, ProgressStyle};
 use std::collections::HashMap;
 use std::path::PathBuf;

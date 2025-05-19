@@ -1,14 +1,14 @@
 //! Memory management for executable code.
 
+use crate::Engine;
 use crate::prelude::*;
 use crate::runtime::vm::MmapVec;
-use crate::Engine;
 use alloc::sync::Arc;
 use core::ops::Range;
-use object::endian::Endianness;
-use object::read::{elf::ElfFile64, Object, ObjectSection};
 use object::SectionFlags;
-use wasmtime_environ::{lookup_trap_code, obj, Trap};
+use object::endian::Endianness;
+use object::read::{Object, ObjectSection, elf::ElfFile64};
+use wasmtime_environ::{Trap, lookup_trap_code, obj};
 
 /// Management of executable memory within a `MmapVec`
 ///

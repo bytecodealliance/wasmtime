@@ -6,7 +6,7 @@
 #![cfg(not(miri))]
 
 use crate::cli_tests::get_wasmtime_command;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use serde_derive::Deserialize;
 use std::collections::HashMap;
 use std::ffi::OsStr;

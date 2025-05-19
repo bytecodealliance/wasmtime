@@ -3,13 +3,13 @@
 use crate::runtime::vm::VMGcRef;
 use crate::store::StoreId;
 use crate::vm::{VMGcHeader, VMStructRef};
+use crate::{AnyRef, FieldType};
 use crate::{
-    prelude::*,
-    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
     AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
     ManuallyRooted, RefType, Rooted, StructType, Val, ValRaw, ValType, WasmTy,
+    prelude::*,
+    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
 };
-use crate::{AnyRef, FieldType};
 use core::mem::{self, MaybeUninit};
 use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 

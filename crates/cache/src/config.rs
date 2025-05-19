@@ -1,11 +1,11 @@
 //! Module for configuring the cache system.
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use directories_next::ProjectDirs;
 use log::{trace, warn};
 use serde::{
-    de::{self, Deserializer},
     Deserialize,
+    de::{self, Deserializer},
 };
 use std::fmt::Debug;
 use std::fs;

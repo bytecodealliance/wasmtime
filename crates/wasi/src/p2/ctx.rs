@@ -1,6 +1,6 @@
 use crate::clocks::{
-    host::{monotonic_clock, wall_clock},
     HostMonotonicClock, HostWallClock,
+    host::{monotonic_clock, wall_clock},
 };
 use crate::net::{SocketAddrCheck, SocketAddrUse};
 use crate::p2::{
@@ -8,7 +8,7 @@ use crate::p2::{
     pipe, stdio,
     stdio::{StdinStream, StdoutStream},
 };
-use crate::{random, DirPerms, FilePerms, OpenMode};
+use crate::{DirPerms, FilePerms, OpenMode, random};
 use anyhow::Result;
 use cap_rand::{Rng, RngCore, SeedableRng};
 use cap_std::ambient_authority;
