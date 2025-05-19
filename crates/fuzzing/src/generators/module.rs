@@ -19,6 +19,7 @@ pub struct ModuleConfig {
     pub component_model_async: bool,
     pub component_model_async_builtins: bool,
     pub component_model_async_stackful: bool,
+    pub component_model_error_context: bool,
     pub legacy_exceptions: bool,
 }
 
@@ -68,6 +69,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
             component_model_async: false,
             component_model_async_builtins: false,
             component_model_async_stackful: false,
+            component_model_error_context: false,
             legacy_exceptions: false,
             function_references_enabled: config.gc_enabled,
             config,
