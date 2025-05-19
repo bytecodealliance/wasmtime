@@ -283,7 +283,7 @@ jobs:
         toolchain: wasmtime-ci-pinned-nightly
 
     # Build C API documentation
-    - run: curl -L https://sourceforge.net/projects/doxygen/files/rel-1.9.3/doxygen-1.9.3.linux.bin.tar.gz/download | tar xzf -
+    - run: curl -L https://github.com/doxygen/doxygen/releases/download/Release_1_9_3/doxygen-1.9.3.linux.bin.tar.gz | tar xzf -
     - run: echo "`pwd`/doxygen-1.9.3/bin" >> $GITHUB_PATH
     - run: cmake -S crates/c-api -B target/c-api
     - run: cmake --build target/c-api --target doc
