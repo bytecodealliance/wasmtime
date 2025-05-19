@@ -1205,22 +1205,29 @@ impl Assembler {
 
     /// Multiply immediate and register.
     pub fn mul_ir(&mut self, imm: i32, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::IMulImm {
-            size: size.into(),
-            src1: dst.to_reg().into(),
-            src2: imm,
-            dst: dst.map(Into::into),
-        });
+        use OperandSize::*;
+        let src = dst.to_reg();
+        let dst: WritableGpr = dst.to_reg().into();
+        let inst = match size {
+            S16 => asm::inst::imulw_rmi::new(dst, src, u16::try_from(imm).unwrap()).into(),
+            S32 => asm::inst::imull_rmi::new(dst, src, imm as u32).into(),
+            S64 => asm::inst::imulq_rmi_sxl::new(dst, src, imm).into(),
+            S8 | S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Multiply register and register.
     pub fn mul_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::IMul {
-            size: size.into(),
-            src1: dst.to_reg().into(),
-            src2: src.into(),
-            dst: dst.map(Into::into),
-        });
+        use OperandSize::*;
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            S16 => asm::inst::imulw_rm::new(dst, src).into(),
+            S32 => asm::inst::imull_rm::new(dst, src).into(),
+            S64 => asm::inst::imulq_rm::new(dst, src).into(),
+            S8 | S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Add immediate and register.
@@ -1734,14 +1741,30 @@ impl Assembler {
         kind: MulWideKind,
         size: OperandSize,
     ) {
-        self.emit(Inst::Mul {
-            signed: kind == MulWideKind::Signed,
-            size: size.into(),
-            src1: lhs.into(),
-            src2: rhs.into(),
-            dst_lo: dst_lo.to_reg().into(),
-            dst_hi: dst_hi.to_reg().into(),
+        use MulWideKind::*;
+        use OperandSize::*;
+        let rax = asm::Fixed(PairedGpr {
+            read: lhs.into(),
+            write: WritableGpr::from_reg(dst_lo.to_reg().into()),
         });
+        let rdx = asm::Fixed(dst_hi.to_reg().into());
+        if size == S8 {
+            // For `mulb` and `imulb`, both the high and low bits are written to
+            // RAX.
+            assert_eq!(dst_lo, dst_hi);
+        }
+        let inst = match (size, kind) {
+            (S8, Unsigned) => asm::inst::mulb_m::new(rax, rhs).into(),
+            (S8, Signed) => asm::inst::imulb_m::new(rax, rhs).into(),
+            (S16, Unsigned) => asm::inst::mulw_m::new(rax, rdx, rhs).into(),
+            (S16, Signed) => asm::inst::imulw_m::new(rax, rdx, rhs).into(),
+            (S32, Unsigned) => asm::inst::mull_m::new(rax, rdx, rhs).into(),
+            (S32, Signed) => asm::inst::imull_m::new(rax, rdx, rhs).into(),
+            (S64, Unsigned) => asm::inst::mulq_m::new(rax, rdx, rhs).into(),
+            (S64, Signed) => asm::inst::imulq_m::new(rax, rdx, rhs).into(),
+            (S128, _) => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Shuffles bytes in `src` according to contents of `mask` and puts

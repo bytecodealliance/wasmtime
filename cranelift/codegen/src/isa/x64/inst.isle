@@ -62,15 +62,6 @@
              (dividend Gpr)
              (dst WritableGpr))
 
-       ;; Unsigned multiplication producing the high bits of the result in one
-       ;; register and the low bits in another register.
-       (Mul (size OperandSize)
-            (signed bool)
-            (src1 Gpr)
-            (src2 GprMem)
-            (dst_lo WritableGpr)
-            (dst_hi WritableGpr))
-
        ;; Same as `Mul`, but for the BMI2 `mulx` instruction. This is different
        ;; where the two `dst_*` registers can be arbitrary registers and it
        ;; is always unsigned multiplication. Note that this instruction does
@@ -85,26 +76,6 @@
              (src2 GprMem)
              (dst_lo WritableGpr)
              (dst_hi WritableGpr))
-
-       ;; Same as `Mul` but the 16-bit multiplication result is stored in `AX`.
-       (Mul8 (signed bool)
-             (src1 Gpr)
-             (src2 GprMem)
-             (dst WritableGpr))
-
-       ;; The two-operand form of `imul` which produces a truncated same-size
-       ;; result as the operands.
-       (IMul (size OperandSize)
-             (src1 Gpr)
-             (src2 GprMem)
-             (dst WritableGpr))
-
-       ;; The three-operand form of `imul` where the third operand must be
-       ;; a constant.
-       (IMulImm (size OperandSize)
-                (src1 GprMem)
-                (src2 i32)
-                (dst WritableGpr))
 
        ;; A synthetic instruction sequence used as part of the lowering of the
        ;; `srem` instruction which returns 0 if the divisor is -1 and
@@ -2693,6 +2664,8 @@
 (decl asm_produce_flags (AssemblerOutputs) ProducesFlags)
 (rule (asm_produce_flags (AssemblerOutputs.RetGpr inst gpr))
       (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst gpr))
+(rule (asm_produce_flags (AssemblerOutputs.RetValueRegs inst regs))
+      (ProducesFlags.ProducesFlagsReturnsResultWithConsumer inst (value_regs_get_gpr regs 0)))
 
 ;; Other operations consume _and_ produce flags--"chaining".
 (type ChainFlagsOp (enum (Adc) (Sbb)))
@@ -2883,15 +2856,18 @@
 
 
 ;; Helper for creating `mul` instructions or `imul` instructions (depending
-;; on `signed`)
-(decl x64_mul (Type bool Gpr GprMem) ValueRegs)
-(rule (x64_mul ty signed src1 src2)
-      (let ((dst_lo WritableGpr (temp_writable_gpr))
-            (dst_hi WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.Mul size signed src1 src2 dst_lo dst_hi))))
-        (value_gprs dst_lo dst_hi)))
+;; on `signed`). For the 8-bit rules, see `x64_mul8`.
+(decl x64_mul_raw (Type bool Gpr GprMem) AssemblerOutputs)
+(rule (x64_mul_raw $I16 false src1 src2) (x64_mulw_m_raw src1 src2))
+(rule (x64_mul_raw $I32 false src1 src2) (x64_mull_m_raw src1 src2))
+(rule (x64_mul_raw $I64 false src1 src2) (x64_mulq_m_raw src1 src2))
+(rule (x64_mul_raw $I16 true src1 src2)  (x64_imulw_m_raw src1 src2))
+(rule (x64_mul_raw $I32 true src1 src2)  (x64_imull_m_raw src1 src2))
+(rule (x64_mul_raw $I64 true src1 src2)  (x64_imulq_m_raw src1 src2))
 
+(decl x64_mul (Type bool Gpr GprMem) ValueRegs)
+(rule 0 (x64_mul ty signed src1 src2)
+      (emit_ret_value_regs (x64_mul_raw ty signed src1 src2)))
 ;; Special case the `mulx` pattern with the BMI2 instruction set.
 (rule 1 (x64_mul (ty_32_or_64 ty) false src1 src2)
   (if-let true (use_bmi2))
@@ -2908,49 +2884,43 @@
         (_ Unit (emit (MInst.MulX size src1 src2 (writable_invalid_gpr) dst))))
     dst))
 
+(decl x64_mul_lo_with_flags_paired (Type bool Gpr GprMem) ProducesFlags)
+(rule (x64_mul_lo_with_flags_paired ty signed src1 src2)
+      (asm_produce_flags (x64_mul_raw ty signed src1 src2)))
+
 ;; Get the invalid register as writable
 (decl writable_invalid_gpr () WritableGpr)
 (extern constructor writable_invalid_gpr writable_invalid_gpr)
 
-;; Helper for creating `mul` instructions or `imul` instructions (depending
-;; on `signed`) for 8-bit operands.
-(decl x64_mul8 (bool Gpr GprMem) Gpr)
-(rule (x64_mul8 signed src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.Mul8 signed src1 src2 dst))))
-        dst))
-
 ;; Helper for creating `imul` instructions.
 (decl x64_imul (Type Gpr GprMem) Gpr)
-(rule (x64_imul ty src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.IMul size src1 src2 dst))))
-        dst))
+(rule (x64_imul $I16 src1 src2) (x64_imulw_rm src1 src2))
+(rule (x64_imul $I32 src1 src2) (x64_imull_rm src1 src2))
+(rule (x64_imul $I64 src1 src2) (x64_imulq_rm src1 src2))
 
-;; Helper for creating `imul` instructions with an immediate operand.
+;; Helper for creating `imul` instructions with an immediate operand. Match
+;; 8-bit immediates first to allow a smaller instruction encoding.
 (decl x64_imul_imm (Type GprMem i32) Gpr)
-(rule (x64_imul_imm ty src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.IMulImm size src1 src2 dst))))
-        dst))
+(rule 2 (x64_imul_imm $I16 src1 (i8_try_from_i32 src2))  (x64_imulw_rmi_sxb src1 src2))
+(rule 2 (x64_imul_imm $I32 src1 (i8_try_from_i32 src2))  (x64_imull_rmi_sxb src1 src2))
+(rule 2 (x64_imul_imm $I64 src1 (i8_try_from_i32 src2))  (x64_imulq_rmi_sxb src1 src2))
+(rule 1 (x64_imul_imm $I16 src1 (u16_try_from_i32 src2)) (x64_imulw_rmi src1 src2))
+(rule 1 (x64_imul_imm $I32 src1 (i32_as_u32 src2))       (x64_imull_rmi src1 src2))
+(rule 1 (x64_imul_imm $I64 src1 src2)                    (x64_imulq_rmi_sxl src1 src2))
+
+;; Helper for creating `mul` instructions or `imul` instructions (depending
+;; on `signed`) for 8-bit operands.
+(decl x64_mul8_raw (bool Gpr GprMem) AssemblerOutputs)
+(rule (x64_mul8_raw false src1 src2) (x64_mulb_m_raw src1 src2))
+(rule (x64_mul8_raw true src1 src2)  (x64_imulb_m_raw src1 src2))
+
+(decl x64_mul8 (bool Gpr GprMem) Gpr)
+(rule (x64_mul8 signed src1 src2)
+      (emit_ret_gpr (x64_mul8_raw signed src1 src2)))
 
 (decl x64_mul8_with_flags_paired (bool Gpr GprMem) ProducesFlags)
 (rule (x64_mul8_with_flags_paired signed src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr)))
-           (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
-                 (MInst.Mul8 signed src1 src2 dst)
-                 dst)))
-
-(decl x64_mul_lo_with_flags_paired (Type bool Gpr GprMem) ProducesFlags)
-(rule (x64_mul_lo_with_flags_paired ty signed src1 src2)
-      (let ((dst_lo WritableGpr (temp_writable_gpr))
-            (dst_hi WritableGpr (temp_writable_gpr))
-            (size OperandSize (raw_operand_size_of_type ty)))
-           (ProducesFlags.ProducesFlagsReturnsResultWithConsumer
-                 (MInst.Mul size signed src1 src2 dst_lo dst_hi)
-                 dst_lo)))
+      (asm_produce_flags (x64_mul8_raw signed src1 src2)))
 
 
 
@@ -3587,59 +3557,52 @@
 
 ;; Helper for creating `pmullw` instructions.
 (decl x64_pmullw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmullw src1 src2)
-      (xmm_rm_r (SseOpcode.Pmullw) src1 src2))
 (rule 1 (x64_pmullw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmullw) src1 src2))
+(rule 0 (x64_pmullw src1 src2) (x64_pmullw_a src1 src2))
 
 ;; Helper for creating `pmulld` instructions.
 (decl x64_pmulld (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmulld src1 src2)
-      (xmm_rm_r (SseOpcode.Pmulld) src1 src2))
 (rule 1 (x64_pmulld src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmulld) src1 src2))
+(rule 0 (x64_pmulld src1 src2) (x64_pmulld_a src1 src2))
 
 ;; Helper for creating `pmulhw` instructions.
 (decl x64_pmulhw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmulhw src1 src2)
-      (xmm_rm_r (SseOpcode.Pmulhw) src1 src2))
 (rule 1 (x64_pmulhw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmulhw) src1 src2))
+(rule 0 (x64_pmulhw src1 src2) (x64_pmulhw_a src1 src2))
 
 ;; Helper for creating `pmulhrsw` instructions.
 (decl x64_pmulhrsw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmulhrsw src1 src2)
-      (xmm_rm_r (SseOpcode.Pmulhrsw) src1 src2))
 (rule 1 (x64_pmulhrsw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmulhrsw) src1 src2))
+(rule 0 (x64_pmulhrsw src1 src2) (x64_pmulhrsw_a src1 src2))
 
 ;; Helper for creating `pmulhuw` instructions.
 (decl x64_pmulhuw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmulhuw src1 src2)
-      (xmm_rm_r (SseOpcode.Pmulhuw) src1 src2))
 (rule 1 (x64_pmulhuw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmulhuw) src1 src2))
+(rule 0 (x64_pmulhuw src1 src2) (x64_pmulhuw_a src1 src2))
 
 ;; Helper for creating `pmuldq` instructions.
 (decl x64_pmuldq (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmuldq src1 src2)
-      (xmm_rm_r (SseOpcode.Pmuldq) src1 src2))
 (rule 1 (x64_pmuldq src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmuldq) src1 src2))
+(rule 0 (x64_pmuldq src1 src2) (x64_pmuldq_a src1 src2))
 
 ;; Helper for creating `pmuludq` instructions.
 (decl x64_pmuludq (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmuludq src1 src2)
-      (xmm_rm_r (SseOpcode.Pmuludq) src1 src2))
 (rule 1 (x64_pmuludq src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpmuludq) src1 src2))
+(rule 0 (x64_pmuludq src1 src2) (x64_pmuludq_a src1 src2))
 
 ;; Helper for creating `punpckhwd` instructions.
 (decl x64_punpckhwd (Xmm XmmMem) Xmm)
@@ -3792,35 +3755,31 @@
 
 ;; Helper for creating `mulss` instructions.
 (decl x64_mulss (Xmm XmmMem) Xmm)
-(rule (x64_mulss src1 src2)
-      (xmm_rm_r_unaligned (SseOpcode.Mulss) src1 src2))
 (rule 1 (x64_mulss src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmulss) src1 src2))
+(rule 0 (x64_mulss src1 src2) (x64_mulss_a src1 src2))
 
 ;; Helper for creating `mulsd` instructions.
 (decl x64_mulsd (Xmm XmmMem) Xmm)
-(rule (x64_mulsd src1 src2)
-      (xmm_rm_r_unaligned (SseOpcode.Mulsd) src1 src2))
 (rule 1 (x64_mulsd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmulsd) src1 src2))
+(rule 0 (x64_mulsd src1 src2) (x64_mulsd_a src1 src2))
 
 ;; Helper for creating `mulps` instructions.
 (decl x64_mulps (Xmm XmmMem) Xmm)
-(rule 0 (x64_mulps src1 src2)
-      (xmm_rm_r (SseOpcode.Mulps) src1 src2))
 (rule 1 (x64_mulps src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmulps) src1 src2))
+(rule 0 (x64_mulps src1 src2) (x64_mulps_a src1 src2))
 
 ;; Helper for creating `mulpd` instructions.
 (decl x64_mulpd (Xmm XmmMem) Xmm)
-(rule (x64_mulpd src1 src2)
-      (xmm_rm_r (SseOpcode.Mulpd) src1 src2))
 (rule 1 (x64_mulpd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmulpd) src1 src2))
+(rule 0 (x64_mulpd src1 src2) (x64_mulpd_a src1 src2))
 
 ;; Helper for creating `divss` instructions.
 (decl x64_divss (Xmm XmmMem) Xmm)

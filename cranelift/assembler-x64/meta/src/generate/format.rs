@@ -14,17 +14,33 @@ impl dsl::Format {
     /// once Cranelift has switched to using this assembler predominantly
     /// (TODO).
     #[must_use]
-    pub fn generate_att_style_operands(&self) -> String {
+    pub(crate) fn generate_att_style_operands(&self) -> String {
         let ordered_ops: Vec<_> = self
             .operands
             .iter()
+            .filter(|o| !o.implicit)
             .rev()
             .map(|o| format!("{{{}}}", o.location))
             .collect();
         ordered_ops.join(", ")
     }
 
-    pub fn generate_rex_encoding(&self, f: &mut Formatter, rex: &dsl::Rex) {
+    #[must_use]
+    pub(crate) fn generate_implicit_operands(&self) -> String {
+        let ops: Vec<_> = self
+            .operands
+            .iter()
+            .filter(|o| o.implicit)
+            .map(|o| format!("{{{}}}", o.location))
+            .collect();
+        if ops.is_empty() {
+            String::new()
+        } else {
+            format!(" ;; implicit: {}", ops.join(", "))
+        }
+    }
+
+    pub(crate) fn generate_rex_encoding(&self, f: &mut Formatter, rex: &dsl::Rex) {
         self.generate_prefixes(f, rex);
         self.generate_rex_prefix(f, rex);
         self.generate_opcodes(f, rex);
@@ -91,12 +107,17 @@ impl dsl::Format {
                 fmtln!(f, "let dst = self.{dst}.enc();");
                 fmtln!(f, "let rex = RexPrefix::two_op(digit, dst, {bits});");
             }
+            [FixedReg(_), RegMem(mem)] | [FixedReg(_), FixedReg(_), RegMem(mem)] => {
+                let digit = rex.digit.unwrap();
+                fmtln!(f, "let digit = 0x{digit:x};");
+                fmtln!(f, "let rex = self.{mem}.as_rex_prefix(digit, {bits});");
+            }
             [Mem(dst), Imm(_)] | [RegMem(dst), Imm(_)] | [RegMem(dst)] => {
                 let digit = rex.digit.unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "let rex = self.{dst}.as_rex_prefix(digit, {bits});");
             }
-            [Reg(dst), RegMem(src)] => {
+            [Reg(dst), RegMem(src)] | [Reg(dst), RegMem(src), Imm(_)] => {
                 fmtln!(f, "let dst = self.{dst}.enc();");
                 fmtln!(f, "let rex = self.{src}.as_rex_prefix(dst, {bits});");
             }
@@ -135,12 +156,17 @@ impl dsl::Format {
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "self.{reg}.encode_modrm(buf, digit);");
             }
-            [Mem(mem), Imm(_)] | [RegMem(mem), Imm(_)] | [RegMem(mem)] => {
+            [Mem(mem), Imm(_)]
+            | [RegMem(mem), Imm(_)]
+            | [RegMem(mem)]
+            | [FixedReg(_), RegMem(mem)]
+            | [FixedReg(_), FixedReg(_), RegMem(mem)] => {
                 let digit = rex.digit.unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "self.{mem}.encode_rex_suffixes(buf, off, digit, 0);");
             }
             [Reg(reg), RegMem(mem)]
+            | [Reg(reg), RegMem(mem), Imm(_)]
             | [Mem(mem), Reg(reg)]
             | [RegMem(mem), Reg(reg)]
             | [RegMem(mem), Reg(reg), Imm(_)]

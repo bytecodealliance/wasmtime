@@ -59,6 +59,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn i32_as_u32(&mut self, x: i32) -> Option<u32> {
+            Some(x as u32)
+        }
+
+        #[inline]
         fn i32_as_i64(&mut self, x: i32) -> i64 {
             x.into()
         }
@@ -933,12 +938,20 @@ macro_rules! isle_common_prelude_methods {
             u64::try_from(val).ok()
         }
 
+        fn u16_try_from_i32(&mut self, val: i32) -> Option<u16> {
+            u16::try_from(val).ok()
+        }
+
         fn u16_try_from_u64(&mut self, val: u64) -> Option<u16> {
             u16::try_from(val).ok()
         }
 
         fn u32_try_from_u64(&mut self, val: u64) -> Option<u32> {
             u32::try_from(val).ok()
+        }
+
+        fn i8_try_from_i32(&mut self, val: i32) -> Option<i8> {
+            i8::try_from(val).ok()
         }
 
         fn i8_try_from_u64(&mut self, val: u64) -> Option<i8> {

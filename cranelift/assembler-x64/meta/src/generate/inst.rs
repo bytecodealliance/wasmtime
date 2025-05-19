@@ -194,7 +194,7 @@ impl dsl::Inst {
                 f.add_block(
                     "fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result",
                     |f| {
-                        for op in &self.format.operands {
+                        for op in self.format.operands.iter() {
                             let location = op.location;
                             let to_string = location.generate_to_string(op.extension);
                             fmtln!(f, "let {location} = {to_string};");
@@ -207,7 +207,8 @@ impl dsl::Inst {
                             &self.mnemonic
                         };
                         let ordered_ops = self.format.generate_att_style_operands();
-                        fmtln!(f, "write!(f, \"{inst_name} {ordered_ops}\")");
+                        let implicit_ops = self.format.generate_implicit_operands();
+                        fmtln!(f, "write!(f, \"{inst_name} {ordered_ops}{implicit_ops}\")");
                     },
                 );
             },

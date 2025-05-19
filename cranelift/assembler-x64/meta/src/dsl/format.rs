@@ -34,13 +34,12 @@ pub fn fmt(
 /// This function panics if the location is an immediate (i.e., an immediate
 /// cannot be written to).
 #[must_use]
-pub fn rw(location: Location) -> Operand {
-    assert!(!matches!(location.kind(), OperandKind::Imm(_)));
+pub fn rw(op: impl Into<Operand>) -> Operand {
+    let op = op.into();
+    assert!(!matches!(op.location.kind(), OperandKind::Imm(_)));
     Operand {
-        location,
         mutability: Mutability::ReadWrite,
-        extension: Extension::default(),
-        align: false,
+        ..op
     }
 }
 
@@ -54,12 +53,11 @@ pub fn r(op: impl Into<Operand>) -> Operand {
 
 /// An abbreviated constructor for a "write" operand.
 #[must_use]
-pub fn w(location: Location) -> Operand {
+pub fn w(op: impl Into<Operand>) -> Operand {
+    let op = op.into();
     Operand {
-        location,
         mutability: Mutability::Write,
-        extension: Extension::None,
-        align: false,
+        ..op
     }
 }
 
@@ -67,10 +65,18 @@ pub fn w(location: Location) -> Operand {
 pub fn align(location: Location) -> Operand {
     assert!(location.uses_memory());
     Operand {
-        location,
-        mutability: Mutability::Read,
-        extension: Extension::None,
         align: true,
+        ..Operand::from(location)
+    }
+}
+
+/// An abbreviated constructor for an operand that is used by the instruction
+/// but not visible in its disassembly.
+pub fn implicit(location: Location) -> Operand {
+    assert!(matches!(location.kind(), OperandKind::FixedReg(_)));
+    Operand {
+        implicit: true,
+        ..Operand::from(location)
     }
 }
 
@@ -84,10 +90,8 @@ pub fn align(location: Location) -> Operand {
 pub fn sxq(location: Location) -> Operand {
     assert!(location.bits() <= 64);
     Operand {
-        location,
-        mutability: Mutability::Read,
         extension: Extension::SignExtendQuad,
-        align: false,
+        ..Operand::from(location)
     }
 }
 
@@ -101,10 +105,8 @@ pub fn sxq(location: Location) -> Operand {
 pub fn sxl(location: Location) -> Operand {
     assert!(location.bits() <= 32);
     Operand {
-        location,
-        mutability: Mutability::Read,
         extension: Extension::SignExtendLong,
-        align: false,
+        ..Operand::from(location)
     }
 }
 
@@ -118,10 +120,8 @@ pub fn sxl(location: Location) -> Operand {
 pub fn sxw(location: Location) -> Operand {
     assert!(location.bits() <= 16);
     Operand {
-        location,
-        mutability: Mutability::Read,
         extension: Extension::SignExtendWord,
-        align: false,
+        ..Operand::from(location)
     }
 }
 
@@ -204,6 +204,9 @@ pub struct Operand {
     /// address used in the operand must align to the size of the operand (e.g.,
     /// `m128` must be 16-byte aligned).
     pub align: bool,
+    /// Some register operands are implicit: that is, they do not appear in the
+    /// disassembled output even though they are used in the instruction.
+    pub implicit: bool,
 }
 
 impl core::fmt::Display for Operand {
@@ -213,6 +216,7 @@ impl core::fmt::Display for Operand {
             mutability,
             extension,
             align,
+            implicit,
         } = self;
         write!(f, "{location}")?;
         let mut flags = vec![];
@@ -224,6 +228,9 @@ impl core::fmt::Display for Operand {
         }
         if *align != false {
             flags.push("align".to_owned());
+        }
+        if *implicit {
+            flags.push("implicit".to_owned());
         }
         if !flags.is_empty() {
             write!(f, "[{}]", flags.join(","))?;
@@ -237,11 +244,13 @@ impl From<Location> for Operand {
         let mutability = Mutability::default();
         let extension = Extension::default();
         let align = false;
+        let implicit = false;
         Self {
             location,
             mutability,
             extension,
             align,
+            implicit,
         }
     }
 }
@@ -270,6 +279,9 @@ pub enum Location {
     ax,
     eax,
     rax,
+    dx,
+    edx,
+    rdx,
     cl,
 
     // Immediate values.
@@ -307,9 +319,9 @@ impl Location {
         use Location::*;
         match self {
             al | cl | imm8 | r8 | rm8 | m8 => 8,
-            ax | imm16 | r16 | rm16 | m16 => 16,
-            eax | imm32 | r32 | rm32 | m32 | xmm_m32 => 32,
-            rax | r64 | rm64 | m64 | xmm_m64 => 64,
+            ax | dx | imm16 | r16 | rm16 | m16 => 16,
+            eax | edx | imm32 | r32 | rm32 | m32 | xmm_m32 => 32,
+            rax | rdx | r64 | rm64 | m64 | xmm_m64 => 64,
             xmm | xmm_m128 => 128,
         }
     }
@@ -325,7 +337,8 @@ impl Location {
     pub fn uses_memory(&self) -> bool {
         use Location::*;
         match self {
-            al | cl | ax | eax | rax | imm8 | imm16 | imm32 | r8 | r16 | r32 | r64 | xmm => false,
+            al | ax | eax | rax | cl | dx | edx | rdx | imm8 | imm16 | imm32 | r8 | r16 | r32
+            | r64 | xmm => false,
             rm8 | rm16 | rm32 | rm64 | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => true,
         }
     }
@@ -337,8 +350,8 @@ impl Location {
         use Location::*;
         match self {
             imm8 | imm16 | imm32 => false,
-            al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 | xmm
-            | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => true,
+            al | ax | eax | rax | cl | dx | edx | rdx | r8 | r16 | r32 | r64 | rm8 | rm16
+            | rm32 | rm64 | xmm | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => true,
         }
     }
 
@@ -347,7 +360,7 @@ impl Location {
     pub fn kind(&self) -> OperandKind {
         use Location::*;
         match self {
-            al | ax | eax | rax | cl => OperandKind::FixedReg(*self),
+            al | ax | eax | rax | cl | dx | edx | rdx => OperandKind::FixedReg(*self),
             imm8 | imm16 | imm32 => OperandKind::Imm(*self),
             r8 | r16 | r32 | r64 | xmm => OperandKind::Reg(*self),
             rm8 | rm16 | rm32 | rm64 | xmm_m32 | xmm_m64 | xmm_m128 => OperandKind::RegMem(*self),
@@ -364,9 +377,8 @@ impl Location {
         use Location::*;
         match self {
             imm8 | imm16 | imm32 | m8 | m16 | m32 | m64 => None,
-            al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 => {
-                Some(RegClass::Gpr)
-            }
+            al | ax | eax | rax | cl | dx | edx | rdx | r8 | r16 | r32 | r64 | rm8 | rm16
+            | rm32 | rm64 => Some(RegClass::Gpr),
             xmm | xmm_m32 | xmm_m64 | xmm_m128 => Some(RegClass::Xmm),
         }
     }
@@ -385,6 +397,9 @@ impl core::fmt::Display for Location {
             eax => write!(f, "eax"),
             rax => write!(f, "rax"),
             cl => write!(f, "cl"),
+            dx => write!(f, "dx"),
+            edx => write!(f, "edx"),
+            rdx => write!(f, "rdx"),
 
             r8 => write!(f, "r8"),
             r16 => write!(f, "r16"),

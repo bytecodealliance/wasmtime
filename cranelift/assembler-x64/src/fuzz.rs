@@ -27,7 +27,7 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
     // off the instruction offset first.
     let expected = expected.split_once(' ').unwrap().1;
     let actual = inst.to_string();
-    if expected != actual && expected != replace_signed_immediates(&actual) {
+    if expected != actual && expected != fix_up(&actual) {
         println!("> {inst}");
         println!("  debug: {inst:x?}");
         println!("  assembled: {}", pretty_print_hexadecimal(&assembled));
@@ -164,6 +164,33 @@ fn replace() {
         replace_signed_immediates("subl $0x3ca77a19, -0x1a030f40(%r14)"),
         "subl $0x3ca77a19, -0x1a030f40(%r14)"
     );
+}
+
+/// Remove everything after the first semicolon in the disassembly and trim any
+/// trailing spaces. This is necessary to remove the implicit operands we end up
+/// printing for Cranelift's sake.
+fn remove_after_semicolon(dis: &str) -> &str {
+    match dis.find(';') {
+        None => dis,
+        Some(idx) => {
+            let (prefix, _) = dis.split_at(idx);
+            prefix.trim()
+        }
+    }
+}
+
+#[test]
+fn remove_after_parenthesis_test() {
+    assert_eq!(
+        remove_after_semicolon("imulb 0x7658eddd(%rcx) ;; implicit: %ax"),
+        "imulb 0x7658eddd(%rcx)"
+    );
+}
+
+/// Run some post-processing on the disassembly to make it match Capstone.
+fn fix_up(dis: &str) -> std::borrow::Cow<str> {
+    let dis = remove_after_semicolon(dis);
+    replace_signed_immediates(&dis)
 }
 
 /// Fuzz-specific registers.

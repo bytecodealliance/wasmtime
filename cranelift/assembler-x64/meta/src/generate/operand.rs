@@ -14,10 +14,11 @@ impl dsl::Operand {
                     format!("Imm{bits}")
                 }
             }
-            al | ax | eax | rax | cl => {
+            al | ax | eax | rax | cl | dx | edx | rdx => {
                 let enc = match self.location {
                     al | ax | eax | rax => "{ gpr::enc::RAX }",
                     cl => "{ gpr::enc::RCX }",
+                    dx | edx | rdx => "{ gpr::enc::RDX }",
                     _ => unreachable!(),
                 };
                 format!("Fixed<R::{mut_}Gpr, {enc}>")
@@ -44,6 +45,9 @@ impl dsl::Location {
             eax => "\"%eax\"".into(),
             rax => "\"%rax\"".into(),
             cl => "\"%cl\"".into(),
+            dx => "\"%dx\"".into(),
+            edx => "\"%edx\"".into(),
+            rdx => "\"%rdx\"".into(),
             imm8 | imm16 | imm32 => {
                 if extension.is_sign_extended() {
                     let variant = extension.generate_variant();
@@ -67,7 +71,7 @@ impl dsl::Location {
     fn generate_size(&self) -> Option<&str> {
         use dsl::Location::*;
         match self {
-            al | ax | eax | rax | cl | imm8 | imm16 | imm32 => None,
+            al | ax | eax | rax | cl | dx | edx | rdx | imm8 | imm16 | imm32 => None,
             r8 | rm8 => Some("Size::Byte"),
             r16 | rm16 => Some("Size::Word"),
             r32 | rm32 => Some("Size::Doubleword"),

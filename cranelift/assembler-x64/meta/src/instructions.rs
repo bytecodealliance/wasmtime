@@ -3,6 +3,7 @@
 mod add;
 mod and;
 mod cvt;
+mod mul;
 mod neg;
 mod or;
 mod shift;
@@ -17,6 +18,7 @@ pub fn list() -> Vec<Inst> {
     all.extend(add::list());
     all.extend(and::list());
     all.extend(cvt::list());
+    all.extend(mul::list());
     all.extend(neg::list());
     all.extend(or::list());
     all.extend(shift::list());
