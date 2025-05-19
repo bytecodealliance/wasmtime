@@ -12,7 +12,7 @@ block0(v0: i8, v1: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   mulb %sil
+;   mulb %sil ;; implicit: %ax
 ;   shrw    $8, %ax, %ax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -41,7 +41,7 @@ block0(v0: i16, v1: i16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   mulw %si
+;   mulw %si ;; implicit: %ax, %dx
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -70,7 +70,7 @@ block0(v0: i32, v1: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   mull %esi
+;   mull %esi ;; implicit: %eax, %edx
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -99,7 +99,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   mulq %rsi
+;   mulq %rsi ;; implicit: %rax, %rdx
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

@@ -14,7 +14,7 @@ impl dsl::Format {
     /// once Cranelift has switched to using this assembler predominantly
     /// (TODO).
     #[must_use]
-    pub fn generate_att_style_operands(&self) -> String {
+    pub(crate) fn generate_att_style_operands(&self) -> String {
         let ordered_ops: Vec<_> = self
             .operands
             .iter()
@@ -25,7 +25,22 @@ impl dsl::Format {
         ordered_ops.join(", ")
     }
 
-    pub fn generate_rex_encoding(&self, f: &mut Formatter, rex: &dsl::Rex) {
+    #[must_use]
+    pub(crate) fn generate_implicit_operands(&self) -> String {
+        let ops: Vec<_> = self
+            .operands
+            .iter()
+            .filter(|o| o.implicit)
+            .map(|o| format!("{{{}}}", o.location))
+            .collect();
+        if ops.is_empty() {
+            String::new()
+        } else {
+            format!(" ;; implicit: {}", ops.join(", "))
+        }
+    }
+
+    pub(crate) fn generate_rex_encoding(&self, f: &mut Formatter, rex: &dsl::Rex) {
         self.generate_prefixes(f, rex);
         self.generate_rex_prefix(f, rex);
         self.generate_opcodes(f, rex);

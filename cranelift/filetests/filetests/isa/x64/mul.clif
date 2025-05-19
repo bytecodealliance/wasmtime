@@ -13,7 +13,7 @@ block0(v0: i8, v1: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   mulb %sil
+;   mulb %sil ;; implicit: %ax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -122,8 +122,8 @@ block0(v0: i8, v1: i8, v2: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   mulb %sil
-;   mulb %dl
+;   mulb %sil ;; implicit: %ax
+;   mulb %dl ;; implicit: %ax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -237,7 +237,7 @@ block0(v0: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   mulb (%rip)
+;   mulb (%rip) ;; implicit: %ax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -502,7 +502,7 @@ block0(v0: i8, v1: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   imulb %sil
+;   imulb %sil ;; implicit: %ax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -531,7 +531,7 @@ block0(v0: i8, v1: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   mulb %sil
+;   mulb %sil ;; implicit: %ax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
