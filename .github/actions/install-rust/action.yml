@@ -13,6 +13,10 @@ runs:
     - name: Install Rust
       shell: bash
       id: select
+      env:
+        # This is an attempt to reduce flakiness and see what happens. If this
+        # lands it worked. Feel free to modify if this becomes flaky again.
+        RUSTUP_USE_CURL: 1
       run: |
         # Determine MSRV as N in `1.N.0` by looking at the `rust-version`
         # located in the root `Cargo.toml`.
@@ -32,7 +36,12 @@ runs:
       shell: bash
       run: |
         rustup set profile minimal
-        rustup update "${{ steps.select.outputs.version }}" --no-self-update
+        for attempt in 1 2 3 4 5; do
+          [ "$attempt" = "5" ] && exit 1
+          rustup update "${{ steps.select.outputs.version }}" --no-self-update \
+            && break
+          sleep 5
+        done
         rustup default "${{ steps.select.outputs.version }}"
 
         # Save disk space by avoiding incremental compilation. Also turn down
