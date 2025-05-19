@@ -112,6 +112,13 @@ impl From<PairedGpr> for asm::GprMem<PairedGpr, Gpr> {
     }
 }
 
+// For Winch ergonomics.
+impl From<WritableGpr> for asm::Gpr<WritableGpr> {
+    fn from(gpr: WritableGpr) -> Self {
+        Self::new(gpr)
+    }
+}
+
 impl asm::AsReg for PairedGpr {
     fn enc(&self) -> u8 {
         let PairedGpr { read, write } = self;
