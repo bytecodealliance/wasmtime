@@ -2003,7 +2003,7 @@ impl Memory {
         }
     }
 
-    /// Returs whether or not the base pointer of this memory is allowed to be
+    /// Returns whether or not the base pointer of this memory is allowed to be
     /// relocated at runtime.
     ///
     /// When this function returns `false` then it means that after the initial

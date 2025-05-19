@@ -49,7 +49,7 @@ impl<R: AsReg> Amode<R> {
         }
     }
 
-    /// Emit the ModR/M, SIB, and displacement suffixes as neeeded for this
+    /// Emit the ModR/M, SIB, and displacement suffixes as needed for this
     /// `Amode`.
     pub(crate) fn encode_rex_suffixes(
         &self,
