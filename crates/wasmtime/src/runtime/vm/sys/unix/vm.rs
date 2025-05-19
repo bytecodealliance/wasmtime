@@ -66,6 +66,8 @@ pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
     Ok(())
 }
 
+// NB: this function is duplicated in `crates/fiber/src/unix.rs` so if this
+// changes that should probably get updated as well.
 pub fn get_page_size() -> usize {
     unsafe { libc::sysconf(libc::_SC_PAGESIZE).try_into().unwrap() }
 }

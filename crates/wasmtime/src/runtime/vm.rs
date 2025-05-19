@@ -449,6 +449,8 @@ impl ModuleRuntimeInfo {
 /// Returns the host OS page size, in bytes.
 #[cfg(has_virtual_memory)]
 pub fn host_page_size() -> usize {
+    // NB: this function is duplicated in `crates/fiber/src/unix.rs` so if this
+    // changes that should probably get updated as well.
     static PAGE_SIZE: AtomicUsize = AtomicUsize::new(0);
 
     return match PAGE_SIZE.load(Ordering::Relaxed) {
