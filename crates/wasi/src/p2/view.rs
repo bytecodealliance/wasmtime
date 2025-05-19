@@ -72,11 +72,11 @@ pub struct WasiImpl<T>(pub IoImpl<T>);
 
 impl<T: IoView> IoView for WasiImpl<T> {
     fn table(&mut self) -> &mut ResourceTable {
-        T::table(&mut self.0 .0)
+        T::table(&mut self.0.0)
     }
 }
 impl<T: WasiView> WasiView for WasiImpl<T> {
     fn ctx(&mut self) -> &mut WasiCtx {
-        T::ctx(&mut self.0 .0)
+        T::ctx(&mut self.0.0)
     }
 }

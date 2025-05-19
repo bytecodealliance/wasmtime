@@ -1,6 +1,6 @@
 use crate::runtime::vm::VMGcRef;
 use crate::{
-    store::AutoAssertNoGc, AsContextMut, GcRefImpl, Result, Rooted, StoreContext, StoreContextMut,
+    AsContextMut, GcRefImpl, Result, Rooted, StoreContext, StoreContextMut, store::AutoAssertNoGc,
 };
 use core::any::Any;
 

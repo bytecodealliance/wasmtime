@@ -3,7 +3,7 @@
 use crate::isa::unwind::UnwindInst;
 use crate::machinst::Reg;
 use crate::result::CodegenResult;
-use crate::{binemit::CodeOffset, CodegenError};
+use crate::{CodegenError, binemit::CodeOffset};
 use alloc::vec::Vec;
 use gimli::write::{Address, FrameDescriptionEntry};
 
@@ -95,7 +95,7 @@ impl From<gimli::write::CallFrameInstruction> for CallFrameInstruction {
 
 impl Into<gimli::write::CallFrameInstruction> for CallFrameInstruction {
     fn into(self) -> gimli::write::CallFrameInstruction {
-        use gimli::{write::CallFrameInstruction, write::Expression, Register};
+        use gimli::{Register, write::CallFrameInstruction, write::Expression};
 
         match self {
             Self::Cfa(reg, offset) => CallFrameInstruction::Cfa(Register(reg), offset),

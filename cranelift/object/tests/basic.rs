@@ -1,7 +1,7 @@
 use cranelift_codegen::ir::*;
 use cranelift_codegen::isa::CallConv;
 use cranelift_codegen::settings;
-use cranelift_codegen::{ir::types::I16, Context};
+use cranelift_codegen::{Context, ir::types::I16};
 use cranelift_entity::EntityRef;
 use cranelift_frontend::*;
 use cranelift_module::*;

@@ -2,13 +2,12 @@ use anyhow::Result;
 use std::io::Write;
 use std::sync::Mutex;
 use std::time::Duration;
-use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::Store;
+use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime_wasi::p2::bindings::Command;
 use wasmtime_wasi::p2::{
-    add_to_linker_async,
+    IoView, WasiCtx, WasiCtxBuilder, WasiView, add_to_linker_async,
     bindings::{clocks::wall_clock, filesystem::types as filesystem},
-    IoView, WasiCtx, WasiCtxBuilder, WasiView,
 };
 use wasmtime_wasi::{DirPerms, FilePerms, HostMonotonicClock, HostWallClock};
 

@@ -1,8 +1,8 @@
 //! The module that implements the `wasmtime settings` command.
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use clap::Parser;
-use serde::{ser::SerializeMap, Serialize};
+use serde::{Serialize, ser::SerializeMap};
 use std::collections::BTreeMap;
 use std::str::FromStr;
 use wasmtime_environ::{CompilerBuilder, FlagValue, Setting, SettingKind, Tunables};

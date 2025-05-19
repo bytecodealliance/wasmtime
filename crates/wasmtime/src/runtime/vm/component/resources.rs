@@ -27,10 +27,10 @@ use crate::prelude::*;
 use core::error::Error;
 use core::fmt;
 use core::mem;
+use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::{
     ComponentTypes, RuntimeComponentInstanceIndex, TypeResourceTableIndex,
 };
-use wasmtime_environ::PrimaryMap;
 
 /// The maximum handle value is specified in
 /// <https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md>

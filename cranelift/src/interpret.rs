@@ -5,7 +5,7 @@ use clap::Parser;
 use cranelift_interpreter::environment::FunctionStore;
 use cranelift_interpreter::interpreter::{Interpreter, InterpreterState};
 use cranelift_interpreter::step::ControlFlow;
-use cranelift_reader::{parse_run_command, parse_test, ParseError, ParseOptions};
+use cranelift_reader::{ParseError, ParseOptions, parse_run_command, parse_test};
 use std::path::PathBuf;
 use std::{fs, io};
 use thiserror::Error;

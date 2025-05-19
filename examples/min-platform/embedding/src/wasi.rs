@@ -26,7 +26,7 @@ use alloc::collections::VecDeque;
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use core::cell::{Cell, RefCell};
 use core::fmt::Write as _;
 use core::future::Future;
@@ -35,10 +35,10 @@ use core::task::{Context, Poll, Waker};
 use wasmtime::component::{Component, Linker, Resource, ResourceTable};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi_io::{
-    bytes::Bytes,
-    poll::{subscribe, DynPollable, Pollable},
-    streams::{DynInputStream, DynOutputStream, InputStream, OutputStream},
     IoView,
+    bytes::Bytes,
+    poll::{DynPollable, Pollable, subscribe},
+    streams::{DynInputStream, DynOutputStream, InputStream, OutputStream},
 };
 
 /// Unlike super::run, its nice to provide some sort of output showing what the

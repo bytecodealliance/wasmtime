@@ -1,16 +1,16 @@
-use crate::net::{SocketAddressFamily, DEFAULT_TCP_BACKLOG};
+use crate::net::{DEFAULT_TCP_BACKLOG, SocketAddressFamily};
 use crate::p2::bindings::sockets::tcp::ErrorCode;
 use crate::p2::host::network;
 use crate::p2::{
     DynInputStream, DynOutputStream, InputStream, OutputStream, Pollable, SocketError,
     SocketResult, StreamError,
 };
-use crate::runtime::{with_ambient_tokio_runtime, AbortOnDropJoinHandle};
+use crate::runtime::{AbortOnDropJoinHandle, with_ambient_tokio_runtime};
 use anyhow::Result;
 use cap_net_ext::AddressFamily;
 use futures::Future;
-use io_lifetimes::views::SocketlikeView;
 use io_lifetimes::AsSocketlike;
+use io_lifetimes::views::SocketlikeView;
 use rustix::io::Errno;
 use rustix::net::sockopt;
 use std::io;
@@ -238,7 +238,7 @@ impl TcpSocket {
             TcpState::Default(..) | TcpState::Bound(..) => {}
 
             TcpState::Connecting(..) | TcpState::ConnectReady(..) => {
-                return Err(ErrorCode::ConcurrencyConflict.into())
+                return Err(ErrorCode::ConcurrencyConflict.into());
             }
 
             _ => return Err(ErrorCode::InvalidState.into()),
@@ -470,7 +470,7 @@ impl TcpSocket {
         let view = match self.tcp_state {
             TcpState::Connected { .. } => self.as_std_view()?,
             TcpState::Connecting(..) | TcpState::ConnectReady(..) => {
-                return Err(ErrorCode::ConcurrencyConflict.into())
+                return Err(ErrorCode::ConcurrencyConflict.into());
             }
             _ => return Err(ErrorCode::InvalidState.into()),
         };

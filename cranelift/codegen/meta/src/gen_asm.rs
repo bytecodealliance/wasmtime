@@ -1,9 +1,9 @@
 //! Generate the Cranelift-specific integration of the x64 assembler.
 
 use cranelift_assembler_x64_meta::dsl::{
-    format::RegClass, Format, Inst, Mutability, Operand, OperandKind,
+    Format, Inst, Mutability, Operand, OperandKind, format::RegClass,
 };
-use cranelift_srcgen::{fmtln, Formatter};
+use cranelift_srcgen::{Formatter, fmtln};
 
 /// This factors out use of the assembler crate name.
 const ASM: &str = "cranelift_assembler_x64";
@@ -307,29 +307,37 @@ pub fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
         .filter(|o| o.mutability.is_write())
         .collect::<Vec<_>>();
     match &write_operands[..] {
-            [] => unimplemented!("if you truly need this (and not a `SideEffect*`), add a `NoReturn` variant to `AssemblerOutputs`"),
-            [one] => match one.mutability {
-                Read => unreachable!(),
-                ReadWrite | Write => match one.location.kind() {
-                    Imm(_) => unreachable!(),
-                    // One read/write register output? Output the instruction
-                    // and that register.
-                    Reg(r) | FixedReg(r) => match r.reg_class().unwrap() {
-                        RegClass::Xmm => vec![IsleConstructor::RetXmm],
-                        RegClass::Gpr => vec![IsleConstructor::RetGpr],
-                    },
-                    // One read/write memory operand? Output a side effect.
-                    Mem(_) => vec![IsleConstructor::RetMemorySideEffect],
-                    // One read/write reg-mem output? We need constructors for
-                    // both variants.
-                    RegMem(rm) => match rm.reg_class().unwrap() {
-                        RegClass::Xmm => vec![IsleConstructor::RetXmm, IsleConstructor::RetMemorySideEffect],
-                        RegClass::Gpr => vec![IsleConstructor::RetGpr, IsleConstructor::RetMemorySideEffect],
-                    },
-                }
+        [] => unimplemented!(
+            "if you truly need this (and not a `SideEffect*`), add a `NoReturn` variant to `AssemblerOutputs`"
+        ),
+        [one] => match one.mutability {
+            Read => unreachable!(),
+            ReadWrite | Write => match one.location.kind() {
+                Imm(_) => unreachable!(),
+                // One read/write register output? Output the instruction
+                // and that register.
+                Reg(r) | FixedReg(r) => match r.reg_class().unwrap() {
+                    RegClass::Xmm => vec![IsleConstructor::RetXmm],
+                    RegClass::Gpr => vec![IsleConstructor::RetGpr],
+                },
+                // One read/write memory operand? Output a side effect.
+                Mem(_) => vec![IsleConstructor::RetMemorySideEffect],
+                // One read/write reg-mem output? We need constructors for
+                // both variants.
+                RegMem(rm) => match rm.reg_class().unwrap() {
+                    RegClass::Xmm => vec![
+                        IsleConstructor::RetXmm,
+                        IsleConstructor::RetMemorySideEffect,
+                    ],
+                    RegClass::Gpr => vec![
+                        IsleConstructor::RetGpr,
+                        IsleConstructor::RetMemorySideEffect,
+                    ],
+                },
             },
-            other => panic!("unsupported number of write operands {other:?}"),
-        }
+        },
+        other => panic!("unsupported number of write operands {other:?}"),
+    }
 }
 
 /// Generate a "raw" constructor that simply constructs, but does not emit

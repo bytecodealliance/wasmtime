@@ -15,17 +15,17 @@ use crate::ir::{
 };
 use crate::machinst::valueregs::InvalidSentinel;
 use crate::machinst::{
-    writable_value_regs, ABIMachineSpec, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder,
-    CallArgList, CallInfo, CallRetList, Callee, InsnIndex, LoweredBlock, MachLabel, Reg, Sig,
-    SigSet, TryCallInfo, VCode, VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants,
-    VCodeInst, ValueRegs, Writable,
+    ABIMachineSpec, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder, CallArgList, CallInfo,
+    CallRetList, Callee, InsnIndex, LoweredBlock, MachLabel, Reg, Sig, SigSet, TryCallInfo, VCode,
+    VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst, ValueRegs, Writable,
+    writable_value_regs,
 };
 use crate::settings::Flags;
-use crate::{trace, CodegenError, CodegenResult};
+use crate::{CodegenError, CodegenResult, trace};
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
 use rustc_hash::{FxHashMap, FxHashSet};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::fmt::Debug;
 
 use super::{VCodeBuildDirection, VRegAllocator};
@@ -421,11 +421,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                         value_regs[result] = regs;
                         trace!(
                             "bb {} inst {} ({:?}): result {} regs {:?}",
-                            bb,
-                            inst,
-                            f.dfg.insts[inst],
-                            result,
-                            regs,
+                            bb, inst, f.dfg.insts[inst], result, regs,
                         );
                     }
                 }
@@ -942,9 +938,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for label in labels {
                 trace!(
                     "value labeling: defines val {:?} -> reg {:?} -> label {:?}",
-                    val,
-                    reg,
-                    label,
+                    val, reg, label,
                 );
                 self.vcode.add_value_label(reg, label);
             }
@@ -1003,9 +997,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     ) -> CodegenResult<()> {
         trace!(
             "lower_clif_branch: block {} branch {:?} targets {:?}",
-            block,
-            branch,
-            targets,
+            block, branch, targets,
         );
         // When considering code-motion opportunities, consider the current
         // program point to be this branch.
@@ -1192,8 +1184,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // VCodeBuilder, let's build the VCode.
         trace!(
             "built vcode:\n{:?}Backwards {:?}",
-            &self.vregs,
-            &self.vcode.vcode
+            &self.vregs, &self.vcode.vcode
         );
         let vcode = self.vcode.build(self.vregs);
 
@@ -1497,9 +1488,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     pub fn get_value_as_source_or_const(&self, val: Value) -> NonRegInput {
         trace!(
             "get_input_for_val: val {} at cur_inst {:?} cur_scan_entry_color {:?}",
-            val,
-            self.cur_inst,
-            self.cur_scan_entry_color,
+            val, self.cur_inst, self.cur_scan_entry_color,
         );
         let inst = match self.f.dfg.value_def(val) {
             // OK to merge source instruction if we have a source
@@ -1565,9 +1554,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     // the code-motion.
                     trace!(
                         " -> side-effecting op {} for val {}: use state {:?}",
-                        src_inst,
-                        val,
-                        self.value_ir_uses[val]
+                        src_inst, val, self.value_ir_uses[val]
                     );
                     if self.cur_scan_entry_color.is_some()
                         && self.value_ir_uses[val] == ValueUseState::Once

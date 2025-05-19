@@ -18,8 +18,8 @@ use object::{
     RelocationEncoding, RelocationFlags, RelocationKind, SectionKind, SymbolFlags, SymbolKind,
     SymbolScope,
 };
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::mem;
 use target_lexicon::PointerWidth;
 
@@ -57,16 +57,16 @@ impl ObjectBuilder {
             target_lexicon::BinaryFormat::Wasm => {
                 return Err(ModuleError::Backend(anyhow!(
                     "binary format wasm is unsupported",
-                )))
+                )));
             }
             target_lexicon::BinaryFormat::Unknown => {
-                return Err(ModuleError::Backend(anyhow!("binary format is unknown")))
+                return Err(ModuleError::Backend(anyhow!("binary format is unknown")));
             }
             other => {
                 return Err(ModuleError::Backend(anyhow!(
                     "binary format {} not recognized",
                     other
-                )))
+                )));
             }
         };
         let architecture = match isa.triple().architecture {
@@ -107,7 +107,7 @@ impl ObjectBuilder {
                 return Err(ModuleError::Backend(anyhow!(
                     "target architecture {:?} is unsupported",
                     architecture,
-                )))
+                )));
             }
         };
         let endian = match isa.triple().endianness().unwrap() {

@@ -4,12 +4,12 @@ use crate::disasm::print_all;
 use crate::utils::read_to_string;
 use anyhow::{Context as _, Result};
 use clap::Parser;
+use cranelift_codegen::Context;
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::settings::FlagsOrIsa;
 use cranelift_codegen::timing;
-use cranelift_codegen::Context;
 use cranelift_reader::OwnedFlagsOrIsa;
-use cranelift_reader::{parse_sets_and_triple, parse_test, ParseOptions};
+use cranelift_reader::{ParseOptions, parse_sets_and_triple, parse_test};
 use std::path::Path;
 use std::path::PathBuf;
 

@@ -8,7 +8,7 @@
 //! type numbering.
 
 use crate::cdsl::types as cdsl_types;
-use cranelift_srcgen::{error, fmtln, Formatter, Language};
+use cranelift_srcgen::{Formatter, Language, error, fmtln};
 
 /// Emit a constant definition of a single value type.
 fn emit_type(ty: &cdsl_types::ValueType, fmt: &mut Formatter) {

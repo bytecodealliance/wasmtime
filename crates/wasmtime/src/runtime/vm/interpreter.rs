@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::vmcontext::VMArrayCallNative;
 use crate::runtime::vm::{
-    f32x4, f64x2, i8x16, tls, TrapRegisters, TrapTest, VMContext, VMOpaqueContext,
+    TrapRegisters, TrapTest, VMContext, VMOpaqueContext, f32x4, f64x2, i8x16, tls,
 };
 use crate::{Engine, ValRaw};
 use core::ptr::NonNull;

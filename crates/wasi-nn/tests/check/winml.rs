@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use windows::AI::MachineLearning::{LearningModelDevice, LearningModelDeviceKind};
 
 /// Return `Ok` if we can use WinML.

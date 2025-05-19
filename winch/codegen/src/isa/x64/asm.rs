@@ -1,7 +1,7 @@
 //! Assembler library implementation for x64.
 
 use crate::{
-    isa::{reg::Reg, CallingConvention},
+    isa::{CallingConvention, reg::Reg},
     masm::{
         DivKind, Extend, ExtendKind, ExtendType, IntCmpKind, MulWideKind, OperandSize, RemKind,
         RoundingMode, ShiftKind, Signed, V128ExtendKind, V128LoadExtendKind, Zero,
@@ -10,25 +10,27 @@ use crate::{
     x64::regs::scratch,
 };
 use cranelift_codegen::{
+    CallInfo, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
+    PatchRegion, VCodeConstantData, VCodeConstants, Writable,
     ir::{
-        types, ConstantPool, ExternalName, MemFlags, SourceLoc, TrapCode, Type, UserExternalNameRef,
+        ConstantPool, ExternalName, MemFlags, SourceLoc, TrapCode, Type, UserExternalNameRef, types,
     },
     isa::{
         unwind::UnwindInst,
         x64::{
+            AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
             args::{
-                self, Amode, Avx512Opcode, AvxOpcode, CmpOpcode, DivSignedness, ExtMode, FenceKind,
-                FromWritableReg, Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
-                ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
-                WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm, CC,
+                self, Amode, Avx512Opcode, AvxOpcode, CC, CmpOpcode, DivSignedness, ExtMode,
+                FenceKind, FromWritableReg, Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem,
+                RegMemImm, ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
+                WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm,
             },
-            encoding::rex::{encode_modrm, RexFlags},
+            encoding::rex::{RexFlags, encode_modrm},
             external::{PairedGpr, PairedXmm},
-            settings as x64_settings, AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
+            settings as x64_settings,
         },
     },
-    settings, CallInfo, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState,
-    MachLabel, PatchRegion, VCodeConstantData, VCodeConstants, Writable,
+    settings,
 };
 
 use crate::reg::WritableReg;

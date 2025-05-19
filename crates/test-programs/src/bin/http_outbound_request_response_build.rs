@@ -43,17 +43,19 @@ fn main() {
     {
         let req = http_types::OutgoingRequest::new(http_types::Fields::new());
 
-        assert!(req
-            .set_method(&http_types::Method::Other("invalid method".to_string()))
-            .is_err());
+        assert!(
+            req.set_method(&http_types::Method::Other("invalid method".to_string()))
+                .is_err()
+        );
 
         assert!(req.set_authority(Some("bad-port:99999")).is_err());
         assert!(req.set_authority(Some("bad-\nhost")).is_err());
         assert!(req.set_authority(Some("too-many-ports:80:80:80")).is_err());
 
-        assert!(req
-            .set_scheme(Some(&http_types::Scheme::Other("bad\nscheme".to_string())))
-            .is_err());
+        assert!(
+            req.set_scheme(Some(&http_types::Scheme::Other("bad\nscheme".to_string())))
+                .is_err()
+        );
 
         assert!(req.set_path_with_query(Some("/bad\npath")).is_err());
     }

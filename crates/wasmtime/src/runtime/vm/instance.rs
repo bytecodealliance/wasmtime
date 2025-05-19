@@ -17,7 +17,7 @@ use crate::runtime::vm::{
     WasmFault,
 };
 use crate::store::{StoreInner, StoreOpaque};
-use crate::{prelude::*, StoreContextMut};
+use crate::{StoreContextMut, prelude::*};
 use alloc::sync::Arc;
 use core::alloc::Layout;
 use core::any::Any;
@@ -30,11 +30,11 @@ use sptr::Strict;
 #[cfg(feature = "gc")]
 use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::{
-    packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
-    DefinedTableIndex, DefinedTagIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex,
-    GlobalIndex, HostPtr, MemoryIndex, Module, PrimaryMap, PtrSize, TableIndex, TableInitialValue,
-    TableSegmentElements, TagIndex, Trap, VMOffsets, VMSharedTypeIndex, WasmHeapTopType,
-    VMCONTEXT_MAGIC,
+    DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex,
+    ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex, HostPtr, MemoryIndex,
+    Module, PrimaryMap, PtrSize, TableIndex, TableInitialValue, TableSegmentElements, TagIndex,
+    Trap, VMCONTEXT_MAGIC, VMOffsets, VMSharedTypeIndex, WasmHeapTopType,
+    packed_option::ReservedValue,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;

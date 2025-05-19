@@ -67,10 +67,10 @@ use crate::{
     inst_predicates::{
         has_memory_fence_semantics, inst_addr_offset_type, inst_store_data, visit_block_succs,
     },
-    ir::{immediates::Offset32, AliasRegion, Block, Function, Inst, Opcode, Type, Value},
+    ir::{AliasRegion, Block, Function, Inst, Opcode, Type, Value, immediates::Offset32},
     trace,
 };
-use cranelift_entity::{packed_option::PackedOption, EntityRef};
+use cranelift_entity::{EntityRef, packed_option::PackedOption};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 /// For a given program point, the vector of last-store instruction

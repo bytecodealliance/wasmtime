@@ -1,34 +1,36 @@
 use super::{
+    ABI,
     abi::Aarch64ABI,
     address::Address,
     asm::{Assembler, PatchableAddToReg},
-    regs, ABI,
+    regs,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, local::LocalSlot, vmctx},
-    codegen::{ptr_type_from_ptr_size, CodeGenContext, CodeGenError, Emission, FuncEnv},
+    codegen::{CodeGenContext, CodeGenError, Emission, FuncEnv, ptr_type_from_ptr_size},
     isa::{
-        aarch64::abi::SHADOW_STACK_POINTER_SLOT_SIZE,
-        reg::{writable, Reg, WritableReg},
         CallingConvention,
+        aarch64::abi::SHADOW_STACK_POINTER_SLOT_SIZE,
+        reg::{Reg, WritableReg, writable},
     },
     masm::{
         CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I,
         IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind,
         ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, StoreKind,
-        TrapCode, TruncKind, V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind,
-        V128ExtMulKind, V128ExtendKind, V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind,
-        V128NegKind, V128SubKind, V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
-        TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+        TRUSTED_FLAGS, TrapCode, TruncKind, UNTRUSTED_FLAGS, V128AbsKind, V128AddKind,
+        V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind, V128MaxKind, V128MinKind,
+        V128MulKind, V128NarrowKind, V128NegKind, V128SubKind, V128TruncKind, VectorCompareKind,
+        VectorEqualityKind, Zero,
     },
     stack::TypedReg,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use cranelift_codegen::{
+    Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
     ir::{MemFlags, RelSourceLoc, SourceLoc},
     isa::aarch64::inst::{Cond, VectorSize},
-    settings, Final, MachBufferFinalized, MachLabel,
+    settings,
 };
 use regalloc2::RegClass;
 use wasmtime_environ::{PtrSize, WasmValType};

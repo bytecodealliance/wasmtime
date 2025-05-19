@@ -51,18 +51,18 @@
 //! [ColorGuard]: https://plas2022.github.io/files/pdf/SegueColorGuard.pdf
 
 use super::{
-    index_allocator::{MemoryInModule, ModuleAffinityIndexAllocator, SlotId},
     MemoryAllocationIndex,
+    index_allocator::{MemoryInModule, ModuleAffinityIndexAllocator, SlotId},
 };
 use crate::prelude::*;
 use crate::runtime::vm::{
-    mmap::AlignedLength, CompiledModuleId, InstanceAllocationRequest, InstanceLimits, Memory,
-    MemoryBase, MemoryImageSlot, Mmap, MmapOffset, PoolingInstanceAllocatorConfig,
+    CompiledModuleId, InstanceAllocationRequest, InstanceLimits, Memory, MemoryBase,
+    MemoryImageSlot, Mmap, MmapOffset, PoolingInstanceAllocatorConfig, mmap::AlignedLength,
 };
 use crate::{
+    MpkEnabled,
     runtime::vm::mpk::{self, ProtectionKey, ProtectionMask},
     vm::HostAlignedByteCount,
-    MpkEnabled,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

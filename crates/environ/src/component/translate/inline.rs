@@ -1404,7 +1404,9 @@ impl<'a> Inliner<'a> {
                 // somewhat tricky and needs something like temporary scratch
                 // space that isn't implemented.
                 ComponentFuncDef::Import(_) => {
-                    bail!("component export `{name}` is a reexport of an imported function which is not implemented")
+                    bail!(
+                        "component export `{name}` is a reexport of an imported function which is not implemented"
+                    )
                 }
             },
 

@@ -396,10 +396,12 @@ impl Table {
         wasmtime_export: crate::runtime::vm::ExportTable,
         store: &mut StoreOpaque,
     ) -> Table {
-        debug_assert!(wasmtime_export
-            .table
-            .ref_type
-            .is_canonicalized_for_runtime_usage());
+        debug_assert!(
+            wasmtime_export
+                .table
+                .ref_type
+                .is_canonicalized_for_runtime_usage()
+        );
 
         Table(store.store_data_mut().insert(wasmtime_export))
     }

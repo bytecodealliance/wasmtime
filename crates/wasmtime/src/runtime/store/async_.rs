@@ -1,13 +1,13 @@
+#[cfg(feature = "call-hook")]
+use crate::CallHook;
 use crate::prelude::*;
 use crate::runtime::vm::mpk::{self, ProtectionMask};
 use crate::store::{ResourceLimiterInner, StoreInner, StoreOpaque};
-#[cfg(feature = "call-hook")]
-use crate::CallHook;
 use crate::{Engine, Store, StoreContextMut, UpdateDeadline};
 use core::cell::UnsafeCell;
 use core::future::Future;
 use core::ops::Range;
-use core::pin::{pin, Pin};
+use core::pin::{Pin, pin};
 use core::ptr;
 use core::task::{Context, Poll};
 
@@ -86,9 +86,9 @@ impl<T> Store<T> {
     pub fn limiter_async(
         &mut self,
         mut limiter: impl FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync)
-            + Send
-            + Sync
-            + 'static,
+        + Send
+        + Sync
+        + 'static,
     ) {
         debug_assert!(self.inner.async_support());
         // Apply the limits on instances, tables, and memory given by the limiter:

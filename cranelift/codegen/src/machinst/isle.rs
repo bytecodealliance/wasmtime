@@ -6,7 +6,7 @@ use smallvec::SmallVec;
 pub use super::MachLabel;
 use super::RetPair;
 pub use crate::ir::{condcodes::CondCode, *};
-pub use crate::isa::{unwind::UnwindInst, TargetIsa};
+pub use crate::isa::{TargetIsa, unwind::UnwindInst};
 pub use crate::machinst::{
     ABIArg, ABIArgSlot, ABIMachineSpec, InputSourceInst, Lower, LowerBackend, RealReg, Reg,
     RelocDistance, Sig, TryCallInfo, VCodeInst, Writable,
@@ -525,11 +525,12 @@ macro_rules! isle_lower_prelude_methods {
             dst: WritableReg,
             stack_slot: DynamicStackSlot,
         ) -> MInst {
-            assert!(self
-                .lower_ctx
-                .abi()
-                .dynamic_stackslot_offsets()
-                .is_valid(stack_slot));
+            assert!(
+                self.lower_ctx
+                    .abi()
+                    .dynamic_stackslot_offsets()
+                    .is_valid(stack_slot)
+            );
             self.lower_ctx
                 .abi()
                 .dynamic_stackslot_addr(stack_slot, dst)

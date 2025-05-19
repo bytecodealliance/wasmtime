@@ -1,7 +1,7 @@
 //! Generate format-related Rust code; this also includes generation of encoding
 //! Rust code.
 
-use super::{fmtln, Formatter};
+use super::{Formatter, fmtln};
 use crate::dsl;
 
 impl dsl::Format {

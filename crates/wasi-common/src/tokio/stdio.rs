@@ -1,1 +1,1 @@
-pub use super::file::{stderr, stdin, stdout, Stderr, Stdin, Stdout};
+pub use super::file::{Stderr, Stdin, Stdout, stderr, stdin, stdout};

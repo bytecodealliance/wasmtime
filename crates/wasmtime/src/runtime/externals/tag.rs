@@ -1,7 +1,7 @@
 use crate::runtime::types::TagType;
 use crate::{
-    store::{StoreData, StoreOpaque, Stored},
     AsContext,
+    store::{StoreData, StoreOpaque, Stored},
 };
 use wasmtime_environ::VMSharedTypeIndex;
 

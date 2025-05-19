@@ -1,9 +1,9 @@
-pub use crate::debug::transform::transform_dwarf;
 use crate::debug::Compilation;
+pub use crate::debug::transform::transform_dwarf;
 use cranelift_codegen::ir::Endianness;
 use cranelift_codegen::isa::{
-    unwind::{CfaUnwindInfo, UnwindInfo},
     TargetIsa,
+    unwind::{CfaUnwindInfo, UnwindInfo},
 };
 use gimli::write::{Address, Dwarf, EndianVec, FrameTable, Result, Sections, Writer};
 use gimli::{RunTimeEndian, SectionId};

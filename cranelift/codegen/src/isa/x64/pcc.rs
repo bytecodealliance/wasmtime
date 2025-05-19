@@ -3,10 +3,10 @@
 use crate::ir::pcc::*;
 use crate::ir::types::*;
 use crate::isa::x64::args::AvxOpcode;
-use crate::isa::x64::inst::args::{
-    Amode, Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind, SseOpcode, SyntheticAmode, ToWritableReg, CC,
-};
 use crate::isa::x64::inst::Inst;
+use crate::isa::x64::inst::args::{
+    Amode, CC, Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind, SseOpcode, SyntheticAmode, ToWritableReg,
+};
 use crate::machinst::pcc::*;
 use crate::machinst::{InsnIndex, VCode, VCodeConstantData};
 use crate::machinst::{Reg, Writable};
@@ -914,8 +914,7 @@ fn check_mem<'a>(
             let loaded_fact = clamp_range(ctx, to_bits, from_bits, ctx.load(&addr, ty)?.cloned())?;
             trace!(
                 "loaded_fact = {:?} result_fact = {:?}",
-                loaded_fact,
-                result_fact
+                loaded_fact, result_fact
             );
             if ctx.subsumes_fact_optionals(loaded_fact.as_ref(), result_fact) {
                 Ok(loaded_fact.clone())

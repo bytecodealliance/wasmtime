@@ -1,8 +1,8 @@
 use super::{super::REALLOC_AND_FREE, engine};
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use wasmtime::{
-    component::{Component, Linker},
     Store,
+    component::{Component, Linker},
 };
 
 mod empty_error {

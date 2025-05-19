@@ -5,7 +5,7 @@ mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
-use crate::runtime::vm::{f32x4, f64x2, i8x16, GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe};
+use crate::runtime::vm::{GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
@@ -16,8 +16,8 @@ use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use sptr::Strict;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, DefinedMemoryIndex, Unsigned, VMSharedTypeIndex, WasmHeapTopType,
-    WasmValType, VMCONTEXT_MAGIC,
+    BuiltinFunctionIndex, DefinedMemoryIndex, Unsigned, VMCONTEXT_MAGIC, VMSharedTypeIndex,
+    WasmHeapTopType, WasmValType,
 };
 
 /// A function pointer that exposes the array calling convention.

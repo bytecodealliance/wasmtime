@@ -1,4 +1,4 @@
-use std::ffi::{c_char, CStr};
+use std::ffi::{CStr, c_char};
 
 use anyhow::Context;
 use wasmtime::component::{Component, ComponentExportIndex};

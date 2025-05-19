@@ -3,7 +3,7 @@ use capstone::arch::BuildsCapstone;
 use serde_derive::Serialize;
 use std::{
     fs::File,
-    io::{read_to_string, Write},
+    io::{Write, read_to_string},
     path::Path,
     str::FromStr,
 };

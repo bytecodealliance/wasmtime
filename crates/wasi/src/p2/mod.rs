@@ -246,14 +246,14 @@ pub use self::ctx::{WasiCtx, WasiCtxBuilder};
 pub use self::filesystem::{FileInputStream, FsError, FsResult};
 pub use self::network::{SocketError, SocketResult};
 pub use self::stdio::{
-    stderr, stdin, stdout, AsyncStdinStream, AsyncStdoutStream, IsATTY, OutputFile, Stderr, Stdin,
-    StdinStream, Stdout, StdoutStream,
+    AsyncStdinStream, AsyncStdoutStream, IsATTY, OutputFile, Stderr, Stdin, StdinStream, Stdout,
+    StdoutStream, stderr, stdin, stdout,
 };
 pub use self::view::{WasiImpl, WasiView};
 // These contents of wasmtime-wasi-io are re-exported by this module for compatibility:
 // they were originally defined in this module before being factored out, and many
 // users of this module depend on them at these names.
-pub use wasmtime_wasi_io::poll::{subscribe, DynFuture, DynPollable, MakeFuture, Pollable};
+pub use wasmtime_wasi_io::poll::{DynFuture, DynPollable, MakeFuture, Pollable, subscribe};
 pub use wasmtime_wasi_io::streams::{
     DynInputStream, DynOutputStream, Error as IoError, InputStream, OutputStream, StreamError,
     StreamResult,

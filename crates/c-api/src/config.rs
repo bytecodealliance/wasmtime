@@ -464,8 +464,8 @@ pub struct wasmtime_pooling_allocation_config_t {
 
 #[unsafe(no_mangle)]
 #[cfg(feature = "pooling-allocator")]
-pub extern "C" fn wasmtime_pooling_allocation_config_new(
-) -> Box<wasmtime_pooling_allocation_config_t> {
+pub extern "C" fn wasmtime_pooling_allocation_config_new()
+-> Box<wasmtime_pooling_allocation_config_t> {
     Box::new(wasmtime_pooling_allocation_config_t {
         config: PoolingAllocationConfig::default(),
     })

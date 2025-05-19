@@ -1,7 +1,7 @@
 //! Evaluating const expressions.
 
 use crate::prelude::*;
-use crate::runtime::vm::{Instance, VMGcRef, ValRaw, I31};
+use crate::runtime::vm::{I31, Instance, VMGcRef, ValRaw};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 #[cfg(feature = "gc")]
 use crate::{

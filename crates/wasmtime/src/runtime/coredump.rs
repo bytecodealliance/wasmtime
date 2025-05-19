@@ -1,8 +1,8 @@
 use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{
-    store::StoreOpaque, AsContextMut, FrameInfo, Global, HeapType, Instance, Memory, Module,
-    StoreContextMut, Val, ValType, WasmBacktrace,
+    AsContextMut, FrameInfo, Global, HeapType, Instance, Memory, Module, StoreContextMut, Val,
+    ValType, WasmBacktrace, store::StoreOpaque,
 };
 use std::fmt;
 

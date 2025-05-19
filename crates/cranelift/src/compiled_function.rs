@@ -1,7 +1,7 @@
-use crate::{mach_reloc_to_reloc, mach_trap_to_trap, Relocation};
+use crate::{Relocation, mach_reloc_to_reloc, mach_trap_to_trap};
 use cranelift_codegen::{
-    ir, isa::unwind::CfaUnwindInfo, isa::unwind::UnwindInfo, Final, MachBufferFinalized,
-    MachSrcLoc, ValueLabelsRanges,
+    Final, MachBufferFinalized, MachSrcLoc, ValueLabelsRanges, ir, isa::unwind::CfaUnwindInfo,
+    isa::unwind::UnwindInfo,
 };
 use wasmtime_environ::{FilePos, InstructionAddressMap, PrimaryMap, TrapInformation};
 

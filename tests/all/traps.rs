@@ -826,17 +826,21 @@ fn multithreaded_traps() -> Result<()> {
     )?;
     let instance = Instance::new(&mut store, &module, &[])?;
 
-    assert!(instance
-        .get_typed_func::<(), ()>(&mut store, "run")?
-        .call(&mut store, ())
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(), ()>(&mut store, "run")?
+            .call(&mut store, ())
+            .is_err()
+    );
 
     let handle = std::thread::spawn(move || {
-        assert!(instance
-            .get_typed_func::<(), ()>(&mut store, "run")
-            .unwrap()
-            .call(&mut store, ())
-            .is_err());
+        assert!(
+            instance
+                .get_typed_func::<(), ()>(&mut store, "run")
+                .unwrap()
+                .call(&mut store, ())
+                .is_err()
+        );
     });
 
     handle.join().expect("couldn't join thread");

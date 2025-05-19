@@ -603,7 +603,9 @@ unsafe impl WasmTy for Option<Func> {
         } else if nullable {
             Ok(())
         } else {
-            bail!("argument type mismatch: expected non-nullable (ref {expected}), found null reference")
+            bail!(
+                "argument type mismatch: expected non-nullable (ref {expected}), found null reference"
+            )
         }
     }
 

@@ -1,6 +1,6 @@
 //! Implementation of the `wasmtime objdump` CLI command.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use capstone::InsnGroupType::{CS_GRP_JUMP, CS_GRP_RET};
 use clap::Parser;
 use cranelift_codegen::isa::lookup_by_name;
@@ -14,7 +14,7 @@ use std::iter::{self, Peekable};
 use std::path::{Path, PathBuf};
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use wasmtime::Engine;
-use wasmtime_environ::{obj, FilePos, StackMap, Trap};
+use wasmtime_environ::{FilePos, StackMap, Trap, obj};
 
 /// A helper utility in wasmtime to explore the compiled object file format of
 /// a `*.cwasm` file.

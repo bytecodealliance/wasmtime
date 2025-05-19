@@ -76,7 +76,7 @@ use bytes::Bytes;
 use rustls::pki_types::ServerName;
 use std::io;
 use std::sync::Arc;
-use std::task::{ready, Poll};
+use std::task::{Poll, ready};
 use std::{future::Future, mem, pin::Pin, sync::LazyLock};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::sync::Mutex;
@@ -188,7 +188,9 @@ impl From<io::Error> for TlsError {
         let error = match error.downcast::<StreamError>() {
             Ok(StreamError::LastOperationFailed(e)) => return Self::Io(e),
             Ok(StreamError::Trap(e)) => return Self::Trap(e),
-            Ok(StreamError::Closed) => unreachable!("our wasi-to-tokio stream transformer should have translated this to a 0-sized read"),
+            Ok(StreamError::Closed) => unreachable!(
+                "our wasi-to-tokio stream transformer should have translated this to a 0-sized read"
+            ),
             Err(e) => e,
         };
 

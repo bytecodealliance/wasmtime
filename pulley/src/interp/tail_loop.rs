@@ -27,10 +27,10 @@
 //!   at this time but doesn't actually run anywhere.
 
 use super::*;
+use crate::ExtendedOpcode;
 use crate::decode::ExtendedOpVisitor;
 use crate::opcode::Opcode;
 use crate::profile::ExecutingPcRef;
-use crate::ExtendedOpcode;
 
 /// ABI signature of each opcode handler.
 ///

@@ -55,12 +55,12 @@
 //! ```
 
 use crate::prelude::*;
-use crate::runtime::vm::table::{Table, TableElementType};
-use crate::runtime::vm::vmcontext::VMFuncRef;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
+use crate::runtime::vm::table::{Table, TableElementType};
+use crate::runtime::vm::vmcontext::VMFuncRef;
 use crate::runtime::vm::{
-    f32x4, f64x2, i8x16, HostResultHasUnwindSentinel, Instance, TrapReason, VMStore,
+    HostResultHasUnwindSentinel, Instance, TrapReason, VMStore, f32x4, f64x2, i8x16,
 };
 use core::convert::Infallible;
 use core::ptr::NonNull;
@@ -94,7 +94,7 @@ pub mod raw {
     // between doc comments and `cfg`s.
     #![allow(unused_doc_comments, unused_attributes)]
 
-    use crate::runtime::vm::{f32x4, f64x2, i8x16, InstanceAndStore, VMContext};
+    use crate::runtime::vm::{InstanceAndStore, VMContext, f32x4, f64x2, i8x16};
     use core::ptr::NonNull;
 
     macro_rules! libcall {
@@ -603,7 +603,7 @@ unsafe fn get_interned_func_ref(
 ) -> *mut u8 {
     use super::FuncRefTableId;
     use crate::store::AutoAssertNoGc;
-    use wasmtime_environ::{packed_option::ReservedValue, ModuleInternedTypeIndex};
+    use wasmtime_environ::{ModuleInternedTypeIndex, packed_option::ReservedValue};
 
     let store = AutoAssertNoGc::new(store.store_opaque_mut());
 
@@ -785,9 +785,9 @@ unsafe fn array_new_elem(
     len: u32,
 ) -> Result<core::num::NonZeroU32> {
     use crate::{
+        ArrayRef, ArrayRefPre, ArrayType, Func, RootSet, RootedGcRefImpl, Val,
         store::AutoAssertNoGc,
         vm::const_expr::{ConstEvalContext, ConstExprEvaluator},
-        ArrayRef, ArrayRefPre, ArrayType, Func, RootSet, RootedGcRefImpl, Val,
     };
     use wasmtime_environ::{ModuleInternedTypeIndex, TableSegmentElements};
 
@@ -863,9 +863,9 @@ unsafe fn array_init_elem(
     len: u32,
 ) -> Result<()> {
     use crate::{
+        ArrayRef, Func, OpaqueRootScope, Val,
         store::AutoAssertNoGc,
         vm::const_expr::{ConstEvalContext, ConstExprEvaluator},
-        ArrayRef, Func, OpaqueRootScope, Val,
     };
     use wasmtime_environ::{ModuleInternedTypeIndex, TableSegmentElements};
 
@@ -876,8 +876,8 @@ unsafe fn array_init_elem(
     let elem_index = ElemIndex::from_u32(elem_index);
 
     log::trace!(
-            "array.init_elem(array={array:#x}, dst={dst}, elem_index={elem_index:?}, src={src}, len={len})",
-        );
+        "array.init_elem(array={array:#x}, dst={dst}, elem_index={elem_index:?}, src={src}, len={len})",
+    );
 
     // Convert the raw GC ref into a `Rooted<ArrayRef>`.
     let array = VMGcRef::from_raw_u32(array).ok_or_else(|| Trap::NullReference)?;
@@ -961,11 +961,11 @@ unsafe fn array_copy(
     src: u32,
     len: u32,
 ) -> Result<()> {
-    use crate::{store::AutoAssertNoGc, ArrayRef, OpaqueRootScope};
+    use crate::{ArrayRef, OpaqueRootScope, store::AutoAssertNoGc};
 
     log::trace!(
-            "array.copy(dst_array={dst_array:#x}, dst_index={dst}, src_array={src_array:#x}, src_index={src}, len={len})",
-        );
+        "array.copy(dst_array={dst_array:#x}, dst_index={dst}, src_array={src_array:#x}, src_index={src}, len={len})",
+    );
 
     let mut store = OpaqueRootScope::new(store.store_opaque_mut());
     let mut store = AutoAssertNoGc::new(&mut store);
@@ -1290,11 +1290,7 @@ fn i8x16_swizzle(_store: &mut dyn VMStore, _instance: &mut Instance, a: i8x16, b
         // index, rather than the x86 pshufb semantics, since Wasmtime uses
         // this to implement `i8x16.swizzle`.
         let select = |arr: &[u8; 16], byte: u8| {
-            if byte >= 16 {
-                0x00
-            } else {
-                arr[byte as usize]
-            }
+            if byte >= 16 { 0x00 } else { arr[byte as usize] }
         };
 
         U {

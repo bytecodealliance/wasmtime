@@ -1,4 +1,4 @@
-use anyhow::{bail, format_err, Result};
+use anyhow::{Result, bail, format_err};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use std::env;
 use std::io::Write;

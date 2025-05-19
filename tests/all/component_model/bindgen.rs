@@ -3,8 +3,8 @@
 use super::engine;
 use anyhow::Result;
 use wasmtime::{
-    component::{Component, Linker},
     Store,
+    component::{Component, Linker},
 };
 
 mod ownership;
@@ -697,7 +697,10 @@ mod unstable_import {
     }
     fn assert_failure(link_options: &LinkOptions) {
         let err = run_with_options(link_options).unwrap_err().to_string();
-        assert_eq!(err, "component imports instance `foo:foo/my-interface`, but a matching implementation was not found in the linker");
+        assert_eq!(
+            err,
+            "component imports instance `foo:foo/my-interface`, but a matching implementation was not found in the linker"
+        );
     }
 
     fn run_with_options(link_options: &LinkOptions) -> Result<()> {

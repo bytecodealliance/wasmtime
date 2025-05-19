@@ -1,6 +1,6 @@
 use crate::{
-    store::{StoreContextMut, StoreOpaque},
     ArrayType, AsContext, AsContextMut, GcRefImpl, Result, Val,
+    store::{StoreContextMut, StoreOpaque},
 };
 
 /// Support for `ArrayRefPre` disabled at compile time because the `gc` cargo

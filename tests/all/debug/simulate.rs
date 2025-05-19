@@ -1,6 +1,6 @@
-use super::dump::{get_dwarfdump, DwarfDumpSection};
+use super::dump::{DwarfDumpSection, get_dwarfdump};
 use super::obj::compile_cranelift;
-use anyhow::{format_err, Result};
+use anyhow::{Result, format_err};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use tempfile::NamedTempFile;
 use wat::parse_str;

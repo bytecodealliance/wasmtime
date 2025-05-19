@@ -15,7 +15,7 @@ use wasmparser::component_types::ComponentAnyTypeId;
 use wasmparser::{Parser, Payload, Validator, WasmFeatures};
 use wasmtime_environ::component::*;
 use wasmtime_environ::fact::Module;
-use wasmtime_test_util::component_fuzz::{TestCase, Type, MAX_TYPE_DEPTH};
+use wasmtime_test_util::component_fuzz::{MAX_TYPE_DEPTH, TestCase, Type};
 
 const TYPE_COUNT: usize = 50;
 const MAX_ARITY: u32 = 5;

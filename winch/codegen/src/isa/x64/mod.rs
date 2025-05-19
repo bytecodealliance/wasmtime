@@ -1,5 +1,5 @@
 use crate::{
-    abi::{wasm_sig, ABI},
+    abi::{ABI, wasm_sig},
     codegen::{BuiltinFunctions, CodeGen, CodeGenContext, FuncEnv, TypeConverter},
 };
 
@@ -14,7 +14,7 @@ use crate::{
 };
 use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
-use cranelift_codegen::{isa::x64::settings as x64_settings, Final, MachBufferFinalized};
+use cranelift_codegen::{Final, MachBufferFinalized, isa::x64::settings as x64_settings};
 use cranelift_codegen::{MachTextSectionBuilder, TextSectionBuilder};
 use target_lexicon::Triple;
 use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};

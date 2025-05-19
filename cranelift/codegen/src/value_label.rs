@@ -1,6 +1,6 @@
+use crate::HashMap;
 use crate::ir::ValueLabel;
 use crate::machinst::Reg;
-use crate::HashMap;
 use alloc::vec::Vec;
 
 #[cfg(feature = "enable-serde")]

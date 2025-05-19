@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use std::rc::Rc;
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
 #[test]
@@ -49,9 +49,11 @@ fn link_twice_bad() -> Result<()> {
     // functions
     linker.func_wrap("f", "", || {})?;
     assert!(linker.func_wrap("f", "", || {}).is_err());
-    assert!(linker
-        .func_wrap("f", "", || -> Result<()> { loop {} })
-        .is_err());
+    assert!(
+        linker
+            .func_wrap("f", "", || -> Result<()> { loop {} })
+            .is_err()
+    );
 
     // globals
     let ty = GlobalType::new(ValType::I32, Mutability::Const);
@@ -278,9 +280,11 @@ fn get_host_function() -> Result<()> {
     let mut linker = Linker::new(&engine);
     linker.func_wrap("mod", "f1", || {})?;
     let mut store = Store::new(&engine, ());
-    assert!(linker
-        .get_by_import(&mut store, &module.imports().nth(0).unwrap())
-        .is_some());
+    assert!(
+        linker
+            .get_by_import(&mut store, &module.imports().nth(0).unwrap())
+            .is_some()
+    );
 
     Ok(())
 }

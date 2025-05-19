@@ -4,12 +4,12 @@
 pub(super) mod isle;
 
 use crate::ir::pcc::{FactContext, PccResult};
-use crate::ir::{types, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type};
+use crate::ir::{ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type, types};
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::isa::x64::pcc;
-use crate::isa::{x64::X64Backend, CallConv};
+use crate::isa::{CallConv, x64::X64Backend};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;

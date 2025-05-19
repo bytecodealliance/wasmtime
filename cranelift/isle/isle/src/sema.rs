@@ -18,10 +18,10 @@ use crate::error::*;
 use crate::lexer::Pos;
 use crate::log;
 use crate::stablemapset::{StableMap, StableSet};
-use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fmt;
 
 declare_id!(

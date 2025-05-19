@@ -1,10 +1,10 @@
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use libtest_mimic::{Arguments, FormatSetting, Trial};
 use std::sync::{Condvar, LazyLock, Mutex};
 use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, MpkEnabled, PoolingAllocationConfig, Store,
 };
-use wasmtime_test_util::wast::{limits, Collector, Compiler, WastConfig, WastTest};
+use wasmtime_test_util::wast::{Collector, Compiler, WastConfig, WastTest, limits};
 use wasmtime_wast::{Async, SpectestConfig, WastContext};
 
 fn main() {

@@ -19,9 +19,10 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         assert_eq!("while in thought", &io::read_to_string(&mut file)?);
 
-        assert!(file
-            .write_all(b"Did gyre and gimble in the wabe;\n")
-            .is_err());
+        assert!(
+            file.write_all(b"Did gyre and gimble in the wabe;\n")
+                .is_err()
+        );
     }
 
     assert!(OpenOptions::new().append(true).open("bar.txt").is_err());

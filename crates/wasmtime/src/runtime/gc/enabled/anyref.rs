@@ -4,9 +4,9 @@ use super::{ExternRef, RootedGcRefImpl};
 use crate::prelude::*;
 use crate::runtime::vm::VMGcRef;
 use crate::{
+    ArrayRef, ArrayType, AsContext, AsContextMut, EqRef, GcRefImpl, GcRootIndex, HeapType, I31,
+    ManuallyRooted, RefType, Result, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy,
     store::{AutoAssertNoGc, StoreOpaque},
-    ArrayRef, ArrayType, AsContext, AsContextMut, EqRef, GcRefImpl, GcRootIndex, HeapType,
-    ManuallyRooted, RefType, Result, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy, I31,
 };
 use core::mem;
 use core::mem::MaybeUninit;

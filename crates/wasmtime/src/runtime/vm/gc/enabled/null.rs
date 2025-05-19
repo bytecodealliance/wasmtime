@@ -6,13 +6,13 @@
 
 use super::*;
 use crate::{
+    Engine,
     prelude::*,
     vm::{
         ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
         GcProgress, GcRootsIter, GcRuntime, SendSyncUnsafeCell, TypedGcRef, VMGcHeader, VMGcRef,
         VMMemoryDefinition,
     },
-    Engine,
 };
 use core::ptr::NonNull;
 use core::{
@@ -21,8 +21,8 @@ use core::{
     num::{NonZeroU32, NonZeroUsize},
 };
 use wasmtime_environ::{
-    null::NullTypeLayouts, GcArrayLayout, GcStructLayout, GcTypeLayouts, VMGcKind,
-    VMSharedTypeIndex,
+    GcArrayLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
+    null::NullTypeLayouts,
 };
 
 /// The null collector.

@@ -1,8 +1,8 @@
 use std::{
-    collections::{hash_map::RandomState, HashSet},
+    collections::{HashSet, hash_map::RandomState},
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, RwLock,
+        atomic::{AtomicBool, Ordering},
     },
 };
 use wasmtime::*;

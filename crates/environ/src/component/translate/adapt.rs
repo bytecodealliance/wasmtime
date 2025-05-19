@@ -115,9 +115,9 @@
 //! time this may want to be revisited if too many adapter modules are being
 //! created.
 
+use crate::EntityType;
 use crate::component::translate::*;
 use crate::fact;
-use crate::EntityType;
 use std::collections::HashSet;
 
 /// Metadata information about a fused adapter.

@@ -1,6 +1,6 @@
+use crate::component::InstanceExportLookup;
 use crate::component::matching::InstanceType;
 use crate::component::types;
-use crate::component::InstanceExportLookup;
 use crate::prelude::*;
 use crate::runtime::vm::component::ComponentRuntimeInfo;
 #[cfg(feature = "std")]
@@ -9,8 +9,8 @@ use crate::runtime::vm::{
     CompiledModuleId, VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMWasmCallFunction,
 };
 use crate::{
-    code::CodeObject, code_memory::CodeMemory, type_registry::TypeCollection, Engine, Module,
-    ResourcesRequired,
+    Engine, Module, ResourcesRequired, code::CodeObject, code_memory::CodeMemory,
+    type_registry::TypeCollection,
 };
 use crate::{FuncType, ValType};
 use alloc::sync::Arc;
@@ -19,12 +19,12 @@ use core::ops::Range;
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::path::Path;
+use wasmtime_environ::TypeTrace;
 use wasmtime_environ::component::{
     AllCallFunc, CompiledComponentInfo, ComponentArtifacts, ComponentTypes, Export, ExportIndex,
     GlobalInitializer, InstantiateModule, NameMapNoIntern, StaticModuleIndex, TrampolineIndex,
     TypeComponentIndex, VMComponentOffsets,
 };
-use wasmtime_environ::TypeTrace;
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
 
 /// A compiled WebAssembly Component.

@@ -2,7 +2,7 @@
 
 use crate::api::{AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, TrapCode};
 use crate::gpr::{self, NonRspGpr, Size};
-use crate::rex::{encode_modrm, encode_sib, Disp, RexPrefix};
+use crate::rex::{Disp, RexPrefix, encode_modrm, encode_sib};
 use crate::{RegisterVisitor, Registers};
 
 /// x64 memory addressing modes.

@@ -1,8 +1,8 @@
-use super::index_allocator::{SimpleIndexAllocator, SlotId};
 use super::GcHeapAllocationIndex;
+use super::index_allocator::{SimpleIndexAllocator, SlotId};
 use crate::runtime::vm::{GcHeap, GcRuntime, PoolingInstanceAllocatorConfig, Result};
 use crate::vm::{Memory, MemoryAllocationIndex};
-use crate::{prelude::*, Engine};
+use crate::{Engine, prelude::*};
 use std::sync::Mutex;
 
 enum HeapSlot {

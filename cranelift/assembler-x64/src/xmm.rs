@@ -1,6 +1,6 @@
 //! Xmm register operands; see [`Xmm`].
 
-use crate::{rex::encode_modrm, AsReg, CodeSink};
+use crate::{AsReg, CodeSink, rex::encode_modrm};
 
 /// An x64 SSE register (e.g., `%xmm0`).
 #[derive(Clone, Copy, Debug)]

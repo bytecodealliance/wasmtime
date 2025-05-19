@@ -1,6 +1,6 @@
 //! Aarch64 addressing mode.
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use cranelift_codegen::{
     ir::types,
     isa::aarch64::inst::{AMode, PairAMode, SImm7Scaled, SImm9},

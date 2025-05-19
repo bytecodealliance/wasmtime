@@ -8,11 +8,11 @@ use cranelift_codegen::entity::{EntityRef, EntitySet, SecondaryMap};
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{
-    types, AbiParam, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, ExtFuncData,
+    AbiParam, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, ExtFuncData,
     ExternalName, FuncRef, Function, GlobalValue, GlobalValueData, Inst, InstBuilder,
     InstBuilderBase, InstructionData, JumpTable, JumpTableData, LibCall, MemFlags, RelSourceLoc,
     SigRef, Signature, StackSlot, StackSlotData, Type, Value, ValueLabel, ValueLabelAssignments,
-    ValueLabelStart,
+    ValueLabelStart, types,
 };
 use cranelift_codegen::isa::TargetFrontendConfig;
 use cranelift_codegen::packed_option::PackedOption;
@@ -1231,17 +1231,17 @@ impl<'a> FunctionBuilder<'a> {
 #[cfg(test)]
 mod tests {
     use super::greatest_divisible_power_of_two;
+    use crate::Variable;
     use crate::frontend::{
         DeclareVariableError, DefVariableError, FunctionBuilder, FunctionBuilderContext,
         UseVariableError,
     };
-    use crate::Variable;
     use alloc::string::ToString;
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir::condcodes::IntCC;
     use cranelift_codegen::ir::{
-        types::*, AbiParam, BlockCall, ExceptionTableData, ExtFuncData, ExternalName, Function,
-        InstBuilder, MemFlags, Signature, UserExternalName, UserFuncName, Value,
+        AbiParam, BlockCall, ExceptionTableData, ExtFuncData, ExternalName, Function, InstBuilder,
+        MemFlags, Signature, UserExternalName, UserFuncName, Value, types::*,
     };
     use cranelift_codegen::isa::{CallConv, TargetFrontendConfig, TargetIsa};
     use cranelift_codegen::settings;

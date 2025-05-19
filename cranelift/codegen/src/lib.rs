@@ -21,9 +21,9 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(not(feature = "std"))]
-use hashbrown::{hash_map, HashMap};
+use hashbrown::{HashMap, hash_map};
 #[cfg(feature = "std")]
-use std::collections::{hash_map, HashMap};
+use std::collections::{HashMap, hash_map};
 
 pub use crate::context::Context;
 pub use crate::value_label::{LabelValueLoc, ValueLabelsRanges, ValueLocRange};

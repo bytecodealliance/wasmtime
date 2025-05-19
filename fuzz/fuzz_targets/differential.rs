@@ -8,7 +8,7 @@ use std::sync::{Mutex, Once};
 use wasmtime_fuzzing::generators::{Config, DiffValue, DiffValueType, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
 use wasmtime_fuzzing::oracles::engine::{build_allowed_env_list, parse_env_list};
-use wasmtime_fuzzing::oracles::{differential, engine, log_wasm, DiffEqResult};
+use wasmtime_fuzzing::oracles::{DiffEqResult, differential, engine, log_wasm};
 
 // Upper limit on the number of invocations for each WebAssembly function
 // executed by this fuzz target.

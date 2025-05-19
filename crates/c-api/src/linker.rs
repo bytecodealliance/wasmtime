@@ -1,7 +1,7 @@
 use crate::{
-    bad_utf8, handle_result, wasm_engine_t, wasm_functype_t, wasm_trap_t, wasmtime_error_t,
-    wasmtime_extern_t, wasmtime_instance_pre_t, wasmtime_module_t, WasmtimeStoreContext,
-    WasmtimeStoreContextMut,
+    WasmtimeStoreContext, WasmtimeStoreContextMut, bad_utf8, handle_result, wasm_engine_t,
+    wasm_functype_t, wasm_trap_t, wasmtime_error_t, wasmtime_extern_t, wasmtime_instance_pre_t,
+    wasmtime_module_t,
 };
 use std::ffi::c_void;
 use std::mem::MaybeUninit;

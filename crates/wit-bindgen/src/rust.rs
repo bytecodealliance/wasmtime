@@ -1,4 +1,4 @@
-use crate::{types::TypeInfo, Ownership};
+use crate::{Ownership, types::TypeInfo};
 use heck::*;
 use wit_parser::*;
 

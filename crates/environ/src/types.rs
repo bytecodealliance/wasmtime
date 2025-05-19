@@ -1,4 +1,4 @@
-use crate::{wasm_unsupported, Tunables, WasmResult};
+use crate::{Tunables, WasmResult, wasm_unsupported};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::{fmt, ops::Range};
@@ -1996,11 +1996,7 @@ impl Memory {
     pub fn static_heap_size(&self) -> Option<u64> {
         let min = self.minimum_byte_size().ok()?;
         let max = self.maximum_byte_size().ok()?;
-        if min == max {
-            Some(min)
-        } else {
-            None
-        }
+        if min == max { Some(min) } else { None }
     }
 
     /// Returs whether or not the base pointer of this memory is allowed to be
@@ -2248,7 +2244,7 @@ pub trait TypeConvert {
                 | wasmparser::AbstractHeapType::NoExn
                 | wasmparser::AbstractHeapType::Cont
                 | wasmparser::AbstractHeapType::NoCont => {
-                    return Err(wasm_unsupported!("unsupported heap type {ty:?}"))
+                    return Err(wasm_unsupported!("unsupported heap type {ty:?}"));
                 }
             },
             _ => return Err(wasm_unsupported!("unsupported heap type {ty:?}")),

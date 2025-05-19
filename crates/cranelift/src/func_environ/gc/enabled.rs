@@ -6,15 +6,15 @@ use crate::{Reachability, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::{
     cursor::FuncCursor,
-    ir::{self, condcodes::IntCC, InstBuilder},
+    ir::{self, InstBuilder, condcodes::IntCC},
 };
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::{
-    wasm_unsupported, Collector, GcArrayLayout, GcLayout, GcStructLayout, ModuleInternedTypeIndex,
+    Collector, GcArrayLayout, GcLayout, GcStructLayout, I31_DISCRIMINANT, ModuleInternedTypeIndex,
     PtrSize, TypeIndex, VMGcKind, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
-    WasmStorageType, WasmValType, I31_DISCRIMINANT,
+    WasmStorageType, WasmValType, wasm_unsupported,
 };
 
 #[cfg(feature = "gc-drc")]
@@ -307,7 +307,9 @@ pub fn translate_struct_get(
     struct_ref: ir::Value,
     extension: Option<Extension>,
 ) -> WasmResult<ir::Value> {
-    log::trace!("translate_struct_get({struct_type_index:?}, {field_index:?}, {struct_ref:?}, {extension:?})");
+    log::trace!(
+        "translate_struct_get({struct_type_index:?}, {field_index:?}, {struct_ref:?}, {extension:?})"
+    );
 
     // TODO: If we know we have a `(ref $my_struct)` here, instead of maybe a
     // `(ref null $my_struct)`, we could omit the `trapz`. But plumbing that
@@ -538,7 +540,9 @@ fn emit_array_fill_impl(
         ir::Value,
     ) -> WasmResult<()>,
 ) -> WasmResult<()> {
-    log::trace!("emit_array_fill_impl(elem_addr: {elem_addr:?}, elem_size: {elem_size:?}, fill_end: {fill_end:?})");
+    log::trace!(
+        "emit_array_fill_impl(elem_addr: {elem_addr:?}, elem_size: {elem_size:?}, fill_end: {fill_end:?})"
+    );
 
     let pointer_ty = func_env.pointer_type();
 

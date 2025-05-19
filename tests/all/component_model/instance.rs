@@ -35,9 +35,11 @@ fn instance_exports() -> Result<()> {
         .module("m", &Module::new(&engine, "(module)")?)?;
     let instance = linker.instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_export(&mut store, None, "not an instance")
-        .is_none());
+    assert!(
+        instance
+            .get_export(&mut store, None, "not an instance")
+            .is_none()
+    );
     let i = instance.get_export_index(&mut store, None, "r").unwrap();
     assert!(instance.get_export(&mut store, Some(&i), "x").is_none());
     instance.get_export(&mut store, None, "i").unwrap();

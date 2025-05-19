@@ -1,6 +1,6 @@
 use crate::{
-    store::{StoreContextMut, StoreOpaque},
     AsContext, AsContextMut, GcRefImpl, Result, StructType, Val,
+    store::{StoreContextMut, StoreOpaque},
 };
 
 /// Support for `StructRefPre` disabled at compile time because the `gc` cargo

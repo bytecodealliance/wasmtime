@@ -92,11 +92,7 @@ fn midpoint(a: SequenceNumber, b: SequenceNumber) -> Option<SequenceNumber> {
     debug_assert!(a < b);
     // Avoid integer overflow.
     let m = a + (b - a) / 2;
-    if m > a {
-        Some(m)
-    } else {
-        None
-    }
+    if m > a { Some(m) } else { None }
 }
 
 impl Layout {

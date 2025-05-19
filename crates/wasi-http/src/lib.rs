@@ -229,12 +229,12 @@ pub mod types;
 pub mod bindings;
 
 pub use crate::error::{
-    http_request_error, hyper_request_error, hyper_response_error, HttpError, HttpResult,
+    HttpError, HttpResult, http_request_error, hyper_request_error, hyper_response_error,
 };
 #[doc(inline)]
 pub use crate::types::{
-    WasiHttpCtx, WasiHttpImpl, WasiHttpView, DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS,
-    DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
+    DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
+    WasiHttpImpl, WasiHttpView,
 };
 use wasmtime::component::{HasData, Linker};
 use wasmtime_wasi::p2::IoImpl;

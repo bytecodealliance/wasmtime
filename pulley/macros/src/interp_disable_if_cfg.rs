@@ -1,9 +1,9 @@
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::{
-    braced,
+    Attribute, Result, Signature, Visibility, braced,
     parse::{Parse, ParseStream},
-    parse_macro_input, token, Attribute, Result, Signature, Visibility,
+    parse_macro_input, token,
 };
 
 pub fn run(attrs: TokenStream, item: TokenStream) -> TokenStream {
