@@ -148,6 +148,10 @@ impl dsl::Format {
             f.empty_line();
             f.comment("Emit ModR/M byte.");
         }
+        let bytes_at_end = match self.operands_by_kind().as_slice() {
+            [.., Imm(imm)] => imm.bytes(),
+            _ => 0,
+        };
 
         match self.operands_by_kind().as_slice() {
             [FixedReg(_)] | [FixedReg(_), FixedReg(_)] | [FixedReg(_), Imm(_)] => {
@@ -166,7 +170,10 @@ impl dsl::Format {
             | [FixedReg(_), FixedReg(_), RegMem(mem)] => {
                 let digit = rex.digit.unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");
-                fmtln!(f, "self.{mem}.encode_rex_suffixes(buf, off, digit, 0);");
+                fmtln!(
+                    f,
+                    "self.{mem}.encode_rex_suffixes(buf, off, digit, {bytes_at_end});"
+                );
             }
             [Reg(reg), RegMem(mem)]
             | [Reg(reg), RegMem(mem), Imm(_)]
@@ -175,7 +182,10 @@ impl dsl::Format {
             | [RegMem(mem), Reg(reg), Imm(_)]
             | [RegMem(mem), Reg(reg), FixedReg(_)] => {
                 fmtln!(f, "let reg = self.{reg}.enc();");
-                fmtln!(f, "self.{mem}.encode_rex_suffixes(buf, off, reg, 0);");
+                fmtln!(
+                    f,
+                    "self.{mem}.encode_rex_suffixes(buf, off, reg, {bytes_at_end});"
+                );
             }
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
         }

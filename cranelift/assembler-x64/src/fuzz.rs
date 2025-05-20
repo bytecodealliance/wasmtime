@@ -5,7 +5,8 @@
 //! unconditionally (use the `fuzz` feature instead).
 
 use crate::{
-    AmodeOffset, AmodeOffsetPlusKnownOffset, AsReg, Fixed, Gpr, Inst, NonRspGpr, Registers, Xmm,
+    AmodeOffset, AmodeOffsetPlusKnownOffset, AsReg, CodeSink, Constant, Fixed, Gpr, Inst, Label,
+    NonRspGpr, Registers, TrapCode, Xmm,
 };
 use arbitrary::{Arbitrary, Result, Unstructured};
 use capstone::{Capstone, arch::BuildsCapstone, arch::BuildsCapstoneSyntax, arch::x86};
@@ -42,10 +43,75 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
 /// This will skip any traps or label registrations, but this is fine for the
 /// single-instruction disassembly we're doing here.
 fn assemble(inst: &Inst<FuzzRegs>) -> Vec<u8> {
-    let mut buffer = Vec::new();
+    let mut sink = TestCodeSink::default();
     let offsets: Vec<i32> = Vec::new();
-    inst.encode(&mut buffer, &offsets);
-    buffer
+    inst.encode(&mut sink, &offsets);
+    sink.patch_labels_as_if_they_referred_to_end();
+    sink.buf
+}
+
+#[derive(Default)]
+struct TestCodeSink {
+    buf: Vec<u8>,
+    offsets_using_label: Vec<u32>,
+}
+
+impl TestCodeSink {
+    /// References to labels, e.g. RIP-relative addressing, is stored with an
+    /// adjustment that takes into account the distance from the relative offset
+    /// to the end of the instruction, where the offset is relative to. That
+    /// means that to indeed make the offset relative to the end of the
+    /// instruction, which is what we pretend all labels are bound to, it's
+    /// required that this adjustment is taken into account.
+    ///
+    /// This function will iterate over all labels bound to this code sink and
+    /// pretend the label is found at the end of the `buf`. That means that the
+    /// distance from the label to the end of `buf` minus 4, which is the width
+    /// of the offset, is added to what's already present in the encoding buffer.
+    ///
+    /// This is effectively undoing the `bytes_at_end` adjustment that's part of
+    /// `Amode::RipRelative` addressing.
+    fn patch_labels_as_if_they_referred_to_end(&mut self) {
+        let len = i32::try_from(self.buf.len()).unwrap();
+        for offset in self.offsets_using_label.iter() {
+            let range = self.buf[*offset as usize..].first_chunk_mut::<4>().unwrap();
+            let offset = i32::try_from(*offset).unwrap() + 4;
+            let rel_distance = len - offset;
+            *range = (i32::from_le_bytes(*range) + rel_distance).to_le_bytes();
+        }
+    }
+}
+
+impl CodeSink for TestCodeSink {
+    fn put1(&mut self, v: u8) {
+        self.buf.extend_from_slice(&[v]);
+    }
+
+    fn put2(&mut self, v: u16) {
+        self.buf.extend_from_slice(&v.to_le_bytes());
+    }
+
+    fn put4(&mut self, v: u32) {
+        self.buf.extend_from_slice(&v.to_le_bytes());
+    }
+
+    fn put8(&mut self, v: u64) {
+        self.buf.extend_from_slice(&v.to_le_bytes());
+    }
+
+    fn add_trap(&mut self, _: TrapCode) {}
+
+    fn current_offset(&self) -> u32 {
+        self.buf.len().try_into().unwrap()
+    }
+
+    fn use_label_at_offset(&mut self, offset: u32, _: Label) {
+        self.offsets_using_label.push(offset);
+    }
+
+    fn get_label_for_constant(&mut self, c: Constant) -> Label {
+        Label(c.0)
+    }
 }
 
 /// Building a new `Capstone` each time is suboptimal (TODO).
