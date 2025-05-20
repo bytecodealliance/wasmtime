@@ -1,6 +1,6 @@
 //! Operands with fixed register encodings.
 
-use crate::AsReg;
+use crate::{AsReg, Size};
 
 /// A _fixed_ register.
 ///
@@ -32,6 +32,14 @@ impl<R, const E: u8> Fixed<R, E> {
     /// able to know what this register should encode as.
     pub fn expected_enc(&self) -> u8 {
         E
+    }
+
+    /// Return the register name at the given `size`.
+    pub fn to_string(&self, size: Size) -> String
+    where
+        R: AsReg,
+    {
+        self.0.to_string(Some(size))
     }
 }
 
