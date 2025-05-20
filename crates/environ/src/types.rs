@@ -233,7 +233,9 @@ impl WasmValType {
         }
     }
 
-    /// TODO
+    /// Returns the contained reference type.
+    ///
+    /// Panics if the value type is not a vmgcref
     pub fn unwrap_ref_type(&self) -> WasmRefType {
         match self {
             WasmValType::Ref(ref_type) => *ref_type,
@@ -811,7 +813,7 @@ impl WasmContType {
     }
 
     /// Returns the (module interned) index to the underlying function type.
-    pub fn unwrap_interned_type_index(self) -> ModuleInternedTypeIndex {
+    pub fn unwrap_module_type_index(self) -> ModuleInternedTypeIndex {
         match self.0 {
             EngineOrModuleTypeIndex::Engine(_) => panic!("not module interned"),
             EngineOrModuleTypeIndex::Module(idx) => idx,
