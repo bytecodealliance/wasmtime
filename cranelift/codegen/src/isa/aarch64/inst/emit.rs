@@ -3119,7 +3119,7 @@ impl MachInstEmit for Inst {
                 sink.put4(0xd503201f);
             }
             &Inst::Brk => {
-                sink.put4(0xd4200000);
+                sink.put4(0xd43e0000);
             }
             &Inst::Udf { trap_code } => {
                 sink.add_trap(trap_code);
