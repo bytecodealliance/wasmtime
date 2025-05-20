@@ -1,6 +1,6 @@
 ## 33.0.0
 
-Unreleased.
+Released 2025-05-20.
 
 ### Added
 
