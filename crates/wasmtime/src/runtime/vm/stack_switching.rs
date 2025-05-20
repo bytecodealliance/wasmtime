@@ -4,8 +4,6 @@
 use core::{marker::PhantomPinned, ptr::NonNull};
 
 use stack::VMContinuationStack;
-#[allow(unused)]
-use wasmtime_environ::{debug_println, stack_switching::ENABLE_DEBUG_PRINTING};
 
 use crate::vm::{Instance, TrapReason, VMFuncRef, VMStore};
 use crate::ValRaw;
@@ -469,7 +467,7 @@ pub fn cont_new(
     csi.state = VMStackState::Fresh;
     csi.limits = limits;
 
-    debug_println!("Created contref @ {:p}", contref);
+    log::trace!("Created contref @ {:p}", contref);
     Ok(contref)
 }
 

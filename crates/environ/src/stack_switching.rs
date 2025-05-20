@@ -1,22 +1,6 @@
 //! This module contains basic type definitions used by the implementation of
 //! the stack switching proposal.
 
-/// FIXME(frank-emrich) Will remove in the final upstreamed version
-#[allow(dead_code, reason = "Only accessed in debug builds")]
-pub const ENABLE_DEBUG_PRINTING: bool = false;
-
-/// FIXME(frank-emrich) Will remove in the final upstreamed version
-#[macro_export]
-macro_rules! debug_println {
-    ($( $args:expr ),+ ) => {
-        #[cfg(debug_assertions)]
-        if ENABLE_DEBUG_PRINTING {
-            #[cfg(feature = "std")]
-            println!($($args),*);
-        }
-    }
-}
-
 /// Discriminant of variant `Absent` in
 /// `wasmtime::runtime::vm::stack_switching::VMStackChain`.
 pub const STACK_CHAIN_ABSENT_DISCRIMINANT: usize = 0;
