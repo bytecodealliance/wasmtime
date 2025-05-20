@@ -432,7 +432,7 @@ pub fn cont_new(
 ) -> Result<*mut VMContRef, TrapReason> {
     let caller_vmctx = instance.vmctx();
 
-    let stack_size = store.engine().config().stack_switching_config.stack_size;
+    let stack_size = store.engine().config().async_stack_size;
 
     let contref = store.allocate_continuation()?;
     let contref = unsafe { contref.as_mut().unwrap() };

@@ -17,27 +17,6 @@ macro_rules! debug_println {
     }
 }
 
-/// Runtime configuration options for stack switching that can be set
-/// via the command line.
-///
-/// Part of wasmtime::config::Config type (which is not in scope in this crate).
-#[derive(Debug, Clone)]
-pub struct StackSwitchingConfig {
-    /// The (fixed) size of a continuation stack.
-    pub stack_size: usize,
-}
-
-impl Default for StackSwitchingConfig {
-    fn default() -> Self {
-        /// Default size for continuation stacks
-        const DEFAULT_FIBER_SIZE: usize = 2097152; // 2MB = 512 pages of 4k
-
-        Self {
-            stack_size: DEFAULT_FIBER_SIZE,
-        }
-    }
-}
-
 /// Discriminant of variant `Absent` in
 /// `wasmtime::runtime::vm::stack_switching::VMStackChain`.
 pub const STACK_CHAIN_ABSENT_DISCRIMINANT: usize = 0;

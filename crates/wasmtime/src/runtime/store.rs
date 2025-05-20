@@ -2039,7 +2039,7 @@ at https://bytecodealliance.org/security.
     pub fn allocate_continuation(&mut self) -> Result<*mut VMContRef> {
         // FIXME(frank-emrich) Do we need to pin this?
         let mut continuation = Box::new(VMContRef::empty());
-        let stack_size = self.engine.config().stack_switching_config.stack_size;
+        let stack_size = self.engine.config().async_stack_size;
         let stack = VMContinuationStack::new(stack_size)?;
         continuation.stack = stack;
         let ptr = continuation.deref_mut() as *mut VMContRef;
