@@ -655,6 +655,16 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
+    fn fcvt_to_uint_ub128(&mut self, size: u8) -> u128 {
+        Ieee128::pow2(size).bits()
+    }
+
+    #[inline]
+    fn fcvt_to_uint_lb128(&mut self) -> u128 {
+        (-Ieee128::pow2(0)).bits()
+    }
+
+    #[inline]
     fn fcvt_to_sint_ub32(&mut self, size: u8) -> u64 {
         (2.0_f32).powi((size - 1).into()).to_bits() as u64
     }
@@ -674,6 +684,16 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     fn fcvt_to_sint_lb64(&mut self, size: u8) -> u64 {
         let lb = (-2.0_f64).powi((size - 1).into());
         std::cmp::max(lb.to_bits() + 1, (lb - 1.0).to_bits())
+    }
+
+    #[inline]
+    fn fcvt_to_sint_ub128(&mut self, size: u8) -> u128 {
+        Ieee128::pow2(size - 1).bits()
+    }
+
+    #[inline]
+    fn fcvt_to_sint_lb128(&mut self, size: u8) -> u128 {
+        Ieee128::fcvt_to_sint_negative_overflow(size).bits()
     }
 
     #[inline]

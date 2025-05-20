@@ -40,6 +40,37 @@ macro_rules! debug_assert_valid_regpair {
     };
 }
 
+macro_rules! debug_assert_valid_fp_regpair {
+    ($hi:expr, $lo:expr) => {
+        if cfg!(debug_assertions) {
+            match ($hi.to_real_reg(), $lo.to_real_reg()) {
+                (Some(hi), Some(lo)) => {
+                    assert!(
+                        hi.hw_enc() & 2 == 0,
+                        "High register is not valid: {}",
+                        show_reg($hi)
+                    );
+                    assert_eq!(
+                        hi.hw_enc() + 2,
+                        lo.hw_enc(),
+                        "Low register is not valid: {}, {}",
+                        show_reg($hi),
+                        show_reg($lo)
+                    );
+                }
+
+                _ => {
+                    panic!(
+                        "Expected real registers for {} {}",
+                        show_reg($hi),
+                        show_reg($lo)
+                    );
+                }
+            }
+        }
+    };
+}
+
 const OPCODE_BRAS: u16 = 0xa75;
 const OPCODE_BCR: u16 = 0xa74;
 const OPCODE_LDR: u16 = 0x28;
@@ -2396,24 +2427,29 @@ impl Inst {
                 let (opcode, m3, m4, m5, opcode_fpr) = match fpu_op {
                     FPUOp1::Abs32 => (0xe7cc, 2, 8, 2, Some(0xb300)), // WFPSO, LPEBR
                     FPUOp1::Abs64 => (0xe7cc, 3, 8, 2, Some(0xb310)), // WFPSO, LPDBR
+                    FPUOp1::Abs128 => (0xe7cc, 4, 8, 2, None),        // WFPSO
                     FPUOp1::Abs32x4 => (0xe7cc, 2, 0, 2, None),       // VFPSO
                     FPUOp1::Abs64x2 => (0xe7cc, 3, 0, 2, None),       // VFPSO
                     FPUOp1::Neg32 => (0xe7cc, 2, 8, 0, Some(0xb303)), // WFPSO, LCEBR
                     FPUOp1::Neg64 => (0xe7cc, 3, 8, 0, Some(0xb313)), // WFPSO, LCDBR
+                    FPUOp1::Neg128 => (0xe7cc, 4, 8, 0, None),        // WFPSO
                     FPUOp1::Neg32x4 => (0xe7cc, 2, 0, 0, None),       // VFPSO
                     FPUOp1::Neg64x2 => (0xe7cc, 3, 0, 0, None),       // VFPSO
                     FPUOp1::NegAbs32 => (0xe7cc, 2, 8, 1, Some(0xb301)), // WFPSO, LNEBR
                     FPUOp1::NegAbs64 => (0xe7cc, 3, 8, 1, Some(0xb311)), // WFPSO, LNDBR
+                    FPUOp1::NegAbs128 => (0xe7cc, 4, 8, 1, None),     // WFPSO
                     FPUOp1::NegAbs32x4 => (0xe7cc, 2, 0, 1, None),    // VFPSO
                     FPUOp1::NegAbs64x2 => (0xe7cc, 3, 0, 1, None),    // VFPSO
                     FPUOp1::Sqrt32 => (0xe7ce, 2, 8, 0, Some(0xb314)), // WFSQ, SQEBR
                     FPUOp1::Sqrt64 => (0xe7ce, 3, 8, 0, Some(0xb315)), // WFSQ, SQDBR
+                    FPUOp1::Sqrt128 => (0xe7ce, 4, 8, 0, None),       // WFSQ
                     FPUOp1::Sqrt32x4 => (0xe7ce, 2, 0, 0, None),      // VFSQ
                     FPUOp1::Sqrt64x2 => (0xe7ce, 3, 0, 0, None),      // VFSQ
                     FPUOp1::Cvt32To64 => (0xe7c4, 2, 8, 0, Some(0xb304)), // WFLL, LDEBR
                     FPUOp1::Cvt32x4To64x2 => (0xe7c4, 2, 0, 0, None), // VFLL
+                    FPUOp1::Cvt64To128 => (0xe7c4, 3, 8, 0, None),    // WFLL
                 };
-                if m4 == 8 && is_fpr(rd.to_reg()) && is_fpr(rn) {
+                if m4 == 8 && opcode_fpr.is_some() && is_fpr(rd.to_reg()) && is_fpr(rn) {
                     put(sink, &enc_rre(opcode_fpr.unwrap(), rd.to_reg(), rn));
                 } else {
                     put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, m3, m4, m5));
@@ -2423,34 +2459,42 @@ impl Inst {
                 let (opcode, m4, m5, m6, opcode_fpr) = match fpu_op {
                     FPUOp2::Add32 => (0xe7e3, 2, 8, 0, Some(0xb30a)), // WFA, AEBR
                     FPUOp2::Add64 => (0xe7e3, 3, 8, 0, Some(0xb31a)), // WFA, ADBR
+                    FPUOp2::Add128 => (0xe7e3, 4, 8, 0, None),        // WFA
                     FPUOp2::Add32x4 => (0xe7e3, 2, 0, 0, None),       // VFA
                     FPUOp2::Add64x2 => (0xe7e3, 3, 0, 0, None),       // VFA
                     FPUOp2::Sub32 => (0xe7e2, 2, 8, 0, Some(0xb30b)), // WFS, SEBR
                     FPUOp2::Sub64 => (0xe7e2, 3, 8, 0, Some(0xb31b)), // WFS, SDBR
+                    FPUOp2::Sub128 => (0xe7e2, 4, 8, 0, None),        // WFS
                     FPUOp2::Sub32x4 => (0xe7e2, 2, 0, 0, None),       // VFS
                     FPUOp2::Sub64x2 => (0xe7e2, 3, 0, 0, None),       // VFS
                     FPUOp2::Mul32 => (0xe7e7, 2, 8, 0, Some(0xb317)), // WFM, MEEBR
                     FPUOp2::Mul64 => (0xe7e7, 3, 8, 0, Some(0xb31c)), // WFM, MDBR
+                    FPUOp2::Mul128 => (0xe7e7, 4, 8, 0, None),        // WFM
                     FPUOp2::Mul32x4 => (0xe7e7, 2, 0, 0, None),       // VFM
                     FPUOp2::Mul64x2 => (0xe7e7, 3, 0, 0, None),       // VFM
                     FPUOp2::Div32 => (0xe7e5, 2, 8, 0, Some(0xb30d)), // WFD, DEBR
                     FPUOp2::Div64 => (0xe7e5, 3, 8, 0, Some(0xb31d)), // WFD, DDBR
+                    FPUOp2::Div128 => (0xe7e5, 4, 8, 0, None),        // WFD
                     FPUOp2::Div32x4 => (0xe7e5, 2, 0, 0, None),       // VFD
                     FPUOp2::Div64x2 => (0xe7e5, 3, 0, 0, None),       // VFD
                     FPUOp2::Max32 => (0xe7ef, 2, 8, 1, None),         // WFMAX
                     FPUOp2::Max64 => (0xe7ef, 3, 8, 1, None),         // WFMAX
+                    FPUOp2::Max128 => (0xe7ef, 4, 8, 1, None),        // WFMAX
                     FPUOp2::Max32x4 => (0xe7ef, 2, 0, 1, None),       // VFMAX
                     FPUOp2::Max64x2 => (0xe7ef, 3, 0, 1, None),       // VFMAX
                     FPUOp2::Min32 => (0xe7ee, 2, 8, 1, None),         // WFMIN
                     FPUOp2::Min64 => (0xe7ee, 3, 8, 1, None),         // WFMIN
+                    FPUOp2::Min128 => (0xe7ee, 4, 8, 1, None),        // WFMIN
                     FPUOp2::Min32x4 => (0xe7ee, 2, 0, 1, None),       // VFMIN
                     FPUOp2::Min64x2 => (0xe7ee, 3, 0, 1, None),       // VFMIN
                     FPUOp2::MaxPseudo32 => (0xe7ef, 2, 8, 3, None),   // WFMAX
                     FPUOp2::MaxPseudo64 => (0xe7ef, 3, 8, 3, None),   // WFMAX
+                    FPUOp2::MaxPseudo128 => (0xe7ef, 4, 8, 3, None),  // WFMAX
                     FPUOp2::MaxPseudo32x4 => (0xe7ef, 2, 0, 3, None), // VFMAX
                     FPUOp2::MaxPseudo64x2 => (0xe7ef, 3, 0, 3, None), // VFMAX
                     FPUOp2::MinPseudo32 => (0xe7ee, 2, 8, 3, None),   // WFMIN
                     FPUOp2::MinPseudo64 => (0xe7ee, 3, 8, 3, None),   // WFMIN
+                    FPUOp2::MinPseudo128 => (0xe7ee, 4, 8, 3, None),  // WFMIN
                     FPUOp2::MinPseudo32x4 => (0xe7ee, 2, 0, 3, None), // VFMIN
                     FPUOp2::MinPseudo64x2 => (0xe7ee, 3, 0, 3, None), // VFMIN
                 };
@@ -2471,14 +2515,22 @@ impl Inst {
                 let (opcode, m5, m6, opcode_fpr) = match fpu_op {
                     FPUOp3::MAdd32 => (0xe78f, 8, 2, Some(0xb30e)), // WFMA, MAEBR
                     FPUOp3::MAdd64 => (0xe78f, 8, 3, Some(0xb31e)), // WFMA, MADBR
+                    FPUOp3::MAdd128 => (0xe78f, 8, 4, None),        // WFMA
                     FPUOp3::MAdd32x4 => (0xe78f, 0, 2, None),       // VFMA
                     FPUOp3::MAdd64x2 => (0xe78f, 0, 3, None),       // VFMA
                     FPUOp3::MSub32 => (0xe78e, 8, 2, Some(0xb30f)), // WFMS, MSEBR
                     FPUOp3::MSub64 => (0xe78e, 8, 3, Some(0xb31f)), // WFMS, MSDBR
+                    FPUOp3::MSub128 => (0xe78e, 8, 4, None),        // WFMS
                     FPUOp3::MSub32x4 => (0xe78e, 0, 2, None),       // VFMS
                     FPUOp3::MSub64x2 => (0xe78e, 0, 3, None),       // VFMS
                 };
-                if m5 == 8 && rd.to_reg() == ra && is_fpr(rn) && is_fpr(rm) && is_fpr(ra) {
+                if m5 == 8
+                    && opcode_fpr.is_some()
+                    && rd.to_reg() == ra
+                    && is_fpr(rn)
+                    && is_fpr(rm)
+                    && is_fpr(ra)
+                {
                     put(sink, &enc_rrd(opcode_fpr.unwrap(), rd.to_reg(), rm, rn));
                 } else {
                     put(sink, &enc_vrr_e(opcode, rd.to_reg(), rn, rm, ra, m5, m6));
@@ -2497,8 +2549,10 @@ impl Inst {
                 let (opcode, m3, m4, opcode_fpr) = match op {
                     FpuRoundOp::Cvt64To32 => (0xe7c5, 3, 8, Some(0xb344)), // WFLR, LEDBR(A)
                     FpuRoundOp::Cvt64x2To32x4 => (0xe7c5, 3, 0, None),     // VFLR
+                    FpuRoundOp::Cvt128To64 => (0xe7c5, 4, 8, None),        // WFLR
                     FpuRoundOp::Round32 => (0xe7c7, 2, 8, Some(0xb357)),   // WFI, FIEBR
                     FpuRoundOp::Round64 => (0xe7c7, 3, 8, Some(0xb35f)),   // WFI, FIDBR
+                    FpuRoundOp::Round128 => (0xe7c7, 4, 8, None),          // WFI
                     FpuRoundOp::Round32x4 => (0xe7c7, 2, 0, None),         // VFI
                     FpuRoundOp::Round64x2 => (0xe7c7, 3, 0, None),         // VFI
                     FpuRoundOp::ToSInt32 => (0xe7c2, 2, 8, None),          // WCSFP
@@ -2527,6 +2581,50 @@ impl Inst {
                     put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, m3, m4, mode));
                 }
             }
+            &Inst::FpuConv128FromInt { op, mode, rd, rn } => {
+                let rd1 = rd.hi;
+                let rd2 = rd.lo;
+                debug_assert_valid_fp_regpair!(rd1.to_reg(), rd2.to_reg());
+
+                let mode = match mode {
+                    FpuRoundMode::Current => 0,
+                    FpuRoundMode::ToNearest => 1,
+                    FpuRoundMode::ShorterPrecision => 3,
+                    FpuRoundMode::ToNearestTiesToEven => 4,
+                    FpuRoundMode::ToZero => 5,
+                    FpuRoundMode::ToPosInfinity => 6,
+                    FpuRoundMode::ToNegInfinity => 7,
+                };
+                let opcode = match op {
+                    FpuConv128Op::SInt32 => 0xb396, // CXFBRA
+                    FpuConv128Op::SInt64 => 0xb3a6, // CXGBRA
+                    FpuConv128Op::UInt32 => 0xb392, // CXLFBR
+                    FpuConv128Op::UInt64 => 0xb3a2, // CXLGBR
+                };
+                put(sink, &enc_rrf_cde(opcode, rd1.to_reg(), rn, mode, 0));
+            }
+            &Inst::FpuConv128ToInt { op, mode, rd, rn } => {
+                let rn1 = rn.hi;
+                let rn2 = rn.lo;
+                debug_assert_valid_fp_regpair!(rn1, rn2);
+
+                let mode = match mode {
+                    FpuRoundMode::Current => 0,
+                    FpuRoundMode::ToNearest => 1,
+                    FpuRoundMode::ShorterPrecision => 3,
+                    FpuRoundMode::ToNearestTiesToEven => 4,
+                    FpuRoundMode::ToZero => 5,
+                    FpuRoundMode::ToPosInfinity => 6,
+                    FpuRoundMode::ToNegInfinity => 7,
+                };
+                let opcode = match op {
+                    FpuConv128Op::SInt32 => 0xb39a, // CFXBRA
+                    FpuConv128Op::SInt64 => 0xb3aa, // CGXBRA
+                    FpuConv128Op::UInt32 => 0xb39e, // CLFXBR
+                    FpuConv128Op::UInt64 => 0xb3ae, // CLGXBR
+                };
+                put(sink, &enc_rrf_cde(opcode, rd.to_reg(), rn1, mode, 0));
+            }
             &Inst::FpuCmp32 { rn, rm } => {
                 if is_fpr(rn) && is_fpr(rm) {
                     let opcode = 0xb309; // CEBR
@@ -2544,6 +2642,10 @@ impl Inst {
                     let opcode = 0xe7cb; // WFC
                     put(sink, &enc_vrr_a(opcode, rn, rm, 3, 0, 0));
                 }
+            }
+            &Inst::FpuCmp128 { rn, rm } => {
+                let opcode = 0xe7cb; // WFC
+                put(sink, &enc_vrr_a(opcode, rn, rm, 4, 0, 0));
             }
 
             &Inst::VecRRR { op, rd, rn, rm } => {
