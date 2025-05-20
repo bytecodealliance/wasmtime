@@ -65,9 +65,9 @@ impl TestCodeSink {
     /// required that this adjustment is taken into account.
     ///
     /// This function will iterate over all labels bound to this code sink and
-    /// pretend the label is found to the end of the `buf`. That means that the
-    /// distance from the label to the end of `buf`, minus 4 which is the width
-    /// of the offset, is added what's already present in the encoding buffer.
+    /// pretend the label is found at the end of the `buf`. That means that the
+    /// distance from the label to the end of `buf` minus 4, which is the width
+    /// of the offset, is added to what's already present in the encoding buffer.
     ///
     /// This is effectively undoing the `bytes_at_end` adjustment that's part of
     /// `Amode::RipRelative` addressing.
