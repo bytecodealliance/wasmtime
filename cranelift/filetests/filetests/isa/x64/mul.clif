@@ -547,3 +547,67 @@ block0(v0: i8, v1: i8):
 ;   popq %rbp
 ;   retq
 
+function %imul_and_constant_pool_small_immediate() -> i32 {
+block0:
+    v0 = iconst.i32 7
+    v1 = iconst.i32 0x22222222
+    v2 = imul v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   imull $0x7, (%rip), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   imull $7, 5(%rip), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   andb (%rdx), %ah
+;   andb (%rdx), %ah
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+
+function %imul_and_constant_pool_big_immediate() -> i32 {
+block0:
+    v0 = iconst.i32 0x11111111
+    v1 = iconst.i32 0x22222222
+    v2 = imul v0, v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   imull $0x11111111, (%rip), %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   imull $0x11111111, 0xa(%rip), %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   addb %al, (%rax)
+;   addb %al, (%rax)
+;   addb %ah, (%rdx)
+;   andb (%rdx), %ah
+;   andb (%rax), %al
+;   addb %al, (%rax)
+
