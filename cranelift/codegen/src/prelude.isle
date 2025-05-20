@@ -142,8 +142,14 @@
 (decl pure partial i8_try_from_u64 (u64) i8)
 (extern constructor i8_try_from_u64 i8_try_from_u64)
 
+(decl pure i16_as_u16 (i16) u16)
+(extern constructor i16_as_u16 i16_as_u16)
+
 (decl pure partial i16_try_from_u64 (u64) i16)
 (extern constructor i16_try_from_u64 i16_try_from_u64)
+
+(decl pure partial i16_try_from_i32 (i16) i32)
+(extern extractor i16_try_from_i32 i16_try_from_i32)
 
 (decl pure partial i32_try_from_u64 (u64) i32)
 (extern constructor i32_try_from_u64 i32_try_from_u64)
@@ -152,8 +158,8 @@
 (extern constructor u32_as_u64 u32_as_u64)
 (convert u32 u64 u32_as_u64)
 
-(decl i32_as_u32 (u32) i32)
-(extern extractor i32_as_u32 i32_as_u32)
+(decl i32_as_u32 (i32) u32)
+(extern constructor i32_as_u32 i32_as_u32)
 
 (decl pure i32_as_i64 (i32) i64)
 (extern constructor i32_as_i64 i32_as_i64)
