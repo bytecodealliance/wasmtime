@@ -336,7 +336,7 @@ fn emit_modrm_sib_disp<R: AsReg>(
     bytes_at_end: u8,
     evex_scaling: Option<i8>,
 ) {
-    match mem_e.clone() {
+    match *mem_e {
         Amode::ImmReg { simm32, base, .. } => {
             let enc_e = base.enc();
             let mut imm = Disp::new(simm32.value(offsets), evex_scaling);
@@ -404,8 +404,8 @@ fn emit_modrm_sib_disp<R: AsReg>(
 
             let offset = sink.current_offset();
             let target = match target {
-                DeferredTarget::Label(label) => label.clone(),
-                DeferredTarget::Constant(constant) => sink.get_label_for_constant(constant.clone()),
+                DeferredTarget::Label(label) => label,
+                DeferredTarget::Constant(constant) => sink.get_label_for_constant(constant),
             };
             sink.use_label_at_offset(offset, target);
 
