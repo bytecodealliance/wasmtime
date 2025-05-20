@@ -284,6 +284,81 @@ block0(v0: i16):
 ;   popq %rbp
 ;   retq
 
+function %imul_i16_const_negative(i16) -> i16 {
+block0(v0: i16):
+    v3 = imul_imm v0, -97
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   imulw $0xff9f, %di, %ax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   imulw $-0x61, %di, %ax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %imul_i16_const_unsigned_but_big(i16) -> i16 {
+block0(v0: i16):
+    v3 = imul_imm v0, 0x8000
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   imulw $0x8000, %di, %ax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   imulw $0x8000, %di, %ax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %imul_i16_const_out_of_bounds(i16) -> i16 {
+block0(v0: i16):
+    v3 = imul_imm v0, 0x80000
+    return v3
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   imulw $0x0, %di, %ax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   imulw $0, %di, %ax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
 function %imul_i32_const(i32) -> i32{
 block0(v0: i32):
     v3 = imul_imm v0, 97
