@@ -44,9 +44,9 @@ as well as the text format for WebAssembly (`*.wat`):
 wasmtime foo.wat
 ```
 
-#### Running "Command" Wasms
+#### Running WebAssembly CLI programs
 
-WebAssembly modules or components can behave like a "command" which means
+WebAssembly modules or components can behave like a CLI program which means
 they're intended to look like a normal OS executable with a `main` function and
 run once to completion. This is the default mode of running a wasm provided to
 Wasmtime.
@@ -55,10 +55,10 @@ For core WebAssembly modules this means that the function exported as an empty
 string, or the `_start` export, is invoked. For WebAssembly components this
 means that the `wasi:cli/run` interface is executed.
 
-For both core modules and components CLI arguments are passed via WASI. Core
+For both core modules and components, CLI arguments are passed via WASI. Core
 modules receive arguments via WASIp1 APIs and components receive arguments via
-WASIp2 or later APIs. Arguments, flags, etc, are passed to the WebAssembly file
-after the file itself. For example:
+WASIp2 or later APIs. Arguments, flags, etc., are passed to the WebAssembly file
+after the file itself. For example,
 
 ```console
 wasmtime foo.wasm --bar baz
@@ -66,13 +66,13 @@ wasmtime foo.wasm --bar baz
 
 Will pass `["foo.wasm", "--bar", "baz"]` as the list of arguments to the module.
 Note that flags for Wasmtime must be passed before the WebAssembly file, not
-afterwards. For example
+afterwards. For example,
 
 ```console
 wasmtime foo.wasm --dir .
 ```
 
-will pass `--dir .` to the `foo.wasm` program, not Wasmtime. If you want to
+Will pass `--dir .` to the `foo.wasm` program, not Wasmtime. If you want to
 mount the current directory you instead need to invoke
 
 ```console
