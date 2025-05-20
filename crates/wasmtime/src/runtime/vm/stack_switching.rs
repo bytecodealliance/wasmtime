@@ -553,7 +553,7 @@ pub fn cont_new(
 pub enum VMStackChain {
     /// For suspended continuations, denotes the end of their chain of
     /// ancestors.
-    Absent = wasmtime_environ::stack_switching::STACK_CHAIN_ABSENT_DISCRIMINANT,
+    Absent = wasmtime_environ::STACK_CHAIN_ABSENT_DISCRIMINANT,
     /// Represents the initial stack (i.e., where we entered Wasm from the
     /// host by executing
     /// `crate::runtime::func::invoke_wasm_and_catch_traps`). Therefore, it
@@ -561,10 +561,9 @@ pub enum VMStackChain {
     /// variant points to is stored in the stack frame of
     /// `invoke_wasm_and_catch_traps`.
     InitialStack(*mut VMCommonStackInformation) =
-        wasmtime_environ::stack_switching::STACK_CHAIN_INITIAL_STACK_DISCRIMINANT,
+        wasmtime_environ::STACK_CHAIN_INITIAL_STACK_DISCRIMINANT,
     /// Represents a continuation's stack.
-    Continuation(*mut VMContRef) =
-        wasmtime_environ::stack_switching::STACK_CHAIN_CONTINUATION_DISCRIMINANT,
+    Continuation(*mut VMContRef) = wasmtime_environ::STACK_CHAIN_CONTINUATION_DISCRIMINANT,
 }
 
 impl VMStackChain {
@@ -662,21 +661,21 @@ impl Iterator for StackLimitsIterator {
 pub enum VMStackState {
     /// The `VMContRef` has been created, but neither `resume` or `switch` has ever been
     /// called on it. During this stage, we may add arguments using `cont.bind`.
-    Fresh = wasmtime_environ::stack_switching::STACK_STATE_FRESH_DISCRIMINANT,
+    Fresh = wasmtime_environ::STACK_STATE_FRESH_DISCRIMINANT,
     /// The continuation is running, meaning that it is the one currently
     /// executing code.
-    Running = wasmtime_environ::stack_switching::STACK_STATE_RUNNING_DISCRIMINANT,
+    Running = wasmtime_environ::STACK_STATE_RUNNING_DISCRIMINANT,
     /// The continuation is suspended because it executed a resume instruction
     /// that has not finished yet. In other words, it became the parent of
     /// another continuation (which may itself be `Running`, a `Parent`, or
     /// `Suspended`).
-    Parent = wasmtime_environ::stack_switching::STACK_STATE_PARENT_DISCRIMINANT,
+    Parent = wasmtime_environ::STACK_STATE_PARENT_DISCRIMINANT,
     /// The continuation was suspended by a `suspend` or `switch` instruction.
-    Suspended = wasmtime_environ::stack_switching::STACK_STATE_SUSPENDED_DISCRIMINANT,
+    Suspended = wasmtime_environ::STACK_STATE_SUSPENDED_DISCRIMINANT,
     /// The function originally passed to `cont.new` has returned normally.
     /// Note that there is no guarantee that a VMContRef will ever
     /// reach this status, as it may stay suspended until being dropped.
-    Returned = wasmtime_environ::stack_switching::STACK_STATE_RETURNED_DISCRIMINANT,
+    Returned = wasmtime_environ::STACK_STATE_RETURNED_DISCRIMINANT,
 }
 
 /// Universal control effect. This structure encodes return signal, resume
@@ -689,15 +688,15 @@ pub enum VMStackState {
 pub enum ControlEffect {
     /// Used to signal that a continuation has returned and control switches
     /// back to the parent.
-    Return = wasmtime_environ::stack_switching::CONTROL_EFFECT_RETURN_DISCRIMINANT,
+    Return = wasmtime_environ::CONTROL_EFFECT_RETURN_DISCRIMINANT,
     /// Used to signal to a continuation that it is being resumed.
-    Resume = wasmtime_environ::stack_switching::CONTROL_EFFECT_RESUME_DISCRIMINANT,
+    Resume = wasmtime_environ::CONTROL_EFFECT_RESUME_DISCRIMINANT,
     /// Used to signal that a continuation has invoked a `suspend` instruction.
     Suspend {
         /// The index of the handler to be used in the parent continuation to
         /// switch back to.
         handler_index: u32,
-    } = wasmtime_environ::stack_switching::CONTROL_EFFECT_SUSPEND_DISCRIMINANT,
+    } = wasmtime_environ::CONTROL_EFFECT_SUSPEND_DISCRIMINANT,
     /// Used to signal that a continuation has invoked a `suspend` instruction.
-    Switch = wasmtime_environ::stack_switching::CONTROL_EFFECT_SWITCH_DISCRIMINANT,
+    Switch = wasmtime_environ::CONTROL_EFFECT_SWITCH_DISCRIMINANT,
 }

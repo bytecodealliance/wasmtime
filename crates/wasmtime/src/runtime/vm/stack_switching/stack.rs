@@ -10,7 +10,7 @@ use crate::runtime::vm::stack_switching::VMArray;
 use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
 
 cfg_if::cfg_if! {
-    if #[cfg(all(feature = "stack-switching",unix, target_arch = "x86_64"))] {
+    if #[cfg(all(feature = "stack-switching", unix, target_arch = "x86_64"))] {
         pub mod unix;
         use unix as imp;
     } else {
