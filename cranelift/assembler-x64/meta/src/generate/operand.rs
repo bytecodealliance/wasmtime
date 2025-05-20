@@ -40,14 +40,6 @@ impl dsl::Location {
     pub fn generate_to_string(&self, extension: dsl::Extension) -> String {
         use dsl::Location::*;
         match self {
-            al => "\"%al\"".into(),
-            ax => "\"%ax\"".into(),
-            eax => "\"%eax\"".into(),
-            rax => "\"%rax\"".into(),
-            cl => "\"%cl\"".into(),
-            dx => "\"%dx\"".into(),
-            edx => "\"%edx\"".into(),
-            rdx => "\"%rdx\"".into(),
             imm8 | imm16 | imm32 => {
                 if extension.is_sign_extended() {
                     let variant = extension.generate_variant();
@@ -56,7 +48,8 @@ impl dsl::Location {
                     format!("self.{self}.to_string()")
                 }
             }
-            r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 => match self.generate_size() {
+            al | ax | eax | rax | cl | dx | edx | rdx | r8 | r16 | r32 | r64 | rm8 | rm16
+            | rm32 | rm64 => match self.generate_size() {
                 Some(size) => format!("self.{self}.to_string({size})"),
                 None => unreachable!(),
             },
@@ -71,11 +64,11 @@ impl dsl::Location {
     fn generate_size(&self) -> Option<&str> {
         use dsl::Location::*;
         match self {
-            al | ax | eax | rax | cl | dx | edx | rdx | imm8 | imm16 | imm32 => None,
-            r8 | rm8 => Some("Size::Byte"),
-            r16 | rm16 => Some("Size::Word"),
-            r32 | rm32 => Some("Size::Doubleword"),
-            r64 | rm64 => Some("Size::Quadword"),
+            imm8 | imm16 | imm32 => None,
+            al | cl | r8 | rm8 => Some("Size::Byte"),
+            ax | dx | r16 | rm16 => Some("Size::Word"),
+            eax | edx | r32 | rm32 => Some("Size::Doubleword"),
+            rax | rdx | r64 | rm64 => Some("Size::Quadword"),
             m8 | m16 | m32 | m64 => {
                 panic!("no need to generate a size for memory-only access")
             }
