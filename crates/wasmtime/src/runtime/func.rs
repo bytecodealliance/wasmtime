@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::runtime::vm::stack_switching::VMCommonStackInformation;
+use crate::runtime::vm::VMCommonStackInformation;
 use crate::runtime::vm::{
     ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext,
     VMFuncRef, VMFunctionImport, VMOpaqueContext, VMStoreContext,
@@ -358,7 +358,7 @@ macro_rules! for_each_function_signature {
 }
 
 mod typed;
-use crate::runtime::vm::stack_switching::VMStackChain;
+use crate::runtime::vm::VMStackChain;
 pub use typed::*;
 
 impl Func {
