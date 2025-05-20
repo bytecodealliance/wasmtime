@@ -2966,7 +2966,7 @@
 (rule (csdb)
       (SideEffectNoResult.Inst (MInst.Csdb)))
 
-;; Helper for generating `brk` instructions.
+;; Helper for generating `brk` instructions, hinted as being debug traps.
 (decl brk () SideEffectNoResult)
 (rule (brk)
       (SideEffectNoResult.Inst (MInst.Brk)))

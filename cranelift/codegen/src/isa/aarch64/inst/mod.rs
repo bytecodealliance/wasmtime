@@ -2680,7 +2680,7 @@ impl Inst {
                 let rn = pretty_print_reg(rn);
                 format!("br {rn}")
             }
-            &Inst::Brk => "brk #0".to_string(),
+            &Inst::Brk => "brk #0xf000".to_string(),
             &Inst::Udf { .. } => "udf #0xc11f".to_string(),
             &Inst::TrapIf {
                 ref kind,
