@@ -2,6 +2,7 @@
 
 use crate::gpr;
 use crate::xmm;
+use crate::{Amode, GprMem, XmmMem};
 use std::{num::NonZeroU8, ops::Index, vec::Vec};
 
 /// Describe how an instruction is emitted into a code buffer.
@@ -67,12 +68,12 @@ impl CodeSink for Vec<u8> {
 }
 
 /// Wrap [`CodeSink`]-specific labels.
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct Label(pub u32);
 
 /// Wrap [`CodeSink`]-specific constant keys.
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct Constant(pub u32);
 
@@ -125,7 +126,7 @@ pub trait Registers {
 }
 
 /// Describe how to interact with an external register type.
-pub trait AsReg: Clone + std::fmt::Debug {
+pub trait AsReg: Copy + Clone + std::fmt::Debug {
     /// Create a register from its hardware encoding.
     ///
     /// This is primarily useful for fuzzing, though it is also useful for
@@ -194,4 +195,46 @@ pub trait RegisterVisitor<R: Registers> {
     /// Visit a read-only fixed SSE register; this register can be modified
     /// in-place but must emit as the hardware encoding `enc`.
     fn fixed_write_xmm(&mut self, reg: &mut R::WriteXmm, enc: u8);
+
+    /// Visit the registers in an [`Amode`].
+    ///
+    /// This is helpful for generated code: it allows capturing the `R::ReadGpr`
+    /// type (which an `Amode` method cannot) and simplifies the code to be
+    /// generated.
+    fn read_amode(&mut self, amode: &mut Amode<R::ReadGpr>) {
+        match amode {
+            Amode::ImmReg { base, .. } => {
+                self.read_gpr(base);
+            }
+            Amode::ImmRegRegShift { base, index, .. } => {
+                self.read_gpr(base);
+                self.read_gpr(index.as_mut());
+            }
+            Amode::RipRelative { .. } => {}
+        }
+    }
+
+    /// Helper method to handle a read/write [`GprMem`] operand.
+    fn read_write_gpr_mem(&mut self, op: &mut GprMem<R::ReadWriteGpr, R::ReadGpr>) {
+        match op {
+            GprMem::Gpr(r) => self.read_write_gpr(r),
+            GprMem::Mem(m) => self.read_amode(m),
+        }
+    }
+
+    /// Helper method to handle a read-only [`GprMem`] operand.
+    fn read_gpr_mem(&mut self, op: &mut GprMem<R::ReadGpr, R::ReadGpr>) {
+        match op {
+            GprMem::Gpr(r) => self.read_gpr(r),
+            GprMem::Mem(m) => self.read_amode(m),
+        }
+    }
+
+    /// Helper method to handle a read-only [`XmmMem`] operand.
+    fn read_xmm_mem(&mut self, op: &mut XmmMem<R::ReadXmm, R::ReadGpr>) {
+        match op {
+            XmmMem::Xmm(r) => self.read_xmm(r),
+            XmmMem::Mem(m) => self.read_amode(m),
+        }
+    }
 }

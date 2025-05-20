@@ -3,10 +3,9 @@
 use crate::api::{AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, TrapCode};
 use crate::gpr::{self, NonRspGpr, Size};
 use crate::rex::{Disp, RexPrefix, encode_modrm, encode_sib};
-use crate::{RegisterVisitor, Registers};
 
 /// x64 memory addressing modes.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub enum Amode<R: AsReg> {
     ImmReg {
@@ -62,27 +61,6 @@ impl<R: AsReg> Amode<R> {
     }
 }
 
-/// Visit the registers in an [`Amode`].
-///
-/// This is helpful for generated code: it allows capturing the `R::ReadGpr`
-/// type (which an `Amode` method cannot) and simplifies the code to be
-/// generated.
-pub(crate) fn visit_amode<R: Registers>(
-    amode: &mut Amode<R::ReadGpr>,
-    visitor: &mut impl RegisterVisitor<R>,
-) {
-    match amode {
-        Amode::ImmReg { base, .. } => {
-            visitor.read_gpr(base);
-        }
-        Amode::ImmRegRegShift { base, index, .. } => {
-            visitor.read_gpr(base);
-            visitor.read_gpr(index.as_mut());
-        }
-        Amode::RipRelative { .. } => {}
-    }
-}
-
 /// A 32-bit immediate for address offsets.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
@@ -134,7 +112,7 @@ impl std::fmt::LowerHex for AmodeOffset {
 /// happens immediately before emission:
 /// - the [`KnownOffset`] is looked up, mapping it to an offset value
 /// - the [`Simm32`] value is added to the offset value
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct AmodeOffsetPlusKnownOffset {
     pub simm32: AmodeOffset,
     pub offset: Option<KnownOffset>,
@@ -166,7 +144,7 @@ impl std::fmt::LowerHex for AmodeOffsetPlusKnownOffset {
 }
 
 /// For RIP-relative addressing, keep track of the [`CodeSink`]-specific target.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub enum DeferredTarget {
     Label(Label),
@@ -205,7 +183,7 @@ impl<R: AsReg> std::fmt::Display for Amode<R> {
 }
 
 /// The scaling factor for the index register in certain [`Amode`]s.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub enum Scale {
     One,
@@ -252,7 +230,7 @@ impl Scale {
 }
 
 /// A general-purpose register or memory operand.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 #[allow(
     clippy::module_name_repetitions,
@@ -313,7 +291,7 @@ impl<R: AsReg, M: AsReg> From<Amode<M>> for GprMem<R, M> {
 }
 
 /// An XMM register or memory operand.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 #[allow(
     clippy::module_name_repetitions,
@@ -382,7 +360,7 @@ fn emit_modrm_sib_disp<R: AsReg>(
     bytes_at_end: u8,
     evex_scaling: Option<i8>,
 ) {
-    match mem_e.clone() {
+    match *mem_e {
         Amode::ImmReg { simm32, base, .. } => {
             let enc_e = base.enc();
             let mut imm = Disp::new(simm32.value(offsets), evex_scaling);
@@ -450,8 +428,8 @@ fn emit_modrm_sib_disp<R: AsReg>(
 
             let offset = sink.current_offset();
             let target = match target {
-                DeferredTarget::Label(label) => label.clone(),
-                DeferredTarget::Constant(constant) => sink.get_label_for_constant(constant.clone()),
+                DeferredTarget::Label(label) => label,
+                DeferredTarget::Constant(constant) => sink.get_label_for_constant(constant),
             };
             sink.use_label_at_offset(offset, target);
 

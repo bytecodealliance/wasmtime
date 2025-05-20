@@ -47,7 +47,7 @@ fn generate_inst_enum(f: &mut Formatter, insts: &[dsl::Inst]) {
 
 /// `#[derive(...)]`
 fn generate_derive(f: &mut Formatter) {
-    fmtln!(f, "#[derive(Clone, Debug)]");
+    fmtln!(f, "#[derive(Copy, Clone, Debug)]");
     fmtln!(
         f,
         "#[cfg_attr(any(test, feature = \"fuzz\"), derive(arbitrary::Arbitrary))]"
@@ -72,7 +72,7 @@ fn generate_inst_display_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
                 f.add_block("match self", |f| {
                     for inst in insts {
                         let variant_name = inst.name();
-                        fmtln!(f, "Self::{variant_name}(i) => write!(f, \"{{i}}\"),");
+                        fmtln!(f, "Self::{variant_name}(i) => i.fmt(f),");
                     }
                 });
             },
