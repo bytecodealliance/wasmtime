@@ -24,7 +24,7 @@ pub fn list() -> Vec<Inst> {
         inst("popcntl", fmt("RM", [w(r32), r(rm32)]), rex([0xF3, 0x0F, 0xB8]).r(), _64b | compat | popcnt),
         inst("popcntq", fmt("RM", [w(r64), r(rm64)]), rex([0xF3, 0x0F, 0xB8]).r().w(), _64b | popcnt),
 
-        // Note that the intel manual calls has different names for these
+        // Note that the Intel manual calls has different names for these
         // instructions than Capstone gives them:
         //
         // * cbtw => cbw
