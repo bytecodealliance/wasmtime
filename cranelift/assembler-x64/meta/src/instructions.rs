@@ -8,6 +8,7 @@ mod mul;
 mod neg;
 mod or;
 mod shift;
+mod sqrt;
 mod sub;
 mod xor;
 
@@ -24,6 +25,7 @@ pub fn list() -> Vec<Inst> {
     all.extend(neg::list());
     all.extend(or::list());
     all.extend(shift::list());
+    all.extend(sqrt::list());
     all.extend(sub::list());
     all.extend(xor::list());
     all
