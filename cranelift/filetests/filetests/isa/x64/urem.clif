@@ -13,7 +13,7 @@ block0(v0: i8, v1: i8):
 ; block0:
 ;   movzbl  %dil, %eax
 ;   div     %al, %sil, %al ; trap=int_divz
-;   shrq    $8, %rax, %rax
+;   shrq $0x8, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

@@ -326,22 +326,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn imm8_from_value(&mut self, val: Value) -> Option<Imm8Reg> {
-        let inst = self.lower_ctx.dfg().value_def(val).inst()?;
-        let constant = self.lower_ctx.get_constant(inst)?;
-        let imm = u8::try_from(constant).ok()?;
-        Some(Imm8Reg::Imm8 { imm })
-    }
-
-    #[inline]
-    fn const_to_type_masked_imm8(&mut self, c: u64, ty: Type) -> Imm8Gpr {
-        let mask = self.shift_mask(ty) as u64;
-        Imm8Gpr::unwrap_new(Imm8Reg::Imm8 {
-            imm: (c & mask) as u8,
-        })
-    }
-
-    #[inline]
     fn shift_mask(&mut self, ty: Type) -> u8 {
         debug_assert!(ty.lane_bits().is_power_of_two());
 
@@ -584,11 +568,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn imm8_reg_to_imm8_gpr(&mut self, ir: &Imm8Reg) -> Imm8Gpr {
-        Imm8Gpr::unwrap_new(ir.clone())
-    }
-
-    #[inline]
     fn gpr_to_gpr_mem(&mut self, gpr: Gpr) -> GprMem {
         GprMem::from(gpr)
     }
@@ -596,30 +575,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     #[inline]
     fn gpr_to_gpr_mem_imm(&mut self, gpr: Gpr) -> GprMemImm {
         GprMemImm::from(gpr)
-    }
-
-    #[inline]
-    fn gpr_to_imm8_gpr(&mut self, gpr: Gpr) -> Imm8Gpr {
-        Imm8Gpr::from(gpr)
-    }
-
-    #[inline]
-    fn imm8_to_imm8_gpr(&mut self, imm: u8) -> Imm8Gpr {
-        Imm8Gpr::unwrap_new(Imm8Reg::Imm8 { imm })
-    }
-
-    fn gpr_from_imm8_gpr(&mut self, val: &Imm8Gpr) -> Option<Gpr> {
-        match val.as_imm8_reg() {
-            &Imm8Reg::Reg { reg } => Some(Gpr::unwrap_new(reg)),
-            Imm8Reg::Imm8 { .. } => None,
-        }
-    }
-
-    fn imm8_from_imm8_gpr(&mut self, val: &Imm8Gpr) -> Option<u8> {
-        match val.as_imm8_reg() {
-            &Imm8Reg::Imm8 { imm } => Some(imm),
-            Imm8Reg::Reg { .. } => None,
-        }
     }
 
     #[inline]

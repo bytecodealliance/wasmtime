@@ -63,7 +63,7 @@ block0(v0: i16x8):
 ; block0:
 ;   packsswb %xmm0, %xmm0, %xmm0
 ;   pmovmskb %xmm0, %eax
-;   shrq    $8, %rax, %rax
+;   shrq $0x8, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

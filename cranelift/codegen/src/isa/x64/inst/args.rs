@@ -34,7 +34,6 @@ macro_rules! newtype_of_reg {
         $newtype_option_writable_reg:ident,
         reg_mem: ($($newtype_reg_mem:ident $(aligned:$aligned:ident)?),*),
         reg_mem_imm: ($($newtype_reg_mem_imm:ident $(aligned:$aligned_imm:ident)?),*),
-        $newtype_imm8_reg:ident,
         |$check_reg:ident| $check:expr
     ) => {
         /// A newtype wrapper around `Reg`.
@@ -294,50 +293,6 @@ macro_rules! newtype_of_reg {
                 }
             }
         )*
-
-        /// A newtype wrapper around `Imm8Reg`.
-        #[derive(Clone, Debug)]
-        #[allow(dead_code)] // Used by some newtypes and not others.
-        pub struct $newtype_imm8_reg(Imm8Reg);
-
-        impl From<$newtype_reg> for $newtype_imm8_reg {
-            fn from(r: $newtype_reg) -> Self {
-                Self(Imm8Reg::Reg { reg: r.to_reg() })
-            }
-        }
-
-        impl $newtype_imm8_reg {
-            /// Construct this newtype from the given `Imm8Reg`, or return
-            /// `None` if the `Imm8Reg` is not a valid instance of this newtype.
-            #[allow(dead_code)] // Used by some newtypes and not others.
-            pub fn new(imm8_reg: Imm8Reg) -> Option<Self> {
-                match imm8_reg {
-                    Imm8Reg::Imm8 { .. } => Some(Self(imm8_reg)),
-                    Imm8Reg::Reg { reg } => Some($newtype_reg::new(reg)?.into()),
-                }
-            }
-
-            /// Like `Self::new(imm8_reg).unwrap()` but with better panic
-            /// messages on failure.
-            pub fn unwrap_new(imm8_reg: Imm8Reg) -> Self {
-                match imm8_reg {
-                    Imm8Reg::Imm8 { .. } => Self(imm8_reg),
-                    Imm8Reg::Reg { reg } => $newtype_reg::unwrap_new(reg).into(),
-                }
-            }
-
-            /// Borrow this newtype as its underlying `Imm8Reg`.
-            #[allow(dead_code)] // Used by some newtypes and not others.
-            pub fn as_imm8_reg(&self) -> &Imm8Reg {
-                &self.0
-            }
-
-            /// Borrow this newtype as its underlying `Imm8Reg`.
-            #[allow(dead_code)] // Used by some newtypes and not others.
-            pub fn as_imm8_reg_mut(&mut self) -> &mut Imm8Reg {
-                &mut self.0
-            }
-        }
     };
 }
 
@@ -348,7 +303,6 @@ newtype_of_reg!(
     OptionWritableGpr,
     reg_mem: (GprMem),
     reg_mem_imm: (GprMemImm),
-    Imm8Gpr,
     |reg| reg.class() == RegClass::Int
 );
 
@@ -359,7 +313,6 @@ newtype_of_reg!(
     OptionWritableXmm,
     reg_mem: (XmmMem, XmmMemAligned aligned:true),
     reg_mem_imm: (XmmMemImm, XmmMemAlignedImm aligned:true),
-    Imm8Xmm,
     |reg| reg.class() == RegClass::Float
 );
 
@@ -712,33 +665,6 @@ impl PrettyPrint for RegMemImm {
             Self::Mem { addr } => addr.pretty_print(size),
             Self::Imm { simm32 } => format!("${}", *simm32 as i32),
         }
-    }
-}
-
-/// An operand which is either an 8-bit integer immediate or a register.
-#[derive(Clone, Debug)]
-pub enum Imm8Reg {
-    /// 8-bit immediate operand.
-    Imm8 {
-        /// The 8-bit immediate value.
-        imm: u8,
-    },
-    /// A register operand.
-    Reg {
-        /// The underlying register.
-        reg: Reg,
-    },
-}
-
-impl From<u8> for Imm8Reg {
-    fn from(imm: u8) -> Self {
-        Self::Imm8 { imm }
-    }
-}
-
-impl From<Reg> for Imm8Reg {
-    fn from(reg: Reg) -> Self {
-        Self::Reg { reg }
     }
 }
 
@@ -1742,40 +1668,6 @@ impl fmt::Debug for ExtMode {
 }
 
 impl fmt::Display for ExtMode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        fmt::Debug::fmt(self, f)
-    }
-}
-
-/// These indicate the form of a scalar shift/rotate: left, signed right, unsigned right.
-#[derive(Clone, Copy)]
-pub enum ShiftKind {
-    /// Left shift.
-    ShiftLeft,
-    /// Inserts zeros in the most significant bits.
-    ShiftRightLogical,
-    /// Replicates the sign bit in the most significant bits.
-    ShiftRightArithmetic,
-    /// Left rotation.
-    RotateLeft,
-    /// Right rotation.
-    RotateRight,
-}
-
-impl fmt::Debug for ShiftKind {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let name = match self {
-            ShiftKind::ShiftLeft => "shl",
-            ShiftKind::ShiftRightLogical => "shr",
-            ShiftKind::ShiftRightArithmetic => "sar",
-            ShiftKind::RotateLeft => "rol",
-            ShiftKind::RotateRight => "ror",
-        };
-        write!(fmt, "{name}")
-    }
-}
-
-impl fmt::Display for ShiftKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         fmt::Debug::fmt(self, f)
     }
