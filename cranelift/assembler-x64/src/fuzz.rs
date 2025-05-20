@@ -27,7 +27,7 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
     // off the instruction offset first.
     let expected = expected.split_once(' ').unwrap().1;
     let actual = inst.to_string();
-    if expected != actual && expected != fix_up(&actual) {
+    if expected != actual && expected.trim() != fix_up(&actual) {
         println!("> {inst}");
         println!("  debug: {inst:x?}");
         println!("  assembled: {}", pretty_print_hexadecimal(&assembled));

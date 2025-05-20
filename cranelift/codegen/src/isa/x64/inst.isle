@@ -89,12 +89,6 @@
                         (divisor Gpr)
                         (dst WritableGpr))
 
-       ;; Do a sign-extend based on the sign of the value in rax into rdx: (cwd
-       ;; cdq cqo) or al into ah: (cbw)
-       (SignExtendData (size OperandSize) ;; 1, 2, 4, or 8
-                       (src Gpr)
-                       (dst WritableGpr))
-
        ;; Constant materialization: (imm32 imm64) reg.
        ;;
        ;; Either: movl $imm32, %reg32 or movabsq $imm64, %reg32.
@@ -5532,13 +5526,6 @@
 (decl x64_div_remainder (Gpr Gpr GprMem OperandSize DivSignedness TrapCode) ValueRegs)
 (rule (x64_div_remainder dividend_lo dividend_hi divisor size sign trap)
       (value_regs_get (x64_div dividend_lo dividend_hi divisor size sign trap) 1))
-
-;; Helper for creating `SignExtendData` instructions
-(decl x64_sign_extend_data (Gpr OperandSize) Gpr)
-(rule (x64_sign_extend_data src size)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.SignExtendData size src dst))))
-        dst))
 
 ;;;; Pinned Register ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

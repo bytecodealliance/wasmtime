@@ -12,7 +12,7 @@ block0(v0: i8, v1: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cbw %al, %al
+;   cbtw  ;; implicit: %ax
 ;   testb   %sil, %sil
 ;   jz #trap=int_divz
 ;   idiv    %al, %sil, %al ; trap=int_ovf
@@ -46,7 +46,7 @@ block0(v0: i16, v1: i16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cwd %ax, %dx
+;   cwtd  ;; implicit: %dx, %ax
 ;   testw   %si, %si
 ;   jz #trap=int_divz
 ;   idiv    %ax, %dx, %si, %ax, %dx ; trap=int_ovf
@@ -80,7 +80,7 @@ block0(v0: i32, v1: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cdq %eax, %edx
+;   cltd  ;; implicit: %edx, %eax
 ;   testl   %esi, %esi
 ;   jz #trap=int_divz
 ;   idiv    %eax, %edx, %esi, %eax, %edx ; trap=int_ovf
@@ -114,7 +114,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cqo %rax, %rdx
+;   cqto  ;; implicit: %rdx, %rax
 ;   testq   %rsi, %rsi
 ;   jz #trap=int_divz
 ;   idiv    %rax, %rdx, %rsi, %rax, %rdx ; trap=int_ovf

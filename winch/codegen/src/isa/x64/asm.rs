@@ -1114,8 +1114,6 @@ impl Assembler {
             // Signed division has two trapping conditions, integer overflow and
             // divide-by-zero. Check for divide-by-zero explicitly and let the
             // hardware detect overflow.
-            //
-            // The dividend is sign extended to initialize `rdx`.
             DivKind::Signed => {
                 self.emit(Inst::CmpRmiR {
                     size: size.into(),
@@ -1127,11 +1125,17 @@ impl Assembler {
                     cc: CC::Z,
                     trap_code: TrapCode::INTEGER_DIVISION_BY_ZERO,
                 });
-                self.emit(Inst::SignExtendData {
-                    size: size.into(),
-                    src: dst.0.into(),
-                    dst: dst.1.into(),
-                });
+
+                // Sign-extend the dividend with tailor-made instructoins for
+                // just this operation.
+                let ext_dst: WritableGpr = dst.1.into();
+                let ext_src: Gpr = dst.0.into();
+                let inst = match size {
+                    OperandSize::S32 => asm::inst::cltd_zo::new(ext_dst, ext_src).into(),
+                    OperandSize::S64 => asm::inst::cqto_zo::new(ext_dst, ext_src).into(),
+                    _ => unimplemented!(),
+                };
+                self.emit(Inst::External { inst });
                 TrapCode::INTEGER_OVERFLOW
             }
 
@@ -1170,11 +1174,17 @@ impl Assembler {
             // some internal branching. The `dividend_hi`, or `rdx`, is
             // initialized here with a `SignExtendData` instruction.
             RemKind::Signed => {
-                self.emit(Inst::SignExtendData {
-                    size: size.into(),
-                    src: dst.0.into(),
-                    dst: dst.1.into(),
-                });
+                let ext_dst: WritableGpr = dst.1.into();
+
+                // Initialize `dividend_hi`, or `rdx`, with a tailor-made
+                // instruction for this operation.
+                let ext_src: Gpr = dst.0.into();
+                let inst = match size {
+                    OperandSize::S32 => asm::inst::cltd_zo::new(ext_dst, ext_src).into(),
+                    OperandSize::S64 => asm::inst::cqto_zo::new(ext_dst, ext_src).into(),
+                    _ => unimplemented!(),
+                };
+                self.emit(Inst::External { inst });
                 self.emit(Inst::CheckedSRemSeq {
                     size: size.into(),
                     divisor: divisor.into(),

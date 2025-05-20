@@ -152,8 +152,6 @@ pub(crate) fn check(
 
         Inst::CheckedSRemSeq8 { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
 
-        Inst::SignExtendData { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
-
         Inst::Imm { simm64, dst, .. } => {
             check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
                 Ok(Some(Fact::constant(64, simm64)))
