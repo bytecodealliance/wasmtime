@@ -21,9 +21,8 @@ use cranelift_codegen::{
             AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
             args::{
                 self, Amode, Avx512Opcode, AvxOpcode, CC, CmpOpcode, DivSignedness, ExtMode,
-                FenceKind, FromWritableReg, Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem,
-                RegMemImm, ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
-                WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm,
+                FenceKind, FromWritableReg, Gpr, GprMem, GprMemImm, RegMem, RegMemImm, SseOpcode,
+                SyntheticAmode, WritableGpr, WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm,
             },
             encoding::rex::{RexFlags, encode_modrm},
             external::{PairedGpr, PairedXmm},
@@ -115,12 +114,6 @@ impl From<Reg> for GprMemImm {
     }
 }
 
-impl From<Reg> for Imm8Gpr {
-    fn from(value: Reg) -> Self {
-        Imm8Gpr::unwrap_new(Imm8Reg::Reg { reg: value.into() })
-    }
-}
-
 impl From<Reg> for Xmm {
     fn from(reg: Reg) -> Self {
         Xmm::unwrap_new(reg.into())
@@ -173,18 +166,6 @@ impl From<IntCmpKind> for CC {
             IntCmpKind::LeU => CC::BE,
             IntCmpKind::GeS => CC::NL,
             IntCmpKind::GeU => CC::NB,
-        }
-    }
-}
-
-impl From<ShiftKind> for CraneliftShiftKind {
-    fn from(value: ShiftKind) -> Self {
-        match value {
-            ShiftKind::Shl => CraneliftShiftKind::ShiftLeft,
-            ShiftKind::ShrS => CraneliftShiftKind::ShiftRightArithmetic,
-            ShiftKind::ShrU => CraneliftShiftKind::ShiftRightLogical,
-            ShiftKind::Rotl => CraneliftShiftKind::RotateLeft,
-            ShiftKind::Rotr => CraneliftShiftKind::RotateRight,
         }
     }
 }
@@ -1081,26 +1062,49 @@ impl Assembler {
 
     /// Shift with register and register.
     pub fn shift_rr(&mut self, src: Reg, dst: WritableReg, kind: ShiftKind, size: OperandSize) {
-        self.emit(Inst::ShiftR {
-            size: size.into(),
-            kind: kind.into(),
-            src: dst.to_reg().into(),
-            num_bits: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let src: Gpr = src.into();
+        let inst = match (kind, size) {
+            (ShiftKind::Shl, OperandSize::S32) => asm::inst::shll_mc::new(dst, src).into(),
+            (ShiftKind::Shl, OperandSize::S64) => asm::inst::shlq_mc::new(dst, src).into(),
+            (ShiftKind::Shl, _) => todo!(),
+            (ShiftKind::ShrS, OperandSize::S32) => asm::inst::sarl_mc::new(dst, src).into(),
+            (ShiftKind::ShrS, OperandSize::S64) => asm::inst::sarq_mc::new(dst, src).into(),
+            (ShiftKind::ShrS, _) => todo!(),
+            (ShiftKind::ShrU, OperandSize::S32) => asm::inst::shrl_mc::new(dst, src).into(),
+            (ShiftKind::ShrU, OperandSize::S64) => asm::inst::shrq_mc::new(dst, src).into(),
+            (ShiftKind::ShrU, _) => todo!(),
+            (ShiftKind::Rotl, OperandSize::S32) => asm::inst::roll_mc::new(dst, src).into(),
+            (ShiftKind::Rotl, OperandSize::S64) => asm::inst::rolq_mc::new(dst, src).into(),
+            (ShiftKind::Rotl, _) => todo!(),
+            (ShiftKind::Rotr, OperandSize::S32) => asm::inst::rorl_mc::new(dst, src).into(),
+            (ShiftKind::Rotr, OperandSize::S64) => asm::inst::rorq_mc::new(dst, src).into(),
+            (ShiftKind::Rotr, _) => todo!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Shift with immediate and register.
     pub fn shift_ir(&mut self, imm: u8, dst: WritableReg, kind: ShiftKind, size: OperandSize) {
-        let imm = imm.into();
-
-        self.emit(Inst::ShiftR {
-            size: size.into(),
-            kind: kind.into(),
-            src: dst.to_reg().into(),
-            num_bits: Imm8Gpr::unwrap_new(imm),
-            dst: dst.map(Into::into),
-        });
+        let dst = pair_gpr(dst);
+        let inst = match (kind, size) {
+            (ShiftKind::Shl, OperandSize::S32) => asm::inst::shll_mi::new(dst, imm).into(),
+            (ShiftKind::Shl, OperandSize::S64) => asm::inst::shlq_mi::new(dst, imm).into(),
+            (ShiftKind::Shl, _) => todo!(),
+            (ShiftKind::ShrS, OperandSize::S32) => asm::inst::sarl_mi::new(dst, imm).into(),
+            (ShiftKind::ShrS, OperandSize::S64) => asm::inst::sarq_mi::new(dst, imm).into(),
+            (ShiftKind::ShrS, _) => todo!(),
+            (ShiftKind::ShrU, OperandSize::S32) => asm::inst::shrl_mi::new(dst, imm).into(),
+            (ShiftKind::ShrU, OperandSize::S64) => asm::inst::shrq_mi::new(dst, imm).into(),
+            (ShiftKind::ShrU, _) => todo!(),
+            (ShiftKind::Rotl, OperandSize::S32) => asm::inst::roll_mi::new(dst, imm).into(),
+            (ShiftKind::Rotl, OperandSize::S64) => asm::inst::rolq_mi::new(dst, imm).into(),
+            (ShiftKind::Rotl, _) => todo!(),
+            (ShiftKind::Rotr, OperandSize::S32) => asm::inst::rorl_mi::new(dst, imm).into(),
+            (ShiftKind::Rotr, OperandSize::S64) => asm::inst::rorq_mi::new(dst, imm).into(),
+            (ShiftKind::Rotr, _) => todo!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Signed/unsigned division.

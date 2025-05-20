@@ -5,7 +5,7 @@ use crate::ir::types::*;
 use crate::isa::x64::args::AvxOpcode;
 use crate::isa::x64::inst::Inst;
 use crate::isa::x64::inst::args::{
-    Amode, CC, Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind, SseOpcode, SyntheticAmode, ToWritableReg,
+    Amode, CC, Gpr, RegMem, RegMemImm, SseOpcode, SyntheticAmode, ToWritableReg,
 };
 use crate::machinst::pcc::*;
 use crate::machinst::{InsnIndex, VCode, VCodeConstantData};
@@ -236,30 +236,6 @@ pub(crate) fn check(
 
         Inst::MovRM { size, src, ref dst } => {
             check_store(ctx, Some(src.to_reg()), dst, vcode, size.to_type())
-        }
-
-        Inst::ShiftR {
-            size,
-            kind: ShiftKind::ShiftLeft,
-            src,
-            ref num_bits,
-            dst,
-        } => match num_bits.as_imm8_reg() {
-            &Imm8Reg::Imm8 { imm } => {
-                check_unop(ctx, vcode, 64, dst.to_writable_reg(), src.to_reg(), |src| {
-                    clamp_range(
-                        ctx,
-                        64,
-                        size.to_bits().into(),
-                        ctx.shl(src, size.to_bits().into(), imm.into()),
-                    )
-                })
-            }
-            Imm8Reg::Reg { .. } => undefined_result(ctx, vcode, dst, 64, size.to_bits().into()),
-        },
-
-        Inst::ShiftR { size, dst, .. } => {
-            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())
         }
 
         Inst::CmpRmiR {

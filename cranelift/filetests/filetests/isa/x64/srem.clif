@@ -14,7 +14,7 @@ block0(v0: i8, v1: i8):
 ;   movq    %rdi, %rax
 ;   cbtw  ;; implicit: %ax
 ;   checked_srem_seq %al, %sil, %al
-;   shrq    $8, %rax, %rax
+;   shrq $0x8, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -156,7 +156,7 @@ block0(v0: i8):
 ;   cbtw  ;; implicit: %ax
 ;   movl    $17, %edx
 ;   idiv    %al, %dl, %al ; trap=int_divz
-;   shrq    $8, %rax, %rax
+;   shrq $0x8, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

@@ -121,7 +121,6 @@ impl Inst {
             | Inst::Rets { .. }
             | Inst::Ret { .. }
             | Inst::Setcc { .. }
-            | Inst::ShiftR { .. }
             | Inst::StackSwitchBasic { .. }
             | Inst::TrapIf { .. }
             | Inst::TrapIfAnd { .. }
@@ -442,26 +441,6 @@ impl Inst {
             addr: addr.into(),
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
             size: OperandSize::Size64,
-        }
-    }
-
-    pub(crate) fn shift_r(
-        size: OperandSize,
-        kind: ShiftKind,
-        num_bits: Imm8Gpr,
-        src: Reg,
-        dst: Writable<Reg>,
-    ) -> Inst {
-        if let &Imm8Reg::Imm8 { imm: num_bits } = num_bits.as_imm8_reg() {
-            debug_assert!(num_bits < size.to_bits());
-        }
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Inst::ShiftR {
-            size,
-            kind,
-            src: Gpr::unwrap_new(src),
-            num_bits,
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
     }
 
@@ -1359,30 +1338,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}")
             }
 
-            Inst::ShiftR {
-                size,
-                kind,
-                num_bits,
-                src,
-                dst,
-                ..
-            } => {
-                let src = pretty_print_reg(src.to_reg(), size.to_bytes());
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                match num_bits.as_imm8_reg() {
-                    &Imm8Reg::Reg { reg } => {
-                        let reg = pretty_print_reg(reg, 1);
-                        let op = ljustify2(kind.to_string(), suffix_bwlq(*size));
-                        format!("{op} {reg}, {src}, {dst}")
-                    }
-
-                    &Imm8Reg::Imm8 { imm: num_bits } => {
-                        let op = ljustify2(kind.to_string(), suffix_bwlq(*size));
-                        format!("{op} ${num_bits}, {src}, {dst}")
-                    }
-                }
-            }
-
             Inst::CmpRmiR {
                 size,
                 src1,
@@ -2161,15 +2116,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::MovRM { src, dst, .. } => {
             collector.reg_use(src);
             dst.get_operands(collector);
-        }
-        Inst::ShiftR {
-            num_bits, src, dst, ..
-        } => {
-            collector.reg_use(src);
-            collector.reg_reuse_def(dst, 0);
-            if let Imm8Reg::Reg { reg } = num_bits.as_imm8_reg_mut() {
-                collector.reg_fixed_use(reg, regs::rcx());
-            }
         }
         Inst::CmpRmiR { src1, src2, .. } => {
             collector.reg_use(src1);

@@ -145,15 +145,6 @@
               (src Gpr)
               (dst SyntheticAmode))
 
-       ;; Arithmetic shifts: (shl shr sar) (b w l q) imm reg.
-       (ShiftR (size OperandSize) ;; 1, 2, 4, or 8
-               (kind ShiftKind)
-               (src Gpr)
-               ;; shift count: `Imm8Gpr::Imm8(0 .. #bits-in-type - 1)` or
-               ;; `Imm8Reg::Gpr(r)` where `r` gets move mitosis'd into `%cl`.
-               (num_bits Imm8Gpr)
-               (dst WritableGpr))
-
        ;; Integer comparisons/tests: cmp or test (b w l q) (reg addr imm) reg.
        (CmpRmiR (size OperandSize) ;; 1, 2, 4, or 8
                 (opcode CmpOpcode)
@@ -1181,9 +1172,9 @@
             RotateLeft
             RotateRight))
 
-(type Imm8Reg extern
+(type Imm8Gpr
       (enum (Imm8 (imm u8))
-            (Reg (reg Reg))))
+            (Gpr (reg Gpr))))
 
 ;; Put the given clif value into a `Imm8Reg` operand, masked to the bit width of
 ;; the given type.
@@ -1196,7 +1187,7 @@
 ;; This is used when lowering various shifts and rotates.
 (decl put_masked_in_imm8_gpr (Value Type) Imm8Gpr)
 (rule 2 (put_masked_in_imm8_gpr (u64_from_iconst amt) ty)
-      (const_to_type_masked_imm8 amt ty))
+      (Imm8Gpr.Imm8 (u64_as_u8 (u64_and amt (shift_mask ty)))))
 (rule 1 (put_masked_in_imm8_gpr amt (fits_in_16 ty))
       (x64_and $I64 (value_regs_get_gpr amt 0) (RegMemImm.Imm (shift_mask ty))))
 (rule (put_masked_in_imm8_gpr amt ty)
@@ -1480,7 +1471,6 @@
 (type OptionWritableGpr (primitive OptionWritableGpr))
 (type GprMem extern (enum))
 (type GprMemImm extern (enum))
-(type Imm8Gpr extern (enum))
 
 (type Xmm (primitive Xmm))
 (type WritableXmm (primitive WritableXmm))
@@ -1489,18 +1479,6 @@
 (type XmmMemAligned extern (enum))
 (type XmmMemImm extern (enum))
 (type XmmMemAlignedImm extern (enum))
-
-;; Convert an `Imm8Reg` into an `Imm8Gpr`.
-(decl imm8_reg_to_imm8_gpr (Imm8Reg) Imm8Gpr)
-(extern constructor imm8_reg_to_imm8_gpr imm8_reg_to_imm8_gpr)
-
-;; Convert an `Imm8Gpr` into a `Gpr`.
-(decl gpr_from_imm8_gpr (Gpr) Imm8Gpr)
-(extern extractor gpr_from_imm8_gpr gpr_from_imm8_gpr)
-
-;; Convert an `Imm8Gpr` into an `Imm8`.
-(decl imm8_from_imm8_gpr (u8) Imm8Gpr)
-(extern extractor imm8_from_imm8_gpr imm8_from_imm8_gpr)
 
 ;; Convert a `WritableGpr` to a `WritableReg`.
 (decl writable_gpr_to_reg (WritableGpr) WritableReg)
@@ -1717,11 +1695,7 @@
 
 ;; Convert a `Gpr` to an `Imm8Gpr`.
 (decl gpr_to_imm8_gpr (Gpr) Imm8Gpr)
-(extern constructor gpr_to_imm8_gpr gpr_to_imm8_gpr)
-
-;; Convert an 8-bit immediate into an `Imm8Gpr`.
-(decl imm8_to_imm8_gpr (u8) Imm8Gpr)
-(extern constructor imm8_to_imm8_gpr imm8_to_imm8_gpr)
+(rule (gpr_to_imm8_gpr gpr) (Imm8Gpr.Gpr gpr))
 
 ;; Get the low half of the given `Value` as a GPR.
 (decl lo_gpr (Value) Gpr)
@@ -1836,17 +1810,6 @@
 (extern constructor use_cmpxchg16b use_cmpxchg16b)
 
 ;;;; Helpers for Merging and Sinking Immediates/Loads  ;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Extract a constant `Imm8Reg.Imm8` from a value operand.
-(decl imm8_from_value (Imm8Reg) Value)
-(extern extractor imm8_from_value imm8_from_value)
-
-;; Mask a constant to the bit-width of the given type and package it into an
-;; `Imm8Reg.Imm8`. This is used for shifts and rotates, so that we don't try and
-;; shift/rotate more bits than the type has available, per Cranelift's
-;; semantics.
-(decl const_to_type_masked_imm8 (u64 Type) Imm8Gpr)
-(extern constructor const_to_type_masked_imm8 const_to_type_masked_imm8)
 
 ;; Generate a mask for the bit-width of the given type
 (decl shift_mask (Type) u8)
@@ -3071,59 +3034,79 @@
       (let ((tmp Xmm (xmm_uninit_value)))
         (x64_xor_vector ty tmp tmp)))
 
-;; Helper for creating `MInst.ShiftR` instructions.
-(decl shift_r (Type ShiftKind Gpr Imm8Gpr) Gpr)
-(rule (shift_r ty kind src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            ;; Use actual 8/16-bit instructions when appropriate: we
-            ;; rely on their shift-amount-masking semantics.
-            (size OperandSize (raw_operand_size_of_type ty))
-            (_ Unit (emit (MInst.ShiftR size kind src1 src2 dst))))
-        dst))
-
 ;; Helper for creating `rotl` instructions.
 (decl x64_rotl (Type Gpr Imm8Gpr) Gpr)
-(rule (x64_rotl ty src1 src2)
-      (shift_r ty (ShiftKind.RotateLeft) src1 src2))
-(rule 1 (x64_rotl (ty_32_or_64 ty) src (imm8_from_imm8_gpr imm))
+(rule (x64_rotl $I8 src1 (Imm8Gpr.Gpr src2)) (x64_rolb_mc src1 src2))
+(rule (x64_rotl $I8 src1 (Imm8Gpr.Imm8 src2)) (x64_rolb_mi src1 src2))
+(rule (x64_rotl $I16 src1 (Imm8Gpr.Gpr src2)) (x64_rolw_mc src1 src2))
+(rule (x64_rotl $I16 src1 (Imm8Gpr.Imm8 src2)) (x64_rolw_mi src1 src2))
+(rule (x64_rotl $I32 src1 (Imm8Gpr.Gpr src2)) (x64_roll_mc src1 src2))
+(rule (x64_rotl $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_roll_mi src1 src2))
+(rule (x64_rotl $I64 src1 (Imm8Gpr.Gpr src2)) (x64_rolq_mc src1 src2))
+(rule (x64_rotl $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_rolq_mi src1 src2))
+(rule 1 (x64_rotl (ty_32_or_64 ty) src (Imm8Gpr.Imm8 imm))
         (if-let true (use_bmi2))
         (x64_rorx ty src (u8_sub (ty_bits ty) imm)))
 
 ;; Helper for creating `rotr` instructions.
 (decl x64_rotr (Type Gpr Imm8Gpr) Gpr)
-(rule (x64_rotr ty src1 src2)
-      (shift_r ty (ShiftKind.RotateRight) src1 src2))
-(rule 1 (x64_rotr (ty_32_or_64 ty) src (imm8_from_imm8_gpr imm))
+(rule (x64_rotr $I8 src1 (Imm8Gpr.Gpr src2)) (x64_rorb_mc src1 src2))
+(rule (x64_rotr $I8 src1 (Imm8Gpr.Imm8 src2)) (x64_rorb_mi src1 src2))
+(rule (x64_rotr $I16 src1 (Imm8Gpr.Gpr src2)) (x64_rorw_mc src1 src2))
+(rule (x64_rotr $I16 src1 (Imm8Gpr.Imm8 src2)) (x64_rorw_mi src1 src2))
+(rule (x64_rotr $I32 src1 (Imm8Gpr.Gpr src2)) (x64_rorl_mc src1 src2))
+(rule (x64_rotr $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_rorl_mi src1 src2))
+(rule (x64_rotr $I64 src1 (Imm8Gpr.Gpr src2)) (x64_rorq_mc src1 src2))
+(rule (x64_rotr $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_rorq_mi src1 src2))
+(rule 1 (x64_rotr (ty_32_or_64 ty) src (Imm8Gpr.Imm8 imm))
         (if-let true (use_bmi2))
         (x64_rorx ty src imm))
 
 ;; Helper for creating `shl` instructions.
 (decl x64_shl (Type Gpr Imm8Gpr) Gpr)
-(rule (x64_shl ty src1 src2)
-      (shift_r ty (ShiftKind.ShiftLeft) src1 src2))
+(rule (x64_shl $I8 src1 (Imm8Gpr.Gpr src2)) (x64_shlb_mc src1 src2))
+(rule (x64_shl $I8 src1 (Imm8Gpr.Imm8 src2)) (x64_shlb_mi src1 src2))
+(rule (x64_shl $I16 src1 (Imm8Gpr.Gpr src2)) (x64_shlw_mc src1 src2))
+(rule (x64_shl $I16 src1 (Imm8Gpr.Imm8 src2)) (x64_shlw_mi src1 src2))
+(rule (x64_shl $I32 src1 (Imm8Gpr.Gpr src2)) (x64_shll_mc src1 src2))
+(rule (x64_shl $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_shll_mi src1 src2))
+(rule (x64_shl $I64 src1 (Imm8Gpr.Gpr src2)) (x64_shlq_mc src1 src2))
+(rule (x64_shl $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_shlq_mi src1 src2))
 ;; With BMI2 the `shlx` instruction is also available, and it's unconditionally
 ;; used for registers shifted by registers since it provides more freedom
 ;; in regalloc since nothing is constrained. Note that the `shlx` instruction
 ;; doesn't encode an immediate so any immediate-based shift still uses `shl`.
-(rule 1 (x64_shl (ty_32_or_64 ty) src1 (gpr_from_imm8_gpr src2))
+(rule 1 (x64_shl (ty_32_or_64 ty) src1 (Imm8Gpr.Gpr src2))
         (if-let true (use_bmi2))
         (x64_shlx ty src1 src2))
 
 ;; Helper for creating logical shift-right instructions.
 (decl x64_shr (Type Gpr Imm8Gpr) Gpr)
-(rule (x64_shr ty src1 src2)
-      (shift_r ty (ShiftKind.ShiftRightLogical) src1 src2))
+(rule (x64_shr $I8 src1 (Imm8Gpr.Gpr src2)) (x64_shrb_mc src1 src2))
+(rule (x64_shr $I8 src1 (Imm8Gpr.Imm8 src2)) (x64_shrb_mi src1 src2))
+(rule (x64_shr $I16 src1 (Imm8Gpr.Gpr src2)) (x64_shrw_mc src1 src2))
+(rule (x64_shr $I16 src1 (Imm8Gpr.Imm8 src2)) (x64_shrw_mi src1 src2))
+(rule (x64_shr $I32 src1 (Imm8Gpr.Gpr src2)) (x64_shrl_mc src1 src2))
+(rule (x64_shr $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_shrl_mi src1 src2))
+(rule (x64_shr $I64 src1 (Imm8Gpr.Gpr src2)) (x64_shrq_mc src1 src2))
+(rule (x64_shr $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_shrq_mi src1 src2))
 ;; see `x64_shl` for more info about this rule
-(rule 1 (x64_shr (ty_32_or_64 ty) src1 (gpr_from_imm8_gpr src2))
+(rule 1 (x64_shr (ty_32_or_64 ty) src1 (Imm8Gpr.Gpr src2))
         (if-let true (use_bmi2))
         (x64_shrx ty src1 src2))
 
 ;; Helper for creating arithmetic shift-right instructions.
 (decl x64_sar (Type Gpr Imm8Gpr) Gpr)
-(rule (x64_sar ty src1 src2)
-      (shift_r ty (ShiftKind.ShiftRightArithmetic) src1 src2))
+(rule (x64_sar $I8 src1 (Imm8Gpr.Gpr src2)) (x64_sarb_mc src1 src2))
+(rule (x64_sar $I8 src1 (Imm8Gpr.Imm8 src2)) (x64_sarb_mi src1 src2))
+(rule (x64_sar $I16 src1 (Imm8Gpr.Gpr src2)) (x64_sarw_mc src1 src2))
+(rule (x64_sar $I16 src1 (Imm8Gpr.Imm8 src2)) (x64_sarw_mi src1 src2))
+(rule (x64_sar $I32 src1 (Imm8Gpr.Gpr src2)) (x64_sarl_mc src1 src2))
+(rule (x64_sar $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_sarl_mi src1 src2))
+(rule (x64_sar $I64 src1 (Imm8Gpr.Gpr src2)) (x64_sarq_mc src1 src2))
+(rule (x64_sar $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_sarq_mi src1 src2))
 ;; see `x64_shl` for more info about this rule
-(rule 1 (x64_sar (ty_32_or_64 ty) src1 (gpr_from_imm8_gpr src2))
+(rule 1 (x64_sar (ty_32_or_64 ty) src1 (Imm8Gpr.Gpr src2))
         (if-let true (use_bmi2))
         (x64_sarx ty src1 src2))
 
@@ -5656,7 +5639,6 @@
 (convert XmmMemImm XmmMemAlignedImm xmm_mem_imm_to_xmm_mem_aligned_imm)
 
 (convert Gpr Imm8Gpr gpr_to_imm8_gpr)
-(convert Imm8Reg Imm8Gpr imm8_reg_to_imm8_gpr)
 
 (convert Amode SyntheticAmode amode_to_synthetic_amode)
 (convert Amode GprMem amode_to_gpr_mem)

@@ -816,62 +816,6 @@ pub(crate) fn emit(
             emit_std_reg_mem(sink, prefix, opcode, 1, src, dst, rex, 0);
         }
 
-        Inst::ShiftR {
-            size,
-            kind,
-            src,
-            num_bits,
-            dst,
-        } => {
-            let src = src.to_reg();
-            let dst = dst.to_reg().to_reg();
-            debug_assert_eq!(src, dst);
-            let subopcode = match kind {
-                ShiftKind::RotateLeft => 0,
-                ShiftKind::RotateRight => 1,
-                ShiftKind::ShiftLeft => 4,
-                ShiftKind::ShiftRightLogical => 5,
-                ShiftKind::ShiftRightArithmetic => 7,
-            };
-            let enc_dst = int_reg_enc(dst);
-            let rex_flags = RexFlags::from((*size, dst));
-            match num_bits.as_imm8_reg() {
-                &Imm8Reg::Reg { reg } => {
-                    debug_assert_eq!(reg, regs::rcx());
-                    let (opcode, prefix) = match size {
-                        OperandSize::Size8 => (0xD2, LegacyPrefixes::None),
-                        OperandSize::Size16 => (0xD3, LegacyPrefixes::_66),
-                        OperandSize::Size32 => (0xD3, LegacyPrefixes::None),
-                        OperandSize::Size64 => (0xD3, LegacyPrefixes::None),
-                    };
-
-                    // SHL/SHR/SAR %cl, reg8 is (REX.W==0) D2 /subopcode
-                    // SHL/SHR/SAR %cl, reg16 is 66 (REX.W==0) D3 /subopcode
-                    // SHL/SHR/SAR %cl, reg32 is (REX.W==0) D3 /subopcode
-                    // SHL/SHR/SAR %cl, reg64 is (REX.W==1) D3 /subopcode
-                    emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, enc_dst, rex_flags);
-                }
-
-                &Imm8Reg::Imm8 { imm: num_bits } => {
-                    let (opcode, prefix) = match size {
-                        OperandSize::Size8 => (0xC0, LegacyPrefixes::None),
-                        OperandSize::Size16 => (0xC1, LegacyPrefixes::_66),
-                        OperandSize::Size32 => (0xC1, LegacyPrefixes::None),
-                        OperandSize::Size64 => (0xC1, LegacyPrefixes::None),
-                    };
-
-                    // SHL/SHR/SAR $ib, reg8 is (REX.W==0) C0 /subopcode
-                    // SHL/SHR/SAR $ib, reg16 is 66 (REX.W==0) C1 /subopcode
-                    // SHL/SHR/SAR $ib, reg32 is (REX.W==0) C1 /subopcode ib
-                    // SHL/SHR/SAR $ib, reg64 is (REX.W==1) C1 /subopcode ib
-                    // When the shift amount is 1, there's an even shorter encoding, but we don't
-                    // bother with that nicety here.
-                    emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, enc_dst, rex_flags);
-                    sink.put1(num_bits);
-                }
-            }
-        }
-
         Inst::CmpRmiR {
             size,
             src1: reg_g,
@@ -3130,14 +3074,10 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
 
             // tmp_gpr1 := src >> 1
-            let inst = Inst::shift_r(
-                OperandSize::Size64,
-                ShiftKind::ShiftRightLogical,
-                Imm8Gpr::unwrap_new(Imm8Reg::Imm8 { imm: 1 }),
-                tmp_gpr1.to_reg(),
-                tmp_gpr1,
-            );
-            inst.emit(sink, info, state);
+            Inst::External {
+                inst: asm::inst::shrq_mi::new(tmp_gpr1, 1).into(),
+            }
+            .emit(sink, info, state);
 
             let inst = Inst::gen_move(tmp_gpr2, src, types::I64);
             inst.emit(sink, info, state);
