@@ -4409,22 +4409,30 @@
 ;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 2 (lower (sdiv a @ (value_type $I8) b))
-        (x64_div8 (x64_sign_extend_data a (OperandSize.Size8))
+        (x64_div8 (x64_cbtw_zo a)
                   (nonzero_sdiv_divisor $I8 b)
                   (DivSignedness.Signed)
                   (TrapCode.INTEGER_OVERFLOW)))
 
 (rule 1 (lower (sdiv a @ (value_type (fits_in_64 ty)) b))
-        (let (
-            (a Gpr a)
-            (size OperandSize (raw_operand_size_of_type ty))
-          )
+        (let ((a Gpr a))
         (x64_div_quotient a
-                          (x64_sign_extend_data a size)
+                          (repeat_sign_bit ty a)
                           (nonzero_sdiv_divisor ty b)
-                          size
+                          (raw_operand_size_of_type ty)
                           (DivSignedness.Signed)
                           (TrapCode.INTEGER_OVERFLOW))))
+
+;; Repeats the sign bit in the provided gpr, which will register-allocate to
+;; %rax, into a destination gpr which will register-allocate to %rdx.
+;;
+;; This is intended to be used before x64 `div` instructions where
+;; left-hand-side (divisor? dividend? I always forget) is double-wide and
+;; present across the rax/rdx registers (sized to the operation in question).
+(decl repeat_sign_bit (Type Gpr) Gpr)
+(rule (repeat_sign_bit $I16 src) (x64_cwtd_zo src))
+(rule (repeat_sign_bit $I32 src) (x64_cltd_zo src))
+(rule (repeat_sign_bit $I64 src) (x64_cqto_zo src))
 
 ;; Checks to make sure that the input `Value` is a non-zero value for `sdiv`.
 ;;
@@ -4474,7 +4482,7 @@
 (rule 3 (lower (srem a @ (value_type $I8) (iconst imm)))
         (if-let n (safe_divisor_from_imm64 $I8 imm))
         (let (
-            (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
+            (a Gpr (x64_cbtw_zo a))
             (result Gpr (x64_div8 a (imm $I8 n) (DivSignedness.Signed) (TrapCode.INTEGER_DIVISION_BY_ZERO)))
           )
           (x64_shr $I64 result (Imm8Reg.Imm8 8))))
@@ -4487,23 +4495,20 @@
             (size OperandSize (raw_operand_size_of_type ty))
           )
           (x64_div_remainder a
-                             (x64_sign_extend_data a size)
+                             (repeat_sign_bit ty a)
                              (imm ty n)
                              size
                              (DivSignedness.Signed)
                              (TrapCode.INTEGER_DIVISION_BY_ZERO))))
 
 (rule 1 (lower (srem a @ (value_type $I8) b))
-        (let (
-            (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
-          )
-          (x64_shr $I64 (x64_checked_srem_seq8 a b) (Imm8Reg.Imm8 8))))
+  (x64_shr $I64 (x64_checked_srem_seq8 (x64_cbtw_zo a) b) (Imm8Reg.Imm8 8)))
 
 (rule (lower (srem a @ (value_type ty) b))
       (let (
           (a Gpr a)
           (size OperandSize (raw_operand_size_of_type ty))
-          (hi Gpr (x64_sign_extend_data a size))
+          (hi Gpr (repeat_sign_bit ty a))
           (tmp ValueRegs (x64_checked_srem_seq size a hi b))
         )
         (value_regs_get tmp 1)))

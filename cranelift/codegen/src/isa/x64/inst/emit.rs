@@ -369,32 +369,6 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
-        Inst::SignExtendData { size, src, dst } => {
-            let src = src.to_reg();
-            let dst = dst.to_reg().to_reg();
-            debug_assert_eq!(src, regs::rax());
-            if *size == OperandSize::Size8 {
-                debug_assert_eq!(dst, regs::rax());
-            } else {
-                debug_assert_eq!(dst, regs::rdx());
-            }
-            match size {
-                OperandSize::Size8 => {
-                    sink.put1(0x66);
-                    sink.put1(0x98);
-                }
-                OperandSize::Size16 => {
-                    sink.put1(0x66);
-                    sink.put1(0x99);
-                }
-                OperandSize::Size32 => sink.put1(0x99),
-                OperandSize::Size64 => {
-                    sink.put1(0x48);
-                    sink.put1(0x99);
-                }
-            }
-        }
-
         Inst::CheckedSRemSeq { divisor, .. } | Inst::CheckedSRemSeq8 { divisor, .. } => {
             let divisor = divisor.to_reg();
 

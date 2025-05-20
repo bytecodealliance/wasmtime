@@ -94,7 +94,7 @@ impl dsl::Format {
         let bits = "w_bit, uses_8bit";
 
         match self.operands_by_kind().as_slice() {
-            [FixedReg(dst), Imm(_)] => {
+            [FixedReg(dst), FixedReg(_)] | [FixedReg(dst)] | [FixedReg(dst), Imm(_)] => {
                 // TODO: don't emit REX byte here.
                 assert_eq!(rex.digit, None);
                 fmtln!(f, "let digit = 0;");
@@ -148,7 +148,7 @@ impl dsl::Format {
         }
 
         match self.operands_by_kind().as_slice() {
-            [FixedReg(_), Imm(_)] => {
+            [FixedReg(_)] | [FixedReg(_), FixedReg(_)] | [FixedReg(_), Imm(_)] => {
                 // No need to emit a ModRM byte: we know the register used.
             }
             [Reg(reg), Imm(_)] => {
