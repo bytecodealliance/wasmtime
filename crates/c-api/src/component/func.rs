@@ -1,6 +1,6 @@
 use wasmtime::component::{Func, Val};
 
-use crate::{wasmtime_error_t, WasmtimeStoreContextMut};
+use crate::{WasmtimeStoreContextMut, wasmtime_error_t};
 
 use super::wasmtime_component_val_t;
 
