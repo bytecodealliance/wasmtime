@@ -98,7 +98,7 @@ impl dsl::Inst {
                 if let Some(op) = self.format.uses_memory() {
                     use dsl::OperandKind::*;
                     f.comment("Emit trap.");
-                    match op.kind() {
+                    match op.kind().unwrap() {
                         Mem(_) => {
                             f.add_block(
                                 &format!("if let Some(trap_code) = self.{op}.trap_code()"),
@@ -120,6 +120,10 @@ impl dsl::Inst {
                         }
                         _ => unreachable!(),
                     }
+                }
+                if let Some(op) = self.format.explicit_trap() {
+                    f.comment("Emit trap.");
+                    fmtln!(f, "buf.add_trap(self.{op});");
                 }
 
                 match &self.encoding {
@@ -143,30 +147,33 @@ impl dsl::Inst {
                 let mutability = o.mutability.generate_snake_case();
                 let reg = o.location.reg_class();
                 match o.location.kind() {
-                    Imm(_) => {
+                    Some(Imm(_)) => {
                         // Immediates do not need register allocation.
                     }
-                    FixedReg(loc) => {
+                    Some(FixedReg(loc)) => {
                         let reg_lower = reg.unwrap().to_string().to_lowercase();
                         fmtln!(f, "let enc = self.{loc}.expected_enc();");
                         fmtln!(f, "visitor.fixed_{mutability}_{reg_lower}(&mut self.{loc}.0, enc);");
                     }
-                    Reg(loc) => {
+                    Some(Reg(loc)) => {
                         let reg_lower = reg.unwrap().to_string().to_lowercase();
                         fmtln!(f, "visitor.{mutability}_{reg_lower}(self.{loc}.as_mut());");
                     }
-                    RegMem(loc) => {
+                    Some(RegMem(loc) )=> {
                         let reg = reg.unwrap();
                         let reg_lower = reg.to_string().to_lowercase();
                         fmtln!(f, "visitor.{mutability}_{reg_lower}_mem(&mut self.{loc});");
                     }
-                    Mem(loc) => {
+                    Some(Mem(loc) )=> {
                         // Note that this is always "read" because from a
                         // regalloc perspective when using an amode it means
                         // that the while a write is happening that's to
                         // memory, not registers.
                         fmtln!(f, "visitor.read_amode(&mut self.{loc});");
                     }
+
+                    // this operand doesn't participate in register allocation
+                    None => {}
                 }
             }
         });

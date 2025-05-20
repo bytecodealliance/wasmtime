@@ -89,8 +89,6 @@ impl Inst {
             | Inst::CvtFloatToSintSeq { .. }
             | Inst::CvtFloatToUintSeq { .. }
             | Inst::CvtUint64ToFloatSeq { .. }
-            | Inst::Div { .. }
-            | Inst::Div8 { .. }
             | Inst::Fence { .. }
             | Inst::Hlt
             | Inst::Imm { .. }
@@ -226,46 +224,6 @@ impl Inst {
             asm::inst::subq_mi_sxl::new(dst, simm32).into()
         };
         Inst::External { inst }
-    }
-
-    pub(crate) fn div(
-        size: OperandSize,
-        sign: DivSignedness,
-        trap: TrapCode,
-        divisor: RegMem,
-        dividend_lo: Gpr,
-        dividend_hi: Gpr,
-        dst_quotient: WritableGpr,
-        dst_remainder: WritableGpr,
-    ) -> Inst {
-        divisor.assert_regclass_is(RegClass::Int);
-        Inst::Div {
-            size,
-            sign,
-            trap,
-            divisor: GprMem::unwrap_new(divisor),
-            dividend_lo,
-            dividend_hi,
-            dst_quotient,
-            dst_remainder,
-        }
-    }
-
-    pub(crate) fn div8(
-        sign: DivSignedness,
-        trap: TrapCode,
-        divisor: RegMem,
-        dividend: Gpr,
-        dst: WritableGpr,
-    ) -> Inst {
-        divisor.assert_regclass_is(RegClass::Int);
-        Inst::Div8 {
-            sign,
-            trap,
-            divisor: GprMem::unwrap_new(divisor),
-            dividend,
-            dst,
-        }
     }
 
     pub(crate) fn imm(dst_size: OperandSize, simm64: u64, dst: Writable<Reg>) -> Inst {
@@ -680,49 +638,6 @@ impl PrettyPrint for Inst {
                     "{} ${imm}, {src}, {dst}",
                     ljustify2(op.to_string(), suffix_bwlq(*size))
                 )
-            }
-
-            Inst::Div {
-                size,
-                sign,
-                trap,
-                divisor,
-                dividend_lo,
-                dividend_hi,
-                dst_quotient,
-                dst_remainder,
-            } => {
-                let divisor = divisor.pretty_print(size.to_bytes());
-                let dividend_lo = pretty_print_reg(dividend_lo.to_reg(), size.to_bytes());
-                let dividend_hi = pretty_print_reg(dividend_hi.to_reg(), size.to_bytes());
-                let dst_quotient =
-                    pretty_print_reg(dst_quotient.to_reg().to_reg(), size.to_bytes());
-                let dst_remainder =
-                    pretty_print_reg(dst_remainder.to_reg().to_reg(), size.to_bytes());
-                let op = ljustify(match sign {
-                    DivSignedness::Signed => "idiv".to_string(),
-                    DivSignedness::Unsigned => "div".to_string(),
-                });
-                format!(
-                    "{op} {dividend_lo}, {dividend_hi}, {divisor}, {dst_quotient}, {dst_remainder} ; trap={trap}"
-                )
-            }
-
-            Inst::Div8 {
-                sign,
-                trap,
-                divisor,
-                dividend,
-                dst,
-            } => {
-                let divisor = divisor.pretty_print(1);
-                let dividend = pretty_print_reg(dividend.to_reg(), 1);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 1);
-                let op = ljustify(match sign {
-                    DivSignedness::Signed => "idiv".to_string(),
-                    DivSignedness::Unsigned => "div".to_string(),
-                });
-                format!("{op} {dividend}, {divisor}, {dst} ; trap={trap}")
             }
 
             Inst::MulX {
@@ -1812,20 +1727,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(src1);
             src2.get_operands(collector);
         }
-        Inst::Div {
-            divisor,
-            dividend_lo,
-            dividend_hi,
-            dst_quotient,
-            dst_remainder,
-            ..
-        } => {
-            divisor.get_operands(collector);
-            collector.reg_fixed_use(dividend_lo, regs::rax());
-            collector.reg_fixed_use(dividend_hi, regs::rdx());
-            collector.reg_fixed_def(dst_quotient, regs::rax());
-            collector.reg_fixed_def(dst_remainder, regs::rdx());
-        }
         Inst::CheckedSRemSeq {
             divisor,
             dividend_lo,
@@ -1839,16 +1740,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_fixed_use(dividend_hi, regs::rdx());
             collector.reg_fixed_def(dst_quotient, regs::rax());
             collector.reg_fixed_def(dst_remainder, regs::rdx());
-        }
-        Inst::Div8 {
-            divisor,
-            dividend,
-            dst,
-            ..
-        } => {
-            divisor.get_operands(collector);
-            collector.reg_fixed_use(dividend, regs::rax());
-            collector.reg_fixed_def(dst, regs::rax());
         }
         Inst::CheckedSRemSeq8 {
             divisor,

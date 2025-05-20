@@ -11,8 +11,6 @@ use smallvec::{SmallVec, smallvec};
 use std::fmt;
 use std::string::String;
 
-pub use crate::isa::x64::lower::isle::generated_code::DivSignedness;
-
 /// An extension trait for converting `Writable{Xmm,Gpr}` to `Writable<Reg>`.
 pub trait ToWritableReg {
     /// Convert `Writable{Xmm,Gpr}` to `Writable<Reg>`.

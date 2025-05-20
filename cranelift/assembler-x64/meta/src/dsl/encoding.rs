@@ -205,16 +205,17 @@ impl Rex {
             assert!(
                 operands.iter().all(|&op| matches!(
                     op.location.kind(),
-                    OperandKind::Imm(_) | OperandKind::FixedReg(_)
+                    Some(OperandKind::Imm(_) | OperandKind::FixedReg(_))
                 ) || op.location.bits() == 16
-                    || op.location.bits() == 128),
+                    || op.location.bits() == 128
+                    || op.location.bits() == 0),
                 "when we encode the 66 prefix, we expect all operands to be 16-bit wide"
             );
         }
 
         if let Some(OperandKind::Imm(op)) = operands
             .iter()
-            .map(|o| o.location.kind())
+            .filter_map(|o| o.location.kind())
             .find(|k| matches!(k, OperandKind::Imm(_)))
         {
             assert_eq!(

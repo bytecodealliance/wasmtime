@@ -20,8 +20,8 @@ use cranelift_codegen::{
         x64::{
             AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
             args::{
-                self, Amode, Avx512Opcode, AvxOpcode, CC, CmpOpcode, DivSignedness, ExtMode,
-                FenceKind, FromWritableReg, Gpr, GprMem, GprMemImm, RegMem, RegMemImm, SseOpcode,
+                self, Amode, Avx512Opcode, AvxOpcode, CC, CmpOpcode, ExtMode, FenceKind,
+                FromWritableReg, Gpr, GprMem, GprMemImm, RegMem, RegMemImm, SseOpcode,
                 SyntheticAmode, WritableGpr, WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm,
             },
             encoding::rex::{RexFlags, encode_modrm},
@@ -140,15 +140,6 @@ impl From<OperandSize> for args::OperandSize {
             OperandSize::S32 => Self::Size32,
             OperandSize::S64 => Self::Size64,
             s => panic!("Invalid operand size {s:?}"),
-        }
-    }
-}
-
-impl From<DivKind> for DivSignedness {
-    fn from(kind: DivKind) -> DivSignedness {
-        match kind {
-            DivKind::Signed => DivSignedness::Signed,
-            DivKind::Unsigned => DivSignedness::Unsigned,
         }
     }
 }
@@ -1153,16 +1144,24 @@ impl Assembler {
                 TrapCode::INTEGER_DIVISION_BY_ZERO
             }
         };
-        self.emit(Inst::Div {
-            sign: kind.into(),
-            size: size.into(),
-            trap,
-            divisor: GprMem::unwrap_new(RegMem::reg(divisor.into())),
-            dividend_lo: dst.0.into(),
-            dividend_hi: dst.1.into(),
-            dst_quotient: dst.0.into(),
-            dst_remainder: dst.1.into(),
-        });
+        let dst0 = pair_gpr(writable!(dst.0));
+        let dst1 = pair_gpr(writable!(dst.1));
+        let inst = match (kind, size) {
+            (DivKind::Signed, OperandSize::S32) => {
+                asm::inst::idivl_m::new(dst0, dst1, divisor, trap).into()
+            }
+            (DivKind::Unsigned, OperandSize::S32) => {
+                asm::inst::divl_m::new(dst0, dst1, divisor, trap).into()
+            }
+            (DivKind::Signed, OperandSize::S64) => {
+                asm::inst::idivq_m::new(dst0, dst1, divisor, trap).into()
+            }
+            (DivKind::Unsigned, OperandSize::S64) => {
+                asm::inst::divq_m::new(dst0, dst1, divisor, trap).into()
+            }
+            _ => todo!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Signed/unsigned remainder.
@@ -1203,16 +1202,15 @@ impl Assembler {
             // then executes a normal `div` instruction.
             RemKind::Unsigned => {
                 self.xor_rr(dst.1, writable!(dst.1), size);
-                self.emit(Inst::Div {
-                    sign: DivSignedness::Unsigned,
-                    trap: TrapCode::INTEGER_DIVISION_BY_ZERO,
-                    size: size.into(),
-                    divisor: GprMem::unwrap_new(RegMem::reg(divisor.into())),
-                    dividend_lo: dst.0.into(),
-                    dividend_hi: dst.1.into(),
-                    dst_quotient: dst.0.into(),
-                    dst_remainder: dst.1.into(),
-                });
+                let dst0 = pair_gpr(writable!(dst.0));
+                let dst1 = pair_gpr(writable!(dst.1));
+                let trap = TrapCode::INTEGER_DIVISION_BY_ZERO;
+                let inst = match size {
+                    OperandSize::S32 => asm::inst::divl_m::new(dst0, dst1, divisor, trap).into(),
+                    OperandSize::S64 => asm::inst::divq_m::new(dst0, dst1, divisor, trap).into(),
+                    _ => todo!(),
+                };
+                self.emit(Inst::External { inst });
             }
         }
     }

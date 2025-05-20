@@ -87,7 +87,7 @@ impl dsl::Format {
         f.comment("Possibly emit REX prefix.");
 
         let find_8bit_registers =
-            |l: &dsl::Location| l.bits() == 8 && matches!(l.kind(), Reg(_) | RegMem(_));
+            |l: &dsl::Location| l.bits() == 8 && matches!(l.kind(), Some(Reg(_) | RegMem(_)));
         let uses_8bit = self.locations().any(find_8bit_registers);
         fmtln!(f, "let uses_8bit = {uses_8bit};");
         fmtln!(f, "let w_bit = {};", rex.w);

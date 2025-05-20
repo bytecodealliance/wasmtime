@@ -3,6 +3,7 @@
 use crate::gpr;
 use crate::xmm;
 use crate::{Amode, GprMem, XmmMem};
+use std::fmt;
 use std::{num::NonZeroU8, ops::Index, vec::Vec};
 
 /// Describe how an instruction is emitted into a code buffer.
@@ -81,6 +82,12 @@ pub struct Constant(pub u32);
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct TrapCode(pub NonZeroU8);
+
+impl fmt::Display for TrapCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "trap={}", self.0)
+    }
+}
 
 /// A table mapping `KnownOffset` identifiers to their `i32` offset values.
 ///

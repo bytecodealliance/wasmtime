@@ -14,6 +14,7 @@ impl dsl::Operand {
                     format!("Imm{bits}")
                 }
             }
+            trap => format!("TrapCode"),
             al | ax | eax | rax | cl | dx | edx | rdx => {
                 let enc = match self.location {
                     al | ax | eax | rax => "{ gpr::enc::RAX }",
@@ -48,6 +49,9 @@ impl dsl::Location {
                     format!("self.{self}.to_string()")
                 }
             }
+            trap => {
+                format!("self.{self}")
+            }
             al | ax | eax | rax | cl | dx | edx | rdx | r8 | r16 | r32 | r64 | rm8 | rm16
             | rm32 | rm64 => match self.generate_size() {
                 Some(size) => format!("self.{self}.to_string({size})"),
@@ -64,7 +68,7 @@ impl dsl::Location {
     fn generate_size(&self) -> Option<&str> {
         use dsl::Location::*;
         match self {
-            imm8 | imm16 | imm32 => None,
+            imm8 | imm16 | imm32 | trap => None,
             al | cl | r8 | rm8 => Some("Size::Byte"),
             ax | dx | r16 | rm16 => Some("Size::Word"),
             eax | edx | r32 | rm32 => Some("Size::Doubleword"),

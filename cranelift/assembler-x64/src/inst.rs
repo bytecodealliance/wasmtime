@@ -4,7 +4,7 @@
 //! See also: [`Inst`], an `enum` containing all these instructions.
 
 use crate::Fixed;
-use crate::api::{AsReg, CodeSink, KnownOffsetTable, RegisterVisitor, Registers};
+use crate::api::{AsReg, CodeSink, KnownOffsetTable, RegisterVisitor, Registers, TrapCode};
 use crate::gpr::{self, Gpr, Size};
 use crate::imm::{Extension, Imm8, Imm16, Imm32, Simm8, Simm32};
 use crate::mem::{Amode, GprMem, XmmMem};
