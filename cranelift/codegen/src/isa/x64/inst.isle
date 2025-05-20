@@ -2884,9 +2884,9 @@
 (rule 2 (x64_imul_imm $I16 src1 (i8_try_from_i32 src2))  (x64_imulw_rmi_sxb src1 src2))
 (rule 2 (x64_imul_imm $I32 src1 (i8_try_from_i32 src2))  (x64_imull_rmi_sxb src1 src2))
 (rule 2 (x64_imul_imm $I64 src1 (i8_try_from_i32 src2))  (x64_imulq_rmi_sxb src1 src2))
-(rule 1 (x64_imul_imm $I16 src1 (u16_try_from_i32 src2)) (x64_imulw_rmi src1 src2))
-(rule 1 (x64_imul_imm $I32 src1 (i32_as_u32 src2))       (x64_imull_rmi src1 src2))
-(rule 1 (x64_imul_imm $I64 src1 src2)                    (x64_imulq_rmi_sxl src1 src2))
+(rule 1 (x64_imul_imm $I16 src1 (i16_try_from_i32 src2)) (x64_imulw_rmi src1 (i16_as_u16 src2)))
+(rule 1 (x64_imul_imm $I32 src1 src2) (x64_imull_rmi src1 (i32_as_u32 src2)))
+(rule 1 (x64_imul_imm $I64 src1 src2) (x64_imulq_rmi_sxl src1 src2))
 
 ;; Helper for creating `mul` instructions or `imul` instructions (depending
 ;; on `signed`) for 8-bit operands.
