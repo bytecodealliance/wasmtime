@@ -2045,23 +2045,23 @@ where
             labels.push(self.masm.get_label()?);
         }
 
-	// Find the innermost target and use it as the relative frame
-	// for result handling below.
-	// 
-	// This approch ensures that
-	// 1. The stack pointer offset is correctly positioned
-	//    according to the expectations of the innermost block end
-	//    sequence.
-	// 2. We meet the jump site invariants introduced by
-	//    `CodegenContext::br`, which take advantage of Wasm
-	//    semantics given that all jumps are "outward".
-	let mut innermost = targets.default();
-	for target in targets.targets()  {
-	    let target = target?;
-	    if target < innermost {
-		innermost = target;
-	    }
-	}
+        // Find the innermost target and use it as the relative frame
+        // for result handling below.
+        //
+        // This approch ensures that
+        // 1. The stack pointer offset is correctly positioned
+        //    according to the expectations of the innermost block end
+        //    sequence.
+        // 2. We meet the jump site invariants introduced by
+        //    `CodegenContext::br`, which take advantage of Wasm
+        //    semantics given that all jumps are "outward".
+        let mut innermost = targets.default();
+        for target in targets.targets() {
+            let target = target?;
+            if target < innermost {
+                innermost = target;
+            }
+        }
 
         let innermost_index = control_index(innermost, self.control_frames.len())?;
         let innermost_frame = &mut self.control_frames[innermost_index];
@@ -2069,7 +2069,7 @@ where
 
         let (index, tmp) = {
             let index_and_tmp = self.context.without::<Result<(TypedReg, _)>, M, _>(
-		innermost_result.regs(),
+                innermost_result.regs(),
                 self.masm,
                 |cx, masm| Ok((cx.pop_to_reg(masm, None)?, cx.any_gpr(masm)?)),
             )??;
