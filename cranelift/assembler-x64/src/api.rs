@@ -98,14 +98,14 @@ impl fmt::Display for TrapCode {
 ///
 /// This table allows up to do a "late" look up of these values by their
 /// `KnownOffset`.
-pub trait KnownOffsetTable: Index<KnownOffset, Output = i32> {}
+pub trait KnownOffsetTable: Index<usize, Output = i32> {}
 impl KnownOffsetTable for Vec<i32> {}
 /// Provide a convenient implementation for testing.
 impl KnownOffsetTable for [i32; 2] {}
 
 /// A `KnownOffset` is a unique identifier for a specific offset known only at
 /// emission time.
-pub type KnownOffset = usize;
+pub type KnownOffset = u8;
 
 /// A type set fixing the register types used in the assembler.
 ///

@@ -125,7 +125,7 @@ impl AmodeOffsetPlusKnownOffset {
     #[must_use]
     pub fn value(&self, offsets: &impl KnownOffsetTable) -> i32 {
         let known_offset = match self.offset {
-            Some(offset) => offsets[offset],
+            Some(offset) => offsets[usize::from(offset)],
             None => 0,
         };
         known_offset
