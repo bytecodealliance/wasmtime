@@ -836,14 +836,6 @@ pub enum SseOpcode {
     Divss,
     Divsd,
     Insertps,
-    Maxps,
-    Maxpd,
-    Maxss,
-    Maxsd,
-    Minps,
-    Minpd,
-    Minss,
-    Minsd,
     Movaps,
     Movapd,
     Movd,
@@ -962,10 +954,6 @@ impl SseOpcode {
             | SseOpcode::Cmpss
             | SseOpcode::Divps
             | SseOpcode::Divss
-            | SseOpcode::Maxps
-            | SseOpcode::Maxss
-            | SseOpcode::Minps
-            | SseOpcode::Minss
             | SseOpcode::Movaps
             | SseOpcode::Movlhps
             | SseOpcode::Movmskps
@@ -986,10 +974,6 @@ impl SseOpcode {
             | SseOpcode::Comisd
             | SseOpcode::Divpd
             | SseOpcode::Divsd
-            | SseOpcode::Maxpd
-            | SseOpcode::Maxsd
-            | SseOpcode::Minpd
-            | SseOpcode::Minsd
             | SseOpcode::Movapd
             | SseOpcode::Movd
             | SseOpcode::Movmskpd
@@ -1136,14 +1120,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Divss => "divss",
             SseOpcode::Divsd => "divsd",
             SseOpcode::Insertps => "insertps",
-            SseOpcode::Maxps => "maxps",
-            SseOpcode::Maxpd => "maxpd",
-            SseOpcode::Maxss => "maxss",
-            SseOpcode::Maxsd => "maxsd",
-            SseOpcode::Minps => "minps",
-            SseOpcode::Minpd => "minpd",
-            SseOpcode::Minss => "minss",
-            SseOpcode::Minsd => "minsd",
             SseOpcode::Movaps => "movaps",
             SseOpcode::Movapd => "movapd",
             SseOpcode::Movd => "movd",

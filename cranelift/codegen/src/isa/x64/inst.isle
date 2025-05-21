@@ -817,14 +817,6 @@
             Divss
             Divsd
             Insertps
-            Maxps
-            Maxpd
-            Maxss
-            Maxsd
-            Minps
-            Minpd
-            Minss
-            Minsd
             Movaps
             Movapd
             Movd
