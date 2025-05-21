@@ -4590,35 +4590,31 @@
 
 ;; Helper for creating `maxss` instructions.
 (decl x64_maxss (Xmm XmmMem) Xmm)
-(rule (x64_maxss x y)
-      (xmm_rm_r_unaligned (SseOpcode.Maxss) x y))
 (rule 1 (x64_maxss x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmaxss) x y))
+(rule 0 (x64_maxss x y) (x64_maxss_a x y))
 
 ;; Helper for creating `maxsd` instructions.
 (decl x64_maxsd (Xmm XmmMem) Xmm)
-(rule (x64_maxsd x y)
-      (xmm_rm_r_unaligned (SseOpcode.Maxsd) x y))
 (rule 1 (x64_maxsd x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmaxsd) x y))
+(rule 0 (x64_maxsd x y) (x64_maxsd_a x y))
 
 ;; Helper for creating `maxps` instructions.
 (decl x64_maxps (Xmm XmmMem) Xmm)
-(rule 0 (x64_maxps x y)
-      (xmm_rm_r (SseOpcode.Maxps) x y))
 (rule 1 (x64_maxps x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmaxps) x y))
+(rule 0 (x64_maxps x y) (x64_maxps_a x y))
 
 ;; Helper for creating `maxpd` instructions.
 (decl x64_maxpd (Xmm XmmMem) Xmm)
-(rule 0 (x64_maxpd x y)
-      (xmm_rm_r (SseOpcode.Maxpd) x y))
 (rule 1 (x64_maxpd x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmaxpd) x y))
+(rule 0 (x64_maxpd x y) (x64_maxpd_a x y))
 
 ;; Helper for creating `vfmadd213*` instructions
 (decl x64_vfmadd213 (Type Xmm Xmm XmmMem) Xmm)
