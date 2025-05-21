@@ -4558,35 +4558,31 @@
 
 ;; Helper for creating `minss` instructions.
 (decl x64_minss (Xmm XmmMem) Xmm)
-(rule (x64_minss x y)
-      (xmm_rm_r_unaligned (SseOpcode.Minss) x y))
 (rule 1 (x64_minss x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vminss) x y))
+(rule 0 (x64_minss x y) (x64_minss_a x y))
 
 ;; Helper for creating `minsd` instructions.
 (decl x64_minsd (Xmm XmmMem) Xmm)
-(rule (x64_minsd x y)
-      (xmm_rm_r_unaligned (SseOpcode.Minsd) x y))
 (rule 1 (x64_minsd x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vminsd) x y))
+(rule 0 (x64_minsd x y) (x64_minsd_a x y))
 
 ;; Helper for creating `minps` instructions.
 (decl x64_minps (Xmm XmmMem) Xmm)
-(rule 0 (x64_minps x y)
-      (xmm_rm_r (SseOpcode.Minps) x y))
 (rule 1 (x64_minps x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vminps) x y))
+(rule 0 (x64_minps x y) (x64_minps_a x y))
 
 ;; Helper for creating `minpd` instructions.
 (decl x64_minpd (Xmm XmmMem) Xmm)
-(rule 0 (x64_minpd x y)
-      (xmm_rm_r (SseOpcode.Minpd) x y))
 (rule 1 (x64_minpd x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vminpd) x y))
+(rule 0 (x64_minpd x y) (x64_minpd_a x y))
 
 ;; Helper for creating `maxss` instructions.
 (decl x64_maxss (Xmm XmmMem) Xmm)
