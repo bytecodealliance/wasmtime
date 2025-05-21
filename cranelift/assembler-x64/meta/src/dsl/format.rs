@@ -473,7 +473,7 @@ impl core::fmt::Display for Location {
 ///
 /// ```
 /// # use cranelift_assembler_x64_meta::dsl::{OperandKind, Location};
-/// let k: OperandKind = Location::imm32.kind();
+/// let k: OperandKind = Location::imm32.kind().unwrap();
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub enum OperandKind {
