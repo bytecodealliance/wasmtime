@@ -304,17 +304,6 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Self {
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmRmR {
-            op,
-            src1: Xmm::unwrap_new(dst.to_reg()),
-            src2: XmmMemAligned::unwrap_new(src),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     #[cfg(test)]
     pub(crate) fn xmm_rmr_vex3(op: AvxOpcode, src3: RegMem, src2: Reg, dst: Writable<Reg>) -> Self {
         src3.assert_regclass_is(RegClass::Float);

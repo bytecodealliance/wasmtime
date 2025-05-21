@@ -881,18 +881,6 @@ pub enum SseOpcode {
     Pinsrd,
     Pmaddubsw,
     Pmaddwd,
-    Pmaxsb,
-    Pmaxsw,
-    Pmaxsd,
-    Pmaxub,
-    Pmaxuw,
-    Pmaxud,
-    Pminsb,
-    Pminsw,
-    Pminsd,
-    Pminub,
-    Pminuw,
-    Pminud,
     Pmovmskb,
     Pmovsxbd,
     Pmovsxbw,
@@ -998,10 +986,6 @@ impl SseOpcode {
             | SseOpcode::Pextrw
             | SseOpcode::Pinsrw
             | SseOpcode::Pmaddwd
-            | SseOpcode::Pmaxsw
-            | SseOpcode::Pmaxub
-            | SseOpcode::Pminsw
-            | SseOpcode::Pminub
             | SseOpcode::Pmovmskb
             | SseOpcode::Pmulhw
             | SseOpcode::Pmulhuw
@@ -1042,14 +1026,6 @@ impl SseOpcode {
             | SseOpcode::Pextrq
             | SseOpcode::Pinsrb
             | SseOpcode::Pinsrd
-            | SseOpcode::Pmaxsb
-            | SseOpcode::Pmaxsd
-            | SseOpcode::Pmaxuw
-            | SseOpcode::Pmaxud
-            | SseOpcode::Pminsb
-            | SseOpcode::Pminsd
-            | SseOpcode::Pminuw
-            | SseOpcode::Pminud
             | SseOpcode::Pmovsxbd
             | SseOpcode::Pmovsxbw
             | SseOpcode::Pmovsxbq
@@ -1165,18 +1141,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pinsrd => "pinsrd",
             SseOpcode::Pmaddubsw => "pmaddubsw",
             SseOpcode::Pmaddwd => "pmaddwd",
-            SseOpcode::Pmaxsb => "pmaxsb",
-            SseOpcode::Pmaxsw => "pmaxsw",
-            SseOpcode::Pmaxsd => "pmaxsd",
-            SseOpcode::Pmaxub => "pmaxub",
-            SseOpcode::Pmaxuw => "pmaxuw",
-            SseOpcode::Pmaxud => "pmaxud",
-            SseOpcode::Pminsb => "pminsb",
-            SseOpcode::Pminsw => "pminsw",
-            SseOpcode::Pminsd => "pminsd",
-            SseOpcode::Pminub => "pminub",
-            SseOpcode::Pminuw => "pminuw",
-            SseOpcode::Pminud => "pminud",
+
             SseOpcode::Pmovmskb => "pmovmskb",
             SseOpcode::Pmovsxbd => "pmovsxbd",
             SseOpcode::Pmovsxbw => "pmovsxbw",
