@@ -4458,6 +4458,7 @@ dependencies = [
  "backtrace",
  "cc",
  "cfg-if",
+ "libc",
  "rustix 1.0.3",
  "wasmtime-asm-macros",
  "wasmtime-versioned-export-macros",
