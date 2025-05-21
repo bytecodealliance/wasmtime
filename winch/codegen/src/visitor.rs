@@ -2045,13 +2045,31 @@ where
             labels.push(self.masm.get_label()?);
         }
 
-        let default_index = control_index(targets.default(), self.control_frames.len())?;
-        let default_frame = &mut self.control_frames[default_index];
-        let default_result = default_frame.results::<M>()?;
+        // Find the innermost target and use it as the relative frame
+        // for result handling below.
+        //
+        // This approch ensures that
+        // 1. The stack pointer offset is correctly positioned
+        //    according to the expectations of the innermost block end
+        //    sequence.
+        // 2. We meet the jump site invariants introduced by
+        //    `CodegenContext::br`, which take advantage of Wasm
+        //    semantics given that all jumps are "outward".
+        let mut innermost = targets.default();
+        for target in targets.targets() {
+            let target = target?;
+            if target < innermost {
+                innermost = target;
+            }
+        }
+
+        let innermost_index = control_index(innermost, self.control_frames.len())?;
+        let innermost_frame = &mut self.control_frames[innermost_index];
+        let innermost_result = innermost_frame.results::<M>()?;
 
         let (index, tmp) = {
             let index_and_tmp = self.context.without::<Result<(TypedReg, _)>, M, _>(
-                default_result.regs(),
+                innermost_result.regs(),
                 self.masm,
                 |cx, masm| Ok((cx.pop_to_reg(masm, None)?, cx.any_gpr(masm)?)),
             )??;
@@ -2059,7 +2077,7 @@ where
             // Materialize any constants or locals into their result
             // representation, so that when reachability is restored,
             // they are correctly located.  NB: the results are popped
-            // in function of the default branch specified for
+            // in function of the innermost branch specified for
             // `br_table`, which implies that the machine stack will
             // be correctly balanced, by virtue of calling
             // `pop_abi_results`.
@@ -2067,7 +2085,7 @@ where
             // It's possible that we need to balance the stack for the
             // rest of the targets, which will be done before emitting
             // the unconditional jump below.
-            default_frame.pop_abi_results::<M, _>(
+            innermost_frame.pop_abi_results::<M, _>(
                 &mut self.context,
                 self.masm,
                 |results, _, _| Ok(results.ret_area().copied()),
