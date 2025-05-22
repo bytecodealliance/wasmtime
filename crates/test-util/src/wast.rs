@@ -540,7 +540,6 @@ impl WastTest {
                     "spec_testsuite/table_copy.wast",
                     "spec_testsuite/table_init.wast",
                     "misc_testsuite/winch/table_grow.wast",
-                    "misc_testsuite/memory64/more-than-4gb.wast",
                     "misc_testsuite/call_indirect.wast",
                 ];
 
