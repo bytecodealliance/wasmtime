@@ -3011,17 +3011,6 @@ fn test_x64_emit() {
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Sqrtss, RegMem::reg(xmm7), w_xmm8),
-        "F3440F51C7",
-        "sqrtss  %xmm8, %xmm7, %xmm8",
-    ));
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Sqrtsd, RegMem::reg(xmm1), w_xmm2),
-        "F20F51D1",
-        "sqrtsd  %xmm2, %xmm1, %xmm2",
-    ));
-
-    insns.push((
         Inst::xmm_unary_rm_r(SseOpcode::Pabsb, RegMem::reg(xmm2), w_xmm1),
         "660F381CCA",
         "pabsb   %xmm2, %xmm1",

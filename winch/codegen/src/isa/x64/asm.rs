@@ -1642,18 +1642,14 @@ impl Assembler {
     }
 
     pub fn sqrt(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Sqrtss,
-            OperandSize::S64 => SseOpcode::Sqrtsd,
-            OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
+        use OperandSize::*;
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            S32 => asm::inst::sqrtss_a::new(dst, src).into(),
+            S64 => asm::inst::sqrtsd_a::new(dst, src).into(),
+            S8 | S16 | S128 => unimplemented!(),
         };
-
-        self.emit(Inst::XmmRmR {
-            op,
-            src2: Xmm::from(src).into(),
-            src1: dst.to_reg().into(),
-            dst: dst.map(Into::into),
-        })
+        self.emit(Inst::External { inst });
     }
 
     /// Emit a call to an unknown location through a register.

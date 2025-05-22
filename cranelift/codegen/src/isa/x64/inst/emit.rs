@@ -1822,8 +1822,6 @@ pub(crate) fn emit(
                 SseOpcode::Unpcklps => (LegacyPrefixes::None, 0x0F14, 2),
                 SseOpcode::Unpckhps => (LegacyPrefixes::None, 0x0F15, 2),
                 SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F10, 2),
-                SseOpcode::Sqrtss => (LegacyPrefixes::_F3, 0x0F51, 2),
-                SseOpcode::Sqrtsd => (LegacyPrefixes::_F2, 0x0F51, 2),
                 SseOpcode::Unpcklpd => (LegacyPrefixes::_66, 0x0F14, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
