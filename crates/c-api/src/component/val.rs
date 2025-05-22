@@ -2,49 +2,62 @@ use wasmtime::component::Val;
 
 use crate::wasm_name_t;
 
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasmtime_component_vallist_t {
-    ptr: *mut wasmtime_component_val_t,
-    len: usize,
+use std::mem;
+use std::mem::MaybeUninit;
+use std::ptr;
+use std::slice;
+
+crate::declare_vecs! {
+    (
+        name: wasmtime_component_vallist_t,
+        ty: wasmtime_component_val_t,
+        new: wasmtime_component_vallist_new,
+        empty: wasmtime_component_vallist_new_empty,
+        uninit: wasmtime_component_vallist_new_uninit,
+        copy: wasmtime_component_vallist_copy,
+        delete: wasmtime_component_vallist_delete,
+    )
+    (
+        name: wasmtime_component_valrecord_t,
+        ty: wasmtime_component_valrecord_entry_t,
+        new: wasmtime_component_valrecord_new,
+        empty: wasmtime_component_valrecord_new_empty,
+        uninit: wasmtime_component_valrecord_new_uninit,
+        copy: wasmtime_component_valrecord_copy,
+        delete: wasmtime_component_valrecord_delete,
+    )
 }
 
 impl From<&wasmtime_component_vallist_t> for Vec<Val> {
     fn from(value: &wasmtime_component_vallist_t) -> Self {
-        let x = unsafe { std::slice::from_raw_parts(value.ptr, value.len) };
-        x.iter().map(Val::from).collect()
+        value.as_slice().iter().map(Val::from).collect()
     }
 }
 
 impl From<&[Val]> for wasmtime_component_vallist_t {
     fn from(value: &[Val]) -> Self {
-        let a = value
+        value
             .iter()
             .map(wasmtime_component_val_t::from)
-            .collect::<Box<[_]>>();
-
-        let a = Box::into_raw(a);
-
-        Self {
-            ptr: a.cast(),
-            len: a.len(),
-        }
+            .collect::<Vec<_>>()
+            .into()
     }
 }
 
-impl Drop for wasmtime_component_vallist_t {
-    fn drop(&mut self) {
-        unsafe {
-            let slice = std::slice::from_raw_parts_mut(self.ptr, self.len);
-            let _ = Box::from_raw(slice);
-        }
-    }
-}
-
+#[derive(Clone)]
 #[repr(C)]
 pub struct wasmtime_component_valrecord_entry_t {
     name: wasm_name_t,
     val: wasmtime_component_val_t,
+}
+
+impl Default for wasmtime_component_valrecord_entry_t {
+    fn default() -> Self {
+        Self {
+            name: wasm_name_t::from_name(String::new()),
+            val: Default::default(),
+        }
+    }
 }
 
 impl From<&wasmtime_component_valrecord_entry_t> for (String, Val) {
@@ -65,42 +78,19 @@ impl From<&(String, Val)> for wasmtime_component_valrecord_entry_t {
     }
 }
 
-#[repr(C)]
-#[derive(Clone)]
-pub struct wasmtime_component_valrecord_t {
-    ptr: *mut wasmtime_component_valrecord_entry_t,
-    len: usize,
-}
-
 impl From<&wasmtime_component_valrecord_t> for Vec<(String, Val)> {
     fn from(value: &wasmtime_component_valrecord_t) -> Self {
-        let value = unsafe { std::slice::from_raw_parts(value.ptr, value.len) };
-        value.iter().map(|x| x.into()).collect()
+        value.as_slice().iter().map(Into::into).collect()
     }
 }
 
 impl From<&[(String, Val)]> for wasmtime_component_valrecord_t {
     fn from(value: &[(String, Val)]) -> Self {
-        let a = value
+        value
             .iter()
             .map(wasmtime_component_valrecord_entry_t::from)
-            .collect::<Box<[_]>>();
-
-        let a = Box::into_raw(a);
-
-        Self {
-            ptr: a.cast(),
-            len: a.len(),
-        }
-    }
-}
-
-impl Drop for wasmtime_component_valrecord_t {
-    fn drop(&mut self) {
-        unsafe {
-            let slice = std::slice::from_raw_parts_mut(self.ptr, self.len);
-            let _ = Box::from_raw(slice);
-        }
+            .collect::<Vec<_>>()
+            .into()
     }
 }
 
@@ -122,6 +112,12 @@ pub enum wasmtime_component_val_t {
     String(wasm_name_t),
     List(wasmtime_component_vallist_t),
     Record(wasmtime_component_valrecord_t),
+}
+
+impl Default for wasmtime_component_val_t {
+    fn default() -> Self {
+        Self::Bool(false)
+    }
 }
 
 impl From<&wasmtime_component_val_t> for Val {
@@ -182,18 +178,4 @@ pub unsafe extern "C" fn wasmtime_component_val_delete(value: *mut wasmtime_comp
     unsafe {
         std::ptr::drop_in_place(value);
     }
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_vallist_new(size: usize) -> wasmtime_component_val_t {
-    // TODO: Create `wasmtime_component_val_t`s manually instead of calling `::from()`
-    let vals = vec![Val::Bool(false); size];
-    wasmtime_component_val_t::List(wasmtime_component_vallist_t::from(vals.as_slice()))
-}
-
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn wasmtime_component_valrecord_new(size: usize) -> wasmtime_component_val_t {
-    // TODO: Create `wasmtime_component_valrecord_entry_t`s manually instead of calling `::from()`
-    let vals = vec![(String::default(), Val::Bool(false)); size];
-    wasmtime_component_val_t::Record(wasmtime_component_valrecord_t::from(vals.as_slice()))
 }

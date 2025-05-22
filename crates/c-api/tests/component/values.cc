@@ -125,8 +125,8 @@ TEST(component, value_record) {
                                uint64_t y) {
     EXPECT_EQ(val.kind, WASMTIME_COMPONENT_RECORD);
 
-    EXPECT_EQ(val.of.record.len, 2);
-    const auto entries = val.of.record.ptr;
+    EXPECT_EQ(val.of.record.size, 2);
+    const auto entries = val.of.record.data;
 
     EXPECT_EQ((std::string_view{entries[0].name.data, entries[0].name.size}),
               "x");
@@ -141,11 +141,13 @@ TEST(component, value_record) {
 
   static const auto make = [](uint64_t x,
                               uint64_t y) -> wasmtime_component_val_t {
-    auto ret = wasmtime_component_valrecord_new(2);
-    EXPECT_EQ(ret.kind, WASMTIME_COMPONENT_RECORD);
-    EXPECT_EQ(ret.of.record.len, 2);
+    auto ret = wasmtime_component_val_t{
+        .kind = WASMTIME_COMPONENT_RECORD,
+    };
 
-    const auto entries = ret.of.record.ptr;
+    wasmtime_component_valrecord_new_uninit(&ret.of.record, 2);
+
+    const auto entries = ret.of.record.data;
     wasm_name_new_from_string(&entries[0].name, "x");
     entries[0].val.kind = WASMTIME_COMPONENT_U64;
     entries[0].val.of.u64 = x;
@@ -268,7 +270,7 @@ TEST(component, value_list) {
   static const auto check = [](const wasmtime_component_val_t &val,
                                std::vector<uint32_t> data) {
     EXPECT_EQ(val.kind, WASMTIME_COMPONENT_LIST);
-    auto vals = std::span{val.of.list.ptr, val.of.list.len};
+    auto vals = std::span{val.of.list.data, val.of.list.size};
     EXPECT_EQ(vals.size(), data.size());
     for (auto i = 0; i < data.size(); i++) {
       EXPECT_EQ(vals[i].kind, WASMTIME_COMPONENT_U32);
@@ -278,18 +280,20 @@ TEST(component, value_list) {
 
   static const auto make =
       [](std::vector<uint32_t> data) -> wasmtime_component_val_t {
-    auto val = wasmtime_component_vallist_new(data.size());
-    EXPECT_EQ(val.kind, WASMTIME_COMPONENT_LIST);
-    EXPECT_EQ(val.of.list.len, data.size());
+    auto ret = wasmtime_component_val_t{
+        .kind = WASMTIME_COMPONENT_LIST,
+    };
+
+    wasmtime_component_vallist_new_uninit(&ret.of.list, data.size());
 
     for (auto i = 0; i < data.size(); i++) {
-      val.of.list.ptr[i] = wasmtime_component_val_t{
+      ret.of.list.data[i] = wasmtime_component_val_t{
           .kind = WASMTIME_COMPONENT_U32,
           .of = {.u32 = data[i]},
       };
     }
 
-    return val;
+    return ret;
   };
 
   auto ctx = create(

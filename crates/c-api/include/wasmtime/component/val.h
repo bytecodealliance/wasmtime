@@ -28,18 +28,21 @@ typedef uint8_t wasmtime_component_valkind_t;
 #define WASMTIME_COMPONENT_RECORD 14
 
 struct wasmtime_component_val;
-
-typedef struct {
-  struct wasmtime_component_val *ptr;
-  size_t len;
-} wasmtime_component_vallist_t;
-
 struct wasmtime_component_valrecord_entry;
 
-typedef struct {
-  struct wasmtime_component_valrecord_entry *ptr;
-  size_t len;
-} wasmtime_component_valrecord_t;
+#define DECLARE_VEC(name, type)                                                \
+  typedef struct name {                                                        \
+    size_t size;                                                               \
+    type *data;                                                                \
+  } name##_t;                                                                  \
+                                                                               \
+  WASM_API_EXTERN void name##_new_uninit(name##_t *out, size_t size);
+
+DECLARE_VEC(wasmtime_component_vallist, struct wasmtime_component_val)
+DECLARE_VEC(wasmtime_component_valrecord,
+            struct wasmtime_component_valrecord_entry)
+
+#undef DECLARE_VEC
 
 typedef union {
   bool boolean;
@@ -71,12 +74,6 @@ typedef struct wasmtime_component_valrecord_entry {
 
 WASM_API_EXTERN void
 wasmtime_component_val_delete(wasmtime_component_val_t *value);
-
-WASM_API_EXTERN wasmtime_component_val_t
-wasmtime_component_vallist_new(size_t size);
-
-WASM_API_EXTERN wasmtime_component_val_t
-wasmtime_component_valrecord_new(size_t size);
 
 #ifdef __cplusplus
 } // extern "C"
