@@ -14,8 +14,8 @@ block0(v0: i64, v1: f32x4):
 ; block0:
 ;   movups  0(%rdi), %xmm4
 ;   movdqa  %xmm0, %xmm6
-;   maxps   %xmm0, %xmm4, %xmm0
-;   maxps   %xmm4, %xmm6, %xmm4
+;   maxps %xmm4, %xmm0
+;   maxps %xmm6, %xmm4
 ;   movdqa  %xmm0, %xmm1
 ;   xorps %xmm4, %xmm1
 ;   orps %xmm1, %xmm0
@@ -62,8 +62,8 @@ block0(v0: i64, v1: f32x4):
 ; block0:
 ;   movups  0(%rdi), %xmm4
 ;   movdqa  %xmm0, %xmm1
-;   minps   %xmm1, %xmm4, %xmm1
-;   minps   %xmm4, %xmm0, %xmm4
+;   minps %xmm4, %xmm1
+;   minps %xmm0, %xmm4
 ;   orps %xmm4, %xmm1
 ;   movdqa  %xmm1, %xmm0
 ;   cmpps   $3, %xmm0, %xmm4, %xmm0
@@ -106,8 +106,8 @@ block0(v0: i64, v1: f64x2):
 ; block0:
 ;   movupd  0(%rdi), %xmm4
 ;   movdqa  %xmm0, %xmm6
-;   maxpd   %xmm0, %xmm4, %xmm0
-;   maxpd   %xmm4, %xmm6, %xmm4
+;   maxpd %xmm4, %xmm0
+;   maxpd %xmm6, %xmm4
 ;   movdqa  %xmm0, %xmm1
 ;   xorpd %xmm4, %xmm1
 ;   orpd %xmm1, %xmm0
@@ -154,8 +154,8 @@ block0(v0: i64, v1: f64x2):
 ; block0:
 ;   movupd  0(%rdi), %xmm4
 ;   movdqa  %xmm0, %xmm5
-;   minpd   %xmm0, %xmm4, %xmm0
-;   minpd   %xmm4, %xmm5, %xmm4
+;   minpd %xmm4, %xmm0
+;   minpd %xmm5, %xmm4
 ;   movdqa  %xmm0, %xmm2
 ;   orpd %xmm4, %xmm2
 ;   cmppd   $3, %xmm0, %xmm4, %xmm0

@@ -817,14 +817,6 @@
             Divss
             Divsd
             Insertps
-            Maxps
-            Maxpd
-            Maxss
-            Maxsd
-            Minps
-            Minpd
-            Minss
-            Minsd
             Movaps
             Movapd
             Movd
@@ -870,18 +862,6 @@
             Pinsrd
             Pmaddubsw
             Pmaddwd
-            Pmaxsb
-            Pmaxsw
-            Pmaxsd
-            Pmaxub
-            Pmaxuw
-            Pmaxud
-            Pminsb
-            Pminsw
-            Pminsd
-            Pminub
-            Pminuw
-            Pminud
             Pmovmskb
             Pmovsxbd
             Pmovsxbw
@@ -3845,20 +3825,20 @@
 (rule (x64_pmaxs $I32X4 x y) (x64_pmaxsd x y))
 ;; No $I64X2 version (PMAXSQ) in SSE4.1.
 (decl x64_pmaxsb (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmaxsb src1 src2) (xmm_rm_r (SseOpcode.Pmaxsb) src1 src2))
 (rule 1 (x64_pmaxsb src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpmaxsb) src1 src2))
+(rule 0 (x64_pmaxsb src1 src2) (x64_pmaxsb_a src1 src2))
 (decl x64_pmaxsw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmaxsw src1 src2) (xmm_rm_r (SseOpcode.Pmaxsw) src1 src2))
 (rule 1 (x64_pmaxsw src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpmaxsw) src1 src2))
+(rule 0 (x64_pmaxsw src1 src2) (x64_pmaxsw_a src1 src2))
 (decl x64_pmaxsd (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmaxsd src1 src2) (xmm_rm_r (SseOpcode.Pmaxsd) src1 src2))
 (rule 1 (x64_pmaxsd src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpmaxsd) src1 src2))
+(rule 0 (x64_pmaxsd src1 src2) (x64_pmaxsd_a src1 src2))
 
 ;; Helpers for creating `pmins*` instructions.
 (decl x64_pmins (Type Xmm XmmMem) Xmm)
@@ -3867,20 +3847,20 @@
 (rule (x64_pmins $I32X4 x y) (x64_pminsd x y))
 ;; No $I64X2 version (PMINSQ) in SSE4.1.
 (decl x64_pminsb (Xmm XmmMem) Xmm)
-(rule 0 (x64_pminsb src1 src2) (xmm_rm_r (SseOpcode.Pminsb) src1 src2))
 (rule 1 (x64_pminsb src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpminsb) src1 src2))
+(rule 0 (x64_pminsb src1 src2) (x64_pminsb_a src1 src2))
 (decl x64_pminsw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pminsw src1 src2) (xmm_rm_r (SseOpcode.Pminsw) src1 src2))
 (rule 1 (x64_pminsw src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpminsw) src1 src2))
+(rule 0 (x64_pminsw src1 src2) (x64_pminsw_a src1 src2))
 (decl x64_pminsd (Xmm XmmMem) Xmm)
-(rule 0 (x64_pminsd src1 src2) (xmm_rm_r (SseOpcode.Pminsd) src1 src2))
 (rule 1 (x64_pminsd src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpminsd) src1 src2))
+(rule 0 (x64_pminsd src1 src2) (x64_pminsd_a src1 src2))
 
 ;; Helpers for creating `pmaxu*` instructions.
 (decl x64_pmaxu (Type Xmm XmmMem) Xmm)
@@ -3889,20 +3869,20 @@
 (rule (x64_pmaxu $I32X4 x y) (x64_pmaxud x y))
 ;; No $I64X2 version (PMAXUQ) in SSE4.1.
 (decl x64_pmaxub (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmaxub src1 src2) (xmm_rm_r (SseOpcode.Pmaxub) src1 src2))
 (rule 1 (x64_pmaxub src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpmaxub) src1 src2))
+(rule 0 (x64_pmaxub src1 src2) (x64_pmaxub_a src1 src2))
 (decl x64_pmaxuw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmaxuw src1 src2) (xmm_rm_r (SseOpcode.Pmaxuw) src1 src2))
 (rule 1 (x64_pmaxuw src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpmaxuw) src1 src2))
+(rule 0 (x64_pmaxuw src1 src2) (x64_pmaxuw_a src1 src2))
 (decl x64_pmaxud (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmaxud src1 src2) (xmm_rm_r (SseOpcode.Pmaxud) src1 src2))
 (rule 1 (x64_pmaxud src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpmaxud) src1 src2))
+(rule 0 (x64_pmaxud src1 src2) (x64_pmaxud_a src1 src2))
 
 ;; Helper for creating `pminu*` instructions.
 (decl x64_pminu (Type Xmm XmmMem) Xmm)
@@ -3911,20 +3891,20 @@
 (rule (x64_pminu $I32X4 x y) (x64_pminud x y))
 ;; No $I64X2 version (PMINUQ) in SSE4.1.
 (decl x64_pminub (Xmm XmmMem) Xmm)
-(rule 0 (x64_pminub src1 src2) (xmm_rm_r (SseOpcode.Pminub) src1 src2))
 (rule 1 (x64_pminub src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpminub) src1 src2))
+(rule 0 (x64_pminub src1 src2) (x64_pminub_a src1 src2))
 (decl x64_pminuw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pminuw src1 src2) (xmm_rm_r (SseOpcode.Pminuw) src1 src2))
 (rule 1 (x64_pminuw src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpminuw) src1 src2))
+(rule 0 (x64_pminuw src1 src2) (x64_pminuw_a src1 src2))
 (decl x64_pminud (Xmm XmmMem) Xmm)
-(rule 0 (x64_pminud src1 src2) (xmm_rm_r (SseOpcode.Pminud) src1 src2))
 (rule 1 (x64_pminud src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpminud) src1 src2))
+(rule 0 (x64_pminud src1 src2) (x64_pminud_a src1 src2))
 
 ;; Helper for creating `punpcklbw` instructions.
 (decl x64_punpcklbw (Xmm XmmMem) Xmm)
@@ -4558,67 +4538,59 @@
 
 ;; Helper for creating `minss` instructions.
 (decl x64_minss (Xmm XmmMem) Xmm)
-(rule (x64_minss x y)
-      (xmm_rm_r_unaligned (SseOpcode.Minss) x y))
 (rule 1 (x64_minss x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vminss) x y))
+(rule 0 (x64_minss x y) (x64_minss_a x y))
 
 ;; Helper for creating `minsd` instructions.
 (decl x64_minsd (Xmm XmmMem) Xmm)
-(rule (x64_minsd x y)
-      (xmm_rm_r_unaligned (SseOpcode.Minsd) x y))
 (rule 1 (x64_minsd x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vminsd) x y))
+(rule 0 (x64_minsd x y) (x64_minsd_a x y))
 
 ;; Helper for creating `minps` instructions.
 (decl x64_minps (Xmm XmmMem) Xmm)
-(rule 0 (x64_minps x y)
-      (xmm_rm_r (SseOpcode.Minps) x y))
 (rule 1 (x64_minps x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vminps) x y))
+(rule 0 (x64_minps x y) (x64_minps_a x y))
 
 ;; Helper for creating `minpd` instructions.
 (decl x64_minpd (Xmm XmmMem) Xmm)
-(rule 0 (x64_minpd x y)
-      (xmm_rm_r (SseOpcode.Minpd) x y))
 (rule 1 (x64_minpd x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vminpd) x y))
+(rule 0 (x64_minpd x y) (x64_minpd_a x y))
 
 ;; Helper for creating `maxss` instructions.
 (decl x64_maxss (Xmm XmmMem) Xmm)
-(rule (x64_maxss x y)
-      (xmm_rm_r_unaligned (SseOpcode.Maxss) x y))
 (rule 1 (x64_maxss x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmaxss) x y))
+(rule 0 (x64_maxss x y) (x64_maxss_a x y))
 
 ;; Helper for creating `maxsd` instructions.
 (decl x64_maxsd (Xmm XmmMem) Xmm)
-(rule (x64_maxsd x y)
-      (xmm_rm_r_unaligned (SseOpcode.Maxsd) x y))
 (rule 1 (x64_maxsd x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmaxsd) x y))
+(rule 0 (x64_maxsd x y) (x64_maxsd_a x y))
 
 ;; Helper for creating `maxps` instructions.
 (decl x64_maxps (Xmm XmmMem) Xmm)
-(rule 0 (x64_maxps x y)
-      (xmm_rm_r (SseOpcode.Maxps) x y))
 (rule 1 (x64_maxps x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmaxps) x y))
+(rule 0 (x64_maxps x y) (x64_maxps_a x y))
 
 ;; Helper for creating `maxpd` instructions.
 (decl x64_maxpd (Xmm XmmMem) Xmm)
-(rule 0 (x64_maxpd x y)
-      (xmm_rm_r (SseOpcode.Maxpd) x y))
 (rule 1 (x64_maxpd x y)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmaxpd) x y))
+(rule 0 (x64_maxpd x y) (x64_maxpd_a x y))
 
 ;; Helper for creating `vfmadd213*` instructions
 (decl x64_vfmadd213 (Type Xmm Xmm XmmMem) Xmm)

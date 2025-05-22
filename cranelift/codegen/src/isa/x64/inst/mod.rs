@@ -304,6 +304,7 @@ impl Inst {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn xmm_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Self {
         src.assert_regclass_is(RegClass::Float);
         debug_assert!(dst.to_reg().class() == RegClass::Float);

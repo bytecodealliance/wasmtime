@@ -1849,14 +1849,6 @@ pub(crate) fn emit(
                 SseOpcode::Divpd => (LegacyPrefixes::_66, 0x0F5E, 2),
                 SseOpcode::Divss => (LegacyPrefixes::_F3, 0x0F5E, 2),
                 SseOpcode::Divsd => (LegacyPrefixes::_F2, 0x0F5E, 2),
-                SseOpcode::Maxps => (LegacyPrefixes::None, 0x0F5F, 2),
-                SseOpcode::Maxpd => (LegacyPrefixes::_66, 0x0F5F, 2),
-                SseOpcode::Maxss => (LegacyPrefixes::_F3, 0x0F5F, 2),
-                SseOpcode::Maxsd => (LegacyPrefixes::_F2, 0x0F5F, 2),
-                SseOpcode::Minps => (LegacyPrefixes::None, 0x0F5D, 2),
-                SseOpcode::Minpd => (LegacyPrefixes::_66, 0x0F5D, 2),
-                SseOpcode::Minss => (LegacyPrefixes::_F3, 0x0F5D, 2),
-                SseOpcode::Minsd => (LegacyPrefixes::_F2, 0x0F5D, 2),
                 SseOpcode::Movlhps => (LegacyPrefixes::None, 0x0F16, 2),
                 SseOpcode::Movsd => (LegacyPrefixes::_F2, 0x0F10, 2),
                 SseOpcode::Mulps => (LegacyPrefixes::None, 0x0F59, 2),
@@ -1879,18 +1871,6 @@ pub(crate) fn emit(
                 SseOpcode::Pcmpgtd => (LegacyPrefixes::_66, 0x0F66, 2),
                 SseOpcode::Pcmpgtq => (LegacyPrefixes::_66, 0x0F3837, 3),
                 SseOpcode::Pmaddwd => (LegacyPrefixes::_66, 0x0FF5, 2),
-                SseOpcode::Pmaxsb => (LegacyPrefixes::_66, 0x0F383C, 3),
-                SseOpcode::Pmaxsw => (LegacyPrefixes::_66, 0x0FEE, 2),
-                SseOpcode::Pmaxsd => (LegacyPrefixes::_66, 0x0F383D, 3),
-                SseOpcode::Pmaxub => (LegacyPrefixes::_66, 0x0FDE, 2),
-                SseOpcode::Pmaxuw => (LegacyPrefixes::_66, 0x0F383E, 3),
-                SseOpcode::Pmaxud => (LegacyPrefixes::_66, 0x0F383F, 3),
-                SseOpcode::Pminsb => (LegacyPrefixes::_66, 0x0F3838, 3),
-                SseOpcode::Pminsw => (LegacyPrefixes::_66, 0x0FEA, 2),
-                SseOpcode::Pminsd => (LegacyPrefixes::_66, 0x0F3839, 3),
-                SseOpcode::Pminub => (LegacyPrefixes::_66, 0x0FDA, 2),
-                SseOpcode::Pminuw => (LegacyPrefixes::_66, 0x0F383A, 3),
-                SseOpcode::Pminud => (LegacyPrefixes::_66, 0x0F383B, 3),
                 SseOpcode::Pmuldq => (LegacyPrefixes::_66, 0x0F3828, 3),
                 SseOpcode::Pmulhw => (LegacyPrefixes::_66, 0x0FE5, 2),
                 SseOpcode::Pmulhrsw => (LegacyPrefixes::_66, 0x0F380B, 3),
@@ -2715,9 +2695,9 @@ pub(crate) fn emit(
                     asm::inst::andps_a::new(dst, lhs).into(),
                     asm::inst::orps_a::new(dst, lhs).into(),
                     if *is_min {
-                        SseOpcode::Minss
+                        asm::inst::minss_a::new(dst, lhs).into()
                     } else {
-                        SseOpcode::Maxss
+                        asm::inst::maxss_a::new(dst, lhs).into()
                     },
                 ),
                 OperandSize::Size64 => (
@@ -2726,9 +2706,9 @@ pub(crate) fn emit(
                     asm::inst::andpd_a::new(dst, lhs).into(),
                     asm::inst::orpd_a::new(dst, lhs).into(),
                     if *is_min {
-                        SseOpcode::Minsd
+                        asm::inst::minsd_a::new(dst, lhs).into()
                     } else {
-                        SseOpcode::Maxsd
+                        asm::inst::maxsd_a::new(dst, lhs).into()
                     },
                 ),
                 _ => unreachable!(),
@@ -2758,9 +2738,7 @@ pub(crate) fn emit(
             one_way_jmp(sink, CC::P, done);
 
             sink.bind_label(do_min_max, state.ctrl_plane_mut());
-
-            let inst = Inst::xmm_rm_r(min_max_op, RegMem::reg(lhs), dst);
-            inst.emit(sink, info, state);
+            Inst::External { inst: min_max_op }.emit(sink, info, state);
 
             sink.bind_label(done, state.ctrl_plane_mut());
         }
