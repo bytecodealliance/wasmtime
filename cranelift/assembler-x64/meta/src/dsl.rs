@@ -30,6 +30,7 @@ pub fn inst(
         format,
         encoding,
         features: features.into(),
+        has_trap: false,
     }
 }
 
@@ -56,6 +57,9 @@ pub struct Inst {
     /// "64-bit/32-bit Mode Support" and "CPUID Feature Flag" columns of the x64
     /// reference manual.
     pub features: Features,
+    /// Whether or not this instruction can trap and thus needs a `TrapCode`
+    /// payload in the instruction itself.
+    pub has_trap: bool,
 }
 
 impl Inst {
@@ -77,6 +81,13 @@ impl Inst {
             self.format.name.to_lowercase()
         )
     }
+
+    /// Flags this instruction as being able to trap, so needs a `TrapCode` at
+    /// compile time to track this.
+    pub fn has_trap(mut self) -> Self {
+        self.has_trap = true;
+        self
+    }
 }
 
 impl core::fmt::Display for Inst {
@@ -86,10 +97,14 @@ impl core::fmt::Display for Inst {
             format,
             encoding,
             features,
+            has_trap,
         } = self;
         write!(f, "{name}: {format} => {encoding}")?;
         if !features.is_empty() {
             write!(f, " [{features}]")?;
+        }
+        if *has_trap {
+            write!(f, " has_trap")?;
         }
         Ok(())
     }

@@ -7,6 +7,7 @@ use crate::isa::x64::encoding::rex::{
     low8_will_sign_extend_to_64, reg_enc,
 };
 use crate::isa::x64::encoding::vex::{VexInstruction, VexVectorLength};
+use crate::isa::x64::external::PairedGpr;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::isa::x64::lower::isle::generated_code::{Atomic128RmwSeqOp, AtomicRmwSeqOp};
@@ -247,90 +248,6 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
-        Inst::Div {
-            sign,
-            trap,
-            divisor,
-            ..
-        }
-        | Inst::Div8 {
-            sign,
-            trap,
-            divisor,
-            ..
-        } => {
-            let divisor = divisor.clone().to_reg_mem().clone();
-            let size = match inst {
-                Inst::Div {
-                    size,
-                    dividend_lo,
-                    dividend_hi,
-                    dst_quotient,
-                    dst_remainder,
-                    ..
-                } => {
-                    let dividend_lo = dividend_lo.to_reg();
-                    let dividend_hi = dividend_hi.to_reg();
-                    let dst_quotient = dst_quotient.to_reg().to_reg();
-                    let dst_remainder = dst_remainder.to_reg().to_reg();
-                    debug_assert_eq!(dividend_lo, regs::rax());
-                    debug_assert_eq!(dividend_hi, regs::rdx());
-                    debug_assert_eq!(dst_quotient, regs::rax());
-                    debug_assert_eq!(dst_remainder, regs::rdx());
-                    *size
-                }
-                Inst::Div8 { dividend, dst, .. } => {
-                    let dividend = dividend.to_reg();
-                    let dst = dst.to_reg().to_reg();
-                    debug_assert_eq!(dividend, regs::rax());
-                    debug_assert_eq!(dst, regs::rax());
-                    OperandSize::Size8
-                }
-                _ => unreachable!(),
-            };
-
-            let (opcode, prefix) = match size {
-                OperandSize::Size8 => (0xF6, LegacyPrefixes::None),
-                OperandSize::Size16 => (0xF7, LegacyPrefixes::_66),
-                OperandSize::Size32 => (0xF7, LegacyPrefixes::None),
-                OperandSize::Size64 => (0xF7, LegacyPrefixes::None),
-            };
-
-            sink.add_trap(*trap);
-
-            let subopcode = match sign {
-                DivSignedness::Signed => 7,
-                DivSignedness::Unsigned => 6,
-            };
-            match divisor {
-                RegMem::Reg { reg } => {
-                    let src = int_reg_enc(reg);
-                    emit_std_enc_enc(
-                        sink,
-                        prefix,
-                        opcode,
-                        1,
-                        subopcode,
-                        src,
-                        RexFlags::from((size, reg)),
-                    )
-                }
-                RegMem::Mem { addr: src } => {
-                    let amode = src.finalize(state.frame_layout(), sink);
-                    emit_std_enc_mem(
-                        sink,
-                        prefix,
-                        opcode,
-                        1,
-                        subopcode,
-                        &amode,
-                        RexFlags::from(size),
-                        0,
-                    );
-                }
-            }
-        }
-
         Inst::MulX {
             size,
             src1,
@@ -370,8 +287,6 @@ pub(crate) fn emit(
         }
 
         Inst::CheckedSRemSeq { divisor, .. } | Inst::CheckedSRemSeq8 { divisor, .. } => {
-            let divisor = divisor.to_reg();
-
             // Validate that the register constraints of the dividend and the
             // destination are all as expected.
             let (dst, size) = match inst {
@@ -422,7 +337,7 @@ pub(crate) fn emit(
 
             // Check if the divisor is -1, and if it isn't then immediately
             // go to the `idiv`.
-            let inst = Inst::cmp_rmi_r(size, divisor, RegMemImm::imm(0xffffffff));
+            let inst = Inst::cmp_rmi_r(size, divisor.to_reg(), RegMemImm::imm(0xffffffff));
             inst.emit(sink, info, state);
             one_way_jmp(sink, CC::NZ, do_op);
 
@@ -443,26 +358,43 @@ pub(crate) fn emit(
             // Here the `idiv` is executed, which is different depending on the
             // size
             sink.bind_label(do_op, state.ctrl_plane_mut());
+            let rax = Gpr::unwrap_new(regs::rax());
+            let rdx = Gpr::unwrap_new(regs::rdx());
+            let writable_rax = Writable::from_reg(rax);
+            let writable_rdx = Writable::from_reg(rdx);
             let inst = match size {
-                OperandSize::Size8 => Inst::div8(
-                    DivSignedness::Signed,
+                OperandSize::Size8 => asm::inst::idivb_m::new(
+                    PairedGpr::from(writable_rax),
+                    *divisor,
                     TrapCode::INTEGER_DIVISION_BY_ZERO,
-                    RegMem::reg(divisor),
-                    Gpr::unwrap_new(regs::rax()),
-                    Writable::from_reg(Gpr::unwrap_new(regs::rax())),
-                ),
-                _ => Inst::div(
-                    size,
-                    DivSignedness::Signed,
+                )
+                .into(),
+
+                OperandSize::Size16 => asm::inst::idivw_m::new(
+                    PairedGpr::from(writable_rax),
+                    PairedGpr::from(writable_rdx),
+                    *divisor,
                     TrapCode::INTEGER_DIVISION_BY_ZERO,
-                    RegMem::reg(divisor),
-                    Gpr::unwrap_new(regs::rax()),
-                    Gpr::unwrap_new(regs::rdx()),
-                    Writable::from_reg(Gpr::unwrap_new(regs::rax())),
-                    Writable::from_reg(Gpr::unwrap_new(regs::rdx())),
-                ),
+                )
+                .into(),
+
+                OperandSize::Size32 => asm::inst::idivl_m::new(
+                    PairedGpr::from(writable_rax),
+                    PairedGpr::from(writable_rdx),
+                    *divisor,
+                    TrapCode::INTEGER_DIVISION_BY_ZERO,
+                )
+                .into(),
+
+                OperandSize::Size64 => asm::inst::idivq_m::new(
+                    PairedGpr::from(writable_rax),
+                    PairedGpr::from(writable_rdx),
+                    *divisor,
+                    TrapCode::INTEGER_DIVISION_BY_ZERO,
+                )
+                .into(),
             };
-            inst.emit(sink, info, state);
+            Inst::External { inst }.emit(sink, info, state);
 
             sink.bind_label(done_label, state.ctrl_plane_mut());
         }
@@ -4169,9 +4101,9 @@ pub(crate) fn emit(
             // assembler; due to when Cranelift determines these offsets, this
             // happens quite late (i.e., here during emission).
             let frame = state.frame_layout();
-            known_offsets[external::offsets::KEY_INCOMING_ARG] =
+            known_offsets[usize::from(external::offsets::KEY_INCOMING_ARG)] =
                 i32::try_from(frame.tail_args_size + frame.setup_area_size).unwrap();
-            known_offsets[external::offsets::KEY_SLOT_OFFSET] =
+            known_offsets[usize::from(external::offsets::KEY_SLOT_OFFSET)] =
                 i32::try_from(frame.outgoing_args_size).unwrap();
             inst.encode(sink, &known_offsets);
         }

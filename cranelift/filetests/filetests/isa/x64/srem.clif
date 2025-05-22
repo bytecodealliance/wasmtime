@@ -155,7 +155,7 @@ block0(v0: i8):
 ;   movq    %rdi, %rax
 ;   cbtw  ;; implicit: %ax
 ;   movl    $17, %edx
-;   idiv    %al, %dl, %al ; trap=int_divz
+;   idivb %dl ;; implicit: %ax, trap=254
 ;   shrq $0x8, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -189,7 +189,7 @@ block0(v0: i16):
 ;   movq    %rdi, %rax
 ;   cwtd  ;; implicit: %dx, %ax
 ;   movl    $17, %r8d
-;   idiv    %ax, %dx, %r8w, %ax, %dx ; trap=int_divz
+;   idivw %r8w ;; implicit: %ax, %dx, trap=254
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -223,7 +223,7 @@ block0(v0: i32):
 ;   movq    %rdi, %rax
 ;   cltd  ;; implicit: %edx, %eax
 ;   movl    $17, %r8d
-;   idiv    %eax, %edx, %r8d, %eax, %edx ; trap=int_divz
+;   idivl %r8d ;; implicit: %eax, %edx, trap=254
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -257,7 +257,7 @@ block0(v0: i64):
 ;   movq    %rdi, %rax
 ;   cqto  ;; implicit: %rdx, %rax
 ;   movl    $17, %r8d
-;   idiv    %rax, %rdx, %r8, %rax, %rdx ; trap=int_divz
+;   idivq %r8 ;; implicit: %rax, %rdx, trap=254
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

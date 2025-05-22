@@ -98,6 +98,11 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
         .iter()
         .filter(|o| o.mutability.is_read())
         .map(|o| format!("{}: {}", o.location, rust_param_raw(o)))
+        .chain(if inst.has_trap {
+            Some(format!("trap: &TrapCode"))
+        } else {
+            None
+        })
         .collect::<Vec<_>>()
         .join(", ");
     f.add_block(
@@ -109,10 +114,13 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                 let cvt = rust_convert_isle_to_assembler(op);
                 fmtln!(f, "let {loc} = {cvt};");
             }
-            let args = operands
+            let mut args = operands
                 .iter()
                 .map(|o| format!("{}.clone()", o.location))
                 .collect::<Vec<_>>();
+            if inst.has_trap {
+                args.push(format!("{ASM}::TrapCode(trap.as_raw())"));
+            }
             let args = args.join(", ");
             f.empty_line();
 
@@ -390,6 +398,12 @@ pub fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
 ///
 /// This function panics if the instruction has no operands.
 pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
+    let (trap_type, trap_name) = if inst.has_trap {
+        (Some("TrapCode".to_string()), Some("trap".to_string()))
+    } else {
+        (None, None)
+    };
+
     // First declare the "raw" constructor which is implemented in Rust
     // with `generate_isle_macro` above. This is an "extern" constructor
     // with relatively raw types. This is not intended to be used by
@@ -405,6 +419,7 @@ pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
     let raw_param_tys = params
         .iter()
         .map(|o| isle_param_raw(o))
+        .chain(trap_type.clone())
         .collect::<Vec<_>>()
         .join(" ");
     fmtln!(f, "(decl {raw_name} ({raw_param_tys}) AssemblerOutputs)");
@@ -424,11 +439,13 @@ pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
         let param_tys = params
             .iter()
             .map(|o| isle_param_for_ctor(o, ctor))
+            .chain(trap_type.clone())
             .collect::<Vec<_>>()
             .join(" ");
         let param_names = params
             .iter()
             .map(|o| o.location.to_string())
+            .chain(trap_name.clone())
             .collect::<Vec<_>>()
             .join(" ");
         let convert = ctor.conversion_constructor();

@@ -92,37 +92,6 @@ pub(crate) fn check(
             RegMem::Reg { .. } => undefined_result(ctx, vcode, dst, 64, size.to_bits().into()),
         },
 
-        Inst::Div {
-            size,
-            ref divisor,
-            dst_quotient,
-            dst_remainder,
-            ..
-        } => {
-            match <&RegMem>::from(divisor) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            undefined_result(ctx, vcode, dst_quotient, 64, 64)?;
-            undefined_result(ctx, vcode, dst_remainder, 64, 64)?;
-            Ok(())
-        }
-        Inst::Div8 {
-            dst, ref divisor, ..
-        } => {
-            match <&RegMem>::from(divisor) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, I8, 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            // 64-bit result width because result may be negative
-            // hence high bits set.
-            undefined_result(ctx, vcode, dst, 64, 64)?;
-            Ok(())
-        }
         Inst::MulX {
             size,
             dst_lo,

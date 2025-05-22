@@ -397,8 +397,8 @@ impl Into<asm::Amode<Gpr>> for Amode {
 /// `KnownOffsetTable`.
 #[expect(missing_docs, reason = "self-describing keys")]
 pub mod offsets {
-    pub const KEY_INCOMING_ARG: usize = 0;
-    pub const KEY_SLOT_OFFSET: usize = 1;
+    pub const KEY_INCOMING_ARG: u8 = 0;
+    pub const KEY_SLOT_OFFSET: u8 = 1;
 }
 
 impl asm::CodeSink for MachBuffer<Inst> {

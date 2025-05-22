@@ -4383,38 +4383,30 @@
 ;; it needs a special case here since the instruction being crafted has a
 ;; different shape.
 (rule 2 (lower (udiv a @ (value_type $I8) b))
-        (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
-                  (put_in_gpr b)
-                  (DivSignedness.Unsigned)
-                  (TrapCode.INTEGER_DIVISION_BY_ZERO)))
+        (x64_divb_m (extend_to_gpr a $I32 (ExtendKind.Zero))
+                    (put_in_gpr b)
+                    (TrapCode.INTEGER_DIVISION_BY_ZERO)))
 
 ;; 16-to-64-bit division is all done with a similar instruction and the only
 ;; tricky requirement here is that when div traps are disallowed the divisor
 ;; must not be zero.
 (rule 1 (lower (udiv a @ (value_type (fits_in_64 ty)) b))
-        (x64_div_quotient a
-                          (imm $I64 0)
-                          (put_in_gpr b)
-                          (raw_operand_size_of_type ty)
-                          (DivSignedness.Unsigned)
-                          (TrapCode.INTEGER_DIVISION_BY_ZERO)))
+  (value_regs_get
+    (x64_div ty a (imm $I64 0) (put_in_gpr b) (TrapCode.INTEGER_DIVISION_BY_ZERO))
+    0))
 
 ;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 2 (lower (sdiv a @ (value_type $I8) b))
-        (x64_div8 (x64_cbtw_zo a)
-                  (nonzero_sdiv_divisor $I8 b)
-                  (DivSignedness.Signed)
-                  (TrapCode.INTEGER_OVERFLOW)))
+        (x64_idivb_m (x64_cbtw_zo a)
+                     (nonzero_sdiv_divisor $I8 b)
+                     (TrapCode.INTEGER_OVERFLOW)))
 
 (rule 1 (lower (sdiv a @ (value_type (fits_in_64 ty)) b))
-        (let ((a Gpr a))
-        (x64_div_quotient a
-                          (repeat_sign_bit ty a)
-                          (nonzero_sdiv_divisor ty b)
-                          (raw_operand_size_of_type ty)
-                          (DivSignedness.Signed)
-                          (TrapCode.INTEGER_OVERFLOW))))
+  (let ((a Gpr a))
+    (value_regs_get
+      (x64_idiv ty a (repeat_sign_bit ty a) (nonzero_sdiv_divisor ty b) (TrapCode.INTEGER_OVERFLOW))
+      0)))
 
 ;; Repeats the sign bit in the provided gpr, which will register-allocate to
 ;; %rax, into a destination gpr which will register-allocate to %rdx.
@@ -4450,20 +4442,16 @@
 ;; by 8.
 (rule 2 (lower (urem a @ (value_type $I8) b))
         (let (
-            (result Gpr (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
-                                  (put_in_gpr b) ;; see `udiv` for why not `gpr_mem`
-                                  (DivSignedness.Unsigned)
-                                  (TrapCode.INTEGER_DIVISION_BY_ZERO)))
+            (result Gpr (x64_divb_m (extend_to_gpr a $I32 (ExtendKind.Zero))
+                                    (put_in_gpr b) ;; see `udiv` for why not `gpr_mem`
+                                    (TrapCode.INTEGER_DIVISION_BY_ZERO)))
           )
           (x64_shrq_mi result 8)))
 
 (rule 1 (lower (urem a @ (value_type (fits_in_64 ty)) b))
-        (x64_div_remainder a
-                           (imm $I64 0)
-                           (put_in_gpr b) ;; see `udiv` for why not `gpr_mem`
-                           (raw_operand_size_of_type ty)
-                           (DivSignedness.Unsigned)
-                           (TrapCode.INTEGER_DIVISION_BY_ZERO)))
+  (value_regs_get
+    (x64_div ty a (imm $I64 0) (put_in_gpr b) (TrapCode.INTEGER_DIVISION_BY_ZERO))
+    1))
 
 ;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4476,7 +4464,7 @@
         (if-let n (safe_divisor_from_imm64 $I8 imm))
         (let (
             (a Gpr (x64_cbtw_zo a))
-            (result Gpr (x64_div8 a (imm $I8 n) (DivSignedness.Signed) (TrapCode.INTEGER_DIVISION_BY_ZERO)))
+            (result Gpr (x64_idivb_m a (imm $I8 n) (TrapCode.INTEGER_DIVISION_BY_ZERO)))
           )
           (x64_shrq_mi result 8)))
 
@@ -4487,12 +4475,9 @@
             (a Gpr a)
             (size OperandSize (raw_operand_size_of_type ty))
           )
-          (x64_div_remainder a
-                             (repeat_sign_bit ty a)
-                             (imm ty n)
-                             size
-                             (DivSignedness.Signed)
-                             (TrapCode.INTEGER_DIVISION_BY_ZERO))))
+       (value_regs_get
+         (x64_idiv ty a (repeat_sign_bit ty a) (imm ty n) (TrapCode.INTEGER_DIVISION_BY_ZERO))
+         1)))
 
 (rule 1 (lower (srem a @ (value_type $I8) b))
   (x64_shrq_mi (x64_checked_srem_seq8 (x64_cbtw_zo a) b) 8))

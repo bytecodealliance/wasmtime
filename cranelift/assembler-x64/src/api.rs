@@ -3,6 +3,7 @@
 use crate::gpr;
 use crate::xmm;
 use crate::{Amode, GprMem, XmmMem};
+use std::fmt;
 use std::{num::NonZeroU8, ops::Index, vec::Vec};
 
 /// Describe how an instruction is emitted into a code buffer.
@@ -82,6 +83,12 @@ pub struct Constant(pub u32);
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct TrapCode(pub NonZeroU8);
 
+impl fmt::Display for TrapCode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "trap={}", self.0)
+    }
+}
+
 /// A table mapping `KnownOffset` identifiers to their `i32` offset values.
 ///
 /// When encoding instructions, Cranelift may not know all of the information
@@ -91,14 +98,14 @@ pub struct TrapCode(pub NonZeroU8);
 ///
 /// This table allows up to do a "late" look up of these values by their
 /// `KnownOffset`.
-pub trait KnownOffsetTable: Index<KnownOffset, Output = i32> {}
+pub trait KnownOffsetTable: Index<usize, Output = i32> {}
 impl KnownOffsetTable for Vec<i32> {}
 /// Provide a convenient implementation for testing.
 impl KnownOffsetTable for [i32; 2] {}
 
 /// A `KnownOffset` is a unique identifier for a specific offset known only at
 /// emission time.
-pub type KnownOffset = usize;
+pub type KnownOffset = u8;
 
 /// A type set fixing the register types used in the assembler.
 ///
