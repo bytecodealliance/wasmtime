@@ -36,7 +36,7 @@ pub fn fmt(
 #[must_use]
 pub fn rw(op: impl Into<Operand>) -> Operand {
     let op = op.into();
-    assert!(!matches!(op.location.kind().unwrap(), OperandKind::Imm(_)));
+    assert!(!matches!(op.location.kind(), OperandKind::Imm(_)));
     Operand {
         mutability: Mutability::ReadWrite,
         ..op
@@ -73,22 +73,10 @@ pub fn align(location: Location) -> Operand {
 /// An abbreviated constructor for an operand that is used by the instruction
 /// but not visible in its disassembly.
 pub fn implicit(location: Location) -> Operand {
-    assert!(matches!(location.kind().unwrap(), OperandKind::FixedReg(_)));
+    assert!(matches!(location.kind(), OperandKind::FixedReg(_)));
     Operand {
         implicit: true,
         ..Operand::from(location)
-    }
-}
-
-/// Creates an operand which represents a `TrapCode`.
-///
-/// This is not actually emitted as part of an instruction, but it's passed
-/// along to the `CodeSink` during emission at runtime.
-#[must_use]
-pub fn trap() -> Operand {
-    Operand {
-        implicit: true,
-        ..Operand::from(Location::trap)
     }
 }
 
@@ -167,12 +155,6 @@ impl Format {
         self.locations().copied().find(Location::uses_memory)
     }
 
-    /// Return the location of the operand that represents an explicit trap.
-    pub fn explicit_trap(&self) -> Option<Location> {
-        debug_assert!(self.locations().copied().filter(Location::is_trap).count() <= 1);
-        self.locations().copied().find(Location::is_trap)
-    }
-
     /// Return `true` if any of the operands accepts a register (i.e., not an
     /// immediate); return `false` otherwise.
     #[must_use]
@@ -181,13 +163,8 @@ impl Format {
     }
 
     /// Collect into operand kinds.
-    ///
-    /// Note that this will drop operands which do not have an `OperandKind`
-    /// associated with them, such as trap codes. This is mainly useful when
-    /// looking at the structure of an instruction and considering what's going
-    /// to get emitted for the instruction.
     pub fn operands_by_kind(&self) -> Vec<OperandKind> {
-        self.locations().filter_map(Location::kind).collect()
+        self.locations().map(Location::kind).collect()
     }
 }
 
@@ -312,9 +289,6 @@ pub enum Location {
     imm16,
     imm32,
 
-    // Compiler-specific trap code for this instruction.
-    trap,
-
     // General-purpose registers, and their memory forms.
     r8,
     r16,
@@ -349,10 +323,6 @@ impl Location {
             eax | edx | imm32 | r32 | rm32 | m32 | xmm_m32 => 32,
             rax | rdx | r64 | rm64 | m64 | xmm_m64 => 64,
             xmm | xmm_m128 => 128,
-
-            // not present in the instruction stream, this is just compiler
-            // metadata.
-            trap => 0,
         }
     }
 
@@ -367,19 +337,9 @@ impl Location {
     pub fn uses_memory(&self) -> bool {
         use Location::*;
         match self {
-            al | ax | eax | rax | cl | dx | edx | rdx | imm8 | imm16 | imm32 | trap | r8 | r16
-            | r32 | r64 | xmm => false,
+            al | ax | eax | rax | cl | dx | edx | rdx | imm8 | imm16 | imm32 | r8 | r16 | r32
+            | r64 | xmm => false,
             rm8 | rm16 | rm32 | rm64 | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => true,
-        }
-    }
-
-    /// Return `true` if the location represents a compiler trap code.
-    #[must_use]
-    pub fn is_trap(&self) -> bool {
-        use Location::*;
-        match self {
-            trap => true,
-            _ => false,
         }
     }
 
@@ -389,28 +349,23 @@ impl Location {
     pub fn uses_register(&self) -> bool {
         use Location::*;
         match self {
-            imm8 | imm16 | imm32 | trap => false,
+            imm8 | imm16 | imm32 => false,
             al | ax | eax | rax | cl | dx | edx | rdx | r8 | r16 | r32 | r64 | rm8 | rm16
             | rm32 | rm64 | xmm | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => true,
         }
     }
 
     /// Convert the location to an [`OperandKind`].
-    ///
-    /// Returns `Some` if this operand is part of an emitted instruction, and
-    /// `None` is returned if the operand is only for compiler metadata (e.g. a
-    /// trap code).
     #[must_use]
-    pub fn kind(&self) -> Option<OperandKind> {
+    pub fn kind(&self) -> OperandKind {
         use Location::*;
-        Some(match self {
+        match self {
             al | ax | eax | rax | cl | dx | edx | rdx => OperandKind::FixedReg(*self),
             imm8 | imm16 | imm32 => OperandKind::Imm(*self),
             r8 | r16 | r32 | r64 | xmm => OperandKind::Reg(*self),
             rm8 | rm16 | rm32 | rm64 | xmm_m32 | xmm_m64 | xmm_m128 => OperandKind::RegMem(*self),
             m8 | m16 | m32 | m64 => OperandKind::Mem(*self),
-            trap => return None,
-        })
+        }
     }
 
     /// If a location directly uses data from a register, return the register
@@ -421,7 +376,7 @@ impl Location {
     pub fn reg_class(&self) -> Option<RegClass> {
         use Location::*;
         match self {
-            imm8 | imm16 | imm32 | trap | m8 | m16 | m32 | m64 => None,
+            imm8 | imm16 | imm32 | m8 | m16 | m32 | m64 => None,
             al | ax | eax | rax | cl | dx | edx | rdx | r8 | r16 | r32 | r64 | rm8 | rm16
             | rm32 | rm64 => Some(RegClass::Gpr),
             xmm | xmm_m32 | xmm_m64 | xmm_m128 => Some(RegClass::Xmm),
@@ -436,7 +391,6 @@ impl core::fmt::Display for Location {
             imm8 => write!(f, "imm8"),
             imm16 => write!(f, "imm16"),
             imm32 => write!(f, "imm32"),
-            trap => write!(f, "trap"),
 
             al => write!(f, "al"),
             ax => write!(f, "ax"),
@@ -473,7 +427,7 @@ impl core::fmt::Display for Location {
 ///
 /// ```
 /// # use cranelift_assembler_x64_meta::dsl::{OperandKind, Location};
-/// let k: OperandKind = Location::imm32.kind().unwrap();
+/// let k: OperandKind = Location::imm32.kind();
 /// ```
 #[derive(Clone, Copy, Debug)]
 pub enum OperandKind {

@@ -22,6 +22,10 @@ impl dsl::Inst {
                 let ty = k.generate_type();
                 fmtln!(f, "pub {loc}: {ty},");
             }
+
+            if self.has_trap {
+                fmtln!(f, "pub trap: TrapCode,");
+            }
         });
     }
 
@@ -69,7 +73,12 @@ impl dsl::Inst {
             self.format
                 .operands
                 .iter()
-                .map(|o| format!("{}: impl Into<{}>", o.location, o.generate_type())),
+                .map(|o| format!("{}: impl Into<{}>", o.location, o.generate_type()))
+                .chain(if self.has_trap {
+                    Some("trap: impl Into<TrapCode>".to_string())
+                } else {
+                    None
+                }),
         );
         fmtln!(f, "#[must_use]");
         f.add_block(&format!("pub fn new({params}) -> Self"), |f| {
@@ -77,6 +86,9 @@ impl dsl::Inst {
                 for o in &self.format.operands {
                     let loc = o.location;
                     fmtln!(f, "{loc}: {loc}.into(),");
+                }
+                if self.has_trap {
+                    fmtln!(f, "trap: trap.into(),");
                 }
             });
         });
@@ -98,7 +110,7 @@ impl dsl::Inst {
                 if let Some(op) = self.format.uses_memory() {
                     use dsl::OperandKind::*;
                     f.comment("Emit trap.");
-                    match op.kind().unwrap() {
+                    match op.kind() {
                         Mem(_) => {
                             f.add_block(
                                 &format!("if let Some(trap_code) = self.{op}.trap_code()"),
@@ -121,9 +133,9 @@ impl dsl::Inst {
                         _ => unreachable!(),
                     }
                 }
-                if let Some(op) = self.format.explicit_trap() {
+                if self.has_trap {
                     f.comment("Emit trap.");
-                    fmtln!(f, "buf.add_trap(self.{op});");
+                    fmtln!(f, "buf.add_trap(self.trap);");
                 }
 
                 match &self.encoding {
@@ -147,24 +159,24 @@ impl dsl::Inst {
                 let mutability = o.mutability.generate_snake_case();
                 let reg = o.location.reg_class();
                 match o.location.kind() {
-                    Some(Imm(_)) => {
+                    Imm(_) => {
                         // Immediates do not need register allocation.
                     }
-                    Some(FixedReg(loc)) => {
+                    FixedReg(loc) => {
                         let reg_lower = reg.unwrap().to_string().to_lowercase();
                         fmtln!(f, "let enc = self.{loc}.expected_enc();");
                         fmtln!(f, "visitor.fixed_{mutability}_{reg_lower}(&mut self.{loc}.0, enc);");
                     }
-                    Some(Reg(loc)) => {
+                    Reg(loc) => {
                         let reg_lower = reg.unwrap().to_string().to_lowercase();
                         fmtln!(f, "visitor.{mutability}_{reg_lower}(self.{loc}.as_mut());");
                     }
-                    Some(RegMem(loc) )=> {
+                    RegMem(loc) => {
                         let reg = reg.unwrap();
                         let reg_lower = reg.to_string().to_lowercase();
                         fmtln!(f, "visitor.{mutability}_{reg_lower}_mem(&mut self.{loc});");
                     }
-                    Some(Mem(loc) )=> {
+                    Mem(loc) => {
                         // Note that this is always "read" because from a
                         // regalloc perspective when using an amode it means
                         // that the while a write is happening that's to
@@ -172,8 +184,6 @@ impl dsl::Inst {
                         fmtln!(f, "visitor.read_amode(&mut self.{loc});");
                     }
 
-                    // this operand doesn't participate in register allocation
-                    None => {}
                 }
             }
         });

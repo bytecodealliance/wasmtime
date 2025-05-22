@@ -11,11 +11,7 @@ const ASM: &str = "cranelift_assembler_x64";
 /// Returns the Rust type used for the `IsleConstructorRaw` variants.
 pub fn rust_param_raw(op: &Operand) -> String {
     match op.location.kind() {
-        None => {
-            assert!(matches!(op.location, Location::trap));
-            format!("&TrapCode")
-        }
-        Some(OperandKind::Imm(loc)) => {
+        OperandKind::Imm(loc) => {
             let bits = loc.bits();
             if op.extension.is_sign_extended() {
                 format!("i{bits}")
@@ -23,15 +19,15 @@ pub fn rust_param_raw(op: &Operand) -> String {
                 format!("u{bits}")
             }
         }
-        Some(OperandKind::RegMem(rm)) => {
+        OperandKind::RegMem(rm) => {
             let reg = rm.reg_class().unwrap();
             let aligned = if op.align { "Aligned" } else { "" };
             format!("&{reg}Mem{aligned}")
         }
-        Some(OperandKind::Mem(_)) => {
+        OperandKind::Mem(_) => {
             format!("&Amode")
         }
-        Some(OperandKind::Reg(r) | OperandKind::FixedReg(r)) => r.reg_class().unwrap().to_string(),
+        OperandKind::Reg(r) | OperandKind::FixedReg(r) => r.reg_class().unwrap().to_string(),
     }
 }
 
@@ -40,11 +36,7 @@ pub fn rust_param_raw(op: &Operand) -> String {
 /// converts `self.rust_param_raw()` to the assembler type.
 pub fn rust_convert_isle_to_assembler(op: &Operand) -> String {
     match op.location.kind() {
-        None => {
-            assert!(matches!(op.location, Location::trap));
-            format!("{ASM}::TrapCode(trap.as_raw())")
-        }
-        Some(OperandKind::Imm(loc)) => {
+        OperandKind::Imm(loc) => {
             let bits = loc.bits();
             let ty = if op.extension.is_sign_extended() {
                 "Simm"
@@ -53,7 +45,7 @@ pub fn rust_convert_isle_to_assembler(op: &Operand) -> String {
             };
             format!("{ASM}::{ty}{bits}::new({loc})")
         }
-        Some(OperandKind::FixedReg(r)) => {
+        OperandKind::FixedReg(r) => {
             let reg = r.reg_class().unwrap().to_string().to_lowercase();
             match op.mutability {
                 Mutability::Read => format!("{ASM}::Fixed({r})"),
@@ -65,7 +57,7 @@ pub fn rust_convert_isle_to_assembler(op: &Operand) -> String {
                 }
             }
         }
-        Some(OperandKind::Reg(r)) => {
+        OperandKind::Reg(r) => {
             let reg = r.reg_class().unwrap();
             let reg_lower = reg.to_string().to_lowercase();
             match op.mutability {
@@ -80,13 +72,13 @@ pub fn rust_convert_isle_to_assembler(op: &Operand) -> String {
                 }
             }
         }
-        Some(OperandKind::RegMem(rm)) => {
+        OperandKind::RegMem(rm) => {
             let reg = rm.reg_class().unwrap().to_string().to_lowercase();
             let mut_ = op.mutability.generate_snake_case();
             let align = if op.align { "_aligned" } else { "" };
             format!("self.convert_{reg}_mem_to_assembler_{mut_}_{reg}_mem{align}({rm})")
         }
-        Some(OperandKind::Mem(mem)) => format!("self.convert_amode_to_assembler_amode({mem})"),
+        OperandKind::Mem(mem) => format!("self.convert_amode_to_assembler_amode({mem})"),
     }
 }
 
@@ -106,6 +98,11 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
         .iter()
         .filter(|o| o.mutability.is_read())
         .map(|o| format!("{}: {}", o.location, rust_param_raw(o)))
+        .chain(if inst.has_trap {
+            Some(format!("trap: &TrapCode"))
+        } else {
+            None
+        })
         .collect::<Vec<_>>()
         .join(", ");
     f.add_block(
@@ -117,10 +114,13 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                 let cvt = rust_convert_isle_to_assembler(op);
                 fmtln!(f, "let {loc} = {cvt};");
             }
-            let args = operands
+            let mut args = operands
                 .iter()
                 .map(|o| format!("{}.clone()", o.location))
                 .collect::<Vec<_>>();
+            if inst.has_trap {
+                args.push(format!("{ASM}::TrapCode(trap.as_raw())"));
+            }
             let args = args.join(", ");
             f.empty_line();
 
@@ -151,7 +151,7 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
             };
             match results.as_slice() {
                 [] => fmtln!(f, "SideEffectNoResult::Inst(inst)"),
-                [op] => match op.location.kind().unwrap() {
+                [op] => match op.location.kind() {
                     OperandKind::Imm(_) => unreachable!(),
                     OperandKind::Reg(r) | OperandKind::FixedReg(r) => {
                         let (ty, var) = ty_var_of_reg(r);
@@ -177,7 +177,7 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                 // For now, we assume that if there are two results, they are
                 // coming from a register-writing instruction like `mul`. The
                 // `match` below can be expanded as needed.
-                [op1, op2] => match (op1.location.kind().unwrap(), op2.location.kind().unwrap()) {
+                [op1, op2] => match (op1.location.kind(), op2.location.kind()) {
                     (OperandKind::FixedReg(loc1), OperandKind::FixedReg(loc2)) => {
                         fmtln!(f, "let one = {loc1}.as_ref().{}.to_reg();", access_reg(op1));
                         fmtln!(f, "let two = {loc2}.as_ref().{}.to_reg();", access_reg(op2));
@@ -212,11 +212,7 @@ pub fn generate_rust_macro(f: &mut Formatter, insts: &[Inst]) {
 /// constructors.
 pub fn isle_param_raw(op: &Operand) -> String {
     match op.location.kind() {
-        None => {
-            assert!(matches!(op.location, Location::trap));
-            format!("TrapCode")
-        }
-        Some(OperandKind::Imm(loc)) => {
+        OperandKind::Imm(loc) => {
             let bits = loc.bits();
             if op.extension.is_sign_extended() {
                 format!("i{bits}")
@@ -224,15 +220,15 @@ pub fn isle_param_raw(op: &Operand) -> String {
                 format!("u{bits}")
             }
         }
-        Some(OperandKind::Reg(r) | OperandKind::FixedReg(r)) => r.reg_class().unwrap().to_string(),
-        Some(OperandKind::Mem(_)) => {
+        OperandKind::Reg(r) | OperandKind::FixedReg(r) => r.reg_class().unwrap().to_string(),
+        OperandKind::Mem(_) => {
             if op.align {
                 unimplemented!("no way yet to mark an Amode as aligned")
             } else {
                 "Amode".to_string()
             }
         }
-        Some(OperandKind::RegMem(rm)) => {
+        OperandKind::RegMem(rm) => {
             let reg = rm.reg_class().unwrap();
             let aligned = if op.align { "Aligned" } else { "" };
             format!("{reg}Mem{aligned}")
@@ -305,7 +301,7 @@ pub fn isle_param_for_ctor(op: &Operand, ctor: IsleConstructor) -> String {
         // it's operating on memory so the argument is `Amode` and in the
         // other constructor it's operating on registers so the argument is
         // a `Gpr`.
-        Some(OperandKind::RegMem(_)) if op.mutability.is_write() => match ctor {
+        OperandKind::RegMem(_) if op.mutability.is_write() => match ctor {
             IsleConstructor::RetMemorySideEffect => "Amode".to_string(),
             IsleConstructor::RetGpr => "Gpr".to_string(),
             IsleConstructor::RetXmm => "Xmm".to_string(),
@@ -337,7 +333,7 @@ pub fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
         ),
         [one] => match one.mutability {
             Read => unreachable!(),
-            ReadWrite | Write => match one.location.kind().unwrap() {
+            ReadWrite | Write => match one.location.kind() {
                 Imm(_) => unreachable!(),
                 // One read/write register output? Output the instruction
                 // and that register.
@@ -365,8 +361,8 @@ pub fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
             // For now, we assume that if there are two results, they are coming
             // from a register-writing instruction like `mul`. This can be
             // expanded as needed.
-            assert!(matches!(one.location.kind().unwrap(), FixedReg(_)));
-            assert!(matches!(two.location.kind().unwrap(), FixedReg(_)));
+            assert!(matches!(one.location.kind(), FixedReg(_)));
+            assert!(matches!(two.location.kind(), FixedReg(_)));
             vec![IsleConstructor::RetValueRegs]
         }
         other => panic!("unsupported number of write operands {other:?}"),
@@ -402,6 +398,12 @@ pub fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
 ///
 /// This function panics if the instruction has no operands.
 pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
+    let (trap_type, trap_name) = if inst.has_trap {
+        (Some("TrapCode".to_string()), Some("trap".to_string()))
+    } else {
+        (None, None)
+    };
+
     // First declare the "raw" constructor which is implemented in Rust
     // with `generate_isle_macro` above. This is an "extern" constructor
     // with relatively raw types. This is not intended to be used by
@@ -417,6 +419,7 @@ pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
     let raw_param_tys = params
         .iter()
         .map(|o| isle_param_raw(o))
+        .chain(trap_type.clone())
         .collect::<Vec<_>>()
         .join(" ");
     fmtln!(f, "(decl {raw_name} ({raw_param_tys}) AssemblerOutputs)");
@@ -436,11 +439,13 @@ pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
         let param_tys = params
             .iter()
             .map(|o| isle_param_for_ctor(o, ctor))
+            .chain(trap_type.clone())
             .collect::<Vec<_>>()
             .join(" ");
         let param_names = params
             .iter()
             .map(|o| o.location.to_string())
+            .chain(trap_name.clone())
             .collect::<Vec<_>>()
             .join(" ");
         let convert = ctor.conversion_constructor();
