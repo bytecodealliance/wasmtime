@@ -416,24 +416,6 @@ impl ExecutorInner {
     }
 }
 
-// Yanked from core::task::wake, which is unfortunately still unstable :/
-fn noop_waker() -> Waker {
-    use core::task::{RawWaker, RawWakerVTable};
-    const VTABLE: RawWakerVTable = RawWakerVTable::new(
-        // Cloning just returns a new no-op raw waker
-        |_| RAW,
-        // `wake` does nothing
-        |_| {},
-        // `wake_by_ref` does nothing
-        |_| {},
-        // Dropping does nothing as we don't allocate anything
-        |_| {},
-    );
-    const RAW: RawWaker = RawWaker::new(core::ptr::null(), &VTABLE);
-
-    unsafe { Waker::from_raw(RAW) }
-}
-
 fn block_on<R>(clock: Clock, f: impl Future<Output = Result<R>> + Send + 'static) -> Result<R> {
     // Guard against nested invocations
     if EXECUTOR.0.borrow_mut().is_some() {
@@ -443,8 +425,7 @@ fn block_on<R>(clock: Clock, f: impl Future<Output = Result<R>> + Send + 'static
     *EXECUTOR.0.borrow_mut() = Some(Executor(executor.0.clone()));
 
     // No special waker needed for this executor.
-    let waker = noop_waker();
-    let mut cx = Context::from_waker(&waker);
+    let mut cx = Context::from_waker(Waker::noop());
     let mut f = core::pin::pin!(f);
 
     // Drive the Future to completion in the following loop

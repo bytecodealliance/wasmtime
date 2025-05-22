@@ -29,7 +29,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
-use std::task::{Context, Poll};
+use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
@@ -1320,7 +1320,7 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
 
     fn run<F: Future>(future: F) -> F::Output {
         let mut f = Box::pin(future);
-        let mut cx = Context::from_waker(futures::task::noop_waker_ref());
+        let mut cx = Context::from_waker(Waker::noop());
         loop {
             match f.as_mut().poll(&mut cx) {
                 Poll::Ready(val) => break val,
