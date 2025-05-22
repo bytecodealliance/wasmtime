@@ -2739,33 +2739,6 @@ pub(crate) fn emit(
             emit_std_reg_mem(sink, prefix, opcode, 2, src, dst, RexFlags::clear_w(), 0);
         }
 
-        Inst::GprToXmm {
-            op,
-            src: src_e,
-            dst: reg_g,
-            src_size,
-        } => {
-            let reg_g = reg_g.to_reg().to_reg();
-            let src_e = src_e.clone().to_reg_mem().clone();
-
-            let (prefix, opcode) = match op {
-                // Movd and movq use the same opcode; the presence of the REX prefix (set below)
-                // actually determines which is used.
-                SseOpcode::Movd | SseOpcode::Movq => (LegacyPrefixes::_66, 0x0F6E),
-                _ => panic!("unexpected opcode {op:?}"),
-            };
-            let rex = RexFlags::from(*src_size);
-            match src_e {
-                RegMem::Reg { reg: reg_e } => {
-                    emit_std_reg_reg(sink, prefix, opcode, 2, reg_g, reg_e, rex);
-                }
-                RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state.frame_layout(), sink);
-                    emit_std_reg_mem(sink, prefix, opcode, 2, reg_g, addr, rex, 0);
-                }
-            }
-        }
-
         Inst::XmmCmpRmR { op, src1, src2 } => {
             let src1 = src1.to_reg();
             let src2 = src2.clone().to_reg_mem().clone();
@@ -2999,9 +2972,9 @@ pub(crate) fn emit(
             //
             // done:
 
-            let (cast_op, cmp_op) = match src_size {
-                Size64 => (SseOpcode::Movq, SseOpcode::Ucomisd),
-                Size32 => (SseOpcode::Movd, SseOpcode::Ucomiss),
+            let cmp_op = match src_size {
+                Size64 => SseOpcode::Ucomisd,
+                Size32 => SseOpcode::Ucomiss,
                 _ => unreachable!(),
             };
 
@@ -3101,9 +3074,15 @@ pub(crate) fn emit(
                     _ => unreachable!(),
                 }
 
-                let inst =
-                    Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, tmp_xmm);
-                inst.emit(sink, info, state);
+                let inst = {
+                    let tmp_xmm: WritableXmm = tmp_xmm.map(|r| Xmm::new(r).unwrap());
+                    match src_size {
+                        Size32 => asm::inst::movd_a::new(tmp_xmm, tmp_gpr).into(),
+                        Size64 => asm::inst::movq_a::new(tmp_xmm, tmp_gpr).into(),
+                        _ => unreachable!(),
+                    }
+                };
+                Inst::External { inst }.emit(sink, info, state);
 
                 let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(tmp_xmm.to_reg()));
                 inst.emit(sink, info, state);
@@ -3183,9 +3162,9 @@ pub(crate) fn emit(
 
             assert_ne!(tmp_xmm.to_reg(), src, "tmp_xmm clobbers src!");
 
-            let (cast_op, cmp_op) = match src_size {
-                Size32 => (SseOpcode::Movd, SseOpcode::Ucomiss),
-                Size64 => (SseOpcode::Movq, SseOpcode::Ucomisd),
+            let cmp_op = match src_size {
+                Size32 => SseOpcode::Ucomiss,
+                Size64 => SseOpcode::Ucomisd,
                 _ => unreachable!(),
             };
 
@@ -3226,8 +3205,15 @@ pub(crate) fn emit(
             let inst = Inst::imm(*src_size, cst, tmp_gpr);
             inst.emit(sink, info, state);
 
-            let inst = Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, tmp_xmm);
-            inst.emit(sink, info, state);
+            let inst = {
+                let tmp_xmm: WritableXmm = tmp_xmm.map(|r| Xmm::new(r).unwrap());
+                match src_size {
+                    Size32 => asm::inst::movd_a::new(tmp_xmm, tmp_gpr).into(),
+                    Size64 => asm::inst::movq_a::new(tmp_xmm, tmp_gpr).into(),
+                    _ => unreachable!(),
+                }
+            };
+            Inst::External { inst }.emit(sink, info, state);
 
             let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(tmp_xmm.to_reg()));
             inst.emit(sink, info, state);

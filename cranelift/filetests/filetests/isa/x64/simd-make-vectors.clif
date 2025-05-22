@@ -67,7 +67,7 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %xmm0
+;   movq %rdi, %xmm0
 ;   pinsrq $0x1, %rsi, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

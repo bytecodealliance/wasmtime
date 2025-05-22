@@ -836,11 +836,9 @@ pub enum SseOpcode {
     Insertps,
     Movaps,
     Movapd,
-    Movd,
     Movdqa,
     Movdqu,
     Movlhps,
-    Movq,
     Movss,
     Movsd,
     Movups,
@@ -950,8 +948,6 @@ impl SseOpcode {
             | SseOpcode::Divpd
             | SseOpcode::Divsd
             | SseOpcode::Movapd
-            | SseOpcode::Movd
-            | SseOpcode::Movq
             | SseOpcode::Movsd
             | SseOpcode::Movupd
             | SseOpcode::Movdqa
@@ -1032,7 +1028,6 @@ impl SseOpcode {
     /// Returns the src operand size for an instruction.
     pub(crate) fn src_size(&self) -> u8 {
         match self {
-            SseOpcode::Movd => 4,
             _ => 8,
         }
     }
@@ -1075,11 +1070,9 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Insertps => "insertps",
             SseOpcode::Movaps => "movaps",
             SseOpcode::Movapd => "movapd",
-            SseOpcode::Movd => "movd",
             SseOpcode::Movdqa => "movdqa",
             SseOpcode::Movdqu => "movdqu",
             SseOpcode::Movlhps => "movlhps",
-            SseOpcode::Movq => "movq",
             SseOpcode::Movss => "movss",
             SseOpcode::Movsd => "movsd",
             SseOpcode::Movups => "movups",

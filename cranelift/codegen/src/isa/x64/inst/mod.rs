@@ -144,8 +144,7 @@ impl Inst {
             Inst::UnaryRmRImmVex { op, .. } => op.available_from(),
 
             // These use dynamic SSE opcodes.
-            Inst::GprToXmm { op, .. }
-            | Inst::XmmMovRM { op, .. }
+            Inst::XmmMovRM { op, .. }
             | Inst::XmmRmR { op, .. }
             | Inst::XmmRmRUnaligned { op, .. }
             | Inst::XmmRmRBlend { op, .. }
@@ -291,23 +290,6 @@ impl Inst {
             op,
             src: Xmm::unwrap_new(src),
             dst: dst.into(),
-        }
-    }
-
-    pub(crate) fn gpr_to_xmm(
-        op: SseOpcode,
-        src: RegMem,
-        src_size: OperandSize,
-        dst: Writable<Reg>,
-    ) -> Inst {
-        src.assert_regclass_is(RegClass::Int);
-        debug_assert!(src_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::GprToXmm {
-            op,
-            src: GprMem::unwrap_new(src),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-            src_size,
         }
     }
 
@@ -979,18 +961,6 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
                 let op = ljustify(op.to_string());
                 format!("{op} ${imm}, {src}, {dst}")
-            }
-
-            Inst::GprToXmm {
-                op,
-                src,
-                src_size,
-                dst,
-            } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let src = src.pretty_print(src_size.to_bytes());
-                let op = ljustify(op.to_string());
-                format!("{op} {src}, {dst}")
             }
 
             Inst::GprToXmmVex {
@@ -1881,7 +1851,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(src);
             collector.reg_def(dst);
         }
-        Inst::GprToXmm { src, dst, .. } | Inst::GprToXmmVex { src, dst, .. } => {
+        Inst::GprToXmmVex { src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
         }
@@ -2463,12 +2433,10 @@ impl MachInst for Inst {
 
     fn gen_imm_f64(value: f64, tmp: Writable<Reg>, dst: Writable<Reg>) -> SmallVec<[Self; 2]> {
         let imm_to_gpr = Inst::imm(OperandSize::Size64, value.to_bits(), tmp);
-        let gpr_to_xmm = Self::gpr_to_xmm(
-            SseOpcode::Movd,
-            tmp.to_reg().into(),
-            OperandSize::Size64,
-            dst,
-        );
+        let gpr_to_xmm = Inst::External {
+            inst: asm::inst::movq_a::new(dst.map(|r| Xmm::new(r).unwrap().into()), tmp.to_reg())
+                .into(),
+        };
         smallvec![imm_to_gpr, gpr_to_xmm]
     }
 

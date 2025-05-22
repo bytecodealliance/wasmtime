@@ -12,7 +12,7 @@ block0(v0: f32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $2147483647, %eax
-;   movd    %eax, %xmm4
+;   movd %eax, %xmm4
 ;   andps %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -41,7 +41,7 @@ block0(v0: f64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movabsq $9223372036854775807, %rax
-;   movq    %rax, %xmm4
+;   movq %rax, %xmm4
 ;   andpd %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

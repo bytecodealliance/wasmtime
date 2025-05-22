@@ -11,7 +11,7 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movd    %edi, %xmm0
+;   movd %edi, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -36,7 +36,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, %xmm0
+;   movq %rdi, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

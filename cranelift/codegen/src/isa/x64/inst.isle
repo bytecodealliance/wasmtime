@@ -341,13 +341,6 @@
                  (src Xmm)
                  (dst SyntheticAmode))
 
-       ;; XMM (scalar) unary op (from integer to float reg): movd, movq,
-       ;; cvtsi2s{s,d}
-       (GprToXmm (op SseOpcode)
-                 (src GprMem)
-                 (dst WritableXmm)
-                 (src_size OperandSize))
-
        ;; Conversion from signed integers to floats, the `{v,}`cvtsi2s{s,d}`
        ;; instructions.
        ;;
@@ -778,11 +771,9 @@
             Insertps
             Movaps
             Movapd
-            Movd
             Movdqa
             Movdqu
             Movlhps
-            Movq
             Movss
             Movsd
             Movups
@@ -1958,13 +1949,6 @@
             (_ Unit (emit (MInst.XmmToGprImmVex op src dst imm))))
         dst))
 
-;; Helper for creating `MInst.GprToXmm` instructions.
-(decl gpr_to_xmm (SseOpcode GprMem OperandSize) Xmm)
-(rule (gpr_to_xmm op src size)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.GprToXmm op src dst size))))
-        dst))
-
 ;; Helper for creating `MInst.GprToXmmVex` instructions.
 (decl gpr_to_xmm_vex (AvxOpcode GprMem OperandSize) Xmm)
 (rule (gpr_to_xmm_vex op src size)
@@ -2389,16 +2373,14 @@
 
 ;; Helper for creating `movd` instructions.
 (decl x64_movd_to_xmm (GprMem) Xmm)
-(rule (x64_movd_to_xmm from)
-      (gpr_to_xmm (SseOpcode.Movd) from (OperandSize.Size32)))
+(rule (x64_movd_to_xmm from) (x64_movd_a from))
 (rule 1 (x64_movd_to_xmm from)
         (if-let true (use_avx))
         (gpr_to_xmm_vex (AvxOpcode.Vmovd) from (OperandSize.Size32)))
 
 ;; Helper for creating `movq` instructions.
 (decl x64_movq_to_xmm (GprMem) Xmm)
-(rule (x64_movq_to_xmm src)
-      (gpr_to_xmm (SseOpcode.Movq) src (OperandSize.Size64)))
+(rule (x64_movq_to_xmm src) (x64_movq_a src))
 (rule 1 (x64_movq_to_xmm from)
         (if-let true (use_avx))
         (gpr_to_xmm_vex (AvxOpcode.Vmovq) from (OperandSize.Size64)))
