@@ -3055,49 +3055,6 @@ fn test_x64_emit() {
         "vpopcntb %xmm2, %xmm8",
     ));
 
-    // Xmm to int conversions, and conversely.
-
-    insns.push((
-        Inst::gpr_to_xmm(
-            SseOpcode::Movd,
-            RegMem::reg(rax),
-            OperandSize::Size32,
-            w_xmm15,
-        ),
-        "66440F6EF8",
-        "movd    %eax, %xmm15",
-    ));
-    insns.push((
-        Inst::gpr_to_xmm(
-            SseOpcode::Movd,
-            RegMem::mem(Amode::imm_reg(2, r10)),
-            OperandSize::Size32,
-            w_xmm9,
-        ),
-        "66450F6E4A02",
-        "movd    2(%r10), %xmm9",
-    ));
-    insns.push((
-        Inst::gpr_to_xmm(
-            SseOpcode::Movd,
-            RegMem::reg(rsi),
-            OperandSize::Size32,
-            w_xmm1,
-        ),
-        "660F6ECE",
-        "movd    %esi, %xmm1",
-    ));
-    insns.push((
-        Inst::gpr_to_xmm(
-            SseOpcode::Movq,
-            RegMem::reg(rdi),
-            OperandSize::Size64,
-            w_xmm15,
-        ),
-        "664C0F6EFF",
-        "movq    %rdi, %xmm15",
-    ));
-
     // ========================================================
     // XmmRmRImm
     insns.push((
