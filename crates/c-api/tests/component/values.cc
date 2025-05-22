@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <wasmtime.h>
 
+#include <array>
 #include <format>
 #include <span>
 
@@ -339,4 +340,50 @@ local.get $res
   wasmtime_component_val_delete(&res);
 
   destroy(ctx);
+}
+
+TEST(component, value_list_inner) {
+  {
+    auto x = wasmtime_component_val_t{
+        .kind = WASMTIME_COMPONENT_LIST,
+    };
+    wasmtime_component_vallist_new_empty(&x.of.list);
+    EXPECT_EQ(x.of.list.data, nullptr);
+    EXPECT_EQ(x.of.list.size, 0);
+
+    wasmtime_component_vallist_new_uninit(&x.of.list, 1);
+    EXPECT_NE(x.of.list.data, nullptr);
+    EXPECT_EQ(x.of.list.size, 1);
+
+    wasmtime_component_vallist_delete(&x.of.list);
+
+    auto items = std::array{
+        wasmtime_component_val_t{
+            .kind = WASMTIME_COMPONENT_U32,
+            .of = {.u32 = 123},
+        },
+    };
+
+    wasmtime_component_vallist_new(&x.of.list, items.size(), items.data());
+    EXPECT_NE(x.of.list.data, nullptr);
+    EXPECT_EQ(x.of.list.size, 1);
+
+    EXPECT_EQ(x.of.list.data[0].kind, WASMTIME_COMPONENT_U32);
+    EXPECT_EQ(x.of.list.data[0].of.u32, 123);
+
+    auto clone = wasmtime_component_val_t{
+        .kind = WASMTIME_COMPONENT_LIST,
+    };
+
+    wasmtime_component_vallist_copy(&clone.of.list, &x.of.list);
+    wasmtime_component_vallist_delete(&x.of.list);
+
+    EXPECT_NE(clone.of.list.data, nullptr);
+    EXPECT_EQ(clone.of.list.size, 1);
+
+    EXPECT_EQ(clone.of.list.data[0].kind, WASMTIME_COMPONENT_U32);
+    EXPECT_EQ(clone.of.list.data[0].of.u32, 123);
+
+    wasmtime_component_vallist_delete(&clone.of.list);
+  }
 }
