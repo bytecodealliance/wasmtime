@@ -331,8 +331,6 @@ wasmtime_option_group! {
         pub trap_on_grow_failure: Option<bool>,
         /// Maximum execution time of wasm code before timing out (1, 2s, 100ms, etc)
         pub timeout: Option<Duration>,
-        /// Size of stacks created with cont.new instructions
-        pub stack_switching_stack_size: Option<usize>,
         /// Configures support for all WebAssembly proposals implemented.
         pub all_proposals: Option<bool>,
         /// Configure support for the bulk memory proposal.
@@ -819,10 +817,21 @@ impl CommonOptions {
             config.native_unwind_info(enable);
         }
 
-        match_feature! {
-            ["stack-switching" : self.wasm.stack_switching_stack_size]
-            size => config.stack_switching_stack_size(size),
-            _ => err,
+        // async_stack_size enabled by either async or stack-switching, so
+        // cannot directly use match_feature!
+        #[cfg(any(feature = "async", feature = "stack-switching"))]
+        {
+            if let Some(size) = self.wasm.async_stack_size {
+                config.async_stack_size(size);
+            }
+        }
+        #[cfg(not(any(feature = "async", feature = "stack-switching")))]
+        {
+            if let Some(size) = self.wasm.async_stack_size {
+                anyhow::bail!(concat!(
+                    "support for async/stack-switching disabled at compile time"
+                ));
+            }
         }
 
         match_feature! {
@@ -930,6 +939,8 @@ impl CommonOptions {
             );
         }
 
+        #[cfg(any(feature = "async", feature = "stack-switching"))]
+
         match_feature! {
             ["async" : self.wasm.async_stack_size]
             size => config.async_stack_size(size),
@@ -947,7 +958,7 @@ impl CommonOptions {
             // If `-Wasync-stack-size` isn't passed then automatically adjust it
             // to the wasm stack size provided here too. That prevents the need
             // to pass both when one can generally be inferred from the other.
-            #[cfg(feature = "async")]
+            #[cfg(any(feature = "async", feature = "stack-switching"))]
             if self.wasm.async_stack_size.is_none() {
                 const DEFAULT_HOST_STACK: usize = 512 << 10;
                 config.async_stack_size(max + DEFAULT_HOST_STACK);

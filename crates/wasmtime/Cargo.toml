@@ -311,8 +311,7 @@ threads = [
 ]
 
 stack-switching = [
-  "std",
-  "runtime"
+  "runtime",
 ]
 
 # Controls whether backtraces will attempt to parse DWARF information in

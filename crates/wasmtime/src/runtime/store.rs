@@ -86,7 +86,8 @@ use crate::runtime::vm::GcRootsList;
 use crate::runtime::vm::{
     ExportGlobal, GcStore, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SignalHandler,
-    StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
+    StoreBox, StorePtr, Unwind, VMContRef, VMContext, VMContinuationStack, VMFuncRef, VMGcRef,
+    VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::RootSet;
@@ -115,9 +116,6 @@ pub use self::async_::CallHookHandler;
 use self::async_::*;
 #[cfg(feature = "gc")]
 mod gc;
-
-use super::vm::stack_switching::stack::VMContinuationStack;
-use super::vm::stack_switching::VMContRef;
 
 /// A [`Store`] is a collection of WebAssembly instances and host-defined state.
 ///
@@ -1700,7 +1698,7 @@ impl StoreOpaque {
 
     #[cfg(feature = "gc")]
     fn trace_wasm_continuation_roots(&mut self, gc_roots_list: &mut GcRootsList) {
-        use crate::runtime::vm::Backtrace;
+        use crate::{runtime::vm::Backtrace, vm::VMStackState};
         log::trace!("Begin trace GC roots :: continuations");
 
         for continuation in &self.continuations {
@@ -1725,7 +1723,7 @@ impl StoreOpaque {
             //   continuations below.
             // - For `Fresh` continuations, we know that there are no GC values
             //   on their stack, yet.
-            if state == crate::vm::stack_switching::VMStackState::Suspended {
+            if state == VMStackState::Suspended {
                 Backtrace::trace_suspended_continuation(self, continuation.deref(), |frame| {
                     self.trace_wasm_stack_frame(gc_roots_list, frame);
                     core::ops::ControlFlow::Continue(())
@@ -2039,7 +2037,7 @@ at https://bytecodealliance.org/security.
     pub fn allocate_continuation(&mut self) -> Result<*mut VMContRef> {
         // FIXME(frank-emrich) Do we need to pin this?
         let mut continuation = Box::new(VMContRef::empty());
-        let stack_size = self.engine.config().stack_switching_config.stack_size;
+        let stack_size = self.engine.config().async_stack_size;
         let stack = VMContinuationStack::new(stack_size)?;
         continuation.stack = stack;
         let ptr = continuation.deref_mut() as *mut VMContRef;

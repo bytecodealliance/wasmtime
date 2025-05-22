@@ -251,14 +251,6 @@ WASMTIME_CONFIG_PROP(void, wasm_wide_arithmetic, bool)
 #ifdef WASMTIME_FEATURE_COMPILER
 
 /**
- * \brief Configures whether the WebAssembly function references
- * proposal is enabled.
- *
- * This setting is `false` by default.
- */
-WASMTIME_CONFIG_PROP(void, wasm_function_references, bool)
-
-/**
  * \brief Configures whether the WebAssembly stack switching
  * proposal is enabled.
  *

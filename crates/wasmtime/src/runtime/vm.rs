@@ -33,6 +33,7 @@ mod memory;
 mod mmap_vec;
 mod provenance;
 mod send_sync_ptr;
+mod stack_switching;
 mod store_box;
 mod sys;
 mod table;
@@ -42,7 +43,6 @@ mod vmcontext;
 
 #[cfg(feature = "threads")]
 mod parking_spot;
-pub mod stack_switching;
 
 // Note that `debug_builtins` here is disabled with a feature or a lack of a
 // native compilation backend because it's only here to assist in debugging
@@ -83,6 +83,7 @@ pub use crate::runtime::vm::memory::{
 };
 pub use crate::runtime::vm::mmap_vec::MmapVec;
 pub use crate::runtime::vm::provenance::*;
+pub use crate::runtime::vm::stack_switching::*;
 pub use crate::runtime::vm::store_box::*;
 #[cfg(feature = "std")]
 pub use crate::runtime::vm::sys::mmap::open_file_for_mmap;

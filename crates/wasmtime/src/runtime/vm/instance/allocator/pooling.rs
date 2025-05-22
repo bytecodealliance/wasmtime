@@ -130,7 +130,11 @@ pub struct InstanceLimits {
     /// Maximum number of tables per instance.
     pub max_tables_per_module: u32,
 
-    /// Maximum number of table elements per table.
+    /// Maximum number of word-size elements per table.
+    ///
+    /// Note that tables for element types such as continuations
+    /// that use more than one word of storage may store fewer
+    /// elements.
     pub table_elements: usize,
 
     /// Maximum number of linear memories per instance.

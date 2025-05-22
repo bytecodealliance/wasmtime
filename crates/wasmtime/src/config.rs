@@ -8,9 +8,7 @@ use std::path::Path;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
-use wasmtime_environ::{
-    stack_switching::StackSwitchingConfig, ConfigTunables, TripleExt, Tunables,
-};
+use wasmtime_environ::{ConfigTunables, TripleExt, Tunables};
 
 #[cfg(feature = "runtime")]
 use crate::memory::MemoryCreator;
@@ -129,14 +127,6 @@ pub struct Config {
     profiling_strategy: ProfilingStrategy,
     tunables: ConfigTunables,
 
-    /// Runtime configuration for the stack switching feature.
-    /// The structure is defined in the
-    /// `wasmtime_environ::stack_switching` module, so that we can
-    /// hand out the configuration object in the interface of
-    /// `wasmtime_runtime::Store` trait, where the full `Config` type
-    /// is not in scope.
-    pub(crate) stack_switching_config: StackSwitchingConfig,
-
     #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
     #[cfg(feature = "runtime")]
@@ -157,7 +147,7 @@ pub struct Config {
     pub(crate) wasm_backtrace: bool,
     pub(crate) wasm_backtrace_details_env_used: bool,
     pub(crate) native_unwind_info: Option<bool>,
-    #[cfg(feature = "async")]
+    #[cfg(any(feature = "async", feature = "stack-switching"))]
     pub(crate) async_stack_size: usize,
     #[cfg(feature = "async")]
     pub(crate) async_stack_zeroing: bool,
@@ -237,7 +227,6 @@ impl Config {
             tunables: ConfigTunables::default(),
             #[cfg(any(feature = "cranelift", feature = "winch"))]
             compiler_config: CompilerConfig::default(),
-            stack_switching_config: StackSwitchingConfig::default(),
             target: None,
             #[cfg(feature = "gc")]
             collector: Collector::default(),
@@ -263,7 +252,7 @@ impl Config {
             native_unwind_info: None,
             enabled_features: WasmFeatures::empty(),
             disabled_features: WasmFeatures::empty(),
-            #[cfg(feature = "async")]
+            #[cfg(any(feature = "async", feature = "stack-switching"))]
             async_stack_size: 2 << 20,
             #[cfg(feature = "async")]
             async_stack_zeroing: false,
@@ -747,7 +736,7 @@ impl Config {
     ///
     /// The `Engine::new` method will fail if the value for this option is
     /// smaller than the [`Config::max_wasm_stack`] option.
-    #[cfg(feature = "async")]
+    #[cfg(any(feature = "async", feature = "stack-switching"))]
     pub fn async_stack_size(&mut self, size: usize) -> &mut Self {
         self.async_stack_size = size;
         self
@@ -784,12 +773,6 @@ impl Config {
     #[cfg(feature = "async")]
     pub fn async_stack_zeroing(&mut self, enable: bool) -> &mut Self {
         self.async_stack_zeroing = enable;
-        self
-    }
-
-    /// Configures the size of the stacks created with cont.new instructions.
-    pub fn stack_switching_stack_size(&mut self, size: usize) -> &mut Self {
-        self.stack_switching_config.stack_size = size;
         self
     }
 
@@ -2242,7 +2225,7 @@ impl Config {
             panic!("should have returned an error by now")
         }
 
-        #[cfg(feature = "async")]
+        #[cfg(any(feature = "async", feature = "stack-switching"))]
         if self.async_support && self.max_wasm_stack > self.async_stack_size {
             bail!("max_wasm_stack size cannot exceed the async_stack_size");
         }

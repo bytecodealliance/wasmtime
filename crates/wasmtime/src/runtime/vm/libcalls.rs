@@ -1441,22 +1441,3 @@ fn cont_new(
         crate::vm::stack_switching::cont_new(store, instance, func, param_count, result_count)?;
     Ok(Some(AllocationSize(ans.cast::<u8>() as usize)))
 }
-
-fn delete_me_print_str(_store: &mut dyn VMStore, _instance: &mut Instance, s: *const u8, len: u64) {
-    let len =
-        usize::try_from(len).map_err(|_error| TrapReason::User(anyhow::anyhow!("len too large!")));
-    let str = unsafe { core::slice::from_raw_parts(s, len.unwrap()) };
-    let _s = core::str::from_utf8(str).unwrap();
-    #[cfg(feature = "std")]
-    print!("{_s}")
-}
-
-fn delete_me_print_int(_store: &mut dyn VMStore, _instance: &mut Instance, _arg: u64) {
-    #[cfg(feature = "std")]
-    print!("{_arg}")
-}
-
-fn delete_me_print_pointer(_store: &mut dyn VMStore, _instance: &mut Instance, _arg: *const u8) {
-    #[cfg(feature = "std")]
-    print!("{_arg:p}")
-}

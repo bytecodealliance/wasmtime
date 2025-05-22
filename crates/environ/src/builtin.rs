@@ -216,17 +216,6 @@ macro_rules! foreach_builtin_function {
             // Creates a new continuation from a funcref.
             cont_new(vmctx: vmctx, r: pointer, param_count: u32, result_count: u32) -> pointer;
 
-            // FIXME(frank-emrich) The next three builtins are used by the debug printing mechanism.
-            // They are not supposed to be part of the final upstreamed code.
-            //
-            // Prints a 'static str, represented as a
-            // pointer and a length.
-            delete_me_print_str(vmctx: vmctx, s: pointer, len : u64);
-            // Prints integer
-            delete_me_print_int(vmctx: vmctx, arg : u64);
-            // Prints pointer, formatted as hex.
-            delete_me_print_pointer(vmctx: vmctx, arg : pointer);
-
             // Returns an index for Wasm's `table.grow` instruction
             // for `contobj`s.  Note that the initial
             // Option<VMContObj> (i.e., the value to fill the new
