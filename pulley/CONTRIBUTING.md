@@ -14,10 +14,10 @@ of doing so.
 
 #### Choose a test to get passing
 
-First off find a test in this repository, probably a `*.wast` test, which isn't
+First off find a test in this repository, probably a `*.wasteee` test, which isn't
 currently passing. Check out the `WastTest::should_fail` method in
-`crates/wast-util/src/lib.rs` which has a list of `unsupported` tests for
-Pulley. Here we're going to select `./tests/misc_testsuite/control-flow.wast`
+`crates/wasteee-util/src/lib.rs` which has a list of `unsupported` tests for
+Pulley. Here we're going to select `./tests/misc_testsuite/control-flow.wasteee`
 as it's a reasonably small test.
 
 #### See the test failure
@@ -25,28 +25,28 @@ as it's a reasonably small test.
 Run this command:
 
 ```
-$ cargo run --features pulley -- wast --target pulley64 ./tests/misc_testsuite/control-flow.wast
+$ cargo run --features pulley -- wasteee --target pulley64 ./tests/misc_testsuite/control-flow.wasteee
 ```
 
 This builds the `wasmtime` CLI with Pulley support enabled (`--features
-pulley`), runs the `wast` subcommand, executes with the pulley target
+pulley`), runs the `wasteee` subcommand, executes with the pulley target
 (`--target pulley64`), and then runs our test. As of now this shows:
 
 ```
-$ cargo run --features pulley -- wast --target pulley64 ./tests/misc_testsuite/control-flow.wast
+$ cargo run --features pulley -- wasteee --target pulley64 ./tests/misc_testsuite/control-flow.wasteee
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
-     Running `target/debug/wasmtime wast --target pulley64 ./tests/misc_testsuite/control-flow.wast`
-Error: failed to run script file './tests/misc_testsuite/control-flow.wast'
+     Running `target/debug/wasmtime wasteee --target pulley64 ./tests/misc_testsuite/control-flow.wasteee`
+Error: failed to run script file './tests/misc_testsuite/control-flow.wasteee'
 
 Caused by:
-    0: failed directive on ./tests/misc_testsuite/control-flow.wast:77:1
+    0: failed directive on ./tests/misc_testsuite/control-flow.wasteee:77:1
     1: Compilation error: Unsupported feature: should be implemented in ISLE: inst = `v5 = sdiv.i32 v2, v3`, type = `Some(types::I32)`
 ```
 
-Note that if you run `cargo test --test wast control-flow.wast` it'll also run
+Note that if you run `cargo test --test wasteee control-flow.wasteee` it'll also run
 the same test under a variety of configurations, but the test is expected to
 fail under Pulley. You can update the `WastTest::should_fail` method in
-`crates/wast-util/src/lib.rs` to say the test is expected to pass, and then you
+`crates/wasteee-util/src/lib.rs` to say the test is expected to pass, and then you
 can see a similar failure.
 
 #### Adding an instruction: Pulley
@@ -84,7 +84,7 @@ operation using integer ("x") registers.
 Rerun our test command and we see:
 
 ```
-$ cargo run --features pulley -- wast --target pulley64 ./tests/misc_testsuite/control-flow.wast
+$ cargo run --features pulley -- wasteee --target pulley64 ./tests/misc_testsuite/control-flow.wasteee
    Compiling pulley-interpreter v29.0.0 (/home/alex/code/wasmtime/pulley)
 error[E0046]: not all trait items implemented, missing: `xdiv32_s`
    --> pulley/src/interp.rs:807:1
@@ -130,13 +130,13 @@ in `interp.rs` for inspiration of how to do various operations.
 Running our test again we get the same error as before!
 
 ```
-$ cargo run --features pulley -- wast --target pulley64 ./tests/misc_testsuite/control-flow.wast
+$ cargo run --features pulley -- wasteee --target pulley64 ./tests/misc_testsuite/control-flow.wasteee
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.08s
-     Running `target/debug/wasmtime wast --target pulley64 ./tests/misc_testsuite/control-flow.wast`
-Error: failed to run script file './tests/misc_testsuite/control-flow.wast'
+     Running `target/debug/wasmtime wasteee --target pulley64 ./tests/misc_testsuite/control-flow.wasteee`
+Error: failed to run script file './tests/misc_testsuite/control-flow.wasteee'
 
 Caused by:
-    0: failed directive on ./tests/misc_testsuite/control-flow.wast:77:1
+    0: failed directive on ./tests/misc_testsuite/control-flow.wasteee:77:1
     1: Compilation error: Unsupported feature: should be implemented in ISLE: inst = `v5 = sdiv.i32 v2, v3`, type = `Some(types::I32)`
 ```
 
@@ -181,10 +181,10 @@ automatically generated from the `for_each_op!` macro.
 Running our test again yields:
 
 ```
-Error: failed to run script file './tests/misc_testsuite/control-flow.wast'
+Error: failed to run script file './tests/misc_testsuite/control-flow.wasteee'
 
 Caused by:
-    0: failed directive on ./tests/misc_testsuite/control-flow.wast:83:1
+    0: failed directive on ./tests/misc_testsuite/control-flow.wasteee:83:1
     1: Compilation error: Unsupported feature: should be implemented in ISLE: inst = `v26 = band.i32 v2, v13  ; v13 = 3`, type = `Some(types::I32)`
 ```
 
@@ -198,47 +198,47 @@ architecture backends too for inspiration.
 After implementing a lowering for `band.i32` our test case is now passing:
 
 ```
-$ cargo run --features pulley -- wast --target pulley64 ./tests/misc_testsuite/control-flow.wast
+$ cargo run --features pulley -- wasteee --target pulley64 ./tests/misc_testsuite/control-flow.wasteee
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.50s
-     Running `target/debug/wasmtime wast --target pulley64 ./tests/misc_testsuite/control-flow.wast`
+     Running `target/debug/wasmtime wasteee --target pulley64 ./tests/misc_testsuite/control-flow.wasteee`
 ```
 
 If we run the test suite though we'll see:
 
 ```
-$ cargo test --test wast control-flow.wast
+$ cargo test --test wasteee control-flow.wasteee
     Finished `test` profile [unoptimized + debuginfo] target(s) in 29.14s
-     Running tests/wast.rs (target/debug/deps/wast-f83a3ee5e5dbacde)
+     Running tests/wasteee.rs (target/debug/deps/wasteee-f83a3ee5e5dbacde)
 
 running 6 tests
 ...F.F
 failures:
 
----- CraneliftPulley/./tests/misc_testsuite/control-flow.wast ----
+---- CraneliftPulley/./tests/misc_testsuite/control-flow.wasteee ----
 this test is flagged as should-fail but it succeeded
 
----- CraneliftPulley/pooling/./tests/misc_testsuite/control-flow.wast ----
+---- CraneliftPulley/pooling/./tests/misc_testsuite/control-flow.wasteee ----
 this test is flagged as should-fail but it succeeded
 
 
 failures:
-    CraneliftPulley/./tests/misc_testsuite/control-flow.wast
-    CraneliftPulley/pooling/./tests/misc_testsuite/control-flow.wast
+    CraneliftPulley/./tests/misc_testsuite/control-flow.wasteee
+    CraneliftPulley/pooling/./tests/misc_testsuite/control-flow.wasteee
 
 test result: FAILED. 4 passed; 2 failed; 0 ignored; 0 measured; 4086 filtered out; finished in 0.05s
 
-error: test failed, to rerun pass `--test wast`
+error: test failed, to rerun pass `--test wasteee`
 ```
 
 This indicates that the test was previously flagged as "should fail", but that
 assertion is no longer true! Update the `WastTest::should_fail` method in
-`crates/wast-util/src/lib.rs` so that it expects the test to pass by deleting
+`crates/wasteee-util/src/lib.rs` so that it expects the test to pass by deleting
 the tests from the `unsupported` list. Then we'll see:
 
 ```
-$ cargo test --test wast control-flow.wast
+$ cargo test --test wasteee control-flow.wasteee
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.74s
-     Running tests/wast.rs (target/debug/deps/wast-f83a3ee5e5dbacde)
+     Running tests/wasteee.rs (target/debug/deps/wasteee-f83a3ee5e5dbacde)
 
 running 6 tests
 ......
@@ -250,12 +250,12 @@ Success!
 But we aren't quite done yet: the new lowerings we added might have made
 additional tests that previously failed start passing as well. If so, then we
 also want to mark those tests as expected to pass now. We can double check by
-running the full `wast` test suite:
+running the full `wasteee` test suite:
 
 ```
-$ cargo test --test wast Pulley
+$ cargo test --test wasteee Pulley
     Finished `test` profile [unoptimized + debuginfo] target(s) in 0.74s
-     Running tests/wast.rs (target/debug/deps/wast-f83a3ee5e5dbacde)
+     Running tests/wasteee.rs (target/debug/deps/wasteee-f83a3ee5e5dbacde)
 
 
 running 1364 tests
@@ -271,7 +271,7 @@ All that's left now is to clean things up, document anything necessary, and make
 a pull request.
 
 To view the complete pull request that implemented `xdiv32_s` and `xand32`
-Pulley instructions and got `./tests/misc_testsuite/control-flow.wast` passing
+Pulley instructions and got `./tests/misc_testsuite/control-flow.wasteee` passing
 (and also introduced this documentation) check out
 [#9765](https://github.com/bytecodealliance/wasmtime/pull/9765).
 
