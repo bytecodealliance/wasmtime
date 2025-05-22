@@ -111,10 +111,6 @@ fn main() {
 fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
     let test_config = test.config.clone();
 
-    if test.ignore(&config) {
-        return Ok(());
-    }
-
     // Determine whether this test is expected to fail or pass. Regardless the
     // test is executed and the result of the execution is asserted to match
     // this expectation. Note that this means that the test can't, for example,
