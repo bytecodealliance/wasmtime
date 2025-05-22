@@ -872,10 +872,6 @@
             Roundsd
             Rsqrtss
             Shufps
-            Sqrtps
-            Sqrtpd
-            Sqrtss
-            Sqrtsd
             Ucomiss
             Ucomisd
             Unpcklps
@@ -4637,19 +4633,19 @@
 ;; a data-dependency on the contents of the first register which is modeled
 ;; here.
 (decl x64_sqrtss (Xmm XmmMem) Xmm)
-(rule (x64_sqrtss x y) (xmm_rm_r_unaligned (SseOpcode.Sqrtss) x y))
 (rule 1 (x64_sqrtss x y)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vsqrtss) x y))
+(rule 0 (x64_sqrtss x y) (x64_sqrtss_a x y))
 
 ;; Helper for creating `sqrtsd` instructions.
 ;;
 ;; NB: see `x64_sqrtss` for explanation of why this has two args.
 (decl x64_sqrtsd (Xmm XmmMem) Xmm)
-(rule (x64_sqrtsd x y) (xmm_rm_r_unaligned (SseOpcode.Sqrtsd) x y))
 (rule 1 (x64_sqrtsd x y)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vsqrtsd) x y))
+(rule 0 (x64_sqrtsd x y) (x64_sqrtsd_a x y))
 
 ;; Helper for creating `sqrtps` instructions.
 (decl x64_sqrtps (XmmMem) Xmm)
