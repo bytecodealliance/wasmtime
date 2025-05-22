@@ -348,7 +348,7 @@ block0(v0: i64, v1: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pinsrd  $3, %xmm0, 0(%rdi), %xmm0
+;   pinsrd $0x3, (%rdi), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -374,7 +374,7 @@ block0(v0: i64, v1: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pinsrw  $3, %xmm0, 0(%rdi), %xmm0
+;   pinsrw $0x3, (%rdi), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -400,7 +400,7 @@ block0(v0: i64, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pinsrb  $3, %xmm0, 0(%rdi), %xmm0
+;   pinsrb $0x3, (%rdi), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -426,7 +426,7 @@ block0(v0: i64, v1: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrd  $3, %xmm0, 0(%rdi)
+;   pextrd $0x3, %xmm0, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -452,7 +452,7 @@ block0(v0: i64, v1: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrw  $3, %xmm0, 0(%rdi)
+;   pextrw $0x3, %xmm0, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

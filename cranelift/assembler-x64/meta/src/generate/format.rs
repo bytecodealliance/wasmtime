@@ -82,6 +82,7 @@ impl dsl::Format {
     }
 
     fn generate_rex_prefix(&self, f: &mut Formatter, rex: &dsl::Rex) {
+        use dsl::Location::*;
         use dsl::OperandKind::{FixedReg, Imm, Mem, Reg, RegMem};
         f.empty_line();
         f.comment("Possibly emit REX prefix.");
@@ -133,6 +134,13 @@ impl dsl::Format {
                 fmtln!(f, "let src = self.{src}.enc();");
                 fmtln!(f, "let rex = self.{dst}.as_rex_prefix(src, {bits});");
             }
+
+            [Reg(dst), Reg(xmm), Imm(_)] | [Reg(dst), Reg(xmm)] => {
+                fmtln!(f, "let reg = self.{dst}.enc();");
+                fmtln!(f, "let rm = self.xmm.enc();");
+                fmtln!(f, "let rex = RexPrefix::two_op(reg, rm, {bits});");
+            }
+
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
         }
 
@@ -140,6 +148,7 @@ impl dsl::Format {
     }
 
     fn generate_modrm_byte(&self, f: &mut Formatter, rex: &dsl::Rex) {
+        use dsl::Location::*;
         use dsl::OperandKind::{FixedReg, Imm, Mem, Reg, RegMem};
 
         if let [FixedReg(_), Imm(_)] = self.operands_by_kind().as_slice() {
@@ -187,6 +196,11 @@ impl dsl::Format {
                     "self.{mem}.encode_rex_suffixes(buf, off, reg, {bytes_at_end});"
                 );
             }
+
+            [Reg(dst), Reg(xmm), Imm(_)] | [Reg(dst), Reg(xmm)] => {
+                fmtln!(f, "self.xmm.encode_modrm(buf, self.{dst}.enc());");
+            }
+
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
         }
     }

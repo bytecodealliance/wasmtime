@@ -3058,33 +3058,6 @@ fn test_x64_emit() {
     // Xmm to int conversions, and conversely.
 
     insns.push((
-        Inst::xmm_to_gpr(SseOpcode::Movd, xmm0, w_rsi, OperandSize::Size32),
-        "660F7EC6",
-        "movd    %xmm0, %esi",
-    ));
-    insns.push((
-        Inst::xmm_to_gpr(SseOpcode::Movq, xmm2, w_rdi, OperandSize::Size64),
-        "66480F7ED7",
-        "movq    %xmm2, %rdi",
-    ));
-
-    insns.push((
-        Inst::xmm_to_gpr(SseOpcode::Pmovmskb, xmm10, w_rax, OperandSize::Size32),
-        "66410FD7C2",
-        "pmovmskb %xmm10, %eax",
-    ));
-    insns.push((
-        Inst::xmm_to_gpr(SseOpcode::Movmskps, xmm2, w_rax, OperandSize::Size32),
-        "0F50C2",
-        "movmskps %xmm2, %eax",
-    ));
-    insns.push((
-        Inst::xmm_to_gpr(SseOpcode::Movmskpd, xmm0, w_rcx, OperandSize::Size32),
-        "660F50C8",
-        "movmskpd %xmm0, %ecx",
-    ));
-
-    insns.push((
         Inst::gpr_to_xmm(
             SseOpcode::Movd,
             RegMem::reg(rax),

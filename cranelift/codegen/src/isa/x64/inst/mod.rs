@@ -146,13 +146,10 @@ impl Inst {
             // These use dynamic SSE opcodes.
             Inst::GprToXmm { op, .. }
             | Inst::XmmMovRM { op, .. }
-            | Inst::XmmMovRMImm { op, .. }
             | Inst::XmmRmR { op, .. }
             | Inst::XmmRmRUnaligned { op, .. }
             | Inst::XmmRmRBlend { op, .. }
             | Inst::XmmRmRImm { op, .. }
-            | Inst::XmmToGpr { op, .. }
-            | Inst::XmmToGprImm { op, .. }
             | Inst::XmmUnaryRmRImm { op, .. }
             | Inst::XmmUnaryRmRUnaligned { op, .. }
             | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
@@ -294,24 +291,6 @@ impl Inst {
             op,
             src: Xmm::unwrap_new(src),
             dst: dst.into(),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn xmm_to_gpr(
-        op: SseOpcode,
-        src: Reg,
-        dst: Writable<Reg>,
-        dst_size: OperandSize,
-    ) -> Inst {
-        debug_assert!(src.class() == RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        debug_assert!(dst_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        Inst::XmmToGpr {
-            op,
-            src: Xmm::unwrap_new(src),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-            dst_size,
         }
     }
 
@@ -761,15 +740,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}")
             }
 
-            Inst::XmmMovRMImm {
-                op, src, dst, imm, ..
-            } => {
-                let src = pretty_print_reg(src.to_reg(), 8);
-                let dst = dst.pretty_print(8);
-                let op = ljustify(op.to_string());
-                format!("{op} ${imm}, {src}, {dst}")
-            }
-
             Inst::XmmMovRMImmVex {
                 op, src, dst, imm, ..
             } => {
@@ -991,19 +961,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {dst}")
             }
 
-            Inst::XmmToGpr {
-                op,
-                src,
-                dst,
-                dst_size,
-            } => {
-                let dst_size = dst_size.to_bytes();
-                let src = pretty_print_reg(src.to_reg(), 8);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size);
-                let op = ljustify(op.to_string());
-                format!("{op} {src}, {dst}")
-            }
-
             Inst::XmmToGprVex {
                 op,
                 src,
@@ -1015,13 +972,6 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size);
                 let op = ljustify(op.to_string());
                 format!("{op} {src}, {dst}")
-            }
-
-            Inst::XmmToGprImm { op, src, dst, imm } => {
-                let src = pretty_print_reg(src.to_reg(), 8);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let op = ljustify(op.to_string());
-                format!("{op} ${imm}, {src}, {dst}")
             }
 
             Inst::XmmToGprImmVex { op, src, dst, imm } => {
@@ -1898,7 +1848,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
         Inst::XmmMovRM { src, dst, .. }
         | Inst::XmmMovRMVex { src, dst, .. }
-        | Inst::XmmMovRMImm { src, dst, .. }
         | Inst::XmmMovRMImmVex { src, dst, .. } => {
             collector.reg_use(src);
             dst.get_operands(collector);
@@ -1928,10 +1877,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(src);
             collector.reg_fixed_nonallocatable(*dst);
         }
-        Inst::XmmToGpr { src, dst, .. }
-        | Inst::XmmToGprVex { src, dst, .. }
-        | Inst::XmmToGprImm { src, dst, .. }
-        | Inst::XmmToGprImmVex { src, dst, .. } => {
+        Inst::XmmToGprVex { src, dst, .. } | Inst::XmmToGprImmVex { src, dst, .. } => {
             collector.reg_use(src);
             collector.reg_def(dst);
         }

@@ -176,7 +176,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm0
-;   pinsrb  $0, %xmm0, 0(%rdi), %xmm0
+;   pinsrb $0x0, (%rdi), %xmm0
 ;   uninit  %xmm7
 ;   pxor %xmm7, %xmm7
 ;   pshufb  %xmm0, %xmm7, %xmm0
@@ -208,7 +208,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm3
-;   pinsrw  $0, %xmm3, 0(%rdi), %xmm3
+;   pinsrw $0x0, (%rdi), %xmm3
 ;   pshuflw $0, %xmm3, %xmm6
 ;   pshufd  $0, %xmm6, %xmm0
 ;   movq    %rbp, %rsp

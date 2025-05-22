@@ -840,8 +840,6 @@ pub enum SseOpcode {
     Movdqa,
     Movdqu,
     Movlhps,
-    Movmskps,
-    Movmskpd,
     Movq,
     Movss,
     Movsd,
@@ -870,16 +868,8 @@ pub enum SseOpcode {
     Pcmpgtw,
     Pcmpgtd,
     Pcmpgtq,
-    Pextrb,
-    Pextrw,
-    Pextrd,
-    Pextrq,
-    Pinsrb,
-    Pinsrw,
-    Pinsrd,
     Pmaddubsw,
     Pmaddwd,
-    Pmovmskb,
     Pmovsxbd,
     Pmovsxbw,
     Pmovsxbq,
@@ -942,7 +932,6 @@ impl SseOpcode {
             | SseOpcode::Divss
             | SseOpcode::Movaps
             | SseOpcode::Movlhps
-            | SseOpcode::Movmskps
             | SseOpcode::Movss
             | SseOpcode::Movups
             | SseOpcode::Mulps
@@ -962,7 +951,6 @@ impl SseOpcode {
             | SseOpcode::Divsd
             | SseOpcode::Movapd
             | SseOpcode::Movd
-            | SseOpcode::Movmskpd
             | SseOpcode::Movq
             | SseOpcode::Movsd
             | SseOpcode::Movupd
@@ -981,10 +969,7 @@ impl SseOpcode {
             | SseOpcode::Pcmpgtb
             | SseOpcode::Pcmpgtw
             | SseOpcode::Pcmpgtd
-            | SseOpcode::Pextrw
-            | SseOpcode::Pinsrw
             | SseOpcode::Pmaddwd
-            | SseOpcode::Pmovmskb
             | SseOpcode::Pmulhw
             | SseOpcode::Pmulhuw
             | SseOpcode::Pmullw
@@ -1019,11 +1004,6 @@ impl SseOpcode {
             | SseOpcode::Packusdw
             | SseOpcode::Pblendvb
             | SseOpcode::Pcmpeqq
-            | SseOpcode::Pextrb
-            | SseOpcode::Pextrd
-            | SseOpcode::Pextrq
-            | SseOpcode::Pinsrb
-            | SseOpcode::Pinsrd
             | SseOpcode::Pmovsxbd
             | SseOpcode::Pmovsxbw
             | SseOpcode::Pmovsxbq
@@ -1060,7 +1040,6 @@ impl SseOpcode {
     /// Is `src2` with this opcode a scalar, as for lane insertions?
     pub(crate) fn has_scalar_src2(self) -> bool {
         match self {
-            SseOpcode::Pinsrb | SseOpcode::Pinsrw | SseOpcode::Pinsrd => true,
             SseOpcode::Pmovsxbw
             | SseOpcode::Pmovsxbd
             | SseOpcode::Pmovsxbq
@@ -1100,8 +1079,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Movdqa => "movdqa",
             SseOpcode::Movdqu => "movdqu",
             SseOpcode::Movlhps => "movlhps",
-            SseOpcode::Movmskps => "movmskps",
-            SseOpcode::Movmskpd => "movmskpd",
             SseOpcode::Movq => "movq",
             SseOpcode::Movss => "movss",
             SseOpcode::Movsd => "movsd",
@@ -1130,17 +1107,9 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pcmpgtw => "pcmpgtw",
             SseOpcode::Pcmpgtd => "pcmpgtd",
             SseOpcode::Pcmpgtq => "pcmpgtq",
-            SseOpcode::Pextrb => "pextrb",
-            SseOpcode::Pextrw => "pextrw",
-            SseOpcode::Pextrd => "pextrd",
-            SseOpcode::Pextrq => "pextrq",
-            SseOpcode::Pinsrb => "pinsrb",
-            SseOpcode::Pinsrw => "pinsrw",
-            SseOpcode::Pinsrd => "pinsrd",
             SseOpcode::Pmaddubsw => "pmaddubsw",
             SseOpcode::Pmaddwd => "pmaddwd",
 
-            SseOpcode::Pmovmskb => "pmovmskb",
             SseOpcode::Pmovsxbd => "pmovsxbd",
             SseOpcode::Pmovsxbw => "pmovsxbw",
             SseOpcode::Pmovsxbq => "pmovsxbq",

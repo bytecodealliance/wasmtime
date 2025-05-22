@@ -229,6 +229,14 @@ pub trait RegisterVisitor<R: Registers> {
         }
     }
 
+    /// Helper method to handle a write [`GprMem`] operand.
+    fn write_gpr_mem(&mut self, op: &mut GprMem<R::WriteGpr, R::ReadGpr>) {
+        match op {
+            GprMem::Gpr(r) => self.write_gpr(r),
+            GprMem::Mem(m) => self.read_amode(m),
+        }
+    }
+
     /// Helper method to handle a read-only [`GprMem`] operand.
     fn read_gpr_mem(&mut self, op: &mut GprMem<R::ReadGpr, R::ReadGpr>) {
         match op {

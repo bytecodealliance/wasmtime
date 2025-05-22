@@ -2695,36 +2695,17 @@ pub(crate) fn emit(
                 SseOpcode::Cmpsd => (LegacyPrefixes::_F2, 0x0FC2, 2),
                 SseOpcode::Insertps => (LegacyPrefixes::_66, 0x0F3A21, 3),
                 SseOpcode::Palignr => (LegacyPrefixes::_66, 0x0F3A0F, 3),
-                SseOpcode::Pinsrb => (LegacyPrefixes::_66, 0x0F3A20, 3),
-                SseOpcode::Pinsrw => (LegacyPrefixes::_66, 0x0FC4, 2),
-                SseOpcode::Pinsrd => (LegacyPrefixes::_66, 0x0F3A22, 3),
                 SseOpcode::Shufps => (LegacyPrefixes::None, 0x0FC6, 2),
                 SseOpcode::Pblendw => (LegacyPrefixes::_66, 0x0F3A0E, 3),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             let rex = RexFlags::from(*size);
-            let regs_swapped = match *op {
-                // These opcodes (and not the SSE2 version of PEXTRW) flip the operand
-                // encoding: `dst` in ModRM's r/m, `src` in ModRM's reg field.
-                SseOpcode::Pextrb | SseOpcode::Pextrd => true,
-                // The rest of the opcodes have the customary encoding: `dst` in ModRM's reg,
-                // `src` in ModRM's r/m field.
-                _ => false,
-            };
             match src2 {
                 RegMem::Reg { reg } => {
-                    if regs_swapped {
-                        emit_std_reg_reg(sink, prefix, opcode, len, reg, dst, rex);
-                    } else {
-                        emit_std_reg_reg(sink, prefix, opcode, len, dst, reg, rex);
-                    }
+                    emit_std_reg_reg(sink, prefix, opcode, len, dst, reg, rex);
                 }
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state.frame_layout(), sink);
-                    assert!(
-                        !regs_swapped,
-                        "No existing way to encode a mem argument in the ModRM r/m field."
-                    );
                     // N.B.: bytes_at_end == 1, because of the `imm` byte below.
                     emit_std_reg_mem(sink, prefix, opcode, len, dst, addr, rex, 1);
                 }
@@ -2756,71 +2737,6 @@ pub(crate) fn emit(
             };
             let dst = &dst.finalize(state.frame_layout(), sink);
             emit_std_reg_mem(sink, prefix, opcode, 2, src, dst, RexFlags::clear_w(), 0);
-        }
-
-        Inst::XmmMovRMImm { op, src, dst, imm } => {
-            let src = src.to_reg();
-            let dst = dst.clone();
-
-            let (w, prefix, opcode) = match op {
-                SseOpcode::Pextrb => (false, LegacyPrefixes::_66, 0x0F3A14),
-                SseOpcode::Pextrw => (false, LegacyPrefixes::_66, 0x0F3A15),
-                SseOpcode::Pextrd => (false, LegacyPrefixes::_66, 0x0F3A16),
-                SseOpcode::Pextrq => (true, LegacyPrefixes::_66, 0x0F3A16),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            let rex = if w {
-                RexFlags::set_w()
-            } else {
-                RexFlags::clear_w()
-            };
-            let dst = &dst.finalize(state.frame_layout(), sink);
-            emit_std_reg_mem(sink, prefix, opcode, 3, src, dst, rex, 1);
-            sink.put1(*imm);
-        }
-
-        Inst::XmmToGpr {
-            op,
-            src,
-            dst,
-            dst_size,
-        } => {
-            let src = src.to_reg();
-            let dst = dst.to_reg().to_reg();
-
-            let (prefix, opcode, dst_first) = match op {
-                // Movd and movq use the same opcode; the presence of the REX prefix (set below)
-                // actually determines which is used.
-                SseOpcode::Movd | SseOpcode::Movq => (LegacyPrefixes::_66, 0x0F7E, false),
-                SseOpcode::Movmskps => (LegacyPrefixes::None, 0x0F50, true),
-                SseOpcode::Movmskpd => (LegacyPrefixes::_66, 0x0F50, true),
-                SseOpcode::Pmovmskb => (LegacyPrefixes::_66, 0x0FD7, true),
-                _ => panic!("unexpected opcode {op:?}"),
-            };
-            let rex = RexFlags::from(*dst_size);
-            let (src, dst) = if dst_first { (dst, src) } else { (src, dst) };
-
-            emit_std_reg_reg(sink, prefix, opcode, 2, src, dst, rex);
-        }
-
-        Inst::XmmToGprImm { op, src, dst, imm } => {
-            use OperandSize as OS;
-
-            let src = src.to_reg();
-            let dst = dst.to_reg().to_reg();
-
-            let (prefix, opcode, opcode_bytes, dst_size, dst_first) = match op {
-                SseOpcode::Pextrb => (LegacyPrefixes::_66, 0x0F3A14, 3, OS::Size32, false),
-                SseOpcode::Pextrw => (LegacyPrefixes::_66, 0x0FC5, 2, OS::Size32, true),
-                SseOpcode::Pextrd => (LegacyPrefixes::_66, 0x0F3A16, 3, OS::Size32, false),
-                SseOpcode::Pextrq => (LegacyPrefixes::_66, 0x0F3A16, 3, OS::Size64, false),
-                _ => panic!("unexpected opcode {op:?}"),
-            };
-            let rex = RexFlags::from(dst_size);
-            let (src, dst) = if dst_first { (dst, src) } else { (src, dst) };
-
-            emit_std_reg_reg(sink, prefix, opcode, opcode_bytes, src, dst, rex);
-            sink.put1(*imm);
         }
 
         Inst::GprToXmm {
