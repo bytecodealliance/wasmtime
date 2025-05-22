@@ -20,7 +20,7 @@ Compilers work with large data structures representing programs, and it quickly
 gets unwieldy to generate test data programmatically. File-level tests make it
 easier to provide substantial input functions for the compiler tests.
 
-File tests are `*.clif` files in the `filetests/` directory
+File tests are `*.clif` files in the `file tests/` directory
 hierarchy. Each file has a header describing what to test followed by a number
 of input functions in the :doc:`Cranelift textual intermediate representation
 <ir>`:
@@ -71,7 +71,7 @@ This example will run the legalizer test twice. Both runs will have
 `opt_level=best`, but they will have different `is_pic` settings. The 32-bit
 run will also have the RISC-V specific flag `supports_m` disabled.
 
-The filetests are run automatically as part of `cargo test`, and they can
+The file tests are run automatically as part of `cargo test`, and they can
 also be run manually with the `clif-util test` command.
 
 By default, the test runner will spawn a thread pool with as many threads as
