@@ -31,21 +31,21 @@ struct wasmtime_component_val;
 struct wasmtime_component_valrecord_entry;
 
 #define DECLARE_VEC(name, type)                                                \
-  /// \brief A vec of a type                                                   \
+  /* \brief A vec of a type */                                                 \
   typedef struct name {                                                        \
     size_t size;                                                               \
     type *data;                                                                \
   } name##_t;                                                                  \
                                                                                \
-  /// \brief Create vec from \p ptr and \p size                                \
+  /* \brief Create vec from \p ptr and \p size */                              \
   WASM_API_EXTERN void name##_new(name##_t *out, size_t size, type *ptr);      \
-  /// \brief Create an empty vec                                               \
+  /* \brief Create an empty vec */                                             \
   WASM_API_EXTERN void name##_new_empty(name##_t *out);                        \
-  /// \brief Create a vec with length \p size                                  \
+  /* \brief Create a vec with length \p size */                                \
   WASM_API_EXTERN void name##_new_uninit(name##_t *out, size_t size);          \
-  /// \brief Copy \p src to \p dst                                             \
+  /* \brief Copy \p src to \p dst */                                           \
   WASM_API_EXTERN void name##_copy(name##_t *dst, const name##_t *src);        \
-  /// \brief Delete \p value                                                   \
+  /* \brief Delete \p value */                                                 \
   WASM_API_EXTERN void name##_delete(name##_t *value);
 
 DECLARE_VEC(wasmtime_component_vallist, struct wasmtime_component_val)
