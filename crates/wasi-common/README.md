@@ -4,7 +4,7 @@
 <strong>A <a href="https://bytecodealliance.org/">Bytecode Alliance</a> project</strong>
 
   <p>
-    <strong>A library providing a common implementation of WASI hostcalls for re-use in any WASI-enabled runtime.</strong>
+    <strong>A library providing a common implementation of WASI hostcalls for reuse in any WASI-enabled runtime.</strong>
   </p>
 
   <p>
@@ -15,7 +15,7 @@
 </div>
 
 The `wasi-common` crate will ultimately serve as a library providing a common implementation of
-WASI hostcalls for re-use in any WASI (and potentially non-WASI) runtimes
+WASI hostcalls for reuse in any WASI (and potentially non-WASI) runtimes
 such as [Wasmtime] and [Lucet].
 
 The library is an adaption of [lucet-wasi] crate from the [Lucet] project, and it is
