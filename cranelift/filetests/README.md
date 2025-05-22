@@ -1,7 +1,7 @@
-# filetests
+# file tests
 
 Filetests is a crate that contains multiple test suites for testing
-various parts of cranelift. Each folder under `cranelift/filetests/filetests` is a different
+various parts of cranelift. Each folder under `cranelift/file tests/file tests` is a different
 test suite that tests different parts.
 
 ## Adding a runtest
@@ -27,7 +27,7 @@ block0(v0: f32, v1: f32):
 ```
 
 Since this is a run test for `band` we can put it in: `runtests/band.clif`.
-Once we have the file in the test suite we can run it by invoking: `cargo run -- test filetests/filetests/runtests/band.clif` from the cranelift directory. 
+Once we have the file in the test suite we can run it by invoking: `cargo run -- test file tests/file tests/runtests/band.clif` from the cranelift directory. 
 
 
 The first lines tell `clif-util` what kind of tests we want to run on this file. 
