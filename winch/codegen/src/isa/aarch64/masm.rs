@@ -496,7 +496,21 @@ impl Masm for MacroAssembler {
         // ensure that the real SP is 16-byte aligned in case control flow is
         // transferred to a signal handler.
         self.with_aligned_sp(|masm| {
-            masm.add(dst, lhs, rhs, size)?;
+            match (rhs, lhs, dst) {
+                (RegImm::Imm(v), rn, rd) => {
+                    let imm = match v {
+                        I::I32(v) => v as u64,
+                        I::I64(v) => v,
+                        _ => bail!(CodeGenError::unsupported_imm()),
+                    };
+
+                    masm.asm.adds_ir(imm, rn, rd, size);
+                }
+
+                (RegImm::Reg(rm), rn, rd) => {
+                    masm.asm.adds_rrr(rm, rn, rd, size);
+                }
+            }
             masm.asm.trapif(Cond::Hs, trap);
             Ok(())
         })

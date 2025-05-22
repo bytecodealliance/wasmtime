@@ -342,9 +342,22 @@ impl Assembler {
         self.alu_rrr_extend(ALUOp::Add, rm, rn, rd, size);
     }
 
+    /// Add with three registers, setting overflow flags.
+    pub fn adds_rrr(&mut self, rm: Reg, rn: Reg, rd: WritableReg, size: OperandSize) {
+        self.alu_rrr_extend(ALUOp::AddS, rm, rn, rd, size);
+    }
+
     /// Add immediate and register.
     pub fn add_ir(&mut self, imm: u64, rn: Reg, rd: WritableReg, size: OperandSize) {
-        let alu_op = ALUOp::Add;
+        self.alu_ir(ALUOp::Add, imm, rn, rd, size)
+    }
+
+    /// Add immediate and register, setting overflow flags.
+    pub fn adds_ir(&mut self, imm: u64, rn: Reg, rd: WritableReg, size: OperandSize) {
+        self.alu_ir(ALUOp::AddS, imm, rn, rd, size)
+    }
+
+    fn alu_ir(&mut self, alu_op: ALUOp, imm: u64, rn: Reg, rd: WritableReg, size: OperandSize) {
         if let Some(imm) = Imm12::maybe_from_u64(imm) {
             self.alu_rri(alu_op, imm, rn, rd, size);
         } else {

@@ -44,7 +44,7 @@
 ;;       ldur    w1, [x28, #0xc]
 ;;       ldur    x2, [x9, #0x48]
 ;;       mov     w3, w1
-;;       add     x3, x3, #4
+;;       adds    x3, x3, #4
 ;;       b.hs    #0x134
 ;;   68: cmp     x3, x2, uxtx
 ;;       b.hi    #0x138
@@ -59,7 +59,7 @@
 ;;       ldur    w1, [x28, #0xc]
 ;;       ldur    x2, [x9, #0x48]
 ;;       mov     w3, w1
-;;       add     x3, x3, #8
+;;       adds    x3, x3, #8
 ;;       b.hs    #0x13c
 ;;   a4: cmp     x3, x2, uxtx
 ;;       b.hi    #0x140
@@ -77,7 +77,7 @@
 ;;       mov     w3, w1
 ;;       mov     w16, #3
 ;;       movk    w16, #0x10, lsl #16
-;;       add     x3, x3, x16, uxtx
+;;       adds    x3, x3, x16, uxtx
 ;;       b.hs    #0x144
 ;;   ec: cmp     x3, x2, uxtx
 ;;       b.hi    #0x148
