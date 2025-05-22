@@ -172,10 +172,10 @@ pub type ContTableElem = Option<VMContObj>;
 
 /// The maximum of the sizes of any of the table element types
 #[allow(dead_code, reason = "Only used if pooling allocator is enabled")]
-pub const MAX_TABLE_ELEM_SIZE: usize = {
+pub const NOMINAL_MAX_TABLE_ELEM_SIZE: usize = {
+    // ContTableElem intentionally excluded for "nominal" calculation.
     let sizes = [
         core::mem::size_of::<FuncTableElem>(),
-        core::mem::size_of::<ContTableElem>(),
         core::mem::size_of::<Option<VMGcRef>>(),
     ];
 
@@ -429,7 +429,7 @@ impl Table {
             })),
             TableElementType::Cont => Ok(Self::from(DynamicContTable {
                 elements: vec![None; minimum],
-                maximum: maximum,
+                maximum,
             })),
         }
     }
