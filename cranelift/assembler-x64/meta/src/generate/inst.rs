@@ -225,7 +225,15 @@ impl dsl::Inst {
                             &self.mnemonic
                         };
                         let ordered_ops = self.format.generate_att_style_operands();
-                        let implicit_ops = self.format.generate_implicit_operands();
+                        let mut implicit_ops = self.format.generate_implicit_operands();
+                        if self.has_trap {
+                            fmtln!(f, "let trap = self.trap;");
+                            if implicit_ops.is_empty() {
+                                implicit_ops.push_str(" ;; {trap}");
+                            } else {
+                                implicit_ops.push_str(", {trap}");
+                            }
+                        }
                         fmtln!(f, "write!(f, \"{inst_name} {ordered_ops}{implicit_ops}\")");
                     },
                 );
