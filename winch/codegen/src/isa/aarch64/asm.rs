@@ -30,6 +30,7 @@ use cranelift_codegen::{
     },
     settings,
 };
+use wasmtime_math::{f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
 
 impl From<OperandSize> for inst::OperandSize {
     fn from(size: OperandSize) -> Self {
@@ -1119,43 +1120,18 @@ impl Assembler {
         out_size: OperandSize,
         rd: Writable<Reg>,
     ) {
-        use OperandSize::*;
-
-        match in_size {
-            S32 => {
-                let min = match (signed, out_size) {
-                    (true, S8) => i8::MIN as f32 - 1.,
-                    (true, S16) => i16::MIN as f32 - 1.,
-                    (true, S32) => i32::MIN as f32, // I32_MIN - 1 isn't precisely representable as a f32.
-                    (true, S64) => i64::MIN as f32, // I64_MIN - 1 isn't precisely representable as a f32.
-
-                    (false, _) => -1.,
-
-                    (_, S128) => {
-                        unimplemented!("floating point conversion to 128bit are not supported")
-                    }
-                };
-
-                self.load_const_fp(min.to_bits() as u64, rd, in_size);
+        let min = match in_size {
+            OperandSize::S32 => {
+                let (min, _) = f32_cvt_to_int_bounds(signed, out_size.num_bits().into());
+                u64::from(min.to_bits())
             }
-            S64 => {
-                let min = match (signed, out_size) {
-                    (true, S8) => i8::MIN as f64 - 1.,
-                    (true, S16) => i16::MIN as f64 - 1.,
-                    (true, S32) => i32::MIN as f64 - 1.,
-                    (true, S64) => i64::MIN as f64,
-
-                    (false, _) => -1.,
-
-                    (_, S128) => {
-                        unimplemented!("floating point conversion to 128bit are not supported")
-                    }
-                };
-
-                self.load_const_fp(min.to_bits(), rd, in_size);
+            OperandSize::S64 => {
+                let (min, _) = f64_cvt_to_int_bounds(signed, out_size.num_bits().into());
+                min.to_bits()
             }
             s => unreachable!("unsupported floating-point size: {}bit", s.num_bits()),
-        }
+        };
+        self.load_const_fp(min, rd, in_size);
     }
 
     /// Load the max value for an integer of size out_size, as a floating-point
@@ -1167,49 +1143,18 @@ impl Assembler {
         out_size: OperandSize,
         rd: Writable<Reg>,
     ) {
-        use OperandSize::*;
-
-        match in_size {
-            S32 => {
-                let max = match (signed, out_size) {
-                    (true, S8) => i8::MAX as f32 + 1.,
-                    (true, S16) => i16::MAX as f32 + 1.,
-                    (true, S32) => i32::MAX as f32 + 1.,
-                    (true, S64) => (i64::MAX as u64 + 1) as f32,
-
-                    (false, S8) => u8::MAX as f32 + 1.,
-                    (false, S16) => u16::MAX as f32 + 1.,
-                    (false, S32) => u32::MAX as f32 + 1.,
-                    (false, S64) => (u64::MAX as u128 + 1) as f32,
-
-                    (_, S128) => {
-                        unimplemented!("floating point conversion to 128bit are not supported")
-                    }
-                };
-
-                self.load_const_fp(max.to_bits() as u64, rd, in_size);
+        let max = match in_size {
+            OperandSize::S32 => {
+                let (_, max) = f32_cvt_to_int_bounds(signed, out_size.num_bits().into());
+                u64::from(max.to_bits())
             }
-            S64 => {
-                let max = match (signed, out_size) {
-                    (true, S8) => i8::MAX as f64 + 1.,
-                    (true, S16) => i16::MAX as f64 + 1.,
-                    (true, S32) => i32::MAX as f64 + 1.,
-                    (true, S64) => (i64::MAX as u64 + 1) as f64,
-
-                    (false, S8) => u8::MAX as f64 + 1.,
-                    (false, S16) => u16::MAX as f64 + 1.,
-                    (false, S32) => u32::MAX as f64 + 1.,
-                    (false, S64) => (u64::MAX as u128 + 1) as f64,
-
-                    (_, S128) => {
-                        unimplemented!("floating point conversion to 128bit are not supported")
-                    }
-                };
-
-                self.load_const_fp(max.to_bits(), rd, in_size);
+            OperandSize::S64 => {
+                let (_, max) = f64_cvt_to_int_bounds(signed, out_size.num_bits().into());
+                max.to_bits()
             }
             s => unreachable!("unsupported floating-point size: {}bit", s.num_bits()),
-        }
+        };
+        self.load_const_fp(max, rd, in_size);
     }
 
     /// Load the floating point number encoded in `n` of size `size`, into `rd`.
