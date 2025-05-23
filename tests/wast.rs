@@ -242,6 +242,7 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
         let result = engine.and_then(|engine| {
             let store = Store::new(&engine, ());
             let mut wast_context = WastContext::new(store, Async::Yes);
+            wast_context.generate_dwarf(true);
             wast_context.register_spectest(&SpectestConfig {
                 use_shared_memory: true,
                 suppress_prints: true,
