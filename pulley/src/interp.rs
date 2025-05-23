@@ -13,7 +13,7 @@ use core::ops::ControlFlow;
 use core::ops::{Index, IndexMut};
 use core::ptr::NonNull;
 use pulley_macros::interp_disable_if_cfg;
-use wasmtime_math::WasmFloat;
+use wasmtime_math::{WasmFloat, f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
 
 mod debug;
 #[cfg(all(not(pulley_tail_calls), not(pulley_assume_llvm_makes_tail_calls)))]
@@ -1132,7 +1132,19 @@ impl Interpreter<'_> {
         unsafe { addr.store_ne::<T, I>(self, val) }
     }
 
-    fn check_xnn_from_fnn<I: Encode>(&mut self, val: f64, lo: f64, hi: f64) -> ControlFlow<Done> {
+    fn check_xnn_from_f32<I: Encode>(
+        &mut self,
+        val: f32,
+        (lo, hi): (f32, f32),
+    ) -> ControlFlow<Done> {
+        self.check_xnn_from_f64::<I>(val.into(), (lo.into(), hi.into()))
+    }
+
+    fn check_xnn_from_f64<I: Encode>(
+        &mut self,
+        val: f64,
+        (lo, hi): (f64, f64),
+    ) -> ControlFlow<Done> {
         if val != val {
             return self.done_trap_kind::<I>(Some(TrapKind::BadConversionToInteger));
         }
@@ -3321,64 +3333,56 @@ impl ExtendedOpVisitor for Interpreter<'_> {
 
     fn x32_from_f32_s(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32();
-        self.check_xnn_from_fnn::<crate::X32FromF32S>(a.into(), -2147483649.0, 2147483648.0)?;
+        self.check_xnn_from_f32::<crate::X32FromF32S>(a, f32_cvt_to_int_bounds(true, 32))?;
         self.state[dst].set_i32(a as i32);
         ControlFlow::Continue(())
     }
 
     fn x32_from_f32_u(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32();
-        self.check_xnn_from_fnn::<crate::X32FromF32U>(a.into(), -1.0, 4294967296.0)?;
+        self.check_xnn_from_f32::<crate::X32FromF32U>(a, f32_cvt_to_int_bounds(false, 32))?;
         self.state[dst].set_u32(a as u32);
         ControlFlow::Continue(())
     }
 
     fn x64_from_f32_s(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32();
-        self.check_xnn_from_fnn::<crate::X64FromF32S>(
-            a.into(),
-            -9223372036854777856.0,
-            9223372036854775808.0,
-        )?;
+        self.check_xnn_from_f32::<crate::X64FromF32S>(a, f32_cvt_to_int_bounds(true, 64))?;
         self.state[dst].set_i64(a as i64);
         ControlFlow::Continue(())
     }
 
     fn x64_from_f32_u(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32();
-        self.check_xnn_from_fnn::<crate::X64FromF32U>(a.into(), -1.0, 18446744073709551616.0)?;
+        self.check_xnn_from_f32::<crate::X64FromF32U>(a, f32_cvt_to_int_bounds(false, 64))?;
         self.state[dst].set_u64(a as u64);
         ControlFlow::Continue(())
     }
 
     fn x32_from_f64_s(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f64();
-        self.check_xnn_from_fnn::<crate::X32FromF64S>(a, -2147483649.0, 2147483648.0)?;
+        self.check_xnn_from_f64::<crate::X32FromF64S>(a, f64_cvt_to_int_bounds(true, 32))?;
         self.state[dst].set_i32(a as i32);
         ControlFlow::Continue(())
     }
 
     fn x32_from_f64_u(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f64();
-        self.check_xnn_from_fnn::<crate::X32FromF64U>(a, -1.0, 4294967296.0)?;
+        self.check_xnn_from_f64::<crate::X32FromF64U>(a, f64_cvt_to_int_bounds(false, 32))?;
         self.state[dst].set_u32(a as u32);
         ControlFlow::Continue(())
     }
 
     fn x64_from_f64_s(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f64();
-        self.check_xnn_from_fnn::<crate::X64FromF64S>(
-            a,
-            -9223372036854777856.0,
-            9223372036854775808.0,
-        )?;
+        self.check_xnn_from_f64::<crate::X64FromF64S>(a, f64_cvt_to_int_bounds(true, 64))?;
         self.state[dst].set_i64(a as i64);
         ControlFlow::Continue(())
     }
 
     fn x64_from_f64_u(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f64();
-        self.check_xnn_from_fnn::<crate::X64FromF64U>(a, -1.0, 18446744073709551616.0)?;
+        self.check_xnn_from_f64::<crate::X64FromF64U>(a, f64_cvt_to_int_bounds(false, 64))?;
         self.state[dst].set_u64(a as u64);
         ControlFlow::Continue(())
     }

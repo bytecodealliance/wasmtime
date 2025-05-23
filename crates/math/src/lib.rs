@@ -21,6 +21,47 @@
 #[cfg(feature = "std")]
 extern crate std;
 
+/// Returns the bounds for guarding a trapping f32-to-int conversion.
+///
+/// This function will return two floats, a lower bound and an upper bound,
+/// which can be used to test whether a WebAssembly f32-to-int conversion
+/// should trap. The float being converted must be greater than the lower bound
+/// and less than the upper bound for the conversion to proceed, otherwise a
+/// trap or infinity value should be generated.
+///
+/// The `signed` argument indicates whether a conversion to a signed integer is
+/// happening. If `false` a conversion to an unsigned integer is happening. The
+/// `out_bits` argument indicates how many bits are in the integer being
+/// converted to.
+pub const fn f32_cvt_to_int_bounds(signed: bool, out_bits: u32) -> (f32, f32) {
+    match (signed, out_bits) {
+        (true, 8) => (i8::min_value() as f32 - 1., i8::max_value() as f32 + 1.),
+        (true, 16) => (i16::min_value() as f32 - 1., i16::max_value() as f32 + 1.),
+        (true, 32) => (-2147483904.0, 2147483648.0),
+        (true, 64) => (-9223373136366403584.0, 9223372036854775808.0),
+        (false, 8) => (-1., u8::max_value() as f32 + 1.),
+        (false, 16) => (-1., u16::max_value() as f32 + 1.),
+        (false, 32) => (-1., 4294967296.0),
+        (false, 64) => (-1., 18446744073709551616.0),
+        _ => unreachable!(),
+    }
+}
+
+/// Same as [`f32_cvt_to_int_bounds`] but used for f64-to-int conversions.
+pub const fn f64_cvt_to_int_bounds(signed: bool, out_bits: u32) -> (f64, f64) {
+    match (signed, out_bits) {
+        (true, 8) => (i8::min_value() as f64 - 1., i8::max_value() as f64 + 1.),
+        (true, 16) => (i16::min_value() as f64 - 1., i16::max_value() as f64 + 1.),
+        (true, 32) => (-2147483649.0, 2147483648.0),
+        (true, 64) => (-9223372036854777856.0, 9223372036854775808.0),
+        (false, 8) => (-1., u8::max_value() as f64 + 1.),
+        (false, 16) => (-1., u16::max_value() as f64 + 1.),
+        (false, 32) => (-1., 4294967296.0),
+        (false, 64) => (-1., 18446744073709551616.0),
+        _ => unreachable!(),
+    }
+}
+
 pub trait WasmFloat {
     fn wasm_trunc(self) -> Self;
     fn wasm_copysign(self, sign: Self) -> Self;
