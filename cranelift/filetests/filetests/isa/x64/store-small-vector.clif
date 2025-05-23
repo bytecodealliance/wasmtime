@@ -11,7 +11,7 @@ block0(v0: i8x2, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pextrw  $0, %xmm0, %rcx
+;   pextrw $0x0, %xmm0, %ecx
 ;   movw    %cx, 0(%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

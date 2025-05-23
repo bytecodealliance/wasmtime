@@ -15,7 +15,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   addps %xmm1, %xmm0
 ;   movdqa  %xmm0, %xmm1
 ;   movl    $2143289344, %esi
-;   movd    %esi, %xmm5
+;   movd %esi, %xmm5
 ;   shufps  $0, %xmm5, const(0), %xmm5
 ;   cmpps   $3, %xmm0, %xmm1, %xmm0
 ;   andps %xmm0, %xmm5
@@ -64,7 +64,7 @@ block0(v0: f64, v1: f64):
 ;   addsd %xmm1, %xmm0
 ;   movdqa  %xmm0, %xmm7
 ;   movabsq $9221120237041090560, %r11
-;   movq    %r11, %xmm5
+;   movq %r11, %xmm5
 ;   cmppd   $3, %xmm0, %xmm7, %xmm0
 ;   andpd %xmm0, %xmm5
 ;   andnpd %xmm7, %xmm0
@@ -103,7 +103,7 @@ block0(v0: f32, v1: f32):
 ;   addss %xmm1, %xmm0
 ;   movdqa  %xmm0, %xmm7
 ;   movl    $2143289344, %r11d
-;   movd    %r11d, %xmm5
+;   movd %r11d, %xmm5
 ;   cmpps   $3, %xmm0, %xmm7, %xmm0
 ;   andps %xmm0, %xmm5
 ;   andnps %xmm7, %xmm0

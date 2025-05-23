@@ -31,7 +31,7 @@ function %f0(i32) -> i32, f32, f64 {
 ;   movq    %r15, 48(%rsp)
 ; block0:
 ;   movabsq $4607182418800017408, %rcx
-;   movq    %rcx, %xmm1
+;   movq %rcx, %xmm1
 ;   movdqu  %xmm1, rsp(0 + virtual offset)
 ;   load_ext_name %g+0, %rdx
 ;   call    *%rdx; jmp MachLabel(1); catch [None: MachLabel(2)]
@@ -148,9 +148,9 @@ function %f1(i32) -> i32, f32, f64 {
 ; block1:
 ;   movl    $42, %eax
 ;   movl    $1167171584, %ecx
-;   movd    %ecx, %xmm0
+;   movd %ecx, %xmm0
 ;   movabsq $4671813911303946240, %rcx
-;   movq    %rcx, %xmm1
+;   movq %rcx, %xmm1
 ;   testl   %edi, %edi
 ;   jnz     label2; j label3
 ; block2:
@@ -161,7 +161,7 @@ function %f1(i32) -> i32, f32, f64 {
 ;   jmp     label7
 ; block4:
 ;   movabsq $4607182418800017408, %r10
-;   movq    %r10, %xmm1
+;   movq %r10, %xmm1
 ;   movdqu  %xmm1, rsp(0 + virtual offset)
 ;   load_ext_name %g+0, %r11
 ;   call    *%r11; jmp MachLabel(6); catch [None: MachLabel(5)]
@@ -188,7 +188,7 @@ function %f1(i32) -> i32, f32, f64 {
 ;   movq    %r11, %rsi
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
-;   movq    %rsi, %xmm1
+;   movq %rsi, %xmm1
 ;   movq    16(%rsp), %rbx
 ;   movq    24(%rsp), %r12
 ;   movq    32(%rsp), %r13
@@ -295,7 +295,7 @@ function %f2(i32) -> i32, f32, f64 {
 ;   movq    %r15, 48(%rsp)
 ; block0:
 ;   movabsq $4607182418800017408, %rcx
-;   movq    %rcx, %xmm1
+;   movq %rcx, %xmm1
 ;   movdqu  %xmm1, rsp(0 + virtual offset)
 ;   load_ext_name %g+0, %rdx
 ;   call    *%rdx; jmp MachLabel(1); catch [None: MachLabel(2)]

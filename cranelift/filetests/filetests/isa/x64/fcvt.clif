@@ -1209,11 +1209,11 @@ block0(v0: i64x2):
 ;   uninit  %xmm1
 ;   xorpd %xmm1, %xmm1
 ;   movdqa  %xmm0, %xmm6
-;   movq    %xmm6, %r9
+;   movq %xmm6, %r9
 ;   movdqa  %xmm1, %xmm0
 ;   cvtsi2sdq %r9, %xmm0
 ;   pshufd  $238, %xmm6, %xmm2
-;   movq    %xmm2, %rcx
+;   movq %xmm2, %rcx
 ;   cvtsi2sdq %rcx, %xmm1
 ;   unpcklpd %xmm0, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
