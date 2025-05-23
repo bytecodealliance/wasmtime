@@ -9,22 +9,53 @@
 extern "C" {
 #endif
 
+/// \brief Discriminant used in #wasmtime_component_val_t::kind
 typedef uint8_t wasmtime_component_valkind_t;
 
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a bool
 #define WASMTIME_COMPONENT_BOOL 0
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a s8
 #define WASMTIME_COMPONENT_S8 1
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a u8
 #define WASMTIME_COMPONENT_U8 2
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a s16
 #define WASMTIME_COMPONENT_S16 3
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a u16
 #define WASMTIME_COMPONENT_U16 4
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a s32
 #define WASMTIME_COMPONENT_S32 5
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a u32
 #define WASMTIME_COMPONENT_U32 6
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a s64
 #define WASMTIME_COMPONENT_S64 7
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a u64
 #define WASMTIME_COMPONENT_U64 8
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a f32
 #define WASMTIME_COMPONENT_F32 9
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a f64
 #define WASMTIME_COMPONENT_F64 10
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a char
 #define WASMTIME_COMPONENT_CHAR 11
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a string
 #define WASMTIME_COMPONENT_STRING 12
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a list
 #define WASMTIME_COMPONENT_LIST 13
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a record
 #define WASMTIME_COMPONENT_RECORD 14
 
 struct wasmtime_component_val;
