@@ -1,3 +1,5 @@
+/// \file wasmtime/component/func.h
+
 #ifndef WASMTIME_COMPONENT_FUNC_H
 #define WASMTIME_COMPONENT_FUNC_H
 

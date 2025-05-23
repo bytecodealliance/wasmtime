@@ -1,3 +1,5 @@
+/// \file wasmtime/component/linker.h
+
 #ifndef WASMTIME_COMPONENT_LINKER_H
 #define WASMTIME_COMPONENT_LINKER_H
 
