@@ -29,7 +29,7 @@
 ;;       stur    x3, [x28]
 ;;       ldur    x0, [x28]
 ;;       ldur    x1, [x28, #8]
-;;       sub     x0, x0, xzr
+;;       neg     x0, x0
 ;;       ror     x1, x1, x0
 ;;       mov     x0, x1
 ;;       add     x28, x28, #0x20
