@@ -13,7 +13,7 @@ block0(v0: i64, v1: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movd    %xmm0, %ecx
+;   movd %xmm0, %ecx
 ;   orl %ecx, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -42,7 +42,7 @@ block0(v0: i64, v1: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movd    %xmm0, %ecx
+;   movd %xmm0, %ecx
 ;   orl %ecx, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -71,7 +71,7 @@ block0(v0: i64, v1: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movd    %xmm0, %ecx
+;   movd %xmm0, %ecx
 ;   andl %ecx, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -100,7 +100,7 @@ block0(v0: i64, v1: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movd    %xmm0, %ecx
+;   movd %xmm0, %ecx
 ;   andl %ecx, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -129,7 +129,7 @@ block0(v0: i64, v1: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movd    %xmm0, %ecx
+;   movd %xmm0, %ecx
 ;   xorl %ecx, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -158,7 +158,7 @@ block0(v0: i64, v1: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movd    %xmm0, %ecx
+;   movd %xmm0, %ecx
 ;   xorl %ecx, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

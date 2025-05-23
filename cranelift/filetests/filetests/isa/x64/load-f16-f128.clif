@@ -12,7 +12,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm0
-;   pinsrw  $0, %xmm0, 0(%rdi), %xmm0
+;   pinsrw $0x0, (%rdi), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

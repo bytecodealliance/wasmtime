@@ -1,7 +1,12 @@
+/// \file wasmtime/component/func.h
+
 #ifndef WASMTIME_COMPONENT_FUNC_H
 #define WASMTIME_COMPONENT_FUNC_H
 
+#include <wasmtime/component/val.h>
 #include <wasmtime/conf.h>
+#include <wasmtime/error.h>
+#include <wasmtime/store.h>
 
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
 
@@ -22,6 +27,19 @@ typedef struct wasmtime_component_func {
   /// Internal index within the store.
   size_t index;
 } wasmtime_component_func_t;
+
+/// \brief Invokes \p func with the \p args given and returns the result.
+///
+/// The \p args provided must match the parameters that this function takes in
+/// terms of their types and the number of parameters. Results will be written
+/// to the \p results provided if the call completes successfully. The initial
+/// types of the values in \p results are ignored and values are overwritten to
+/// write the result. It's required that the \p results_size exactly matches the
+/// number of results that this function produces.
+WASM_API_EXTERN wasmtime_error_t *wasmtime_component_func_call(
+    const wasmtime_component_func_t *func, wasmtime_context_t *context,
+    const wasmtime_component_val_t *args, size_t args_size,
+    wasmtime_component_val_t *results, size_t results_size);
 
 #ifdef __cplusplus
 } // extern "C"

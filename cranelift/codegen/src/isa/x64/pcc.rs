@@ -451,7 +451,7 @@ pub(crate) fn check(
 
         Inst::XmmToGprImmVex { dst, .. } => ensure_no_fact(vcode, dst.to_writable_reg().to_reg()),
 
-        Inst::GprToXmmVex { dst, ref src, .. } | Inst::GprToXmm { dst, ref src, .. } => {
+        Inst::GprToXmmVex { dst, ref src, .. } => {
             match <&RegMem>::from(src) {
                 RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I64, 64)?;
@@ -481,13 +481,9 @@ pub(crate) fn check(
             Ok(())
         }
 
-        Inst::XmmMovRM { ref dst, .. } | Inst::XmmMovRMImm { ref dst, .. } => {
+        Inst::XmmMovRM { ref dst, .. } => {
             check_store(ctx, None, dst, vcode, I8X16)?;
             Ok(())
-        }
-
-        Inst::XmmToGpr { dst, .. } | Inst::XmmToGprImm { dst, .. } => {
-            undefined_result(ctx, vcode, dst, 64, 64)
         }
 
         Inst::CvtIntToFloatVex { dst, ref src2, .. } => {

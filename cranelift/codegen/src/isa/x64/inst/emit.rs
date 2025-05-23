@@ -1783,10 +1783,6 @@ pub(crate) fn emit(
                 SseOpcode::Divsd => (LegacyPrefixes::_F2, 0x0F5E, 2),
                 SseOpcode::Movlhps => (LegacyPrefixes::None, 0x0F16, 2),
                 SseOpcode::Movsd => (LegacyPrefixes::_F2, 0x0F10, 2),
-                SseOpcode::Mulps => (LegacyPrefixes::None, 0x0F59, 2),
-                SseOpcode::Mulpd => (LegacyPrefixes::_66, 0x0F59, 2),
-                SseOpcode::Mulss => (LegacyPrefixes::_F3, 0x0F59, 2),
-                SseOpcode::Mulsd => (LegacyPrefixes::_F2, 0x0F59, 2),
                 SseOpcode::Packssdw => (LegacyPrefixes::_66, 0x0F6B, 2),
                 SseOpcode::Packsswb => (LegacyPrefixes::_66, 0x0F63, 2),
                 SseOpcode::Packusdw => (LegacyPrefixes::_66, 0x0F382B, 3),
@@ -2693,36 +2689,17 @@ pub(crate) fn emit(
                 SseOpcode::Cmpsd => (LegacyPrefixes::_F2, 0x0FC2, 2),
                 SseOpcode::Insertps => (LegacyPrefixes::_66, 0x0F3A21, 3),
                 SseOpcode::Palignr => (LegacyPrefixes::_66, 0x0F3A0F, 3),
-                SseOpcode::Pinsrb => (LegacyPrefixes::_66, 0x0F3A20, 3),
-                SseOpcode::Pinsrw => (LegacyPrefixes::_66, 0x0FC4, 2),
-                SseOpcode::Pinsrd => (LegacyPrefixes::_66, 0x0F3A22, 3),
                 SseOpcode::Shufps => (LegacyPrefixes::None, 0x0FC6, 2),
                 SseOpcode::Pblendw => (LegacyPrefixes::_66, 0x0F3A0E, 3),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
             let rex = RexFlags::from(*size);
-            let regs_swapped = match *op {
-                // These opcodes (and not the SSE2 version of PEXTRW) flip the operand
-                // encoding: `dst` in ModRM's r/m, `src` in ModRM's reg field.
-                SseOpcode::Pextrb | SseOpcode::Pextrd => true,
-                // The rest of the opcodes have the customary encoding: `dst` in ModRM's reg,
-                // `src` in ModRM's r/m field.
-                _ => false,
-            };
             match src2 {
                 RegMem::Reg { reg } => {
-                    if regs_swapped {
-                        emit_std_reg_reg(sink, prefix, opcode, len, reg, dst, rex);
-                    } else {
-                        emit_std_reg_reg(sink, prefix, opcode, len, dst, reg, rex);
-                    }
+                    emit_std_reg_reg(sink, prefix, opcode, len, dst, reg, rex);
                 }
                 RegMem::Mem { addr } => {
                     let addr = &addr.finalize(state.frame_layout(), sink);
-                    assert!(
-                        !regs_swapped,
-                        "No existing way to encode a mem argument in the ModRM r/m field."
-                    );
                     // N.B.: bytes_at_end == 1, because of the `imm` byte below.
                     emit_std_reg_mem(sink, prefix, opcode, len, dst, addr, rex, 1);
                 }
@@ -2754,98 +2731,6 @@ pub(crate) fn emit(
             };
             let dst = &dst.finalize(state.frame_layout(), sink);
             emit_std_reg_mem(sink, prefix, opcode, 2, src, dst, RexFlags::clear_w(), 0);
-        }
-
-        Inst::XmmMovRMImm { op, src, dst, imm } => {
-            let src = src.to_reg();
-            let dst = dst.clone();
-
-            let (w, prefix, opcode) = match op {
-                SseOpcode::Pextrb => (false, LegacyPrefixes::_66, 0x0F3A14),
-                SseOpcode::Pextrw => (false, LegacyPrefixes::_66, 0x0F3A15),
-                SseOpcode::Pextrd => (false, LegacyPrefixes::_66, 0x0F3A16),
-                SseOpcode::Pextrq => (true, LegacyPrefixes::_66, 0x0F3A16),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            let rex = if w {
-                RexFlags::set_w()
-            } else {
-                RexFlags::clear_w()
-            };
-            let dst = &dst.finalize(state.frame_layout(), sink);
-            emit_std_reg_mem(sink, prefix, opcode, 3, src, dst, rex, 1);
-            sink.put1(*imm);
-        }
-
-        Inst::XmmToGpr {
-            op,
-            src,
-            dst,
-            dst_size,
-        } => {
-            let src = src.to_reg();
-            let dst = dst.to_reg().to_reg();
-
-            let (prefix, opcode, dst_first) = match op {
-                // Movd and movq use the same opcode; the presence of the REX prefix (set below)
-                // actually determines which is used.
-                SseOpcode::Movd | SseOpcode::Movq => (LegacyPrefixes::_66, 0x0F7E, false),
-                SseOpcode::Movmskps => (LegacyPrefixes::None, 0x0F50, true),
-                SseOpcode::Movmskpd => (LegacyPrefixes::_66, 0x0F50, true),
-                SseOpcode::Pmovmskb => (LegacyPrefixes::_66, 0x0FD7, true),
-                _ => panic!("unexpected opcode {op:?}"),
-            };
-            let rex = RexFlags::from(*dst_size);
-            let (src, dst) = if dst_first { (dst, src) } else { (src, dst) };
-
-            emit_std_reg_reg(sink, prefix, opcode, 2, src, dst, rex);
-        }
-
-        Inst::XmmToGprImm { op, src, dst, imm } => {
-            use OperandSize as OS;
-
-            let src = src.to_reg();
-            let dst = dst.to_reg().to_reg();
-
-            let (prefix, opcode, opcode_bytes, dst_size, dst_first) = match op {
-                SseOpcode::Pextrb => (LegacyPrefixes::_66, 0x0F3A14, 3, OS::Size32, false),
-                SseOpcode::Pextrw => (LegacyPrefixes::_66, 0x0FC5, 2, OS::Size32, true),
-                SseOpcode::Pextrd => (LegacyPrefixes::_66, 0x0F3A16, 3, OS::Size32, false),
-                SseOpcode::Pextrq => (LegacyPrefixes::_66, 0x0F3A16, 3, OS::Size64, false),
-                _ => panic!("unexpected opcode {op:?}"),
-            };
-            let rex = RexFlags::from(dst_size);
-            let (src, dst) = if dst_first { (dst, src) } else { (src, dst) };
-
-            emit_std_reg_reg(sink, prefix, opcode, opcode_bytes, src, dst, rex);
-            sink.put1(*imm);
-        }
-
-        Inst::GprToXmm {
-            op,
-            src: src_e,
-            dst: reg_g,
-            src_size,
-        } => {
-            let reg_g = reg_g.to_reg().to_reg();
-            let src_e = src_e.clone().to_reg_mem().clone();
-
-            let (prefix, opcode) = match op {
-                // Movd and movq use the same opcode; the presence of the REX prefix (set below)
-                // actually determines which is used.
-                SseOpcode::Movd | SseOpcode::Movq => (LegacyPrefixes::_66, 0x0F6E),
-                _ => panic!("unexpected opcode {op:?}"),
-            };
-            let rex = RexFlags::from(*src_size);
-            match src_e {
-                RegMem::Reg { reg: reg_e } => {
-                    emit_std_reg_reg(sink, prefix, opcode, 2, reg_g, reg_e, rex);
-                }
-                RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state.frame_layout(), sink);
-                    emit_std_reg_mem(sink, prefix, opcode, 2, reg_g, addr, rex, 0);
-                }
-            }
         }
 
         Inst::XmmCmpRmR { op, src1, src2 } => {
@@ -3081,9 +2966,9 @@ pub(crate) fn emit(
             //
             // done:
 
-            let (cast_op, cmp_op) = match src_size {
-                Size64 => (SseOpcode::Movq, SseOpcode::Ucomisd),
-                Size32 => (SseOpcode::Movd, SseOpcode::Ucomiss),
+            let cmp_op = match src_size {
+                Size64 => SseOpcode::Ucomisd,
+                Size32 => SseOpcode::Ucomiss,
                 _ => unreachable!(),
             };
 
@@ -3183,9 +3068,15 @@ pub(crate) fn emit(
                     _ => unreachable!(),
                 }
 
-                let inst =
-                    Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, tmp_xmm);
-                inst.emit(sink, info, state);
+                let inst = {
+                    let tmp_xmm: WritableXmm = tmp_xmm.map(|r| Xmm::new(r).unwrap());
+                    match src_size {
+                        Size32 => asm::inst::movd_a::new(tmp_xmm, tmp_gpr).into(),
+                        Size64 => asm::inst::movq_a::new(tmp_xmm, tmp_gpr).into(),
+                        _ => unreachable!(),
+                    }
+                };
+                Inst::External { inst }.emit(sink, info, state);
 
                 let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(tmp_xmm.to_reg()));
                 inst.emit(sink, info, state);
@@ -3265,9 +3156,9 @@ pub(crate) fn emit(
 
             assert_ne!(tmp_xmm.to_reg(), src, "tmp_xmm clobbers src!");
 
-            let (cast_op, cmp_op) = match src_size {
-                Size32 => (SseOpcode::Movd, SseOpcode::Ucomiss),
-                Size64 => (SseOpcode::Movq, SseOpcode::Ucomisd),
+            let cmp_op = match src_size {
+                Size32 => SseOpcode::Ucomiss,
+                Size64 => SseOpcode::Ucomisd,
                 _ => unreachable!(),
             };
 
@@ -3308,8 +3199,15 @@ pub(crate) fn emit(
             let inst = Inst::imm(*src_size, cst, tmp_gpr);
             inst.emit(sink, info, state);
 
-            let inst = Inst::gpr_to_xmm(cast_op, RegMem::reg(tmp_gpr.to_reg()), *src_size, tmp_xmm);
-            inst.emit(sink, info, state);
+            let inst = {
+                let tmp_xmm: WritableXmm = tmp_xmm.map(|r| Xmm::new(r).unwrap());
+                match src_size {
+                    Size32 => asm::inst::movd_a::new(tmp_xmm, tmp_gpr).into(),
+                    Size64 => asm::inst::movq_a::new(tmp_xmm, tmp_gpr).into(),
+                    _ => unreachable!(),
+                }
+            };
+            Inst::External { inst }.emit(sink, info, state);
 
             let inst = Inst::xmm_cmp_rm_r(cmp_op, src, RegMem::reg(tmp_xmm.to_reg()));
             inst.emit(sink, info, state);
