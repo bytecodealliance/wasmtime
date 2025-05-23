@@ -1,3 +1,5 @@
+/// \file wasmtime/component/linker.h
+
 #ifndef WASMTIME_COMPONENT_LINKER_H
 #define WASMTIME_COMPONENT_LINKER_H
 
@@ -14,7 +16,10 @@
 extern "C" {
 #endif
 
+/// A type used to instantiate a #wasmtime_component_t.
 typedef struct wasmtime_component_linker_t wasmtime_component_linker_t;
+
+/// Structure representing an "instance" being defined within a linker.
 typedef struct wasmtime_component_linker_instance_t
     wasmtime_component_linker_instance_t;
 
@@ -82,7 +87,8 @@ wasmtime_component_linker_delete(wasmtime_component_linker_t *linker);
  * \param linker_instance the linker instance from which the new one is created
  * \param name new instance name
  * \param name_len length of \p name in bytes
- * \param linker_instance_out on success, the new #component_linker_instance_t
+ * \param linker_instance_out on success, the new
+ * #wasmtime_component_linker_instance_t
  * \return on success `NULL`, otherwise an error
  */
 WASM_API_EXTERN wasmtime_error_t *
@@ -107,6 +113,28 @@ wasmtime_component_linker_instance_add_instance(
 WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instance_add_module(
     wasmtime_component_linker_instance_t *linker_instance, const char *name,
     size_t name_len, const wasmtime_module_t *module);
+
+/// Type of the callback used in #wasmtime_component_linker_instance_add_func
+typedef wasmtime_error_t *(*wasmtime_component_func_callback_t)(
+    void *, wasmtime_context_t *, const wasmtime_component_val_t *, size_t,
+    wasmtime_component_val_t *, size_t);
+
+/**
+ * \brief Define a function within this instance.
+ *
+ * \param linker_instance the instance to define the function in
+ * \param name the module name
+ * \param name_len length of \p name in bytes
+ * \param callback the callback when this function gets called
+ * \param data host-specific data passed to the callback invocation, can be
+ * `NULL`
+ * \param finalizer optional finalizer for \p data, can be `NULL`
+ * \return on success `NULL`, otherwise an error
+ */
+WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instance_add_func(
+    wasmtime_component_linker_instance_t *linker_instance, const char *name,
+    size_t name_len, wasmtime_component_func_callback_t callback, void *data,
+    void (*finalizer)());
 
 /**
  * \brief Deletes a #wasmtime_component_linker_instance_t

@@ -1,3 +1,5 @@
+/// \file wasmtime/component/component.h
+
 #ifndef WASMTIME_COMPONENT_COMPONENT_H
 #define WASMTIME_COMPONENT_COMPONENT_H
 
@@ -101,13 +103,13 @@ WASM_API_EXTERN wasmtime_component_t *
 wasmtime_component_clone(const wasmtime_component_t *component);
 
 /**
- * \brief Deletes a #wasmtime_component_t created by
- * #wasmtime_component_from_binary
+ * \brief Deletes a #wasmtime_component_t created by #wasmtime_component_new
  *
  * \param component the component to delete
  */
 WASM_API_EXTERN void wasmtime_component_delete(wasmtime_component_t *component);
 
+/// A value which represents a known export of a component.
 typedef struct wasmtime_component_export_index_t
     wasmtime_component_export_index_t;
 
