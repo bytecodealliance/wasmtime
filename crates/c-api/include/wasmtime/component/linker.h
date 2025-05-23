@@ -122,13 +122,14 @@ typedef wasmtime_error_t *(*wasmtime_component_func_callback_t)(
 /**
  * \brief Define a function within this instance.
  *
- * \param linker_instance the instance to define the module in
+ * \param linker_instance the instance to define the function in
  * \param name the module name
  * \param name_len length of \p name in bytes
  * \param callback the callback when this function gets called
  * \param data host-specific data passed to the callback invocation, can be
  * `NULL`
  * \param finalizer optional finalizer for \p data, can be `NULL`
+ * \return on success `NULL`, otherwise an error
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instance_add_func(
     wasmtime_component_linker_instance_t *linker_instance, const char *name,
