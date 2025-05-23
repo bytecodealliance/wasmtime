@@ -15,8 +15,8 @@ block0(v0: f64x2):
 ; block0:
 ;   uninit  %xmm3
 ;   xorpd %xmm3, %xmm3
-;   maxpd   %xmm0, %xmm3, %xmm0
-;   minpd   %xmm0, const(0), %xmm0
+;   maxpd %xmm3, %xmm0
+;   minpd (%rip), %xmm0
 ;   roundpd $3, %xmm0, %xmm0
 ;   addpd (%rip), %xmm0
 ;   shufps  $136, %xmm0, %xmm3, %xmm0

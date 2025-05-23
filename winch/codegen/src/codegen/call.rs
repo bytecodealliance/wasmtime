@@ -59,18 +59,18 @@
 //! └──────────────────────────────────────────────────┘ ------> Stack pointer when emitting the call
 
 use crate::{
-    abi::{scratch, vmctx, ABIOperand, ABISig, RetArea},
+    FuncEnv,
+    abi::{ABIOperand, ABISig, RetArea, scratch, vmctx},
     codegen::{BuiltinFunction, BuiltinType, Callee, CodeGenContext, CodeGenError, Emission},
     masm::{
         CalleeKind, ContextArgs, MacroAssembler, MemMoveDirection, OperandSize, SPOffset,
         VMContextLoc,
     },
-    reg::writable,
     reg::Reg,
+    reg::writable,
     stack::Val,
-    FuncEnv,
 };
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use wasmtime_environ::{FuncIndex, PtrSize, VMOffsets};
 
 /// All the information needed to emit a function call.
@@ -165,7 +165,6 @@ impl FnCall {
                 CalleeKind::direct(env.name_builtin(idx)),
                 ContextArgs::pinned_vmctx(),
             ),
-            BuiltinType::LibCall(c) => (CalleeKind::libcall(c), ContextArgs::none()),
         }
     }
 

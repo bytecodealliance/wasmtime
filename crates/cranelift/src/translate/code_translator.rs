@@ -71,30 +71,30 @@
 //!   <https://github.com/bytecodealliance/cranelift/pull/1236>
 //!     ("Relax verification to allow I8X16 to act as a default vector type")
 
-use crate::bounds_checks::{bounds_check_and_compute_addr, BoundsCheck};
+use crate::Reachability;
+use crate::bounds_checks::{BoundsCheck, bounds_check_and_compute_addr};
 use crate::func_environ::{Extension, FuncEnvironment};
 use crate::translate::environ::{GlobalVariable, StructFieldsVec};
 use crate::translate::state::{ControlStackFrame, ElseData, FuncTranslationState};
 use crate::translate::translation_utils::{
     block_with_params, blocktype_params_results, f32_translation, f64_translation,
 };
-use crate::Reachability;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::{
-    self, AtomicRmwOp, ConstantData, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
+    self, AtomicRmwOp, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
 };
-use cranelift_codegen::ir::{types::*, BlockArg};
+use cranelift_codegen::ir::{BlockArg, types::*};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use itertools::Itertools;
 use smallvec::SmallVec;
-use std::collections::{hash_map, HashMap};
+use std::collections::{HashMap, hash_map};
 use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 use wasmtime_environ::{
-    wasm_unsupported, DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, Signed,
-    TableIndex, TypeConvert, TypeIndex, Unsigned, WasmRefType, WasmResult,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, Signed, TableIndex, TypeConvert,
+    TypeIndex, Unsigned, WasmRefType, WasmResult, wasm_unsupported,
 };
 
 /// Given a `Reachability<T>`, unwrap the inner `T` or, when unreachable, set
@@ -979,21 +979,37 @@ pub fn translate_operator(
             let arg = state.pop1();
             state.push1(builder.ins().sqrt(arg));
         }
-        Operator::F32Ceil | Operator::F64Ceil => {
+        Operator::F32Ceil => {
             let arg = state.pop1();
-            state.push1(builder.ins().ceil(arg));
+            state.push1(environ.ceil_f32(builder, arg));
         }
-        Operator::F32Floor | Operator::F64Floor => {
+        Operator::F64Ceil => {
             let arg = state.pop1();
-            state.push1(builder.ins().floor(arg));
+            state.push1(environ.ceil_f64(builder, arg));
         }
-        Operator::F32Trunc | Operator::F64Trunc => {
+        Operator::F32Floor => {
             let arg = state.pop1();
-            state.push1(builder.ins().trunc(arg));
+            state.push1(environ.floor_f32(builder, arg));
         }
-        Operator::F32Nearest | Operator::F64Nearest => {
+        Operator::F64Floor => {
             let arg = state.pop1();
-            state.push1(builder.ins().nearest(arg));
+            state.push1(environ.floor_f64(builder, arg));
+        }
+        Operator::F32Trunc => {
+            let arg = state.pop1();
+            state.push1(environ.trunc_f32(builder, arg));
+        }
+        Operator::F64Trunc => {
+            let arg = state.pop1();
+            state.push1(environ.trunc_f64(builder, arg));
+        }
+        Operator::F32Nearest => {
+            let arg = state.pop1();
+            state.push1(environ.nearest_f32(builder, arg));
+        }
+        Operator::F64Nearest => {
+            let arg = state.pop1();
+            state.push1(environ.nearest_f64(builder, arg));
         }
         Operator::F32Abs | Operator::F64Abs => {
             let val = state.pop1();
@@ -1724,10 +1740,7 @@ pub fn translate_operator(
         }
         Operator::I8x16Shuffle { lanes, .. } => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
-            let lanes = ConstantData::from(lanes.as_ref());
-            let mask = builder.func.dfg.immediates.push(lanes);
-            let shuffled = builder.ins().shuffle(a, b, mask);
-            state.push1(shuffled)
+            state.push1(environ.i8x16_shuffle(builder, a, b, lanes));
             // At this point the original types of a and b are lost; users of this value (i.e. this
             // WASM-to-CLIF translator) may need to bitcast for type-correctness. This is due
             // to WASM using the less specific v128 type for certain operations and more specific
@@ -1735,7 +1748,7 @@ pub fn translate_operator(
         }
         Operator::I8x16Swizzle => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
-            state.push1(builder.ins().swizzle(a, b))
+            state.push1(environ.swizzle(builder, a, b));
         }
         Operator::I8x16Add | Operator::I16x8Add | Operator::I32x4Add | Operator::I64x2Add => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
@@ -2028,11 +2041,26 @@ pub fn translate_operator(
         }
         Operator::I32x4RelaxedTruncF64x2UZero | Operator::I32x4TruncSatF64x2UZero => {
             let a = pop1_with_bitcast(state, F64X2, builder);
-            let converted_a = builder.ins().fcvt_to_uint_sat(I64X2, a);
-            let handle = builder.func.dfg.constants.insert(vec![0u8; 16].into());
-            let zero = builder.ins().vconst(I64X2, handle);
-
-            state.push1(builder.ins().uunarrow(converted_a, zero));
+            let zero_constant = builder.func.dfg.constants.insert(vec![0u8; 16].into());
+            let result = if environ.is_x86() && !environ.isa().has_round() {
+                // On x86 the vector lowering for `fcvt_to_uint_sat` requires
+                // SSE4.1 `round` instructions. If SSE4.1 isn't available it
+                // falls back to a libcall which we don't want in Wasmtime.
+                // Handle this by falling back to the scalar implementation
+                // which does not require SSE4.1 instructions.
+                let lane0 = builder.ins().extractlane(a, 0);
+                let lane1 = builder.ins().extractlane(a, 1);
+                let lane0_rounded = builder.ins().fcvt_to_uint_sat(I32, lane0);
+                let lane1_rounded = builder.ins().fcvt_to_uint_sat(I32, lane1);
+                let result = builder.ins().vconst(I32X4, zero_constant);
+                let result = builder.ins().insertlane(result, lane0_rounded, 0);
+                builder.ins().insertlane(result, lane1_rounded, 1)
+            } else {
+                let converted_a = builder.ins().fcvt_to_uint_sat(I64X2, a);
+                let zero = builder.ins().vconst(I64X2, zero_constant);
+                builder.ins().uunarrow(converted_a, zero)
+            };
+            state.push1(result);
         }
 
         Operator::I8x16NarrowI16x8S => {
@@ -2123,24 +2151,37 @@ pub fn translate_operator(
             let widen_high = builder.ins().uwiden_high(a);
             state.push1(builder.ins().iadd_pairwise(widen_low, widen_high));
         }
-        Operator::F32x4Ceil | Operator::F64x2Ceil => {
-            // This is something of a misuse of `type_of`, because that produces the return type
-            // of `op`.  In this case we want the arg type, but we know it's the same as the
-            // return type.  Same for the 3 cases below.
-            let arg = pop1_with_bitcast(state, type_of(op), builder);
-            state.push1(builder.ins().ceil(arg));
+        Operator::F32x4Ceil => {
+            let arg = pop1_with_bitcast(state, F32X4, builder);
+            state.push1(environ.ceil_f32x4(builder, arg));
         }
-        Operator::F32x4Floor | Operator::F64x2Floor => {
-            let arg = pop1_with_bitcast(state, type_of(op), builder);
-            state.push1(builder.ins().floor(arg));
+        Operator::F64x2Ceil => {
+            let arg = pop1_with_bitcast(state, F64X2, builder);
+            state.push1(environ.ceil_f64x2(builder, arg));
         }
-        Operator::F32x4Trunc | Operator::F64x2Trunc => {
-            let arg = pop1_with_bitcast(state, type_of(op), builder);
-            state.push1(builder.ins().trunc(arg));
+        Operator::F32x4Floor => {
+            let arg = pop1_with_bitcast(state, F32X4, builder);
+            state.push1(environ.floor_f32x4(builder, arg));
         }
-        Operator::F32x4Nearest | Operator::F64x2Nearest => {
-            let arg = pop1_with_bitcast(state, type_of(op), builder);
-            state.push1(builder.ins().nearest(arg));
+        Operator::F64x2Floor => {
+            let arg = pop1_with_bitcast(state, F64X2, builder);
+            state.push1(environ.floor_f64x2(builder, arg));
+        }
+        Operator::F32x4Trunc => {
+            let arg = pop1_with_bitcast(state, F32X4, builder);
+            state.push1(environ.trunc_f32x4(builder, arg));
+        }
+        Operator::F64x2Trunc => {
+            let arg = pop1_with_bitcast(state, F64X2, builder);
+            state.push1(environ.trunc_f64x2(builder, arg));
+        }
+        Operator::F32x4Nearest => {
+            let arg = pop1_with_bitcast(state, F32X4, builder);
+            state.push1(environ.nearest_f32x4(builder, arg));
+        }
+        Operator::F64x2Nearest => {
+            let arg = pop1_with_bitcast(state, F64X2, builder);
+            state.push1(environ.nearest_f64x2(builder, arg));
         }
         Operator::I32x4DotI16x8S => {
             let (a, b) = pop2_with_bitcast(state, I16X8, builder);
@@ -2279,45 +2320,26 @@ pub fn translate_operator(
 
         Operator::I8x16RelaxedSwizzle => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
-            state.push1(
-                if environ.relaxed_simd_deterministic()
-                    || !environ.use_x86_pshufb_for_relaxed_swizzle()
-                {
-                    // Deterministic semantics match the `i8x16.swizzle`
-                    // instruction which is the CLIF `swizzle`.
-                    builder.ins().swizzle(a, b)
-                } else {
-                    builder.ins().x86_pshufb(a, b)
-                },
-            );
+            state.push1(environ.relaxed_swizzle(builder, a, b));
         }
 
-        Operator::F32x4RelaxedMadd | Operator::F64x2RelaxedMadd => {
+        Operator::F32x4RelaxedMadd => {
             let (a, b, c) = pop3_with_bitcast(state, type_of(op), builder);
-            state.push1(
-                if environ.relaxed_simd_deterministic() || environ.has_native_fma() {
-                    // Deterministic semantics are "fused multiply and add"
-                    // which the CLIF `fma` guarantees.
-                    builder.ins().fma(a, b, c)
-                } else {
-                    let mul = builder.ins().fmul(a, b);
-                    builder.ins().fadd(mul, c)
-                },
-            );
+            state.push1(environ.fma_f32x4(builder, a, b, c));
         }
-        Operator::F32x4RelaxedNmadd | Operator::F64x2RelaxedNmadd => {
+        Operator::F64x2RelaxedMadd => {
+            let (a, b, c) = pop3_with_bitcast(state, type_of(op), builder);
+            state.push1(environ.fma_f64x2(builder, a, b, c));
+        }
+        Operator::F32x4RelaxedNmadd => {
             let (a, b, c) = pop3_with_bitcast(state, type_of(op), builder);
             let a = builder.ins().fneg(a);
-            state.push1(
-                if environ.relaxed_simd_deterministic() || environ.has_native_fma() {
-                    // Deterministic semantics are "fused multiply and add"
-                    // which the CLIF `fma` guarantees.
-                    builder.ins().fma(a, b, c)
-                } else {
-                    let mul = builder.ins().fmul(a, b);
-                    builder.ins().fadd(mul, c)
-                },
-            );
+            state.push1(environ.fma_f32x4(builder, a, b, c));
+        }
+        Operator::F64x2RelaxedNmadd => {
+            let (a, b, c) = pop3_with_bitcast(state, type_of(op), builder);
+            let a = builder.ins().fneg(a);
+            state.push1(environ.fma_f64x2(builder, a, b, c));
         }
 
         Operator::I8x16RelaxedLaneselect
@@ -3464,7 +3486,7 @@ fn translate_atomic_rmw(
             return Err(wasm_unsupported!(
                 "atomic_rmw: unsupported access type {:?}",
                 access_ty
-            ))
+            ));
         }
     };
     let w_ty_ok = match widened_ty {
@@ -3517,7 +3539,7 @@ fn translate_atomic_cas(
             return Err(wasm_unsupported!(
                 "atomic_cas: unsupported access type {:?}",
                 access_ty
-            ))
+            ));
         }
     };
     let w_ty_ok = match widened_ty {
@@ -3569,7 +3591,7 @@ fn translate_atomic_load(
             return Err(wasm_unsupported!(
                 "atomic_load: unsupported access type {:?}",
                 access_ty
-            ))
+            ));
         }
     };
     let w_ty_ok = match widened_ty {
@@ -3614,7 +3636,7 @@ fn translate_atomic_store(
             return Err(wasm_unsupported!(
                 "atomic_store: unsupported access type {:?}",
                 access_ty
-            ))
+            ));
         }
     };
     let d_ty_ok = match data_ty {

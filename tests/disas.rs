@@ -39,7 +39,7 @@
 //! at the start of the file. These comments are then parsed as TOML and
 //! deserialized into `TestConfig` in this crate.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use cranelift_codegen::ir::{Function, UserExternalName, UserFuncName};
 use libtest_mimic::{Arguments, Trial};
@@ -159,13 +159,14 @@ impl Test {
     fn new(path: &Path) -> Result<Test> {
         let contents =
             std::fs::read_to_string(path).with_context(|| format!("failed to read {path:?}"))?;
-        let config: TestConfig = wasmtime_test_util::wast::parse_test_config(&contents)
+        let config: TestConfig = wasmtime_test_util::wast::parse_test_config(&contents, ";;!")
             .context("failed to parse test configuration as TOML")?;
         let mut flags = vec!["wasmtime"];
         if let Some(config) = &config.flags {
             flags.extend(config.to_vec());
         }
-        let opts = wasmtime_cli_flags::CommonOptions::try_parse_from(&flags)?;
+        let mut opts = wasmtime_cli_flags::CommonOptions::try_parse_from(&flags)?;
+        opts.codegen.cranelift_debug_verifier = Some(true);
 
         Ok(Test {
             path: path.to_path_buf(),

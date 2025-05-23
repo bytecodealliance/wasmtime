@@ -8,11 +8,13 @@ mod encoding;
 mod features;
 pub mod format;
 
+pub use encoding::{
+    Encoding, Group1Prefix, Group2Prefix, Group3Prefix, Group4Prefix, Opcodes, Prefixes, Rex,
+};
 pub use encoding::{rex, vex};
-pub use encoding::{Encoding, Group1Prefix, Group2Prefix, Group3Prefix, Group4Prefix, Opcodes, Prefixes, Rex};
-pub use features::{Feature, Features, ALL_FEATURES};
-pub use format::{align, fmt, r, rw, sxl, sxq, sxw};
-pub use format::{Extension, Format, Location, Mutability, Operand, OperandKind};
+pub use features::{ALL_FEATURES, Feature, Features};
+pub use format::{Extension, Format, Location, Mutability, Operand, OperandKind, RegClass};
+pub use format::{align, fmt, implicit, r, rw, sxl, sxq, sxw, w};
 
 /// Abbreviated constructor for an x64 instruction.
 pub fn inst(
@@ -28,6 +30,7 @@ pub fn inst(
         format,
         encoding,
         features: features.into(),
+        has_trap: false,
     }
 }
 
@@ -54,6 +57,9 @@ pub struct Inst {
     /// "64-bit/32-bit Mode Support" and "CPUID Feature Flag" columns of the x64
     /// reference manual.
     pub features: Features,
+    /// Whether or not this instruction can trap and thus needs a `TrapCode`
+    /// payload in the instruction itself.
+    pub has_trap: bool,
 }
 
 impl Inst {
@@ -69,16 +75,36 @@ impl Inst {
     /// the format name (e.g., `sx*`) to keep this unique.
     #[must_use]
     pub fn name(&self) -> String {
-        format!("{}_{}", self.mnemonic.to_lowercase(), self.format.name.to_lowercase())
+        format!(
+            "{}_{}",
+            self.mnemonic.to_lowercase(),
+            self.format.name.to_lowercase()
+        )
+    }
+
+    /// Flags this instruction as being able to trap, so needs a `TrapCode` at
+    /// compile time to track this.
+    pub fn has_trap(mut self) -> Self {
+        self.has_trap = true;
+        self
     }
 }
 
 impl core::fmt::Display for Inst {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let Inst { mnemonic: name, format, encoding, features } = self;
+        let Inst {
+            mnemonic: name,
+            format,
+            encoding,
+            features,
+            has_trap,
+        } = self;
         write!(f, "{name}: {format} => {encoding}")?;
         if !features.is_empty() {
             write!(f, " [{features}]")?;
+        }
+        if *has_trap {
+            write!(f, " has_trap")?;
         }
         Ok(())
     }

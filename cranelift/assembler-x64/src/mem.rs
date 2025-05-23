@@ -2,10 +2,10 @@
 
 use crate::api::{AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, TrapCode};
 use crate::gpr::{self, NonRspGpr, Size};
-use crate::rex::{encode_modrm, encode_sib, Imm, RexFlags};
+use crate::rex::{Disp, RexPrefix, encode_modrm, encode_sib};
 
 /// x64 memory addressing modes.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub enum Amode<R: AsReg> {
     ImmReg {
@@ -34,41 +34,30 @@ impl<R: AsReg> Amode<R> {
         }
     }
 
-    /// Encode the [`Amode`] into a ModRM/SIB/displacement sequence.
-    pub fn emit_rex_prefix(&self, rex: RexFlags, enc_g: u8, sink: &mut impl CodeSink) {
+    /// Return the [`RexPrefix`] for each variant of this [`Amode`].
+    #[must_use]
+    pub(crate) fn as_rex_prefix(&self, enc_reg: u8, has_w_bit: bool, uses_8bit: bool) -> RexPrefix {
         match self {
             Amode::ImmReg { base, .. } => {
-                let enc_e = base.enc();
-                rex.emit_two_op(sink, enc_g, enc_e);
+                RexPrefix::two_op(enc_reg, base.enc(), has_w_bit, uses_8bit)
             }
             Amode::ImmRegRegShift { base, index, .. } => {
-                let enc_base = base.enc();
-                let enc_index = index.enc();
-                rex.emit_three_op(sink, enc_g, enc_index, enc_base);
+                RexPrefix::three_op(enc_reg, index.enc(), base.enc(), has_w_bit, uses_8bit)
             }
-            Amode::RipRelative { .. } => {
-                // note REX.B = 0.
-                rex.emit_two_op(sink, enc_g, 0);
-            }
+            Amode::RipRelative { .. } => RexPrefix::two_op(enc_reg, 0, has_w_bit, uses_8bit),
         }
     }
 
-    /// Return the registers used by this [`Amode`].
-    ///
-    /// This is useful in generated code to allow access by a
-    /// [`RegisterVisitor`](crate::RegisterVisitor).
-    pub fn registers_mut(&mut self) -> Vec<&mut R> {
-        match self {
-            Amode::ImmReg { base, .. } => {
-                vec![base]
-            }
-            Amode::ImmRegRegShift { base, index, .. } => {
-                vec![base, index.as_mut()]
-            }
-            Amode::RipRelative { .. } => {
-                vec![]
-            }
-        }
+    /// Emit the ModR/M, SIB, and displacement suffixes as needed for this
+    /// `Amode`.
+    pub(crate) fn encode_rex_suffixes(
+        &self,
+        sink: &mut impl CodeSink,
+        offsets: &impl KnownOffsetTable,
+        enc_reg: u8,
+        bytes_at_end: u8,
+    ) {
+        emit_modrm_sib_disp(sink, offsets, enc_reg, self, bytes_at_end, None);
     }
 }
 
@@ -123,7 +112,7 @@ impl std::fmt::LowerHex for AmodeOffset {
 /// happens immediately before emission:
 /// - the [`KnownOffset`] is looked up, mapping it to an offset value
 /// - the [`Simm32`] value is added to the offset value
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct AmodeOffsetPlusKnownOffset {
     pub simm32: AmodeOffset,
     pub offset: Option<KnownOffset>,
@@ -136,7 +125,7 @@ impl AmodeOffsetPlusKnownOffset {
     #[must_use]
     pub fn value(&self, offsets: &impl KnownOffsetTable) -> i32 {
         let known_offset = match self.offset {
-            Some(offset) => offsets[offset],
+            Some(offset) => offsets[usize::from(offset)],
             None => 0,
         };
         known_offset
@@ -155,7 +144,7 @@ impl std::fmt::LowerHex for AmodeOffsetPlusKnownOffset {
 }
 
 /// For RIP-relative addressing, keep track of the [`CodeSink`]-specific target.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub enum DeferredTarget {
     Label(Label),
@@ -194,7 +183,7 @@ impl<R: AsReg> std::fmt::Display for Amode<R> {
 }
 
 /// The scaling factor for the index register in certain [`Amode`]s.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub enum Scale {
     One,
@@ -241,7 +230,7 @@ impl Scale {
 }
 
 /// A general-purpose register or memory operand.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 #[allow(
     clippy::module_name_repetitions,
@@ -261,20 +250,48 @@ impl<R: AsReg, M: AsReg> GprMem<R, M> {
         }
     }
 
-    /// Proxy on the 8-bit REX flag emission; helpful for simplifying generated
-    /// code.
-    pub(crate) fn always_emit_if_8bit_needed(&self, rex: &mut RexFlags) {
+    /// Return the [`RexPrefix`] for each variant of this [`GprMem`].
+    #[must_use]
+    pub(crate) fn as_rex_prefix(&self, enc_reg: u8, has_w_bit: bool, uses_8bit: bool) -> RexPrefix {
+        match self {
+            GprMem::Gpr(rm) => RexPrefix::two_op(enc_reg, rm.enc(), has_w_bit, uses_8bit),
+            GprMem::Mem(amode) => amode.as_rex_prefix(enc_reg, has_w_bit, uses_8bit),
+        }
+    }
+
+    /// Emit the ModR/M, SIB, and displacement suffixes for this [`GprMem`].
+    pub(crate) fn encode_rex_suffixes(
+        &self,
+        sink: &mut impl CodeSink,
+        offsets: &impl KnownOffsetTable,
+        enc_reg: u8,
+        bytes_at_end: u8,
+    ) {
         match self {
             GprMem::Gpr(gpr) => {
-                rex.always_emit_if_8bit_needed(gpr.enc());
+                sink.put1(encode_modrm(0b11, enc_reg & 0b111, gpr.enc() & 0b111));
             }
-            GprMem::Mem(_) => {}
+            GprMem::Mem(amode) => {
+                amode.encode_rex_suffixes(sink, offsets, enc_reg, bytes_at_end);
+            }
         }
     }
 }
 
+impl<R: AsReg, M: AsReg> From<R> for GprMem<R, M> {
+    fn from(reg: R) -> GprMem<R, M> {
+        GprMem::Gpr(reg)
+    }
+}
+
+impl<R: AsReg, M: AsReg> From<Amode<M>> for GprMem<R, M> {
+    fn from(amode: Amode<M>) -> GprMem<R, M> {
+        GprMem::Mem(amode)
+    }
+}
+
 /// An XMM register or memory operand.
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 #[allow(
     clippy::module_name_repetitions,
@@ -293,10 +310,49 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
             XmmMem::Mem(amode) => amode.to_string(),
         }
     }
+
+    /// Return the [`RexPrefix`] for each variant of this [`XmmMem`].
+    #[must_use]
+    pub(crate) fn as_rex_prefix(&self, enc_reg: u8, has_w_bit: bool, uses_8bit: bool) -> RexPrefix {
+        match self {
+            XmmMem::Xmm(rm) => RexPrefix::two_op(enc_reg, rm.enc(), has_w_bit, uses_8bit),
+            XmmMem::Mem(amode) => amode.as_rex_prefix(enc_reg, has_w_bit, uses_8bit),
+        }
+    }
+
+    /// Emit the ModR/M, SIB, and displacement suffixes for this [`XmmMem`].
+    pub(crate) fn encode_rex_suffixes(
+        &self,
+        sink: &mut impl CodeSink,
+        offsets: &impl KnownOffsetTable,
+        enc_reg: u8,
+        bytes_at_end: u8,
+    ) {
+        match self {
+            XmmMem::Xmm(xmm) => {
+                sink.put1(encode_modrm(0b11, enc_reg & 0b111, xmm.enc() & 0b111));
+            }
+            XmmMem::Mem(amode) => {
+                amode.encode_rex_suffixes(sink, offsets, enc_reg, bytes_at_end);
+            }
+        }
+    }
+}
+
+impl<R: AsReg, M: AsReg> From<R> for XmmMem<R, M> {
+    fn from(reg: R) -> XmmMem<R, M> {
+        XmmMem::Xmm(reg)
+    }
+}
+
+impl<R: AsReg, M: AsReg> From<Amode<M>> for XmmMem<R, M> {
+    fn from(amode: Amode<M>) -> XmmMem<R, M> {
+        XmmMem::Mem(amode)
+    }
 }
 
 /// Emit the ModRM/SIB/displacement sequence for a memory operand.
-pub fn emit_modrm_sib_disp<R: AsReg>(
+fn emit_modrm_sib_disp<R: AsReg>(
     sink: &mut impl CodeSink,
     offsets: &impl KnownOffsetTable,
     enc_g: u8,
@@ -304,10 +360,10 @@ pub fn emit_modrm_sib_disp<R: AsReg>(
     bytes_at_end: u8,
     evex_scaling: Option<i8>,
 ) {
-    match mem_e.clone() {
+    match *mem_e {
         Amode::ImmReg { simm32, base, .. } => {
             let enc_e = base.enc();
-            let mut imm = Imm::new(simm32.value(offsets), evex_scaling);
+            let mut imm = Disp::new(simm32.value(offsets), evex_scaling);
 
             // Most base registers allow for a single ModRM byte plus an
             // optional immediate. If rsp is the base register, however, then a
@@ -354,7 +410,7 @@ pub fn emit_modrm_sib_disp<R: AsReg>(
             // that if the base register's lower three bits are `101` then an
             // offset must be present. This is a special case in the encoding of
             // the SIB byte and requires an explicit displacement with rbp/r13.
-            let mut imm = Imm::new(simm32.value(), evex_scaling);
+            let mut imm = Disp::new(simm32.value(), evex_scaling);
             if enc_base & 7 == gpr::enc::RBP {
                 imm.force_immediate();
             }
@@ -372,8 +428,8 @@ pub fn emit_modrm_sib_disp<R: AsReg>(
 
             let offset = sink.current_offset();
             let target = match target {
-                DeferredTarget::Label(label) => label.clone(),
-                DeferredTarget::Constant(constant) => sink.get_label_for_constant(constant.clone()),
+                DeferredTarget::Label(label) => label,
+                DeferredTarget::Constant(constant) => sink.get_label_for_constant(constant),
             };
             sink.use_label_at_offset(offset, target);
 

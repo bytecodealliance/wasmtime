@@ -1,21 +1,21 @@
 //! Implementation of a standard AArch64 ABI.
 
+use crate::CodegenResult;
 use crate::ir;
+use crate::ir::MemFlags;
 use crate::ir::types;
 use crate::ir::types::*;
-use crate::ir::MemFlags;
-use crate::ir::{dynamic_to_fixed, ExternalName, LibCall, Signature};
+use crate::ir::{ExternalName, LibCall, Signature, dynamic_to_fixed};
 use crate::isa;
-use crate::isa::aarch64::{inst::*, settings as aarch64_settings, AArch64Backend};
+use crate::isa::aarch64::{inst::*, settings as aarch64_settings};
 use crate::isa::unwind::UnwindInst;
 use crate::isa::winch;
 use crate::machinst::*;
 use crate::settings;
-use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PReg, PRegSet};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
@@ -24,9 +24,6 @@ use std::sync::OnceLock;
 
 /// Support for the AArch64 ABI from the callee side (within a function body).
 pub(crate) type AArch64Callee = Callee<AArch64MachineDeps>;
-
-/// Support for the AArch64 ABI from the caller side (at a callsite).
-pub(crate) type AArch64CallSite = CallSite<AArch64MachineDeps>;
 
 impl Into<AMode> for StackAMode {
     fn into(self) -> AMode {
@@ -569,7 +566,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let setup_frame = frame_layout.setup_area_size > 0;
         let mut insts = SmallVec::new();
 
-        match select_api_key(isa_flags, call_conv, setup_frame) {
+        match Self::select_api_key(isa_flags, call_conv, setup_frame) {
             Some(key) => {
                 insts.push(Inst::Paci { key });
                 if flags.unwind_info() {
@@ -675,7 +672,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
     ) -> SmallInstVec<Inst> {
         let setup_frame = frame_layout.setup_area_size > 0;
 
-        match select_api_key(isa_flags, call_conv, setup_frame) {
+        match Self::select_api_key(isa_flags, call_conv, setup_frame) {
             Some(key) => {
                 smallvec![Inst::AuthenticatedRet {
                     key,
@@ -1034,31 +1031,6 @@ impl ABIMachineSpec for AArch64MachineDeps {
         insts
     }
 
-    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Inst; 2]> {
-        let mut insts = SmallVec::new();
-        match dest {
-            CallDest::ExtName(name, RelocDistance::Near) => {
-                let info = Box::new(info.map(|()| name.clone()));
-                insts.push(Inst::Call { info });
-            }
-            CallDest::ExtName(name, RelocDistance::Far) => {
-                insts.push(Inst::LoadExtName {
-                    rd: tmp,
-                    name: Box::new(name.clone()),
-                    offset: 0,
-                });
-                let info = Box::new(info.map(|()| tmp.to_reg()));
-                insts.push(Inst::CallInd { info });
-            }
-            CallDest::Reg(reg) => {
-                let info = Box::new(info.map(|()| *reg));
-                insts.push(Inst::CallInd { info });
-            }
-        }
-
-        insts
-    }
-
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         call_conv: isa::CallConv,
         dst: Reg,
@@ -1257,89 +1229,30 @@ impl AArch64MachineDeps {
             step: Imm12::maybe_from_u64(guard_size.into()).unwrap(),
         });
     }
-}
 
-fn select_api_key(
-    isa_flags: &aarch64_settings::Flags,
-    call_conv: isa::CallConv,
-    setup_frame: bool,
-) -> Option<APIKey> {
-    if isa_flags.sign_return_address() && (setup_frame || isa_flags.sign_return_address_all()) {
-        // The `tail` calling convention uses a zero modifier rather than SP
-        // because tail calls may happen with a different stack pointer than
-        // when the function was entered, meaning that it won't be the same when
-        // the return address is decrypted.
-        Some(if isa_flags.sign_return_address_with_bkey() {
-            match call_conv {
-                isa::CallConv::Tail => APIKey::BZ,
-                _ => APIKey::BSP,
-            }
+    pub fn select_api_key(
+        isa_flags: &aarch64_settings::Flags,
+        call_conv: isa::CallConv,
+        setup_frame: bool,
+    ) -> Option<APIKey> {
+        if isa_flags.sign_return_address() && (setup_frame || isa_flags.sign_return_address_all()) {
+            // The `tail` calling convention uses a zero modifier rather than SP
+            // because tail calls may happen with a different stack pointer than
+            // when the function was entered, meaning that it won't be the same when
+            // the return address is decrypted.
+            Some(if isa_flags.sign_return_address_with_bkey() {
+                match call_conv {
+                    isa::CallConv::Tail => APIKey::BZ,
+                    _ => APIKey::BSP,
+                }
+            } else {
+                match call_conv {
+                    isa::CallConv::Tail => APIKey::AZ,
+                    _ => APIKey::ASP,
+                }
+            })
         } else {
-            match call_conv {
-                isa::CallConv::Tail => APIKey::AZ,
-                _ => APIKey::ASP,
-            }
-        })
-    } else {
-        None
-    }
-}
-
-impl AArch64CallSite {
-    pub fn emit_return_call(
-        mut self,
-        ctx: &mut Lower<Inst>,
-        args: isle::ValueSlice,
-        backend: &AArch64Backend,
-    ) {
-        let new_stack_arg_size =
-            u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
-
-        ctx.abi_mut().accumulate_tail_args_size(new_stack_arg_size);
-
-        // Put all arguments in registers and stack slots (within that newly
-        // allocated stack space).
-        self.emit_args(ctx, args);
-        self.emit_stack_ret_arg_for_tail_call(ctx);
-
-        let dest = self.dest().clone();
-        let uses = self.take_uses();
-        let key = select_api_key(&backend.isa_flags, isa::CallConv::Tail, true);
-
-        match dest {
-            CallDest::ExtName(callee, RelocDistance::Near) => {
-                let info = Box::new(ReturnCallInfo {
-                    dest: callee,
-                    uses,
-                    key,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnCall { info });
-            }
-            CallDest::ExtName(name, RelocDistance::Far) => {
-                let callee = ctx.alloc_tmp(types::I64).only_reg().unwrap();
-                ctx.emit(Inst::LoadExtName {
-                    rd: callee,
-                    name: Box::new(name),
-                    offset: 0,
-                });
-                let info = Box::new(ReturnCallInfo {
-                    dest: callee.to_reg(),
-                    uses,
-                    key,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnCallInd { info });
-            }
-            CallDest::Reg(callee) => {
-                let info = Box::new(ReturnCallInfo {
-                    dest: callee,
-                    uses,
-                    key,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnCallInd { info });
-            }
+            None
         }
     }
 }

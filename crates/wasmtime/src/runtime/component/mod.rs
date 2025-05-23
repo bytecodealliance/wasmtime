@@ -104,6 +104,7 @@ mod component;
 #[cfg(feature = "component-model-async")]
 pub(crate) mod concurrent;
 mod func;
+mod has_data;
 mod instance;
 mod linker;
 mod matching;
@@ -121,6 +122,7 @@ pub use self::concurrent::{
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
+pub use self::has_data::*;
 pub use self::instance::{Instance, InstanceExportLookup, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
 pub use self::resource_table::{ResourceTable, ResourceTableError};
@@ -140,13 +142,13 @@ pub use wasm_wave;
 #[doc(hidden)]
 pub mod __internal {
     pub use super::func::{
-        bad_type_info, format_flags, lower_payload, typecheck_enum, typecheck_flags,
-        typecheck_record, typecheck_variant, ComponentVariant, LiftContext, LowerContext, Options,
+        ComponentVariant, LiftContext, LowerContext, Options, bad_type_info, format_flags,
+        lower_payload, typecheck_enum, typecheck_flags, typecheck_record, typecheck_variant,
     };
     pub use super::matching::InstanceType;
+    pub use crate::MaybeUninitExt;
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
-    pub use crate::MaybeUninitExt;
     pub use alloc::boxed::Box;
     pub use alloc::string::String;
     pub use alloc::vec::Vec;

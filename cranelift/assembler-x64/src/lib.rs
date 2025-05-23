@@ -13,8 +13,10 @@
 //! impl Registers for Regs {
 //!     type ReadGpr = u8;
 //!     type ReadWriteGpr = u8;
+//!     type WriteGpr = u8;
 //!     type ReadXmm = u8;
 //!     type ReadWriteXmm = u8;
+//!     type WriteXmm = u8;
 //! }
 //!
 //! // Then, build one of the `AND` instructions; this one operates on an
@@ -80,14 +82,9 @@ pub use api::{
 };
 pub use fixed::Fixed;
 pub use gpr::{Gpr, NonRspGpr, Size};
-pub use imm::{Extension, Imm16, Imm32, Imm8, Simm16, Simm32, Simm8};
+pub use imm::{Extension, Imm8, Imm16, Imm32, Simm8, Simm16, Simm32};
 pub use mem::{
     Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, DeferredTarget, GprMem, Scale, XmmMem,
 };
-pub use rex::RexFlags;
+pub use rex::RexPrefix;
 pub use xmm::Xmm;
-
-/// List the files generated to create this assembler.
-pub fn generated_files() -> Vec<std::path::PathBuf> {
-    include!(concat!(env!("OUT_DIR"), "/generated-files.rs"))
-}

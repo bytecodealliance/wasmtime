@@ -5,7 +5,7 @@ mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
-use crate::runtime::vm::{GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe};
+use crate::runtime::vm::{GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
 use crate::vm::stack_switching::VMStackChain;
 use core::cell::UnsafeCell;
@@ -17,8 +17,8 @@ use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use sptr::Strict;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, DefinedMemoryIndex, Unsigned, VMSharedTypeIndex, WasmHeapTopType,
-    WasmValType, VMCONTEXT_MAGIC,
+    BuiltinFunctionIndex, DefinedMemoryIndex, Unsigned, VMCONTEXT_MAGIC, VMSharedTypeIndex,
+    WasmHeapTopType, WasmValType,
 };
 
 /// A function pointer that exposes the array calling convention.
@@ -455,6 +455,8 @@ mod test_vmglobal_definition {
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<f32>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<f64>());
         assert!(align_of::<VMGlobalDefinition>() >= align_of::<[u8; 16]>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<[f32; 4]>());
+        assert!(align_of::<VMGlobalDefinition>() >= align_of::<[f64; 2]>());
     }
 
     #[test]
@@ -834,6 +836,7 @@ impl VMFuncRef {
     ///
     /// Note that the unsafety invariants to maintain here are not currently
     /// exhaustively documented.
+    #[inline]
     pub unsafe fn array_call(
         &self,
         pulley: Option<InterpreterRef<'_>>,
@@ -868,6 +871,7 @@ impl VMFuncRef {
         )
     }
 
+    #[inline]
     unsafe fn array_call_native(
         &self,
         caller: NonNull<VMOpaqueContext>,
@@ -933,9 +937,12 @@ macro_rules! define_builtin_array {
     ) => {
         /// An array that stores addresses of builtin functions. We translate code
         /// to use indirect calls. This way, we don't have to patch the code.
+        ///
+        /// Ignore improper ctypes to permit `__m128i` on x86_64.
         #[repr(C)]
         pub struct VMBuiltinFunctionsArray {
             $(
+                #[allow(improper_ctypes_definitions)]
                 $name: unsafe extern "C" fn(
                     $(define_builtin_array!(@ty $param)),*
                 ) $( -> define_builtin_array!(@ty $result))?,
@@ -970,7 +977,12 @@ macro_rules! define_builtin_array {
 
     (@ty u32) => (u32);
     (@ty u64) => (u64);
+    (@ty f32) => (f32);
+    (@ty f64) => (f64);
     (@ty u8) => (u8);
+    (@ty i8x16) => (i8x16);
+    (@ty f32x4) => (f32x4);
+    (@ty f64x2) => (f64x2);
     (@ty bool) => (bool);
     (@ty pointer) => (*mut u8);
     (@ty vmctx) => (NonNull<VMContext>);

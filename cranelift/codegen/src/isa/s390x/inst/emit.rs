@@ -1,6 +1,8 @@
 //! S390x ISA: binary code emission.
 
 use crate::ir::{self, LibCall, MemFlags, TrapCode};
+use crate::isa::CallConv;
+use crate::isa::s390x::abi::REG_SAVE_AREA_SIZE;
 use crate::isa::s390x::inst::*;
 use crate::isa::s390x::settings as s390x_settings;
 use cranelift_control::ControlPlane;
@@ -38,6 +40,42 @@ macro_rules! debug_assert_valid_regpair {
     };
 }
 
+macro_rules! debug_assert_valid_fp_regpair {
+    ($hi:expr, $lo:expr) => {
+        if cfg!(debug_assertions) {
+            match ($hi.to_real_reg(), $lo.to_real_reg()) {
+                (Some(hi), Some(lo)) => {
+                    assert!(
+                        hi.hw_enc() & 2 == 0,
+                        "High register is not valid: {}",
+                        show_reg($hi)
+                    );
+                    assert_eq!(
+                        hi.hw_enc() + 2,
+                        lo.hw_enc(),
+                        "Low register is not valid: {}, {}",
+                        show_reg($hi),
+                        show_reg($lo)
+                    );
+                }
+
+                _ => {
+                    panic!(
+                        "Expected real registers for {} {}",
+                        show_reg($hi),
+                        show_reg($lo)
+                    );
+                }
+            }
+        }
+    };
+}
+
+const OPCODE_BRAS: u16 = 0xa75;
+const OPCODE_BCR: u16 = 0xa74;
+const OPCODE_LDR: u16 = 0x28;
+const OPCODE_VLR: u16 = 0xe756;
+
 /// Type(s) of memory instructions available for mem_finalize.
 pub struct MemInstType {
     /// True if 12-bit unsigned displacement is supported.
@@ -67,18 +105,28 @@ pub fn mem_finalize(
     let mem = match mem {
         &MemArg::RegOffset { off, .. }
         | &MemArg::InitialSPOffset { off }
-        | &MemArg::NominalSPOffset { off }
+        | &MemArg::IncomingArgOffset { off }
+        | &MemArg::OutgoingArgOffset { off }
         | &MemArg::SlotOffset { off }
         | &MemArg::SpillOffset { off } => {
             let base = match mem {
                 &MemArg::RegOffset { reg, .. } => reg,
                 &MemArg::InitialSPOffset { .. }
-                | &MemArg::NominalSPOffset { .. }
+                | &MemArg::IncomingArgOffset { .. }
+                | &MemArg::OutgoingArgOffset { .. }
                 | &MemArg::SlotOffset { .. }
                 | &MemArg::SpillOffset { .. } => stack_reg(),
                 _ => unreachable!(),
             };
             let adj = match mem {
+                &MemArg::IncomingArgOffset { .. } => i64::from(
+                    state.incoming_args_size
+                        + REG_SAVE_AREA_SIZE
+                        + state.frame_layout().clobber_size
+                        + state.frame_layout().fixed_frame_storage_size
+                        + state.frame_layout().outgoing_args_size
+                        + state.nominal_sp_offset,
+                ),
                 &MemArg::InitialSPOffset { .. } => i64::from(
                     state.frame_layout().clobber_size
                         + state.frame_layout().fixed_frame_storage_size
@@ -93,7 +141,9 @@ pub fn mem_finalize(
                 &MemArg::SlotOffset { .. } => {
                     i64::from(state.frame_layout().outgoing_args_size + state.nominal_sp_offset)
                 }
-                &MemArg::NominalSPOffset { .. } => i64::from(state.nominal_sp_offset),
+                &MemArg::OutgoingArgOffset { .. } => {
+                    i64::from(REG_SAVE_AREA_SIZE) - i64::from(state.outgoing_sp_offset)
+                }
                 _ => 0,
             };
             let off = off + adj;
@@ -132,7 +182,8 @@ pub fn mem_finalize(
 
     // If this addressing mode cannot be handled by the instruction, use load-address.
     let need_load_address = match &mem {
-        &MemArg::Label { .. } | &MemArg::Symbol { .. } if !mi.have_pcrel => true,
+        &MemArg::Label { .. } | &MemArg::Constant { .. } if !mi.have_pcrel => true,
+        &MemArg::Symbol { .. } if !mi.have_pcrel => true,
         &MemArg::Symbol { flags, .. } if !mi.have_unaligned_pcrel && !flags.aligned() => true,
         &MemArg::BXD20 { .. } if !mi.have_d20 => true,
         &MemArg::BXD12 { index, .. } | &MemArg::BXD20 { index, .. } if !mi.have_index => {
@@ -221,6 +272,11 @@ pub fn mem_emit(
             );
         }
         &MemArg::Label { target } => {
+            sink.use_label_at_offset(sink.cur_offset(), target, LabelUse::BranchRIL);
+            put(sink, &enc_ril_b(opcode_ril.unwrap(), rd, 0));
+        }
+        &MemArg::Constant { constant } => {
+            let target = sink.get_label_for_constant(constant);
             sink.use_label_at_offset(sink.cur_offset(), target, LabelUse::BranchRIL);
             put(sink, &enc_ril_b(opcode_ril.unwrap(), rd, 0));
         }
@@ -1279,6 +1335,15 @@ pub struct EmitState {
     /// ABI, between the AllocateArgs and the actual call instruction.
     pub(crate) nominal_sp_offset: u32,
 
+    /// Offset from the actual SP to the SP during an outgoing function call.
+    /// This is normally always zero, except during processing of the return
+    /// argument handling after a call using the tail-call ABI has returned.
+    pub(crate) outgoing_sp_offset: u32,
+
+    /// Size of the incoming argument area in the caller's frame.  Always zero
+    /// for functions using the tail-call ABI.
+    pub(crate) incoming_args_size: u32,
+
     /// The user stack map for the upcoming instruction, as provided to
     /// `pre_safepoint()`.
     user_stack_map: Option<ir::UserStackMap>,
@@ -1292,8 +1357,15 @@ pub struct EmitState {
 
 impl MachInstEmitState<Inst> for EmitState {
     fn new(abi: &Callee<S390xMachineDeps>, ctrl_plane: ControlPlane) -> Self {
+        let incoming_args_size = if abi.call_conv() == CallConv::Tail {
+            0
+        } else {
+            abi.frame_layout().incoming_args_size
+        };
         EmitState {
             nominal_sp_offset: 0,
+            outgoing_sp_offset: 0,
+            incoming_args_size,
             user_stack_map: None,
             ctrl_plane,
             frame_layout: abi.frame_layout().clone(),
@@ -2298,9 +2370,8 @@ impl Inst {
                 rd,
                 ref symbol_reloc,
             } => {
-                let opcode = 0xa75; // BRAS
                 let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(opcode, reg, 12));
+                put(sink, &enc_ri_b(OPCODE_BRAS, reg, 12));
                 let (reloc, name, offset) = match &**symbol_reloc {
                     SymbolReloc::Absolute { name, offset } => (Reloc::Abs8, name, *offset),
                     SymbolReloc::TlsGd { name } => (Reloc::S390xTlsGd64, name, 0),
@@ -2319,97 +2390,66 @@ impl Inst {
                     let opcode = 0x38; // LER
                     put(sink, &enc_rr(opcode, rd.to_reg(), rn));
                 } else {
-                    let opcode = 0xe756; // VLR
-                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, 0, 0, 0));
+                    put(sink, &enc_vrr_a(OPCODE_VLR, rd.to_reg(), rn, 0, 0, 0));
                 }
             }
             &Inst::FpuMove64 { rd, rn } => {
                 if is_fpr(rd.to_reg()) && is_fpr(rn) {
-                    let opcode = 0x28; // LDR
-                    put(sink, &enc_rr(opcode, rd.to_reg(), rn));
+                    put(sink, &enc_rr(OPCODE_LDR, rd.to_reg(), rn));
                 } else {
-                    let opcode = 0xe756; // VLR
-                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, 0, 0, 0));
+                    put(sink, &enc_vrr_a(OPCODE_VLR, rd.to_reg(), rn, 0, 0, 0));
                 }
             }
             &Inst::FpuCMov32 { rd, cond, ri, rm } => {
                 debug_assert_eq!(rd.to_reg(), ri);
 
                 if is_fpr(rd.to_reg()) && is_fpr(rm) {
-                    let opcode = 0xa74; // BCR
-                    put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 2));
+                    put(sink, &enc_ri_c(OPCODE_BCR, cond.invert().bits(), 4 + 2));
                     let opcode = 0x38; // LER
                     put(sink, &enc_rr(opcode, rd.to_reg(), rm));
                 } else {
-                    let opcode = 0xa74; // BCR
-                    put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 6));
-                    let opcode = 0xe756; // VLR
-                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rm, 0, 0, 0));
+                    put(sink, &enc_ri_c(OPCODE_BCR, cond.invert().bits(), 4 + 6));
+                    put(sink, &enc_vrr_a(OPCODE_VLR, rd.to_reg(), rm, 0, 0, 0));
                 }
             }
             &Inst::FpuCMov64 { rd, cond, ri, rm } => {
                 debug_assert_eq!(rd.to_reg(), ri);
 
                 if is_fpr(rd.to_reg()) && is_fpr(rm) {
-                    let opcode = 0xa74; // BCR
-                    put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 2));
-                    let opcode = 0x28; // LDR
-                    put(sink, &enc_rr(opcode, rd.to_reg(), rm));
+                    put(sink, &enc_ri_c(OPCODE_BCR, cond.invert().bits(), 4 + 2));
+                    put(sink, &enc_rr(OPCODE_LDR, rd.to_reg(), rm));
                 } else {
-                    let opcode = 0xa74; // BCR
-                    put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 6));
-                    let opcode = 0xe756; // VLR
-                    put(sink, &enc_vrr_a(opcode, rd.to_reg(), rm, 0, 0, 0));
+                    put(sink, &enc_ri_c(OPCODE_BCR, cond.invert().bits(), 4 + 6));
+                    put(sink, &enc_vrr_a(OPCODE_VLR, rd.to_reg(), rm, 0, 0, 0));
                 }
-            }
-            &Inst::LoadFpuConst32 { rd, const_data } => {
-                let opcode = 0xa75; // BRAS
-                let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(opcode, reg, 8));
-                sink.put4(const_data.swap_bytes());
-                let inst = Inst::VecLoadLaneUndef {
-                    size: 32,
-                    rd,
-                    mem: MemArg::reg(reg, MemFlags::trusted()),
-                    lane_imm: 0,
-                };
-                inst.emit(sink, emit_info, state);
-            }
-            &Inst::LoadFpuConst64 { rd, const_data } => {
-                let opcode = 0xa75; // BRAS
-                let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(opcode, reg, 12));
-                sink.put8(const_data.swap_bytes());
-                let inst = Inst::VecLoadLaneUndef {
-                    size: 64,
-                    rd,
-                    mem: MemArg::reg(reg, MemFlags::trusted()),
-                    lane_imm: 0,
-                };
-                inst.emit(sink, emit_info, state);
             }
             &Inst::FpuRR { fpu_op, rd, rn } => {
                 let (opcode, m3, m4, m5, opcode_fpr) = match fpu_op {
                     FPUOp1::Abs32 => (0xe7cc, 2, 8, 2, Some(0xb300)), // WFPSO, LPEBR
                     FPUOp1::Abs64 => (0xe7cc, 3, 8, 2, Some(0xb310)), // WFPSO, LPDBR
+                    FPUOp1::Abs128 => (0xe7cc, 4, 8, 2, None),        // WFPSO
                     FPUOp1::Abs32x4 => (0xe7cc, 2, 0, 2, None),       // VFPSO
                     FPUOp1::Abs64x2 => (0xe7cc, 3, 0, 2, None),       // VFPSO
                     FPUOp1::Neg32 => (0xe7cc, 2, 8, 0, Some(0xb303)), // WFPSO, LCEBR
                     FPUOp1::Neg64 => (0xe7cc, 3, 8, 0, Some(0xb313)), // WFPSO, LCDBR
+                    FPUOp1::Neg128 => (0xe7cc, 4, 8, 0, None),        // WFPSO
                     FPUOp1::Neg32x4 => (0xe7cc, 2, 0, 0, None),       // VFPSO
                     FPUOp1::Neg64x2 => (0xe7cc, 3, 0, 0, None),       // VFPSO
                     FPUOp1::NegAbs32 => (0xe7cc, 2, 8, 1, Some(0xb301)), // WFPSO, LNEBR
                     FPUOp1::NegAbs64 => (0xe7cc, 3, 8, 1, Some(0xb311)), // WFPSO, LNDBR
+                    FPUOp1::NegAbs128 => (0xe7cc, 4, 8, 1, None),     // WFPSO
                     FPUOp1::NegAbs32x4 => (0xe7cc, 2, 0, 1, None),    // VFPSO
                     FPUOp1::NegAbs64x2 => (0xe7cc, 3, 0, 1, None),    // VFPSO
                     FPUOp1::Sqrt32 => (0xe7ce, 2, 8, 0, Some(0xb314)), // WFSQ, SQEBR
                     FPUOp1::Sqrt64 => (0xe7ce, 3, 8, 0, Some(0xb315)), // WFSQ, SQDBR
+                    FPUOp1::Sqrt128 => (0xe7ce, 4, 8, 0, None),       // WFSQ
                     FPUOp1::Sqrt32x4 => (0xe7ce, 2, 0, 0, None),      // VFSQ
                     FPUOp1::Sqrt64x2 => (0xe7ce, 3, 0, 0, None),      // VFSQ
                     FPUOp1::Cvt32To64 => (0xe7c4, 2, 8, 0, Some(0xb304)), // WFLL, LDEBR
                     FPUOp1::Cvt32x4To64x2 => (0xe7c4, 2, 0, 0, None), // VFLL
+                    FPUOp1::Cvt64To128 => (0xe7c4, 3, 8, 0, None),    // WFLL
                 };
-                if m4 == 8 && is_fpr(rd.to_reg()) && is_fpr(rn) {
+                if m4 == 8 && opcode_fpr.is_some() && is_fpr(rd.to_reg()) && is_fpr(rn) {
                     put(sink, &enc_rre(opcode_fpr.unwrap(), rd.to_reg(), rn));
                 } else {
                     put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, m3, m4, m5));
@@ -2419,34 +2459,42 @@ impl Inst {
                 let (opcode, m4, m5, m6, opcode_fpr) = match fpu_op {
                     FPUOp2::Add32 => (0xe7e3, 2, 8, 0, Some(0xb30a)), // WFA, AEBR
                     FPUOp2::Add64 => (0xe7e3, 3, 8, 0, Some(0xb31a)), // WFA, ADBR
+                    FPUOp2::Add128 => (0xe7e3, 4, 8, 0, None),        // WFA
                     FPUOp2::Add32x4 => (0xe7e3, 2, 0, 0, None),       // VFA
                     FPUOp2::Add64x2 => (0xe7e3, 3, 0, 0, None),       // VFA
                     FPUOp2::Sub32 => (0xe7e2, 2, 8, 0, Some(0xb30b)), // WFS, SEBR
                     FPUOp2::Sub64 => (0xe7e2, 3, 8, 0, Some(0xb31b)), // WFS, SDBR
+                    FPUOp2::Sub128 => (0xe7e2, 4, 8, 0, None),        // WFS
                     FPUOp2::Sub32x4 => (0xe7e2, 2, 0, 0, None),       // VFS
                     FPUOp2::Sub64x2 => (0xe7e2, 3, 0, 0, None),       // VFS
                     FPUOp2::Mul32 => (0xe7e7, 2, 8, 0, Some(0xb317)), // WFM, MEEBR
                     FPUOp2::Mul64 => (0xe7e7, 3, 8, 0, Some(0xb31c)), // WFM, MDBR
+                    FPUOp2::Mul128 => (0xe7e7, 4, 8, 0, None),        // WFM
                     FPUOp2::Mul32x4 => (0xe7e7, 2, 0, 0, None),       // VFM
                     FPUOp2::Mul64x2 => (0xe7e7, 3, 0, 0, None),       // VFM
                     FPUOp2::Div32 => (0xe7e5, 2, 8, 0, Some(0xb30d)), // WFD, DEBR
                     FPUOp2::Div64 => (0xe7e5, 3, 8, 0, Some(0xb31d)), // WFD, DDBR
+                    FPUOp2::Div128 => (0xe7e5, 4, 8, 0, None),        // WFD
                     FPUOp2::Div32x4 => (0xe7e5, 2, 0, 0, None),       // VFD
                     FPUOp2::Div64x2 => (0xe7e5, 3, 0, 0, None),       // VFD
                     FPUOp2::Max32 => (0xe7ef, 2, 8, 1, None),         // WFMAX
                     FPUOp2::Max64 => (0xe7ef, 3, 8, 1, None),         // WFMAX
+                    FPUOp2::Max128 => (0xe7ef, 4, 8, 1, None),        // WFMAX
                     FPUOp2::Max32x4 => (0xe7ef, 2, 0, 1, None),       // VFMAX
                     FPUOp2::Max64x2 => (0xe7ef, 3, 0, 1, None),       // VFMAX
                     FPUOp2::Min32 => (0xe7ee, 2, 8, 1, None),         // WFMIN
                     FPUOp2::Min64 => (0xe7ee, 3, 8, 1, None),         // WFMIN
+                    FPUOp2::Min128 => (0xe7ee, 4, 8, 1, None),        // WFMIN
                     FPUOp2::Min32x4 => (0xe7ee, 2, 0, 1, None),       // VFMIN
                     FPUOp2::Min64x2 => (0xe7ee, 3, 0, 1, None),       // VFMIN
                     FPUOp2::MaxPseudo32 => (0xe7ef, 2, 8, 3, None),   // WFMAX
                     FPUOp2::MaxPseudo64 => (0xe7ef, 3, 8, 3, None),   // WFMAX
+                    FPUOp2::MaxPseudo128 => (0xe7ef, 4, 8, 3, None),  // WFMAX
                     FPUOp2::MaxPseudo32x4 => (0xe7ef, 2, 0, 3, None), // VFMAX
                     FPUOp2::MaxPseudo64x2 => (0xe7ef, 3, 0, 3, None), // VFMAX
                     FPUOp2::MinPseudo32 => (0xe7ee, 2, 8, 3, None),   // WFMIN
                     FPUOp2::MinPseudo64 => (0xe7ee, 3, 8, 3, None),   // WFMIN
+                    FPUOp2::MinPseudo128 => (0xe7ee, 4, 8, 3, None),  // WFMIN
                     FPUOp2::MinPseudo32x4 => (0xe7ee, 2, 0, 3, None), // VFMIN
                     FPUOp2::MinPseudo64x2 => (0xe7ee, 3, 0, 3, None), // VFMIN
                 };
@@ -2467,14 +2515,22 @@ impl Inst {
                 let (opcode, m5, m6, opcode_fpr) = match fpu_op {
                     FPUOp3::MAdd32 => (0xe78f, 8, 2, Some(0xb30e)), // WFMA, MAEBR
                     FPUOp3::MAdd64 => (0xe78f, 8, 3, Some(0xb31e)), // WFMA, MADBR
+                    FPUOp3::MAdd128 => (0xe78f, 8, 4, None),        // WFMA
                     FPUOp3::MAdd32x4 => (0xe78f, 0, 2, None),       // VFMA
                     FPUOp3::MAdd64x2 => (0xe78f, 0, 3, None),       // VFMA
                     FPUOp3::MSub32 => (0xe78e, 8, 2, Some(0xb30f)), // WFMS, MSEBR
                     FPUOp3::MSub64 => (0xe78e, 8, 3, Some(0xb31f)), // WFMS, MSDBR
+                    FPUOp3::MSub128 => (0xe78e, 8, 4, None),        // WFMS
                     FPUOp3::MSub32x4 => (0xe78e, 0, 2, None),       // VFMS
                     FPUOp3::MSub64x2 => (0xe78e, 0, 3, None),       // VFMS
                 };
-                if m5 == 8 && rd.to_reg() == ra && is_fpr(rn) && is_fpr(rm) && is_fpr(ra) {
+                if m5 == 8
+                    && opcode_fpr.is_some()
+                    && rd.to_reg() == ra
+                    && is_fpr(rn)
+                    && is_fpr(rm)
+                    && is_fpr(ra)
+                {
                     put(sink, &enc_rrd(opcode_fpr.unwrap(), rd.to_reg(), rm, rn));
                 } else {
                     put(sink, &enc_vrr_e(opcode, rd.to_reg(), rn, rm, ra, m5, m6));
@@ -2493,8 +2549,10 @@ impl Inst {
                 let (opcode, m3, m4, opcode_fpr) = match op {
                     FpuRoundOp::Cvt64To32 => (0xe7c5, 3, 8, Some(0xb344)), // WFLR, LEDBR(A)
                     FpuRoundOp::Cvt64x2To32x4 => (0xe7c5, 3, 0, None),     // VFLR
+                    FpuRoundOp::Cvt128To64 => (0xe7c5, 4, 8, None),        // WFLR
                     FpuRoundOp::Round32 => (0xe7c7, 2, 8, Some(0xb357)),   // WFI, FIEBR
                     FpuRoundOp::Round64 => (0xe7c7, 3, 8, Some(0xb35f)),   // WFI, FIDBR
+                    FpuRoundOp::Round128 => (0xe7c7, 4, 8, None),          // WFI
                     FpuRoundOp::Round32x4 => (0xe7c7, 2, 0, None),         // VFI
                     FpuRoundOp::Round64x2 => (0xe7c7, 3, 0, None),         // VFI
                     FpuRoundOp::ToSInt32 => (0xe7c2, 2, 8, None),          // WCSFP
@@ -2523,6 +2581,50 @@ impl Inst {
                     put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, m3, m4, mode));
                 }
             }
+            &Inst::FpuConv128FromInt { op, mode, rd, rn } => {
+                let rd1 = rd.hi;
+                let rd2 = rd.lo;
+                debug_assert_valid_fp_regpair!(rd1.to_reg(), rd2.to_reg());
+
+                let mode = match mode {
+                    FpuRoundMode::Current => 0,
+                    FpuRoundMode::ToNearest => 1,
+                    FpuRoundMode::ShorterPrecision => 3,
+                    FpuRoundMode::ToNearestTiesToEven => 4,
+                    FpuRoundMode::ToZero => 5,
+                    FpuRoundMode::ToPosInfinity => 6,
+                    FpuRoundMode::ToNegInfinity => 7,
+                };
+                let opcode = match op {
+                    FpuConv128Op::SInt32 => 0xb396, // CXFBRA
+                    FpuConv128Op::SInt64 => 0xb3a6, // CXGBRA
+                    FpuConv128Op::UInt32 => 0xb392, // CXLFBR
+                    FpuConv128Op::UInt64 => 0xb3a2, // CXLGBR
+                };
+                put(sink, &enc_rrf_cde(opcode, rd1.to_reg(), rn, mode, 0));
+            }
+            &Inst::FpuConv128ToInt { op, mode, rd, rn } => {
+                let rn1 = rn.hi;
+                let rn2 = rn.lo;
+                debug_assert_valid_fp_regpair!(rn1, rn2);
+
+                let mode = match mode {
+                    FpuRoundMode::Current => 0,
+                    FpuRoundMode::ToNearest => 1,
+                    FpuRoundMode::ShorterPrecision => 3,
+                    FpuRoundMode::ToNearestTiesToEven => 4,
+                    FpuRoundMode::ToZero => 5,
+                    FpuRoundMode::ToPosInfinity => 6,
+                    FpuRoundMode::ToNegInfinity => 7,
+                };
+                let opcode = match op {
+                    FpuConv128Op::SInt32 => 0xb39a, // CFXBRA
+                    FpuConv128Op::SInt64 => 0xb3aa, // CGXBRA
+                    FpuConv128Op::UInt32 => 0xb39e, // CLFXBR
+                    FpuConv128Op::UInt64 => 0xb3ae, // CLGXBR
+                };
+                put(sink, &enc_rrf_cde(opcode, rd.to_reg(), rn1, mode, 0));
+            }
             &Inst::FpuCmp32 { rn, rm } => {
                 if is_fpr(rn) && is_fpr(rm) {
                     let opcode = 0xb309; // CEBR
@@ -2540,6 +2642,10 @@ impl Inst {
                     let opcode = 0xe7cb; // WFC
                     put(sink, &enc_vrr_a(opcode, rn, rm, 3, 0, 0));
                 }
+            }
+            &Inst::FpuCmp128 { rn, rm } => {
+                let opcode = 0xe7cb; // WFC
+                put(sink, &enc_vrr_a(opcode, rn, rm, 4, 0, 0));
             }
 
             &Inst::VecRRR { op, rd, rn, rm } => {
@@ -2780,8 +2886,7 @@ impl Inst {
                 put(sink, &enc_vrr_a(opcode, rm, rn, m3, 0, 0));
 
                 // If CC != 0, we'd done, so jump over the next instruction.
-                let opcode = 0xa74; // BCR
-                put(sink, &enc_ri_c(opcode, 7, 4 + 6));
+                put(sink, &enc_ri_c(OPCODE_BCR, 7, 4 + 6));
 
                 // Otherwise, use VECTOR COMPARE HIGH LOGICAL.
                 // Since we already know the high parts are equal, the CC
@@ -2864,51 +2969,17 @@ impl Inst {
             }
 
             &Inst::VecMov { rd, rn } => {
-                let opcode = 0xe756; // VLR
-                put(sink, &enc_vrr_a(opcode, rd.to_reg(), rn, 0, 0, 0));
+                put(sink, &enc_vrr_a(OPCODE_VLR, rd.to_reg(), rn, 0, 0, 0));
             }
             &Inst::VecCMov { rd, cond, ri, rm } => {
                 debug_assert_eq!(rd.to_reg(), ri);
 
-                let opcode = 0xa74; // BCR
-                put(sink, &enc_ri_c(opcode, cond.invert().bits(), 4 + 6));
-                let opcode = 0xe756; // VLR
-                put(sink, &enc_vrr_a(opcode, rd.to_reg(), rm, 0, 0, 0));
+                put(sink, &enc_ri_c(OPCODE_BCR, cond.invert().bits(), 4 + 6));
+                put(sink, &enc_vrr_a(OPCODE_VLR, rd.to_reg(), rm, 0, 0, 0));
             }
             &Inst::MovToVec128 { rd, rn, rm } => {
                 let opcode = 0xe762; // VLVGP
                 put(sink, &enc_vrr_f(opcode, rd.to_reg(), rn, rm));
-            }
-            &Inst::VecLoadConst { rd, const_data } => {
-                let opcode = 0xa75; // BRAS
-                let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(opcode, reg, 20));
-                for i in const_data.to_be_bytes().iter() {
-                    sink.put1(*i);
-                }
-                let inst = Inst::VecLoad {
-                    rd,
-                    mem: MemArg::reg(reg, MemFlags::trusted()),
-                };
-                inst.emit(sink, emit_info, state);
-            }
-            &Inst::VecLoadConstReplicate {
-                size,
-                rd,
-                const_data,
-            } => {
-                let opcode = 0xa75; // BRAS
-                let reg = writable_spilltmp_reg().to_reg();
-                put(sink, &enc_ri_b(opcode, reg, (4 + size / 8) as i32));
-                for i in 0..size / 8 {
-                    sink.put1((const_data >> (size - 8 - 8 * i)) as u8);
-                }
-                let inst = Inst::VecLoadReplicate {
-                    size,
-                    rd,
-                    mem: MemArg::reg(reg, MemFlags::trusted()),
-                };
-                inst.emit(sink, emit_info, state);
             }
             &Inst::VecImmByteMask { rd, mask } => {
                 let opcode = 0xe744; // VGBM
@@ -3150,7 +3221,25 @@ impl Inst {
 
                 let opcode = match size {
                     8 => 0xe740,  // VLEIB
-                    16 => 0xe741, // LEIVH
+                    16 => 0xe741, // VLEIH
+                    32 => 0xe743, // VLEIF
+                    64 => 0xe742, // VLEIG
+                    _ => unreachable!(),
+                };
+                put(
+                    sink,
+                    &enc_vri_a(opcode, rd.to_reg(), imm as u16, lane_imm.into()),
+                );
+            }
+            &Inst::VecInsertLaneImmUndef {
+                size,
+                rd,
+                imm,
+                lane_imm,
+            } => {
+                let opcode = match size {
+                    8 => 0xe740,  // VLEIB
+                    16 => 0xe741, // VLEIH
                     32 => 0xe743, // VLEIF
                     64 => 0xe742, // VLEIG
                     _ => unreachable!(),
@@ -3179,6 +3268,48 @@ impl Inst {
                 );
             }
 
+            &Inst::VecEltRev { lane_count, rd, rn } => {
+                assert!(lane_count >= 2 && lane_count <= 16);
+                let inst = Inst::VecPermuteDWImm {
+                    rd,
+                    rn,
+                    rm: rn,
+                    idx1: 1,
+                    idx2: 0,
+                };
+                inst.emit(sink, emit_info, state);
+                if lane_count >= 4 {
+                    let inst = Inst::VecShiftRR {
+                        shift_op: VecShiftOp::RotL64x2,
+                        rd,
+                        rn: rd.to_reg(),
+                        shift_imm: 32,
+                        shift_reg: zero_reg(),
+                    };
+                    inst.emit(sink, emit_info, state);
+                }
+                if lane_count >= 8 {
+                    let inst = Inst::VecShiftRR {
+                        shift_op: VecShiftOp::RotL32x4,
+                        rd,
+                        rn: rd.to_reg(),
+                        shift_imm: 16,
+                        shift_reg: zero_reg(),
+                    };
+                    inst.emit(sink, emit_info, state);
+                }
+                if lane_count >= 16 {
+                    let inst = Inst::VecShiftRR {
+                        shift_op: VecShiftOp::RotL16x8,
+                        rd,
+                        rn: rd.to_reg(),
+                        shift_imm: 8,
+                        shift_reg: zero_reg(),
+                    };
+                    inst.emit(sink, emit_info, state);
+                }
+            }
+
             &Inst::AllocateArgs { size } => {
                 let inst = if let Ok(size) = i16::try_from(size) {
                     Inst::AluRSImm16 {
@@ -3196,6 +3327,7 @@ impl Inst {
                     }
                 };
                 inst.emit(sink, emit_info, state);
+                assert_eq!(state.nominal_sp_offset, 0);
                 state.nominal_sp_offset += size;
             }
             &Inst::Call { link, ref info } => {
@@ -3224,10 +3356,13 @@ impl Inst {
                 }
 
                 state.nominal_sp_offset -= info.callee_pop_size;
+                assert_eq!(state.nominal_sp_offset, 0);
 
+                state.outgoing_sp_offset = info.callee_pop_size;
                 for inst in S390xMachineDeps::gen_retval_loads(info) {
                     inst.emit(sink, emit_info, state);
                 }
+                state.outgoing_sp_offset = 0;
 
                 // If this is a try-call, jump to the continuation
                 // (normal-return) block.

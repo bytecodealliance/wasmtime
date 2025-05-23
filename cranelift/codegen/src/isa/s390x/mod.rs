@@ -7,8 +7,8 @@ use crate::isa::s390x::settings as s390x_settings;
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
-    TextSectionBuilder, VCode,
+    CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode, compile,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
@@ -180,6 +180,10 @@ impl TargetIsa for S390xBackend {
     }
 
     fn has_native_fma(&self) -> bool {
+        true
+    }
+
+    fn has_round(&self) -> bool {
         true
     }
 

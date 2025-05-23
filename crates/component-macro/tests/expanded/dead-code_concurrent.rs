@@ -6,11 +6,11 @@
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
 /// For more information see [`Imports`] as well.
-pub struct ImportsPre<T> {
+pub struct ImportsPre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
     indices: ImportsIndices,
 }
-impl<T> Clone for ImportsPre<T> {
+impl<T: 'static> Clone for ImportsPre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,7 +18,7 @@ impl<T> Clone for ImportsPre<T> {
         }
     }
 }
-impl<_T> ImportsPre<_T> {
+impl<_T: 'static> ImportsPre<_T> {
     /// Creates a new copy of `ImportsPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -149,8 +149,9 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
+            T: 'static,
             T: Send + a::b::interface_with_live_type::Host<Data = T>
-                + a::b::interface_with_dead_type::Host + 'static,
+                + a::b::interface_with_dead_type::Host,
             U: Send + a::b::interface_with_live_type::Host<Data = T>
                 + a::b::interface_with_dead_type::Host,
         {
@@ -198,27 +199,16 @@ pub mod a {
                 where
                     Self: Sized;
             }
-            pub trait GetHost<
-                T,
-                D,
-            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host<Data = D> + Send;
-            }
-            impl<F, T, D, O> GetHost<T, D> for F
-            where
-                F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host<Data = D> + Send,
-            {
-                type Host = O;
-            }
-            pub fn add_to_linker_get_host<
-                T,
-                G: for<'a> GetHost<&'a mut T, T, Host: Host<Data = T> + Send>,
-            >(
+            pub fn add_to_linker_get_host<T, G>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
+                G: for<'a> wasmtime::component::GetHost<
+                    &'a mut T,
+                    Host: Host<Data = T> + Send,
+                >,
                 T: Send + 'static,
             {
                 let mut inst = linker.instance("a:b/interface-with-live-type")?;
@@ -259,6 +249,7 @@ pub mod a {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host<Data = T> + Send,
                 T: Send + 'static,
             {
@@ -335,27 +326,13 @@ pub mod a {
                 assert!(4 == < V as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait Host {}
-            pub trait GetHost<
-                T,
-                D,
-            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host + Send;
-            }
-            impl<F, T, D, O> GetHost<T, D> for F
-            where
-                F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host + Send,
-            {
-                type Host = O;
-            }
-            pub fn add_to_linker_get_host<
-                T,
-                G: for<'a> GetHost<&'a mut T, T, Host: Host + Send>,
-            >(
+            pub fn add_to_linker_get_host<T, G>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
+                G: for<'a> wasmtime::component::GetHost<&'a mut T, Host: Host + Send>,
                 T: Send + 'static,
             {
                 let mut inst = linker.instance("a:b/interface-with-dead-type")?;
@@ -366,6 +343,7 @@ pub mod a {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
+                T: 'static,
                 U: Host + Send,
                 T: Send + 'static,
             {

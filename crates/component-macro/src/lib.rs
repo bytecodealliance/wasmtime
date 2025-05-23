@@ -1,4 +1,4 @@
-use syn::{parse_macro_input, DeriveInput, Error};
+use syn::{DeriveInput, Error, parse_macro_input};
 
 mod bindgen;
 mod component;

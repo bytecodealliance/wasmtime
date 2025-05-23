@@ -4,19 +4,19 @@
 //! You probably want to use [`preview1`](crate::preview1) instead.
 
 use crate::preview0::types::Error;
+use crate::preview1::WasiP1Ctx;
 use crate::preview1::types as snapshot1_types;
 use crate::preview1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;
-use crate::preview1::WasiP1Ctx;
 use wiggle::{GuestError, GuestMemory, GuestPtr};
 
-pub fn add_to_linker_async<T: Send>(
+pub fn add_to_linker_async<T: Send + 'static>(
     linker: &mut wasmtime::Linker<T>,
     f: impl Fn(&mut T) -> &mut WasiP1Ctx + Copy + Send + Sync + 'static,
 ) -> anyhow::Result<()> {
     wasi_unstable::add_to_linker(linker, f)
 }
 
-pub fn add_to_linker_sync<T: Send>(
+pub fn add_to_linker_sync<T: Send + 'static>(
     linker: &mut wasmtime::Linker<T>,
     f: impl Fn(&mut T) -> &mut WasiP1Ctx + Copy + Send + Sync + 'static,
 ) -> anyhow::Result<()> {

@@ -21,7 +21,7 @@ use anyhow::anyhow;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::{fmt, str::FromStr};
-use wasmtime::component::{Resource, ResourceTable};
+use wasmtime::component::{HasData, Resource, ResourceTable};
 
 /// Capture the state necessary for calling into the backend ML libraries.
 pub struct WasiNnCtx {
@@ -150,15 +150,21 @@ pub use generated_::Ml as ML;
 
 /// Add the WIT-based version of the `wasi-nn` API to a
 /// [`wasmtime::component::Linker`].
-pub fn add_to_linker<T>(
+pub fn add_to_linker<T: 'static>(
     l: &mut wasmtime::component::Linker<T>,
-    f: impl Fn(&mut T) -> WasiNnView<'_> + Send + Sync + Copy + 'static,
+    f: fn(&mut T) -> WasiNnView<'_>,
 ) -> anyhow::Result<()> {
-    generated::graph::add_to_linker_get_host(l, f)?;
-    generated::tensor::add_to_linker_get_host(l, f)?;
-    generated::inference::add_to_linker_get_host(l, f)?;
-    generated::errors::add_to_linker_get_host(l, f)?;
+    generated::graph::add_to_linker::<_, HasWasiNnView>(l, f)?;
+    generated::tensor::add_to_linker::<_, HasWasiNnView>(l, f)?;
+    generated::inference::add_to_linker::<_, HasWasiNnView>(l, f)?;
+    generated::errors::add_to_linker::<_, HasWasiNnView>(l, f)?;
     Ok(())
+}
+
+struct HasWasiNnView;
+
+impl HasData for HasWasiNnView {
+    type Data<'a> = WasiNnView<'a>;
 }
 
 impl generated::graph::Host for WasiNnView<'_> {

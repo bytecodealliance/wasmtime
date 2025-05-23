@@ -24,9 +24,13 @@
 //! namely in the `Resource<T>` and `ResourceAny` types.
 
 use crate::prelude::*;
+use core::error::Error;
+use core::fmt;
 use core::mem;
-use wasmtime_environ::component::TypeResourceTableIndex;
 use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::component::{
+    ComponentTypes, RuntimeComponentInstanceIndex, TypeResourceTableIndex,
+};
 
 /// The maximum handle value is specified in
 /// <https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md>
@@ -39,8 +43,9 @@ const MAX_RESOURCE_HANDLE: u32 = 1 << 30;
 /// whenever this is constructed the bits required to perform operations are
 /// always `Some`. For example:
 ///
-/// * During lifting and lowering both `tables` and `host_table` are `Some`.
-/// * During wasm's own intrinsics only `tables` is `Some`.
+/// * During lifting and lowering both `guest_table` and `host_table` are
+///   `Some`.
+/// * During wasm's own intrinsics only `guest_table` is `Some`.
 /// * During embedder-invoked resource destruction calls only `host_table` is
 ///   `Some`.
 ///
@@ -50,11 +55,15 @@ const MAX_RESOURCE_HANDLE: u32 = 1 << 30;
 pub struct ResourceTables<'a> {
     /// Runtime state for all resources defined in a component.
     ///
-    /// This is required whenever a `TypeResourceTableIndex` is provided as it's
-    /// the lookup where that happens. Not present during embedder-originating
-    /// operations though such as `ResourceAny::resource_drop` which won't
-    /// consult this table as it's only operating over the host table.
-    pub tables: Option<&'a mut PrimaryMap<TypeResourceTableIndex, ResourceTable>>,
+    /// This is required whenever a `TypeResourceTableIndex`, for example, is
+    /// provided as it's the lookup where that happens. Not present during
+    /// embedder-originating operations though such as
+    /// `ResourceAny::resource_drop` which won't consult this table as it's
+    /// only operating over the host table.
+    pub guest: Option<(
+        &'a mut PrimaryMap<RuntimeComponentInstanceIndex, ResourceTable>,
+        &'a ComponentTypes,
+    )>,
 
     /// Runtime state for resources currently owned by the host.
     ///
@@ -80,6 +89,99 @@ pub struct ResourceTable {
     slots: Vec<Slot>,
 }
 
+/// Typed representation of a "rep" for a resource.
+///
+/// All resources in the component model are stored in a single heterogeneous
+/// table so this type is used to disambiguate what everything is. This is the
+/// representation of a resource stored at-rest in memory.
+#[derive(Debug)]
+pub enum TypedResource {
+    /// A resource defined by the host.
+    ///
+    /// The meaning of the 32-bit integer here is up to the embedder, it
+    /// otherwise is not used within the runtime here.
+    Host(u32),
+
+    /// A resource defined within a component.
+    Component {
+        /// This is an integer supplied by the component itself when this
+        /// resource was created. Typically this is a pointer into linear
+        /// memory for a component.
+        rep: u32,
+
+        /// The type of this component resource.
+        ///
+        /// This is used, within the context of a component, to keep track of
+        /// what the type of `rep` is. This is then used when getting/removing
+        /// from the table to ensure that the guest does indeed have the right
+        /// permission to access this slot.
+        ty: TypeResourceTableIndex,
+    },
+}
+
+impl TypedResource {
+    fn rep(&self, access_ty: &TypedResourceIndex) -> Result<u32> {
+        match (self, access_ty) {
+            (Self::Host(rep), TypedResourceIndex::Host(_)) => Ok(*rep),
+            (Self::Host(_), expected) => bail!(ResourceTypeMismatch {
+                expected: *expected,
+                found: "host resource",
+            }),
+            (Self::Component { rep, ty }, TypedResourceIndex::Component { ty: expected, .. }) => {
+                if ty == expected {
+                    Ok(*rep)
+                } else {
+                    bail!(ResourceTypeMismatch {
+                        expected: *access_ty,
+                        found: "a different guest-defined resource",
+                    })
+                }
+            }
+            (Self::Component { .. }, expected) => bail!(ResourceTypeMismatch {
+                expected: *expected,
+                found: "guest-defined resource",
+            }),
+        }
+    }
+}
+
+/// An index used to access a resource.
+///
+/// This reflects how index operations are always accompanied not only with a
+/// 32-bit index but additionally with a type. For example a `resource.drop`
+/// intrinsic in a guest takes only a 32-bit integer argument, but it
+/// inherently is used to only drop one type of resource which is additionally
+/// ascribed here.
+#[derive(Debug, Copy, Clone)]
+pub enum TypedResourceIndex {
+    /// A host resource at the given index is being accessed.
+    Host(u32),
+
+    /// A guest resource is being accessed.
+    Component {
+        /// The index supplied by the guest being accessed.
+        index: u32,
+
+        /// The fully-specific type of this resource.
+        ty: TypeResourceTableIndex,
+    },
+}
+
+impl TypedResourceIndex {
+    fn raw_index(&self) -> u32 {
+        match self {
+            Self::Host(index) | Self::Component { index, .. } => *index,
+        }
+    }
+
+    fn desc(&self) -> &'static str {
+        match self {
+            Self::Host(_) => "host resource",
+            Self::Component { .. } => "guest-defined resource",
+        }
+    }
+}
+
 enum Slot {
     /// This slot is free and points to the next free slot, forming a linked
     /// list of free slots.
@@ -89,12 +191,18 @@ enum Slot {
     ///
     /// The `lend_count` tracks how many times this has been lent out as a
     /// `borrow` and if nonzero this can't be removed.
-    Own { rep: u32, lend_count: u32 },
+    Own {
+        resource: TypedResource,
+        lend_count: u32,
+    },
 
     /// This slot contains a `borrow` resource that's connected to the `scope`
     /// provided. The `rep` is listed and dropping this borrow will decrement
     /// the borrow count of the `scope`.
-    Borrow { rep: u32, scope: usize },
+    Borrow {
+        resource: TypedResource,
+        scope: usize,
+    },
 }
 
 /// State related to borrows and calls within a component.
@@ -109,59 +217,74 @@ pub struct CallContexts {
 
 #[derive(Default)]
 struct CallContext {
-    lenders: Vec<Lender>,
+    lenders: Vec<TypedResourceIndex>,
     borrow_count: u32,
 }
 
-#[derive(Copy, Clone)]
-struct Lender {
-    ty: Option<TypeResourceTableIndex>,
-    idx: u32,
-}
-
 impl ResourceTables<'_> {
-    fn table(&mut self, ty: Option<TypeResourceTableIndex>) -> &mut ResourceTable {
-        match ty {
-            None => self.host_table.as_mut().unwrap(),
-            Some(idx) => &mut self.tables.as_mut().unwrap()[idx],
+    fn table_for_resource(&mut self, resource: &TypedResource) -> &mut ResourceTable {
+        match resource {
+            TypedResource::Host(_) => self.host_table.as_mut().unwrap(),
+            TypedResource::Component { ty, .. } => {
+                let (tables, types) = self.guest.as_mut().unwrap();
+                &mut tables[types[*ty].instance]
+            }
+        }
+    }
+
+    fn table_for_index(&mut self, index: &TypedResourceIndex) -> &mut ResourceTable {
+        match index {
+            TypedResourceIndex::Host(_) => self.host_table.as_mut().unwrap(),
+            TypedResourceIndex::Component { ty, .. } => {
+                let (tables, types) = self.guest.as_mut().unwrap();
+                &mut tables[types[*ty].instance]
+            }
         }
     }
 
     /// Implementation of the `resource.new` canonical intrinsic.
     ///
     /// Note that this is the same as `resource_lower_own`.
-    pub fn resource_new(&mut self, ty: Option<TypeResourceTableIndex>, rep: u32) -> Result<u32> {
-        self.table(ty).insert(Slot::Own { rep, lend_count: 0 })
+    pub fn resource_new(&mut self, resource: TypedResource) -> Result<u32> {
+        self.table_for_resource(&resource).insert(Slot::Own {
+            resource,
+            lend_count: 0,
+        })
     }
 
     /// Implementation of the `resource.rep` canonical intrinsic.
     ///
     /// This one's one of the simpler ones: "just get the rep please"
-    pub fn resource_rep(&mut self, ty: Option<TypeResourceTableIndex>, idx: u32) -> Result<u32> {
-        self.table(ty).rep(idx)
+    pub fn resource_rep(&mut self, index: TypedResourceIndex) -> Result<u32> {
+        self.table_for_index(&index).rep(index)
     }
 
     /// Implementation of the `resource.drop` canonical intrinsic minus the
     /// actual invocation of the destructor.
     ///
-    /// This will drop the handle at the `idx` specified, removing it from the
-    /// specified table. This operation can fail if:
+    /// This will drop the handle at the `index` specified, removing it from
+    /// the specified table. This operation can fail if:
     ///
     /// * The index is invalid.
     /// * The index points to an `own` resource which has active borrows.
+    /// * The index's type is mismatched with the entry in the table's type.
     ///
     /// Otherwise this will return `Some(rep)` if the destructor for `rep` needs
     /// to run. If `None` is returned then that means a `borrow` handle was
     /// removed and no destructor is necessary.
-    pub fn resource_drop(
-        &mut self,
-        ty: Option<TypeResourceTableIndex>,
-        idx: u32,
-    ) -> Result<Option<u32>> {
-        match self.table(ty).remove(idx)? {
-            Slot::Own { rep, lend_count: 0 } => Ok(Some(rep)),
+    pub fn resource_drop(&mut self, index: TypedResourceIndex) -> Result<Option<u32>> {
+        match self.table_for_index(&index).remove(index)? {
+            Slot::Own {
+                resource,
+                lend_count: 0,
+            } => resource.rep(&index).map(Some),
             Slot::Own { .. } => bail!("cannot remove owned resource while borrowed"),
-            Slot::Borrow { scope, .. } => {
+            Slot::Borrow {
+                scope, resource, ..
+            } => {
+                // Validate that this borrow has the correct type to ensure a
+                // trap is returned if this is a mis-typed `resource.drop`.
+                resource.rep(&index)?;
                 self.calls.scopes[scope].borrow_count -= 1;
                 Ok(None)
             }
@@ -178,28 +301,27 @@ impl ResourceTables<'_> {
     /// the same as `resource_new` implementation-wise.
     ///
     /// This is an implementation of the canonical ABI `lower_own` function.
-    pub fn resource_lower_own(
-        &mut self,
-        ty: Option<TypeResourceTableIndex>,
-        rep: u32,
-    ) -> Result<u32> {
-        self.table(ty).insert(Slot::Own { rep, lend_count: 0 })
+    pub fn resource_lower_own(&mut self, resource: TypedResource) -> Result<u32> {
+        self.table_for_resource(&resource).insert(Slot::Own {
+            resource,
+            lend_count: 0,
+        })
     }
 
     /// Attempts to remove an "own" handle from the specified table and its
     /// index.
     ///
-    /// This operation will fail if `idx` is invalid, if it's a `borrow` handle,
-    /// or if the own handle has currently been "lent" as a borrow.
+    /// This operation will fail if `index` is invalid, if it's a `borrow`
+    /// handle, if the own handle has currently been "lent" as a borrow, or if
+    /// `index` has a different type in the table than the index.
     ///
     /// This is an implementation of the canonical ABI `lift_own` function.
-    pub fn resource_lift_own(
-        &mut self,
-        ty: Option<TypeResourceTableIndex>,
-        idx: u32,
-    ) -> Result<u32> {
-        match self.table(ty).remove(idx)? {
-            Slot::Own { rep, lend_count: 0 } => Ok(rep),
+    pub fn resource_lift_own(&mut self, index: TypedResourceIndex) -> Result<u32> {
+        match self.table_for_index(&index).remove(index)? {
+            Slot::Own {
+                resource,
+                lend_count: 0,
+            } => resource.rep(&index),
             Slot::Own { .. } => bail!("cannot remove owned resource while borrowed"),
             Slot::Borrow { .. } => bail!("cannot lift own resource from a borrow"),
             Slot::Free { .. } => unreachable!(),
@@ -215,21 +337,20 @@ impl ResourceTables<'_> {
     /// returns the lend operation is undone.
     ///
     /// This is an implementation of the canonical ABI `lift_borrow` function.
-    pub fn resource_lift_borrow(
-        &mut self,
-        ty: Option<TypeResourceTableIndex>,
-        idx: u32,
-    ) -> Result<u32> {
-        match self.table(ty).get_mut(idx)? {
-            Slot::Own { rep, lend_count } => {
+    pub fn resource_lift_borrow(&mut self, index: TypedResourceIndex) -> Result<u32> {
+        match self.table_for_index(&index).get_mut(index)? {
+            Slot::Own {
+                resource,
+                lend_count,
+            } => {
+                let rep = resource.rep(&index)?;
                 // The decrement to this count happens in `exit_call`.
                 *lend_count = lend_count.checked_add(1).unwrap();
-                let rep = *rep;
                 let scope = self.calls.scopes.last_mut().unwrap();
-                scope.lenders.push(Lender { ty, idx });
+                scope.lenders.push(index);
                 Ok(rep)
             }
-            Slot::Borrow { rep, .. } => Ok(*rep),
+            Slot::Borrow { resource, .. } => resource.rep(&index),
             Slot::Free { .. } => unreachable!(),
         }
     }
@@ -246,15 +367,12 @@ impl ResourceTables<'_> {
     /// function. The other half of this implementation is located on
     /// `VMComponentContext` which handles the special case of avoiding borrow
     /// tracking entirely.
-    pub fn resource_lower_borrow(
-        &mut self,
-        ty: Option<TypeResourceTableIndex>,
-        rep: u32,
-    ) -> Result<u32> {
+    pub fn resource_lower_borrow(&mut self, resource: TypedResource) -> Result<u32> {
         let scope = self.calls.scopes.len() - 1;
         let borrow_count = &mut self.calls.scopes.last_mut().unwrap().borrow_count;
         *borrow_count = borrow_count.checked_add(1).unwrap();
-        self.table(ty).insert(Slot::Borrow { rep, scope })
+        self.table_for_resource(&resource)
+            .insert(Slot::Borrow { resource, scope })
     }
 
     /// Enters a new calling context, starting a fresh count of borrows and
@@ -279,7 +397,7 @@ impl ResourceTables<'_> {
             // Note the panics here which should never get triggered in theory
             // due to the dynamic tracking of borrows and such employed for
             // resources.
-            match self.table(lender.ty).get_mut(lender.idx).unwrap() {
+            match self.table_for_index(lender).get_mut(*lender).unwrap() {
                 Slot::Own { lend_count, .. } => {
                     *lend_count -= 1;
                 }
@@ -322,30 +440,62 @@ impl ResourceTable {
         usize::try_from(idx).ok()
     }
 
-    fn rep(&self, idx: u32) -> Result<u32> {
+    fn rep(&self, idx: TypedResourceIndex) -> Result<u32> {
         let slot = self
-            .handle_index_to_table_index(idx)
+            .handle_index_to_table_index(idx.raw_index())
             .and_then(|i| self.slots.get(i));
         match slot {
-            None | Some(Slot::Free { .. }) => bail!("unknown handle index {idx}"),
-            Some(Slot::Own { rep, .. } | Slot::Borrow { rep, .. }) => Ok(*rep),
+            None | Some(Slot::Free { .. }) => bail!(UnknownHandleIndex(idx)),
+            Some(Slot::Own { resource, .. } | Slot::Borrow { resource, .. }) => resource.rep(&idx),
         }
     }
 
-    fn get_mut(&mut self, idx: u32) -> Result<&mut Slot> {
+    fn get_mut(&mut self, idx: TypedResourceIndex) -> Result<&mut Slot> {
         let slot = self
-            .handle_index_to_table_index(idx)
+            .handle_index_to_table_index(idx.raw_index())
             .and_then(|i| self.slots.get_mut(i));
         match slot {
-            None | Some(Slot::Free { .. }) => bail!("unknown handle index {idx}"),
+            None | Some(Slot::Free { .. }) => bail!(UnknownHandleIndex(idx)),
             Some(other) => Ok(other),
         }
     }
 
-    fn remove(&mut self, idx: u32) -> Result<Slot> {
+    fn remove(&mut self, idx: TypedResourceIndex) -> Result<Slot> {
         let to_fill = Slot::Free { next: self.next };
         let ret = mem::replace(self.get_mut(idx)?, to_fill);
-        self.next = idx - 1;
+        self.next = idx.raw_index() - 1;
         Ok(ret)
     }
 }
+
+#[derive(Debug)]
+struct UnknownHandleIndex(TypedResourceIndex);
+
+impl fmt::Display for UnknownHandleIndex {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "unknown handle index {}", self.0.raw_index())
+    }
+}
+
+impl Error for UnknownHandleIndex {}
+
+#[derive(Debug)]
+struct ResourceTypeMismatch {
+    expected: TypedResourceIndex,
+    found: &'static str,
+}
+
+impl fmt::Display for ResourceTypeMismatch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "handle index {} used with the wrong type, \
+             expected {} but found {}",
+            self.expected.raw_index(),
+            self.expected.desc(),
+            self.found,
+        )
+    }
+}
+
+impl Error for ResourceTypeMismatch {}

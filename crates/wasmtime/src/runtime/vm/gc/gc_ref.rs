@@ -244,11 +244,7 @@ impl VMGcRef {
     ///
     /// Returns `None` for `i31ref`s.
     pub fn as_heap_index(&self) -> Option<NonZeroU32> {
-        if self.is_i31() {
-            None
-        } else {
-            Some(self.0)
-        }
+        if self.is_i31() { None } else { Some(self.0) }
     }
 
     /// Get this GC reference as a raw, non-zero u32 value, regardless whether

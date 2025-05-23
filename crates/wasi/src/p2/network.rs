@@ -1,5 +1,5 @@
-use crate::p2::bindings::sockets::network::{ErrorCode, Ipv4Address, Ipv6Address};
 use crate::TrappableError;
+use crate::p2::bindings::sockets::network::{ErrorCode, Ipv4Address, Ipv6Address};
 
 pub type SocketResult<T> = Result<T, SocketError>;
 

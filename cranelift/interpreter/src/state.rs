@@ -5,8 +5,8 @@ use crate::frame::Frame;
 use crate::interpreter::LibCallHandler;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
-    types, ExternalName, FuncRef, Function, GlobalValue, LibCall, MemFlags, Signature, StackSlot,
-    Type, Value,
+    ExternalName, FuncRef, Function, GlobalValue, LibCall, MemFlags, Signature, StackSlot, Type,
+    Value, types,
 };
 use cranelift_codegen::isa::CallConv;
 use smallvec::SmallVec;

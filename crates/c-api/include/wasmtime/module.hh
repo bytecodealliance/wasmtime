@@ -188,4 +188,3 @@ public:
 } // namespace wasmtime
 
 #endif // WASMTIME_MODULE_HH
-

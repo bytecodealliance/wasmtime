@@ -1,13 +1,13 @@
 //! Common functionality shared between command implementations.
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use clap::Parser;
 use std::net::TcpListener;
 use std::{fs::File, path::Path, time::Duration};
 use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
-use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
-use wasmtime_wasi::p2::bindings::LinkOptions;
+use wasmtime_cli_flags::{CommonOptions, opt::WasmtimeOptionValue};
 use wasmtime_wasi::p2::WasiCtxBuilder;
+use wasmtime_wasi::p2::bindings::LinkOptions;
 
 #[cfg(feature = "component-model")]
 use wasmtime::component::Component;

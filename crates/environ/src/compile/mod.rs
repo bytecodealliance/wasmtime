@@ -2,11 +2,11 @@
 //! module.
 
 use crate::prelude::*;
-use crate::{obj, Tunables};
 use crate::{
     BuiltinFunctionIndex, DefinedFuncIndex, FlagValue, FuncIndex, FunctionLoc, ObjectKind,
     PrimaryMap, StaticModuleIndex, TripleExt, WasmError, WasmFuncType,
 };
+use crate::{Tunables, obj};
 use anyhow::Result;
 use object::write::{Object, SymbolId};
 use object::{Architecture, BinaryFormat, FileFlags};
@@ -79,8 +79,6 @@ pub enum RelocationTarget {
     Wasm(FuncIndex),
     /// This is a reference to a trampoline for a builtin function.
     Builtin(BuiltinFunctionIndex),
-    /// A compiler-generated libcall.
-    HostLibcall(obj::LibCall),
     /// A pulley->host call from the interpreter.
     PulleyHostcall(u32),
 }

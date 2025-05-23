@@ -1,4 +1,4 @@
-use escaping::{escape_id, handle_2big_enum_variant, NamingConvention};
+use escaping::{NamingConvention, escape_id, handle_2big_enum_variant};
 use heck::{ToShoutySnakeCase, ToSnakeCase};
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};

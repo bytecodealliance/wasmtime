@@ -3,18 +3,18 @@
 use super::lower::isle::generated_code::{VecAMode, VecElementWidth, VecOpMasking};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
-use crate::ir::types::{self, F128, F16, F32, F64, I128, I16, I32, I64, I8, I8X16};
+use crate::ir::types::{self, F16, F32, F64, F128, I8, I8X16, I16, I32, I64, I128};
 
 pub use crate::ir::{ExternalName, MemFlags, Type};
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
-use crate::{settings, CodegenError, CodegenResult};
+use crate::{CodegenError, CodegenResult, settings};
 
 pub use crate::ir::condcodes::FloatCC;
 
 use alloc::vec::Vec;
 use regalloc2::RegClass;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::boxed::Box;
 use std::fmt::Write;
 use std::string::{String, ToString};
@@ -46,8 +46,8 @@ pub(crate) type VecU8 = Vec<u8>;
 // Instructions (top level): definition
 
 pub use crate::isa::riscv64::lower::isle::generated_code::{
-    AluOPRRI, AluOPRRR, AtomicOP, CsrImmOP, CsrRegOP, FClassResult, FFlagsException, FpuOPRR,
-    FpuOPRRR, FpuOPRRRR, LoadOP, MInst as Inst, StoreOP, CSR, FRM,
+    AluOPRRI, AluOPRRR, AtomicOP, CSR, CsrImmOP, CsrRegOP, FClassResult, FFlagsException, FRM,
+    FpuOPRR, FpuOPRRR, FpuOPRRRR, LoadOP, MInst as Inst, StoreOP,
 };
 use crate::isa::riscv64::lower::isle::generated_code::{CjOp, MInst, VecAluOpRRImm5, VecAluOpRRR};
 
@@ -795,7 +795,8 @@ impl MachInst for Inst {
             F16 => Ok((&[RegClass::Float], &[F16])),
             F32 => Ok((&[RegClass::Float], &[F32])),
             F64 => Ok((&[RegClass::Float], &[F64])),
-            I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
+            // FIXME(#8312): Add support for Q extension
+            F128 | I128 => Ok((&[RegClass::Int, RegClass::Int], &[I64, I64])),
             _ if ty.is_vector() => {
                 debug_assert!(ty.bits() <= 512);
 
@@ -1108,16 +1109,10 @@ impl Inst {
             &Inst::Lui { rd, ref imm } => {
                 format!("{} {},{}", "lui", format_reg(rd.to_reg()), imm.as_i32())
             }
-            &Inst::Fli { rd, ty, imm } => {
+            &Inst::Fli { rd, width, imm } => {
                 let rd_s = format_reg(rd.to_reg());
                 let imm_s = imm.format();
-                let suffix = match ty {
-                    F32 => "s",
-                    F64 => "d",
-                    _ => unreachable!(),
-                };
-
-                format!("fli.{suffix} {rd_s},{imm_s}")
+                format!("fli.{width} {rd_s},{imm_s}")
             }
             &Inst::LoadInlineConst { rd, imm, .. } => {
                 let rd = format_reg(rd.to_reg());

@@ -6,11 +6,11 @@
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
 /// For more information see [`TheWorld`] as well.
-pub struct TheWorldPre<T> {
+pub struct TheWorldPre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
     indices: TheWorldIndices,
 }
-impl<T> Clone for TheWorldPre<T> {
+impl<T: 'static> Clone for TheWorldPre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,7 +18,7 @@ impl<T> Clone for TheWorldPre<T> {
         }
     }
 }
-impl<_T> TheWorldPre<_T> {
+impl<_T: 'static> TheWorldPre<_T> {
     /// Creates a new copy of `TheWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -138,14 +138,16 @@ const _: () = {
             let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker<T, U>(
+        pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            get: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            U: imports::Host,
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<'a>: imports::Host,
+            T: 'static,
         {
-            imports::add_to_linker(linker, get)?;
+            imports::add_to_linker::<T, D>(linker, get)?;
             Ok(())
         }
     }
@@ -157,23 +159,15 @@ pub mod imports {
     pub trait Host {
         fn y(&mut self) -> ();
     }
-    pub trait GetHost<
-        T,
-        D,
-    >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-        type Host: Host;
-    }
-    impl<F, T, D, O> GetHost<T, D> for F
-    where
-        F: Fn(T) -> O + Send + Sync + Copy + 'static,
-        O: Host,
-    {
-        type Host = O;
-    }
-    pub fn add_to_linker_get_host<T, G: for<'a> GetHost<&'a mut T, T, Host: Host>>(
+    pub fn add_to_linker<T, D>(
         linker: &mut wasmtime::component::Linker<T>,
-        host_getter: G,
-    ) -> wasmtime::Result<()> {
+        host_getter: fn(&mut T) -> D::Data<'_>,
+    ) -> wasmtime::Result<()>
+    where
+        D: wasmtime::component::HasData,
+        for<'a> D::Data<'a>: Host,
+        T: 'static,
+    {
         let mut inst = linker.instance("imports")?;
         inst.func_wrap(
             "y",
@@ -184,15 +178,6 @@ pub mod imports {
             },
         )?;
         Ok(())
-    }
-    pub fn add_to_linker<T, U>(
-        linker: &mut wasmtime::component::Linker<T>,
-        get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-    ) -> wasmtime::Result<()>
-    where
-        U: Host,
-    {
-        add_to_linker_get_host(linker, get)
     }
     impl<_T: Host + ?Sized> Host for &mut _T {
         fn y(&mut self) -> () {

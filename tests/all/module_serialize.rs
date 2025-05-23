@@ -24,9 +24,10 @@ fn test_version_mismatch() -> Result<()> {
     let custom_version_engine = Engine::new(&config).unwrap();
     match unsafe { Module::deserialize(&custom_version_engine, &buffer) } {
         Ok(_) => bail!("expected deserialization to fail"),
-        Err(e) => assert!(e
-            .to_string()
-            .starts_with("Module was compiled with incompatible version")),
+        Err(e) => assert!(
+            e.to_string()
+                .starts_with("Module was compiled with incompatible version")
+        ),
     }
 
     let mut config = Config::new();

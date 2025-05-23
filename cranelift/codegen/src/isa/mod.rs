@@ -46,21 +46,21 @@
 use crate::dominator_tree::DominatorTree;
 pub use crate::isa::call_conv::CallConv;
 
+use crate::CodegenResult;
 use crate::ir::{self, Function, Type};
 #[cfg(feature = "unwind")]
-use crate::isa::unwind::{systemv::RegisterMappingError, UnwindInfoKind};
+use crate::isa::unwind::{UnwindInfoKind, systemv::RegisterMappingError};
 use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder};
 use crate::settings;
 use crate::settings::Configurable;
 use crate::settings::SetResult;
-use crate::CodegenResult;
-use crate::{flowgraph, Reg};
+use crate::{Reg, flowgraph};
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
 use cranelift_control::ControlPlane;
 use std::string::String;
-use target_lexicon::{triple, Architecture, PointerWidth, Triple};
+use target_lexicon::{Architecture, PointerWidth, Triple, triple};
 
 // This module is made public here for benchmarking purposes. No guarantees are
 // made regarding API stability.
@@ -384,6 +384,9 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Currently this only returns false on x86 when some native features are
     /// not detected.
     fn has_native_fma(&self) -> bool;
+
+    /// Returns whether this ISA has instructions for `ceil`, `floor`, etc.
+    fn has_round(&self) -> bool;
 
     /// Returns whether the CLIF `x86_blendv` instruction is implemented for
     /// this ISA for the specified type.

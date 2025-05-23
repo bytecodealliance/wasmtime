@@ -210,7 +210,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   shll    $3, %esi, %esi
+;   shll $0x3, %esi
 ;   movq    -1(%rdi,%rsi,1), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -244,7 +244,7 @@ block0(v0: i64, v1: i32, v2: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   lea     0(%rsi,%rdx,1), %r8d
-;   shll    $2, %r8d, %r8d
+;   shll $0x2, %r8d
 ;   movq    -1(%rdi,%r8,1), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

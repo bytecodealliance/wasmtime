@@ -4,17 +4,17 @@
 pub(super) mod isle;
 
 use crate::ir::pcc::{FactContext, PccResult};
-use crate::ir::{types, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type};
+use crate::ir::{ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type, types};
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::isa::x64::pcc;
-use crate::isa::{x64::X64Backend, CallConv};
+use crate::isa::{CallConv, x64::X64Backend};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
-use smallvec::{smallvec, SmallVec};
+use std::boxed::Box;
 use target_lexicon::Triple;
 
 //=============================================================================
@@ -150,43 +150,43 @@ fn emit_vm_call(
     flags: &Flags,
     triple: &Triple,
     libcall: LibCall,
-    inputs: &[Reg],
-) -> CodegenResult<SmallVec<[Reg; 1]>> {
+    inputs: &[ValueRegs<Reg>],
+) -> CodegenResult<InstOutput> {
     let extname = ExternalName::LibCall(libcall);
-
-    let dist = if flags.use_colocated_libcalls() {
-        RelocDistance::Near
-    } else {
-        RelocDistance::Far
-    };
 
     // TODO avoid recreating signatures for every single Libcall function.
     let call_conv = CallConv::for_libcall(flags, CallConv::triple_default(triple));
     let sig = libcall.signature(call_conv, types::I64);
-    let caller_conv = ctx.abi().call_conv(ctx.sigs());
+    let outputs = ctx.gen_call_output(&sig);
 
     if !ctx.sigs().have_abi_sig_for_signature(&sig) {
         ctx.sigs_mut()
             .make_abi_sig_from_ir_signature::<X64ABIMachineSpec>(sig.clone(), flags)?;
     }
+    let sig = ctx.sigs().abi_sig_for_signature(&sig);
 
-    let mut abi =
-        X64CallSite::from_libcall(ctx.sigs(), &sig, &extname, dist, caller_conv, flags.clone());
+    let uses = ctx.gen_call_args(sig, inputs);
+    let defs = ctx.gen_call_rets(sig, &outputs);
 
-    assert_eq!(inputs.len(), abi.num_args(ctx.sigs()));
+    let stack_ret_space = ctx.sigs()[sig].sized_stack_ret_space();
+    let stack_arg_space = ctx.sigs()[sig].sized_stack_arg_space();
+    ctx.abi_mut()
+        .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
 
-    for (i, input) in inputs.iter().enumerate() {
-        abi.gen_arg(ctx, i, ValueRegs::one(*input));
+    if flags.use_colocated_libcalls() {
+        let call_info = ctx.gen_call_info(sig, extname, uses, defs, None);
+        ctx.emit(Inst::call_known(Box::new(call_info)));
+    } else {
+        let tmp = ctx.alloc_tmp(types::I64).only_reg().unwrap();
+        ctx.emit(Inst::LoadExtName {
+            dst: tmp,
+            name: Box::new(extname),
+            offset: 0,
+            distance: RelocDistance::Far,
+        });
+        let call_info = ctx.gen_call_info(sig, RegMem::reg(tmp.to_reg()), uses, defs, None);
+        ctx.emit(Inst::call_unknown(Box::new(call_info)));
     }
-
-    let mut outputs: SmallVec<[_; 1]> = smallvec![];
-    for i in 0..ctx.sigs().num_rets(ctx.sigs().abi_sig_for_signature(&sig)) {
-        let retval_regs = abi.gen_retval(ctx, i);
-        outputs.push(retval_regs.only_reg().unwrap());
-    }
-
-    abi.emit_call(ctx, None);
-
     Ok(outputs)
 }
 

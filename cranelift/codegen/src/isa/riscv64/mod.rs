@@ -5,12 +5,12 @@ use crate::ir::{Function, Type};
 use crate::isa::riscv64::settings as riscv_settings;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, OwnedTargetIsa, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
-    TextSectionBuilder, VCode,
+    CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode, compile,
 };
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
-use crate::{ir, CodegenError};
+use crate::{CodegenError, ir};
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
@@ -198,6 +198,10 @@ impl TargetIsa for Riscv64Backend {
     }
 
     fn has_native_fma(&self) -> bool {
+        true
+    }
+
+    fn has_round(&self) -> bool {
         true
     }
 

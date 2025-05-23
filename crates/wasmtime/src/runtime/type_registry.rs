@@ -3,11 +3,11 @@
 //! Helps implement fast indirect call signature checking, reference type
 //! downcasting, and etc...
 
+use crate::Engine;
 use crate::hash_set::HashSet;
 use crate::prelude::*;
 use crate::sync::RwLock;
 use crate::vm::GcRuntime;
-use crate::Engine;
 use alloc::borrow::Cow;
 use alloc::sync::Arc;
 use core::iter;
@@ -22,10 +22,9 @@ use core::{
     },
 };
 use wasmtime_environ::{
-    iter_entity_range,
-    packed_option::{PackedOption, ReservedValue},
     EngineOrModuleTypeIndex, GcLayout, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap,
-    SecondaryMap, TypeTrace, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
+    SecondaryMap, TypeTrace, VMSharedTypeIndex, WasmRecGroup, WasmSubType, iter_entity_range,
+    packed_option::{PackedOption, ReservedValue},
 };
 use wasmtime_slab::{Id as SlabId, Slab};
 
@@ -784,9 +783,10 @@ impl TypeRegistryInner {
                     let engine_index = shared_type_indices[rec_group_offset];
                     log::trace!("    intra-group {module_index:?} becomes {engine_index:?}");
                     assert!(!engine_index.is_reserved_value());
-                    assert!(self
-                        .types
-                        .contains(shared_type_index_to_slab_id(engine_index)));
+                    assert!(
+                        self.types
+                            .contains(shared_type_index_to_slab_id(engine_index))
+                    );
                     engine_index
                 }
             });

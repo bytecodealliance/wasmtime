@@ -216,8 +216,8 @@ block0(v0: i8, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   shrb    $3, %dil, %dil
-;   shlb    $5, %sil, %sil
+;   shrb $0x3, %dil
+;   shlb $0x5, %sil
 ;   movq    %rdi, %rax
 ;   orl %esi, %eax
 ;   movq    %rbp, %rsp

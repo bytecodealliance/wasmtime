@@ -59,6 +59,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn i32_as_u32(&mut self, x: i32) -> u32 {
+            x as u32
+        }
+
+        #[inline]
         fn i32_as_i64(&mut self, x: i32) -> i64 {
             x.into()
         }
@@ -77,11 +82,7 @@ macro_rules! isle_common_prelude_methods {
         fn checked_add_with_type(&mut self, ty: Type, a: u64, b: u64) -> Option<u64> {
             let c = a.checked_add(b)?;
             let ty_mask = self.ty_mask(ty);
-            if (c & !ty_mask) == 0 {
-                Some(c)
-            } else {
-                None
-            }
+            if (c & !ty_mask) == 0 { Some(c) } else { None }
         }
 
         #[inline]
@@ -397,21 +398,23 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_16(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 16 { Some(ty) } else { None }
+        }
+
+        #[inline]
         fn ty_32(&mut self, ty: Type) -> Option<Type> {
-            if ty.bits() == 32 {
-                Some(ty)
-            } else {
-                None
-            }
+            if ty.bits() == 32 { Some(ty) } else { None }
         }
 
         #[inline]
         fn ty_64(&mut self, ty: Type) -> Option<Type> {
-            if ty.bits() == 64 {
-                Some(ty)
-            } else {
-                None
-            }
+            if ty.bits() == 64 { Some(ty) } else { None }
+        }
+
+        #[inline]
+        fn ty_128(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 128 { Some(ty) } else { None }
         }
 
         #[inline]
@@ -472,20 +475,12 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn ty_scalar(&mut self, ty: Type) -> Option<Type> {
-            if ty.lane_count() == 1 {
-                Some(ty)
-            } else {
-                None
-            }
+            if ty.lane_count() == 1 { Some(ty) } else { None }
         }
 
         #[inline]
         fn ty_scalar_float(&mut self, ty: Type) -> Option<Type> {
-            if ty.is_float() {
-                Some(ty)
-            } else {
-                None
-            }
+            if ty.is_float() { Some(ty) } else { None }
         }
 
         #[inline]
@@ -603,11 +598,7 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn u64_from_bool(&mut self, b: bool) -> u64 {
-            if b {
-                u64::MAX
-            } else {
-                0
-            }
+            if b { u64::MAX } else { 0 }
         }
 
         #[inline]
@@ -671,11 +662,7 @@ macro_rules! isle_common_prelude_methods {
         }
 
         fn not_i64x2(&mut self, ty: Type) -> Option<()> {
-            if ty == I64X2 {
-                None
-            } else {
-                Some(())
-            }
+            if ty == I64X2 { None } else { Some(()) }
         }
 
         fn trap_code_division_by_zero(&mut self) -> TrapCode {
@@ -724,38 +711,22 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn u32_nonnegative(&mut self, x: u32) -> Option<u32> {
-            if (x as i32) >= 0 {
-                Some(x)
-            } else {
-                None
-            }
+            if (x as i32) >= 0 { Some(x) } else { None }
         }
 
         #[inline]
         fn u32_lteq(&mut self, a: u32, b: u32) -> Option<()> {
-            if a <= b {
-                Some(())
-            } else {
-                None
-            }
+            if a <= b { Some(()) } else { None }
         }
 
         #[inline]
         fn u8_lteq(&mut self, a: u8, b: u8) -> Option<()> {
-            if a <= b {
-                Some(())
-            } else {
-                None
-            }
+            if a <= b { Some(()) } else { None }
         }
 
         #[inline]
         fn u8_lt(&mut self, a: u8, b: u8) -> Option<()> {
-            if a < b {
-                Some(())
-            } else {
-                None
-            }
+            if a < b { Some(()) } else { None }
         }
 
         #[inline]
@@ -825,21 +796,6 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn i32_to_offset32(&mut self, offset: i32) -> Offset32 {
             Offset32::new(offset)
-        }
-
-        fn range(&mut self, start: usize, end: usize) -> Range {
-            (start, end)
-        }
-
-        fn range_view(&mut self, (start, end): Range) -> RangeView {
-            if start >= end {
-                RangeView::Empty
-            } else {
-                RangeView::NonEmpty {
-                    index: start,
-                    rest: (start + 1, end),
-                }
-            }
         }
 
         #[inline]
@@ -982,6 +938,10 @@ macro_rules! isle_common_prelude_methods {
             u64::try_from(val).ok()
         }
 
+        fn u16_try_from_i32(&mut self, val: i32) -> Option<u16> {
+            u16::try_from(val).ok()
+        }
+
         fn u16_try_from_u64(&mut self, val: u64) -> Option<u16> {
             u16::try_from(val).ok()
         }
@@ -990,8 +950,20 @@ macro_rules! isle_common_prelude_methods {
             u32::try_from(val).ok()
         }
 
+        fn i8_try_from_i32(&mut self, val: i32) -> Option<i8> {
+            i8::try_from(val).ok()
+        }
+
         fn i8_try_from_u64(&mut self, val: u64) -> Option<i8> {
             i8::try_from(val).ok()
+        }
+
+        fn i16_as_u16(&mut self, val: i16) -> u16 {
+            val as u16
+        }
+
+        fn i16_try_from_i32(&mut self, val: i32) -> Option<i16> {
+            i16::try_from(val).ok()
         }
 
         fn i16_try_from_u64(&mut self, val: u64) -> Option<i16> {
@@ -1038,6 +1010,14 @@ macro_rules! isle_common_prelude_methods {
             } else {
                 None
             }
+        }
+
+        fn u128_low_bits(&mut self, val: u128) -> u64 {
+            val as u64
+        }
+
+        fn u128_high_bits(&mut self, val: u128) -> u64 {
+            (val >> 64) as u64
         }
 
         fn f16_min(&mut self, a: Ieee16, b: Ieee16) -> Option<Ieee16> {

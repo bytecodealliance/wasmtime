@@ -217,7 +217,6 @@
 #![deny(missing_docs)]
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 mod error;
 mod http_impl;
@@ -230,14 +229,16 @@ pub mod types;
 pub mod bindings;
 
 pub use crate::error::{
-    http_request_error, hyper_request_error, hyper_response_error, HttpError, HttpResult,
+    HttpError, HttpResult, http_request_error, hyper_request_error, hyper_response_error,
 };
 #[doc(inline)]
 pub use crate::types::{
-    WasiHttpCtx, WasiHttpImpl, WasiHttpView, DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS,
-    DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
+    DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
+    WasiHttpImpl, WasiHttpView,
 };
+use wasmtime::component::{HasData, Linker};
 use wasmtime_wasi::p2::IoImpl;
+
 /// Add all of the `wasi:http/proxy` world's interfaces to a [`wasmtime::component::Linker`].
 ///
 /// This function will add the `async` variant of all interfaces into the
@@ -285,44 +286,10 @@ use wasmtime_wasi::p2::IoImpl;
 /// ```
 pub fn add_to_linker_async<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
 where
-    T: WasiHttpView + wasmtime_wasi::p2::WasiView,
+    T: WasiHttpView + wasmtime_wasi::p2::WasiView + 'static,
 {
-    let io_closure = type_annotate_io::<T, _>(|t| wasmtime_wasi::p2::IoImpl(t));
-    wasmtime_wasi::p2::bindings::io::poll::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::p2::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::p2::bindings::io::streams::add_to_linker_get_host(l, io_closure)?;
-
-    let closure =
-        type_annotate_wasi::<T, _>(|t| wasmtime_wasi::p2::WasiImpl(wasmtime_wasi::p2::IoImpl(t)));
-    wasmtime_wasi::p2::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::p2::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::p2::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::p2::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::p2::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::p2::bindings::random::random::add_to_linker_get_host(l, closure)?;
-
+    wasmtime_wasi::p2::add_to_linker_proxy_interfaces_async(l)?;
     add_only_http_to_linker_async(l)
-}
-
-// NB: workaround some rustc inference - a future refactoring may make this
-// obsolete.
-fn type_annotate_http<T, F>(val: F) -> F
-where
-    F: Fn(&mut T) -> WasiHttpImpl<&mut T>,
-{
-    val
-}
-fn type_annotate_wasi<T, F>(val: F) -> F
-where
-    F: Fn(&mut T) -> wasmtime_wasi::p2::WasiImpl<&mut T>,
-{
-    val
-}
-fn type_annotate_io<T, F>(val: F) -> F
-where
-    F: Fn(&mut T) -> wasmtime_wasi::p2::IoImpl<&mut T>,
-{
-    val
 }
 
 /// A slimmed down version of [`add_to_linker_async`] which only adds
@@ -334,13 +301,20 @@ pub fn add_only_http_to_linker_async<T>(
     l: &mut wasmtime::component::Linker<T>,
 ) -> anyhow::Result<()>
 where
-    T: WasiHttpView,
+    T: WasiHttpView + 'static,
 {
-    let closure = type_annotate_http::<T, _>(|t| WasiHttpImpl(IoImpl(t)));
-    crate::bindings::http::outgoing_handler::add_to_linker_get_host(l, closure)?;
-    crate::bindings::http::types::add_to_linker_get_host(l, closure)?;
+    crate::bindings::http::outgoing_handler::add_to_linker::<_, WasiHttp<T>>(l, |x| {
+        WasiHttpImpl(IoImpl(x))
+    })?;
+    crate::bindings::http::types::add_to_linker::<_, WasiHttp<T>>(l, |x| WasiHttpImpl(IoImpl(x)))?;
 
     Ok(())
+}
+
+struct WasiHttp<T>(T);
+
+impl<T: 'static> HasData for WasiHttp<T> {
+    type Data<'a> = WasiHttpImpl<&'a mut T>;
 }
 
 /// Add all of the `wasi:http/proxy` world's interfaces to a [`wasmtime::component::Linker`].
@@ -383,31 +357,12 @@ where
 ///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
 /// }
 /// ```
-pub fn add_to_linker_sync<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
+pub fn add_to_linker_sync<T>(l: &mut Linker<T>) -> anyhow::Result<()>
 where
-    T: WasiHttpView + wasmtime_wasi::p2::WasiView,
+    T: WasiHttpView + wasmtime_wasi::p2::WasiView + 'static,
 {
-    let io_closure = type_annotate_io::<T, _>(|t| wasmtime_wasi::p2::IoImpl(t));
-    // For the sync linker, use the definitions of poll and streams from the
-    // wasmtime_wasi::p2::bindings::sync space because those are defined using in_tokio.
-    wasmtime_wasi::p2::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::p2::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
-    // The error interface in the wasmtime_wasi is synchronous
-    wasmtime_wasi::p2::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
-
-    let closure =
-        type_annotate_wasi::<T, _>(|t| wasmtime_wasi::p2::WasiImpl(wasmtime_wasi::p2::IoImpl(t)));
-
-    wasmtime_wasi::p2::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::p2::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::p2::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::p2::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::p2::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::p2::bindings::random::random::add_to_linker_get_host(l, closure)?;
-
-    add_only_http_to_linker_sync(l)?;
-
-    Ok(())
+    wasmtime_wasi::p2::add_to_linker_proxy_interfaces_sync(l)?;
+    add_only_http_to_linker_sync(l)
 }
 
 /// A slimmed down version of [`add_to_linker_sync`] which only adds
@@ -415,14 +370,16 @@ where
 ///
 /// This is useful when using [`wasmtime_wasi::p2::add_to_linker_sync`] for
 /// example to avoid re-adding the same interfaces twice.
-pub fn add_only_http_to_linker_sync<T>(l: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
+pub fn add_only_http_to_linker_sync<T>(l: &mut Linker<T>) -> anyhow::Result<()>
 where
-    T: WasiHttpView,
+    T: WasiHttpView + 'static,
 {
-    let closure = type_annotate_http::<T, _>(|t| WasiHttpImpl(IoImpl(t)));
-
-    crate::bindings::http::outgoing_handler::add_to_linker_get_host(l, closure)?;
-    crate::bindings::http::types::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sync::http::outgoing_handler::add_to_linker::<_, WasiHttp<T>>(l, |x| {
+        WasiHttpImpl(IoImpl(x))
+    })?;
+    crate::bindings::sync::http::types::add_to_linker::<_, WasiHttp<T>>(l, |x| {
+        WasiHttpImpl(IoImpl(x))
+    })?;
 
     Ok(())
 }

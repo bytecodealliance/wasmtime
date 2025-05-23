@@ -12,7 +12,8 @@ TEST(ExportType, Smoke) {
 
   module = Module::compile(engine, "(module"
                                    "(global (export \"x\") i32 (i32.const 0))"
-                                   ")").unwrap();
+                                   ")")
+               .unwrap();
 
   auto exports = module.exports();
   EXPECT_EQ(exports.size(), 1);

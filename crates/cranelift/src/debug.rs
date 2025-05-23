@@ -201,7 +201,7 @@ impl<'a> fmt::Debug for Compilation<'a> {
     }
 }
 
-pub use write_debuginfo::{emit_dwarf, DwarfSectionRelocTarget};
+pub use write_debuginfo::{DwarfSectionRelocTarget, emit_dwarf};
 
 mod gc;
 mod transform;

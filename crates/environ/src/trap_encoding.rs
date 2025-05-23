@@ -102,6 +102,10 @@ pub enum Trap {
     /// FIXME(frank-emrich) Only used for stack switching debugging code, to be
     /// removed from final upstreamed code.
     DeleteMeDebugAssertion,
+
+    /// A Pulley opcode was executed at runtime when the opcode was disabled at
+    /// compile time.
+    DisabledOpcode,
     // if adding a variant here be sure to update the `check!` macro below
 }
 
@@ -142,6 +146,7 @@ impl Trap {
             UnhandledTag
             ContinuationAlreadyConsumed
             DeleteMeDebugAssertion
+            DisabledOpcode
         }
 
         None
@@ -176,6 +181,7 @@ impl fmt::Display for Trap {
             UnhandledTag => "unhandled tag",
             ContinuationAlreadyConsumed => "continuation already consumed",
             DeleteMeDebugAssertion => "triggered debug assertion",
+            DisabledOpcode => "pulley opcode disabled at compile time was executed",
         };
         write!(f, "wasm trap: {desc}")
     }

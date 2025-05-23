@@ -1,13 +1,13 @@
+#[cfg(feature = "call-hook")]
+use crate::CallHook;
 use crate::prelude::*;
 use crate::runtime::vm::mpk::{self, ProtectionMask};
 use crate::store::{ResourceLimiterInner, StoreInner, StoreOpaque};
-#[cfg(feature = "call-hook")]
-use crate::CallHook;
 use crate::{Engine, Store, StoreContextMut, UpdateDeadline};
 use core::cell::UnsafeCell;
 use core::future::Future;
 use core::ops::Range;
-use core::pin::{pin, Pin};
+use core::pin::{Pin, pin};
 use core::ptr;
 use core::task::{Context, Poll};
 
@@ -86,9 +86,9 @@ impl<T> Store<T> {
     pub fn limiter_async(
         &mut self,
         mut limiter: impl FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync)
-            + Send
-            + Sync
-            + 'static,
+        + Send
+        + Sync
+        + 'static,
     ) {
         debug_assert!(self.inner.async_support());
         // Apply the limits on instances, tables, and memory given by the limiter:
@@ -179,7 +179,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     #[cfg(feature = "gc")]
     pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) -> Result<()>
     where
-        T: Send,
+        T: Send + 'static,
     {
         self.0.gc_async(why).await
     }
@@ -720,7 +720,7 @@ impl<T> StoreContextMut<'_, T> {
         func: impl FnOnce(&mut StoreContextMut<'_, T>) -> R + Send,
     ) -> Result<R>
     where
-        T: Send,
+        T: Send + 'static,
     {
         self.0
             .on_fiber(|opaque| {
@@ -757,7 +757,7 @@ impl AsyncCx {
     /// which represents that the asynchronous computation was cancelled. It is
     /// not recommended to catch the trap and try to keep executing wasm, so
     /// we've tried to liberally document this.
-    pub unsafe fn block_on<F>(&self, mut future: F) -> Result<F::Output>
+    pub unsafe fn block_on<F>(&self, future: F) -> Result<F::Output>
     where
         F: Future + Send,
     {

@@ -5,6 +5,34 @@
 // selectively enabled here.
 #![warn(clippy::cast_sign_loss)]
 
+// Polyfill `std::simd::i8x16` etc. until they're stable.
+#[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
+#[allow(non_camel_case_types)]
+pub(crate) type i8x16 = core::arch::x86_64::__m128i;
+#[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
+#[allow(non_camel_case_types)]
+pub(crate) type f32x4 = core::arch::x86_64::__m128;
+#[cfg(all(target_arch = "x86_64", target_feature = "sse"))]
+#[allow(non_camel_case_types)]
+pub(crate) type f64x2 = core::arch::x86_64::__m128d;
+
+// On platforms other than x86_64, define i8x16 to a non-constructible type;
+// we need a type because we have a lot of macros for defining builtin
+// functions that are awkward to make conditional on the target, but it
+// doesn't need to actually be constructible unless we're on x86_64.
+#[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone)]
+pub(crate) struct i8x16(crate::uninhabited::Uninhabited);
+#[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone)]
+pub(crate) struct f32x4(crate::uninhabited::Uninhabited);
+#[cfg(not(all(target_arch = "x86_64", target_feature = "sse")))]
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone)]
+pub(crate) struct f64x2(crate::uninhabited::Uninhabited);
+
 use crate::prelude::*;
 use crate::store::StoreOpaque;
 use alloc::sync::Arc;
@@ -424,6 +452,8 @@ impl ModuleRuntimeInfo {
 /// Returns the host OS page size, in bytes.
 #[cfg(has_virtual_memory)]
 pub fn host_page_size() -> usize {
+    // NB: this function is duplicated in `crates/fiber/src/unix.rs` so if this
+    // changes that should probably get updated as well.
     static PAGE_SIZE: AtomicUsize = AtomicUsize::new(0);
 
     return match PAGE_SIZE.load(Ordering::Relaxed) {

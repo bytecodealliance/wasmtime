@@ -15,7 +15,7 @@ block0(v0: f32):
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
 ;   movdqa  %xmm5, %xmm7
-;   sqrtss  %xmm0, %xmm7, %xmm0
+;   sqrtss %xmm7, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -47,7 +47,7 @@ block0(v0: f64):
 ;   uninit  %xmm0
 ;   xorpd %xmm0, %xmm0
 ;   movdqa  %xmm5, %xmm7
-;   sqrtsd  %xmm0, %xmm7, %xmm0
+;   sqrtsd %xmm7, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

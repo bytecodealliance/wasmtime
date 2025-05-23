@@ -4,7 +4,7 @@
 //! instruction into code that depends on the kind of global value referenced.
 
 use crate::cursor::{Cursor, FuncCursor};
-use crate::ir::{self, pcc::Fact, InstBuilder};
+use crate::ir::{self, InstBuilder, pcc::Fact};
 use crate::isa::TargetIsa;
 
 /// Expand a `global_value` instruction according to the definition of the global value.

@@ -12,8 +12,8 @@ use crate::ir::{
     ValueListPool,
 };
 use crate::loop_analysis::LoopAnalysis;
-use crate::opts::generated_code::SkeletonInstSimplification;
 use crate::opts::IsleContext;
+use crate::opts::generated_code::SkeletonInstSimplification;
 use crate::scoped_hash_map::{Entry as ScopedEntry, ScopedHashMap};
 use crate::settings::Flags;
 use crate::take_and_replace::TakeAndReplace;
@@ -22,8 +22,8 @@ use alloc::vec::Vec;
 use core::cmp::Ordering;
 use core::hash::Hasher;
 use cranelift_control::ControlPlane;
-use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::SecondaryMap;
+use cranelift_entity::packed_option::ReservedValue;
 use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
 
@@ -373,8 +373,7 @@ where
             for optimized_value in optimized_values.drain(..) {
                 trace!(
                     "Returned from ISLE for {}, got {:?}",
-                    orig_value,
-                    optimized_value
+                    orig_value, optimized_value
                 );
                 if optimized_value == orig_value {
                     trace!(" -> same as orig value; skipping");
@@ -413,11 +412,7 @@ where
     fn merge_availability(&self, a: Value, b: Value) -> Block {
         let a = self.available_block[a];
         let b = self.available_block[b];
-        if self.domtree.dominates(a, b) {
-            a
-        } else {
-            b
-        }
+        if self.domtree.dominates(a, b) { a } else { b }
     }
 
     /// Optimize a "skeleton" instruction.
@@ -505,9 +500,7 @@ where
             let result = self.func.dfg.first_result(inst);
             trace!(
                 " -> inst {} has result {} replaced with {}",
-                inst,
-                result,
-                new_result
+                inst, result, new_result
             );
             self.value_to_opt_value[result] = new_result;
             self.available_block[result] = self.available_block[new_result];

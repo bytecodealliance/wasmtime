@@ -42,7 +42,14 @@
 ;;       mov     x29, sp
 ;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
-;;       mov     x9, x0
+;;       ldur    x16, [x0, #8]
+;;       ldur    x16, [x16, #0x10]
+;;       mov     x17, #0
+;;       movk    x17, #0x40
+;;       add     x16, x16, x17
+;;       cmp     sp, x16
+;;       b.lo    #0x188
+;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       stur    x0, [x28, #0x10]
@@ -79,8 +86,8 @@
 ;;       mov     x16, #8
 ;;       mov     w16, w16
 ;;       stur    w16, [x28, #0x10]
-;;       bl      #0x180
-;;   a8: add     x28, x28, #0x24
+;;       bl      #0x1a0
+;;   c4: add     x28, x28, #0x24
 ;;       mov     sp, x28
 ;;       add     x28, x28, #4
 ;;       mov     sp, x28
@@ -117,8 +124,8 @@
 ;;       mov     x16, #8
 ;;       mov     w16, w16
 ;;       stur    w16, [x28, #0x10]
-;;       bl      #0x180
-;;  140: add     x28, x28, #0x20
+;;       bl      #0x1a0
+;;  15c: add     x28, x28, #0x20
 ;;       mov     sp, x28
 ;;       add     x28, x28, #8
 ;;       mov     sp, x28
@@ -129,13 +136,21 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
+;;  188: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;
 ;; wasm[0]::function[1]::add:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
-;;       mov     x9, x0
+;;       ldur    x16, [x0, #8]
+;;       ldur    x16, [x16, #0x10]
+;;       mov     x17, #0
+;;       movk    x17, #0x28
+;;       add     x16, x16, x17
+;;       cmp     sp, x16
+;;       b.lo    #0x258
+;;  1cc: mov     x9, x0
 ;;       sub     x28, x28, #0x28
 ;;       mov     sp, x28
 ;;       stur    x0, [x28, #0x20]
@@ -170,3 +185,4 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
+;;  258: .byte   0x1f, 0xc1, 0x00, 0x00

@@ -1,8 +1,8 @@
 use crate::debug::transform::AddressTransform;
 use crate::debug::{Compilation, Reader};
+use gimli::UnitSectionOffset;
 use gimli::constants;
 use gimli::read;
-use gimli::UnitSectionOffset;
 use std::collections::{HashMap, HashSet};
 use wasmtime_environ::{PrimaryMap, StaticModuleIndex};
 

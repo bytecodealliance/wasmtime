@@ -131,6 +131,7 @@ pub struct JitDumpFile {
     jitdump_file: File,
 
     map_addr: usize,
+    map_len: usize,
 
     /// Unique identifier for jitted code
     code_index: u64,
@@ -157,10 +158,11 @@ impl JitDumpFile {
         //
         // To match what some perf examples are doing we keep this `mmap` alive
         // until this agent goes away.
+        let map_len = 1024;
         let map_addr = unsafe {
             let ptr = rustix::mm::mmap(
                 ptr::null_mut(),
-                rustix::param::page_size(),
+                map_len,
                 rustix::mm::ProtFlags::EXEC | rustix::mm::ProtFlags::READ,
                 rustix::mm::MapFlags::PRIVATE,
                 &jitdump_file,
@@ -171,6 +173,7 @@ impl JitDumpFile {
         let mut state = JitDumpFile {
             jitdump_file,
             map_addr,
+            map_len,
             code_index: 0,
             e_machine,
         };
@@ -283,7 +286,7 @@ impl JitDumpFile {
 impl Drop for JitDumpFile {
     fn drop(&mut self) {
         unsafe {
-            rustix::mm::munmap(self.map_addr as *mut _, rustix::param::page_size()).unwrap();
+            rustix::mm::munmap(self.map_addr as *mut _, self.map_len).unwrap();
         }
     }
 }

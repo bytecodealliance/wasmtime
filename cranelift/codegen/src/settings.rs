@@ -500,7 +500,7 @@ impl<'a> From<&'a dyn TargetIsa> for FlagsOrIsa<'a> {
 mod tests {
     use super::Configurable;
     use super::SetError::*;
-    use super::{builder, Flags};
+    use super::{Flags, builder};
     use alloc::string::ToString;
 
     #[test]

@@ -16,14 +16,14 @@ block0(v0: i128):
 ; block0:
 ;   lgr %r6, %r2
 ;   vl %v1, 0(%r3)
-;   vst %v1, 160(%r15)
 ;   la %r3, 160(%r15)
+;   vst %v1, 0(%r3)
 ;   la %r2, 176(%r15)
 ;   bras %r1, 12 ; data %callee_be + 0 ; lg %r4, 0(%r1)
 ;   basr %r14, %r4 ; vl %v1, 176(%r15) ; vst %v1, 192(%r15)
 ;   lgr %r2, %r6
-;   vl %v19, 192(%r15)
-;   vst %v19, 0(%r2)
+;   vl %v16, 192(%r15)
+;   vst %v16, 0(%r2)
 ;   lmg %r6, %r15, 256(%r15)
 ;   br %r14
 ;
@@ -34,8 +34,8 @@ block0(v0: i128):
 ; block1: ; offset 0xa
 ;   lgr %r6, %r2
 ;   vl %v1, 0(%r3)
-;   vst %v1, 0xa0(%r15)
 ;   la %r3, 0xa0(%r15)
+;   vst %v1, 0(%r3)
 ;   la %r2, 0xb0(%r15)
 ;   bras %r1, 0x2e
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_be 0
@@ -47,8 +47,8 @@ block0(v0: i128):
 ;   vl %v1, 0xb0(%r15)
 ;   vst %v1, 0xc0(%r15)
 ;   lgr %r2, %r6
-;   vl %v19, 0xc0(%r15)
-;   vst %v19, 0(%r2)
+;   vl %v16, 0xc0(%r15)
+;   vst %v16, 0(%r2)
 ;   lmg %r6, %r15, 0x100(%r15)
 ;   br %r14
 
@@ -75,14 +75,14 @@ block0(v0: i128):
 ;   lgr %r8, %r2
 ;   vl %v1, 0(%r3)
 ;   aghi %r15, -176
-;   vst %v1, 160(%r15)
 ;   la %r3, 160(%r15)
+;   vst %v1, 0(%r3)
 ;   la %r2, 336(%r15)
-;   bras %r1, 12 ; data %callee_le + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4 ; callee_pop_size 176 ; vl %v1, 336(%r15) ; vst %v1, 352(%r15)
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r5, 0(%r1)
+;   basr %r14, %r5 ; callee_pop_size 176 ; vl %v1, 160(%r15) ; vst %v1, 176(%r15)
 ;   lgr %r2, %r8
-;   vl %v20, 176(%r15)
-;   vst %v20, 0(%r2)
+;   vl %v17, 176(%r15)
+;   vst %v17, 0(%r2)
 ;   ld %f8, 192(%r15)
 ;   ld %f9, 200(%r15)
 ;   ld %f10, 208(%r15)
@@ -110,21 +110,21 @@ block0(v0: i128):
 ;   lgr %r8, %r2
 ;   vl %v1, 0(%r3)
 ;   aghi %r15, -0xb0
-;   vst %v1, 0xa0(%r15)
 ;   la %r3, 0xa0(%r15)
+;   vst %v1, 0(%r3)
 ;   la %r2, 0x150(%r15)
 ;   bras %r1, 0x52
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_le 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r4, 0(%r1)
-;   basr %r14, %r4
+;   lg %r5, 0(%r1)
+;   basr %r14, %r5
 ;   vl %v1, 0xa0(%r15)
 ;   vst %v1, 0xb0(%r15)
 ;   lgr %r2, %r8
-;   vl %v20, 0xb0(%r15)
-;   vst %v20, 0(%r2)
+;   vl %v17, 0xb0(%r15)
+;   vst %v17, 0(%r2)
 ;   ld %f8, 0xc0(%r15)
 ;   ld %f9, 0xc8(%r15)
 ;   ld %f10, 0xd0(%r15)
@@ -156,16 +156,16 @@ block0(v0: i128):
 ;   std %f14, 256(%r15)
 ;   std %f15, 264(%r15)
 ; block0:
-;   lgr %r6, %r2
+;   lgr %r7, %r2
 ;   vl %v1, 0(%r3)
-;   vst %v1, 160(%r15)
 ;   la %r3, 160(%r15)
+;   vst %v1, 0(%r3)
 ;   la %r2, 176(%r15)
-;   bras %r1, 12 ; data %callee_be + 0 ; lg %r5, 0(%r1)
-;   basr %r14, %r5 ; vl %v1, 176(%r15) ; vst %v1, 192(%r15)
-;   lgr %r2, %r6
-;   vl %v19, 192(%r15)
-;   vst %v19, 0(%r2)
+;   bras %r1, 12 ; data %callee_be + 0 ; lg %r6, 0(%r1)
+;   basr %r14, %r6 ; vl %v1, 176(%r15) ; vst %v1, 192(%r15)
+;   lgr %r2, %r7
+;   vl %v16, 192(%r15)
+;   vst %v16, 0(%r2)
 ;   ld %f8, 208(%r15)
 ;   ld %f9, 216(%r15)
 ;   ld %f10, 224(%r15)
@@ -191,23 +191,23 @@ block0(v0: i128):
 ;   std %f14, 0x100(%r15)
 ;   std %f15, 0x108(%r15)
 ; block1: ; offset 0x2a
-;   lgr %r6, %r2
+;   lgr %r7, %r2
 ;   vl %v1, 0(%r3)
-;   vst %v1, 0xa0(%r15)
 ;   la %r3, 0xa0(%r15)
+;   vst %v1, 0(%r3)
 ;   la %r2, 0xb0(%r15)
 ;   bras %r1, 0x4e
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_be 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r5, 0(%r1)
-;   basr %r14, %r5
+;   lg %r6, 0(%r1)
+;   basr %r14, %r6
 ;   vl %v1, 0xb0(%r15)
 ;   vst %v1, 0xc0(%r15)
-;   lgr %r2, %r6
-;   vl %v19, 0xc0(%r15)
-;   vst %v19, 0(%r2)
+;   lgr %r2, %r7
+;   vl %v16, 0xc0(%r15)
+;   vst %v16, 0(%r2)
 ;   ld %f8, 0xd0(%r15)
 ;   ld %f9, 0xd8(%r15)
 ;   ld %f10, 0xe0(%r15)
@@ -235,14 +235,14 @@ block0(v0: i128):
 ;   lgr %r9, %r2
 ;   vl %v1, 0(%r3)
 ;   aghi %r15, -176
-;   vst %v1, 160(%r15)
 ;   la %r3, 160(%r15)
+;   vst %v1, 0(%r3)
 ;   la %r2, 336(%r15)
-;   bras %r1, 12 ; data %callee_le + 0 ; lg %r6, 0(%r1)
-;   basr %r14, %r6 ; callee_pop_size 176 ; vl %v1, 336(%r15) ; vst %v1, 352(%r15)
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r7, 0(%r1)
+;   basr %r14, %r7 ; callee_pop_size 176 ; vl %v1, 160(%r15) ; vst %v1, 176(%r15)
 ;   lgr %r2, %r9
-;   vl %v20, 176(%r15)
-;   vst %v20, 0(%r2)
+;   vl %v17, 176(%r15)
+;   vst %v17, 0(%r2)
 ;   aghi %r15, 368
 ;   lmg %r9, %r14, 72(%r15)
 ;   br %r14
@@ -255,21 +255,21 @@ block0(v0: i128):
 ;   lgr %r9, %r2
 ;   vl %v1, 0(%r3)
 ;   aghi %r15, -0xb0
-;   vst %v1, 0xa0(%r15)
 ;   la %r3, 0xa0(%r15)
+;   vst %v1, 0(%r3)
 ;   la %r2, 0x150(%r15)
 ;   bras %r1, 0x32
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_le 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r6, 0(%r1)
-;   basr %r14, %r6
+;   lg %r7, 0(%r1)
+;   basr %r14, %r7
 ;   vl %v1, 0xa0(%r15)
 ;   vst %v1, 0xb0(%r15)
 ;   lgr %r2, %r9
-;   vl %v20, 0xb0(%r15)
-;   vst %v20, 0(%r2)
+;   vl %v17, 0xb0(%r15)
+;   vst %v17, 0(%r2)
 ;   aghi %r15, 0x170
 ;   lmg %r9, %r14, 0x48(%r15)
 ;   br %r14

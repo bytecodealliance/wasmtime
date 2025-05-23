@@ -3,6 +3,31 @@ set unwind_info=false
 target riscv64
 
 
+function %select_icmp_i8_f16(i8, f16, f16) -> f16 {
+block0(v0: i8, v1: f16, v2: f16):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select.f16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a1,42
+;   andi a5,a0,255
+;   andi a1,a1,255
+;   select fa0,fa0,fa1##condition=(a5 eq a1)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a1, zero, 0x2a
+;   andi a5, a0, 0xff
+;   andi a1, a1, 0xff
+;   beq a5, a1, 8
+;   fmv.d fa0, fa1
+;   ret
+
 function %select_icmp_i8_f32(i8, f32, f32) -> f32 {
 block0(v0: i8, v1: f32, v2: f32):
   v3 = iconst.i8 42
@@ -50,6 +75,94 @@ block0(v0: i8, v1: f64, v2: f64):
 ;   andi a5, a0, 0xff
 ;   andi a1, a1, 0xff
 ;   beq a5, a1, 8
+;   fmv.d fa0, fa1
+;   ret
+
+function %select_icmp_i8_f128(i8, f128, f128) -> f128 {
+block0(v0: i8, v1: f128, v2: f128):
+  v3 = iconst.i8 42
+  v4 = icmp eq v0, v3
+  v5 = select.f128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+;   sd s3,8(sp)
+;   sd s10,0(sp)
+; block0:
+;   mv s10,a1
+;   mv a1,a0
+;   li a0,42
+;   andi a5,a1,255
+;   andi s3,a0,255
+;   select [a0,a1],[s10,a2],[a3,a4]##condition=(a5 eq s3)
+;   ld s3,8(sp)
+;   ld s10,0(sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+;   sd s3, 8(sp)
+;   sd s10, 0(sp)
+; block1: ; offset 0x1c
+;   mv s10, a1
+;   mv a1, a0
+;   addi a0, zero, 0x2a
+;   andi a5, a1, 0xff
+;   andi s3, a0, 0xff
+;   mv a0, s10
+;   mv a1, a2
+;   beq a5, s3, 0xc
+;   mv a0, a3
+;   mv a1, a4
+;   ld s3, 8(sp)
+;   ld s10, 0(sp)
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %select_icmp_i16_f16(i16, f16, f16) -> f16 {
+block0(v0: i16, v1: f16, v2: f16):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select.f16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a3,42
+;   slli a5,a0,48
+;   srai a1,a5,48
+;   slli a3,a3,48
+;   srai a5,a3,48
+;   select fa0,fa0,fa1##condition=(a1 eq a5)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a3, zero, 0x2a
+;   slli a5, a0, 0x30
+;   srai a1, a5, 0x30
+;   slli a3, a3, 0x30
+;   srai a5, a3, 0x30
+;   beq a1, a5, 8
 ;   fmv.d fa0, fa1
 ;   ret
 
@@ -111,6 +224,92 @@ block0(v0: i16, v1: f64, v2: f64):
 ;   fmv.d fa0, fa1
 ;   ret
 
+function %select_icmp_i16_f128(i16, f128, f128) -> f128 {
+block0(v0: i16, v1: f128, v2: f128):
+  v3 = iconst.i16 42
+  v4 = icmp eq v0, v3
+  v5 = select.f128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+;   sd s6,8(sp)
+;   sd s7,0(sp)
+; block0:
+;   mv t0,a1
+;   li s6,42
+;   slli a1,a0,48
+;   srai a5,a1,48
+;   slli a0,s6,48
+;   srai s7,a0,48
+;   select [a0,a1],[t0,a2],[a3,a4]##condition=(a5 eq s7)
+;   ld s6,8(sp)
+;   ld s7,0(sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+;   sd s6, 8(sp)
+;   sd s7, 0(sp)
+; block1: ; offset 0x1c
+;   mv t0, a1
+;   addi s6, zero, 0x2a
+;   slli a1, a0, 0x30
+;   srai a5, a1, 0x30
+;   slli a0, s6, 0x30
+;   srai s7, a0, 0x30
+;   mv a0, t0
+;   mv a1, a2
+;   beq a5, s7, 0xc
+;   mv a0, a3
+;   mv a1, a4
+;   ld s6, 8(sp)
+;   ld s7, 0(sp)
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %select_icmp_i32_f16(i32, f16, f16) -> f16 {
+block0(v0: i32, v1: f16, v2: f16):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select.f16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a1,42
+;   sext.w a5,a0
+;   sext.w a1,a1
+;   select fa0,fa0,fa1##condition=(a5 eq a1)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a1, zero, 0x2a
+;   sext.w a5, a0
+;   sext.w a1, a1
+;   beq a5, a1, 8
+;   fmv.d fa0, fa1
+;   ret
+
 function %select_icmp_i32_f32(i32, f32, f32) -> f32 {
 block0(v0: i32, v1: f32, v2: f32):
   v3 = iconst.i32 42
@@ -161,6 +360,86 @@ block0(v0: i32, v1: f64, v2: f64):
 ;   fmv.d fa0, fa1
 ;   ret
 
+function %select_icmp_i32_f128(i32, f128, f128) -> f128 {
+block0(v0: i32, v1: f128, v2: f128):
+  v3 = iconst.i32 42
+  v4 = icmp eq v0, v3
+  v5 = select.f128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+;   sd s3,8(sp)
+;   sd s10,0(sp)
+; block0:
+;   mv s10,a1
+;   mv a1,a0
+;   li a0,42
+;   sext.w a5,a1
+;   sext.w s3,a0
+;   select [a0,a1],[s10,a2],[a3,a4]##condition=(a5 eq s3)
+;   ld s3,8(sp)
+;   ld s10,0(sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+;   sd s3, 8(sp)
+;   sd s10, 0(sp)
+; block1: ; offset 0x1c
+;   mv s10, a1
+;   mv a1, a0
+;   addi a0, zero, 0x2a
+;   sext.w a5, a1
+;   sext.w s3, a0
+;   mv a0, s10
+;   mv a1, a2
+;   beq a5, s3, 0xc
+;   mv a0, a3
+;   mv a1, a4
+;   ld s3, 8(sp)
+;   ld s10, 0(sp)
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %select_icmp_i64_f16(i64, f16, f16) -> f16 {
+block0(v0: i64, v1: f16, v2: f16):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select.f16 v4, v1, v2
+  return v5
+}
+
+; VCode:
+; block0:
+;   li a5,42
+;   select fa0,fa0,fa1##condition=(a0 eq a5)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a5, zero, 0x2a
+;   beq a0, a5, 8
+;   fmv.d fa0, fa1
+;   ret
+
 function %select_icmp_i64_f32(i64, f32, f32) -> f32 {
 block0(v0: i64, v1: f32, v2: f32):
   v3 = iconst.i64 42
@@ -200,6 +479,95 @@ block0(v0: i64, v1: f64, v2: f64):
 ; block0: ; offset 0x0
 ;   addi a5, zero, 0x2a
 ;   beq a0, a5, 8
+;   fmv.d fa0, fa1
+;   ret
+
+function %select_icmp_i64_f128(i64, f128, f128) -> f128 {
+block0(v0: i64, v1: f128, v2: f128):
+  v3 = iconst.i64 42
+  v4 = icmp eq v0, v3
+  v5 = select.f128 v4, v1, v2
+  return v5
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-16
+;   sd s4,8(sp)
+;   sd s6,0(sp)
+; block0:
+;   mv s4,a2
+;   mv s6,a1
+;   li a2,42
+;   mv a5,a0
+;   select [a0,a1],[s6,s4],[a3,a4]##condition=(a5 eq a2)
+;   ld s4,8(sp)
+;   ld s6,0(sp)
+;   addi sp,sp,16
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x10
+;   sd s4, 8(sp)
+;   sd s6, 0(sp)
+; block1: ; offset 0x1c
+;   mv s4, a2
+;   mv s6, a1
+;   addi a2, zero, 0x2a
+;   mv a5, a0
+;   mv a0, s6
+;   mv a1, s4
+;   beq a5, a2, 0xc
+;   mv a0, a3
+;   mv a1, a4
+;   ld s4, 8(sp)
+;   ld s6, 0(sp)
+;   addi sp, sp, 0x10
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
+;   ret
+
+function %select_icmp_i128_f16(i128, f16, f16) -> f16 {
+block0(v0: i128, v1: f16, v2: f16):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.f16 v5, v1, v2
+  return v6
+}
+
+; VCode:
+; block0:
+;   li a5,42
+;   li a2,0
+;   xor a3,a0,a5
+;   xor a4,a1,a2
+;   or a0,a3,a4
+;   seqz a2,a0
+;   select fa0,fa0,fa1##condition=(a2 ne zero)
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi a5, zero, 0x2a
+;   mv a2, zero
+;   xor a3, a0, a5
+;   xor a4, a1, a2
+;   or a0, a3, a4
+;   seqz a2, a0
+;   bnez a2, 8
 ;   fmv.d fa0, fa1
 ;   ret
 
@@ -265,5 +633,71 @@ block0(v0: i128, v1: f64, v2: f64):
 ;   seqz a2, a0
 ;   bnez a2, 8
 ;   fmv.d fa0, fa1
+;   ret
+
+function %select_icmp_i128_f128(i128, f128, f128) -> f128 {
+block0(v0: i128, v1: f128, v2: f128):
+  v3 = iconst.i64 42
+  v4 = uextend.i128 v3
+  v5 = icmp eq v0, v4
+  v6 = select.f128 v5, v1, v2
+  return v6
+}
+
+; VCode:
+;   addi sp,sp,-16
+;   sd ra,8(sp)
+;   sd fp,0(sp)
+;   mv fp,sp
+;   addi sp,sp,-32
+;   sd s8,24(sp)
+;   sd s9,16(sp)
+;   sd s11,8(sp)
+; block0:
+;   li s8,42
+;   li s9,0
+;   xor a0,a0,s8
+;   xor a1,a1,s9
+;   or a0,a0,a1
+;   seqz s11,a0
+;   select [a0,a1],[a2,a3],[a4,a5]##condition=(s11 ne zero)
+;   ld s8,24(sp)
+;   ld s9,16(sp)
+;   ld s11,8(sp)
+;   addi sp,sp,32
+;   ld ra,8(sp)
+;   ld fp,0(sp)
+;   addi sp,sp,16
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   addi sp, sp, -0x10
+;   sd ra, 8(sp)
+;   sd s0, 0(sp)
+;   mv s0, sp
+;   addi sp, sp, -0x20
+;   sd s8, 0x18(sp)
+;   sd s9, 0x10(sp)
+;   sd s11, 8(sp)
+; block1: ; offset 0x20
+;   addi s8, zero, 0x2a
+;   mv s9, zero
+;   xor a0, a0, s8
+;   xor a1, a1, s9
+;   or a0, a0, a1
+;   seqz s11, a0
+;   mv a0, a2
+;   mv a1, a3
+;   bnez s11, 0xc
+;   mv a0, a4
+;   mv a1, a5
+;   ld s8, 0x18(sp)
+;   ld s9, 0x10(sp)
+;   ld s11, 8(sp)
+;   addi sp, sp, 0x20
+;   ld ra, 8(sp)
+;   ld s0, 0(sp)
+;   addi sp, sp, 0x10
 ;   ret
 

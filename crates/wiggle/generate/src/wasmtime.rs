@@ -1,7 +1,7 @@
+use crate::CodegenSettings;
 use crate::config::Asyncness;
 use crate::funcs::func_bounds;
 use crate::names;
-use crate::CodegenSettings;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
 use std::collections::HashSet;
@@ -58,6 +58,7 @@ pub fn link_module(
             get_cx: impl Fn(&mut T) -> #u + Send + Sync + Copy + 'static,
         ) -> wiggle::anyhow::Result<()>
             where
+                T: 'static,
                 U: #ctx_bound #send_bound
         {
             #(#bodies)*

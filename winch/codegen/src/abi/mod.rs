@@ -46,7 +46,7 @@
 //! |                               | ----> Space allocated for calls
 //! |                               |
 use crate::codegen::ptr_type_from_ptr_size;
-use crate::isa::{reg::Reg, CallingConvention};
+use crate::isa::{CallingConvention, reg::Reg};
 use crate::masm::SPOffset;
 use anyhow::Result;
 use smallvec::SmallVec;
@@ -536,7 +536,7 @@ impl ABIParams {
     }
 
     /// Get the [`ABIOperand`] param in the nth position.
-    #[allow(unused)]
+    #[cfg(test)]
     pub fn get(&self, n: usize) -> Option<&ABIOperand> {
         self.operands.inner.get(n)
     }

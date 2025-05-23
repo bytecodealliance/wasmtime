@@ -1,5 +1,5 @@
 use crate::config::{AsyncConf, ErrorConf, ErrorConfField, TracingConf};
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 use std::collections::HashMap;

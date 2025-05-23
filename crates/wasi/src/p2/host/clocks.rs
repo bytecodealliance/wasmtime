@@ -1,5 +1,3 @@
-#![allow(unused_variables)]
-
 use crate::p2::bindings::{
     clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
     clocks::wall_clock::{self, Datetime},
@@ -8,7 +6,7 @@ use crate::p2::{DynPollable, IoView, WasiImpl, WasiView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
 use wasmtime::component::Resource;
-use wasmtime_wasi_io::poll::{subscribe, Pollable};
+use wasmtime_wasi_io::poll::{Pollable, subscribe};
 
 impl TryFrom<SystemTime> for Datetime {
     type Error = anyhow::Error;

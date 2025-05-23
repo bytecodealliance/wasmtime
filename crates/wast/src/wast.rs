@@ -2,7 +2,7 @@
 use crate::component;
 use crate::core;
 use crate::spectest::*;
-use anyhow::{anyhow, bail, Context as _};
+use anyhow::{Context as _, anyhow, bail};
 use std::collections::HashMap;
 use std::path::Path;
 use std::str;
@@ -14,7 +14,7 @@ use wast::{QuoteWat, Wast, WastArg, WastDirective, WastExecute, WastInvoke, Wast
 
 /// The wast test script language allows modules to be defined and actions
 /// to be performed on them.
-pub struct WastContext<T> {
+pub struct WastContext<T: 'static> {
     /// Wast files have a concept of a "current" module, which is the most
     /// recently defined.
     current: Option<InstanceKind>,
@@ -380,9 +380,9 @@ where
             #[cfg(feature = "component-model")]
             Export::Component(_) => bail!("no global named `{field}`"),
         };
-        Ok(Outcome::Ok(Results::Core(
-            vec![global.get(&mut self.store)],
-        )))
+        Ok(Outcome::Ok(Results::Core(vec![
+            global.get(&mut self.store),
+        ])))
     }
 
     fn assert_return(&mut self, result: Outcome, results: &[WastRet<'_>]) -> Result<()> {

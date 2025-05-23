@@ -1,9 +1,9 @@
 use crate::{debug::Reader, translate::get_vmctx_value_label};
 use core::fmt;
-use cranelift_codegen::{ir::ValueLabel, isa::TargetIsa, LabelValueLoc, ValueLabelsRanges};
+use cranelift_codegen::{LabelValueLoc, ValueLabelsRanges, ir::ValueLabel, isa::TargetIsa};
 use gimli::{
-    write, AttributeValue, DebuggingInformationEntry, Dwarf, LittleEndian, Unit, UnitOffset,
-    UnitSectionOffset,
+    AttributeValue, DebuggingInformationEntry, Dwarf, LittleEndian, Unit, UnitOffset,
+    UnitSectionOffset, write,
 };
 
 macro_rules! dbi_log_enabled {

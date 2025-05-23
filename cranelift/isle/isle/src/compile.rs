@@ -37,13 +37,13 @@ pub fn from_files<P: AsRef<Path>>(
     inputs: impl IntoIterator<Item = P>,
     options: &codegen::CodegenOptions,
 ) -> Result<String, Errors> {
-    let files = match Files::from_paths(inputs) {
+    let files = match Files::from_paths(inputs, &options.prefixes) {
         Ok(files) => files,
         Err((path, err)) => {
             return Err(Errors::from_io(
                 err,
                 format!("cannot read file {}", path.display()),
-            ))
+            ));
         }
     };
 
@@ -70,13 +70,13 @@ pub fn from_files<P: AsRef<Path>>(
 pub fn create_envs(
     inputs: Vec<std::path::PathBuf>,
 ) -> Result<(sema::TypeEnv, sema::TermEnv, Vec<Def>), Errors> {
-    let files = match Files::from_paths(inputs) {
+    let files = match Files::from_paths(inputs, &[]) {
         Ok(files) => files,
         Err((path, err)) => {
             return Err(Errors::from_io(
                 err,
                 format!("cannot read file {}", path.display()),
-            ))
+            ));
         }
     };
     let files = Arc::new(files);

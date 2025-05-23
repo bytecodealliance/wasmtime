@@ -1,3 +1,4 @@
+use crate::Config;
 use crate::prelude::*;
 #[cfg(feature = "runtime")]
 pub use crate::runtime::code_memory::CustomCodeMemory;
@@ -5,7 +6,6 @@ pub use crate::runtime::code_memory::CustomCodeMemory;
 use crate::runtime::type_registry::TypeRegistry;
 #[cfg(feature = "runtime")]
 use crate::runtime::vm::GcRuntime;
-use crate::Config;
 use alloc::sync::Arc;
 use core::ptr::NonNull;
 #[cfg(target_has_atomic = "64")]
@@ -468,14 +468,14 @@ impl Engine {
                     Ok(())
                 } else {
                     Err("wrong host pointer width".to_string())
-                }
+                };
             }
             FlagValue::Enum("pointer64") => {
                 return if cfg!(target_pointer_width = "64") {
                     Ok(())
                 } else {
                     Err("wrong host pointer width".to_string())
-                }
+                };
             }
 
             // Only `bool` values are supported right now, other settings would
@@ -483,7 +483,7 @@ impl Engine {
             _ => {
                 return Err(format!(
                     "isa-specific feature {flag:?} configured to unknown value {value:?}"
-                ))
+                ));
             }
         }
 
@@ -532,7 +532,7 @@ impl Engine {
             // pulley features
             "big_endian" if cfg!(target_endian = "big") => return Ok(()),
             "big_endian" if cfg!(target_endian = "little") => {
-                return Err("wrong host endianness".to_string())
+                return Err("wrong host endianness".to_string());
             }
 
             _ => {
@@ -554,7 +554,7 @@ impl Engine {
                     "cannot determine if host feature {host_feature:?} is \
                      available at runtime, configure a probing function with \
                      `Config::detect_host_feature`"
-                ))
+                ));
             }
         };
 
@@ -701,8 +701,8 @@ impl Engine {
     }
 
     #[cfg(all(feature = "cache", any(feature = "cranelift", feature = "winch")))]
-    pub(crate) fn cache_config(&self) -> &wasmtime_cache::CacheConfig {
-        &self.config().cache_config
+    pub(crate) fn cache(&self) -> Option<&wasmtime_cache::Cache> {
+        self.config().cache.as_ref()
     }
 
     pub(crate) fn signatures(&self) -> &TypeRegistry {

@@ -11,20 +11,21 @@ use crate::ir::pcc::{Fact, FactContext, PccError, PccResult};
 use crate::ir::{
     ArgumentPurpose, Block, BlockArg, Constant, ConstantData, DataFlowGraph, ExternalName,
     Function, GlobalValue, GlobalValueData, Immediate, Inst, InstructionData, MemFlags,
-    RelSourceLoc, Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
+    RelSourceLoc, SigRef, Signature, Type, Value, ValueDef, ValueLabelAssignments, ValueLabelStart,
 };
 use crate::machinst::valueregs::InvalidSentinel;
 use crate::machinst::{
-    writable_value_regs, ABIMachineSpec, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder,
-    Callee, InsnIndex, LoweredBlock, MachLabel, Reg, SigSet, VCode, VCodeBuilder, VCodeConstant,
-    VCodeConstantData, VCodeConstants, VCodeInst, ValueRegs, Writable,
+    ABIMachineSpec, BackwardsInsnIndex, BlockIndex, BlockLoweringOrder, CallArgList, CallInfo,
+    CallRetList, Callee, InsnIndex, LoweredBlock, MachLabel, Reg, Sig, SigSet, TryCallInfo, VCode,
+    VCodeBuilder, VCodeConstant, VCodeConstantData, VCodeConstants, VCodeInst, ValueRegs, Writable,
+    writable_value_regs,
 };
 use crate::settings::Flags;
-use crate::{trace, CodegenError, CodegenResult};
+use crate::{CodegenError, CodegenResult, trace};
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
 use rustc_hash::{FxHashMap, FxHashSet};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::fmt::Debug;
 
 use super::{VCodeBuildDirection, VRegAllocator};
@@ -420,11 +421,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                         value_regs[result] = regs;
                         trace!(
                             "bb {} inst {} ({:?}): result {} regs {:?}",
-                            bb,
-                            inst,
-                            f.dfg.insts[inst],
-                            result,
-                            regs,
+                            bb, inst, f.dfg.insts[inst], result, regs,
                         );
                     }
                 }
@@ -587,7 +584,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     }
 
     /// Generate the return instruction.
-    pub fn gen_return(&mut self, rets: Vec<ValueRegs<Reg>>) {
+    pub fn gen_return(&mut self, rets: &[ValueRegs<Reg>]) {
         let mut out_rets = vec![];
 
         let mut rets = rets.into_iter();
@@ -602,7 +599,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             let regs = if ret.purpose == ArgumentPurpose::StructReturn {
                 self.sret_reg.unwrap()
             } else {
-                rets.next().unwrap()
+                *rets.next().unwrap()
             };
 
             let (regs, insns) = self.vcode.abi().gen_copy_regs_to_retval(
@@ -631,6 +628,88 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
 
         let inst = self.abi().gen_rets(out_rets);
         self.emit(inst);
+    }
+
+    /// Generate list of registers to hold the output of a call with
+    /// signature `sig`.
+    pub fn gen_call_output(&mut self, sig: &Signature) -> InstOutput {
+        let mut rets = smallvec![];
+        for ty in sig.returns.iter().map(|ret| ret.value_type) {
+            rets.push(self.vregs.alloc_with_deferred_error(ty));
+        }
+        rets
+    }
+
+    /// Likewise, but for a `SigRef` instead.
+    pub fn gen_call_output_from_sig_ref(&mut self, sig_ref: SigRef) -> InstOutput {
+        self.gen_call_output(&self.f.dfg.signatures[sig_ref])
+    }
+
+    /// Set up arguments values `args` for a call with signature `sig`.
+    pub fn gen_call_args(&mut self, sig: Sig, args: &[ValueRegs<Reg>]) -> CallArgList {
+        let (uses, insts) = self.vcode.abi().gen_call_args(
+            self.vcode.sigs(),
+            sig,
+            args,
+            /* is_tail_call */ false,
+            &self.flags,
+            &mut self.vregs,
+        );
+        for insn in insts {
+            self.emit(insn);
+        }
+        uses
+    }
+
+    /// Likewise, but for a `return_call`.
+    pub fn gen_return_call_args(&mut self, sig: Sig, args: &[ValueRegs<Reg>]) -> CallArgList {
+        let (uses, insts) = self.vcode.abi().gen_call_args(
+            self.vcode.sigs(),
+            sig,
+            args,
+            /* is_tail_call */ true,
+            &self.flags,
+            &mut self.vregs,
+        );
+        for insn in insts {
+            self.emit(insn);
+        }
+        uses
+    }
+
+    /// Set up return values `outputs` for a call with signature `sig`.
+    pub fn gen_call_rets(&mut self, sig: Sig, outputs: &[ValueRegs<Reg>]) -> CallRetList {
+        self.vcode
+            .abi()
+            .gen_call_rets(self.vcode.sigs(), sig, outputs, None, &mut self.vregs)
+    }
+
+    /// Likewise, but for a `try_call`.
+    pub fn gen_try_call_rets(&mut self, sig: Sig) -> CallRetList {
+        let ir_inst = self.cur_inst.unwrap();
+        let mut outputs: SmallVec<[ValueRegs<Reg>; 2]> = smallvec![];
+        for return_def in self.try_call_rets.get(&ir_inst).unwrap() {
+            outputs.push(return_def.map(|r| r.to_reg()));
+        }
+        let payloads = Some(&self.try_call_payloads.get(&ir_inst).unwrap()[..]);
+
+        self.vcode
+            .abi()
+            .gen_call_rets(self.vcode.sigs(), sig, &outputs, payloads, &mut self.vregs)
+    }
+
+    /// Populate a `CallInfo` for a call with signature `sig`.
+    pub fn gen_call_info<T>(
+        &mut self,
+        sig: Sig,
+        dest: T,
+        uses: CallArgList,
+        defs: CallRetList,
+        try_call_info: Option<TryCallInfo>,
+    ) -> CallInfo<T> {
+        self.vcode
+            .abi()
+            .gen_call_info(self.vcode.sigs(), sig, dest, uses, defs, try_call_info)
     }
 
     /// Has this instruction been sunk to a use-site (i.e., away from its
@@ -859,9 +938,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             for label in labels {
                 trace!(
                     "value labeling: defines val {:?} -> reg {:?} -> label {:?}",
-                    val,
-                    reg,
-                    label,
+                    val, reg, label,
                 );
                 self.vcode.add_value_label(reg, label);
             }
@@ -920,9 +997,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     ) -> CodegenResult<()> {
         trace!(
             "lower_clif_branch: block {} branch {:?} targets {:?}",
-            block,
-            branch,
-            targets,
+            block, branch, targets,
         );
         // When considering code-motion opportunities, consider the current
         // program point to be this branch.
@@ -1109,8 +1184,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         // VCodeBuilder, let's build the VCode.
         trace!(
             "built vcode:\n{:?}Backwards {:?}",
-            &self.vregs,
-            &self.vcode.vcode
+            &self.vregs, &self.vcode.vcode
         );
         let vcode = self.vcode.build(self.vregs);
 
@@ -1414,9 +1488,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
     pub fn get_value_as_source_or_const(&self, val: Value) -> NonRegInput {
         trace!(
             "get_input_for_val: val {} at cur_inst {:?} cur_scan_entry_color {:?}",
-            val,
-            self.cur_inst,
-            self.cur_scan_entry_color,
+            val, self.cur_inst, self.cur_scan_entry_color,
         );
         let inst = match self.f.dfg.value_def(val) {
             // OK to merge source instruction if we have a source
@@ -1482,9 +1554,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
                     // the code-motion.
                     trace!(
                         " -> side-effecting op {} for val {}: use state {:?}",
-                        src_inst,
-                        val,
-                        self.value_ir_uses[val]
+                        src_inst, val, self.value_ir_uses[val]
                     );
                     if self.cur_scan_entry_color.is_some()
                         && self.value_ir_uses[val] == ValueUseState::Once

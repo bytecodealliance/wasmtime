@@ -1,8 +1,8 @@
 //! Elaboration phase: lowers EGraph back to sequences of operations
 //! in CFG nodes.
 
-use super::cost::Cost;
 use super::Stats;
+use super::cost::Cost;
 use crate::ctxhash::NullCtx;
 use crate::dominator_tree::DominatorTreePreorder;
 use crate::hash_map::Entry as HashEntry;
@@ -13,9 +13,9 @@ use crate::scoped_hash_map::ScopedHashMap;
 use crate::trace;
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
-use cranelift_entity::{packed_option::ReservedValue, SecondaryMap};
+use cranelift_entity::{SecondaryMap, packed_option::ReservedValue};
 use rustc_hash::{FxHashMap, FxHashSet};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 
 pub(crate) struct Elaborator<'a> {
     func: &'a mut Function,
@@ -283,9 +283,7 @@ impl<'a> Elaborator<'a> {
                         };
                         trace!(
                             " -> best of union({:?}, {:?}) = {:?}",
-                            best[x],
-                            best[y],
-                            best[value]
+                            best[x], best[y], best[value]
                         );
                     }
                     ValueDef::Param(_, _) => {
@@ -447,9 +445,7 @@ impl<'a> Elaborator<'a> {
                         ValueDef::Result(inst, result_idx) => {
                             trace!(
                                 " -> value {} is result {} of {}",
-                                best_value,
-                                result_idx,
-                                inst
+                                best_value, result_idx, inst
                             );
                             (inst, result_idx)
                         }
@@ -472,8 +468,7 @@ impl<'a> Elaborator<'a> {
 
                     trace!(
                         " -> result {} of inst {:?}",
-                        result_idx,
-                        self.func.dfg.insts[inst]
+                        result_idx, self.func.dfg.insts[inst]
                     );
 
                     // We're going to need to use this instruction
@@ -506,10 +501,7 @@ impl<'a> Elaborator<'a> {
                 } => {
                     trace!(
                         "PendingInst: {} result {} args {} before {}",
-                        inst,
-                        result_idx,
-                        num_args,
-                        before
+                        inst, result_idx, num_args, before
                     );
 
                     // We should have all args resolved at this
@@ -546,8 +538,7 @@ impl<'a> Elaborator<'a> {
                                 .unwrap_or(self.loop_stack.len());
                             trace!(
                                 " -> arg: elab_value {:?} hoist level {:?}",
-                                value,
-                                hoist_level
+                                value, hoist_level
                             );
                             hoist_level
                         })
@@ -595,8 +586,7 @@ impl<'a> Elaborator<'a> {
 
                     trace!(
                         " -> decided to place: before {} insert_block {}",
-                        before,
-                        insert_block
+                        before, insert_block
                     );
 
                     // Now that we have the location for the
@@ -636,8 +626,7 @@ impl<'a> Elaborator<'a> {
                         let new_inst = self.func.dfg.clone_inst(inst);
                         trace!(
                             " -> inst {} already has a location; cloned to {}",
-                            inst,
-                            new_inst
+                            inst, new_inst
                         );
                         // Create mappings in the
                         // value-to-elab'd-value map from original
@@ -665,8 +654,7 @@ impl<'a> Elaborator<'a> {
 
                             trace!(
                                 " -> cloned inst has new result {} for orig {}",
-                                new_result,
-                                result
+                                new_result, result
                             );
                         }
                         new_inst

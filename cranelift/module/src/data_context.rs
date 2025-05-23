@@ -8,8 +8,8 @@ use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
 
-use crate::module::ModuleReloc;
 use crate::ModuleRelocTarget;
+use crate::module::ModuleReloc;
 
 /// This specifies how data is to be initialized.
 #[derive(Clone, PartialEq, Eq, Debug)]

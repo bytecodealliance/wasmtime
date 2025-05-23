@@ -1,6 +1,6 @@
 //! Xmm register operands; see [`Xmm`].
 
-use crate::AsReg;
+use crate::{AsReg, CodeSink, rex::encode_modrm};
 
 /// An x64 SSE register (e.g., `%xmm0`).
 #[derive(Clone, Copy, Debug)]
@@ -28,6 +28,11 @@ impl<R: AsReg> Xmm<R> {
     pub fn to_string(&self) -> String {
         self.0.to_string(None)
     }
+
+    /// Emit this register as the `r/m` field of a ModR/M byte.
+    pub(crate) fn encode_modrm(&self, sink: &mut impl CodeSink, enc_reg: u8) {
+        sink.put1(encode_modrm(0b11, enc_reg & 0b111, self.enc() & 0b111));
+    }
 }
 
 impl<R: AsReg> AsRef<R> for Xmm<R> {
@@ -39,6 +44,12 @@ impl<R: AsReg> AsRef<R> for Xmm<R> {
 impl<R: AsReg> AsMut<R> for Xmm<R> {
     fn as_mut(&mut self) -> &mut R {
         &mut self.0
+    }
+}
+
+impl<R: AsReg> From<R> for Xmm<R> {
+    fn from(reg: R) -> Xmm<R> {
+        Xmm(reg)
     }
 }
 

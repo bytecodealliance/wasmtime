@@ -18,7 +18,8 @@ wasmtime-versioned-export-macros = { workspace = true }
 wasmtime-asm-macros = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["mm", "param"] }
+rustix = { workspace = true, features = ["mm"] }
+libc = { workspace = true }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 workspace = true

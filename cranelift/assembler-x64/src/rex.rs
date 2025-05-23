@@ -2,13 +2,13 @@
 
 use crate::api::CodeSink;
 
-pub(crate) fn low8_will_sign_extend_to_32(xs: i32) -> bool {
+fn low8_will_sign_extend_to_32(xs: i32) -> bool {
     xs == ((xs << 24) >> 24)
 }
 
 /// Encode the ModR/M byte.
 #[inline]
-pub fn encode_modrm(m0d: u8, enc_reg_g: u8, rm_e: u8) -> u8 {
+pub(crate) fn encode_modrm(m0d: u8, enc_reg_g: u8, rm_e: u8) -> u8 {
     debug_assert!(m0d < 4);
     debug_assert!(enc_reg_g < 8);
     debug_assert!(rm_e < 8);
@@ -17,115 +17,134 @@ pub fn encode_modrm(m0d: u8, enc_reg_g: u8, rm_e: u8) -> u8 {
 
 /// Encode the SIB byte (scale-index-base).
 #[inline]
-pub fn encode_sib(scale: u8, enc_index: u8, enc_base: u8) -> u8 {
+pub(crate) fn encode_sib(scale: u8, enc_index: u8, enc_base: u8) -> u8 {
     debug_assert!(scale < 4);
     debug_assert!(enc_index < 8);
     debug_assert!(enc_base < 8);
     ((scale & 3) << 6) | ((enc_index & 7) << 3) | (enc_base & 7)
 }
 
-/// A small bit field to record a REX prefix specification:
-/// - bit 0 set to 1 indicates REX.W must be 0 (cleared).
-/// - bit 1 set to 1 indicates the REX prefix must always be emitted.
-#[repr(transparent)]
+/// Force emission of the REX byte if the register is: `rsp`, `rbp`, `rsi`,
+/// `rdi`.
+const fn is_special(enc: u8) -> bool {
+    enc >= 4 && enc <= 7
+}
+
+/// Construct and emit the REX prefix byte.
+///
+/// For more details, see section 2.2.1, "REX Prefixes" in Intel's reference
+/// manual.
 #[derive(Clone, Copy)]
-pub struct RexFlags(u8);
+pub struct RexPrefix {
+    byte: u8,
+    must_emit: bool,
+}
 
-impl RexFlags {
-    /// By default, set the W field, and don't always emit.
+impl RexPrefix {
+    /// Construct the [`RexPrefix`] for a unary instruction.
+    ///
+    /// Used with a single register operand:
+    /// - `x` and `r` are unused.
+    /// - `b` extends the `reg` register, allowing access to r8-r15, or the top
+    ///   bit of the opcode digit.
     #[inline]
     #[must_use]
-    pub fn set_w() -> Self {
-        Self(0)
-    }
-
-    /// Creates a new REX prefix for which the REX.W bit will be cleared.
-    #[inline]
-    #[must_use]
-    pub fn clear_w() -> Self {
-        Self(1)
-    }
-
-    /// True if 64-bit operands are used.
-    #[inline]
-    #[must_use]
-    pub fn must_clear_w(self) -> bool {
-        (self.0 & 1) != 0
-    }
-
-    /// Require that the REX prefix is emitted.
-    #[inline]
-    pub fn always_emit(&mut self) -> &mut Self {
-        self.0 |= 2;
-        self
-    }
-
-    /// True if the REX prefix must always be emitted.
-    #[inline]
-    #[must_use]
-    pub fn must_always_emit(self) -> bool {
-        (self.0 & 2) != 0
-    }
-
-    /// Force emission of the REX byte if the register is: `rsp`, `rbp`, `rsi`,
-    /// `rdi`.
-    pub fn always_emit_if_8bit_needed(&mut self, enc: u8) {
-        if (4..=7).contains(&enc) {
-            self.always_emit();
-        }
-    }
-
-    /// Emit a unary instruction.
-    #[inline]
-    pub fn emit_one_op(self, sink: &mut impl CodeSink, enc_e: u8) {
-        // Register Operand coded in Opcode Byte
-        // REX.R and REX.X unused
-        // REX.B == 1 accesses r8-r15
-        let w = if self.must_clear_w() { 0 } else { 1 };
+    pub const fn one_op(self, enc: u8, w_bit: bool, uses_8bit: bool) -> Self {
+        let must_emit = uses_8bit && is_special(enc);
+        let w = if w_bit { 1 } else { 0 };
         let r = 0;
         let x = 0;
-        let b = (enc_e >> 3) & 1;
-        let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
-        if rex != 0x40 || self.must_always_emit() {
-            sink.put1(rex);
+        let b = (enc >> 3) & 1;
+        let flag = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
+        Self {
+            byte: flag,
+            must_emit,
         }
     }
 
-    /// Emit a binary instruction.
+    /// Construct the [`RexPrefix`] for a binary instruction.
+    ///
+    /// Used without a SIB byte or for register-to-register addressing:
+    /// - `r` extends the `reg` operand, allowing access to r8-r15.
+    /// - `x` is unused.
+    /// - `b` extends the `r/m` operand, allowing access to r8-r15.
     #[inline]
-    pub fn emit_two_op(self, sink: &mut impl CodeSink, enc_g: u8, enc_e: u8) {
-        let w = if self.must_clear_w() { 0 } else { 1 };
-        let r = (enc_g >> 3) & 1;
+    #[must_use]
+    pub const fn two_op(enc_reg: u8, enc_rm: u8, w_bit: bool, uses_8bit: bool) -> Self {
+        let must_emit = uses_8bit && (is_special(enc_rm) || is_special(enc_reg));
+        let w = if w_bit { 1 } else { 0 };
+        let r = (enc_reg >> 3) & 1;
         let x = 0;
-        let b = (enc_e >> 3) & 1;
-        let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
-        if rex != 0x40 || self.must_always_emit() {
-            sink.put1(rex);
+        let b = (enc_rm >> 3) & 1;
+        let flag = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
+        Self {
+            byte: flag,
+            must_emit,
         }
     }
 
-    /// Emit a ternary instruction.
+    /// Construct the [`RexPrefix`] for an instruction using an opcode digit.
+    ///
+    /// :
+    /// - `r` extends the opcode digit.
+    /// - `x` is unused.
+    /// - `b` extends the `reg` operand, allowing access to r8-r15.
     #[inline]
-    pub fn emit_three_op(self, sink: &mut impl CodeSink, enc_g: u8, enc_index: u8, enc_base: u8) {
-        let w = if self.must_clear_w() { 0 } else { 1 };
-        let r = (enc_g >> 3) & 1;
+    #[must_use]
+    pub const fn with_digit(digit: u8, enc_reg: u8, w_bit: bool, uses_8bit: bool) -> Self {
+        Self::two_op(digit, enc_reg, w_bit, uses_8bit)
+    }
+
+    /// Construct the [`RexPrefix`] for a ternary instruction, typically using a
+    /// memory address.
+    ///
+    /// Used with a SIB byte:
+    /// - `r` extends the `reg` operand, allowing access to r8-r15.
+    /// - `x` extends the index register, allowing access to r8-r15.
+    /// - `b` extends the base register, allowing access to r8-r15.
+    #[inline]
+    #[must_use]
+    pub const fn three_op(
+        enc_reg: u8,
+        enc_index: u8,
+        enc_base: u8,
+        w_bit: bool,
+        uses_8bit: bool,
+    ) -> Self {
+        let must_emit =
+            uses_8bit && (is_special(enc_reg) || is_special(enc_base) || is_special(enc_index));
+        let w = if w_bit { 1 } else { 0 };
+        let r = (enc_reg >> 3) & 1;
         let x = (enc_index >> 3) & 1;
         let b = (enc_base >> 3) & 1;
-        let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
-        if rex != 0x40 || self.must_always_emit() {
-            sink.put1(rex);
+        let flag = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
+        Self {
+            byte: flag,
+            must_emit,
+        }
+    }
+
+    /// Possibly emit the REX prefix byte.
+    ///
+    /// This will only be emitted if the REX prefix is not `0x40` (the default)
+    /// or if the instruction uses 8-bit operands.
+    #[inline]
+    pub fn encode(&self, sink: &mut impl CodeSink) {
+        if self.byte != 0x40 || self.must_emit {
+            sink.put1(self.byte);
         }
     }
 }
 
+/// The displacement bytes used after the ModR/M and SIB bytes.
 #[derive(Copy, Clone)]
-pub enum Imm {
+pub enum Disp {
     None,
     Imm8(i8),
     Imm32(i32),
 }
 
-impl Imm {
+impl Disp {
     /// Classifies the 32-bit immediate `val` as how this can be encoded
     /// with ModRM/SIB bytes.
     ///
@@ -139,23 +158,23 @@ impl Imm {
     /// The `evex_scaling` factor provided here is `Some(N)` for EVEX
     /// instructions.  This is taken into account where the `Imm` value
     /// contained is the raw byte offset.
-    pub fn new(val: i32, evex_scaling: Option<i8>) -> Imm {
+    pub fn new(val: i32, evex_scaling: Option<i8>) -> Disp {
         if val == 0 {
-            return Imm::None;
+            return Disp::None;
         }
         match evex_scaling {
             Some(scaling) => {
                 if val % i32::from(scaling) == 0 {
                     let scaled = val / i32::from(scaling);
                     if low8_will_sign_extend_to_32(scaled) {
-                        return Imm::Imm8(scaled as i8);
+                        return Disp::Imm8(scaled as i8);
                     }
                 }
-                Imm::Imm32(val)
+                Disp::Imm32(val)
             }
             None => match i8::try_from(val) {
-                Ok(val) => Imm::Imm8(val),
-                Err(_) => Imm::Imm32(val),
+                Ok(val) => Disp::Imm8(val),
+                Err(_) => Disp::Imm32(val),
             },
         }
     }
@@ -163,8 +182,8 @@ impl Imm {
     /// Forces `Imm::None` to become `Imm::Imm8(0)`, used for special cases
     /// where some base registers require an immediate.
     pub fn force_immediate(&mut self) {
-        if let Imm::None = self {
-            *self = Imm::Imm8(0);
+        if let Disp::None = self {
+            *self = Disp::Imm8(0);
         }
     }
 
@@ -172,18 +191,18 @@ impl Imm {
     /// byte.
     pub fn m0d(self) -> u8 {
         match self {
-            Imm::None => 0b00,
-            Imm::Imm8(_) => 0b01,
-            Imm::Imm32(_) => 0b10,
+            Disp::None => 0b00,
+            Disp::Imm8(_) => 0b01,
+            Disp::Imm32(_) => 0b10,
         }
     }
 
     /// Emit the truncated immediate into the code sink.
     pub fn emit(self, sink: &mut impl CodeSink) {
         match self {
-            Imm::None => {}
-            Imm::Imm8(n) => sink.put1(n as u8),
-            Imm::Imm32(n) => sink.put4(n as u32),
+            Disp::None => {}
+            Disp::Imm8(n) => sink.put1(n as u8),
+            Disp::Imm32(n) => sink.put4(n as u32),
         }
     }
 }

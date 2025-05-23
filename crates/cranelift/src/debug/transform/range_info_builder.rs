@@ -1,7 +1,7 @@
-use super::address_transform::AddressTransform;
 use super::Reader;
+use super::address_transform::AddressTransform;
 use anyhow::Error;
-use gimli::{write, AttributeValue, DebuggingInformationEntry, RangeListsOffset, Unit};
+use gimli::{AttributeValue, DebuggingInformationEntry, RangeListsOffset, Unit, write};
 use wasmtime_environ::DefinedFuncIndex;
 
 pub(crate) enum RangeInfoBuilder {

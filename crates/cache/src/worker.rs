@@ -5,7 +5,7 @@
 //! but we guarantee eventual consistency and fault tolerancy.
 //! Background tasks can be CPU intensive, but the worker thread has low priority.
 
-use super::{fs_write_atomic, CacheConfig};
+use super::{CacheConfig, fs_write_atomic};
 use log::{debug, info, trace, warn};
 use serde_derive::{Deserialize, Serialize};
 use std::cmp;
@@ -14,7 +14,7 @@ use std::ffi::OsStr;
 use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 #[cfg(test)]
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
@@ -253,7 +253,9 @@ impl WorkerThread {
             }
             Err(err) => {
                 warn!(
-                    "Failed to lower worker thread priority ({:?}). It might affect application performance.", err);
+                    "Failed to lower worker thread priority ({:?}). It might affect application performance.",
+                    err
+                );
             }
         };
     }

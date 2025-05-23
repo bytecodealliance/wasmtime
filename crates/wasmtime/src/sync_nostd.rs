@@ -17,7 +17,7 @@
 use core::cell::UnsafeCell;
 use core::mem::MaybeUninit;
 use core::ops::{Deref, DerefMut};
-use core::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicU8, AtomicU32, Ordering};
 
 pub struct OnceLock<T> {
     val: UnsafeCell<MaybeUninit<T>>,

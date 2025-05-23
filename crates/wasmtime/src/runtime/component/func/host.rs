@@ -13,8 +13,8 @@ use core::any::Any;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, StringEncoding, TypeFuncIndex,
-    MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    StringEncoding, TypeFuncIndex,
 };
 
 pub struct HostFunc {
@@ -35,6 +35,7 @@ impl HostFunc {
         F: Fn(StoreContextMut<T>, P) -> Result<R> + Send + Sync + 'static,
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + 'static,
+        T: 'static,
     {
         let entrypoint = Self::entrypoint::<T, F, P, R>;
         Arc::new(HostFunc {
@@ -61,6 +62,7 @@ impl HostFunc {
         F: Fn(StoreContextMut<T>, P) -> Result<R>,
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + 'static,
+        T: 'static,
     {
         let data = data.as_ptr() as *const F;
         unsafe {
@@ -85,6 +87,7 @@ impl HostFunc {
     pub(crate) fn new_dynamic<T, F>(func: F) -> Arc<HostFunc>
     where
         F: Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
+        T: 'static,
     {
         Arc::new(HostFunc {
             entrypoint: dynamic_entrypoint::<T, F>,
@@ -310,7 +313,10 @@ unsafe fn call_host_and_handle_result<T>(
         &Arc<ComponentTypes>,
         StoreContextMut<'_, T>,
     ) -> Result<()>,
-) -> bool {
+) -> bool
+where
+    T: 'static,
+{
     let cx = VMComponentContext::from_opaque(cx);
     let instance = cx.as_ref().instance();
     let types = (*instance).component_types();
@@ -340,6 +346,7 @@ unsafe fn call_host_dynamic<T, F>(
 ) -> Result<()>
 where
     F: FnOnce(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()>,
+    T: 'static,
 {
     if async_ {
         todo!()
@@ -455,6 +462,7 @@ extern "C" fn dynamic_entrypoint<T, F>(
 ) -> bool
 where
     F: Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
+    T: 'static,
 {
     let data = data.as_ptr() as *const F;
     unsafe {

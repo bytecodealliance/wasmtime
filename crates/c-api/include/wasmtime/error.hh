@@ -7,6 +7,7 @@
 
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <string>
 #include <variant>
 #include <wasmtime/error.h>
@@ -62,9 +63,7 @@ public:
   Trace trace() const;
 
   /// Release ownership of this error, acquiring the underlying C raw pointer.
-  wasmtime_error_t *release() {
-    return ptr.release();
-  }
+  wasmtime_error_t *release() { return ptr.release(); }
 };
 
 /// \brief Used to print an error.
@@ -121,4 +120,3 @@ private:
 } // namespace wasmtime
 
 #endif // WASMTIME_ERROR_HH
-

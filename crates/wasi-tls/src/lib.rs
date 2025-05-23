@@ -76,12 +76,12 @@ use bytes::Bytes;
 use rustls::pki_types::ServerName;
 use std::io;
 use std::sync::Arc;
-use std::task::{ready, Poll};
+use std::task::{Poll, ready};
 use std::{future::Future, mem, pin::Pin, sync::LazyLock};
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 use tokio::sync::Mutex;
 use tokio_rustls::client::TlsStream;
-use wasmtime::component::{Resource, ResourceTable};
+use wasmtime::component::{HasData, Resource, ResourceTable};
 use wasmtime_wasi::async_trait;
 use wasmtime_wasi::p2::bindings::io::{
     error::Error as HostIoError,
@@ -139,13 +139,19 @@ impl<'a> WasiTlsCtx<'a> {
 impl<'a> generated::types::Host for WasiTlsCtx<'a> {}
 
 /// Add the `wasi-tls` world's types to a [`wasmtime::component::Linker`].
-pub fn add_to_linker<T: Send>(
+pub fn add_to_linker<T: Send + 'static>(
     l: &mut wasmtime::component::Linker<T>,
     opts: &mut LinkOptions,
-    f: impl Fn(&mut T) -> WasiTlsCtx + Send + Sync + Copy + 'static,
+    f: fn(&mut T) -> WasiTlsCtx<'_>,
 ) -> Result<()> {
-    generated::types::add_to_linker_get_host(l, &opts, f)?;
+    generated::types::add_to_linker::<_, WasiTls>(l, &opts, f)?;
     Ok(())
+}
+
+struct WasiTls;
+
+impl HasData for WasiTls {
+    type Data<'a> = WasiTlsCtx<'a>;
 }
 
 enum TlsError {
@@ -182,7 +188,9 @@ impl From<io::Error> for TlsError {
         let error = match error.downcast::<StreamError>() {
             Ok(StreamError::LastOperationFailed(e)) => return Self::Io(e),
             Ok(StreamError::Trap(e)) => return Self::Trap(e),
-            Ok(StreamError::Closed) => unreachable!("our wasi-to-tokio stream transformer should have translated this to a 0-sized read"),
+            Ok(StreamError::Closed) => unreachable!(
+                "our wasi-to-tokio stream transformer should have translated this to a 0-sized read"
+            ),
             Err(e) => e,
         };
 
@@ -670,6 +678,7 @@ fn try_lock_for_stream<TlsWriter>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::task::Waker;
     use tokio::sync::oneshot;
 
     #[tokio::test]
@@ -683,7 +692,7 @@ mod tests {
 
         let mut fut = future_streams.ready();
 
-        let mut cx = std::task::Context::from_waker(futures::task::noop_waker_ref());
+        let mut cx = std::task::Context::from_waker(Waker::noop());
         assert!(fut.as_mut().poll(&mut cx).is_pending());
 
         //cancel the readiness check

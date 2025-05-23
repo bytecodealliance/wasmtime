@@ -1,14 +1,14 @@
 use crate::{
-    abi::{scratch, vmctx, ABIOperand, ABISig, RetArea},
+    abi::{ABIOperand, ABISig, RetArea, scratch, vmctx},
     codegen::BlockSig,
-    isa::reg::{writable, Reg},
+    isa::reg::{Reg, writable},
     masm::{
         Extend, Imm, IntCmpKind, LaneSelector, LoadKind, MacroAssembler, OperandSize, RegImm,
-        RmwOp, SPOffset, ShiftKind, StoreKind, TrapCode, Zero, UNTRUSTED_FLAGS,
+        RmwOp, SPOffset, ShiftKind, StoreKind, TrapCode, UNTRUSTED_FLAGS, Zero,
     },
     stack::TypedReg,
 };
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{Result, anyhow, bail, ensure};
 use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{RelSourceLoc, SourceLoc},
@@ -21,8 +21,8 @@ use wasmparser::{
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_HEAP_MISALIGNED, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
-    GlobalIndex, MemoryIndex, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType, WasmValType,
-    FUNCREF_MASK,
+    FUNCREF_MASK, GlobalIndex, MemoryIndex, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType,
+    WasmValType,
 };
 
 mod context;
@@ -44,6 +44,32 @@ pub(crate) use phase::*;
 
 mod error;
 pub(crate) use error::*;
+
+/// Branch states in the compiler, enabling the derivation of the
+/// reachability state.
+pub(crate) trait BranchState {
+    /// Whether the compiler will enter in an unreachable state after
+    /// the branch is emitted.
+    fn unreachable_state_after_emission() -> bool;
+}
+
+/// A conditional branch state, with a fallthrough.
+pub(crate) struct ConditionalBranch;
+
+impl BranchState for ConditionalBranch {
+    fn unreachable_state_after_emission() -> bool {
+        false
+    }
+}
+
+/// Unconditional branch state.
+pub(crate) struct UnconditionalBranch;
+
+impl BranchState for UnconditionalBranch {
+    fn unreachable_state_after_emission() -> bool {
+        true
+    }
+}
 
 /// Holds metadata about the source code location and the machine code emission.
 /// The fields of this struct are opaque and are not interpreted in any way.

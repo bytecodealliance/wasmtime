@@ -50,7 +50,7 @@ use crate::runtime::vm::{
     GcProgress, GcRootsIter, GcRuntime, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
 };
 use crate::vm::{SendSyncPtr, VMMemoryDefinition};
-use crate::{prelude::*, Engine, EngineWeak};
+use crate::{Engine, EngineWeak, prelude::*};
 use core::{
     alloc::Layout,
     any::Any,
@@ -59,7 +59,7 @@ use core::{
     ops::{Deref, DerefMut},
     ptr::NonNull,
 };
-use wasmtime_environ::drc::{DrcTypeLayouts, ARRAY_LENGTH_OFFSET};
+use wasmtime_environ::drc::{ARRAY_LENGTH_OFFSET, DrcTypeLayouts};
 use wasmtime_environ::{
     GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
 };

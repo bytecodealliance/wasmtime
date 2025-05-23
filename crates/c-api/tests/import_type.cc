@@ -12,7 +12,8 @@ TEST(ImportType, Smoke) {
 
   module = Module::compile(engine, "(module"
                                    "(import \"a\" \"b\" (func))"
-                                   ")").unwrap();
+                                   ")")
+               .unwrap();
 
   auto imports = module.imports();
   EXPECT_EQ(imports.size(), 1);

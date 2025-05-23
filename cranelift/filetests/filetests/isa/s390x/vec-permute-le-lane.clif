@@ -51,13 +51,22 @@ block0(v0: i8x16, v1: i8x16):
 
 ; VCode:
 ; block0:
-;   bras %r1, 20 ; data.u128 0x0a1e000d0b1702180403090b15100f0c ; vl %v3, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v3, 0(%r1)
 ;   vperm %v24, %v24, %v25, %v3
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0x14
+;   larl %r1, 0x20
+;   vl %v3, 0(%r1)
+;   vperm %v24, %v24, %v25, %v3
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   svc 0x1e
 ;   .byte 0x00, 0x0d
 ;   bsm %r1, %r7
@@ -66,9 +75,6 @@ block0(v0: i8x16, v1: i8x16):
 ;   .byte 0x09, 0x0b
 ;   clr %r1, %r0
 ;   clcl %r0, %r12
-;   vl %v3, 0(%r1)
-;   vperm %v24, %v24, %v25, %v3
-;   br %r14
 
 function %shuffle_vmrhg_xy(i8x16, i8x16) -> i8x16 tail {
 block0(v0: i8x16, v1: i8x16):

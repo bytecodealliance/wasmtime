@@ -2,8 +2,16 @@
 
 mod add;
 mod and;
+mod bitmanip;
+mod cvt;
+mod div;
+mod max;
+mod min;
+mod mul;
+mod neg;
 mod or;
-mod shld;
+mod shift;
+mod sqrt;
 mod sub;
 mod xor;
 
@@ -14,8 +22,16 @@ pub fn list() -> Vec<Inst> {
     let mut all = vec![];
     all.extend(add::list());
     all.extend(and::list());
+    all.extend(bitmanip::list());
+    all.extend(cvt::list());
+    all.extend(div::list());
+    all.extend(max::list());
+    all.extend(min::list());
+    all.extend(mul::list());
+    all.extend(neg::list());
     all.extend(or::list());
-    all.extend(shld::list());
+    all.extend(shift::list());
+    all.extend(sqrt::list());
     all.extend(sub::list());
     all.extend(xor::list());
     all

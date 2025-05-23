@@ -1,0 +1,176 @@
+test run
+set enable_multi_ret_implicit_sret
+set enable_llvm_abi_extensions
+target x86_64
+target x86_64 has_avx
+target aarch64
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function %bitcast_i32x2_to_i64(i32x2) -> i64 {
+block0(v0: i32x2):
+    v1 = bitcast.i64 little v0
+    return v1
+}
+; run: %bitcast_i32x2_to_i64([0xBEEF 0xC0FFEE]) == 0x00c0ffee_0000beef
+; run: %bitcast_i32x2_to_i64([-1 127]) == 0x0000007f_ffffffff
+
+function %bitcast_i64_to_i32x2(i64) -> i32x2 {
+block0(v0: i64):
+    v1 = bitcast.i32x2 little v0
+    return v1
+}
+; run: %bitcast_i64_to_i32x2(0x00c0ffee_0000beef) == [0xBEEF 0xC0FFEE]
+; run: %bitcast_i64_to_i32x2(0x0000007f_ffffffff) == [-1 127]
+
+function %bitcast_i32x2_to_f64(i32x2) -> f64 {
+block0(v0: i32x2):
+    v1 = bitcast.f64 little v0
+    return v1
+}
+; run: %bitcast_i32x2_to_f64([0xBEEF 0xC0FFEE]) == 0x1.0ffee0000beefp-1011
+; run: %bitcast_i32x2_to_f64([-1 127]) == 0x0.0007fffffffffp-1022
+
+function %bitcast_f64_to_i32x2(f64) -> i32x2 {
+block0(v0: f64):
+    v1 = bitcast.i32x2 little v0
+    return v1
+}
+; run: %bitcast_f64_to_i32x2(0x1.0ffee0000beefp-1011) == [0xBEEF 0xC0FFEE]
+; run: %bitcast_f64_to_i32x2(0x0.0007fffffffffp-1022) == [-1 127]
+
+function %store_i32x2(i32x2) -> i64 {
+    ss0 = explicit_slot 8
+block0(v0: i32x2):
+    stack_store.i32x2 v0, ss0
+    v1 = stack_load.i64 ss0
+    return v1
+}
+; run: %store_i32x2([0xBEEF 0xC0FFEE]) == 0x00c0ffee_0000beef
+; run: %store_i32x2([-1 127]) == 0x0000007f_ffffffff
+
+function %load_i32x2(i64) -> i32x2 {
+    ss0 = explicit_slot 8
+block0(v0: i64):
+    stack_store.i64 v0, ss0
+    v1 = stack_load.i32x2 ss0
+    return v1
+}
+; run: %bitcast_i64_to_i32x2(0x00c0ffee_0000beef) == [0xBEEF 0xC0FFEE]
+; run: %bitcast_i64_to_i32x2(0x0000007f_ffffffff) == [-1 127]
+
+
+
+function %bitcast_i16x2_to_i32(i16x2) -> i32 {
+block0(v0: i16x2):
+    v1 = bitcast.i32 little v0
+    return v1
+}
+; run: %bitcast_i16x2_to_i32([0xBEEF 0xC0FE]) == 0xc0fe_beef
+; run: %bitcast_i16x2_to_i32([-1 127]) == 0x007f_ffff
+
+function %bitcast_i32_to_i16x2(i32) -> i16x2 {
+block0(v0: i32):
+    v1 = bitcast.i16x2 little v0
+    return v1
+}
+; run: %bitcast_i32_to_i16x2(0xc0fe_beef) == [0xBEEF 0xC0FE]
+; run: %bitcast_i32_to_i16x2(0x007f_ffff) == [-1 127]
+
+function %bitcast_i16x2_to_f32(i16x2) -> f32 {
+block0(v0: i16x2):
+    v1 = bitcast.f32 little v0
+    return v1
+}
+; run: %bitcast_i16x2_to_f32([0xBEEF 0xC0FE]) == -0x1.fd7ddep2
+; run: %bitcast_i16x2_to_f32([-1 127]) == 0x0.fffffep-126
+
+function %bitcast_f32_to_i16x2(f32) -> i16x2 {
+block0(v0: f32):
+    v1 = bitcast.i16x2 little v0
+    return v1
+}
+; run: %bitcast_f32_to_i16x2(-0x1.fd7ddep2) == [0xBEEF 0xC0FE]
+; run: %bitcast_f32_to_i16x2(0x0.fffffep-126) == [-1 127]
+
+function %store_i16x2(i16x2) -> i32 {
+    ss0 = explicit_slot 4
+block0(v0: i16x2):
+    stack_store.i16x2 v0, ss0
+    v1 = stack_load.i32 ss0
+    return v1
+}
+; run: %store_i16x2([0xBEEF 0xC0FE]) == 0xc0fe_beef
+; run: %store_i16x2([-1 127]) == 0x007f_ffff
+
+function %load_i16x2(i32) -> i16x2 {
+    ss0 = explicit_slot 4
+block0(v0: i32):
+    stack_store.i32 v0, ss0
+    v1 = stack_load.i16x2 ss0
+    return v1
+}
+; run: %bitcast_i32_to_i16x2(0xc0fe_beef) == [0xBEEF 0xC0FE]
+; run: %bitcast_i32_to_i16x2(0x007f_ffff) == [-1 127]
+
+
+
+function %bitcast_i8x2_to_i16(i8x2) -> i16 {
+block0(v0: i8x2):
+    v1 = bitcast.i16 little v0
+    return v1
+}
+; run: %bitcast_i8x2_to_i16([0xFE 0xC0]) == 0xc0fe
+; run: %bitcast_i8x2_to_i16([-1 127]) == 0x7fff
+
+function %bitcast_i16_to_i8x2(i16) -> i8x2 {
+block0(v0: i16):
+    v1 = bitcast.i8x2 little v0
+    return v1
+}
+; run: %bitcast_i16_to_i8x2(0xc0fe) == [0xFE 0xC0]
+; run: %bitcast_i16_to_i8x2(0x7fff) == [-1 127]
+
+function %bitcast_i8x2_to_f16(i8x2) -> f16 {
+block0(v0: i8x2):
+    v1 = bitcast.f16 little v0
+    return v1
+}
+; run: %bitcast_i8x2_to_f16([0xFE 0xC0]) == -0x1.3f8p1
+; run: %bitcast_i8x2_to_f16([-1 127]) == +NaN:0x1ff
+
+function %bitcast_f16_to_i8x2(f16) -> i8x2 {
+block0(v0: f16):
+    v1 = bitcast.i8x2 little v0
+    return v1
+}
+; run: %bitcast_f16_to_i8x2(-0x1.3f8p1) == [0xFE 0xC0]
+; run: %bitcast_f16_to_i8x2(+NaN:0x1ff) == [-1 127]
+
+function %store_i8x2(i8x2) -> i16 {
+    ss0 = explicit_slot 2
+block0(v0: i8x2):
+    stack_store.i8x2 v0, ss0
+    v1 = stack_load.i16 ss0
+    return v1
+}
+; run: %store_i8x2([0xFE 0xC0]) == 0xc0fe
+; run: %store_i8x2([-1 127]) == 0x7fff
+
+function %load_i8x2(i16) -> i8x2 {
+    ss0 = explicit_slot 2
+block0(v0: i16):
+    stack_store.i16 v0, ss0
+    v1 = stack_load.i8x2 ss0
+    return v1
+}
+; run: %bitcast_i16_to_i8x2(0xc0fe) == [0xFE 0xC0]
+; run: %bitcast_i16_to_i8x2(0x7fff) == [-1 127]
+
+
+
+function %rearrange(i8x2, i16x2, i32x2) -> i16x2, i32x2, i8x2 {
+block0(v0: i8x2, v1: i16x2, v2: i32x2):
+    return v1, v2, v0
+}
+; run: %rearrange([1 2], [3 4], [5 6]) == [[3 4], [5 6], [1 2]]

@@ -2,13 +2,13 @@
 
 use crate::new_subtest;
 use crate::subtest::SubTest;
-use anyhow::{bail, Context as _, Result};
+use anyhow::{Context as _, Result, bail};
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::print_errors::pretty_verifier_error;
 use cranelift_codegen::settings::{Flags, FlagsOrIsa};
 use cranelift_codegen::timing;
 use cranelift_codegen::verify_function;
-use cranelift_reader::{parse_test, IsaSpec, Location, ParseOptions, TestFile};
+use cranelift_reader::{IsaSpec, Location, ParseOptions, TestFile, parse_test};
 use log::info;
 use std::cell::Cell;
 use std::fs;

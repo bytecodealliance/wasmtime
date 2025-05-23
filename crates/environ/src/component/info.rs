@@ -166,10 +166,6 @@ pub struct Component {
     /// instantiate this component.
     pub num_lowerings: u32,
 
-    /// Maximal number of tables required at runtime for resource-related
-    /// information in this component.
-    pub num_resource_tables: usize,
-
     /// Total number of resources both imported and defined within this
     /// component.
     pub num_resources: u32,
@@ -973,7 +969,7 @@ pub enum Trampoline {
     /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
     /// ownership of a `future`.
     ///
-    /// Transfering a `future` can either mean giving away the readable end
+    /// Transferring a `future` can either mean giving away the readable end
     /// while retaining the writable end or only the former, depending on the
     /// ownership status of the `future`.
     FutureTransfer,
@@ -981,7 +977,7 @@ pub enum Trampoline {
     /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
     /// ownership of a `stream`.
     ///
-    /// Transfering a `stream` can either mean giving away the readable end
+    /// Transferring a `stream` can either mean giving away the readable end
     /// while retaining the writable end or only the former, depending on the
     /// ownership status of the `stream`.
     StreamTransfer,

@@ -12,7 +12,7 @@ block0:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm0
-;   pxor    %xmm0, %xmm0, %xmm0
+;   pxor %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -39,7 +39,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm0
-;   pxor    %xmm0, %xmm0, %xmm0
+;   pxor %xmm0, %xmm0
 ;   pinsrd.w $0, %xmm0, %rdi, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

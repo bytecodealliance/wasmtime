@@ -26,7 +26,7 @@ use alloc::collections::VecDeque;
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use core::cell::{Cell, RefCell};
 use core::fmt::Write as _;
 use core::future::Future;
@@ -35,10 +35,10 @@ use core::task::{Context, Poll, Waker};
 use wasmtime::component::{Component, Linker, Resource, ResourceTable};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi_io::{
-    bytes::Bytes,
-    poll::{subscribe, DynPollable, Pollable},
-    streams::{DynInputStream, DynOutputStream, InputStream, OutputStream},
     IoView,
+    bytes::Bytes,
+    poll::{DynPollable, Pollable, subscribe},
+    streams::{DynInputStream, DynOutputStream, InputStream, OutputStream},
 };
 
 /// Unlike super::run, its nice to provide some sort of output showing what the
@@ -212,16 +212,18 @@ impl ExampleCtx {
 // wasi:cli/command world. Many of these impls are bare-bones and some are
 // intentionally broken, see notes below.
 pub fn add_to_linker_async(linker: &mut Linker<ExampleCtx>) -> Result<()> {
-    wasi::clocks::monotonic_clock::add_to_linker(linker, |t| t)?;
-    wasi::clocks::wall_clock::add_to_linker(linker, |t| t)?;
-    wasi::cli::environment::add_to_linker(linker, |t| t)?;
-    wasi::cli::exit::add_to_linker(linker, &wasi::cli::exit::LinkOptions::default(), |t| t)?;
-    wasi::cli::stdin::add_to_linker(linker, |t| t)?;
-    wasi::cli::stdout::add_to_linker(linker, |t| t)?;
-    wasi::cli::stderr::add_to_linker(linker, |t| t)?;
-    wasi::random::random::add_to_linker(linker, |t| t)?;
-    wasi::filesystem::preopens::add_to_linker(linker, |t| t)?;
-    wasi::filesystem::types::add_to_linker(linker, |t| t)?;
+    type Data = wasmtime::component::HasSelf<ExampleCtx>;
+
+    wasi::clocks::monotonic_clock::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::clocks::wall_clock::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::cli::environment::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::cli::exit::add_to_linker::<_, Data>(linker, &Default::default(), |t| t)?;
+    wasi::cli::stdin::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::cli::stdout::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::cli::stderr::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::random::random::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::filesystem::preopens::add_to_linker::<_, Data>(linker, |t| t)?;
+    wasi::filesystem::types::add_to_linker::<_, Data>(linker, |t| t)?;
     Ok(())
 }
 
@@ -414,24 +416,6 @@ impl ExecutorInner {
     }
 }
 
-// Yanked from core::task::wake, which is unfortunately still unstable :/
-fn noop_waker() -> Waker {
-    use core::task::{RawWaker, RawWakerVTable};
-    const VTABLE: RawWakerVTable = RawWakerVTable::new(
-        // Cloning just returns a new no-op raw waker
-        |_| RAW,
-        // `wake` does nothing
-        |_| {},
-        // `wake_by_ref` does nothing
-        |_| {},
-        // Dropping does nothing as we don't allocate anything
-        |_| {},
-    );
-    const RAW: RawWaker = RawWaker::new(core::ptr::null(), &VTABLE);
-
-    unsafe { Waker::from_raw(RAW) }
-}
-
 fn block_on<R>(clock: Clock, f: impl Future<Output = Result<R>> + Send + 'static) -> Result<R> {
     // Guard against nested invocations
     if EXECUTOR.0.borrow_mut().is_some() {
@@ -441,8 +425,7 @@ fn block_on<R>(clock: Clock, f: impl Future<Output = Result<R>> + Send + 'static
     *EXECUTOR.0.borrow_mut() = Some(Executor(executor.0.clone()));
 
     // No special waker needed for this executor.
-    let waker = noop_waker();
-    let mut cx = Context::from_waker(&waker);
+    let mut cx = Context::from_waker(Waker::noop());
     let mut f = core::pin::pin!(f);
 
     // Drive the Future to completion in the following loop

@@ -16,9 +16,9 @@
 //! small, the exception table also contains the signature ID of the
 //! called function.
 
+use crate::ir::BlockCall;
 use crate::ir::entities::{ExceptionTag, SigRef};
 use crate::ir::instructions::ValueListPool;
-use crate::ir::BlockCall;
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use cranelift_entity::packed_option::PackedOption;

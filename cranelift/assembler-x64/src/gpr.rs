@@ -1,6 +1,5 @@
 //! Pure register operands; see [`Gpr`].
 
-use crate::rex::RexFlags;
 use crate::AsReg;
 
 /// A general purpose x64 register (e.g., `%rax`).
@@ -33,12 +32,6 @@ impl<R: AsReg> Gpr<R> {
     pub fn to_string(&self, size: Size) -> String {
         self.0.to_string(Some(size))
     }
-
-    /// Proxy on the 8-bit REX flag emission; helpful for simplifying generated
-    /// code.
-    pub(crate) fn always_emit_if_8bit_needed(&self, rex: &mut RexFlags) {
-        rex.always_emit_if_8bit_needed(self.enc());
-    }
 }
 
 impl<R: AsReg> AsRef<R> for Gpr<R> {
@@ -50,6 +43,12 @@ impl<R: AsReg> AsRef<R> for Gpr<R> {
 impl<R: AsReg> AsMut<R> for Gpr<R> {
     fn as_mut(&mut self) -> &mut R {
         &mut self.0
+    }
+}
+
+impl<R: AsReg> From<R> for Gpr<R> {
+    fn from(reg: R) -> Gpr<R> {
+        Gpr(reg)
     }
 }
 
@@ -100,6 +99,12 @@ impl<R: AsReg> NonRspGpr<R> {
 impl<R: AsReg> AsMut<R> for NonRspGpr<R> {
     fn as_mut(&mut self) -> &mut R {
         &mut self.0
+    }
+}
+
+impl<R: AsReg> From<R> for NonRspGpr<R> {
+    fn from(reg: R) -> NonRspGpr<R> {
+        NonRspGpr(reg)
     }
 }
 

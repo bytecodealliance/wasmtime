@@ -1,17 +1,17 @@
 use super::address_transform::AddressTransform;
 use super::dbi_log;
+use crate::debug::ModuleMemoryOffset;
 use crate::debug::transform::debug_transform_logging::{
     dbi_log_enabled, log_get_value_loc, log_get_value_name, log_get_value_ranges,
 };
-use crate::debug::ModuleMemoryOffset;
 use crate::translate::get_vmctx_value_label;
 use anyhow::{Context, Error, Result};
 use core::fmt;
-use cranelift_codegen::ir::ValueLabel;
-use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::LabelValueLoc;
 use cranelift_codegen::ValueLabelsRanges;
-use gimli::{write, Expression, Operation, Reader, ReaderOffset};
+use cranelift_codegen::ir::ValueLabel;
+use cranelift_codegen::isa::TargetIsa;
+use gimli::{Expression, Operation, Reader, ReaderOffset, write};
 use itertools::Itertools;
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
@@ -892,12 +892,12 @@ impl std::fmt::Debug for JumpTargetMarker {
 #[expect(trivial_numeric_casts, reason = "macro-generated code")]
 mod tests {
     use super::{
-        compile_expression, AddressTransform, CompiledExpression, CompiledExpressionPart,
-        FunctionFrameInfo, JumpTargetMarker, ValueLabel, ValueLabelsRanges,
+        AddressTransform, CompiledExpression, CompiledExpressionPart, FunctionFrameInfo,
+        JumpTargetMarker, ValueLabel, ValueLabelsRanges, compile_expression,
     };
     use crate::CompiledFunctionMetadata;
     use cranelift_codegen::{isa::lookup, settings::Flags};
-    use gimli::{constants, Encoding, EndianSlice, Expression, RunTimeEndian};
+    use gimli::{Encoding, EndianSlice, Expression, RunTimeEndian, constants};
     use target_lexicon::triple;
     use wasmtime_environ::FilePos;
 

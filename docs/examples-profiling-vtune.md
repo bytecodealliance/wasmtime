@@ -56,9 +56,9 @@ future.
 
 With VTune [properly installed][download], if you are using the CLI execute:
 
-```sh
-$ cargo build
-$ vtune -run-pass-thru=--no-altstack -collect hotspots target/debug/wasmtime --profile=vtune foo.wasm
+```console
+cargo build
+vtune -run-pass-thru=--no-altstack -collect hotspots target/debug/wasmtime --profile=vtune foo.wasm
 ```
 
 This command tells the VTune collector (`vtune`) to collect hot spot
@@ -91,8 +91,8 @@ fn fib(n: u32) -> u32 {
 
 We compile the example to Wasm:
 
-```sh
-$ rustc --target wasm32-wasip1 fib.rs -C opt-level=z -C lto=yes
+```console
+rustc --target wasm32-wasip1 fib.rs -C opt-level=z -C lto=yes
 ```
 
 Then we execute the Wasmtime runtime (built with the `vtune` feature and
@@ -100,7 +100,7 @@ executed with the `--profile=vtune` flag to enable reporting) inside the VTune C
 application, `vtune`, which must already be installed and available on the
 path. To collect hot spot profiling information, we execute:
 
-```sh
+```console
 $ rustc --target wasm32-wasip1 fib.rs -C opt-level=z -C lto=yes
 $ vtune -run-pass-thru=--no-altstack -v -collect hotspots target/debug/wasmtime --profile=vtune fib.wasm
 fib(45) = 1134903170

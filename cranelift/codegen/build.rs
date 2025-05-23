@@ -211,6 +211,13 @@ fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
         // https://github.com/rust-lang/rust/issues/47995.)
         options.exclude_global_allow_pragmas = true;
 
+        if let Ok(out_dir) = std::env::var("OUT_DIR") {
+            options.prefixes.push(isle::codegen::Prefix {
+                prefix: out_dir,
+                name: "<OUT_DIR>".to_string(),
+            })
+        };
+
         isle::compile::from_files(file_paths, &options)?
     };
 

@@ -12,9 +12,9 @@ block0(v0: i8, v1: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cbw %al, %al
+;   cbtw  ;; implicit: %ax
 ;   checked_srem_seq %al, %sil, %al
-;   shrq    $8, %rax, %rax
+;   shrq $0x8, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -47,7 +47,7 @@ block0(v0: i16, v1: i16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cwd %ax, %dx
+;   cwtd  ;; implicit: %dx, %ax
 ;   checked_srem_seq %ax, %dx, %si, %ax, %dx
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
@@ -82,7 +82,7 @@ block0(v0: i32, v1: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cdq %eax, %edx
+;   cltd  ;; implicit: %edx, %eax
 ;   checked_srem_seq %eax, %edx, %esi, %eax, %edx
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
@@ -117,7 +117,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cqo %rax, %rdx
+;   cqto  ;; implicit: %rdx, %rax
 ;   checked_srem_seq %rax, %rdx, %rsi, %rax, %rdx
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
@@ -153,10 +153,10 @@ block0(v0: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cbw %al, %al
+;   cbtw  ;; implicit: %ax
 ;   movl    $17, %edx
-;   idiv    %al, %dl, %al ; trap=int_divz
-;   shrq    $8, %rax, %rax
+;   idivb %dl ;; implicit: %ax, trap=254
+;   shrq $0x8, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -187,9 +187,9 @@ block0(v0: i16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cwd %ax, %dx
+;   cwtd  ;; implicit: %dx, %ax
 ;   movl    $17, %r8d
-;   idiv    %ax, %dx, %r8w, %ax, %dx ; trap=int_divz
+;   idivw %r8w ;; implicit: %ax, %dx, trap=254
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -221,9 +221,9 @@ block0(v0: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cdq %eax, %edx
+;   cltd  ;; implicit: %edx, %eax
 ;   movl    $17, %r8d
-;   idiv    %eax, %edx, %r8d, %eax, %edx ; trap=int_divz
+;   idivl %r8d ;; implicit: %eax, %edx, trap=254
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -255,9 +255,9 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   cqo %rax, %rdx
+;   cqto  ;; implicit: %rdx, %rax
 ;   movl    $17, %r8d
-;   idiv    %rax, %rdx, %r8, %rax, %rdx ; trap=int_divz
+;   idivq %r8 ;; implicit: %rax, %rdx, trap=254
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

@@ -423,9 +423,11 @@ wasmtime_option_group! {
         /// Enable support for WASI key-value imports (experimental)
         pub keyvalue: Option<bool>,
         /// Inherit environment variables and file descriptors following the
-        /// systemd listen fd specification (UNIX only)
+        /// systemd listen fd specification (UNIX only) (legacy wasip1
+        /// implementation only)
         pub listenfd: Option<bool>,
-        /// Grant access to the given TCP listen socket
+        /// Grant access to the given TCP listen socket (experimental, legacy
+        /// wasip1 implementation only)
         #[serde(default)]
         pub tcplisten: Vec<String>,
         /// Enable support for WASI TLS (Transport Layer Security) imports (experimental)
@@ -735,14 +737,12 @@ impl CommonOptions {
 
         #[cfg(feature = "cache")]
         if self.codegen.cache != Some(false) {
-            match &self.codegen.cache_config {
-                Some(path) => {
-                    config.cache_config_load(path)?;
-                }
-                None => {
-                    config.cache_config_load_default()?;
-                }
-            }
+            use wasmtime::Cache;
+            let cache = match &self.codegen.cache_config {
+                Some(path) => Cache::from_file(Some(Path::new(path)))?,
+                None => Cache::from_file(None)?,
+            };
+            config.cache(Some(cache));
         }
         #[cfg(not(feature = "cache"))]
         if self.codegen.cache == Some(true) {

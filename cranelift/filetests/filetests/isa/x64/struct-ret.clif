@@ -40,7 +40,7 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %r15, 0(%rsp)
 ; block0:
 ;   movq    %rsi, %r15
@@ -49,7 +49,7 @@ block0(v0: i64, v1: i64):
 ;   call    *%rax
 ;   movq    %r15, %rax
 ;   movq    0(%rsp), %r15
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -83,7 +83,7 @@ block0(v0: i64):
 ; VCode:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
+;   subq $0x10, %rsp
 ;   movq    %r15, 0(%rsp)
 ; block0:
 ;   movq    %rdi, %r15
@@ -91,7 +91,7 @@ block0(v0: i64):
 ;   call    *%rax
 ;   movq    %r15, %rax
 ;   movq    0(%rsp), %r15
-;   addq    %rsp, $16, %rsp
+;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

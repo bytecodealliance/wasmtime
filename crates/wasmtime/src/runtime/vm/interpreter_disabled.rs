@@ -4,8 +4,8 @@
 //! `Option<Thing>` is also zero-sized so there should be no runtime cost for
 //! having these structures plumbed around.
 
-use crate::runtime::vm::VMOpaqueContext;
 use crate::runtime::Uninhabited;
+use crate::runtime::vm::VMOpaqueContext;
 use crate::{Engine, ValRaw};
 use core::marker;
 use core::mem;

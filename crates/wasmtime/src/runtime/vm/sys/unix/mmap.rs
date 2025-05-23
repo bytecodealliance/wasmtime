@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::MemoryImageSource;
 use crate::runtime::vm::{HostAlignedByteCount, SendSyncPtr};
-use rustix::mm::{mprotect, MprotectFlags};
+use rustix::mm::{MprotectFlags, mprotect};
 use std::ops::Range;
 use std::ptr::{self, NonNull};
 #[cfg(feature = "std")]

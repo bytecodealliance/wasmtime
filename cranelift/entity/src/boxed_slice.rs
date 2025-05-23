@@ -1,8 +1,8 @@
 //! Boxed slices for `PrimaryMap`.
 
+use crate::EntityRef;
 use crate::iter::{Iter, IterMut};
 use crate::keys::Keys;
-use crate::EntityRef;
 use alloc::boxed::Box;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};

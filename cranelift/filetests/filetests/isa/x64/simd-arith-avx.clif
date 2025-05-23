@@ -1385,7 +1385,7 @@ block0(v0: i8x16, v1: i32):
 ;   vmovd   %edi, %xmm5
 ;   vpsllw  %xmm0, %xmm5, %xmm7
 ;   lea     const(0), %rsi
-;   shlq    $4, %rdi, %rdi
+;   shlq $0x4, %rdi
 ;   vmovdqu 0(%rsi,%rdi,1), %xmm5
 ;   vpand   %xmm7, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
@@ -1624,7 +1624,7 @@ block0(v0: i8x16, v1: i32):
 ;   vmovd   %edi, %xmm5
 ;   vpsrlw  %xmm0, %xmm5, %xmm7
 ;   lea     const(0), %rsi
-;   shlq    $4, %rdi, %rdi
+;   shlq $0x4, %rdi
 ;   vpand   %xmm7, 0(%rsi,%rdi,1), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

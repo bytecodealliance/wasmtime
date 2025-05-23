@@ -31,7 +31,7 @@
 The Wasmtime CLI can be installed on Linux and macOS (locally) with a small install
 script:
 
-```sh
+```console
 curl https://wasmtime.dev/install.sh -sSf | bash
 ```
 This script installs into `$WASMTIME_HOME` (defaults to `$HOME/.wasmtime`), and executable is placed in `$WASMTIME_HOME/bin`.
@@ -56,19 +56,31 @@ fn main() {
 }
 ```
 
-and compile/run it with:
+and compile it into a WebAssembly component with:
 
-```sh
-$ rustup target add wasm32-wasip1
-$ rustc hello.rs --target wasm32-wasip1
-$ wasmtime hello.wasm
+```console
+rustup target add wasm32-wasip2
+rustc hello.rs --target wasm32-wasip2
+```
+
+Once compiled, you can can run your component:
+
+```console
+wasmtime hello.wasm
+```
+
+You should see the following output:
+
+```text
 Hello, world!
 ```
 
-(Note: make sure you installed Rust using the `rustup` method in the official
+(Note: make sure you installed Rust using the [`rustup`][rustup] method in the official
 instructions above, and do not have a copy of the Rust toolchain installed on
 your system in some other way as well (e.g. the system package manager). Otherwise, the `rustup target add...`
 command may not install the target for the correct copy of Rust.)
+
+[rustup]: https://rustup.rs
 
 ## Features
 

@@ -1,5 +1,5 @@
-use crate::ir::types;
 use crate::ir::Type;
+use crate::ir::types;
 use crate::settings::{self, LibcallCallConv};
 use core::fmt;
 use core::str;

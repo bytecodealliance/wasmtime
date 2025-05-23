@@ -3,7 +3,7 @@
 use crate::egraph::{NewOrExistingInst, OptimizeCtx};
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::dfg::ValueDef;
-pub use crate::ir::immediates::{Ieee128, Ieee16, Ieee32, Ieee64, Imm64, Offset32, Uimm8, V128Imm};
+pub use crate::ir::immediates::{Ieee16, Ieee32, Ieee64, Ieee128, Imm64, Offset32, Uimm8, V128Imm};
 use crate::ir::instructions::InstructionFormat;
 pub use crate::ir::types::*;
 pub use crate::ir::{
@@ -14,12 +14,11 @@ use crate::isle_common_prelude_methods;
 use crate::machinst::isle::*;
 use crate::trace;
 use cranelift_entity::packed_option::ReservedValue;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::marker::PhantomData;
 
 #[allow(dead_code)]
 pub type Unit = ();
-pub type Range = (usize, usize);
 pub type ValueArray2 = [Value; 2];
 pub type ValueArray3 = [Value; 3];
 

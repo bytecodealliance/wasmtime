@@ -46,13 +46,13 @@ use self::table_pool::TablePool;
 use super::{
     InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex, TableAllocationIndex,
 };
+use crate::MpkEnabled;
 use crate::prelude::*;
 use crate::runtime::vm::{
+    CompiledModuleId, Memory, Table,
     instance::Instance,
     mpk::{self, ProtectionKey, ProtectionMask},
-    CompiledModuleId, Memory, Table,
 };
-use crate::MpkEnabled;
 use std::borrow::Cow;
 use std::fmt::Display;
 use std::sync::{Mutex, MutexGuard};
@@ -76,8 +76,8 @@ use stack_pool::StackPool;
 
 #[cfg(feature = "component-model")]
 use wasmtime_environ::{
-    component::{Component, VMComponentOffsets},
     StaticModuleIndex,
+    component::{Component, VMComponentOffsets},
 };
 
 fn round_up_to_pow2(n: usize, to: usize) -> usize {

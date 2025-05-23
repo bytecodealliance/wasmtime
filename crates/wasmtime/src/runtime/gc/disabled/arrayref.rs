@@ -1,6 +1,6 @@
 use crate::{
-    store::{StoreContextMut, StoreOpaque},
     ArrayType, AsContext, AsContextMut, GcRefImpl, Result, Val,
+    store::{StoreContextMut, StoreOpaque},
 };
 
 /// Support for `ArrayRefPre` disabled at compile time because the `gc` cargo
@@ -30,7 +30,7 @@ impl ArrayRef {
         match *self {}
     }
 
-    pub fn elems<'a, T: 'a>(
+    pub fn elems<'a, T: 'static>(
         &self,
         _store: impl Into<StoreContextMut<'a, T>>,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a + '_> {

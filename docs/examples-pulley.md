@@ -94,6 +94,25 @@ modules as Cranelift is an optimizing compiler. Compiling WebAssembly to Pulley
 bytecode should be expected to take about the same time as compiling to native
 platforms.
 
+## Disabling SIMD in Pulley
+
+By default all Pulley opcodes are enabled in the interpreter meaning it's
+possible to execute any Pulley bytecode created by Cranelift and Wasmtime. This
+includes, for example, SIMD opcodes for all of the WebAssembly SIMD proposal.
+Not all WebAssembly modules use these opcodes though nor do all embeddings want
+to enable it, so Pulley supports a custom Rust flag that can be specified at
+compile time to compile-out the SIMD opcodes:
+
+```text
+RUSTFLAGS=--cfg=pulley_disable_interp_simd
+```
+
+When specified the Pulley interpreter will no longer include code to execute
+SIMD opcodes. Instead attempting to execute any opcode will raise a "disabled
+opcode" trap instead. If doing this it's recommended to pair it with
+`Config::wasm_simd(false)` to ensure that SIMD-using modules do not pass
+validation.
+
 ## High-level Design of Pulley
 
 This section is not necessary for users of Pulley but for those interested this
@@ -158,7 +177,7 @@ doesn't happen the same in LLVM on all architectures).
 Like when compiling to native the `wasmtime objdump` command can be used to
 inspect compiled bytecode:
 
-```sh
+```shell-session
 $ wasmtime compile --target pulley64 foo.wat
 $ wasmtime objdump foo.cwasm --addresses --bytes
 0x000000: wasm[0]::function[20]:
@@ -194,8 +213,8 @@ it has a performance hit for the interpreter. To collect a profile with the
 `wasmtime` CLI you'll have to build from source and enable the `profile-pulley`
 feature:
 
-```sh
-$ cargo run --features profile-pulley --release run --profile pulley --target pulley64 foo.wat
+```console
+cargo run --features profile-pulley --release run --profile pulley --target pulley64 foo.wat
 ```
 
 This will compile an optimized `wasmtime` executable with the `profile-pulley`
@@ -205,8 +224,8 @@ Cargo feature enabled. The `--profile pulley` flag can then be passed to the
 The command will emit a `pulley-$pid.data` file which contains raw data about
 Pulley opcodes and samples taken. To view this file you can use:
 
-```sh
-$ cargo run -p pulley-interpreter --example profiler-html --all-features ./pulley-$pid.data
+```console
+cargo run -p pulley-interpreter --example profiler-html --all-features ./pulley-$pid.data
 ```
 
 This will load the `pulley-*.data` file, parse it, collate the results, and

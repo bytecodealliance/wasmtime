@@ -124,7 +124,10 @@ impl Rex {
     #[must_use]
     pub fn digit(self, digit: u8) -> Self {
         assert!(digit <= 0b111, "must fit in 3 bits");
-        Self { digit: Some(digit), ..self }
+        Self {
+            digit: Some(digit),
+            ..self
+        }
     }
 
     /// Append a byte-sized immediate operand (8-bit); equivalent to `ib` in the
@@ -136,7 +139,10 @@ impl Rex {
     #[must_use]
     pub fn ib(self) -> Self {
         assert_eq!(self.imm, Imm::None);
-        Self { imm: Imm::ib, ..self }
+        Self {
+            imm: Imm::ib,
+            ..self
+        }
     }
 
     /// Append a word-sized immediate operand (16-bit); equivalent to `iw` in
@@ -148,7 +154,10 @@ impl Rex {
     #[must_use]
     pub fn iw(self) -> Self {
         assert_eq!(self.imm, Imm::None);
-        Self { imm: Imm::iw, ..self }
+        Self {
+            imm: Imm::iw,
+            ..self
+        }
     }
 
     /// Append a doubleword-sized immediate operand (32-bit); equivalent to `id`
@@ -160,7 +169,10 @@ impl Rex {
     #[must_use]
     pub fn id(self) -> Self {
         assert_eq!(self.imm, Imm::None);
-        Self { imm: Imm::id, ..self }
+        Self {
+            imm: Imm::id,
+            ..self
+        }
     }
 
     /// Append a quadword-sized immediate operand (64-bit); equivalent to `io`
@@ -172,7 +184,10 @@ impl Rex {
     #[must_use]
     pub fn io(self) -> Self {
         assert_eq!(self.imm, Imm::None);
-        Self { imm: Imm::io, ..self }
+        Self {
+            imm: Imm::io,
+            ..self
+        }
     }
 
     /// Check a subset of the rules for valid encodings outlined in chapter 2,
@@ -188,11 +203,11 @@ impl Rex {
 
         if self.opcodes.prefixes.has_operand_size_override() {
             assert!(
-                operands
-                    .iter()
-                    .all(|&op| matches!(op.location.kind(), OperandKind::Imm(_) | OperandKind::FixedReg(_))
-                        || op.location.bits() == 16
-                        || op.location.bits() == 128),
+                operands.iter().all(|&op| matches!(
+                    op.location.kind(),
+                    OperandKind::Imm(_) | OperandKind::FixedReg(_)
+                ) || op.location.bits() == 16
+                    || op.location.bits() == 128),
                 "when we encode the 66 prefix, we expect all operands to be 16-bit wide"
             );
         }
@@ -313,9 +328,16 @@ impl<const N: usize> From<[u8; N]> for Opcodes {
             [primary] => (false, *primary, None),
             [0x0f, primary] => (true, *primary, None),
             [0x0f, primary, secondary] => (true, *primary, Some(*secondary)),
-            _ => panic!("invalid opcodes after prefix; expected [opcode], [0x0f, opcode], or [0x0f, opcode, opcode], found {remaining:?}"),
+            _ => panic!(
+                "invalid opcodes after prefix; expected [opcode], [0x0f, opcode], or [0x0f, opcode, opcode], found {remaining:?}"
+            ),
         };
-        Self { prefixes, escape, primary, secondary }
+        Self {
+            prefixes,
+            escape,
+            primary,
+            secondary,
+        }
     }
 }
 
@@ -381,7 +403,10 @@ impl Prefixes {
 
     /// Check if any prefix is present.
     pub fn is_empty(&self) -> bool {
-        self.group1.is_none() && self.group2.is_none() && self.group3.is_none() && self.group4.is_none()
+        self.group1.is_none()
+            && self.group2.is_none()
+            && self.group3.is_none()
+            && self.group4.is_none()
     }
 }
 

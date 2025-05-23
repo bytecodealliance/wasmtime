@@ -1,6 +1,7 @@
-use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq};
 use crate::dsl::{Feature::*, Inst, Location::*};
+use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq};
 
+#[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
     vec![
         inst("subb", fmt("I", [rw(al), r(imm8)]), rex(0x2C).ib(), _64b | compat),
@@ -62,7 +63,17 @@ pub fn list() -> Vec<Inst> {
         inst("lock_sbbl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x19]).r(), _64b | compat),
         inst("lock_sbbq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x19]).w().r(), _64b),
         // Vector instructions.
-        inst("subps", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x0F, 0x5C]).r(), _64b | compat | sse),
-        inst("subpd", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x66, 0x0F, 0x5C]).r(), _64b | compat | sse),
+        inst("subss", fmt("A", [rw(xmm), r(xmm_m32)]), rex([0xF3, 0x0F, 0x5C]).r(), _64b | compat | sse),
+        inst("subsd", fmt("A", [rw(xmm), r(xmm_m64)]), rex([0xF2, 0x0F, 0x5C]).r(), _64b | compat | sse2),
+        inst("subps", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x0F, 0x5C]).r(), _64b | compat | sse),
+        inst("subpd", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x5C]).r(), _64b | compat | sse2),
+        inst("psubb", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF8]).r(), _64b | compat | sse2),
+        inst("psubw", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF9]).r(), _64b | compat | sse2),
+        inst("psubd", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFA]).r(), _64b | compat | sse2),
+        inst("psubq", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFB]).r(), _64b | compat | sse2),
+        inst("psubsb", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xE8]).r(), _64b | compat | sse2),
+        inst("psubsw", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xE9]).r(), _64b | compat | sse2),
+        inst("psubusb", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD8]).r(), _64b | compat | sse2),
+        inst("psubusw", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD9]).r(), _64b | compat | sse2),
     ]
 }

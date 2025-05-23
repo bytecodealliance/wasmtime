@@ -7,8 +7,8 @@
 //! > Briggs, Torczon, *An efficient representation for sparse sets*,
 //! > ACM Letters on Programming Languages and Systems, Volume 2, Issue 1-4, March-Dec. 1993.
 
-use crate::map::SecondaryMap;
 use crate::EntityRef;
+use crate::map::SecondaryMap;
 use alloc::vec::Vec;
 use core::fmt;
 use core::mem;

@@ -1,11 +1,11 @@
 use {
     crate::{
-        store::StoreInner,
-        vm::{component::ComponentInstance, VMFuncRef, VMMemoryDefinition},
         AsContextMut, ValRaw,
+        store::StoreInner,
+        vm::{VMFuncRef, VMMemoryDefinition, component::ComponentInstance},
     },
     anyhow::Result,
-    futures::{stream::FuturesUnordered, FutureExt},
+    futures::{FutureExt, stream::FuturesUnordered},
     std::{boxed::Box, future::Future, mem::MaybeUninit, pin::Pin},
     wasmtime_environ::component::{
         RuntimeComponentInstanceIndex, TypeComponentLocalErrorContextTableIndex,

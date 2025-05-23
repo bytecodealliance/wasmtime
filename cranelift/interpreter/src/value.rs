@@ -1,16 +1,16 @@
 //! The [DataValueExt] trait is an extension trait for [DataValue]. It provides a lot of functions
 //! used by the rest of the interpreter.
 
-#![allow(trivial_numeric_casts)]
+#![expect(trivial_numeric_casts, reason = "macro-generated code")]
 
 use core::fmt::{self, Display, Formatter};
 use core::ops::Neg;
 use cranelift_codegen::data_value::{DataValue, DataValueCastFailure};
-use cranelift_codegen::ir::immediates::{Ieee128, Ieee16, Ieee32, Ieee64};
-use cranelift_codegen::ir::{types, Type};
+use cranelift_codegen::ir::immediates::{Ieee16, Ieee32, Ieee64, Ieee128};
+use cranelift_codegen::ir::{Type, types};
 use thiserror::Error;
 
-use crate::step::{extractlanes, SimdVec};
+use crate::step::{SimdVec, extractlanes};
 
 pub type ValueResult<T> = Result<T, ValueError>;
 
@@ -321,11 +321,7 @@ impl DataValueExt for DataValue {
         macro_rules! make_bool {
             ($ty:ident) => {
                 Ok(DataValue::$ty(if b {
-                    if vec_elem {
-                        -1
-                    } else {
-                        1
-                    }
+                    if vec_elem { -1 } else { 1 }
                 } else {
                     0
                 }))
@@ -354,14 +350,13 @@ impl DataValueExt for DataValue {
     }
 
     fn vector(v: [u8; 16], ty: Type) -> ValueResult<Self> {
-        assert!(ty.is_vector() && [8, 16].contains(&ty.bytes()));
-        if ty.bytes() == 16 {
-            Ok(DataValue::V128(v))
-        } else if ty.bytes() == 8 {
-            let v64: [u8; 8] = v[..8].try_into().unwrap();
-            Ok(DataValue::V64(v64))
-        } else {
-            unimplemented!()
+        assert!(ty.is_vector() && [2, 4, 8, 16].contains(&ty.bytes()));
+        match ty.bytes() {
+            16 => Ok(DataValue::V128(v)),
+            8 => Ok(DataValue::V64(v[..8].try_into().unwrap())),
+            4 => Ok(DataValue::V32(v[..4].try_into().unwrap())),
+            2 => Ok(DataValue::V16(v[..2].try_into().unwrap())),
+            _ => unreachable!(),
         }
     }
 
@@ -371,6 +366,16 @@ impl DataValueExt for DataValue {
             DataValue::V64(v) => {
                 let mut v128 = [0; 16];
                 v128[..8].clone_from_slice(&v);
+                Ok(v128)
+            }
+            DataValue::V32(v) => {
+                let mut v128 = [0; 16];
+                v128[..4].clone_from_slice(&v);
+                Ok(v128)
+            }
+            DataValue::V16(v) => {
+                let mut v128 = [0; 16];
+                v128[..2].clone_from_slice(&v);
                 Ok(v128)
             }
             _ => Err(ValueError::InvalidType(ValueTypeClass::Vector, self.ty())),
@@ -495,7 +500,7 @@ impl DataValueExt for DataValue {
             DataValue::F32(f) => Ok(f.is_zero()),
             DataValue::F64(f) => Ok(f.is_zero()),
             DataValue::F128(f) => Ok(f.is_zero()),
-            DataValue::V64(_) | DataValue::V128(_) => {
+            DataValue::V16(_) | DataValue::V32(_) | DataValue::V64(_) | DataValue::V128(_) => {
                 Err(ValueError::InvalidType(ValueTypeClass::Float, self.ty()))
             }
         }
@@ -504,37 +509,21 @@ impl DataValueExt for DataValue {
     fn umax(self, other: Self) -> ValueResult<Self> {
         let lhs = self.clone().into_int_unsigned()?;
         let rhs = other.clone().into_int_unsigned()?;
-        if lhs > rhs {
-            Ok(self)
-        } else {
-            Ok(other)
-        }
+        if lhs > rhs { Ok(self) } else { Ok(other) }
     }
 
     fn smax(self, other: Self) -> ValueResult<Self> {
-        if self > other {
-            Ok(self)
-        } else {
-            Ok(other)
-        }
+        if self > other { Ok(self) } else { Ok(other) }
     }
 
     fn umin(self, other: Self) -> ValueResult<Self> {
         let lhs = self.clone().into_int_unsigned()?;
         let rhs = other.clone().into_int_unsigned()?;
-        if lhs < rhs {
-            Ok(self)
-        } else {
-            Ok(other)
-        }
+        if lhs < rhs { Ok(self) } else { Ok(other) }
     }
 
     fn smin(self, other: Self) -> ValueResult<Self> {
-        if self < other {
-            Ok(self)
-        } else {
-            Ok(other)
-        }
+        if self < other { Ok(self) } else { Ok(other) }
     }
 
     fn uno(&self, other: &Self) -> ValueResult<bool> {

@@ -38,11 +38,7 @@ macro_rules! newtype_of_reg {
             /// Create this newtype from the given register, or return `None` if the register
             /// is not a valid instance of this newtype.
             pub fn new($check_reg: Reg) -> Option<Self> {
-                if $check {
-                    Some(Self($check_reg))
-                } else {
-                    None
-                }
+                if $check { Some(Self($check_reg)) } else { None }
             }
 
             /// Get this newtype's underlying `Reg`.
@@ -329,6 +325,35 @@ impl FliConstant {
         // Convert the value into an F64, this allows us to represent
         // values from both f32 and f64 in the same value.
         let value = match ty {
+            F16 => {
+                // FIXME(#8312): Use `f16` once it has been stabilised.
+                // Handle special/non-normal values first.
+                match imm {
+                    // `f16::MIN_POSITIVE`
+                    0x0400 => return Some(Self::new(1)),
+                    // 2 pow -16
+                    0x0100 => return Some(Self::new(2)),
+                    // 2 pow -15
+                    0x0200 => return Some(Self::new(3)),
+                    // `f16::INFINITY`
+                    0x7c00 => return Some(Self::new(30)),
+                    // Canonical NaN
+                    0x7e00 => return Some(Self::new(31)),
+                    _ => {
+                        let exponent_bits = imm & 0x7c00;
+                        if exponent_bits == 0 || exponent_bits == 0x7c00 {
+                            // All non-normal values are handled above.
+                            return None;
+                        }
+                        let sign = (imm & 0x8000) << 48;
+                        // Adjust the exponent for the difference between the `f16` exponent bias
+                        // and the `f64` exponent bias.
+                        let exponent = (exponent_bits + ((1023 - 15) << 10)) << 42;
+                        let significand = (imm & 0x3ff) << 42;
+                        f64::from_bits(sign | exponent | significand)
+                    }
+                }
+            }
             F32 => f32::from_bits(imm as u32) as f64,
             F64 => f64::from_bits(imm),
             _ => unimplemented!(),
@@ -1409,18 +1434,10 @@ impl AtomicOP {
     }
 
     pub(crate) fn load_op(t: Type) -> Self {
-        if t.bits() <= 32 {
-            Self::LrW
-        } else {
-            Self::LrD
-        }
+        if t.bits() <= 32 { Self::LrW } else { Self::LrD }
     }
     pub(crate) fn store_op(t: Type) -> Self {
-        if t.bits() <= 32 {
-            Self::ScW
-        } else {
-            Self::ScD
-        }
+        if t.bits() <= 32 { Self::ScW } else { Self::ScD }
     }
 
     /// extract

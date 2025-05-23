@@ -1,6 +1,6 @@
 //! Forest of sets.
 
-use super::{Comparator, Forest, Node, NodeData, NodePool, Path, SetValue, INNER_SIZE};
+use super::{Comparator, Forest, INNER_SIZE, Node, NodeData, NodePool, Path, SetValue};
 use crate::packed_option::PackedOption;
 #[cfg(test)]
 use alloc::string::String;

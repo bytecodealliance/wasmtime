@@ -11,7 +11,6 @@ TEST(Module, Simple) {
   Module::compile(engine, wasm).unwrap();
   Module::validate(engine, wasm).unwrap();
 
-
   auto serialized = m.serialize().unwrap();
   Module::deserialize(engine, serialized).unwrap();
 }

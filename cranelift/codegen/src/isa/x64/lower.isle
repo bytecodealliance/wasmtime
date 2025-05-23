@@ -644,8 +644,7 @@
 (rule (ishl_i8x16_mask (RegMemImm.Reg amt))
       (let ((mask_table SyntheticAmode (ishl_i8x16_mask_table))
             (base_mask_addr Gpr (x64_lea $I64 mask_table))
-            (mask_offset Gpr (x64_shl $I64 amt
-                                  (imm8_to_imm8_gpr 4))))
+            (mask_offset Gpr (x64_shlq_mi amt 4)))
         (Amode.ImmRegRegShift 0
                               base_mask_addr
                               mask_offset
@@ -749,9 +748,7 @@
 (rule (ushr_i8x16_mask (RegMemImm.Reg amt))
       (let ((mask_table SyntheticAmode (ushr_i8x16_mask_table))
             (base_mask_addr Gpr (x64_lea $I64 mask_table))
-            (mask_offset Gpr (x64_shl $I64
-                                  amt
-                                  (imm8_to_imm8_gpr 4))))
+            (mask_offset Gpr (x64_shlq_mi amt 4)))
         (Amode.ImmRegRegShift 0
                               base_mask_addr
                               mask_offset
@@ -810,7 +807,7 @@
             ;; Add the carry into the low half.
             (lo_shifted_ Gpr (x64_or $I64 lo_shifted carry_))
             ;; Get all sign bits.
-            (sign_bits Gpr (x64_sar $I64 src_hi (imm8_to_imm8_gpr 63))))
+            (sign_bits Gpr (x64_sarq_mi src_hi 63)))
         ;; Combine the two shifted halves. However, if we are shifting by >= 64
         ;; (modulo 128), then the hi bits are all sign bits and the lo bits are
         ;; what would otherwise be our hi bits.
@@ -1044,7 +1041,7 @@
 (rule -5 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (sinkable_load x) y)))
          (x64_imul ty y x))
 
-;; lift out constants to use 3-operand form
+;; Lift out constants to use 3-operand form.
 (rule -4 (lower (has_type (ty_int_ref_16_to_64 ty) (imul x (i32_from_iconst y))))
          (x64_imul_imm ty x y))
 (rule -3 (lower (has_type (ty_int_ref_16_to_64 ty) (imul (i32_from_iconst x) y)))
@@ -1616,7 +1613,7 @@
 (rule (lower (insertlane vec @ (value_type $I8X16) val (u8_from_uimm8 n)))
       (let ((vec_with_hole Xmm (x64_pand vec (insert_i8x16_lane_hole n)))
             (val Gpr (x64_movzx (ExtMode.BL) val))
-            (val Gpr (x64_shl $I32 val (Imm8Reg.Imm8 (u8_shl (u8_and n 3) 3))))
+            (val Gpr (x64_shll_mi val (u8_shl (u8_and n 3) 3)))
             (val Xmm (x64_movd_to_xmm val))
             (val_at_hole Xmm (x64_pshufd val (insert_i8x16_lane_pshufd_imm (u8_shr n 2)))))
         (x64_por vec_with_hole val_at_hole)))
@@ -1949,35 +1946,35 @@
 
 ;; Peephole optimization for `x < 0`, when x is a signed 64 bit value
 (rule 2 (lower (has_type $I8 (icmp (IntCC.SignedLessThan) x @ (value_type $I64) (u64_from_iconst 0))))
-      (x64_shr $I64 x (Imm8Reg.Imm8 63)))
+      (x64_shrq_mi x 63))
 
 ;; Peephole optimization for `0 > x`, when x is a signed 64 bit value
 (rule 2 (lower (has_type $I8 (icmp (IntCC.SignedGreaterThan) (u64_from_iconst 0) x @ (value_type $I64))))
-      (x64_shr $I64 x (Imm8Reg.Imm8 63)))
+      (x64_shrq_mi x 63))
 
 ;; Peephole optimization for `0 <= x`, when x is a signed 64 bit value
 (rule 2 (lower (has_type $I8 (icmp (IntCC.SignedLessThanOrEqual) (u64_from_iconst 0) x @ (value_type $I64))))
-      (x64_shr $I64 (x64_not $I64 x) (Imm8Reg.Imm8 63)))
+      (x64_shrq_mi (x64_not $I64 x) 63))
 
 ;; Peephole optimization for `x >= 0`, when x is a signed 64 bit value
 (rule 2 (lower (has_type $I8 (icmp (IntCC.SignedGreaterThanOrEqual) x @ (value_type $I64) (u64_from_iconst 0))))
-      (x64_shr $I64 (x64_not $I64 x) (Imm8Reg.Imm8 63)))
+      (x64_shrq_mi (x64_not $I64 x) 63))
 
 ;; Peephole optimization for `x < 0`, when x is a signed 32 bit value
 (rule 2 (lower (has_type $I8 (icmp (IntCC.SignedLessThan) x @ (value_type $I32) (u64_from_iconst 0))))
-      (x64_shr $I32 x (Imm8Reg.Imm8 31)))
+      (x64_shrl_mi x 31))
 
 ;; Peephole optimization for `0 > x`, when x is a signed 32 bit value
 (rule 2 (lower (has_type $I8 (icmp (IntCC.SignedGreaterThan) (u64_from_iconst 0) x @ (value_type $I32))))
-      (x64_shr $I32 x (Imm8Reg.Imm8 31)))
+      (x64_shrl_mi x 31))
 
 ;; Peephole optimization for `0 <= x`, when x is a signed 32 bit value
 (rule 2 (lower (has_type $I8 (icmp (IntCC.SignedLessThanOrEqual) (u64_from_iconst 0) x @ (value_type $I32))))
-      (x64_shr $I32 (x64_not $I64 x) (Imm8Reg.Imm8 31)))
+      (x64_shrl_mi (x64_not $I64 x) 31))
 
 ;; Peephole optimization for `x >= 0`, when x is a signed 32 bit value
 (rule 2 (lower (has_type $I8 (icmp (IntCC.SignedGreaterThanOrEqual) x @ (value_type $I32) (u64_from_iconst 0))))
-      (x64_shr $I32 (x64_not $I64 x) (Imm8Reg.Imm8 31)))
+      (x64_shrl_mi (x64_not $I64 x) 31))
 
 ;; For XMM-held values, we lower to `PCMP*` instructions, sometimes more than
 ;; one. To note: what is different here about the output values is that each
@@ -2345,16 +2342,16 @@
 ;; instruction.
 (decl do_popcnt (Type Gpr) Gpr)
 (rule (do_popcnt $I64 src)
-      (let ((shifted1 Gpr (x64_shr $I64 src (Imm8Reg.Imm8 1)))
+      (let ((shifted1 Gpr (x64_shrq_mi src 1))
             (sevens Gpr (imm $I64 0x7777777777777777))
             (masked1 Gpr (x64_and $I64 shifted1 sevens))
             ;; diff1 := src - ((src >> 1) & 0b0111_0111_0111...)
             (diff1 Gpr (x64_sub $I64 src masked1))
-            (shifted2 Gpr (x64_shr $I64 masked1 (Imm8Reg.Imm8 1)))
+            (shifted2 Gpr (x64_shrq_mi masked1 1))
             (masked2 Gpr (x64_and $I64 shifted2 sevens))
             ;; diff2 := diff1 - ((diff1 >> 1) & 0b0111_0111_0111...)
             (diff2 Gpr (x64_sub $I64 diff1 masked2))
-            (shifted3 Gpr (x64_shr $I64 masked2 (Imm8Reg.Imm8 1)))
+            (shifted3 Gpr (x64_shrq_mi masked2 1))
             (masked3 Gpr (x64_and $I64 shifted3 sevens))
             ;; diff3 := diff2 - ((diff2 >> 1) & 0b0111_0111_0111...)
             ;;
@@ -2367,9 +2364,7 @@
             ;; additions for the three other bits.
             (diff3 Gpr (x64_sub $I64 diff2 masked3))
             ;; Add the two nibbles of each byte together.
-            (sum1 Gpr (x64_add $I64
-                           (x64_shr $I64 diff3 (Imm8Reg.Imm8 4))
-                           diff3))
+            (sum1 Gpr (x64_add $I64 (x64_shrq_mi diff3 4) diff3))
             ;; Mask the above sum to have the popcount for each byte
             ;; in the lower nibble of that byte.
             (ofof Gpr (imm $I64 0x0f0f0f0f0f0f0f0f))
@@ -2382,28 +2377,26 @@
             ;; + ... + (masked4 >> 0).
             (mul Gpr (x64_imul $I64 masked4 ones))
             ;; Now take that top byte and return it as the popcount.
-            (final Gpr (x64_shr $I64 mul (Imm8Reg.Imm8 56))))
+            (final Gpr (x64_shrq_mi mul 56)))
         final))
 
 ;; This is the 32-bit version of the above; the steps for each nibble
 ;; are the same, we just use constants half as wide.
 (rule (do_popcnt $I32 src)
-      (let ((shifted1 Gpr (x64_shr $I32 src (Imm8Reg.Imm8 1)))
+      (let ((shifted1 Gpr (x64_shrl_mi src 1))
             (sevens Gpr (imm $I32 0x77777777))
             (masked1 Gpr (x64_and $I32 shifted1 sevens))
             (diff1 Gpr (x64_sub $I32 src masked1))
-            (shifted2 Gpr (x64_shr $I32 masked1 (Imm8Reg.Imm8 1)))
+            (shifted2 Gpr (x64_shrl_mi masked1 1))
             (masked2 Gpr (x64_and $I32 shifted2 sevens))
             (diff2 Gpr (x64_sub $I32 diff1 masked2))
-            (shifted3 Gpr (x64_shr $I32 masked2 (Imm8Reg.Imm8 1)))
+            (shifted3 Gpr (x64_shrl_mi masked2 1))
             (masked3 Gpr (x64_and $I32 shifted3 sevens))
             (diff3 Gpr (x64_sub $I32 diff2 masked3))
-            (sum1 Gpr (x64_add $I32
-                           (x64_shr $I32 diff3 (Imm8Reg.Imm8 4))
-                           diff3))
+            (sum1 Gpr (x64_add $I32 (x64_shrl_mi diff3 4) diff3))
             (masked4 Gpr (x64_and $I32 sum1 (RegMemImm.Imm 0x0f0f0f0f)))
             (mul Gpr (x64_imul_imm $I32 masked4 0x01010101))
-            (final Gpr (x64_shr $I32 mul (Imm8Reg.Imm8 24))))
+            (final Gpr (x64_shrl_mi mul 24)))
         final))
 
 
@@ -2485,21 +2478,21 @@
       (let ((tymask u64 (ty_mask ty))
             (mask1 Gpr (imm ty (u64_and tymask 0x5555555555555555)))
             (lo1 Gpr (x64_and ty src mask1))
-            (hi1 Gpr (x64_and ty (x64_shr ty src (Imm8Reg.Imm8 1)) mask1))
+            (hi1 Gpr (x64_and ty (x64_shr ty src (Imm8Gpr.Imm8 1)) mask1))
             (swap1 Gpr (x64_or ty
-                           (x64_shl ty lo1 (Imm8Reg.Imm8 1))
+                           (x64_shl ty lo1 (Imm8Gpr.Imm8 1))
                            hi1))
             (mask2 Gpr (imm ty (u64_and tymask 0x3333333333333333)))
             (lo2 Gpr (x64_and ty swap1 mask2))
-            (hi2 Gpr (x64_and ty (x64_shr ty swap1 (Imm8Reg.Imm8 2)) mask2))
+            (hi2 Gpr (x64_and ty (x64_shr ty swap1 (Imm8Gpr.Imm8 2)) mask2))
             (swap2 Gpr (x64_or ty
-                           (x64_shl ty lo2 (Imm8Reg.Imm8 2))
+                           (x64_shl ty lo2 (Imm8Gpr.Imm8 2))
                            hi2))
             (mask4 Gpr (imm ty (u64_and tymask 0x0f0f0f0f0f0f0f0f)))
             (lo4 Gpr (x64_and ty swap2 mask4))
-            (hi4 Gpr (x64_and ty (x64_shr ty swap2 (Imm8Reg.Imm8 4)) mask4))
+            (hi4 Gpr (x64_and ty (x64_shr ty swap2 (Imm8Gpr.Imm8 4)) mask4))
             (swap4 Gpr (x64_or ty
-                           (x64_shl ty lo4 (Imm8Reg.Imm8 4))
+                           (x64_shl ty lo4 (Imm8Gpr.Imm8 4))
                            hi4)))
         swap4))
 
@@ -2509,9 +2502,9 @@
             (tymask u64 (ty_mask ty))
             (mask8 Gpr (imm ty (u64_and tymask 0x00ff00ff00ff00ff)))
             (lo8 Gpr (x64_and ty src_ mask8))
-            (hi8 Gpr (x64_and ty (x64_shr ty src_ (Imm8Reg.Imm8 8)) mask8))
+            (hi8 Gpr (x64_and ty (x64_shr ty src_ (Imm8Gpr.Imm8 8)) mask8))
             (swap8 Gpr (x64_or ty
-                           (x64_shl ty lo8 (Imm8Reg.Imm8 8))
+                           (x64_shl ty lo8 (Imm8Gpr.Imm8 8))
                            hi8)))
         swap8))
 
@@ -2521,9 +2514,9 @@
             (tymask u64 (ty_mask ty))
             (mask16 Gpr (imm ty (u64_and tymask 0x0000ffff0000ffff)))
             (lo16 Gpr (x64_and ty src_ mask16))
-            (hi16 Gpr (x64_and ty (x64_shr ty src_ (Imm8Reg.Imm8 16)) mask16))
+            (hi16 Gpr (x64_and ty (x64_shr ty src_ (Imm8Gpr.Imm8 16)) mask16))
             (swap16 Gpr (x64_or ty
-                            (x64_shl ty lo16 (Imm8Reg.Imm8 16))
+                            (x64_shl ty lo16 (Imm8Gpr.Imm8 16))
                             hi16)))
         swap16))
 
@@ -2532,9 +2525,9 @@
       (let ((src_ Gpr (do_bitrev32 ty src))
             (mask32 Gpr (imm ty 0xffffffff))
             (lo32 Gpr (x64_and ty src_ mask32))
-            (hi32 Gpr (x64_shr ty src_ (Imm8Reg.Imm8 32)))
+            (hi32 Gpr (x64_shrq_mi src_ 32))
             (swap32 Gpr (x64_or ty
-                            (x64_shl ty lo32 (Imm8Reg.Imm8 32))
+                            (x64_shlq_mi lo32 32)
                             hi32)))
         swap32))
 
@@ -2543,7 +2536,7 @@
 ;; x64 bswap instruction is only for 32- or 64-bit swaps
 ;; implement the 16-bit swap as a rotl by 8
 (rule (lower (has_type $I16 (bswap src)))
-      (x64_rotl $I16 src (Imm8Reg.Imm8 8)))
+      (x64_rolw_mi src 8))
 
 (rule (lower (has_type $I32 (bswap src)))
       (x64_bswap $I32 src))
@@ -2579,7 +2572,7 @@
 ;; 63 bits to spread the sign bit across the result.
 (rule (lower (has_type $I128 (sextend src)))
       (let ((lo Gpr (extend_to_gpr src $I64 (ExtendKind.Sign)))
-            (hi Gpr (x64_sar $I64 lo (Imm8Reg.Imm8 63))))
+            (hi Gpr (x64_sarq_mi lo 63)))
       (value_regs lo hi)))
 
 ;; I{8,16,32} -> I64.
@@ -3029,19 +3022,17 @@
 ;; For `$F32` and `$F64` this is important--we only want to load 32 or 64 bits.
 ;; But for the 128-bit types, this is not strictly necessary for performance but
 ;; might help with clarity during disassembly.
-(rule (lower (has_type $F16 (load flags address offset)))
+(rule 4 (lower (has_type (is_xmm_type (ty_16 _)) (load flags address offset)))
       (x64_pinsrw (xmm_uninit_value) (to_amode flags address offset) 0))
-(rule (lower (has_type $F32 (load flags address offset)))
+(rule 3 (lower (has_type (is_xmm_type (ty_32 _)) (load flags address offset)))
       (x64_movss_load (to_amode flags address offset)))
-(rule (lower (has_type $F64 (load flags address offset)))
+(rule 2 (lower (has_type (is_xmm_type (ty_64 _)) (load flags address offset)))
       (x64_movsd_load (to_amode flags address offset)))
-(rule (lower (has_type $F128 (load flags address offset)))
-      (x64_movdqu_load (to_amode flags address offset)))
-(rule (lower (has_type $F32X4 (load flags address offset)))
+(rule 1 (lower (has_type $F32X4 (load flags address offset)))
       (x64_movups_load (to_amode flags address offset)))
-(rule (lower (has_type $F64X2 (load flags address offset)))
+(rule 1 (lower (has_type $F64X2 (load flags address offset)))
       (x64_movupd_load (to_amode flags address offset)))
-(rule -2 (lower (has_type (ty_vec128 ty) (load flags address offset)))
+(rule 0 (lower (has_type (is_xmm_type (ty_128 _)) (load flags address offset)))
       (x64_movdqu_load (to_amode flags address offset)))
 
 ;; We can load an I128 by doing two 64-bit loads.
@@ -3115,15 +3106,15 @@
        (x64_movimm_m ty (to_amode flags address offset) imm)))
 
 ;; F16 stores of values in XMM registers.
-(rule 0 (lower (store flags
-                    value @ (value_type $F16)
+(rule -2 (lower (store flags
+                    value @ (value_type (is_xmm_type (ty_16 _)))
                     address
                     offset))
       (side_effect
        (x64_movrm $I16 (to_amode flags address offset) (bitcast_xmm_to_gpr 16 value))))
 
-(rule 1 (lower (store flags
-                    value @ (value_type $F16)
+(rule -1 (lower (store flags
+                    value @ (value_type (is_xmm_type (ty_16 _)))
                     address
                     offset))
       (if-let true (use_sse41))
@@ -3131,28 +3122,20 @@
        (x64_pextrw_store (to_amode flags address offset) value 0)))
 
 ;; F32 stores of values in XMM registers.
-(rule 1 (lower (store flags
-                    value @ (value_type $F32)
+(rule -3 (lower (store flags
+                    value @ (value_type (is_xmm_type (ty_32 _)))
                     address
                     offset))
       (side_effect
        (x64_movss_store (to_amode flags address offset) value)))
 
 ;; F64 stores of values in XMM registers.
-(rule 1 (lower (store flags
-                    value @ (value_type $F64)
+(rule -4 (lower (store flags
+                    value @ (value_type (is_xmm_type (ty_64 _)))
                     address
                     offset))
       (side_effect
        (x64_movsd_store (to_amode flags address offset) value)))
-
-;; F128 stores of values in XMM registers.
-(rule 1 (lower (store flags
-                    value @ (value_type $F128)
-                    address
-                    offset))
-      (side_effect
-       (x64_movdqu_store (to_amode flags address offset) value)))
 
 ;; Stores of F32X4 vectors.
 (rule 1 (lower (store flags
@@ -3171,8 +3154,8 @@
        (x64_movupd_store (to_amode flags address offset) value)))
 
 ;; Stores of all other 128-bit vector types with integer lanes.
-(rule -1 (lower (store flags
-                    value @ (value_type (ty_vec128_int _))
+(rule -5 (lower (store flags
+                    value @ (value_type (is_xmm_type (ty_128 _)))
                     address
                     offset))
       (side_effect
@@ -3478,28 +3461,94 @@
 
 ;; Rules for `call` and `call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (call (func_ref_data sig_ref extname dist) inputs))
-      (gen_call sig_ref extname dist inputs))
+;; Direct call to an in-range function.
+(rule 1 (lower (call (func_ref_data sig_ref name (reloc_distance_near)) args))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_call_rets abi output))
+            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none)))
+            (_ Unit (emit_side_effect (call_known info))))
+        output))
 
-(rule (lower (call_indirect sig_ref val inputs))
-      (gen_call_indirect sig_ref val inputs))
+;; Direct call to an out-of-range function (implicitly via pointer).
+(rule (lower (call (func_ref_data sig_ref name dist) args))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_call_rets abi output))
+            (target RegMem (RegMem.Reg (load_ext_name name 0 dist)))
+            (info BoxCallIndInfo (gen_call_ind_info abi target uses defs (try_call_none)))
+            (_ Unit (emit_side_effect (call_unknown info))))
+        output))
+
+;; Indirect call.
+(rule (lower (call_indirect sig_ref ptr args))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
+            (target RegMem (RegMem.Reg (put_in_reg ptr)))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_call_rets abi output))
+            (info BoxCallIndInfo (gen_call_ind_info abi target uses defs (try_call_none)))
+            (_ Unit (emit_side_effect (call_unknown info))))
+        output))
 
 ;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (return_call (func_ref_data sig_ref extname dist) args))
-      (gen_return_call sig_ref extname dist args))
+;; Direct call to an in-range function.
+(rule 1 (lower (return_call (func_ref_data sig_ref name (reloc_distance_near)) args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_return_call_args abi args))
+            (info BoxReturnCallInfo (gen_return_call_info abi name uses)))
+        (side_effect (return_call_known info))))
 
-(rule (lower (return_call_indirect sig_ref callee args))
-      (gen_return_call_indirect sig_ref callee args))
+;; Direct call to an out-of-range function (implicitly via pointer).
+(rule (lower (return_call (func_ref_data sig_ref name dist) args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (uses CallArgList (gen_return_call_args abi args))
+            (target Reg (load_ext_name name 0 dist))
+            (info BoxReturnCallIndInfo (gen_return_call_ind_info abi target uses)))
+        (side_effect (return_call_unknown info))))
+
+;; Indirect call.
+(rule (lower (return_call_indirect sig_ref ptr args))
+      (let ((abi Sig (abi_sig sig_ref))
+            (target Reg (put_in_reg ptr))
+            (uses CallArgList (gen_return_call_args abi args))
+            (info BoxReturnCallIndInfo (gen_return_call_ind_info abi target uses)))
+        (side_effect (return_call_unknown info))))
 
 ;;;; Rules for `try_call` and `try_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower_branch (try_call (func_ref_data sig_ref extname dist) inputs et) targets)
-      (gen_try_call sig_ref extname dist et inputs targets))
+;; Direct call to an in-range function.
+(rule 1 (lower_branch (try_call (func_ref_data sig_ref name (reloc_distance_near)) args et) targets)
+      (let ((abi Sig (abi_sig sig_ref))
+            (trycall OptionTryCallInfo (try_call_info et targets))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_try_call_rets abi))
+            (info BoxCallInfo (gen_call_info abi name uses defs trycall)))
+        (emit_side_effect (call_known info))))
 
-(rule (lower_branch (try_call_indirect val inputs et) targets)
+;; Direct call to an out-of-range function (implicitly via pointer).
+(rule (lower_branch (try_call (func_ref_data sig_ref name dist) args et) targets)
+      (let ((abi Sig (abi_sig sig_ref))
+            (trycall OptionTryCallInfo (try_call_info et targets))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_try_call_rets abi))
+            (target RegMem (RegMem.Reg (load_ext_name name 0 dist)))
+            (info BoxCallIndInfo (gen_call_ind_info abi target uses defs trycall)))
+        (emit_side_effect (call_unknown info))))
+
+;; Indirect call.
+(rule (lower_branch (try_call_indirect ptr args et) targets)
       (if-let (exception_sig sig_ref) et)
-      (gen_try_call_indirect sig_ref val et inputs targets))
+      (let ((abi Sig (abi_sig sig_ref))
+            (trycall OptionTryCallInfo (try_call_info et targets))
+            (target RegMem (RegMem.Reg (put_in_reg ptr)))
+            (uses CallArgList (gen_call_args abi args))
+            (defs CallRetList (gen_try_call_rets abi))
+            (info BoxCallIndInfo (gen_call_ind_info abi target uses defs trycall)))
+        (emit_side_effect (call_unknown info))))
 
 ;; Rules for `stack_switch` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4334,41 +4383,41 @@
 ;; it needs a special case here since the instruction being crafted has a
 ;; different shape.
 (rule 2 (lower (udiv a @ (value_type $I8) b))
-        (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
-                  (put_in_gpr b)
-                  (DivSignedness.Unsigned)
-                  (TrapCode.INTEGER_DIVISION_BY_ZERO)))
+        (x64_divb_m (extend_to_gpr a $I32 (ExtendKind.Zero))
+                    (put_in_gpr b)
+                    (TrapCode.INTEGER_DIVISION_BY_ZERO)))
 
 ;; 16-to-64-bit division is all done with a similar instruction and the only
 ;; tricky requirement here is that when div traps are disallowed the divisor
 ;; must not be zero.
 (rule 1 (lower (udiv a @ (value_type (fits_in_64 ty)) b))
-        (x64_div_quotient a
-                          (imm $I64 0)
-                          (put_in_gpr b)
-                          (raw_operand_size_of_type ty)
-                          (DivSignedness.Unsigned)
-                          (TrapCode.INTEGER_DIVISION_BY_ZERO)))
+  (value_regs_get
+    (x64_div ty a (imm $I64 0) (put_in_gpr b) (TrapCode.INTEGER_DIVISION_BY_ZERO))
+    0))
 
 ;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 2 (lower (sdiv a @ (value_type $I8) b))
-        (x64_div8 (x64_sign_extend_data a (OperandSize.Size8))
-                  (nonzero_sdiv_divisor $I8 b)
-                  (DivSignedness.Signed)
-                  (TrapCode.INTEGER_OVERFLOW)))
+        (x64_idivb_m (x64_cbtw_zo a)
+                     (nonzero_sdiv_divisor $I8 b)
+                     (TrapCode.INTEGER_OVERFLOW)))
 
 (rule 1 (lower (sdiv a @ (value_type (fits_in_64 ty)) b))
-        (let (
-            (a Gpr a)
-            (size OperandSize (raw_operand_size_of_type ty))
-          )
-        (x64_div_quotient a
-                          (x64_sign_extend_data a size)
-                          (nonzero_sdiv_divisor ty b)
-                          size
-                          (DivSignedness.Signed)
-                          (TrapCode.INTEGER_OVERFLOW))))
+  (let ((a Gpr a))
+    (value_regs_get
+      (x64_idiv ty a (repeat_sign_bit ty a) (nonzero_sdiv_divisor ty b) (TrapCode.INTEGER_OVERFLOW))
+      0)))
+
+;; Repeats the sign bit in the provided gpr, which will register-allocate to
+;; %rax, into a destination gpr which will register-allocate to %rdx.
+;;
+;; This is intended to be used before x64 `div` instructions where
+;; left-hand-side (divisor? dividend? I always forget) is double-wide and
+;; present across the rax/rdx registers (sized to the operation in question).
+(decl repeat_sign_bit (Type Gpr) Gpr)
+(rule (repeat_sign_bit $I16 src) (x64_cwtd_zo src))
+(rule (repeat_sign_bit $I32 src) (x64_cltd_zo src))
+(rule (repeat_sign_bit $I64 src) (x64_cqto_zo src))
 
 ;; Checks to make sure that the input `Value` is a non-zero value for `sdiv`.
 ;;
@@ -4393,20 +4442,16 @@
 ;; by 8.
 (rule 2 (lower (urem a @ (value_type $I8) b))
         (let (
-            (result Gpr (x64_div8 (extend_to_gpr a $I32 (ExtendKind.Zero))
-                                  (put_in_gpr b) ;; see `udiv` for why not `gpr_mem`
-                                  (DivSignedness.Unsigned)
-                                  (TrapCode.INTEGER_DIVISION_BY_ZERO)))
+            (result Gpr (x64_divb_m (extend_to_gpr a $I32 (ExtendKind.Zero))
+                                    (put_in_gpr b) ;; see `udiv` for why not `gpr_mem`
+                                    (TrapCode.INTEGER_DIVISION_BY_ZERO)))
           )
-          (x64_shr $I64 result (Imm8Reg.Imm8 8))))
+          (x64_shrq_mi result 8)))
 
 (rule 1 (lower (urem a @ (value_type (fits_in_64 ty)) b))
-        (x64_div_remainder a
-                           (imm $I64 0)
-                           (put_in_gpr b) ;; see `udiv` for why not `gpr_mem`
-                           (raw_operand_size_of_type ty)
-                           (DivSignedness.Unsigned)
-                           (TrapCode.INTEGER_DIVISION_BY_ZERO)))
+  (value_regs_get
+    (x64_div ty a (imm $I64 0) (put_in_gpr b) (TrapCode.INTEGER_DIVISION_BY_ZERO))
+    1))
 
 ;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4418,10 +4463,10 @@
 (rule 3 (lower (srem a @ (value_type $I8) (iconst imm)))
         (if-let n (safe_divisor_from_imm64 $I8 imm))
         (let (
-            (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
-            (result Gpr (x64_div8 a (imm $I8 n) (DivSignedness.Signed) (TrapCode.INTEGER_DIVISION_BY_ZERO)))
+            (a Gpr (x64_cbtw_zo a))
+            (result Gpr (x64_idivb_m a (imm $I8 n) (TrapCode.INTEGER_DIVISION_BY_ZERO)))
           )
-          (x64_shr $I64 result (Imm8Reg.Imm8 8))))
+          (x64_shrq_mi result 8)))
 
 ;; Same as the above rule but for 16-to-64 bit types.
 (rule 2 (lower (srem a @ (value_type ty) (iconst imm)))
@@ -4430,24 +4475,18 @@
             (a Gpr a)
             (size OperandSize (raw_operand_size_of_type ty))
           )
-          (x64_div_remainder a
-                             (x64_sign_extend_data a size)
-                             (imm ty n)
-                             size
-                             (DivSignedness.Signed)
-                             (TrapCode.INTEGER_DIVISION_BY_ZERO))))
+       (value_regs_get
+         (x64_idiv ty a (repeat_sign_bit ty a) (imm ty n) (TrapCode.INTEGER_DIVISION_BY_ZERO))
+         1)))
 
 (rule 1 (lower (srem a @ (value_type $I8) b))
-        (let (
-            (a Gpr (x64_sign_extend_data a (OperandSize.Size8)))
-          )
-          (x64_shr $I64 (x64_checked_srem_seq8 a b) (Imm8Reg.Imm8 8))))
+  (x64_shrq_mi (x64_checked_srem_seq8 (x64_cbtw_zo a) b) 8))
 
 (rule (lower (srem a @ (value_type ty) b))
       (let (
           (a Gpr a)
           (size OperandSize (raw_operand_size_of_type ty))
-          (hi Gpr (x64_sign_extend_data a size))
+          (hi Gpr (repeat_sign_bit ty a))
           (tmp ValueRegs (x64_checked_srem_seq size a hi b))
         )
         (value_regs_get tmp 1)))
@@ -4455,7 +4494,7 @@
 ;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (umulhi a @ (value_type $I8) b))
-        (x64_shr $I16 (x64_mul8 false a b) (imm8_to_imm8_gpr 8)))
+        (x64_shrw_mi (x64_mul8 false a b) 8))
 
 (rule 1 (lower (umulhi a @ (value_type (ty_int_ref_16_to_64 ty)) b))
         (value_regs_get_gpr (x64_mul ty false a b) 1))
@@ -4471,7 +4510,7 @@
 ;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (smulhi a @ (value_type $I8) b))
-        (x64_sar $I16 (x64_mul8 true a b) (imm8_to_imm8_gpr 8)))
+        (x64_sarw_mi (x64_mul8 true a b) 8))
 
 (rule 1 (lower (smulhi a @ (value_type (ty_int_ref_16_to_64 ty)) b))
         (value_regs_get_gpr (x64_mul ty true a b) 1))
@@ -4701,7 +4740,7 @@
 ;; extracting an odd lane has an extra shift-right
 (rule 1 (lower (extractlane val @ (value_type ty @ $I8X16) (u8_from_uimm8 lane)))
         (if-let 1 (u8_and lane 1))
-        (x64_shr $I16 (x64_pextrw val (u8_shr lane 1)) (Imm8Reg.Imm8 8)))
+        (x64_shrw_mi (x64_pextrw val (u8_shr lane 1)) 8))
 ;; Extracting an even lane already has the desired lane in the lower bits. Note
 ;; that having arbitrary upper bits in the returned register should be ok since
 ;; all operators on the resulting `i8` type should work correctly regardless of
@@ -4921,7 +4960,7 @@
       (let ((src Xmm val)
             (tmp Xmm (x64_packsswb src src))
             (tmp Gpr (x64_pmovmskb (OperandSize.Size32) tmp)))
-        (x64_shr $I64 tmp (Imm8Reg.Imm8 8))))
+        (x64_shrq_mi tmp 8)))
 
 ;; Rules for `iconcat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -6,8 +6,6 @@ use core::str::FromStr;
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
 use wasmparser::WasmFeatures;
-#[cfg(feature = "cache")]
-use wasmtime_cache::CacheConfig;
 use wasmtime_environ::{ConfigTunables, TripleExt, Tunables};
 
 #[cfg(feature = "runtime")]
@@ -28,6 +26,8 @@ use wasmtime_fiber::RuntimeFiberStackCreator;
 
 #[cfg(feature = "runtime")]
 pub use crate::runtime::code_memory::CustomCodeMemory;
+#[cfg(feature = "cache")]
+pub use wasmtime_cache::{Cache, CacheConfig};
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
 
@@ -128,7 +128,7 @@ pub struct Config {
     tunables: ConfigTunables,
 
     #[cfg(feature = "cache")]
-    pub(crate) cache_config: CacheConfig,
+    pub(crate) cache: Option<Cache>,
     #[cfg(feature = "runtime")]
     pub(crate) mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
     #[cfg(feature = "runtime")]
@@ -231,7 +231,7 @@ impl Config {
             #[cfg(feature = "gc")]
             collector: Collector::default(),
             #[cfg(feature = "cache")]
-            cache_config: CacheConfig::new_cache_disabled(),
+            cache: None,
             profiling_strategy: ProfilingStrategy::None,
             #[cfg(feature = "runtime")]
             mem_creator: None,
@@ -1369,71 +1369,25 @@ impl Config {
         self
     }
 
-    /// Loads cache configuration specified at `path`.
+    /// Set a custom [`Cache`].
     ///
-    /// This method will read the file specified by `path` on the filesystem and
-    /// attempt to load cache configuration from it. This method can also fail
-    /// due to I/O errors, misconfiguration, syntax errors, etc. For expected
-    /// syntax in the configuration file see the [documentation online][docs].
+    /// To load a cache from a file, use [`Cache::from_file`]. Otherwise, you can create a new
+    /// cache config using [`CacheConfig::new`] and passing that to [`Cache::new`].
     ///
-    /// By default cache configuration is not enabled or loaded.
+    /// If you want to disable the cache, you can call this method with `None`.
+    ///
+    /// By default, new configs do not have caching enabled.
+    /// Every call to [`Module::new(my_wasm)`][crate::Module::new] will recompile `my_wasm`,
+    /// even when it is unchanged, unless an enabled `CacheConfig` is provided.
     ///
     /// This method is only available when the `cache` feature of this crate is
     /// enabled.
-    ///
-    /// # Errors
-    ///
-    /// This method can fail due to any error that happens when loading the file
-    /// pointed to by `path` and attempting to load the cache configuration.
     ///
     /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
     #[cfg(feature = "cache")]
-    pub fn cache_config_load(&mut self, path: impl AsRef<Path>) -> Result<&mut Self> {
-        self.cache_config = CacheConfig::from_file(Some(path.as_ref()))?;
-        Ok(self)
-    }
-
-    /// Disable caching.
-    ///
-    /// Every call to [`Module::new(my_wasm)`][crate::Module::new] will
-    /// recompile `my_wasm`, even when it is unchanged.
-    ///
-    /// By default, new configs do not have caching enabled. This method is only
-    /// useful for disabling a previous cache configuration.
-    ///
-    /// This method is only available when the `cache` feature of this crate is
-    /// enabled.
-    #[cfg(feature = "cache")]
-    pub fn disable_cache(&mut self) -> &mut Self {
-        self.cache_config = CacheConfig::new_cache_disabled();
+    pub fn cache(&mut self, cache: Option<Cache>) -> &mut Self {
+        self.cache = cache;
         self
-    }
-
-    /// Loads cache configuration from the system default path.
-    ///
-    /// This commit is the same as [`Config::cache_config_load`] except that it
-    /// does not take a path argument and instead loads the default
-    /// configuration present on the system. This is located, for example, on
-    /// Unix at `$HOME/.config/wasmtime/config.toml` and is typically created
-    /// with the `wasmtime config new` command.
-    ///
-    /// By default cache configuration is not enabled or loaded.
-    ///
-    /// This method is only available when the `cache` feature of this crate is
-    /// enabled.
-    ///
-    /// # Errors
-    ///
-    /// This method can fail due to any error that happens when loading the
-    /// default system configuration. Note that it is not an error if the
-    /// default config file does not exist, in which case the default settings
-    /// for an enabled cache are applied.
-    ///
-    /// [docs]: https://bytecodealliance.github.io/wasmtime/cli-cache.html
-    #[cfg(feature = "cache")]
-    pub fn cache_config_load_default(&mut self) -> Result<&mut Self> {
-        self.cache_config = CacheConfig::from_file(None)?;
-        Ok(self)
     }
 
     /// Sets a custom memory creator.
@@ -2112,14 +2066,9 @@ impl Config {
                     | WasmFeatures::STACK_SWITCHING;
                 match self.compiler_target().architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
-                        // no support for simd on aarch64
                         unsupported |= WasmFeatures::SIMD;
-
-                        // things like multi-table are technically supported on
-                        // winch on aarch64 but this helps gate most spec tests
-                        // by default which otherwise currently cause panics.
-                        unsupported |= WasmFeatures::REFERENCE_TYPES;
-                        unsupported |= WasmFeatures::THREADS
+                        unsupported |= WasmFeatures::THREADS;
+                        unsupported |= WasmFeatures::WIDE_ARITHMETIC;
                     }
 
                     // Winch doesn't support other non-x64 architectures at this
@@ -2441,7 +2390,9 @@ impl Config {
                 .compiler_config
                 .ensure_setting_unset_or_given("unwind_info", &unwind_requested.to_string())
             {
-                bail!("incompatible settings requested for Cranelift and Wasmtime `unwind-info` settings");
+                bail!(
+                    "incompatible settings requested for Cranelift and Wasmtime `unwind-info` settings"
+                );
             }
         }
 
@@ -2490,7 +2441,9 @@ impl Config {
                 .compiler_config
                 .ensure_setting_unset_or_given("enable_safepoints", "true")
             {
-                bail!("compiler option 'enable_safepoints' must be enabled when 'reference types' is enabled");
+                bail!(
+                    "compiler option 'enable_safepoints' must be enabled when 'reference types' is enabled"
+                );
             }
         }
 

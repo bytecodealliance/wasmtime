@@ -1,12 +1,18 @@
-#![allow(dead_code)]
-
-use anyhow::{bail, format_err, Result};
+use anyhow::{Result, bail, format_err};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use std::env;
 use std::io::Write;
 use std::process::Command;
 use tempfile::NamedTempFile;
-use test_programs_artifacts as assets;
+use test_programs_artifacts::*;
+
+macro_rules! assert_test_exists {
+    ($name:ident) => {
+        #[expect(unused_imports, reason = "here to assert tests exist")]
+        use self::$name as _;
+    };
+}
+foreach_dwarf!(assert_test_exists);
 
 fn lldb_with_script(args: &[&str], script: &str) -> Result<String> {
     let lldb_path = env::var("LLDB").unwrap_or("lldb".to_string());
@@ -62,9 +68,12 @@ fn check_lldb_output(output: &str, directives: &str) -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code, reason = "tested elsewhere")]
+fn dwarf_dead_code() {} // this is tested over in `translate.rs`
+
 #[test]
 #[ignore]
-pub fn test_debug_dwarf_lldb() -> Result<()> {
+pub fn dwarf_fib_wasm() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
@@ -72,7 +81,7 @@ pub fn test_debug_dwarf_lldb() -> Result<()> {
             "-Oopt-level=0",
             "--invoke",
             "fib",
-            assets::FIB_WASM_WASM_PATH,
+            DWARF_FIB_WASM,
             "3",
         ],
         r#"b fib
@@ -102,7 +111,7 @@ check: exited with status
 
 #[test]
 #[ignore]
-pub fn test_debug_dwarf5_lldb() -> Result<()> {
+pub fn dwarf_fib_wasm_dwarf5() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
@@ -110,7 +119,7 @@ pub fn test_debug_dwarf5_lldb() -> Result<()> {
             "-Oopt-level=0",
             "--invoke",
             "fib",
-            assets::FIB_WASM_DWARF5_WASM_PATH,
+            DWARF_FIB_WASM_DWARF5,
             "3",
         ],
         r#"b fib
@@ -140,7 +149,7 @@ check: exited with status
 
 #[test]
 #[ignore]
-pub fn test_debug_split_dwarf4_lldb() -> Result<()> {
+pub fn dwarf_fib_wasm_split4() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
@@ -148,7 +157,7 @@ pub fn test_debug_split_dwarf4_lldb() -> Result<()> {
             "-Oopt-level=0",
             "--invoke",
             "fib",
-            assets::FIB_WASM_SPLIT4_WASM_PATH,
+            DWARF_FIB_WASM_SPLIT4,
             "3",
         ],
         r#"b fib
@@ -178,14 +187,9 @@ check: exited with status
 
 #[test]
 #[ignore]
-pub fn test_debug_dwarf_generic_lldb() -> Result<()> {
+pub fn dwarf_generic() -> Result<()> {
     let output = lldb_with_script(
-        &[
-            "-Ccache=n",
-            "-Ddebug-info",
-            "-Oopt-level=0",
-            assets::GENERIC_WASM_PATH,
-        ],
+        &["-Ccache=n", "-Ddebug-info", "-Oopt-level=0", DWARF_GENERIC],
         r#"br set -n debug_break -C up
 r
 p __vmctx->set()
@@ -202,6 +206,12 @@ c
 p __this->BaseValue + __this->DerivedValue
 c
 p __this->BaseValue + __this->DerivedValue
+c
+f
+n
+s
+v var0
+v var1
 c"#,
     )?;
 
@@ -223,6 +233,9 @@ check: stop reason = breakpoint 1.1
 check: 7
 check: stop reason = breakpoint 1.1
 check: 8
+check: stop reason = breakpoint 1.1
+check: 9
+check: 10
 check: exited with status = 0
 "#,
     )?;
@@ -231,18 +244,18 @@ check: exited with status = 0
 
 #[test]
 #[ignore]
-pub fn test_debug_codegen_optimized_lldb() -> Result<()> {
+pub fn dwarf_codegen_optimized() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
             "-Ddebug-info",
             "-Oopt-level=2",
-            assets::CODEGEN_OPTIMIZED_WASM_PATH,
+            DWARF_CODEGEN_OPTIMIZED,
         ],
         r#"b InitializeTest
 r
-b codegen-optimized.cpp:25
-b codegen-optimized.cpp:26
+b dwarf_codegen_optimized.cpp:25
+b dwarf_codegen_optimized.cpp:26
 c
 v x
 c
@@ -266,18 +279,18 @@ check: exited with status = 0
 
 #[test]
 #[ignore]
-pub fn test_debug_codegen_optimized_wasm_optimized_lldb() -> Result<()> {
+pub fn dwarf_codegen_optimized_wasm_optimized() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
             "-Ddebug-info",
             "-Oopt-level=2",
-            assets::CODEGEN_OPTIMIZED_WASM_OPTIMIZED_WASM_PATH,
+            DWARF_CODEGEN_OPTIMIZED_WASM_OPTIMIZED,
         ],
         r#"b InitializeTest
 r
-b codegen-optimized-wasm-optimized.cpp:21
-b codegen-optimized-wasm-optimized.cpp:27
+b dwarf_codegen_optimized_wasm_optimized.cpp:23
+b dwarf_codegen_optimized_wasm_optimized.cpp:29
 c
 v b
 c
@@ -301,15 +314,15 @@ check: exited with status = 0
 
 #[test]
 #[ignore]
-pub fn test_debug_dwarf_ref() -> Result<()> {
+pub fn dwarf_fraction_norm() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
             "-Oopt-level=0",
             "-Ddebug-info",
-            assets::FRACTION_NORM_WASM_PATH,
+            DWARF_FRACTION_NORM,
         ],
-        r#"b fraction-norm.cc:26
+        r#"b dwarf_fraction_norm.cc:26
 r
 p __vmctx->set(),n->denominator
 c"#,
@@ -331,13 +344,13 @@ check: resuming
 
 #[test]
 #[ignore]
-pub fn test_debug_inst_offsets_are_correct_when_branches_are_removed() -> Result<()> {
+pub fn dwarf_two_removed_branches() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
             "-Oopt-level=0",
             "-Ddebug-info",
-            assets::TWO_REMOVED_BRANCHES_WASM_PATH,
+            DWARF_TWO_REMOVED_BRANCHES,
         ],
         r#"r"#,
     )?;
@@ -354,15 +367,15 @@ check: exited with status
 
 #[test]
 #[ignore]
-pub fn test_spilled_frame_base_is_accessible() -> Result<()> {
+pub fn dwarf_spilled_frame_base() -> Result<()> {
     let output = lldb_with_script(
         &[
             "-Ccache=n",
             "-Oopt-level=0",
             "-Ddebug-info",
-            assets::SPILLED_FRAME_BASE_WASM_PATH,
+            DWARF_SPILLED_FRAME_BASE,
         ],
-        r#"b spilled_frame_base.c:8
+        r#"b dwarf_spilled_frame_base.c:13
 r
 fr v i
 n
@@ -396,22 +409,12 @@ check: exited with status
     Ok(())
 }
 
-/* C program used for this test, dwarf_fission.c, compiled with `emcc dwarf_fission.c -o dwarf_fission.wasm -gsplit-dwarf -gdwarf-5 -gpubnames -sWASM_BIGINT`:
-#include <stdio.h>
-
-int main()
-{
-    int i = 1;
-    i++;
-    return i - 2;
-}
- */
 #[test]
 #[ignore]
-pub fn test_debug_dwarf5_fission_lldb() -> Result<()> {
+pub fn dwarf_fission() -> Result<()> {
     let output = lldb_with_script(
-        &["-Ccache=n", "-Ddebug-info", assets::DWARF_FISSION_WASM_PATH],
-        r#"breakpoint set --file dwarf_fission.c --line 6
+        &["-Ccache=n", "-Ddebug-info", "-Oopt-level=0", DWARF_FISSION],
+        r#"breakpoint set --file dwarf_fission.c --line 8
 r
 fr v
 s
@@ -436,27 +439,14 @@ check: exited with status = 0
     Ok(())
 }
 
-mod test_programs {
-    use super::{check_lldb_output, lldb_with_script};
-    use anyhow::Result;
-    use test_programs_artifacts::*;
-
-    macro_rules! assert_test_exists {
-        ($name:ident) => {
-            #[allow(unused_imports)]
-            use self::$name as _;
-        };
-    }
-    foreach_dwarf!(assert_test_exists);
-
-    fn test_dwarf_simple(wasm: &str, extra_args: &[&str]) -> Result<()> {
-        println!("testing {wasm:?}");
-        let mut args = vec!["-Ccache=n", "-Oopt-level=0", "-Ddebug-info"];
-        args.extend(extra_args);
-        args.push(wasm);
-        let output = lldb_with_script(
-            &args,
-            r#"
+fn test_dwarf_simple(wasm: &str, extra_args: &[&str]) -> Result<()> {
+    println!("testing {wasm:?}");
+    let mut args = vec!["-Ccache=n", "-Oopt-level=0", "-Ddebug-info"];
+    args.extend(extra_args);
+    args.push(wasm);
+    let output = lldb_with_script(
+        &args,
+        r#"
 breakpoint set --file dwarf_simple.rs --line 3
 breakpoint set --file dwarf_simple.rs --line 5
 r
@@ -464,11 +454,11 @@ fr v
 c
 fr v
 c"#,
-        )?;
+    )?;
 
-        check_lldb_output(
-            &output,
-            r#"
+    check_lldb_output(
+        &output,
+        r#"
 check: Breakpoint 1: no locations (pending)
 check: Unable to resolve breakpoint to any actual locations.
 check: 1 location added to breakpoint 1
@@ -481,45 +471,45 @@ check: b = 117
 check: resuming
 check: exited with status = 0
 "#,
-        )?;
-        Ok(())
-    }
+    )?;
+    Ok(())
+}
 
-    #[test]
-    #[ignore]
-    fn dwarf_simple() -> Result<()> {
-        for wasm in [DWARF_SIMPLE, DWARF_SIMPLE_COMPONENT] {
-            test_dwarf_simple(wasm, &[])?;
-        }
-        Ok(())
+#[test]
+#[ignore]
+fn dwarf_simple() -> Result<()> {
+    for wasm in [DWARF_SIMPLE, DWARF_SIMPLE_COMPONENT] {
+        test_dwarf_simple(wasm, &[])?;
     }
+    Ok(())
+}
 
-    #[test]
-    #[ignore]
-    fn dwarf_imported_memory() -> Result<()> {
-        test_dwarf_simple(
-            DWARF_IMPORTED_MEMORY,
-            &["--preload=env=./tests/all/debug/satisfy_memory_import.wat"],
-        )
-    }
+#[test]
+#[ignore]
+fn dwarf_imported_memory() -> Result<()> {
+    test_dwarf_simple(
+        DWARF_IMPORTED_MEMORY,
+        &["--preload=env=./tests/all/debug/satisfy_memory_import.wat"],
+    )
+}
 
-    #[test]
-    #[ignore]
-    fn dwarf_shared_memory() -> Result<()> {
-        test_dwarf_simple(DWARF_SHARED_MEMORY, &[])
-    }
+#[test]
+#[ignore]
+fn dwarf_shared_memory() -> Result<()> {
+    test_dwarf_simple(DWARF_SHARED_MEMORY, &[])
+}
 
-    #[test]
-    #[ignore]
-    fn dwarf_multiple_codegen_units() -> Result<()> {
-        for wasm in [
-            DWARF_MULTIPLE_CODEGEN_UNITS,
-            DWARF_MULTIPLE_CODEGEN_UNITS_COMPONENT,
-        ] {
-            println!("testing {wasm:?}");
-            let output = lldb_with_script(
-                &["-Ccache=n", "-Oopt-level=0", "-Ddebug-info", wasm],
-                r#"
+#[test]
+#[ignore]
+fn dwarf_multiple_codegen_units() -> Result<()> {
+    for wasm in [
+        DWARF_MULTIPLE_CODEGEN_UNITS,
+        DWARF_MULTIPLE_CODEGEN_UNITS_COMPONENT,
+    ] {
+        println!("testing {wasm:?}");
+        let output = lldb_with_script(
+            &["-Ccache=n", "-Oopt-level=0", "-Ddebug-info", wasm],
+            r#"
 breakpoint set --file dwarf_multiple_codegen_units.rs --line 3
 breakpoint set --file dwarf_multiple_codegen_units.rs --line 10
 r
@@ -529,11 +519,11 @@ fr v
 breakpoint delete 2
 finish
 c"#,
-            )?;
+        )?;
 
-            check_lldb_output(
-                &output,
-                r#"
+        check_lldb_output(
+            &output,
+            r#"
 check: Breakpoint 1: no locations (pending)
 check: Breakpoint 2: no locations (pending)
 check: stop reason = breakpoint 1.1
@@ -546,8 +536,7 @@ check: 1 breakpoints deleted
 check: Return value: $(=.*) 3
 check: exited with status = 0
 "#,
-            )?;
-        }
-        Ok(())
+        )?;
     }
+    Ok(())
 }

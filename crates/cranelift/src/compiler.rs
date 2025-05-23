@@ -1,16 +1,16 @@
+use crate::TRAP_INTERNAL_ASSERT;
 use crate::debug::DwarfSectionRelocTarget;
 use crate::func_environ::FuncEnvironment;
 use crate::translate::FuncTranslator;
-use crate::TRAP_INTERNAL_ASSERT;
-use crate::{array_call_signature, CompiledFunction, ModuleTextBuilder};
-use crate::{builder::LinkOptions, wasm_call_signature, BuiltinFunctionSignatures};
+use crate::{BuiltinFunctionSignatures, builder::LinkOptions, wasm_call_signature};
+use crate::{CompiledFunction, ModuleTextBuilder, array_call_signature};
 use anyhow::{Context as _, Result};
 use cranelift_codegen::binemit::CodeOffset;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value};
 use cranelift_codegen::isa::{
-    unwind::{UnwindInfo, UnwindInfoKind},
     OwnedTargetIsa, TargetIsa,
+    unwind::{UnwindInfo, UnwindInfoKind},
 };
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{CompiledCode, Context};
@@ -225,7 +225,7 @@ impl wasmtime_environ::Compiler for Compiler {
         // check to all functions for how much native stack is remaining. The
         // `VMContext` pointer is the first argument to all functions, and the
         // first field of this structure is `*const VMStoreContext` and the
-        // first field of that is the stack limit. Note that the stack limit in
+        // third field of that is the stack limit. Note that the stack limit in
         // this case means "if the stack pointer goes below this, trap". Each
         // function which consumes stack space or isn't a leaf function starts
         // off by loading the stack limit, checking it against the stack

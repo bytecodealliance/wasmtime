@@ -8,11 +8,10 @@
 
 (type ValueRegs (primitive ValueRegs))
 (type WritableValueRegs (primitive WritableValueRegs))
+(type ValueRegsVec extern (enum))
 
 ;; Instruction lowering result: a vector of `ValueRegs`.
 (type InstOutput (primitive InstOutput))
-;; (Mutable) builder to incrementally construct an `InstOutput`.
-(type InstOutputBuilder extern (enum))
 
 ;; Type to hold multiple Regs
 (type MultiReg
@@ -86,17 +85,9 @@
 (decl output_value (Value) InstOutput)
 (rule (output_value val) (output (put_in_regs val)))
 
-;; Initially empty `InstOutput` builder.
-(decl output_builder_new () InstOutputBuilder)
-(extern constructor output_builder_new output_builder_new)
-
-;; Append a `ValueRegs` to an `InstOutput` under construction.
-(decl output_builder_push (InstOutputBuilder ValueRegs) Unit)
-(extern constructor output_builder_push output_builder_push)
-
-;; Finish building an `InstOutput` incrementally.
-(decl output_builder_finish (InstOutputBuilder) InstOutput)
-(extern constructor output_builder_finish output_builder_finish)
+;; Construct an `InstOutput` from a vector.
+(decl output_vec (ValueRegsVec) InstOutput)
+(extern constructor output_vec output_vec)
 
 ;; Get a temporary register for writing.
 (decl temp_writable_reg (Type) WritableReg)
@@ -141,6 +132,10 @@
 (decl put_in_regs (Value) ValueRegs)
 (extern constructor put_in_regs put_in_regs)
 
+;; Put a slice of values into a vector of ValueRegs.
+(decl put_in_regs_vec (ValueSlice) ValueRegsVec)
+(extern constructor put_in_regs_vec put_in_regs_vec)
+
 ;; If the given reg is a real register, cause the value in reg to be in a virtual
 ;; reg, by copying it into a new virtual reg.
 (decl ensure_in_vreg (Reg Type) Reg)
@@ -155,10 +150,6 @@
 ;; Get the number of registers in a `ValueRegs`.
 (decl pure value_regs_len (ValueRegs) usize)
 (extern constructor value_regs_len value_regs_len)
-
-;; Get a range for the number of regs in a `ValueRegs`.
-(decl value_regs_range (ValueRegs) Range)
-(rule (value_regs_range regs) (range 0 (value_regs_len regs)))
 
 ;; Put the value into one or more registers and return the first register.
 ;;
@@ -208,7 +199,8 @@
 (type RelocDistance (primitive RelocDistance))
 (type VecArgPair extern (enum))
 (type VecRetPair extern (enum))
-(type CallArgList extern (enum))
+(type CallArgList (primitive CallArgList))
+(type CallRetList (primitive CallRetList))
 (type MachLabelSlice extern (enum))
 (type BoxVecMachLabel extern (enum))
 
@@ -408,11 +400,23 @@
 (decl emit_u64_le_const (u64) VCodeConstant)
 (extern constructor emit_u64_le_const emit_u64_le_const)
 
+;; Add a u64 big-endian constant to the in-memory constant pool and
+;; return a VCodeConstant index that refers to it. This is
+;; side-effecting but idempotent (constants are deduplicated).
+(decl emit_u64_be_const (u64) VCodeConstant)
+(extern constructor emit_u64_be_const emit_u64_be_const)
+
 ;; Add a u128 little-endian constant to the in-memory constant pool and
 ;; return a VCodeConstant index that refers to it. This is
 ;; side-effecting but idempotent (constants are deduplicated).
 (decl emit_u128_le_const (u128) VCodeConstant)
 (extern constructor emit_u128_le_const emit_u128_le_const)
+
+;; Add a u128 big-endian constant to the in-memory constant pool and
+;; return a VCodeConstant index that refers to it. This is
+;; side-effecting but idempotent (constants are deduplicated).
+(decl emit_u128_be_const (u128) VCodeConstant)
+(extern constructor emit_u128_be_const emit_u128_be_const)
 
 ;; Fetch the VCodeConstant associated with a Constant.
 (decl const_to_vconst (Constant) VCodeConstant)
@@ -1064,6 +1068,10 @@
     (Uext)
     (Sext)))
 
+;; Create a Sig from a SigRef.
+(decl abi_sig (SigRef) Sig)
+(extern constructor abi_sig abi_sig)
+
 ;; Get the number of arguments expected.
 (decl abi_num_args (Sig) usize)
 (extern constructor abi_num_args abi_num_args)
@@ -1129,14 +1137,29 @@
       (let ((_ Unit (gen_return vals)))
         (output_none)))
 
-(decl gen_return (ValueSlice) Unit)
+(decl gen_return (ValueRegsVec) Unit)
 (extern constructor gen_return gen_return)
 
-(decl gen_return_call (SigRef ExternalName RelocDistance ValueSlice) InstOutput)
-(extern constructor gen_return_call gen_return_call)
+(decl gen_call_output (SigRef) ValueRegsVec)
+(extern constructor gen_call_output gen_call_output)
 
-(decl gen_return_call_indirect (SigRef Value ValueSlice) InstOutput)
-(extern constructor gen_return_call_indirect gen_return_call_indirect)
+(decl gen_call_args (Sig ValueRegsVec) CallArgList)
+(extern constructor gen_call_args gen_call_args)
+
+(decl gen_return_call_args (Sig ValueRegsVec) CallArgList)
+(extern constructor gen_return_call_args gen_return_call_args)
+
+(decl gen_call_rets (Sig ValueRegsVec) CallRetList)
+(extern constructor gen_call_rets gen_call_rets)
+
+(decl gen_try_call_rets (Sig) CallRetList)
+(extern constructor gen_try_call_rets gen_try_call_rets)
+
+(type OptionTryCallInfo (primitive OptionTryCallInfo))
+(decl try_call_info (ExceptionTable MachLabelSlice) OptionTryCallInfo)
+(extern constructor try_call_info try_call_info)
+(decl try_call_none () OptionTryCallInfo)
+(extern constructor try_call_none try_call_none)
 
 ;; Helper for extracting an immediate that's not 0 and not -1 from an imm64.
  (spec (safe_divisor_from_imm64 t x)
@@ -1153,9 +1176,11 @@
 (convert WritableReg WritableValueRegs writable_value_reg)
 (convert Value Reg put_in_reg)
 (convert Value ValueRegs put_in_regs)
+(convert ValueSlice ValueRegsVec put_in_regs_vec)
 (convert WritableReg Reg writable_reg_to_reg)
 (convert ValueRegs InstOutput output)
 (convert Reg InstOutput output_reg)
 (convert Value InstOutput output_value)
+(convert ValueRegsVec InstOutput output_vec)
 (convert ExternalName BoxExternalName box_external_name)
 (convert PReg Reg preg_to_reg)

@@ -25,8 +25,8 @@ use crate::prelude::*;
 use crate::runtime::store::StoreOpaque;
 use crate::runtime::vm::stack_switching::VMStackChain;
 use crate::runtime::vm::{
-    traphandlers::{tls, CallThreadState},
     Unwind, VMStoreContext,
+    traphandlers::{CallThreadState, tls},
 };
 use crate::vm::stack_switching::{VMContRef, VMStackState};
 use core::ops::ControlFlow;

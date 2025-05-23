@@ -1,5 +1,4 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 //! # Wasmtime's WASI Implementation
 //!
@@ -27,7 +26,7 @@ pub use self::clocks::{HostMonotonicClock, HostWallClock};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::fs::{DirPerms, FilePerms, OpenMode};
 pub use self::net::{Network, SocketAddrUse};
-pub use self::random::{thread_rng, Deterministic};
+pub use self::random::{Deterministic, thread_rng};
 #[doc(no_inline)]
 pub use async_trait::async_trait;
 #[doc(no_inline)]

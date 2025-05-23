@@ -17,16 +17,16 @@
 //! See the main module comment in `mod.rs` for more details on the VCode-based
 //! backend pipeline.
 
+use crate::CodegenError;
 use crate::ir::pcc::*;
-use crate::ir::{self, types, Constant, ConstantData, ValueLabel};
+use crate::ir::{self, Constant, ConstantData, ValueLabel, types};
 use crate::ranges::Ranges;
 use crate::timing;
 use crate::trace;
-use crate::CodegenError;
-use crate::{machinst::*, trace_log_enabled};
 use crate::{LabelValueLoc, ValueLocRange};
+use crate::{machinst::*, trace_log_enabled};
 use regalloc2::{
-    Edit, Function as RegallocFunction, InstOrEdit, InstPosition, InstRange, MachineEnv, Operand,
+    Edit, Function as RegallocFunction, InstOrEdit, InstPosition, InstRange, Operand,
     OperandConstraint, OperandKind, PRegSet, ProgPoint, RegClass,
 };
 use rustc_hash::FxHashMap;
@@ -34,9 +34,9 @@ use rustc_hash::FxHashMap;
 use core::cmp::Ordering;
 use core::fmt::{self, Write};
 use core::mem::take;
-use cranelift_entity::{entity_impl, Keys};
-use std::collections::hash_map::Entry;
+use cranelift_entity::{Keys, entity_impl};
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 
 /// Index referring to an instruction in VCode.
 pub type InsnIndex = regalloc2::Inst;
@@ -517,7 +517,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     }
 
     fn collect_operands(&mut self, vregs: &VRegAllocator<I>) {
-        let allocatable = PRegSet::from(self.vcode.machine_env());
+        let allocatable = PRegSet::from(self.vcode.abi.machine_env());
         for (i, insn) in self.vcode.insts.iter_mut().enumerate() {
             // Push operands from the instruction onto the operand list.
             //
@@ -663,11 +663,6 @@ impl<I: VCodeInst> VCode<I> {
             facts: vec![],
             log2_min_function_alignment,
         }
-    }
-
-    /// Get the ABI-dependent MachineEnv for managing register allocation.
-    pub fn machine_env(&self) -> &MachineEnv {
-        self.abi.machine_env(&self.sigs)
     }
 
     /// Get the number of blocks. Block indices will be in the range `0 ..
@@ -1152,9 +1147,7 @@ impl<I: VCodeInst> VCode<I> {
             if inst_offset > next_offset {
                 trace!(
                     "Fixing code offset of the removed Inst {}: {} -> {}",
-                    inst_index,
-                    inst_offset,
-                    next_offset
+                    inst_index, inst_offset, next_offset
                 );
                 inst_offsets[inst_index] = next_offset;
                 continue;
@@ -1227,10 +1220,7 @@ impl<I: VCodeInst> VCode<I> {
                 if last_loc_range.loc == loc && last_loc_range.end == from_offset {
                     trace!(
                         "Extending debug range for {:?} in {:?} to Inst {} ({})",
-                        label,
-                        loc,
-                        to_inst_index,
-                        to_offset
+                        label, loc, to_inst_index, to_offset
                     );
                     last_loc_range.end = to_offset;
                     continue;
@@ -1239,12 +1229,7 @@ impl<I: VCodeInst> VCode<I> {
 
             trace!(
                 "Recording debug range for {:?} in {:?}: [Inst {}..Inst {}) [{}..{})",
-                label,
-                loc,
-                from_inst_index,
-                to_inst_index,
-                from_offset,
-                to_offset
+                label, loc, from_inst_index, to_inst_index, from_offset, to_offset
             );
 
             ranges.push(ValueLocRange {
@@ -1977,11 +1962,7 @@ impl VCodeConstantData {
 
     /// Calculate the alignment of the constant data.
     pub fn alignment(&self) -> u32 {
-        if self.as_slice().len() <= 8 {
-            8
-        } else {
-            16
-        }
+        if self.as_slice().len() <= 8 { 8 } else { 16 }
     }
 }
 

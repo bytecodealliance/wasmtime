@@ -36,7 +36,15 @@ impl Features {
 
 impl fmt::Display for Features {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0.iter().map(ToString::to_string).collect::<Vec<_>>().join(" | "))
+        write!(
+            f,
+            "{}",
+            self.0
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" | ")
+        )
     }
 }
 
@@ -55,6 +63,12 @@ pub enum Feature {
     _64b,
     compat,
     sse,
+    sse2,
+    ssse3,
+    sse41,
+    bmi1,
+    lzcnt,
+    popcnt,
 }
 
 /// List all CPU features.
@@ -64,15 +78,21 @@ pub enum Feature {
 /// transcribe each variant to an `enum` available in the generated layer above.
 /// If this list is incomplete, we will (fortunately) see compile errors for
 /// generated functions that use the missing variants.
-pub const ALL_FEATURES: &[Feature] = &[Feature::_64b, Feature::compat, Feature::sse];
+pub const ALL_FEATURES: &[Feature] = &[
+    Feature::_64b,
+    Feature::compat,
+    Feature::sse,
+    Feature::sse2,
+    Feature::ssse3,
+    Feature::sse41,
+    Feature::bmi1,
+    Feature::lzcnt,
+    Feature::popcnt,
+];
 
 impl fmt::Display for Feature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Feature::_64b => write!(f, "_64b"),
-            Feature::compat => write!(f, "compat"),
-            Feature::sse => write!(f, "sse"),
-        }
+        fmt::Debug::fmt(self, f)
     }
 }
 

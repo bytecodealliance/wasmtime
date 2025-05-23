@@ -1,4 +1,4 @@
-use crate::rust::{to_rust_ident, to_rust_upper_camel_case, RustGenerator, TypeMode};
+use crate::rust::{RustGenerator, TypeMode, to_rust_ident, to_rust_upper_camel_case};
 use crate::types::{TypeInfo, Types};
 use anyhow::bail;
 use heck::*;
@@ -625,7 +625,7 @@ impl Wasmtime {
                 ty = format!("{wt}::component::Func");
                 let sig = generator.typedfunc_sig(func, TypeMode::AllBorrowed("'_"));
                 let typecheck = format!(
-                    "match item {{ 
+                    "match item {{
                             {wt}::component::types::ComponentItem::ComponentFunc(func) => {{
                                 anyhow::Context::context(
                                     func.typecheck::<{sig}>(&_instance_type),
@@ -873,12 +873,12 @@ pub fn new<_T>(
 /// has been created through a [`Linker`]({wt}::component::Linker).
 ///
 /// For more information see [`{camel}`] as well.
-pub struct {camel}Pre<T> {{
+pub struct {camel}Pre<T: 'static> {{
     instance_pre: {wt}::component::InstancePre<T>,
     indices: {camel}Indices,
 }}
 
-impl<T> Clone for {camel}Pre<T> {{
+impl<T: 'static> Clone for {camel}Pre<T> {{
     fn clone(&self) -> Self {{
         Self {{
             instance_pre: self.instance_pre.clone(),
@@ -887,7 +887,7 @@ impl<T> Clone for {camel}Pre<T> {{
     }}
 }}
 
-impl<_T> {camel}Pre<_T> {{
+impl<_T: 'static> {camel}Pre<_T> {{
     /// Creates a new copy of `{camel}Pre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -1091,7 +1091,9 @@ impl<_T> {camel}Pre<_T> {{
         unused_keys.sort();
 
         if !unused_keys.is_empty() {
-            anyhow::bail!("interfaces were specified in the `with` config option but are not referenced in the target world: {unused_keys:?}");
+            anyhow::bail!(
+                "interfaces were specified in the `with` config option but are not referenced in the target world: {unused_keys:?}"
+            );
         }
 
         if let TrappableImports::Only(only) = &self.opts.trappable_imports {
@@ -1103,7 +1105,9 @@ impl<_T> {camel}Pre<_T> {{
             if !unused_imports.is_empty() {
                 dbg!(&self.used_trappable_imports_opts);
                 unused_imports.sort();
-                anyhow::bail!("names specified in the `trappable_imports` config option but are not referenced in the target world: {unused_imports:?}");
+                anyhow::bail!(
+                    "names specified in the `trappable_imports` config option but are not referenced in the target world: {unused_imports:?}"
+                );
             }
         }
 
@@ -1423,37 +1427,6 @@ impl Wasmtime {
         }
         uwriteln!(self.src, "}}");
 
-        let get_host_bounds = if let CallStyle::Concurrent = self.opts.call_style() {
-            let constraints = world_imports_concurrent_constraints(resolve, world, &self.opts);
-
-            format!("{world_camel}Imports{}", constraints("D"))
-        } else {
-            format!("{world_camel}Imports")
-        };
-
-        uwriteln!(
-            self.src,
-            "
-                pub trait {world_camel}ImportsGetHost<T, D>:
-                    Fn(T) -> <Self as {world_camel}ImportsGetHost<T, D>>::Host
-                        + Send
-                        + Sync
-                        + Copy
-                        + 'static
-                {{
-                    type Host: {get_host_bounds};
-                }}
-
-                impl<F, T, D, O> {world_camel}ImportsGetHost<T, D> for F
-                where
-                    F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                    O: {get_host_bounds},
-                {{
-                    type Host = O;
-                }}
-            "
-        );
-
         // Generate impl WorldImports for &mut WorldImports
         let maybe_send = if let CallStyle::Async = self.opts.call_style() {
             "+ Send"
@@ -1468,7 +1441,7 @@ impl Wasmtime {
             };
             uwriteln!(
                 self.src,
-                    "impl<_T: {world_camel}Imports {maybe_maybe_sized} {maybe_send}> {world_camel}Imports for &mut _T {{"
+                "impl<_T: {world_camel}Imports {maybe_maybe_sized} {maybe_send}> {world_camel}Imports for &mut _T {{"
             );
             let has_concurrent_function = self.import_functions.iter().any(|f| {
                 matches!(
@@ -1563,13 +1536,9 @@ impl Wasmtime {
         let camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
 
         let data_bounds = if self.opts.is_store_data_send() {
-            if let CallStyle::Concurrent = self.opts.call_style() {
-                "T: Send + 'static,"
-            } else {
-                "T: Send,"
-            }
+            "Send + 'static"
         } else {
-            ""
+            "'static"
         };
         let wt = self.wasmtime_path();
         if has_world_imports_trait {
@@ -1584,15 +1553,15 @@ impl Wasmtime {
             uwrite!(
                 self.src,
                 "
-                    pub fn add_to_linker_imports_get_host<
-                        T,
-                        G: for<'a> {camel}ImportsGetHost<&'a mut T, T, Host: {host_bounds}>
-                    >(
+                    pub fn add_to_linker_imports<T, D>(
                         linker: &mut {wt}::component::Linker<T>,
                         {options_param}
-                        host_getter: G,
+                        host_getter: fn(&mut T) -> D::Data<'_>,
                     ) -> {wt}::Result<()>
-                        where {data_bounds}
+                        where
+                            D: {wt}::component::HasData,
+                            for<'a> D::Data<'a>: {host_bounds},
+                            T: {data_bounds}
                     {{
                         let mut linker = linker.root();
                 "
@@ -1653,68 +1622,64 @@ impl Wasmtime {
                 .collect::<Vec<_>>()
                 .concat();
 
-            (
-                format!("U: Send{bounds}"),
-                format!("T: Send{bounds} + 'static,"),
-            )
+            (format!("Send{bounds}"), format!("Send{bounds} + 'static,"))
         } else {
             (
-                format!("U: {}", self.world_host_traits(resolve, world).join(" + ")),
+                format!("{}", self.world_host_traits(resolve, world).join(" + ")),
                 data_bounds.to_string(),
             )
         };
 
-        if !self.opts.skip_mut_forwarding_impls {
+        uwriteln!(
+            self.src,
+            "
+                pub fn add_to_linker<T, D>(
+                    linker: &mut {wt}::component::Linker<T>,
+                    {options_param}
+                    get: fn(&mut T) -> D::Data<'_>,
+                ) -> {wt}::Result<()>
+                    where
+                        D: {wt}::component::HasData,
+                        for<'a> D::Data<'a>: {host_bounds},
+                        T: {data_bounds}
+                {{
+            "
+        );
+        let gate = FeatureGate::open(&mut self.src, &resolve.worlds[world].stability);
+        if has_world_imports_trait {
             uwriteln!(
                 self.src,
-                "
-                    pub fn add_to_linker<T, U>(
-                        linker: &mut {wt}::component::Linker<T>,
-                        {options_param}
-                        get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-                    ) -> {wt}::Result<()>
-                        where
-                            {data_bounds}
-                            {host_bounds}
-                    {{
-                "
+                "Self::add_to_linker_imports::<T, D>(linker {options_arg}, get)?;"
             );
-            let gate = FeatureGate::open(&mut self.src, &resolve.worlds[world].stability);
-            if has_world_imports_trait {
-                uwriteln!(
-                    self.src,
-                    "Self::add_to_linker_imports_get_host(linker {options_arg}, get)?;"
-                );
-            }
-            for (interface_id, path) in self.import_interface_paths() {
-                let options_arg = if self.interface_link_options[&interface_id].has_any() {
-                    ", &options.into()"
-                } else {
-                    ""
-                };
-
-                let import_stability = resolve.worlds[world]
-                    .imports
-                    .iter()
-                    .filter_map(|(_, i)| match i {
-                        WorldItem::Interface { id, stability } if *id == interface_id => {
-                            Some(stability.clone())
-                        }
-                        _ => None,
-                    })
-                    .next()
-                    .unwrap_or(Stability::Unknown);
-
-                let gate = FeatureGate::open(&mut self.src, &import_stability);
-                uwriteln!(
-                    self.src,
-                    "{path}::add_to_linker(linker {options_arg}, get)?;"
-                );
-                gate.close(&mut self.src);
-            }
-            gate.close(&mut self.src);
-            uwriteln!(self.src, "Ok(())\n}}");
         }
+        for (interface_id, path) in self.import_interface_paths() {
+            let options_arg = if self.interface_link_options[&interface_id].has_any() {
+                ", &options.into()"
+            } else {
+                ""
+            };
+
+            let import_stability = resolve.worlds[world]
+                .imports
+                .iter()
+                .filter_map(|(_, i)| match i {
+                    WorldItem::Interface { id, stability } if *id == interface_id => {
+                        Some(stability.clone())
+                    }
+                    _ => None,
+                })
+                .next()
+                .unwrap_or(Stability::Unknown);
+
+            let gate = FeatureGate::open(&mut self.src, &import_stability);
+            uwriteln!(
+                self.src,
+                "{path}::add_to_linker::<T, D>(linker {options_arg}, get)?;"
+            );
+            gate.close(&mut self.src);
+        }
+        gate.close(&mut self.src);
+        uwriteln!(self.src, "Ok(())\n}}");
     }
 
     fn generate_add_resource_to_linker(
@@ -1804,6 +1769,7 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Handle(handle) => self.type_handle(id, name, handle, &ty.docs),
             TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs),
             TypeDefKind::Unknown => unreachable!(),
+            TypeDefKind::FixedSizeList(..) => todo!(),
         }
     }
 
@@ -2663,7 +2629,7 @@ impl<'a> InterfaceGenerator<'a> {
         let (data_bounds, mut host_bounds, mut get_host_bounds) =
             match self.generator.opts.call_style() {
                 CallStyle::Async => (
-                    "T: Send,".to_string(),
+                    "Send + 'static,",
                     "Host + Send".to_string(),
                     "Host + Send".to_string(),
                 ),
@@ -2676,12 +2642,12 @@ impl<'a> InterfaceGenerator<'a> {
                     );
 
                     (
-                        "T: Send + 'static,".to_string(),
+                        "Send + 'static,",
                         format!("Host{} + Send", constraints("T")),
                         format!("Host{} + Send", constraints("D")),
                     )
                 }
-                CallStyle::Sync => (String::new(), "Host".to_string(), "Host".to_string()),
+                CallStyle::Sync => ("'static", "Host".to_string(), "Host".to_string()),
             };
 
         for ty in required_conversion_traits {
@@ -2689,39 +2655,24 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(get_host_bounds, " + {ty}");
         }
 
-        let (options_param, options_arg) = if self.generator.interface_link_options[&id].has_any() {
-            ("options: &LinkOptions,", ", options")
+        let options_param = if self.generator.interface_link_options[&id].has_any() {
+            "options: &LinkOptions,"
         } else {
-            ("", "")
+            ""
         };
 
         uwriteln!(
             self.src,
             "
-                pub trait GetHost<T, D>:
-                    Fn(T) -> <Self as GetHost<T, D>>::Host
-                        + Send
-                        + Sync
-                        + Copy
-                        + 'static
-                {{
-                    type Host: {get_host_bounds};
-                }}
-
-                impl<F, T, D, O> GetHost<T, D> for F
-                where
-                    F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                    O: {get_host_bounds},
-                {{
-                    type Host = O;
-                }}
-
-                pub fn add_to_linker_get_host<T, G: for<'a> GetHost<&'a mut T, T, Host: {host_bounds}>>(
+                pub fn add_to_linker<T, D>(
                     linker: &mut {wt}::component::Linker<T>,
                     {options_param}
-                    host_getter: G,
+                    host_getter: fn(&mut T) -> D::Data<'_>,
                 ) -> {wt}::Result<()>
-                    where {data_bounds}
+                    where
+                        D: {wt}::component::HasData,
+                        for<'a> D::Data<'a>: {host_bounds},
+                        T: {data_bounds}
                 {{
             "
         );
@@ -2748,23 +2699,6 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(self.src, "}}");
 
         if !self.generator.opts.skip_mut_forwarding_impls {
-            // Generate add_to_linker (with closure)
-            uwriteln!(
-                self.src,
-                "
-                pub fn add_to_linker<T, U>(
-                    linker: &mut {wt}::component::Linker<T>,
-                    {options_param}
-                    get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-                ) -> {wt}::Result<()>
-                    where
-                        U: {host_bounds}, {data_bounds}
-                {{
-                    add_to_linker_get_host(linker {options_arg}, get)
-                }}
-                "
-            );
-
             // Generate impl Host for &mut Host
             let maybe_send = if is_maybe_async { "+ Send" } else { "" };
 
@@ -2966,7 +2900,7 @@ impl<'a> InterfaceGenerator<'a> {
         if let CallStyle::Concurrent = &style {
             uwrite!(
                 self.src,
-                "let r = <G::Host as {host_trait}>::{func_name}(host, "
+                "let r = <D::Data<'_> as {host_trait}>::{func_name}(host, "
             );
         } else {
             uwrite!(self.src, "let r = {host_trait}::{func_name}(host, ");
@@ -3088,7 +3022,10 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(" -> ");
 
         if let CallStyle::Concurrent = &style {
-            uwrite!(self.src, "impl ::core::future::Future<Output = impl FnOnce(wasmtime::StoreContextMut<'_, Self::{data}>) -> ");
+            uwrite!(
+                self.src,
+                "impl ::core::future::Future<Output = impl FnOnce(wasmtime::StoreContextMut<'_, Self::{data}>) -> "
+            );
         }
 
         if !self.generator.opts.trappable_imports.can_trap(func) {
@@ -3176,13 +3113,21 @@ impl<'a> InterfaceGenerator<'a> {
         if concurrent {
             uwrite!(self.src, ">");
         }
+        uwrite!(self.src, ">");
 
-        let maybe_static = if concurrent { " + 'static" } else { "" };
-
-        uwrite!(
-            self.src,
-            "> where <S as {wt}::AsContext>::Data: Send{maybe_static} {{\n"
-        );
+        match style {
+            CallStyle::Concurrent => {
+                uwrite!(
+                    self.src,
+                    " where <S as {wt}::AsContext>::Data: Send + 'static",
+                );
+            }
+            CallStyle::Async => {
+                uwrite!(self.src, " where <S as {wt}::AsContext>::Data: Send");
+            }
+            CallStyle::Sync => {}
+        }
+        uwrite!(self.src, "{{\n");
 
         // TODO: support tracing concurrent calls
         if self.generator.opts.tracing && !concurrent {
@@ -3586,6 +3531,7 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
                 .any(|case| option_type_contains_lists(case.ty, resolve)),
             TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
             TypeDefKind::List(_) => true,
+            TypeDefKind::FixedSizeList(..) => todo!(),
         },
 
         // Technically strings are lists too, but we ignore that here because

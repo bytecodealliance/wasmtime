@@ -1,7 +1,7 @@
 use crate::cdsl::formats::InstructionFormat;
 use crate::cdsl::instructions::AllInstructions;
 use crate::error;
-use cranelift_srcgen::{fmtln, Formatter, Language};
+use cranelift_srcgen::{Formatter, Language, fmtln};
 use std::rc::Rc;
 
 /// Which ISLE target are we generating code for?

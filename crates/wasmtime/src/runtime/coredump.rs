@@ -1,8 +1,8 @@
 use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{
-    store::StoreOpaque, AsContextMut, FrameInfo, Global, HeapType, Instance, Memory, Module,
-    StoreContextMut, Val, ValType, WasmBacktrace,
+    AsContextMut, FrameInfo, Global, HeapType, Instance, Memory, Module, StoreContextMut, Val,
+    ValType, WasmBacktrace, store::StoreOpaque,
 };
 use std::fmt;
 
@@ -103,7 +103,7 @@ impl WasmCoreDump {
         self._serialize(store, name)
     }
 
-    fn _serialize<T>(&self, mut store: StoreContextMut<'_, T>, name: &str) -> Vec<u8> {
+    fn _serialize<T: 'static>(&self, mut store: StoreContextMut<'_, T>, name: &str) -> Vec<u8> {
         let mut core_dump = wasm_encoder::Module::new();
 
         core_dump.section(&wasm_encoder::CoreDumpSection::new(name));
@@ -192,8 +192,8 @@ impl WasmCoreDump {
                 let init = match g.get(&mut store) {
                     Val::I32(x) => wasm_encoder::ConstExpr::i32_const(x),
                     Val::I64(x) => wasm_encoder::ConstExpr::i64_const(x),
-                    Val::F32(x) => wasm_encoder::ConstExpr::f32_const(f32::from_bits(x)),
-                    Val::F64(x) => wasm_encoder::ConstExpr::f64_const(f64::from_bits(x)),
+                    Val::F32(x) => wasm_encoder::ConstExpr::f32_const(f32::from_bits(x).into()),
+                    Val::F64(x) => wasm_encoder::ConstExpr::f64_const(f64::from_bits(x).into()),
                     Val::V128(x) => wasm_encoder::ConstExpr::v128_const(x.as_u128() as i128),
                     Val::FuncRef(_) => {
                         wasm_encoder::ConstExpr::ref_null(wasm_encoder::HeapType::FUNC)

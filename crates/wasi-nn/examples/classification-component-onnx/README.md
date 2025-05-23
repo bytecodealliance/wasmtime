@@ -5,17 +5,20 @@ This example demonstrates how to use the `wasi-nn` crate to run a classification
 
 ## Build
 In this directory, run the following command to build the WebAssembly component:
-```shell
+```console
 cargo component build
 ```
 
 In the Wasmtime root directory, run the following command to build the Wasmtime CLI and run the WebAssembly component:
-```shell
+```sh
 # build wasmtime with component-model and WASI-NN with ONNX runtime support
 cargo build --features component-model,wasi-nn,wasmtime-wasi-nn/onnx
 
 # run the component with wasmtime
-./target/debug/wasmtime run -Snn --dir ./crates/wasi-nn/examples/classification-component-onnx/fixture/::fixture ./crates/wasi-nn/examples/classification-component-onnx/target/wasm32-wasip1/debug/classification-component-onnx.wasm
+./target/debug/wasmtime run \
+    -Snn \
+    --dir ./crates/wasi-nn/examples/classification-component-onnx/fixture/::fixture \
+    ./crates/wasi-nn/examples/classification-component-onnx/target/wasm32-wasip1/debug/classification-component-onnx.wasm
 ```
 
 You should get the following output:

@@ -1,6 +1,6 @@
 use crate::{
-    store::{AutoAssertNoGc, StoreOpaque},
     HeapType, Ref, RefType, Result, Uninhabited, Val, ValRaw, ValType, WasmTy,
+    store::{AutoAssertNoGc, StoreOpaque},
 };
 use core::mem::MaybeUninit;
 

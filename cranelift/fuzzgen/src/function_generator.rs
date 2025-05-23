@@ -9,9 +9,9 @@ use cranelift::codegen::ir::instructions::{InstructionFormat, ResolvedConstraint
 use cranelift::codegen::ir::stackslot::StackSize;
 
 use cranelift::codegen::ir::{
-    types::*, AliasRegion, AtomicRmwOp, Block, BlockArg, ConstantData, Endianness, ExternalName,
-    FuncRef, Function, LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName,
-    UserFuncName, Value,
+    AliasRegion, AtomicRmwOp, Block, BlockArg, ConstantData, Endianness, ExternalName, FuncRef,
+    Function, LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName, UserFuncName, Value,
+    types::*,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};

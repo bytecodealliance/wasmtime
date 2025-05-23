@@ -5,7 +5,7 @@ use super::env::HeapData;
 use crate::{
     abi::{scratch, vmctx},
     codegen::{CodeGenContext, Emission},
-    isa::reg::{writable, Reg},
+    isa::reg::{Reg, writable},
     masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},
     stack::TypedReg,
 };

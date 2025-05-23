@@ -1,4 +1,4 @@
-use crate::{wasm_engine_t, wasmtime_error_t, wasmtime_val_t, ForeignData};
+use crate::{ForeignData, wasm_engine_t, wasmtime_error_t, wasmtime_val_t};
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
 use std::sync::Arc;

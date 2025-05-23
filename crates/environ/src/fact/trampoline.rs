@@ -16,11 +16,11 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    CanonicalAbiInfo, ComponentTypesBuilder, FixedEncoding as FE, FlatType, InterfaceType,
-    StringEncoding, Transcode, TypeComponentLocalErrorContextTableIndex, TypeEnumIndex,
-    TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
-    TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
-    TypeVariantIndex, VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS,
+    CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FixedEncoding as FE,
+    FlatType, InterfaceType, MAX_FLAT_PARAMS, StringEncoding, Transcode,
+    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFlagsIndex, TypeFutureTableIndex,
+    TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex,
+    TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
@@ -2892,8 +2892,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
                         match ty {
                             ValType::I32 => self.instruction(I32Const(0)),
                             ValType::I64 => self.instruction(I64Const(0)),
-                            ValType::F32 => self.instruction(F32Const(0.0)),
-                            ValType::F64 => self.instruction(F64Const(0.0)),
+                            ValType::F32 => self.instruction(F32Const(0.0.into())),
+                            ValType::F64 => self.instruction(F64Const(0.0.into())),
                             _ => unreachable!(),
                         }
                     }

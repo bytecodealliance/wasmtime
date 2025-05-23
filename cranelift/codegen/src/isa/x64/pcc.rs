@@ -3,11 +3,10 @@
 use crate::ir::pcc::*;
 use crate::ir::types::*;
 use crate::isa::x64::args::AvxOpcode;
-use crate::isa::x64::inst::args::{
-    AluRmiROpcode, Amode, Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind, SseOpcode, SyntheticAmode,
-    ToWritableReg, CC,
-};
 use crate::isa::x64::inst::Inst;
+use crate::isa::x64::inst::args::{
+    Amode, CC, Gpr, RegMem, RegMemImm, SseOpcode, SyntheticAmode, ToWritableReg,
+};
 use crate::machinst::pcc::*;
 use crate::machinst::{InsnIndex, VCode, VCodeConstantData};
 use crate::machinst::{Reg, Writable};
@@ -63,101 +62,6 @@ pub(crate) fn check(
             Ok(())
         }
 
-        Inst::AluRmiR {
-            size,
-            op: AluRmiROpcode::Add,
-            src1,
-            ref src2,
-            dst,
-        } => match *<&RegMemImm>::from(src2) {
-            RegMemImm::Reg { reg: src2 } => {
-                let bits = size.to_bits().into();
-                check_binop(
-                    ctx,
-                    vcode,
-                    64,
-                    dst.to_writable_reg(),
-                    src1.to_reg(),
-                    src2,
-                    |src1, src2| clamp_range(ctx, 64, bits, ctx.add(src1, src2, bits)),
-                )
-            }
-            RegMemImm::Imm { simm32 } => {
-                let bits = size.to_bits().into();
-                check_unop(
-                    ctx,
-                    vcode,
-                    64,
-                    dst.to_writable_reg(),
-                    src1.to_reg(),
-                    |src1| {
-                        let simm32: i64 = simm32.into();
-                        clamp_range(ctx, 64, bits, ctx.offset(src1, bits, simm32))
-                    },
-                )
-            }
-            RegMemImm::Mem { ref addr } => {
-                let bits: u16 = size.to_bits().into();
-                let loaded = check_load(ctx, None, addr, vcode, size.to_type(), bits)?;
-                check_unop(ctx, vcode, 64, dst.to_writable_reg(), src1.into(), |src1| {
-                    let sum = loaded.and_then(|loaded| ctx.add(src1, &loaded, bits));
-                    clamp_range(ctx, 64, bits, sum)
-                })
-            }
-        },
-
-        Inst::AluRmiR {
-            size,
-            op: AluRmiROpcode::Sub,
-            src1,
-            ref src2,
-            dst,
-        } => match *<&RegMemImm>::from(src2) {
-            RegMemImm::Imm { simm32 } => {
-                let bits = size.to_bits().into();
-                check_unop(
-                    ctx,
-                    vcode,
-                    64,
-                    dst.to_writable_reg(),
-                    src1.to_reg(),
-                    |src1| {
-                        let simm32: i64 = simm32.into();
-                        clamp_range(ctx, 64, bits, ctx.offset(src1, bits, -simm32))
-                    },
-                )
-            }
-            RegMemImm::Reg { .. } => {
-                let bits: u16 = size.to_bits().into();
-                check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-                    clamp_range(ctx, 64, bits, None)
-                })
-            }
-            RegMemImm::Mem { ref addr } => {
-                let loaded = check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-                check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-                    clamp_range(ctx, 64, size.to_bits().into(), loaded)
-                })
-            }
-        },
-
-        Inst::AluRmiR {
-            size,
-            ref src2,
-            dst,
-            ..
-        } => match <&RegMemImm>::from(src2) {
-            RegMemImm::Mem { addr } => {
-                let loaded = check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-                check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-                    clamp_range(ctx, 64, size.to_bits().into(), loaded)
-                })
-            }
-            RegMemImm::Reg { .. } | RegMemImm::Imm { .. } => {
-                undefined_result(ctx, vcode, dst, 64, size.to_bits().into())
-            }
-        },
-
         Inst::AluRmRVex {
             size,
             ref src2,
@@ -173,20 +77,7 @@ pub(crate) fn check(
             RegMem::Reg { .. } => undefined_result(ctx, vcode, dst, 64, size.to_bits().into()),
         },
 
-        Inst::AluConstOp {
-            op: AluRmiROpcode::Xor,
-            dst,
-            ..
-        } => check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-            Ok(Some(Fact::constant(64, 0)))
-        }),
-
-        Inst::AluConstOp { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
-
-        Inst::UnaryRmR {
-            size, ref src, dst, ..
-        }
-        | Inst::UnaryRmRVex {
+        Inst::UnaryRmRVex {
             size, ref src, dst, ..
         }
         | Inst::UnaryRmRImmVex {
@@ -201,49 +92,7 @@ pub(crate) fn check(
             RegMem::Reg { .. } => undefined_result(ctx, vcode, dst, 64, size.to_bits().into()),
         },
 
-        Inst::Not { size, dst, .. } | Inst::Neg { size, dst, .. } => {
-            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())
-        }
-
-        Inst::Div {
-            size,
-            ref divisor,
-            dst_quotient,
-            dst_remainder,
-            ..
-        } => {
-            match <&RegMem>::from(divisor) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            undefined_result(ctx, vcode, dst_quotient, 64, 64)?;
-            undefined_result(ctx, vcode, dst_remainder, 64, 64)?;
-            Ok(())
-        }
-        Inst::Div8 {
-            dst, ref divisor, ..
-        } => {
-            match <&RegMem>::from(divisor) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, I8, 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            // 64-bit result width because result may be negative
-            // hence high bits set.
-            undefined_result(ctx, vcode, dst, 64, 64)?;
-            Ok(())
-        }
-        Inst::Mul {
-            size,
-            dst_lo,
-            dst_hi,
-            ref src2,
-            ..
-        }
-        | Inst::MulX {
+        Inst::MulX {
             size,
             dst_lo,
             dst_hi,
@@ -260,46 +109,6 @@ pub(crate) fn check(
             undefined_result(ctx, vcode, dst_hi, 64, size.to_bits().into())?;
             Ok(())
         }
-        Inst::Mul8 { dst, ref src2, .. } => {
-            match <&RegMem>::from(src2) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, I8, 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            undefined_result(ctx, vcode, dst, 64, 16)?;
-            Ok(())
-        }
-        Inst::IMul {
-            size,
-            dst,
-            ref src2,
-            ..
-        } => {
-            match <&RegMem>::from(src2) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())?;
-            Ok(())
-        }
-        Inst::IMulImm {
-            size,
-            dst,
-            ref src1,
-            ..
-        } => {
-            match <&RegMem>::from(src1) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())?;
-            Ok(())
-        }
         Inst::CheckedSRemSeq {
             dst_quotient,
             dst_remainder,
@@ -311,8 +120,6 @@ pub(crate) fn check(
         }
 
         Inst::CheckedSRemSeq8 { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
-
-        Inst::SignExtendData { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
 
         Inst::Imm { simm64, dst, .. } => {
             check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
@@ -398,40 +205,6 @@ pub(crate) fn check(
 
         Inst::MovRM { size, src, ref dst } => {
             check_store(ctx, Some(src.to_reg()), dst, vcode, size.to_type())
-        }
-
-        Inst::ShiftR {
-            size,
-            kind: ShiftKind::ShiftLeft,
-            src,
-            ref num_bits,
-            dst,
-        } => match num_bits.as_imm8_reg() {
-            &Imm8Reg::Imm8 { imm } => {
-                check_unop(ctx, vcode, 64, dst.to_writable_reg(), src.to_reg(), |src| {
-                    clamp_range(
-                        ctx,
-                        64,
-                        size.to_bits().into(),
-                        ctx.shl(src, size.to_bits().into(), imm.into()),
-                    )
-                })
-            }
-            Imm8Reg::Reg { .. } => undefined_result(ctx, vcode, dst, 64, size.to_bits().into()),
-        },
-
-        Inst::ShiftR { size, dst, .. } => {
-            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())
-        }
-
-        Inst::XmmRmiReg { dst, ref src2, .. } => {
-            match <&RegMemImm>::from(src2) {
-                RegMemImm::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
-                }
-                _ => {}
-            }
-            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
 
         Inst::CmpRmiR {
@@ -717,8 +490,7 @@ pub(crate) fn check(
             undefined_result(ctx, vcode, dst, 64, 64)
         }
 
-        Inst::CvtIntToFloat { dst, ref src2, .. }
-        | Inst::CvtIntToFloatVex { dst, ref src2, .. } => {
+        Inst::CvtIntToFloatVex { dst, ref src2, .. } => {
             match <&RegMem>::from(src2) {
                 RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I64, 64)?;
@@ -957,6 +729,10 @@ pub(crate) fn check(
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
 
+        Inst::GprUninitializedValue { dst } => {
+            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
+        }
+
         Inst::ElfTlsGetAddr { dst, .. } | Inst::MachOTlsGetAddr { dst, .. } => {
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
@@ -1031,8 +807,7 @@ fn check_mem<'a>(
             let loaded_fact = clamp_range(ctx, to_bits, from_bits, ctx.load(&addr, ty)?.cloned())?;
             trace!(
                 "loaded_fact = {:?} result_fact = {:?}",
-                loaded_fact,
-                result_fact
+                loaded_fact, result_fact
             );
             if ctx.subsumes_fact_optionals(loaded_fact.as_ref(), result_fact) {
                 Ok(loaded_fact.clone())

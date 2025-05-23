@@ -1,6 +1,6 @@
 //! Raw bindings to the `wasi:http` package.
 
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "bindgen-generated code")]
 mod generated {
     use crate::body;
     use crate::types;
@@ -51,9 +51,8 @@ pub use self::generated::{Proxy, ProxyIndices, ProxyPre};
 
 /// Sync implementation of the `wasi:http/proxy` world.
 pub mod sync {
-    #[allow(missing_docs)]
+    #[expect(missing_docs, reason = "bindgen-generated code")]
     mod generated {
-        #![allow(missing_docs)]
         wasmtime::component::bindgen!({
             world: "wasi:http/proxy",
             tracing: true,

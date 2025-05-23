@@ -1,5 +1,5 @@
 use crate::{wasm_frame_vec_t, wasm_instance_t, wasm_name_t, wasm_store_t};
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use std::cell::OnceCell;
 use wasmtime::{Trap, WasmBacktrace};
 
@@ -66,6 +66,14 @@ pub unsafe extern "C" fn wasmtime_trap_new(message: *const u8, len: usize) -> Bo
 }
 
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_trap_new_code(code: u8) -> Box<wasm_trap_t> {
+    let trap = Trap::from_u8(code).unwrap();
+    Box::new(wasm_trap_t {
+        error: Error::new(trap),
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_trap_message(trap: &wasm_trap_t, out: &mut wasm_message_t) {
     let mut buffer = Vec::new();
     buffer.extend_from_slice(format!("{:?}", trap.error).as_bytes());
@@ -121,22 +129,7 @@ pub extern "C" fn wasmtime_trap_code(raw: &wasm_trap_t, code: &mut u8) -> bool {
         Some(trap) => trap,
         None => return false,
     };
-    *code = match trap {
-        Trap::StackOverflow => 0,
-        Trap::MemoryOutOfBounds => 1,
-        Trap::HeapMisaligned => 2,
-        Trap::TableOutOfBounds => 3,
-        Trap::IndirectCallToNull => 4,
-        Trap::BadSignature => 5,
-        Trap::IntegerOverflow => 6,
-        Trap::IntegerDivisionByZero => 7,
-        Trap::BadConversionToInteger => 8,
-        Trap::UnreachableCodeReached => 9,
-        Trap::Interrupt => 10,
-        Trap::OutOfFuel => 11,
-        Trap::AlwaysTrapAdapter => unreachable!("component model not supported"),
-        _ => unreachable!(),
-    };
+    *code = *trap as u8;
     true
 }
 

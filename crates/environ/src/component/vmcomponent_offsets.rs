@@ -14,8 +14,8 @@
 //      resource_destructors: [*mut VMFuncRef; component.num_resources],
 // }
 
-use crate::component::*;
 use crate::PtrSize;
+use crate::component::*;
 
 /// Equivalent of `VMCONTEXT_MAGIC` except for components.
 ///

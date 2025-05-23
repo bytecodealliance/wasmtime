@@ -3,7 +3,7 @@
 use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType, WasmtimeConfig};
 use crate::oracles::dummy;
 use crate::oracles::engine::DiffInstance;
-use crate::oracles::{compile_module, engine::DiffEngine, StoreLimits};
+use crate::oracles::{StoreLimits, compile_module, engine::DiffEngine};
 use crate::single_module_fuzzer::KnownValid;
 use anyhow::{Context, Error, Result};
 use arbitrary::Unstructured;

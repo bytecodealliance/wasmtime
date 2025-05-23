@@ -1,5 +1,5 @@
-use crate::debug::Compilation;
 use crate::FunctionAddressMap;
+use crate::debug::Compilation;
 use gimli::write;
 use std::collections::BTreeMap;
 use wasmtime_environ::{DefinedFuncIndex, FilePos, PrimaryMap, StaticModuleIndex};
@@ -661,7 +661,7 @@ impl AddressTransform {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_function_lookup, get_wasm_code_offset, AddressTransform};
+    use super::{AddressTransform, build_function_lookup, get_wasm_code_offset};
     use crate::{CompiledFunctionMetadata, FunctionAddressMap};
     use cranelift_entity::PrimaryMap;
     use gimli::write::Address;

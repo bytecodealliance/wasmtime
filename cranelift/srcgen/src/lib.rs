@@ -381,10 +381,10 @@ impl Match {
 
 #[cfg(test)]
 mod srcgen_tests {
-    use super::parse_multiline;
     use super::Formatter;
     use super::Language;
     use super::Match;
+    use super::parse_multiline;
 
     fn from_raw_string<S: Into<String>>(s: S) -> Vec<String> {
         s.into()

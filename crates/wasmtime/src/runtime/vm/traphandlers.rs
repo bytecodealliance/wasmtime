@@ -18,8 +18,8 @@ pub use self::signals::*;
 use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
-use crate::runtime::vm::{InterpreterRef, VMContext, VMStoreContext};
-use crate::{prelude::*, EntryStoreContext};
+use crate::runtime::vm::{InterpreterRef, VMContext, VMStoreContext, f32x4, f64x2, i8x16};
+use crate::{EntryStoreContext, prelude::*};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
@@ -179,6 +179,11 @@ host_result_no_catch! {
     u32,
     *mut u8,
     u64,
+    f32,
+    f64,
+    i8x16,
+    f32x4,
+    f64x2,
 }
 
 impl HostResult for NonNull<u8> {
@@ -427,9 +432,8 @@ where
 // usage of its accessor methods.
 mod call_thread_state {
     use super::*;
-    use crate::runtime::vm::stack_switching::VMStackChain;
-    use crate::runtime::vm::Unwind;
     use crate::EntryStoreContext;
+    use crate::runtime::vm::{Unwind, VMStackChain};
 
     /// Temporary state stored on the stack which is registered in the `tls`
     /// module below for calls into wasm.

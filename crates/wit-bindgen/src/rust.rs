@@ -1,4 +1,4 @@
-use crate::{types::TypeInfo, Ownership};
+use crate::{Ownership, types::TypeInfo};
 use heck::*;
 use wit_parser::*;
 
@@ -132,6 +132,7 @@ pub trait RustGenerator<'a> {
                     TypeDefKind::Type(Type::String) => true,
                     TypeDefKind::Type(_) => false,
                     TypeDefKind::Unknown => unreachable!(),
+                    TypeDefKind::FixedSizeList(..) => todo!(),
                 }
             }
         }
@@ -187,6 +188,7 @@ pub trait RustGenerator<'a> {
 
             TypeDefKind::Type(t) => self.ty(t, mode),
             TypeDefKind::Unknown => unreachable!(),
+            TypeDefKind::FixedSizeList(..) => todo!(),
         }
     }
 

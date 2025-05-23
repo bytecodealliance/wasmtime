@@ -1,17 +1,17 @@
 //! X86_64-bit Instruction Set Architecture.
 
-pub use self::inst::{args, AtomicRmwSeqOp, EmitInfo, EmitState, Inst};
+pub use self::inst::{AtomicRmwSeqOp, EmitInfo, EmitState, Inst, args, external};
 
 use super::{OwnedTargetIsa, TargetIsa};
 use crate::dominator_tree::DominatorTree;
-use crate::ir::{self, types, Function, Type};
+use crate::ir::{self, Function, Type, types};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
-    TextSectionBuilder, VCode,
+    CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode, compile,
 };
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};
@@ -165,6 +165,10 @@ impl TargetIsa for X64Backend {
 
     fn has_native_fma(&self) -> bool {
         self.x64_flags.use_fma()
+    }
+
+    fn has_round(&self) -> bool {
+        self.x64_flags.use_sse41()
     }
 
     fn has_x86_blendv_lowering(&self, ty: Type) -> bool {

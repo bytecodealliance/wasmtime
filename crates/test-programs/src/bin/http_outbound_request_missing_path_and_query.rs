@@ -1,4 +1,4 @@
-use test_programs::wasi::http::outgoing_handler::{handle, OutgoingRequest};
+use test_programs::wasi::http::outgoing_handler::{OutgoingRequest, handle};
 use test_programs::wasi::http::types::{Fields, Method, Scheme};
 
 fn main() {

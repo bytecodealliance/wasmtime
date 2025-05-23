@@ -8,13 +8,13 @@ mod settings;
 use self::inst::EmitInfo;
 use super::{Builder as IsaBuilder, FunctionAlignment};
 use crate::{
+    MachTextSectionBuilder, TextSectionBuilder,
     dominator_tree::DominatorTree,
     ir,
     isa::{self, OwnedTargetIsa, TargetIsa},
     machinst::{self, CompiledCodeStencil, MachInst, SigSet, VCode},
     result::CodegenResult,
     settings::{self as shared_settings, Flags},
-    MachTextSectionBuilder, TextSectionBuilder,
 };
 use alloc::boxed::Box;
 use alloc::vec::Vec;
@@ -225,7 +225,13 @@ where
     }
 
     fn has_native_fma(&self) -> bool {
-        false
+        // The pulley interpreter does have fma opcodes.
+        true
+    }
+
+    fn has_round(&self) -> bool {
+        // The pulley interpreter does have rounding opcodes.
+        true
     }
 
     fn has_x86_blendv_lowering(&self, _ty: ir::Type) -> bool {

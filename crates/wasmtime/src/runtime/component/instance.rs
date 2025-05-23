@@ -1,8 +1,8 @@
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
 use crate::component::{
-    types::ComponentItem, Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower,
-    ResourceType, TypedFunc,
+    Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower, ResourceType,
+    TypedFunc, types::ComponentItem,
 };
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
@@ -14,7 +14,7 @@ use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
 use core::ptr::NonNull;
-use wasmtime_environ::{component::*, EngineOrModuleTypeIndex};
+use wasmtime_environ::{EngineOrModuleTypeIndex, component::*};
 use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
 
 /// An instantiated component.
@@ -363,7 +363,7 @@ impl Instance {
         ))
     }
 
-    #[doc(hidden)]
+    /// Returns the [`InstancePre`] that was used to create this instance.
     pub fn instance_pre<T>(&self, store: &impl AsContext<Data = T>) -> InstancePre<T> {
         // This indexing operation asserts the Store owns the Instance.
         // Therefore, the InstancePre<T> must match the Store<T>.
@@ -826,7 +826,7 @@ impl<'a> Instantiator<'a> {
 /// type is created. This type is primarily created through the
 /// [`Linker::instantiate_pre`](crate::component::Linker::instantiate_pre)
 /// method.
-pub struct InstancePre<T> {
+pub struct InstancePre<T: 'static> {
     component: Component,
     imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
     resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
@@ -834,7 +834,7 @@ pub struct InstancePre<T> {
 }
 
 // `InstancePre`'s clone does not require `T: Clone`
-impl<T> Clone for InstancePre<T> {
+impl<T: 'static> Clone for InstancePre<T> {
     fn clone(&self) -> Self {
         Self {
             component: self.component.clone(),
@@ -845,7 +845,7 @@ impl<T> Clone for InstancePre<T> {
     }
 }
 
-impl<T> InstancePre<T> {
+impl<T: 'static> InstancePre<T> {
     /// This function is `unsafe` since there's no guarantee that the
     /// `RuntimeImport` items provided are guaranteed to work with the `T` of
     /// the store.

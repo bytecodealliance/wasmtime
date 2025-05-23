@@ -1,12 +1,29 @@
 test compile precise-output
+set enable_multi_ret_implicit_sret
 target s390x
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; F32CONST/F64CONST
+;; f16const/f32const/f64const/f128const
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ; FIXME: should use FZERO instruction
 ; FIXME: should use out-of-line literal pool
+
+function %f16const_zero() -> f16 {
+block0:
+  v1 = f16const 0x0.0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vleih %v0, 0, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vleih %v0, 0, 0
+;   br %r14
 
 function %f32const_zero() -> f32 {
 block0:
@@ -16,16 +33,20 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 8 ; data.f32 0 ; le %f0, 0(%r1)
+;   larl %r1, [const(0)] ; le %f0, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 8
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x10
 ;   le %f0, 0(%r1)
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %f64const_zero() -> f64 {
 block0:
@@ -35,17 +56,53 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 12 ; data.f64 0 ; ld %f0, 0(%r1)
+;   larl %r1, [const(0)] ; ld %f0, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0xc
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x10
 ;   ld %f0, 0(%r1)
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+
+function %f128const_zero() -> f128 {
+block0:
+  v1 = f128const 0x0.0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vgbm %v2, 0
+;   vst %v2, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vzero %v2
+;   vst %v2, 0(%r2)
+;   br %r14
+
+function %f16const_one() -> f16 {
+block0:
+  v1 = f16const 0x1.0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vleih %v0, 15360, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vleih %v0, 0x3c00, 0
 ;   br %r14
 
 function %f32const_one() -> f32 {
@@ -56,16 +113,20 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 8 ; data.f32 1 ; le %f0, 0(%r1)
+;   larl %r1, [const(0)] ; le %f0, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 8
-;   sur %f8, %f0
-;   .byte 0x00, 0x00
+;   larl %r1, 0x10
 ;   le %f0, 0(%r1)
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sur %f8, %f0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %f64const_one() -> f64 {
 block0:
@@ -75,18 +136,53 @@ block0:
 
 ; VCode:
 ; block0:
-;   bras %r1, 12 ; data.f64 1 ; ld %f0, 0(%r1)
+;   larl %r1, [const(0)] ; ld %f0, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0xc
+;   larl %r1, 0x10
+;   ld %f0, 0(%r1)
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   sur %f15, %f0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   ld %f0, 0(%r1)
+
+function %f128const_one() -> f128 {
+block0:
+  v1 = f128const 0x1.0
+  return v1
+}
+
+; VCode:
+; block0:
+;   larl %r1, [const(0)] ; vl %v2, 0(%r1)
+;   vst %v2, 0(%r2)
 ;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   larl %r1, 0x20
+;   vl %v2, 0(%r1)
+;   vst %v2, 0(%r2)
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sur %f15, %f15
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %fadd_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
@@ -118,6 +214,28 @@ block0(v0: f64, v1: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   adbr %f0, %f2
+;   br %r14
+
+function %fadd_f128(f128, f128) -> f128 {
+block0(v0: f128, v1: f128):
+  v2 = fadd v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfaxb %f6, %f1, %f3
+;   vst %v6, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfaxb %v6, %v1, %v3
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %fsub_f32(f32, f32) -> f32 {
@@ -152,6 +270,28 @@ block0(v0: f64, v1: f64):
 ;   sdbr %f0, %f2
 ;   br %r14
 
+function %fsub_f128(f128, f128) -> f128 {
+block0(v0: f128, v1: f128):
+  v2 = fsub v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfsxb %f6, %f1, %f3
+;   vst %v6, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfsxb %v6, %v1, %v3
+;   vst %v6, 0(%r2)
+;   br %r14
+
 function %fmul_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
   v2 = fmul v0, v1
@@ -182,6 +322,28 @@ block0(v0: f64, v1: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   mdbr %f0, %f2
+;   br %r14
+
+function %fmul_f128(f128, f128) -> f128 {
+block0(v0: f128, v1: f128):
+  v2 = fmul v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfmxb %f6, %f1, %f3
+;   vst %v6, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfmxb %v6, %v1, %v3
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %fdiv_f32(f32, f32) -> f32 {
@@ -216,6 +378,28 @@ block0(v0: f64, v1: f64):
 ;   ddbr %f0, %f2
 ;   br %r14
 
+function %fdiv_f128(f128, f128) -> f128 {
+block0(v0: f128, v1: f128):
+  v2 = fdiv v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfdxb %f6, %f1, %f3
+;   vst %v6, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfdxb %v6, %v1, %v3
+;   vst %v6, 0(%r2)
+;   br %r14
+
 function %fmin_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
   v2 = fmin v0, v1
@@ -248,6 +432,28 @@ block0(v0: f64, v1: f64):
 ;   wfmindb %f0, %f0, %f2, 1
 ;   br %r14
 
+function %fmin_f128(f128, f128) -> f128 {
+block0(v0: f128, v1: f128):
+  v2 = fmin v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfminxb %f6, %f1, %f3, 1
+;   vst %v6, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfminxb %v6, %v1, %v3, 1
+;   vst %v6, 0(%r2)
+;   br %r14
+
 function %fmax_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
   v2 = fmax v0, v1
@@ -278,6 +484,28 @@ block0(v0: f64, v1: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   wfmaxdb %f0, %f0, %f2, 1
+;   br %r14
+
+function %fmax_f128(f128, f128) -> f128 {
+block0(v0: f128, v1: f128):
+  v2 = fmax v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfmaxxb %f6, %f1, %f3, 1
+;   vst %v6, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfmaxxb %v6, %v1, %v3, 1
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %fmin_pseudo_f32(f32, f32) -> f32 {
@@ -314,6 +542,29 @@ block0(v0: f64, v1: f64):
 ;   wfmindb %f0, %f0, %f2, 3
 ;   br %r14
 
+function %fmin_pseudo_f128(f128, f128) -> f128 {
+block0(v0: f128, v1: f128):
+  v2 = fcmp lt v1, v0
+  v3 = select v2, v1, v0
+  return v3
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfminxb %f6, %f1, %f3, 3
+;   vst %v6, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfminxb %v6, %v1, %v3, 3
+;   vst %v6, 0(%r2)
+;   br %r14
+
 function %fmax_pseudo_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
   v2 = fcmp lt v0, v1
@@ -348,6 +599,29 @@ block0(v0: f64, v1: f64):
 ;   wfmaxdb %f0, %f0, %f2, 3
 ;   br %r14
 
+function %fmax_pseudo_f128(f128, f128) -> f128 {
+block0(v0: f128, v1: f128):
+  v2 = fcmp lt v0, v1
+  v3 = select v2, v1, v0
+  return v3
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfmaxxb %f6, %f1, %f3, 3
+;   vst %v6, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   wfmaxxb %v6, %v1, %v3, 3
+;   vst %v6, 0(%r2)
+;   br %r14
+
 function %sqrt_f32(f32) -> f32 {
 block0(v0: f32):
   v1 = sqrt v0
@@ -378,6 +652,26 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   sqdbr %f0, %f0
+;   br %r14
+
+function %sqrt_f128(f128) -> f128 {
+block0(v0: f128):
+  v1 = sqrt v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   wfsqxb %f4, %f1
+;   vst %v4, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   wfsqxb %v4, %v1
+;   vst %v4, 0(%r2)
 ;   br %r14
 
 function %fabs_f32(f32) -> f32 {
@@ -412,6 +706,26 @@ block0(v0: f64):
 ;   lpdbr %f0, %f0
 ;   br %r14
 
+function %fabs_f128(f128) -> f128 {
+block0(v0: f128):
+  v1 = fabs v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   wflpxb %f4, %f1
+;   vst %v4, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   wflpxb %v4, %v1
+;   vst %v4, 0(%r2)
+;   br %r14
+
 function %fneg_f32(f32) -> f32 {
 block0(v0: f32):
   v1 = fneg v0
@@ -444,7 +758,27 @@ block0(v0: f64):
 ;   lcdbr %f0, %f0
 ;   br %r14
 
-function %fpromote_f32(f32) -> f64 {
+function %fneg_f128(f128) -> f128 {
+block0(v0: f128):
+  v1 = fneg v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   wflcxb %f4, %f1
+;   vst %v4, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   wflcxb %v4, %v1
+;   vst %v4, 0(%r2)
+;   br %r14
+
+function %fpromote_f32_f64(f32) -> f64 {
 block0(v0: f32):
   v1 = fpromote.f64 v0
   return v1
@@ -460,7 +794,45 @@ block0(v0: f32):
 ;   ldebr %f0, %f0
 ;   br %r14
 
-function %fdemote_f64(f64) -> f32 {
+function %fpromote_f64_f128(f64) -> f128 {
+block0(v0: f64):
+  v1 = fpromote.f128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   wflld %f3, %f0
+;   vst %v3, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   wflld %v3, %f0
+;   vst %v3, 0(%r2)
+;   br %r14
+
+function %fpromote_f32_f128(f32) -> f128 {
+block0(v0: f32):
+  v1 = fpromote.f128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   ldebr %f3, %f0
+;   wflld %f5, %f3
+;   vst %v5, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldebr %f3, %f0
+;   wflld %v5, %f3
+;   vst %v5, 0(%r2)
+;   br %r14
+
+function %fdemote_f64_f32(f64) -> f32 {
 block0(v0: f64):
   v1 = fdemote.f32 v0
   return v1
@@ -474,6 +846,44 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   ledbr %f0, %f0
+;   br %r14
+
+function %fdemote_f128_f64(f128) -> f64 {
+block0(v0: f128):
+  v1 = fdemote.f64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   wflrx %f0, %f1, 0, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   wflrx %f0, %v1, 0, 0
+;   br %r14
+
+function %fdemote_f128_f32(f128) -> f32 {
+block0(v0: f128):
+  v1 = fdemote.f32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   wflrx %f3, %f1, 0, 3
+;   ledbra %f0, 0, %f3, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   wflrx %f3, %v1, 0, 3
+;   ledbr %f0, %f3
 ;   br %r14
 
 function %ceil_f32(f32) -> f32 {
@@ -508,6 +918,26 @@ block0(v0: f64):
 ;   fidbr %f0, 6, %f0
 ;   br %r14
 
+function %ceil_f128(f128) -> f128 {
+block0(v0: f128):
+  v1 = ceil v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   wfixb %f4, %f1, 0, 6
+;   vst %v4, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   wfixb %v4, %v1, 0, 6
+;   vst %v4, 0(%r2)
+;   br %r14
+
 function %floor_f32(f32) -> f32 {
 block0(v0: f32):
   v1 = floor v0
@@ -538,6 +968,26 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fidbr %f0, 7, %f0
+;   br %r14
+
+function %floor_f128(f128) -> f128 {
+block0(v0: f128):
+  v1 = floor v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   wfixb %f4, %f1, 0, 7
+;   vst %v4, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   wfixb %v4, %v1, 0, 7
+;   vst %v4, 0(%r2)
 ;   br %r14
 
 function %trunc_f32(f32) -> f32 {
@@ -572,6 +1022,26 @@ block0(v0: f64):
 ;   fidbr %f0, 5, %f0
 ;   br %r14
 
+function %trunc_f128(f128) -> f128 {
+block0(v0: f128):
+  v1 = trunc v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   wfixb %f4, %f1, 0, 5
+;   vst %v4, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   wfixb %v4, %v1, 0, 5
+;   vst %v4, 0(%r2)
+;   br %r14
+
 function %nearest_f32(f32) -> f32 {
 block0(v0: f32):
   v1 = nearest v0
@@ -602,6 +1072,26 @@ block0(v0: f64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fidbr %f0, 4, %f0
+;   br %r14
+
+function %nearest_f128(f128) -> f128 {
+block0(v0: f128):
+  v1 = nearest v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   wfixb %f4, %f1, 0, 4
+;   vst %v4, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   wfixb %v4, %v1, 0, 4
+;   vst %v4, 0(%r2)
 ;   br %r14
 
 function %fma_f32(f32, f32, f32) -> f32 {
@@ -636,6 +1126,30 @@ block0(v0: f64, v1: f64, v2: f64):
 ;   wfmadb %f0, %f0, %f2, %f4
 ;   br %r14
 
+function %fma_f128(f128, f128, f128) -> f128 {
+block0(v0: f128, v1: f128, v2: f128):
+  v3 = fma v0, v1, v2
+  return v3
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   vl %v5, 0(%r5)
+;   wfmaxb %v16, %f1, %f3, %f5
+;   vst %v16, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   vl %v5, 0(%r5)
+;   wfmaxb %v16, %v1, %v3, %v5
+;   vst %v16, 0(%r2)
+;   br %r14
+
 function %fcopysign_f32(f32, f32) -> f32 {
 block0(v0: f32, v1: f32):
   v2 = fcopysign v0, v1
@@ -644,17 +1158,22 @@ block0(v0: f32, v1: f32):
 
 ; VCode:
 ; block0:
-;   bras %r1, 8 ; data.f32 NaN ; le %f3, 0(%r1)
+;   larl %r1, [const(0)] ; le %f3, 0(%r1)
 ;   vsel %v0, %v0, %v2, %v3
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 8
-;   su %f15, 0xfff(%r15, %r15)
+;   larl %r1, 0x18
 ;   le %f3, 0(%r1)
 ;   vsel %v0, %v0, %v2, %v3
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   su %f15, 0xfff(%r15, %r15)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %fcopysign_f64(f64, f64) -> f64 {
 block0(v0: f64, v1: f64):
@@ -664,19 +1183,59 @@ block0(v0: f64, v1: f64):
 
 ; VCode:
 ; block0:
-;   bras %r1, 12 ; data.f64 NaN ; ld %f3, 0(%r1)
+;   larl %r1, [const(0)] ; ld %f3, 0(%r1)
 ;   vsel %v0, %v0, %v2, %v3
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0xc
-;   su %f15, 0xfff(%r15, %r15)
-;   .byte 0xff, 0xff
-;   .byte 0xff, 0xff
+;   larl %r1, 0x18
 ;   ld %f3, 0(%r1)
 ;   vsel %v0, %v0, %v2, %v3
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   su %f15, 0xfff(%r15, %r15)
+;   .byte 0xff, 0xff
+;   .byte 0xff, 0xff
+
+function %fcopysign_f128(f128, f128) -> f128 {
+block0(v0: f128, v1: f128):
+  v2 = fcopysign v0, v1
+  return v2
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   larl %r1, [const(0)] ; vl %v6, 0(%r1)
+;   vsel %v16, %v1, %v3, %v6
+;   vst %v16, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   vl %v3, 0(%r4)
+;   larl %r1, 0x30
+;   vl %v6, 0(%r1)
+;   vsel %v16, %v1, %v3, %v6
+;   vst %v16, 0(%r2)
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   su %f15, 0xfff(%r15, %r15)
+;   .byte 0xff, 0xff
+;   .byte 0xff, 0xff
+;   .byte 0xff, 0xff
+;   .byte 0xff, 0xff
+;   .byte 0xff, 0xff
+;   .byte 0xff, 0xff
 
 function %fcvt_to_uint_f32_i8(f32) -> i8 {
 block0(v0: f32):
@@ -688,10 +1247,10 @@ block0(v0: f32):
 ; block0:
 ;   cebr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 8 ; data.f32 256 ; le %f4, 0(%r1)
+;   larl %r1, [const(0)] ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 8 ; data.f32 -1 ; vlef %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wldeb %v20, %f0
@@ -703,20 +1262,27 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x12
-;   ic %r8, 0
+;   larl %r1, 0x50
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jghe 0x1c ; trap: int_ovf
-;   bras %r1, 0x28
-;   icm %r8, 0, 0
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x58
 ;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jgle 0x36 ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wldeb %v20, %f0
 ;   wclgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ic %r8, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   icm %r8, 0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %fcvt_to_sint_f32_i8(f32) -> i8 {
 block0(v0: f32):
@@ -728,10 +1294,10 @@ block0(v0: f32):
 ; block0:
 ;   cebr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 8 ; data.f32 128 ; le %f4, 0(%r1)
+;   larl %r1, [const(0)] ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 8 ; data.f32 -129 ; vlef %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wldeb %v20, %f0
@@ -743,21 +1309,28 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x12
-;   ic %r0, 0
+;   larl %r1, 0x50
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jghe 0x1c ; trap: int_ovf
-;   bras %r1, 0x28
-;   .byte 0xc3, 0x01
-;   .byte 0x00, 0x00
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x58
 ;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jgle 0x36 ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wldeb %v20, %f0
 ;   wcgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ic %r0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0xc3, 0x01
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %fcvt_to_uint_f32_i16(f32) -> i16 {
 block0(v0: f32):
@@ -769,10 +1342,10 @@ block0(v0: f32):
 ; block0:
 ;   cebr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 8 ; data.f32 65536 ; le %f4, 0(%r1)
+;   larl %r1, [const(0)] ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 8 ; data.f32 -1 ; vlef %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wldeb %v20, %f0
@@ -784,20 +1357,27 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x12
-;   be 0
+;   larl %r1, 0x50
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jghe 0x1c ; trap: int_ovf
-;   bras %r1, 0x28
-;   icm %r8, 0, 0
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x58
 ;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jgle 0x36 ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wldeb %v20, %f0
 ;   wclgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   be 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   icm %r8, 0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %fcvt_to_sint_f32_i16(f32) -> i16 {
 block0(v0: f32):
@@ -809,10 +1389,10 @@ block0(v0: f32):
 ; block0:
 ;   cebr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 8 ; data.f32 32768 ; le %f4, 0(%r1)
+;   larl %r1, [const(0)] ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 8 ; data.f32 -32769 ; vlef %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wldeb %v20, %f0
@@ -824,21 +1404,26 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x12
-;   bc 0, 0
+;   larl %r1, 0x50
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jghe 0x1c ; trap: int_ovf
-;   bras %r1, 0x28
-;   bpp 0, -0x31dc, 0x100
-;   lpr %r0, %r0
-;   .byte 0x08, 0x03
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x58
+;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jgle 0x36 ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wldeb %v20, %f0
 ;   wcgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   bc 0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   bpp 0, 0x58, 0x100
+;   .byte 0x00, 0x00
 
 function %fcvt_to_uint_f32_i32(f32) -> i32 {
 block0(v0: f32):
@@ -850,10 +1435,10 @@ block0(v0: f32):
 ; block0:
 ;   cebr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 8 ; data.f32 4294967300 ; le %f4, 0(%r1)
+;   larl %r1, [const(0)] ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 8 ; data.f32 -1 ; vlef %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wldeb %v20, %f0
@@ -865,20 +1450,27 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x12
-;   cvb %r8, 0
+;   larl %r1, 0x50
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jghe 0x1c ; trap: int_ovf
-;   bras %r1, 0x28
-;   icm %r8, 0, 0
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x58
 ;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jgle 0x36 ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wldeb %v20, %f0
 ;   wclgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   cvb %r8, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   icm %r8, 0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %fcvt_to_sint_f32_i32(f32) -> i32 {
 block0(v0: f32):
@@ -890,10 +1482,10 @@ block0(v0: f32):
 ; block0:
 ;   cebr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 8 ; data.f32 2147483600 ; le %f4, 0(%r1)
+;   larl %r1, [const(0)] ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 8 ; data.f32 -2147484000 ; vlef %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wldeb %v20, %f0
@@ -905,21 +1497,28 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x12
-;   cvb %r0, 0
+;   larl %r1, 0x50
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jghe 0x1c ; trap: int_ovf
-;   bras %r1, 0x28
-;   .byte 0xcf, 0x00
-;   .byte 0x00, 0x01
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x58
 ;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jgle 0x36 ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wldeb %v20, %f0
 ;   wcgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   cvb %r0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0xcf, 0x00
+;   .byte 0x00, 0x01
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %fcvt_to_uint_f32_i64(f32) -> i64 {
 block0(v0: f32):
@@ -931,10 +1530,10 @@ block0(v0: f32):
 ; block0:
 ;   cebr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 8 ; data.f32 18446744000000000000 ; le %f4, 0(%r1)
+;   larl %r1, [const(0)] ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 8 ; data.f32 -1 ; vlef %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wldeb %v20, %f0
@@ -946,20 +1545,27 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x12
-;   sl %r8, 0
+;   larl %r1, 0x50
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jghe 0x1c ; trap: int_ovf
-;   bras %r1, 0x28
-;   icm %r8, 0, 0
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x58
 ;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jgle 0x36 ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wldeb %v20, %f0
 ;   wclgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sl %r8, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   icm %r8, 0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %fcvt_to_sint_f32_i64(f32) -> i64 {
 block0(v0: f32):
@@ -971,10 +1577,10 @@ block0(v0: f32):
 ; block0:
 ;   cebr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 8 ; data.f32 9223372000000000000 ; le %f4, 0(%r1)
+;   larl %r1, [const(0)] ; le %f4, 0(%r1)
 ;   cebr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 8 ; data.f32 -9223373000000000000 ; vlef %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wldeb %v20, %f0
@@ -986,21 +1592,26 @@ block0(v0: f32):
 ; block0: ; offset 0x0
 ;   cebr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x12
-;   sl %r0, 0
+;   larl %r1, 0x50
 ;   le %f4, 0(%r1)
 ;   cebr %f0, %f4
-;   jghe 0x1c ; trap: int_ovf
-;   bras %r1, 0x28
-;   edmk 1(1), 0x700(%r14)
-;   lpr %r0, %r0
-;   .byte 0x08, 0x03
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x58
+;   vlef %v16, 0(%r1), 0
 ;   wfcsb %f0, %v16
-;   jgle 0x36 ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wldeb %v20, %f0
 ;   wcgdb %v22, %v20, 0, 5
 ;   vlgvg %r2, %v22, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sl %r0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   edmk 1(1), 0
+;   .byte 0x00, 0x00
 
 function %fcvt_to_uint_f64_i8(f64) -> i8 {
 block0(v0: f64):
@@ -1012,10 +1623,10 @@ block0(v0: f64):
 ; block0:
 ;   cdbr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 12 ; data.f64 256 ; ld %f4, 0(%r1)
+;   larl %r1, [const(0)] ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 12 ; data.f64 -1 ; vleg %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wclgdb %v20, %f0, 0, 5
@@ -1026,23 +1637,25 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x16
-;   sth %r7, 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x48
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jghe 0x20 ; trap: int_ovf
-;   bras %r1, 0x30
-;   icm %r15, 0, 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x50
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jgle 0x3e ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sth %r7, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   icm %r15, 0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %fcvt_to_sint_f64_i8(f64) -> i8 {
 block0(v0: f64):
@@ -1054,10 +1667,10 @@ block0(v0: f64):
 ; block0:
 ;   cdbr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 12 ; data.f64 128 ; ld %f4, 0(%r1)
+;   larl %r1, [const(0)] ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 12 ; data.f64 -129 ; vleg %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wcgdb %v20, %f0, 0, 5
@@ -1068,22 +1681,24 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x16
-;   sth %r6, 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x48
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jghe 0x20 ; trap: int_ovf
-;   bras %r1, 0x30
-;   larl %r6, 0x40000028
-;   .byte 0x00, 0x00
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x50
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jgle 0x3e ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sth %r6, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   larl %r6, 0x40000050
+;   .byte 0x00, 0x00
 
 function %fcvt_to_uint_f64_i16(f64) -> i16 {
 block0(v0: f64):
@@ -1095,10 +1710,10 @@ block0(v0: f64):
 ; block0:
 ;   cdbr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 12 ; data.f64 65536 ; ld %f4, 0(%r1)
+;   larl %r1, [const(0)] ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 12 ; data.f64 -1 ; vleg %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wclgdb %v20, %f0, 0, 5
@@ -1109,23 +1724,25 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x16
-;   sth %r15, 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x48
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jghe 0x20 ; trap: int_ovf
-;   bras %r1, 0x30
-;   icm %r15, 0, 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x50
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jgle 0x3e ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sth %r15, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   icm %r15, 0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %fcvt_to_sint_f64_i16(f64) -> i16 {
 block0(v0: f64):
@@ -1137,10 +1754,10 @@ block0(v0: f64):
 ; block0:
 ;   cdbr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 12 ; data.f64 32768 ; ld %f4, 0(%r1)
+;   larl %r1, [const(0)] ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 12 ; data.f64 -32769 ; vleg %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wcgdb %v20, %f0, 0, 5
@@ -1151,22 +1768,24 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x16
-;   sth %r14, 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x48
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jghe 0x20 ; trap: int_ovf
-;   bras %r1, 0x30
-;   larl %r14, 0x400028
-;   .byte 0x00, 0x00
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x50
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jgle 0x3e ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wcgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sth %r14, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   larl %r14, 0x400050
+;   .byte 0x00, 0x00
 
 function %fcvt_to_uint_f64_i32(f64) -> i32 {
 block0(v0: f64):
@@ -1178,10 +1797,10 @@ block0(v0: f64):
 ; block0:
 ;   cdbr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 12 ; data.f64 4294967296 ; ld %f4, 0(%r1)
+;   larl %r1, [const(0)] ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 12 ; data.f64 -1 ; vleg %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wclgdb %v20, %f0, 0, 5
@@ -1192,23 +1811,25 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x16
-;   la %r15, 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x48
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jghe 0x20 ; trap: int_ovf
-;   bras %r1, 0x30
-;   icm %r15, 0, 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x50
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jgle 0x3e ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   la %r15, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   icm %r15, 0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %fcvt_to_sint_f64_i32(f64) -> i32 {
 block0(v0: f64):
@@ -1220,10 +1841,10 @@ block0(v0: f64):
 ; block0:
 ;   cdbr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 12 ; data.f64 2147483648 ; ld %f4, 0(%r1)
+;   larl %r1, [const(0)] ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 12 ; data.f64 -2147483649 ; vleg %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wcgdb %v20, %f0, 0, 5
@@ -1234,24 +1855,26 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x16
+;   larl %r1, 0x48
+;   ld %f4, 0(%r1)
+;   cdbr %f0, %f4
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x50
+;   vleg %v16, 0(%r1), 0
+;   wfcdb %f0, %v16
+;   jgle 0x32 ; trap: int_ovf
+;   wcgdb %v20, %f0, 0, 5
+;   vlgvg %r2, %v20, 0
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   la %r14, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   ld %f4, 0(%r1)
-;   cdbr %f0, %f4
-;   jghe 0x20 ; trap: int_ovf
-;   bras %r1, 0x30
 ;   .byte 0xc1, 0xe0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x20
 ;   .byte 0x00, 0x00
-;   vleg %v16, 0(%r1), 0
-;   wfcdb %f0, %v16
-;   jgle 0x3e ; trap: int_ovf
-;   wcgdb %v20, %f0, 0, 5
-;   vlgvg %r2, %v20, 0
-;   br %r14
 
 function %fcvt_to_uint_f64_i64(f64) -> i64 {
 block0(v0: f64):
@@ -1263,10 +1886,10 @@ block0(v0: f64):
 ; block0:
 ;   cdbr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 12 ; data.f64 18446744073709552000 ; ld %f4, 0(%r1)
+;   larl %r1, [const(0)] ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 12 ; data.f64 -1 ; vleg %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wclgdb %v20, %f0, 0, 5
@@ -1277,23 +1900,25 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x16
-;   ic %r15, 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x48
 ;   ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
-;   jghe 0x20 ; trap: int_ovf
-;   bras %r1, 0x30
-;   icm %r15, 0, 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x50
 ;   vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
-;   jgle 0x3e ; trap: int_ovf
+;   jgle 0x32 ; trap: int_ovf
 ;   wclgdb %v20, %f0, 0, 5
 ;   vlgvg %r2, %v20, 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   ic %r15, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   icm %r15, 0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %fcvt_to_sint_f64_i64(f64) -> i64 {
 block0(v0: f64):
@@ -1305,10 +1930,10 @@ block0(v0: f64):
 ; block0:
 ;   cdbr %f0, %f0
 ;   jgo .+2 # trap=bad_toint
-;   bras %r1, 12 ; data.f64 9223372036854776000 ; ld %f4, 0(%r1)
+;   larl %r1, [const(0)] ; ld %f4, 0(%r1)
 ;   cdbr %f0, %f4
 ;   jghe .+2 # trap=int_ovf
-;   bras %r1, 12 ; data.f64 -9223372036854778000 ; vleg %v16, 0(%r1), 0
+;   larl %r1, [const(1)] ; vleg %v16, 0(%r1), 0
 ;   wfcdb %f0, %v16
 ;   jgle .+2 # trap=int_ovf
 ;   wcgdb %v20, %f0, 0, 5
@@ -1319,24 +1944,446 @@ block0(v0: f64):
 ; block0: ; offset 0x0
 ;   cdbr %f0, %f0
 ;   jgo 6 ; trap: bad_toint
-;   bras %r1, 0x16
+;   larl %r1, 0x48
+;   ld %f4, 0(%r1)
+;   cdbr %f0, %f4
+;   jghe 0x1a ; trap: int_ovf
+;   larl %r1, 0x50
+;   vleg %v16, 0(%r1), 0
+;   wfcdb %f0, %v16
+;   jgle 0x32 ; trap: int_ovf
+;   wcgdb %v20, %f0, 0, 5
+;   vlgvg %r2, %v20, 0
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   ic %r14, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   ld %f4, 0(%r1)
-;   cdbr %f0, %f4
-;   jghe 0x20 ; trap: int_ovf
-;   bras %r1, 0x30
 ;   .byte 0xc3, 0xe0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x01
-;   vleg %v16, 0(%r1), 0
-;   wfcdb %f0, %v16
-;   jgle 0x3e ; trap: int_ovf
-;   wcgdb %v20, %f0, 0, 5
-;   vlgvg %r2, %v20, 0
+
+function %fcvt_to_uint_f128_i8(f128) -> i8 {
+block0(v0: f128):
+  v1 = fcvt_to_uint.i8 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   wfcxb %f1, %f1
+;   jgo .+2 # trap=bad_toint
+;   larl %r1, [const(0)] ; vl %v5, 0(%r1)
+;   wfcxb %f1, %f5
+;   jghe .+2 # trap=int_ovf
+;   larl %r1, [const(1)] ; vl %v17, 0(%r1)
+;   wfcxb %f1, %v17
+;   jgle .+2 # trap=int_ovf
+;   vrepg %v3, %v1, 1
+;   clfxbr %r2, 5, %f1, 0
 ;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   wfcxb %v1, %v1
+;   jgo 0xe ; trap: bad_toint
+;   larl %r1, 0x50
+;   vl %v5, 0(%r1)
+;   wfcxb %v1, %v5
+;   jghe 0x26 ; trap: int_ovf
+;   larl %r1, 0x60
+;   vl %v17, 0(%r1)
+;   wfcxb %v1, %v17
+;   jgle 0x3e ; trap: int_ovf
+;   vrepg %v3, %v1, 1
+;   clfxbr %r2, 5, %f1, 0
+;   br %r14
+;   .byte 0x00, 0x00
+;   sth %r0, 0(%r7)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   icm %r15, 0xf, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+
+function %fcvt_to_sint_f128_i8(f128) -> i8 {
+block0(v0: f128):
+  v1 = fcvt_to_sint.i8 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   wfcxb %f1, %f1
+;   jgo .+2 # trap=bad_toint
+;   larl %r1, [const(0)] ; vl %v5, 0(%r1)
+;   wfcxb %f1, %f5
+;   jghe .+2 # trap=int_ovf
+;   larl %r1, [const(1)] ; vl %v17, 0(%r1)
+;   wfcxb %f1, %v17
+;   jgle .+2 # trap=int_ovf
+;   vrepg %v3, %v1, 1
+;   cfxbra %r2, 5, %f1, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   wfcxb %v1, %v1
+;   jgo 0xe ; trap: bad_toint
+;   larl %r1, 0x50
+;   vl %v5, 0(%r1)
+;   wfcxb %v1, %v5
+;   jghe 0x26 ; trap: int_ovf
+;   larl %r1, 0x60
+;   vl %v17, 0(%r1)
+;   wfcxb %v1, %v17
+;   jgle 0x3e ; trap: int_ovf
+;   vrepg %v3, %v1, 1
+;   cfxbr %r2, 5, %f1
+;   br %r14
+;   .byte 0x00, 0x00
+;   sth %r0, 0(%r6)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   xihf %r0, 0x2000000
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+
+function %fcvt_to_uint_f128_i16(f128) -> i16 {
+block0(v0: f128):
+  v1 = fcvt_to_uint.i16 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   wfcxb %f1, %f1
+;   jgo .+2 # trap=bad_toint
+;   larl %r1, [const(0)] ; vl %v5, 0(%r1)
+;   wfcxb %f1, %f5
+;   jghe .+2 # trap=int_ovf
+;   larl %r1, [const(1)] ; vl %v17, 0(%r1)
+;   wfcxb %f1, %v17
+;   jgle .+2 # trap=int_ovf
+;   vrepg %v3, %v1, 1
+;   clfxbr %r2, 5, %f1, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   wfcxb %v1, %v1
+;   jgo 0xe ; trap: bad_toint
+;   larl %r1, 0x50
+;   vl %v5, 0(%r1)
+;   wfcxb %v1, %v5
+;   jghe 0x26 ; trap: int_ovf
+;   larl %r1, 0x60
+;   vl %v17, 0(%r1)
+;   wfcxb %v1, %v17
+;   jgle 0x3e ; trap: int_ovf
+;   vrepg %v3, %v1, 1
+;   clfxbr %r2, 5, %f1, 0
+;   br %r14
+;   .byte 0x00, 0x00
+;   sth %r0, 0(%r15)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   icm %r15, 0xf, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+
+function %fcvt_to_sint_f128_i16(f128) -> i16 {
+block0(v0: f128):
+  v1 = fcvt_to_sint.i16 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   wfcxb %f1, %f1
+;   jgo .+2 # trap=bad_toint
+;   larl %r1, [const(0)] ; vl %v5, 0(%r1)
+;   wfcxb %f1, %f5
+;   jghe .+2 # trap=int_ovf
+;   larl %r1, [const(1)] ; vl %v17, 0(%r1)
+;   wfcxb %f1, %v17
+;   jgle .+2 # trap=int_ovf
+;   vrepg %v3, %v1, 1
+;   cfxbra %r2, 5, %f1, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   wfcxb %v1, %v1
+;   jgo 0xe ; trap: bad_toint
+;   larl %r1, 0x50
+;   vl %v5, 0(%r1)
+;   wfcxb %v1, %v5
+;   jghe 0x26 ; trap: int_ovf
+;   larl %r1, 0x60
+;   vl %v17, 0(%r1)
+;   wfcxb %v1, %v17
+;   jgle 0x3e ; trap: int_ovf
+;   vrepg %v3, %v1, 1
+;   cfxbr %r2, 5, %f1
+;   br %r14
+;   .byte 0x00, 0x00
+;   sth %r0, 0(%r14)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   llihf %r0, 0x20000
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+
+function %fcvt_to_uint_f128_i32(f128) -> i32 {
+block0(v0: f128):
+  v1 = fcvt_to_uint.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   wfcxb %f1, %f1
+;   jgo .+2 # trap=bad_toint
+;   larl %r1, [const(0)] ; vl %v5, 0(%r1)
+;   wfcxb %f1, %f5
+;   jghe .+2 # trap=int_ovf
+;   larl %r1, [const(1)] ; vl %v17, 0(%r1)
+;   wfcxb %f1, %v17
+;   jgle .+2 # trap=int_ovf
+;   vrepg %v3, %v1, 1
+;   clfxbr %r2, 5, %f1, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   wfcxb %v1, %v1
+;   jgo 0xe ; trap: bad_toint
+;   larl %r1, 0x50
+;   vl %v5, 0(%r1)
+;   wfcxb %v1, %v5
+;   jghe 0x26 ; trap: int_ovf
+;   larl %r1, 0x60
+;   vl %v17, 0(%r1)
+;   wfcxb %v1, %v17
+;   jgle 0x3e ; trap: int_ovf
+;   vrepg %v3, %v1, 1
+;   clfxbr %r2, 5, %f1, 0
+;   br %r14
+;   .byte 0x00, 0x00
+;   sth %r1, 0(%r15)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   icm %r15, 0xf, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+
+function %fcvt_to_sint_f128_i32(f128) -> i32 {
+block0(v0: f128):
+  v1 = fcvt_to_sint.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   wfcxb %f1, %f1
+;   jgo .+2 # trap=bad_toint
+;   larl %r1, [const(0)] ; vl %v5, 0(%r1)
+;   wfcxb %f1, %f5
+;   jghe .+2 # trap=int_ovf
+;   larl %r1, [const(1)] ; vl %v17, 0(%r1)
+;   wfcxb %f1, %v17
+;   jgle .+2 # trap=int_ovf
+;   vrepg %v3, %v1, 1
+;   cfxbra %r2, 5, %f1, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   wfcxb %v1, %v1
+;   jgo 0xe ; trap: bad_toint
+;   larl %r1, 0x50
+;   vl %v5, 0(%r1)
+;   wfcxb %v1, %v5
+;   jghe 0x26 ; trap: int_ovf
+;   larl %r1, 0x60
+;   vl %v17, 0(%r1)
+;   wfcxb %v1, %v17
+;   jgle 0x3e ; trap: int_ovf
+;   vrepg %v3, %v1, 1
+;   cfxbr %r2, 5, %f1
+;   br %r14
+;   .byte 0x00, 0x00
+;   sth %r1, 0(%r14)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   llihf %r1, 2
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+
+function %fcvt_to_uint_f128_i64(f128) -> i64 {
+block0(v0: f128):
+  v1 = fcvt_to_uint.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   wfcxb %f1, %f1
+;   jgo .+2 # trap=bad_toint
+;   larl %r1, [const(0)] ; vl %v5, 0(%r1)
+;   wfcxb %f1, %f5
+;   jghe .+2 # trap=int_ovf
+;   larl %r1, [const(1)] ; vl %v17, 0(%r1)
+;   wfcxb %f1, %v17
+;   jgle .+2 # trap=int_ovf
+;   vrepg %v3, %v1, 1
+;   clgxbr %r2, 5, %f1, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   wfcxb %v1, %v1
+;   jgo 0xe ; trap: bad_toint
+;   larl %r1, 0x50
+;   vl %v5, 0(%r1)
+;   wfcxb %v1, %v5
+;   jghe 0x26 ; trap: int_ovf
+;   larl %r1, 0x60
+;   vl %v17, 0(%r1)
+;   wfcxb %v1, %v17
+;   jgle 0x3e ; trap: int_ovf
+;   vrepg %v3, %v1, 1
+;   clgxbr %r2, 5, %f1, 0
+;   br %r14
+;   .byte 0x00, 0x00
+;   sth %r3, 0(%r15)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   icm %r15, 0xf, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+
+function %fcvt_to_sint_f128_i64(f128) -> i64 {
+block0(v0: f128):
+  v1 = fcvt_to_sint.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   wfcxb %f1, %f1
+;   jgo .+2 # trap=bad_toint
+;   larl %r1, [const(0)] ; vl %v5, 0(%r1)
+;   wfcxb %f1, %f5
+;   jghe .+2 # trap=int_ovf
+;   larl %r1, [const(1)] ; vl %v17, 0(%r1)
+;   wfcxb %f1, %v17
+;   jgle .+2 # trap=int_ovf
+;   vrepg %v3, %v1, 1
+;   cgxbra %r2, 5, %f1, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   wfcxb %v1, %v1
+;   jgo 0xe ; trap: bad_toint
+;   larl %r1, 0x50
+;   vl %v5, 0(%r1)
+;   wfcxb %v1, %v5
+;   jghe 0x26 ; trap: int_ovf
+;   larl %r1, 0x60
+;   vl %v17, 0(%r1)
+;   wfcxb %v1, %v17
+;   jgle 0x3e ; trap: int_ovf
+;   vrepg %v3, %v1, 1
+;   cgxbr %r2, 5, %f1
+;   br %r14
+;   .byte 0x00, 0x00
+;   sth %r3, 0(%r14)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   llihf %r3, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x02
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %fcvt_from_uint_i8_f32(i8) -> f32 {
 block0(v0: i8):
@@ -1664,6 +2711,174 @@ block0(v0: i64):
 ; block0: ; offset 0x0
 ;   ldgr %f2, %r2
 ;   wcdgb %f0, %f2, 0, 4
+;   br %r14
+
+function %fcvt_from_uint_i8_f128(i8) -> f128 {
+block0(v0: i8):
+  v1 = fcvt_from_uint.f128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   llcr %r5, %r3
+;   cxlfbr %f1, 4, %r5, 0
+;   vmrhg %v16, %v1, %v3
+;   vst %v16, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   llcr %r5, %r3
+;   cxlfbr %f1, 4, %r5, 0
+;   vmrhg %v16, %v1, %v3
+;   vst %v16, 0(%r2)
+;   br %r14
+
+function %fcvt_from_sint_i8_f128(i8) -> f128 {
+block0(v0: i8):
+  v1 = fcvt_from_sint.f128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lbr %r5, %r3
+;   cxfbra %f1, 4, %r5, 0
+;   vmrhg %v16, %v1, %v3
+;   vst %v16, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lbr %r5, %r3
+;   cxfbra %f1, 4, %r5, 0
+;   vmrhg %v16, %v1, %v3
+;   vst %v16, 0(%r2)
+;   br %r14
+
+function %fcvt_from_uint_i16_f128(i16) -> f128 {
+block0(v0: i16):
+  v1 = fcvt_from_uint.f128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   llhr %r5, %r3
+;   cxlfbr %f1, 4, %r5, 0
+;   vmrhg %v16, %v1, %v3
+;   vst %v16, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   llhr %r5, %r3
+;   cxlfbr %f1, 4, %r5, 0
+;   vmrhg %v16, %v1, %v3
+;   vst %v16, 0(%r2)
+;   br %r14
+
+function %fcvt_from_sint_i16_f128(i16) -> f128 {
+block0(v0: i16):
+  v1 = fcvt_from_sint.f128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   lhr %r5, %r3
+;   cxfbra %f1, 4, %r5, 0
+;   vmrhg %v16, %v1, %v3
+;   vst %v16, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lhr %r5, %r3
+;   cxfbra %f1, 4, %r5, 0
+;   vmrhg %v16, %v1, %v3
+;   vst %v16, 0(%r2)
+;   br %r14
+
+function %fcvt_from_uint_i32_f128(i32) -> f128 {
+block0(v0: i32):
+  v1 = fcvt_from_uint.f128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   cxlfbr %f1, 4, %r3, 0
+;   vmrhg %v6, %v1, %v3
+;   vst %v6, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cxlfbr %f1, 4, %r3, 0
+;   vmrhg %v6, %v1, %v3
+;   vst %v6, 0(%r2)
+;   br %r14
+
+function %fcvt_from_sint_i32_f128(i32) -> f128 {
+block0(v0: i32):
+  v1 = fcvt_from_sint.f128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   cxfbra %f1, 4, %r3, 0
+;   vmrhg %v6, %v1, %v3
+;   vst %v6, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cxfbra %f1, 4, %r3, 0
+;   vmrhg %v6, %v1, %v3
+;   vst %v6, 0(%r2)
+;   br %r14
+
+function %fcvt_from_uint_i64_f128(i64) -> f128 {
+block0(v0: i64):
+  v1 = fcvt_from_uint.f128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   cxlgbr %f1, 4, %r3, 0
+;   vmrhg %v6, %v1, %v3
+;   vst %v6, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cxlgbr %f1, 4, %r3, 0
+;   vmrhg %v6, %v1, %v3
+;   vst %v6, 0(%r2)
+;   br %r14
+
+function %fcvt_from_sint_i64_f128(i64) -> f128 {
+block0(v0: i64):
+  v1 = fcvt_from_sint.f128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   cxgbra %f1, 4, %r3, 0
+;   vmrhg %v6, %v1, %v3
+;   vst %v6, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   cxgbra %f1, 4, %r3, 0
+;   vmrhg %v6, %v1, %v3
+;   vst %v6, 0(%r2)
 ;   br %r14
 
 function %fcvt_to_uint_sat_f32_i8(f32) -> i8 {
@@ -2086,6 +3301,206 @@ block0(v0: f64):
 ;   locghio %r2, 0
 ;   br %r14
 
+function %fcvt_to_uint_sat_f128_i8(f128) -> i8 {
+block0(v0: f128):
+  v1 = fcvt_to_uint_sat.i8 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   clfxbr %r2, 5, %f1, 0
+;   clfi %r2, 256
+;   lochih %r2, 255
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   clfxbr %r2, 5, %f1, 0
+;   clfi %r2, 0x100
+;   lochih %r2, 0xff
+;   br %r14
+
+function %fcvt_to_sint_sat_f128_i8(f128) -> i8 {
+block0(v0: f128):
+  v1 = fcvt_to_sint_sat.i8 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   cfxbra %r2, 5, %f1, 0
+;   wfcxb %f1, %f1
+;   lochio %r2, 0
+;   chi %r2, 127
+;   lochih %r2, 127
+;   chi %r2, -128
+;   lochil %r2, -128
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   cfxbr %r2, 5, %f1
+;   wfcxb %v1, %v1
+;   lochio %r2, 0
+;   chi %r2, 0x7f
+;   lochih %r2, 0x7f
+;   chi %r2, -0x80
+;   lochil %r2, -0x80
+;   br %r14
+
+function %fcvt_to_uint_sat_f128_i16(f128) -> i16 {
+block0(v0: f128):
+  v1 = fcvt_to_uint_sat.i16 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   clfxbr %r2, 5, %f1, 0
+;   clfi %r2, 65535
+;   lochih %r2, -1
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   clfxbr %r2, 5, %f1, 0
+;   clfi %r2, 0xffff
+;   lochih %r2, -1
+;   br %r14
+
+function %fcvt_to_sint_sat_f128_i16(f128) -> i16 {
+block0(v0: f128):
+  v1 = fcvt_to_sint_sat.i16 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   cfxbra %r2, 5, %f1, 0
+;   wfcxb %f1, %f1
+;   lochio %r2, 0
+;   chi %r2, 32767
+;   lochih %r2, 32767
+;   chi %r2, -32768
+;   lochil %r2, -32768
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   cfxbr %r2, 5, %f1
+;   wfcxb %v1, %v1
+;   lochio %r2, 0
+;   chi %r2, 0x7fff
+;   lochih %r2, 0x7fff
+;   chi %r2, -0x8000
+;   lochil %r2, -0x8000
+;   br %r14
+
+function %fcvt_to_uint_sat_f128_i32(f128) -> i32 {
+block0(v0: f128):
+  v1 = fcvt_to_uint_sat.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   clfxbr %r2, 5, %f1, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   clfxbr %r2, 5, %f1, 0
+;   br %r14
+
+function %fcvt_to_sint_sat_f128_i32(f128) -> i32 {
+block0(v0: f128):
+  v1 = fcvt_to_sint_sat.i32 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   cfxbra %r2, 5, %f1, 0
+;   wfcxb %f1, %f1
+;   lochio %r2, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   cfxbr %r2, 5, %f1
+;   wfcxb %v1, %v1
+;   lochio %r2, 0
+;   br %r14
+
+function %fcvt_to_uint_sat_f128_i64(f128) -> i64 {
+block0(v0: f128):
+  v1 = fcvt_to_uint_sat.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   clgxbr %r2, 5, %f1, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   clgxbr %r2, 5, %f1, 0
+;   br %r14
+
+function %fcvt_to_sint_sat_f128_i64(f128) -> i64 {
+block0(v0: f128):
+  v1 = fcvt_to_sint_sat.i64 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   cgxbra %r2, 5, %f1, 0
+;   wfcxb %f1, %f1
+;   locghio %r2, 0
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r2)
+;   vrepg %v3, %v1, 1
+;   cgxbr %r2, 5, %f1
+;   wfcxb %v1, %v1
+;   locghio %r2, 0
+;   br %r14
+
 function %bitcast_i64_f64(i64) -> f64 {
 block0(v0: i64):
   v1 = bitcast.f64 v0
@@ -2176,5 +3591,59 @@ block0(v0: f64):
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
+;   br %r14
+
+function %bitcast_f128_f128(f128) -> f128 {
+block0(v0: f128):
+  v1 = bitcast.f128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   vst %v1, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   vst %v1, 0(%r2)
+;   br %r14
+
+function %bitcast_i128_f128(i128) -> f128 {
+block0(v0: i128):
+  v1 = bitcast.f128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   vst %v1, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   vst %v1, 0(%r2)
+;   br %r14
+
+function %bitcast_f128_i128(f128) -> i128 {
+block0(v0: f128):
+  v1 = bitcast.i128 v0
+  return v1
+}
+
+; VCode:
+; block0:
+;   vl %v1, 0(%r3)
+;   vst %v1, 0(%r2)
+;   br %r14
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   vl %v1, 0(%r3)
+;   vst %v1, 0(%r2)
 ;   br %r14
 

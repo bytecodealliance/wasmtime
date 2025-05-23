@@ -1,8 +1,8 @@
 //! Densely numbered entity references as mapping keys.
 
+use crate::EntityRef;
 use crate::iter::{Iter, IterMut};
 use crate::keys::Keys;
-use crate::EntityRef;
 use alloc::vec::Vec;
 use core::cmp::min;
 use core::marker::PhantomData;
@@ -10,9 +10,9 @@ use core::ops::{Index, IndexMut};
 use core::slice;
 #[cfg(feature = "enable-serde")]
 use serde::{
+    Deserialize, Serialize,
     de::{Deserializer, SeqAccess, Visitor},
     ser::{SerializeSeq, Serializer},
-    Deserialize, Serialize,
 };
 
 /// A mapping `K -> V` for densely indexed entity references.

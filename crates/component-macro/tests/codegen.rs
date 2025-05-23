@@ -12,14 +12,15 @@ macro_rules! gentest {
                     async: true,
                 });
             }
-            mod concurrent {
-                wasmtime::component::bindgen!({
-                    path: $path,
-                    async: true,
-                    concurrent_imports: true,
-                    concurrent_exports: true,
-                });
-            }
+            // TODO: re-enable this when wasip3 is merged back into this repo
+            // mod concurrent {
+            //     wasmtime::component::bindgen!({
+            //         path: $path,
+            //         async: true,
+            //         concurrent_imports: true,
+            //         concurrent_exports: true,
+            //     });
+            // }
             mod tracing {
                 wasmtime::component::bindgen!({
                     path: $path,
@@ -532,7 +533,7 @@ mod trappable_imports {
 }
 
 mod custom_derives {
-    use std::collections::{hash_map::RandomState, HashSet};
+    use std::collections::{HashSet, hash_map::RandomState};
 
     wasmtime::component::bindgen!({
         inline: "

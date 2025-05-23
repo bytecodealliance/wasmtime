@@ -66,7 +66,7 @@ block0(v0: f64, v1: f64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addsd   %xmm0, %xmm1, %xmm0
+;   addsd %xmm1, %xmm0
 ;   movabsq $9221120237041090560, %r9
 ;   movq    %r9, %xmm1
 ;   movdqa  %xmm0, %xmm7
@@ -107,7 +107,7 @@ block0(v0: f32, v1: f32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addss   %xmm0, %xmm1, %xmm0
+;   addss %xmm1, %xmm0
 ;   movl    $2143289344, %r9d
 ;   movd    %r9d, %xmm1
 ;   movdqa  %xmm0, %xmm7
