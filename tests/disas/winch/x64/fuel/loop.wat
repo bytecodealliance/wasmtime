@@ -18,9 +18,9 @@
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
 ;;       movq    8(%r14), %rax
-;;       movq    (%rax), %r11
-;;       addq    $1, %r11
-;;       movq    %r11, (%rax)
+;;       movq    (%rax), %rcx
+;;       addq    $1, %rcx
+;;       movq    %rcx, (%rax)
 ;;       movq    8(%r14), %rcx
 ;;       movq    (%rcx), %rcx
 ;;       cmpq    $0, %rcx
@@ -36,9 +36,9 @@
 ;;       callq   0x16b
 ;;       movq    8(%rsp), %r14
 ;;       movq    8(%r14), %rax
-;;       movq    (%rax), %r11
-;;       addq    $1, %r11
-;;       movq    %r11, (%rax)
+;;       movq    (%rax), %rcx
+;;       addq    $1, %rcx
+;;       movq    %rcx, (%rax)
 ;;       jmp     0x5e
 ;;   92: addq    $0x10, %rsp
 ;;       popq    %rbp

@@ -227,11 +227,11 @@
 ;;       movq    0xb8(%rdx), %rbx
 ;;       cmpq    %rbx, %rcx
 ;;       jae     0x3c8
-;;  321: movq    %rcx, %r11
-;;       imulq   $8, %r11, %r11
+;;  321: movq    %rcx, %rdi
+;;       imulq   $8, %rdi, %rdi
 ;;       movq    0xb0(%rdx), %rdx
 ;;       movq    %rdx, %rsi
-;;       addq    %r11, %rdx
+;;       addq    %rdi, %rdx
 ;;       cmpl    %ebx, %ecx
 ;;       cmovaeq %rsi, %rdx
 ;;       movq    (%rdx), %rax

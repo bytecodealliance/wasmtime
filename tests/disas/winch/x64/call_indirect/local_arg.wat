@@ -56,11 +56,11 @@
 ;;       movq    0x40(%rdx), %rbx
 ;;       cmpq    %rbx, %rcx
 ;;       jae     0x159
-;;   9e: movq    %rcx, %r11
-;;       imulq   $8, %r11, %r11
+;;   9e: movq    %rcx, %rdi
+;;       imulq   $8, %rdi, %rdi
 ;;       movq    0x38(%rdx), %rdx
 ;;       movq    %rdx, %rsi
-;;       addq    %r11, %rdx
+;;       addq    %rdi, %rdx
 ;;       cmpl    %ebx, %ecx
 ;;       cmovaeq %rsi, %rdx
 ;;       movq    (%rdx), %rax

@@ -69,12 +69,12 @@
 ;;       sub     sp, x28, #4
 ;;       b.hs    #0x2a4
 ;;   98: mov     sp, x28
-;;       mov     x16, x1
+;;       mov     x5, x1
 ;;       mov     x16, #8
-;;       mul     x16, x16, x16
+;;       mul     x5, x5, x16
 ;;       ldur    x2, [x2, #0x38]
 ;;       mov     x4, x2
-;;       add     x2, x2, x16, uxtx
+;;       add     x2, x2, x5, uxtx
 ;;       cmp     w1, w3, uxtx
 ;;       csel    x2, x4, x2, hs
 ;;       ldur    x0, [x2]
@@ -137,12 +137,12 @@
 ;;       ldur    x3, [x2, #0x40]
 ;;       cmp     x1, x3, uxtx
 ;;       b.hs    #0x2b0
-;;  1ac: mov     x16, x1
+;;  1ac: mov     x5, x1
 ;;       mov     x16, #8
-;;       mul     x16, x16, x16
+;;       mul     x5, x5, x16
 ;;       ldur    x2, [x2, #0x38]
 ;;       mov     x4, x2
-;;       add     x2, x2, x16, uxtx
+;;       add     x2, x2, x5, uxtx
 ;;       cmp     w1, w3, uxtx
 ;;       csel    x2, x4, x2, hs
 ;;       ldur    x0, [x2]

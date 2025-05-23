@@ -74,12 +74,12 @@
 ;;       sub     sp, x28, #4
 ;;       b.hs    #0x1cc
 ;;   d4: mov     sp, x28
-;;       mov     x16, x1
+;;       mov     x5, x1
 ;;       mov     x16, #8
-;;       mul     x16, x16, x16
+;;       mul     x5, x5, x16
 ;;       ldur    x2, [x2, #0x38]
 ;;       mov     x4, x2
-;;       add     x2, x2, x16, uxtx
+;;       add     x2, x2, x5, uxtx
 ;;       cmp     w1, w3, uxtx
 ;;       csel    x2, x4, x2, hs
 ;;       ldur    x0, [x2]
