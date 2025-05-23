@@ -1,6 +1,5 @@
 //! Generate format-related Rust code; this also includes generation of encoding
 //! Rust code.
-
 use super::{Formatter, fmtln};
 use crate::dsl;
 
@@ -46,6 +45,38 @@ impl dsl::Format {
         self.generate_opcodes(f, rex);
         self.generate_modrm_byte(f, rex);
         self.generate_immediate(f);
+    }
+
+    pub fn generate_vex_encoding(&self, f: &mut Formatter, vex: &dsl::Vex) {
+        use dsl::OperandKind::{Reg, RegMem};
+        f.empty_line();
+        f.comment("Emit New VEX prefix.");
+
+        match self.operands_by_kind().as_slice() {
+            [Reg(xmm1), Reg(xmm2), RegMem(xmm_m128)] => {
+                fmtln!(
+                    f,
+                    "vex_instruction::<R>(
+                    0x{:0x},
+                    VexVectorLength::{},
+                    VexPP::{},
+                    OpcodeMap::{},
+                    self.{}.enc(),
+                    Some(self.{}.enc()),
+                    Some(self.{}),
+                    {}).encode(buf, off);",
+                    vex.opcodes.primary,
+                    vex.length.to_string(),
+                    vex.pp.to_string(),
+                    vex.mmmmm.to_string(),
+                    xmm1,
+                    xmm2,
+                    xmm_m128,
+                    "None"
+                );
+            }
+            _ => unimplemented!(),
+        }
     }
 
     /// `buf.put1(...);`
@@ -135,9 +166,9 @@ impl dsl::Format {
                 fmtln!(f, "let rex = self.{dst}.as_rex_prefix(src, {bits});");
             }
 
-            [Reg(dst), Reg(xmm), Imm(_)] | [Reg(dst), Reg(xmm)] => {
+            [Reg(dst), Reg(xmm2), Imm(_)] | [Reg(dst), Reg(xmm2)] => {
                 fmtln!(f, "let reg = self.{dst}.enc();");
-                fmtln!(f, "let rm = self.xmm.enc();");
+                fmtln!(f, "let rm = self.xmm2.enc();");
                 fmtln!(f, "let rex = RexPrefix::two_op(reg, rm, {bits});");
             }
 
@@ -197,8 +228,8 @@ impl dsl::Format {
                 );
             }
 
-            [Reg(dst), Reg(xmm), Imm(_)] | [Reg(dst), Reg(xmm)] => {
-                fmtln!(f, "self.xmm.encode_modrm(buf, self.{dst}.enc());");
+            [Reg(dst), Reg(xmm2), Imm(_)] | [Reg(dst), Reg(xmm2)] => {
+                fmtln!(f, "self.xmm2.encode_modrm(buf, self.{dst}.enc());");
             }
 
             unknown => unimplemented!("unknown pattern: {unknown:?}"),

@@ -3561,7 +3561,7 @@
 (decl x64_addps (Xmm XmmMem) Xmm)
 (rule 1 (x64_addps src1 src2)
       (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vaddps) src1 src2))
+      (x64_vaddps_b src1 src2))
 (rule 0 (x64_addps src1 src2) (x64_addps_a src1 src2))
 
 ;; Helper for creating `addpd` instructions.

@@ -34,8 +34,8 @@ pub fn list() -> Vec<Inst> {
         inst("lock_xorl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x31]).r(), _64b | compat),
         inst("lock_xorq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x31]).w().r(), _64b),
         // Vector instructions.
-        inst("xorps", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x0F, 0x57]).r(), _64b | compat | sse),
-        inst("xorpd", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x57]).r(), _64b | compat | sse2),
-        inst("pxor", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xEF]).r(), _64b | compat | sse2),
+        inst("xorps", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x0F, 0x57]).r(), _64b | compat | sse),
+        inst("xorpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x57]).r(), _64b | compat | sse2),
+        inst("pxor", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xEF]).r(), _64b | compat | sse2),
     ]
 }

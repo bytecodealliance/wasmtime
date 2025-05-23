@@ -447,8 +447,8 @@ block0(v0: i32x4):
 ;   vcvtdq2ps %xmm4, %xmm0
 ;   vpsrld  %xmm6, $1, %xmm2
 ;   vcvtdq2ps %xmm2, %xmm4
-;   vaddps  %xmm4, %xmm4, %xmm6
-;   vaddps  %xmm6, %xmm0, %xmm0
+;   vaddps %xmm4, %xmm4, %xmm6
+;   vaddps %xmm0, %xmm6, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

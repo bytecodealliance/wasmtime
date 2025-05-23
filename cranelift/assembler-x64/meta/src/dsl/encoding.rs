@@ -32,8 +32,15 @@ pub fn rex(opcode: impl Into<Opcodes>) -> Rex {
 
 /// An abbreviated constructor for VEX-encoded instructions.
 #[must_use]
-pub fn vex() -> Vex {
-    Vex {}
+pub fn vex(opcode: impl Into<Opcodes>) -> Vex {
+    Vex {
+        opcodes: opcode.into(),
+        w: false,
+        length: VexLength::_128,
+        mmmmm: VexMMMMM::None,
+        pp: VexPP::None,
+        imm: None,
+    }
 }
 
 /// Enumerate the ways x64 encodes instructions.
@@ -48,7 +55,7 @@ impl Encoding {
     pub fn validate(&self, operands: &[Operand]) {
         match self {
             Encoding::Rex(rex) => rex.validate(operands),
-            Encoding::Vex(vex) => vex.validate(),
+            Encoding::Vex(vex) => vex.validate(operands),
         }
     }
 }
@@ -57,7 +64,7 @@ impl fmt::Display for Encoding {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Encoding::Rex(rex) => write!(f, "{rex}"),
-            Encoding::Vex(_vex) => todo!(),
+            Encoding::Vex(vex) => write!(f, "{vex}"),
         }
     }
 }
@@ -563,7 +570,7 @@ pub enum Imm {
 }
 
 impl Imm {
-    fn bits(&self) -> u8 {
+    fn bits(&self) -> u16 {
         match self {
             Imm::None => 0,
             Imm::ib => 8,
@@ -586,10 +593,113 @@ impl fmt::Display for Imm {
     }
 }
 
-pub struct Vex {}
+pub struct Vex {
+    pub opcodes: Opcodes,
+    pub w: bool,
+    pub length: VexLength,
+    pub mmmmm: VexMMMMM,
+    pub pp: VexPP,
+    pub imm: Option<u8>,
+}
+
+#[derive(PartialEq)]
+pub enum VexPP {
+    None,
+    /// Operand size override -- here, denoting "16-bit operation".
+    _66,
+    /// REPNE, but no specific meaning here -- is just an opcode extension.
+    _F2,
+    /// REP/REPE, but no specific meaning here -- is just an opcode extension.
+    _F3,
+}
+
+impl fmt::Display for VexPP {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            VexPP::None => write!(f, "None"),
+            VexPP::_66 => write!(f, "_66"),
+            VexPP::_F3 => write!(f, "_F3"),
+            VexPP::_F2 => write!(f, "_F2"),
+        }
+    }
+}
+
+pub enum VexLength {
+    _128,
+}
+
+impl fmt::Display for VexLength {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            VexLength::_128 => write!(f, "_128"),
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub enum VexMMMMM {
+    None,
+    _OF,
+    /// Operand size override -- here, denoting "16-bit operation".
+    _OF3A,
+    /// The lock prefix.
+    _OF38,
+}
+
+impl fmt::Display for VexMMMMM {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            VexMMMMM::None => write!(f, "None"),
+            VexMMMMM::_OF => write!(f, "_0F"),
+            VexMMMMM::_OF3A => write!(f, "_OF3A"),
+            VexMMMMM::_OF38 => write!(f, "_OF38"),
+        }
+    }
+}
+
+/// Describe the register index to use. This wrapper is a type-safe way to pass
+/// around the registers defined in `inst/regs.rs`.
+#[derive(Debug, Copy, Clone, Default)]
+pub struct Register(u8);
+impl From<u8> for Register {
+    fn from(reg: u8) -> Self {
+        debug_assert!(reg < 16);
+        Self(reg)
+    }
+}
+impl Into<u8> for Register {
+    fn into(self) -> u8 {
+        self.0
+    }
+}
 
 impl Vex {
-    fn validate(&self) {
-        todo!()
+    pub fn length(self, length: VexLength) -> Self {
+        Self { length, ..self }
+    }
+    pub fn pp(self, pp: VexPP) -> Self {
+        Self { pp, ..self }
+    }
+    pub fn mmmmm(self, mmmmm: VexMMMMM) -> Self {
+        Self { mmmmm, ..self }
+    }
+
+    fn validate(&self, _operands: &[Operand]) {}
+}
+
+impl From<Vex> for Encoding {
+    fn from(vex: Vex) -> Encoding {
+        Encoding::Vex(vex)
+    }
+}
+
+impl fmt::Display for Vex {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "VEX")?;
+        match self.length {
+            VexLength::_128 => write!(f, ".128")?,
+        }
+        write!(f, " {:#04x}", self.opcodes.primary)?;
+        Ok(())
     }
 }
