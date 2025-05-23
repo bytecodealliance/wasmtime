@@ -847,10 +847,6 @@ pub enum SseOpcode {
     Movsd,
     Movups,
     Movupd,
-    Mulps,
-    Mulpd,
-    Mulss,
-    Mulsd,
     Pabsb,
     Pabsw,
     Pabsd,
@@ -943,8 +939,6 @@ impl SseOpcode {
             | SseOpcode::Movmskps
             | SseOpcode::Movss
             | SseOpcode::Movups
-            | SseOpcode::Mulps
-            | SseOpcode::Mulss
             | SseOpcode::Rcpss
             | SseOpcode::Rsqrtss
             | SseOpcode::Shufps
@@ -965,8 +959,6 @@ impl SseOpcode {
             | SseOpcode::Movupd
             | SseOpcode::Movdqa
             | SseOpcode::Movdqu
-            | SseOpcode::Mulpd
-            | SseOpcode::Mulsd
             | SseOpcode::Packssdw
             | SseOpcode::Packsswb
             | SseOpcode::Packuswb
@@ -1103,10 +1095,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Movsd => "movsd",
             SseOpcode::Movups => "movups",
             SseOpcode::Movupd => "movupd",
-            SseOpcode::Mulps => "mulps",
-            SseOpcode::Mulpd => "mulpd",
-            SseOpcode::Mulss => "mulss",
-            SseOpcode::Mulsd => "mulsd",
             SseOpcode::Pabsb => "pabsb",
             SseOpcode::Pabsw => "pabsw",
             SseOpcode::Pabsd => "pabsd",

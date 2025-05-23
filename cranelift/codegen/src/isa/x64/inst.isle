@@ -806,10 +806,6 @@
             Movsd
             Movups
             Movupd
-            Mulps
-            Mulpd
-            Mulss
-            Mulsd
             Pabsb
             Pabsw
             Pabsd
