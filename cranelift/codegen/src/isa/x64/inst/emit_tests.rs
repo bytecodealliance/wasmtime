@@ -2695,17 +2695,6 @@ fn test_x64_emit() {
     // XMM_RM_R: float binary ops
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Mulss, RegMem::reg(xmm5), w_xmm4),
-        "F30F59E5",
-        "mulss   %xmm4, %xmm5, %xmm4",
-    ));
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Mulsd, RegMem::reg(xmm5), w_xmm4),
-        "F20F59E5",
-        "mulsd   %xmm4, %xmm5, %xmm4",
-    ));
-
-    insns.push((
         Inst::xmm_rm_r(SseOpcode::Divss, RegMem::reg(xmm8), w_xmm7),
         "F3410F5EF8",
         "divss   %xmm7, %xmm8, %xmm7",
