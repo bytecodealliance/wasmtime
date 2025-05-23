@@ -27,6 +27,7 @@ pub fn rex(opcode: impl Into<Opcodes>) -> Rex {
         r: false,
         digit: None,
         imm: Imm::None,
+        opcode_mod: None,
     }
 }
 
@@ -99,6 +100,19 @@ pub struct Rex {
     pub digit: Option<u8>,
     /// The number of bits used as an immediate operand to the instruction.
     pub imm: Imm,
+    /// Used for `+rb`, `+rw`, `+rd`, and `+ro` instructions, which encode `reg`
+    /// bits in the opcode byte; if `Some`, this contains the expected bit width
+    /// of `reg`.
+    ///
+    /// From the reference manual: "[...] the lower 3 bits of the opcode byte is
+    /// used to encode the register operand without a modR/M byte. The
+    /// instruction lists the corresponding hexadecimal value of the opcode byte
+    /// with low 3 bits as 000b. In non-64-bit mode, a register code, from 0
+    /// through 7, is added to the hexadecimal value of the opcode byte. In
+    /// 64-bit mode, indicates the four bit field of REX.b and opcode[2:0] field
+    /// encodes the register operand of the instruction. “+ro” is applicable
+    /// only in 64-bit mode."
+    pub opcode_mod: Option<u8>,
 }
 
 impl Rex {
@@ -190,6 +204,46 @@ impl Rex {
         }
     }
 
+    /// Modify the opcode byte with bits from `reg`; equivalent to `+rb` in the
+    /// reference manual.
+    #[must_use]
+    pub fn rb(self) -> Self {
+        Self {
+            opcode_mod: Some(8),
+            ..self
+        }
+    }
+
+    /// Modify the opcode byte with bits from `reg`; equivalent to `+rw` in the
+    /// reference manual.
+    #[must_use]
+    pub fn rw(self) -> Self {
+        Self {
+            opcode_mod: Some(16),
+            ..self
+        }
+    }
+
+    /// Modify the opcode byte with bits from `reg`; equivalent to `+rd` in the
+    /// reference manual.
+    #[must_use]
+    pub fn rd(self) -> Self {
+        Self {
+            opcode_mod: Some(32),
+            ..self
+        }
+    }
+
+    /// Modify the opcode byte with bits from `reg`; equivalent to `+ro` in the
+    /// reference manual.
+    #[must_use]
+    pub fn ro(self) -> Self {
+        Self {
+            opcode_mod: Some(64),
+            ..self
+        }
+    }
+
     /// Check a subset of the rules for valid encodings outlined in chapter 2,
     /// _Instruction Format_, of the Intel® 64 and IA-32 Architectures Software
     /// Developer’s Manual, Volume 2A.
@@ -222,6 +276,18 @@ impl Rex {
                 self.imm.bits(),
                 "for an immediate, the encoding width must match the declared operand width"
             );
+        }
+
+        if let Some(bits) = self.opcode_mod {
+            assert!(
+                self.opcodes.primary & 0b111 == 0,
+                "the lower three bits of the opcode byte should be 0"
+            );
+            assert!(
+                operands.iter().all(|o| o.location.bits() == bits),
+                "the opcode modifier width must match the operand widths"
+            );
+            assert!(!self.r, "the opcode modifier cannot be used with /r");
         }
     }
 }
@@ -261,6 +327,15 @@ impl fmt::Display for Rex {
         }
         if let Some(digit) = self.digit {
             write!(f, " /{digit}")?;
+        }
+        if let Some(bits) = self.opcode_mod {
+            match bits {
+                8 => write!(f, " +rb")?,
+                16 => write!(f, " +rw")?,
+                32 => write!(f, " +rd")?,
+                64 => write!(f, " +ro")?,
+                _ => panic!("invalid opcode modifier bits {bits}"),
+            }
         }
         if self.imm != Imm::None {
             write!(f, " {}", self.imm)?;

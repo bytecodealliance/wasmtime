@@ -75,7 +75,14 @@ impl dsl::Format {
         if rex.opcodes.escape {
             fmtln!(f, "buf.put1(0x0f);");
         }
-        fmtln!(f, "buf.put1(0x{:x});", rex.opcodes.primary);
+        if rex.opcode_mod.is_some() {
+            let loc = self.locations().next().unwrap();
+            assert!(matches!(loc.kind(), dsl::OperandKind::Reg(_)));
+            fmtln!(f, "let low_bits = self.{loc}.enc() & 0b111;");
+            fmtln!(f, "buf.put1(0x{:x} | low_bits);", rex.opcodes.primary);
+        } else {
+            fmtln!(f, "buf.put1(0x{:x});", rex.opcodes.primary);
+        }
         if let Some(secondary) = rex.opcodes.secondary {
             fmtln!(f, "buf.put1(0x{:x});", secondary);
         }
@@ -142,21 +149,27 @@ impl dsl::Format {
     fn generate_modrm_byte(&self, f: &mut Formatter, rex: &dsl::Rex) {
         use dsl::OperandKind::{FixedReg, Imm, Mem, Reg, RegMem};
 
-        if let [FixedReg(_), Imm(_)] = self.operands_by_kind().as_slice() {
-            // No need to emit a comment.
-        } else {
+        // Some instructions will never emit a ModR/M byte.
+        let operands = self.operands_by_kind();
+        if rex.opcode_mod.is_some()
+            || matches!(
+                operands.as_slice(),
+                [FixedReg(_)] | [FixedReg(_), FixedReg(_)] | [FixedReg(_), Imm(_)]
+            )
+        {
             f.empty_line();
-            f.comment("Emit ModR/M byte.");
+            f.comment("No need to emit a ModRM byte.");
+            return;
         }
-        let bytes_at_end = match self.operands_by_kind().as_slice() {
+
+        // If we must, emit the ModR/M byte and the SIB byte (if necessary).
+        f.empty_line();
+        f.comment("Emit ModR/M byte.");
+        let bytes_at_end = match operands.as_slice() {
             [.., Imm(imm)] => imm.bytes(),
             _ => 0,
         };
-
-        match self.operands_by_kind().as_slice() {
-            [FixedReg(_)] | [FixedReg(_), FixedReg(_)] | [FixedReg(_), Imm(_)] => {
-                // No need to emit a ModRM byte: we know the register used.
-            }
+        match operands.as_slice() {
             [Reg(reg), Imm(_)] => {
                 let digit = rex.digit.unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");
