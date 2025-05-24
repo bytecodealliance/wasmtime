@@ -372,6 +372,9 @@ wasmtime_option_group! {
         /// Component model support for async lifting/lowering: this corresponds
         /// to the 🚟 emoji in the component model specification.
         pub component_model_async_stackful: Option<bool>,
+        /// Component model support for `error-context`: this corresponds
+        /// to the 📝 emoji in the component model specification.
+        pub component_model_error_context: Option<bool>,
         /// Configure support for the function-references proposal.
         pub function_references: Option<bool>,
         /// Configure support for the GC proposal.
@@ -1015,6 +1018,7 @@ impl CommonOptions {
             ("component-model-async", component_model_async, wasm_component_model_async)
             ("component-model-async", component_model_async_builtins, wasm_component_model_async_builtins)
             ("component-model-async", component_model_async_stackful, wasm_component_model_async_stackful)
+            ("component-model", component_model_error_context, wasm_component_model_error_context)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)
