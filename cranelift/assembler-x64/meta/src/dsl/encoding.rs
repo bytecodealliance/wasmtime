@@ -286,7 +286,7 @@ impl Rex {
             assert!(
                 operands
                     .iter()
-                    .all(|o| o.location.bits() == opcode_mod.bits()),
+                    .all(|o| o.location.bits() == opcode_mod.bits().into()),
                 "the opcode modifier width must match the operand widths"
             );
             assert!(!self.r, "the opcode modifier cannot be used with /r");
