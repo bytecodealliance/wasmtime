@@ -337,6 +337,23 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
             }
         }
     }
+
+    /// Return the registers for encoding the `b` and `x` bits (e.g., in a VEX
+    /// prefix).
+    ///
+    /// During encoding, the `b` bit is set by the topmost bit (the fourth bit)
+    /// of either the `reg` register or, if this is a memory address, the `base`
+    /// register. The `x` bit is set by the `index` register, when used.
+    pub(crate) fn encode_bx_regs(&self) -> (Option<u8>, Option<u8>) {
+        match self {
+            XmmMem::Xmm(reg) => (Some(reg.enc()), None),
+            XmmMem::Mem(Amode::ImmReg { base, .. }) => (Some(base.enc()), None),
+            XmmMem::Mem(Amode::ImmRegRegShift { base, index, .. }) => {
+                (Some(base.enc()), Some(index.enc()))
+            }
+            XmmMem::Mem(Amode::RipRelative { .. }) => (None, None),
+        }
+    }
 }
 
 impl<R: AsReg, M: AsReg> From<R> for XmmMem<R, M> {
