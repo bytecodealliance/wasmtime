@@ -112,7 +112,7 @@ pub struct Rex {
     /// 64-bit mode, indicates the four bit field of REX.b and opcode[2:0] field
     /// encodes the register operand of the instruction. “+ro” is applicable
     /// only in 64-bit mode."
-    pub opcode_mod: Option<u8>,
+    pub opcode_mod: Option<OpcodeMod>,
 }
 
 impl Rex {
@@ -204,42 +204,42 @@ impl Rex {
         }
     }
 
-    /// Modify the opcode byte with bits from `reg`; equivalent to `+rb` in the
-    /// reference manual.
+    /// Modify the opcode byte with bits from an 8-bit `reg`; equivalent to
+    /// `+rb` in the reference manual.
     #[must_use]
     pub fn rb(self) -> Self {
         Self {
-            opcode_mod: Some(8),
+            opcode_mod: Some(OpcodeMod::rb),
             ..self
         }
     }
 
-    /// Modify the opcode byte with bits from `reg`; equivalent to `+rw` in the
-    /// reference manual.
+    /// Modify the opcode byte with bits from a 16-bit `reg`; equivalent to
+    /// `+rw` in the reference manual.
     #[must_use]
     pub fn rw(self) -> Self {
         Self {
-            opcode_mod: Some(16),
+            opcode_mod: Some(OpcodeMod::rw),
             ..self
         }
     }
 
-    /// Modify the opcode byte with bits from `reg`; equivalent to `+rd` in the
-    /// reference manual.
+    /// Modify the opcode byte with bits from a 32-bit `reg`; equivalent to
+    /// `+rd` in the reference manual.
     #[must_use]
     pub fn rd(self) -> Self {
         Self {
-            opcode_mod: Some(32),
+            opcode_mod: Some(OpcodeMod::rd),
             ..self
         }
     }
 
-    /// Modify the opcode byte with bits from `reg`; equivalent to `+ro` in the
-    /// reference manual.
+    /// Modify the opcode byte with bits from a 64-bit `reg`; equivalent to
+    /// `+ro` in the reference manual.
     #[must_use]
     pub fn ro(self) -> Self {
         Self {
-            opcode_mod: Some(64),
+            opcode_mod: Some(OpcodeMod::ro),
             ..self
         }
     }
@@ -278,13 +278,15 @@ impl Rex {
             );
         }
 
-        if let Some(bits) = self.opcode_mod {
+        if let Some(opcode_mod) = &self.opcode_mod {
             assert!(
                 self.opcodes.primary & 0b111 == 0,
                 "the lower three bits of the opcode byte should be 0"
             );
             assert!(
-                operands.iter().all(|o| o.location.bits() == bits),
+                operands
+                    .iter()
+                    .all(|o| o.location.bits() == opcode_mod.bits()),
                 "the opcode modifier width must match the operand widths"
             );
             assert!(!self.r, "the opcode modifier cannot be used with /r");
@@ -318,9 +320,9 @@ impl fmt::Display for Rex {
         if self.opcodes.escape {
             write!(f, "0x0F + ")?;
         }
-        write!(f, "{:#04x}", self.opcodes.primary)?;
+        write!(f, "{:#04X}", self.opcodes.primary)?;
         if let Some(secondary) = self.opcodes.secondary {
-            write!(f, " {secondary:#04x}")?;
+            write!(f, " {secondary:#04X}")?;
         }
         if self.r {
             write!(f, " /r")?;
@@ -328,14 +330,8 @@ impl fmt::Display for Rex {
         if let Some(digit) = self.digit {
             write!(f, " /{digit}")?;
         }
-        if let Some(bits) = self.opcode_mod {
-            match bits {
-                8 => write!(f, " +rb")?,
-                16 => write!(f, " +rw")?,
-                32 => write!(f, " +rd")?,
-                64 => write!(f, " +ro")?,
-                _ => panic!("invalid opcode modifier bits {bits}"),
-            }
+        if let Some(opcode_mod) = &self.opcode_mod {
+            write!(f, " {opcode_mod}")?;
         }
         if self.imm != Imm::None {
             write!(f, " {}", self.imm)?;
@@ -661,11 +657,11 @@ pub enum Imm {
 impl Imm {
     fn bits(&self) -> u8 {
         match self {
-            Imm::None => 0,
-            Imm::ib => 8,
-            Imm::iw => 16,
-            Imm::id => 32,
-            Imm::io => 64,
+            Self::None => 0,
+            Self::ib => 8,
+            Self::iw => 16,
+            Self::id => 32,
+            Self::io => 64,
         }
     }
 }
@@ -673,11 +669,52 @@ impl Imm {
 impl fmt::Display for Imm {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Imm::None => write!(f, ""),
-            Imm::ib => write!(f, "ib"),
-            Imm::iw => write!(f, "iw"),
-            Imm::id => write!(f, "id"),
-            Imm::io => write!(f, "io"),
+            Self::None => write!(f, ""),
+            Self::ib => write!(f, "ib"),
+            Self::iw => write!(f, "iw"),
+            Self::id => write!(f, "id"),
+            Self::io => write!(f, "io"),
+        }
+    }
+}
+
+/// Indicate the size of the `reg` used when modifying the lower three bits of
+/// the opcode byte; this corresponds to the `+rb`, `+rw`, `+rd`, and `+ro`
+/// modifiers in the reference manual.
+///
+/// ```
+/// # use cranelift_assembler_x64_meta::dsl::{rex};
+/// // The `bswap` instruction extends the opcode byte:
+/// let enc = rex([0x0F, 0xC8]).rd();
+/// assert_eq!(enc.to_string(), "0x0F + 0xC8 +rd");
+/// ```
+#[derive(Debug, PartialEq)]
+#[allow(non_camel_case_types, reason = "makes DSL definitions easier to read")]
+pub enum OpcodeMod {
+    rb,
+    rw,
+    rd,
+    ro,
+}
+
+impl OpcodeMod {
+    fn bits(&self) -> u8 {
+        match self {
+            Self::rb => 8,
+            Self::rw => 16,
+            Self::rd => 32,
+            Self::ro => 64,
+        }
+    }
+}
+
+impl fmt::Display for OpcodeMod {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::rb => write!(f, "+rb"),
+            Self::rw => write!(f, "+rw"),
+            Self::rd => write!(f, "+rd"),
+            Self::ro => write!(f, "+ro"),
         }
     }
 }
