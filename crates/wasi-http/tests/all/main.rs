@@ -129,6 +129,7 @@ async fn run_wasi_http(
     req: hyper::Request<BoxBody<Bytes, hyper::Error>>,
     send_request: Option<RequestSender>,
     rejected_authority: Option<String>,
+    early_drop: bool,
 ) -> anyhow::Result<Result<hyper::Response<Collected<Bytes>>, ErrorCode>> {
     let stdout = MemoryOutputPipe::new(4096);
     let stderr = MemoryOutputPipe::new(4096);
@@ -169,6 +170,15 @@ async fn run_wasi_http(
     let (sender, receiver) = tokio::sync::oneshot::channel();
     let out = store.data_mut().new_response_outparam(sender)?;
 
+    let receiver = if early_drop {
+        // Drop the receiver early, emulating a host event like
+        // timeout occurred so that the processing has to be stopped.
+        drop(receiver);
+        None
+    } else {
+        Some(receiver)
+    };
+
     let handle = wasmtime_wasi::runtime::spawn(async move {
         proxy
             .wasi_http_incoming_handler()
@@ -178,24 +188,29 @@ async fn run_wasi_http(
         Ok::<_, anyhow::Error>(())
     });
 
-    let resp = match receiver.await {
-        Ok(Ok(resp)) => {
-            let (parts, body) = resp.into_parts();
-            let collected = BodyExt::collect(body).await?;
-            Some(Ok(hyper::Response::from_parts(parts, collected)))
-        }
-        Ok(Err(e)) => Some(Err(e)),
+    if let Some(r) = receiver {
+        let resp = match r.await {
+            Ok(Ok(resp)) => {
+                let (parts, body) = resp.into_parts();
+                let collected = BodyExt::collect(body).await?;
+                Some(Ok(hyper::Response::from_parts(parts, collected)))
+            }
+            Ok(Err(e)) => Some(Err(e)),
 
-        // Fall through below to the `resp.expect(...)` which will hopefully
-        // return a more specific error from `handle.await`.
-        Err(_) => None,
-    };
+            // Fall through below to the `resp.expect(...)` which will hopefully
+            // return a more specific error from `handle.await`.
+            Err(_) => None,
+        };
 
-    // Now that the response has been processed, we can wait on the wasm to
-    // finish without deadlocking.
-    handle.await.context("Component execution")?;
+        // Now that the response has been processed, we can wait on the wasm to
+        // finish without deadlocking.
+        handle.await.context("Component execution")?;
 
-    Ok(resp.expect("wasm never called set-response-outparam"))
+        Ok(resp.expect("wasm never called set-response-outparam"))
+    } else {
+        handle.await.context("Component execution")?;
+        Ok(Err(ErrorCode::HttpResponseTimeout))
+    }
 }
 
 #[test_log::test(tokio::test)]
@@ -210,6 +225,7 @@ async fn wasi_http_proxy_tests() -> anyhow::Result<()> {
         req.body(body::empty())?,
         None,
         None,
+        false,
     )
     .await?;
 
@@ -341,6 +357,7 @@ async fn do_wasi_http_hash_all(override_send_request: bool) -> Result<()> {
         request,
         send_request,
         None,
+        false,
     )
     .await??;
 
@@ -388,6 +405,7 @@ async fn wasi_http_hash_all_with_reject() -> Result<()> {
         request,
         None,
         Some("forbidden.com".to_string()),
+        false,
     )
     .await??;
 
@@ -507,6 +525,7 @@ async fn do_wasi_http_echo(uri: &str, url_header: Option<&str>) -> Result<()> {
         request,
         None,
         None,
+        false,
     )
     .await??;
 
@@ -538,6 +557,7 @@ async fn wasi_http_without_port() -> Result<()> {
         req.body(body::empty())?,
         None,
         None,
+        false,
     )
     .await??;
 
@@ -547,6 +567,28 @@ async fn wasi_http_without_port() -> Result<()> {
     // port in the URI was handled.
 
     Ok(())
+}
+
+#[test_log::test(tokio::test)]
+async fn wasi_http_no_trap_on_early_drop() -> Result<()> {
+    let req = hyper::Request::builder()
+        .uri("http://example.com:8080/early_drop")
+        .method(http::Method::GET);
+
+    let resp = run_wasi_http(
+        test_programs_artifacts::API_PROXY_COMPONENT,
+        req.body(body::empty())?,
+        None,
+        None,
+        true,
+    )
+    .await?;
+
+    if let Err(ErrorCode::HttpResponseTimeout) = resp {
+        Ok(())
+    } else {
+        panic!("test expects an error");
+    }
 }
 
 mod body {
