@@ -37,7 +37,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqu  0(%rdi), %xmm0
+;   movdqu (%rdi), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

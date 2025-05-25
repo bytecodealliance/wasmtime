@@ -37,7 +37,7 @@ block0():
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqu  const(0), %xmm0
+;   movdqu (%rip), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

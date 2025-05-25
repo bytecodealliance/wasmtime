@@ -63,7 +63,7 @@ block0(v0: f64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm3
+;   movdqa %xmm0, %xmm3
 ;   cmppd   $0, %xmm3, %xmm0, %xmm3
 ;   andps (%rip), %xmm3
 ;   minpd %xmm3, %xmm0

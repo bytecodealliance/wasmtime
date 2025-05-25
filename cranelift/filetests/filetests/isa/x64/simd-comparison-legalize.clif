@@ -73,7 +73,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm3
+;   movdqa %xmm0, %xmm3
 ;   pmaxsw %xmm1, %xmm3
 ;   pcmpeqw %xmm0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp
@@ -102,7 +102,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm3
+;   movdqa %xmm0, %xmm3
 ;   pmaxub %xmm1, %xmm3
 ;   pcmpeqb %xmm0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp

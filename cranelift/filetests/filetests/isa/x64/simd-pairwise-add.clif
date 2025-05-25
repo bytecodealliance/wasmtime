@@ -13,9 +13,9 @@ block0(v0: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm4
-;   movdqu  const(0), %xmm0
-;   movdqa  %xmm4, %xmm5
+;   movdqa %xmm0, %xmm4
+;   movdqu (%rip), %xmm0
+;   movdqa %xmm4, %xmm5
 ;   pmaddubsw %xmm0, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

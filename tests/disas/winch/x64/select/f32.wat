@@ -6,7 +6,7 @@
     (select (local.get 0) (local.get 1) (local.get 2))
   )
 )
- 
+
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp

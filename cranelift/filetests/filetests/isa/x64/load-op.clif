@@ -189,7 +189,7 @@ block1:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm0
+;   movss (%rdi), %xmm0
 ;   jmp     label1
 ; block1:
 ;   movq    %rbp, %rsp

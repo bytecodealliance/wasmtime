@@ -252,4 +252,12 @@ pub trait RegisterVisitor<R: Registers> {
             XmmMem::Mem(m) => self.read_amode(m),
         }
     }
+
+    /// Helper method to handle a write [`XmmMem`] operand.
+    fn write_xmm_mem(&mut self, op: &mut XmmMem<R::WriteXmm, R::ReadGpr>) {
+        match op {
+            XmmMem::Xmm(r) => self.write_xmm(r),
+            XmmMem::Mem(m) => self.read_amode(m),
+        }
+    }
 }

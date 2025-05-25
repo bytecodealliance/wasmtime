@@ -41,7 +41,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movsd   0(%rdi), %xmm0
+;   movsd (%rdi), %xmm0
 ;   movabsq $9223372036854775807, %rcx
 ;   movq %rcx, %xmm5
 ;   andpd %xmm5, %xmm0

@@ -880,10 +880,10 @@ pub(crate) fn emit(
             alternative,
             dst,
         } => {
-            let alternative = alternative.to_reg();
-            let dst = dst.to_writable_reg();
+            let alternative = *alternative;
+            let dst = *dst;
             debug_assert_eq!(alternative, dst.to_reg());
-            let consequent = consequent.to_reg();
+            let consequent = *consequent;
 
             // Lowering of the Select IR opcode when the input is an fcmp relies on the fact that
             // this doesn't clobber flags. Make sure to not do so here.
@@ -891,7 +891,8 @@ pub(crate) fn emit(
 
             // Jump if cc is *not* set.
             one_way_jmp(sink, cc.invert(), next);
-            Inst::gen_move(dst, consequent, *ty).emit(sink, info, state);
+            Inst::gen_move(dst.map(|r| r.to_reg()), consequent.to_reg(), *ty)
+                .emit(sink, info, state);
 
             sink.bind_label(next, state.ctrl_plane_mut());
         }
@@ -1595,14 +1596,6 @@ pub(crate) fn emit(
             let rex = RexFlags::clear_w();
 
             let (prefix, opcode, num_opcodes) = match op {
-                SseOpcode::Movaps => (LegacyPrefixes::None, 0x0F28, 2),
-                SseOpcode::Movapd => (LegacyPrefixes::_66, 0x0F28, 2),
-                SseOpcode::Movdqa => (LegacyPrefixes::_66, 0x0F6F, 2),
-                SseOpcode::Movdqu => (LegacyPrefixes::_F3, 0x0F6F, 2),
-                SseOpcode::Movsd => (LegacyPrefixes::_F2, 0x0F10, 2),
-                SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F10, 2),
-                SseOpcode::Movups => (LegacyPrefixes::None, 0x0F10, 2),
-                SseOpcode::Movupd => (LegacyPrefixes::_66, 0x0F10, 2),
                 SseOpcode::Pabsb => (LegacyPrefixes::_66, 0x0F381C, 3),
                 SseOpcode::Pabsw => (LegacyPrefixes::_66, 0x0F381D, 3),
                 SseOpcode::Pabsd => (LegacyPrefixes::_66, 0x0F381E, 3),
@@ -1754,7 +1747,6 @@ pub(crate) fn emit(
                 SseOpcode::Divss => (LegacyPrefixes::_F3, 0x0F5E, 2),
                 SseOpcode::Divsd => (LegacyPrefixes::_F2, 0x0F5E, 2),
                 SseOpcode::Movlhps => (LegacyPrefixes::None, 0x0F16, 2),
-                SseOpcode::Movsd => (LegacyPrefixes::_F2, 0x0F10, 2),
                 SseOpcode::Packssdw => (LegacyPrefixes::_66, 0x0F6B, 2),
                 SseOpcode::Packsswb => (LegacyPrefixes::_66, 0x0F63, 2),
                 SseOpcode::Packusdw => (LegacyPrefixes::_66, 0x0F382B, 3),
@@ -1779,7 +1771,6 @@ pub(crate) fn emit(
                 SseOpcode::Pmullw => (LegacyPrefixes::_66, 0x0FD5, 2),
                 SseOpcode::Pmuludq => (LegacyPrefixes::_66, 0x0FF4, 2),
                 SseOpcode::Pshufb => (LegacyPrefixes::_66, 0x0F3800, 3),
-                SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F10, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
@@ -2674,24 +2665,6 @@ pub(crate) fn emit(
             // an instruction, such as `xor <tmp>, <tmp>`, that semantically
             // reads this undefined value but arithmetically produces the same
             // result regardless of its value.
-        }
-
-        Inst::XmmMovRM { op, src, dst } => {
-            let src = src.to_reg();
-            let dst = dst.clone();
-
-            let (prefix, opcode) = match op {
-                SseOpcode::Movaps => (LegacyPrefixes::None, 0x0F29),
-                SseOpcode::Movapd => (LegacyPrefixes::_66, 0x0F29),
-                SseOpcode::Movdqu => (LegacyPrefixes::_F3, 0x0F7F),
-                SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F11),
-                SseOpcode::Movsd => (LegacyPrefixes::_F2, 0x0F11),
-                SseOpcode::Movups => (LegacyPrefixes::None, 0x0F11),
-                SseOpcode::Movupd => (LegacyPrefixes::_66, 0x0F11),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            let dst = &dst.finalize(state.frame_layout(), sink);
-            emit_std_reg_mem(sink, prefix, opcode, 2, src, dst, RexFlags::clear_w(), 0);
         }
 
         Inst::XmmCmpRmR { op, src1, src2 } => {

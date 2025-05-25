@@ -25,7 +25,7 @@ pub fn rust_param_raw(op: &Operand) -> String {
             format!("&{reg}Mem{aligned}")
         }
         OperandKind::Mem(_) => {
-            format!("&Amode")
+            format!("&SyntheticAmode")
         }
         OperandKind::Reg(r) | OperandKind::FixedReg(r) => r.reg_class().unwrap().to_string(),
     }
@@ -223,9 +223,9 @@ pub fn isle_param_raw(op: &Operand) -> String {
         OperandKind::Reg(r) | OperandKind::FixedReg(r) => r.reg_class().unwrap().to_string(),
         OperandKind::Mem(_) => {
             if op.align {
-                unimplemented!("no way yet to mark an Amode as aligned")
+                unimplemented!("no way yet to mark an SyntheticAmode as aligned")
             } else {
-                "Amode".to_string()
+                "SyntheticAmode".to_string()
             }
         }
         OperandKind::RegMem(rm) => {
@@ -316,7 +316,7 @@ pub fn isle_param_for_ctor(op: &Operand, ctor: IsleConstructor) -> String {
         // other constructor it's operating on registers so the argument is
         // a `Gpr`.
         OperandKind::RegMem(_) if op.mutability.is_write() => match ctor {
-            IsleConstructor::RetMemorySideEffect => "Amode".to_string(),
+            IsleConstructor::RetMemorySideEffect => "SyntheticAmode".to_string(),
             IsleConstructor::RetGpr => "Gpr".to_string(),
             IsleConstructor::RetXmm => "Xmm".to_string(),
             IsleConstructor::RetValueRegs => "ValueRegs".to_string(),
@@ -581,5 +581,9 @@ pub fn generate_isle(f: &mut Formatter, insts: &[Inst]) {
 /// `RegMem::Mem`, an operand from the constructor of the original entrypoint
 /// itself.
 fn is_raw_operand_param(o: &Operand) -> bool {
-    o.mutability.is_read() || matches!(o.location.kind(), OperandKind::RegMem(_))
+    o.mutability.is_read()
+        || matches!(
+            o.location.kind(),
+            OperandKind::RegMem(_) | OperandKind::Mem(_)
+        )
 }
