@@ -140,18 +140,18 @@ impl dsl::Format {
                 fmtln!(f, "let dst = self.{dst}.enc();");
                 fmtln!(f, "let rex = RexPrefix::with_digit(digit, dst, {bits});");
             }
-            [Reg(dst), Imm(_)] | [Reg(dst)] => match rex.digit {
-                Some(digit) => {
-                    fmtln!(f, "let digit = 0x{digit:x};");
-                    fmtln!(f, "let dst = self.{dst}.enc();");
-                    fmtln!(f, "let rex = RexPrefix::two_op(digit, dst, {bits});");
-                }
-                None => {
-                    assert!(rex.opcode_mod.is_some());
-                    fmtln!(f, "let dst = self.{dst}.enc();");
-                    fmtln!(f, "let rex = RexPrefix::one_op(dst, {bits});");
-                }
-            },
+            [Reg(dst)] => {
+                assert_eq!(rex.digit, None);
+                assert!(rex.opcode_mod.is_some());
+                fmtln!(f, "let dst = self.{dst}.enc();");
+                fmtln!(f, "let rex = RexPrefix::one_op(dst, {bits});");
+            }
+            [Reg(dst), Imm(_)] => {
+                let digit = rex.digit.unwrap();
+                fmtln!(f, "let digit = 0x{digit:x};");
+                fmtln!(f, "let dst = self.{dst}.enc();");
+                fmtln!(f, "let rex = RexPrefix::two_op(digit, dst, {bits});");
+            }
             [FixedReg(_), RegMem(mem)]
             | [FixedReg(_), FixedReg(_), RegMem(mem)]
             | [RegMem(mem), FixedReg(_)] => {
