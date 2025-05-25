@@ -135,11 +135,6 @@
        (Setcc (cc CC)
               (dst WritableGpr))
 
-       ;; Swaps byte order in register
-       (Bswap (size OperandSize) ;; 4 or 8
-              (src Gpr)
-              (dst WritableGpr))
-
        ;; =========================================
        ;; Conditional moves.
 
@@ -3012,11 +3007,8 @@
 ;; In x64, 32- and 64-bit registers use BSWAP instruction, and
 ;; for 16-bit registers one must instead use xchg or rol/ror
 (decl x64_bswap (Type Gpr) Gpr)
-(rule (x64_bswap ty src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.Bswap size src dst))))
-        dst))
+(rule (x64_bswap $I32 src) (x64_bswapl_o src))
+(rule (x64_bswap $I64 src) (x64_bswapq_o src))
 
 ;; Helper for creating `MInst.CmpRmiR` instructions.
 (decl cmp_rmi_r (OperandSize CmpOpcode Gpr GprMemImm) ProducesFlags)

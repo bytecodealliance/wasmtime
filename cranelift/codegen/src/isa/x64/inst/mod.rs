@@ -77,7 +77,6 @@ impl Inst {
             // These instructions are part of SSE2, which is a basic requirement in Cranelift, and
             // don't have to be checked.
             Inst::AtomicRmwSeq { .. }
-            | Inst::Bswap { .. }
             | Inst::CallKnown { .. }
             | Inst::CallUnknown { .. }
             | Inst::ReturnCallKnown { .. }
@@ -1196,13 +1195,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {dst}")
             }
 
-            Inst::Bswap { size, src, dst } => {
-                let src = pretty_print_reg(src.to_reg(), size.to_bytes());
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let op = ljustify2("bswap".to_string(), suffix_bwlq(*size));
-                format!("{op} {src}, {dst}")
-            }
-
             Inst::Cmove {
                 size,
                 cc,
@@ -1931,10 +1923,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
         Inst::Setcc { dst, .. } => {
             collector.reg_def(dst);
-        }
-        Inst::Bswap { src, dst, .. } => {
-            collector.reg_use(src);
-            collector.reg_reuse_def(dst, 0);
         }
         Inst::Cmove {
             consequent,

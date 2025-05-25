@@ -39,5 +39,8 @@ pub fn list() -> Vec<Inst> {
         inst("cwtd", fmt("ZO", [w(implicit(dx)), r(implicit(ax))]), rex([0x66, 0x99]), _64b | compat),
         inst("cltd", fmt("ZO", [w(implicit(edx)), r(implicit(eax))]), rex([0x99]), _64b | compat),
         inst("cqto", fmt("ZO", [w(implicit(rdx)), r(implicit(rax))]), rex([0x99]).w(), _64b),
+
+        inst("bswapl", fmt("O", [rw(r32)]), rex([0x0F, 0xC8]).rd(), _64b | compat),
+        inst("bswapq", fmt("O", [rw(r64)]), rex([0x0F, 0xC8]).w().ro(), _64b),
     ]
 }

@@ -12,7 +12,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   bswapq  %rax, %rax
+;   bswapq %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -39,7 +39,7 @@ block0(v0: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   bswapl  %eax, %eax
+;   bswapl %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

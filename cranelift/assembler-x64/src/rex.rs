@@ -49,7 +49,7 @@ impl RexPrefix {
     ///   bit of the opcode digit.
     #[inline]
     #[must_use]
-    pub const fn one_op(self, enc: u8, w_bit: bool, uses_8bit: bool) -> Self {
+    pub const fn one_op(enc: u8, w_bit: bool, uses_8bit: bool) -> Self {
         let must_emit = uses_8bit && is_special(enc);
         let w = if w_bit { 1 } else { 0 };
         let r = 0;

@@ -140,6 +140,12 @@ impl dsl::Format {
                 fmtln!(f, "let dst = self.{dst}.enc();");
                 fmtln!(f, "let rex = RexPrefix::with_digit(digit, dst, {bits});");
             }
+            [Reg(dst)] => {
+                assert_eq!(rex.digit, None);
+                assert!(rex.opcode_mod.is_some());
+                fmtln!(f, "let dst = self.{dst}.enc();");
+                fmtln!(f, "let rex = RexPrefix::one_op(dst, {bits});");
+            }
             [Reg(dst), Imm(_)] => {
                 let digit = rex.digit.unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");

@@ -250,8 +250,6 @@ pub(crate) fn check(
 
         Inst::Setcc { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
 
-        Inst::Bswap { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
-
         Inst::Cmove {
             size,
             dst,
