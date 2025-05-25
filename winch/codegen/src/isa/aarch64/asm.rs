@@ -358,10 +358,11 @@ impl Assembler {
     }
 
     fn alu_ir(&mut self, alu_op: ALUOp, imm: u64, rn: Reg, rd: WritableReg, size: OperandSize) {
+        let scratch = regs::scratch();
+        assert!(rn != scratch);
         if let Some(imm) = Imm12::maybe_from_u64(imm) {
             self.alu_rri(alu_op, imm, rn, rd, size);
         } else {
-            let scratch = regs::scratch();
             self.load_constant(imm, writable!(scratch));
             self.alu_rrr_extend(alu_op, scratch, rn, rd, size);
         }
@@ -384,11 +385,12 @@ impl Assembler {
 
     /// Subtract immediate and register.
     pub fn sub_ir(&mut self, imm: u64, rn: Reg, rd: WritableReg, size: OperandSize) {
+        let scratch = regs::scratch();
+        assert!(rn != scratch);
         let alu_op = ALUOp::Sub;
         if let Some(imm) = Imm12::maybe_from_u64(imm) {
             self.alu_rri(alu_op, imm, rn, rd, size);
         } else {
-            let scratch = regs::scratch();
             self.load_constant(imm, writable!(scratch));
             self.alu_rrr_extend(alu_op, scratch, rn, rd, size);
         }
@@ -401,11 +403,12 @@ impl Assembler {
 
     /// Subtract immediate and register, setting flags.
     pub fn subs_ir(&mut self, imm: u64, rn: Reg, size: OperandSize) {
+        let scratch = regs::scratch();
+        assert!(rn != scratch);
         let alu_op = ALUOp::SubS;
         if let Some(imm) = Imm12::maybe_from_u64(imm) {
             self.alu_rri(alu_op, imm, rn, writable!(regs::zero()), size);
         } else {
-            let scratch = regs::scratch();
             self.load_constant(imm, writable!(scratch));
             self.alu_rrr_extend(alu_op, scratch, rn, writable!(regs::zero()), size);
         }
@@ -419,6 +422,7 @@ impl Assembler {
     /// Multiply immediate and register.
     pub fn mul_ir(&mut self, imm: u64, rn: Reg, rd: WritableReg, size: OperandSize) {
         let scratch = regs::scratch();
+        assert!(rn != scratch);
         self.load_constant(imm, writable!(scratch));
         self.alu_rrrr(ALUOp3::MAdd, scratch, rn, rd, regs::zero(), size);
     }
@@ -542,12 +546,13 @@ impl Assembler {
 
     /// And immediate and register.
     pub fn and_ir(&mut self, imm: u64, rn: Reg, rd: WritableReg, size: OperandSize) {
+        let scratch = regs::scratch();
+        assert!(rn != scratch);
         let alu_op = ALUOp::And;
         let cl_size: inst::OperandSize = size.into();
         if let Some(imm) = ImmLogic::maybe_from_u64(imm, cl_size.to_ty()) {
             self.alu_rri_logic(alu_op, imm, rn, rd, size);
         } else {
-            let scratch = regs::scratch();
             self.load_constant(imm, writable!(scratch));
             self.alu_rrr(alu_op, scratch, rn, rd, size);
         }
@@ -560,12 +565,13 @@ impl Assembler {
 
     /// Or immediate and register.
     pub fn or_ir(&mut self, imm: u64, rn: Reg, rd: WritableReg, size: OperandSize) {
+        let scratch = regs::scratch();
+        assert!(rn != scratch);
         let alu_op = ALUOp::Orr;
         let cl_size: inst::OperandSize = size.into();
         if let Some(imm) = ImmLogic::maybe_from_u64(imm, cl_size.to_ty()) {
             self.alu_rri_logic(alu_op, imm, rn, rd, size);
         } else {
-            let scratch = regs::scratch();
             self.load_constant(imm, writable!(scratch));
             self.alu_rrr(alu_op, scratch, rn, rd, size);
         }
@@ -578,12 +584,13 @@ impl Assembler {
 
     /// Xor immediate and register.
     pub fn xor_ir(&mut self, imm: u64, rn: Reg, rd: WritableReg, size: OperandSize) {
+        let scratch = regs::scratch();
+        assert!(rn != scratch);
         let alu_op = ALUOp::Eor;
         let cl_size: inst::OperandSize = size.into();
         if let Some(imm) = ImmLogic::maybe_from_u64(imm, cl_size.to_ty()) {
             self.alu_rri_logic(alu_op, imm, rn, rd, size);
         } else {
-            let scratch = regs::scratch();
             self.load_constant(imm, writable!(scratch));
             self.alu_rrr(alu_op, scratch, rn, rd, size);
         }
@@ -611,12 +618,13 @@ impl Assembler {
         kind: ShiftKind,
         size: OperandSize,
     ) {
+        let scratch = regs::scratch();
+        assert!(rn != scratch);
         let shift_op = self.shift_kind_to_alu_op(kind, rn, size);
 
         if let Some(imm) = ImmShift::maybe_from_u64(imm) {
             self.alu_rri_shift(shift_op, imm, rn, rd, size);
         } else {
-            let scratch = regs::scratch();
             self.load_constant(imm, writable!(scratch));
             self.alu_rrr(shift_op, scratch, rn, rd, size);
         }
@@ -868,6 +876,30 @@ impl Assembler {
             rm: rm.into(),
             cond,
         });
+    }
+
+    /// If the condition is true, `csel` writes rn to rd. If the
+    /// condition is false, it writes rm to rd
+    pub fn fpu_csel(&mut self, rn: Reg, rm: Reg, rd: WritableReg, cond: Cond, size: OperandSize) {
+        match size {
+            OperandSize::S32 => {
+                self.emit(Inst::FpuCSel32 {
+                    rd: rd.map(Into::into),
+                    rn: rn.into(),
+                    rm: rm.into(),
+                    cond,
+                });
+            }
+            OperandSize::S64 => {
+                self.emit(Inst::FpuCSel64 {
+                    rd: rd.map(Into::into),
+                    rn: rn.into(),
+                    rm: rm.into(),
+                    cond,
+                });
+            }
+            _ => todo!(),
+        }
     }
 
     /// Population count per byte.

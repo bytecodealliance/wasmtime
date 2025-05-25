@@ -403,47 +403,6 @@ impl WastTest {
         spec_proposal_from_path(&self.path)
     }
 
-    /// Returns true for tests that should be ignored (not run) for
-    /// the given config.
-
-    /// The infrastructure for `.wast` tests is designed to enable the
-    /// execution of tests at all times, however, while compiler
-    /// backends are in partial development state, it becomes harder
-    /// to guarantee particular tests will run to completion and
-    /// return a recoverable error, in some cases tests might segfault
-    /// making it challenging to assert a failure status.
-    /// It's recommended to avoid ignoring tests as much as possible, instead
-    /// it's recommended to add tests to `WastTest::should_fail`.
-    pub fn ignore(&self, config: &WastConfig) -> bool {
-        if config.compiler == Compiler::Winch {
-            if cfg!(target_arch = "aarch64") {
-                let unsupported = [
-                    // Fails intermittently
-                    "misc_testsuite/table_copy_on_imported_tables.wast",
-                    // Segfault
-                    "spec_testsuite/conversions.wast",
-                    "spec_testsuite/func.wast",
-                    "spec_testsuite/float_exprs.wast",
-                    "spec_testsuite/int_exprs.wast",
-                    "spec_testsuite/left-to-right.wast",
-                    "spec_testsuite/i32.wast",
-                    "spec_testsuite/traps.wast",
-                    "spec_testsuite/unreachable.wast",
-                    "spec_testsuite/unreached-valid.wast",
-                    "misc_testsuite/component-model/fused.wast",
-                    "misc_testsuite/component-model/strings.wast",
-                    "misc_testsuite/winch/select.wast",
-                    "misc_testsuite/sink-float-but-dont-trap.wast",
-                    "misc_testsuite/issue4840.wast",
-                    "misc_testsuite/winch/use-innermost-frame.wast",
-                ];
-
-                return unsupported.iter().any(|part| self.path.ends_with(part));
-            }
-        }
-        false
-    }
-
     /// Returns whether this test should fail under the specified extra
     /// configuration.
     pub fn should_fail(&self, config: &WastConfig) -> bool {
@@ -527,7 +486,6 @@ impl WastTest {
                     "misc_testsuite/winch/table_set.wast",
                     "misc_testsuite/winch/table_fill.wast",
                     // Known bugs that don't cause segfaults.
-                    "spec_testsuite/call_indirect.wast",
                     "spec_testsuite/f32_cmp.wast",
                     "spec_testsuite/f64_cmp.wast",
                     "spec_testsuite/func_ptrs.wast",
@@ -540,7 +498,7 @@ impl WastTest {
                     "spec_testsuite/table_copy.wast",
                     "spec_testsuite/table_init.wast",
                     "misc_testsuite/winch/table_grow.wast",
-                    "misc_testsuite/call_indirect.wast",
+                    "misc_testsuite/issue4840.wast",
                 ];
 
                 if unsupported.iter().any(|part| self.path.ends_with(part)) {
