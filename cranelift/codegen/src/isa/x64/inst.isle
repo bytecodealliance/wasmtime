@@ -816,8 +816,6 @@
             Pshufb
             Pshufd
             Ptest
-            Punpcklbw
-            Punpcklwd
             Rcpss
             Roundps
             Roundpd
@@ -827,10 +825,6 @@
             Shufps
             Ucomiss
             Ucomisd
-            Punpckhdq
-            Punpckldq
-            Punpckhqdq
-            Punpcklqdq
             Pshuflw
             Pshufhw
             Pblendw
@@ -3448,7 +3442,7 @@
 ;; Helper for creating `punpcklwd` instructions.
 (decl x64_punpcklwd (Xmm XmmMem) Xmm)
 (rule 0 (x64_punpcklwd src1 src2)
-      (xmm_rm_r (SseOpcode.Punpcklwd) src1 src2))
+      (x64_punpcklwd_a src1 src2))
 (rule 1 (x64_punpcklwd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpunpcklwd) src1 src2))
@@ -3456,7 +3450,7 @@
 ;; Helper for creating `punpckldq` instructions.
 (decl x64_punpckldq (Xmm XmmMem) Xmm)
 (rule 0 (x64_punpckldq src1 src2)
-      (xmm_rm_r (SseOpcode.Punpckldq) src1 src2))
+      (x64_punpckldq_a src1 src2))
 (rule 1 (x64_punpckldq src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpunpckldq) src1 src2))
@@ -3464,7 +3458,7 @@
 ;; Helper for creating `punpckhdq` instructions.
 (decl x64_punpckhdq (Xmm XmmMem) Xmm)
 (rule 0 (x64_punpckhdq src1 src2)
-      (xmm_rm_r (SseOpcode.Punpckhdq) src1 src2))
+      (x64_punpckhdq_a src1 src2))
 (rule 1 (x64_punpckhdq src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpunpckhdq) src1 src2))
@@ -3472,7 +3466,7 @@
 ;; Helper for creating `punpcklqdq` instructions.
 (decl x64_punpcklqdq (Xmm XmmMem) Xmm)
 (rule 0 (x64_punpcklqdq src1 src2)
-      (xmm_rm_r (SseOpcode.Punpcklqdq) src1 src2))
+      (x64_punpcklqdq_a src1 src2))
 (rule 1 (x64_punpcklqdq src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpunpcklqdq) src1 src2))
@@ -3480,7 +3474,7 @@
 ;; Helper for creating `punpckhqdq` instructions.
 (decl x64_punpckhqdq (Xmm XmmMem) Xmm)
 (rule 0 (x64_punpckhqdq src1 src2)
-      (xmm_rm_r (SseOpcode.Punpckhqdq) src1 src2))
+      (x64_punpckhqdq_a src1 src2))
 (rule 1 (x64_punpckhqdq src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpunpckhqdq) src1 src2))
@@ -3799,7 +3793,7 @@
 ;; Helper for creating `punpcklbw` instructions.
 (decl x64_punpcklbw (Xmm XmmMem) Xmm)
 (rule 0 (x64_punpcklbw src1 src2)
-      (xmm_rm_r (SseOpcode.Punpcklbw) src1 src2))
+      (x64_punpcklbw_a src1 src2))
 (rule 1 (x64_punpcklbw src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpunpcklbw) src1 src2))

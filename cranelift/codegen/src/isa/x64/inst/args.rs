@@ -886,8 +886,6 @@ pub enum SseOpcode {
     Pshufb,
     Pshufd,
     Ptest,
-    Punpcklbw,
-    Punpcklwd,
     Rcpss,
     Roundps,
     Roundpd,
@@ -897,10 +895,6 @@ pub enum SseOpcode {
     Shufps,
     Ucomiss,
     Ucomisd,
-    Punpckhdq,
-    Punpckldq,
-    Punpckhqdq,
-    Punpcklqdq,
     Pshuflw,
     Pshufhw,
     Pblendw,
@@ -953,13 +947,7 @@ impl SseOpcode {
             | SseOpcode::Pmullw
             | SseOpcode::Pmuludq
             | SseOpcode::Pshufd
-            | SseOpcode::Punpcklbw
-            | SseOpcode::Punpcklwd
             | SseOpcode::Ucomisd
-            | SseOpcode::Punpckldq
-            | SseOpcode::Punpckhdq
-            | SseOpcode::Punpcklqdq
-            | SseOpcode::Punpckhqdq
             | SseOpcode::Pshuflw
             | SseOpcode::Pshufhw => SSE2,
 
@@ -1099,8 +1087,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pshufb => "pshufb",
             SseOpcode::Pshufd => "pshufd",
             SseOpcode::Ptest => "ptest",
-            SseOpcode::Punpcklbw => "punpcklbw",
-            SseOpcode::Punpcklwd => "punpcklwd",
             SseOpcode::Rcpss => "rcpss",
             SseOpcode::Roundps => "roundps",
             SseOpcode::Roundpd => "roundpd",
@@ -1110,10 +1096,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Shufps => "shufps",
             SseOpcode::Ucomiss => "ucomiss",
             SseOpcode::Ucomisd => "ucomisd",
-            SseOpcode::Punpckldq => "punpckldq",
-            SseOpcode::Punpckhdq => "punpckhdq",
-            SseOpcode::Punpcklqdq => "punpcklqdq",
-            SseOpcode::Punpckhqdq => "punpckhqdq",
             SseOpcode::Pshuflw => "pshuflw",
             SseOpcode::Pshufhw => "pshufhw",
             SseOpcode::Pblendw => "pblendw",

@@ -1779,12 +1779,6 @@ pub(crate) fn emit(
                 SseOpcode::Pmullw => (LegacyPrefixes::_66, 0x0FD5, 2),
                 SseOpcode::Pmuludq => (LegacyPrefixes::_66, 0x0FF4, 2),
                 SseOpcode::Pshufb => (LegacyPrefixes::_66, 0x0F3800, 3),
-                SseOpcode::Punpcklbw => (LegacyPrefixes::_66, 0x0F60, 2),
-                SseOpcode::Punpcklwd => (LegacyPrefixes::_66, 0x0F61, 2),
-                SseOpcode::Punpckldq => (LegacyPrefixes::_66, 0x0F62, 2),
-                SseOpcode::Punpcklqdq => (LegacyPrefixes::_66, 0x0F6C, 2),
-                SseOpcode::Punpckhdq => (LegacyPrefixes::_66, 0x0F6A, 2),
-                SseOpcode::Punpckhqdq => (LegacyPrefixes::_66, 0x0F6D, 2),
                 SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F10, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
