@@ -12,7 +12,6 @@ fn measure_execution_time(c: &mut Criterion) {
         let (engine, module) = test_setup();
         b.iter_custom(move |iters| {
             (0..iters)
-                .into_iter()
                 .map(|_| lazy_thread_instantiate(engine.clone(), module.clone()))
                 .sum()
         })
@@ -24,7 +23,6 @@ fn measure_execution_time(c: &mut Criterion) {
         let (engine, module) = test_setup();
         b.iter_custom(move |iters| {
             (0..iters)
-                .into_iter()
                 .map(|_| {
                     let (init, _call) = eager_thread_instantiate(engine.clone(), module.clone());
                     init
@@ -39,7 +37,6 @@ fn measure_execution_time(c: &mut Criterion) {
         let (engine, module) = test_setup();
         b.iter_custom(move |iters| {
             (0..iters)
-                .into_iter()
                 .map(|_| {
                     let (_init, call) = eager_thread_instantiate(engine.clone(), module.clone());
                     call

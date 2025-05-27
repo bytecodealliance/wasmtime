@@ -523,7 +523,7 @@ impl Assembler {
         };
 
         let scratch = regs::scratch();
-        self.alu_rrr(op, divisor, dividend, writable!(scratch.into()), size);
+        self.alu_rrr(op, divisor, dividend, writable!(scratch), size);
 
         self.alu_rrrr(
             ALUOp3::MSub,

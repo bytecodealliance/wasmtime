@@ -57,7 +57,7 @@ impl RunCommand {
         let are_equal = actual.len() == expected.len()
             && actual
                 .into_iter()
-                .zip(expected.into_iter())
+                .zip(expected)
                 .all(|(a, b)| a.bitwise_eq(b));
 
         match compare {

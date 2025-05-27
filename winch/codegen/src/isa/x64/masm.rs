@@ -928,8 +928,8 @@ impl Masm for MacroAssembler {
             // Use the following approach:
             // dst = size.num_bits() - bsr(src) - is_not_zero
             //     = size.num.bits() + -bsr(src) - is_not_zero.
-            self.asm.bsr(src.into(), dst, size);
-            self.asm.setcc(IntCmpKind::Ne, writable!(scratch.into()));
+            self.asm.bsr(src, dst, size);
+            self.asm.setcc(IntCmpKind::Ne, writable!(scratch));
             self.asm.neg(dst.to_reg(), dst, size);
             self.asm.add_ir(size.num_bits() as i32, dst, size);
             self.asm.sub_rr(scratch, dst, size);
@@ -950,8 +950,8 @@ impl Masm for MacroAssembler {
             // BSF outputs the correct value for every value except 0.
             // When the value is 0, BSF outputs 0, correct output for ctz is
             // the number of bits.
-            self.asm.bsf(src.into(), dst.into(), size);
-            self.asm.setcc(IntCmpKind::Eq, writable!(scratch.into()));
+            self.asm.bsf(src, dst, size);
+            self.asm.setcc(IntCmpKind::Eq, writable!(scratch));
             self.asm
                 .shift_ir(size.log2(), writable!(scratch), ShiftKind::Shl, size);
             self.asm.add_rr(scratch, dst, size);
@@ -1053,8 +1053,8 @@ impl Masm for MacroAssembler {
             self.asm.add_rr(dst.to_reg(), tmp, size);
 
             // x = (x + (x >> 4)) & m4;
-            self.asm.mov_rr(tmp.to_reg(), dst.into(), size);
-            self.asm.shift_ir(4u8, dst.into(), ShiftKind::ShrU, size);
+            self.asm.mov_rr(tmp.to_reg(), dst, size);
+            self.asm.shift_ir(4u8, dst, ShiftKind::ShrU, size);
             self.asm.add_rr(tmp.to_reg(), dst, size);
             let lhs = dst.to_reg();
             self.and(writable!(lhs), lhs, RegImm::i64(masks[2]), size)?;
@@ -1062,8 +1062,7 @@ impl Masm for MacroAssembler {
             // (x * h01) >> shift_amt
             let lhs = dst.to_reg();
             self.mul(writable!(lhs), lhs, RegImm::i64(masks[3]), size)?;
-            self.asm
-                .shift_ir(shift_amt, dst.into(), ShiftKind::ShrU, size);
+            self.asm.shift_ir(shift_amt, dst, ShiftKind::ShrU, size);
 
             context.stack.push(src.into());
             context.free_reg(tmp.to_reg());
@@ -1073,7 +1072,7 @@ impl Masm for MacroAssembler {
     }
 
     fn wrap(&mut self, dst: WritableReg, src: Reg) -> Result<()> {
-        self.asm.mov_rr(src.into(), dst, OperandSize::S32);
+        self.asm.mov_rr(src, dst, OperandSize::S32);
         Ok(())
     }
 
@@ -1193,19 +1192,19 @@ impl Masm for MacroAssembler {
         src: Reg,
         size: OperandSize,
     ) -> Result<()> {
-        self.asm.gpr_to_xmm(src.into(), dst, size);
+        self.asm.gpr_to_xmm(src, dst, size);
         Ok(())
     }
 
     fn demote(&mut self, dst: WritableReg, src: Reg) -> Result<()> {
         self.asm
-            .cvt_float_to_float(src.into(), dst.into(), OperandSize::S64, OperandSize::S32);
+            .cvt_float_to_float(src, dst, OperandSize::S64, OperandSize::S32);
         Ok(())
     }
 
     fn promote(&mut self, dst: WritableReg, src: Reg) -> Result<()> {
         self.asm
-            .cvt_float_to_float(src.into(), dst, OperandSize::S32, OperandSize::S64);
+            .cvt_float_to_float(src, dst, OperandSize::S32, OperandSize::S64);
         Ok(())
     }
 
@@ -1502,7 +1501,7 @@ impl Masm for MacroAssembler {
             Some(ext) => {
                 // We don't need to zero-extend from 32 to 64bits.
                 if !(ext.from_bits() == 32 && ext.to_bits() == 64) {
-                    self.asm.movzx_rr(res, writable!(res), ext.into());
+                    self.asm.movzx_rr(res, writable!(res), ext);
                 }
 
                 WasmValType::int_from_bits(ext.to_bits())
@@ -1657,7 +1656,7 @@ impl Masm for MacroAssembler {
             // We don't need to zero-extend from 32 to 64bits.
             if !(extend.from_bits() == 32 && extend.to_bits() == 64) {
                 self.asm
-                    .movzx_rr(expected.reg.into(), writable!(expected.reg.into()), extend);
+                    .movzx_rr(expected.reg, writable!(expected.reg), extend);
             }
         }
 
@@ -2948,7 +2947,7 @@ impl MacroAssembler {
         shared_flags: settings::Flags,
         isa_flags: x64_settings::Flags,
     ) -> Result<Self> {
-        let ptr_type: WasmValType = ptr_type_from_ptr_size(ptr_size.size()).into();
+        let ptr_type: WasmValType = ptr_type_from_ptr_size(ptr_size.size());
 
         Ok(Self {
             sp_offset: 0,

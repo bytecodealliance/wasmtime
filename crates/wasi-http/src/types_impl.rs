@@ -425,7 +425,7 @@ where
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
     ) -> wasmtime::Result<Method> {
-        Ok(self.table().get(&request)?.method.clone().try_into()?)
+        Ok(self.table().get(&request)?.method.clone())
     }
 
     fn set_method(

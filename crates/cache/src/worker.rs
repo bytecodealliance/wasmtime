@@ -5,6 +5,14 @@
 //! but we guarantee eventual consistency and fault tolerancy.
 //! Background tasks can be CPU intensive, but the worker thread has low priority.
 
+#![cfg_attr(
+    not(test),
+    expect(
+        clippy::useless_conversion,
+        reason = "test/not have a different definition of `SystemTime`",
+    )
+)]
+
 use super::{CacheConfig, fs_write_atomic};
 use log::{debug, info, trace, warn};
 use serde_derive::{Deserialize, Serialize};

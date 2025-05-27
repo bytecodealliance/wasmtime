@@ -353,10 +353,10 @@ impl Engine {
             // These settings must all have be enabled, since their value
             // can affect the way the generated code performs or behaves at
             // runtime.
-            "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
+            "libcall_call_conv" => *value == FlagValue::Enum("isa_default"),
             "preserve_frame_pointers" => *value == FlagValue::Bool(true),
             "enable_probestack" => *value == FlagValue::Bool(true),
-            "probestack_strategy" => *value == FlagValue::Enum("inline".into()),
+            "probestack_strategy" => *value == FlagValue::Enum("inline"),
             "enable_multi_ret_implicit_sret" => *value == FlagValue::Bool(true),
 
             // Features wasmtime doesn't use should all be disabled, since

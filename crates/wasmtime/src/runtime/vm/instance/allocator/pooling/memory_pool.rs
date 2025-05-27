@@ -237,10 +237,7 @@ impl MemoryPool {
         };
 
         debug_assert!(layout.num_stripes > 0);
-        let stripes: Vec<_> = (0..layout.num_stripes)
-            .into_iter()
-            .map(create_stripe)
-            .collect();
+        let stripes: Vec<_> = (0..layout.num_stripes).map(create_stripe).collect();
 
         let pool = Self {
             stripes,
@@ -270,7 +267,7 @@ impl MemoryPool {
     /// Validate whether this memory pool supports the given module.
     pub fn validate_memories(&self, module: &Module) -> Result<()> {
         let memories = module.num_defined_memories();
-        if memories > usize::try_from(self.memories_per_instance).unwrap() {
+        if memories > self.memories_per_instance {
             bail!(
                 "defined memories count of {} exceeds the per-instance limit of {}",
                 memories,

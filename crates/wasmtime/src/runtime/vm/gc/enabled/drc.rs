@@ -276,10 +276,7 @@ impl DrcHeap {
         let info = match gc_layout {
             GcLayout::Array(l) => {
                 if l.elems_are_gc_refs {
-                    debug_assert_eq!(
-                        l.elem_offset(0),
-                        u32::try_from(GC_REF_ARRAY_ELEMS_OFFSET).unwrap()
-                    );
+                    debug_assert_eq!(l.elem_offset(0), GC_REF_ARRAY_ELEMS_OFFSET,);
                 }
                 TraceInfo::Array {
                     gc_ref_elems: l.elems_are_gc_refs,

@@ -47,7 +47,7 @@ impl Ctx {
         if preload_model {
             registry.load((backend).as_dir_loadable().unwrap(), &mobilenet_dir)?;
         }
-        let wasi_nn = WasiNnCtx::new([backend.into()], registry.into());
+        let wasi_nn = WasiNnCtx::new([backend], registry.into());
 
         Ok(Self { wasi, wasi_nn })
     }

@@ -527,7 +527,7 @@ impl HostOutgoingBody {
         };
 
         // Ignoring failure: receiver died sending body, but we can't report that here.
-        let _ = sender.send(message.into());
+        let _ = sender.send(message);
 
         Ok(())
     }

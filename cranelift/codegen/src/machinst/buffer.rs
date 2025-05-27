@@ -876,8 +876,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             self.label_offsets[l.0 as usize] = cur_off;
         }
         // Old labels_at_this_branch are now at cur_off.
-        self.labels_at_tail
-            .extend(b.labels_at_this_branch.into_iter());
+        self.labels_at_tail.extend(b.labels_at_this_branch);
 
         // Post-invariant: this operation is defined to truncate the buffer,
         // which moves cur_off backward, and to move labels at the end of the

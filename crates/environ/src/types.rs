@@ -2109,8 +2109,8 @@ pub trait TypeConvert {
             true => IndexType::I64,
         };
         let limits = Limits {
-            min: ty.initial.try_into().unwrap(),
-            max: ty.maximum.map(|i| i.try_into().unwrap()),
+            min: ty.initial,
+            max: ty.maximum,
         };
         Ok(Table {
             idx_type,

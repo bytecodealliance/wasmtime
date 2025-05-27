@@ -390,7 +390,6 @@ mod srcgen_tests {
         s.into()
             .trim()
             .split("\n")
-            .into_iter()
             .map(|x| format!("{x}\n"))
             .collect()
     }
@@ -495,7 +494,7 @@ match x {
 
         actual_results
             .into_iter()
-            .zip(expected_results.into_iter())
+            .zip(expected_results)
             .for_each(|(actual, expected): (String, &str)| assert_eq!(&actual, expected));
     }
 

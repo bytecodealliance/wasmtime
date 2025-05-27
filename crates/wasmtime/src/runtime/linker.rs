@@ -849,7 +849,7 @@ impl<T> Linker<T> {
                 if let Some(export) = instance.get_export(&mut store, "_initialize") {
                     if let Extern::Func(func) = export {
                         func.typed::<(), ()>(&store)
-                            .and_then(|f| f.call(&mut store, ()).map_err(Into::into))
+                            .and_then(|f| f.call(&mut store, ()))
                             .context("calling the Reactor initialization function")?;
                     }
                 }

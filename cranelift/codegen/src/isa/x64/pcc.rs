@@ -553,7 +553,7 @@ pub(crate) fn check(
             op,
             ..
         } if op.has_scalar_src2() => {
-            match <&RegMem>::from(src2) {
+            match src2 {
                 RegMem::Mem { addr } => {
                     check_load(
                         ctx,
@@ -570,7 +570,7 @@ pub(crate) fn check(
         }
 
         Inst::XmmRmRImm { dst, ref src2, .. } => {
-            match <&RegMem>::from(src2) {
+            match src2 {
                 RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I8X16, 128)?;
                 }
@@ -607,7 +607,7 @@ pub(crate) fn check(
 
         Inst::ReturnCallUnknown { .. } => Ok(()),
 
-        Inst::CallUnknown { ref info } => match <&RegMem>::from(&info.dest) {
+        Inst::CallUnknown { ref info } => match &info.dest {
             RegMem::Mem { addr } => {
                 check_load(ctx, None, addr, vcode, I64, 64)?;
                 Ok(())
@@ -616,7 +616,7 @@ pub(crate) fn check(
         },
         Inst::JmpUnknown {
             target: ref dest, ..
-        } => match <&RegMem>::from(dest) {
+        } => match dest {
             RegMem::Mem { addr } => {
                 check_load(ctx, None, addr, vcode, I64, 64)?;
                 Ok(())

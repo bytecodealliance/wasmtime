@@ -505,14 +505,14 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 .push(TableSegment {
                                     table_index,
                                     offset,
-                                    elements: elements.into(),
+                                    elements,
                                 });
                         }
 
                         ElementKind::Passive => {
                             let elem_index = ElemIndex::from_u32(index as u32);
                             let index = self.result.module.passive_elements.len();
-                            self.result.module.passive_elements.push(elements.into());
+                            self.result.module.passive_elements.push(elements);
                             self.result
                                 .module
                                 .passive_elements_map

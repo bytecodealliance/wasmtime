@@ -516,7 +516,7 @@ mod record_error {
             fn convert_e2(&mut self, err: TrappableE2) -> anyhow::Result<imports::E2> {
                 match err {
                     TrappableE2::Normal(e) => Ok(e),
-                    TrappableE2::Trap(e) => Err(e.into()),
+                    TrappableE2::Trap(e) => Err(e),
                 }
             }
             fn record_error(&mut self, a: f64) -> Result<f64, TrappableE2> {
@@ -712,7 +712,7 @@ mod variant_error {
             fn convert_e3(&mut self, err: TrappableE3) -> anyhow::Result<imports::E3> {
                 match err {
                     TrappableE3::Normal(e) => Ok(e),
-                    TrappableE3::Trap(e) => Err(e.into()),
+                    TrappableE3::Trap(e) => Err(e),
                 }
             }
             fn variant_error(&mut self, a: f64) -> Result<f64, TrappableE3> {
@@ -907,7 +907,7 @@ mod multiple_interfaces_error {
             fn convert_e1(&mut self, err: TrappableE1) -> anyhow::Result<imports::E1> {
                 match err {
                     TrappableE1::Normal(e) => Ok(e),
-                    TrappableE1::Trap(e) => Err(e.into()),
+                    TrappableE1::Trap(e) => Err(e),
                 }
             }
             fn enum_error(&mut self, a: f64) -> Result<f64, TrappableE1> {

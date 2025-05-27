@@ -2422,8 +2422,7 @@ impl MachInst for Inst {
     fn gen_imm_f64(value: f64, tmp: Writable<Reg>, dst: Writable<Reg>) -> SmallVec<[Self; 2]> {
         let imm_to_gpr = Inst::imm(OperandSize::Size64, value.to_bits(), tmp);
         let gpr_to_xmm = Inst::External {
-            inst: asm::inst::movq_a::new(dst.map(|r| Xmm::new(r).unwrap().into()), tmp.to_reg())
-                .into(),
+            inst: asm::inst::movq_a::new(dst.map(|r| Xmm::new(r).unwrap()), tmp.to_reg()).into(),
         };
         smallvec![imm_to_gpr, gpr_to_xmm]
     }

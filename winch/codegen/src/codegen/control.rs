@@ -452,7 +452,7 @@ impl ControlStackFrame {
                 self.init(masm, context)?;
                 masm.branch(
                     IntCmpKind::Eq,
-                    top.reg.into(),
+                    top.reg,
                     top.reg.into(),
                     cont,
                     OperandSize::S32,

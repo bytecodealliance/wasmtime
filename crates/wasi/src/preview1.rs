@@ -533,8 +533,7 @@ impl WasiP1Ctx {
             descriptors
         } else {
             Descriptors::new(self.as_wasi_impl())?
-        }
-        .into();
+        };
         Ok(Transaction {
             view: self,
             descriptors,

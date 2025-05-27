@@ -483,21 +483,21 @@ pub fn mem_vrx_emit(
 
 fn machreg_to_gpr(m: Reg) -> u8 {
     assert_eq!(m.class(), RegClass::Int);
-    u8::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
+    m.to_real_reg().unwrap().hw_enc()
 }
 
 fn machreg_to_vr(m: Reg) -> u8 {
     assert_eq!(m.class(), RegClass::Float);
-    u8::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
+    m.to_real_reg().unwrap().hw_enc()
 }
 
 fn machreg_to_fpr(m: Reg) -> u8 {
     assert!(is_fpr(m));
-    u8::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap()
+    m.to_real_reg().unwrap().hw_enc()
 }
 
 fn machreg_to_gpr_or_fpr(m: Reg) -> u8 {
-    let reg = u8::try_from(m.to_real_reg().unwrap().hw_enc()).unwrap();
+    let reg = m.to_real_reg().unwrap().hw_enc();
     assert!(reg < 16);
     reg
 }
@@ -3042,16 +3042,7 @@ impl Inst {
                 };
 
                 let rd = rd.to_reg();
-                mem_vrx_emit(
-                    rd,
-                    &mem,
-                    opcode_vrx,
-                    lane_imm.into(),
-                    true,
-                    sink,
-                    emit_info,
-                    state,
-                );
+                mem_vrx_emit(rd, &mem, opcode_vrx, lane_imm, true, sink, emit_info, state);
             }
             &Inst::VecLoadLaneUndef {
                 size,
@@ -3084,16 +3075,7 @@ impl Inst {
                         rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
                     );
                 } else {
-                    mem_vrx_emit(
-                        rd,
-                        &mem,
-                        opcode_vrx,
-                        lane_imm.into(),
-                        true,
-                        sink,
-                        emit_info,
-                        state,
-                    );
+                    mem_vrx_emit(rd, &mem, opcode_vrx, lane_imm, true, sink, emit_info, state);
                 }
             }
             &Inst::VecStoreLane {
@@ -3126,16 +3108,7 @@ impl Inst {
                         rd, &mem, opcode_rx, opcode_rxy, None, true, sink, emit_info, state,
                     );
                 } else {
-                    mem_vrx_emit(
-                        rd,
-                        &mem,
-                        opcode_vrx,
-                        lane_imm.into(),
-                        true,
-                        sink,
-                        emit_info,
-                        state,
-                    );
+                    mem_vrx_emit(rd, &mem, opcode_vrx, lane_imm, true, sink, emit_info, state);
                 }
             }
             &Inst::VecInsertLane {
@@ -3226,10 +3199,7 @@ impl Inst {
                     64 => 0xe742, // VLEIG
                     _ => unreachable!(),
                 };
-                put(
-                    sink,
-                    &enc_vri_a(opcode, rd.to_reg(), imm as u16, lane_imm.into()),
-                );
+                put(sink, &enc_vri_a(opcode, rd.to_reg(), imm as u16, lane_imm));
             }
             &Inst::VecInsertLaneImmUndef {
                 size,
@@ -3244,10 +3214,7 @@ impl Inst {
                     64 => 0xe742, // VLEIG
                     _ => unreachable!(),
                 };
-                put(
-                    sink,
-                    &enc_vri_a(opcode, rd.to_reg(), imm as u16, lane_imm.into()),
-                );
+                put(sink, &enc_vri_a(opcode, rd.to_reg(), imm as u16, lane_imm));
             }
             &Inst::VecReplicateLane {
                 size,

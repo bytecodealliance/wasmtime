@@ -184,7 +184,7 @@ fn build_function_lookup(
     }
     active_ranges.sort();
     index.insert(last_wasm_pos.unwrap(), active_ranges.into_boxed_slice());
-    let index = Vec::from_iter(index.into_iter());
+    let index = Vec::from_iter(index);
     (fn_start, fn_end, FuncLookup { index, ranges })
 }
 
@@ -486,7 +486,7 @@ impl AddressTransform {
         }
 
         let map = build_function_addr_map(compilation, module);
-        let func = Vec::from_iter(func.into_iter());
+        let func = Vec::from_iter(func);
         AddressTransform { map, func }
     }
 
@@ -751,7 +751,7 @@ mod tests {
         assert_eq!(20, end);
 
         assert_eq!(2, lookup.index.len());
-        let index_entries = Vec::from_iter(lookup.index.into_iter());
+        let index_entries = Vec::from_iter(lookup.index);
         assert_eq!((10u64, vec![0].into_boxed_slice()), index_entries[0]);
         assert_eq!((12u64, vec![0, 1].into_boxed_slice()), index_entries[1]);
         assert_eq!(2, lookup.ranges.len());

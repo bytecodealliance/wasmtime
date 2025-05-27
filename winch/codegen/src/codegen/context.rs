@@ -355,7 +355,7 @@ impl<'a> CodeGenContext<'a, Emission> {
     {
         let src = self.pop_to_reg(masm, None)?;
         let dst = self.pop_to_reg(masm, None)?;
-        let dst = emit(masm, dst.reg, src.reg.into(), size)?;
+        let dst = emit(masm, dst.reg, src.reg, size)?;
         self.free_reg(src);
         self.stack.push(dst.into());
 

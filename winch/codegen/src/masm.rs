@@ -1471,10 +1471,7 @@ pub(crate) trait MacroAssembler {
                         self.address_from_sp(SPOffset::from_u32(src_offs))?,
                         writable!(scratch),
                     )?;
-                    self.store_ptr(
-                        scratch.into(),
-                        self.address_from_sp(SPOffset::from_u32(dst_offs))?,
-                    )?;
+                    self.store_ptr(scratch, self.address_from_sp(SPOffset::from_u32(dst_offs))?)?;
                 }
             }
             MemMoveDirection::HighToLow => {
@@ -1486,10 +1483,7 @@ pub(crate) trait MacroAssembler {
                         self.address_from_sp(SPOffset::from_u32(src_offs))?,
                         writable!(scratch),
                     )?;
-                    self.store_ptr(
-                        scratch.into(),
-                        self.address_from_sp(SPOffset::from_u32(dst_offs))?,
-                    )?;
+                    self.store_ptr(scratch, self.address_from_sp(SPOffset::from_u32(dst_offs))?)?;
 
                     remaining -= word_bytes;
                     src_offs -= word_bytes;
@@ -1823,7 +1817,7 @@ pub(crate) trait MacroAssembler {
             self.zero(writable!(zero))?;
             let zero = RegImm::reg(zero);
 
-            for step in (start..end).into_iter().step_by(word_size as usize) {
+            for step in (start..end).step_by(word_size as usize) {
                 let slot = LocalSlot::i64(step + word_size);
                 let addr: Self::Address = self.local_address(&slot)?;
                 self.store(zero, addr, OperandSize::S64)?;

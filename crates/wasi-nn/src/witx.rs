@@ -160,7 +160,7 @@ impl generated::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
     ) -> Result<generated::types::Graph> {
         let name = memory.as_str(name)?.unwrap();
         if let Some(graph) = self.registry.get_mut(&name) {
-            let graph_id = self.graphs.insert(graph.clone().into());
+            let graph_id = self.graphs.insert(graph.clone());
             Ok(graph_id.into())
         } else {
             return Err(UsageError::NotFound(name.to_string()).into());

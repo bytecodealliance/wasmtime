@@ -249,11 +249,7 @@ where
             n => (n, false),
         };
 
-        buffer.truncate(
-            bytes_read
-                .try_into()
-                .expect("bytes read into memory as u64 fits in usize"),
-        );
+        buffer.truncate(bytes_read);
 
         Ok((buffer, state))
     }

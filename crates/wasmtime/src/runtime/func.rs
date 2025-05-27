@@ -1331,7 +1331,7 @@ impl Func {
             };
             VMFunctionImport {
                 wasm_call: if let Some(wasm_call) = f.as_ref().wasm_call {
-                    wasm_call.into()
+                    wasm_call
                 } else {
                     // Assert that this is a array-call function, since those
                     // are the only ones that could be missing a `wasm_call`

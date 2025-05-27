@@ -90,15 +90,12 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         let mut ret = Self {
             ptr,
             num_lowerings: component.num_lowerings,
-            num_runtime_memories: component.num_runtime_memories.try_into().unwrap(),
-            num_runtime_tables: component.num_runtime_tables.try_into().unwrap(),
-            num_runtime_reallocs: component.num_runtime_reallocs.try_into().unwrap(),
-            num_runtime_callbacks: component.num_runtime_callbacks.try_into().unwrap(),
-            num_runtime_post_returns: component.num_runtime_post_returns.try_into().unwrap(),
-            num_runtime_component_instances: component
-                .num_runtime_component_instances
-                .try_into()
-                .unwrap(),
+            num_runtime_memories: component.num_runtime_memories,
+            num_runtime_tables: component.num_runtime_tables,
+            num_runtime_reallocs: component.num_runtime_reallocs,
+            num_runtime_callbacks: component.num_runtime_callbacks,
+            num_runtime_post_returns: component.num_runtime_post_returns,
+            num_runtime_component_instances: component.num_runtime_component_instances,
             num_trampolines: component.trampolines.len().try_into().unwrap(),
             num_resources: component.num_resources,
             magic: 0,

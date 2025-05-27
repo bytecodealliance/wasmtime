@@ -1693,7 +1693,7 @@ impl OpVisitor for Interpreter<'_> {
 
     fn xadd32_u32(&mut self, dst: XReg, src1: XReg, src2: u32) -> ControlFlow<Done> {
         let a = self.state[src1].get_u32();
-        self.state[dst].set_u32(a.wrapping_add(src2.into()));
+        self.state[dst].set_u32(a.wrapping_add(src2));
         ControlFlow::Continue(())
     }
 
@@ -1743,7 +1743,7 @@ impl OpVisitor for Interpreter<'_> {
 
     fn xsub32_u32(&mut self, dst: XReg, src1: XReg, src2: u32) -> ControlFlow<Done> {
         let a = self.state[src1].get_u32();
-        self.state[dst].set_u32(a.wrapping_sub(src2.into()));
+        self.state[dst].set_u32(a.wrapping_sub(src2));
         ControlFlow::Continue(())
     }
 
