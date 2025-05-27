@@ -1336,7 +1336,12 @@ impl<M: ABIMachineSpec> Callee<M> {
         // means we need a second scratch register for loading the stack size
         // into a register.
         let scratch = Writable::from_reg(M::get_stacklimit_reg(self.call_conv));
-        insts.extend(M::gen_add_imm(self.call_conv, scratch, stack_limit, stack_size).into_iter());
+        insts.extend(M::gen_add_imm(
+            self.call_conv,
+            scratch,
+            stack_limit,
+            stack_size,
+        ));
         insts.extend(M::gen_stack_lower_bound_trap(scratch.to_reg()));
     }
 }

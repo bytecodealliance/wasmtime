@@ -668,10 +668,10 @@ impl Table {
             // that delta is non-zero and the new size doesn't exceed the
             // maximum mean we can't get here.
             Table::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => {
-                elements.resize(usize::try_from(new_size).unwrap(), None);
+                elements.resize(new_size, None);
             }
             Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => {
-                elements.resize_with(usize::try_from(new_size).unwrap(), || None);
+                elements.resize_with(new_size, || None);
             }
         }
 
@@ -842,9 +842,7 @@ impl Table {
                 size,
                 lazy_init,
             })) => (
-                unsafe {
-                    slice::from_raw_parts(data.as_ptr().cast(), usize::try_from(*size).unwrap())
-                },
+                unsafe { slice::from_raw_parts(data.as_ptr().cast(), *size) },
                 *lazy_init,
             ),
             _ => unreachable!(),
@@ -867,9 +865,7 @@ impl Table {
                 size,
                 lazy_init,
             })) => (
-                unsafe {
-                    slice::from_raw_parts_mut(data.as_ptr().cast(), usize::try_from(*size).unwrap())
-                },
+                unsafe { slice::from_raw_parts_mut(data.as_ptr().cast(), *size) },
                 *lazy_init,
             ),
             _ => unreachable!(),
@@ -881,7 +877,7 @@ impl Table {
         match self {
             Self::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => elements,
             Self::Static(StaticTable::GcRef(StaticGcRefTable { data, size })) => unsafe {
-                &data.as_non_null().as_ref()[..usize::try_from(*size).unwrap()]
+                &data.as_non_null().as_ref()[..*size]
             },
             _ => unreachable!(),
         }
@@ -895,7 +891,7 @@ impl Table {
         match self {
             Self::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => elements,
             Self::Static(StaticTable::GcRef(StaticGcRefTable { data, size })) => unsafe {
-                &mut data.as_non_null().as_mut()[..usize::try_from(*size).unwrap()]
+                &mut data.as_non_null().as_mut()[..*size]
             },
             _ => unreachable!(),
         }

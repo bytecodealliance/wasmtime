@@ -280,14 +280,14 @@ convert_struct!(
 impl From<snapshot1_types::Filestat> for types::Filestat {
     fn from(f: snapshot1_types::Filestat) -> types::Filestat {
         types::Filestat {
-            dev: f.dev.into(),
-            ino: f.ino.into(),
+            dev: f.dev,
+            ino: f.ino,
             filetype: f.filetype.into(),
             nlink: f.nlink.try_into().unwrap_or(u32::MAX),
-            size: f.size.into(),
-            atim: f.atim.into(),
-            mtim: f.mtim.into(),
-            ctim: f.ctim.into(),
+            size: f.size,
+            atim: f.atim,
+            mtim: f.mtim,
+            ctim: f.ctim,
         }
     }
 }

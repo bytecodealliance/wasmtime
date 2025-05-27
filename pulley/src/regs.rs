@@ -321,7 +321,7 @@ impl<R: Reg> Eq for UpperRegSet<R> {}
 
 impl<R: Reg> fmt::Debug for UpperRegSet<R> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_set().entries(self.into_iter()).finish()
+        f.debug_set().entries(*self).finish()
     }
 }
 

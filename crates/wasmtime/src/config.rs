@@ -2403,14 +2403,13 @@ impl Config {
             .insert("preserve_frame_pointers".into(), "true".into());
 
         if !tunables.signals_based_traps {
-            let mut ok = self.compiler_config.ensure_setting_unset_or_given(
-                "enable_table_access_spectre_mitigation".into(),
-                "false".into(),
-            );
+            let mut ok = self
+                .compiler_config
+                .ensure_setting_unset_or_given("enable_table_access_spectre_mitigation", "false");
             ok = ok
                 && self.compiler_config.ensure_setting_unset_or_given(
-                    "enable_heap_access_spectre_mitigation".into(),
-                    "false".into(),
+                    "enable_heap_access_spectre_mitigation",
+                    "false",
                 );
 
             // Right now spectre-mitigated bounds checks will load from zero so

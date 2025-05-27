@@ -333,7 +333,6 @@ impl CompiledExpression {
         let expressions = BuildWithLocalsResult::Ranges(Box::new(
             ranges
                 .ranges
-                .into_iter()
                 .map(
                     move |CachedValueLabelRange {
                               func_index,

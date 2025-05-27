@@ -121,15 +121,10 @@ impl Global {
 
                         HeapType::NoFunc => Ref::Func(None),
 
-                        HeapType::Extern => Ref::Extern(
-                            definition
-                                .as_gc_ref()
-                                .map(|r| {
-                                    let r = store.unwrap_gc_store_mut().clone_gc_ref(r);
-                                    ExternRef::from_cloned_gc_ref(&mut store, r)
-                                })
-                                .into(),
-                        ),
+                        HeapType::Extern => Ref::Extern(definition.as_gc_ref().map(|r| {
+                            let r = store.unwrap_gc_store_mut().clone_gc_ref(r);
+                            ExternRef::from_cloned_gc_ref(&mut store, r)
+                        })),
 
                         HeapType::NoExtern => Ref::Extern(None),
 

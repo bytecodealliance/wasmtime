@@ -540,7 +540,7 @@ impl Assembler {
             size: size.into(),
             cc: cc.into(),
             consequent: src.into(),
-            alternative: dst.to_reg().into(),
+            alternative: dst.to_reg(),
             dst,
         })
     }
@@ -771,7 +771,7 @@ impl Assembler {
             ty,
             cc: cc.into(),
             consequent: Xmm::unwrap_new(src.into()),
-            alternative: dst.to_reg().into(),
+            alternative: dst.to_reg(),
             dst,
         })
     }
@@ -1572,7 +1572,7 @@ impl Assembler {
 
         self.emit(Inst::XmmRmRUnaligned {
             op,
-            src1: Xmm::from(dst.to_reg()).into(),
+            src1: Xmm::from(dst.to_reg()),
             src2: Xmm::from(src).into(),
             dst: dst.map(Into::into),
         });

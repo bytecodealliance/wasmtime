@@ -229,7 +229,7 @@ impl<'a> AliasAnalysis<'a> {
             }
 
             visit_block_succs(func, block, |_inst, succ, _from_table| {
-                let succ_first_inst = func.layout.block_insts(succ).into_iter().next().unwrap();
+                let succ_first_inst = func.layout.block_insts(succ).next().unwrap();
                 let updated = match self.block_input.get_mut(&succ) {
                     Some(succ_state) => {
                         let old = *succ_state;

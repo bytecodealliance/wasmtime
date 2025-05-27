@@ -1266,11 +1266,11 @@ pub(crate) fn emit(
                 };
                 emit(&inst, sink, info, state);
 
-                let dst = Writable::from_reg(reg.into());
+                let dst = Writable::from_reg(reg);
                 let inst = Inst::MovRR {
                     size: OperandSize::Size64,
                     src: tmp1.to_reg(),
-                    dst: WritableGpr::from_writable_reg(dst.into()).unwrap(),
+                    dst: WritableGpr::from_writable_reg(dst).unwrap(),
                 };
                 emit(&inst, sink, info, state);
             };

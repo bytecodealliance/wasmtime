@@ -177,7 +177,7 @@ impl generated::graph::Host for WasiNnView<'_> {
         tracing::debug!("load {encoding:?} {target:?}");
         if let Some(backend) = self.ctx.backends.get_mut(&encoding) {
             let slices = builders.iter().map(|s| s.as_slice()).collect::<Vec<_>>();
-            match backend.load(&slices, target.into()) {
+            match backend.load(&slices, target) {
                 Ok(graph) => {
                     let graph = self.table.push(graph)?;
                     Ok(Ok(graph))

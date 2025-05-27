@@ -191,7 +191,7 @@ fn pulley_emit<P>(
 
             let adjust = -i32::try_from(info.callee_pop_size).unwrap();
             for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
-                <InstAndKind<P>>::from(i).emit(sink, emit_info, state);
+                i.emit(sink, emit_info, state);
             }
 
             // Load any stack-carried return values.
@@ -231,7 +231,7 @@ fn pulley_emit<P>(
 
             let adjust = -i32::try_from(info.callee_pop_size).unwrap();
             for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
-                <InstAndKind<P>>::from(i).emit(sink, emit_info, state);
+                i.emit(sink, emit_info, state);
             }
 
             // Load any stack-carried return values.
@@ -648,7 +648,7 @@ fn return_call_emit_impl<T, P>(
     if incoming_args_diff != 0 {
         let amt = i32::try_from(incoming_args_diff).unwrap();
         for inst in PulleyMachineDeps::<P>::gen_sp_reg_adjust(amt) {
-            <InstAndKind<P>>::from(inst).emit(sink, emit_info, state);
+            inst.emit(sink, emit_info, state);
         }
     }
 }

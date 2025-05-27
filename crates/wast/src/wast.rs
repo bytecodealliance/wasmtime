@@ -229,7 +229,7 @@ where
                 };
 
                 Ok(match result {
-                    Ok(()) => Outcome::Ok(Results::Core(results.into())),
+                    Ok(()) => Outcome::Ok(Results::Core(results)),
                     Err(e) => Outcome::Trap(e),
                 })
             }
@@ -259,7 +259,7 @@ where
                             None => func.post_return(&mut self.store)?,
                         }
 
-                        Outcome::Ok(Results::Component(results.into()))
+                        Outcome::Ok(Results::Component(results))
                     }
                     Err(e) => Outcome::Trap(e),
                 })

@@ -49,9 +49,7 @@ pub fn run(
                 );
                 return Ok(started.elapsed());
             }
-            return Err(e)
-                .context(format!("failed to parse {}", path.display()))
-                .into();
+            return Err(e).context(format!("failed to parse {}", path.display()));
         }
     };
 

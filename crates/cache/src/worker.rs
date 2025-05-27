@@ -5,6 +5,17 @@
 //! but we guarantee eventual consistency and fault tolerancy.
 //! Background tasks can be CPU intensive, but the worker thread has low priority.
 
+#![cfg_attr(
+    not(test),
+    expect(
+        clippy::useless_conversion,
+        reason = "cfg(test) and cfg(not(test)) have a different definition \
+                  of `SystemTime`, so conversions below are needed in \
+                  one mode but not the other, just ignore the lint in this \
+                  module in not(test) mode where the conversion isn't required",
+    )
+)]
+
 use super::{CacheConfig, fs_write_atomic};
 use log::{debug, info, trace, warn};
 use serde_derive::{Deserialize, Serialize};

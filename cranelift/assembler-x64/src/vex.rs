@@ -143,7 +143,7 @@ impl<R: Registers> VexInstruction<R> {
     /// encoding logic here.
     #[inline(always)]
     fn prefix_last_byte(&self) -> u8 {
-        let vvvv = self.vvvv.map(|r| r.into()).unwrap_or(0x00);
+        let vvvv = self.vvvv.unwrap_or(0x00);
 
         let mut byte = 0x00;
         byte |= self.prefix.bits();

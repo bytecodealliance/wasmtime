@@ -14,9 +14,7 @@ struct Builder {
 }
 
 pub fn builder(triple: Option<Triple>) -> Result<Box<dyn CompilerBuilder>> {
-    let inner = IsaBuilder::new(triple.clone(), |triple| {
-        isa::lookup(triple).map_err(|e| e.into())
-    })?;
+    let inner = IsaBuilder::new(triple.clone(), |triple| isa::lookup(triple))?;
     let cranelift = wasmtime_cranelift::builder(triple)?;
     Ok(Box::new(Builder {
         inner,

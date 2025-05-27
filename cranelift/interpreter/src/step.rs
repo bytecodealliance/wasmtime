@@ -94,7 +94,7 @@ where
 
     // Retrieve the immediate value for an instruction, expecting it to exist.
     let imm = || -> DataValue {
-        DataValue::from(match inst {
+        match inst {
             InstructionData::UnaryConst {
                 constant_handle,
                 opcode,
@@ -159,7 +159,7 @@ where
             | InstructionData::IntCompareImm { imm, .. } => DataValue::from(imm.bits()),
             InstructionData::UnaryIeee64 { imm, .. } => DataValue::from(imm),
             _ => unreachable!(),
-        })
+        }
     };
 
     // Retrieve the immediate value for an instruction and convert it to the controlling type of the
@@ -462,7 +462,7 @@ where
                 AddressSize::try_from(addr_ty).and_then(|addr_size| {
                     let addr = state.function_address(addr_size, &ext_data.name)?;
                     let dv = DataValue::try_from(addr)?;
-                    Ok(dv.into())
+                    Ok(dv)
                 })
             })
         }
@@ -564,7 +564,7 @@ where
                 AddressSize::try_from(load_ty).and_then(|addr_size| {
                     let addr = state.stack_address(addr_size, slot, offset)?;
                     let dv = DataValue::try_from(addr)?;
-                    Ok(dv.into())
+                    Ok(dv)
                 })
             })
         }

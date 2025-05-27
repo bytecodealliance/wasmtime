@@ -308,7 +308,7 @@ fn valid_valuedata(data: ValueDataPacked) -> bool {
     if let ValueData::Alias {
         ty: types::INVALID,
         original,
-    } = ValueData::from(data)
+    } = data
     {
         if original == Value::reserved_value() {
             return false;

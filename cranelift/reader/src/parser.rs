@@ -2245,8 +2245,8 @@ impl<'a> Parser<'a> {
                 }
                 Ok(Fact::Range {
                     bit_width: u16::try_from(bit_width).unwrap(),
-                    min: min.into(),
-                    max: max.into(),
+                    min,
+                    max,
                 })
             }
             Some(Token::Identifier("dynamic_range")) => {
