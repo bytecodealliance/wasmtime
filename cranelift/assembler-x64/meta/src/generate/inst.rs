@@ -245,24 +245,17 @@ impl dsl::Inst {
                                 },
                             );
                             fmtln!(f, ";");
+                            let op0 = self.format.operands[0].location;
+                            let op1 = self.format.operands[1].location;
+                            let imm = imm_operand;
                             fmtln!(f, "let operands = if mnemonic != \"{}\" {{", self.mnemonic);
-                            fmtln!(
-                                f,
-                                "  format!(\"{{}}, {{}}\", {}, {})",
-                                self.format.operands[1].location,
-                                self.format.operands[0].location
-                            );
+                            fmtln!(f, "  format!(\"{op1}, {op0}\")",);
                             fmtln!(f, "}} else {{");
-                            fmtln!(
-                                f,
-                                "  format!(\"{{}}, {{}}, {{}}\", {}, {}, {})",
-                                imm_operand,
-                                self.format.operands[1].location,
-                                self.format.operands[0].location
-                            );
+                            fmtln!(f, "  format!(\"{imm}, {op1}, {op0}\")");
                             fmtln!(f, "}};");
 
-                            fmtln!(f, "write!(f, \"{} {{}}\", operands)", "{mnemonic}");
+                            //fmtln!(f, "write!(f, \"{} {{}}\", operands)", "{mnemonic}");
+                            fmtln!(f, "write!(f, \"{{mnemonic}} {{operands}}\")");
                             return;
                         }
                         // Fix up the mnemonic for locked instructions: we want to print
