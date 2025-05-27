@@ -604,7 +604,7 @@ block0(v0: i32):
 ;   andq $0x7, %rdi
 ;   movdqa  %xmm1, %xmm0
 ;   punpcklbw %xmm0, %xmm1, %xmm0
-;   punpckhbw %xmm1, %xmm1, %xmm1
+;   punpckhbw %xmm1, %xmm1
 ;   addl $0x8, %edi
 ;   movd %edi, %xmm3
 ;   psraw %xmm3, %xmm0
@@ -654,7 +654,7 @@ block0(v0: i8x16, v1: i32):
 ; block0:
 ;   movdqa  %xmm0, %xmm6
 ;   punpcklbw %xmm6, %xmm0, %xmm6
-;   punpckhbw %xmm0, %xmm0, %xmm0
+;   punpckhbw %xmm0, %xmm0
 ;   movdqa  %xmm0, %xmm4
 ;   movdqa  %xmm6, %xmm0
 ;   psraw $0xb, %xmm0

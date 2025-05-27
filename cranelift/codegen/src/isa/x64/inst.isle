@@ -816,7 +816,6 @@
             Pshufb
             Pshufd
             Ptest
-            Punpckhbw
             Punpckhwd
             Punpcklbw
             Punpcklwd
@@ -3809,7 +3808,7 @@
 ;; Helper for creating `punpckhbw` instructions.
 (decl x64_punpckhbw (Xmm XmmMem) Xmm)
 (rule 0 (x64_punpckhbw src1 src2)
-      (xmm_rm_r (SseOpcode.Punpckhbw) src1 src2))
+      (x64_punpckhbw_a src1 src2))
 (rule 1 (x64_punpckhbw src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpunpckhbw) src1 src2))

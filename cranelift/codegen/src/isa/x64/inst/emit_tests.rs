@@ -2792,12 +2792,6 @@ fn test_x64_emit() {
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Punpckhbw, RegMem::reg(xmm3), w_xmm2),
-        "660F68D3",
-        "punpckhbw %xmm2, %xmm3, %xmm2",
-    ));
-
-    insns.push((
         Inst::xmm_rm_r(SseOpcode::Punpckhwd, RegMem::reg(xmm13), w_xmm2),
         "66410F69D5",
         "punpckhwd %xmm2, %xmm13, %xmm2",

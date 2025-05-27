@@ -8,5 +8,6 @@ pub fn list() -> Vec<Inst> {
         inst("unpcklps", fmt("A", [rw(xmm1), r(xmm_m128)]), rex([0xF, 0x14]).r(), _64b | compat | sse),
         inst("unpcklpd", fmt("A", [rw(xmm1), r(xmm_m128)]), rex([0x66, 0x0F, 0x14]).r(), _64b | compat | sse2),
         inst("unpckhps", fmt("A", [rw(xmm1), r(xmm_m128)]), rex([0xF, 0x15]).r(), _64b | compat | sse),
+        inst("punpckhbw", fmt("A", [rw(xmm1), r(xmm_m128)]), rex([0x66, 0x0F, 0x68]).r(), _64b | compat | sse2),
     ]
 }
