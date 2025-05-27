@@ -300,7 +300,7 @@ block0(v0: i32x4):
 ; block0:
 ;   uninit  %xmm3
 ;   xorps %xmm3, %xmm3
-;   unpckhps %xmm0, %xmm3, %xmm0
+;   unpckhps %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

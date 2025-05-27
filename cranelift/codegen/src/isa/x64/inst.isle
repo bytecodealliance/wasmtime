@@ -829,7 +829,6 @@
             Shufps
             Ucomiss
             Ucomisd
-            Unpckhps
             Punpckhdq
             Punpckldq
             Punpckhqdq
@@ -3507,7 +3506,7 @@
 ;; Helper for creating `unpckhps` instructions.
 (decl x64_unpckhps (Xmm XmmMem) Xmm)
 (rule 0 (x64_unpckhps src1 src2)
-      (xmm_rm_r (SseOpcode.Unpckhps) src1 src2))
+      (x64_unpckhps_a src1 src2))
 (rule 1 (x64_unpckhps src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vunpckhps) src1 src2))

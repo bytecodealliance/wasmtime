@@ -899,8 +899,6 @@ pub enum SseOpcode {
     Shufps,
     Ucomiss,
     Ucomisd,
-    Unpcklpd,
-    Unpckhps,
     Punpckhdq,
     Punpckldq,
     Punpckhqdq,
@@ -928,8 +926,7 @@ impl SseOpcode {
             | SseOpcode::Rcpss
             | SseOpcode::Rsqrtss
             | SseOpcode::Shufps
-            | SseOpcode::Ucomiss
-            | SseOpcode::Unpckhps => SSE,
+            | SseOpcode::Ucomiss => SSE,
 
             SseOpcode::Cmppd
             | SseOpcode::Cmpsd
@@ -968,8 +965,7 @@ impl SseOpcode {
             | SseOpcode::Punpcklqdq
             | SseOpcode::Punpckhqdq
             | SseOpcode::Pshuflw
-            | SseOpcode::Pshufhw
-            | SseOpcode::Unpcklpd => SSE2,
+            | SseOpcode::Pshufhw => SSE2,
 
             SseOpcode::Pabsb
             | SseOpcode::Pabsw
@@ -1120,7 +1116,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Shufps => "shufps",
             SseOpcode::Ucomiss => "ucomiss",
             SseOpcode::Ucomisd => "ucomisd",
-            SseOpcode::Unpckhps => "unpckhps",
             SseOpcode::Punpckldq => "punpckldq",
             SseOpcode::Punpckhdq => "punpckhdq",
             SseOpcode::Punpcklqdq => "punpcklqdq",
@@ -1129,7 +1124,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pshufhw => "pshufhw",
             SseOpcode::Pblendw => "pblendw",
             SseOpcode::Movddup => "movddup",
-            SseOpcode::Unpcklpd => "unpcklpd",
         };
         write!(fmt, "{name}")
     }
