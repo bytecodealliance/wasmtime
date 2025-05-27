@@ -556,15 +556,15 @@ impl SyntheticAmode {
     }
 }
 
-impl Into<SyntheticAmode> for Amode {
-    fn into(self) -> SyntheticAmode {
-        SyntheticAmode::Real(self)
+impl From<Amode> for SyntheticAmode {
+    fn from(amode: Amode) -> SyntheticAmode {
+        SyntheticAmode::Real(amode)
     }
 }
 
-impl Into<SyntheticAmode> for VCodeConstant {
-    fn into(self) -> SyntheticAmode {
-        SyntheticAmode::ConstantOffset(self)
+impl From<VCodeConstant> for SyntheticAmode {
+    fn from(c: VCodeConstant) -> SyntheticAmode {
+        SyntheticAmode::ConstantOffset(c)
     }
 }
 

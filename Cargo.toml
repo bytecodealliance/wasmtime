@@ -211,6 +211,7 @@ unnecessary_mut_passed = 'warn'
 unnecessary_fallible_conversions = 'warn'
 unnecessary_cast = 'warn'
 allow_attributes_without_reason = 'warn'
+from_over_into = 'warn'
 
 [workspace.dependencies]
 arbitrary = { version = "1.4.0" }

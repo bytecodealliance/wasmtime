@@ -253,9 +253,9 @@ fn get_vecreg_for_ret(idx: usize) -> Option<Reg> {
 /// The size of the register save area
 pub static REG_SAVE_AREA_SIZE: u32 = 160;
 
-impl Into<MemArg> for StackAMode {
-    fn into(self) -> MemArg {
-        match self {
+impl From<StackAMode> for MemArg {
+    fn from(stack: StackAMode) -> MemArg {
+        match stack {
             StackAMode::IncomingArg(off, stack_args_size) => MemArg::IncomingArgOffset {
                 off: off - stack_args_size as i64,
             },

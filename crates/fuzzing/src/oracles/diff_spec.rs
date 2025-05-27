@@ -110,9 +110,9 @@ impl From<&DiffValue> for SpecValue {
     }
 }
 
-impl Into<DiffValue> for SpecValue {
-    fn into(self) -> DiffValue {
-        match self {
+impl From<SpecValue> for DiffValue {
+    fn from(spec: SpecValue) -> DiffValue {
+        match spec {
             SpecValue::I32(n) => DiffValue::I32(n),
             SpecValue::I64(n) => DiffValue::I64(n),
             SpecValue::F32(n) => DiffValue::F32(n as u32),

@@ -100,9 +100,9 @@ impl<T: ReservedValue> From<Option<T>> for PackedOption<T> {
     }
 }
 
-impl<T: ReservedValue> Into<Option<T>> for PackedOption<T> {
-    fn into(self) -> Option<T> {
-        self.expand()
+impl<T: ReservedValue> From<PackedOption<T>> for Option<T> {
+    fn from(packed: PackedOption<T>) -> Option<T> {
+        packed.expand()
     }
 }
 

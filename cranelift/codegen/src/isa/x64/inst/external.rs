@@ -331,9 +331,9 @@ fn fixed_reg(enc: u8, class: RegClass) -> Reg {
     Reg::from_real_reg(preg)
 }
 
-impl Into<asm::Amode<Gpr>> for SyntheticAmode {
-    fn into(self) -> asm::Amode<Gpr> {
-        match self {
+impl From<SyntheticAmode> for asm::Amode<Gpr> {
+    fn from(amode: SyntheticAmode) -> asm::Amode<Gpr> {
+        match amode {
             SyntheticAmode::Real(amode) => amode.into(),
             SyntheticAmode::IncomingArg { offset } => asm::Amode::ImmReg {
                 base: Gpr::unwrap_new(regs::rbp()),
@@ -358,9 +358,9 @@ impl Into<asm::Amode<Gpr>> for SyntheticAmode {
     }
 }
 
-impl Into<asm::Amode<Gpr>> for Amode {
-    fn into(self) -> asm::Amode<Gpr> {
-        match self {
+impl From<Amode> for asm::Amode<Gpr> {
+    fn from(amode: Amode) -> asm::Amode<Gpr> {
+        match amode {
             Amode::ImmReg {
                 simm32,
                 base,
