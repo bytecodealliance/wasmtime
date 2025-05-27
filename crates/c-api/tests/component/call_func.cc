@@ -70,6 +70,9 @@ TEST(component, call_func) {
                                    results.data(), results.size());
   CHECK_ERR(err);
 
+  err = wasmtime_component_func_post_return(&func, context);
+  CHECK_ERR(err);
+
   EXPECT_EQ(results[0].kind, WASMTIME_COMPONENT_U32);
   EXPECT_EQ(results[0].of.u32, 69);
 

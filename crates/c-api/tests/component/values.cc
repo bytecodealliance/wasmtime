@@ -196,6 +196,9 @@ local.get $res
       wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
   CHECK_ERR(err);
 
+  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
+  CHECK_ERR(err);
+
   check(res, 3, 4);
 
   wasmtime_component_val_delete(&arg);
@@ -257,6 +260,9 @@ local.get $res
 
   auto err =
       wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  CHECK_ERR(err);
+
+  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
   CHECK_ERR(err);
 
   check(res, "hello from B!");
@@ -332,6 +338,9 @@ local.get $res
 
   auto err =
       wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  CHECK_ERR(err);
+
+  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
   CHECK_ERR(err);
 
   check(res, {4, 5, 6, 7});
