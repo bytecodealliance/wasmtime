@@ -26,8 +26,8 @@ block0(v0: i32, v1: f64, v2: i64):
 ; block1: ; offset 0x4
 ;   movsd (%rsi), %xmm5 ; trap: heap_oob
 ;   testl %edi, %edi
-;   je 0x14
-;   movsd %xmm5, %xmm0
+;   je 0x13
+;   movaps %xmm5, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
