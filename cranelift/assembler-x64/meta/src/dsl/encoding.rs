@@ -15,7 +15,6 @@
 //!
 //! [link]: https://software.intel.com/content/www/us/en/develop/articles/intel-sdm.html
 
-
 use super::{Operand, OperandKind};
 use core::fmt;
 
