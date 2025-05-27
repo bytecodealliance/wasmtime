@@ -253,8 +253,6 @@ impl dsl::Inst {
                             fmtln!(f, "}} else {{");
                             fmtln!(f, "  format!(\"{{{imm}}}, {{{op1}}}, {{{op0}}}\")");
                             fmtln!(f, "}};");
-
-                            //fmtln!(f, "write!(f, \"{} {{}}\", operands)", "{mnemonic}");
                             fmtln!(f, "write!(f, \"{{mnemonic}} {{operands}}\")");
                             return;
                         }
