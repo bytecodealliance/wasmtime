@@ -891,20 +891,7 @@ pub(crate) fn emit(
 
             // Jump if cc is *not* set.
             one_way_jmp(sink, cc.invert(), next);
-
-            let op = match *ty {
-                types::F64 => SseOpcode::Movsd,
-                types::F32 => SseOpcode::Movsd,
-                types::F16 => SseOpcode::Movsd,
-                types::F32X4 => SseOpcode::Movaps,
-                types::F64X2 => SseOpcode::Movapd,
-                ty => {
-                    debug_assert!((ty.is_float() || ty.is_vector()) && ty.bytes() <= 16);
-                    SseOpcode::Movdqa
-                }
-            };
-            let inst = Inst::xmm_unary_rm_r(op, consequent.into(), dst);
-            inst.emit(sink, info, state);
+            Inst::gen_move(dst, consequent, *ty).emit(sink, info, state);
 
             sink.bind_label(next, state.ctrl_plane_mut());
         }
