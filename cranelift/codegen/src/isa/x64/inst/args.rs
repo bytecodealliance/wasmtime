@@ -899,7 +899,6 @@ pub enum SseOpcode {
     Shufps,
     Ucomiss,
     Ucomisd,
-    Unpcklps,
     Unpcklpd,
     Unpckhps,
     Punpckhdq,
@@ -930,7 +929,6 @@ impl SseOpcode {
             | SseOpcode::Rsqrtss
             | SseOpcode::Shufps
             | SseOpcode::Ucomiss
-            | SseOpcode::Unpcklps
             | SseOpcode::Unpckhps => SSE,
 
             SseOpcode::Cmppd
@@ -1122,7 +1120,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Shufps => "shufps",
             SseOpcode::Ucomiss => "ucomiss",
             SseOpcode::Ucomisd => "ucomisd",
-            SseOpcode::Unpcklps => "unpcklps",
             SseOpcode::Unpckhps => "unpckhps",
             SseOpcode::Punpckldq => "punpckldq",
             SseOpcode::Punpckhdq => "punpckhdq",

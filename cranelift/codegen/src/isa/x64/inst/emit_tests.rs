@@ -2815,12 +2815,6 @@ fn test_x64_emit() {
         "punpcklwd %xmm8, %xmm11, %xmm8",
     ));
 
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Unpcklps, RegMem::reg(xmm11), w_xmm2),
-        "410F14D3",
-        "unpcklps %xmm2, %xmm11, %xmm2",
-    ));
-
     // ========================================================
     // XMM_RM_R: Integer Conversion
 

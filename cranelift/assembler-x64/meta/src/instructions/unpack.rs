@@ -1,0 +1,10 @@
+use crate::dsl::{Feature::*, Inst, Location::*};
+use crate::dsl::{align, fmt, implicit, inst, r, rex, rw, sxl, sxq, sxw, w};
+
+#[rustfmt::skip] // Keeps instructions on a single line.
+pub fn list() -> Vec<Inst> {
+    vec![
+        // Vector instructions.
+        inst("unpcklps", fmt("A", [rw(xmm1), r(xmm_m128)]), rex([0xF, 0x14]).r(), _64b | compat | sse),
+    ]
+}
