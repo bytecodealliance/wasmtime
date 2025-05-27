@@ -1548,6 +1548,7 @@ fn raise(_store: &mut dyn VMStore, _instance: &mut Instance) {
 
 // Builtins for continuations. These are thin wrappers around the
 // respective definitions in stack_switching.rs.
+#[cfg(feature = "stack-switching")]
 fn cont_new(
     store: &mut dyn VMStore,
     instance: &mut Instance,

@@ -312,6 +312,7 @@ threads = [
 
 stack-switching = [
   "runtime",
+  "wasmtime-environ/stack-switching",
 ]
 
 # Controls whether backtraces will attempt to parse DWARF information in

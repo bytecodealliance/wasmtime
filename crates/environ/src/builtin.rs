@@ -228,6 +228,7 @@ macro_rules! foreach_builtin_function {
             raise(vmctx: vmctx);
 
             // Creates a new continuation from a funcref.
+            #[cfg(feature = "stack-switching")]
             cont_new(vmctx: vmctx, r: pointer, param_count: u32, result_count: u32) -> pointer;
 
             // Returns an index for Wasm's `table.grow` instruction

@@ -419,6 +419,7 @@ fn check_vm_contref_offsets() {
 }
 
 /// Implements `cont.new` instructions (i.e., creation of continuations).
+#[cfg(feature = "stack-switching")]
 #[inline(always)]
 pub fn cont_new(
     store: &mut dyn VMStore,

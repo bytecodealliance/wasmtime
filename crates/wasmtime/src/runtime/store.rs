@@ -2038,6 +2038,7 @@ at https://bytecodealliance.org/security.
     /// Allocates a new continuation. Note that we currently don't support
     /// deallocating them. Instead, all continuations remain allocated
     /// throughout the store's lifetime.
+    #[cfg(feature = "stack-switching")]
     pub fn allocate_continuation(&mut self) -> Result<*mut VMContRef> {
         // FIXME(frank-emrich) Do we need to pin this?
         let mut continuation = Box::new(VMContRef::empty());

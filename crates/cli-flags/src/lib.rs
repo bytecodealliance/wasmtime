@@ -830,7 +830,7 @@ impl CommonOptions {
         }
         #[cfg(not(any(feature = "async", feature = "stack-switching")))]
         {
-            if let Some(size) = self.wasm.async_stack_size {
+            if let Some(_size) = self.wasm.async_stack_size {
                 anyhow::bail!(concat!(
                     "support for async/stack-switching disabled at compile time"
                 ));
