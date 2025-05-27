@@ -27,7 +27,7 @@ block0(v0: f32, v1: i64, v2: i32, v3: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   ucomiss 0(%rdi), %xmm0
+;   ucomiss (%rdi), %xmm0
 ;   cmovpl  %edx, %esi, %esi
 ;   movq    %rsi, %rax
 ;   cmovnzl %edx, %eax, %eax
@@ -47,7 +47,6 @@ block0(v0: f32, v1: i64, v2: i32, v3: i32):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-
 
 function %select_cond_lhs(f32, i64, i32, i32) -> i32 {
 block0(v0: f32, v1: i64, v2: i32, v3: i32):

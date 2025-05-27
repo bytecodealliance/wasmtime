@@ -2610,33 +2610,6 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
-    // XMM_CMP_RM_R
-
-    insns.push((
-        Inst::xmm_cmp_rm_r(SseOpcode::Ucomiss, xmm2, RegMem::reg(xmm1)),
-        "0F2ED1",
-        "ucomiss %xmm1, %xmm2",
-    ));
-
-    insns.push((
-        Inst::xmm_cmp_rm_r(SseOpcode::Ucomiss, xmm9, RegMem::reg(xmm0)),
-        "440F2EC8",
-        "ucomiss %xmm0, %xmm9",
-    ));
-
-    insns.push((
-        Inst::xmm_cmp_rm_r(SseOpcode::Ucomisd, xmm4, RegMem::reg(xmm13)),
-        "66410F2EE5",
-        "ucomisd %xmm13, %xmm4",
-    ));
-
-    insns.push((
-        Inst::xmm_cmp_rm_r(SseOpcode::Ucomisd, xmm12, RegMem::reg(xmm11)),
-        "66450F2EE3",
-        "ucomisd %xmm11, %xmm12",
-    ));
-
-    // ========================================================
     // XMM_RM_R: float binary ops
 
     insns.push((
@@ -2980,28 +2953,6 @@ fn test_x64_emit() {
 
     // ========================================================
     // XmmRmRImm
-    insns.push((
-        Inst::xmm_rm_r_imm(
-            SseOpcode::Cmppd,
-            RegMem::reg(xmm5),
-            w_xmm1,
-            2,
-            OperandSize::Size32,
-        ),
-        "660FC2CD02",
-        "cmppd   $2, %xmm1, %xmm5, %xmm1",
-    ));
-    insns.push((
-        Inst::xmm_rm_r_imm(
-            SseOpcode::Cmpps,
-            RegMem::reg(xmm15),
-            w_xmm7,
-            0,
-            OperandSize::Size32,
-        ),
-        "410FC2FF00",
-        "cmpps   $0, %xmm7, %xmm15, %xmm7",
-    ));
     insns.push((
         Inst::xmm_rm_r_imm(
             SseOpcode::Palignr,

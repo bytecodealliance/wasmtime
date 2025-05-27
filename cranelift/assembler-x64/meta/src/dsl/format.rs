@@ -24,6 +24,7 @@ pub fn fmt(
     Format {
         name: name.into(),
         operands: operands.into_iter().map(Into::into).collect(),
+        eflags: EflagsMutability::default(),
     }
 }
 
@@ -134,6 +135,8 @@ pub struct Format {
     /// These operands should match the "Instruction" column in the reference
     /// manual.
     pub operands: Vec<Operand>,
+    /// This should match eflags description of an instruction.
+    pub eflags: EflagsMutability,
 }
 
 impl Format {
@@ -166,17 +169,38 @@ impl Format {
     pub fn operands_by_kind(&self) -> Vec<OperandKind> {
         self.locations().map(Location::kind).collect()
     }
+
+    /// Set the EFLAGS mutability for this instruction.
+    pub fn flags(mut self, eflags: EflagsMutability) -> Self {
+        self.eflags = eflags;
+        self
+    }
+
+    /// Return true if an instruction uses EFLAGS.
+    pub fn uses_eflags(&self) -> bool {
+        self.eflags != EflagsMutability::None
+    }
 }
 
 impl core::fmt::Display for Format {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
-        let Format { name, operands } = self;
+        let Format {
+            name,
+            operands,
+            eflags,
+        } = self;
         let operands = operands
             .iter()
             .map(|operand| format!("{operand}"))
             .collect::<Vec<_>>()
             .join(", ");
-        write!(f, "{name}({operands})")
+        write!(f, "{name}({operands})")?;
+
+        if *eflags != EflagsMutability::None {
+            write!(f, "[flags:{eflags}]")?;
+        }
+
+        Ok(())
     }
 }
 
@@ -256,6 +280,7 @@ impl From<Location> for Operand {
 }
 
 /// The kind of register used in a [`Location`].
+#[derive(PartialEq)]
 pub enum RegClass {
     Gpr,
     Xmm,
@@ -534,6 +559,31 @@ impl core::fmt::Display for Extension {
             Extension::SignExtendQuad => write!(f, "sxq"),
             Extension::SignExtendLong => write!(f, "sxl"),
             Extension::SignExtendWord => write!(f, "sxw"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum EflagsMutability {
+    None,
+    R,
+    W,
+    RW,
+}
+
+impl Default for EflagsMutability {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl core::fmt::Display for EflagsMutability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::None => write!(f, ""),
+            Self::R => write!(f, "r"),
+            Self::W => write!(f, "w"),
+            Self::RW => write!(f, "rw"),
         }
     }
 }

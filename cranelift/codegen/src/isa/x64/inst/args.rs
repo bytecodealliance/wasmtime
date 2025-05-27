@@ -823,12 +823,6 @@ pub(crate) enum InstructionSet {
 pub enum SseOpcode {
     Blendvpd,
     Blendvps,
-    Comiss,
-    Comisd,
-    Cmpps,
-    Cmppd,
-    Cmpss,
-    Cmpsd,
     Divps,
     Divpd,
     Divss,
@@ -897,8 +891,6 @@ pub enum SseOpcode {
     Roundsd,
     Rsqrtss,
     Shufps,
-    Ucomiss,
-    Ucomisd,
     Unpcklps,
     Unpcklpd,
     Unpckhps,
@@ -917,10 +909,7 @@ impl SseOpcode {
     pub(crate) fn available_from(&self) -> InstructionSet {
         use InstructionSet::*;
         match self {
-            SseOpcode::Comiss
-            | SseOpcode::Cmpps
-            | SseOpcode::Cmpss
-            | SseOpcode::Divps
+            SseOpcode::Divps
             | SseOpcode::Divss
             | SseOpcode::Movaps
             | SseOpcode::Movlhps
@@ -929,14 +918,10 @@ impl SseOpcode {
             | SseOpcode::Rcpss
             | SseOpcode::Rsqrtss
             | SseOpcode::Shufps
-            | SseOpcode::Ucomiss
             | SseOpcode::Unpcklps
             | SseOpcode::Unpckhps => SSE,
 
-            SseOpcode::Cmppd
-            | SseOpcode::Cmpsd
-            | SseOpcode::Comisd
-            | SseOpcode::Divpd
+            SseOpcode::Divpd
             | SseOpcode::Divsd
             | SseOpcode::Movapd
             | SseOpcode::Movsd
@@ -964,7 +949,6 @@ impl SseOpcode {
             | SseOpcode::Punpckhwd
             | SseOpcode::Punpcklbw
             | SseOpcode::Punpcklwd
-            | SseOpcode::Ucomisd
             | SseOpcode::Punpckldq
             | SseOpcode::Punpckhdq
             | SseOpcode::Punpcklqdq
@@ -1045,12 +1029,6 @@ impl fmt::Debug for SseOpcode {
         let name = match self {
             SseOpcode::Blendvpd => "blendvpd",
             SseOpcode::Blendvps => "blendvps",
-            SseOpcode::Cmpps => "cmpps",
-            SseOpcode::Cmppd => "cmppd",
-            SseOpcode::Cmpss => "cmpss",
-            SseOpcode::Cmpsd => "cmpsd",
-            SseOpcode::Comiss => "comiss",
-            SseOpcode::Comisd => "comisd",
             SseOpcode::Divps => "divps",
             SseOpcode::Divpd => "divpd",
             SseOpcode::Divss => "divss",
@@ -1120,8 +1098,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Roundsd => "roundsd",
             SseOpcode::Rsqrtss => "rsqrtss",
             SseOpcode::Shufps => "shufps",
-            SseOpcode::Ucomiss => "ucomiss",
-            SseOpcode::Ucomisd => "ucomisd",
             SseOpcode::Unpcklps => "unpcklps",
             SseOpcode::Unpckhps => "unpckhps",
             SseOpcode::Punpckldq => "punpckldq",

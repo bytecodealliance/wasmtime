@@ -217,6 +217,45 @@ impl dsl::Inst {
                             let to_string = location.generate_to_string(op.extension);
                             fmtln!(f, "let {location} = {to_string};");
                         }
+                        // Fix the mnemonic for comparison instructions: we want to print pseudo-ops without
+                        // the immediate operand.
+                        if self.mnemonic.starts_with("cmp")
+                            && ["cmppd", "cmpps", "cmpsd", "cmpss"]
+                                .contains(&self.mnemonic.as_str())
+                            && self.format.operands.len() == 3
+                            && matches!(
+                                self.format.operands[2].location.kind(),
+                                dsl::OperandKind::Imm(_)
+                            )
+                        {
+                            let imm_operand = self.format.operands[2].location;
+                            f.add_block(
+                                &format!("let mnemonic = match self.{imm_operand}.value()"),
+                                |f| {
+                                    let suffix = &self.mnemonic[3..];
+                                    fmtln!(f, "0 => \"cmpeq{suffix}\",");
+                                    fmtln!(f, "1 => \"cmplt{suffix}\",");
+                                    fmtln!(f, "2 => \"cmple{suffix}\",");
+                                    fmtln!(f, "3 => \"cmpunord{suffix}\",");
+                                    fmtln!(f, "4 => \"cmpneq{suffix}\",");
+                                    fmtln!(f, "5 => \"cmpnlt{suffix}\",");
+                                    fmtln!(f, "6 => \"cmpnle{suffix}\",");
+                                    fmtln!(f, "7 => \"cmpord{suffix}\",");
+                                    fmtln!(f, "_ => \"{}\",", self.mnemonic);
+                                },
+                            );
+                            fmtln!(f, ";");
+                            let op0 = self.format.operands[0].location.to_string();
+                            let op1 = self.format.operands[1].location.to_string();
+                            let imm = imm_operand.to_string();
+                            fmtln!(f, "let operands = if mnemonic != \"{}\" {{", self.mnemonic);
+                            fmtln!(f, "  format!(\"{{{op1}}}, {{{op0}}}\")",);
+                            fmtln!(f, "}} else {{");
+                            fmtln!(f, "  format!(\"{{{imm}}}, {{{op1}}}, {{{op0}}}\")");
+                            fmtln!(f, "}};");
+                            fmtln!(f, "write!(f, \"{{mnemonic}} {{operands}}\")");
+                            return;
+                        }
                         // Fix up the mnemonic for locked instructions: we want to print
                         // "lock <inst>", not "lock_<inst>".
                         let inst_name = if self.mnemonic.starts_with("lock_") {
