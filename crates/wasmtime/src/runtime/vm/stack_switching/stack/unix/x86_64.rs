@@ -79,8 +79,5 @@ asm_func!(
 #[test]
 fn test_return_payload() {
     // The following assumption is baked into `wasmtime_continuation_start`.
-    assert_eq!(
-        wasmtime_environ::CONTROL_EFFECT_RETURN_DISCRIMINANT,
-        0
-    );
+    assert_eq!(wasmtime_environ::CONTROL_EFFECT_RETURN_DISCRIMINANT, 0);
 }

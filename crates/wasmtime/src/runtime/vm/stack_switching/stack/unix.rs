@@ -329,8 +329,10 @@ unsafe extern "C" fn fiber_start(
         // since the caller vmctx is only really used to access stuff in the
         // underlying `Store`, it's fine to be slightly sloppy about the exact
         // value we set.
-        func_ref.array_call(None, caller_vmxtx, params_and_returns); // TODO(dhil): we are ignoring the boolean return value
-                                                                     // here... we probably shouldn't.
+        //
+        // TODO(dhil): we are ignoring the boolean return value
+        // here... we probably shouldn't.
+        func_ref.array_call(None, caller_vmxtx, params_and_returns);
 
         // The array call trampoline should have just written
         // `return_value_count` values to the `args` buffer. Let's reflect that

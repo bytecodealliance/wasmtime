@@ -186,11 +186,7 @@ pub const NOMINAL_MAX_TABLE_ELEM_SIZE: usize = {
             [] => 0,
             [head, tail @ ..] => {
                 let tail_max = slice_max(tail);
-                if *head >= tail_max {
-                    *head
-                } else {
-                    tail_max
-                }
+                if *head >= tail_max { *head } else { tail_max }
             }
         }
     }

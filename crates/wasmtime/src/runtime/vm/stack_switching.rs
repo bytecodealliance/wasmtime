@@ -3,8 +3,8 @@
 
 mod stack;
 
-use crate::vm::{Instance, TrapReason, VMFuncRef, VMStore};
 use crate::ValRaw;
+use crate::vm::{Instance, TrapReason, VMFuncRef, VMStore};
 use core::{marker::PhantomPinned, ptr::NonNull};
 
 pub use stack::*;
