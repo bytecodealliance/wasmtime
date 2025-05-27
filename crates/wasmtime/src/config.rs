@@ -2474,7 +2474,7 @@ impl Config {
 
             if !self
                 .compiler_config
-                .ensure_setting_unset_or_given("stack_switch_model".into(), model.into())
+                .ensure_setting_unset_or_given("stack_switch_model", model)
             {
                 bail!(
                     "compiler option 'stack_switch_model' must be set to '{}' on this platform",

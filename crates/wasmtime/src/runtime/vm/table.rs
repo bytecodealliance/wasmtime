@@ -812,7 +812,7 @@ impl Table {
                 elements.resize_with(new_size, || None);
             }
             Table::Dynamic(DynamicTable::Cont(DynamicContTable { elements, .. })) => {
-                elements.resize(usize::try_from(new_size).unwrap(), None);
+                elements.resize(new_size, None);
             }
         }
 
@@ -977,7 +977,7 @@ impl Table {
                     base: NonNull::<[Option<VMContObj>]>::from(&mut elements[..])
                         .cast()
                         .into(),
-                    current_elements: elements.len().try_into().unwrap(),
+                    current_elements: elements.len(),
                 }
             }
         }
@@ -1051,7 +1051,7 @@ impl Table {
                 slice::from_raw_parts(elements.as_ptr().cast(), elements.len())
             },
             Self::Static(StaticTable::Cont(StaticContTable { data, size })) => unsafe {
-                slice::from_raw_parts(data.as_ptr().cast(), usize::try_from(*size).unwrap())
+                slice::from_raw_parts(data.as_ptr().cast(), *size)
             },
             _ => unreachable!(),
         }
@@ -1064,7 +1064,7 @@ impl Table {
                 slice::from_raw_parts_mut(elements.as_mut_ptr().cast(), elements.len())
             },
             Self::Static(StaticTable::Cont(StaticContTable { data, size })) => unsafe {
-                slice::from_raw_parts_mut(data.as_ptr().cast(), usize::try_from(*size).unwrap())
+                slice::from_raw_parts_mut(data.as_ptr().cast(), *size)
             },
             _ => unreachable!(),
         }
