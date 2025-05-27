@@ -273,6 +273,7 @@ unsafe fn table_grow_gc_ref(
     Ok(result)
 }
 
+#[cfg(feature = "stack-switching")]
 unsafe fn table_grow_cont_obj(
     store: &mut dyn VMStore,
     instance: &mut Instance,
@@ -353,6 +354,7 @@ unsafe fn table_fill_gc_ref(
     }
 }
 
+#[cfg(feature = "stack-switching")]
 unsafe fn table_fill_cont_obj(
     store: &mut dyn VMStore,
     instance: &mut Instance,

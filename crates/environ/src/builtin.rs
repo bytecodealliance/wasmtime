@@ -238,9 +238,12 @@ macro_rules! foreach_builtin_function {
             // continuation reference and the revision count.  To
             // denote the continuation being `None`, `init_contref`
             // may be 0.
+            #[cfg(feature = "stack-switching")]
             table_grow_cont_obj(vmctx: vmctx, table: u32, delta: u64, init_contref: pointer, init_revision: u64) -> pointer;
+
             // `value_contref` and `value_revision` together encode
             // the Option<VMContObj>, as in previous libcall.
+            #[cfg(feature = "stack-switching")]
             table_fill_cont_obj(vmctx: vmctx, table: u32, dst: u64, value_contref: pointer, value_revision: u64, len: u64) -> bool;
         }
     };
