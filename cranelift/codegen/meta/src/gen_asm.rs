@@ -310,7 +310,7 @@ impl IsleConstructor {
     pub fn includes_write_only_reg_mem(&self) -> bool {
         match self {
             IsleConstructor::RetMemorySideEffect => true,
-            IsleConstructor::RetGpr | IsleConstructor::RetXmm | IsleConstructor::RetValueRegs => {
+            IsleConstructor::RetGpr | IsleConstructor::RetXmm | IsleConstructor::RetValueRegs | IsleConstructor::NoReturnSideEffect => {
                 false
             }
         }
@@ -497,7 +497,7 @@ pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
             .map(|o| {
                 assert!(matches!(o.location.kind(), OperandKind::RegMem(_)));
                 match ctor {
-                    IsleConstructor::RetMemorySideEffect => unreachable!(),
+                    IsleConstructor::RetMemorySideEffect | IsleConstructor::NoReturnSideEffect => unreachable!(),
                     IsleConstructor::RetGpr => "(temp_writable_gpr)",
                     IsleConstructor::RetXmm => "(temp_writable_xmm)",
                     IsleConstructor::RetValueRegs => todo!(),
