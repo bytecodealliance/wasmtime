@@ -15,6 +15,8 @@
 //!
 //! [link]: https://software.intel.com/content/www/us/en/develop/articles/intel-sdm.html
 
+use crate::dsl::RegClass;
+
 use super::{Operand, OperandKind};
 use core::fmt;
 

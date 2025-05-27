@@ -3,6 +3,7 @@
 mod add;
 mod and;
 mod bitmanip;
+mod cmp;
 mod cvt;
 mod div;
 mod lanes;
@@ -24,6 +25,7 @@ pub fn list() -> Vec<Inst> {
     all.extend(add::list());
     all.extend(and::list());
     all.extend(bitmanip::list());
+    all.extend(cmp::list());
     all.extend(cvt::list());
     all.extend(div::list());
     all.extend(lanes::list());

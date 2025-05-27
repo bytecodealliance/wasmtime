@@ -635,12 +635,12 @@ block202:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   ucomiss const(1), %xmm0
+;   ucomiss (%rip), %xmm0
 ;   jp,nz   label2; j label1
 ; block1:
 ;   jmp     label5
 ; block2:
-;   ucomiss const(0), %xmm0
+;   ucomiss (%rip), %xmm0
 ;   jnp     label4; j label3
 ; block3:
 ;   jmp     label5
