@@ -230,7 +230,7 @@ impl dsl::Inst {
                         {
                             let imm_operand = self.format.operands[2].location;
                             f.add_block(
-                                &format!("let mnemonic = match self.{}.value()", imm_operand),
+                                &format!("let mnemonic = match self.{imm_operand}.value()"),
                                 |f| {
                                     let suffix = &self.mnemonic[3..];
                                     fmtln!(f, "0 => \"cmpeq{suffix}\",");
