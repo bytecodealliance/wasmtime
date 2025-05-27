@@ -87,8 +87,7 @@ use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     ExportGlobal, GcStore, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SignalHandler,
-    StoreBox, StorePtr, Unwind, VMContRef, VMContext, VMContinuationStack, VMFuncRef, VMGcRef,
-    VMStoreContext,
+    StoreBox, StorePtr, Unwind, VMContRef, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
@@ -2043,7 +2042,7 @@ at https://bytecodealliance.org/security.
         // FIXME(frank-emrich) Do we need to pin this?
         let mut continuation = Box::new(VMContRef::empty());
         let stack_size = self.engine.config().async_stack_size;
-        let stack = VMContinuationStack::new(stack_size)?;
+        let stack = crate::vm::VMContinuationStack::new(stack_size)?;
         continuation.stack = stack;
         let ptr = continuation.deref_mut() as *mut VMContRef;
         self.continuations.push(continuation);

@@ -3,8 +3,6 @@
 
 mod stack;
 
-use crate::ValRaw;
-use crate::vm::{Instance, TrapReason, VMFuncRef, VMStore};
 use core::{marker::PhantomPinned, ptr::NonNull};
 
 pub use stack::*;
@@ -422,12 +420,12 @@ fn check_vm_contref_offsets() {
 #[cfg(feature = "stack-switching")]
 #[inline(always)]
 pub fn cont_new(
-    store: &mut dyn VMStore,
-    instance: &mut Instance,
+    store: &mut dyn crate::vm::VMStore,
+    instance: &mut crate::vm::Instance,
     func: *mut u8,
     param_count: u32,
     result_count: u32,
-) -> Result<*mut VMContRef, TrapReason> {
+) -> Result<*mut VMContRef, crate::vm::TrapReason> {
     let caller_vmctx = instance.vmctx();
 
     let stack_size = store.engine().config().async_stack_size;
@@ -443,10 +441,10 @@ pub fn cont_new(
 
     // The initialization function will allocate the actual args/return value buffer and
     // update this object (if needed).
-    let contref_args_ptr = &mut contref.args as *mut _ as *mut VMArray<ValRaw>;
+    let contref_args_ptr = &mut contref.args as *mut _ as *mut VMArray<crate::ValRaw>;
 
     contref.stack.initialize(
-        func.cast::<VMFuncRef>(),
+        func.cast::<crate::vm::VMFuncRef>(),
         caller_vmctx.as_ptr(),
         contref_args_ptr,
         param_count,

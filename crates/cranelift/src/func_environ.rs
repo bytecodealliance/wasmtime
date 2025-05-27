@@ -3813,6 +3813,7 @@ fn index_type_to_ir_type(index_type: IndexType) -> ir::Type {
 /// TODO(10248) This is removed in the next stack switching PR. It stops the
 /// compiler from complaining about the stack switching libcalls being dead
 /// code.
+#[cfg(feature = "stack-switching")]
 #[allow(
     dead_code,
     reason = "Dummy function to supress more dead code warnings"
