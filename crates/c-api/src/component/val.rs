@@ -26,6 +26,15 @@ crate::declare_vecs! {
         copy: wasmtime_component_valrecord_copy,
         delete: wasmtime_component_valrecord_delete,
     )
+    (
+        name: wasmtime_component_valtuple_t,
+        ty: wasmtime_component_val_t,
+        new: wasmtime_component_valtuple_new,
+        empty: wasmtime_component_valtuple_new_empty,
+        uninit: wasmtime_component_valtuple_new_uninit,
+        copy: wasmtime_component_valtuple_copy,
+        delete: wasmtime_component_valtuple_delete,
+    )
 }
 
 impl From<&wasmtime_component_vallist_t> for Vec<Val> {
@@ -94,6 +103,22 @@ impl From<&[(String, Val)]> for wasmtime_component_valrecord_t {
     }
 }
 
+impl From<&wasmtime_component_valtuple_t> for Vec<Val> {
+    fn from(value: &wasmtime_component_valtuple_t) -> Self {
+        value.as_slice().iter().map(Val::from).collect()
+    }
+}
+
+impl From<&[Val]> for wasmtime_component_valtuple_t {
+    fn from(value: &[Val]) -> Self {
+        value
+            .iter()
+            .map(wasmtime_component_val_t::from)
+            .collect::<Vec<_>>()
+            .into()
+    }
+}
+
 #[repr(C, u8)]
 #[derive(Clone)]
 pub enum wasmtime_component_val_t {
@@ -112,6 +137,7 @@ pub enum wasmtime_component_val_t {
     String(wasm_name_t),
     List(wasmtime_component_vallist_t),
     Record(wasmtime_component_valrecord_t),
+    Tuple(wasmtime_component_valtuple_t),
 }
 
 impl Default for wasmtime_component_val_t {
@@ -140,6 +166,7 @@ impl From<&wasmtime_component_val_t> for Val {
             }
             wasmtime_component_val_t::List(x) => Val::List(x.into()),
             wasmtime_component_val_t::Record(x) => Val::Record(x.into()),
+            wasmtime_component_val_t::Tuple(x) => Val::Tuple(x.into()),
         }
     }
 }
@@ -162,7 +189,7 @@ impl From<&Val> for wasmtime_component_val_t {
             Val::String(x) => wasmtime_component_val_t::String(wasm_name_t::from_name(x.clone())),
             Val::List(x) => wasmtime_component_val_t::List(x.as_slice().into()),
             Val::Record(x) => wasmtime_component_val_t::Record(x.as_slice().into()),
-            Val::Tuple(_vals) => todo!(),
+            Val::Tuple(x) => wasmtime_component_val_t::Tuple(x.as_slice().into()),
             Val::Variant(_, _val) => todo!(),
             Val::Enum(_) => todo!(),
             Val::Option(_val) => todo!(),

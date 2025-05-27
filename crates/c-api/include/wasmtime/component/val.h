@@ -59,6 +59,9 @@ typedef uint8_t wasmtime_component_valkind_t;
 /// \brief Value of #wasmtime_component_valkind_t meaning that
 /// #wasmtime_component_val_t is a record
 #define WASMTIME_COMPONENT_RECORD 14
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a tuple
+#define WASMTIME_COMPONENT_TUPLE 15
 
 struct wasmtime_component_val;
 struct wasmtime_component_valrecord_entry;
@@ -86,6 +89,7 @@ struct wasmtime_component_valrecord_entry;
 DECLARE_VEC(wasmtime_component_vallist, struct wasmtime_component_val)
 DECLARE_VEC(wasmtime_component_valrecord,
             struct wasmtime_component_valrecord_entry)
+DECLARE_VEC(wasmtime_component_valtuple, struct wasmtime_component_val)
 
 #undef DECLARE_VEC
 
@@ -124,6 +128,8 @@ typedef union {
   /// Field used if #wasmtime_component_val_t::kind is
   /// #WASMTIME_COMPONENT_RECORD
   wasmtime_component_valrecord_t record;
+  /// Field used if #wasmtime_component_val_t::kind is #WASMTIME_COMPONENT_TUPLE
+  wasmtime_component_valtuple_t tuple;
 } wasmtime_component_valunion_t;
 
 /// \brief Represents possible runtime values which a component function can
