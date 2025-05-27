@@ -148,14 +148,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::floats::Host,
             T: 'static,
         {
-            foo::foo::floats::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::floats::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_floats(&self) -> &exports::foo::foo::floats::Guest {
@@ -174,6 +174,20 @@ pub mod foo {
                 fn f64_param(&mut self, x: f64) -> ();
                 fn f32_result(&mut self) -> f32;
                 fn f64_result(&mut self) -> f64;
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn f32_param(&mut self, x: f32) -> () {
+                    Host::f32_param(*self, x)
+                }
+                fn f64_param(&mut self, x: f64) -> () {
+                    Host::f64_param(*self, x)
+                }
+                fn f32_result(&mut self) -> f32 {
+                    Host::f32_result(*self)
+                }
+                fn f64_result(&mut self) -> f64 {
+                    Host::f64_result(*self)
+                }
             }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -218,20 +232,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn f32_param(&mut self, x: f32) -> () {
-                    Host::f32_param(*self, x)
-                }
-                fn f64_param(&mut self, x: f64) -> () {
-                    Host::f64_param(*self, x)
-                }
-                fn f32_result(&mut self) -> f32 {
-                    Host::f32_result(*self)
-                }
-                fn f64_result(&mut self) -> f64 {
-                    Host::f64_result(*self)
-                }
             }
         }
     }

@@ -146,14 +146,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::anon::Host,
             T: 'static,
         {
-            foo::foo::anon::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::anon::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_anon(&self) -> &exports::foo::foo::anon::Guest {
@@ -217,6 +217,13 @@ pub mod foo {
                     &mut self,
                 ) -> Result<Option<wasmtime::component::__internal::String>, Error>;
             }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn option_test(
+                    &mut self,
+                ) -> Result<Option<wasmtime::component::__internal::String>, Error> {
+                    Host::option_test(*self)
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -236,13 +243,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn option_test(
-                    &mut self,
-                ) -> Result<Option<wasmtime::component::__internal::String>, Error> {
-                    Host::option_test(*self)
-                }
             }
         }
     }

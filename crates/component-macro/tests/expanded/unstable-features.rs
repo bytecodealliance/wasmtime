@@ -79,7 +79,7 @@ impl core::convert::From<&LinkOptions> for foo::foo::the_interface::LinkOptions 
     }
 }
 pub enum Baz {}
-pub trait HostBaz: Sized {
+pub trait HostBaz {
     fn foo(&mut self, self_: wasmtime::component::Resource<Baz>) -> ();
     fn drop(&mut self, rep: wasmtime::component::Resource<Baz>) -> wasmtime::Result<()>;
 }
@@ -295,7 +295,7 @@ const _: () = {
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
             options: &LinkOptions,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
@@ -303,12 +303,12 @@ const _: () = {
             T: 'static,
         {
             if options.experimental_world {
-                Self::add_to_linker_imports::<T, D>(linker, options, get)?;
+                Self::add_to_linker_imports::<T, D>(linker, options, host_getter)?;
                 if options.experimental_world_interface_import {
                     foo::foo::the_interface::add_to_linker::<
                         T,
                         D,
-                    >(linker, &options.into(), get)?;
+                    >(linker, &options.into(), host_getter)?;
                 }
             }
             Ok(())
@@ -361,7 +361,7 @@ pub mod foo {
                 }
             }
             pub enum Bar {}
-            pub trait HostBar: Sized {
+            pub trait HostBar {
                 fn foo(&mut self, self_: wasmtime::component::Resource<Bar>) -> ();
                 fn drop(
                     &mut self,
@@ -379,8 +379,13 @@ pub mod foo {
                     HostBar::drop(*self, rep)
                 }
             }
-            pub trait Host: HostBar + Sized {
+            pub trait Host: HostBar {
                 fn foo(&mut self) -> ();
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn foo(&mut self) -> () {
+                    Host::foo(*self)
+                }
             }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -431,11 +436,6 @@ pub mod foo {
                     }
                 }
                 Ok(())
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn foo(&mut self) -> () {
-                    Host::foo(*self)
-                }
             }
         }
     }

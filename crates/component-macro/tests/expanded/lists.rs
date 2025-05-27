@@ -146,14 +146,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::lists::Host,
             T: 'static,
         {
-            foo::foo::lists::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::lists::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_lists(&self) -> &exports::foo::foo::lists::Guest {
@@ -445,6 +445,163 @@ pub mod foo {
                     &mut self,
                     a: LoadStoreAllSizes,
                 ) -> LoadStoreAllSizes;
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn list_u8_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<u8>,
+                ) -> () {
+                    Host::list_u8_param(*self, x)
+                }
+                fn list_u16_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<u16>,
+                ) -> () {
+                    Host::list_u16_param(*self, x)
+                }
+                fn list_u32_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<u32>,
+                ) -> () {
+                    Host::list_u32_param(*self, x)
+                }
+                fn list_u64_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<u64>,
+                ) -> () {
+                    Host::list_u64_param(*self, x)
+                }
+                fn list_s8_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<i8>,
+                ) -> () {
+                    Host::list_s8_param(*self, x)
+                }
+                fn list_s16_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<i16>,
+                ) -> () {
+                    Host::list_s16_param(*self, x)
+                }
+                fn list_s32_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<i32>,
+                ) -> () {
+                    Host::list_s32_param(*self, x)
+                }
+                fn list_s64_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<i64>,
+                ) -> () {
+                    Host::list_s64_param(*self, x)
+                }
+                fn list_f32_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<f32>,
+                ) -> () {
+                    Host::list_f32_param(*self, x)
+                }
+                fn list_f64_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<f64>,
+                ) -> () {
+                    Host::list_f64_param(*self, x)
+                }
+                fn list_u8_ret(&mut self) -> wasmtime::component::__internal::Vec<u8> {
+                    Host::list_u8_ret(*self)
+                }
+                fn list_u16_ret(&mut self) -> wasmtime::component::__internal::Vec<u16> {
+                    Host::list_u16_ret(*self)
+                }
+                fn list_u32_ret(&mut self) -> wasmtime::component::__internal::Vec<u32> {
+                    Host::list_u32_ret(*self)
+                }
+                fn list_u64_ret(&mut self) -> wasmtime::component::__internal::Vec<u64> {
+                    Host::list_u64_ret(*self)
+                }
+                fn list_s8_ret(&mut self) -> wasmtime::component::__internal::Vec<i8> {
+                    Host::list_s8_ret(*self)
+                }
+                fn list_s16_ret(&mut self) -> wasmtime::component::__internal::Vec<i16> {
+                    Host::list_s16_ret(*self)
+                }
+                fn list_s32_ret(&mut self) -> wasmtime::component::__internal::Vec<i32> {
+                    Host::list_s32_ret(*self)
+                }
+                fn list_s64_ret(&mut self) -> wasmtime::component::__internal::Vec<i64> {
+                    Host::list_s64_ret(*self)
+                }
+                fn list_f32_ret(&mut self) -> wasmtime::component::__internal::Vec<f32> {
+                    Host::list_f32_ret(*self)
+                }
+                fn list_f64_ret(&mut self) -> wasmtime::component::__internal::Vec<f64> {
+                    Host::list_f64_ret(*self)
+                }
+                fn tuple_list(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<(u8, i8)>,
+                ) -> wasmtime::component::__internal::Vec<(i64, u32)> {
+                    Host::tuple_list(*self, x)
+                }
+                fn string_list_arg(
+                    &mut self,
+                    a: wasmtime::component::__internal::Vec<
+                        wasmtime::component::__internal::String,
+                    >,
+                ) -> () {
+                    Host::string_list_arg(*self, a)
+                }
+                fn string_list_ret(
+                    &mut self,
+                ) -> wasmtime::component::__internal::Vec<
+                    wasmtime::component::__internal::String,
+                > {
+                    Host::string_list_ret(*self)
+                }
+                fn tuple_string_list(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<
+                        (u8, wasmtime::component::__internal::String),
+                    >,
+                ) -> wasmtime::component::__internal::Vec<
+                    (wasmtime::component::__internal::String, u8),
+                > {
+                    Host::tuple_string_list(*self, x)
+                }
+                fn string_list(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<
+                        wasmtime::component::__internal::String,
+                    >,
+                ) -> wasmtime::component::__internal::Vec<
+                    wasmtime::component::__internal::String,
+                > {
+                    Host::string_list(*self, x)
+                }
+                fn record_list(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<SomeRecord>,
+                ) -> wasmtime::component::__internal::Vec<OtherRecord> {
+                    Host::record_list(*self, x)
+                }
+                fn record_list_reverse(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<OtherRecord>,
+                ) -> wasmtime::component::__internal::Vec<SomeRecord> {
+                    Host::record_list_reverse(*self, x)
+                }
+                fn variant_list(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<SomeVariant>,
+                ) -> wasmtime::component::__internal::Vec<OtherVariant> {
+                    Host::variant_list(*self, x)
+                }
+                fn load_store_everything(
+                    &mut self,
+                    a: LoadStoreAllSizes,
+                ) -> LoadStoreAllSizes {
+                    Host::load_store_everything(*self, a)
+                }
             }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -761,163 +918,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn list_u8_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<u8>,
-                ) -> () {
-                    Host::list_u8_param(*self, x)
-                }
-                fn list_u16_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<u16>,
-                ) -> () {
-                    Host::list_u16_param(*self, x)
-                }
-                fn list_u32_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<u32>,
-                ) -> () {
-                    Host::list_u32_param(*self, x)
-                }
-                fn list_u64_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<u64>,
-                ) -> () {
-                    Host::list_u64_param(*self, x)
-                }
-                fn list_s8_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<i8>,
-                ) -> () {
-                    Host::list_s8_param(*self, x)
-                }
-                fn list_s16_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<i16>,
-                ) -> () {
-                    Host::list_s16_param(*self, x)
-                }
-                fn list_s32_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<i32>,
-                ) -> () {
-                    Host::list_s32_param(*self, x)
-                }
-                fn list_s64_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<i64>,
-                ) -> () {
-                    Host::list_s64_param(*self, x)
-                }
-                fn list_f32_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<f32>,
-                ) -> () {
-                    Host::list_f32_param(*self, x)
-                }
-                fn list_f64_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<f64>,
-                ) -> () {
-                    Host::list_f64_param(*self, x)
-                }
-                fn list_u8_ret(&mut self) -> wasmtime::component::__internal::Vec<u8> {
-                    Host::list_u8_ret(*self)
-                }
-                fn list_u16_ret(&mut self) -> wasmtime::component::__internal::Vec<u16> {
-                    Host::list_u16_ret(*self)
-                }
-                fn list_u32_ret(&mut self) -> wasmtime::component::__internal::Vec<u32> {
-                    Host::list_u32_ret(*self)
-                }
-                fn list_u64_ret(&mut self) -> wasmtime::component::__internal::Vec<u64> {
-                    Host::list_u64_ret(*self)
-                }
-                fn list_s8_ret(&mut self) -> wasmtime::component::__internal::Vec<i8> {
-                    Host::list_s8_ret(*self)
-                }
-                fn list_s16_ret(&mut self) -> wasmtime::component::__internal::Vec<i16> {
-                    Host::list_s16_ret(*self)
-                }
-                fn list_s32_ret(&mut self) -> wasmtime::component::__internal::Vec<i32> {
-                    Host::list_s32_ret(*self)
-                }
-                fn list_s64_ret(&mut self) -> wasmtime::component::__internal::Vec<i64> {
-                    Host::list_s64_ret(*self)
-                }
-                fn list_f32_ret(&mut self) -> wasmtime::component::__internal::Vec<f32> {
-                    Host::list_f32_ret(*self)
-                }
-                fn list_f64_ret(&mut self) -> wasmtime::component::__internal::Vec<f64> {
-                    Host::list_f64_ret(*self)
-                }
-                fn tuple_list(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<(u8, i8)>,
-                ) -> wasmtime::component::__internal::Vec<(i64, u32)> {
-                    Host::tuple_list(*self, x)
-                }
-                fn string_list_arg(
-                    &mut self,
-                    a: wasmtime::component::__internal::Vec<
-                        wasmtime::component::__internal::String,
-                    >,
-                ) -> () {
-                    Host::string_list_arg(*self, a)
-                }
-                fn string_list_ret(
-                    &mut self,
-                ) -> wasmtime::component::__internal::Vec<
-                    wasmtime::component::__internal::String,
-                > {
-                    Host::string_list_ret(*self)
-                }
-                fn tuple_string_list(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<
-                        (u8, wasmtime::component::__internal::String),
-                    >,
-                ) -> wasmtime::component::__internal::Vec<
-                    (wasmtime::component::__internal::String, u8),
-                > {
-                    Host::tuple_string_list(*self, x)
-                }
-                fn string_list(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<
-                        wasmtime::component::__internal::String,
-                    >,
-                ) -> wasmtime::component::__internal::Vec<
-                    wasmtime::component::__internal::String,
-                > {
-                    Host::string_list(*self, x)
-                }
-                fn record_list(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<SomeRecord>,
-                ) -> wasmtime::component::__internal::Vec<OtherRecord> {
-                    Host::record_list(*self, x)
-                }
-                fn record_list_reverse(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<OtherRecord>,
-                ) -> wasmtime::component::__internal::Vec<SomeRecord> {
-                    Host::record_list_reverse(*self, x)
-                }
-                fn variant_list(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<SomeVariant>,
-                ) -> wasmtime::component::__internal::Vec<OtherVariant> {
-                    Host::variant_list(*self, x)
-                }
-                fn load_store_everything(
-                    &mut self,
-                    a: LoadStoreAllSizes,
-                ) -> LoadStoreAllSizes {
-                    Host::load_store_everything(*self, a)
-                }
             }
         }
     }

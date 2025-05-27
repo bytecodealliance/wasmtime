@@ -140,7 +140,7 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
@@ -150,8 +150,8 @@ const _: () = {
                 + a::b::interface_with_dead_type::Host,
             T: 'static,
         {
-            a::b::interface_with_live_type::add_to_linker::<T, D>(linker, get)?;
-            a::b::interface_with_dead_type::add_to_linker::<T, D>(linker, get)?;
+            a::b::interface_with_live_type::add_to_linker::<T, D>(linker, host_getter)?;
+            a::b::interface_with_dead_type::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
     }
@@ -185,6 +185,11 @@ pub mod a {
             pub trait Host {
                 fn f(&mut self) -> LiveType;
             }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn f(&mut self) -> LiveType {
+                    Host::f(*self)
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -204,11 +209,6 @@ pub mod a {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn f(&mut self) -> LiveType {
-                    Host::f(*self)
-                }
             }
         }
         #[allow(clippy::all)]
@@ -266,6 +266,7 @@ pub mod a {
                 assert!(4 == < V as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait Host {}
+            impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -278,7 +279,6 @@ pub mod a {
                 let mut inst = linker.instance("a:b/interface-with-dead-type")?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized> Host for &mut _T {}
         }
     }
 }

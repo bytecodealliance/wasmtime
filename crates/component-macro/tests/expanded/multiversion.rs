@@ -153,15 +153,15 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: my::dep0_1_0::a::Host + my::dep0_2_0::a::Host,
             T: 'static,
         {
-            my::dep0_1_0::a::add_to_linker::<T, D>(linker, get)?;
-            my::dep0_2_0::a::add_to_linker::<T, D>(linker, get)?;
+            my::dep0_1_0::a::add_to_linker::<T, D>(linker, host_getter)?;
+            my::dep0_2_0::a::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn my_dep0_1_0_a(&self) -> &exports::my::dep0_1_0::a::Guest {
@@ -180,6 +180,11 @@ pub mod my {
             use wasmtime::component::__internal::{anyhow, Box};
             pub trait Host {
                 fn x(&mut self) -> ();
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn x(&mut self) -> () {
+                    Host::x(*self)
+                }
             }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -201,11 +206,6 @@ pub mod my {
                 )?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn x(&mut self) -> () {
-                    Host::x(*self)
-                }
-            }
         }
     }
     pub mod dep0_2_0 {
@@ -215,6 +215,11 @@ pub mod my {
             use wasmtime::component::__internal::{anyhow, Box};
             pub trait Host {
                 fn x(&mut self) -> ();
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn x(&mut self) -> () {
+                    Host::x(*self)
+                }
             }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -235,11 +240,6 @@ pub mod my {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn x(&mut self) -> () {
-                    Host::x(*self)
-                }
             }
         }
     }

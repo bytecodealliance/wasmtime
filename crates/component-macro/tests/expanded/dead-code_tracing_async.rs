@@ -146,7 +146,7 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
@@ -154,10 +154,10 @@ const _: () = {
                 'a,
             >: a::b::interface_with_live_type::Host
                 + a::b::interface_with_dead_type::Host + Send,
-            T: Send + 'static,
+            T: 'static + Send,
         {
-            a::b::interface_with_live_type::add_to_linker::<T, D>(linker, get)?;
-            a::b::interface_with_dead_type::add_to_linker::<T, D>(linker, get)?;
+            a::b::interface_with_live_type::add_to_linker::<T, D>(linker, host_getter)?;
+            a::b::interface_with_dead_type::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
     }
@@ -192,14 +192,19 @@ pub mod a {
             pub trait Host: Send {
                 async fn f(&mut self) -> LiveType;
             }
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                async fn f(&mut self) -> LiveType {
+                    Host::f(*self).await
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
                 D: wasmtime::component::HasData,
-                for<'a> D::Data<'a>: Host + Send,
-                T: Send + 'static,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
             {
                 let mut inst = linker.instance("a:b/interface-with-live-type")?;
                 inst.func_wrap_async(
@@ -226,11 +231,6 @@ pub mod a {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn f(&mut self) -> LiveType {
-                    Host::f(*self).await
-                }
             }
         }
         #[allow(clippy::all)]
@@ -289,19 +289,19 @@ pub mod a {
             };
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {}
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
                 D: wasmtime::component::HasData,
-                for<'a> D::Data<'a>: Host + Send,
-                T: Send + 'static,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
             {
                 let mut inst = linker.instance("a:b/interface-with-dead-type")?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
         }
     }
 }
