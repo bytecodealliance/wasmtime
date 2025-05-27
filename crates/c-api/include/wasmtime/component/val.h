@@ -62,6 +62,9 @@ typedef uint8_t wasmtime_component_valkind_t;
 /// \brief Value of #wasmtime_component_valkind_t meaning that
 /// #wasmtime_component_val_t is a tuple
 #define WASMTIME_COMPONENT_TUPLE 15
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a variant
+#define WASMTIME_COMPONENT_VARIANT 16
 
 struct wasmtime_component_val;
 struct wasmtime_component_valrecord_entry;
@@ -92,6 +95,14 @@ DECLARE_VEC(wasmtime_component_valrecord,
 DECLARE_VEC(wasmtime_component_valtuple, struct wasmtime_component_val)
 
 #undef DECLARE_VEC
+
+/// Represents a variant type
+typedef struct {
+  /// The discriminant of the variant
+  wasm_name_t discriminant;
+  /// The payload of the variant
+  struct wasmtime_component_val *val;
+} wasmtime_component_valvariant_t;
 
 /// \brief Represents possible runtime values which a component function can
 /// either consume or produce
@@ -130,6 +141,9 @@ typedef union {
   wasmtime_component_valrecord_t record;
   /// Field used if #wasmtime_component_val_t::kind is #WASMTIME_COMPONENT_TUPLE
   wasmtime_component_valtuple_t tuple;
+  /// Field used if #wasmtime_component_val_t::kind is
+  /// #WASMTIME_COMPONENT_VARIANT
+  wasmtime_component_valvariant_t variant;
 } wasmtime_component_valunion_t;
 
 /// \brief Represents possible runtime values which a component function can
@@ -149,6 +163,9 @@ typedef struct wasmtime_component_valrecord_entry {
   /// The value of this entry
   wasmtime_component_val_t val;
 } wasmtime_component_valrecord_entry_t;
+
+/// \brief Allocates a new #wasmtime_component_val_t
+WASM_API_EXTERN wasmtime_component_val_t *wasmtime_component_val_new();
 
 /// \brief Calls the destructor on \p value deallocating any owned memory
 WASM_API_EXTERN void

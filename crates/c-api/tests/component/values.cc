@@ -6,6 +6,7 @@
 #include <array>
 #include <format>
 #include <span>
+#include <variant>
 
 static std::string echo_component(std::string_view type, std::string_view func,
                                   std::string_view host_params) {
@@ -424,6 +425,120 @@ local.get $res
   CHECK_ERR(err);
 
   check(res, {4, 5, 6});
+
+  wasmtime_component_val_delete(&arg);
+  wasmtime_component_val_delete(&res);
+
+  destroy(ctx);
+}
+
+TEST(component, value_variant) {
+  static const auto check_aa = [](const wasmtime_component_val_t &val,
+                                  uint32_t value) {
+    EXPECT_EQ(val.kind, WASMTIME_COMPONENT_VARIANT);
+    EXPECT_EQ((std::string_view{val.of.variant.discriminant.data,
+                                val.of.variant.discriminant.size}),
+              "aa");
+
+    EXPECT_NE(val.of.variant.val, nullptr);
+
+    EXPECT_EQ(val.of.variant.val->kind, WASMTIME_COMPONENT_U32);
+    EXPECT_EQ(val.of.variant.val->of.u32, value);
+  };
+
+  static const auto check_bb = [](const wasmtime_component_val_t &val,
+                                  std::string_view value) {
+    EXPECT_EQ(val.kind, WASMTIME_COMPONENT_VARIANT);
+    EXPECT_EQ((std::string_view{val.of.variant.discriminant.data,
+                                val.of.variant.discriminant.size}),
+              "bb");
+
+    EXPECT_NE(val.of.variant.val, nullptr);
+
+    EXPECT_EQ(val.of.variant.val->kind, WASMTIME_COMPONENT_STRING);
+    EXPECT_EQ((std::string_view{val.of.variant.val->of.string.data,
+                                val.of.variant.val->of.string.size}),
+              value);
+  };
+
+  static const auto make_aa = [](uint32_t value) -> wasmtime_component_val_t {
+    auto ret = wasmtime_component_val_t{
+        .kind = WASMTIME_COMPONENT_VARIANT,
+    };
+
+    wasm_name_new_from_string(&ret.of.variant.discriminant, "aa");
+
+    ret.of.variant.val = wasmtime_component_val_new();
+    ret.of.variant.val->kind = WASMTIME_COMPONENT_U32;
+    ret.of.variant.val->of.u32 = value;
+
+    return ret;
+  };
+
+  static const auto make_bb =
+      [](std::string_view value) -> wasmtime_component_val_t {
+    auto ret = wasmtime_component_val_t{
+        .kind = WASMTIME_COMPONENT_VARIANT,
+    };
+
+    wasm_name_new_from_string(&ret.of.variant.discriminant, "bb");
+
+    ret.of.variant.val = wasmtime_component_val_new();
+    ret.of.variant.val->kind = WASMTIME_COMPONENT_STRING;
+    wasm_name_new(&ret.of.variant.val->of.string, value.size(), value.data());
+
+    return ret;
+  };
+
+  auto ctx = create(
+      R"(
+(variant
+	(case "aa" u32)
+	(case "bb" string)
+)
+	  )",
+      R"(
+(param $x i32)
+(param $y i32)
+(param $z i32)
+(result i32)
+(local $res i32)
+local.get $x
+local.get $y
+local.get $z
+(call $realloc
+	(i32.const 0)
+	(i32.const 0)
+	(i32.const 4)
+	(i32.const 12))
+local.tee $res
+call $do
+local.get $res
+	  )",
+      "(param i32 i32 i32 i32)",
+      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
+          size_t args_len, wasmtime_component_val_t *rets,
+          size_t rets_len) -> wasmtime_error_t * {
+        EXPECT_EQ(args_len, 1);
+        check_aa(args[0], 123);
+
+        EXPECT_EQ(rets_len, 1);
+        rets[0] = make_bb("textt");
+
+        return nullptr;
+      });
+
+  auto arg = make_aa(123);
+  auto res = wasmtime_component_val_t{};
+
+  auto err =
+      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  CHECK_ERR(err);
+
+  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
+  CHECK_ERR(err);
+
+  check_bb(res, "textt");
 
   wasmtime_component_val_delete(&arg);
   wasmtime_component_val_delete(&res);

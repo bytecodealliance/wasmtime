@@ -119,6 +119,33 @@ impl From<&[Val]> for wasmtime_component_valtuple_t {
     }
 }
 
+#[repr(C)]
+#[derive(Clone)]
+pub struct wasmtime_component_valvariant_t {
+    discriminant: wasm_name_t,
+    val: Option<Box<wasmtime_component_val_t>>,
+}
+
+impl From<(&String, &Option<Box<Val>>)> for wasmtime_component_valvariant_t {
+    fn from((discriminant, value): (&String, &Option<Box<Val>>)) -> Self {
+        Self {
+            discriminant: wasm_name_t::from_name(discriminant.clone()),
+            val: value
+                .as_ref()
+                .map(|x| Box::new(wasmtime_component_val_t::from(x.as_ref()))),
+        }
+    }
+}
+
+impl From<&wasmtime_component_valvariant_t> for (String, Option<Box<Val>>) {
+    fn from(value: &wasmtime_component_valvariant_t) -> Self {
+        (
+            String::from_utf8(value.discriminant.clone().take()).unwrap(),
+            value.val.as_ref().map(|x| Box::new(Val::from(x.as_ref()))),
+        )
+    }
+}
+
 #[repr(C, u8)]
 #[derive(Clone)]
 pub enum wasmtime_component_val_t {
@@ -138,6 +165,7 @@ pub enum wasmtime_component_val_t {
     List(wasmtime_component_vallist_t),
     Record(wasmtime_component_valrecord_t),
     Tuple(wasmtime_component_valtuple_t),
+    Variant(wasmtime_component_valvariant_t),
 }
 
 impl Default for wasmtime_component_val_t {
@@ -167,6 +195,10 @@ impl From<&wasmtime_component_val_t> for Val {
             wasmtime_component_val_t::List(x) => Val::List(x.into()),
             wasmtime_component_val_t::Record(x) => Val::Record(x.into()),
             wasmtime_component_val_t::Tuple(x) => Val::Tuple(x.into()),
+            wasmtime_component_val_t::Variant(x) => {
+                let (a, b) = x.into();
+                Val::Variant(a, b)
+            }
         }
     }
 }
@@ -190,7 +222,9 @@ impl From<&Val> for wasmtime_component_val_t {
             Val::List(x) => wasmtime_component_val_t::List(x.as_slice().into()),
             Val::Record(x) => wasmtime_component_val_t::Record(x.as_slice().into()),
             Val::Tuple(x) => wasmtime_component_val_t::Tuple(x.as_slice().into()),
-            Val::Variant(_, _val) => todo!(),
+            Val::Variant(discriminant, val) => {
+                wasmtime_component_val_t::Variant((discriminant, val).into())
+            }
             Val::Enum(_) => todo!(),
             Val::Option(_val) => todo!(),
             Val::Result(_val) => todo!(),
@@ -198,6 +232,11 @@ impl From<&Val> for wasmtime_component_val_t {
             Val::Resource(_resource_any) => todo!(),
         }
     }
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_val_new() -> Box<wasmtime_component_val_t> {
+    Box::new(wasmtime_component_val_t::default())
 }
 
 #[unsafe(no_mangle)]
