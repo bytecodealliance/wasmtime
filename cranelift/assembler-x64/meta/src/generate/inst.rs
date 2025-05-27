@@ -245,13 +245,13 @@ impl dsl::Inst {
                                 },
                             );
                             fmtln!(f, ";");
-                            let op0 = self.format.operands[0].location;
-                            let op1 = self.format.operands[1].location;
-                            let imm = imm_operand;
+                            let op0 = self.format.operands[0].location.to_string();
+                            let op1 = self.format.operands[1].location.to_string();
+                            let imm = imm_operand.to_string();
                             fmtln!(f, "let operands = if mnemonic != \"{}\" {{", self.mnemonic);
-                            fmtln!(f, "  format!(\"{op1}, {op0}\")",);
+                            fmtln!(f, "  format!(\"{{{op1}}}, {{{op0}}}\")",);
                             fmtln!(f, "}} else {{");
-                            fmtln!(f, "  format!(\"{imm}, {op1}, {op0}\")");
+                            fmtln!(f, "  format!(\"{{{imm}}}, {{{op1}}}, {{{op0}}}\")");
                             fmtln!(f, "}};");
 
                             //fmtln!(f, "write!(f, \"{} {{}}\", operands)", "{mnemonic}");
