@@ -331,9 +331,9 @@ fn fixed_reg(enc: u8, class: RegClass) -> Reg {
     Reg::from_real_reg(preg)
 }
 
-impl Into<asm::Amode<Gpr>> for SyntheticAmode {
-    fn into(self) -> asm::Amode<Gpr> {
-        match self {
+impl From<SyntheticAmode> for asm::Amode<Gpr> {
+    fn from(amode: SyntheticAmode) -> asm::Amode<Gpr> {
+        match amode {
             SyntheticAmode::Real(amode) => amode.into(),
             SyntheticAmode::IncomingArg { offset } => asm::Amode::ImmReg {
                 base: Gpr::unwrap_new(regs::rbp()),
@@ -358,9 +358,9 @@ impl Into<asm::Amode<Gpr>> for SyntheticAmode {
     }
 }
 
-impl Into<asm::Amode<Gpr>> for Amode {
-    fn into(self) -> asm::Amode<Gpr> {
-        match self {
+impl From<Amode> for asm::Amode<Gpr> {
+    fn from(amode: Amode) -> asm::Amode<Gpr> {
+        match amode {
             Amode::ImmReg {
                 simm32,
                 base,
@@ -492,7 +492,7 @@ mod tests {
         assert_eq!(gpr200.to_string(Some(Size::Quadword)), "%v200");
 
         let v300: Reg = VReg::new(300, RegClass::Int).into();
-        let wgpr300 = WritableGpr::from_writable_reg(Writable::from_reg(v300).into()).unwrap();
+        let wgpr300 = WritableGpr::from_writable_reg(Writable::from_reg(v300)).unwrap();
         let pair = PairedGpr {
             read: gpr200,
             write: wgpr300,
@@ -504,7 +504,7 @@ mod tests {
         assert_eq!(xmm400.to_string(None), "%v400");
 
         let v500: Reg = VReg::new(500, RegClass::Float).into();
-        let wxmm500 = WritableXmm::from_writable_reg(Writable::from_reg(v500).into()).unwrap();
+        let wxmm500 = WritableXmm::from_writable_reg(Writable::from_reg(v500)).unwrap();
         let pair = PairedXmm {
             read: xmm400,
             write: wxmm500,

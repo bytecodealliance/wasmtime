@@ -55,7 +55,7 @@ impl TablePool {
             max_total_tables,
             tables_per_instance,
             keep_resident,
-            nominal_table_elements: usize::try_from(config.limits.table_elements).unwrap(),
+            nominal_table_elements: config.limits.table_elements,
         })
     }
 
@@ -63,7 +63,7 @@ impl TablePool {
     pub fn validate(&self, module: &Module) -> Result<()> {
         let tables = module.num_defined_tables();
 
-        if tables > usize::try_from(self.tables_per_instance).unwrap() {
+        if tables > self.tables_per_instance {
             bail!(
                 "defined tables count of {} exceeds the per-instance limit of {}",
                 tables,

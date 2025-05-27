@@ -1159,6 +1159,18 @@ impl Config {
         self
     }
 
+    /// This corresponds to the 📝 emoji in the component model specification.
+    ///
+    /// Please note that Wasmtime's support for this feature is _very_
+    /// incomplete.
+    ///
+    /// [proposal]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
+    #[cfg(feature = "component-model")]
+    pub fn wasm_component_model_error_context(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::CM_ERROR_CONTEXT, enable);
+        self
+    }
+
     #[doc(hidden)] // FIXME(#3427) - if/when implemented then un-hide this
     pub fn wasm_exceptions(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::EXCEPTIONS, enable);
@@ -2413,14 +2425,13 @@ impl Config {
             .insert("preserve_frame_pointers".into(), "true".into());
 
         if !tunables.signals_based_traps {
-            let mut ok = self.compiler_config.ensure_setting_unset_or_given(
-                "enable_table_access_spectre_mitigation".into(),
-                "false".into(),
-            );
+            let mut ok = self
+                .compiler_config
+                .ensure_setting_unset_or_given("enable_table_access_spectre_mitigation", "false");
             ok = ok
                 && self.compiler_config.ensure_setting_unset_or_given(
-                    "enable_heap_access_spectre_mitigation".into(),
-                    "false".into(),
+                    "enable_heap_access_spectre_mitigation",
+                    "false",
                 );
 
             // Right now spectre-mitigated bounds checks will load from zero so

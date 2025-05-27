@@ -25,9 +25,9 @@ use std::sync::OnceLock;
 /// Support for the AArch64 ABI from the callee side (within a function body).
 pub(crate) type AArch64Callee = Callee<AArch64MachineDeps>;
 
-impl Into<AMode> for StackAMode {
-    fn into(self) -> AMode {
-        match self {
+impl From<StackAMode> for AMode {
+    fn from(stack: StackAMode) -> AMode {
+        match stack {
             StackAMode::IncomingArg(off, stack_args_size) => AMode::IncomingArg {
                 off: i64::from(stack_args_size) - off,
             },
@@ -457,7 +457,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // `gen_add_imm` is only ever called after register allocation has taken place, and as a
             // result it's ok to reuse the scratch2 register here. If that changes, we'll need to
             // plumb through a way to allocate temporary virtual registers
-            insts.extend(Inst::load_constant(scratch2, imm.into(), &mut |_| scratch2));
+            insts.extend(Inst::load_constant(scratch2, imm, &mut |_| scratch2));
             insts.push(Inst::AluRRRExtend {
                 alu_op: ALUOp::Add,
                 size: OperandSize::Size64,

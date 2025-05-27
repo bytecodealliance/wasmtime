@@ -315,9 +315,9 @@ impl From<u8> for Register {
         Self(reg)
     }
 }
-impl Into<u8> for Register {
-    fn into(self) -> u8 {
-        self.0
+impl From<Register> for u8 {
+    fn from(reg: Register) -> u8 {
+        reg.0
     }
 }
 

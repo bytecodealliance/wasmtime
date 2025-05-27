@@ -156,8 +156,7 @@ where
             .params()
             .first()
             .ok_or_else(|| anyhow!(CodeGenError::vmcontext_arg_expected()))?
-            .unwrap_reg()
-            .into();
+            .unwrap_reg();
 
         self.masm.start_source_loc(Default::default())?;
         // We need to use the vmctx parameter before pinning it for stack checking.
@@ -227,7 +226,7 @@ where
                         }
                         Ref(rt) => match rt.heap_type {
                             WasmHeapType::Func | WasmHeapType::Extern => {
-                                self.masm.store_ptr((*reg).into(), addr)?;
+                                self.masm.store_ptr(*reg, addr)?;
                             }
                             _ => bail!(CodeGenError::unsupported_wasm_type()),
                         },
@@ -585,13 +584,10 @@ where
         // avoid conflict at the control flow merge below. Requesting the result
         // register is safe since we know ahead-of-time the builtin's signature.
         self.context.spill(self.masm)?;
-        let elem_value: Reg = self
-            .context
-            .reg(
-                builtin.sig().results.unwrap_singleton().unwrap_reg(),
-                self.masm,
-            )?
-            .into();
+        let elem_value: Reg = self.context.reg(
+            builtin.sig().results.unwrap_singleton().unwrap_reg(),
+            self.masm,
+        )?;
 
         let index = self.context.pop_to_reg(self.masm, None)?;
         let base = self.context.any_gpr(self.masm)?;
@@ -780,7 +776,7 @@ where
                 |masm, bounds, _| {
                     let bounds_reg = bounds.as_typed_reg().reg;
                     masm.cmp(
-                        index_offset_and_access_size.into(),
+                        index_offset_and_access_size,
                         bounds_reg.into(),
                         // We use the pointer size to keep the bounds
                         // comparison consistent with the result of the
@@ -988,7 +984,7 @@ where
 
         if let Some(addr) = maybe_addr {
             self.masm
-                .wasm_store(src.reg.into(), self.masm.address_at_reg(addr, 0)?, kind)?;
+                .wasm_store(src.reg, self.masm.address_at_reg(addr, 0)?, kind)?;
 
             self.context.free_reg(addr);
         }
@@ -1027,8 +1023,7 @@ where
             .masm
             .address_at_reg(base, table_data.current_elems_offset)?;
         let bound_size = table_data.current_elements_size;
-        self.masm
-            .load(bound_addr, writable!(bound), bound_size.into())?;
+        self.masm.load(bound_addr, writable!(bound), bound_size)?;
         self.masm.cmp(index, bound.into(), bound_size)?;
         self.masm
             .trapif(IntCmpKind::GeU, TRAP_TABLE_OUT_OF_BOUNDS)?;
@@ -1084,11 +1079,8 @@ where
         let size_addr = self
             .masm
             .address_at_reg(scratch, table_data.current_elems_offset)?;
-        self.masm.load(
-            size_addr,
-            writable!(size),
-            table_data.current_elements_size.into(),
-        )?;
+        self.masm
+            .load(size_addr, writable!(size), table_data.current_elements_size)?;
 
         self.context.stack.push(TypedReg::i32(size).into());
         Ok(())

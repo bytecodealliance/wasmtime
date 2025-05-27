@@ -534,12 +534,8 @@ impl TlsWriter {
 
         self.state = WriteState::Writing(wasmtime_wasi::runtime::spawn(async move {
             while !bytes.is_empty() {
-                match stream.write(&bytes).await {
-                    Ok(n) => {
-                        let _ = bytes.split_to(n);
-                    }
-                    Err(e) => return Err(e.into()),
-                }
+                let n = stream.write(&bytes).await?;
+                let _ = bytes.split_to(n);
             }
 
             Ok(stream)

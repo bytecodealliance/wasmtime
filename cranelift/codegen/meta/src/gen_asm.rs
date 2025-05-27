@@ -96,7 +96,7 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
         .collect::<Vec<_>>();
     let rust_params = operands
         .iter()
-        .filter(|o| o.mutability.is_read())
+        .filter(|o| is_raw_operand_param(o))
         .map(|o| format!("{}: {}", o.location, rust_param_raw(o)))
         .chain(if inst.has_trap {
             Some(format!("trap: &TrapCode"))
@@ -291,6 +291,20 @@ impl IsleConstructor {
             IsleConstructor::RetGpr | IsleConstructor::RetXmm | IsleConstructor::RetValueRegs => "",
         }
     }
+
+    /// Returns whether this constructor will include a write-only `RegMem`
+    /// operand as an argument to the constructor.
+    ///
+    /// Memory-based ctors take an `Amode`, but register-based ctors don't take
+    /// the result as an argument and instead manufacture it internally.
+    pub fn includes_write_only_reg_mem(&self) -> bool {
+        match self {
+            IsleConstructor::RetMemorySideEffect => true,
+            IsleConstructor::RetGpr | IsleConstructor::RetXmm | IsleConstructor::RetValueRegs => {
+                false
+            }
+        }
+    }
 }
 
 /// Returns the parameter type used for the `IsleConstructor` variant
@@ -414,7 +428,7 @@ pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
         .format
         .operands
         .iter()
-        .filter(|o| o.mutability.is_read())
+        .filter(|o| is_raw_operand_param(o))
         .collect::<Vec<_>>();
     let raw_param_tys = params
         .iter()
@@ -432,17 +446,33 @@ pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
     // The main purpose of these constructors is to have faithful type
     // signatures for the SSA nature of VCode/ISLE, effectively translating
     // x64's type system to ISLE/VCode's type system.
+    //
+    // Note that the `params` from above are partitioned into explicit/implicit
+    // parameters based on the `ctor` we're generating here. That means, for
+    // example, that a write-only `RegMem` will have one ctor which produces a
+    // register that takes no argument, but one ctors will take an `Amode` which
+    // is the address to write to.
     for ctor in isle_constructors(&inst.format) {
         let suffix = ctor.suffix();
         let rule_name = format!("x64_{struct_name}{suffix}");
         let result_ty = ctor.result_ty();
-        let param_tys = params
+        let mut explicit_params = Vec::new();
+        let mut implicit_params = Vec::new();
+        for param in params.iter() {
+            if param.mutability.is_read() || ctor.includes_write_only_reg_mem() {
+                explicit_params.push(param);
+            } else {
+                implicit_params.push(param);
+            }
+        }
+        assert!(implicit_params.len() <= 1);
+        let param_tys = explicit_params
             .iter()
             .map(|o| isle_param_for_ctor(o, ctor))
             .chain(trap_type.clone())
             .collect::<Vec<_>>()
             .join(" ");
-        let param_names = params
+        let param_names = explicit_params
             .iter()
             .map(|o| o.location.to_string())
             .chain(trap_name.clone())
@@ -450,10 +480,27 @@ pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
             .join(" ");
         let convert = ctor.conversion_constructor();
 
+        // Generate implicit parameters to the `*_raw` constructor. Currently
+        // this is only destination gpr/xmm temps if the result of this entire
+        // constructor is a gpr/xmm register.
+        let implicit_params = implicit_params
+            .iter()
+            .map(|o| {
+                assert!(matches!(o.location.kind(), OperandKind::RegMem(_)));
+                match ctor {
+                    IsleConstructor::RetMemorySideEffect => unreachable!(),
+                    IsleConstructor::RetGpr => "(temp_writable_gpr)",
+                    IsleConstructor::RetXmm => "(temp_writable_xmm)",
+                    IsleConstructor::RetValueRegs => todo!(),
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+
         fmtln!(f, "(decl {rule_name} ({param_tys}) {result_ty})");
         fmtln!(
             f,
-            "(rule ({rule_name} {param_names}) ({convert} ({raw_name} {param_names})))"
+            "(rule ({rule_name} {param_names}) ({convert} ({raw_name} {implicit_params} {param_names})))"
         );
     }
 }
@@ -522,4 +569,17 @@ pub fn generate_isle(f: &mut Formatter, insts: &[Inst]) {
         generate_isle_inst_decls(f, inst);
         f.empty_line();
     }
+}
+
+/// Returns whether `o` is included in the `*_raw` constructor generated in
+/// ISLE/Rust.
+///
+/// This notably includes all operands that are read as those are the
+/// data-dependencies of an instruction. This additionally includes, though,
+/// write-only `RegMem` operands. In this situation the `RegMem` operand is
+/// dynamically a `RegMem::Reg`, a temp register synthesized in ISLE, or a
+/// `RegMem::Mem`, an operand from the constructor of the original entrypoint
+/// itself.
+fn is_raw_operand_param(o: &Operand) -> bool {
+    o.mutability.is_read() || matches!(o.location.kind(), OperandKind::RegMem(_))
 }

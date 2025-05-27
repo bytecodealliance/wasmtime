@@ -196,7 +196,7 @@ impl Val {
                     );
                 }
 
-                Val::Flags(flags.into())
+                Val::Flags(flags)
             }
             InterfaceType::Future(_)
             | InterfaceType::Stream(_)
@@ -320,7 +320,7 @@ impl Val {
                         }
                     }
                 }
-                Val::Flags(flags.into())
+                Val::Flags(flags)
             }
             InterfaceType::Future(_)
             | InterfaceType::Stream(_)

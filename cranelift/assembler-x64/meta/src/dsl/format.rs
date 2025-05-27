@@ -300,7 +300,6 @@ pub enum Location {
     rm64,
 
     // XMM registers, and their memory forms.
-    xmm,
     xmm_m32,
     xmm_m64,
     xmm_m128,
@@ -310,25 +309,28 @@ pub enum Location {
     m16,
     m32,
     m64,
+    xmm1,
+    xmm2,
+    xmm3,
 }
 
 impl Location {
     /// Return the number of bits accessed.
     #[must_use]
-    pub fn bits(&self) -> u8 {
+    pub fn bits(&self) -> u16 {
         use Location::*;
         match self {
             al | cl | imm8 | r8 | rm8 | m8 => 8,
             ax | dx | imm16 | r16 | rm16 | m16 => 16,
             eax | edx | imm32 | r32 | rm32 | m32 | xmm_m32 => 32,
             rax | rdx | r64 | rm64 | m64 | xmm_m64 => 64,
-            xmm | xmm_m128 => 128,
+            xmm1 | xmm2 | xmm3 | xmm_m128 => 128,
         }
     }
 
     /// Return the number of bytes accessed, for convenience.
     #[must_use]
-    pub fn bytes(&self) -> u8 {
+    pub fn bytes(&self) -> u16 {
         self.bits() / 8
     }
 
@@ -338,8 +340,8 @@ impl Location {
         use Location::*;
         match self {
             al | ax | eax | rax | cl | dx | edx | rdx | imm8 | imm16 | imm32 | r8 | r16 | r32
-            | r64 | xmm => false,
-            rm8 | rm16 | rm32 | rm64 | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => true,
+            | r64 | xmm1 | xmm2 | xmm3 => false,
+            rm8 | rm16 | rm32 | rm64 | m8 | m16 | m32 | m64 | xmm_m32 | xmm_m64 | xmm_m128 => true,
         }
     }
 
@@ -351,7 +353,8 @@ impl Location {
         match self {
             imm8 | imm16 | imm32 => false,
             al | ax | eax | rax | cl | dx | edx | rdx | r8 | r16 | r32 | r64 | rm8 | rm16
-            | rm32 | rm64 | xmm | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => true,
+            | rm32 | rm64 | m8 | m16 | m32 | m64 | xmm1 | xmm2 | xmm3 | xmm_m32 | xmm_m64
+            | xmm_m128 => true,
         }
     }
 
@@ -362,7 +365,7 @@ impl Location {
         match self {
             al | ax | eax | rax | cl | dx | edx | rdx => OperandKind::FixedReg(*self),
             imm8 | imm16 | imm32 => OperandKind::Imm(*self),
-            r8 | r16 | r32 | r64 | xmm => OperandKind::Reg(*self),
+            r8 | r16 | r32 | r64 | xmm1 | xmm2 | xmm3 => OperandKind::Reg(*self),
             rm8 | rm16 | rm32 | rm64 | xmm_m32 | xmm_m64 | xmm_m128 => OperandKind::RegMem(*self),
             m8 | m16 | m32 | m64 => OperandKind::Mem(*self),
         }
@@ -379,7 +382,7 @@ impl Location {
             imm8 | imm16 | imm32 | m8 | m16 | m32 | m64 => None,
             al | ax | eax | rax | cl | dx | edx | rdx | r8 | r16 | r32 | r64 | rm8 | rm16
             | rm32 | rm64 => Some(RegClass::Gpr),
-            xmm | xmm_m32 | xmm_m64 | xmm_m128 => Some(RegClass::Xmm),
+            xmm1 | xmm2 | xmm3 | xmm_m32 | xmm_m64 | xmm_m128 => Some(RegClass::Xmm),
         }
     }
 }
@@ -410,7 +413,6 @@ impl core::fmt::Display for Location {
             rm32 => write!(f, "rm32"),
             rm64 => write!(f, "rm64"),
 
-            xmm => write!(f, "xmm"),
             xmm_m32 => write!(f, "xmm_m32"),
             xmm_m64 => write!(f, "xmm_m64"),
             xmm_m128 => write!(f, "xmm_m128"),
@@ -419,6 +421,10 @@ impl core::fmt::Display for Location {
             m16 => write!(f, "m16"),
             m32 => write!(f, "m32"),
             m64 => write!(f, "m64"),
+
+            xmm1 => write!(f, "xmm1"),
+            xmm2 => write!(f, "xmm2"),
+            xmm3 => write!(f, "xmm3"),
         }
     }
 }

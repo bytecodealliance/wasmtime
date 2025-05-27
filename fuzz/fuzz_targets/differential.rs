@@ -163,9 +163,6 @@ fn execute_one(data: &[u8]) -> Result<()> {
             let result_tys = match signature
                 .results()
                 .map(|ty| {
-                    let ty: wasmtime::ValType = ty
-                        .try_into()
-                        .map_err(|_| arbitrary::Error::IncorrectFormat)?;
                     DiffValueType::try_from(ty).map_err(|_| arbitrary::Error::IncorrectFormat)
                 })
                 .collect::<Result<Vec<_>>>()

@@ -40,6 +40,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         component_model_async,
         component_model_async_builtins,
         component_model_async_stackful,
+        component_model_error_context,
         nan_canonicalization,
         simd,
         exceptions,
@@ -64,6 +65,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
     let component_model_async = component_model_async.unwrap_or(false);
     let component_model_async_builtins = component_model_async_builtins.unwrap_or(false);
     let component_model_async_stackful = component_model_async_stackful.unwrap_or(false);
+    let component_model_error_context = component_model_error_context.unwrap_or(false);
     let nan_canonicalization = nan_canonicalization.unwrap_or(false);
     let relaxed_simd = relaxed_simd.unwrap_or(false);
     let legacy_exceptions = legacy_exceptions.unwrap_or(false);
@@ -97,6 +99,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
         .wasm_component_model_async(component_model_async)
         .wasm_component_model_async_builtins(component_model_async_builtins)
         .wasm_component_model_async_stackful(component_model_async_stackful)
+        .wasm_component_model_error_context(component_model_error_context)
         .wasm_exceptions(exceptions)
         .wasm_stack_switching(stack_switching)
         .cranelift_nan_canonicalization(nan_canonicalization);

@@ -142,6 +142,7 @@ impl Config {
             component_model_async,
             component_model_async_builtins,
             component_model_async_stackful,
+            component_model_error_context,
             simd,
             exceptions,
             legacy_exceptions,
@@ -161,6 +162,8 @@ impl Config {
             component_model_async_builtins.unwrap_or(false);
         self.module_config.component_model_async_stackful =
             component_model_async_stackful.unwrap_or(false);
+        self.module_config.component_model_error_context =
+            component_model_error_context.unwrap_or(false);
         self.module_config.legacy_exceptions = legacy_exceptions.unwrap_or(false);
 
         // Enable/disable proposals that wasm-smith has knobs for which will be
@@ -286,6 +289,8 @@ impl Config {
             Some(self.module_config.component_model_async_builtins);
         cfg.wasm.component_model_async_stackful =
             Some(self.module_config.component_model_async_stackful);
+        cfg.wasm.component_model_error_context =
+            Some(self.module_config.component_model_error_context);
         cfg.wasm.custom_page_sizes = Some(self.module_config.config.custom_page_sizes_enabled);
         cfg.wasm.epoch_interruption = Some(self.wasmtime.epoch_interruption);
         cfg.wasm.extended_const = Some(self.module_config.config.extended_const_enabled);

@@ -229,15 +229,19 @@ impl From<Vec<VerifierError>> for VerifierErrors {
     }
 }
 
-impl Into<Vec<VerifierError>> for VerifierErrors {
-    fn into(self) -> Vec<VerifierError> {
-        self.0
+impl From<VerifierErrors> for Vec<VerifierError> {
+    fn from(errors: VerifierErrors) -> Vec<VerifierError> {
+        errors.0
     }
 }
 
-impl Into<VerifierResult<()>> for VerifierErrors {
-    fn into(self) -> VerifierResult<()> {
-        if self.is_empty() { Ok(()) } else { Err(self) }
+impl From<VerifierErrors> for VerifierResult<()> {
+    fn from(errors: VerifierErrors) -> VerifierResult<()> {
+        if errors.is_empty() {
+            Ok(())
+        } else {
+            Err(errors)
+        }
     }
 }
 

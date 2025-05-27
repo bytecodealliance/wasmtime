@@ -146,9 +146,7 @@ pub extern "C" fn wasmtime_store_epoch_deadline_callback(
             &mut kind as *mut wasmtime_update_deadline_kind_t,
         );
         match result {
-            Some(err) => Err(wasmtime::Error::from(<wasmtime_error_t as Into<
-                anyhow::Error,
-            >>::into(*err))),
+            Some(err) => Err((*err).into()),
             None if kind == WASMTIME_UPDATE_DEADLINE_CONTINUE => {
                 Ok(UpdateDeadline::Continue(delta))
             }

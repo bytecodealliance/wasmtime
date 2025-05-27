@@ -147,7 +147,7 @@ impl FinishedObject for MmapVecWrapper {
             }
             Err(e) => match result.err.take() {
                 Some(original) => Err(original.context(e)),
-                None => Err(e.into()),
+                None => Err(e),
             },
         };
 

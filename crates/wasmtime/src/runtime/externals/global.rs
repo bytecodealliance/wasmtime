@@ -121,15 +121,11 @@ impl Global {
 
                         HeapType::NoFunc => Ref::Func(None),
 
-                        HeapType::Extern => Ref::Extern(
-                            definition
-                                .as_gc_ref()
-                                .map(|r| {
-                                    let r = store.unwrap_gc_store_mut().clone_gc_ref(r);
-                                    ExternRef::from_cloned_gc_ref(&mut store, r)
-                                })
-                                .into(),
-                        ),
+                        HeapType::Extern => Ref::Extern(definition.as_gc_ref().map(|r| {
+                            let r = store.unwrap_gc_store_mut().clone_gc_ref(r);
+                            ExternRef::from_cloned_gc_ref(&mut store, r)
+                        })),
+
                         HeapType::NoCont | HeapType::ConcreteCont(_) | HeapType::Cont => {
                             // TODO(#10248) Required to support stack switching in the embedder API.
                             unimplemented!()

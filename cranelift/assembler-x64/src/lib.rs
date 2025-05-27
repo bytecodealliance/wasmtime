@@ -53,6 +53,7 @@ mod imm;
 pub mod inst;
 mod mem;
 mod rex;
+mod vex;
 pub mod xmm;
 
 #[cfg(any(test, feature = "fuzz"))]

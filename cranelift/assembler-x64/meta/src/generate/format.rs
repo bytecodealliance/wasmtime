@@ -1,6 +1,5 @@
 //! Generate format-related Rust code; this also includes generation of encoding
 //! Rust code.
-
 use super::{Formatter, fmtln};
 use crate::dsl;
 
@@ -48,6 +47,38 @@ impl dsl::Format {
         self.generate_immediate(f);
     }
 
+    pub fn generate_vex_encoding(&self, f: &mut Formatter, vex: &dsl::Vex) {
+        use dsl::OperandKind::{Reg, RegMem};
+        f.empty_line();
+        f.comment("Emit New VEX prefix.");
+
+        match self.operands_by_kind().as_slice() {
+            [Reg(xmm1), Reg(xmm2), RegMem(xmm_m128)] => {
+                fmtln!(
+                    f,
+                    "vex_instruction::<R>(
+                    0x{:0x},
+                    VexVectorLength::{},
+                    VexPP::{},
+                    OpcodeMap::{},
+                    self.{}.enc(),
+                    Some(self.{}.enc()),
+                    Some(self.{}),
+                    {}).encode(buf, off);",
+                    vex.opcodes.primary,
+                    vex.length.to_string(),
+                    vex.pp.to_string(),
+                    vex.mmmmm.to_string(),
+                    xmm1,
+                    xmm2,
+                    xmm_m128,
+                    "None"
+                );
+            }
+            _ => unimplemented!(),
+        }
+    }
+
     /// `buf.put1(...);`
     fn generate_prefixes(&self, f: &mut Formatter, rex: &dsl::Rex) {
         if !rex.opcodes.prefixes.is_empty() {
@@ -75,13 +106,21 @@ impl dsl::Format {
         if rex.opcodes.escape {
             fmtln!(f, "buf.put1(0x0f);");
         }
-        fmtln!(f, "buf.put1(0x{:x});", rex.opcodes.primary);
+        if rex.opcode_mod.is_some() {
+            let loc = self.locations().next().unwrap();
+            assert!(matches!(loc.kind(), dsl::OperandKind::Reg(_)));
+            fmtln!(f, "let low_bits = self.{loc}.enc() & 0b111;");
+            fmtln!(f, "buf.put1(0x{:x} | low_bits);", rex.opcodes.primary);
+        } else {
+            fmtln!(f, "buf.put1(0x{:x});", rex.opcodes.primary);
+        }
         if let Some(secondary) = rex.opcodes.secondary {
             fmtln!(f, "buf.put1(0x{:x});", secondary);
         }
     }
 
     fn generate_rex_prefix(&self, f: &mut Formatter, rex: &dsl::Rex) {
+        use dsl::Location::*;
         use dsl::OperandKind::{FixedReg, Imm, Mem, Reg, RegMem};
         f.empty_line();
         f.comment("Possibly emit REX prefix.");
@@ -100,6 +139,12 @@ impl dsl::Format {
                 fmtln!(f, "let digit = 0;");
                 fmtln!(f, "let dst = self.{dst}.enc();");
                 fmtln!(f, "let rex = RexPrefix::with_digit(digit, dst, {bits});");
+            }
+            [Reg(dst)] => {
+                assert_eq!(rex.digit, None);
+                assert!(rex.opcode_mod.is_some());
+                fmtln!(f, "let dst = self.{dst}.enc();");
+                fmtln!(f, "let rex = RexPrefix::one_op(dst, {bits});");
             }
             [Reg(dst), Imm(_)] => {
                 let digit = rex.digit.unwrap();
@@ -133,6 +178,13 @@ impl dsl::Format {
                 fmtln!(f, "let src = self.{src}.enc();");
                 fmtln!(f, "let rex = self.{dst}.as_rex_prefix(src, {bits});");
             }
+
+            [Reg(dst), Reg(xmm2), Imm(_)] | [Reg(dst), Reg(xmm2)] => {
+                fmtln!(f, "let reg = self.{dst}.enc();");
+                fmtln!(f, "let rm = self.xmm2.enc();");
+                fmtln!(f, "let rex = RexPrefix::two_op(reg, rm, {bits});");
+            }
+
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
         }
 
@@ -140,23 +192,30 @@ impl dsl::Format {
     }
 
     fn generate_modrm_byte(&self, f: &mut Formatter, rex: &dsl::Rex) {
+        use dsl::Location::*;
         use dsl::OperandKind::{FixedReg, Imm, Mem, Reg, RegMem};
 
-        if let [FixedReg(_), Imm(_)] = self.operands_by_kind().as_slice() {
-            // No need to emit a comment.
-        } else {
+        // Some instructions will never emit a ModR/M byte.
+        let operands = self.operands_by_kind();
+        if rex.opcode_mod.is_some()
+            || matches!(
+                operands.as_slice(),
+                [FixedReg(_)] | [FixedReg(_), FixedReg(_)] | [FixedReg(_), Imm(_)]
+            )
+        {
             f.empty_line();
-            f.comment("Emit ModR/M byte.");
+            f.comment("No need to emit a ModRM byte.");
+            return;
         }
-        let bytes_at_end = match self.operands_by_kind().as_slice() {
+
+        // If we must, emit the ModR/M byte and the SIB byte (if necessary).
+        f.empty_line();
+        f.comment("Emit ModR/M byte.");
+        let bytes_at_end = match operands.as_slice() {
             [.., Imm(imm)] => imm.bytes(),
             _ => 0,
         };
-
-        match self.operands_by_kind().as_slice() {
-            [FixedReg(_)] | [FixedReg(_), FixedReg(_)] | [FixedReg(_), Imm(_)] => {
-                // No need to emit a ModRM byte: we know the register used.
-            }
+        match operands.as_slice() {
             [Reg(reg), Imm(_)] => {
                 let digit = rex.digit.unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");
@@ -187,6 +246,11 @@ impl dsl::Format {
                     "self.{mem}.encode_rex_suffixes(buf, off, reg, {bytes_at_end});"
                 );
             }
+
+            [Reg(dst), Reg(xmm2), Imm(_)] | [Reg(dst), Reg(xmm2)] => {
+                fmtln!(f, "self.xmm2.encode_modrm(buf, self.{dst}.enc());");
+            }
+
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
         }
     }

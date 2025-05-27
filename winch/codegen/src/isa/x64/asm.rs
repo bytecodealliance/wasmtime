@@ -540,7 +540,7 @@ impl Assembler {
             size: size.into(),
             cc: cc.into(),
             consequent: src.into(),
-            alternative: dst.to_reg().into(),
+            alternative: dst.to_reg(),
             dst,
         })
     }
@@ -771,7 +771,7 @@ impl Assembler {
             ty,
             cc: cc.into(),
             consequent: Xmm::unwrap_new(src.into()),
-            alternative: dst.to_reg().into(),
+            alternative: dst.to_reg(),
             dst,
         })
     }
@@ -850,33 +850,26 @@ impl Assembler {
     }
 
     pub fn gpr_to_xmm(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Movd,
-            OperandSize::S64 => SseOpcode::Movq,
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = match size {
+            OperandSize::S32 => asm::inst::movd_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::movq_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
 
-        self.emit(Inst::GprToXmm {
-            op,
-            src: src.into(),
-            dst: dst.map(Into::into),
-            src_size: size.into(),
-        })
+        self.emit(Inst::External { inst });
     }
 
     pub fn xmm_to_gpr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Movd,
-            OperandSize::S64 => SseOpcode::Movq,
+        let dst: WritableGpr = dst.map(Into::into);
+        let src: Xmm = src.into();
+        let inst = match size {
+            OperandSize::S32 => asm::inst::movd_b::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::movq_b::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
 
-        self.emit(Inst::XmmToGpr {
-            op,
-            src: src.into(),
-            dst: dst.map(Into::into),
-            dst_size: size.into(),
-        });
+        self.emit(Inst::External { inst })
     }
 
     /// Convert float to signed int.
@@ -1559,18 +1552,14 @@ impl Assembler {
 
     /// Performs float multiplication on src and dst and places result in dst.
     pub fn xmm_mul_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Mulss,
-            OperandSize::S64 => SseOpcode::Mulsd,
-            OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
+        use OperandSize::*;
+        let dst = pair_xmm(dst);
+        let inst = match size {
+            S32 => asm::inst::mulss_a::new(dst, src).into(),
+            S64 => asm::inst::mulsd_a::new(dst, src).into(),
+            S8 | S16 | S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmRmRUnaligned {
-            op,
-            src1: Xmm::from(dst.to_reg()).into(),
-            src2: Xmm::from(src).into(),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Performs float division on src and dst and places result in dst.
@@ -1583,7 +1572,7 @@ impl Assembler {
 
         self.emit(Inst::XmmRmRUnaligned {
             op,
-            src1: Xmm::from(dst.to_reg()).into(),
+            src1: Xmm::from(dst.to_reg()),
             src2: Xmm::from(src).into(),
             dst: dst.map(Into::into),
         });

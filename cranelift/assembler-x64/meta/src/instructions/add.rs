@@ -1,5 +1,5 @@
-use crate::dsl::{Feature::*, Inst, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq};
+use crate::dsl::{Feature::*, Inst, Location::*, VexLength::*, VexMMMMM::*, VexPP::*};
+use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -63,19 +63,22 @@ pub fn list() -> Vec<Inst> {
         inst("lock_adcl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x11]).r(), _64b | compat),
         inst("lock_adcq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x11]).w().r(), _64b),
         // Vector instructions.
-        inst("addss", fmt("A", [rw(xmm), r(xmm_m32)]), rex([0xF3, 0x0F, 0x58]).r(), _64b | compat | sse),
-        inst("addsd", fmt("A", [rw(xmm), r(xmm_m64)]), rex([0xF2, 0x0F, 0x58]).r(), _64b | compat | sse2),
-        inst("addps", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x0F, 0x58]).r(), _64b | compat | sse),
-        inst("addpd", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x58]).r(), _64b | compat | sse2),
-        inst("paddb", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFC]).r(), _64b | compat | sse2),
-        inst("paddw", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFD]).r(), _64b | compat | sse2),
-        inst("paddd", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFE]).r(), _64b | compat | sse2),
-        inst("paddq", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD4]).r(), _64b | compat | sse2),
-        inst("paddsb", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xEC]).r(), _64b | compat | sse2),
-        inst("paddsw", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xED]).r(), _64b | compat | sse2),
-        inst("paddusb", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDC]).r(), _64b | compat | sse2),
-        inst("paddusw", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDD]).r(), _64b | compat | sse2),
-        inst("phaddw", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x01]).r(), _64b | compat | ssse3),
-        inst("phaddd", fmt("A", [rw(xmm), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x02]).r(), _64b | compat | ssse3),
+        inst("addss", fmt("A", [rw(xmm1), r(xmm_m32)]), rex([0xF3, 0x0F, 0x58]).r(), _64b | compat | sse),
+        inst("addsd", fmt("A", [rw(xmm1), r(xmm_m64)]), rex([0xF2, 0x0F, 0x58]).r(), _64b | compat | sse2),
+        inst("addps", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x0F, 0x58]).r(), _64b | compat | sse),
+        inst("addpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x58]).r(), _64b | compat | sse2),
+        inst("paddb", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFC]).r(), _64b | compat | sse2),
+        inst("paddw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFD]).r(), _64b | compat | sse2),
+        inst("paddd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFE]).r(), _64b | compat | sse2),
+        inst("paddq", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD4]).r(), _64b | compat | sse2),
+        inst("paddsb", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xEC]).r(), _64b | compat | sse2),
+        inst("paddsw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xED]).r(), _64b | compat | sse2),
+        inst("paddusb", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDC]).r(), _64b | compat | sse2),
+        inst("paddusw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDD]).r(), _64b | compat | sse2),
+        inst("phaddw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x01]).r(), _64b | compat | ssse3),
+        inst("phaddd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x02]).r(), _64b | compat | ssse3),
+        // Vex instructions
+        inst("vaddps", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(0x58).length(_128).mmmmm(_OF), _64b | compat | sse2),
+        inst("vaddpd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(0x58).length(_128).pp(_66).mmmmm(_OF), _64b | compat | sse2)
     ]
 }

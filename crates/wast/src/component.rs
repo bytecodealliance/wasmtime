@@ -21,24 +21,21 @@ pub fn val(v: &WastVal<'_>) -> Result<Val> {
         WastVal::F32(b) => Val::Float32(f32::from_bits(b.bits)),
         WastVal::F64(b) => Val::Float64(f64::from_bits(b.bits)),
         WastVal::Char(b) => Val::Char(*b),
-        WastVal::String(s) => Val::String(s.to_string().into()),
+        WastVal::String(s) => Val::String(s.to_string()),
         WastVal::List(vals) => {
             let vals = vals.iter().map(|v| val(v)).collect::<Result<Vec<_>>>()?;
-            Val::List(vals.into())
+            Val::List(vals)
         }
         WastVal::Record(vals) => {
             let mut fields = Vec::new();
             for (name, v) in vals {
                 fields.push((name.to_string(), val(v)?));
             }
-            Val::Record(fields.into())
+            Val::Record(fields)
         }
-        WastVal::Tuple(vals) => Val::Tuple(
-            vals.iter()
-                .map(|v| val(v))
-                .collect::<Result<Vec<_>>>()?
-                .into(),
-        ),
+        WastVal::Tuple(vals) => {
+            Val::Tuple(vals.iter().map(|v| val(v)).collect::<Result<Vec<_>>>()?)
+        }
         WastVal::Enum(name) => Val::Enum(name.to_string()),
         WastVal::Variant(name, payload) => {
             let payload = payload_val(payload.as_deref())?;

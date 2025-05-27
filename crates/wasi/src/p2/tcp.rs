@@ -814,7 +814,7 @@ impl TcpWriter {
                         let _ = bytes.split_to(n);
                     }
                     Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
-                    Err(e) => return Err(e.into()),
+                    Err(e) => return Err(e),
                 }
             }
 

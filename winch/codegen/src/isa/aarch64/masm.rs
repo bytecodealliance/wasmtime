@@ -856,13 +856,13 @@ impl Masm for MacroAssembler {
 
     fn demote(&mut self, dst: WritableReg, src: Reg) -> Result<()> {
         self.asm
-            .cvt_float_to_float(src.into(), dst, OperandSize::S64, OperandSize::S32);
+            .cvt_float_to_float(src, dst, OperandSize::S64, OperandSize::S32);
         Ok(())
     }
 
     fn promote(&mut self, dst: WritableReg, src: Reg) -> Result<()> {
         self.asm
-            .cvt_float_to_float(src.into(), dst, OperandSize::S32, OperandSize::S64);
+            .cvt_float_to_float(src, dst, OperandSize::S32, OperandSize::S64);
         Ok(())
     }
 
