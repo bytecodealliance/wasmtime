@@ -7,7 +7,7 @@ use crate::isa::x64::encoding::rex::{
     low8_will_sign_extend_to_64, reg_enc,
 };
 use crate::isa::x64::encoding::vex::{VexInstruction, VexVectorLength};
-use crate::isa::x64::external::{PairedGpr, CraneliftRegisters};
+use crate::isa::x64::external::{CraneliftRegisters, PairedGpr};
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::isa::x64::lower::isle::generated_code::{Atomic128RmwSeqOp, AtomicRmwSeqOp};
