@@ -886,7 +886,6 @@ pub enum SseOpcode {
     Pshufb,
     Pshufd,
     Ptest,
-    Punpckhwd,
     Punpcklbw,
     Punpcklwd,
     Rcpss,
@@ -954,7 +953,6 @@ impl SseOpcode {
             | SseOpcode::Pmullw
             | SseOpcode::Pmuludq
             | SseOpcode::Pshufd
-            | SseOpcode::Punpckhwd
             | SseOpcode::Punpcklbw
             | SseOpcode::Punpcklwd
             | SseOpcode::Ucomisd
@@ -1101,7 +1099,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pshufb => "pshufb",
             SseOpcode::Pshufd => "pshufd",
             SseOpcode::Ptest => "ptest",
-            SseOpcode::Punpckhwd => "punpckhwd",
             SseOpcode::Punpcklbw => "punpcklbw",
             SseOpcode::Punpcklwd => "punpcklwd",
             SseOpcode::Rcpss => "rcpss",

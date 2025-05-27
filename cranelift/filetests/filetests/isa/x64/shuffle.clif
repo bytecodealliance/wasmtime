@@ -92,7 +92,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   punpckhwd %xmm0, %xmm1, %xmm0
+;   punpckhwd %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

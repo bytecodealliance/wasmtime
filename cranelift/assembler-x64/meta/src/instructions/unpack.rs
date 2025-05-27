@@ -9,5 +9,10 @@ pub fn list() -> Vec<Inst> {
         inst("unpcklpd", fmt("A", [rw(xmm1), r(xmm_m128)]), rex([0x66, 0x0F, 0x14]).r(), _64b | compat | sse2),
         inst("unpckhps", fmt("A", [rw(xmm1), r(xmm_m128)]), rex([0xF, 0x15]).r(), _64b | compat | sse),
         inst("punpckhbw", fmt("A", [rw(xmm1), r(xmm_m128)]), rex([0x66, 0x0F, 0x68]).r(), _64b | compat | sse2),
+        inst("punpckhwd", fmt("A", [rw(xmm1), r(xmm_m128)]), rex([0x66, 0x0F, 0x69]).r(), _64b | compat | sse2),
+        inst("punpckhdq", fmt("A", [rw(xmm1), r(xmm_m128)]), rex([0x66, 0x0F, 0x6A]).r(), _64b | compat | sse2),
+        inst("punpcklwd", fmt("A", [rw(xmm1), r(xmm_m128)]), rex([0x66, 0x0F, 0x6D]).r(), _64b | compat | sse2),
+        inst("punpcklqdq", fmt("A", [rw(xmm1), r(xmm_m128)]), rex([0x66, 0x0F, 0x6C]).r(), _64b | compat | sse2),
+        inst("punpcklbw", fmt("A", [rw(xmm1), r(xmm_m128)]), rex([0x66, 0x0F, 0x60]).r(), _64b | compat | sse2),
     ]
 }
