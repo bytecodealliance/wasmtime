@@ -9,7 +9,10 @@
     not(test),
     expect(
         clippy::useless_conversion,
-        reason = "test/not have a different definition of `SystemTime`",
+        reason = "cfg(test) and cfg(not(test)) have a different definition \
+                  of `SystemTime`, so conversions below are needed in \
+                  one mode but not the other, just ignore the lint in this \
+                  module in not(test) mode where the conversion isn't required",
     )
 )]
 
