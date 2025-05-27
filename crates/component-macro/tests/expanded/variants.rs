@@ -148,14 +148,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::variants::Host,
             T: 'static,
         {
-            foo::foo::variants::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::variants::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_variants(&self) -> &exports::foo::foo::variants::Guest {
@@ -511,6 +511,116 @@ pub mod foo {
                 fn is_clone_arg(&mut self, a: IsClone) -> ();
                 fn is_clone_return(&mut self) -> IsClone;
             }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn e1_arg(&mut self, x: E1) -> () {
+                    Host::e1_arg(*self, x)
+                }
+                fn e1_result(&mut self) -> E1 {
+                    Host::e1_result(*self)
+                }
+                fn v1_arg(&mut self, x: V1) -> () {
+                    Host::v1_arg(*self, x)
+                }
+                fn v1_result(&mut self) -> V1 {
+                    Host::v1_result(*self)
+                }
+                fn bool_arg(&mut self, x: bool) -> () {
+                    Host::bool_arg(*self, x)
+                }
+                fn bool_result(&mut self) -> bool {
+                    Host::bool_result(*self)
+                }
+                fn option_arg(
+                    &mut self,
+                    a: Option<bool>,
+                    b: Option<()>,
+                    c: Option<u32>,
+                    d: Option<E1>,
+                    e: Option<f32>,
+                    g: Option<Option<bool>>,
+                ) -> () {
+                    Host::option_arg(*self, a, b, c, d, e, g)
+                }
+                fn option_result(
+                    &mut self,
+                ) -> (
+                    Option<bool>,
+                    Option<()>,
+                    Option<u32>,
+                    Option<E1>,
+                    Option<f32>,
+                    Option<Option<bool>>,
+                ) {
+                    Host::option_result(*self)
+                }
+                fn casts(
+                    &mut self,
+                    a: Casts1,
+                    b: Casts2,
+                    c: Casts3,
+                    d: Casts4,
+                    e: Casts5,
+                    f: Casts6,
+                ) -> (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6) {
+                    Host::casts(*self, a, b, c, d, e, f)
+                }
+                fn result_arg(
+                    &mut self,
+                    a: Result<(), ()>,
+                    b: Result<(), E1>,
+                    c: Result<E1, ()>,
+                    d: Result<(), ()>,
+                    e: Result<u32, V1>,
+                    f: Result<
+                        wasmtime::component::__internal::String,
+                        wasmtime::component::__internal::Vec<u8>,
+                    >,
+                ) -> () {
+                    Host::result_arg(*self, a, b, c, d, e, f)
+                }
+                fn result_result(
+                    &mut self,
+                ) -> (
+                    Result<(), ()>,
+                    Result<(), E1>,
+                    Result<E1, ()>,
+                    Result<(), ()>,
+                    Result<u32, V1>,
+                    Result<
+                        wasmtime::component::__internal::String,
+                        wasmtime::component::__internal::Vec<u8>,
+                    >,
+                ) {
+                    Host::result_result(*self)
+                }
+                fn return_result_sugar(&mut self) -> Result<i32, MyErrno> {
+                    Host::return_result_sugar(*self)
+                }
+                fn return_result_sugar2(&mut self) -> Result<(), MyErrno> {
+                    Host::return_result_sugar2(*self)
+                }
+                fn return_result_sugar3(&mut self) -> Result<MyErrno, MyErrno> {
+                    Host::return_result_sugar3(*self)
+                }
+                fn return_result_sugar4(&mut self) -> Result<(i32, u32), MyErrno> {
+                    Host::return_result_sugar4(*self)
+                }
+                fn return_option_sugar(&mut self) -> Option<i32> {
+                    Host::return_option_sugar(*self)
+                }
+                fn return_option_sugar2(&mut self) -> Option<MyErrno> {
+                    Host::return_option_sugar2(*self)
+                }
+                fn result_simple(&mut self) -> Result<u32, i32> {
+                    Host::result_simple(*self)
+                }
+                fn is_clone_arg(&mut self, a: IsClone) -> () {
+                    Host::is_clone_arg(*self, a)
+                }
+                fn is_clone_return(&mut self) -> IsClone {
+                    Host::is_clone_return(*self)
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -751,116 +861,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn e1_arg(&mut self, x: E1) -> () {
-                    Host::e1_arg(*self, x)
-                }
-                fn e1_result(&mut self) -> E1 {
-                    Host::e1_result(*self)
-                }
-                fn v1_arg(&mut self, x: V1) -> () {
-                    Host::v1_arg(*self, x)
-                }
-                fn v1_result(&mut self) -> V1 {
-                    Host::v1_result(*self)
-                }
-                fn bool_arg(&mut self, x: bool) -> () {
-                    Host::bool_arg(*self, x)
-                }
-                fn bool_result(&mut self) -> bool {
-                    Host::bool_result(*self)
-                }
-                fn option_arg(
-                    &mut self,
-                    a: Option<bool>,
-                    b: Option<()>,
-                    c: Option<u32>,
-                    d: Option<E1>,
-                    e: Option<f32>,
-                    g: Option<Option<bool>>,
-                ) -> () {
-                    Host::option_arg(*self, a, b, c, d, e, g)
-                }
-                fn option_result(
-                    &mut self,
-                ) -> (
-                    Option<bool>,
-                    Option<()>,
-                    Option<u32>,
-                    Option<E1>,
-                    Option<f32>,
-                    Option<Option<bool>>,
-                ) {
-                    Host::option_result(*self)
-                }
-                fn casts(
-                    &mut self,
-                    a: Casts1,
-                    b: Casts2,
-                    c: Casts3,
-                    d: Casts4,
-                    e: Casts5,
-                    f: Casts6,
-                ) -> (Casts1, Casts2, Casts3, Casts4, Casts5, Casts6) {
-                    Host::casts(*self, a, b, c, d, e, f)
-                }
-                fn result_arg(
-                    &mut self,
-                    a: Result<(), ()>,
-                    b: Result<(), E1>,
-                    c: Result<E1, ()>,
-                    d: Result<(), ()>,
-                    e: Result<u32, V1>,
-                    f: Result<
-                        wasmtime::component::__internal::String,
-                        wasmtime::component::__internal::Vec<u8>,
-                    >,
-                ) -> () {
-                    Host::result_arg(*self, a, b, c, d, e, f)
-                }
-                fn result_result(
-                    &mut self,
-                ) -> (
-                    Result<(), ()>,
-                    Result<(), E1>,
-                    Result<E1, ()>,
-                    Result<(), ()>,
-                    Result<u32, V1>,
-                    Result<
-                        wasmtime::component::__internal::String,
-                        wasmtime::component::__internal::Vec<u8>,
-                    >,
-                ) {
-                    Host::result_result(*self)
-                }
-                fn return_result_sugar(&mut self) -> Result<i32, MyErrno> {
-                    Host::return_result_sugar(*self)
-                }
-                fn return_result_sugar2(&mut self) -> Result<(), MyErrno> {
-                    Host::return_result_sugar2(*self)
-                }
-                fn return_result_sugar3(&mut self) -> Result<MyErrno, MyErrno> {
-                    Host::return_result_sugar3(*self)
-                }
-                fn return_result_sugar4(&mut self) -> Result<(i32, u32), MyErrno> {
-                    Host::return_result_sugar4(*self)
-                }
-                fn return_option_sugar(&mut self) -> Option<i32> {
-                    Host::return_option_sugar(*self)
-                }
-                fn return_option_sugar2(&mut self) -> Option<MyErrno> {
-                    Host::return_option_sugar2(*self)
-                }
-                fn result_simple(&mut self) -> Result<u32, i32> {
-                    Host::result_simple(*self)
-                }
-                fn is_clone_arg(&mut self, a: IsClone) -> () {
-                    Host::is_clone_arg(*self, a)
-                }
-                fn is_clone_return(&mut self) -> IsClone {
-                    Host::is_clone_return(*self)
-                }
             }
         }
     }

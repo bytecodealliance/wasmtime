@@ -148,14 +148,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::strings::Host,
             T: 'static,
         {
-            foo::foo::strings::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::strings::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_strings(&self) -> &exports::foo::foo::strings::Guest {
@@ -177,6 +177,21 @@ pub mod foo {
                     a: wasmtime::component::__internal::String,
                     b: wasmtime::component::__internal::String,
                 ) -> wasmtime::component::__internal::String;
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn a(&mut self, x: wasmtime::component::__internal::String) -> () {
+                    Host::a(*self, x)
+                }
+                fn b(&mut self) -> wasmtime::component::__internal::String {
+                    Host::b(*self)
+                }
+                fn c(
+                    &mut self,
+                    a: wasmtime::component::__internal::String,
+                    b: wasmtime::component::__internal::String,
+                ) -> wasmtime::component::__internal::String {
+                    Host::c(*self, a, b)
+                }
             }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -225,21 +240,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn a(&mut self, x: wasmtime::component::__internal::String) -> () {
-                    Host::a(*self, x)
-                }
-                fn b(&mut self) -> wasmtime::component::__internal::String {
-                    Host::b(*self)
-                }
-                fn c(
-                    &mut self,
-                    a: wasmtime::component::__internal::String,
-                    b: wasmtime::component::__internal::String,
-                ) -> wasmtime::component::__internal::String {
-                    Host::c(*self, a, b)
-                }
             }
         }
     }

@@ -140,14 +140,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::a::Host,
             T: 'static,
         {
-            foo::foo::a::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::a::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
     }
@@ -189,6 +189,11 @@ pub mod foo {
             pub trait Host {
                 fn g(&mut self) -> Result<(), Error>;
             }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn g(&mut self) -> Result<(), Error> {
+                    Host::g(*self)
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -208,11 +213,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn g(&mut self) -> Result<(), Error> {
-                    Host::g(*self)
-                }
             }
         }
     }

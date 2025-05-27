@@ -154,14 +154,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::integers::Host + Send,
-            T: Send + 'static,
+            T: 'static + Send,
         {
-            foo::foo::integers::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::integers::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_integers(&self) -> &exports::foo::foo::integers::Guest {
@@ -206,14 +206,80 @@ pub mod foo {
                 async fn r8(&mut self) -> i64;
                 async fn pair_ret(&mut self) -> (i64, u8);
             }
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                async fn a1(&mut self, x: u8) -> () {
+                    Host::a1(*self, x).await
+                }
+                async fn a2(&mut self, x: i8) -> () {
+                    Host::a2(*self, x).await
+                }
+                async fn a3(&mut self, x: u16) -> () {
+                    Host::a3(*self, x).await
+                }
+                async fn a4(&mut self, x: i16) -> () {
+                    Host::a4(*self, x).await
+                }
+                async fn a5(&mut self, x: u32) -> () {
+                    Host::a5(*self, x).await
+                }
+                async fn a6(&mut self, x: i32) -> () {
+                    Host::a6(*self, x).await
+                }
+                async fn a7(&mut self, x: u64) -> () {
+                    Host::a7(*self, x).await
+                }
+                async fn a8(&mut self, x: i64) -> () {
+                    Host::a8(*self, x).await
+                }
+                async fn a9(
+                    &mut self,
+                    p1: u8,
+                    p2: i8,
+                    p3: u16,
+                    p4: i16,
+                    p5: u32,
+                    p6: i32,
+                    p7: u64,
+                    p8: i64,
+                ) -> () {
+                    Host::a9(*self, p1, p2, p3, p4, p5, p6, p7, p8).await
+                }
+                async fn r1(&mut self) -> u8 {
+                    Host::r1(*self).await
+                }
+                async fn r2(&mut self) -> i8 {
+                    Host::r2(*self).await
+                }
+                async fn r3(&mut self) -> u16 {
+                    Host::r3(*self).await
+                }
+                async fn r4(&mut self) -> i16 {
+                    Host::r4(*self).await
+                }
+                async fn r5(&mut self) -> u32 {
+                    Host::r5(*self).await
+                }
+                async fn r6(&mut self) -> i32 {
+                    Host::r6(*self).await
+                }
+                async fn r7(&mut self) -> u64 {
+                    Host::r7(*self).await
+                }
+                async fn r8(&mut self) -> i64 {
+                    Host::r8(*self).await
+                }
+                async fn pair_ret(&mut self) -> (i64, u8) {
+                    Host::pair_ret(*self).await
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
                 D: wasmtime::component::HasData,
-                for<'a> D::Data<'a>: Host + Send,
-                T: Send + 'static,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
             {
                 let mut inst = linker.instance("foo:foo/integers")?;
                 inst.func_wrap_async(
@@ -685,72 +751,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn a1(&mut self, x: u8) -> () {
-                    Host::a1(*self, x).await
-                }
-                async fn a2(&mut self, x: i8) -> () {
-                    Host::a2(*self, x).await
-                }
-                async fn a3(&mut self, x: u16) -> () {
-                    Host::a3(*self, x).await
-                }
-                async fn a4(&mut self, x: i16) -> () {
-                    Host::a4(*self, x).await
-                }
-                async fn a5(&mut self, x: u32) -> () {
-                    Host::a5(*self, x).await
-                }
-                async fn a6(&mut self, x: i32) -> () {
-                    Host::a6(*self, x).await
-                }
-                async fn a7(&mut self, x: u64) -> () {
-                    Host::a7(*self, x).await
-                }
-                async fn a8(&mut self, x: i64) -> () {
-                    Host::a8(*self, x).await
-                }
-                async fn a9(
-                    &mut self,
-                    p1: u8,
-                    p2: i8,
-                    p3: u16,
-                    p4: i16,
-                    p5: u32,
-                    p6: i32,
-                    p7: u64,
-                    p8: i64,
-                ) -> () {
-                    Host::a9(*self, p1, p2, p3, p4, p5, p6, p7, p8).await
-                }
-                async fn r1(&mut self) -> u8 {
-                    Host::r1(*self).await
-                }
-                async fn r2(&mut self) -> i8 {
-                    Host::r2(*self).await
-                }
-                async fn r3(&mut self) -> u16 {
-                    Host::r3(*self).await
-                }
-                async fn r4(&mut self) -> i16 {
-                    Host::r4(*self).await
-                }
-                async fn r5(&mut self) -> u32 {
-                    Host::r5(*self).await
-                }
-                async fn r6(&mut self) -> i32 {
-                    Host::r6(*self).await
-                }
-                async fn r7(&mut self) -> u64 {
-                    Host::r7(*self).await
-                }
-                async fn r8(&mut self) -> i64 {
-                    Host::r8(*self).await
-                }
-                async fn pair_ret(&mut self) -> (i64, u8) {
-                    Host::pair_ret(*self).await
-                }
             }
         }
     }
