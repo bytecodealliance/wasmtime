@@ -14,9 +14,9 @@ impl From<Error> for wasmtime_error_t {
     }
 }
 
-impl Into<Error> for wasmtime_error_t {
-    fn into(self) -> Error {
-        self.error
+impl From<wasmtime_error_t> for Error {
+    fn from(cerr: wasmtime_error_t) -> Error {
+        cerr.error
     }
 }
 

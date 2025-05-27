@@ -93,26 +93,25 @@ impl From<gimli::write::CallFrameInstruction> for CallFrameInstruction {
     }
 }
 
-impl Into<gimli::write::CallFrameInstruction> for CallFrameInstruction {
-    fn into(self) -> gimli::write::CallFrameInstruction {
-        use gimli::{Register, write::CallFrameInstruction, write::Expression};
+impl From<CallFrameInstruction> for gimli::write::CallFrameInstruction {
+    fn from(cfi: CallFrameInstruction) -> gimli::write::CallFrameInstruction {
+        use CallFrameInstruction as ClifCfi;
+        use gimli::{Register, write::CallFrameInstruction as GimliCfi, write::Expression};
 
-        match self {
-            Self::Cfa(reg, offset) => CallFrameInstruction::Cfa(Register(reg), offset),
-            Self::CfaRegister(reg) => CallFrameInstruction::CfaRegister(Register(reg)),
-            Self::CfaOffset(offset) => CallFrameInstruction::CfaOffset(offset),
-            Self::Restore(reg) => CallFrameInstruction::Restore(Register(reg)),
-            Self::Undefined(reg) => CallFrameInstruction::Undefined(Register(reg)),
-            Self::SameValue(reg) => CallFrameInstruction::SameValue(Register(reg)),
-            Self::Offset(reg, offset) => CallFrameInstruction::Offset(Register(reg), offset),
-            Self::ValOffset(reg, offset) => CallFrameInstruction::ValOffset(Register(reg), offset),
-            Self::Register(reg1, reg2) => {
-                CallFrameInstruction::Register(Register(reg1), Register(reg2))
-            }
-            Self::RememberState => CallFrameInstruction::RememberState,
-            Self::RestoreState => CallFrameInstruction::RestoreState,
-            Self::ArgsSize(size) => CallFrameInstruction::ArgsSize(size),
-            Self::Aarch64SetPointerAuth { return_addresses } => {
+        match cfi {
+            ClifCfi::Cfa(reg, offset) => GimliCfi::Cfa(Register(reg), offset),
+            ClifCfi::CfaRegister(reg) => GimliCfi::CfaRegister(Register(reg)),
+            ClifCfi::CfaOffset(offset) => GimliCfi::CfaOffset(offset),
+            ClifCfi::Restore(reg) => GimliCfi::Restore(Register(reg)),
+            ClifCfi::Undefined(reg) => GimliCfi::Undefined(Register(reg)),
+            ClifCfi::SameValue(reg) => GimliCfi::SameValue(Register(reg)),
+            ClifCfi::Offset(reg, offset) => GimliCfi::Offset(Register(reg), offset),
+            ClifCfi::ValOffset(reg, offset) => GimliCfi::ValOffset(Register(reg), offset),
+            ClifCfi::Register(reg1, reg2) => GimliCfi::Register(Register(reg1), Register(reg2)),
+            ClifCfi::RememberState => GimliCfi::RememberState,
+            ClifCfi::RestoreState => GimliCfi::RestoreState,
+            ClifCfi::ArgsSize(size) => GimliCfi::ArgsSize(size),
+            ClifCfi::Aarch64SetPointerAuth { return_addresses } => {
                 // To enable pointer authentication for return addresses in dwarf directives, we
                 // use a small dwarf expression that sets the value of the pseudo-register
                 // RA_SIGN_STATE (RA stands for return address) to 0 or 1. This behavior is
@@ -125,7 +124,7 @@ impl Into<gimli::write::CallFrameInstruction> for CallFrameInstruction {
                     gimli::DW_OP_lit0
                 });
                 const RA_SIGN_STATE: Register = Register(34);
-                CallFrameInstruction::ValExpression(RA_SIGN_STATE, expr)
+                GimliCfi::ValExpression(RA_SIGN_STATE, expr)
             }
         }
     }

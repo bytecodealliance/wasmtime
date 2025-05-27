@@ -71,9 +71,9 @@ impl From<FloatCmpKind> for Cond {
     }
 }
 
-impl Into<ScalarSize> for OperandSize {
-    fn into(self) -> ScalarSize {
-        match self {
+impl From<OperandSize> for ScalarSize {
+    fn from(size: OperandSize) -> ScalarSize {
+        match size {
             OperandSize::S8 => ScalarSize::Size8,
             OperandSize::S16 => ScalarSize::Size16,
             OperandSize::S32 => ScalarSize::Size32,

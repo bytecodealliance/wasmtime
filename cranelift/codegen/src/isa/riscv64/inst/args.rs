@@ -198,9 +198,9 @@ impl Display for AMode {
     }
 }
 
-impl Into<AMode> for StackAMode {
-    fn into(self) -> AMode {
-        match self {
+impl From<StackAMode> for AMode {
+    fn from(stack: StackAMode) -> AMode {
+        match stack {
             StackAMode::IncomingArg(offset, stack_args_size) => {
                 AMode::IncomingArg(i64::from(stack_args_size) - offset)
             }

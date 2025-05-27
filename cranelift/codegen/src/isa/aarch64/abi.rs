@@ -25,9 +25,9 @@ use std::sync::OnceLock;
 /// Support for the AArch64 ABI from the callee side (within a function body).
 pub(crate) type AArch64Callee = Callee<AArch64MachineDeps>;
 
-impl Into<AMode> for StackAMode {
-    fn into(self) -> AMode {
-        match self {
+impl From<StackAMode> for AMode {
+    fn from(stack: StackAMode) -> AMode {
+        match stack {
             StackAMode::IncomingArg(off, stack_args_size) => AMode::IncomingArg {
                 off: i64::from(stack_args_size) - off,
             },

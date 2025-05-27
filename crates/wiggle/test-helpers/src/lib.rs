@@ -35,9 +35,9 @@ where
     }
 }
 
-impl Into<Vec<MemArea>> for MemAreas {
-    fn into(self) -> Vec<MemArea> {
-        self.0.clone()
+impl From<MemAreas> for Vec<MemArea> {
+    fn from(areas: MemAreas) -> Vec<MemArea> {
+        areas.0.clone()
     }
 }
 

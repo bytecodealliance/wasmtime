@@ -259,9 +259,9 @@ impl<R: Reg> From<ScalarBitSet<u16>> for UpperRegSet<R> {
     }
 }
 
-impl<R: Reg> Into<ScalarBitSet<u16>> for UpperRegSet<R> {
-    fn into(self) -> ScalarBitSet<u16> {
-        self.bitset
+impl<R: Reg> From<UpperRegSet<R>> for ScalarBitSet<u16> {
+    fn from(upper: UpperRegSet<R>) -> ScalarBitSet<u16> {
+        upper.bitset
     }
 }
 
