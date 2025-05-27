@@ -53,7 +53,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pmulhw %xmm1, %xmm0
 ;   movdqa  %xmm0, %xmm2
 ;   movdqa  %xmm5, %xmm0
-;   punpckhwd %xmm0, %xmm2, %xmm0
+;   punpckhwd %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -152,7 +152,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pmulhw %xmm1, %xmm0
 ;   movdqa  %xmm0, %xmm2
 ;   movdqa  %xmm5, %xmm0
-;   punpcklwd %xmm0, %xmm2, %xmm0
+;   punpcklwd %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -217,10 +217,10 @@ block0(v0: i8x16, v1: i8x16):
 ; block0:
 ;   uninit  %xmm2
 ;   pxor %xmm2, %xmm2
-;   punpckhbw %xmm0, %xmm2, %xmm0
+;   punpckhbw %xmm2, %xmm0
 ;   uninit  %xmm2
 ;   pxor %xmm2, %xmm2
-;   punpckhbw %xmm1, %xmm2, %xmm1
+;   punpckhbw %xmm2, %xmm1
 ;   pmullw %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -257,7 +257,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pmulhuw %xmm1, %xmm0
 ;   movdqa  %xmm0, %xmm2
 ;   movdqa  %xmm5, %xmm0
-;   punpckhwd %xmm0, %xmm2, %xmm0
+;   punpckhwd %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -356,7 +356,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pmulhuw %xmm1, %xmm0
 ;   movdqa  %xmm0, %xmm2
 ;   movdqa  %xmm5, %xmm0
-;   punpcklwd %xmm0, %xmm2, %xmm0
+;   punpcklwd %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

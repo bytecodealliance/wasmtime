@@ -14,6 +14,7 @@ mod or;
 mod shift;
 mod sqrt;
 mod sub;
+mod unpack;
 mod xor;
 
 use crate::dsl::Inst;
@@ -36,5 +37,6 @@ pub fn list() -> Vec<Inst> {
     all.extend(sqrt::list());
     all.extend(sub::list());
     all.extend(xor::list());
+    all.extend(unpack::list());
     all
 }
