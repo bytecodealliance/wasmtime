@@ -152,14 +152,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::anon::Host + Send,
-            T: Send + 'static,
+            T: 'static + Send,
         {
-            foo::foo::anon::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::anon::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_anon(&self) -> &exports::foo::foo::anon::Guest {
@@ -224,14 +224,21 @@ pub mod foo {
                     &mut self,
                 ) -> Result<Option<wasmtime::component::__internal::String>, Error>;
             }
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                async fn option_test(
+                    &mut self,
+                ) -> Result<Option<wasmtime::component::__internal::String>, Error> {
+                    Host::option_test(*self).await
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
                 D: wasmtime::component::HasData,
-                for<'a> D::Data<'a>: Host + Send,
-                T: Send + 'static,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
             {
                 let mut inst = linker.instance("foo:foo/anon")?;
                 inst.func_wrap_async(
@@ -245,13 +252,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn option_test(
-                    &mut self,
-                ) -> Result<Option<wasmtime::component::__internal::String>, Error> {
-                    Host::option_test(*self).await
-                }
             }
         }
     }

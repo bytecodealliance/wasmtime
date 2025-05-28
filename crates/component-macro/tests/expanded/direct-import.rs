@@ -169,14 +169,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: FooImports,
             T: 'static,
         {
-            Self::add_to_linker_imports::<T, D>(linker, get)?;
+            Self::add_to_linker_imports::<T, D>(linker, host_getter)?;
             Ok(())
         }
     }

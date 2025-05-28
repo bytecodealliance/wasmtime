@@ -154,14 +154,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::floats::Host + Send,
-            T: Send + 'static,
+            T: 'static + Send,
         {
-            foo::foo::floats::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::floats::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_floats(&self) -> &exports::foo::foo::floats::Guest {
@@ -182,14 +182,28 @@ pub mod foo {
                 async fn f32_result(&mut self) -> f32;
                 async fn f64_result(&mut self) -> f64;
             }
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                async fn f32_param(&mut self, x: f32) -> () {
+                    Host::f32_param(*self, x).await
+                }
+                async fn f64_param(&mut self, x: f64) -> () {
+                    Host::f64_param(*self, x).await
+                }
+                async fn f32_result(&mut self) -> f32 {
+                    Host::f32_result(*self).await
+                }
+                async fn f64_result(&mut self) -> f64 {
+                    Host::f64_result(*self).await
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
                 D: wasmtime::component::HasData,
-                for<'a> D::Data<'a>: Host + Send,
-                T: Send + 'static,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
             {
                 let mut inst = linker.instance("foo:foo/floats")?;
                 inst.func_wrap_async(
@@ -233,20 +247,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn f32_param(&mut self, x: f32) -> () {
-                    Host::f32_param(*self, x).await
-                }
-                async fn f64_param(&mut self, x: f64) -> () {
-                    Host::f64_param(*self, x).await
-                }
-                async fn f32_result(&mut self) -> f32 {
-                    Host::f32_result(*self).await
-                }
-                async fn f64_result(&mut self) -> f64 {
-                    Host::f64_result(*self).await
-                }
             }
         }
     }

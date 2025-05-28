@@ -146,15 +146,15 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::http_types::Host + http_fetch::Host,
             T: 'static,
         {
-            foo::foo::http_types::add_to_linker::<T, D>(linker, get)?;
-            http_fetch::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::http_types::add_to_linker::<T, D>(linker, host_getter)?;
+            http_fetch::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn http_handler(&self) -> &exports::http_handler::Guest {
@@ -207,6 +207,7 @@ pub mod foo {
                 );
             };
             pub trait Host {}
+            impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -219,7 +220,6 @@ pub mod foo {
                 let mut inst = linker.instance("foo:foo/http-types")?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized> Host for &mut _T {}
         }
     }
 }
@@ -240,6 +240,11 @@ pub mod http_fetch {
     pub trait Host {
         fn fetch_request(&mut self, request: Request) -> Response;
     }
+    impl<_T: Host + ?Sized> Host for &mut _T {
+        fn fetch_request(&mut self, request: Request) -> Response {
+            Host::fetch_request(*self, request)
+        }
+    }
     pub fn add_to_linker<T, D>(
         linker: &mut wasmtime::component::Linker<T>,
         host_getter: fn(&mut T) -> D::Data<'_>,
@@ -259,11 +264,6 @@ pub mod http_fetch {
             },
         )?;
         Ok(())
-    }
-    impl<_T: Host + ?Sized> Host for &mut _T {
-        fn fetch_request(&mut self, request: Request) -> Response {
-            Host::fetch_request(*self, request)
-        }
     }
 }
 pub mod exports {

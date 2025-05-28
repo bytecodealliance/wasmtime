@@ -154,14 +154,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::manyarg::Host + Send,
-            T: Send + 'static,
+            T: 'static + Send,
         {
-            foo::foo::manyarg::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::manyarg::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_manyarg(&self) -> &exports::foo::foo::manyarg::Guest {
@@ -279,14 +279,59 @@ pub mod foo {
                 ) -> ();
                 async fn big_argument(&mut self, x: BigStruct) -> ();
             }
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                async fn many_args(
+                    &mut self,
+                    a1: u64,
+                    a2: u64,
+                    a3: u64,
+                    a4: u64,
+                    a5: u64,
+                    a6: u64,
+                    a7: u64,
+                    a8: u64,
+                    a9: u64,
+                    a10: u64,
+                    a11: u64,
+                    a12: u64,
+                    a13: u64,
+                    a14: u64,
+                    a15: u64,
+                    a16: u64,
+                ) -> () {
+                    Host::many_args(
+                            *self,
+                            a1,
+                            a2,
+                            a3,
+                            a4,
+                            a5,
+                            a6,
+                            a7,
+                            a8,
+                            a9,
+                            a10,
+                            a11,
+                            a12,
+                            a13,
+                            a14,
+                            a15,
+                            a16,
+                        )
+                        .await
+                }
+                async fn big_argument(&mut self, x: BigStruct) -> () {
+                    Host::big_argument(*self, x).await
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
                 D: wasmtime::component::HasData,
-                for<'a> D::Data<'a>: Host + Send,
-                T: Send + 'static,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
             {
                 let mut inst = linker.instance("foo:foo/manyarg")?;
                 inst.func_wrap_async(
@@ -412,51 +457,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn many_args(
-                    &mut self,
-                    a1: u64,
-                    a2: u64,
-                    a3: u64,
-                    a4: u64,
-                    a5: u64,
-                    a6: u64,
-                    a7: u64,
-                    a8: u64,
-                    a9: u64,
-                    a10: u64,
-                    a11: u64,
-                    a12: u64,
-                    a13: u64,
-                    a14: u64,
-                    a15: u64,
-                    a16: u64,
-                ) -> () {
-                    Host::many_args(
-                            *self,
-                            a1,
-                            a2,
-                            a3,
-                            a4,
-                            a5,
-                            a6,
-                            a7,
-                            a8,
-                            a9,
-                            a10,
-                            a11,
-                            a12,
-                            a13,
-                            a14,
-                            a15,
-                            a16,
-                        )
-                        .await
-                }
-                async fn big_argument(&mut self, x: BigStruct) -> () {
-                    Host::big_argument(*self, x).await
-                }
             }
         }
     }

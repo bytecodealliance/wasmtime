@@ -159,15 +159,15 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: my::dep0_1_0::a::Host + my::dep0_2_0::a::Host + Send,
-            T: Send + 'static,
+            T: 'static + Send,
         {
-            my::dep0_1_0::a::add_to_linker::<T, D>(linker, get)?;
-            my::dep0_2_0::a::add_to_linker::<T, D>(linker, get)?;
+            my::dep0_1_0::a::add_to_linker::<T, D>(linker, host_getter)?;
+            my::dep0_2_0::a::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn my_dep0_1_0_a(&self) -> &exports::my::dep0_1_0::a::Guest {
@@ -188,14 +188,19 @@ pub mod my {
             pub trait Host: Send {
                 async fn x(&mut self) -> ();
             }
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                async fn x(&mut self) -> () {
+                    Host::x(*self).await
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
                 D: wasmtime::component::HasData,
-                for<'a> D::Data<'a>: Host + Send,
-                T: Send + 'static,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
             {
                 let mut inst = linker.instance("my:dep/a@0.1.0")?;
                 inst.func_wrap_async(
@@ -223,11 +228,6 @@ pub mod my {
                 )?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn x(&mut self) -> () {
-                    Host::x(*self).await
-                }
-            }
         }
     }
     pub mod dep0_2_0 {
@@ -239,14 +239,19 @@ pub mod my {
             pub trait Host: Send {
                 async fn x(&mut self) -> ();
             }
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                async fn x(&mut self) -> () {
+                    Host::x(*self).await
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
                 D: wasmtime::component::HasData,
-                for<'a> D::Data<'a>: Host + Send,
-                T: Send + 'static,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
             {
                 let mut inst = linker.instance("my:dep/a@0.2.0")?;
                 inst.func_wrap_async(
@@ -273,11 +278,6 @@ pub mod my {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn x(&mut self) -> () {
-                    Host::x(*self).await
-                }
             }
         }
     }

@@ -140,15 +140,15 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::green::Host + foo::foo::red::Host,
             T: 'static,
         {
-            foo::foo::green::add_to_linker::<T, D>(linker, get)?;
-            foo::foo::red::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::green::add_to_linker::<T, D>(linker, host_getter)?;
+            foo::foo::red::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
     }
@@ -165,6 +165,7 @@ pub mod foo {
                 assert!(4 == < Thing as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait Host {}
+            impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -177,7 +178,6 @@ pub mod foo {
                 let mut inst = linker.instance("foo:foo/green")?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized> Host for &mut _T {}
         }
         #[allow(clippy::all)]
         pub mod red {
@@ -190,6 +190,11 @@ pub mod foo {
             };
             pub trait Host {
                 fn foo(&mut self) -> Thing;
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn foo(&mut self) -> Thing {
+                    Host::foo(*self)
+                }
             }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -210,11 +215,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn foo(&mut self) -> Thing {
-                    Host::foo(*self)
-                }
             }
         }
     }

@@ -338,7 +338,7 @@ block0(v0: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   unpcklps %xmm0, const(0), %xmm0
+;   unpcklps (%rip), %xmm0
 ;   subpd (%rip), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -1215,7 +1215,7 @@ block0(v0: i64x2):
 ;   pshufd  $238, %xmm6, %xmm2
 ;   movq %xmm2, %rcx
 ;   cvtsi2sdq %rcx, %xmm1
-;   unpcklpd %xmm0, %xmm1, %xmm0
+;   unpcklpd %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

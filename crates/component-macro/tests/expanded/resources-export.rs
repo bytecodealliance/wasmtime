@@ -176,14 +176,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::transitive_import::Host,
             T: 'static,
         {
-            foo::foo::transitive_import::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::transitive_import::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_simple_export(&self) -> &exports::foo::foo::simple_export::Guest {
@@ -213,7 +213,7 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Y {}
-            pub trait HostY: Sized {
+            pub trait HostY {
                 fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Y>,
@@ -227,7 +227,8 @@ pub mod foo {
                     HostY::drop(*self, rep)
                 }
             }
-            pub trait Host: HostY + Sized {}
+            pub trait Host: HostY {}
+            impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -250,7 +251,6 @@ pub mod foo {
                 )?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized> Host for &mut _T {}
         }
     }
 }

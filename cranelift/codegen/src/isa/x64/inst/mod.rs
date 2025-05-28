@@ -187,6 +187,7 @@ impl Inst {
                         bmi1 => features.push(InstructionSet::BMI1),
                         lzcnt => features.push(InstructionSet::Lzcnt),
                         popcnt => features.push(InstructionSet::Popcnt),
+                        avx => features.push(InstructionSet::AVX),
                     }
                 }
                 features

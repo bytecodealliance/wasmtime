@@ -140,7 +140,7 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
@@ -149,8 +149,8 @@ const _: () = {
             >: foo::foo::wasi_filesystem::Host + foo::foo::wall_clock::Host,
             T: 'static,
         {
-            foo::foo::wasi_filesystem::add_to_linker::<T, D>(linker, get)?;
-            foo::foo::wall_clock::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::wasi_filesystem::add_to_linker::<T, D>(linker, host_getter)?;
+            foo::foo::wall_clock::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
     }
@@ -226,6 +226,14 @@ pub mod foo {
                 fn create_directory_at(&mut self) -> Result<(), Errno>;
                 fn stat(&mut self) -> Result<DescriptorStat, Errno>;
             }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn create_directory_at(&mut self) -> Result<(), Errno> {
+                    Host::create_directory_at(*self)
+                }
+                fn stat(&mut self) -> Result<DescriptorStat, Errno> {
+                    Host::stat(*self)
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -254,14 +262,6 @@ pub mod foo {
                 )?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn create_directory_at(&mut self) -> Result<(), Errno> {
-                    Host::create_directory_at(*self)
-                }
-                fn stat(&mut self) -> Result<DescriptorStat, Errno> {
-                    Host::stat(*self)
-                }
-            }
         }
         #[allow(clippy::all)]
         pub mod wall_clock {
@@ -287,6 +287,7 @@ pub mod foo {
                 );
             };
             pub trait Host {}
+            impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -299,7 +300,6 @@ pub mod foo {
                 let mut inst = linker.instance("foo:foo/wall-clock")?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized> Host for &mut _T {}
         }
     }
 }
