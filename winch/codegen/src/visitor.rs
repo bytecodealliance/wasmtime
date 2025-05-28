@@ -6,16 +6,16 @@
 
 use crate::abi::RetArea;
 use crate::codegen::{
-    AtomicWaitKind, Callee, CodeGen, CodeGenError, ConditionalBranch, ControlStackFrame, Emission,
-    FnCall, UnconditionalBranch, control_index,
+    Callee, CodeGen, CodeGenError, ConditionalBranch, ControlStackFrame, Emission, FnCall,
+    UnconditionalBranch, control_index,
 };
 use crate::masm::{
-    DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
-    MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset,
-    ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind, V128AbsKind, V128AddKind,
-    V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind, V128LoadExtendKind,
-    V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind, V128NegKind, V128SubKind, V128TruncKind,
-    VectorCompareKind, VectorEqualityKind, Zero,
+    AtomicWaitKind, DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind,
+    MacroAssembler, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp,
+    RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind,
+    V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind,
+    V128LoadExtendKind, V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind, V128NegKind,
+    V128SubKind, V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
 };
 
 use crate::reg::{Reg, writable};

@@ -23,6 +23,13 @@ pub(crate) enum DivKind {
     Unsigned,
 }
 
+/// Represents the `memory.atomic.wait*` kind.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum AtomicWaitKind {
+    Wait32,
+    Wait64,
+}
+
 /// Remainder kind.
 #[derive(Copy, Clone)]
 pub(crate) enum RemKind {
