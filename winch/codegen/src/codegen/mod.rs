@@ -3,8 +3,9 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{Reg, writable},
     masm::{
-        Extend, Imm, IntCmpKind, LaneSelector, LoadKind, MacroAssembler, OperandSize, RegImm,
-        RmwOp, SPOffset, ShiftKind, StoreKind, TrapCode, UNTRUSTED_FLAGS, Zero,
+        AtomicWaitKind, Extend, Imm, IntCmpKind, LaneSelector, LoadKind, MacroAssembler,
+        OperandSize, RegImm, RmwOp, SPOffset, ShiftKind, StoreKind, TrapCode, UNTRUSTED_FLAGS,
+        Zero,
     },
     stack::TypedReg,
 };
@@ -81,13 +82,6 @@ pub(crate) struct SourceLocation {
     /// The current relative source code location along with its associated
     /// machine code offset.
     pub current: (CodeOffset, RelSourceLoc),
-}
-
-/// Represents the `memory.atomic.wait*` kind.
-#[derive(Debug, Clone, Copy)]
-pub(crate) enum AtomicWaitKind {
-    Wait32,
-    Wait64,
 }
 
 /// The code generation abstraction.
