@@ -46,7 +46,6 @@ impl TablePool {
             .context("failed to create table pool mapping")?;
 
         let keep_resident = HostAlignedByteCount::new_rounded_up(config.table_keep_resident)?;
-        assert!(keep_resident <= table_size);
 
         Ok(Self {
             index_allocator: SimpleIndexAllocator::new(config.limits.total_tables),
