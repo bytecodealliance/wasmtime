@@ -22,11 +22,6 @@ pub fn list() -> Vec<Inst> {
         inst("pinsrd", fmt("A", [rw(xmm1), r(rm32), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x22]).r().ib(), _64b | compat | sse41),
         inst("pinsrq", fmt("A", [rw(xmm1), r(rm64), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x22]).r().ib().w(), _64b | sse41),
 
-        inst("movd", fmt("A", [w(xmm1), r(rm32)]), rex([0x66, 0x0F, 0x6E]).r(), _64b | compat | sse2),
-        inst("movq", fmt("A", [w(xmm1), r(rm64)]), rex([0x66, 0x0F, 0x6E]).r().w(), _64b | sse2),
-        inst("movd", fmt("B", [w(rm32), r(xmm2)]), rex([0x66, 0x0F, 0x7E]).r(), _64b | compat | sse2),
-        inst("movq", fmt("B", [w(rm64), r(xmm2)]), rex([0x66, 0x0F, 0x7E]).r().w(), _64b | sse2),
-
         inst("movmskps", fmt("RM", [w(r32), r(xmm2)]), rex([0x0F, 0x50]).r(), _64b | compat | sse),
         inst("movmskpd", fmt("RM", [w(r32), r(xmm2)]), rex([0x66, 0x0F, 0x50]).r(), _64b | compat | sse2),
         inst("pmovmskb", fmt("RM", [w(r32), r(xmm2)]), rex([0x66, 0x0F, 0xD7]).r(), _64b | compat | sse2),

@@ -143,8 +143,7 @@ impl Inst {
             Inst::UnaryRmRImmVex { op, .. } => op.available_from(),
 
             // These use dynamic SSE opcodes.
-            Inst::XmmMovRM { op, .. }
-            | Inst::XmmRmR { op, .. }
+            Inst::XmmRmR { op, .. }
             | Inst::XmmRmRUnaligned { op, .. }
             | Inst::XmmRmRBlend { op, .. }
             | Inst::XmmRmRImm { op, .. }
@@ -248,6 +247,7 @@ impl Inst {
     }
 
     /// Convenient helper for unary float operations.
+    #[cfg(test)]
     pub(crate) fn xmm_unary_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::Float);
         debug_assert!(dst.to_reg().class() == RegClass::Float);
@@ -281,15 +281,6 @@ impl Inst {
             src2: Xmm::unwrap_new(src2),
             src1: Xmm::unwrap_new(dst.to_reg()),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
-    pub(crate) fn xmm_mov_r_m(op: SseOpcode, src: Reg, dst: impl Into<SyntheticAmode>) -> Inst {
-        debug_assert!(src.class() == RegClass::Float);
-        Inst::XmmMovRM {
-            op,
-            src: Xmm::unwrap_new(src),
-            dst: dst.into(),
         }
     }
 
@@ -473,18 +464,26 @@ impl Inst {
                 }
             }
             RegClass::Float => {
-                let opcode = match ty {
+                let to_reg = to_reg.map(|r| Xmm::new(r).unwrap());
+                let from_addr = from_addr.into();
+                let inst = match ty {
                     types::F16 | types::I8X2 => {
                         panic!("loading a f16 or i8x2 requires multiple instructions")
                     }
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 32 => SseOpcode::Movss,
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 64 => SseOpcode::Movsd,
-                    types::F32X4 => SseOpcode::Movups,
-                    types::F64X2 => SseOpcode::Movupd,
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => SseOpcode::Movdqu,
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 32 => {
+                        asm::inst::movss_a_m::new(to_reg, from_addr).into()
+                    }
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 64 => {
+                        asm::inst::movsd_a_m::new(to_reg, from_addr).into()
+                    }
+                    types::F32X4 => asm::inst::movups_a::new(to_reg, from_addr).into(),
+                    types::F64X2 => asm::inst::movupd_a::new(to_reg, from_addr).into(),
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => {
+                        asm::inst::movdqu_a::new(to_reg, from_addr).into()
+                    }
                     _ => unimplemented!("unable to load type: {}", ty),
                 };
-                Inst::xmm_unary_rm_r(opcode, RegMem::mem(from_addr), to_reg)
+                Inst::External { inst }
             }
             RegClass::Vector => unreachable!(),
         }
@@ -496,18 +495,26 @@ impl Inst {
         match rc {
             RegClass::Int => Inst::mov_r_m(OperandSize::from_ty(ty), from_reg, to_addr),
             RegClass::Float => {
-                let opcode = match ty {
+                let to_addr = to_addr.into();
+                let from_reg = Xmm::new(from_reg).unwrap();
+                let inst = match ty {
                     types::F16 | types::I8X2 => {
                         panic!("storing a f16 or i8x2 requires multiple instructions")
                     }
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 32 => SseOpcode::Movss,
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 64 => SseOpcode::Movsd,
-                    types::F32X4 => SseOpcode::Movups,
-                    types::F64X2 => SseOpcode::Movupd,
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => SseOpcode::Movdqu,
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 32 => {
+                        asm::inst::movss_c_m::new(to_addr, from_reg).into()
+                    }
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 64 => {
+                        asm::inst::movsd_c_m::new(to_addr, from_reg).into()
+                    }
+                    types::F32X4 => asm::inst::movups_b::new(to_addr, from_reg).into(),
+                    types::F64X2 => asm::inst::movupd_b::new(to_addr, from_reg).into(),
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => {
+                        asm::inst::movdqu_b::new(to_addr, from_reg).into()
+                    }
                     _ => unimplemented!("unable to store type: {}", ty),
                 };
-                Inst::xmm_mov_r_m(opcode, from_reg, to_addr)
+                Inst::External { inst }
             }
             RegClass::Vector => unreachable!(),
         }
@@ -706,13 +713,6 @@ impl PrettyPrint for Inst {
                 let src = src.pretty_print(8);
                 let op = ljustify(op.to_string());
                 format!("{op} ${imm}, {src}, {dst}")
-            }
-
-            Inst::XmmMovRM { op, src, dst, .. } => {
-                let src = pretty_print_reg(src.to_reg(), 8);
-                let dst = dst.pretty_print(8);
-                let op = ljustify(op.to_string());
-                format!("{op} {src}, {dst}")
             }
 
             Inst::XmmMovRMVex { op, src, dst, .. } => {
@@ -1809,9 +1809,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(lhs);
             collector.reg_reuse_def(dst, 0); // Reuse RHS.
         }
-        Inst::XmmMovRM { src, dst, .. }
-        | Inst::XmmMovRMVex { src, dst, .. }
-        | Inst::XmmMovRMImmVex { src, dst, .. } => {
+        Inst::XmmMovRMVex { src, dst, .. } | Inst::XmmMovRMImmVex { src, dst, .. } => {
             collector.reg_use(src);
             dst.get_operands(collector);
         }
@@ -2262,6 +2260,7 @@ impl MachInst for Inst {
     }
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
+        use asm::inst::Inst as I;
         match self {
             // Note (carefully!) that a 32-bit mov *isn't* a no-op since it zeroes
             // out the upper 32 bits of the destination.  For example, we could
@@ -2270,26 +2269,41 @@ impl MachInst for Inst {
             Self::MovRR { size, src, dst, .. } if *size == OperandSize::Size64 => {
                 Some((dst.to_writable_reg(), src.to_reg()))
             }
-            // Note as well that MOVS[S|D] when used in the `XmmUnaryRmR` context are pure moves of
-            // scalar floating-point values (and annotate `dst` as `def`s to the register allocator)
-            // whereas the same operation in a packed context, e.g. `XMM_RM_R`, is used to merge a
-            // value into the lowest lane of a vector (not a move).
-            Self::XmmUnaryRmR { op, src, dst, .. }
-                if *op == SseOpcode::Movss
-                    || *op == SseOpcode::Movsd
-                    || *op == SseOpcode::Movaps
-                    || *op == SseOpcode::Movapd
-                    || *op == SseOpcode::Movups
-                    || *op == SseOpcode::Movupd
-                    || *op == SseOpcode::Movdqa
-                    || *op == SseOpcode::Movdqu =>
-            {
-                if let RegMem::Reg { reg } = src.clone().to_reg_mem() {
-                    Some((dst.to_writable_reg(), reg))
-                } else {
-                    None
-                }
-            }
+            // Note that `movss_a_r` and `movsd_a_r` are specifically omitted
+            // here because they only overwrite the low bits in the destination
+            // register, otherwise preserving the upper bits. That can be used
+            // for lane-insertion instructions, for example, meaning it's not
+            // classified as a register move.
+            //
+            // Otherwise though all register-to-register movement instructions
+            // which move 128-bits are registered as moves.
+            Self::External {
+                inst:
+                    I::movaps_a(asm::inst::movaps_a { xmm1, xmm_m128 })
+                    | I::movups_a(asm::inst::movups_a { xmm1, xmm_m128 })
+                    | I::movapd_a(asm::inst::movapd_a { xmm1, xmm_m128 })
+                    | I::movupd_a(asm::inst::movupd_a { xmm1, xmm_m128 })
+                    | I::movdqa_a(asm::inst::movdqa_a { xmm1, xmm_m128 })
+                    | I::movdqu_a(asm::inst::movdqu_a { xmm1, xmm_m128 }),
+            } => match xmm_m128 {
+                asm::XmmMem::Xmm(xmm2) => Some((xmm1.as_ref().map(|r| r.to_reg()), xmm2.to_reg())),
+                asm::XmmMem::Mem(_) => None,
+            },
+            // In addition to the "A" format of instructions above also
+            // recognize the "B" format which while it can be used for stores it
+            // can also be used for register moves.
+            Self::External {
+                inst:
+                    I::movaps_b(asm::inst::movaps_b { xmm_m128, xmm1 })
+                    | I::movups_b(asm::inst::movups_b { xmm_m128, xmm1 })
+                    | I::movapd_b(asm::inst::movapd_b { xmm_m128, xmm1 })
+                    | I::movupd_b(asm::inst::movupd_b { xmm_m128, xmm1 })
+                    | I::movdqa_b(asm::inst::movdqa_b { xmm_m128, xmm1 })
+                    | I::movdqu_b(asm::inst::movdqu_b { xmm_m128, xmm1 }),
+            } => match xmm_m128 {
+                asm::XmmMem::Xmm(dst) => Some((dst.map(|r| r.to_reg()), xmm1.as_ref().to_reg())),
+                asm::XmmMem::Mem(_) => None,
+            },
             _ => None,
         }
     }
@@ -2364,13 +2378,19 @@ impl MachInst for Inst {
                 // doesn't include MOVSS/MOVSD as instructions with zero-latency. Use movaps for
                 // those, which may write more lanes that we need, but are specified to have
                 // zero-latency.
-                let opcode = match ty {
-                    types::F16 | types::F32 | types::F64 | types::F32X4 => SseOpcode::Movaps,
-                    types::F64X2 => SseOpcode::Movapd,
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() <= 128 => SseOpcode::Movdqa,
+                let dst_reg = dst_reg.map(|r| Xmm::new(r).unwrap());
+                let src_reg = Xmm::new(src_reg).unwrap();
+                let inst = match ty {
+                    types::F16 | types::F32 | types::F64 | types::F32X4 => {
+                        asm::inst::movaps_a::new(dst_reg, src_reg).into()
+                    }
+                    types::F64X2 => asm::inst::movapd_a::new(dst_reg, src_reg).into(),
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() <= 128 => {
+                        asm::inst::movdqa_a::new(dst_reg, src_reg).into()
+                    }
                     _ => unimplemented!("unable to move type: {}", ty),
                 };
-                Inst::xmm_unary_rm_r(opcode, RegMem::reg(src_reg), dst_reg)
+                Inst::External { inst }
             }
             RegClass::Vector => unreachable!(),
         }

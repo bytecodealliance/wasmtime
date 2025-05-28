@@ -8,6 +8,7 @@ mod div;
 mod lanes;
 mod max;
 mod min;
+mod mov;
 mod mul;
 mod neg;
 mod or;
@@ -30,6 +31,7 @@ pub fn list() -> Vec<Inst> {
     all.extend(lanes::list());
     all.extend(max::list());
     all.extend(min::list());
+    all.extend(mov::list());
     all.extend(mul::list());
     all.extend(neg::list());
     all.extend(or::list());

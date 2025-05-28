@@ -344,7 +344,7 @@ impl From<SyntheticAmode> for asm::Amode<Gpr> {
                 trap: None,
             },
             SyntheticAmode::SlotOffset { simm32 } => asm::Amode::ImmReg {
-                base: Gpr::unwrap_new(regs::rbp()),
+                base: Gpr::unwrap_new(regs::rsp()),
                 simm32: asm::AmodeOffsetPlusKnownOffset {
                     simm32: simm32.into(),
                     offset: Some(offsets::KEY_SLOT_OFFSET),
@@ -390,6 +390,30 @@ impl From<Amode> for asm::Amode<Gpr> {
                 target: asm::DeferredTarget::Label(asm::Label(target.as_u32())),
             },
         }
+    }
+}
+
+impl<R: asm::AsReg> From<SyntheticAmode> for asm::XmmMem<R, Gpr> {
+    fn from(amode: SyntheticAmode) -> Self {
+        asm::XmmMem::Mem(amode.into())
+    }
+}
+
+impl<R: asm::AsReg> From<SyntheticAmode> for asm::GprMem<R, Gpr> {
+    fn from(amode: SyntheticAmode) -> Self {
+        asm::GprMem::Mem(amode.into())
+    }
+}
+
+impl<R: asm::AsReg> From<Amode> for asm::XmmMem<R, Gpr> {
+    fn from(amode: Amode) -> Self {
+        asm::XmmMem::Mem(amode.into())
+    }
+}
+
+impl<R: asm::AsReg> From<Amode> for asm::GprMem<R, Gpr> {
+    fn from(amode: Amode) -> Self {
+        asm::GprMem::Mem(amode.into())
     }
 }
 

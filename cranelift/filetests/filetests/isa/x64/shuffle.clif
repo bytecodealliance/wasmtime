@@ -372,8 +372,8 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm4
-;   movdqa  %xmm1, %xmm0
+;   movdqa %xmm0, %xmm4
+;   movdqa %xmm1, %xmm0
 ;   shufps  $6, %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -678,8 +678,8 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm4
-;   movdqa  %xmm1, %xmm0
+;   movdqa %xmm0, %xmm4
+;   movdqa %xmm1, %xmm0
 ;   palignr $1, %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -707,8 +707,8 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm4
-;   movdqa  %xmm1, %xmm0
+;   movdqa %xmm0, %xmm4
+;   movdqa %xmm1, %xmm0
 ;   palignr $5, %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -736,8 +736,8 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm4
-;   movdqa  %xmm1, %xmm0
+;   movdqa %xmm0, %xmm4
+;   movdqa %xmm1, %xmm0
 ;   palignr $11, %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

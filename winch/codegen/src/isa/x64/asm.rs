@@ -10,8 +10,8 @@ use crate::{
     x64::regs::scratch,
 };
 use cranelift_codegen::{
-    CallInfo, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
-    PatchRegion, VCodeConstantData, VCodeConstants, Writable,
+    CallInfo, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
+    MachLabel, PatchRegion, VCodeConstantData, VCodeConstants, Writable,
     ir::{
         ConstantPool, ExternalName, MemFlags, SourceLoc, TrapCode, Type, UserExternalNameRef, types,
     },
@@ -548,20 +548,13 @@ impl Assembler {
     /// Single and double precision floating point
     /// register-to-register move.
     pub fn xmm_mov_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        use OperandSize::*;
-
-        let op = match size {
-            S32 => SseOpcode::Movaps,
-            S64 => SseOpcode::Movapd,
-            S128 => SseOpcode::Movdqa,
-            S8 | S16 => unreachable!(),
+        let ty = match size {
+            OperandSize::S32 => types::F32,
+            OperandSize::S64 => types::F64,
+            OperandSize::S128 => types::I32X4,
+            OperandSize::S8 | OperandSize::S16 => unreachable!(),
         };
-
-        self.emit(Inst::XmmUnaryRmRUnaligned {
-            op,
-            src: XmmMem::unwrap_new(src.into()),
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::gen_move(dst.map(|r| r.into()), src.into(), ty));
     }
 
     /// Single and double precision floating point load.
@@ -575,12 +568,6 @@ impl Assembler {
         use OperandSize::*;
 
         assert!(dst.to_reg().is_float());
-        let op = match size {
-            S32 => SseOpcode::Movss,
-            S64 => SseOpcode::Movsd,
-            S128 => SseOpcode::Movdqu,
-            S16 | S8 => unreachable!(),
-        };
 
         let src = Self::to_synthetic_amode(
             src,
@@ -589,11 +576,14 @@ impl Assembler {
             &mut self.buffer,
             flags,
         );
-        self.emit(Inst::XmmUnaryRmRUnaligned {
-            op,
-            src: XmmMem::unwrap_new(RegMem::mem(src)),
-            dst: dst.map(Into::into),
-        });
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = match size {
+            S32 => asm::inst::movss_a_m::new(dst, src).into(),
+            S64 => asm::inst::movsd_a_m::new(dst, src).into(),
+            S128 => asm::inst::movdqu_a::new(dst, src).into(),
+            S8 | S16 => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Vector load and extend.
@@ -735,13 +725,6 @@ impl Assembler {
 
         assert!(src.is_float());
 
-        let op = match size {
-            S32 => SseOpcode::Movss,
-            S64 => SseOpcode::Movsd,
-            S128 => SseOpcode::Movdqu,
-            S16 | S8 => unreachable!(),
-        };
-
         let dst = Self::to_synthetic_amode(
             dst,
             &mut self.pool,
@@ -749,11 +732,14 @@ impl Assembler {
             &mut self.buffer,
             flags,
         );
-        self.emit(Inst::XmmMovRM {
-            op,
-            src: src.into(),
-            dst,
-        });
+        let src: Xmm = src.into();
+        let inst = match size {
+            S32 => asm::inst::movss_c_m::new(dst, src).into(),
+            S64 => asm::inst::movsd_c_m::new(dst, src).into(),
+            S128 => asm::inst::movdqu_b::new(dst, src).into(),
+            S16 | S8 => unreachable!(),
+        };
+        self.emit(Inst::External { inst })
     }
 
     /// Floating point register conditional move.

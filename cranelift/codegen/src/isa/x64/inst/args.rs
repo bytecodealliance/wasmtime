@@ -834,15 +834,7 @@ pub enum SseOpcode {
     Divss,
     Divsd,
     Insertps,
-    Movaps,
-    Movapd,
-    Movdqa,
-    Movdqu,
     Movlhps,
-    Movss,
-    Movsd,
-    Movups,
-    Movupd,
     Pabsb,
     Pabsw,
     Pabsd,
@@ -911,10 +903,7 @@ impl SseOpcode {
             | SseOpcode::Cmpss
             | SseOpcode::Divps
             | SseOpcode::Divss
-            | SseOpcode::Movaps
             | SseOpcode::Movlhps
-            | SseOpcode::Movss
-            | SseOpcode::Movups
             | SseOpcode::Rcpss
             | SseOpcode::Rsqrtss
             | SseOpcode::Shufps
@@ -925,11 +914,6 @@ impl SseOpcode {
             | SseOpcode::Comisd
             | SseOpcode::Divpd
             | SseOpcode::Divsd
-            | SseOpcode::Movapd
-            | SseOpcode::Movsd
-            | SseOpcode::Movupd
-            | SseOpcode::Movdqa
-            | SseOpcode::Movdqu
             | SseOpcode::Packssdw
             | SseOpcode::Packsswb
             | SseOpcode::Packuswb
@@ -1034,15 +1018,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Divss => "divss",
             SseOpcode::Divsd => "divsd",
             SseOpcode::Insertps => "insertps",
-            SseOpcode::Movaps => "movaps",
-            SseOpcode::Movapd => "movapd",
-            SseOpcode::Movdqa => "movdqa",
-            SseOpcode::Movdqu => "movdqu",
             SseOpcode::Movlhps => "movlhps",
-            SseOpcode::Movss => "movss",
-            SseOpcode::Movsd => "movsd",
-            SseOpcode::Movups => "movups",
-            SseOpcode::Movupd => "movupd",
             SseOpcode::Pabsb => "pabsb",
             SseOpcode::Pabsw => "pabsw",
             SseOpcode::Pabsd => "pabsd",

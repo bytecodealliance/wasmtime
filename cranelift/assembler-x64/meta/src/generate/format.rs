@@ -118,7 +118,7 @@ impl dsl::Format {
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "let rex = self.{dst}.as_rex_prefix(digit, {bits});");
             }
-            [Reg(dst), RegMem(src)] | [Reg(dst), RegMem(src), Imm(_)] => {
+            [Reg(dst), RegMem(src)] | [Reg(dst), RegMem(src), Imm(_)] | [Reg(dst), Mem(src)] => {
                 fmtln!(f, "let dst = self.{dst}.enc();");
                 fmtln!(f, "let rex = self.{src}.as_rex_prefix(dst, {bits});");
             }
@@ -219,7 +219,8 @@ impl dsl::Format {
             | [Reg(reg), Reg(_), RegMem(mem)]
             | [RegMem(mem), Reg(reg)]
             | [RegMem(mem), Reg(reg), Imm(_)]
-            | [RegMem(mem), Reg(reg), FixedReg(_)] => {
+            | [RegMem(mem), Reg(reg), FixedReg(_)]
+            | [Reg(reg), Mem(mem)] => {
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(
                     f,

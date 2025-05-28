@@ -324,13 +324,13 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqu  const(1), %xmm0
+;   movdqu (%rip), %xmm0
 ;   andq $0x7, %rdi
 ;   movd %edi, %xmm5
 ;   psllw %xmm5, %xmm0
 ;   lea     const(0), %rsi
 ;   shlq $0x4, %rdi
-;   movdqu  0(%rsi,%rdi,1), %xmm5
+;   movdqu (%rsi, %rdi), %xmm5
 ;   pand %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -377,7 +377,7 @@ block0(v0: i8x16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   psllw $0x4, %xmm0
-;   movdqu  const(0), %xmm4
+;   movdqu (%rip), %xmm4
 ;   pand %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -488,7 +488,7 @@ block0:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqu  const(1), %xmm0
+;   movdqu (%rip), %xmm0
 ;   psrlw $0x1, %xmm0
 ;   pand (%rip), %xmm0
 ;   movq    %rbp, %rsp
@@ -600,9 +600,9 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqu  const(0), %xmm1
+;   movdqu (%rip), %xmm1
 ;   andq $0x7, %rdi
-;   movdqa  %xmm1, %xmm0
+;   movdqa %xmm1, %xmm0
 ;   punpcklbw %xmm1, %xmm0
 ;   punpckhbw %xmm1, %xmm1
 ;   addl $0x8, %edi
@@ -652,11 +652,11 @@ block0(v0: i8x16, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm6
+;   movdqa %xmm0, %xmm6
 ;   punpcklbw %xmm0, %xmm6
 ;   punpckhbw %xmm0, %xmm0
-;   movdqa  %xmm0, %xmm4
-;   movdqa  %xmm6, %xmm0
+;   movdqa %xmm0, %xmm4
+;   movdqa %xmm6, %xmm0
 ;   psraw $0xb, %xmm0
 ;   psraw $0xb, %xmm4
 ;   packsswb %xmm0, %xmm4, %xmm0
@@ -744,7 +744,7 @@ block0(v0: i64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm2
+;   movdqa %xmm0, %xmm2
 ;   psrad $0x1, %xmm2
 ;   pshufd  $237, %xmm2, %xmm4
 ;   psrlq $0x1, %xmm0
@@ -783,7 +783,7 @@ block0(v0: i64x2):
 ;   pshufd  $237, %xmm0, %xmm5
 ;   psrad $0x1f, %xmm0
 ;   pshufd  $237, %xmm0, %xmm6
-;   movdqa  %xmm5, %xmm0
+;   movdqa %xmm5, %xmm0
 ;   punpckldq %xmm6, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -814,7 +814,7 @@ block0(v0: i64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm2
+;   movdqa %xmm0, %xmm2
 ;   psrad $0x1f, %xmm2
 ;   pshufd  $237, %xmm2, %xmm4
 ;   psrad $0x16, %xmm0
@@ -850,7 +850,7 @@ block0(v0: i64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm2
+;   movdqa %xmm0, %xmm2
 ;   psrad $0x1f, %xmm2
 ;   pshufd  $237, %xmm2, %xmm4
 ;   psrad $0x4, %xmm0
@@ -887,11 +887,11 @@ block0(v0: i64x2, v1: i32):
 ; block0:
 ;   andq $0x3f, %rdi
 ;   movq %rdi, %xmm5
-;   movdqu  const(0), %xmm1
+;   movdqu (%rip), %xmm1
 ;   psrlq %xmm5, %xmm1
 ;   psrlq %xmm5, %xmm0
-;   movdqa  %xmm0, %xmm7
-;   movdqa  %xmm1, %xmm0
+;   movdqa %xmm0, %xmm7
+;   movdqa %xmm1, %xmm0
 ;   pxor %xmm7, %xmm0
 ;   psubq %xmm1, %xmm0
 ;   movq    %rbp, %rsp

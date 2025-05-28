@@ -5,7 +5,7 @@ use crate::ir::types::*;
 use crate::isa::x64::args::AvxOpcode;
 use crate::isa::x64::inst::Inst;
 use crate::isa::x64::inst::args::{
-    Amode, CC, Gpr, RegMem, RegMemImm, SseOpcode, SyntheticAmode, ToWritableReg,
+    Amode, CC, Gpr, RegMem, RegMemImm, SyntheticAmode, ToWritableReg,
 };
 use crate::machinst::pcc::*;
 use crate::machinst::{InsnIndex, VCode, VCodeConstantData};
@@ -321,35 +321,6 @@ pub(crate) fn check(
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
 
-        Inst::XmmUnaryRmRUnaligned {
-            dst,
-            ref src,
-            op: SseOpcode::Movss,
-            ..
-        } => {
-            match <&RegMem>::from(src) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, F32, 32)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
-        }
-        Inst::XmmUnaryRmRUnaligned {
-            dst,
-            ref src,
-            op: SseOpcode::Movsd,
-            ..
-        } => {
-            match <&RegMem>::from(src) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, F64, 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
-        }
-
         // NOTE: it's assumed that all of these cases perform 128-bit loads, but this hasn't been
         // verified. The effect of this will be spurious PCC failures when these instructions are
         // involved.
@@ -460,29 +431,6 @@ pub(crate) fn check(
         }
 
         Inst::XmmToGprVex { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
-
-        Inst::XmmMovRM {
-            ref dst,
-            op: SseOpcode::Movss,
-            ..
-        } => {
-            check_store(ctx, None, dst, vcode, F32)?;
-            Ok(())
-        }
-
-        Inst::XmmMovRM {
-            ref dst,
-            op: SseOpcode::Movsd,
-            ..
-        } => {
-            check_store(ctx, None, dst, vcode, F64)?;
-            Ok(())
-        }
-
-        Inst::XmmMovRM { ref dst, .. } => {
-            check_store(ctx, None, dst, vcode, I8X16)?;
-            Ok(())
-        }
 
         Inst::CvtIntToFloatVex { dst, ref src2, .. } => {
             match <&RegMem>::from(src2) {

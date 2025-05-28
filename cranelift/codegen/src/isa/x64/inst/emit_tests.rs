@@ -188,7 +188,6 @@ fn test_x64_emit() {
     let w_xmm11 = Writable::<Reg>::from_reg(xmm11);
     let w_xmm12 = Writable::<Reg>::from_reg(xmm12);
     let w_xmm13 = Writable::<Reg>::from_reg(xmm13);
-    let w_xmm14 = Writable::<Reg>::from_reg(xmm14);
     let w_xmm15 = Writable::<Reg>::from_reg(xmm15);
 
     let mut insns = Vec::<(Inst, &str, &str)>::new();
@@ -2792,21 +2791,6 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
-    // XMM_RM_R: Integer Conversion
-
-    // XMM_Mov_R_M: float stores
-    insns.push((
-        Inst::xmm_mov_r_m(SseOpcode::Movss, xmm15, Amode::imm_reg(128, r12)),
-        "F3450F11BC2480000000",
-        "movss   %xmm15, 128(%r12)",
-    ));
-    insns.push((
-        Inst::xmm_mov_r_m(SseOpcode::Movsd, xmm1, Amode::imm_reg(0, rsi)),
-        "F20F110E",
-        "movsd   %xmm1, 0(%rsi)",
-    ));
-
-    // ========================================================
     // XMM_MOV: Packed Move
 
     insns.push((
@@ -2882,37 +2866,6 @@ fn test_x64_emit() {
     ));
 
     // XmmUnary: moves and unary float ops
-    insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Movss, RegMem::reg(xmm13), w_xmm2),
-        "F3410F10D5",
-        "movss   %xmm13, %xmm2",
-    ));
-
-    insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Movsd, RegMem::reg(xmm0), w_xmm1),
-        "F20F10C8",
-        "movsd   %xmm0, %xmm1",
-    ));
-    insns.push((
-        Inst::xmm_unary_rm_r(
-            SseOpcode::Movsd,
-            RegMem::mem(Amode::imm_reg(0, rsi)),
-            w_xmm2,
-        ),
-        "F20F1016",
-        "movsd   0(%rsi), %xmm2",
-    ));
-    insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Movsd, RegMem::reg(xmm14), w_xmm3),
-        "F2410F10DE",
-        "movsd   %xmm14, %xmm3",
-    ));
-
-    insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Movaps, RegMem::reg(xmm5), w_xmm14),
-        "440F28F5",
-        "movaps  %xmm5, %xmm14",
-    ));
 
     insns.push((
         Inst::xmm_unary_rm_r(SseOpcode::Pabsb, RegMem::reg(xmm2), w_xmm1),
