@@ -150,7 +150,7 @@ impl dsl::Format {
         fmtln!(f, "let len = {:#03b};", vex.length.bits());
         fmtln!(f, "let pp = {:#04b};", vex.pp.map_or(0b00, |pp| pp.bits()));
         fmtln!(f, "let mmmmm = {:#07b};", vex.mmmmm.unwrap().bits());
-        fmtln!(f, "let w = {};", vex.w.unwrap_or(false));
+        fmtln!(f, "let w = {};", vex.w.as_bool());
         let bits = "len, pp, mmmmm, w";
 
         match self.operands_by_kind().as_slice() {

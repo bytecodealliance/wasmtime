@@ -37,7 +37,7 @@ pub fn vex(length: VexLength) -> Vex {
         length,
         pp: None,
         mmmmm: None,
-        w: None,
+        w: VexW::WIG,
         opcode: u8::MAX,
         modrm: None,
         imm: Imm::None,
@@ -856,6 +856,45 @@ impl fmt::Display for VexLength {
     }
 }
 
+/// Model the `W` bit in VEX-encoded instructions.
+pub enum VexW {
+    /// The `W` bit is ignored; equivalent to `.WIG` in the manual.
+    WIG,
+    /// The `W` bit is set to `0`; equivalent to `.W0` in the manual.
+    W0,
+    /// The `W` bit is set to `1`; equivalent to `.W1` in the manual.
+    W1,
+}
+
+impl VexW {
+    /// Return `true` if the `W` bit is ignored; this is useful to check in the
+    /// DSL for the default case.
+    fn is_ignored(&self) -> bool {
+        match self {
+            Self::WIG => true,
+            Self::W0 | Self::W1 => false,
+        }
+    }
+
+    /// Return `true` if the `W` bit is set (`W1`); otherwise, return `false`.
+    pub(crate) fn as_bool(&self) -> bool {
+        match self {
+            Self::W1 => true,
+            Self::W0 | Self::WIG => false,
+        }
+    }
+}
+
+impl fmt::Display for VexW {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::WIG => write!(f, "WIG"),
+            Self::W0 => write!(f, "W0"),
+            Self::W1 => write!(f, "W1"),
+        }
+    }
+}
+
 /// The VEX encoding, introduced for AVX instructions.
 ///
 /// ```
@@ -872,13 +911,7 @@ pub struct Vex {
     /// Map the `MMMMM` field encodings.
     pub mmmmm: Option<VexEscape>,
     /// The `W` bit.
-    ///
-    /// Since VEX-encoded instructions may ignore the `W` bit, we model this
-    /// with a three-state field:
-    /// - `None`: the `W` bit is ignored (i.e., `WIG` in the manual)
-    /// - `Some(false)`: the `W` bit is set to `0` (i.e., `W0` in the manual)
-    /// - `Some(true)`: the `W` bit is set to `1` (i.e., `W1` in the manual)
-    pub w: Option<bool>,
+    pub w: VexW,
     /// VEX-encoded instructions have a single-byte opcode. Other prefix-related
     /// bytes (see [`Opcodes`]) are encoded in the VEX prefixes (see `pp`,
     /// `mmmmmm`). From the reference manual: "One (and only one) opcode byte
@@ -953,26 +986,29 @@ impl Vex {
 
     /// Set the `W` bit to `0`; equivalent to `.W0` in the manual.
     pub fn w0(self) -> Self {
-        assert!(self.w.is_none());
+        assert!(self.w.is_ignored());
         Self {
-            w: Some(false),
+            w: VexW::W0,
             ..self
         }
     }
 
     /// Set the `W` bit to `1`; equivalent to `.W1` in the manual.
     pub fn w1(self) -> Self {
-        assert!(self.w.is_none());
+        assert!(self.w.is_ignored());
         Self {
-            w: Some(true),
+            w: VexW::W1,
             ..self
         }
     }
 
     /// Ignore the `W` bit; equivalent to `.WIG` in the manual.
     pub fn wig(self) -> Self {
-        assert!(self.w.is_none());
-        Self { w: None, ..self }
+        assert!(self.w.is_ignored());
+        Self {
+            w: VexW::WIG,
+            ..self
+        }
     }
 
     /// Set the single opcode for this VEX-encoded instruction.
@@ -1071,12 +1107,7 @@ impl fmt::Display for Vex {
         if let Some(mmmmm) = self.mmmmm {
             write!(f, ".{mmmmm}")?;
         }
-        let w = match self.w {
-            Some(true) => "W1",
-            Some(false) => "W0",
-            None => "WIG",
-        };
-        write!(f, ".{w} {:#04X}", self.opcode)?;
+        write!(f, ".{} {:#04X}", self.w, self.opcode)?;
         if let Some(modrm) = self.modrm {
             write!(f, " {modrm}")?;
         }
