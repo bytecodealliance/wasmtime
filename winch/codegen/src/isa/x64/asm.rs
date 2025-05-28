@@ -1552,19 +1552,10 @@ impl Assembler {
     pub fn xmm_div_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
         let dst = pair_xmm(dst);
         let inst = match size {
-            //  OperandSize::S32 => SseOpcode::Divss,
-            //  OperandSize::S64 => SseOpcode::Divsd,
             OperandSize::S32 => asm::inst::divss_a::new(dst, src).into(),
             OperandSize::S64 => asm::inst::divsd_a::new(dst, src).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        // self.emit(Inst::XmmRmRUnaligned {
-        //     op,
-        //     src1: Xmm::from(dst.to_reg()),
-        //     src2: Xmm::from(src).into(),
-        //     dst: dst.map(Into::into),
-        // });
         self.emit(Inst::External { inst });
     }
 
