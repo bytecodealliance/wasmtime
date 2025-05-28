@@ -170,3 +170,34 @@ block0(v0: i8, v1: i8):
 ;     v5 = icmp uge v0, v1
 ;     return v5
 ; }
+
+;; `x == (x ^ y)` to `y == 0`.
+function %simplify_icmp_eq_x_bxor_x_y(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = icmp eq v0, v2
+    return v3
+}
+
+; function %simplify_icmp_eq_x_bxor_x_y(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i32 0
+;     v5 = icmp eq v1, v4  ; v4 = 0
+;     return v5
+; }
+
+
+;; `x != (x ^ y)` to `y != 0`.
+function %simplify_icmp_ne_x_bxor_x_y(i32, i32) -> i8 fast {
+block0(v0: i32, v1: i32):
+    v2 = bxor v0, v1
+    v3 = icmp ne v0, v2
+    return v3
+}
+
+; function %simplify_icmp_ne_x_bxor_x_y(i32, i32) -> i8 fast {
+; block0(v0: i32, v1: i32):
+;     v4 = iconst.i32 0
+;     v5 = icmp ne v1, v4  ; v4 = 0
+;     return v5
+; }
