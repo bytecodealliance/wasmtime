@@ -145,6 +145,7 @@ pub extern "C" fn wasmtime_config_wasm_stack_switching_set(c: &mut wasm_config_t
     c.config.wasm_stack_switching(enable);
 }
 
+#[unsafe(no_mangle)]
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 pub extern "C" fn wasmtime_config_strategy_set(
     c: &mut wasm_config_t,
