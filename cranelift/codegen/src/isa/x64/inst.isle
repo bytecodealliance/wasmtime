@@ -792,13 +792,6 @@
             Pmovzxwd
             Pmovzxwq
             Pmovzxdq
-            Pmuldq
-            Pmulhw
-            Pmulhuw
-            Pmulhrsw
-            Pmulld
-            Pmullw
-            Pmuludq
             Pshufb
             Pshufd
             Ptest

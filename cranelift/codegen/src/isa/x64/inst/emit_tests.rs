@@ -2683,36 +2683,6 @@ fn test_x64_emit() {
     ));
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmuldq, RegMem::reg(xmm4), w_xmm15),
-        "66440F3828FC",
-        "pmuldq  %xmm15, %xmm4, %xmm15",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmulhw, RegMem::reg(xmm9), w_xmm1),
-        "66410FE5C9",
-        "pmulhw  %xmm1, %xmm9, %xmm1",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmulhuw, RegMem::reg(xmm7), w_xmm9),
-        "66440FE4CF",
-        "pmulhuw %xmm9, %xmm7, %xmm9",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmulld, RegMem::reg(xmm15), w_xmm6),
-        "66410F3840F7",
-        "pmulld  %xmm6, %xmm15, %xmm6",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmullw, RegMem::reg(xmm14), w_xmm1),
-        "66410FD5CE",
-        "pmullw  %xmm1, %xmm14, %xmm1",
-    ));
-
-    insns.push((
         Inst::xmm_rm_r_evex(Avx512Opcode::Vpmullq, xmm10, RegMem::reg(xmm14), w_xmm1),
         "62D2AD0840CE",
         "vpmullq %xmm14, %xmm10, %xmm1",
@@ -2746,12 +2716,6 @@ fn test_x64_emit() {
         ),
         "62F27D0875D1",
         "vpermi2b %xmm1, %xmm0, %xmm2, %xmm2",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmuludq, RegMem::reg(xmm8), w_xmm9),
-        "66450FF4C8",
-        "pmuludq %xmm9, %xmm8, %xmm9",
     ));
 
     insns.push((
