@@ -54,8 +54,8 @@
 //! }
 //! ```
 
-use super::stack_switching::VMContObj;
-use super::stack_switching::VMContRef;
+#[cfg(feature = "stack-switching")]
+use super::stack_switching::{VMContObj, VMContRef};
 use crate::prelude::*;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
