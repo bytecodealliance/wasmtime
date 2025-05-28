@@ -2018,6 +2018,12 @@ criteria = "safe-to-deploy"
 delta = "0.29.0 -> 0.31.0"
 notes = "Various updates here and there, nothing too major, what you'd expect from a DWARF parsing crate."
 
+[[audits.gimli]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.31.0 -> 0.31.1"
+notes = "No fundmanetally new `unsafe` code, some small refactoring of existing code. Lots of changes in tests, not as many changes in the rest of the crate. More dwarf!"
+
 [[audits.glob]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
