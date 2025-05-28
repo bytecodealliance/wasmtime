@@ -83,11 +83,13 @@ use crate::module::RegisteredModuleId;
 use crate::prelude::*;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::GcRootsList;
+#[cfg(feature = "stack-switching")]
+use crate::runtime::vm::VMContRef;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     ExportGlobal, GcStore, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SignalHandler,
-    StoreBox, StorePtr, Unwind, VMContRef, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
+    StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
@@ -324,6 +326,7 @@ pub struct StoreOpaque {
 
     // Contains all continuations ever allocated throughout the lifetime of this
     // store.
+    #[cfg(feature = "stack-switching")]
     continuations: Vec<Box<VMContRef>>,
 
     instances: Vec<StoreInstance>,
@@ -547,6 +550,7 @@ impl<T> Store<T> {
             _marker: marker::PhantomPinned,
             engine: engine.clone(),
             vm_store_context: Default::default(),
+            #[cfg(feature = "stack-switching")]
             continuations: Vec::new(),
             instances: Vec::new(),
             #[cfg(feature = "component-model")]
@@ -1629,6 +1633,7 @@ impl StoreOpaque {
         assert!(gc_roots_list.is_empty());
 
         self.trace_wasm_stack_roots(gc_roots_list);
+        #[cfg(feature = "stack-switching")]
         self.trace_wasm_continuation_roots(gc_roots_list);
         self.trace_vmctx_roots(gc_roots_list);
         self.trace_user_roots(gc_roots_list);
@@ -1699,7 +1704,7 @@ impl StoreOpaque {
         log::trace!("End trace GC roots :: Wasm stack");
     }
 
-    #[cfg(feature = "gc")]
+    #[cfg(all(feature = "gc", feature = "stack-switching"))]
     fn trace_wasm_continuation_roots(&mut self, gc_roots_list: &mut GcRootsList) {
         use crate::{runtime::vm::Backtrace, vm::VMStackState};
         log::trace!("Begin trace GC roots :: continuations");
