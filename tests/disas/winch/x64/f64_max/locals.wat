@@ -24,7 +24,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x20, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x96
+;;       ja      0x95
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x20, %rsp
 ;;       movq    %rdi, 0x18(%rsp)
@@ -46,8 +46,11 @@
 ;;   7b: addsd   %xmm0, %xmm1
 ;;       jp      0x89
 ;;   85: maxsd   %xmm0, %xmm1
-;;       movapd  %xmm1, %xmm0
+;;       movaps  %xmm1, %xmm0
 ;;       addq    $0x20, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   96: ud2
+;;   95: ud2
+;;   97: addb    %bl, -0x66666667(%rdx)
+;;   9d: cltd
+;;   9e: int1

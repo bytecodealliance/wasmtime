@@ -10,8 +10,8 @@ use crate::{
     x64::regs::scratch,
 };
 use cranelift_codegen::{
-    CallInfo, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState, MachLabel,
-    PatchRegion, VCodeConstantData, VCodeConstants, Writable,
+    CallInfo, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
+    MachLabel, PatchRegion, VCodeConstantData, VCodeConstants, Writable,
     ir::{
         ConstantPool, ExternalName, MemFlags, SourceLoc, TrapCode, Type, UserExternalNameRef, types,
     },
@@ -548,17 +548,13 @@ impl Assembler {
     /// Single and double precision floating point
     /// register-to-register move.
     pub fn xmm_mov_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        use OperandSize::*;
-
-        let dst: WritableXmm = dst.map(|r| r.into());
-        let inst = match size {
-            S32 => asm::inst::movaps_a::new(dst, src).into(),
-            S64 => asm::inst::movapd_a::new(dst, src).into(),
-            S128 => asm::inst::movdqa_a::new(dst, src).into(),
-            S8 | S16 => unreachable!(),
+        let ty = match size {
+            OperandSize::S32 => types::F32,
+            OperandSize::S64 => types::F64,
+            OperandSize::S128 => types::I32X4,
+            OperandSize::S8 | OperandSize::S16 => unreachable!(),
         };
-
-        self.emit(Inst::External { inst });
+        self.emit(Inst::gen_move(dst.map(|r| r.into()), src.into(), ty));
     }
 
     /// Single and double precision floating point load.
