@@ -15,9 +15,7 @@ result rather than performing compilation all over again.
 
 See these API docs for more details:
 
-* [`wasmtime::Config::cache_config_load`](https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.cache_config_load)
-* [`wasmtime::Config::cache_config_load_default`](https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.cache_config_load_default)
-* [`wasmtime::Config::disable_cache`](https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.disable_cache)
+* [`wasmtime::Config::cache`](https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.cache)
 * [`wasmtime::CacheStore`](https://docs.rs/wasmtime/latest/wasmtime/trait.CacheStore.html)
 
 ## Enable Winch
