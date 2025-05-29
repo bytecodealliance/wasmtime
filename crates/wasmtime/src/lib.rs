@@ -195,8 +195,7 @@
 //!
 //! * `cache` - Enabled by default, this feature adds support for wasmtime to
 //!   perform internal caching of modules in a global location. This must still
-//!   be enabled explicitly through [`Config::cache_config_load`] or
-//!   [`Config::cache_config_load_default`].
+//!   be enabled explicitly through [`Config::cache`].
 //!
 //! * `wat` - Enabled by default, this feature adds support for accepting the
 //!   text format of WebAssembly in [`Module::new`] and

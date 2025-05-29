@@ -8,7 +8,7 @@ wasmtime config new
 It will print the location regardless of the success.
 Please refer to the  `--help` message for using a custom location.
 
-All settings, except `enabled`, are **optional**.
+All settings are **optional**.
 If the setting is not specified, the **default** value is used.
 ***Thus, if you don't know what values to use, don't specify them.***
 The default values might be tuned in the future.
@@ -30,20 +30,6 @@ should be introduced or some behavior should be changed, you are
 welcome to discuss it and contribute to [the Wasmtime repository].
 
 [the Wasmtime repository]: https://github.com/bytecodealliance/wasmtime
-
-Setting `enabled`
------------------
-- **type**: boolean
-- **format**: `true | false`
-- **default**: `true`
-
-Specifies whether the cache system is used or not.
-
-This field is *mandatory*.
-The default value is used when configuration file is not specified
-and none exists at the default location.
-
-[`enabled`]: #setting-enabled
 
 Setting `directory`
 -----------------
