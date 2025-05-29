@@ -166,6 +166,7 @@ pub enum wasmtime_component_val_t {
     Record(wasmtime_component_valrecord_t),
     Tuple(wasmtime_component_valtuple_t),
     Variant(wasmtime_component_valvariant_t),
+    Enum(wasm_name_t),
 }
 
 impl Default for wasmtime_component_val_t {
@@ -199,6 +200,9 @@ impl From<&wasmtime_component_val_t> for Val {
                 let (a, b) = x.into();
                 Val::Variant(a, b)
             }
+            wasmtime_component_val_t::Enum(x) => {
+                Val::Enum(String::from_utf8(x.clone().take()).unwrap())
+            }
         }
     }
 }
@@ -225,7 +229,7 @@ impl From<&Val> for wasmtime_component_val_t {
             Val::Variant(discriminant, val) => {
                 wasmtime_component_val_t::Variant((discriminant, val).into())
             }
-            Val::Enum(_) => todo!(),
+            Val::Enum(x) => wasmtime_component_val_t::Enum(wasm_name_t::from_name(x.clone())),
             Val::Option(_val) => todo!(),
             Val::Result(_val) => todo!(),
             Val::Flags(_items) => todo!(),

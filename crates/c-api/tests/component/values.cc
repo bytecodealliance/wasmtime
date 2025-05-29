@@ -546,6 +546,64 @@ local.get $res
   destroy(ctx);
 }
 
+TEST(component, value_enum) {
+  static const auto check = [](const wasmtime_component_val_t &val,
+                               std::string_view text) {
+    EXPECT_EQ(val.kind, WASMTIME_COMPONENT_ENUM);
+    EXPECT_EQ(
+        (std::string_view{val.of.enumeration.data, val.of.enumeration.size}),
+        text);
+  };
+
+  static const auto make =
+      [](std::string_view text) -> wasmtime_component_val_t {
+    auto ret = wasmtime_component_val_t{
+        .kind = WASMTIME_COMPONENT_ENUM,
+    };
+
+    wasm_name_new(&ret.of.enumeration, text.size(), text.data());
+
+    return ret;
+  };
+
+  auto ctx = create(
+      R"((enum "aa" "bb"))", R"(
+(param $x i32)
+(result i32)
+local.get $x
+call $do
+	  )",
+      "(param i32) (result i32)",
+      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
+          size_t args_len, wasmtime_component_val_t *rets,
+          size_t rets_len) -> wasmtime_error_t * {
+        EXPECT_EQ(args_len, 1);
+        check(args[0], "aa");
+
+        EXPECT_EQ(rets_len, 1);
+        rets[0] = make("bb");
+
+        return nullptr;
+      });
+
+  auto arg = make("aa");
+  auto res = wasmtime_component_val_t{};
+
+  auto err =
+      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  CHECK_ERR(err);
+
+  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
+  CHECK_ERR(err);
+
+  check(res, "bb");
+
+  wasmtime_component_val_delete(&arg);
+  wasmtime_component_val_delete(&res);
+
+  destroy(ctx);
+}
+
 TEST(component, value_list_inner) {
   {
     auto x = wasmtime_component_val_t{
