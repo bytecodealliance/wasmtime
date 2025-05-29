@@ -36,7 +36,7 @@ block0(v0: f64x2, v1: f64):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movlhps %xmm0, %xmm1, %xmm0
+;   movlhps %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret

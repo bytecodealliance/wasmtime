@@ -594,7 +594,6 @@
             Cmpss
             Cmpsd
             Insertps
-            Movlhps
             Pabsb
             Pabsw
             Pabsd
@@ -3346,12 +3345,11 @@
         (xmm_rmir_vex (AvxOpcode.Vmovss) src1 src2))
 
 ;; Helper for creating `movlhps` instructions.
-(decl x64_movlhps (Xmm XmmMem) Xmm)
-(rule 0 (x64_movlhps src1 src2)
-      (xmm_rm_r (SseOpcode.Movlhps) src1 src2))
+(decl x64_movlhps (Xmm Xmm) Xmm)
 (rule 1 (x64_movlhps src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vmovlhps) src1 src2))
+(rule 0 (x64_movlhps src1 src2) (x64_movlhps_rm src1 src2))
 
 ;; Helpers for creating `pmaxs*` instructions.
 (decl x64_pmaxs (Type Xmm XmmMem) Xmm)
