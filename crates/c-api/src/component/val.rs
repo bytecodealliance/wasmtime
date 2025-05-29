@@ -166,6 +166,8 @@ pub enum wasmtime_component_val_t {
     Record(wasmtime_component_valrecord_t),
     Tuple(wasmtime_component_valtuple_t),
     Variant(wasmtime_component_valvariant_t),
+    Enum(wasm_name_t),
+    Option(Option<Box<Self>>),
 }
 
 impl Default for wasmtime_component_val_t {
@@ -199,6 +201,12 @@ impl From<&wasmtime_component_val_t> for Val {
                 let (a, b) = x.into();
                 Val::Variant(a, b)
             }
+            wasmtime_component_val_t::Enum(x) => {
+                Val::Enum(String::from_utf8(x.clone().take()).unwrap())
+            }
+            wasmtime_component_val_t::Option(x) => {
+                Val::Option(x.as_ref().map(|x| Box::new(Val::from(x.as_ref()))))
+            }
         }
     }
 }
@@ -225,8 +233,11 @@ impl From<&Val> for wasmtime_component_val_t {
             Val::Variant(discriminant, val) => {
                 wasmtime_component_val_t::Variant((discriminant, val).into())
             }
-            Val::Enum(_) => todo!(),
-            Val::Option(_val) => todo!(),
+            Val::Enum(x) => wasmtime_component_val_t::Enum(wasm_name_t::from_name(x.clone())),
+            Val::Option(x) => wasmtime_component_val_t::Option(
+                x.as_ref()
+                    .map(|x| Box::new(wasmtime_component_val_t::from(x.as_ref()))),
+            ),
             Val::Result(_val) => todo!(),
             Val::Flags(_items) => todo!(),
             Val::Resource(_resource_any) => todo!(),
