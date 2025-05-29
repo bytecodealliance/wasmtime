@@ -288,6 +288,7 @@ pub enum Location {
     imm8,
     imm16,
     imm32,
+    imm64,
 
     // General-purpose registers, and their memory forms.
     r8,
