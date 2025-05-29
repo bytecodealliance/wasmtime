@@ -6,7 +6,7 @@ impl dsl::Operand {
         use dsl::Location::*;
         let mut_ = self.mutability.generate_camel_case();
         match self.location {
-            imm8 | imm16 | imm32 => {
+            imm8 | imm16 | imm32 | imm64 => {
                 let bits = self.location.bits();
                 if self.extension.is_sign_extended() {
                     format!("Simm{bits}")
@@ -42,7 +42,7 @@ impl dsl::Location {
     pub fn generate_to_string(&self, extension: dsl::Extension) -> String {
         use dsl::Location::*;
         match self {
-            imm8 | imm16 | imm32 => {
+            imm8 | imm16 | imm32 | imm64 => {
                 if extension.is_sign_extended() {
                     let variant = extension.generate_variant();
                     format!("self.{self}.to_string({variant})")
@@ -66,7 +66,7 @@ impl dsl::Location {
     fn generate_size(&self) -> Option<&str> {
         use dsl::Location::*;
         match self {
-            imm8 | imm16 | imm32 => None,
+            imm8 | imm16 | imm32 | imm64 => None,
             al | cl | r8 | rm8 => Some("Size::Byte"),
             ax | dx | r16 | rm16 => Some("Size::Word"),
             eax | edx | r32 | rm32 => Some("Size::Doubleword"),

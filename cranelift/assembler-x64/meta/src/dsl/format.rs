@@ -323,7 +323,7 @@ impl Location {
             al | cl | imm8 | r8 | rm8 | m8 => 8,
             ax | dx | imm16 | r16 | rm16 | m16 => 16,
             eax | edx | imm32 | r32 | rm32 | m32 | xmm_m32 => 32,
-            rax | rdx | r64 | rm64 | m64 | xmm_m64 => 64,
+            rax | rdx | imm64 | r64 | rm64 | m64 | xmm_m64 => 64,
             xmm1 | xmm2 | xmm3 | xmm_m128 => 128,
         }
     }
@@ -337,11 +337,10 @@ impl Location {
     /// Return `true` if the location accesses memory; `false` otherwise.
     #[must_use]
     pub fn uses_memory(&self) -> bool {
-        use Location::*;
-        match self {
-            al | ax | eax | rax | cl | dx | edx | rdx | imm8 | imm16 | imm32 | r8 | r16 | r32
-            | r64 | xmm1 | xmm2 | xmm3 => false,
-            rm8 | rm16 | rm32 | rm64 | m8 | m16 | m32 | m64 | xmm_m32 | xmm_m64 | xmm_m128 => true,
+        use OperandKind::*;
+        match self.kind() {
+            FixedReg(_) | Imm(_) | Reg(_) => false,
+            RegMem(_) | Mem(_) => true,
         }
     }
 
@@ -349,12 +348,10 @@ impl Location {
     /// immediate); return `false` otherwise.
     #[must_use]
     pub fn uses_register(&self) -> bool {
-        use Location::*;
-        match self {
-            imm8 | imm16 | imm32 => false,
-            al | ax | eax | rax | cl | dx | edx | rdx | r8 | r16 | r32 | r64 | rm8 | rm16
-            | rm32 | rm64 | m8 | m16 | m32 | m64 | xmm1 | xmm2 | xmm3 | xmm_m32 | xmm_m64
-            | xmm_m128 => true,
+        use OperandKind::*;
+        match self.kind() {
+            Imm(_) => false,
+            FixedReg(_) | Reg(_) | RegMem(_) | Mem(_) => true,
         }
     }
 
@@ -364,7 +361,7 @@ impl Location {
         use Location::*;
         match self {
             al | ax | eax | rax | cl | dx | edx | rdx => OperandKind::FixedReg(*self),
-            imm8 | imm16 | imm32 => OperandKind::Imm(*self),
+            imm8 | imm16 | imm32 | imm64 => OperandKind::Imm(*self),
             r8 | r16 | r32 | r64 | xmm1 | xmm2 | xmm3 => OperandKind::Reg(*self),
             rm8 | rm16 | rm32 | rm64 | xmm_m32 | xmm_m64 | xmm_m128 => OperandKind::RegMem(*self),
             m8 | m16 | m32 | m64 => OperandKind::Mem(*self),
@@ -379,7 +376,7 @@ impl Location {
     pub fn reg_class(&self) -> Option<RegClass> {
         use Location::*;
         match self {
-            imm8 | imm16 | imm32 | m8 | m16 | m32 | m64 => None,
+            imm8 | imm16 | imm32 | imm64 | m8 | m16 | m32 | m64 => None,
             al | ax | eax | rax | cl | dx | edx | rdx | r8 | r16 | r32 | r64 | rm8 | rm16
             | rm32 | rm64 => Some(RegClass::Gpr),
             xmm1 | xmm2 | xmm3 | xmm_m32 | xmm_m64 | xmm_m128 => Some(RegClass::Xmm),
@@ -394,6 +391,7 @@ impl core::fmt::Display for Location {
             imm8 => write!(f, "imm8"),
             imm16 => write!(f, "imm16"),
             imm32 => write!(f, "imm32"),
+            imm64 => write!(f, "imm64"),
 
             al => write!(f, "al"),
             ax => write!(f, "ax"),
