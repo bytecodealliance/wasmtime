@@ -26,7 +26,6 @@ use core::ptr::NonNull;
 #[cfg(target_has_atomic = "64")]
 use core::sync::atomic::AtomicU64;
 use core::{mem, ptr};
-use sptr::Strict;
 #[cfg(feature = "gc")]
 use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::{
@@ -656,13 +655,8 @@ impl Instance {
         // (there's an actual load of the field) it does look like that by the
         // time the backend runs. (that's magic to me, the backend removing
         // loads...)
-        //
-        // As a final minor note, strict provenance APIs are not stable on Rust
-        // today so the `sptr` crate is used. This crate provides the extension
-        // trait `Strict` but the method names conflict with the nightly methods
-        // so a different syntax is used to invoke methods here.
         let addr = &raw const self.vmctx;
-        let ret = Strict::with_addr(self.vmctx_self_reference.as_ptr(), Strict::addr(addr));
+        let ret = self.vmctx_self_reference.as_ptr().with_addr(addr.addr());
         NonNull::new(ret).unwrap()
     }
 

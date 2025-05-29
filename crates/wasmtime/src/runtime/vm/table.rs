@@ -13,7 +13,6 @@ use core::ops::Range;
 use core::ptr::{self, NonNull};
 use core::slice;
 use core::{cmp, usize};
-use sptr::Strict;
 use wasmtime_environ::{
     FUNCREF_INIT_BIT, FUNCREF_MASK, IndexType, Trap, Tunables, WasmHeapTopType, WasmRefType,
 };
@@ -117,7 +116,7 @@ impl TaggedFuncRef {
     fn from(ptr: Option<NonNull<VMFuncRef>>, lazy_init: bool) -> Self {
         let ptr = ptr.map(|p| p.as_ptr()).unwrap_or(ptr::null_mut());
         if lazy_init {
-            let masked = Strict::map_addr(ptr, |a| a | FUNCREF_INIT_BIT);
+            let masked = ptr.map_addr(|a| a | FUNCREF_INIT_BIT);
             TaggedFuncRef(masked)
         } else {
             TaggedFuncRef(ptr)
@@ -133,7 +132,7 @@ impl TaggedFuncRef {
         } else {
             // Masking off the tag bit is harmless whether the table uses lazy
             // init or not.
-            let unmasked = Strict::map_addr(ptr, |a| a & FUNCREF_MASK);
+            let unmasked = ptr.map_addr(|a| a & FUNCREF_MASK);
             TableElement::FuncRef(NonNull::new(unmasked))
         }
     }

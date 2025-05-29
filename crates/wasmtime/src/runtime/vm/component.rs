@@ -21,7 +21,6 @@ use core::mem;
 use core::mem::offset_of;
 use core::ops::Deref;
 use core::ptr::{self, NonNull};
-use sptr::Strict;
 use wasmtime_environ::component::*;
 use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
 
@@ -241,7 +240,7 @@ impl ComponentInstance {
 
     fn vmctx(&self) -> NonNull<VMComponentContext> {
         let addr = &raw const self.vmctx;
-        let ret = Strict::with_addr(self.vmctx_self_reference.as_ptr(), Strict::addr(addr));
+        let ret = self.vmctx_self_reference.as_ptr().with_addr(addr.addr());
         NonNull::new(ret).unwrap()
     }
 

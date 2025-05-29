@@ -14,7 +14,6 @@ use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
-use sptr::Strict;
 use wasmtime_environ::{
     BuiltinFunctionIndex, DefinedMemoryIndex, Unsigned, VMCONTEXT_MAGIC, VMSharedTypeIndex,
     WasmHeapTopType, WasmValType,
@@ -1409,7 +1408,7 @@ impl ValRaw {
     #[inline]
     pub fn funcref(i: *mut c_void) -> ValRaw {
         ValRaw {
-            funcref: Strict::map_addr(i, |i| i.to_le()),
+            funcref: i.map_addr(|i| i.to_le()),
         }
     }
 
@@ -1474,7 +1473,7 @@ impl ValRaw {
     /// Gets the WebAssembly `funcref` value
     #[inline]
     pub fn get_funcref(&self) -> *mut c_void {
-        unsafe { Strict::map_addr(self.funcref, |i| usize::from_le(i)) }
+        unsafe { self.funcref.map_addr(|i| usize::from_le(i)) }
     }
 
     /// Gets the WebAssembly `externref` value

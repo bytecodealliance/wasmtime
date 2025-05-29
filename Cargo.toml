@@ -340,7 +340,6 @@ memfd = "0.6.2"
 psm = "0.1.11"
 proptest = "1.0.0"
 rand = { version = "0.8.3", features = ["small_rng"] }
-sptr = "0.3.2"
 # serde and serde_derive must have the same version
 serde = { version = "1.0.215", default-features = false, features = ['alloc'] }
 serde_derive = "1.0.188"

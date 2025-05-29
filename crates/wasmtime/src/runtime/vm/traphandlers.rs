@@ -867,7 +867,6 @@ pub(crate) mod tls {
     // these functions are free to be inlined.
     pub(super) mod raw {
         use super::CallThreadState;
-        use sptr::Strict;
 
         pub type Ptr = *const CallThreadState;
 
@@ -877,7 +876,7 @@ pub(crate) mod tls {
 
         fn tls_get() -> (Ptr, bool) {
             let mut initialized = false;
-            let p = Strict::map_addr(crate::runtime::vm::sys::tls_get(), |a| {
+            let p = crate::runtime::vm::sys::tls_get().map_addr(|a| {
                 initialized = (a & 1) != 0;
                 a & !1
             });
@@ -885,7 +884,7 @@ pub(crate) mod tls {
         }
 
         fn tls_set(ptr: Ptr, initialized: bool) {
-            let encoded = Strict::map_addr(ptr, |a| a | usize::from(initialized));
+            let encoded = ptr.map_addr(|a| a | usize::from(initialized));
             crate::runtime::vm::sys::tls_set(encoded.cast_mut().cast::<u8>());
         }
 
