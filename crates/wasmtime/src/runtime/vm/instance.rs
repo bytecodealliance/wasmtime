@@ -16,7 +16,7 @@ use crate::runtime::vm::{
     ModuleRuntimeInfo, SendSyncPtr, VMFunctionBody, VMGcRef, VMStore, VMStoreRawPtr, VmPtr, VmSafe,
     WasmFault,
 };
-use crate::store::{StoreInner, StoreOpaque};
+use crate::store::{InstanceId, StoreInner, StoreOpaque};
 use crate::{StoreContextMut, prelude::*};
 use alloc::sync::Arc;
 use core::alloc::Layout;
@@ -184,6 +184,9 @@ impl InstanceAndStore {
 /// values, whether or not they were created on the host or through a module.
 #[repr(C)] // ensure that the vmctx field is last.
 pub struct Instance {
+    /// The index, within a `Store` that this instance lives at
+    id: InstanceId,
+
     /// The runtime info (corresponding to the "compiled module"
     /// abstraction in higher layers) that is retained and needed for
     /// lazy initialization. This provides access to the underlying
@@ -317,6 +320,7 @@ impl Instance {
         ptr::write(
             ptr,
             Instance {
+                id: req.id,
                 runtime_info: req.runtime_info.clone(),
                 memories,
                 tables,
