@@ -68,6 +68,9 @@ typedef uint8_t wasmtime_component_valkind_t;
 /// \brief Value of #wasmtime_component_valkind_t meaning that
 /// #wasmtime_component_val_t is a enum
 #define WASMTIME_COMPONENT_ENUM 17
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a option
+#define WASMTIME_COMPONENT_OPTION 18
 
 struct wasmtime_component_val;
 struct wasmtime_component_valrecord_entry;
@@ -149,6 +152,9 @@ typedef union {
   wasmtime_component_valvariant_t variant;
   /// Field used if #wasmtime_component_val_t::kind is #WASMTIME_COMPONENT_ENUM
   wasm_name_t enumeration;
+  /// Field used if #wasmtime_component_val_t::kind is
+  /// #WASMTIME_COMPONENT_OPTION
+  struct wasmtime_component_val *option;
 } wasmtime_component_valunion_t;
 
 /// \brief Represents possible runtime values which a component function can
