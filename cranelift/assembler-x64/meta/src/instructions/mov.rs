@@ -74,5 +74,21 @@ pub fn list() -> Vec<Inst> {
         inst("movups", fmt("B", [w(xmm_m128), r(xmm1)]), rex([0x0F, 0x11]).r(), _64b | sse),
         inst("movdqu", fmt("A", [w(xmm1), r(xmm_m128)]), rex([0xF3, 0x0F, 0x6F]).r(), _64b | sse2),
         inst("movdqu", fmt("B", [w(xmm_m128), r(xmm1)]), rex([0xF3, 0x0F, 0x7F]).r(), _64b | sse2),
+
+        // Move and extend packed integers to and from XMM locations with sign extension.
+        inst("pmovsxbw", fmt("A", [w(xmm1), r(xmm_m64)]), rex([0x66, 0x0F, 0x38, 0x20]).r(), _64b | compat | sse41),
+        inst("pmovsxbd", fmt("A", [w(xmm1), r(xmm_m32)]), rex([0x66, 0x0F, 0x38, 0x21]).r(), _64b | compat | sse41),
+        inst("pmovsxbq", fmt("A", [w(xmm1), r(xmm_m16)]), rex([0x66, 0x0F, 0x38, 0x22]).r(), _64b | compat | sse41),
+        inst("pmovsxwd", fmt("A", [w(xmm1), r(xmm_m64)]), rex([0x66, 0x0F, 0x38, 0x23]).r(), _64b | compat | sse41),
+        inst("pmovsxwq", fmt("A", [w(xmm1), r(xmm_m32)]), rex([0x66, 0x0F, 0x38, 0x24]).r(), _64b | compat | sse41),
+        inst("pmovsxdq", fmt("A", [w(xmm1), r(xmm_m64)]), rex([0x66, 0x0F, 0x38, 0x25]).r(), _64b | compat | sse41),
+
+        // Move and extend packed integers to and from XMM locations with zero extension.
+        inst("pmovzxbw", fmt("A", [w(xmm1), r(xmm_m64)]), rex([0x66, 0x0F, 0x38, 0x30]).r(), _64b | compat | sse41),
+        inst("pmovzxbd", fmt("A", [w(xmm1), r(xmm_m32)]), rex([0x66, 0x0F, 0x38, 0x31]).r(), _64b | compat | sse41),
+        inst("pmovzxbq", fmt("A", [w(xmm1), r(xmm_m16)]), rex([0x66, 0x0F, 0x38, 0x32]).r(), _64b | compat | sse41),
+        inst("pmovzxwd", fmt("A", [w(xmm1), r(xmm_m64)]), rex([0x66, 0x0F, 0x38, 0x33]).r(), _64b | compat | sse41),
+        inst("pmovzxwq", fmt("A", [w(xmm1), r(xmm_m32)]), rex([0x66, 0x0F, 0x38, 0x34]).r(), _64b | compat | sse41),
+        inst("pmovzxdq", fmt("A", [w(xmm1), r(xmm_m64)]), rex([0x66, 0x0F, 0x38, 0x35]).r(), _64b | compat | sse41),
     ]
 }
