@@ -85,9 +85,10 @@ use crate::prelude::*;
 use crate::runtime::vm::GcRootsList;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
-    ExportGlobal, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SendSyncPtr,
-    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
+    self, ExportGlobal, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator,
+    InstanceHandle, Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator,
+    SendSyncPtr, SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef,
+    VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
@@ -396,9 +397,9 @@ pub struct StoreOpaque {
     /// and calls. These also interact with the `ResourceAny` type and its
     /// internal representation.
     #[cfg(feature = "component-model")]
-    component_host_table: crate::runtime::vm::component::ResourceTable,
+    component_host_table: vm::component::ResourceTable,
     #[cfg(feature = "component-model")]
-    component_calls: crate::runtime::vm::component::CallContexts,
+    component_calls: vm::component::CallContexts,
     #[cfg(feature = "component-model")]
     host_resource_data: crate::component::HostResourceData,
 
@@ -1422,7 +1423,7 @@ impl StoreOpaque {
         #[cfg(feature = "gc")]
         fn allocate_gc_store(
             engine: &Engine,
-            vmstore: NonNull<dyn crate::vm::VMStore>,
+            vmstore: NonNull<dyn vm::VMStore>,
             pkey: Option<ProtectionKey>,
         ) -> Result<GcStore> {
             ensure!(
@@ -1436,7 +1437,7 @@ impl StoreOpaque {
                 runtime_info: &ModuleRuntimeInfo::bare(Arc::new(
                     wasmtime_environ::Module::default(),
                 )),
-                imports: crate::vm::Imports::default(),
+                imports: vm::Imports::default(),
                 host_state: Box::new(()),
                 store: StorePtr::new(vmstore),
                 wmemcheck: false,
@@ -1468,7 +1469,7 @@ impl StoreOpaque {
         #[cfg(not(feature = "gc"))]
         fn allocate_gc_store(
             _engine: &Engine,
-            _vmstore: NonNull<dyn crate::vm::VMStore>,
+            _vmstore: NonNull<dyn vm::VMStore>,
             _pkey: Option<ProtectionKey>,
         ) -> Result<GcStore> {
             bail!("cannot allocate a GC store: the `gc` feature was disabled at compile time")
@@ -1740,12 +1741,12 @@ impl StoreOpaque {
     }
 
     #[inline]
-    pub fn traitobj(&self) -> NonNull<dyn crate::runtime::vm::VMStore> {
+    pub fn traitobj(&self) -> NonNull<dyn vm::VMStore> {
         self.traitobj.as_raw().unwrap()
     }
 
     #[inline]
-    pub fn traitobj_mut(&mut self) -> &mut dyn crate::runtime::vm::VMStore {
+    pub fn traitobj_mut(&mut self) -> &mut dyn vm::VMStore {
         unsafe { self.traitobj().as_mut() }
     }
 
@@ -1798,11 +1799,7 @@ impl StoreOpaque {
     /// with spectre mitigations enabled since the hardware fault address is
     /// always zero in these situations which means that the trapping context
     /// doesn't have enough information to report the fault address.
-    pub(crate) fn wasm_fault(
-        &self,
-        pc: usize,
-        addr: usize,
-    ) -> Option<crate::runtime::vm::WasmFault> {
+    pub(crate) fn wasm_fault(&self, pc: usize, addr: usize) -> Option<vm::WasmFault> {
         // There are a few instances where a "close to zero" pointer is loaded
         // and we expect that to happen:
         //
@@ -1901,8 +1898,8 @@ at https://bytecodealliance.org/security.
     pub(crate) fn component_resource_state(
         &mut self,
     ) -> (
-        &mut crate::runtime::vm::component::CallContexts,
-        &mut crate::runtime::vm::component::ResourceTable,
+        &mut vm::component::CallContexts,
+        &mut vm::component::ResourceTable,
         &mut crate::component::HostResourceData,
     ) {
         (
@@ -1937,9 +1934,9 @@ at https://bytecodealliance.org/security.
 
     pub(crate) fn unwinder(&self) -> &'static dyn Unwind {
         match &self.executor {
-            Executor::Interpreter(_) => &crate::runtime::vm::UnwindPulley,
+            Executor::Interpreter(_) => &vm::UnwindPulley,
             #[cfg(has_host_compiler_backend)]
-            Executor::Native => &crate::runtime::vm::UnwindHost,
+            Executor::Native => &vm::UnwindHost,
         }
     }
 
@@ -2017,6 +2014,18 @@ at https://bytecodealliance.org/security.
 
         Ok(id)
     }
+
+    /// Returns the `StoreInstanceId` that can be used to re-acquire access to
+    /// `vmctx` from a store later on.
+    ///
+    /// # Safety
+    ///
+    /// This method is unsafe as it cannot validate that `vmctx` is a valid
+    /// allocation that lives within this store.
+    pub(crate) unsafe fn vmctx_id(&self, vmctx: NonNull<VMContext>) -> StoreInstanceId {
+        let instance_id = vm::Instance::from_vmctx(vmctx, |i| i.id());
+        StoreInstanceId::new(self.id(), instance_id)
+    }
 }
 
 /// Helper parameter to [`StoreOpaque::allocate_instance`].
@@ -2038,7 +2047,7 @@ pub(crate) enum AllocateInstanceKind<'a> {
     },
 }
 
-unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
+unsafe impl<T> vm::VMStore for StoreInner<T> {
     #[cfg(feature = "component-model-async")]
     fn component_async_store(
         &mut self,
@@ -2229,7 +2238,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
     }
 
     #[cfg(feature = "component-model")]
-    fn component_calls(&mut self) -> &mut crate::runtime::vm::component::CallContexts {
+    fn component_calls(&mut self) -> &mut vm::component::CallContexts {
         &mut self.component_calls
     }
 }
