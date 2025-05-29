@@ -71,6 +71,9 @@ typedef uint8_t wasmtime_component_valkind_t;
 /// \brief Value of #wasmtime_component_valkind_t meaning that
 /// #wasmtime_component_val_t is a option
 #define WASMTIME_COMPONENT_OPTION 18
+/// \brief Value of #wasmtime_component_valkind_t meaning that
+/// #wasmtime_component_val_t is a result
+#define WASMTIME_COMPONENT_RESULT 19
 
 struct wasmtime_component_val;
 struct wasmtime_component_valrecord_entry;
@@ -109,6 +112,15 @@ typedef struct {
   /// The payload of the variant
   struct wasmtime_component_val *val;
 } wasmtime_component_valvariant_t;
+
+/// Represents a result type
+typedef struct {
+  /// The discriminant of the result
+  bool is_ok;
+  /// The 'ok' value if #wasmtime_component_valresult_t::is_ok is `true`, else
+  /// the 'err' value
+  struct wasmtime_component_val *val;
+} wasmtime_component_valresult_t;
 
 /// \brief Represents possible runtime values which a component function can
 /// either consume or produce
@@ -155,6 +167,9 @@ typedef union {
   /// Field used if #wasmtime_component_val_t::kind is
   /// #WASMTIME_COMPONENT_OPTION
   struct wasmtime_component_val *option;
+  /// Field used if #wasmtime_component_val_t::kind is
+  /// #WASMTIME_COMPONENT_RESULT
+  wasmtime_component_valresult_t result;
 } wasmtime_component_valunion_t;
 
 /// \brief Represents possible runtime values which a component function can
