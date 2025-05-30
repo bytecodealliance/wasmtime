@@ -121,7 +121,7 @@ impl Extern {
 
     pub(crate) unsafe fn from_wasmtime_export(
         wasmtime_export: crate::runtime::vm::Export,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
     ) -> Extern {
         match wasmtime_export {
             crate::runtime::vm::Export::Function(f) => {

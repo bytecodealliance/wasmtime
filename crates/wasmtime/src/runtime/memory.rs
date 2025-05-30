@@ -1030,7 +1030,7 @@ impl SharedMemory {
     /// shared memory and the user wants host-side access to it.
     pub(crate) unsafe fn from_wasmtime_memory(
         wasmtime_export: crate::runtime::vm::ExportMemory,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
     ) -> Self {
         #[cfg_attr(not(feature = "threads"), allow(unused_variables, unreachable_code))]
         crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {
