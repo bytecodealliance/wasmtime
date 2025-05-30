@@ -713,9 +713,7 @@ impl OwnedImports {
                 });
             }
             crate::runtime::vm::Export::Global(g) => {
-                self.globals.push(VMGlobalImport {
-                    from: g.definition.into(),
-                });
+                self.globals.push(g.vmimport());
             }
             crate::runtime::vm::Export::Table(t) => {
                 self.tables.push(VMTableImport {

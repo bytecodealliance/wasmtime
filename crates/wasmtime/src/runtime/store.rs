@@ -85,10 +85,9 @@ use crate::prelude::*;
 use crate::runtime::vm::GcRootsList;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
-    self, ExportGlobal, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator,
-    InstanceHandle, Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator,
-    SendSyncPtr, SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef,
-    VMStoreContext,
+    self, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SendSyncPtr,
+    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
@@ -101,7 +100,7 @@ use core::mem::{self, ManuallyDrop};
 use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
-use wasmtime_environ::TripleExt;
+use wasmtime_environ::{DefinedGlobalIndex, EntityRef, PrimaryMap, TripleExt};
 
 mod context;
 pub use self::context::*;
@@ -329,8 +328,7 @@ pub struct StoreOpaque {
     signal_handler: Option<SignalHandler>,
     modules: ModuleRegistry,
     func_refs: FuncRefs,
-    host_globals: Vec<StoreBox<VMHostGlobalContext>>,
-
+    host_globals: PrimaryMap<DefinedGlobalIndex, StoreBox<VMHostGlobalContext>>,
     // GC-related fields.
     gc_store: Option<GcStore>,
     gc_roots: RootSet,
@@ -556,7 +554,7 @@ impl<T> Store<T> {
             gc_host_alloc_types: Default::default(),
             modules: ModuleRegistry::default(),
             func_refs: FuncRefs::default(),
-            host_globals: Vec::new(),
+            host_globals: PrimaryMap::new(),
             instance_count: 0,
             instance_limit: crate::DEFAULT_INSTANCE_LIMIT,
             memory_count: 0,
@@ -1248,7 +1246,15 @@ impl StoreOpaque {
         self.func_refs.push_instance_pre_func_refs(func_refs);
     }
 
-    pub(crate) fn host_globals(&mut self) -> &mut Vec<StoreBox<VMHostGlobalContext>> {
+    pub(crate) fn host_globals(
+        &self,
+    ) -> &PrimaryMap<DefinedGlobalIndex, StoreBox<VMHostGlobalContext>> {
+        &self.host_globals
+    }
+
+    pub(crate) fn host_globals_mut(
+        &mut self,
+    ) -> &mut PrimaryMap<DefinedGlobalIndex, StoreBox<VMHostGlobalContext>> {
         &mut self.host_globals
     }
 
@@ -1343,52 +1349,19 @@ impl StoreOpaque {
 
     /// Iterate over all globals (host- or Wasm-defined) within this store.
     pub fn for_each_global(&mut self, mut f: impl FnMut(&mut Self, Global)) {
-        struct TempTakeHostGlobalsAndInstances<'a> {
-            host_globals: Vec<StoreBox<VMHostGlobalContext>>,
-            instances: Vec<StoreInstance>,
-            store: &'a mut StoreOpaque,
+        // First enumerate all the host-created globals.
+        for global in self.host_globals.keys() {
+            let global = Global::new_host(self, global);
+            f(self, global);
         }
 
-        impl<'a> TempTakeHostGlobalsAndInstances<'a> {
-            fn new(store: &'a mut StoreOpaque) -> Self {
-                let host_globals = mem::take(&mut store.host_globals);
-                let instances = mem::take(&mut store.instances);
-                Self {
-                    host_globals,
-                    instances,
-                    store,
-                }
-            }
-        }
-
-        impl Drop for TempTakeHostGlobalsAndInstances<'_> {
-            fn drop(&mut self) {
-                assert!(self.store.host_globals.is_empty());
-                self.store.host_globals = mem::take(&mut self.host_globals);
-                assert!(self.store.instances.is_empty());
-                self.store.instances = mem::take(&mut self.instances);
-            }
-        }
-
-        let mut temp = TempTakeHostGlobalsAndInstances::new(self);
-        unsafe {
-            // First enumerate all the host-created globals.
-            for global in temp.host_globals.iter() {
-                let export = ExportGlobal {
-                    definition: NonNull::from(&mut global.get().as_mut().global),
-                    vmctx: None,
-                    global: global.get().as_ref().ty.to_wasm_type(),
-                };
-                let global = Global::from_wasmtime_global(export, temp.store);
-                f(temp.store, global);
-            }
-
-            // Then enumerate all instances' defined globals.
-            for instance in temp.instances.iter_mut() {
-                for (_, export) in instance.handle.defined_globals() {
-                    let global = Global::from_wasmtime_global(export, temp.store);
-                    f(temp.store, global);
-                }
+        // Then enumerate all instances' defined globals.
+        for id in 0..self.instances.len() {
+            let id = InstanceId(id);
+            for index in 0..self.instance(id).module().num_defined_globals() {
+                let index = DefinedGlobalIndex::new(index);
+                let global = Global::new_instance(self, id, index);
+                f(self, global);
             }
         }
     }

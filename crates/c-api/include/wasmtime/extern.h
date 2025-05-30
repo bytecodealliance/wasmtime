@@ -76,7 +76,11 @@ typedef struct wasmtime_global {
   /// Internal identifier of what store this belongs to, never zero.
   uint64_t store_id;
   /// Private field for Wasmtime.
-  size_t __private;
+  size_t __private1;
+  /// Private field for Wasmtime.
+  uint32_t __private2;
+  /// Private field for Wasmtime.
+  uint32_t __private3;
 } wasmtime_global_t;
 
 /// \brief Discriminant of #wasmtime_extern_t

@@ -15,8 +15,8 @@ use core::mem::{self, MaybeUninit};
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
-    BuiltinFunctionIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex, Unsigned,
-    VMCONTEXT_MAGIC, VMSharedTypeIndex, WasmHeapTopType, WasmValType,
+    BuiltinFunctionIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex,
+    DefinedTagIndex, Unsigned, VMCONTEXT_MAGIC, VMSharedTypeIndex, WasmHeapTopType, WasmValType,
 };
 
 /// A function pointer that exposes the array calling convention.
@@ -254,10 +254,38 @@ mod test_vmmemory_import {
 pub struct VMGlobalImport {
     /// A pointer to the imported global variable description.
     pub from: VmPtr<VMGlobalDefinition>,
+
+    /// A pointer to the context that owns the global.
+    ///
+    /// Exactly what's stored here is dictated by `kind` below. This is `None`
+    /// for `VMGlobalKind::Host`, it's a `VMContext` for
+    /// `VMGlobalKind::Instance`, and it's `VMComponentContext` for
+    /// `VMGlobalKind::ComponentFlags`.
+    pub vmctx: Option<VmPtr<VMOpaqueContext>>,
+
+    /// The kind of global, and extra location information in addition to
+    /// `vmctx` above.
+    pub kind: VMGlobalKind,
 }
 
 // SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
 unsafe impl VmSafe for VMGlobalImport {}
+
+/// The kinds of globals that Wasmtime has.
+#[derive(Debug, Copy, Clone)]
+#[repr(C, u32)]
+pub enum VMGlobalKind {
+    /// Host globals, stored in a `StoreOpaque`.
+    Host(DefinedGlobalIndex),
+    /// Instance globals, stored in `VMContext`s
+    Instance(DefinedGlobalIndex),
+    /// Flags for a component instance, stored in `VMComponentContext`.
+    #[cfg(feature = "component-model")]
+    ComponentFlags(wasmtime_environ::component::RuntimeComponentInstanceIndex),
+}
+
+// SAFETY: the above enum is repr(C) and stores nothing else
+unsafe impl VmSafe for VMGlobalKind {}
 
 #[cfg(test)]
 mod test_vmglobal_import {

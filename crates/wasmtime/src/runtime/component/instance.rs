@@ -8,7 +8,7 @@ use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
-use crate::runtime::vm::{CompiledModuleId, VMFuncRef};
+use crate::runtime::vm::{CompiledModuleId, ExportGlobalKind, VMFuncRef};
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
@@ -431,11 +431,11 @@ impl InstanceData {
             CoreDef::InstanceFlags(idx) => {
                 crate::runtime::vm::Export::Global(crate::runtime::vm::ExportGlobal {
                     definition: self.state.instance_flags(*idx).as_raw(),
-                    vmctx: None,
                     global: Global {
                         wasm_ty: WasmValType::I32,
                         mutability: true,
                     },
+                    kind: ExportGlobalKind::ComponentFlags(self.state.vmctx(), *idx),
                 })
             }
         }
