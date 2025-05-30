@@ -459,7 +459,7 @@ impl Instance {
     }
 
     /// Return the indexed `VMTagDefinition`.
-    fn tag_ptr(&mut self, index: DefinedTagIndex) -> NonNull<VMTagDefinition> {
+    pub fn tag_ptr(&self, index: DefinedTagIndex) -> NonNull<VMTagDefinition> {
         unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmtag_definition(index)) }
     }
 
