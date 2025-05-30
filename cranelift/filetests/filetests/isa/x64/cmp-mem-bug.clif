@@ -14,7 +14,7 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    0(%rsi), %r9
+;   movq (%rsi), %r9
 ;   cmpq    %r9, %rdi
 ;   setz    %r10b
 ;   movzbq  %r10b, %rax

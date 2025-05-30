@@ -50,7 +50,7 @@ block0:
 ;   movq    %r15, %rdi
 ;   lea     1(%rdi), %rdi
 ;   movq    %rdi, %r15
-;   movq    0(%rsp), %rdi
+;   movq (%rsp), %rdi
 ;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

@@ -68,9 +68,9 @@ block0:
 ;   ; UserStackMap { by_type: [(types::I32, CompoundBitSet {0})], sp_to_sized_stack_slots: None }
 ;   movq    %rbx, %rdi
 ;   call    User(userextname0)
-;   movq    16(%rsp), %rbx
-;   movq    24(%rsp), %r14
-;   movq    32(%rsp), %r15
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r14
+;   movq 0x20(%rsp), %r15
 ;   addq $0x30, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -177,11 +177,11 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64, v4: f32, v5: f64):
 ;   movq    %r12, %rdx
 ;   movdqu <offset:1>+0x60(%rsp), %xmm0
 ;   movdqu <offset:1>+0x70(%rsp), %xmm1
-;   movq    128(%rsp), %rbx
-;   movq    136(%rsp), %r12
-;   movq    144(%rsp), %r13
-;   movq    152(%rsp), %r14
-;   movq    160(%rsp), %r15
+;   movq 0x80(%rsp), %rbx
+;   movq 0x88(%rsp), %r12
+;   movq 0x90(%rsp), %r13
+;   movq 0x98(%rsp), %r14
+;   movq 0xa0(%rsp), %r15
 ;   addq $0xb0, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

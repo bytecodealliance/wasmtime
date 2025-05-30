@@ -21,7 +21,7 @@ block0:
 ;   load_ext_name userextname0+0, %rbx
 ;   call    *%rbx
 ;   call    *%rbx
-;   movq    0(%rsp), %rbx
+;   movq (%rsp), %rbx
 ;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

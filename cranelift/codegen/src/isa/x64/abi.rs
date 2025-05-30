@@ -12,6 +12,7 @@ use crate::settings;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
+use cranelift_assembler_x64 as asm;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{SmallVec, smallvec};
 use std::borrow::ToOwned;
@@ -656,10 +657,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             let incoming_args_diff = i32::try_from(incoming_args_diff).unwrap();
 
             // Move the saved frame pointer down by `incoming_args_diff`.
-            insts.push(Inst::mov64_m_r(
-                Amode::imm_reg(incoming_args_diff, regs::rsp()),
-                Writable::from_reg(regs::r11()),
-            ));
+            let addr = Amode::imm_reg(incoming_args_diff, regs::rsp());
+            let r11 = Writable::from_reg(regs::r11());
+            let inst = asm::inst::movq_rm::new(r11, addr).into();
+            insts.push(Inst::External { inst });
             insts.push(Inst::mov_r_m(
                 OperandSize::Size64,
                 regs::r11(),
@@ -667,10 +668,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             ));
 
             // Move the saved return address down by `incoming_args_diff`.
-            insts.push(Inst::mov64_m_r(
-                Amode::imm_reg(incoming_args_diff + 8, regs::rsp()),
-                Writable::from_reg(regs::r11()),
-            ));
+            let addr = Amode::imm_reg(incoming_args_diff + 8, regs::rsp());
+            let r11 = Writable::from_reg(regs::r11());
+            let inst = asm::inst::movq_rm::new(r11, addr).into();
+            insts.push(Inst::External { inst });
             insts.push(Inst::mov_r_m(
                 OperandSize::Size64,
                 regs::r11(),

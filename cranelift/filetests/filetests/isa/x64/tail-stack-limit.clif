@@ -25,8 +25,8 @@ block0(v0: i64, v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8, v8: i128
 ;   jnbe #trap=stk_ovf
 ;   subq $0x10, %rsp
 ; block0:
-;   movq    rbp(stack args max - 16), %rax
-;   movq    rbp(stack args max - 8), %rcx
+;   movq <offset:0>+-0x10(%rbp), %rax
+;   movq <offset:0>+-8(%rbp), %rcx
 ;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

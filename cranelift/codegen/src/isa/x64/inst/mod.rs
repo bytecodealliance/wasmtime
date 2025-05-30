@@ -102,7 +102,6 @@ impl Inst {
             | Inst::LockCmpxchg { .. }
             | Inst::LockXadd { .. }
             | Inst::Xchg { .. }
-            | Inst::Mov64MR { .. }
             | Inst::MovImmM { .. }
             | Inst::MovRM { .. }
             | Inst::MovRR { .. }
@@ -329,14 +328,6 @@ impl Inst {
         Inst::MovsxRmR { ext_mode, src, dst }
     }
 
-    pub(crate) fn mov64_m_r(src: impl Into<SyntheticAmode>, dst: Writable<Reg>) -> Inst {
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Inst::Mov64MR {
-            src: src.into(),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     pub(crate) fn mov_r_m(size: OperandSize, src: Reg, dst: impl Into<SyntheticAmode>) -> Inst {
         debug_assert!(src.class() == RegClass::Int);
         Inst::MovRM {
@@ -460,7 +451,10 @@ impl Inst {
                     }
                 } else {
                     // 64-bit values can be moved directly.
-                    Inst::mov64_m_r(from_addr, to_reg)
+                    let from_addr = asm::GprMem::from(from_addr.into());
+                    Inst::External {
+                        inst: asm::inst::movq_rm::new(to_reg, from_addr).into(),
+                    }
                 }
             }
             RegClass::Float => {
@@ -1142,13 +1136,6 @@ impl PrettyPrint for Inst {
                     let op = ljustify2("movz".to_string(), ext_mode.to_string());
                     format!("{op} {src}, {dst}")
                 }
-            }
-
-            Inst::Mov64MR { src, dst, .. } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let src = src.pretty_print(8);
-                let op = ljustify("movq".to_string());
-                format!("{op} {src}, {dst}")
             }
 
             Inst::LoadEffectiveAddress { addr, dst, size } => {
@@ -1897,10 +1884,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
 
         Inst::MovzxRmR { src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
-        }
-        Inst::Mov64MR { src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
         }

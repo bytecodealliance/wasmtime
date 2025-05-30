@@ -101,10 +101,6 @@
                  (src GprMem)
                  (dst WritableGpr))
 
-       ;; A plain 64-bit integer load, since MovZX_RM_R can't represent that.
-       (Mov64MR (src SyntheticAmode)
-                (dst WritableGpr))
-
        ;; Loads the memory address of addr into dst.
        (LoadEffectiveAddress (addr SyntheticAmode)
                              (dst WritableGpr)
@@ -1772,13 +1768,6 @@
             (_ Unit (emit (MInst.LoadExtName dst extname offset distance))))
         dst))
 
-;; Helper for constructing a Mov64MR instruction.
-(decl mov64_mr (SyntheticAmode) Reg)
-(rule (mov64_mr addr)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.Mov64MR addr dst))))
-        dst))
-
 ;; Helper for emitting `MInst.AluRmRVex` instructions.
 (decl alu_rm_r_vex (Type AluRmROpcode Gpr GprMem) Gpr)
 (rule (alu_rm_r_vex ty opcode src1 src2)
@@ -2200,7 +2189,7 @@
              addr))
 
 (rule 2 (x64_load $I64 addr _ext_kind)
-      (mov64_mr addr))
+      (x64_movq_rm addr))
 
 (rule 2 (x64_load $F32 addr _ext_kind)
       (x64_movss_load addr))
@@ -2223,8 +2212,7 @@
 (decl x64_mov (Amode) Reg)
 (spec (x64_mov addr)
       (provide (= result (conv_to 64 (load_effect (extract 79 64 addr) 64 (extract 63 0 addr))))))
-(rule (x64_mov addr)
-      (mov64_mr addr))
+(rule (x64_mov addr) (x64_movq_rm addr))
 
 (decl x64_movzx (ExtMode GprMem) Gpr)
 (spec (x64_movzx mode src)

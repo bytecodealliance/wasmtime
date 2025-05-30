@@ -180,7 +180,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64):
 ;   movq    %rsp, %rbp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
-;   movq    rbp(stack args max - 8), %rax
+;   movq <offset:0>+-8(%rbp), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -206,8 +206,8 @@ block0(v0: i128, v1: i64, v2: i128, v3: i128):
 ;   movq    %rsp, %rbp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
-;   movq    rbp(stack args max - 24), %rax
-;   movq    rbp(stack args max - 16), %rdx
+;   movq <offset:0>+-0x18(%rbp), %rax
+;   movq <offset:0>+-0x10(%rbp), %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

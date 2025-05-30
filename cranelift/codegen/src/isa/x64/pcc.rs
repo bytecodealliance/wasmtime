@@ -165,11 +165,6 @@ pub(crate) fn check(
             }
         }
 
-        Inst::Mov64MR { ref src, dst } => {
-            check_load(ctx, Some(dst.to_writable_reg()), src, vcode, I64, 64)?;
-            Ok(())
-        }
-
         Inst::LoadEffectiveAddress {
             ref addr,
             dst,
