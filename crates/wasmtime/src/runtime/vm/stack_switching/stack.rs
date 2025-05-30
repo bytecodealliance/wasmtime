@@ -6,7 +6,7 @@
 use anyhow::Result;
 use core::ops::Range;
 
-use crate::runtime::vm::stack_switching::VMArray;
+use crate::runtime::vm::stack_switching::VMHostArray;
 use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
 
 cfg_if::cfg_if! {
@@ -104,7 +104,7 @@ impl VMContinuationStack {
         &self,
         func_ref: *const VMFuncRef,
         caller_vmctx: *mut VMContext,
-        args: *mut VMArray<ValRaw>,
+        args: *mut VMHostArray<ValRaw>,
         parameter_count: u32,
         return_value_count: u32,
     ) {

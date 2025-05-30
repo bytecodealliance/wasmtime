@@ -65,7 +65,7 @@ use std::io;
 use std::ops::Range;
 use std::ptr;
 
-use crate::runtime::vm::stack_switching::VMArray;
+use crate::runtime::vm::stack_switching::VMHostArray;
 use crate::runtime::vm::{VMContext, VMFuncRef, VMOpaqueContext, ValRaw};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -230,7 +230,7 @@ impl VMContinuationStack {
         &self,
         func_ref: *const VMFuncRef,
         caller_vmctx: *mut VMContext,
-        args: *mut VMArray<ValRaw>,
+        args: *mut VMHostArray<ValRaw>,
         parameter_count: u32,
         return_value_count: u32,
     ) {
@@ -270,7 +270,7 @@ impl VMContinuationStack {
                 // Data after the args buffer:
                 (0x28 + s, func_ref as usize),
                 (0x30 + s, caller_vmctx as usize),
-                (0x38 + s, args as *mut VMArray<ValRaw> as usize),
+                (0x38 + s, args as *mut VMHostArray<ValRaw> as usize),
                 (0x40 + s, return_value_count as usize),
             ];
 
@@ -306,7 +306,7 @@ unsafe extern "C" {
 unsafe extern "C" fn fiber_start(
     func_ref: *const VMFuncRef,
     caller_vmctx: *mut VMContext,
-    args: *mut VMArray<ValRaw>,
+    args: *mut VMHostArray<ValRaw>,
     return_value_count: u32,
 ) {
     unsafe {

@@ -215,7 +215,7 @@ impl VMStackLimits {
 #[derive(Debug, Clone)]
 /// Reference to a stack-allocated buffer ("array"), storing data of some type
 /// `T`.
-pub struct VMArray<T> {
+pub struct VMHostArray<T> {
     /// Number of currently occupied slots.
     pub length: u32,
     /// Number of slots in the data buffer. Note that this is *not* the size of
@@ -225,7 +225,7 @@ pub struct VMArray<T> {
     pub data: *mut T,
 }
 
-impl<T> VMArray<T> {
+impl<T> VMHostArray<T> {
     /// Creates empty `Array`
     pub fn empty() -> Self {
         Self {
@@ -252,19 +252,19 @@ fn check_vm_array_offsets() {
     let module = Module::new();
     let offsets = VMOffsets::new(HostPtr, &module);
     assert_eq!(
-        size_of::<VMArray<()>>(),
+        size_of::<VMHostArray<()>>(),
         usize::from(offsets.ptr.size_of_vmarray())
     );
     assert_eq!(
-        offset_of!(VMArray<()>, length),
+        offset_of!(VMHostArray<()>, length),
         usize::from(offsets.ptr.vmarray_length())
     );
     assert_eq!(
-        offset_of!(VMArray<()>, capacity),
+        offset_of!(VMHostArray<()>, capacity),
         usize::from(offsets.ptr.vmarray_capacity())
     );
     assert_eq!(
-        offset_of!(VMArray<()>, data),
+        offset_of!(VMHostArray<()>, data),
         usize::from(offsets.ptr.vmarray_data())
     );
 }
@@ -272,12 +272,12 @@ fn check_vm_array_offsets() {
 /// Type used for passing payloads to and from continuations. The actual type
 /// argument should be wasmtime::runtime::vm::vmcontext::ValRaw, but we don't
 /// have access to that here.
-pub type VMPayloads = VMArray<u128>;
+pub type VMPayloads = VMHostArray<u128>;
 
 /// Type for a list of handlers, represented by the handled tag. Thus, the
 /// stored data is actually `*mut VMTagDefinition`, but we don't havr access to
 /// that here.
-pub type VMHandlerList = VMArray<*mut u8>;
+pub type VMHandlerList = VMHostArray<*mut u8>;
 
 /// The main type representing a continuation.
 #[repr(C)]
@@ -453,7 +453,7 @@ pub fn cont_new(
 
     // The initialization function will allocate the actual args/return value buffer and
     // update this object (if needed).
-    let contref_args_ptr = &mut contref.args as *mut _ as *mut VMArray<crate::ValRaw>;
+    let contref_args_ptr = &mut contref.args as *mut _ as *mut VMHostArray<crate::ValRaw>;
 
     contref.stack.initialize(
         func.cast::<crate::vm::VMFuncRef>(),
