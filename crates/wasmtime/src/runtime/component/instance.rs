@@ -466,7 +466,7 @@ impl InstanceData {
             // investigated if this becomes a performance issue though.
             ExportItem::Name(name) => instance.module().exports[name],
         };
-        instance.get_export_by_index(idx)
+        instance.instance().get_export_by_index(idx)
     }
 
     #[inline]

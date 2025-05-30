@@ -26,8 +26,8 @@ extern "C" {
 typedef struct wasmtime_instance {
   /// Internal identifier of what store this belongs to, never zero.
   uint64_t store_id;
-  /// Internal index within the store.
-  size_t index;
+  /// Private data for use in Wasmtime.
+  size_t __private;
 } wasmtime_instance_t;
 
 /**

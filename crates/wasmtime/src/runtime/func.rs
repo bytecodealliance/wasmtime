@@ -2011,7 +2011,7 @@ for_each_function_signature!(impl_wasm_ty_list);
 /// recommended to use this type.
 pub struct Caller<'a, T: 'static> {
     pub(crate) store: StoreContextMut<'a, T>,
-    caller: &'a crate::runtime::vm::Instance,
+    caller: Instance,
 }
 
 impl<T> Caller<'_, T> {
@@ -2025,13 +2025,14 @@ impl<T> Caller<'_, T> {
     {
         crate::runtime::vm::InstanceAndStore::from_vmctx(caller, |pair| {
             let (instance, mut store) = pair.unpack_context_mut::<T>();
+            let caller = Instance::from_wasmtime(instance.id(), store.0);
 
             let (gc_lifo_scope, ret) = {
                 let gc_lifo_scope = store.0.gc_roots().enter_lifo_scope();
 
                 let ret = f(Caller {
                     store: store.as_context_mut(),
-                    caller: &instance,
+                    caller,
                 });
 
                 (gc_lifo_scope, ret)
@@ -2081,10 +2082,7 @@ impl<T> Caller<'_, T> {
         // back to themselves. If this caller doesn't have that `host_state`
         // then it probably means it was a host-created object like `Func::new`
         // which doesn't have any exports we want to return anyway.
-        self.caller
-            .host_state()
-            .downcast_ref::<Instance>()?
-            .get_export(&mut self.store, name)
+        self.caller.get_export(&mut self.store, name)
     }
 
     /// Looks up an exported [`Extern`] value by a [`ModuleExport`] value.
@@ -2153,10 +2151,7 @@ impl<T> Caller<'_, T> {
     /// # }
     /// ```
     pub fn get_module_export(&mut self, export: &ModuleExport) -> Option<Extern> {
-        self.caller
-            .host_state()
-            .downcast_ref::<Instance>()?
-            .get_module_export(&mut self.store, export)
+        self.caller.get_module_export(&mut self.store, export)
     }
 
     /// Access the underlying data owned by this `Store`.
