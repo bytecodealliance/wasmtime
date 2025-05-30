@@ -3,7 +3,7 @@ use crate::runtime::vm::vmcontext::{
     VMTagDefinition,
 };
 use core::ptr::NonNull;
-use wasmtime_environ::{DefinedMemoryIndex, Global, Memory, Table, Tag};
+use wasmtime_environ::{DefinedMemoryIndex, DefinedTableIndex, Global, Memory, Table, Tag};
 
 /// The value of an export passed from one instance to another.
 pub enum Export {
@@ -54,6 +54,8 @@ pub struct ExportTable {
     pub vmctx: NonNull<VMContext>,
     /// The table declaration, used for compatibility checking.
     pub table: Table,
+    /// The index at which the table is defined within the `vmctx`.
+    pub index: DefinedTableIndex,
 }
 
 // See docs on send/sync for `ExportFunction` above.
