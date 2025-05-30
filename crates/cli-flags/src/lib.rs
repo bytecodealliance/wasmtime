@@ -942,13 +942,6 @@ impl CommonOptions {
             );
         }
 
-        #[cfg(any(feature = "async", feature = "stack-switching"))]
-
-        match_feature! {
-            ["async" : self.wasm.async_stack_size]
-            size => config.async_stack_size(size),
-            _ => err,
-        }
         match_feature! {
             ["async" : self.wasm.async_stack_zeroing]
             enable => config.async_stack_zeroing(enable),
