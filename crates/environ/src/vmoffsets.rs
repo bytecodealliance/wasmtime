@@ -584,7 +584,7 @@ impl<P: PtrSize> VMOffsets<P> {
     }
 }
 
-/// Offsets for `vmtable_import`.
+/// Offsets for `VMTableImport`.
 impl<P: PtrSize> VMOffsets<P> {
     /// The offset of the `from` field.
     #[inline]
@@ -598,7 +598,7 @@ impl<P: PtrSize> VMOffsets<P> {
         1 * self.pointer_size()
     }
 
-    /// Return the size of `vmtable_import`.
+    /// Return the size of `VMTableImport`.
     #[inline]
     pub fn size_of_vmtable_import(&self) -> u8 {
         3 * self.pointer_size()
