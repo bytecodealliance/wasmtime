@@ -10,11 +10,14 @@ use core::ops::{Index, IndexMut};
 // it only as `pub(crate)`. This avoids a ton of
 // crate-private-type-in-public-interface errors that aren't really too
 // interesting to deal with.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct InstanceId(pub(super) usize);
 
 impl InstanceId {
+    pub const INVALID: InstanceId = InstanceId(usize::MAX);
+
     pub fn from_index(idx: usize) -> InstanceId {
+        debug_assert!(idx != Self::INVALID.0);
         InstanceId(idx)
     }
 }

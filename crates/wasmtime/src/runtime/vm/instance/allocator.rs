@@ -6,7 +6,7 @@ use crate::runtime::vm::memory::Memory;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
 use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, VMFuncRef, VMGcRef, VMStore};
-use crate::store::{AutoAssertNoGc, StoreOpaque};
+use crate::store::{AutoAssertNoGc, InstanceId, StoreOpaque};
 use crate::vm::VMGlobalDefinition;
 use core::ptr::NonNull;
 use core::{any::Any, mem, ptr};
@@ -38,6 +38,10 @@ pub use self::pooling::{
 
 /// Represents a request for a new runtime instance.
 pub struct InstanceAllocationRequest<'a> {
+    /// The instance id that this will be assigned within the store once the
+    /// allocation has finished.
+    pub id: InstanceId,
+
     /// The info related to the compiled version of this module,
     /// needed for instantiation: function metadata, JIT code
     /// addresses, precomputed images for lazy memory and table

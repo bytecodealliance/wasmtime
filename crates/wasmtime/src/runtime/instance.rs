@@ -1,10 +1,10 @@
 use crate::linker::{Definition, DefinitionType};
 use crate::prelude::*;
 use crate::runtime::vm::{
-    Imports, InstanceAllocationRequest, ModuleRuntimeInfo, StorePtr, VMFuncRef, VMFunctionImport,
-    VMGlobalImport, VMMemoryImport, VMOpaqueContext, VMTable, VMTagImport,
+    Imports, ModuleRuntimeInfo, VMFuncRef, VMFunctionImport, VMGlobalImport, VMMemoryImport,
+    VMOpaqueContext, VMTable, VMTagImport,
 };
-use crate::store::{InstanceId, StoreOpaque, Stored};
+use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
 use crate::{
     AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, ModuleExport, SharedMemory,
@@ -278,33 +278,12 @@ impl Instance {
         // it's the same later when we do actually insert it.
         let instance_to_be = store.store_data().next_id::<InstanceData>();
 
-        let mut instance_handle =
-            store
-                .engine()
-                .allocator()
-                .allocate_module(InstanceAllocationRequest {
-                    runtime_info: &ModuleRuntimeInfo::Module(module.clone()),
-                    imports,
-                    host_state: Box::new(Instance(instance_to_be)),
-                    store: StorePtr::new(store.traitobj()),
-                    wmemcheck: store.engine().config().wmemcheck,
-                    pkey: store.get_pkey(),
-                    tunables: store.engine().tunables(),
-                })?;
-
-        // The instance still has lots of setup, for example
-        // data/elements/start/etc. This can all fail, but even on failure
-        // the instance may persist some state via previous successful
-        // initialization. For this reason once we have an instance handle
-        // we immediately insert it into the store to keep it alive.
-        //
-        // Note that we `clone` the instance handle just to make easier
-        // working the borrow checker here easier. Technically the `&mut
-        // instance` has somewhat of a borrow on `store` (which
-        // conflicts with the borrow on `store.engine`) but this doesn't
-        // matter in practice since initialization isn't even running any
-        // code here anyway.
-        let id = store.add_instance(instance_handle.clone(), module_id);
+        let id = store.allocate_instance(
+            AllocateInstanceKind::Module(module_id),
+            &ModuleRuntimeInfo::Module(module.clone()),
+            imports,
+            Box::new(Instance(instance_to_be)),
+        )?;
 
         // Additionally, before we start doing fallible instantiation, we
         // do one more step which is to insert an `InstanceData`
@@ -342,7 +321,10 @@ impl Instance {
             .engine()
             .features()
             .contains(WasmFeatures::BULK_MEMORY);
-        instance_handle.initialize(store, compiled_module.module(), bulk_memory)?;
+        store
+            .instance(id)
+            .clone()
+            .initialize(store, compiled_module.module(), bulk_memory)?;
 
         Ok((instance, compiled_module.module().start_func))
     }
