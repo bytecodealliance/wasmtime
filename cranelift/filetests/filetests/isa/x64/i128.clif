@@ -651,7 +651,7 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzbq  %dil, %rax
+;   movzbq %dil, %rax
 ;   uninit  %rdx
 ;   xorq %rdx, %rdx
 ;   movq    %rbp, %rsp
@@ -729,7 +729,7 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzbq  %dil, %rax
+;   movzbq %dil, %rax
 ;   uninit  %rdx
 ;   xorq %rdx, %rdx
 ;   movq    %rbp, %rsp
@@ -1122,14 +1122,14 @@ block2(v8: i128):
 ; block1:
 ;   addq $0x2, %rax
 ;   setb    %cl
-;   movzbq  %cl, %rdx
+;   movzbq %cl, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
 ; block2:
 ;   addq $0x1, %rax
 ;   setb    %cl
-;   movzbq  %cl, %rdx
+;   movzbq %cl, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -2064,7 +2064,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsi, %rax
 ;   addq (%rdi), %rax
 ;   setb    %r8b
-;   movzbq  %r8b, %rdx
+;   movzbq %r8b, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -2213,7 +2213,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rdi, %rax
 ;   addq %rsi, %rax
 ;   setb    %r8b
-;   movzbq  %r8b, %rdx
+;   movzbq %r8b, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

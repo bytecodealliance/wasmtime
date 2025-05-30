@@ -495,7 +495,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzwq  0(%rdi), %rcx
+;   movzwq (%rdi), %rcx
 ;   imulw $0x3fd, %cx, %ax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

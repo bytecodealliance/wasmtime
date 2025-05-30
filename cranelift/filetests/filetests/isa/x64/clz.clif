@@ -133,7 +133,7 @@ block0(v0: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzwq  %di, %rax
+;   movzwq %di, %rax
 ;   movabsq $-1, %rdx
 ;   bsrq %rax, %r10
 ;   cmovzq  %rdx, %r10, %r10
@@ -170,7 +170,7 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzbq  %dil, %rax
+;   movzbq %dil, %rax
 ;   movabsq $-1, %rdx
 ;   bsrq %rax, %r10
 ;   cmovzq  %rdx, %r10, %r10
