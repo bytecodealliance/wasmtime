@@ -804,6 +804,14 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn little_or_native_endian(&mut self, flags: MemFlags) -> Option<MemFlags> {
+            match flags.explicit_endianness() {
+                Some(crate::ir::Endianness::Little) | None => Some(flags),
+                Some(crate::ir::Endianness::Big) => None,
+            }
+        }
+
+        #[inline]
         fn intcc_unsigned(&mut self, x: &IntCC) -> IntCC {
             x.unsigned()
         }

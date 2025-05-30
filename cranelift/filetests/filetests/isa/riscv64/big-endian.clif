@@ -1,0 +1,286 @@
+test compile expect-fail
+set enable_llvm_abi_extensions=true
+target riscv64
+
+;; Technically this could succeed (little- and big-endian treatment of
+;; a single byte is the same) but we have a blanket exclusion on all
+;; big-endian loads/stores for now.
+function %f(i64) -> i8 {
+    block0(v0: i64):
+        v1 = load.i8 big v0+8
+        return v1
+}
+
+function %f(i64) -> i16 {
+    block0(v0: i64):
+        v1 = load.i16 big v0+8
+        return v1
+}
+
+function %f(i64) -> i32 {
+    block0(v0: i64):
+        v1 = load.i32 big v0+8
+        return v1
+}
+
+function %f(i64) -> i64 {
+    block0(v0: i64):
+        v1 = load.i64 big v0+8
+        return v1
+}
+
+function %f(i64) -> i128 {
+    block0(v0: i64):
+        v1 = load.i128 big v0+8
+        return v1
+}
+
+function %f(i64) -> i8x16 {
+    block0(v0: i64):
+        v1 = load.i8x16 big v0+8
+        return v1
+}
+
+function %f(i64) -> i16x8 {
+    block0(v0: i64):
+        v1 = load.i16x8 big v0+8
+        return v1
+}
+
+function %f(i64) -> i32x4 {
+    block0(v0: i64):
+        v1 = load.i32x4 big v0+8
+        return v1
+}
+
+function %f(i64) -> i64x2 {
+    block0(v0: i64):
+        v1 = load.i64x2 big v0+8
+        return v1
+}
+
+function %f(i64) -> f32x4 {
+    block0(v0: i64):
+        v1 = load.f32x4 big v0+8
+        return v1
+}
+
+function %f(i64) -> f64x2 {
+    block0(v0: i64):
+        v1 = load.f64x2 big v0+8
+        return v1
+}
+
+function %f(i64) -> i32 {
+    block0(v0: i64):
+        v1 = uload8.i32 big v0+8
+        return v1
+}
+
+function %f(i64) -> i32 {
+    block0(v0: i64):
+        v1 = sload8.i32 big v0+8
+        return v1
+}
+
+function %f(i64) -> i32 {
+    block0(v0: i64):
+        v1 = uload16.i32 big v0+8
+        return v1
+}
+
+function %f(i64) -> i32 {
+    block0(v0: i64):
+        v1 = sload16.i32 big v0+8
+        return v1
+}
+
+function %f(i64) -> i64 {
+    block0(v0: i64):
+        v1 = uload32.i64 big v0+8
+        return v1
+}
+
+function %f(i64) -> i64 {
+    block0(v0: i64):
+        v1 = sload32.i64 big v0+8
+        return v1
+}
+
+function %f(i64, i8) {
+    block0(v0: i64, v1: i8):
+        store big v1, v0+8
+        return
+}
+
+function %f(i64, i16) {
+    block0(v0: i64, v1: i16):
+        store big v1, v0+8
+        return
+}
+
+function %f(i64, i32) {
+    block0(v0: i64, v1: i32):
+        store big v1, v0+8
+        return
+}
+
+function %f(i64, i64) {
+    block0(v0: i64, v1: i64):
+        store big v1, v0+8
+        return
+}
+
+function %f(i64, i128) {
+    block0(v0: i64, v1: i128):
+        store big v1, v0+8
+        return
+}
+
+function %f(i64, i64) {
+    block0(v0: i64, v1: i64):
+        istore8.i64 big v1, v0+8
+        return
+}
+
+function %f(i64, i64) {
+    block0(v0: i64, v1: i64):
+        istore16.i64 big v1, v0+8
+        return
+}
+
+function %f(i64, i64) {
+    block0(v0: i64, v1: i64):
+        istore32.i64 big v1, v0+8
+        return
+}
+
+function %f(i64, i8x16) {
+    block0(v0: i64, v1: i8x16):
+        store big v1, v0+8
+        return
+}
+
+function %f(i64, i16x8) {
+    block0(v0: i64, v1: i16x8):
+        store big v1, v0+8
+        return
+}
+
+function %f(i64, i32x4) {
+    block0(v0: i64, v1: i32x4):
+        store big v1, v0+8
+        return
+}
+
+function %f(i64, i64x2) {
+    block0(v0: i64, v1: i64x2):
+        store big v1, v0+8
+        return
+}
+
+function %f(i64, f32x4) {
+    block0(v0: i64, v1: f32x4):
+        store big v1, v0+8
+        return
+}
+
+function %f(i64, f64x2) {
+    block0(v0: i64, v1: f64x2):
+        store big v1, v0+8
+        return
+}
+
+function %f(i64) -> i64 {
+    block0(v0: i64):
+        v1 = load.i64 big v0+8
+        v2 = iadd v0, v1
+        return v2
+}
+
+function %f(i64) {
+    block0(v0: i64):
+        v1 = load.i32 big v0+8
+        v2 = iadd_imm v0, 1
+        store v2, v0
+        return
+}
+
+function %f(i64) -> i64 {
+    block0(v0: i64):
+        v1 = atomic_load.i64 big v0
+        return v1
+}
+
+
+function %f(i64, i64) {
+    block0(v0: i64, v1: i64):
+        atomic_store.i64 big v1, v0
+        return
+}
+
+function %f(i64, i64) -> i64 {
+    block0(v0: i64, v1: i64):
+        v2 = atomic_rmw.i64 big add v1, v0
+        return v2
+}
+
+function %f(i64, i64) -> i64 {
+    block0(v0: i64, v1: i64):
+        v2 = atomic_rmw.i64 big sub v1, v0
+        return v2
+}
+
+function %f(i64, i64) -> i64 {
+    block0(v0: i64, v1: i64):
+        v2 = atomic_rmw.i64 big and v1, v0
+        return v2
+}
+
+function %f(i64, i64) -> i64 {
+    block0(v0: i64, v1: i64):
+        v2 = atomic_rmw.i64 big nand v1, v0
+        return v2
+}
+
+function %f(i64, i64) -> i64 {
+    block0(v0: i64, v1: i64):
+        v2 = atomic_rmw.i64 big or v1, v0
+        return v2
+}
+
+function %f(i64, i64) -> i64 {
+    block0(v0: i64, v1: i64):
+        v2 = atomic_rmw.i64 big xor v1, v0
+        return v2
+}
+
+function %f(i64, i64) -> i64 {
+    block0(v0: i64, v1: i64):
+        v2 = atomic_rmw.i64 big xchg v1, v0
+        return v2
+}
+
+function %f(i64, i64) -> i64 {
+    block0(v0: i64, v1: i64):
+        v2 = atomic_rmw.i64 big smin v1, v0
+        return v2
+}
+
+function %f(i64, i64) -> i64 {
+    block0(v0: i64, v1: i64):
+        v2 = atomic_rmw.i64 big umin v1, v0
+        return v2
+}
+
+function %f(i64, i64) -> i64 {
+    block0(v0: i64, v1: i64):
+        v2 = atomic_rmw.i64 big smax v1, v0
+        return v2
+}
+
+function %f(i64, i64) -> i64 {
+    block0(v0: i64, v1: i64):
+        v2 = atomic_rmw.i64 big umax v1, v0
+        return v2
+}

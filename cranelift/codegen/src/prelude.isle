@@ -525,6 +525,10 @@
 (decl pure mem_flags_trusted () MemFlags)
 (extern constructor mem_flags_trusted mem_flags_trusted)
 
+;; Determine if flags specify little- or native-endian.
+(decl little_or_native_endian (MemFlags) MemFlags)
+(extern extractor little_or_native_endian little_or_native_endian)
+
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Swap args of an IntCC flag.
