@@ -337,7 +337,6 @@ impl VMContRef {
 
     /// This is effectively a `Default` implementation, without calling it
     /// so. Used to create `VMContRef`s when initializing pooling allocator.
-    #[allow(clippy::cast_possible_truncation)]
     pub fn empty() -> Self {
         let limits = VMStackLimits::with_stack_limit(Default::default());
         let state = VMStackState::Fresh;
