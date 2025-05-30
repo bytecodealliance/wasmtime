@@ -8,7 +8,7 @@ use core::ops::Range;
 use object::SectionFlags;
 use object::endian::Endianness;
 use object::read::{Object, ObjectSection, elf::ElfFile64};
-use wasmtime_environ::{Trap, lookup_trap_code, obj};
+use wasmtime_environ::obj;
 
 /// Management of executable memory within a `MmapVec`
 ///
@@ -417,12 +417,6 @@ impl CodeMemory {
         let reg = crate::runtime::vm::GdbJitImageRegistration::register(bytes);
         self.debug_registration = Some(reg);
         Ok(())
-    }
-
-    /// Looks up the given offset within this module's text section and returns
-    /// the trap code associated with that instruction, if there is one.
-    pub fn lookup_trap_code(&self, text_offset: usize) -> Option<Trap> {
-        lookup_trap_code(self.trap_data(), text_offset)
     }
 }
 
