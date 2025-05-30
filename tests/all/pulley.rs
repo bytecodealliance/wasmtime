@@ -1,5 +1,7 @@
 use anyhow::Result;
-use wasmtime::{Config, Engine, Func, FuncType, Instance, Module, Store, Trap, Val, ValType};
+use wasmtime::{
+    Caller, Config, Engine, Func, FuncType, Instance, Module, Store, Trap, Val, ValType,
+};
 use wasmtime_environ::TripleExt;
 
 fn pulley_target() -> String {
@@ -169,6 +171,14 @@ fn pulley_provenance_test() -> Result<()> {
     instance
         .get_typed_func::<(), ()>(&mut store, "table-intrinsics")?
         .call(&mut store, ())?;
+
+    let funcref = Func::wrap(&mut store, move |mut caller: Caller<'_, ()>| {
+        let func = instance.get_typed_func::<(), (i32, i32, i32)>(&mut caller, "call-wasm")?;
+        func.call(&mut caller, ())
+    });
+    let func = instance.get_typed_func::<Func, (i32, i32, i32)>(&mut store, "call_ref-wasm")?;
+    let results = func.call(&mut store, funcref)?;
+    assert_eq!(results, (1, 2, 3));
 
     Ok(())
 }

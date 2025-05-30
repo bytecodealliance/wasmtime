@@ -1,9 +1,9 @@
-use crate::prelude::*;
 use crate::runtime::vm::vmcontext::VMArrayCallNative;
 use crate::runtime::vm::{
-    TrapRegisters, TrapTest, VMContext, VMOpaqueContext, f32x4, f64x2, i8x16, tls,
+    StoreBox, TrapRegisters, TrapTest, VMContext, VMOpaqueContext, f32x4, f64x2, i8x16, tls,
 };
 use crate::{Engine, ValRaw};
+use core::marker;
 use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
 use pulley_interpreter::{FReg, Reg, XReg};
@@ -12,17 +12,47 @@ use wasmtime_environ::{BuiltinFunctionIndex, HostCall, Trap};
 /// Interpreter state stored within a `Store<T>`.
 #[repr(transparent)]
 pub struct Interpreter {
-    /// Pulley VM state, stored behind a `Box<T>` to make the storage in
-    /// `Store<T>` only pointer-sized (that way if you enable pulley but don't
-    /// use it it's low-overhead).
-    pulley: Box<Vm>,
+    /// Pulley VM state, stored in a `StoreBox<T>`.
+    ///
+    /// This representation has a dual purpose of (a) having a low overhead if
+    /// pulley is disabled (just a null pointer) and (b) enabling safe access to
+    /// the `Vm` in the face of recursive calls.
+    ///
+    /// For (b) that's the most tricky part of this, but the basic problem looks
+    /// like:
+    ///
+    /// * The host initially executes some WebAssembly.
+    /// * This acquires a `&mut Vm` and does some execution.
+    /// * The WebAssembly then invokes the host.
+    /// * This bottoms out in `CallIndirectHost` which means that we'll do a
+    ///   dynamic dispatch to a function pointer in pulley registers.
+    /// * The function we call gets unfettered access to `StoreContextMut<T>`
+    /// * When the function returns our original `&mut Vm` pointer is
+    ///   invalidated, so it has to be re-acquired.
+    ///
+    /// The usage of `StoreBox` here solves this conundrum by storing the
+    /// `InterpreterRef` at-rest as a `NonNull<Vm>` as opposed to a `&mut Vm`.
+    /// This is required to model how after a host call the VM state must be
+    /// re-acquire from store state to re-assert that it has an exclusive
+    /// borrow.
+    ///
+    /// This in turn models how VM state could be modified as part of the
+    /// recursive function call, for example with another VM execution itself.
+    ///
+    /// Note that the safety of this all relies not only on correctly managing
+    /// this pointer but it also requires that this pointer is never
+    /// deallocated while an `InterpreterRef` is live. The `InterpreterRef` type
+    /// carries a borrow of this type to ensure this isn't dropped
+    /// independently, and then this file never overwrites this private field to
+    /// otherwise guarantee this.
+    pulley: StoreBox<Vm>,
 }
 
 impl Interpreter {
     /// Creates a new interpreter ready to interpret code.
     pub fn new(engine: &Engine) -> Interpreter {
         let ret = Interpreter {
-            pulley: Box::new(Vm::with_stack(engine.config().max_wasm_stack)),
+            pulley: StoreBox::new(Vm::with_stack(engine.config().max_wasm_stack)),
         };
         engine.profiler().register_interpreter(&ret);
         ret
@@ -31,18 +61,24 @@ impl Interpreter {
     /// Returns the `InterpreterRef` structure which can be used to actually
     /// execute interpreted code.
     pub fn as_interpreter_ref(&mut self) -> InterpreterRef<'_> {
-        InterpreterRef(&mut self.pulley)
+        InterpreterRef {
+            vm: self.pulley.get(),
+            _phantom: marker::PhantomData,
+        }
     }
 
     pub fn pulley(&self) -> &Vm {
-        &self.pulley
+        unsafe { self.pulley.get().as_ref() }
     }
 }
 
 /// Wrapper around `&mut pulley_interpreter::Vm` to enable compiling this to a
 /// zero-sized structure when pulley is disabled at compile time.
 #[repr(transparent)]
-pub struct InterpreterRef<'a>(&'a mut Vm);
+pub struct InterpreterRef<'a> {
+    vm: NonNull<Vm>,
+    _phantom: marker::PhantomData<&'a mut Vm>,
+}
 
 /// Equivalent of a native platform's `jmp_buf` (sort of).
 ///
@@ -79,6 +115,34 @@ struct Setjmp {
 }
 
 impl InterpreterRef<'_> {
+    fn vm(&mut self) -> &mut Vm {
+        // SAFETY: This is a bit of a tricky code. The safety here is isolated
+        // to this file, but not isolated to just this function call.
+        //
+        // An `InterpreterRef` guarantees that we have a pointer to a `Vm`, and
+        // that pointer originates from a `StoreBox<VM>` in the store itself.
+        // One level of safety here relies on that never being deallocated or
+        // overwritten, which this file upholds as it's a private field only
+        // this module can acccess.
+        //
+        // Another aspect upheld by `InterpreterRef` is that it transfers, to
+        // the compiler, a mutable borrow of the store (e.g `struct Interpreter`
+        // above) to this reference. While this doesn't actually hold such a
+        // lifetime-bound pointer it guarantees that only one of these can be
+        // active at a time per interpreter.
+        //
+        // Finally the lifetime of the returned `Vm` is bound to `self` which
+        // ensures that there is at most one per `InterpreterRef`.
+        //
+        // All put together this should allow at most one `&mut Vm` per-store,
+        // which is one guarantee we need for this to be safe.
+        //
+        // Otherwise this is then done to represent how across host function
+        // calls the interpreter needs to be re-borrowed as the state may have
+        // changed as part of the dynamic host call.
+        unsafe { self.vm.as_mut() }
+    }
+
     /// Invokes interpreted code.
     ///
     /// The `bytecode` pointer should previously have been produced by Cranelift
@@ -99,24 +163,26 @@ impl InterpreterRef<'_> {
             XRegVal::new_u64(args_and_results.len() as u64).into(),
         ];
 
+        let mut vm = self.vm();
+
         // Fake a "poor man's setjmp" for now by saving some critical context to
         // get restored when a trap happens. This pseudo-implements the stack
         // unwinding necessary for a trap.
         //
         // See more comments in `trap` below about how this isn't actually
         // correct as it's not saving all callee-save state.
-        let setjmp = self.setjmp();
+        let setjmp = setjmp(vm);
 
-        let old_lr = self.0.call_start(&args);
+        let old_lr = vm.call_start(&args);
 
         // Run the interpreter as much as possible until it finishes, and then
         // handle each finish condition differently.
         let ret = loop {
-            match self.0.call_run(bytecode) {
+            match vm.call_run(bytecode) {
                 // If the VM returned entirely then read the return value and
                 // return that (it indicates whether a trap happened or not.
                 DoneReason::ReturnToHost(()) => {
-                    match self.0.call_end(old_lr, [RegType::XReg]).next().unwrap() {
+                    match vm.call_end(old_lr, [RegType::XReg]).next().unwrap() {
                         #[allow(
                             clippy::cast_possible_truncation,
                             reason = "intentionally reading the lower bits only"
@@ -133,16 +199,16 @@ impl InterpreterRef<'_> {
                 // longjmp/setjmp is handled differently than on the host.
                 DoneReason::CallIndirectHost { id, resume } => {
                     if u32::from(id) == HostCall::Builtin(BuiltinFunctionIndex::raise()).index() {
-                        self.longjmp(setjmp);
+                        longjmp(vm, setjmp);
                         break false;
                     } else {
-                        self.call_indirect_host(id);
+                        vm = self.call_indirect_host(id);
                         bytecode = resume;
                     }
                 }
                 // If the VM trapped then process that here and return `false`.
                 DoneReason::Trap { pc, kind } => {
-                    self.trap(pc, kind, setjmp);
+                    trap(vm, pc, kind, setjmp);
                     break false;
                 }
             }
@@ -150,96 +216,15 @@ impl InterpreterRef<'_> {
 
         if cfg!(debug_assertions) {
             for (i, reg) in callee_save_xregs() {
-                assert!(self.0[reg].get_u64() == setjmp.xregs[i]);
+                assert!(vm[reg].get_u64() == setjmp.xregs[i]);
             }
             for (i, reg) in callee_save_fregs() {
-                assert!(self.0[reg].get_f64().to_bits() == setjmp.fregs[i].to_bits());
+                assert!(vm[reg].get_f64().to_bits() == setjmp.fregs[i].to_bits());
             }
-            assert!(self.0.fp() == setjmp.fp);
-            assert!(self.0.lr() == setjmp.lr);
+            assert!(vm.fp() == setjmp.fp);
+            assert!(vm.lr() == setjmp.lr);
         }
         ret
-    }
-
-    /// Handles an interpreter trap. This will initialize the trap state stored
-    /// in TLS via the `test_if_trap` helper below by reading the pc/fp of the
-    /// interpreter and seeing if that's a valid opcode to trap at.
-    fn trap(&mut self, pc: NonNull<u8>, kind: Option<TrapKind>, setjmp: Setjmp) {
-        let regs = TrapRegisters {
-            pc: pc.as_ptr() as usize,
-            fp: self.0.fp() as usize,
-        };
-        tls::with(|s| {
-            let s = s.unwrap();
-            match kind {
-                Some(kind) => {
-                    let trap = match kind {
-                        TrapKind::IntegerOverflow => Trap::IntegerOverflow,
-                        TrapKind::DivideByZero => Trap::IntegerDivisionByZero,
-                        TrapKind::BadConversionToInteger => Trap::BadConversionToInteger,
-                        TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds,
-                        TrapKind::DisabledOpcode => Trap::DisabledOpcode,
-                    };
-                    s.set_jit_trap(regs, None, trap);
-                }
-                None => {
-                    match s.test_if_trap(regs, None, |_| false) {
-                        // This shouldn't be possible, so this is a fatal error
-                        // if it happens.
-                        TrapTest::NotWasm => {
-                            panic!("pulley trap at {pc:?} without trap code registered")
-                        }
-
-                        // Not possible with our closure above returning `false`.
-                        #[cfg(has_host_compiler_backend)]
-                        TrapTest::HandledByEmbedder => unreachable!(),
-
-                        // Trap was handled, yay! We don't use `jmp_buf`.
-                        TrapTest::Trap { .. } => {}
-                    }
-                }
-            }
-        });
-
-        self.longjmp(setjmp);
-    }
-
-    fn setjmp(&self) -> Setjmp {
-        let mut xregs = [0; 16];
-        let mut fregs = [0.0; 16];
-        for (i, reg) in callee_save_xregs() {
-            xregs[i] = self.0[reg].get_u64();
-        }
-        for (i, reg) in callee_save_fregs() {
-            fregs[i] = self.0[reg].get_f64();
-        }
-        Setjmp {
-            xregs,
-            fregs,
-            fp: self.0.fp(),
-            lr: self.0.lr(),
-        }
-    }
-
-    /// Perform a "longjmp" by restoring the "setjmp" context saved when this
-    /// started.
-    fn longjmp(&mut self, setjmp: Setjmp) {
-        let Setjmp {
-            xregs,
-            fregs,
-            fp,
-            lr,
-        } = setjmp;
-        unsafe {
-            for (i, reg) in callee_save_xregs() {
-                self.0[reg].set_u64(xregs[i]);
-            }
-            for (i, reg) in callee_save_fregs() {
-                self.0[reg].set_f64(fregs[i]);
-            }
-            self.0.set_fp(fp);
-            self.0.set_lr(lr);
-        }
     }
 
     /// Handles the `call_indirect_host` instruction, dispatching the `sig`
@@ -254,9 +239,9 @@ impl InterpreterRef<'_> {
         not(feature = "component-model"),
         expect(unused_macro_rules, reason = "macro-code")
     )]
-    unsafe fn call_indirect_host(&mut self, id: u8) {
+    unsafe fn call_indirect_host(&mut self, id: u8) -> &mut Vm {
         let id = u32::from(id);
-        let fnptr = self.0[XReg::x0].get_ptr();
+        let fnptr = self.vm()[XReg::x0].get_ptr();
         let mut arg_reg = 1;
 
         /// Helper macro to invoke a builtin.
@@ -278,32 +263,36 @@ impl InterpreterRef<'_> {
                 call!(@host T($($param),*) $(-> $result)?);
             }};
             (@host $ty:ident($($param:ident),*) $(-> $result:ident)?) => {{
-                // Convert the pointer from pulley to a native function pointer.
-                union GetNative {
-                    fnptr: *mut u8,
-                    host: $ty,
-                }
-                let host = GetNative { fnptr }.host;
 
                 // Decode each argument according to this macro, pulling
                 // arguments from successive registers.
-                let ret = host($({
-                    let reg = XReg::new(arg_reg).unwrap();
-                    arg_reg += 1;
-                    call!(@get $param reg)
-                }),*);
+                let ret = {
+                    let mut vm = self.vm();
+                    // Convert the pointer from pulley to a native function pointer.
+                    union GetNative {
+                        fnptr: *mut u8,
+                        host: $ty,
+                    }
+                    let host = GetNative { fnptr }.host;
+                    host($({
+                        let reg = XReg::new(arg_reg).unwrap();
+                        arg_reg += 1;
+                        call!(@get $param vm[reg])
+                    }),*)
+                };
                 let _ = arg_reg; // silence last dead arg_reg increment warning
+
+                let vm = self.vm();
 
                 // Store the return value, if one is here, in x0.
                 $(
-                    let dst = XReg::x0;
-                    call!(@set $result dst ret);
+                    call!(@set $result ret => vm[XReg::x0]);
                 )?
                 let _ = ret; // silence warning if no return value
 
                 // Return from the outer `call_indirect_host` host function as
                 // it's been processed.
-                return;
+                return vm;
             }};
 
             // Conversion from macro-defined types to Rust host types.
@@ -327,35 +316,35 @@ impl InterpreterRef<'_> {
 
             // Conversion from a pulley register value to the macro-defined
             // type.
-            (@get u8 $reg:ident) => (self.0[$reg].get_i32() as u8);
-            (@get u32 $reg:ident) => (self.0[$reg].get_u32());
-            (@get u64 $reg:ident) => (self.0[$reg].get_u64());
-            (@get f32 $reg:ident) => (unreachable::<f32, _>($reg));
-            (@get f64 $reg:ident) => (unreachable::<f64, _>($reg));
-            (@get i8x16 $reg:ident) => (unreachable::<i8x16, _>($reg));
-            (@get f32x4 $reg:ident) => (unreachable::<f32x4, _>($reg));
-            (@get f64x2 $reg:ident) => (unreachable::<f64x2, _>($reg));
-            (@get vmctx $reg:ident) => (self.0[$reg].get_ptr());
-            (@get pointer $reg:ident) => (self.0[$reg].get_ptr());
-            (@get ptr $reg:ident) => (self.0[$reg].get_ptr());
-            (@get nonnull $reg:ident) => (NonNull::new(self.0[$reg].get_ptr()).unwrap());
-            (@get ptr_u8 $reg:ident) => (self.0[$reg].get_ptr());
-            (@get ptr_u16 $reg:ident) => (self.0[$reg].get_ptr());
-            (@get ptr_size $reg:ident) => (self.0[$reg].get_ptr());
-            (@get size $reg:ident) => (self.0[$reg].get_ptr::<u8>() as usize);
+            (@get u8 $reg:expr) => ($reg.get_i32() as u8);
+            (@get u32 $reg:expr) => ($reg.get_u32());
+            (@get u64 $reg:expr) => ($reg.get_u64());
+            (@get f32 $reg:expr) => (unreachable::<f32, _>($reg));
+            (@get f64 $reg:expr) => (unreachable::<f64, _>($reg));
+            (@get i8x16 $reg:expr) => (unreachable::<i8x16, _>($reg));
+            (@get f32x4 $reg:expr) => (unreachable::<f32x4, _>($reg));
+            (@get f64x2 $reg:expr) => (unreachable::<f64x2, _>($reg));
+            (@get vmctx $reg:expr) => ($reg.get_ptr());
+            (@get pointer $reg:expr) => ($reg.get_ptr());
+            (@get ptr $reg:expr) => ($reg.get_ptr());
+            (@get nonnull $reg:expr) => (NonNull::new($reg.get_ptr()).unwrap());
+            (@get ptr_u8 $reg:expr) => ($reg.get_ptr());
+            (@get ptr_u16 $reg:expr) => ($reg.get_ptr());
+            (@get ptr_size $reg:expr) => ($reg.get_ptr());
+            (@get size $reg:expr) => ($reg.get_ptr::<u8>() as usize);
 
             // Conversion from a Rust value back into a macro-defined type,
             // stored in a pulley register.
-            (@set bool $reg:ident $val:ident) => (self.0[$reg].set_i32(i32::from($val)));
-            (@set u32 $reg:ident $val:ident) => (self.0[$reg].set_u32($val));
-            (@set u64 $reg:ident $val:ident) => (self.0[$reg].set_u64($val));
-            (@set f32 $reg:ident $val:ident) => (unreachable::<f32, _>(($reg, $val)));
-            (@set f64 $reg:ident $val:ident) => (unreachable::<f64, _>(($reg, $val)));
-            (@set i8x16 $reg:ident $val:ident) => (unreachable::<i8x16, _>(($reg, $val)));
-            (@set f32x4 $reg:ident $val:ident) => (unreachable::<f32x4, _>(($reg, $val)));
-            (@set f64x2 $reg:ident $val:ident) => (unreachable::<f64x2, _>(($reg, $val)));
-            (@set pointer $reg:ident $val:ident) => (self.0[$reg].set_ptr($val));
-            (@set size $reg:ident $val:ident) => (self.0[$reg].set_ptr($val as *mut u8));
+            (@set bool $src:expr => $dst:expr) => ($dst.set_i32(i32::from($src)));
+            (@set u32 $src:expr => $dst:expr) => ($dst.set_u32($src));
+            (@set u64 $src:expr => $dst:expr) => ($dst.set_u64($src));
+            (@set f32 $src:expr => $dst:expr) => (unreachable::<f32, _>(($dst, $src)));
+            (@set f64 $src:expr => $dst:expr) => (unreachable::<f64, _>(($dst, $src)));
+            (@set i8x16 $src:expr => $dst:expr) => (unreachable::<i8x16, _>(($dst, $src)));
+            (@set f32x4 $src:expr => $dst:expr) => (unreachable::<f32x4, _>(($dst, $src)));
+            (@set f64x2 $src:expr => $dst:expr) => (unreachable::<f64x2, _>(($dst, $src)));
+            (@set pointer $src:expr => $dst:expr) => ($dst.set_ptr($src));
+            (@set size $src:expr => $dst:expr) => ($dst.set_ptr($src as *mut u8));
         }
 
         // With the helper macro above structure this into:
@@ -427,6 +416,87 @@ impl InterpreterRef<'_> {
         fn unreachable<T, U>(_: U) -> T {
             unreachable!()
         }
+    }
+}
+
+/// Handles an interpreter trap. This will initialize the trap state stored
+/// in TLS via the `test_if_trap` helper below by reading the pc/fp of the
+/// interpreter and seeing if that's a valid opcode to trap at.
+fn trap(vm: &mut Vm, pc: NonNull<u8>, kind: Option<TrapKind>, setjmp: Setjmp) {
+    let regs = TrapRegisters {
+        pc: pc.as_ptr() as usize,
+        fp: vm.fp() as usize,
+    };
+    tls::with(|s| {
+        let s = s.unwrap();
+        match kind {
+            Some(kind) => {
+                let trap = match kind {
+                    TrapKind::IntegerOverflow => Trap::IntegerOverflow,
+                    TrapKind::DivideByZero => Trap::IntegerDivisionByZero,
+                    TrapKind::BadConversionToInteger => Trap::BadConversionToInteger,
+                    TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds,
+                    TrapKind::DisabledOpcode => Trap::DisabledOpcode,
+                };
+                s.set_jit_trap(regs, None, trap);
+            }
+            None => {
+                match s.test_if_trap(regs, None, |_| false) {
+                    // This shouldn't be possible, so this is a fatal error
+                    // if it happens.
+                    TrapTest::NotWasm => {
+                        panic!("pulley trap at {pc:?} without trap code registered")
+                    }
+
+                    // Not possible with our closure above returning `false`.
+                    #[cfg(has_host_compiler_backend)]
+                    TrapTest::HandledByEmbedder => unreachable!(),
+
+                    // Trap was handled, yay! We don't use `jmp_buf`.
+                    TrapTest::Trap { .. } => {}
+                }
+            }
+        }
+    });
+
+    longjmp(vm, setjmp);
+}
+
+fn setjmp(vm: &Vm) -> Setjmp {
+    let mut xregs = [0; 16];
+    let mut fregs = [0.0; 16];
+    for (i, reg) in callee_save_xregs() {
+        xregs[i] = vm[reg].get_u64();
+    }
+    for (i, reg) in callee_save_fregs() {
+        fregs[i] = vm[reg].get_f64();
+    }
+    Setjmp {
+        xregs,
+        fregs,
+        fp: vm.fp(),
+        lr: vm.lr(),
+    }
+}
+
+/// Perform a "longjmp" by restoring the "setjmp" context saved when this
+/// started.
+fn longjmp(vm: &mut Vm, setjmp: Setjmp) {
+    let Setjmp {
+        xregs,
+        fregs,
+        fp,
+        lr,
+    } = setjmp;
+    unsafe {
+        for (i, reg) in callee_save_xregs() {
+            vm[reg].set_u64(xregs[i]);
+        }
+        for (i, reg) in callee_save_fregs() {
+            vm[reg].set_f64(fregs[i]);
+        }
+        vm.set_fp(fp);
+        vm.set_lr(lr);
     }
 }
 
