@@ -156,7 +156,7 @@ impl VMContinuationStack {
     }
 
     pub fn range(&self) -> Option<Range<usize>> {
-        let base = unsafe { self.top.sub(self.len) as usize };
+        let base = unsafe { self.top.sub(self.len).addr() };
         Some(base..base + self.len)
     }
 
@@ -164,7 +164,7 @@ impl VMContinuationStack {
         // See picture at top of this file:
         // RIP is stored 8 bytes below top of stack.
         unsafe {
-            let ptr = self.top.sub(8) as *mut usize;
+            let ptr = self.top.sub(8).cast::<usize>();
             *ptr
         }
     }
@@ -173,7 +173,7 @@ impl VMContinuationStack {
         // See picture at top of this file:
         // RBP is stored 16 bytes below top of stack.
         unsafe {
-            let ptr = self.top.sub(16) as *mut usize;
+            let ptr = self.top.sub(16).cast::<usize>();
             *ptr
         }
     }
@@ -182,7 +182,7 @@ impl VMContinuationStack {
         // See picture at top of this file:
         // RSP is stored 24 bytes below top of stack.
         unsafe {
-            let ptr = self.top.sub(24) as *mut usize;
+            let ptr = self.top.sub(24).cast::<usize>();
             *ptr
         }
     }
@@ -238,40 +238,41 @@ impl VMContinuationStack {
 
         unsafe {
             let store = |tos_neg_offset, value| {
-                let target = tos.sub(tos_neg_offset) as *mut usize;
+                let target = tos.sub(tos_neg_offset).cast::<usize>();
                 target.write(value)
             };
 
-            let args = &mut *args;
+            let args_ref = &mut *args;
             let args_capacity = std::cmp::max(parameter_count, return_value_count);
             // The args object must currently be empty.
-            debug_assert_eq!(args.capacity, 0);
-            debug_assert_eq!(args.length, 0);
+            debug_assert_eq!(args_ref.capacity, 0);
+            debug_assert_eq!(args_ref.length, 0);
 
-            // The size of the args buffer
-            let s = args_capacity as usize * std::mem::size_of::<ValRaw>();
-
-            // The actual pointer to the buffer
+            let args_data_size =
+                usize::try_from(args_capacity).unwrap() * std::mem::size_of::<ValRaw>();
             let args_data_ptr = if args_capacity == 0 {
-                0
+                ptr::null_mut()
             } else {
-                tos as usize - 0x20 - s
+                tos.sub(0x20 + args_data_size)
             };
 
-            args.capacity = args_capacity;
-            args.data = args_data_ptr as *mut ValRaw;
+            args_ref.capacity = args_capacity;
+            args_ref.data = args_data_ptr.cast::<ValRaw>();
 
             let to_store = [
                 // Data near top of stack:
                 (0x08, wasmtime_continuation_start as usize),
-                (0x10, tos.sub(0x10) as usize),
-                (0x18, tos.sub(0x40 + s) as usize),
-                (0x20, args_capacity as usize),
+                (0x10, tos.sub(0x10).addr()),
+                (0x18, tos.sub(0x40 + args_data_size).addr()),
+                (0x20, usize::try_from(args_capacity).unwrap()),
                 // Data after the args buffer:
-                (0x28 + s, func_ref as usize),
-                (0x30 + s, caller_vmctx as usize),
-                (0x38 + s, args as *mut VMHostArray<ValRaw> as usize),
-                (0x40 + s, return_value_count as usize),
+                (0x28 + args_data_size, func_ref.addr()),
+                (0x30 + args_data_size, caller_vmctx.addr()),
+                (0x38 + args_data_size, args.addr()),
+                (
+                    0x40 + args_data_size,
+                    usize::try_from(return_value_count).unwrap(),
+                ),
             ];
 
             for (offset, data) in to_store {
@@ -316,7 +317,8 @@ unsafe extern "C" fn fiber_start(
         let params_and_returns: NonNull<[ValRaw]> = if args.capacity == 0 {
             NonNull::from(&[])
         } else {
-            std::slice::from_raw_parts_mut(args.data, args.capacity as usize).into()
+            std::slice::from_raw_parts_mut(args.data, usize::try_from(args.capacity).unwrap())
+                .into()
         };
 
         // NOTE(frank-emrich) The usage of the `caller_vmctx` is probably not
