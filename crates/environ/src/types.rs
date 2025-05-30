@@ -232,6 +232,16 @@ impl WasmValType {
             size => panic!("invalid int bits for WasmValType: {size}"),
         }
     }
+
+    /// Returns the contained reference type.
+    ///
+    /// Panics if the value type is not a vmgcref
+    pub fn unwrap_ref_type(&self) -> WasmRefType {
+        match self {
+            WasmValType::Ref(ref_type) => *ref_type,
+            _ => panic!("Called WasmValType::unwrap_ref_type on non-reference type"),
+        }
+    }
 }
 
 /// WebAssembly reference type -- equivalent of `wasmparser`'s RefType
@@ -800,6 +810,15 @@ impl WasmContType {
     /// Constructs a new continuation type.
     pub fn new(idx: EngineOrModuleTypeIndex) -> Self {
         WasmContType(idx)
+    }
+
+    /// Returns the (module interned) index to the underlying function type.
+    pub fn unwrap_module_type_index(self) -> ModuleInternedTypeIndex {
+        match self.0 {
+            EngineOrModuleTypeIndex::Engine(_) => panic!("not module interned"),
+            EngineOrModuleTypeIndex::Module(idx) => idx,
+            EngineOrModuleTypeIndex::RecGroup(_) => todo!(),
+        }
     }
 }
 
@@ -2239,11 +2258,9 @@ pub trait TypeConvert {
                 wasmparser::AbstractHeapType::Array => WasmHeapType::Array,
                 wasmparser::AbstractHeapType::Struct => WasmHeapType::Struct,
                 wasmparser::AbstractHeapType::None => WasmHeapType::None,
-
-                wasmparser::AbstractHeapType::Exn
-                | wasmparser::AbstractHeapType::NoExn
-                | wasmparser::AbstractHeapType::Cont
-                | wasmparser::AbstractHeapType::NoCont => {
+                wasmparser::AbstractHeapType::Cont => WasmHeapType::Cont,
+                wasmparser::AbstractHeapType::NoCont => WasmHeapType::NoCont,
+                wasmparser::AbstractHeapType::Exn | wasmparser::AbstractHeapType::NoExn => {
                     return Err(wasm_unsupported!("unsupported heap type {ty:?}"));
                 }
             },

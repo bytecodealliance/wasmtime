@@ -934,7 +934,7 @@ impl TypeRegistryInner {
                     .struct_layout(s)
                     .into(),
             ),
-            wasmtime_environ::WasmCompositeInnerType::Cont(_) => todo!(), // FIXME: #10248 stack switching support.
+            wasmtime_environ::WasmCompositeInnerType::Cont(_) => None, // FIXME: #10248 stack switching support.
         };
 
         // Add the type to our slab.

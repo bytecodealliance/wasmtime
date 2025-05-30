@@ -147,7 +147,7 @@ pub struct Config {
     pub(crate) wasm_backtrace: bool,
     pub(crate) wasm_backtrace_details_env_used: bool,
     pub(crate) native_unwind_info: Option<bool>,
-    #[cfg(feature = "async")]
+    #[cfg(any(feature = "async", feature = "stack-switching"))]
     pub(crate) async_stack_size: usize,
     #[cfg(feature = "async")]
     pub(crate) async_stack_zeroing: bool,
@@ -252,7 +252,7 @@ impl Config {
             native_unwind_info: None,
             enabled_features: WasmFeatures::empty(),
             disabled_features: WasmFeatures::empty(),
-            #[cfg(feature = "async")]
+            #[cfg(any(feature = "async", feature = "stack-switching"))]
             async_stack_size: 2 << 20,
             #[cfg(feature = "async")]
             async_stack_zeroing: false,
@@ -736,7 +736,7 @@ impl Config {
     ///
     /// The `Engine::new` method will fail if the value for this option is
     /// smaller than the [`Config::max_wasm_stack`] option.
-    #[cfg(feature = "async")]
+    #[cfg(any(feature = "async", feature = "stack-switching"))]
     pub fn async_stack_size(&mut self, size: usize) -> &mut Self {
         self.async_stack_size = size;
         self
@@ -2040,10 +2040,31 @@ impl Config {
                 // Pulley at this time fundamentally doesn't support the
                 // `threads` proposal, notably shared memory, because Rust can't
                 // safely implement loads/stores in the face of shared memory.
+                // Stack switching is not implemented, either.
                 if self.compiler_target().is_pulley() {
                     unsupported |= WasmFeatures::THREADS;
+                    unsupported |= WasmFeatures::STACK_SWITCHING;
                 }
 
+                use target_lexicon::*;
+                match self.compiler_target() {
+                    Triple {
+                        architecture: Architecture::X86_64 | Architecture::X86_64h,
+                        operating_system:
+                            OperatingSystem::Linux
+                            | OperatingSystem::MacOSX(_)
+                            | OperatingSystem::Darwin(_),
+                        ..
+                    } => {
+                        // Stack switching supported on (non-Pulley) Cranelift.
+                    }
+
+                    _ => {
+                        // On platforms other than x64 Unix-like, we don't
+                        // support stack switching.
+                        unsupported |= WasmFeatures::STACK_SWITCHING;
+                    }
+                }
                 unsupported
             }
             Some(Strategy::Winch) => {
@@ -2053,7 +2074,8 @@ impl Config {
                     | WasmFeatures::TAIL_CALL
                     | WasmFeatures::GC_TYPES
                     | WasmFeatures::EXCEPTIONS
-                    | WasmFeatures::LEGACY_EXCEPTIONS;
+                    | WasmFeatures::LEGACY_EXCEPTIONS
+                    | WasmFeatures::STACK_SWITCHING;
                 match self.compiler_target().architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
                         unsupported |= WasmFeatures::SIMD;
@@ -2164,7 +2186,7 @@ impl Config {
             panic!("should have returned an error by now")
         }
 
-        #[cfg(feature = "async")]
+        #[cfg(any(feature = "async", feature = "stack-switching"))]
         if self.async_support && self.max_wasm_stack > self.async_stack_size {
             bail!("max_wasm_stack size cannot exceed the async_stack_size");
         }
@@ -2438,6 +2460,27 @@ impl Config {
 
         if features.contains(WasmFeatures::RELAXED_SIMD) && !features.contains(WasmFeatures::SIMD) {
             bail!("cannot disable the simd proposal but enable the relaxed simd proposal");
+        }
+
+        if features.contains(WasmFeatures::STACK_SWITCHING) {
+            use target_lexicon::OperatingSystem;
+            let model = match target.operating_system {
+                OperatingSystem::Windows => "update_windows_tib",
+                OperatingSystem::Linux
+                | OperatingSystem::MacOSX(_)
+                | OperatingSystem::Darwin(_) => "basic",
+                _ => bail!("stack-switching feature not supported on this platform "),
+            };
+
+            if !self
+                .compiler_config
+                .ensure_setting_unset_or_given("stack_switch_model", model)
+            {
+                bail!(
+                    "compiler option 'stack_switch_model' must be set to '{}' on this platform",
+                    model
+                );
+            }
         }
 
         // Apply compiler settings and flags

@@ -248,6 +248,7 @@ macro_rules! foreach_config_option {
             gc_types
             exceptions
             legacy_exceptions
+            stack_switching
         }
     };
 }
@@ -349,6 +350,8 @@ impl Compiler {
                     || config.relaxed_simd()
                     || config.gc_types()
                     || config.exceptions()
+                    || config.legacy_exceptions()
+                    || config.stack_switching()
                     || config.legacy_exceptions();
 
                 if cfg!(target_arch = "x86_64") {
@@ -365,7 +368,9 @@ impl Compiler {
                 false
             }
 
-            Compiler::CraneliftPulley => config.threads() || config.legacy_exceptions(),
+            Compiler::CraneliftPulley => {
+                config.threads() || config.legacy_exceptions() || config.stack_switching()
+            }
         }
     }
 

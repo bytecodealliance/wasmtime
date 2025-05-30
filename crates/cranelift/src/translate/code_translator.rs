@@ -2898,6 +2898,56 @@ pub fn translate_operator(
             // representation, so we don't actually need to do anything.
         }
 
+        Operator::ContNew { cont_type_index: _ } => {
+            // TODO(10248) This is added in a follow-up PR
+            return Err(wasmtime_environ::WasmError::Unsupported(
+                "codegen for stack switching instructions not implemented, yet".to_string(),
+            ));
+        }
+        Operator::ContBind {
+            argument_index: _,
+            result_index: _,
+        } => {
+            // TODO(10248) This is added in a follow-up PR
+            return Err(wasmtime_environ::WasmError::Unsupported(
+                "codegen for stack switching instructions not implemented, yet".to_string(),
+            ));
+        }
+        Operator::Suspend { tag_index: _ } => {
+            // TODO(10248) This is added in a follow-up PR
+            return Err(wasmtime_environ::WasmError::Unsupported(
+                "codegen for stack switching instructions not implemented, yet".to_string(),
+            ));
+        }
+        Operator::Resume {
+            cont_type_index: _,
+            resume_table: _,
+        } => {
+            // TODO(10248) This is added in a follow-up PR
+            return Err(wasmtime_environ::WasmError::Unsupported(
+                "codegen for stack switching instructions not implemented, yet".to_string(),
+            ));
+        }
+        Operator::ResumeThrow {
+            cont_type_index: _,
+            tag_index: _,
+            resume_table: _,
+        } => {
+            // TODO(10248) This depends on exception handling
+            return Err(wasmtime_environ::WasmError::Unsupported(
+                "resume.throw instructions not supported, yet".to_string(),
+            ));
+        }
+        Operator::Switch {
+            cont_type_index: _,
+            tag_index: _,
+        } => {
+            // TODO(10248) This is added in a follow-up PR
+            return Err(wasmtime_environ::WasmError::Unsupported(
+                "codegen for stack switching instructions not implemented, yet".to_string(),
+            ));
+        }
+
         Operator::GlobalAtomicGet { .. }
         | Operator::GlobalAtomicSet { .. }
         | Operator::GlobalAtomicRmwAdd { .. }
@@ -2936,17 +2986,6 @@ pub fn translate_operator(
         | Operator::RefI31Shared { .. } => {
             return Err(wasm_unsupported!(
                 "shared-everything-threads operators are not yet implemented"
-            ));
-        }
-
-        Operator::ContNew { .. }
-        | Operator::ContBind { .. }
-        | Operator::Suspend { .. }
-        | Operator::Resume { .. }
-        | Operator::ResumeThrow { .. }
-        | Operator::Switch { .. } => {
-            return Err(wasm_unsupported!(
-                "stack-switching operators are not yet implemented"
             ));
         }
 

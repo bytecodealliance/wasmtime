@@ -251,6 +251,14 @@ WASMTIME_CONFIG_PROP(void, wasm_wide_arithmetic, bool)
 #ifdef WASMTIME_FEATURE_COMPILER
 
 /**
+ * \brief Configures whether the WebAssembly stack switching
+ * proposal is enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_stack_switching, bool)
+
+/**
  * \brief Configures how JIT code will be compiled.
  *
  * This setting is #WASMTIME_STRATEGY_AUTO by default.
