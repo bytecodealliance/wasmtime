@@ -16,6 +16,7 @@ mod codegen;
 mod frame;
 pub mod isa;
 pub use isa::*;
+mod constant_pool;
 mod masm;
 mod regalloc;
 mod regset;

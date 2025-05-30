@@ -1,6 +1,7 @@
 //! Assembler library implementation for x64.
 
 use crate::{
+    constant_pool::ConstantPool,
     isa::{CallingConvention, reg::Reg},
     masm::{
         DivKind, Extend, ExtendKind, ExtendType, IntCmpKind, MulWideKind, OperandSize, RemKind,
@@ -11,10 +12,8 @@ use crate::{
 };
 use cranelift_codegen::{
     CallInfo, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
-    MachLabel, PatchRegion, VCodeConstantData, VCodeConstants, Writable,
-    ir::{
-        ConstantPool, ExternalName, MemFlags, SourceLoc, TrapCode, Type, UserExternalNameRef, types,
-    },
+    MachLabel, PatchRegion, Writable,
+    ir::{ExternalName, MemFlags, SourceLoc, TrapCode, Type, UserExternalNameRef, types},
     isa::{
         unwind::UnwindInst,
         x64::{
@@ -294,8 +293,6 @@ pub(crate) struct Assembler {
     isa_flags: x64_settings::Flags,
     /// Constant pool.
     pool: ConstantPool,
-    /// Constants that will be emitted separately by the MachBuffer.
-    constants: VCodeConstants,
 }
 
 impl Assembler {
@@ -305,7 +302,6 @@ impl Assembler {
             buffer: MachBuffer::<Inst>::new(),
             emit_state: Default::default(),
             emit_info: EmitInfo::new(shared_flags, isa_flags.clone()),
-            constants: Default::default(),
             pool: ConstantPool::new(),
             isa_flags,
         }
@@ -324,15 +320,21 @@ impl Assembler {
 
     /// Adds a constant to the constant pool and returns its address.
     pub fn add_constant(&mut self, constant: &[u8]) -> Address {
-        let handle = self.pool.insert(constant.into());
+        let handle = self.pool.register(constant, &mut self.buffer);
         Address::constant(handle)
+    }
+
+    /// Load a floating point constant, using the constant pool.
+    pub fn load_fp_const(&mut self, dst: WritableReg, constant: &[u8], size: OperandSize) {
+        let addr = self.add_constant(constant);
+        self.xmm_mov_mr(&addr, dst, size, MemFlags::trusted());
     }
 
     /// Return the emitted code.
     pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized<Final> {
         let stencil = self
             .buffer
-            .finish(&self.constants, self.emit_state.ctrl_plane_mut());
+            .finish(&self.pool.constants(), self.emit_state.ctrl_plane_mut());
         stencil.apply_base_srcloc(loc.unwrap_or_default())
     }
 
@@ -340,35 +342,13 @@ impl Assembler {
         inst.emit(&mut self.buffer, &self.emit_info, &mut self.emit_state);
     }
 
-    fn to_synthetic_amode(
-        addr: &Address,
-        pool: &mut ConstantPool,
-        constants: &mut VCodeConstants,
-        buffer: &mut MachBuffer<Inst>,
-        memflags: MemFlags,
-    ) -> SyntheticAmode {
+    fn to_synthetic_amode(addr: &Address, memflags: MemFlags) -> SyntheticAmode {
         match *addr {
             Address::Offset { base, offset } => {
                 let amode = Amode::imm_reg(offset as i32, base.into()).with_flags(memflags);
                 SyntheticAmode::real(amode)
             }
-            Address::Const(c) => {
-                // Defer the creation of the
-                // `SyntheticAmode::ConstantOffset` addressing mode
-                // until the address is referenced by an actual
-                // instruction.
-                let constant_data = pool.get(c);
-                let data = VCodeConstantData::Pool(c, constant_data.clone());
-                // If the constant data is not marked as used, it will be
-                // inserted, therefore, it needs to be registered.
-                let needs_registration = !constants.pool_uses(&data);
-                let constant = constants.insert(VCodeConstantData::Pool(c, constant_data.clone()));
-
-                if needs_registration {
-                    buffer.register_constant(&constant, &data);
-                }
-                SyntheticAmode::ConstantOffset(constant)
-            }
+            Address::Const(c) => SyntheticAmode::ConstantOffset(c),
             Address::ImmRegRegShift {
                 simm32,
                 base,
@@ -420,13 +400,7 @@ impl Assembler {
     /// Register-to-memory move.
     pub fn mov_rm(&mut self, src: Reg, addr: &Address, size: OperandSize, flags: MemFlags) {
         assert!(addr.is_offset());
-        let dst = Self::to_synthetic_amode(
-            addr,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            flags,
-        );
+        let dst = Self::to_synthetic_amode(addr, flags);
         self.emit(Inst::MovRM {
             size: size.into(),
             src: src.into(),
@@ -437,13 +411,7 @@ impl Assembler {
     /// Immediate-to-memory move.
     pub fn mov_im(&mut self, src: i32, addr: &Address, size: OperandSize, flags: MemFlags) {
         assert!(addr.is_offset());
-        let dst = Self::to_synthetic_amode(
-            addr,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            flags,
-        );
+        let dst = Self::to_synthetic_amode(addr, flags);
         self.emit(Inst::MovImmM {
             size: size.into(),
             simm32: src,
@@ -468,13 +436,7 @@ impl Assembler {
         ext: Option<Extend<Zero>>,
         memflags: MemFlags,
     ) {
-        let src = Self::to_synthetic_amode(
-            addr,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            memflags,
-        );
+        let src = Self::to_synthetic_amode(addr, memflags);
 
         if let Some(ext) = ext {
             let reg_mem = RegMem::mem(src);
@@ -498,13 +460,7 @@ impl Assembler {
         ext: Extend<Signed>,
         memflags: MemFlags,
     ) {
-        let src = Self::to_synthetic_amode(
-            addr,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            memflags,
-        );
+        let src = Self::to_synthetic_amode(addr, memflags);
 
         let reg_mem = RegMem::mem(src);
         self.emit(Inst::MovsxRmR {
@@ -568,13 +524,7 @@ impl Assembler {
 
         assert!(dst.to_reg().is_float());
 
-        let src = Self::to_synthetic_amode(
-            src,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            flags,
-        );
+        let src = Self::to_synthetic_amode(src, flags);
         let dst: WritableXmm = dst.map(|r| r.into());
         let inst = match size {
             S32 => asm::inst::movss_a_m::new(dst, src).into(),
@@ -595,13 +545,7 @@ impl Assembler {
     ) {
         assert!(dst.to_reg().is_float());
 
-        let src = Self::to_synthetic_amode(
-            src,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            flags,
-        );
+        let src = Self::to_synthetic_amode(src, flags);
 
         self.emit(Inst::XmmUnaryRmRVex {
             op: kind.into(),
@@ -629,13 +573,7 @@ impl Assembler {
     ) {
         assert!(dst.to_reg().is_float());
 
-        let src = Self::to_synthetic_amode(
-            src,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            flags,
-        );
+        let src = Self::to_synthetic_amode(src, flags);
 
         let op = match size {
             OperandSize::S8 => AvxOpcode::Vpbroadcastb,
@@ -685,13 +623,7 @@ impl Assembler {
             _ => unimplemented!(),
         };
 
-        let src = Self::to_synthetic_amode(
-            src,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            flags,
-        );
+        let src = Self::to_synthetic_amode(src, flags);
         self.emit(Inst::XmmUnaryRmRImmVex {
             op,
             src: XmmMem::unwrap_new(RegMem::Mem { addr: src }),
@@ -724,13 +656,7 @@ impl Assembler {
 
         assert!(src.is_float());
 
-        let dst = Self::to_synthetic_amode(
-            dst,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            flags,
-        );
+        let dst = Self::to_synthetic_amode(dst, flags);
         let src: Xmm = src.into();
         let inst = match size {
             S32 => asm::inst::movss_c_m::new(dst, src).into(),
@@ -1255,13 +1181,7 @@ impl Assembler {
         flags: MemFlags,
     ) {
         assert!(addr.is_offset());
-        let mem = Self::to_synthetic_amode(
-            &addr,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            flags,
-        );
+        let mem = Self::to_synthetic_amode(&addr, flags);
 
         self.emit(Inst::LockXadd {
             size: size.into(),
@@ -1281,13 +1201,7 @@ impl Assembler {
         op: AtomicRmwSeqOp,
     ) {
         assert!(addr.is_offset());
-        let mem = Self::to_synthetic_amode(
-            &addr,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            flags,
-        );
+        let mem = Self::to_synthetic_amode(&addr, flags);
         self.emit(Inst::AtomicRmwSeq {
             ty: Type::int_with_byte_size(size.bytes() as _).unwrap(),
             mem,
@@ -1307,13 +1221,7 @@ impl Assembler {
         flags: MemFlags,
     ) {
         assert!(addr.is_offset());
-        let mem = Self::to_synthetic_amode(
-            &addr,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            flags,
-        );
+        let mem = Self::to_synthetic_amode(&addr, flags);
 
         self.emit(Inst::Xchg {
             size: size.into(),
@@ -1332,13 +1240,7 @@ impl Assembler {
         flags: MemFlags,
     ) {
         assert!(addr.is_offset());
-        let mem = Self::to_synthetic_amode(
-            &addr,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            flags,
-        );
+        let mem = Self::to_synthetic_amode(&addr, flags);
 
         self.emit(Inst::LockCmpxchg {
             ty: Type::int_with_byte_size(size.bytes() as _).unwrap(),
@@ -1686,13 +1588,7 @@ impl Assembler {
 
     /// Load effective address.
     pub fn lea(&mut self, addr: &Address, dst: WritableReg, size: OperandSize) {
-        let addr = Self::to_synthetic_amode(
-            addr,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let addr = Self::to_synthetic_amode(addr, MemFlags::trusted());
         self.emit(Inst::LoadEffectiveAddress {
             addr,
             dst: dst.map(Into::into),
@@ -1762,13 +1658,7 @@ impl Assembler {
     /// Shuffles bytes in `src` according to contents of `mask` and puts
     /// result in `dst`.
     pub fn xmm_vpshufb_rrm(&mut self, dst: WritableReg, src: Reg, mask: &Address) {
-        let mask = Self::to_synthetic_amode(
-            mask,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let mask = Self::to_synthetic_amode(mask, MemFlags::trusted());
 
         self.emit(Inst::XmmRmiRVex {
             op: args::AvxOpcode::Vpshufb,
@@ -1804,13 +1694,7 @@ impl Assembler {
     /// Adds the src operands but when an individual byte result is larger than
     /// an unsigned byte integer, 0xFF is written instead.
     pub fn xmm_vpaddusb_rrm(&mut self, dst: WritableReg, src1: Reg, src2: &Address) {
-        let src2 = Self::to_synthetic_amode(
-            src2,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let src2 = Self::to_synthetic_amode(src2, MemFlags::trusted());
 
         self.emit(Inst::XmmRmiRVex {
             op: args::AvxOpcode::Vpaddusb,
@@ -1836,13 +1720,7 @@ impl Assembler {
         dst: WritableReg,
         size: OperandSize,
     ) {
-        let address = Self::to_synthetic_amode(
-            src2,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let address = Self::to_synthetic_amode(src2, MemFlags::trusted());
 
         self.emit(Inst::XmmRmiRVex {
             op: Self::xmm_vpadd_opcode(size),
@@ -1887,13 +1765,7 @@ impl Assembler {
         count: u8,
         size: OperandSize,
     ) {
-        let src2 = Self::to_synthetic_amode(
-            src2,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let src2 = Self::to_synthetic_amode(src2, MemFlags::trusted());
 
         self.emit(Inst::XmmVexPinsr {
             op: Self::vpinsr_opcode(size),
@@ -1925,13 +1797,7 @@ impl Assembler {
 
     /// Copy a 32-bit float in `src2`, merge into `src1`, and put result in `dst`.
     pub fn xmm_vinsertps_rrm(&mut self, dst: WritableReg, src1: Reg, src2: &Address, imm: u8) {
-        let src2 = Self::to_synthetic_amode(
-            src2,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let src2 = Self::to_synthetic_amode(src2, MemFlags::trusted());
 
         self.emit(Inst::XmmRmRImmVex {
             op: AvxOpcode::Vinsertps,
@@ -1967,13 +1833,7 @@ impl Assembler {
     /// Moves 64-bit float from `src` into lower 64-bits of `dst`.
     /// Zeroes out the upper 64 bits of `dst`.
     pub fn xmm_vmovsd_rm(&mut self, dst: WritableReg, src: &Address) {
-        let src = Self::to_synthetic_amode(
-            src,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let src = Self::to_synthetic_amode(src, MemFlags::trusted());
 
         self.emit(Inst::XmmUnaryRmRVex {
             op: AvxOpcode::Vmovsd,
@@ -1986,13 +1846,7 @@ impl Assembler {
     /// Copies two 32-bit floats from the lower 64-bits of `src1` to lower
     /// 64-bits of `dst`.
     pub fn xmm_vmovlhps_rrm(&mut self, dst: WritableReg, src1: Reg, src2: &Address) {
-        let src2 = Self::to_synthetic_amode(
-            src2,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let src2 = Self::to_synthetic_amode(src2, MemFlags::trusted());
 
         self.emit(Inst::XmmRmiRVex {
             op: AvxOpcode::Vmovlhps,
@@ -2016,13 +1870,7 @@ impl Assembler {
 
     /// Move unaligned packed integer values from address `src` to `dst`.
     pub fn xmm_vmovdqu_mr(&mut self, src: &Address, dst: WritableReg, flags: MemFlags) {
-        let src = Self::to_synthetic_amode(
-            src,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            flags,
-        );
+        let src = Self::to_synthetic_amode(src, flags);
         self.emit(Inst::XmmUnaryRmRVex {
             op: AvxOpcode::Vmovdqu,
             src: XmmMem::unwrap_new(RegMem::mem(src)),
@@ -2108,13 +1956,7 @@ impl Assembler {
         flags: MemFlags,
     ) -> anyhow::Result<()> {
         assert!(addr.is_offset());
-        let dst = Self::to_synthetic_amode(
-            addr,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            flags,
-        );
+        let dst = Self::to_synthetic_amode(addr, flags);
 
         self.emit(Inst::XmmMovRMImmVex {
             op: Self::vpextr_opcode(size),
@@ -2209,13 +2051,7 @@ impl Assembler {
         dst: WritableReg,
         size: OperandSize,
     ) {
-        let address = Self::to_synthetic_amode(
-            src2,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let address = Self::to_synthetic_amode(src2, MemFlags::trusted());
 
         self.emit(Inst::XmmRmiRVex {
             op: Self::vaddp_opcode(size),
@@ -2255,13 +2091,7 @@ impl Assembler {
         address: &Address,
         size: OperandSize,
     ) {
-        let address = Self::to_synthetic_amode(
-            address,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let address = Self::to_synthetic_amode(address, MemFlags::trusted());
 
         self.emit(Inst::XmmRmiRVex {
             op: Self::vpcmpeq_opcode(size),
@@ -2418,13 +2248,7 @@ impl Assembler {
             _ => unimplemented!(),
         };
 
-        let address = Self::to_synthetic_amode(
-            src2,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let address = Self::to_synthetic_amode(src2, MemFlags::trusted());
 
         self.emit(Inst::XmmRmiRVex {
             op,
@@ -2442,13 +2266,7 @@ impl Assembler {
             _ => unimplemented!(),
         };
 
-        let address = Self::to_synthetic_amode(
-            src2,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let address = Self::to_synthetic_amode(src2, MemFlags::trusted());
 
         self.emit(Inst::XmmRmiRVex {
             op,
@@ -2683,13 +2501,7 @@ impl Assembler {
         dst: WritableReg,
         size: OperandSize,
     ) {
-        let address = Self::to_synthetic_amode(
-            src2,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let address = Self::to_synthetic_amode(src2, MemFlags::trusted());
 
         self.emit(Inst::XmmRmiRVex {
             op: Self::vandp_opcode(size),
@@ -2761,13 +2573,7 @@ impl Assembler {
         dst: WritableReg,
         size: OperandSize,
     ) {
-        let address = Self::to_synthetic_amode(
-            src2,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let address = Self::to_synthetic_amode(src2, MemFlags::trusted());
 
         self.emit(Inst::XmmRmiRVex {
             op: Self::vminp_opcode(size),
@@ -2861,13 +2667,7 @@ impl Assembler {
     /// Performs a bitwise `and` operation on the vectors in `src1` and `src2`
     /// and stores the results in `dst`.
     pub fn xmm_vpand_rrm(&mut self, src1: Reg, src2: &Address, dst: WritableReg) {
-        let address = Self::to_synthetic_amode(
-            &src2,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let address = Self::to_synthetic_amode(&src2, MemFlags::trusted());
 
         self.emit(Inst::XmmRmiRVex {
             op: AvxOpcode::Vpand,
@@ -2952,13 +2752,7 @@ impl Assembler {
         dst: WritableReg,
         size: OperandSize,
     ) {
-        let address = Self::to_synthetic_amode(
-            address,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let address = Self::to_synthetic_amode(address, MemFlags::trusted());
 
         let op = match size {
             OperandSize::S16 => AvxOpcode::Vpmaddubsw,
@@ -2975,13 +2769,7 @@ impl Assembler {
 
     /// Multiple and add packed integers.
     pub fn xmm_vpmaddwd_rmr(&mut self, src: Reg, address: &Address, dst: WritableReg) {
-        let address = Self::to_synthetic_amode(
-            address,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let address = Self::to_synthetic_amode(address, MemFlags::trusted());
 
         self.emit(Inst::XmmRmiRVex {
             op: AvxOpcode::Vpmaddwd,
@@ -2994,13 +2782,7 @@ impl Assembler {
     /// Perform a logical on vector in `src` and in `address` and put the
     /// results in `dst`.
     pub fn xmm_vpxor_rmr(&mut self, src: Reg, address: &Address, dst: WritableReg) {
-        let address = Self::to_synthetic_amode(
-            address,
-            &mut self.pool,
-            &mut self.constants,
-            &mut self.buffer,
-            MemFlags::trusted(),
-        );
+        let address = Self::to_synthetic_amode(address, MemFlags::trusted());
 
         self.emit(Inst::XmmRmiRVex {
             op: AvxOpcode::Vpxor,
