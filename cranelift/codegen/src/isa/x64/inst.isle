@@ -91,16 +91,6 @@
        (MovToPReg (src Gpr)
                   (dst PReg))
 
-       ;; Zero-extended loads, except for 64 bits: movz (bl bq wl wq lq) addr
-       ;; reg.
-       ;;
-       ;; Note that the lq variant doesn't really exist since the default
-       ;; zero-extend rule makes it unnecessary. For that case we emit the
-       ;; equivalent "movl AM, reg32".
-       (MovzxRmR (ext_mode ExtMode)
-                 (src GprMem)
-                 (dst WritableGpr))
-
        ;; Loads the memory address of addr into dst.
        (LoadEffectiveAddress (addr SyntheticAmode)
                              (dst WritableGpr)

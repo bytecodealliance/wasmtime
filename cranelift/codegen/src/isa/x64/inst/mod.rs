@@ -108,7 +108,6 @@ impl Inst {
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
             | Inst::MovsxRmR { .. }
-            | Inst::MovzxRmR { .. }
             | Inst::Nop { .. }
             | Inst::Pop64 { .. }
             | Inst::Push64 { .. }
@@ -315,9 +314,26 @@ impl Inst {
     pub(crate) fn movzx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::Int);
         debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let src = GprMem::unwrap_new(src);
-        let dst = WritableGpr::from_writable_reg(dst).unwrap();
-        Inst::MovzxRmR { ext_mode, src, dst }
+        let src = match src {
+            RegMem::Reg { reg } => asm::GprMem::Gpr(Gpr::new(reg).unwrap()),
+            RegMem::Mem { addr } => asm::GprMem::Mem(addr.into()),
+        };
+        let inst = match ext_mode {
+            ExtMode::BL => asm::inst::movzbl_rm::new(dst, src).into(),
+            ExtMode::BQ => asm::inst::movzbq_rm::new(dst, src).into(),
+            ExtMode::WL => asm::inst::movzwl_rm::new(dst, src).into(),
+            ExtMode::WQ => asm::inst::movzwq_rm::new(dst, src).into(),
+            ExtMode::LQ => {
+                // This instruction selection may seem strange but is correct in
+                // 64-bit mode: section 3.4.1.1 of the Intel manual says that
+                // "32-bit operands generate a 32-bit result, zero-extended to a
+                // 64-bit result in the destination general-purpose register."
+                // This is applicable beyond `mov` but we use this fact to
+                // zero-extend `src` into `dst`.
+                asm::inst::movl_rm::new(dst, src).into()
+            }
+        };
+        Inst::External { inst }
     }
 
     pub(crate) fn movsx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
@@ -1118,26 +1134,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}")
             }
 
-            Inst::MovzxRmR {
-                ext_mode, src, dst, ..
-            } => {
-                let dst_size = if *ext_mode == ExtMode::LQ {
-                    4
-                } else {
-                    ext_mode.dst_size()
-                };
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size);
-                let src = src.pretty_print(ext_mode.src_size());
-
-                if *ext_mode == ExtMode::LQ {
-                    let op = ljustify("movl".to_string());
-                    format!("{op} {src}, {dst}")
-                } else {
-                    let op = ljustify2("movz".to_string(), ext_mode.to_string());
-                    format!("{op} {src}, {dst}")
-                }
-            }
-
             Inst::LoadEffectiveAddress { addr, dst, size } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
                 let addr = addr.pretty_print(8);
@@ -1881,11 +1877,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
 
         Inst::MovImmM { dst, .. } => {
             dst.get_operands(collector);
-        }
-
-        Inst::MovzxRmR { src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
         }
         Inst::LoadEffectiveAddress { addr: src, dst, .. } => {
             collector.reg_def(dst);
