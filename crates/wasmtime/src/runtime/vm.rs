@@ -123,7 +123,7 @@ pub use crate::runtime::vm::vmcontext::VMTableDefinition;
 pub use crate::runtime::vm::vmcontext::{
     VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionBody,
     VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport,
-    VMOpaqueContext, VMStoreContext, VMTable, VMTagImport, VMWasmCallFunction, ValRaw,
+    VMOpaqueContext, VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
 pub use send_sync_ptr::SendSyncPtr;
 
