@@ -55,7 +55,7 @@
 //! ```
 
 #[cfg(feature = "stack-switching")]
-use super::stack_switching::{VMContObj, VMContRef};
+use super::stack_switching::VMContObj;
 use crate::prelude::*;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
@@ -284,15 +284,7 @@ unsafe fn table_grow_cont_obj(
     init_value_contref: *mut u8,
     init_value_revision: u64,
 ) -> Result<Option<AllocationSize>> {
-    use core::ptr::NonNull;
-    let init_value = if init_value_contref.is_null() {
-        None
-    } else {
-        // SAFETY: We just checked that the pointer is non-null
-        let contref = NonNull::new_unchecked(init_value_contref as *mut VMContRef);
-        let contobj = VMContObj::new(contref, init_value_revision);
-        Some(contobj)
-    };
+    let init_value = VMContObj::from_raw_parts(init_value_contref, init_value_revision);
 
     let table_index = TableIndex::from_u32(table_index);
 
@@ -364,20 +356,11 @@ unsafe fn table_fill_cont_obj(
     value_revision: u64,
     len: u64,
 ) -> Result<()> {
-    use core::ptr::NonNull;
     let table_index = TableIndex::from_u32(table_index);
     let table = &mut *instance.get_table(table_index);
     match table.element_type() {
         TableElementType::Cont => {
-            let contobj = if value_contref.is_null() {
-                None
-            } else {
-                // SAFETY: We just checked that the pointer is non-null
-                let contref = NonNull::new_unchecked(value_contref as *mut VMContRef);
-                let contobj = VMContObj::new(contref, value_revision);
-                Some(contobj)
-            };
-
+            let contobj = VMContObj::from_raw_parts(value_contref, value_revision);
             table.fill(store.optional_gc_store_mut(), dst, contobj.into(), len)?;
             Ok(())
         }

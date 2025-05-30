@@ -54,6 +54,18 @@ impl VMContObj {
     pub fn new(contref: NonNull<VMContRef>, revision: u64) -> Self {
         Self { contref, revision }
     }
+
+    /// Construction a VMContinuationObject from a pointer and revision
+    ///
+    /// The `contref` pointer may be null in which case None will be returned.
+    ///
+    /// # Safety
+    ///
+    /// Behavior will be undefined if a pointer to data that is not a
+    /// VMContRef is provided.
+    pub unsafe fn from_raw_parts(contref: *mut u8, revision: u64) -> Option<Self> {
+        NonNull::new(contref.cast::<VMContRef>()).map(|contref| Self::new(contref, revision))
+    }
 }
 
 unsafe impl Send for VMContObj {}
