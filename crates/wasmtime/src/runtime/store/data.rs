@@ -29,7 +29,6 @@ impl InstanceId {
 
 pub struct StoreData {
     id: StoreId,
-    instances: Vec<crate::instance::InstanceData>,
     #[cfg(feature = "component-model")]
     pub(crate) components: crate::component::ComponentStoreData,
 }
@@ -39,26 +38,10 @@ pub trait StoredData: Sized {
     fn list_mut(data: &mut StoreData) -> &mut Vec<Self>;
 }
 
-macro_rules! impl_store_data {
-    ($($field:ident => $t:ty,)*) => ($(
-        impl StoredData for $t {
-            #[inline]
-            fn list(data: &StoreData) -> &Vec<Self> { &data.$field }
-            #[inline]
-            fn list_mut(data: &mut StoreData) -> &mut Vec<Self> { &mut data.$field }
-        }
-    )*)
-}
-
-impl_store_data! {
-    instances => crate::instance::InstanceData,
-}
-
 impl StoreData {
     pub fn new() -> StoreData {
         StoreData {
             id: StoreId::allocate(),
-            instances: Vec::new(),
             #[cfg(feature = "component-model")]
             components: Default::default(),
         }
@@ -341,7 +324,7 @@ pub struct StoreInstanceId {
 }
 
 impl StoreInstanceId {
-    pub(super) fn new(store_id: StoreId, instance: InstanceId) -> StoreInstanceId {
+    pub(crate) fn new(store_id: StoreId, instance: InstanceId) -> StoreInstanceId {
         StoreInstanceId { store_id, instance }
     }
 
@@ -353,6 +336,11 @@ impl StoreInstanceId {
     #[inline]
     pub fn store_id(&self) -> StoreId {
         self.store_id
+    }
+
+    #[inline]
+    pub(crate) fn instance(&self) -> InstanceId {
+        self.instance
     }
 }
 

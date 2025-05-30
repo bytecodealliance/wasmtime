@@ -18,13 +18,11 @@ use crate::runtime::vm::{
 use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque};
 use crate::{MemoryType, TableType};
 use alloc::sync::Arc;
-use core::any::Any;
 use wasmtime_environ::{MemoryIndex, Module, TableIndex, VMSharedTypeIndex};
 
 fn create_handle(
     module: Module,
     store: &mut StoreOpaque,
-    host_state: Box<dyn Any + Send + Sync>,
     func_imports: &[VMFunctionImport],
     one_signature: Option<VMSharedTypeIndex>,
 ) -> Result<InstanceId> {
@@ -41,7 +39,6 @@ fn create_handle(
             },
             &ModuleRuntimeInfo::bare_maybe_imported_func(module, one_signature),
             imports,
-            host_state,
         )
     }
 }

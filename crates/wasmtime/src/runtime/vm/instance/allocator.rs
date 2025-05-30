@@ -9,7 +9,7 @@ use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, VMFuncRef, VMGcRef
 use crate::store::{AutoAssertNoGc, InstanceId, StoreOpaque};
 use crate::vm::VMGlobalDefinition;
 use core::ptr::NonNull;
-use core::{any::Any, mem, ptr};
+use core::{mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
     MemoryInitializer, Module, PrimaryMap, SizeOverflow, TableInitialValue, Trap, Tunables,
@@ -51,9 +51,6 @@ pub struct InstanceAllocationRequest<'a> {
 
     /// The imports to use for the instantiation.
     pub imports: Imports<'a>,
-
-    /// The host state to associate with the instance.
-    pub host_state: Box<dyn Any + Send + Sync>,
 
     /// A pointer to the "store" for this instance to be allocated. The store
     /// correlates with the `Store` in wasmtime itself, and lots of contextual

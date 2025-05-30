@@ -58,7 +58,6 @@ pub fn create_memory(
             },
             &ModuleRuntimeInfo::bare_maybe_imported_func(Arc::new(module), None),
             Default::default(),
-            Box::new(()),
         )
     }
 }
