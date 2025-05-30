@@ -713,7 +713,7 @@ impl Instance {
         NonNull::new(ret).unwrap()
     }
 
-    fn get_exported_func(&mut self, index: FuncIndex) -> ExportFunction {
+    fn get_exported_func(&self, index: FuncIndex) -> ExportFunction {
         let func_ref = self.get_func_ref(index).unwrap();
         ExportFunction { func_ref }
     }
@@ -739,7 +739,7 @@ impl Instance {
         }
     }
 
-    fn get_exported_memory(&mut self, index: MemoryIndex) -> ExportMemory {
+    fn get_exported_memory(&self, index: MemoryIndex) -> ExportMemory {
         let (definition, vmctx, def_index) =
             if let Some(def_index) = self.env_module().defined_memory_index(index) {
                 (self.memory_ptr(def_index), self.vmctx(), def_index)
@@ -772,7 +772,7 @@ impl Instance {
         }
     }
 
-    fn get_exported_tag(&mut self, index: TagIndex) -> ExportTag {
+    fn get_exported_tag(&self, index: TagIndex) -> ExportTag {
         let tag = self.env_module().tags[index];
         let (vmctx, definition, index) =
             if let Some(def_index) = self.env_module().defined_tag_index(index) {
@@ -936,7 +936,7 @@ impl Instance {
     /// before, because resetting that state on (re)instantiation is
     /// very expensive if there are many funcrefs.
     fn construct_func_ref(
-        &mut self,
+        &self,
         index: FuncIndex,
         type_index: VMSharedTypeIndex,
         into: *mut VMFuncRef,
@@ -975,7 +975,7 @@ impl Instance {
     ///
     /// The returned reference is a stable reference that won't be moved and can
     /// be passed into JIT code.
-    pub(crate) fn get_func_ref(&mut self, index: FuncIndex) -> Option<NonNull<VMFuncRef>> {
+    pub(crate) fn get_func_ref(&self, index: FuncIndex) -> Option<NonNull<VMFuncRef>> {
         if index == FuncIndex::reserved_value() {
             return None;
         }
@@ -1600,32 +1600,32 @@ impl InstanceHandle {
     }
 
     /// Lookup a function by index.
-    pub fn get_exported_func(&mut self, export: FuncIndex) -> ExportFunction {
-        self.instance_mut().get_exported_func(export)
+    pub fn get_exported_func(&self, export: FuncIndex) -> ExportFunction {
+        self.instance().get_exported_func(export)
     }
 
     /// Lookup a global by index.
-    pub fn get_exported_global(&mut self, export: GlobalIndex) -> ExportGlobal {
-        self.instance_mut().get_exported_global(export)
+    pub fn get_exported_global(&self, export: GlobalIndex) -> ExportGlobal {
+        self.instance().get_exported_global(export)
     }
 
     /// Lookup a tag by index.
-    pub fn get_exported_tag(&mut self, export: TagIndex) -> ExportTag {
-        self.instance_mut().get_exported_tag(export)
+    pub fn get_exported_tag(&self, export: TagIndex) -> ExportTag {
+        self.instance().get_exported_tag(export)
     }
 
     /// Lookup a memory by index.
-    pub fn get_exported_memory(&mut self, export: MemoryIndex) -> ExportMemory {
-        self.instance_mut().get_exported_memory(export)
+    pub fn get_exported_memory(&self, export: MemoryIndex) -> ExportMemory {
+        self.instance().get_exported_memory(export)
     }
 
     /// Lookup a table by index.
-    pub fn get_exported_table(&mut self, export: TableIndex) -> ExportTable {
-        self.instance_mut().get_exported_table(export)
+    pub fn get_exported_table(&self, export: TableIndex) -> ExportTable {
+        self.instance().get_exported_table(export)
     }
 
     /// Lookup an item with the given index.
-    pub fn get_export_by_index(&mut self, export: EntityIndex) -> Export {
+    pub fn get_export_by_index(&self, export: EntityIndex) -> Export {
         match export {
             EntityIndex::Function(i) => Export::Function(self.get_exported_func(i)),
             EntityIndex::Global(i) => Export::Global(self.get_exported_global(i)),
