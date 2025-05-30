@@ -271,7 +271,7 @@ impl Backtrace {
         // The VMStackLimits of the currently running stack (whether that's a
         // continuation or the initial stack) contains undefined data, the
         // information about that stack is saved in the Store's
-        // `VMRuntimeLimits` and handled at the top of this function
+        // `VMStoreContext` and handled at the top of this function
         // already. That's why we ignore `stack_limits_vec[0]`.
         //
         // Note that a continuation stack's control context stores

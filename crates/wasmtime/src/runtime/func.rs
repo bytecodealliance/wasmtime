@@ -1642,7 +1642,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
 /// are restored.
 pub(crate) struct EntryStoreContext {
     /// If set, contains value of `stack_limit` field to restore in
-    /// `VMRuntimeLimits` when exiting Wasm.
+    /// `VMStoreContext` when exiting Wasm.
     pub stack_limit: Option<usize>,
     /// Contains value of `last_wasm_exit_pc` field to restore in
     /// `VMStoreContext` when exiting Wasm.
@@ -1672,7 +1672,7 @@ impl EntryStoreContext {
     ///   allocated by WebAssembly code and it's relative to the initial stack
     ///   pointer that called into wasm.
     ///
-    /// It also saves the different last_wasm_* values in the `VMRuntimeLimits`.
+    /// It also saves the different last_wasm_* values in the `VMStoreContext`.
     pub fn enter_wasm<T>(
         store: &mut StoreContextMut<'_, T>,
         initial_stack_information: *mut VMCommonStackInformation,

@@ -82,13 +82,13 @@ fn null_pointer_optimization() {
 }
 
 /// This type is used to save (and subsequently restore) a subset of the data in
-/// `VMRuntimeLimits`. See documentation of `VMStackChain` for the exact uses.
+/// `VMStoreContext`. See documentation of `VMStackChain` for the exact uses.
 #[repr(C)]
 #[derive(Debug, Default, Clone)]
 pub struct VMStackLimits {
-    /// Saved version of `stack_limit` field of `VMRuntimeLimits`
+    /// Saved version of `stack_limit` field of `VMStoreContext`
     pub stack_limit: usize,
-    /// Saved version of `last_wasm_entry_fp` field of `VMRuntimeLimits`
+    /// Saved version of `last_wasm_entry_fp` field of `VMStoreContext`
     pub last_wasm_entry_fp: usize,
 }
 
@@ -114,7 +114,7 @@ fn check_vm_stack_limits_offsets() {
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct VMCommonStackInformation {
-    /// Saves subset of `VMRuntimeLimits` for this stack. See documentation of
+    /// Saves subset of `VMStoreContext` for this stack. See documentation of
     /// `VMStackChain` for the exact uses.
     pub limits: VMStackLimits,
     /// For the initial stack, this field must only have one of the following values:
@@ -527,15 +527,15 @@ pub fn cont_new(
 /// the stack frame that executed by `invoke_wasm_and_catch_traps`.
 ///
 /// The following invariants hold for these `VMStackLimits` objects,
-/// and the data in `VMRuntimeLimits`.
+/// and the data in `VMStoreContext`.
 ///
 /// Currently executing stack: For the currently executing stack (i.e., the
 /// stack that is at the head of the store's `stack_chain` list), the
 /// associated `VMStackLimits` object contains stale/undefined data. Instead,
 /// the live data describing the limits for the currently executing stack is
-/// always maintained in `VMRuntimeLimits`. Note that as a general rule
+/// always maintained in `VMStoreContext`. Note that as a general rule
 /// independently from any execution of continuations, the `last_wasm_exit*`
-/// fields in the `VMRuntimeLimits` contain undefined values while executing
+/// fields in the `VMStoreContext` contain undefined values while executing
 /// wasm.
 ///
 /// Parents of currently executing stack: For stacks that appear in the tail
@@ -555,7 +555,7 @@ pub fn cont_new(
 /// However, its `last_enter_wasm_sp` field contains undefined data. This is
 /// justified, because when resume-ing a continuation for the first time, a
 /// native-to-wasm trampoline is called, which sets up the
-/// `last_wasm_entry_sp` in the `VMRuntimeLimits` with the correct value,
+/// `last_wasm_entry_sp` in the `VMStoreContext` with the correct value,
 /// thus restoring the necessary invariant.
 #[derive(Debug, Clone, PartialEq)]
 #[repr(usize, C)]
