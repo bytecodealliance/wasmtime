@@ -29,7 +29,6 @@ impl InstanceId {
 
 pub struct StoreData {
     id: StoreId,
-    funcs: Vec<crate::func::FuncData>,
     instances: Vec<crate::instance::InstanceData>,
     #[cfg(feature = "component-model")]
     pub(crate) components: crate::component::ComponentStoreData,
@@ -52,7 +51,6 @@ macro_rules! impl_store_data {
 }
 
 impl_store_data! {
-    funcs => crate::func::FuncData,
     instances => crate::instance::InstanceData,
 }
 
@@ -60,7 +58,6 @@ impl StoreData {
     pub fn new() -> StoreData {
         StoreData {
             id: StoreId::allocate(),
-            funcs: Vec::new(),
             instances: Vec::new(),
             #[cfg(feature = "component-model")]
             components: Default::default(),
@@ -107,10 +104,6 @@ impl StoreData {
     {
         let id = self.id;
         (0..T::list(self).len()).map(move |i| Stored::new(id, i))
-    }
-
-    pub(crate) fn reserve_funcs(&mut self, count: usize) {
-        self.funcs.reserve(count);
     }
 }
 

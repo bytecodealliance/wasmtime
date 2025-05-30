@@ -40,6 +40,10 @@ struct LoadedCode {
     /// Modules found within `self.code`, keyed by start address here of the
     /// address of the first function in the module.
     modules: BTreeMap<usize, Module>,
+
+    /// These modules have no functions inside of them but they can still be
+    /// used for trampoline lookup.
+    modules_with_only_trampolines: Vec<Module>,
 }
 
 /// An identifier of a module that has previously been inserted into a
@@ -156,6 +160,7 @@ impl ModuleRegistry {
         let mut item = LoadedCode {
             _code: code.clone(),
             modules: Default::default(),
+            modules_with_only_trampolines: Vec::new(),
         };
         if let Some(module) = module {
             item.push_module(module);
@@ -191,7 +196,11 @@ impl ModuleRegistry {
         //
         // See also the comment in `ModuleInner::wasm_to_native_trampoline`.
         for (_, code) in self.loaded_code.values() {
-            for module in code.modules.values() {
+            for module in code
+                .modules
+                .values()
+                .chain(&code.modules_with_only_trampolines)
+            {
                 if let Some(trampoline) = module.wasm_to_array_trampoline(sig) {
                     return Some(trampoline);
                 }
@@ -209,7 +218,10 @@ impl LoadedCode {
             // need to push onto `self.modules` which is only used for frame
             // information lookup for a trap which only symbolicates defined
             // functions.
-            None => return,
+            None => {
+                self.modules_with_only_trampolines.push(module.clone());
+                return;
+            }
         };
         let start = func.as_ptr() as usize;
 

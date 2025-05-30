@@ -1419,9 +1419,8 @@ impl Definition {
 
 impl DefinitionType {
     pub(crate) fn from(store: &StoreOpaque, item: &Extern) -> DefinitionType {
-        let data = store.store_data();
         match item {
-            Extern::Func(f) => DefinitionType::Func(f.type_index(data)),
+            Extern::Func(f) => DefinitionType::Func(f.type_index(store)),
             Extern::Table(t) => {
                 DefinitionType::Table(*t.wasmtime_ty(store), t.internal_size(store))
             }

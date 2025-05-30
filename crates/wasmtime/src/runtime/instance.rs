@@ -166,13 +166,28 @@ impl Instance {
                 bail!("cross-`Store` instantiation is not currently supported");
             }
         }
+
         typecheck(module, imports, |cx, ty, item| {
             let item = DefinitionType::from(store, item);
             cx.definition(ty, &item)
         })?;
+
+        // When pushing functions into `OwnedImports` it's required that their
+        // `wasm_call` fields are all filled out. This `module` is guaranteed
+        // to have any trampolines necessary for functions so register the
+        // module with the store and then attempt to fill out any outstanding
+        // holes.
+        //
+        // Note that under normal operation this shouldn't do much as the list
+        // of funcs-with-holes should generally be empty. As a result the
+        // process of filling this out is not super optimized at this point.
+        store.modules_mut().register_module(module);
+        let (funcrefs, modules) = store.func_refs_and_modules();
+        funcrefs.fill(modules);
+
         let mut owned_imports = OwnedImports::new(module);
         for import in imports {
-            owned_imports.push(import, store, module);
+            owned_imports.push(import, store);
         }
         Ok(owned_imports)
     }
@@ -265,7 +280,6 @@ impl Instance {
         // Register the module just before instantiation to ensure we keep the module
         // properly referenced while in use by the store.
         let module_id = store.modules_mut().register_module(module);
-        store.fill_func_refs();
 
         // The first thing we do is issue an instance allocation request
         // to the instance allocator. This, on success, will give us an
@@ -676,10 +690,10 @@ impl OwnedImports {
         self.tags.clear();
     }
 
-    fn push(&mut self, item: &Extern, store: &mut StoreOpaque, module: &Module) {
+    fn push(&mut self, item: &Extern, store: &mut StoreOpaque) {
         match item {
             Extern::Func(i) => {
-                self.functions.push(i.vmimport(store, module));
+                self.functions.push(i.vmimport(store));
             }
             Extern::Global(i) => {
                 self.globals.push(i.vmimport(store));
@@ -928,19 +942,25 @@ fn pre_instantiate_raw(
     host_funcs: usize,
     func_refs: &Arc<[VMFuncRef]>,
 ) -> Result<OwnedImports> {
+    // Register this module and use it to fill out any funcref wasm_call holes
+    // we can. For more comments on this see `typecheck_externs`.
+    store.modules_mut().register_module(module);
+    let (funcrefs, modules) = store.func_refs_and_modules();
+    funcrefs.fill(modules);
+
     if host_funcs > 0 {
         // Any linker-defined function of the `Definition::HostFunc` variant
         // will insert a function into the store automatically as part of
         // instantiation, so reserve space here to make insertion more efficient
         // as it won't have to realloc during the instantiation.
-        store.store_data_mut().reserve_funcs(host_funcs);
+        funcrefs.reserve_storage(host_funcs);
 
         // The usage of `to_extern_store_rooted` requires that the items are
         // rooted via another means, which happens here by cloning the list of
         // items into the store once. This avoids cloning each individual item
         // below.
-        store.push_rooted_funcs(items.clone());
-        store.push_instance_pre_func_refs(func_refs.clone());
+        funcrefs.push_instance_pre_definitions(items.clone());
+        funcrefs.push_instance_pre_func_refs(func_refs.clone());
     }
 
     let mut func_refs = func_refs.iter().map(|f| NonNull::from(f));
@@ -967,7 +987,7 @@ fn pre_instantiate_raw(
                 .into()
             },
         };
-        imports.push(&item, store, module);
+        imports.push(&item, store);
     }
 
     Ok(imports)
