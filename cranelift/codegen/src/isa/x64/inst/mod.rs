@@ -292,37 +292,6 @@ impl Inst {
         }
     }
 
-    /// Compare two floating-point registers, returning the result in the flags.
-    pub fn x64_ucomis(size: OperandSize, src1: Reg, src2: RegMem) -> Self {
-        debug_assert!(src1.class() == RegClass::Float);
-        let inst = match size {
-            OperandSize::Size32 => match src2 {
-                RegMem::Reg { reg } => {
-                    debug_assert!(reg.class() == RegClass::Float);
-                    asm::inst::ucomiss_a::new(src1, reg).into()
-                }
-                RegMem::Mem { addr } => {
-                    let xmm = Xmm::unwrap_new(src1);
-                    let xmm_mem = asm::XmmMem::Mem(addr.into());
-                    asm::inst::ucomiss_a::new(xmm, xmm_mem).into()
-                }
-            },
-            OperandSize::Size64 => match src2 {
-                RegMem::Reg { reg } => {
-                    debug_assert!(reg.class() == RegClass::Float);
-                    asm::inst::ucomisd_a::new(src1, reg).into()
-                }
-                RegMem::Mem { addr } => {
-                    let xmm = Xmm::unwrap_new(src1);
-                    let xmm_mem = asm::XmmMem::Mem(addr.into());
-                    asm::inst::ucomisd_a::new(xmm, xmm_mem).into()
-                }
-            },
-            _ => unreachable!("ucomis only supports 32 and 64 bit operands"),
-        };
-        Inst::External { inst }
-    }
-
     #[allow(dead_code)]
     pub(crate) fn xmm_min_max_seq(
         size: OperandSize,

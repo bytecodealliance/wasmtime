@@ -24,7 +24,7 @@ pub fn fmt(
     Format {
         name: name.into(),
         operands: operands.into_iter().map(Into::into).collect(),
-        eflags: EflagsMutability::default(),
+        eflags: Eflags::default(),
     }
 }
 
@@ -136,7 +136,7 @@ pub struct Format {
     /// manual.
     pub operands: Vec<Operand>,
     /// This should match eflags description of an instruction.
-    pub eflags: EflagsMutability,
+    pub eflags: Eflags,
 }
 
 impl Format {
@@ -171,14 +171,14 @@ impl Format {
     }
 
     /// Set the EFLAGS mutability for this instruction.
-    pub fn flags(mut self, eflags: EflagsMutability) -> Self {
+    pub fn flags(mut self, eflags: Eflags) -> Self {
         self.eflags = eflags;
         self
     }
 
     /// Return true if an instruction uses EFLAGS.
     pub fn uses_eflags(&self) -> bool {
-        self.eflags != EflagsMutability::None
+        self.eflags != Eflags::None
     }
 }
 
@@ -196,7 +196,7 @@ impl core::fmt::Display for Format {
             .join(", ");
         write!(f, "{name}({operands})")?;
 
-        if *eflags != EflagsMutability::None {
+        if *eflags != Eflags::None {
             write!(f, "[flags:{eflags}]")?;
         }
 
@@ -280,7 +280,6 @@ impl From<Location> for Operand {
 }
 
 /// The kind of register used in a [`Location`].
-#[derive(PartialEq)]
 pub enum RegClass {
     Gpr,
     Xmm,
@@ -563,21 +562,27 @@ impl core::fmt::Display for Extension {
     }
 }
 
+/// Describes if an instruction uses EFLAGS, and whether it reads, writes, or
+/// reads/writes the EFLAGS register.
+/// In the future, we might want to model specific EFLAGS bits instead of the
+/// entire EFLAGS register.
+/// Some related discussion in this GitHub issue
+/// https://github.com/bytecodealliance/wasmtime/issues/10298
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum EflagsMutability {
+pub enum Eflags {
     None,
     R,
     W,
     RW,
 }
 
-impl Default for EflagsMutability {
+impl Default for Eflags {
     fn default() -> Self {
         Self::None
     }
 }
 
-impl core::fmt::Display for EflagsMutability {
+impl core::fmt::Display for Eflags {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::None => write!(f, ""),
