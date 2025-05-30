@@ -63,7 +63,7 @@ block0:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rbp, %rsi
-;   movq    8(%rsi), %rax
+;   movq 8(%rsi), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

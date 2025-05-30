@@ -38,11 +38,11 @@ function %f0(i32) -> i32, f32, f64 {
 ; block1:
 ;   movl    $1, %eax
 ;   movdqu <offset:1>+(%rsp), %xmm1
-;   movq    16(%rsp), %rbx
-;   movq    24(%rsp), %r12
-;   movq    32(%rsp), %r13
-;   movq    40(%rsp), %r14
-;   movq    48(%rsp), %r15
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -52,11 +52,11 @@ function %f0(i32) -> i32, f32, f64 {
 ;   lea     1(%rax), %eax
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
-;   movq    16(%rsp), %rbx
-;   movq    24(%rsp), %r12
-;   movq    32(%rsp), %r13
-;   movq    40(%rsp), %r14
-;   movq    48(%rsp), %r15
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -174,11 +174,11 @@ function %f1(i32) -> i32, f32, f64 {
 ; block7:
 ;   movl    $1, %eax
 ;   movdqu <offset:1>+(%rsp), %xmm1
-;   movq    16(%rsp), %rbx
-;   movq    24(%rsp), %r12
-;   movq    32(%rsp), %r13
-;   movq    40(%rsp), %r14
-;   movq    48(%rsp), %r15
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -189,11 +189,11 @@ function %f1(i32) -> i32, f32, f64 {
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
 ;   movq %rsi, %xmm1
-;   movq    16(%rsp), %rbx
-;   movq    24(%rsp), %r12
-;   movq    32(%rsp), %r13
-;   movq    40(%rsp), %r14
-;   movq    48(%rsp), %r15
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -302,11 +302,11 @@ function %f2(i32) -> i32, f32, f64 {
 ; block1:
 ;   movl    $1, %eax
 ;   movdqu <offset:1>+(%rsp), %xmm1
-;   movq    16(%rsp), %rbx
-;   movq    24(%rsp), %r12
-;   movq    32(%rsp), %r13
-;   movq    40(%rsp), %r14
-;   movq    48(%rsp), %r15
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -316,11 +316,11 @@ function %f2(i32) -> i32, f32, f64 {
 ;   lea     1(%rax), %eax
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
-;   movq    16(%rsp), %rbx
-;   movq    24(%rsp), %r12
-;   movq    32(%rsp), %r13
-;   movq    40(%rsp), %r14
-;   movq    48(%rsp), %r15
+;   movq 0x10(%rsp), %rbx
+;   movq 0x18(%rsp), %r12
+;   movq 0x20(%rsp), %r13
+;   movq 0x28(%rsp), %r14
+;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

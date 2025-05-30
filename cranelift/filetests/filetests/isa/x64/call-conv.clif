@@ -105,8 +105,8 @@ block0(v0: i32):
 ;   movdqu %xmm15, 0xa0(%rsp)
 ; block0:
 ;   call    *%rcx
-;   movq    0(%rsp), %rsi
-;   movq    8(%rsp), %rdi
+;   movq (%rsp), %rsi
+;   movq 8(%rsp), %rdi
 ;   movdqu 0x10(%rsp), %xmm6
 ;   movdqu 0x20(%rsp), %xmm7
 ;   movdqu 0x30(%rsp), %xmm8
@@ -193,8 +193,8 @@ block0(
 ;   movq    %rsp, %rbp
 ;   subq $0x90, %rsp
 ; block0:
-;   movq    rbp(stack args max - 32), %r10
-;   movq    rbp(stack args max - 24), %r11
+;   movq <offset:0>+-0x20(%rbp), %r10
+;   movq <offset:0>+-0x18(%rbp), %r11
 ;   movss <offset:0>+-0x10(%rbp), %xmm11
 ;   movsd <offset:0>+-8(%rbp), %xmm13
 ;   movq    %r8, 32(%rsp)

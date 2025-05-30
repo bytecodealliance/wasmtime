@@ -50,25 +50,25 @@ block0(v0: i32):
 ;   lea     0(%rax,%rdx,1), %r8
 ;   lea     0(%rbx,%r15,1), %r9
 ;   lea     0(%r13,%r12,1), %r10
-;   movq    rsp(0 + virtual offset), %rcx
+;   movq <offset:1>+(%rsp), %rcx
 ;   lea     0(%rcx,%r14,1), %r11
-;   movq    rsp(8 + virtual offset), %rcx
-;   movq    rsp(16 + virtual offset), %rdi
+;   movq <offset:1>+8(%rsp), %rcx
+;   movq <offset:1>+0x10(%rsp), %rdi
 ;   lea     0(%rcx,%rdi,1), %rsi
-;   movq    rsp(32 + virtual offset), %rdx
-;   movq    rsp(24 + virtual offset), %rdi
+;   movq <offset:1>+0x20(%rsp), %rdx
+;   movq <offset:1>+0x18(%rsp), %rdi
 ;   lea     0(%rdi,%rdx,1), %rdi
-;   movq    rsp(40 + virtual offset), %rax
-;   movq    rsp(48 + virtual offset), %rcx
+;   movq <offset:1>+0x28(%rsp), %rax
+;   movq <offset:1>+0x30(%rsp), %rcx
 ;   lea     0(%rax,%rcx,1), %rax
-;   movq    rsp(64 + virtual offset), %rcx
-;   movq    rsp(56 + virtual offset), %rdx
+;   movq <offset:1>+0x40(%rsp), %rcx
+;   movq <offset:1>+0x38(%rsp), %rdx
 ;   lea     0(%rdx,%rcx,1), %rcx
-;   movq    rsp(80 + virtual offset), %rdx
-;   movq    rsp(72 + virtual offset), %r14
+;   movq <offset:1>+0x50(%rsp), %rdx
+;   movq <offset:1>+0x48(%rsp), %r14
 ;   lea     0(%r14,%rdx,1), %rdx
-;   movq    rsp(96 + virtual offset), %rbx
-;   movq    rsp(88 + virtual offset), %r13
+;   movq <offset:1>+0x60(%rsp), %rbx
+;   movq <offset:1>+0x58(%rsp), %r13
 ;   lea     0(%r13,%rbx,1), %r14
 ;   lea     0(%r8,%r9,1), %r8
 ;   lea     0(%r10,%r11,1), %r9
@@ -79,11 +79,11 @@ block0(v0: i32):
 ;   lea     0(%r10,%r11,1), %r9
 ;   lea     0(%rsi,%r8,1), %r8
 ;   lea     0(%r9,%r8,1), %rax
-;   movq    256(%rsp), %rbx
-;   movq    264(%rsp), %r12
-;   movq    272(%rsp), %r13
-;   movq    280(%rsp), %r14
-;   movq    288(%rsp), %r15
+;   movq 0x100(%rsp), %rbx
+;   movq 0x108(%rsp), %r12
+;   movq 0x110(%rsp), %r13
+;   movq 0x118(%rsp), %r14
+;   movq 0x120(%rsp), %r15
 ;   addq $0x130, %rsp
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
