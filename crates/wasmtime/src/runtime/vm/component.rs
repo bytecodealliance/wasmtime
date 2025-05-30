@@ -244,7 +244,7 @@ impl ComponentInstance {
         (*ptr.as_ptr()).initialize_vmctx();
     }
 
-    fn vmctx(&self) -> NonNull<VMComponentContext> {
+    pub fn vmctx(&self) -> NonNull<VMComponentContext> {
         let addr = &raw const self.vmctx;
         let ret = self.vmctx_self_reference.as_ptr().with_addr(addr.addr());
         NonNull::new(ret).unwrap()

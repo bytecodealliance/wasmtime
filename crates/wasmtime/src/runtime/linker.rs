@@ -1425,7 +1425,7 @@ impl DefinitionType {
             Extern::Table(t) => {
                 DefinitionType::Table(*t.wasmtime_ty(store), t.internal_size(store))
             }
-            Extern::Global(t) => DefinitionType::Global(*t.wasmtime_ty(data)),
+            Extern::Global(t) => DefinitionType::Global(*t.wasmtime_ty(store)),
             Extern::Memory(t) => {
                 DefinitionType::Memory(*t.wasmtime_ty(store), t.internal_size(store))
             }

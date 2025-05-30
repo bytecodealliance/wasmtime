@@ -1,11 +1,12 @@
-use crate::runtime::vm::{StoreBox, VMGlobalDefinition};
+use crate::runtime::vm::{ExportGlobalKind, StoreBox, VMGlobalDefinition};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{GlobalType, Mutability, Result, RootedGcRefImpl, Val};
 use core::ptr::{self, NonNull};
+use wasmtime_environ::{DefinedGlobalIndex, EntityRef, Global};
 
 #[repr(C)]
 pub struct VMHostGlobalContext {
-    pub(crate) ty: GlobalType,
+    pub(crate) ty: Global,
     pub(crate) global: VMGlobalDefinition,
 }
 
@@ -22,7 +23,7 @@ pub fn generate_global_export(
         },
     };
     let ctx = StoreBox::new(VMHostGlobalContext {
-        ty,
+        ty: global,
         global: VMGlobalDefinition::new(),
     });
 
@@ -61,10 +62,12 @@ pub fn generate_global_export(
         global
     };
 
-    store.host_globals().push(ctx);
+    let globals = store.host_globals();
+    let index = DefinedGlobalIndex::new(globals.len());
+    store.host_globals_mut().push(ctx);
     Ok(crate::runtime::vm::ExportGlobal {
         definition: NonNull::from(definition),
-        vmctx: None,
+        kind: ExportGlobalKind::Host(index),
         global,
     })
 }

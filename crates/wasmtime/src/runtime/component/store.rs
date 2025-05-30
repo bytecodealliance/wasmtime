@@ -37,6 +37,10 @@ impl ComponentInstanceId {
     pub fn from_index(idx: usize) -> ComponentInstanceId {
         ComponentInstanceId(idx)
     }
+
+    pub(crate) fn index(&self) -> usize {
+        self.0
+    }
 }
 
 impl ComponentStoreData {
@@ -59,7 +63,6 @@ impl StoreData {
 }
 
 impl StoreOpaque {
-    #[expect(dead_code, reason = "to be used soon")]
     pub(crate) fn component_instance(&self, id: ComponentInstanceId) -> &ComponentInstance {
         self.store_data().components.instances[id.0]
             .as_ref()
