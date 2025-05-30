@@ -39,18 +39,11 @@ pub(crate) struct InstanceData {
     /// The id of the instance within the store, used to find the original
     /// `InstanceHandle`.
     id: InstanceId,
-    /// A lazily-populated list of exports of this instance. The order of
-    /// exports here matches the order of the exports in the original
-    /// module.
-    exports: Vec<Option<Extern>>,
 }
 
 impl InstanceData {
     pub fn from_id(id: InstanceId) -> InstanceData {
-        InstanceData {
-            id,
-            exports: vec![],
-        }
+        InstanceData { id }
     }
 }
 
@@ -312,8 +305,7 @@ impl Instance {
         // stored in the instance handle so we need to immediately handle
         // those here.
         let instance = {
-            let exports = vec![None; compiled_module.module().exports.len()];
-            let data = InstanceData { id, exports };
+            let data = InstanceData { id };
             Instance::from_wasmtime(data, store)
         };
 
@@ -392,31 +384,12 @@ impl Instance {
         &'a self,
         store: &'a mut StoreOpaque,
     ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
-        // If this is an `Instantiated` instance then all the `exports` may not
-        // be filled in. Fill them all in now if that's the case.
-        let InstanceData { exports, id, .. } = &store[self.0];
-        if exports.iter().any(|e| e.is_none()) {
-            let module = Arc::clone(store.instance(*id).module());
-            let data = &store[self.0];
-            let id = data.id;
-
-            for name in module.exports.keys() {
-                let instance = store.instance(id);
-                if let Some((export_name_index, _, &entity)) =
-                    instance.module().exports.get_full(name)
-                {
-                    self._get_export(store, entity, export_name_index);
-                }
-            }
-        }
-
         let data = &store.store_data()[self.0];
         let module = store.instance(data.id).module();
         module
             .exports
             .iter()
-            .zip(&data.exports)
-            .map(|((name, _), export)| Export::new(name, export.clone().unwrap()))
+            .map(|(name, entity)| Export::new(name, self._get_export(store, *entity)))
     }
 
     /// Looks up an exported [`Extern`] value by name.
@@ -440,8 +413,8 @@ impl Instance {
         let store = store.as_context_mut().0;
         let data = &store[self.0];
         let instance = store.instance(data.id);
-        let (export_name_index, _, &entity) = instance.module().exports.get_full(name)?;
-        self._get_export(store, entity, export_name_index)
+        let entity = *instance.module().exports.get(name)?;
+        Some(self._get_export(store, entity))
     }
 
     /// Looks up an exported [`Extern`] value by a [`ModuleExport`] value.
@@ -469,29 +442,17 @@ impl Instance {
             return None;
         }
 
-        self._get_export(store, export.entity, export.export_name_index)
+        Some(self._get_export(store, export.entity))
     }
 
-    fn _get_export(
-        &self,
-        store: &mut StoreOpaque,
-        entity: EntityIndex,
-        export_name_index: usize,
-    ) -> Option<Extern> {
+    fn _get_export(&self, store: &StoreOpaque, entity: EntityIndex) -> Extern {
         // Instantiated instances will lazily fill in exports, so we process
         // all that lazy logic here.
         let data = &store[self.0];
 
-        if let Some(export) = &data.exports[export_name_index] {
-            return Some(export.clone());
-        }
+        let instance = store.instance(data.id); // Reborrow the &mut InstanceHandle
 
-        let instance = store.instance_mut(data.id); // Reborrow the &mut InstanceHandle
-        let item =
-            unsafe { Extern::from_wasmtime_export(instance.get_export_by_index(entity), store) };
-        let data = &mut store[self.0];
-        data.exports[export_name_index] = Some(item.clone());
-        Some(item)
+        unsafe { Extern::from_wasmtime_export(instance.get_export_by_index(entity), store) }
     }
 
     /// Looks up an exported [`Func`] value by name.
