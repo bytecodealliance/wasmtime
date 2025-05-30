@@ -484,10 +484,9 @@ impl Assembler {
                 dst: dst.map(Into::into),
             });
         } else {
-            self.emit(Inst::Mov64MR {
-                src,
-                dst: dst.map(Into::into),
-            });
+            let dst = WritableGpr::from_reg(dst.to_reg().into());
+            let inst = asm::inst::movq_rm::new(dst, src).into();
+            self.emit(Inst::External { inst });
         }
     }
 
