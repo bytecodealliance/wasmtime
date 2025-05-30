@@ -41,8 +41,10 @@ pub struct Interpreter {
     ///
     /// Note that the safety of this all relies not only on correctly managing
     /// this pointer but it also requires that this pointer is never
-    /// deallocated. This private field is never overwritten which ensures such
-    /// a guarantee.
+    /// deallocated while an `InterpreterRef` is live. The `InterpreterRef` type
+    /// carries a borrow of this type to ensure this isn't dropped
+    /// independently, and then this file never overwrites this private field to
+    /// otherwise guarantee this.
     pulley: StoreBox<Vm>,
 }
 
