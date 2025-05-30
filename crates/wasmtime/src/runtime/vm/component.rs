@@ -8,6 +8,7 @@
 
 use crate::component::ResourceType;
 use crate::prelude::*;
+use crate::runtime::component::ComponentInstanceId;
 use crate::runtime::vm::{
     SendSyncPtr, VMArrayCallFunction, VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
     VMOpaqueContext, VMStore, VMStoreRawPtr, VMTable, VMTableDefinition, VMWasmCallFunction,
@@ -44,6 +45,9 @@ pub use self::resources::{
 /// contained within.
 #[repr(C)]
 pub struct ComponentInstance {
+    /// The index within the store of where to find this component instance.
+    id: ComponentInstanceId,
+
     /// Size and offset information for the trailing `VMComponentContext`.
     offsets: VMComponentOffsets<HostPtr>,
 
@@ -200,6 +204,7 @@ impl ComponentInstance {
         ptr: NonNull<ComponentInstance>,
         alloc_size: usize,
         offsets: VMComponentOffsets<HostPtr>,
+        id: ComponentInstanceId,
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
         store: NonNull<dyn VMStore>,
@@ -216,6 +221,7 @@ impl ComponentInstance {
         ptr::write(
             ptr.as_ptr(),
             ComponentInstance {
+                id,
                 offsets,
                 vmctx_self_reference: SendSyncPtr::new(
                     NonNull::new(
@@ -749,6 +755,11 @@ impl ComponentInstance {
         _ = (src_idx, src, dst);
         todo!()
     }
+
+    /// Returns the store-local id that points to this component.
+    pub fn id(&self) -> ComponentInstanceId {
+        self.id
+    }
 }
 
 impl VMComponentContext {
@@ -776,6 +787,7 @@ impl OwnedComponentInstance {
     /// Allocates a new `ComponentInstance + VMComponentContext` pair on the
     /// heap with `malloc` and configures it for the `component` specified.
     pub fn new(
+        id: ComponentInstanceId,
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
         store: NonNull<dyn VMStore>,
@@ -799,6 +811,7 @@ impl OwnedComponentInstance {
                 ptr,
                 layout.size(),
                 offsets,
+                id,
                 runtime_info,
                 resource_types,
                 store,

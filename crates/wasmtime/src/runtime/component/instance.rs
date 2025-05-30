@@ -555,6 +555,7 @@ impl<'a> Instantiator<'a> {
                 instances: PrimaryMap::with_capacity(env_component.num_runtime_instances as usize),
                 component: component.clone(),
                 state: OwnedComponentInstance::new(
+                    store.store_data().components.next_component_instance_id(),
                     component.runtime_info(),
                     Arc::new(imported_resources),
                     store.traitobj(),
@@ -932,7 +933,7 @@ impl<T: 'static> InstancePre<T> {
             e
         })?;
         let data = Box::new(instantiator.data);
-        let instance = Instance(store.0.store_data_mut().insert(Some(data)));
+        let instance = Instance(store.0.store_data_mut().push_component_instance(data));
         store.0.push_component_instance(instance);
         Ok(instance)
     }
