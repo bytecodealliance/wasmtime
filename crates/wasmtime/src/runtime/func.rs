@@ -527,7 +527,7 @@ impl Func {
     }
 
     pub(crate) unsafe fn from_vm_func_ref(
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
         func_ref: NonNull<VMFuncRef>,
     ) -> Func {
         debug_assert!(func_ref.as_ref().type_index != VMSharedTypeIndex::default());
@@ -1218,12 +1218,12 @@ impl Func {
 
     pub(crate) unsafe fn from_wasmtime_function(
         export: ExportFunction,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
     ) -> Self {
         Self::from_vm_func_ref(store, export.func_ref)
     }
 
-    pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> VMFunctionImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> VMFunctionImport {
         unsafe {
             let f = self.vm_func_ref(store);
             VMFunctionImport {
