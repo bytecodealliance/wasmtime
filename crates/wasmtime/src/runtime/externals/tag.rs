@@ -16,7 +16,7 @@ pub struct Tag {
 impl Tag {
     pub(crate) unsafe fn from_wasmtime_tag(
         wasmtime_export: crate::runtime::vm::ExportTag,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
     ) -> Self {
         debug_assert!(
             wasmtime_export.tag.signature.unwrap_engine_type_index()

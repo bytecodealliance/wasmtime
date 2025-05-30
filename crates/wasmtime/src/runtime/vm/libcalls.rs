@@ -911,7 +911,7 @@ unsafe fn array_init_elem(
             .iter()
             .map(|f| {
                 let raw_func_ref = instance.get_func_ref(*f);
-                let func = raw_func_ref.map(|p| Func::from_vm_func_ref(&mut store, p));
+                let func = raw_func_ref.map(|p| Func::from_vm_func_ref(&store, p));
                 Val::FuncRef(func)
             })
             .collect::<Vec<_>>(),

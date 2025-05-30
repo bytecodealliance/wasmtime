@@ -167,7 +167,7 @@ impl Table {
         unsafe {
             match (*table).get(gc_store, index)? {
                 runtime::TableElement::FuncRef(f) => {
-                    let func = f.map(|f| Func::from_vm_func_ref(&mut store, f));
+                    let func = f.map(|f| Func::from_vm_func_ref(&store, f));
                     Some(func.into())
                 }
 
@@ -409,7 +409,7 @@ impl Table {
 
     pub(crate) unsafe fn from_wasmtime_table(
         wasmtime_export: crate::runtime::vm::ExportTable,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
     ) -> Table {
         debug_assert!(
             wasmtime_export

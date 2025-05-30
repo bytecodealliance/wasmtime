@@ -527,7 +527,7 @@ impl Func {
     }
 
     pub(crate) unsafe fn from_vm_func_ref(
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
         func_ref: NonNull<VMFuncRef>,
     ) -> Func {
         debug_assert!(func_ref.as_ref().type_index != VMSharedTypeIndex::default());
@@ -900,14 +900,7 @@ impl Func {
     }
 
     pub(crate) fn type_index(&self, data: &StoreOpaque) -> VMSharedTypeIndex {
-        // Note that this is only accessing the `type_index` field of the
-        // `VMFuncRef` so this doesn't need the lazy-fill-in-logic of
-        // `self.vm_func_ref` and then doesn't need `&mut StoreOpaque`. That
-        // builds up to this directly using `self.unsafe_func_ref` which is why
-        // there's a store-check directly preceding it to ensure that it's safe
-        // to witness the funcref in this store.
-        self.store.assert_belongs_to(data.id());
-        unsafe { self.unsafe_func_ref.as_ref().type_index }
+        unsafe { self.vm_func_ref(data).as_ref().type_index }
     }
 
     /// Invokes this function with the `params` given and writes returned values
@@ -1218,19 +1211,19 @@ impl Func {
     }
 
     #[inline]
-    pub(crate) fn vm_func_ref(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
+    pub(crate) fn vm_func_ref(&self, store: &StoreOpaque) -> NonNull<VMFuncRef> {
         self.store.assert_belongs_to(store.id());
         self.unsafe_func_ref.as_non_null()
     }
 
     pub(crate) unsafe fn from_wasmtime_function(
         export: ExportFunction,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
     ) -> Self {
         Self::from_vm_func_ref(store, export.func_ref)
     }
 
-    pub(crate) fn vmimport(&self, store: &mut StoreOpaque) -> VMFunctionImport {
+    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> VMFunctionImport {
         unsafe {
             let f = self.vm_func_ref(store);
             VMFunctionImport {
