@@ -35,6 +35,15 @@ crate::declare_vecs! {
         copy: wasmtime_component_valtuple_copy,
         delete: wasmtime_component_valtuple_delete,
     )
+    (
+        name: wasmtime_component_valflags_t,
+        ty: wasm_name_t,
+        new: wasmtime_component_valflags_new,
+        empty: wasmtime_component_valflags_new_empty,
+        uninit: wasmtime_component_valflags_new_uninit,
+        copy: wasmtime_component_valflags_copy,
+        delete: wasmtime_component_valflags_delete,
+    )
 }
 
 impl From<&wasmtime_component_vallist_t> for Vec<Val> {
@@ -114,6 +123,28 @@ impl From<&[Val]> for wasmtime_component_valtuple_t {
         value
             .iter()
             .map(wasmtime_component_val_t::from)
+            .collect::<Vec<_>>()
+            .into()
+    }
+}
+
+impl From<&wasmtime_component_valflags_t> for Vec<String> {
+    fn from(value: &wasmtime_component_valflags_t) -> Self {
+        value
+            .clone()
+            .take()
+            .into_iter()
+            .map(|mut x| String::from_utf8(x.take()))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+    }
+}
+
+impl From<&[String]> for wasmtime_component_valflags_t {
+    fn from(value: &[String]) -> Self {
+        value
+            .iter()
+            .map(|x| wasm_name_t::from_name(x.clone()))
             .collect::<Vec<_>>()
             .into()
     }
@@ -200,6 +231,7 @@ pub enum wasmtime_component_val_t {
     Enum(wasm_name_t),
     Option(Option<Box<Self>>),
     Result(wasmtime_component_valresult_t),
+    Flags(wasmtime_component_valflags_t),
 }
 
 impl Default for wasmtime_component_val_t {
@@ -240,6 +272,7 @@ impl From<&wasmtime_component_val_t> for Val {
                 Val::Option(x.as_ref().map(|x| Box::new(Val::from(x.as_ref()))))
             }
             wasmtime_component_val_t::Result(x) => Val::Result(x.into()),
+            wasmtime_component_val_t::Flags(x) => Val::Flags(x.into()),
         }
     }
 }
@@ -272,7 +305,7 @@ impl From<&Val> for wasmtime_component_val_t {
                     .map(|x| Box::new(wasmtime_component_val_t::from(x.as_ref()))),
             ),
             Val::Result(x) => wasmtime_component_val_t::Result(x.into()),
-            Val::Flags(_items) => todo!(),
+            Val::Flags(x) => wasmtime_component_val_t::Flags(x.as_slice().into()),
             Val::Resource(_resource_any) => todo!(),
         }
     }

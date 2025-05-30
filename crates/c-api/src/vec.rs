@@ -28,6 +28,7 @@ macro_rules! declare_vecs {
             delete: $delete:ident,
         ))*
     ) => {$(
+        #[derive(Default)]
         #[repr(C)]
         pub struct $name $(<$lt>)? {
             size: usize,

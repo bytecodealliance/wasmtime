@@ -763,6 +763,70 @@ local.get $res
   destroy(ctx);
 }
 
+TEST(component, value_flags) {
+  static const auto check = [](const wasmtime_component_val_t &val,
+                               std::vector<std::string> data) {
+    EXPECT_EQ(val.kind, WASMTIME_COMPONENT_FLAGS);
+    auto flags = std::span{val.of.flags.data, val.of.flags.size};
+    EXPECT_EQ(flags.size(), data.size());
+    for (auto i = 0; i < data.size(); i++) {
+      EXPECT_EQ((std::string_view{flags[i].data, flags[i].size}), data[i]);
+    }
+  };
+
+  static const auto make =
+      [](std::vector<std::string> data) -> wasmtime_component_val_t {
+    auto ret = wasmtime_component_val_t{
+        .kind = WASMTIME_COMPONENT_FLAGS,
+    };
+
+    wasmtime_component_valflags_new_uninit(&ret.of.flags, data.size());
+
+    for (auto i = 0; i < data.size(); i++) {
+      wasm_name_new(&ret.of.flags.data[i], data[i].size(), data[i].data());
+    }
+
+    return ret;
+  };
+
+  auto ctx = create(
+      R"((flags "aa" "bb"))", R"(
+(param $x i32)
+(result i32)
+local.get $x
+call $do
+	  )",
+      "(param i32) (result i32)",
+      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
+          size_t args_len, wasmtime_component_val_t *rets,
+          size_t rets_len) -> wasmtime_error_t * {
+        EXPECT_EQ(args_len, 1);
+        check(args[0], {"aa"});
+
+        EXPECT_EQ(rets_len, 1);
+        rets[0] = make({"aa", "bb"});
+
+        return nullptr;
+      });
+
+  auto arg = make({"aa"});
+  auto res = wasmtime_component_val_t{};
+
+  auto err =
+      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  CHECK_ERR(err);
+
+  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
+  CHECK_ERR(err);
+
+  check(res, {"aa", "bb"});
+
+  wasmtime_component_val_delete(&arg);
+  wasmtime_component_val_delete(&res);
+
+  destroy(ctx);
+}
+
 TEST(component, value_list_inner) {
   {
     auto x = wasmtime_component_val_t{
