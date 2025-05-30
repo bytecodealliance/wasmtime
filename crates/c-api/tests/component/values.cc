@@ -685,6 +685,84 @@ local.get $res
   destroy(ctx);
 }
 
+TEST(component, value_result) {
+  static const auto check = [](const wasmtime_component_val_t &val,
+                               bool expected_is_ok, uint32_t expected_value) {
+    EXPECT_EQ(val.kind, WASMTIME_COMPONENT_RESULT);
+
+    EXPECT_EQ(val.of.result.is_ok, expected_is_ok);
+    EXPECT_NE(val.of.result.val, nullptr);
+
+    EXPECT_EQ(val.of.result.val->kind, WASMTIME_COMPONENT_U32);
+    EXPECT_EQ(val.of.result.val->of.u32, expected_value);
+  };
+
+  static const auto make = [](bool is_ok,
+                              uint32_t value) -> wasmtime_component_val_t {
+    auto ret = wasmtime_component_val_t{
+        .kind = WASMTIME_COMPONENT_RESULT,
+    };
+
+    const auto inner = wasmtime_component_val_new();
+    inner->kind = WASMTIME_COMPONENT_U32;
+    inner->of.u32 = value;
+
+    ret.of.result = {
+        .is_ok = is_ok,
+        .val = inner,
+    };
+
+    return ret;
+  };
+
+  auto ctx = create(
+      R"((result u32 (error u32)))", R"(
+(param $x i32)
+(param $y i32)
+(result i32)
+(local $res i32)
+local.get $x
+local.get $y
+(call $realloc
+	(i32.const 0)
+	(i32.const 0)
+	(i32.const 4)
+	(i32.const 8))
+local.tee $res
+call $do
+local.get $res
+	  )",
+      "(param i32 i32 i32)",
+      +[](void *, wasmtime_context_t *, const wasmtime_component_val_t *args,
+          size_t args_len, wasmtime_component_val_t *rets,
+          size_t rets_len) -> wasmtime_error_t * {
+        EXPECT_EQ(args_len, 1);
+        check(args[0], true, 123);
+
+        EXPECT_EQ(rets_len, 1);
+        rets[0] = make(false, 456);
+
+        return nullptr;
+      });
+
+  auto arg = make(true, 123);
+  auto res = wasmtime_component_val_t{};
+
+  auto err =
+      wasmtime_component_func_call(&ctx.func, ctx.context, &arg, 1, &res, 1);
+  CHECK_ERR(err);
+
+  err = wasmtime_component_func_post_return(&ctx.func, ctx.context);
+  CHECK_ERR(err);
+
+  check(res, false, 456);
+
+  wasmtime_component_val_delete(&arg);
+  wasmtime_component_val_delete(&res);
+
+  destroy(ctx);
+}
+
 TEST(component, value_list_inner) {
   {
     auto x = wasmtime_component_val_t{
