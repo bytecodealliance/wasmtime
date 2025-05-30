@@ -500,8 +500,9 @@ impl Instance {
         }
     }
 
-    /// Return the indexed `VMMemoryDefinition`.
-    fn memory(&self, index: DefinedMemoryIndex) -> VMMemoryDefinition {
+    /// Return the indexed `VMMemoryDefinition`, loaded from vmctx memory
+    /// already.
+    pub fn memory(&self, index: DefinedMemoryIndex) -> VMMemoryDefinition {
         unsafe { VMMemoryDefinition::load(self.memory_ptr(index).as_ptr()) }
     }
 
@@ -512,8 +513,11 @@ impl Instance {
         }
     }
 
-    /// Return the indexed `VMMemoryDefinition`.
-    fn memory_ptr(&self, index: DefinedMemoryIndex) -> NonNull<VMMemoryDefinition> {
+    /// Return the address of the specified memory at `index` within this vmctx.
+    ///
+    /// Note that the returned pointer resides in wasm-code-readable-memory in
+    /// the vmctx.
+    pub fn memory_ptr(&self, index: DefinedMemoryIndex) -> NonNull<VMMemoryDefinition> {
         let vmptr = unsafe {
             *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets().vmctx_vmmemory_pointer(index))
         };
@@ -1501,6 +1505,11 @@ impl Instance {
             }
         }
         fault
+    }
+
+    /// Returns the id, within this instance's store, that it's assigned.
+    pub fn id(&self) -> InstanceId {
+        self.id
     }
 }
 

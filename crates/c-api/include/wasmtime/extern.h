@@ -55,10 +55,14 @@ typedef struct wasmtime_table {
 /// wrong memory is passed to the wrong store then it may trigger an assertion
 /// to abort the process.
 typedef struct wasmtime_memory {
-  /// Internal identifier of what store this belongs to, never zero.
-  uint64_t store_id;
+  struct {
+    /// Internal identifier of what store this belongs to, never zero.
+    uint64_t store_id;
+    /// Private field for Wasmtime.
+    size_t __private1;
+  };
   /// Private field for Wasmtime.
-  size_t __private;
+  uint32_t __private2;
 } wasmtime_memory_t;
 
 /// \brief Representation of a global in Wasmtime.
