@@ -482,7 +482,7 @@ pub fn cont_new(
 
 /// This type represents a linked lists ("chain") of stacks, where the a
 /// node's successor denotes its parent.
-/// A additionally, a `CommonStackInformation` object is associated with
+/// Additionally, a `CommonStackInformation` object is associated with
 /// each stack in the list.
 /// Here, a "stack" is one of the following:
 /// - A continuation (i.e., created with cont.new).
