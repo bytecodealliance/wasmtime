@@ -177,10 +177,6 @@ mod test_vmtable {
             offset_of!(VMTableImport, from),
             usize::from(offsets.vmtable_import_from())
         );
-        assert_eq!(
-            offset_of!(VMTableImport, vmctx),
-            usize::from(offsets.vmtable_import_vmctx())
-        );
     }
 
     #[test]
@@ -235,10 +231,6 @@ mod test_vmmemory_import {
         assert_eq!(
             offset_of!(VMMemoryImport, from),
             usize::from(offsets.vmmemory_import_from())
-        );
-        assert_eq!(
-            offset_of!(VMMemoryImport, vmctx),
-            usize::from(offsets.vmmemory_import_vmctx())
         );
     }
 }
