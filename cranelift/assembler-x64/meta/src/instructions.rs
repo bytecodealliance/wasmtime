@@ -12,6 +12,7 @@ mod mov;
 mod mul;
 mod neg;
 mod or;
+mod round;
 mod shift;
 mod sqrt;
 mod sub;
@@ -35,6 +36,7 @@ pub fn list() -> Vec<Inst> {
     all.extend(mul::list());
     all.extend(neg::list());
     all.extend(or::list());
+    all.extend(round::list());
     all.extend(shift::list());
     all.extend(sqrt::list());
     all.extend(sub::list());

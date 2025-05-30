@@ -796,10 +796,6 @@
             Pshufd
             Ptest
             Rcpss
-            Roundps
-            Roundpd
-            Roundss
-            Roundsd
             Rsqrtss
             Shufps
             Ucomiss
@@ -3896,21 +3892,21 @@
 ;; because the AVX variant, when available, doesn't need alignment and can
 ;; pass through the `src1` argument as-is.
 (decl x64_roundss (XmmMem RoundImm) Xmm)
-(rule (x64_roundss src1 round)
-      (xmm_unary_rm_r_imm (SseOpcode.Roundss) (put_xmm_mem_in_xmm $F32 src1) (encode_round_imm round)))
 (rule 1 (x64_roundss src1 round)
         (if-let true (use_avx))
         (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundss) src1 (encode_round_imm round)))
+(rule 0 (x64_roundss src1 round)
+        (x64_roundss_rmi src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundsd` instructions.
 ;;
 ;; NB: see `x64_roundss` above for `put_xmm_mem_in_xmm` in call.
 (decl x64_roundsd (XmmMem RoundImm) Xmm)
-(rule (x64_roundsd src1 round)
-      (xmm_unary_rm_r_imm (SseOpcode.Roundsd) (put_xmm_mem_in_xmm $F64 src1) (encode_round_imm round)))
 (rule 1 (x64_roundsd src1 round)
         (if-let true (use_avx))
         (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundsd) src1 (encode_round_imm round)))
+(rule 0 (x64_roundsd src1 round)
+        (x64_roundsd_rmi src1 (encode_round_imm round)))
 
 ;; Helper for forcing an `XmmMem` to be placed into an `Xmm` register.
 ;;
@@ -3926,19 +3922,19 @@
 
 ;; Helper for creating `roundps` instructions.
 (decl x64_roundps (XmmMem RoundImm) Xmm)
-(rule (x64_roundps src1 round)
-      (xmm_unary_rm_r_imm (SseOpcode.Roundps) src1 (encode_round_imm round)))
 (rule 1 (x64_roundps src1 round)
       (if-let true (use_avx))
       (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundps) src1 (encode_round_imm round)))
+(rule (x64_roundps src1 round)
+      (x64_roundps_rmi src1 (encode_round_imm round)))
 
 ;; Helper for creating `roundpd` instructions.
 (decl x64_roundpd (XmmMem RoundImm) Xmm)
-(rule (x64_roundpd src1 round)
-      (xmm_unary_rm_r_imm (SseOpcode.Roundpd) src1 (encode_round_imm round)))
 (rule 1 (x64_roundpd src1 round)
       (if-let true (use_avx))
       (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundpd) src1 (encode_round_imm round)))
+(rule 0 (x64_roundpd src1 round)
+      (x64_roundpd_rmi src1 (encode_round_imm round)))
 
 ;; Helper for creating `pmaddwd` instructions.
 (decl x64_pmaddwd (Xmm XmmMem) Xmm)
