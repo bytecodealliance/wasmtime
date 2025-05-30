@@ -150,7 +150,7 @@ impl Extern {
             Extern::Global(g) => store.store_data().contains(g.0),
             Extern::Memory(m) => m.comes_from_same_store(store),
             Extern::SharedMemory(m) => Engine::same(m.engine(), store.engine()),
-            Extern::Table(t) => store.store_data().contains(t.0),
+            Extern::Table(t) => t.comes_from_same_store(store),
             Extern::Tag(t) => store.store_data().contains(t.0),
         }
     }
