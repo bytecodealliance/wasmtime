@@ -28,7 +28,6 @@ macro_rules! declare_vecs {
             delete: $delete:ident,
         ))*
     ) => {$(
-        #[derive(Default)]
         #[repr(C)]
         pub struct $name $(<$lt>)? {
             size: usize,
@@ -77,6 +76,15 @@ macro_rules! declare_vecs {
                 self.data = ptr::null_mut();
                 self.size = 0;
                 return vec;
+            }
+        }
+
+        impl$(<$lt>)? Default for $name $(<$lt>)? {
+            fn default() -> Self {
+                Self {
+                    size: 0,
+                    data: ptr::null_mut(),
+                }
             }
         }
 
