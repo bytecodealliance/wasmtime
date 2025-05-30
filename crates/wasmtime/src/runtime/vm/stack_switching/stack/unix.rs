@@ -94,7 +94,7 @@ impl VMContinuationStack {
         let size = if size == 0 {
             page_size
         } else {
-            (size + (page_size - 1)) & (!(page_size - 1))
+            size.next_multiple_of(page_size)
         };
 
         unsafe {
