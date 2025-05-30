@@ -66,6 +66,9 @@ pub struct ComponentDfg {
     /// Same as `reallocs`, but for post-return.
     pub memories: Intern<MemoryId, CoreExport<MemoryIndex>>,
 
+    /// Tables used by this component.
+    pub tables: Intern<TableId, CoreExport<TableIndex>>,
+
     /// Metadata about identified fused adapters.
     ///
     /// Note that this list is required to be populated in-order where the
@@ -388,6 +391,10 @@ pub enum Trampoline {
     FutureTransfer,
     StreamTransfer,
     ErrorContextTransfer,
+    ThreadSpawnIndirect {
+        ty: TypeFuncIndex,
+        table: TableId,
+    },
 }
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
@@ -700,6 +707,15 @@ impl LinearizeDfg<'_> {
         )
     }
 
+    fn runtime_table(&mut self, tbl: TableId) -> RuntimeTableIndex {
+        self.intern(
+            tbl,
+            |me| &mut me.runtime_tables,
+            |me, tbl| me.core_export(&me.dfg.tables[tbl]),
+            |index, export| GlobalInitializer::ExtractTable(ExtractTable { index, export }),
+        )
+    }
+
     fn runtime_realloc(&mut self, realloc: ReallocId) -> RuntimeReallocIndex {
         self.intern(
             realloc,
@@ -890,6 +906,12 @@ impl LinearizeDfg<'_> {
             Trampoline::FutureTransfer => info::Trampoline::FutureTransfer,
             Trampoline::StreamTransfer => info::Trampoline::StreamTransfer,
             Trampoline::ErrorContextTransfer => info::Trampoline::ErrorContextTransfer,
+            Trampoline::ThreadSpawnIndirect { ty, table } => {
+                info::Trampoline::ThreadSpawnIndirect {
+                    ty: *ty,
+                    table: self.runtime_table(*table),
+                }
+            }
         };
         let i1 = self.trampolines.push(*signature);
         let i2 = self.trampoline_defs.push(trampoline);

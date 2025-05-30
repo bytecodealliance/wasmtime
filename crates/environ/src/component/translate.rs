@@ -328,6 +328,13 @@ enum LocalInitializer<'data> {
 
     // export section
     Export(ComponentItem),
+
+    // threads
+    ThreadSpawnIndirect {
+        ty: ComponentFuncTypeId,
+        table: TableIndex,
+        func: ModuleInternedTypeIndex,
+    },
 }
 
 /// The "closure environment" of components themselves.
@@ -810,12 +817,21 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::ErrorContextDrop { func }
                         }
+                        wasmparser::CanonicalFunction::ThreadSpawnIndirect {
+                            func_ty_index,
+                            table_index,
+                        } => {
+                            let ty = types.component_any_type_at(func_ty_index).unwrap_func();
+                            let func = self.core_func_signature(core_func_index)?;
+                            let table = TableIndex::from_u32(table_index);
+                            core_func_index += 1;
+                            LocalInitializer::ThreadSpawnIndirect { ty, func, table }
+                        }
                         wasmparser::CanonicalFunction::ContextGet(..)
                         | wasmparser::CanonicalFunction::ContextSet(..)
                         | wasmparser::CanonicalFunction::TaskCancel
                         | wasmparser::CanonicalFunction::SubtaskCancel { .. }
                         | wasmparser::CanonicalFunction::ThreadSpawnRef { .. }
-                        | wasmparser::CanonicalFunction::ThreadSpawnIndirect { .. }
                         | wasmparser::CanonicalFunction::ThreadAvailableParallelism => {
                             bail!("unsupported intrinsic")
                         }
