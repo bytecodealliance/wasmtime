@@ -2236,10 +2236,16 @@
                   (= mode (ExtMode.WL))
                   (= mode (ExtMode.WQ))
                   (= mode (ExtMode.LQ)))))
-(rule (x64_movzx mode src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.MovzxRmR mode src dst))))
-        dst))
+(rule (x64_movzx (ExtMode.BL) src) (x64_movzbl_rm src))
+(rule (x64_movzx (ExtMode.BQ) src) (x64_movzbq_rm src))
+(rule (x64_movzx (ExtMode.WL) src) (x64_movzwl_rm src))
+(rule (x64_movzx (ExtMode.WQ) src) (x64_movzwq_rm src))
+;; This instruction selection may seem strange but is correct in 64-bit mode:
+;; section 3.4.1.1 of the Intel manual says that "32-bit operands generate a
+;; 32-bit result, zero-extended to a 64-bit result in the destination
+;; general-purpose register." This is applicable beyond `mov` but we use this
+;; fact to zero-extend `src` into `dst`.
+(rule (x64_movzx (ExtMode.LQ) src) (x64_movl_rm src))
 
 (decl x64_movsx (ExtMode GprMem) Gpr)
 (rule (x64_movsx mode src)
