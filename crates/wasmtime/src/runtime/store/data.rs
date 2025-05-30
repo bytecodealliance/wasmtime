@@ -25,7 +25,6 @@ impl InstanceId {
 
 pub struct StoreData {
     id: StoreId,
-    funcs: Vec<crate::func::FuncData>,
     tables: Vec<crate::runtime::vm::ExportTable>,
     globals: Vec<crate::runtime::vm::ExportGlobal>,
     instances: Vec<crate::instance::InstanceData>,
@@ -51,7 +50,6 @@ macro_rules! impl_store_data {
 }
 
 impl_store_data! {
-    funcs => crate::func::FuncData,
     tables => crate::runtime::vm::ExportTable,
     globals => crate::runtime::vm::ExportGlobal,
     instances => crate::instance::InstanceData,
@@ -62,7 +60,6 @@ impl StoreData {
     pub fn new() -> StoreData {
         StoreData {
             id: StoreId::allocate(),
-            funcs: Vec::new(),
             tables: Vec::new(),
             globals: Vec::new(),
             instances: Vec::new(),
@@ -112,10 +109,6 @@ impl StoreData {
     {
         let id = self.id;
         (0..T::list(self).len()).map(move |i| Stored::new(id, i))
-    }
-
-    pub(crate) fn reserve_funcs(&mut self, count: usize) {
-        self.funcs.reserve(count);
     }
 }
 
