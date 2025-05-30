@@ -3,10 +3,11 @@ use super::{address::Address, regs};
 use crate::CallingConvention;
 use crate::aarch64::regs::zero;
 use crate::masm::{
-    DivKind, Extend, ExtendKind, FloatCmpKind, IntCmpKind, RemKind, RoundingMode, ShiftKind,
-    Signed, TruncKind,
+    DivKind, Extend, ExtendKind, FloatCmpKind, Imm, IntCmpKind, RemKind, RoundingMode, ShiftKind,
+    Signed, TRUSTED_FLAGS, TruncKind,
 };
 use crate::{
+    constant_pool::ConstantPool,
     masm::OperandSize,
     reg::{Reg, WritableReg, writable},
 };
@@ -92,6 +93,8 @@ pub(crate) struct Assembler {
     emit_info: EmitInfo,
     /// Emission state.
     emit_state: EmitState,
+    /// Constant pool.
+    pool: ConstantPool,
 }
 
 impl Assembler {
@@ -101,6 +104,7 @@ impl Assembler {
             buffer: MachBuffer::<Inst>::new(),
             emit_state: Default::default(),
             emit_info: EmitInfo::new(shared_flags),
+            pool: ConstantPool::new(),
         }
     }
 }
@@ -108,10 +112,9 @@ impl Assembler {
 impl Assembler {
     /// Return the emitted code.
     pub fn finalize(mut self, loc: Option<SourceLoc>) -> MachBufferFinalized<Final> {
-        let constants = Default::default();
         let stencil = self
             .buffer
-            .finish(&constants, self.emit_state.ctrl_plane_mut());
+            .finish(&self.pool.constants(), self.emit_state.ctrl_plane_mut());
         stencil.apply_base_srcloc(loc.unwrap_or_default())
     }
 
@@ -134,12 +137,41 @@ impl Assembler {
         inst.emit(&mut self.buffer, &self.emit_info, &mut self.emit_state);
     }
 
-    /// Load a constant into a register.
-    pub fn load_constant(&mut self, imm: u64, rd: WritableReg) {
+    /// Load an integer immediate into a register.
+    pub fn load_int_const(&mut self, imm: u64, rd: WritableReg) {
         let writable = rd.map(Into::into);
         Inst::load_constant(writable, imm, &mut |_| writable)
             .into_iter()
             .for_each(|i| self.emit(i));
+    }
+
+    /// Load a floating point immediate into a register.
+    pub fn load_fp_const(&mut self, rd: Writable<Reg>, imm: Imm, size: OperandSize) {
+        let bits = match imm {
+            Imm::F32(v) => v as u64,
+            Imm::F64(v) => v,
+            _ => unreachable!(),
+        };
+
+        match ASIMDFPModImm::maybe_from_u64(bits, size.into()) {
+            Some(imm) => {
+                self.emit(Inst::FpuMoveFPImm {
+                    rd: rd.map(Into::into),
+                    imm,
+                    size: size.into(),
+                });
+            }
+            _ => {
+                let addr = self.add_constant(&imm.to_bytes());
+                self.uload(addr, rd, size, TRUSTED_FLAGS);
+            }
+        }
+    }
+
+    /// Adds a constant to the constant pool, returning its address.
+    pub fn add_constant(&mut self, constant: &[u8]) -> Address {
+        let handle = self.pool.register(constant, &mut self.buffer);
+        Address::constant(handle)
     }
 
     /// Store a pair of registers.
@@ -363,7 +395,7 @@ impl Assembler {
             self.alu_rri(alu_op, imm, rn, rd, size);
         } else {
             let scratch = regs::scratch();
-            self.load_constant(imm, writable!(scratch));
+            self.load_int_const(imm, writable!(scratch));
             self.alu_rrr_extend(alu_op, scratch, rn, rd, size);
         }
     }
@@ -390,7 +422,7 @@ impl Assembler {
             self.alu_rri(alu_op, imm, rn, rd, size);
         } else {
             let scratch = regs::scratch();
-            self.load_constant(imm, writable!(scratch));
+            self.load_int_const(imm, writable!(scratch));
             self.alu_rrr_extend(alu_op, scratch, rn, rd, size);
         }
     }
@@ -407,7 +439,7 @@ impl Assembler {
             self.alu_rri(alu_op, imm, rn, writable!(regs::zero()), size);
         } else {
             let scratch = regs::scratch();
-            self.load_constant(imm, writable!(scratch));
+            self.load_int_const(imm, writable!(scratch));
             self.alu_rrr_extend(alu_op, scratch, rn, writable!(regs::zero()), size);
         }
     }
@@ -420,7 +452,7 @@ impl Assembler {
     /// Multiply immediate and register.
     pub fn mul_ir(&mut self, imm: u64, rn: Reg, rd: WritableReg, size: OperandSize) {
         let scratch = regs::scratch();
-        self.load_constant(imm, writable!(scratch));
+        self.load_int_const(imm, writable!(scratch));
         self.alu_rrrr(ALUOp3::MAdd, scratch, rn, rd, regs::zero(), size);
     }
 
@@ -549,7 +581,7 @@ impl Assembler {
             self.alu_rri_logic(alu_op, imm, rn, rd, size);
         } else {
             let scratch = regs::scratch();
-            self.load_constant(imm, writable!(scratch));
+            self.load_int_const(imm, writable!(scratch));
             self.alu_rrr(alu_op, scratch, rn, rd, size);
         }
     }
@@ -567,7 +599,7 @@ impl Assembler {
             self.alu_rri_logic(alu_op, imm, rn, rd, size);
         } else {
             let scratch = regs::scratch();
-            self.load_constant(imm, writable!(scratch));
+            self.load_int_const(imm, writable!(scratch));
             self.alu_rrr(alu_op, scratch, rn, rd, size);
         }
     }
@@ -585,7 +617,7 @@ impl Assembler {
             self.alu_rri_logic(alu_op, imm, rn, rd, size);
         } else {
             let scratch = regs::scratch();
-            self.load_constant(imm, writable!(scratch));
+            self.load_int_const(imm, writable!(scratch));
             self.alu_rrr(alu_op, scratch, rn, rd, size);
         }
     }
@@ -618,7 +650,7 @@ impl Assembler {
             self.alu_rri_shift(shift_op, imm, rn, rd, size);
         } else {
             let scratch = regs::scratch();
-            self.load_constant(imm, writable!(scratch));
+            self.load_int_const(imm, writable!(scratch));
             self.alu_rrr(shift_op, scratch, rn, rd, size);
         }
     }
@@ -1155,26 +1187,6 @@ impl Assembler {
             s => unreachable!("unsupported floating-point size: {}bit", s.num_bits()),
         };
         self.load_const_fp(max, rd, in_size);
-    }
-
-    /// Load the floating point number encoded in `n` of size `size`, into `rd`.
-    fn load_const_fp(&mut self, n: u64, rd: Writable<Reg>, size: OperandSize) {
-        // Check if we can load `n` directly, otherwise, load it into a tmp register, as an
-        // integer, and then move that to `rd`.
-        match ASIMDFPModImm::maybe_from_u64(n, size.into()) {
-            Some(imm) => {
-                self.emit(Inst::FpuMoveFPImm {
-                    rd: rd.map(Into::into),
-                    imm,
-                    size: size.into(),
-                });
-            }
-            None => {
-                let tmp = regs::scratch();
-                self.load_constant(n, Writable::from_reg(tmp));
-                self.mov_to_fpu(tmp, rd, size)
-            }
-        }
     }
 
     /// Emit instructions to check if the value in `rn` is NaN.
