@@ -562,22 +562,6 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::Mov64MR { src, dst } => {
-            let dst = dst.to_reg().to_reg();
-            let src = &src.finalize(state.frame_layout(), sink).clone();
-
-            emit_std_reg_mem(
-                sink,
-                LegacyPrefixes::None,
-                0x8B,
-                1,
-                dst,
-                src,
-                RexFlags::set_w(),
-                0,
-            )
-        }
-
         Inst::LoadEffectiveAddress { addr, dst, size } => {
             let dst = dst.to_reg().to_reg();
             let amode = addr.finalize(state.frame_layout(), sink).clone();
@@ -1254,11 +1238,9 @@ pub(crate) fn emit(
             //
 
             let mut exchange = |offset, reg| {
-                let inst = Inst::Mov64MR {
-                    src: Amode::imm_reg(offset, **load_context_ptr).into(),
-                    dst: tmp1,
-                };
-                emit(&inst, sink, info, state);
+                let addr = SyntheticAmode::real(Amode::imm_reg(offset, **load_context_ptr));
+                let inst = asm::inst::movq_rm::new(tmp1, addr).into();
+                Inst::External { inst }.emit(sink, info, state);
 
                 let inst = Inst::MovRM {
                     size: OperandSize::Size64,
@@ -1283,11 +1265,9 @@ pub(crate) fn emit(
             // Load target PC, store resume PC, jump to target PC
             //
 
-            let inst = Inst::Mov64MR {
-                src: Amode::imm_reg(pc_offset, **load_context_ptr).into(),
-                dst: tmp1,
-            };
-            emit(&inst, sink, info, state);
+            let addr = SyntheticAmode::real(Amode::imm_reg(pc_offset, **load_context_ptr));
+            let inst = asm::inst::movq_rm::new(tmp1, addr).into();
+            Inst::External { inst }.emit(sink, info, state);
 
             let amode = Amode::RipRelative { target: resume };
             let inst = Inst::lea(amode, tmp2.map(Reg::from));
@@ -3977,8 +3957,10 @@ fn emit_return_call_common_sequence<T>(
 
     let incoming_args_diff = state.frame_layout().tail_args_size - call_info.new_stack_arg_size;
     if incoming_args_diff > 0 {
-        // Move the saved return address up by `incoming_args_diff`
-        Inst::mov64_m_r(Amode::imm_reg(0, regs::rsp()), tmp).emit(sink, info, state);
+        // Move the saved return address up by `incoming_args_diff`.
+        let addr = Amode::imm_reg(0, regs::rsp());
+        let inst = asm::inst::movq_rm::new(tmp, addr).into();
+        Inst::External { inst }.emit(sink, info, state);
         Inst::mov_r_m(
             OperandSize::Size64,
             tmp.to_reg(),
