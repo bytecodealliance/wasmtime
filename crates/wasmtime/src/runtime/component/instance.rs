@@ -8,7 +8,7 @@ use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
-use crate::runtime::vm::{CompiledModuleId, VMFuncRef};
+use crate::runtime::vm::{CompiledModuleId, ExportGlobalKind, VMFuncRef};
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
@@ -431,11 +431,11 @@ impl InstanceData {
             CoreDef::InstanceFlags(idx) => {
                 crate::runtime::vm::Export::Global(crate::runtime::vm::ExportGlobal {
                     definition: self.state.instance_flags(*idx).as_raw(),
-                    vmctx: None,
                     global: Global {
                         wasm_ty: WasmValType::I32,
                         mutability: true,
                     },
+                    kind: ExportGlobalKind::ComponentFlags(self.state.vmctx(), *idx),
                 })
             }
         }
@@ -466,7 +466,7 @@ impl InstanceData {
             // investigated if this becomes a performance issue though.
             ExportItem::Name(name) => instance.module().exports[name],
         };
-        instance.get_export_by_index(idx)
+        instance.instance().get_export_by_index(idx)
     }
 
     #[inline]
@@ -555,6 +555,7 @@ impl<'a> Instantiator<'a> {
                 instances: PrimaryMap::with_capacity(env_component.num_runtime_instances as usize),
                 component: component.clone(),
                 state: OwnedComponentInstance::new(
+                    store.store_data().components.next_component_instance_id(),
                     component.runtime_info(),
                     Arc::new(imported_resources),
                     store.traitobj(),
@@ -737,9 +738,12 @@ impl<'a> Instantiator<'a> {
             crate::runtime::vm::Export::Table(t) => t,
             _ => unreachable!(),
         };
-        self.data
-            .state
-            .set_runtime_table(table.index, export.definition, export.vmctx);
+        self.data.state.set_runtime_table(
+            table.index,
+            export.definition,
+            export.vmctx,
+            export.index,
+        );
     }
 
     fn build_imports<'b>(
@@ -932,7 +936,7 @@ impl<T: 'static> InstancePre<T> {
             e
         })?;
         let data = Box::new(instantiator.data);
-        let instance = Instance(store.0.store_data_mut().insert(Some(data)));
+        let instance = Instance(store.0.store_data_mut().push_component_instance(data));
         store.0.push_component_instance(instance);
         Ok(instance)
     }

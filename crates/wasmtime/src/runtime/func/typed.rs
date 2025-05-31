@@ -546,7 +546,7 @@ unsafe impl WasmTy for Func {
 
     #[inline]
     fn compatible_with_store(&self, store: &StoreOpaque) -> bool {
-        store.store_data().contains(self.0)
+        self.store == store.id()
     }
 
     #[inline]
@@ -584,7 +584,7 @@ unsafe impl WasmTy for Option<Func> {
     #[inline]
     fn compatible_with_store(&self, store: &StoreOpaque) -> bool {
         if let Some(f) = self {
-            store.store_data().contains(f.0)
+            f.compatible_with_store(store)
         } else {
             true
         }

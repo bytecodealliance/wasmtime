@@ -21,15 +21,14 @@ impl InstanceId {
         debug_assert!(idx != Self::INVALID.0);
         InstanceId(idx)
     }
+
+    pub fn index(&self) -> usize {
+        self.0
+    }
 }
 
 pub struct StoreData {
     id: StoreId,
-    funcs: Vec<crate::func::FuncData>,
-    tables: Vec<crate::runtime::vm::ExportTable>,
-    globals: Vec<crate::runtime::vm::ExportGlobal>,
-    instances: Vec<crate::instance::InstanceData>,
-    tags: Vec<crate::runtime::vm::ExportTag>,
     #[cfg(feature = "component-model")]
     pub(crate) components: crate::component::ComponentStoreData,
 }
@@ -39,34 +38,10 @@ pub trait StoredData: Sized {
     fn list_mut(data: &mut StoreData) -> &mut Vec<Self>;
 }
 
-macro_rules! impl_store_data {
-    ($($field:ident => $t:ty,)*) => ($(
-        impl StoredData for $t {
-            #[inline]
-            fn list(data: &StoreData) -> &Vec<Self> { &data.$field }
-            #[inline]
-            fn list_mut(data: &mut StoreData) -> &mut Vec<Self> { &mut data.$field }
-        }
-    )*)
-}
-
-impl_store_data! {
-    funcs => crate::func::FuncData,
-    tables => crate::runtime::vm::ExportTable,
-    globals => crate::runtime::vm::ExportGlobal,
-    instances => crate::instance::InstanceData,
-    tags => crate::runtime::vm::ExportTag,
-}
-
 impl StoreData {
     pub fn new() -> StoreData {
         StoreData {
             id: StoreId::allocate(),
-            funcs: Vec::new(),
-            tables: Vec::new(),
-            globals: Vec::new(),
-            instances: Vec::new(),
-            tags: Vec::new(),
             #[cfg(feature = "component-model")]
             components: Default::default(),
         }
@@ -112,10 +87,6 @@ impl StoreData {
     {
         let id = self.id;
         (0..T::list(self).len()).map(move |i| Stored::new(id, i))
-    }
-
-    pub(crate) fn reserve_funcs(&mut self, count: usize) {
-        self.funcs.reserve(count);
     }
 }
 
@@ -307,7 +278,7 @@ impl<T> Stored<T> {
         self.store_id.assert_belongs_to(store)
     }
 
-    fn index(&self) -> usize {
+    pub(crate) fn index(&self) -> usize {
         self.index
     }
 }
@@ -353,7 +324,7 @@ pub struct StoreInstanceId {
 }
 
 impl StoreInstanceId {
-    pub(super) fn new(store_id: StoreId, instance: InstanceId) -> StoreInstanceId {
+    pub(crate) fn new(store_id: StoreId, instance: InstanceId) -> StoreInstanceId {
         StoreInstanceId { store_id, instance }
     }
 
@@ -365,6 +336,11 @@ impl StoreInstanceId {
     #[inline]
     pub fn store_id(&self) -> StoreId {
         self.store_id
+    }
+
+    #[inline]
+    pub(crate) fn instance(&self) -> InstanceId {
+        self.instance
     }
 }
 
