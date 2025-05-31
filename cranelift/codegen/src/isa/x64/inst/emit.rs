@@ -141,54 +141,6 @@ pub(crate) fn emit(
         )
     }
     match inst {
-        Inst::AluRmRVex {
-            size,
-            op,
-            dst,
-            src1,
-            src2,
-        } => {
-            use AluRmROpcode::*;
-            use LegacyPrefixes as LP;
-
-            let dst = dst.to_reg().to_reg();
-            let src1 = src1.to_reg();
-            let src2 = match src2.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let w = match size {
-                OperandSize::Size32 => false,
-                OperandSize::Size64 => true,
-
-                // the other cases would be rejected by isle constructors
-                _ => unreachable!(),
-            };
-
-            let (prefix, opcode) = match op {
-                Andn => (LP::None, 0xf2),
-                Sarx => (LP::_F3, 0xf7),
-                Shrx => (LP::_F2, 0xf7),
-                Shlx => (LP::_66, 0xf7),
-                Bzhi => (LP::None, 0xf5),
-            };
-
-            VexInstruction::new()
-                .prefix(prefix)
-                .map(OpcodeMap::_0F38)
-                .w(w)
-                .reg(dst.to_real_reg().unwrap().hw_enc())
-                .vvvv(src1.to_real_reg().unwrap().hw_enc())
-                .rm(src2)
-                .opcode(opcode)
-                .encode(sink);
-        }
-
         Inst::UnaryRmRVex { size, op, src, dst } => {
             let dst = dst.to_reg().to_reg();
             let src = match src.clone().to_reg_mem().clone() {

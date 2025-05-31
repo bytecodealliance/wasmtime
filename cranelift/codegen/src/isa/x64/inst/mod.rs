@@ -137,7 +137,6 @@ impl Inst {
             | Inst::Atomic128RmwSeq { .. }
             | Inst::Atomic128XchgSeq { .. } => smallvec![InstructionSet::CMPXCHG16b],
 
-            Inst::AluRmRVex { op, .. } => op.available_from(),
             Inst::UnaryRmRVex { op, .. } => op.available_from(),
             Inst::UnaryRmRImmVex { op, .. } => op.available_from(),
 
@@ -563,21 +562,6 @@ impl PrettyPrint for Inst {
 
         match self {
             Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
-
-            Inst::AluRmRVex {
-                size,
-                op,
-                src1,
-                src2,
-                dst,
-            } => {
-                let size_bytes = size.to_bytes();
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let src1 = pretty_print_reg(src1.to_reg(), size_bytes);
-                let src2 = src2.pretty_print(size_bytes);
-                let op = ljustify2(op.to_string(), String::new());
-                format!("{op} {src2}, {src1}, {dst}")
-            }
 
             Inst::UnaryRmRVex { src, dst, op, size } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
@@ -1599,13 +1583,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
     // in `emit.rs`, and (ii) pretty-printing, in the `pretty_print`
     // method above.
     match inst {
-        Inst::AluRmRVex {
-            src1, src2, dst, ..
-        } => {
-            collector.reg_def(dst);
-            collector.reg_use(src1);
-            src2.get_operands(collector);
-        }
         Inst::CheckedSRemSeq {
             divisor,
             dividend_lo,

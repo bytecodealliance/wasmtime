@@ -62,21 +62,6 @@ pub(crate) fn check(
             Ok(())
         }
 
-        Inst::AluRmRVex {
-            size,
-            ref src2,
-            dst,
-            ..
-        } => match <&RegMem>::from(src2) {
-            RegMem::Mem { addr } => {
-                let loaded = check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-                check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-                    clamp_range(ctx, 64, size.to_bits().into(), loaded)
-                })
-            }
-            RegMem::Reg { .. } => undefined_result(ctx, vcode, dst, 64, size.to_bits().into()),
-        },
-
         Inst::UnaryRmRVex {
             size, ref src, dst, ..
         }
