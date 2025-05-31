@@ -532,7 +532,6 @@ impl WastTest {
                     "spec_testsuite/f32_cmp.wast",
                     "spec_testsuite/f64_cmp.wast",
                     "spec_testsuite/func_ptrs.wast",
-                    "spec_testsuite/i64.wast",
                     "spec_testsuite/if.wast",
                     "spec_testsuite/imports.wast",
                     "spec_testsuite/local_set.wast",

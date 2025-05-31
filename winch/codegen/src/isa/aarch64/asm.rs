@@ -1066,7 +1066,7 @@ impl Assembler {
             ShiftKind::Rotr => ALUOp::Extr,
             ShiftKind::Rotl => {
                 // neg(r) is sub(zero, r).
-                self.alu_rrr(ALUOp::Sub, regs::zero(), r, writable!(r), size);
+                self.alu_rrr(ALUOp::Sub, r, regs::zero(), writable!(r), size);
                 ALUOp::Extr
             }
         }

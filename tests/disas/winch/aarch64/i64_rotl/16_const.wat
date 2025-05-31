@@ -27,7 +27,7 @@
 ;;       stur    x1, [x28]
 ;;       mov     x16, #1
 ;;       mov     x0, x16
-;;       sub     x0, x0, xzr
+;;       neg     x0, x0
 ;;       mov     x16, #0x200
 ;;       ror     x0, x0, x16
 ;;       add     x28, x28, #0x10
