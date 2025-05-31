@@ -10,7 +10,7 @@ use crate::component::ResourceType;
 use crate::prelude::*;
 use crate::runtime::vm::{
     SendSyncPtr, VMArrayCallFunction, VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTable, VMTableDefinition, VMWasmCallFunction,
+    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction,
     ValRaw, VmPtr, VmSafe,
 };
 use alloc::alloc::Layout;
@@ -22,7 +22,7 @@ use core::mem::offset_of;
 use core::ops::Deref;
 use core::ptr::{self, NonNull};
 use wasmtime_environ::component::*;
-use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
+use wasmtime_environ::{DefinedTableIndex, HostPtr, PrimaryMap, VMSharedTypeIndex};
 
 #[allow(clippy::cast_possible_truncation)] // it's intended this is truncated on
 // 32-bit platforms
@@ -293,9 +293,9 @@ impl ComponentInstance {
     ///
     /// This can only be called after `idx` has been initialized at runtime
     /// during the instantiation process of a component.
-    pub fn runtime_table(&self, idx: RuntimeTableIndex) -> VMTable {
+    pub fn runtime_table(&self, idx: RuntimeTableIndex) -> VMTableImport {
         unsafe {
-            let ret = *self.vmctx_plus_offset::<VMTable>(self.offsets.runtime_table(idx));
+            let ret = *self.vmctx_plus_offset::<VMTableImport>(self.offsets.runtime_table(idx));
             debug_assert!(ret.from.as_ptr() as usize != INVALID_PTR);
             debug_assert!(ret.vmctx.as_ptr() as usize != INVALID_PTR);
             ret
@@ -430,14 +430,17 @@ impl ComponentInstance {
         idx: RuntimeTableIndex,
         ptr: NonNull<VMTableDefinition>,
         vmctx: NonNull<VMContext>,
+        index: DefinedTableIndex,
     ) {
         unsafe {
-            let storage = self.vmctx_plus_offset_mut::<VMTable>(self.offsets.runtime_table(idx));
+            let storage =
+                self.vmctx_plus_offset_mut::<VMTableImport>(self.offsets.runtime_table(idx));
             debug_assert!((*storage).vmctx.as_ptr() as usize == INVALID_PTR);
             debug_assert!((*storage).from.as_ptr() as usize == INVALID_PTR);
-            *storage = VMTable {
+            *storage = VMTableImport {
                 vmctx: vmctx.into(),
                 from: ptr.into(),
+                index,
             };
         }
     }
@@ -856,8 +859,12 @@ impl OwnedComponentInstance {
         idx: RuntimeTableIndex,
         ptr: NonNull<VMTableDefinition>,
         vmctx: NonNull<VMContext>,
+        index: DefinedTableIndex,
     ) {
-        unsafe { self.instance_mut().set_runtime_table(idx, ptr, vmctx) }
+        unsafe {
+            self.instance_mut()
+                .set_runtime_table(idx, ptr, vmctx, index)
+        }
     }
 
     /// See `ComponentInstance::set_lowering`

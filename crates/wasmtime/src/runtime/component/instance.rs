@@ -737,9 +737,12 @@ impl<'a> Instantiator<'a> {
             crate::runtime::vm::Export::Table(t) => t,
             _ => unreachable!(),
         };
-        self.data
-            .state
-            .set_runtime_table(table.index, export.definition, export.vmctx);
+        self.data.state.set_runtime_table(
+            table.index,
+            export.definition,
+            export.vmctx,
+            export.index,
+        );
     }
 
     fn build_imports<'b>(

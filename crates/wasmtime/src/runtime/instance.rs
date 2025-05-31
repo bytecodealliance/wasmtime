@@ -2,7 +2,7 @@ use crate::linker::{Definition, DefinitionType};
 use crate::prelude::*;
 use crate::runtime::vm::{
     Imports, ModuleRuntimeInfo, VMFuncRef, VMFunctionImport, VMGlobalImport, VMMemoryImport,
-    VMOpaqueContext, VMTable, VMTagImport,
+    VMOpaqueContext, VMTableImport, VMTagImport,
 };
 use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque, Stored};
 use crate::types::matching;
@@ -635,7 +635,7 @@ impl Instance {
 
 pub(crate) struct OwnedImports {
     functions: PrimaryMap<FuncIndex, VMFunctionImport>,
-    tables: PrimaryMap<TableIndex, VMTable>,
+    tables: PrimaryMap<TableIndex, VMTableImport>,
     memories: PrimaryMap<MemoryIndex, VMMemoryImport>,
     globals: PrimaryMap<GlobalIndex, VMGlobalImport>,
     tags: PrimaryMap<TagIndex, VMTagImport>,
@@ -718,9 +718,10 @@ impl OwnedImports {
                 });
             }
             crate::runtime::vm::Export::Table(t) => {
-                self.tables.push(VMTable {
+                self.tables.push(VMTableImport {
                     from: t.definition.into(),
                     vmctx: t.vmctx.into(),
+                    index: t.index,
                 });
             }
             crate::runtime::vm::Export::Memory(m) => {
