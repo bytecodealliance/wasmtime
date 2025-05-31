@@ -384,22 +384,72 @@ impl Instance {
     /// Helper function to access various locations offset from our `*mut
     /// VMContext` object.
     ///
+    /// Note that this method takes `&self` as an argument but returns
+    /// `NonNull<T>` which is frequently used to mutate said memory. This is an
+    /// intentional design decision where the safety of the modification of
+    /// memory is placed as a burden onto the caller. The implementation of this
+    /// method explicitly does not require `&mut self` to acquire mutable
+    /// provenance to update the `VMContext` region. Instead all pointers into
+    /// the `VMContext` area have provenance/permissions to write.
+    ///
+    /// Also note though that care must be taken to ensure that reads/writes of
+    /// memory must only happen where appropriate, for example a non-atomic
+    /// write (as most are) should never happen concurrently with another read
+    /// or write. It's generally on the burden of the caller to adhere to this.
+    ///
+    /// Also of note is that most of the time the usage of this method falls
+    /// into one of:
+    ///
+    /// * Something in the VMContext is being read or written. In that case use
+    ///   `vmctx_plus_offset` or `vmctx_plus_offset_raw` if possible due to
+    ///   that having a safer lifetime.
+    ///
+    /// * A pointer is being created to pass to other VM* data structures. In
+    ///   that situation the lifetime of all VM data structures are typically
+    ///   tied to the `Store<T>` which is what provides the guarantees around
+    ///   concurrency/etc.
+    ///
+    /// There's quite a lot of unsafety riding on this method, especially
+    /// related to the ascription `T` of the byte `offset`. It's hoped that in
+    /// the future we're able to settle on an in theory safer design.
+    ///
     /// # Safety
     ///
     /// This method is unsafe because the `offset` must be within bounds of the
-    /// `VMContext` object trailing this instance.
-    unsafe fn vmctx_plus_offset<T: VmSafe>(&self, offset: impl Into<u32>) -> *const T {
-        self.vmctx()
-            .as_ptr()
-            .byte_add(usize::try_from(offset.into()).unwrap())
-            .cast()
+    /// `VMContext` object trailing this instance. Additionally `T` must be a
+    /// valid ascription of the value that resides at that location.
+    unsafe fn vmctx_plus_offset_raw<T: VmSafe>(&self, offset: impl Into<u32>) -> NonNull<T> {
+        // SAFETY: the safety requirements of `byte_add` are forwarded to this
+        // method's caller.
+        unsafe {
+            self.vmctx()
+                .byte_add(usize::try_from(offset.into()).unwrap())
+                .cast()
+        }
     }
 
-    /// Dual of `vmctx_plus_offset`, but for mutability.
-    unsafe fn vmctx_plus_offset_mut<T: VmSafe>(&mut self, offset: impl Into<u32>) -> NonNull<T> {
-        self.vmctx()
-            .byte_add(usize::try_from(offset.into()).unwrap())
-            .cast()
+    /// Helper above `vmctx_plus_offset_raw` which transfers the lifetime of
+    /// `&self` to the returned reference `&T`.
+    ///
+    /// # Safety
+    ///
+    /// See the safety documentation of `vmctx_plus_offset_raw`.
+    unsafe fn vmctx_plus_offset<T: VmSafe>(&self, offset: impl Into<u32>) -> &T {
+        // SAFETY: this method has the same safety requirements as
+        // `vmctx_plus_offset_raw`.
+        unsafe { self.vmctx_plus_offset_raw(offset).as_ref() }
+    }
+
+    /// Helper above `vmctx_plus_offset_raw` which transfers the lifetime of
+    /// `&mut self` to the returned reference `&mut T`.
+    ///
+    /// # Safety
+    ///
+    /// See the safety documentation of `vmctx_plus_offset_raw`.
+    unsafe fn vmctx_plus_offset_mut<T: VmSafe>(&mut self, offset: impl Into<u32>) -> &mut T {
+        // SAFETY: this method has the same safety requirements as
+        // `vmctx_plus_offset_raw`.
+        unsafe { self.vmctx_plus_offset_raw(offset).as_mut() }
     }
 
     pub(crate) fn env_module(&self) -> &Arc<wasmtime_environ::Module> {
@@ -428,32 +478,32 @@ impl Instance {
 
     /// Return the indexed `VMFunctionImport`.
     fn imported_function(&self, index: FuncIndex) -> &VMFunctionImport {
-        unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmfunction_import(index)) }
+        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmfunction_import(index)) }
     }
 
     /// Return the index `VMTable`.
     fn imported_table(&self, index: TableIndex) -> &VMTable {
-        unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmtable_import(index)) }
+        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmtable_import(index)) }
     }
 
     /// Return the indexed `VMMemoryImport`.
     fn imported_memory(&self, index: MemoryIndex) -> &VMMemoryImport {
-        unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmmemory_import(index)) }
+        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmmemory_import(index)) }
     }
 
     /// Return the indexed `VMGlobalImport`.
     fn imported_global(&self, index: GlobalIndex) -> &VMGlobalImport {
-        unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmglobal_import(index)) }
+        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmglobal_import(index)) }
     }
 
     /// Return the indexed `VMTagImport`.
     fn imported_tag(&self, index: TagIndex) -> &VMTagImport {
-        unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmtag_import(index)) }
+        unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmtag_import(index)) }
     }
 
     /// Return the indexed `VMTagDefinition`.
     fn tag_ptr(&mut self, index: DefinedTagIndex) -> NonNull<VMTagDefinition> {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().vmctx_vmtag_definition(index)) }
+        unsafe { self.vmctx_plus_offset_raw(self.offsets().vmctx_vmtag_definition(index)) }
     }
 
     /// Return the indexed `VMTableDefinition`.
@@ -470,8 +520,8 @@ impl Instance {
     }
 
     /// Return the indexed `VMTableDefinition`.
-    fn table_ptr(&mut self, index: DefinedTableIndex) -> NonNull<VMTableDefinition> {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().vmctx_vmtable_definition(index)) }
+    fn table_ptr(&self, index: DefinedTableIndex) -> NonNull<VMTableDefinition> {
+        unsafe { self.vmctx_plus_offset_raw(self.offsets().vmctx_vmtable_definition(index)) }
     }
 
     /// Get a locally defined or imported memory.
@@ -518,15 +568,15 @@ impl Instance {
     /// Note that the returned pointer resides in wasm-code-readable-memory in
     /// the vmctx.
     pub fn memory_ptr(&self, index: DefinedMemoryIndex) -> NonNull<VMMemoryDefinition> {
-        let vmptr = unsafe {
-            *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets().vmctx_vmmemory_pointer(index))
-        };
-        vmptr.as_non_null()
+        unsafe {
+            self.vmctx_plus_offset::<VmPtr<_>>(self.offsets().vmctx_vmmemory_pointer(index))
+                .as_non_null()
+        }
     }
 
     /// Return the indexed `VMGlobalDefinition`.
     fn global_ptr(&mut self, index: DefinedGlobalIndex) -> NonNull<VMGlobalDefinition> {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().vmctx_vmglobal_definition(index)) }
+        unsafe { self.vmctx_plus_offset_raw(self.offsets().vmctx_vmglobal_definition(index)) }
     }
 
     /// Get a raw pointer to the global at the given index regardless whether it
@@ -590,17 +640,17 @@ impl Instance {
     /// Return a pointer to the interrupts structure
     #[inline]
     pub fn vm_store_context(&mut self) -> NonNull<Option<VmPtr<VMStoreContext>>> {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_store_context()) }
+        unsafe { self.vmctx_plus_offset_raw(self.offsets().ptr.vmctx_store_context()) }
     }
 
     /// Return a pointer to the global epoch counter used by this instance.
     #[cfg(target_has_atomic = "64")]
-    pub fn epoch_ptr(&mut self) -> NonNull<Option<VmPtr<AtomicU64>>> {
+    pub fn epoch_ptr(&mut self) -> &mut Option<VmPtr<AtomicU64>> {
         unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_epoch_ptr()) }
     }
 
     /// Return a pointer to the collector-specific heap data.
-    pub fn gc_heap_data(&mut self) -> NonNull<Option<VmPtr<u8>>> {
+    pub fn gc_heap_data(&mut self) -> &mut Option<VmPtr<u8>> {
         unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_gc_heap_data()) }
     }
 
@@ -611,8 +661,9 @@ impl Instance {
             self.vm_store_context()
                 .write(Some(store.vm_store_context_ptr().into()));
             #[cfg(target_has_atomic = "64")]
-            self.epoch_ptr()
-                .write(Some(NonNull::from(store.engine().epoch_counter()).into()));
+            {
+                *self.epoch_ptr() = Some(NonNull::from(store.engine().epoch_counter()).into());
+            }
 
             if self.env_module().needs_gc_heap {
                 self.set_gc_heap(Some(store.gc_store().expect(
@@ -625,24 +676,24 @@ impl Instance {
         } else {
             self.vm_store_context().write(None);
             #[cfg(target_has_atomic = "64")]
-            self.epoch_ptr().write(None);
+            {
+                *self.epoch_ptr() = None;
+            }
             self.set_gc_heap(None);
         }
     }
 
     unsafe fn set_gc_heap(&mut self, gc_store: Option<&GcStore>) {
         if let Some(gc_store) = gc_store {
-            self.gc_heap_data()
-                .write(Some(gc_store.gc_heap.vmctx_gc_heap_data().into()));
+            *self.gc_heap_data() = Some(gc_store.gc_heap.vmctx_gc_heap_data().into());
         } else {
-            self.gc_heap_data().write(None);
+            *self.gc_heap_data() = None;
         }
     }
 
     pub(crate) unsafe fn set_callee(&mut self, callee: Option<NonNull<VMFunctionBody>>) {
         let callee = callee.map(|p| VmPtr::from(p));
-        self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_callee())
-            .write(callee);
+        *self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_callee()) = callee;
     }
 
     /// Return a reference to the vmctx used by compiled wasm code.
@@ -861,7 +912,7 @@ impl Instance {
     }
 
     fn type_ids_array(&mut self) -> NonNull<VmPtr<VMSharedTypeIndex>> {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_type_ids_array()) }
+        unsafe { self.vmctx_plus_offset_raw(self.offsets().ptr.vmctx_type_ids_array()) }
     }
 
     /// Construct a new VMFuncRef for the given function
@@ -948,7 +999,7 @@ impl Instance {
             let func = &self.env_module().functions[index];
             let sig = func.signature.unwrap_engine_type_index();
             let func_ref = self
-                .vmctx_plus_offset_mut::<VMFuncRef>(self.offsets().vmctx_func_ref(func.func_ref));
+                .vmctx_plus_offset_raw::<VMFuncRef>(self.offsets().vmctx_func_ref(func.func_ref));
             self.construct_func_ref(index, sig, func_ref.as_ptr());
 
             Some(func_ref)
@@ -1379,7 +1430,7 @@ impl Instance {
     ) {
         assert!(ptr::eq(module, self.env_module().as_ref()));
 
-        self.vmctx_plus_offset_mut(offsets.ptr.vmctx_magic())
+        self.vmctx_plus_offset_raw::<u32>(offsets.ptr.vmctx_magic())
             .write(VMCONTEXT_MAGIC);
         self.set_callee(None);
         self.set_store(store.as_raw());
@@ -1391,35 +1442,35 @@ impl Instance {
         // Initialize the built-in functions
         static BUILTINS: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray::INIT;
         let ptr = BUILTINS.expose_provenance();
-        self.vmctx_plus_offset_mut(offsets.ptr.vmctx_builtin_functions())
+        self.vmctx_plus_offset_raw(offsets.ptr.vmctx_builtin_functions())
             .write(VmPtr::from(ptr));
 
         // Initialize the imports
         debug_assert_eq!(imports.functions.len(), module.num_imported_funcs);
         ptr::copy_nonoverlapping(
             imports.functions.as_ptr(),
-            self.vmctx_plus_offset_mut(offsets.vmctx_imported_functions_begin())
+            self.vmctx_plus_offset_raw(offsets.vmctx_imported_functions_begin())
                 .as_ptr(),
             imports.functions.len(),
         );
         debug_assert_eq!(imports.tables.len(), module.num_imported_tables);
         ptr::copy_nonoverlapping(
             imports.tables.as_ptr(),
-            self.vmctx_plus_offset_mut(offsets.vmctx_imported_tables_begin())
+            self.vmctx_plus_offset_raw(offsets.vmctx_imported_tables_begin())
                 .as_ptr(),
             imports.tables.len(),
         );
         debug_assert_eq!(imports.memories.len(), module.num_imported_memories);
         ptr::copy_nonoverlapping(
             imports.memories.as_ptr(),
-            self.vmctx_plus_offset_mut(offsets.vmctx_imported_memories_begin())
+            self.vmctx_plus_offset_raw(offsets.vmctx_imported_memories_begin())
                 .as_ptr(),
             imports.memories.len(),
         );
         debug_assert_eq!(imports.globals.len(), module.num_imported_globals);
         ptr::copy_nonoverlapping(
             imports.globals.as_ptr(),
-            self.vmctx_plus_offset_mut(offsets.vmctx_imported_globals_begin())
+            self.vmctx_plus_offset_raw(offsets.vmctx_imported_globals_begin())
                 .as_ptr(),
             imports.globals.len(),
         );
@@ -1427,7 +1478,7 @@ impl Instance {
         debug_assert_eq!(imports.tags.len(), module.num_imported_tags);
         ptr::copy_nonoverlapping(
             imports.tags.as_ptr(),
-            self.vmctx_plus_offset_mut(offsets.vmctx_imported_tags_begin())
+            self.vmctx_plus_offset_raw(offsets.vmctx_imported_tags_begin())
                 .as_ptr(),
             imports.tags.len(),
         );
@@ -1438,7 +1489,7 @@ impl Instance {
         // the lazy-init, so we don't need to initialize any state now.
 
         // Initialize the defined tables
-        let mut ptr = self.vmctx_plus_offset_mut(offsets.vmctx_tables_begin());
+        let mut ptr = self.vmctx_plus_offset_raw(offsets.vmctx_tables_begin());
         for i in 0..module.num_defined_tables() {
             ptr.write(self.tables[DefinedTableIndex::new(i)].1.vmtable());
             ptr = ptr.add(1);
@@ -1449,8 +1500,8 @@ impl Instance {
         // time. Entries in `defined_memories` hold a pointer to a definition
         // (all memories) whereas the `owned_memories` hold the actual
         // definitions of memories owned (not shared) in the module.
-        let mut ptr = self.vmctx_plus_offset_mut(offsets.vmctx_memories_begin());
-        let mut owned_ptr = self.vmctx_plus_offset_mut(offsets.vmctx_owned_memories_begin());
+        let mut ptr = self.vmctx_plus_offset_raw(offsets.vmctx_memories_begin());
+        let mut owned_ptr = self.vmctx_plus_offset_raw(offsets.vmctx_owned_memories_begin());
         for i in 0..module.num_defined_memories() {
             let defined_memory_index = DefinedMemoryIndex::new(i);
             let memory_index = module.memory_index(defined_memory_index);
@@ -1478,7 +1529,7 @@ impl Instance {
         }
 
         // Initialize the defined tags
-        let mut ptr = self.vmctx_plus_offset_mut(offsets.vmctx_tags_begin());
+        let mut ptr = self.vmctx_plus_offset_raw(offsets.vmctx_tags_begin());
         for i in 0..module.num_defined_tags() {
             let defined_index = DefinedTagIndex::new(i);
             let tag_index = module.tag_index(defined_index);
