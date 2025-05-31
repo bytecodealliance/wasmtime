@@ -18,14 +18,13 @@
 ;;       movk    x17, #0x10
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x64
+;;       b.lo    #0x60
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x10
 ;;       mov     sp, x28
 ;;       stur    x0, [x28, #8]
 ;;       stur    x1, [x28]
-;;       mov     x16, #0x3f800000
-;;       fmov    s0, w16
+;;       fmov    s0, #1.00000000
 ;;       mov     w0, v0.s[0]
 ;;       add     x28, x28, #0x10
 ;;       mov     sp, x28
@@ -33,4 +32,4 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   64: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   60: .byte   0x1f, 0xc1, 0x00, 0x00

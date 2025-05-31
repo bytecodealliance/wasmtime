@@ -306,7 +306,7 @@ impl Masm for MacroAssembler {
                     I::V128(_) => unreachable!(),
                 };
                 let scratch = regs::scratch();
-                self.asm.load_constant(imm, writable!(scratch));
+                self.asm.load_int_const(imm, writable!(scratch));
                 if v.is_float() {
                     let float_scratch = regs::float_scratch();
                     self.asm
@@ -427,23 +427,25 @@ impl Masm for MacroAssembler {
 
     fn mov(&mut self, dst: WritableReg, src: RegImm, size: OperandSize) -> Result<()> {
         match (src, dst) {
-            (RegImm::Imm(v), rd) => {
-                let imm = match v {
-                    I::I32(v) => v as u64,
-                    I::I64(v) => v,
-                    I::F32(v) => v as u64,
-                    I::F64(v) => v,
-                    I::V128(_) => bail!(CodeGenError::unsupported_imm()),
-                };
-
-                let scratch = regs::scratch();
-                self.asm.load_constant(imm, writable!(scratch));
-                match rd.to_reg().class() {
-                    RegClass::Int => Ok(self.asm.mov_rr(scratch, rd, size)),
-                    RegClass::Float => Ok(self.asm.mov_to_fpu(scratch, rd, size)),
-                    _ => bail!(CodeGenError::invalid_operand_combination()),
+            (RegImm::Imm(v), _) => match v {
+                I::I32(v) => {
+                    self.asm.load_int_const(v as u64, dst);
+                    Ok(())
                 }
-            }
+                I::I64(v) => {
+                    self.asm.load_int_const(v, dst);
+                    Ok(())
+                }
+                imm @ I::F32(_) => {
+                    self.asm.load_fp_const(dst, imm, size);
+                    Ok(())
+                }
+                imm @ I::F64(_) => {
+                    self.asm.load_fp_const(dst, imm, size);
+                    Ok(())
+                }
+                I::V128(_) => bail!(CodeGenError::unsupported_imm()),
+            },
             (RegImm::Reg(rs), rd) => match (rs.class(), rd.to_reg().class()) {
                 (RegClass::Int, RegClass::Int) => Ok(self.asm.mov_rr(rs, rd, size)),
                 (RegClass::Float, RegClass::Float) => Ok(self.asm.fmov_rr(rs, rd, size)),
@@ -760,7 +762,7 @@ impl Masm for MacroAssembler {
     }
 
     fn zero(&mut self, reg: WritableReg) -> Result<()> {
-        self.asm.load_constant(0, reg);
+        self.asm.load_int_const(0, reg);
         Ok(())
     }
 
