@@ -30,7 +30,7 @@
 ;;       fmov    s0, w16
 ;;       mov     x16, #0xbf800000
 ;;       fmov    s1, w16
-;;       fcmp    s0, s1
+;;       fcmp    s1, s0
 ;;       cset    x0, mi
 ;;       add     x28, x28, #0x10
 ;;       mov     sp, x28

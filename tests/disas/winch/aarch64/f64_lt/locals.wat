@@ -45,7 +45,7 @@
 ;;       stur    d0, [x28]
 ;;       ldur    d0, [x28]
 ;;       ldur    d1, [x28, #8]
-;;       fcmp    d0, d1
+;;       fcmp    d1, d0
 ;;       cset    x0, mi
 ;;       add     x28, x28, #0x20
 ;;       mov     sp, x28

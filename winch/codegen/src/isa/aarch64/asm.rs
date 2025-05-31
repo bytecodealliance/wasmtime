@@ -730,7 +730,7 @@ impl Assembler {
     }
 
     /// Float compare.
-    pub fn fcmp(&mut self, rm: Reg, rn: Reg, size: OperandSize) {
+    pub fn fcmp(&mut self, rn: Reg, rm: Reg, size: OperandSize) {
         self.emit(Inst::FpuCmp {
             size: size.into(),
             rn: rn.into(),

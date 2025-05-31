@@ -29,7 +29,7 @@
 ;;       stur    s1, [x28]
 ;;       ldur    s0, [x28]
 ;;       ldur    s1, [x28, #4]
-;;       fcmp    s0, s1
+;;       fcmp    s1, s0
 ;;       cset    x0, gt
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28

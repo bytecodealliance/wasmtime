@@ -34,11 +34,11 @@
 ;;   54: mov     x16, #0x200000
 ;;       movk    x16, #0xc1e0, lsl #48
 ;;       fmov    d31, x16
-;;       fcmp    d31, d0
+;;       fcmp    d0, d31
 ;;       b.le    #0x9c
 ;;   68: mov     x16, #0x41e0000000000000
 ;;       fmov    d31, x16
-;;       fcmp    d31, d0
+;;       fcmp    d0, d31
 ;;       b.ge    #0xa0
 ;;   78: fcvtzs  w0, d0
 ;;       add     x28, x28, #0x18

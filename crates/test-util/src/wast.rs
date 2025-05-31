@@ -435,7 +435,6 @@ impl WastTest {
                     "misc_testsuite/component-model/strings.wast",
                     "misc_testsuite/winch/select.wast",
                     "misc_testsuite/sink-float-but-dont-trap.wast",
-                    "misc_testsuite/issue4840.wast",
                     "misc_testsuite/winch/use-innermost-frame.wast",
                 ];
 

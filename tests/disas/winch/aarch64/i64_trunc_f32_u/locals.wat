@@ -32,11 +32,11 @@
 ;;       fcmp    s0, s0
 ;;       b.vs    #0x90
 ;;   54: fmov    s31, #-1.00000000
-;;       fcmp    s31, s0
+;;       fcmp    s0, s31
 ;;       b.le    #0x94
 ;;   60: mov     x16, #0x5f800000
 ;;       fmov    s31, w16
-;;       fcmp    s31, s0
+;;       fcmp    s0, s31
 ;;       b.ge    #0x98
 ;;   70: fcvtzu  x0, s0
 ;;       add     x28, x28, #0x18
