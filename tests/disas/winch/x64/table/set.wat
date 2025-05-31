@@ -52,11 +52,11 @@
 ;;       movq    0x40(%rdx), %rbx
 ;;       cmpq    %rbx, %rcx
 ;;       jae     0xbf
-;;   90: movq    %rcx, %r11
-;;       imulq   $8, %r11, %r11
+;;   90: movq    %rcx, %rdi
+;;       imulq   $8, %rdi, %rdi
 ;;       movq    0x38(%rdx), %rdx
 ;;       movq    %rdx, %rsi
-;;       addq    %r11, %rdx
+;;       addq    %rdi, %rdx
 ;;       cmpl    %ebx, %ecx
 ;;       cmovaeq %rsi, %rdx
 ;;       orq     $1, %rax
@@ -93,11 +93,11 @@
 ;;       movq    0x40(%rdx), %rbx
 ;;       cmpq    %rbx, %rcx
 ;;       jae     0x1f2
-;;  142: movq    %rcx, %r11
-;;       imulq   $8, %r11, %r11
+;;  142: movq    %rcx, %rdi
+;;       imulq   $8, %rdi, %rdi
 ;;       movq    0x38(%rdx), %rdx
 ;;       movq    %rdx, %rsi
-;;       addq    %r11, %rdx
+;;       addq    %rdi, %rdx
 ;;       cmpl    %ebx, %ecx
 ;;       cmovaeq %rsi, %rdx
 ;;       movq    (%rdx), %rax
@@ -121,11 +121,11 @@
 ;;       movq    0x40(%rdx), %rbx
 ;;       cmpq    %rbx, %rcx
 ;;       jae     0x1f4
-;;  1c3: movq    %rcx, %r11
-;;       imulq   $8, %r11, %r11
+;;  1c3: movq    %rcx, %rdi
+;;       imulq   $8, %rdi, %rdi
 ;;       movq    0x38(%rdx), %rdx
 ;;       movq    %rdx, %rsi
-;;       addq    %r11, %rdx
+;;       addq    %rdi, %rdx
 ;;       cmpl    %ebx, %ecx
 ;;       cmovaeq %rsi, %rdx
 ;;       orq     $1, %rax

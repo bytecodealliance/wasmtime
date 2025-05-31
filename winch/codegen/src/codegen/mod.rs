@@ -995,9 +995,9 @@ where
         base: Reg,
         table_data: &TableData,
     ) -> Result<M::Address> {
-        let scratch = scratch!(M);
         let bound = self.context.any_gpr(self.masm)?;
         let tmp = self.context.any_gpr(self.masm)?;
+        let tmp2 = self.context.any_gpr(self.masm)?;
         let ptr_size: OperandSize = self.env.ptr_type().try_into()?;
 
         if let Some(offset) = table_data.import_from {
@@ -1022,15 +1022,14 @@ where
         self.masm
             .trapif(IntCmpKind::GeU, TRAP_TABLE_OUT_OF_BOUNDS)?;
 
-        // Move the index into the scratch register to calculate the table
+        // Move the index into the tmp2 register to calculate the table
         // element address.
-        // Moving the value of the index register to the scratch register
+        // Moving the value of the index register to the tmp2 register
         // also avoids overwriting the context of the index register.
-        self.masm
-            .mov(writable!(scratch), index.into(), bound_size)?;
+        self.masm.mov(writable!(tmp2), index.into(), bound_size)?;
         self.masm.mul(
-            writable!(scratch),
-            scratch,
+            writable!(tmp2),
+            tmp2,
             RegImm::i32(table_data.element_size.bytes() as i32),
             table_data.element_size,
         )?;
@@ -1043,7 +1042,7 @@ where
         self.masm.mov(writable!(tmp), base.into(), ptr_size)?;
         // Calculate the address of the table element.
         self.masm
-            .add(writable!(base), base, scratch.into(), ptr_size)?;
+            .add(writable!(base), base, tmp2.into(), ptr_size)?;
         if self.env.table_access_spectre_mitigation() {
             // Perform a bounds check and override the value of the
             // table element address in case the index is out of bounds.
@@ -1053,6 +1052,7 @@ where
         }
         self.context.free_reg(bound);
         self.context.free_reg(tmp);
+        self.context.free_reg(tmp2);
         self.masm.address_at_reg(base, 0)
     }
 
@@ -1286,6 +1286,7 @@ where
         let store_context_offset = self.env.vmoffsets.ptr.vmctx_store_context();
         let fuel_offset = self.env.vmoffsets.ptr.vmstore_context_fuel_consumed();
         let limits_reg = self.context.any_gpr(self.masm)?;
+        let fuel_tmp = self.context.any_gpr(self.masm)?;
 
         // Load `VMStoreContext` into the `limits_reg` reg.
         self.masm.load_ptr(
@@ -1298,28 +1299,29 @@ where
         self.masm.load(
             self.masm
                 .address_at_reg(limits_reg, u32::from(fuel_offset))?,
-            writable!(scratch!(M)),
+            writable!(fuel_tmp),
             OperandSize::S64,
         )?;
 
         // Add the fuel consumed at point with the value in the scratch
         // register.
         self.masm.add(
-            writable!(scratch!(M)),
-            scratch!(M),
+            writable!(fuel_tmp),
+            fuel_tmp,
             RegImm::i64(fuel_at_point),
             OperandSize::S64,
         )?;
 
         // Store the updated fuel consumed to `VMStoreContext`.
         self.masm.store(
-            scratch!(M).into(),
+            fuel_tmp.into(),
             self.masm
                 .address_at_reg(limits_reg, u32::from(fuel_offset))?,
             OperandSize::S64,
         )?;
 
         self.context.free_reg(limits_reg);
+        self.context.free_reg(fuel_tmp);
 
         Ok(())
     }

@@ -35,9 +35,9 @@
 ;;       movdqu  0x2a(%rip), %xmm0
 ;;       movl    $0, %eax
 ;;       movq    8(%r14), %rcx
-;;       movq    (%rcx), %r11
-;;       addq    $1, %r11
-;;       movq    %r11, (%rcx)
+;;       movq    (%rcx), %rdx
+;;       addq    $1, %rdx
+;;       movq    %rdx, (%rcx)
 ;;       ud2
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
