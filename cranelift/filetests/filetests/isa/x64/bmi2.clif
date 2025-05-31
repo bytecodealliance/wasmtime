@@ -360,7 +360,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rdx
-;   mulxq   %rdx, %rsi, %rax, %rdx
+;   mulxq %rsi, %rax, %rdx ;; implicit: %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -387,7 +387,7 @@ block0(v0: i32, v1: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rdx
-;   mulxl   %edx, %esi, %eax, %eax
+;   mulxl %esi, %eax, %eax ;; implicit: %edx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -414,7 +414,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rdx
-;   mulxq   %rdx, %rsi, %rax, %rax
+;   mulxq %rsi, %rax, %rax ;; implicit: %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

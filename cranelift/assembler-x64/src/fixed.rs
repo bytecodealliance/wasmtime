@@ -22,7 +22,7 @@ use crate::{AsReg, Size};
 /// let fixed = Fixed::<u8, { gpr::enc::RAX }>(invalid_reg);
 /// fixed.enc(); // Will panic because `invalid_reg` does not match `RAX`.
 /// ```
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Fixed<R, const E: u8>(pub R);
 
 impl<R, const E: u8> Fixed<R, E> {

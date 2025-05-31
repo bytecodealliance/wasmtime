@@ -35,21 +35,6 @@
                        (dst WritableGpr)
                        (imm u8))
 
-       ;; Same as `Mul`, but for the BMI2 `mulx` instruction. This is different
-       ;; where the two `dst_*` registers can be arbitrary registers and it
-       ;; is always unsigned multiplication. Note that this instruction does
-       ;; not modify or read flags.
-       ;;
-       ;; Note that `dst_hi` here is always a valid register but `dst_lo`
-       ;; is allowed to be `invalid_reg` to indicate that only the high
-       ;; bits are desired. If `dst_lo` is invalid then the instruction itself
-       ;; will only define `dst_hi`.
-       (MulX (size OperandSize)
-             (src1 Gpr)
-             (src2 GprMem)
-             (dst_lo WritableGpr)
-             (dst_hi WritableGpr))
-
        ;; A synthetic instruction sequence used as part of the lowering of the
        ;; `srem` instruction which returns 0 if the divisor is -1 and
        ;; otherwise executes an `idiv` instruction.
@@ -2627,21 +2612,29 @@
 (decl x64_mul (Type bool Gpr GprMem) ValueRegs)
 (rule 0 (x64_mul ty signed src1 src2)
       (emit_ret_value_regs (x64_mul_raw ty signed src1 src2)))
+
 ;; Special case the `mulx` pattern with the BMI2 instruction set.
-(rule 1 (x64_mul (ty_32_or_64 ty) false src1 src2)
+;;
+;; Note that mulx returns the high bits in the first result and the low bits in
+;; the second result, so here the result registers are swapped to match
+;; `x64_mul` above.
+(rule 1 (x64_mul $I32 false src1 src2)
   (if-let true (use_bmi2))
-  (let ((dst_lo WritableGpr (temp_writable_gpr))
-        (dst_hi WritableGpr (temp_writable_gpr))
-        (size OperandSize (raw_operand_size_of_type ty))
-        (_ Unit (emit (MInst.MulX size src1 src2 dst_lo dst_hi))))
-    (value_gprs dst_lo dst_hi)))
+  (let ((regs ValueRegs (x64_mulxl_rvm src2 src1)))
+    (value_regs (value_regs_get regs 1) (value_regs_get regs 0))))
+(rule 1 (x64_mul $I64 false src1 src2)
+  (if-let true (use_bmi2))
+  (let ((regs ValueRegs (x64_mulxq_rvm src2 src1)))
+    (value_regs (value_regs_get regs 1) (value_regs_get regs 0))))
 
 (decl x64_mulx_hi (Type Gpr GprMem) Gpr)
-(rule (x64_mulx_hi (ty_32_or_64 ty) src1 src2)
-  (let ((dst WritableGpr (temp_writable_gpr))
-        (size OperandSize (raw_operand_size_of_type ty))
-        (_ Unit (emit (MInst.MulX size src1 src2 (writable_invalid_gpr) dst))))
-    dst))
+(rule (x64_mulx_hi $I32 src1 src2) (x64_mulxl_rvm_hi src2 src1))
+(rule (x64_mulx_hi $I64 src1 src2) (x64_mulxq_rvm_hi src2 src1))
+
+(decl x64_mulxl_rvm_hi (GprMem Gpr) Gpr)
+(extern constructor x64_mulxl_rvm_hi x64_mulxl_rvm_hi)
+(decl x64_mulxq_rvm_hi (GprMem Gpr) Gpr)
+(extern constructor x64_mulxq_rvm_hi x64_mulxq_rvm_hi)
 
 (decl x64_mul_lo_with_flags_paired (Type bool Gpr GprMem) ProducesFlags)
 (rule (x64_mul_lo_with_flags_paired ty signed src1 src2)

@@ -155,6 +155,10 @@ impl dsl::Inst {
             "<R: Registers>"
         };
         f.add_block(&format!("pub fn visit{extra_generic_bound}(&mut self, visitor: &mut impl RegisterVisitor<R>)"), |f| {
+            if self.custom_visit {
+                fmtln!(f, "crate::custom::visit_{}(self, visitor)", self.name());
+                return;
+            }
             for o in &self.format.operands {
                 let mutability = o.mutability.generate_snake_case();
                 let reg = o.location.reg_class();
