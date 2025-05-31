@@ -6,6 +6,10 @@ Unreleased.
 
 ### Changed
 
+* Release binaries for Linux AArch64, s390x, and ARMv7 are now built with Ubuntu
+  18.04 instead of Ubuntu 16.04. This means that the minimum glibc requirement
+  of these binaries has increased from 2.23 to 2.27.
+
 --------------------------------------------------------------------------------
 
 Release notes for previous releases of Wasmtime can be found on the respective
