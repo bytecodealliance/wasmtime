@@ -170,8 +170,6 @@ impl Inst {
             | Inst::CvtIntToFloatVex { op, .. }
             | Inst::XmmCmpRmRVex { op, .. } => op.available_from(),
 
-            Inst::MulX { .. } => smallvec![InstructionSet::BMI2],
-
             Inst::External { inst } => {
                 use cranelift_assembler_x64::Feature::*;
                 let mut features = smallvec![];
@@ -183,6 +181,7 @@ impl Inst {
                         ssse3 => features.push(InstructionSet::SSSE3),
                         sse41 => features.push(InstructionSet::SSE41),
                         bmi1 => features.push(InstructionSet::BMI1),
+                        bmi2 => features.push(InstructionSet::BMI2),
                         lzcnt => features.push(InstructionSet::Lzcnt),
                         popcnt => features.push(InstructionSet::Popcnt),
                         avx => features.push(InstructionSet::AVX),
@@ -600,26 +599,6 @@ impl PrettyPrint for Inst {
                     "{} ${imm}, {src}, {dst}",
                     ljustify2(op.to_string(), suffix_bwlq(*size))
                 )
-            }
-
-            Inst::MulX {
-                size,
-                src1,
-                src2,
-                dst_lo,
-                dst_hi,
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), size.to_bytes());
-                let dst_hi = pretty_print_reg(dst_hi.to_reg().to_reg(), size.to_bytes());
-                let dst_lo = if dst_lo.to_reg().is_invalid_sentinel() {
-                    dst_hi.clone()
-                } else {
-                    pretty_print_reg(dst_lo.to_reg().to_reg(), size.to_bytes())
-                };
-                let src2 = src2.pretty_print(size.to_bytes());
-                let suffix = suffix_bwlq(*size);
-                let op = ljustify(format!("mulx{suffix}"));
-                format!("{op} {src1}, {src2}, {dst_lo}, {dst_hi}")
             }
 
             Inst::CheckedSRemSeq {
@@ -1650,20 +1629,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(divisor);
             collector.reg_fixed_use(dividend, regs::rax());
             collector.reg_fixed_def(dst, regs::rax());
-        }
-        Inst::MulX {
-            src1,
-            src2,
-            dst_lo,
-            dst_hi,
-            ..
-        } => {
-            if !dst_lo.to_reg().is_invalid_sentinel() {
-                collector.reg_def(dst_lo);
-            }
-            collector.reg_def(dst_hi);
-            collector.reg_fixed_use(src1, regs::rdx());
-            src2.get_operands(collector);
         }
         Inst::UnaryRmRVex { src, dst, .. } | Inst::UnaryRmRImmVex { src, dst, .. } => {
             collector.reg_def(dst);

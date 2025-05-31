@@ -92,23 +92,6 @@ pub(crate) fn check(
             RegMem::Reg { .. } => undefined_result(ctx, vcode, dst, 64, size.to_bits().into()),
         },
 
-        Inst::MulX {
-            size,
-            dst_lo,
-            dst_hi,
-            ref src2,
-            ..
-        } => {
-            match <&RegMem>::from(src2) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            undefined_result(ctx, vcode, dst_lo, 64, size.to_bits().into())?;
-            undefined_result(ctx, vcode, dst_hi, 64, size.to_bits().into())?;
-            Ok(())
-        }
         Inst::CheckedSRemSeq {
             dst_quotient,
             dst_remainder,

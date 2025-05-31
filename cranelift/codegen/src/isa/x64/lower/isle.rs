@@ -1057,6 +1057,28 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             _ => None,
         }
     }
+
+    // Custom constructors for `mulx` which only calculates the high half of the
+    // result meaning that the same output operand is used in both destination
+    // registers. This is in contrast to the assembler-generated version of this
+    // instruction which generates two distinct temporary registers for output
+    // which calculates both the high and low halves of the result.
+
+    fn x64_mulxl_rvm_hi(&mut self, src1: &GprMem, src2: Gpr) -> Gpr {
+        let ret = self.temp_writable_gpr();
+        let src1 = self.convert_gpr_mem_to_assembler_read_gpr_mem(src1);
+        let inst = asm::inst::mulxl_rvm::new(ret, ret, src1, src2);
+        self.emit(&MInst::External { inst: inst.into() });
+        ret.to_reg()
+    }
+
+    fn x64_mulxq_rvm_hi(&mut self, src1: &GprMem, src2: Gpr) -> Gpr {
+        let ret = self.temp_writable_gpr();
+        let src1 = self.convert_gpr_mem_to_assembler_read_gpr_mem(src1);
+        let inst = asm::inst::mulxq_rvm::new(ret, ret, src1, src2);
+        self.emit(&MInst::External { inst: inst.into() });
+        ret.to_reg()
+    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
