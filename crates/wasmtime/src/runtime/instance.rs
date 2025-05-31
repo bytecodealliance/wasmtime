@@ -733,6 +733,8 @@ impl OwnedImports {
             crate::runtime::vm::Export::Tag(t) => {
                 self.tags.push(VMTagImport {
                     from: t.definition.into(),
+                    vmctx: t.vmctx.into(),
+                    index: t.index,
                 });
             }
         }

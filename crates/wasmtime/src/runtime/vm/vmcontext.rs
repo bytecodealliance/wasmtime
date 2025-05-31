@@ -15,8 +15,8 @@ use core::mem::{self, MaybeUninit};
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
-    BuiltinFunctionIndex, DefinedMemoryIndex, Unsigned, VMCONTEXT_MAGIC, VMSharedTypeIndex,
-    WasmHeapTopType, WasmValType,
+    BuiltinFunctionIndex, DefinedMemoryIndex, DefinedTagIndex, Unsigned, VMCONTEXT_MAGIC,
+    VMSharedTypeIndex, WasmHeapTopType, WasmValType,
 };
 
 /// A function pointer that exposes the array calling convention.
@@ -282,6 +282,12 @@ mod test_vmglobal_import {
 pub struct VMTagImport {
     /// A pointer to the imported tag description.
     pub from: VmPtr<VMTagDefinition>,
+
+    /// The instance that owns this tag.
+    pub vmctx: VmPtr<VMContext>,
+
+    /// The index of the tag in the containing `vmctx`.
+    pub index: DefinedTagIndex,
 }
 
 // SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
