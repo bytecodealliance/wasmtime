@@ -736,6 +736,7 @@ dependencies = [
  "smallvec",
  "souper-ir",
  "target-lexicon",
+ "wasmtime-math",
 ]
 
 [[package]]
@@ -4383,6 +4384,7 @@ dependencies = [
  "thiserror 2.0.12",
  "wasmparser 0.230.0",
  "wasmtime-environ",
+ "wasmtime-math",
  "wasmtime-versioned-export-macros",
 ]
 
@@ -4930,6 +4932,7 @@ dependencies = [
  "wasmparser 0.230.0",
  "wasmtime-cranelift",
  "wasmtime-environ",
+ "wasmtime-math",
 ]
 
 [[package]]
