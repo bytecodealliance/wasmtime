@@ -1,3 +1,5 @@
+;;! simd = true
+
 (module
   (memory 1)
   (func (export "punpckhbw") (param v128 i32) (result v128)
