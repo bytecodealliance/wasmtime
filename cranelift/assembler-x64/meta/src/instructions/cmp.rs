@@ -1,5 +1,5 @@
 use crate::dsl::{Eflags::*, Feature::*, Inst, Location::*};
-use crate::dsl::{fmt, inst, r, rex, rw, sxl, sxq, sxw};
+use crate::dsl::{fmt, inst, r, rex, rw};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {

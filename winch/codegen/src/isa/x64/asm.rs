@@ -25,7 +25,7 @@ use cranelift_codegen::{
                 SyntheticAmode, WritableGpr, WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm,
             },
             encoding::rex::{RexFlags, encode_modrm},
-            external::{PairedGpr, PairedXmm},
+            external::{CraneliftRegisters, PairedGpr, PairedXmm},
             settings as x64_settings,
         },
     },
@@ -1387,16 +1387,17 @@ impl Assembler {
     /// Compares values in src1 and src2 and sets ZF, PF, and CF flags in EFLAGS
     /// register.
     pub fn ucomis(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => {
-                Inst::x64_ucomis(size.into(), src1.into(), RegMem::reg(src2.into()))
-            }
-            OperandSize::S64 => {
-                Inst::x64_ucomis(size.into(), src1.into(), RegMem::reg(src2.into()))
-            }
-            OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
-        };
-        self.emit(op);
+        let inst =
+            match size {
+                OperandSize::S32 => asm::Inst::<CraneliftRegisters>::from(
+                    asm::inst::ucomiss_a::new(Into::<Xmm>::into(src1), src2),
+                ),
+                OperandSize::S64 => asm::Inst::<CraneliftRegisters>::from(
+                    asm::inst::ucomisd_a::new(Into::<Xmm>::into(src1), src2),
+                ),
+                OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
+            };
+        self.emit(Inst::External { inst });
     }
 
     pub fn popcnt(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
