@@ -20,7 +20,7 @@
 ;;       movk    x17, #0x18
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x74
+;;       b.lo    #0x70
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
@@ -28,8 +28,7 @@
 ;;       stur    x1, [x28, #8]
 ;;       mov     x16, #0
 ;;       stur    x16, [x28]
-;;       mov     x16, #0xa
-;;       mov     w0, w16
+;;       mov     x0, #0xa
 ;;       stur    w0, [x28, #4]
 ;;       rbit    w16, w0
 ;;       clz     w0, w16
@@ -39,4 +38,4 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   74: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   70: .byte   0x1f, 0xc1, 0x00, 0x00
