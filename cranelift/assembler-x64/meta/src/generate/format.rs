@@ -150,7 +150,7 @@ impl dsl::Format {
     }
 
     fn generate_vex_prefix(&self, f: &mut Formatter, vex: &dsl::Vex) {
-        use dsl::OperandKind::{Imm, Reg, RegMem};
+        use dsl::OperandKind::{FixedReg, Imm, Reg, RegMem};
         f.empty_line();
         f.comment("Emit VEX prefix.");
         fmtln!(f, "let len = {:#03b};", vex.length.bits());
@@ -172,7 +172,7 @@ impl dsl::Format {
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                 fmtln!(f, "let vex = VexPrefix::three_op(reg, vvvv, rm, {bits});");
             }
-            [Reg(reg), Reg(vvvv), RegMem(rm), Imm(_imm8)] => {
+            [Reg(reg), Reg(vvvv), RegMem(rm), Imm(_) | FixedReg(_)] => {
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let vvvv = self.{vvvv}.enc();");
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
@@ -238,7 +238,7 @@ impl dsl::Format {
             | [RegMem(mem), Reg(reg)]
             | [RegMem(mem), Reg(reg), Imm(_)]
             | [RegMem(mem), Reg(reg), FixedReg(_)]
-            | [Reg(reg), Reg(_), RegMem(mem), Imm(_)]
+            | [Reg(reg), Reg(_), RegMem(mem), Imm(_) | FixedReg(_)]
             | [Reg(reg), Mem(mem)] => {
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(

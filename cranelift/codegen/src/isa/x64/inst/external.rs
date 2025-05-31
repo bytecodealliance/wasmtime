@@ -27,7 +27,7 @@ impl asm::Registers for CraneliftRegisters {
 /// separately prior to register allocation. Once register allocation is
 /// complete, we expect the hardware encoding for both `read` and `write` to be
 /// the same.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[expect(missing_docs, reason = "self-describing variants")]
 pub struct PairedGpr {
     pub read: Gpr,
@@ -116,7 +116,7 @@ impl asm::AsReg for PairedGpr {
 }
 
 /// A pair of XMM registers, one for reading and one for writing.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[expect(missing_docs, reason = "self-describing variants")]
 pub struct PairedXmm {
     pub read: Xmm,
