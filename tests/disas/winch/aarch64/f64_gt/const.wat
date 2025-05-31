@@ -20,17 +20,29 @@
 ;;       movk    x17, #0x10
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x70
+;;       b.lo    #0x68
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x10
 ;;       mov     sp, x28
 ;;       stur    x0, [x28, #8]
 ;;       stur    x1, [x28]
+<<<<<<< HEAD
 ;;       mov     x16, #-0x4000000000000000
 ;;       fmov    d0, x16
 ;;       mov     x16, #-0x4010000000000000
 ;;       fmov    d1, x16
 ;;       fcmp    d1, d0
+||||||| parent of 549c6a5f0 (Update disassembly tests)
+;;       mov     x16, #-0x4000000000000000
+;;       fmov    d0, x16
+;;       mov     x16, #-0x4010000000000000
+;;       fmov    d1, x16
+;;       fcmp    d0, d1
+=======
+;;       fmov    d0, #-2.00000000
+;;       fmov    d1, #-1.00000000
+;;       fcmp    d0, d1
+>>>>>>> 549c6a5f0 (Update disassembly tests)
 ;;       cset    x0, gt
 ;;       add     x28, x28, #0x10
 ;;       mov     sp, x28
@@ -38,4 +50,4 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   70: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   68: .byte   0x1f, 0xc1, 0x00, 0x00
