@@ -218,6 +218,17 @@ impl dsl::Format {
                     rm: *rm,
                 }
             }
+            [Reg(vvvv), RegMem(rm)] => {
+                let digit = vex.modrm.unwrap().unwrap_digit();
+                fmtln!(f, "let reg = {digit:#x};");
+                fmtln!(f, "let vvvv = self.{vvvv}.enc();");
+                fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
+                fmtln!(f, "let vex = VexPrefix::three_op(reg, vvvv, rm, {bits});");
+                ModRmStyle::RegMem {
+                    reg: ModRmReg::Digit(digit),
+                    rm: *rm,
+                }
+            }
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
         };
 

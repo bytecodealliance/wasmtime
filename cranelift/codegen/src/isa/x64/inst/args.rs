@@ -729,42 +729,6 @@ impl PrettyPrint for RegMem {
     }
 }
 
-pub use crate::isa::x64::lower::isle::generated_code::UnaryRmRVexOpcode;
-
-impl UnaryRmRVexOpcode {
-    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
-        match self {
-            UnaryRmRVexOpcode::Blsi | UnaryRmRVexOpcode::Blsmsk | UnaryRmRVexOpcode::Blsr => {
-                smallvec![InstructionSet::BMI1]
-            }
-        }
-    }
-}
-
-impl fmt::Display for UnaryRmRVexOpcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&format!("{self:?}").to_lowercase())
-    }
-}
-
-pub use crate::isa::x64::lower::isle::generated_code::UnaryRmRImmVexOpcode;
-
-impl UnaryRmRImmVexOpcode {
-    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
-        match self {
-            UnaryRmRImmVexOpcode::Rorx => {
-                smallvec![InstructionSet::BMI2]
-            }
-        }
-    }
-}
-
-impl fmt::Display for UnaryRmRImmVexOpcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&format!("{self:?}").to_lowercase())
-    }
-}
-
 #[derive(Clone, Copy, PartialEq)]
 /// Comparison operations.
 pub enum CmpOpcode {

@@ -135,9 +135,6 @@ impl Inst {
             | Inst::Atomic128RmwSeq { .. }
             | Inst::Atomic128XchgSeq { .. } => smallvec![InstructionSet::CMPXCHG16b],
 
-            Inst::UnaryRmRVex { op, .. } => op.available_from(),
-            Inst::UnaryRmRImmVex { op, .. } => op.available_from(),
-
             // These use dynamic SSE opcodes.
             Inst::XmmRmR { op, .. }
             | Inst::XmmRmRUnaligned { op, .. }
@@ -586,28 +583,6 @@ impl PrettyPrint for Inst {
 
         match self {
             Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
-
-            Inst::UnaryRmRVex { src, dst, op, size } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let src = src.pretty_print(size.to_bytes());
-                let op = ljustify2(op.to_string(), suffix_bwlq(*size));
-                format!("{op} {src}, {dst}")
-            }
-
-            Inst::UnaryRmRImmVex {
-                src,
-                dst,
-                op,
-                size,
-                imm,
-            } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let src = src.pretty_print(size.to_bytes());
-                format!(
-                    "{} ${imm}, {src}, {dst}",
-                    ljustify2(op.to_string(), suffix_bwlq(*size))
-                )
-            }
 
             Inst::CheckedSRemSeq {
                 size,
@@ -1601,10 +1576,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(divisor);
             collector.reg_fixed_use(dividend, regs::rax());
             collector.reg_fixed_def(dst, regs::rax());
-        }
-        Inst::UnaryRmRVex { src, dst, .. } | Inst::UnaryRmRImmVex { src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
         }
         Inst::XmmUnaryRmR { src, dst, .. } | Inst::XmmUnaryRmRImm { src, dst, .. } => {
             collector.reg_def(dst);
