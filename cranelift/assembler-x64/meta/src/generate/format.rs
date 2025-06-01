@@ -3,6 +3,36 @@
 use super::{Formatter, fmtln};
 use crate::dsl;
 
+/// Different methods of emitting a ModR/M operand and encoding various bits and
+/// pieces of information into it. The REX/VEX formats plus the operand kinds
+/// dictate how exactly each instruction uses this, if at all.
+enum ModRmStyle {
+    /// This instruction does not use a ModR/M byte.
+    None,
+
+    /// The R/M bits are encoded with `reg`, and the Reg/Opcode bits are encoded
+    /// with `digit`.
+    RegWithDigit { reg: dsl::Location, digit: u8 },
+
+    /// The R/M bits are encoded with `mem`, and the Reg/Opcode bits are encoded
+    /// with `digit`.
+    RegMemWithDigit { mem: dsl::Location, digit: u8 },
+
+    /// The R/M bits are encoded with `mem`, and the Reg/Opcode bits are encoded
+    /// with `reg`.
+    RegMem {
+        reg: dsl::Location,
+        mem: dsl::Location,
+    },
+
+    /// The R/M bits are encoded with `reg`, and the Reg/Opcode bits are encoded
+    /// with `dst`.
+    RegReg {
+        reg: dsl::Location,
+        dst: dsl::Location,
+    },
+}
+
 impl dsl::Format {
     /// Re-order the Intel-style operand order to accommodate ATT-style
     /// printing.
@@ -41,16 +71,16 @@ impl dsl::Format {
 
     pub(crate) fn generate_rex_encoding(&self, f: &mut Formatter, rex: &dsl::Rex) {
         self.generate_prefixes(f, rex);
-        self.generate_rex_prefix(f, rex);
+        let style = self.generate_rex_prefix(f, rex);
         rex.generate_opcodes(f, self.locations().next());
-        self.generate_modrm_byte(f, rex.opcode_mod, rex.modrm);
+        self.generate_modrm_byte(f, style);
         self.generate_immediate(f);
     }
 
     pub fn generate_vex_encoding(&self, f: &mut Formatter, vex: &dsl::Vex) {
-        self.generate_vex_prefix(f, vex);
+        let style = self.generate_vex_prefix(f, vex);
         vex.generate_opcode(f);
-        self.generate_modrm_byte(f, None, vex.modrm);
+        self.generate_modrm_byte(f, style);
         self.generate_immediate(f);
     }
 
@@ -74,7 +104,7 @@ impl dsl::Format {
         }
     }
 
-    fn generate_rex_prefix(&self, f: &mut Formatter, rex: &dsl::Rex) {
+    fn generate_rex_prefix(&self, f: &mut Formatter, rex: &dsl::Rex) -> ModRmStyle {
         use dsl::OperandKind::{FixedReg, Imm, Mem, Reg, RegMem};
         f.empty_line();
         f.comment("Possibly emit REX prefix.");
@@ -86,30 +116,34 @@ impl dsl::Format {
         fmtln!(f, "let w_bit = {};", rex.w);
         let bits = "w_bit, uses_8bit";
 
-        match self.operands_by_kind().as_slice() {
+        let style = match self.operands_by_kind().as_slice() {
             [FixedReg(dst), FixedReg(_)] | [FixedReg(dst)] | [FixedReg(dst), Imm(_)] => {
                 // TODO: don't emit REX byte here.
                 assert_eq!(rex.unwrap_digit(), None);
                 fmtln!(f, "let digit = 0;");
                 fmtln!(f, "let dst = self.{dst}.enc();");
                 fmtln!(f, "let rex = RexPrefix::with_digit(digit, dst, {bits});");
+                ModRmStyle::None
             }
             [Reg(dst)] => {
                 assert_eq!(rex.unwrap_digit(), None);
                 assert!(rex.opcode_mod.is_some());
                 fmtln!(f, "let dst = self.{dst}.enc();");
                 fmtln!(f, "let rex = RexPrefix::one_op(dst, {bits});");
+                ModRmStyle::None
             }
             [Reg(dst), Imm(_)] => match rex.unwrap_digit() {
                 Some(digit) => {
                     fmtln!(f, "let digit = 0x{digit:x};");
                     fmtln!(f, "let dst = self.{dst}.enc();");
                     fmtln!(f, "let rex = RexPrefix::two_op(digit, dst, {bits});");
+                    ModRmStyle::RegWithDigit { reg: *dst, digit }
                 }
                 None => {
                     assert!(rex.opcode_mod.is_some());
                     fmtln!(f, "let dst = self.{dst}.enc();");
                     fmtln!(f, "let rex = RexPrefix::one_op(dst, {bits});");
+                    ModRmStyle::None
                 }
             },
             [FixedReg(_), RegMem(mem)]
@@ -118,38 +152,57 @@ impl dsl::Format {
                 let digit = rex.unwrap_digit().unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "let rex = self.{mem}.as_rex_prefix(digit, {bits});");
+                ModRmStyle::RegMemWithDigit { mem: *mem, digit }
             }
             [Mem(dst), Imm(_)] | [RegMem(dst), Imm(_)] | [RegMem(dst)] => {
                 let digit = rex.unwrap_digit().unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "let rex = self.{dst}.as_rex_prefix(digit, {bits});");
+                ModRmStyle::RegMemWithDigit { mem: *dst, digit }
             }
             [Reg(dst), RegMem(src)] | [Reg(dst), RegMem(src), Imm(_)] | [Reg(dst), Mem(src)] => {
                 fmtln!(f, "let dst = self.{dst}.enc();");
                 fmtln!(f, "let rex = self.{src}.as_rex_prefix(dst, {bits});");
+                ModRmStyle::RegMem {
+                    reg: *dst,
+                    mem: *src,
+                }
             }
             [Mem(dst), Reg(src)] => {
                 fmtln!(f, "let src = self.{src}.enc();");
                 fmtln!(f, "let rex = self.{dst}.as_rex_prefix(src, {bits});");
+                ModRmStyle::RegMem {
+                    reg: *src,
+                    mem: *dst,
+                }
             }
             [RegMem(dst), Reg(src)]
             | [RegMem(dst), Reg(src), Imm(_)]
             | [RegMem(dst), Reg(src), FixedReg(_)] => {
                 fmtln!(f, "let src = self.{src}.enc();");
                 fmtln!(f, "let rex = self.{dst}.as_rex_prefix(src, {bits});");
+                ModRmStyle::RegMem {
+                    reg: *src,
+                    mem: *dst,
+                }
             }
-            [Reg(dst), Reg(xmm2), Imm(_)] | [Reg(dst), Reg(xmm2)] => {
+            [Reg(dst), Reg(src), Imm(_)] | [Reg(dst), Reg(src)] => {
                 fmtln!(f, "let reg = self.{dst}.enc();");
-                fmtln!(f, "let rm = self.{xmm2}.enc();");
+                fmtln!(f, "let rm = self.{src}.enc();");
                 fmtln!(f, "let rex = RexPrefix::two_op(reg, rm, {bits});");
+                ModRmStyle::RegReg {
+                    reg: *src,
+                    dst: *dst,
+                }
             }
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
-        }
+        };
 
         fmtln!(f, "rex.encode(buf);");
+        style
     }
 
-    fn generate_vex_prefix(&self, f: &mut Formatter, vex: &dsl::Vex) {
+    fn generate_vex_prefix(&self, f: &mut Formatter, vex: &dsl::Vex) -> ModRmStyle {
         use dsl::OperandKind::{Imm, Reg, RegMem};
         f.empty_line();
         f.comment("Emit VEX prefix.");
@@ -159,97 +212,81 @@ impl dsl::Format {
         fmtln!(f, "let w = {};", vex.w.as_bool());
         let bits = "len, pp, mmmmm, w";
 
-        match self.operands_by_kind().as_slice() {
+        let style = match self.operands_by_kind().as_slice() {
             [Reg(reg), Reg(vvvv), RegMem(rm)] => {
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let vvvv = self.{vvvv}.enc();");
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                 fmtln!(f, "let vex = VexPrefix::three_op(reg, vvvv, rm, {bits});");
+                ModRmStyle::RegMem {
+                    reg: *reg,
+                    mem: *rm,
+                }
             }
             [Reg(reg), RegMem(rm), Imm(_imm8)] => {
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let vvvv = {};", "0b0");
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                 fmtln!(f, "let vex = VexPrefix::three_op(reg, vvvv, rm, {bits});");
+                ModRmStyle::RegMem {
+                    reg: *reg,
+                    mem: *rm,
+                }
             }
             [Reg(reg), Reg(vvvv), RegMem(rm), Imm(_imm8)] => {
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let vvvv = self.{vvvv}.enc();");
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
                 fmtln!(f, "let vex = VexPrefix::three_op(reg, vvvv, rm, {bits});");
+                ModRmStyle::RegMem {
+                    reg: *reg,
+                    mem: *rm,
+                }
             }
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
-        }
+        };
 
         fmtln!(f, "vex.encode(buf);");
+        style
     }
 
-    fn generate_modrm_byte(
-        &self,
-        f: &mut Formatter,
-        opcode_mod: Option<dsl::OpcodeMod>,
-        digit: Option<dsl::ModRmKind>,
-    ) {
-        use dsl::OperandKind::{FixedReg, Imm, Mem, Reg, RegMem};
-
-        // Some instructions will never emit a ModR/M byte.
+    fn generate_modrm_byte(&self, f: &mut Formatter, modrm_style: ModRmStyle) {
         let operands = self.operands_by_kind();
-        if opcode_mod.is_some()
-            || matches!(
-                operands.as_slice(),
-                [FixedReg(_)] | [FixedReg(_), FixedReg(_)] | [FixedReg(_), Imm(_)]
-            )
-        {
-            f.empty_line();
-            f.comment("No need to emit a ModRM byte.");
-            return;
-        }
-
-        // If we must, emit the ModR/M byte and the SIB byte (if necessary).
-        f.empty_line();
-        f.comment("Emit ModR/M byte.");
         let bytes_at_end = match operands.as_slice() {
-            [.., Imm(imm)] => imm.bytes(),
+            [.., dsl::OperandKind::Imm(imm)] => imm.bytes(),
             _ => 0,
         };
-        match operands.as_slice() {
-            [Reg(reg), Imm(_)] => {
-                let digit = digit.unwrap().unwrap_digit();
+
+        f.empty_line();
+
+        match modrm_style {
+            ModRmStyle::None => f.comment("No need to emit a ModRM byte."),
+            _ => f.comment("Emit ModR/M byte."),
+        }
+
+        match modrm_style {
+            ModRmStyle::None => {}
+            ModRmStyle::RegWithDigit { reg, digit } => {
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "self.{reg}.encode_modrm(buf, digit);");
             }
-            [Mem(mem), Imm(_)]
-            | [RegMem(mem), Imm(_)]
-            | [RegMem(mem)]
-            | [FixedReg(_), RegMem(mem)]
-            | [RegMem(mem), FixedReg(_)]
-            | [FixedReg(_), FixedReg(_), RegMem(mem)] => {
-                let digit = digit.unwrap().unwrap_digit();
+            ModRmStyle::RegMemWithDigit { mem, digit } => {
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(
                     f,
                     "self.{mem}.encode_rex_suffixes(buf, off, digit, {bytes_at_end});"
                 );
             }
-            [Reg(reg), RegMem(mem)]
-            | [Reg(reg), RegMem(mem), Imm(_)]
-            | [Mem(mem), Reg(reg)]
-            | [Reg(reg), Reg(_), RegMem(mem)]
-            | [RegMem(mem), Reg(reg)]
-            | [RegMem(mem), Reg(reg), Imm(_)]
-            | [RegMem(mem), Reg(reg), FixedReg(_)]
-            | [Reg(reg), Reg(_), RegMem(mem), Imm(_)]
-            | [Reg(reg), Mem(mem)] => {
+            ModRmStyle::RegMem { reg, mem } => {
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(
                     f,
                     "self.{mem}.encode_rex_suffixes(buf, off, reg, {bytes_at_end});"
                 );
             }
-            [Reg(dst), Reg(xmm2), Imm(_)] | [Reg(dst), Reg(xmm2)] => {
-                fmtln!(f, "self.{xmm2}.encode_modrm(buf, self.{dst}.enc());");
+            ModRmStyle::RegReg { reg, dst } => {
+                fmtln!(f, "self.{reg}.encode_modrm(buf, self.{dst}.enc());");
             }
-            unknown => unimplemented!("unknown pattern: {unknown:?}"),
         }
     }
 
