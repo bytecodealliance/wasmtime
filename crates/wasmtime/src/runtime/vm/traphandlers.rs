@@ -15,7 +15,7 @@ mod signals;
 #[cfg(all(has_native_signals))]
 pub use self::signals::*;
 
-use crate::runtime::module::lookup_code;
+use crate::runtime::module::lookup_trap_for_pc;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{InterpreterRef, VMContext, VMStoreContext, f32x4, f64x2, i8x16};
@@ -721,16 +721,10 @@ impl CallThreadState {
             }
         }
 
-        // If this fault wasn't in wasm code, then it's not our problem
-        let Some((code, text_offset)) = lookup_code(regs.pc) else {
-            return TrapTest::NotWasm;
-        };
-
-        // If the fault was at a location that was not marked as potentially
-        // trapping, then that's a bug in Cranelift/Winch/etc. Don't try to
-        // catch the trap and pretend this isn't wasm so the program likely
-        // aborts.
-        let Some(trap) = code.lookup_trap_code(text_offset) else {
+        // If this fault wasn't in wasm code, then it's not our problem.
+        // (or it was in wasm code but at a location that was not marked as
+        // potentially trapping, then that's a bug in Cranelift/Winch/etc.)
+        let Some(trap) = lookup_trap_for_pc(regs.pc) else {
             return TrapTest::NotWasm;
         };
 
