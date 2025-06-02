@@ -32,6 +32,10 @@ impl Features {
     pub fn iter(&self) -> impl Iterator<Item = &Feature> {
         self.0.iter()
     }
+
+    pub fn contains(&self, feature: Feature) -> bool {
+        self.0.contains(&feature)
+    }
 }
 
 impl fmt::Display for Features {

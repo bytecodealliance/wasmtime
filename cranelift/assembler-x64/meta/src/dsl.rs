@@ -31,6 +31,7 @@ pub fn inst(
         format,
         encoding,
         features: features.into(),
+        alternate: None,
         has_trap: false,
         custom_visit: false,
     }
@@ -59,6 +60,19 @@ pub struct Inst {
     /// "64-bit/32-bit Mode Support" and "CPUID Feature Flag" columns of the x64
     /// reference manual.
     pub features: Features,
+    /// An alternate version of this instruction, if it exists.
+    ///
+    /// Some instructions have the same semantics in their SSE or AVX encodings.
+    /// In these cases, we use this field to record the mnemonic of the upgraded
+    /// version of the instruction.
+    ///
+    /// For AVX specifically, using the VEX-encoded
+    /// instruction is typically better than its legacy SSE version:
+    /// - VEX can encode three operands
+    /// - VEX allows unaligned memory access (avoids additional `MOVUPS`)
+    /// - VEX can compact byte-long prefixes into the VEX prefix
+    /// - VEX instructions zero the upper bits of XMM registers by default
+    pub alternate: Option<String>,
     /// Whether or not this instruction can trap and thus needs a `TrapCode`
     /// payload in the instruction itself.
     pub has_trap: bool,
@@ -109,12 +123,16 @@ impl core::fmt::Display for Inst {
             format,
             encoding,
             features,
+            alternate,
             has_trap,
             custom_visit,
         } = self;
         write!(f, "{name}: {format} => {encoding}")?;
         if !features.is_empty() {
             write!(f, " [{features}]")?;
+        }
+        if let Some(alternate) = alternate {
+            write!(f, " (alternate: {alternate})")?;
         }
         if *has_trap {
             write!(f, " has_trap")?;
