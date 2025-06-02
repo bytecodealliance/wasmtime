@@ -990,6 +990,16 @@ impl<'a> Inliner<'a> {
                     .push((*func, dfg::Trampoline::ErrorContextDrop { ty }));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
+            ThreadSpawnIndirect { func, ty, table } => {
+                let (table, _) = self.table(frame, types, *table);
+                let table = self.result.tables.push(table);
+                let ty = types.convert_component_func_type(frame.translation.types_ref(), *ty)?;
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::ThreadSpawnIndirect { ty, table }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
 
             ModuleStatic(idx, ty) => {
                 frame.modules.push(ModuleDef::Static(*idx, *ty));
@@ -1314,6 +1324,41 @@ impl<'a> Inliner<'a> {
             },
         };
         (memory, memory64)
+    }
+
+    fn table(
+        &mut self,
+        frame: &InlinerFrame<'a>,
+        types: &ComponentTypesBuilder,
+        table: TableIndex,
+    ) -> (dfg::CoreExport<TableIndex>, bool) {
+        let table = frame.tables[table].clone().map_index(|i| match i {
+            EntityIndex::Table(i) => i,
+            _ => unreachable!(),
+        });
+        let table64 = match &self.runtime_instances[table.instance] {
+            InstanceModule::Static(idx) => match &table.item {
+                ExportItem::Index(i) => {
+                    let ty = &self.nested_modules[*idx].module.tables[*i];
+                    match ty.idx_type {
+                        IndexType::I32 => false,
+                        IndexType::I64 => true,
+                    }
+                }
+                ExportItem::Name(_) => unreachable!(),
+            },
+            InstanceModule::Import(ty) => match &table.item {
+                ExportItem::Name(name) => match types[*ty].exports[name] {
+                    EntityType::Memory(m) => match m.idx_type {
+                        IndexType::I32 => false,
+                        IndexType::I64 => true,
+                    },
+                    _ => unreachable!(),
+                },
+                ExportItem::Index(_) => unreachable!(),
+            },
+        };
+        (table, table64)
     }
 
     /// Translates a `LocalCanonicalOptions` which indexes into the `frame`

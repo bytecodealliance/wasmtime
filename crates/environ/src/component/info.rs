@@ -966,7 +966,7 @@ pub enum Trampoline {
         post_return: Option<RuntimePostReturnIndex>,
     },
 
-    /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
+    /// An intrinsic used by FACT-generated modules to (partially or entirely) transfer
     /// ownership of a `future`.
     ///
     /// Transferring a `future` can either mean giving away the readable end
@@ -974,7 +974,7 @@ pub enum Trampoline {
     /// ownership status of the `future`.
     FutureTransfer,
 
-    /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
+    /// An intrinsic used by FACT-generated modules to (partially or entirely) transfer
     /// ownership of a `stream`.
     ///
     /// Transferring a `stream` can either mean giving away the readable end
@@ -982,18 +982,28 @@ pub enum Trampoline {
     /// ownership status of the `stream`.
     StreamTransfer,
 
-    /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
+    /// An intrinsic used by FACT-generated modules to (partially or entirely) transfer
     /// ownership of an `error-context`.
     ///
     /// Unlike futures, streams, and resource handles, `error-context` handles
     /// are reference counted, meaning that sharing the handle with another
     /// component does not invalidate the handle in the original component.
     ErrorContextTransfer,
+
+    /// The `thread.spawn_indirect` intrinsic to spawn a thread from a function
+    /// of type `ty` stored in a `table`.
+    ThreadSpawnIndirect {
+        /// The type of the function that is being spawned.
+        ty: TypeFuncIndex,
+        /// The table from which to indirectly retrieve retrieve the spawn
+        /// function.
+        table: RuntimeTableIndex,
+    },
 }
 
 impl Trampoline {
     /// Returns the name to use for the symbol of this trampoline in the final
-    /// compiled artifact
+    /// compiled artifact.
     pub fn symbol_name(&self) -> String {
         use Trampoline::*;
         match self {
@@ -1049,6 +1059,7 @@ impl Trampoline {
             FutureTransfer => format!("future-transfer"),
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),
+            ThreadSpawnIndirect { .. } => format!("thread-spawn-indirect"),
         }
     }
 }

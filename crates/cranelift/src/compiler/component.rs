@@ -279,6 +279,9 @@ impl<'a> TrampolineCompiler<'a> {
                     rets[0] = me.raise_if_negative_one_and_truncate(rets[0]);
                 })
             }
+            Trampoline::ThreadSpawnIndirect { ty, table } => {
+                self.translate_thread_spawn_indirect(*ty, *table)
+            }
         }
     }
 
@@ -1326,6 +1329,36 @@ impl<'a> TrampolineCompiler<'a> {
             vmctx,
             host::error_context_drop,
             &callee_args,
+            TrapSentinel::Falsy,
+        );
+    }
+
+    fn translate_thread_spawn_indirect(
+        &mut self,
+        func_ty: TypeFuncIndex,
+        table: RuntimeTableIndex,
+    ) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+        let element = args[1];
+        let context = args[2];
+
+        // func_ty: u32
+        let func_ty = self
+            .builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(func_ty.as_u32()));
+
+        // table: u32
+        let table = self
+            .builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(table.as_u32()));
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            host::thread_spawn_indirect,
+            &[vmctx, func_ty, table, element, context],
             TrapSentinel::Falsy,
         );
     }

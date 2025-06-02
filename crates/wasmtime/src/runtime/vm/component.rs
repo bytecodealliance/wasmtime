@@ -749,6 +749,76 @@ impl ComponentInstance {
         _ = (src_idx, src, dst);
         todo!()
     }
+
+    #[cfg(feature = "threads")]
+    pub(crate) fn thread_spawn_indirect(
+        &mut self,
+        _func_ty: TypeFuncIndex,
+        table: RuntimeTableIndex,
+        element: u32,
+        _context: u32,
+    ) -> Result<u32> {
+        use crate::vm::{Instance, TableElement};
+        use crate::{Func, ValType};
+        use core::iter;
+
+        // Retrieve the table referenced by the canonical builtin (i.e.,
+        // `table`). By validation this is guaranteed to be a `shared funcref`
+        // table.
+        let VMTable { vmctx, from } = self.runtime_table(table);
+        let element = u64::from(element);
+        let table = unsafe {
+            Instance::from_vmctx(vmctx.as_non_null(), |handle| {
+                let idx = handle.table_index(from.as_non_null().as_ref());
+                handle
+                    .get_defined_table_with_lazy_init(idx, iter::once(element))
+                    .as_ref()
+            })
+        };
+        let table = *table
+            .as_ref()
+            .ok_or_else(|| anyhow!("failed to get table for thread spawn indirect"))?;
+
+        // Retrieve the actual function reference from the table. The CM
+        // specification tells us to trap if
+        let element = table.get(None, element);
+        let element = element
+            .ok_or_else(|| anyhow!("failed to get table element for thread spawn indirect"))?;
+        match element {
+            TableElement::FuncRef(Some(func)) => {
+                // Build a `Func` from the function reference--this is
+                // incorrect, but temporarily necessary! In the future this will
+                // require additional infrastructure to build a `SharedFunc` or
+                // some more-correct type. It is unclear yet how to do this from
+                // a `Store` (e.g., `SharedStore`) but this use here--never
+                // actually invoked!--makes the problem concrete (TODO).
+                let store = unsafe { (*self.store()).store_opaque_mut() };
+                let func = unsafe { Func::from_vm_func_ref(store, func) };
+
+                // Check the function signature matches what we expect.
+                // Currently, this is temporarily set to `[i32] -> []` but in
+                // the future, with some additional plumbing of the core type
+                // index, we must check that the function signature matches
+                // that (TODO).
+                let ty = func.load_ty(store);
+                if ty.params().len() != 1
+                    || !matches!(ty.params().nth(0).unwrap(), ValType::I32)
+                    || ty.results().len() != 0
+                {
+                    bail!("thread start function signature is invalid");
+                }
+
+                // At this point we should spawn the thread with the function
+                // provided, returning 0 on success, -1 otherwise. None of that
+                // infrastructure is built yet so we crash instead (TODO).
+                unimplemented!("`thread.spawn_indirect` is not implemented yet");
+            }
+            TableElement::FuncRef(None) => {
+                bail!("thread start function is not present in the table")
+            }
+            _ => bail!("thread start element is not a function reference"),
+        }
+    }
 }
 
 impl VMComponentContext {
