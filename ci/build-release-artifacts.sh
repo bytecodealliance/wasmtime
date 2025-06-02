@@ -63,6 +63,11 @@ else
   bin_flags="--features all-arch,component-model"
 fi
 
+if [[ "$target" = "x86_64-pc-windows-msvc" ]]; then
+  export CC=clang
+  export CXX=clang++
+fi
+
 cargo build --release $flags --target $target -p wasmtime-cli $bin_flags --features run
 
 mkdir -p target/c-api-build
