@@ -15,8 +15,8 @@ use core::mem::{self, MaybeUninit};
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
-    BuiltinFunctionIndex, DefinedMemoryIndex, DefinedTagIndex, Unsigned, VMCONTEXT_MAGIC,
-    VMSharedTypeIndex, WasmHeapTopType, WasmValType,
+    BuiltinFunctionIndex, DefinedMemoryIndex, DefinedTableIndex, DefinedTagIndex, Unsigned,
+    VMCONTEXT_MAGIC, VMSharedTypeIndex, WasmHeapTopType, WasmValType,
 };
 
 /// A function pointer that exposes the array calling convention.
@@ -143,20 +143,23 @@ mod test_vmfunction_body {
 /// imported from another instance.
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
-pub struct VMTable {
+pub struct VMTableImport {
     /// A pointer to the imported table description.
     pub from: VmPtr<VMTableDefinition>,
 
     /// A pointer to the `VMContext` that owns the table description.
     pub vmctx: VmPtr<VMContext>,
+
+    /// The table index, within `vmctx`, this definition resides at.
+    pub index: DefinedTableIndex,
 }
 
 // SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
-unsafe impl VmSafe for VMTable {}
+unsafe impl VmSafe for VMTableImport {}
 
 #[cfg(test)]
 mod test_vmtable {
-    use super::VMTable;
+    use super::VMTableImport;
     use core::mem::offset_of;
     use std::mem::size_of;
     use wasmtime_environ::component::{Component, VMComponentOffsets};
@@ -166,20 +169,23 @@ mod test_vmtable {
     fn check_vmtable_offsets() {
         let module = Module::new();
         let offsets = VMOffsets::new(HostPtr, &module);
-        assert_eq!(size_of::<VMTable>(), usize::from(offsets.size_of_vmtable()));
         assert_eq!(
-            offset_of!(VMTable, from),
-            usize::from(offsets.vmtable_from())
+            size_of::<VMTableImport>(),
+            usize::from(offsets.size_of_vmtable_import())
         );
         assert_eq!(
-            offset_of!(VMTable, vmctx),
-            usize::from(offsets.vmtable_vmctx())
+            offset_of!(VMTableImport, from),
+            usize::from(offsets.vmtable_import_from())
+        );
+        assert_eq!(
+            offset_of!(VMTableImport, vmctx),
+            usize::from(offsets.vmtable_import_vmctx())
         );
     }
 
     #[test]
     fn ensure_sizes_match() {
-        // Because we use `VMTable` for recording tables used by components, we
+        // Because we use `VMTableImport` for recording tables used by components, we
         // want to make sure that the size calculations between `VMOffsets` and
         // `VMComponentOffsets` stay the same.
         let module = Module::new();
@@ -187,8 +193,8 @@ mod test_vmtable {
         let component = Component::default();
         let vm_component_offsets = VMComponentOffsets::new(HostPtr, &component);
         assert_eq!(
-            vm_offsets.size_of_vmtable(),
-            vm_component_offsets.size_of_vmtable()
+            vm_offsets.size_of_vmtable_import(),
+            vm_component_offsets.size_of_vmtable_import()
         );
     }
 }

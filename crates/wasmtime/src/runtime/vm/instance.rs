@@ -8,8 +8,8 @@ use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
 use crate::runtime::vm::table::{Table, TableElement, TableElementType};
 use crate::runtime::vm::vmcontext::{
     VMBuiltinFunctionsArray, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMStoreContext, VMTable,
-    VMTableDefinition, VMTagDefinition, VMTagImport,
+    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMStoreContext,
+    VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, ExportTag, GcStore, Imports,
@@ -481,8 +481,8 @@ impl Instance {
         unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmfunction_import(index)) }
     }
 
-    /// Return the index `VMTable`.
-    fn imported_table(&self, index: TableIndex) -> &VMTable {
+    /// Return the index `VMTableImport`.
+    fn imported_table(&self, index: TableIndex) -> &VMTableImport {
         unsafe { self.vmctx_plus_offset(self.offsets().vmctx_vmtable_import(index)) }
     }
 
@@ -725,17 +725,23 @@ impl Instance {
     }
 
     fn get_exported_table(&mut self, index: TableIndex) -> ExportTable {
-        let (definition, vmctx) =
+        let ty = self.env_module().tables[index];
+        let (definition, vmctx, index) =
             if let Some(def_index) = self.env_module().defined_table_index(index) {
-                (self.table_ptr(def_index), self.vmctx())
+                (self.table_ptr(def_index), self.vmctx(), def_index)
             } else {
                 let import = self.imported_table(index);
-                (import.from.as_non_null(), import.vmctx.as_non_null())
+                (
+                    import.from.as_non_null(),
+                    import.vmctx.as_non_null(),
+                    import.index,
+                )
             };
         ExportTable {
             definition,
             vmctx,
-            table: self.env_module().tables[index],
+            table: ty,
+            index,
         }
     }
 
