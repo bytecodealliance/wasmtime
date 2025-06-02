@@ -1155,11 +1155,11 @@ impl Assembler {
         match in_size {
             OperandSize::S32 => {
                 let (min, _) = f32_cvt_to_int_bounds(signed, out_size.num_bits().into());
-		self.load_fp_const(rd, Imm::f32(min.to_bits()), in_size);
+                self.load_fp_const(rd, Imm::f32(min.to_bits()), in_size);
             }
             OperandSize::S64 => {
                 let (min, _) = f64_cvt_to_int_bounds(signed, out_size.num_bits().into());
-		self.load_fp_const(rd, Imm::f64(min.to_bits()), in_size);
+                self.load_fp_const(rd, Imm::f64(min.to_bits()), in_size);
             }
             s => unreachable!("unsupported floating-point size: {}bit", s.num_bits()),
         };
@@ -1177,11 +1177,11 @@ impl Assembler {
         match in_size {
             OperandSize::S32 => {
                 let (_, max) = f32_cvt_to_int_bounds(signed, out_size.num_bits().into());
-		self.load_fp_const(rd, Imm::f32(max.to_bits()), in_size);
+                self.load_fp_const(rd, Imm::f32(max.to_bits()), in_size);
             }
             OperandSize::S64 => {
                 let (_, max) = f64_cvt_to_int_bounds(signed, out_size.num_bits().into());
-		self.load_fp_const(rd, Imm::f64(max.to_bits()), in_size);
+                self.load_fp_const(rd, Imm::f64(max.to_bits()), in_size);
             }
             s => unreachable!("unsupported floating-point size: {}bit", s.num_bits()),
         };

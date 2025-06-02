@@ -472,10 +472,7 @@ impl Assembler {
         ext: Extend<Signed>,
         memflags: MemFlags,
     ) {
-        let src = Self::to_synthetic_amode(
-            addr,
-            memflags,
-        );
+        let src = Self::to_synthetic_amode(addr, memflags);
         let dst = WritableGpr::from_reg(dst.to_reg().into());
         let inst = match ext.into() {
             ExtMode::BL => asm::inst::movsbl_rm::new(dst, src).into(),
