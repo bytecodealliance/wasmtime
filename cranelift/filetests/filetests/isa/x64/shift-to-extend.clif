@@ -14,7 +14,7 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movsbl  %dil, %eax
+;   movsbl %dil, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -40,7 +40,7 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movswl  %di, %eax
+;   movswl %di, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -66,7 +66,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movsbq  %dil, %rax
+;   movsbq %dil, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -92,7 +92,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movswq  %di, %rax
+;   movswq %di, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -118,7 +118,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movslq  %edi, %rax
+;   movslq %edi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

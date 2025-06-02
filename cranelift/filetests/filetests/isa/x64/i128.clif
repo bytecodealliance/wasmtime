@@ -622,7 +622,7 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movsbq  %dil, %rax
+;   movsbq %dil, %rax
 ;   movq    %rax, %rdx
 ;   sarq $0x3f, %rdx
 ;   movq    %rbp, %rsp

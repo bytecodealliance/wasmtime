@@ -13,7 +13,7 @@ block0(v0: i8):
 ; block0:
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
-;   movsbl  %dil, %r9d
+;   movsbl %dil, %r9d
 ;   cvtsi2ssl %r9d, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -43,7 +43,7 @@ block0(v0: i16):
 ; block0:
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
-;   movswl  %di, %r9d
+;   movswl %di, %r9d
 ;   cvtsi2ssl %r9d, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -129,7 +129,7 @@ block0(v0: i8):
 ; block0:
 ;   uninit  %xmm0
 ;   xorpd %xmm0, %xmm0
-;   movsbl  %dil, %r9d
+;   movsbl %dil, %r9d
 ;   cvtsi2sdl %r9d, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -159,7 +159,7 @@ block0(v0: i16):
 ; block0:
 ;   uninit  %xmm0
 ;   xorpd %xmm0, %xmm0
-;   movswl  %di, %r9d
+;   movswl %di, %r9d
 ;   cvtsi2sdl %r9d, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
