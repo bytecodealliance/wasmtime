@@ -29,30 +29,12 @@
 ;;       fcmp    d0, d0
 ;;       b.vs    #0x88
 ;;   50: fmov    d31, #-1.00000000
-<<<<<<< HEAD
 ;;       fcmp    d0, d31
-;;       b.le    #0x90
-;;   5c: mov     x16, #0x41f0000000000000
-;;       fmov    d31, x16
-;;       fcmp    d0, d31
-;;       b.ge    #0x94
-;;   6c: fcvtzu  w0, d0
-||||||| parent of 549c6a5f0 (Update disassembly tests)
-;;       fcmp    d31, d0
-;;       b.le    #0x90
-;;   5c: mov     x16, #0x41f0000000000000
-;;       fmov    d31, x16
-;;       fcmp    d31, d0
-;;       b.ge    #0x94
-;;   6c: fcvtzu  w0, d0
-=======
-;;       fcmp    d31, d0
 ;;       b.le    #0x8c
 ;;   5c: ldr     d31, #0x98
-;;       fcmp    d31, d0
+;;       fcmp    d0, d31
 ;;       b.ge    #0x90
 ;;   68: fcvtzu  w0, d0
->>>>>>> 549c6a5f0 (Update disassembly tests)
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       mov     sp, x28

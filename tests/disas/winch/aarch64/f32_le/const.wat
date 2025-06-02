@@ -8,7 +8,6 @@
         (f32.le)
     )
 )
-
 ;; wasm[0]::function[0]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
@@ -26,23 +25,9 @@
 ;;       mov     sp, x28
 ;;       stur    x0, [x28, #8]
 ;;       stur    x1, [x28]
-<<<<<<< HEAD
-;;       mov     x16, #0xc0000000
-;;       fmov    s0, w16
-;;       mov     x16, #0xbf800000
-;;       fmov    s1, w16
-;;       fcmp    s1, s0
-||||||| parent of 549c6a5f0 (Update disassembly tests)
-;;       mov     x16, #0xc0000000
-;;       fmov    s0, w16
-;;       mov     x16, #0xbf800000
-;;       fmov    s1, w16
-;;       fcmp    s0, s1
-=======
 ;;       fmov    s0, #-2.00000000
 ;;       fmov    s1, #-1.00000000
-;;       fcmp    s0, s1
->>>>>>> 549c6a5f0 (Update disassembly tests)
+;;       fcmp    s1, s0
 ;;       cset    x0, ls
 ;;       add     x28, x28, #0x10
 ;;       mov     sp, x28

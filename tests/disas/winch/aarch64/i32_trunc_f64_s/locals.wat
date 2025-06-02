@@ -30,40 +30,14 @@
 ;;       stur    x16, [x28]
 ;;       ldur    d0, [x28]
 ;;       fcmp    d0, d0
-<<<<<<< HEAD
-;;       b.vs    #0x98
-;;   54: mov     x16, #0x200000
-;;       movk    x16, #0xc1e0, lsl #48
-;;       fmov    d31, x16
-;;       fcmp    d0, d31
-;;       b.le    #0x9c
-;;   68: mov     x16, #0x41e0000000000000
-;;       fmov    d31, x16
-;;       fcmp    d0, d31
-;;       b.ge    #0xa0
-;;   78: fcvtzs  w0, d0
-||||||| parent of 549c6a5f0 (Update disassembly tests)
-;;       b.vs    #0x98
-;;   54: mov     x16, #0x200000
-;;       movk    x16, #0xc1e0, lsl #48
-;;       fmov    d31, x16
-;;       fcmp    d31, d0
-;;       b.le    #0x9c
-;;   68: mov     x16, #0x41e0000000000000
-;;       fmov    d31, x16
-;;       fcmp    d31, d0
-;;       b.ge    #0xa0
-;;   78: fcvtzs  w0, d0
-=======
 ;;       b.vs    #0x8c
 ;;   54: ldr     d31, #0x98
-;;       fcmp    d31, d0
+;;       fcmp    d0, d31
 ;;       b.le    #0x90
 ;;   60: ldr     d31, #0xa0
-;;       fcmp    d31, d0
+;;       fcmp    d0, d31
 ;;       b.ge    #0x94
 ;;   6c: fcvtzs  w0, d0
->>>>>>> 549c6a5f0 (Update disassembly tests)
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       mov     sp, x28

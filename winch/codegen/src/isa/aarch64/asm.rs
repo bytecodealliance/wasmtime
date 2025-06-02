@@ -1152,18 +1152,17 @@ impl Assembler {
         out_size: OperandSize,
         rd: Writable<Reg>,
     ) {
-        let min = match in_size {
+        match in_size {
             OperandSize::S32 => {
                 let (min, _) = f32_cvt_to_int_bounds(signed, out_size.num_bits().into());
-                u64::from(min.to_bits())
+		self.load_fp_const(rd, Imm::f32(min.to_bits()), in_size);
             }
             OperandSize::S64 => {
                 let (min, _) = f64_cvt_to_int_bounds(signed, out_size.num_bits().into());
-                min.to_bits()
+		self.load_fp_const(rd, Imm::f64(min.to_bits()), in_size);
             }
             s => unreachable!("unsupported floating-point size: {}bit", s.num_bits()),
         };
-        self.load_const_fp(min, rd, in_size);
     }
 
     /// Load the max value for an integer of size out_size, as a floating-point
@@ -1175,18 +1174,17 @@ impl Assembler {
         out_size: OperandSize,
         rd: Writable<Reg>,
     ) {
-        let max = match in_size {
+        match in_size {
             OperandSize::S32 => {
                 let (_, max) = f32_cvt_to_int_bounds(signed, out_size.num_bits().into());
-                u64::from(max.to_bits())
+		self.load_fp_const(rd, Imm::f32(max.to_bits()), in_size);
             }
             OperandSize::S64 => {
                 let (_, max) = f64_cvt_to_int_bounds(signed, out_size.num_bits().into());
-                max.to_bits()
+		self.load_fp_const(rd, Imm::f64(max.to_bits()), in_size);
             }
             s => unreachable!("unsupported floating-point size: {}bit", s.num_bits()),
         };
-        self.load_const_fp(max, rd, in_size);
     }
 
     /// Emit instructions to check if the value in `rn` is NaN.
