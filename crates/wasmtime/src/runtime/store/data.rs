@@ -307,7 +307,7 @@ impl<T> Stored<T> {
         self.store_id.assert_belongs_to(store)
     }
 
-    fn index(&self) -> usize {
+    pub(crate) fn index(&self) -> usize {
         self.index
     }
 }
