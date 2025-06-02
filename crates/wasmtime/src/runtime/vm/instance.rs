@@ -12,9 +12,9 @@ use crate::runtime::vm::vmcontext::{
     VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
-    ExportFunction, ExportGlobal, ExportMemory, ExportTable, ExportTag, GcStore, Imports,
-    ModuleRuntimeInfo, SendSyncPtr, VMFunctionBody, VMGcRef, VMStore, VMStoreRawPtr, VmPtr, VmSafe,
-    WasmFault,
+    ExportFunction, ExportGlobal, ExportGlobalKind, ExportMemory, ExportTable, ExportTag, GcStore,
+    Imports, ModuleRuntimeInfo, SendSyncPtr, VMFunctionBody, VMGcRef, VMStore, VMStoreRawPtr,
+    VmPtr, VmSafe, WasmFault,
 };
 use crate::store::{InstanceId, StoreInner, StoreOpaque};
 use crate::{StoreContextMut, prelude::*};
@@ -575,7 +575,7 @@ impl Instance {
     }
 
     /// Return the indexed `VMGlobalDefinition`.
-    fn global_ptr(&mut self, index: DefinedGlobalIndex) -> NonNull<VMGlobalDefinition> {
+    pub fn global_ptr(&self, index: DefinedGlobalIndex) -> NonNull<VMGlobalDefinition> {
         unsafe { self.vmctx_plus_offset_raw(self.offsets().vmctx_vmglobal_definition(index)) }
     }
 
@@ -605,16 +605,10 @@ impl Instance {
         &'a mut self,
     ) -> impl ExactSizeIterator<Item = (GlobalIndex, ExportGlobal)> + 'a {
         let module = self.env_module().clone();
-        module.globals.keys().map(move |idx| {
-            (
-                idx,
-                ExportGlobal {
-                    definition: self.defined_or_imported_global_ptr(idx),
-                    vmctx: Some(self.vmctx()),
-                    global: self.env_module().globals[idx],
-                },
-            )
-        })
+        module
+            .globals
+            .keys()
+            .map(move |idx| (idx, self.get_exported_global(idx)))
     }
 
     /// Get the globals defined in this instance (not imported).
@@ -630,7 +624,7 @@ impl Instance {
                 let def_idx = module.defined_global_index(global_idx).unwrap();
                 let global = ExportGlobal {
                     definition: self.global_ptr(def_idx),
-                    vmctx: Some(self.vmctx()),
+                    kind: ExportGlobalKind::Instance(self.vmctx(), def_idx),
                     global: self.env_module().globals[global_idx],
                 };
                 (def_idx, global)
@@ -765,15 +759,16 @@ impl Instance {
         }
     }
 
-    fn get_exported_global(&mut self, index: GlobalIndex) -> ExportGlobal {
-        ExportGlobal {
-            definition: if let Some(def_index) = self.env_module().defined_global_index(index) {
-                self.global_ptr(def_index)
-            } else {
-                self.imported_global(index).from.as_non_null()
-            },
-            vmctx: Some(self.vmctx()),
-            global: self.env_module().globals[index],
+    fn get_exported_global(&self, index: GlobalIndex) -> ExportGlobal {
+        let global = self.env_module().globals[index];
+        if let Some(def_index) = self.env_module().defined_global_index(index) {
+            ExportGlobal {
+                definition: self.global_ptr(def_index),
+                kind: ExportGlobalKind::Instance(self.vmctx(), def_index),
+                global,
+            }
+        } else {
+            ExportGlobal::from_vmimport(self.imported_global(index), global)
         }
     }
 

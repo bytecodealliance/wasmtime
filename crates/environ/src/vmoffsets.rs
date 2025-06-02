@@ -663,7 +663,8 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the size of `VMGlobalImport`.
     #[inline]
     pub fn size_of_vmglobal_import(&self) -> u8 {
-        1 * self.pointer_size()
+        // `VMGlobalImport` has two pointers plus 8 bytes for `VMGlobalKind`
+        2 * self.pointer_size() + 8
     }
 }
 

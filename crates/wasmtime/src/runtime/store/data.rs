@@ -21,13 +21,16 @@ impl InstanceId {
         debug_assert!(idx != Self::INVALID.0);
         InstanceId(idx)
     }
+
+    pub fn index(&self) -> usize {
+        self.0
+    }
 }
 
 pub struct StoreData {
     id: StoreId,
     funcs: Vec<crate::func::FuncData>,
     tables: Vec<crate::runtime::vm::ExportTable>,
-    globals: Vec<crate::runtime::vm::ExportGlobal>,
     instances: Vec<crate::instance::InstanceData>,
     #[cfg(feature = "component-model")]
     pub(crate) components: crate::component::ComponentStoreData,
@@ -52,7 +55,6 @@ macro_rules! impl_store_data {
 impl_store_data! {
     funcs => crate::func::FuncData,
     tables => crate::runtime::vm::ExportTable,
-    globals => crate::runtime::vm::ExportGlobal,
     instances => crate::instance::InstanceData,
 }
 
@@ -62,7 +64,6 @@ impl StoreData {
             id: StoreId::allocate(),
             funcs: Vec::new(),
             tables: Vec::new(),
-            globals: Vec::new(),
             instances: Vec::new(),
             #[cfg(feature = "component-model")]
             components: Default::default(),

@@ -2483,15 +2483,6 @@ impl GlobalType {
         self.mutability
     }
 
-    pub(crate) fn to_wasm_type(&self) -> Global {
-        let wasm_ty = self.content().to_wasm_type();
-        let mutability = matches!(self.mutability(), Mutability::Var);
-        Global {
-            wasm_ty,
-            mutability,
-        }
-    }
-
     /// Returns `None` if the wasmtime global has a type that we can't
     /// represent, but that should only very rarely happen and indicate a bug.
     pub(crate) fn from_wasmtime_global(engine: &Engine, global: &Global) -> GlobalType {
