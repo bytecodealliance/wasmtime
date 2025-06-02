@@ -182,7 +182,7 @@ impl FuncRefs {
 }
 
 /// Attempts to fill the `wasm_call` field of `func_ref` given `modules`
-/// registered.
+/// registered and returns `true` if the field was filled, `false` otherwise.
 ///
 /// # Panics
 ///
