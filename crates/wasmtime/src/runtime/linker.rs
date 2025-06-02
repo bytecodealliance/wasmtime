@@ -1428,7 +1428,7 @@ impl DefinitionType {
                 DefinitionType::Memory(*t.wasmtime_ty(store), t.internal_size(store))
             }
             Extern::SharedMemory(t) => DefinitionType::Memory(*t.ty().wasmtime_memory(), t.size()),
-            Extern::Tag(t) => DefinitionType::Tag(*t.wasmtime_ty(data)),
+            Extern::Tag(t) => DefinitionType::Tag(*t.wasmtime_ty(store)),
         }
     }
 
