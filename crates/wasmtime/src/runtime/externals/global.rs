@@ -182,9 +182,8 @@ impl Global {
                 Val::F64(f) => *definition.as_u64_mut() = f,
                 Val::V128(i) => definition.set_u128(i.into()),
                 Val::FuncRef(f) => {
-                    *definition.as_func_ref_mut() = f.map_or(ptr::null_mut(), |f| {
-                        f.vm_func_ref(&mut store).as_ptr().cast()
-                    });
+                    *definition.as_func_ref_mut() =
+                        f.map_or(ptr::null_mut(), |f| f.vm_func_ref(&store).as_ptr().cast());
                 }
                 Val::ExternRef(e) => {
                     let new = match e {

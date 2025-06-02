@@ -37,7 +37,7 @@ pub fn generate_global_export(
             Val::V128(x) => global.set_u128(x.into()),
             Val::FuncRef(f) => {
                 *global.as_func_ref_mut() =
-                    f.map_or(ptr::null_mut(), |f| f.vm_func_ref(&mut store).as_ptr());
+                    f.map_or(ptr::null_mut(), |f| f.vm_func_ref(&store).as_ptr());
             }
             Val::ExternRef(x) => {
                 let new = match x {
