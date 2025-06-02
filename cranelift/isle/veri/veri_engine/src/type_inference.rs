@@ -291,7 +291,7 @@ fn type_annotations_using_rule<'a>(
                 if let Some(ty) = solution.get(t) {
                     tymap.insert(*t, convert_type(ty));
                 } else {
-                    panic!("missing type variable {} in solution for: {:?}", t, expr);
+                    panic!("missing type variable {t} in solution for: {expr:?}");
                 }
             }
             let mut quantified_vars = vec![];
@@ -306,7 +306,7 @@ fn type_annotations_using_rule<'a>(
                         tyvar: *t,
                     });
                 } else {
-                    panic!("missing type variable {} in solution for: {:?}", t, expr);
+                    panic!("missing type variable {t} in solution for: {expr:?}");
                 }
             }
             let mut free_vars = vec![];
@@ -318,7 +318,7 @@ fn type_annotations_using_rule<'a>(
                     tymap.insert(t, ty);
                     free_vars.push(veri_ir::BoundVar { name: s, tyvar: t });
                 } else {
-                    panic!("missing type variable {} in solution for: {:?}", t, expr);
+                    panic!("missing type variable {t} in solution for: {expr:?}");
                 }
             }
 
@@ -361,7 +361,7 @@ fn add_annotation_constraints(
     let (e, t) = match expr {
         annotation_ir::Expr::Var(x, ..) => {
             if !annotation_info.var_to_type_var.contains_key(&x) {
-                panic!("Error: unbound variable: {}", x);
+                panic!("Error: unbound variable: {x}");
             }
             let t = annotation_info.var_to_type_var[&x];
             let name = format!("{}__{}__{}", annotation_info.term, x, t);
@@ -1738,10 +1738,7 @@ fn solve_constraints(
                         }
                     }
                 }
-                _ => panic!(
-                    "Non-concrete constraint found in concrete constraints: {:#?}",
-                    c
-                ),
+                _ => panic!("Non-concrete constraint found in concrete constraints: {c:#?}"),
             };
         }
 
@@ -1778,8 +1775,7 @@ fn solve_constraints(
                                         match (e1, e2) {
                                             (Some(e1), Some(e2)) =>
                                             panic!(
-                                                "type conflict\n\t{}\nhas type\n\t{}\nbut\n\t{}\nhas type\n\t{}",
-                                                e1, x, e2, y
+                                                "type conflict\n\t{e1}\nhas type\n\t{x}\nbut\n\t{e2}\nhas type\n\t{y}"
                                                 ),
                                             _ => continue,
                                         }
@@ -1830,7 +1826,7 @@ fn solve_constraints(
                         }
                     }
                 }
-                _ => panic!("Non-variable constraint found in var constraints: {:#?}", v),
+                _ => panic!("Non-variable constraint found in var constraints: {v:#?}"),
             }
         }
 
@@ -1857,7 +1853,7 @@ fn solve_constraints(
                                                 |(k, &u)| if u == *v { Some(k) } else { None },
                                             )
                                             .unwrap();
-                                        panic!("Var was already typed as {:#?} but currently processing constraint: {:#?}\n{:?}", var_type, b, e)
+                                        panic!("Var was already typed as {var_type:#?} but currently processing constraint: {b:#?}\n{e:?}")
                                     }
                                 }
 
@@ -1886,14 +1882,14 @@ fn solve_constraints(
                                 }
                             }
                         }
-                        _ => panic!("Non-bv constraint found in bv constraints: {:#?}", b),
+                        _ => panic!("Non-bv constraint found in bv constraints: {b:#?}"),
                     }
                 }
                 TypeExpr::Variable(_, _) => {
-                    panic!("Non-bv constraint found in bv constraints: {:#?}", b)
+                    panic!("Non-bv constraint found in bv constraints: {b:#?}")
                 }
                 TypeExpr::WidthInt(_, _) => {
-                    panic!("Non-bv constraint found in bv constraints: {:#?}", b)
+                    panic!("Non-bv constraint found in bv constraints: {b:#?}")
                 }
             }
         }
@@ -2050,7 +2046,7 @@ fn create_parse_tree_pattern(
                     let eq = veri_ir::Expr::Binary(
                         veri_ir::BinaryOp::Eq,
                         Box::new(veri_ir::Expr::WidthOf(Box::new(veri_ir::Expr::Terminal(
-                            veri_ir::Terminal::Var(format!("{}__{}", name, type_var)),
+                            veri_ir::Terminal::Var(format!("{name}__{type_var}")),
                         )))),
                         Box::new(lit),
                     );
@@ -2059,7 +2055,7 @@ fn create_parse_tree_pattern(
             }
 
             TypeVarNode {
-                ident: format!("{}__{}", name, type_var),
+                ident: format!("{name}__{type_var}"),
                 construct: TypeVarConstruct::Term(*term_id),
                 type_var,
                 children,
@@ -2139,7 +2135,7 @@ fn create_parse_tree_pattern(
             let type_var = tree.next_type_var;
             tree.next_type_var += 1;
             TypeVarNode {
-                ident: format!("wildcard__{}", type_var),
+                ident: format!("wildcard__{type_var}"),
                 construct: TypeVarConstruct::Wildcard(type_var),
                 type_var,
                 children: vec![],
@@ -2161,7 +2157,7 @@ fn create_parse_tree_pattern(
                 "I128" => 16,
                 _ => todo!("{:?}", &name),
             };
-            let name = format!("{}__{}", name, type_var);
+            let name = format!("{name}__{type_var}");
 
             TypeVarNode {
                 ident: name,
@@ -2174,7 +2170,7 @@ fn create_parse_tree_pattern(
         isle::sema::Pattern::ConstBool(_, val) => {
             let type_var = tree.next_type_var;
             tree.next_type_var += 1;
-            let name = format!("{}__{}", val, type_var);
+            let name = format!("{val}__{type_var}");
             TypeVarNode {
                 ident: name,
                 construct: TypeVarConstruct::Bool(*val),
@@ -2186,7 +2182,7 @@ fn create_parse_tree_pattern(
         isle::sema::Pattern::ConstInt(_, num) => {
             let type_var = tree.next_type_var;
             tree.next_type_var += 1;
-            let name = format!("{}__{}", num, type_var);
+            let name = format!("{num}__{type_var}");
             TypeVarNode {
                 ident: name,
                 construct: TypeVarConstruct::Const(*num),
@@ -2246,7 +2242,7 @@ fn create_parse_tree_expr(
             tree.next_type_var += 1;
 
             TypeVarNode {
-                ident: format!("{}__{}", name, type_var),
+                ident: format!("{name}__{type_var}"),
                 construct: TypeVarConstruct::Term(*term_id),
                 type_var,
                 children,
@@ -2293,7 +2289,7 @@ fn create_parse_tree_expr(
                 "true" => 1,
                 _ => todo!("{:?}", &name),
             };
-            let name = format!("{}__{}", name, type_var);
+            let name = format!("{name}__{type_var}");
             TypeVarNode {
                 ident: name,
                 construct: TypeVarConstruct::Const(val),
@@ -2305,7 +2301,7 @@ fn create_parse_tree_expr(
         isle::sema::Expr::ConstBool(_, val) => {
             let type_var = tree.next_type_var;
             tree.next_type_var += 1;
-            let name = format!("{}__{}", val, type_var);
+            let name = format!("{val}__{type_var}");
             TypeVarNode {
                 ident: name,
                 construct: TypeVarConstruct::Bool(*val),
@@ -2317,7 +2313,7 @@ fn create_parse_tree_expr(
         isle::sema::Expr::ConstInt(_, num) => {
             let type_var = tree.next_type_var;
             tree.next_type_var += 1;
-            let name = format!("{}__{}", num, type_var);
+            let name = format!("{num}__{type_var}");
             TypeVarNode {
                 ident: name,
                 construct: TypeVarConstruct::Const(*num),
@@ -2353,7 +2349,7 @@ fn create_parse_tree_expr(
             let type_var = tree.next_type_var;
             tree.next_type_var += 1;
 
-            let name = format!("let__{}", type_var);
+            let name = format!("let__{type_var}");
 
             // The let should have the same type as the body
             tree.var_constraints

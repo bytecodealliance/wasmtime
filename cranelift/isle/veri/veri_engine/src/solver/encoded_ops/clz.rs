@@ -8,7 +8,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     // Generated code.
     // total zeros counter
     let ret0 = solver.declare(
-        format!("ret0_{id}", id = id),
+        format!("ret0_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -25,7 +25,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ));
     // round 1
     let ret1 = solver.declare(
-        format!("ret1_{id}", id = id),
+        format!("ret1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -33,7 +33,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y32 = solver.declare(
-        format!("y32_{id}", id = id),
+        format!("y32_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -41,7 +41,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x32 = solver.declare(
-        format!("x32_{id}", id = id),
+        format!("x32_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -97,7 +97,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 2
     let ret2 = solver.declare(
-        format!("ret2_{id}", id = id),
+        format!("ret2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -105,7 +105,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y16 = solver.declare(
-        format!("y16_{id}", id = id),
+        format!("y16_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -113,7 +113,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x16 = solver.declare(
-        format!("x16_{id}", id = id),
+        format!("x16_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -173,7 +173,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 3
     let ret3 = solver.declare(
-        format!("ret3_{id}", id = id),
+        format!("ret3_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -181,7 +181,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y8 = solver.declare(
-        format!("y8_{id}", id = id),
+        format!("y8_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -189,7 +189,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x8 = solver.declare(
-        format!("x8_{id}", id = id),
+        format!("x8_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -249,7 +249,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 4
     let ret4 = solver.declare(
-        format!("ret4_{id}", id = id),
+        format!("ret4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -257,7 +257,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y4 = solver.declare(
-        format!("y4_{id}", id = id),
+        format!("y4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -265,7 +265,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x4 = solver.declare(
-        format!("x4_{id}", id = id),
+        format!("x4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -321,7 +321,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 5
     let ret5 = solver.declare(
-        format!("ret5_{id}", id = id),
+        format!("ret5_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -329,7 +329,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y2 = solver.declare(
-        format!("y2_{id}", id = id),
+        format!("y2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -337,7 +337,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x2 = solver.declare(
-        format!("x2_{id}", id = id),
+        format!("x2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -393,7 +393,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 6
     let ret6 = solver.declare(
-        format!("ret6_{id}", id = id),
+        format!("ret6_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -401,7 +401,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y1 = solver.declare(
-        format!("y1_{id}", id = id),
+        format!("y1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -409,7 +409,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x1 = solver.declare(
-        format!("x1_{id}", id = id),
+        format!("x1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -466,7 +466,7 @@ pub fn clz64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
 
     // last round
     let ret7 = solver.declare(
-        format!("ret7_{id}", id = id),
+        format!("ret7_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -510,7 +510,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     // Generated code.
     // total zeros counter
     let ret0 = solver.declare(
-        format!("ret0_{id}", id = id),
+        format!("ret0_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -527,7 +527,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ));
     // round 1
     let ret1 = solver.declare(
-        format!("ret1_{id}", id = id),
+        format!("ret1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -535,7 +535,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y16 = solver.declare(
-        format!("y16_{id}", id = id),
+        format!("y16_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -543,7 +543,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x16 = solver.declare(
-        format!("x16_{id}", id = id),
+        format!("x16_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -600,7 +600,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 2
     let ret2 = solver.declare(
-        format!("ret2_{id}", id = id),
+        format!("ret2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -608,7 +608,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y8 = solver.declare(
-        format!("y8_{id}", id = id),
+        format!("y8_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -616,7 +616,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x8 = solver.declare(
-        format!("x8_{id}", id = id),
+        format!("x8_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -673,7 +673,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 3
     let ret3 = solver.declare(
-        format!("ret3_{id}", id = id),
+        format!("ret3_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -681,7 +681,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y4 = solver.declare(
-        format!("y4_{id}", id = id),
+        format!("y4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -689,7 +689,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x4 = solver.declare(
-        format!("x4_{id}", id = id),
+        format!("x4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -746,7 +746,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 4
     let ret4 = solver.declare(
-        format!("ret4_{id}", id = id),
+        format!("ret4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -754,7 +754,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y2 = solver.declare(
-        format!("y2_{id}", id = id),
+        format!("y2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -762,7 +762,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x2 = solver.declare(
-        format!("x2_{id}", id = id),
+        format!("x2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -819,7 +819,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 5
     let ret5 = solver.declare(
-        format!("ret5_{id}", id = id),
+        format!("ret5_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -827,7 +827,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y1 = solver.declare(
-        format!("y1_{id}", id = id),
+        format!("y1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -835,7 +835,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x1 = solver.declare(
-        format!("x1_{id}", id = id),
+        format!("x1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -893,7 +893,7 @@ pub fn clz32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
 
     // last round
     let ret6 = solver.declare(
-        format!("ret6_{id}", id = id),
+        format!("ret6_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -942,7 +942,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     // Generated code.
     // total zeros counter
     let ret1 = solver.declare(
-        format!("ret1_{id}", id = id),
+        format!("ret1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -959,7 +959,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ));
     // round 1
     let ret2 = solver.declare(
-        format!("ret2_{id}", id = id),
+        format!("ret2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -967,7 +967,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y8 = solver.declare(
-        format!("y8_{id}", id = id),
+        format!("y8_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -975,7 +975,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x8 = solver.declare(
-        format!("x8_{id}", id = id),
+        format!("x8_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1032,7 +1032,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 2
     let ret3 = solver.declare(
-        format!("ret3_{id}", id = id),
+        format!("ret3_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1040,7 +1040,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y4 = solver.declare(
-        format!("y4_{id}", id = id),
+        format!("y4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1048,7 +1048,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x4 = solver.declare(
-        format!("x4_{id}", id = id),
+        format!("x4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1105,7 +1105,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 3
     let ret4 = solver.declare(
-        format!("ret4_{id}", id = id),
+        format!("ret4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1113,7 +1113,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y2 = solver.declare(
-        format!("y2_{id}", id = id),
+        format!("y2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1121,7 +1121,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x2 = solver.declare(
-        format!("x2_{id}", id = id),
+        format!("x2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1178,7 +1178,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 4
     let ret5 = solver.declare(
-        format!("ret5_{id}", id = id),
+        format!("ret5_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1186,7 +1186,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y1 = solver.declare(
-        format!("y1_{id}", id = id),
+        format!("y1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1194,7 +1194,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x1 = solver.declare(
-        format!("x1_{id}", id = id),
+        format!("x1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1252,7 +1252,7 @@ pub fn clz16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
 
     // last round
     let ret6 = solver.declare(
-        format!("ret6_{id}", id = id),
+        format!("ret6_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1301,7 +1301,7 @@ pub fn clz8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     // Generated code.
     // total zeros counter
     let ret0 = solver.declare(
-        format!("ret0_{id}", id = id),
+        format!("ret0_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1318,7 +1318,7 @@ pub fn clz8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ));
     // round 1
     let ret3 = solver.declare(
-        format!("ret3_{id}", id = id),
+        format!("ret3_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1326,7 +1326,7 @@ pub fn clz8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y4 = solver.declare(
-        format!("y4_{id}", id = id),
+        format!("y4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1334,7 +1334,7 @@ pub fn clz8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x4 = solver.declare(
-        format!("x4_{id}", id = id),
+        format!("x4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1391,7 +1391,7 @@ pub fn clz8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 2
     let ret4 = solver.declare(
-        format!("ret4_{id}", id = id),
+        format!("ret4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1399,7 +1399,7 @@ pub fn clz8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y2 = solver.declare(
-        format!("y2_{id}", id = id),
+        format!("y2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1407,7 +1407,7 @@ pub fn clz8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x2 = solver.declare(
-        format!("x2_{id}", id = id),
+        format!("x2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1464,7 +1464,7 @@ pub fn clz8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // round 3
     let ret5 = solver.declare(
-        format!("ret5_{id}", id = id),
+        format!("ret5_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1472,7 +1472,7 @@ pub fn clz8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let y1 = solver.declare(
-        format!("y1_{id}", id = id),
+        format!("y1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1480,7 +1480,7 @@ pub fn clz8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ]),
     );
     let x1 = solver.declare(
-        format!("x1_{id}", id = id),
+        format!("x1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1537,7 +1537,7 @@ pub fn clz8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     ]));
     // last round
     let ret6 = solver.declare(
-        format!("ret6_{id}", id = id),
+        format!("ret6_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -1585,7 +1585,7 @@ pub fn clz1(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
 
     // Generated code.
     let clz1ret = solver.declare(
-        format!("clz1ret_{id}", id = id),
+        format!("clz1ret_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),

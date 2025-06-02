@@ -40,7 +40,7 @@ pub fn verify_rules(
                 "I16" => veri_ir::Type::BitVector(Some(16)),
                 "I32" => veri_ir::Type::BitVector(Some(32)),
                 "I64" => veri_ir::Type::BitVector(Some(64)),
-                _ => panic!("Invalid width type: {}", w),
+                _ => panic!("Invalid width type: {w}"),
             };
             width_types.push(width_type);
         }
