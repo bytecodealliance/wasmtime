@@ -856,18 +856,6 @@ pub enum SseOpcode {
     Pcmpgtq,
     Pmaddubsw,
     Pmaddwd,
-    Pmovsxbd,
-    Pmovsxbw,
-    Pmovsxbq,
-    Pmovsxwd,
-    Pmovsxwq,
-    Pmovsxdq,
-    Pmovzxbd,
-    Pmovzxbw,
-    Pmovzxbq,
-    Pmovzxwd,
-    Pmovzxwq,
-    Pmovzxdq,
     Pshufb,
     Pshufd,
     Ptest,
@@ -938,18 +926,6 @@ impl SseOpcode {
             | SseOpcode::Packusdw
             | SseOpcode::Pblendvb
             | SseOpcode::Pcmpeqq
-            | SseOpcode::Pmovsxbd
-            | SseOpcode::Pmovsxbw
-            | SseOpcode::Pmovsxbq
-            | SseOpcode::Pmovsxwd
-            | SseOpcode::Pmovsxwq
-            | SseOpcode::Pmovsxdq
-            | SseOpcode::Pmovzxbd
-            | SseOpcode::Pmovzxbw
-            | SseOpcode::Pmovzxbq
-            | SseOpcode::Pmovzxwd
-            | SseOpcode::Pmovzxwq
-            | SseOpcode::Pmovzxdq
             | SseOpcode::Ptest
             | SseOpcode::Roundps
             | SseOpcode::Roundpd
@@ -970,21 +946,7 @@ impl SseOpcode {
 
     /// Is `src2` with this opcode a scalar, as for lane insertions?
     pub(crate) fn has_scalar_src2(self) -> bool {
-        match self {
-            SseOpcode::Pmovsxbw
-            | SseOpcode::Pmovsxbd
-            | SseOpcode::Pmovsxbq
-            | SseOpcode::Pmovsxwd
-            | SseOpcode::Pmovsxwq
-            | SseOpcode::Pmovsxdq => true,
-            SseOpcode::Pmovzxbw
-            | SseOpcode::Pmovzxbd
-            | SseOpcode::Pmovzxbq
-            | SseOpcode::Pmovzxwd
-            | SseOpcode::Pmovzxwq
-            | SseOpcode::Pmovzxdq => true,
-            _ => false,
-        }
+        false
     }
 }
 
@@ -1026,19 +988,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pcmpgtq => "pcmpgtq",
             SseOpcode::Pmaddubsw => "pmaddubsw",
             SseOpcode::Pmaddwd => "pmaddwd",
-
-            SseOpcode::Pmovsxbd => "pmovsxbd",
-            SseOpcode::Pmovsxbw => "pmovsxbw",
-            SseOpcode::Pmovsxbq => "pmovsxbq",
-            SseOpcode::Pmovsxwd => "pmovsxwd",
-            SseOpcode::Pmovsxwq => "pmovsxwq",
-            SseOpcode::Pmovsxdq => "pmovsxdq",
-            SseOpcode::Pmovzxbd => "pmovzxbd",
-            SseOpcode::Pmovzxbw => "pmovzxbw",
-            SseOpcode::Pmovzxbq => "pmovzxbq",
-            SseOpcode::Pmovzxwd => "pmovzxwd",
-            SseOpcode::Pmovzxwq => "pmovzxwq",
-            SseOpcode::Pmovzxdq => "pmovzxdq",
             SseOpcode::Pshufb => "pshufb",
             SseOpcode::Pshufd => "pshufd",
             SseOpcode::Ptest => "ptest",
