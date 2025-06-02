@@ -133,7 +133,7 @@ fn test_rules_with_term(inputs: Vec<PathBuf>, tr: TestResult, config: Config) {
                     .filter(|sig| sig.canonical_type.unwrap() == ty)
                     .collect();
                 if all_instantiations.is_empty() {
-                    panic!("Missing type instantiation for width {:?}", width);
+                    panic!("Missing type instantiation for width {width:?}");
                 }
                 for i in all_instantiations {
                     res.push((i.clone(), result.clone()));
@@ -178,7 +178,7 @@ pub fn test_from_file_with_lhs_termname_simple(
 }
 
 pub fn test_from_file_with_lhs_termname(file: &str, termname: String, tr: TestResult) {
-    println!("Verifying {} rules in file: {}", termname, file);
+    println!("Verifying {termname} rules in file: {file}");
     let mut inputs = get_isle_files("shared_lower");
     inputs.push(PathBuf::from(file));
     let config = Config {
@@ -200,7 +200,7 @@ pub fn test_aarch64_rule_with_lhs_termname_simple(
 }
 
 pub fn test_aarch64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: TestResult) {
-    println!("Verifying rule `{}` with termname {} ", rulename, termname);
+    println!("Verifying rule `{rulename}` with termname {termname} ");
     let inputs = get_isle_files("aarch64");
     let config = Config {
         term: termname.to_string(),
@@ -221,7 +221,7 @@ pub fn test_x64_rule_with_lhs_termname_simple(
 }
 
 pub fn test_x64_rule_with_lhs_termname(rulename: &str, termname: &str, tr: TestResult) {
-    println!("Verifying rule `{}` with termname {} ", rulename, termname);
+    println!("Verifying rule `{rulename}` with termname {termname} ");
     let inputs = get_isle_files("x64");
     let config = Config {
         term: termname.to_string(),
@@ -265,10 +265,7 @@ pub fn test_concrete_aarch64_rule_with_lhs_termname(
     termname: &str,
     concrete: ConcreteTest,
 ) {
-    println!(
-        "Verifying concrete input rule `{}` with termname {} ",
-        rulename, termname
-    );
+    println!("Verifying concrete input rule `{rulename}` with termname {termname} ");
     let inputs = get_isle_files("aarch64");
     let (typeenv, termenv, defs) = create_envs(inputs).unwrap();
     let annotation_env = parse_annotations(&defs, &termenv, &typeenv);
@@ -307,10 +304,7 @@ pub fn test_concrete_input_from_file_with_lhs_termname(
     termname: String,
     concrete: ConcreteTest,
 ) {
-    println!(
-        "Verifying concrete input {} rule in file: {}",
-        termname, file
-    );
+    println!("Verifying concrete input {termname} rule in file: {file}");
     let mut inputs = get_isle_files("shared_lower");
     inputs.push(PathBuf::from(file));
 
