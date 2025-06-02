@@ -449,7 +449,7 @@ impl Table {
     /// this hash key will be consistent across all of these tables.
     #[allow(dead_code)] // Not used yet, but added for consistency.
     pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<'_> {
-        store[self.instance].table_ptr(self.index).as_ptr() as usize
+        store[self.instance].table_ptr(self.index).as_ptr().addr()
     }
 }
 

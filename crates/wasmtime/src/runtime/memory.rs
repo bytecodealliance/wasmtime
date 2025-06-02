@@ -679,7 +679,7 @@ impl Memory {
     /// this hash key will be consistent across all of these memories.
     #[cfg(feature = "coredump")]
     pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<> {
-        store[self.instance].memory_ptr(self.index).as_ptr() as usize
+        store[self.instance].memory_ptr(self.index).as_ptr().addr()
     }
 }
 
