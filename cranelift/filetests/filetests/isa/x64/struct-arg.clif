@@ -12,7 +12,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   lea     rbp(stack args max - 64), %rsi
-;   movzbq  0(%rsi), %rax
+;   movzbq (%rsi), %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -41,8 +41,8 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   lea     rbp(stack args max - 64), %rcx
-;   movzbq  0(%rdi), %rax
-;   movzbq  0(%rcx), %r9
+;   movzbq (%rdi), %rax
+;   movzbq (%rcx), %r9
 ;   addl %r9d, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -163,8 +163,8 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   lea     rbp(stack args max - 192), %rsi
 ;   lea     rbp(stack args max - 64), %rcx
-;   movzbq  0(%rsi), %rax
-;   movzbq  0(%rcx), %r9
+;   movzbq (%rsi), %rax
+;   movzbq (%rcx), %r9
 ;   addl %r9d, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

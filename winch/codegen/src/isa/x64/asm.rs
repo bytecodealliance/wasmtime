@@ -477,12 +477,24 @@ impl Assembler {
         );
 
         if let Some(ext) = ext {
-            let reg_mem = RegMem::mem(src);
-            self.emit(Inst::MovzxRmR {
-                ext_mode: ext.into(),
-                src: GprMem::unwrap_new(reg_mem),
-                dst: dst.map(Into::into),
-            });
+            let dst = WritableGpr::from_reg(dst.to_reg().into());
+            let inst = match ext.into() {
+                ExtMode::BL => asm::inst::movzbl_rm::new(dst, src).into(),
+                ExtMode::BQ => asm::inst::movzbq_rm::new(dst, src).into(),
+                ExtMode::WL => asm::inst::movzwl_rm::new(dst, src).into(),
+                ExtMode::WQ => asm::inst::movzwq_rm::new(dst, src).into(),
+                ExtMode::LQ => {
+                    // This instruction selection may seem strange but is
+                    // correct in 64-bit mode: section 3.4.1.1 of the Intel
+                    // manual says that "32-bit operands generate a 32-bit
+                    // result, zero-extended to a 64-bit result in the
+                    // destination general-purpose register." This is applicable
+                    // beyond `mov` but we use this fact to zero-extend `src`
+                    // into `dst`.
+                    asm::inst::movl_rm::new(dst, src).into()
+                }
+            };
+            self.emit(Inst::External { inst });
         } else {
             let dst = WritableGpr::from_reg(dst.to_reg().into());
             let inst = asm::inst::movq_rm::new(dst, src).into();
@@ -505,31 +517,49 @@ impl Assembler {
             &mut self.buffer,
             memflags,
         );
-
-        let reg_mem = RegMem::mem(src);
-        self.emit(Inst::MovsxRmR {
-            ext_mode: ext.into(),
-            src: GprMem::unwrap_new(reg_mem),
-            dst: dst.map(Into::into),
-        })
+        let dst = WritableGpr::from_reg(dst.to_reg().into());
+        let inst = match ext.into() {
+            ExtMode::BL => asm::inst::movsbl_rm::new(dst, src).into(),
+            ExtMode::BQ => asm::inst::movsbq_rm::new(dst, src).into(),
+            ExtMode::WL => asm::inst::movswl_rm::new(dst, src).into(),
+            ExtMode::WQ => asm::inst::movswq_rm::new(dst, src).into(),
+            ExtMode::LQ => asm::inst::movslq_rm::new(dst, src).into(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Register-to-register move with zero extension.
     pub fn movzx_rr(&mut self, src: Reg, dst: WritableReg, kind: Extend<Zero>) {
-        self.emit(Inst::MovzxRmR {
-            ext_mode: kind.into(),
-            src: src.into(),
-            dst: dst.map(Into::into),
-        })
+        let dst = WritableGpr::from_reg(dst.to_reg().into());
+        let inst = match kind.into() {
+            ExtMode::BL => asm::inst::movzbl_rm::new(dst, src).into(),
+            ExtMode::BQ => asm::inst::movzbq_rm::new(dst, src).into(),
+            ExtMode::WL => asm::inst::movzwl_rm::new(dst, src).into(),
+            ExtMode::WQ => asm::inst::movzwq_rm::new(dst, src).into(),
+            ExtMode::LQ => {
+                // This instruction selection may seem strange but is correct in
+                // 64-bit mode: section 3.4.1.1 of the Intel manual says that
+                // "32-bit operands generate a 32-bit result, zero-extended to a
+                // 64-bit result in the destination general-purpose register."
+                // This is applicable beyond `mov` but we use this fact to
+                // zero-extend `src` into `dst`.
+                asm::inst::movl_rm::new(dst, src).into()
+            }
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Register-to-register move with sign extension.
     pub fn movsx_rr(&mut self, src: Reg, dst: WritableReg, kind: Extend<Signed>) {
-        self.emit(Inst::MovsxRmR {
-            ext_mode: kind.into(),
-            src: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst = WritableGpr::from_reg(dst.to_reg().into());
+        let inst = match kind.into() {
+            ExtMode::BL => asm::inst::movsbl_rm::new(dst, src).into(),
+            ExtMode::BQ => asm::inst::movsbq_rm::new(dst, src).into(),
+            ExtMode::WL => asm::inst::movswl_rm::new(dst, src).into(),
+            ExtMode::WQ => asm::inst::movswq_rm::new(dst, src).into(),
+            ExtMode::LQ => asm::inst::movslq_rm::new(dst, src).into(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Integer register conditional move.

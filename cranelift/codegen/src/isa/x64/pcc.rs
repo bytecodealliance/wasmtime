@@ -117,37 +117,6 @@ pub(crate) fn check(
         Inst::MovFromPReg { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
         Inst::MovToPReg { .. } => Ok(()),
 
-        Inst::MovzxRmR {
-            ref ext_mode,
-            ref src,
-            dst,
-        } => {
-            let from_bytes: u16 = ext_mode.src_size().into();
-            let to_bytes: u16 = ext_mode.dst_size().into();
-            match <&RegMem>::from(src) {
-                RegMem::Reg { reg } => {
-                    check_unop(ctx, vcode, 64, dst.to_writable_reg(), *reg, |src| {
-                        clamp_range(ctx, 64, from_bytes * 8, Some(src.clone()))
-                    })
-                }
-                RegMem::Mem { addr } => {
-                    let loaded = check_load(
-                        ctx,
-                        Some(dst.to_writable_reg()),
-                        addr,
-                        vcode,
-                        ext_mode.src_type(),
-                        64,
-                    )?;
-                    check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-                        let extended = loaded
-                            .and_then(|loaded| ctx.uextend(&loaded, from_bytes * 8, to_bytes * 8));
-                        clamp_range(ctx, 64, from_bytes * 8, extended)
-                    })
-                }
-            }
-        }
-
         Inst::LoadEffectiveAddress {
             ref addr,
             dst,
@@ -163,20 +132,6 @@ pub(crate) fn check(
                 };
                 clamp_range(ctx, 64, bits, fact)
             })
-        }
-
-        Inst::MovsxRmR {
-            ref ext_mode,
-            ref src,
-            dst,
-        } => {
-            match <&RegMem>::from(src) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, ext_mode.src_type(), 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            undefined_result(ctx, vcode, dst, 64, 64)
         }
 
         Inst::MovImmM { size, ref dst, .. } => check_store(ctx, None, dst, vcode, size.to_type()),

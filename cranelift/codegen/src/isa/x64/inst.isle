@@ -76,25 +76,10 @@
        (MovToPReg (src Gpr)
                   (dst PReg))
 
-       ;; Zero-extended loads, except for 64 bits: movz (bl bq wl wq lq) addr
-       ;; reg.
-       ;;
-       ;; Note that the lq variant doesn't really exist since the default
-       ;; zero-extend rule makes it unnecessary. For that case we emit the
-       ;; equivalent "movl AM, reg32".
-       (MovzxRmR (ext_mode ExtMode)
-                 (src GprMem)
-                 (dst WritableGpr))
-
        ;; Loads the memory address of addr into dst.
        (LoadEffectiveAddress (addr SyntheticAmode)
                              (dst WritableGpr)
                              (size OperandSize))
-
-       ;; Sign-extended loads and moves: movs (bl bq wl wq lq) addr reg.
-       (MovsxRmR (ext_mode ExtMode)
-                 (src GprMem)
-                 (dst WritableGpr))
 
        ;; Immediate store.
        (MovImmM (size OperandSize)
@@ -2221,16 +2206,23 @@
                   (= mode (ExtMode.WL))
                   (= mode (ExtMode.WQ))
                   (= mode (ExtMode.LQ)))))
-(rule (x64_movzx mode src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.MovzxRmR mode src dst))))
-        dst))
+(rule (x64_movzx (ExtMode.BL) src) (x64_movzbl_rm src))
+(rule (x64_movzx (ExtMode.BQ) src) (x64_movzbq_rm src))
+(rule (x64_movzx (ExtMode.WL) src) (x64_movzwl_rm src))
+(rule (x64_movzx (ExtMode.WQ) src) (x64_movzwq_rm src))
+;; This instruction selection may seem strange but is correct in 64-bit mode:
+;; section 3.4.1.1 of the Intel manual says that "32-bit operands generate a
+;; 32-bit result, zero-extended to a 64-bit result in the destination
+;; general-purpose register." This is applicable beyond `mov` but we use this
+;; fact to zero-extend `src` into `dst`.
+(rule (x64_movzx (ExtMode.LQ) src) (x64_movl_rm src))
 
 (decl x64_movsx (ExtMode GprMem) Gpr)
-(rule (x64_movsx mode src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.MovsxRmR mode src dst))))
-        dst))
+(rule (x64_movsx (ExtMode.BL) src) (x64_movsbl_rm src))
+(rule (x64_movsx (ExtMode.BQ) src) (x64_movsbq_rm src))
+(rule (x64_movsx (ExtMode.WL) src) (x64_movswl_rm src))
+(rule (x64_movsx (ExtMode.WQ) src) (x64_movswq_rm src))
+(rule (x64_movsx (ExtMode.LQ) src) (x64_movslq_rm src))
 
 (decl x64_movss_load (SyntheticAmode) Xmm)
 (rule (x64_movss_load from) (x64_movss_a_m from))

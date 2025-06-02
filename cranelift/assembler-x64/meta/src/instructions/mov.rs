@@ -1,5 +1,5 @@
 use crate::dsl::{Feature::*, Inst, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, sxq, w};
+use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, sxw, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -26,6 +26,27 @@ pub fn list() -> Vec<Inst> {
         inst("movw", fmt("MI", [w(rm16), r(imm16)]), rex([0x66, 0xC7]).digit(0).iw(), _64b | compat),
         inst("movl", fmt("MI", [w(rm32), r(imm32)]), rex(0xC7).digit(0).id(), _64b | compat),
         inst("movq", fmt("MI_SXL", [w(rm64), sxq(imm32)]), rex(0xC7).w().digit(0).id(), _64b),
+
+        // Move integers with sign extension. These are defined as `movsx` in
+        // the x64 reference manual but Capstone (and likely other tools)
+        // disassemble this as `movs{from}{to}`.
+        inst("movsbw", fmt("RM", [w(r16), sxw(rm8)]), rex([0x66, 0x0F, 0xBE]).r(), _64b | compat),
+        inst("movsbl", fmt("RM", [w(r32), sxl(rm8)]), rex([0x0F, 0xBE]).r(), _64b | compat),
+        inst("movsbq", fmt("RM", [w(r64), sxq(rm8)]), rex([0x0F, 0xBE]).w().r(), _64b),
+        inst("movsww", fmt("RM", [w(r16), sxl(rm16)]), rex([0x66, 0x0F, 0xBF]).r(), _64b | compat),
+        inst("movswl", fmt("RM", [w(r32), sxl(rm16)]), rex([0x0F, 0xBF]).r(), _64b | compat),
+        inst("movswq", fmt("RM", [w(r64), sxq(rm16)]), rex([0x0F, 0xBF]).w().r(), _64b),
+        inst("movslq", fmt("RM", [w(r64), sxl(rm32)]), rex(0x63).w().r(), _64b),
+
+        // Move integers with zero extension. These are defined as `movzx` in
+        // the x64 reference manual but Capstone (and likely other tools)
+        // disassemble this as `movz{from}{to}`.
+        inst("movzbw", fmt("RM", [w(r16), sxw(rm8)]), rex([0x66, 0x0F, 0xB6]).r(), _64b | compat),
+        inst("movzbl", fmt("RM", [w(r32), sxl(rm8)]), rex([0x0F, 0xB6]).r(), _64b | compat),
+        inst("movzbq", fmt("RM", [w(r64), sxq(rm8)]), rex([0x0F, 0xB6]).w().r(), _64b),
+        inst("movzww", fmt("RM", [w(r16), sxl(rm16)]), rex([0x66, 0x0F, 0xB7]).r(), _64b | compat),
+        inst("movzwl", fmt("RM", [w(r32), sxl(rm16)]), rex([0x0F, 0xB7]).r(), _64b | compat),
+        inst("movzwq", fmt("RM", [w(r64), sxq(rm16)]), rex([0x0F, 0xB7]).w().r(), _64b),
 
         // Move integers between GPR and XMM locations. From the reference
         // manual: "when the destination operand is an XMM register, the source

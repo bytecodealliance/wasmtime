@@ -314,7 +314,7 @@ block2:
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $2, %r10d
-;   movl    %edi, %r11d
+;   movl %edi, %r11d
 ;   cmpl    %r10d, %r11d
 ;   cmovbl  %r11d, %r10d, %r10d
 ;   br_table %r10, %rcx, %rdx
@@ -965,7 +965,7 @@ block5(v5: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $4, %eax
-;   movl    %edi, %ecx
+;   movl %edi, %ecx
 ;   cmpl    %eax, %ecx
 ;   cmovbl  %ecx, %eax, %eax
 ;   br_table %rax, %r9, %r10
@@ -1052,7 +1052,7 @@ block1(v5: i32):
 ;   movl    $3, %edx
 ;   movl    $4, %eax
 ;   movl    $4, %esi
-;   movl    %edi, %edi
+;   movl %edi, %edi
 ;   cmpl    %esi, %edi
 ;   cmovbl  %edi, %esi, %esi
 ;   br_table %rsi, %r10, %r9

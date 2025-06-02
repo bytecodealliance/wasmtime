@@ -140,7 +140,7 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    0(%rdi), %edx
+;   movl (%rdi), %edx
 ;   cmpl    $1, %edx
 ;   jz      label2; j label1
 ; block1:
@@ -191,7 +191,7 @@ block2:
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    0(%rdi), %edx
+;   movl (%rdi), %edx
 ;   cmpl    $1, %edx
 ;   jz      label2; j label1
 ; block1:
