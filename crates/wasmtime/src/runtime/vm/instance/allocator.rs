@@ -237,9 +237,11 @@ pub unsafe trait InstanceAllocatorImpl {
     //    Rust. Therefore, we would be forced to add reference counting and
     //    stuff like that to keep a handle on the instance allocator from this
     //    theoretical type. That's a bummer.
+    #[cfg(feature = "component-model")]
     fn increment_component_instance_count(&self) -> Result<()>;
 
     /// The dual of `increment_component_instance_count`.
+    #[cfg(feature = "component-model")]
     fn decrement_component_instance_count(&self);
 
     /// Increment the count of concurrent core module instances that are

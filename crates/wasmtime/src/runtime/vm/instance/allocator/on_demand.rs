@@ -96,10 +96,12 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         Ok(())
     }
 
+    #[cfg(feature = "component-model")]
     fn increment_component_instance_count(&self) -> Result<()> {
         Ok(())
     }
 
+    #[cfg(feature = "component-model")]
     fn decrement_component_instance_count(&self) {}
 
     fn increment_core_instance_count(&self) -> Result<()> {
