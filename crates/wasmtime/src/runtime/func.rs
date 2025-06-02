@@ -1227,7 +1227,7 @@ impl Func {
         unsafe {
             let f = self.vm_func_ref(store);
             VMFunctionImport {
-                // Note that this is a load-bearing assertion here, but is
+                // Note that this is a load-bearing `unwrap` here, but is
                 // never expected to trip at runtime. The general problem is
                 // that host functions do not have a `wasm_call` function so
                 // the `VMFuncRef` type has an optional pointer there. This is
