@@ -28,6 +28,7 @@ use wasmtime_environ::{
     WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
+use wasmtime_math::f64_cvt_to_int_bounds;
 
 #[derive(Debug)]
 pub(crate) enum Extension {
@@ -1157,8 +1158,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder: &mut FunctionBuilder,
         ty: ir::Type,
         val: ir::Value,
-        range32: (f64, f64),
-        range64: (f64, f64),
+        signed: bool,
     ) {
         assert!(!self.clif_instruction_traps_enabled());
         let val_ty = builder.func.dfg.value_type(val);
@@ -1170,11 +1170,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let isnan = builder.ins().fcmp(FloatCC::NotEqual, val, val);
         self.trapnz(builder, isnan, ir::TrapCode::BAD_CONVERSION_TO_INTEGER);
         let val = self.trunc_f64(builder, val);
-        let (lower_bound, upper_bound) = match ty {
-            I32 => range32,
-            I64 => range64,
-            _ => unreachable!(),
-        };
+        let (lower_bound, upper_bound) = f64_cvt_to_int_bounds(signed, ty.bits());
         let lower_bound = builder.ins().f64const(lower_bound);
         let too_small = builder
             .ins()
@@ -3734,13 +3730,7 @@ impl FuncEnvironment<'_> {
         // NB: for now avoid translating this entire instruction to CLIF and
         // just do it in a libcall.
         if !self.clif_instruction_traps_enabled() {
-            self.guard_fcvt_to_int(
-                builder,
-                ty,
-                val,
-                (-2147483649.0, 2147483648.0),
-                (-9223372036854777856.0, 9223372036854775808.0),
-            );
+            self.guard_fcvt_to_int(builder, ty, val, true);
         }
         builder.ins().fcvt_to_sint(ty, val)
     }
@@ -3752,13 +3742,7 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
     ) -> ir::Value {
         if !self.clif_instruction_traps_enabled() {
-            self.guard_fcvt_to_int(
-                builder,
-                ty,
-                val,
-                (-1.0, 4294967296.0),
-                (-1.0, 18446744073709551616.0),
-            );
+            self.guard_fcvt_to_int(builder, ty, val, false);
         }
         builder.ins().fcvt_to_uint(ty, val)
     }
