@@ -96,11 +96,6 @@
                              (dst WritableGpr)
                              (size OperandSize))
 
-       ;; Sign-extended loads and moves: movs (bl bq wl wq lq) addr reg.
-       (MovsxRmR (ext_mode ExtMode)
-                 (src GprMem)
-                 (dst WritableGpr))
-
        ;; Immediate store.
        (MovImmM (size OperandSize)
 		(simm32 i32)

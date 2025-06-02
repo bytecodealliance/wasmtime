@@ -574,68 +574,6 @@ pub(crate) fn emit(
             };
         }
 
-        Inst::MovsxRmR { ext_mode, src, dst } => {
-            let dst = dst.to_reg().to_reg();
-            let (opcodes, num_opcodes, mut rex_flags) = match ext_mode {
-                ExtMode::BL => {
-                    // MOVSBL is (REX.W==0) 0F BE /r
-                    (0x0FBE, 2, RexFlags::clear_w())
-                }
-                ExtMode::BQ => {
-                    // MOVSBQ is (REX.W==1) 0F BE /r
-                    (0x0FBE, 2, RexFlags::set_w())
-                }
-                ExtMode::WL => {
-                    // MOVSWL is (REX.W==0) 0F BF /r
-                    (0x0FBF, 2, RexFlags::clear_w())
-                }
-                ExtMode::WQ => {
-                    // MOVSWQ is (REX.W==1) 0F BF /r
-                    (0x0FBF, 2, RexFlags::set_w())
-                }
-                ExtMode::LQ => {
-                    // MOVSLQ is (REX.W==1) 63 /r
-                    (0x63, 1, RexFlags::set_w())
-                }
-            };
-
-            match src.clone().to_reg_mem() {
-                RegMem::Reg { reg: src } => {
-                    match ext_mode {
-                        ExtMode::BL | ExtMode::BQ => {
-                            // A redundant REX prefix must be emitted for certain register inputs.
-                            rex_flags.always_emit_if_8bit_needed(src);
-                        }
-                        _ => {}
-                    }
-                    emit_std_reg_reg(
-                        sink,
-                        LegacyPrefixes::None,
-                        opcodes,
-                        num_opcodes,
-                        dst,
-                        src,
-                        rex_flags,
-                    )
-                }
-
-                RegMem::Mem { addr: src } => {
-                    let src = &src.finalize(state.frame_layout(), sink).clone();
-
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefixes::None,
-                        opcodes,
-                        num_opcodes,
-                        dst,
-                        src,
-                        rex_flags,
-                        0,
-                    )
-                }
-            }
-        }
-
         Inst::MovRM { size, src, dst } => {
             let src = src.to_reg();
             let dst = &dst.finalize(state.frame_layout(), sink).clone();

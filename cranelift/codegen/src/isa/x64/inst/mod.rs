@@ -107,7 +107,6 @@ impl Inst {
             | Inst::MovRR { .. }
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
-            | Inst::MovsxRmR { .. }
             | Inst::Nop { .. }
             | Inst::Pop64 { .. }
             | Inst::Push64 { .. }
@@ -339,9 +338,18 @@ impl Inst {
     pub(crate) fn movsx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::Int);
         debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let src = GprMem::unwrap_new(src);
-        let dst = WritableGpr::from_writable_reg(dst).unwrap();
-        Inst::MovsxRmR { ext_mode, src, dst }
+        let src = match src {
+            RegMem::Reg { reg } => asm::GprMem::Gpr(Gpr::new(reg).unwrap()),
+            RegMem::Mem { addr } => asm::GprMem::Mem(addr.into()),
+        };
+        let inst = match ext_mode {
+            ExtMode::BL => asm::inst::movsbl_rm::new(dst, src).into(),
+            ExtMode::BQ => asm::inst::movsbq_rm::new(dst, src).into(),
+            ExtMode::WL => asm::inst::movswl_rm::new(dst, src).into(),
+            ExtMode::WQ => asm::inst::movswq_rm::new(dst, src).into(),
+            ExtMode::LQ => asm::inst::movslq_rm::new(dst, src).into(),
+        };
+        Inst::External { inst }
     }
 
     pub(crate) fn mov_r_m(size: OperandSize, src: Reg, dst: impl Into<SyntheticAmode>) -> Inst {
@@ -1141,15 +1149,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {addr}, {dst}")
             }
 
-            Inst::MovsxRmR {
-                ext_mode, src, dst, ..
-            } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), ext_mode.dst_size());
-                let src = src.pretty_print(ext_mode.src_size());
-                let op = ljustify2("movs".to_string(), ext_mode.to_string());
-                format!("{op} {src}, {dst}")
-            }
-
             Inst::MovRM { size, src, dst, .. } => {
                 let src = pretty_print_reg(src.to_reg(), size.to_bytes());
                 let dst = dst.pretty_print(size.to_bytes());
@@ -1879,10 +1878,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             dst.get_operands(collector);
         }
         Inst::LoadEffectiveAddress { addr: src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
-        }
-        Inst::MovsxRmR { src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
         }
