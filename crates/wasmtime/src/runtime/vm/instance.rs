@@ -401,7 +401,7 @@ impl Instance {
     /// into one of:
     ///
     /// * Something in the VMContext is being read or written. In that case use
-    ///   `vmctx_plus_offset` or `vmctx_plus_offset_raw` if possible due to
+    ///   `vmctx_plus_offset` or `vmctx_plus_offset_mut` if possible due to
     ///   that having a safer lifetime.
     ///
     /// * A pointer is being created to pass to other VM* data structures. In
