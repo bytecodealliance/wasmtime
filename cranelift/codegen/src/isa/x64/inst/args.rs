@@ -729,25 +729,6 @@ impl PrettyPrint for RegMem {
     }
 }
 
-pub use crate::isa::x64::lower::isle::generated_code::AluRmROpcode;
-
-impl AluRmROpcode {
-    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
-        match self {
-            AluRmROpcode::Andn => smallvec![InstructionSet::BMI1],
-            AluRmROpcode::Sarx | AluRmROpcode::Shrx | AluRmROpcode::Shlx | AluRmROpcode::Bzhi => {
-                smallvec![InstructionSet::BMI2]
-            }
-        }
-    }
-}
-
-impl fmt::Display for AluRmROpcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&format!("{self:?}").to_lowercase())
-    }
-}
-
 pub use crate::isa::x64::lower::isle::generated_code::UnaryRmRVexOpcode;
 
 impl UnaryRmRVexOpcode {

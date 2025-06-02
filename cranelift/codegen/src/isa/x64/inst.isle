@@ -13,15 +13,6 @@
        ;; =========================================
        ;; Integer instructions.
 
-       ;; Integer arithmetic binary op that relies on the VEX prefix.
-       ;; NOTE: we don't currently support emitting VEX instructions with memory
-       ;; arguments, so `src2` is artificially constrained to be a Gpr.
-       (AluRmRVex (size OperandSize)
-                  (op AluRmROpcode)
-                  (src1 Gpr)
-                  (src2 GprMem)
-                  (dst WritableGpr))
-
        ;; Same as `UnaryRmR` but with the VEX prefix for BMI1 instructions.
        (UnaryRmRVex (size OperandSize)
                     (op UnaryRmRVexOpcode)
@@ -687,13 +678,6 @@
 (rule (operand_size_bits (OperandSize.Size16)) 16)
 (rule (operand_size_bits (OperandSize.Size32)) 32)
 (rule (operand_size_bits (OperandSize.Size64)) 64)
-
-(type AluRmROpcode
-      (enum Andn
-            Sarx
-            Shrx
-            Shlx
-            Bzhi))
 
 (type UnaryRmROpcode extern
       (enum Bsr
@@ -1738,14 +1722,6 @@
             (_ Unit (emit (MInst.LoadExtName dst extname offset distance))))
         dst))
 
-;; Helper for emitting `MInst.AluRmRVex` instructions.
-(decl alu_rm_r_vex (Type AluRmROpcode Gpr GprMem) Gpr)
-(rule (alu_rm_r_vex ty opcode src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.AluRmRVex size opcode src1 src2 dst))))
-        dst))
-
 ;; Helper for creating `MInst.XmmRmR` instructions.
 (decl xmm_rm_r (SseOpcode Xmm XmmMemAligned) Xmm)
 (rule (xmm_rm_r op src1 src2)
@@ -2757,11 +2733,16 @@
 (rule 0 (x64_xor $I32 src1 (is_gpr_mem src2)) (x64_xorl_rm src1 src2))
 (rule 0 (x64_xor $I64 src1 (is_gpr_mem src2)) (x64_xorq_rm src1 src2))
 
-
-
+;; Helper for `andn` instructions
+;;
+;; Note that 8/16-bit versions of these instructions do not exist, so for
+;; those bit-widths the 32-bit version of the instruction is used which has the
+;; desired semantics for the lower bits of the register.
 (decl x64_andn (Type Gpr GprMem) Gpr)
-(rule (x64_andn ty src1 src2)
-      (alu_rm_r_vex ty (AluRmROpcode.Andn) src1 src2))
+(rule (x64_andn $I8 src1 src2) (x64_andnl_rvm src1 src2))
+(rule (x64_andn $I16 src1 src2) (x64_andnl_rvm src1 src2))
+(rule (x64_andn $I32 src1 src2) (x64_andnl_rvm src1 src2))
+(rule (x64_andn $I64 src1 src2) (x64_andnq_rvm src1 src2))
 
 ;; Helper for emitting immediates with an `i64` value. Note that
 ;; integer constants in ISLE are always parsed as `i128`s; this enables
@@ -2919,12 +2900,9 @@
 (rule (x64_shld $I64 src1 src2 amt) (x64_shldq_mri src1 src2 amt))
 
 ;; Helper for creating zeroing-of-high-bits instructions bzhi
-;;
-;; Note that the `src` operands are swapped here. The amount-to-shift-by
-;; is stored in `vvvv` which is `src1` in the `AluRmRVex` instruction shape.
 (decl x64_bzhi (Type GprMem Gpr) Gpr)
-(rule (x64_bzhi ty src1 src2)
-      (alu_rm_r_vex ty (AluRmROpcode.Bzhi) src2 src1))
+(rule (x64_bzhi $I32 src1 src2) (x64_bzhil_rmv src1 src2))
+(rule (x64_bzhi $I64 src1 src2) (x64_bzhiq_rmv src1 src2))
 
 ;; Helper for creating byteswap instructions.
 ;; In x64, 32- and 64-bit registers use BSWAP instruction, and
@@ -4263,18 +4241,18 @@
 
 ;; Helper for creating `sarx` instructions.
 (decl x64_sarx (Type GprMem Gpr) Gpr)
-(rule (x64_sarx ty val amt)
-      (alu_rm_r_vex ty (AluRmROpcode.Sarx) amt val))
+(rule (x64_sarx $I32 val amt) (x64_sarxl_rmv val amt))
+(rule (x64_sarx $I64 val amt) (x64_sarxq_rmv val amt))
 
 ;; Helper for creating `shrx` instructions.
 (decl x64_shrx (Type GprMem Gpr) Gpr)
-(rule (x64_shrx ty val amt)
-      (alu_rm_r_vex ty (AluRmROpcode.Shrx) amt val))
+(rule (x64_shrx $I32 val amt) (x64_shrxl_rmv val amt))
+(rule (x64_shrx $I64 val amt) (x64_shrxq_rmv val amt))
 
 ;; Helper for creating `shlx` instructions.
 (decl x64_shlx (Type GprMem Gpr) Gpr)
-(rule (x64_shlx ty val amt)
-      (alu_rm_r_vex ty (AluRmROpcode.Shlx) amt val))
+(rule (x64_shlx $I32 val amt) (x64_shlxl_rmv val amt))
+(rule (x64_shlx $I64 val amt) (x64_shlxq_rmv val amt))
 
 ;; Helper for creating `rorx` instructions.
 (decl x64_rorx (Type GprMem u8) Gpr)

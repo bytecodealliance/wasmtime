@@ -197,7 +197,8 @@ impl dsl::Format {
 
         let style = match self.operands_by_kind().as_slice() {
             [Reg(reg), Reg(vvvv), RegMem(rm)]
-            | [Reg(reg), Reg(vvvv), RegMem(rm), Imm(_) | FixedReg(_)] => {
+            | [Reg(reg), Reg(vvvv), RegMem(rm), Imm(_) | FixedReg(_)]
+            | [Reg(reg), RegMem(rm), Reg(vvvv)] => {
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let vvvv = self.{vvvv}.enc();");
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");

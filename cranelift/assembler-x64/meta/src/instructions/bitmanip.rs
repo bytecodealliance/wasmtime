@@ -1,5 +1,5 @@
-use crate::dsl::{Feature::*, Inst, Location::*};
-use crate::dsl::{fmt, implicit, inst, r, rex, rw, w};
+use crate::dsl::{Feature::*, Inst, Location::*, VexLength::*};
+use crate::dsl::{fmt, implicit, inst, r, rex, rw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -42,5 +42,8 @@ pub fn list() -> Vec<Inst> {
 
         inst("bswapl", fmt("O", [rw(r32)]), rex([0x0F, 0xC8]).rd(), _64b | compat),
         inst("bswapq", fmt("O", [rw(r64)]), rex([0x0F, 0xC8]).w().ro(), _64b),
+
+        inst("bzhil", fmt("RMV", [w(r32a), r(rm32), r(r32b)]), vex(LZ)._0f38().w0().op(0xF5), _64b | compat | bmi2),
+        inst("bzhiq", fmt("RMV", [w(r64a), r(rm64), r(r64b)]), vex(LZ)._0f38().w1().op(0xF5), _64b | bmi2),
     ]
 }
