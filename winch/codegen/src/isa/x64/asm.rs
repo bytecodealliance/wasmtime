@@ -517,13 +517,15 @@ impl Assembler {
             &mut self.buffer,
             memflags,
         );
-
-        let reg_mem = RegMem::mem(src);
-        self.emit(Inst::MovsxRmR {
-            ext_mode: ext.into(),
-            src: GprMem::unwrap_new(reg_mem),
-            dst: dst.map(Into::into),
-        })
+        let dst = WritableGpr::from_reg(dst.to_reg().into());
+        let inst = match ext.into() {
+            ExtMode::BL => asm::inst::movsbl_rm::new(dst, src).into(),
+            ExtMode::BQ => asm::inst::movsbq_rm::new(dst, src).into(),
+            ExtMode::WL => asm::inst::movswl_rm::new(dst, src).into(),
+            ExtMode::WQ => asm::inst::movswq_rm::new(dst, src).into(),
+            ExtMode::LQ => asm::inst::movslq_rm::new(dst, src).into(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Register-to-register move with zero extension.
@@ -549,11 +551,15 @@ impl Assembler {
 
     /// Register-to-register move with sign extension.
     pub fn movsx_rr(&mut self, src: Reg, dst: WritableReg, kind: Extend<Signed>) {
-        self.emit(Inst::MovsxRmR {
-            ext_mode: kind.into(),
-            src: src.into(),
-            dst: dst.map(Into::into),
-        });
+        let dst = WritableGpr::from_reg(dst.to_reg().into());
+        let inst = match kind.into() {
+            ExtMode::BL => asm::inst::movsbl_rm::new(dst, src).into(),
+            ExtMode::BQ => asm::inst::movsbq_rm::new(dst, src).into(),
+            ExtMode::WL => asm::inst::movswl_rm::new(dst, src).into(),
+            ExtMode::WQ => asm::inst::movswq_rm::new(dst, src).into(),
+            ExtMode::LQ => asm::inst::movslq_rm::new(dst, src).into(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Integer register conditional move.
