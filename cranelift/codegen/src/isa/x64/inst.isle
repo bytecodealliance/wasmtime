@@ -2238,10 +2238,11 @@
 (rule (x64_movzx (ExtMode.LQ) src) (x64_movl_rm src))
 
 (decl x64_movsx (ExtMode GprMem) Gpr)
-(rule (x64_movsx mode src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.MovsxRmR mode src dst))))
-        dst))
+(rule (x64_movsx (ExtMode.BL) src) (x64_movsbl_rm src))
+(rule (x64_movsx (ExtMode.BQ) src) (x64_movsbq_rm src))
+(rule (x64_movsx (ExtMode.WL) src) (x64_movswl_rm src))
+(rule (x64_movsx (ExtMode.WQ) src) (x64_movswq_rm src))
+(rule (x64_movsx (ExtMode.LQ) src) (x64_movslq_rm src))
 
 (decl x64_movss_load (SyntheticAmode) Xmm)
 (rule (x64_movss_load from) (x64_movss_a_m from))
