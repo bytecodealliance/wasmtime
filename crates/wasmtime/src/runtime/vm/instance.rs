@@ -772,13 +772,23 @@ impl Instance {
     }
 
     fn get_exported_tag(&mut self, index: TagIndex) -> ExportTag {
-        ExportTag {
-            definition: if let Some(def_index) = self.env_module().defined_tag_index(index) {
-                self.tag_ptr(def_index)
+        let tag = self.env_module().tags[index];
+        let (vmctx, definition, index) =
+            if let Some(def_index) = self.env_module().defined_tag_index(index) {
+                (self.vmctx(), self.tag_ptr(def_index), def_index)
             } else {
-                self.imported_tag(index).from.as_non_null()
-            },
-            tag: self.env_module().tags[index],
+                let import = self.imported_tag(index);
+                (
+                    import.vmctx.as_non_null(),
+                    import.from.as_non_null(),
+                    import.index,
+                )
+            };
+        ExportTag {
+            definition,
+            vmctx,
+            index,
+            tag,
         }
     }
 

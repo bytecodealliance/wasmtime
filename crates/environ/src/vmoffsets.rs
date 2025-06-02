@@ -687,7 +687,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the size of `VMTagImport`.
     #[inline]
     pub fn size_of_vmtag_import(&self) -> u8 {
-        1 * self.pointer_size()
+        3 * self.pointer_size()
     }
 }
 
