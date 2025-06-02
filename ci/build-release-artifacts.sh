@@ -44,6 +44,9 @@ fi
 export CARGO_PROFILE_RELEASE_STRIP=debuginfo
 export CARGO_PROFILE_RELEASE_PANIC=abort
 
+export CC=clang
+export CXX=clang++
+
 if [[ "$build" = *-min ]]; then
   # Configure a whole bunch of compile-time options which help reduce the size
   # of the binary artifact produced.
