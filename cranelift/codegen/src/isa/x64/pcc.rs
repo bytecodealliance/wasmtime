@@ -151,20 +151,6 @@ pub(crate) fn check(
             })
         }
 
-        Inst::MovsxRmR {
-            ref ext_mode,
-            ref src,
-            dst,
-        } => {
-            match <&RegMem>::from(src) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, ext_mode.src_type(), 64)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            undefined_result(ctx, vcode, dst, 64, 64)
-        }
-
         Inst::MovImmM { size, ref dst, .. } => check_store(ctx, None, dst, vcode, size.to_type()),
 
         Inst::MovRM { size, src, ref dst } => {

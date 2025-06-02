@@ -1431,32 +1431,6 @@ impl ExtMode {
             _ => None,
         }
     }
-
-    /// Return the source register size in bytes.
-    pub(crate) fn src_size(&self) -> u8 {
-        match self {
-            ExtMode::BL | ExtMode::BQ => 1,
-            ExtMode::WL | ExtMode::WQ => 2,
-            ExtMode::LQ => 4,
-        }
-    }
-
-    /// Return the destination register size in bytes.
-    pub(crate) fn dst_size(&self) -> u8 {
-        match self {
-            ExtMode::BL | ExtMode::WL => 4,
-            ExtMode::BQ | ExtMode::WQ | ExtMode::LQ => 8,
-        }
-    }
-
-    /// Source size, as an integer type.
-    pub(crate) fn src_type(&self) -> Type {
-        match self {
-            ExtMode::BL | ExtMode::BQ => I8,
-            ExtMode::WL | ExtMode::WQ => I16,
-            ExtMode::LQ => I32,
-        }
-    }
 }
 
 impl fmt::Debug for ExtMode {
