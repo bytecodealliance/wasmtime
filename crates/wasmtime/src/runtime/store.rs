@@ -78,7 +78,6 @@
 
 use crate::RootSet;
 use crate::instance::InstanceData;
-use crate::linker::Definition;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
 #[cfg(feature = "gc")]
@@ -356,11 +355,7 @@ pub struct StoreOpaque {
     fuel_yield_interval: Option<NonZeroU64>,
     /// Indexed data within this `Store`, used to store information about
     /// globals, functions, memories, etc.
-    ///
-    /// Note that this is `ManuallyDrop` because it needs to be dropped before
-    /// `rooted_host_funcs` below. This structure contains pointers which are
-    /// otherwise kept alive by the `Arc` references in `rooted_host_funcs`.
-    store_data: ManuallyDrop<StoreData>,
+    store_data: StoreData,
     traitobj: StorePtr,
     default_caller_vmctx: SendSyncPtr<VMContext>,
 
@@ -371,20 +366,6 @@ pub struct StoreOpaque {
     /// Same as `hostcall_val_storage`, but for the direction of the host
     /// calling wasm.
     wasm_val_raw_storage: Vec<ValRaw>,
-
-    /// A list of lists of definitions which have been used to instantiate
-    /// within this `Store`.
-    ///
-    /// Note that not all instantiations end up pushing to this list. At the
-    /// time of this writing only the `InstancePre<T>` type will push to this
-    /// list. Pushes to this list are typically accompanied with
-    /// `HostFunc::to_func_store_rooted` to clone an `Arc` here once which
-    /// preserves a strong reference to the `Arc` for each `HostFunc` stored
-    /// within the list of `Definition`s.
-    ///
-    /// Note that this is `ManuallyDrop` as it must be dropped after
-    /// `store_data` above, where the function pointers are stored.
-    rooted_host_funcs: ManuallyDrop<Vec<Arc<[Definition]>>>,
 
     /// Keep track of what protection key is being used during allocation so
     /// that the right memory pages can be enabled when entering WebAssembly
@@ -565,12 +546,11 @@ impl<T> Store<T> {
             async_state: AsyncState::default(),
             fuel_reserve: 0,
             fuel_yield_interval: None,
-            store_data: ManuallyDrop::new(store_data),
+            store_data,
             traitobj: StorePtr::empty(),
             default_caller_vmctx: SendSyncPtr::new(NonNull::dangling()),
             hostcall_val_storage: Vec::new(),
             wasm_val_raw_storage: Vec::new(),
-            rooted_host_funcs: ManuallyDrop::new(Vec::new()),
             pkey,
             #[cfg(feature = "component-model")]
             component_host_table: Default::default(),
@@ -1234,16 +1214,8 @@ impl StoreOpaque {
         &mut self.modules
     }
 
-    pub(crate) fn func_refs(&mut self) -> &mut FuncRefs {
-        &mut self.func_refs
-    }
-
-    pub(crate) fn fill_func_refs(&mut self) {
-        self.func_refs.fill(&self.modules);
-    }
-
-    pub(crate) fn push_instance_pre_func_refs(&mut self, func_refs: Arc<[VMFuncRef]>) {
-        self.func_refs.push_instance_pre_func_refs(func_refs);
+    pub(crate) fn func_refs_and_modules(&mut self) -> (&mut FuncRefs, &ModuleRegistry) {
+        (&mut self.func_refs, &self.modules)
     }
 
     pub(crate) fn host_globals(
@@ -1754,10 +1726,6 @@ impl StoreOpaque {
         if storage.capacity() > self.wasm_val_raw_storage.capacity() {
             self.wasm_val_raw_storage = storage;
         }
-    }
-
-    pub(crate) fn push_rooted_funcs(&mut self, funcs: Arc<[Definition]>) {
-        self.rooted_host_funcs.push(funcs);
     }
 
     /// Translates a WebAssembly fault at the native `pc` and native `addr` to a
@@ -2328,11 +2296,6 @@ impl Drop for StoreOpaque {
                     allocator.decrement_component_instance_count();
                 }
             }
-
-            // See documentation for these fields on `StoreOpaque` for why they
-            // must be dropped in this order.
-            ManuallyDrop::drop(&mut self.store_data);
-            ManuallyDrop::drop(&mut self.rooted_host_funcs);
         }
     }
 }
