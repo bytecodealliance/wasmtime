@@ -97,6 +97,7 @@ use core::mem::{self, ManuallyDrop};
 use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
+use wasmtime_environ::packed_option::ReservedValue;
 use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, PrimaryMap, TripleExt};
 
 mod context;
@@ -319,7 +320,7 @@ pub struct StoreOpaque {
 
     engine: Engine,
     vm_store_context: VMStoreContext,
-    instances: Vec<StoreInstance>,
+    instances: PrimaryMap<InstanceId, StoreInstance>,
     #[cfg(feature = "component-model")]
     num_component_instances: usize,
     signal_handler: Option<SignalHandler>,
@@ -521,7 +522,7 @@ impl<T> Store<T> {
             _marker: marker::PhantomPinned,
             engine: engine.clone(),
             vm_store_context: Default::default(),
-            instances: Vec::new(),
+            instances: PrimaryMap::new(),
             #[cfg(feature = "component-model")]
             num_component_instances: 0,
             signal_handler: None,
@@ -1229,7 +1230,7 @@ impl StoreOpaque {
 
     pub fn module_for_instance(&self, instance: StoreInstanceId) -> Option<&'_ Module> {
         instance.store_id().assert_belongs_to(self.id());
-        match self.instances[instance.instance().0].kind {
+        match self.instances[instance.instance()].kind {
             StoreInstanceKind::Dummy => None,
             StoreInstanceKind::Real { module_id } => {
                 let module = self
@@ -1242,11 +1243,11 @@ impl StoreOpaque {
     }
 
     pub fn instance(&self, id: InstanceId) -> &InstanceHandle {
-        &self.instances[id.0].handle
+        &self.instances[id].handle
     }
 
     pub fn instance_mut(&mut self, id: InstanceId) -> &mut InstanceHandle {
-        &mut self.instances[id.0].handle
+        &mut self.instances[id].handle
     }
 
     /// Get all instances (ignoring dummy instances) within this store.
@@ -1254,9 +1255,7 @@ impl StoreOpaque {
         let instances = self
             .instances
             .iter()
-            .enumerate()
-            .filter_map(|(idx, inst)| {
-                let id = InstanceId::from_index(idx);
+            .filter_map(|(id, inst)| {
                 if let StoreInstanceKind::Dummy = inst.kind {
                     None
                 } else {
@@ -1277,7 +1276,7 @@ impl StoreOpaque {
         let mems = self
             .instances
             .iter_mut()
-            .flat_map(|instance| instance.handle.instance().defined_memories())
+            .flat_map(|(_, instance)| instance.handle.instance().defined_memories())
             .collect::<Vec<_>>();
         mems.into_iter()
             .map(|memory| unsafe { Memory::from_wasmtime_memory(memory, self) })
@@ -1288,8 +1287,7 @@ impl StoreOpaque {
         // NB: Host-created tables have dummy instances. Therefore, we can get
         // all tables in the store by iterating over all instances (including
         // dummy instances) and getting each of their defined memories.
-        for id in 0..self.instances.len() {
-            let id = InstanceId(id);
+        for id in self.instances.keys() {
             let instance = StoreInstanceId::new(self.id(), id);
             for table in 0..self.instance(id).module().num_defined_tables() {
                 let table = DefinedTableIndex::new(table);
@@ -1307,8 +1305,7 @@ impl StoreOpaque {
         }
 
         // Then enumerate all instances' defined globals.
-        for id in 0..self.instances.len() {
-            let id = InstanceId(id);
+        for id in self.instances.keys() {
             for index in 0..self.instance(id).module().num_defined_globals() {
                 let index = DefinedGlobalIndex::new(index);
                 let global = Global::new_instance(self, id, index);
@@ -1357,7 +1354,7 @@ impl StoreOpaque {
 
             // First, allocate the memory that will be our GC heap's storage.
             let mut request = InstanceAllocationRequest {
-                id: InstanceId::INVALID,
+                id: InstanceId::reserved_value(),
                 runtime_info: &ModuleRuntimeInfo::bare(Arc::new(
                     wasmtime_environ::Module::default(),
                 )),
@@ -1751,7 +1748,7 @@ impl StoreOpaque {
         // possible to precompute maps about linear memories in a store and have
         // a quicker lookup.
         let mut fault = None;
-        for instance in self.instances.iter() {
+        for (_, instance) in self.instances.iter() {
             if let Some(f) = instance.handle.wasm_fault(addr) {
                 assert!(fault.is_none());
                 fault = Some(f);
@@ -1886,7 +1883,7 @@ at https://bytecodealliance.org/security.
         runtime_info: &ModuleRuntimeInfo,
         imports: Imports<'_>,
     ) -> Result<InstanceId> {
-        let id = InstanceId(self.instances.len());
+        let id = self.instances.next_key();
 
         let allocator = match kind {
             AllocateInstanceKind::Module(_) => self.engine().allocator(),
@@ -1902,7 +1899,7 @@ at https://bytecodealliance.org/security.
             tunables: self.engine().tunables(),
         })?;
 
-        match kind {
+        let actual = match kind {
             AllocateInstanceKind::Module(module_id) => {
                 log::trace!(
                     "Adding instance to store: store={:?}, module={module_id:?}, instance={id:?}",
@@ -1911,7 +1908,7 @@ at https://bytecodealliance.org/security.
                 self.instances.push(StoreInstance {
                     handle,
                     kind: StoreInstanceKind::Real { module_id },
-                });
+                })
             }
             AllocateInstanceKind::Dummy { .. } => {
                 log::trace!(
@@ -1921,13 +1918,13 @@ at https://bytecodealliance.org/security.
                 self.instances.push(StoreInstance {
                     handle,
                     kind: StoreInstanceKind::Dummy,
-                });
+                })
             }
-        }
+        };
 
         // double-check we didn't accidentally allocate two instances and our
         // prediction of what the id would be is indeed the id it should be.
-        assert_eq!(self.instances.len(), id.0 + 1);
+        assert_eq!(id, actual);
 
         Ok(id)
     }
@@ -2256,8 +2253,7 @@ impl Drop for StoreOpaque {
                 allocator.deallocate_memory(None, mem_alloc_index, mem);
             }
 
-            for (idx, instance) in self.instances.iter_mut().enumerate() {
-                let id = InstanceId::from_index(idx);
+            for (id, instance) in self.instances.iter_mut() {
                 log::trace!("store {store_id:?} is deallocating {id:?}");
                 if let StoreInstanceKind::Dummy = instance.kind {
                     ondemand.deallocate_module(&mut instance.handle);

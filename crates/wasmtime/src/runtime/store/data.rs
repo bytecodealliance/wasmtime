@@ -12,20 +12,8 @@ use core::ops::{Index, IndexMut};
 // crate-private-type-in-public-interface errors that aren't really too
 // interesting to deal with.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct InstanceId(pub(super) usize);
-
-impl InstanceId {
-    pub const INVALID: InstanceId = InstanceId(usize::MAX);
-
-    pub fn from_index(idx: usize) -> InstanceId {
-        debug_assert!(idx != Self::INVALID.0);
-        InstanceId(idx)
-    }
-
-    pub fn index(&self) -> usize {
-        self.0
-    }
-}
+pub struct InstanceId(u32);
+wasmtime_environ::entity_impl!(InstanceId);
 
 pub struct StoreData {
     id: StoreId,

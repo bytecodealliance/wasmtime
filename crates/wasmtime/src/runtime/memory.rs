@@ -222,7 +222,7 @@ pub struct Memory {
 // representation here in terms of size/alignment/etc.
 const _: () = {
     #[repr(C)]
-    struct Tmp(u64, usize);
+    struct Tmp(u64, u32);
     #[repr(C)]
     struct C(Tmp, u32);
     assert!(core::mem::size_of::<C>() == core::mem::size_of::<Memory>());
