@@ -6,7 +6,7 @@
 //! Eventually it's intended that module-to-module calls, which would be
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
-use crate::component::{Component, ResourceType};
+use crate::component::{Component, ResourceType, RuntimeImport};
 use crate::prelude::*;
 use crate::runtime::component::ComponentInstanceId;
 use crate::runtime::vm::{
@@ -82,6 +82,22 @@ pub struct ComponentInstance {
     /// Storage for the type information about resources within this component
     /// instance.
     resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+
+    /// Arguments that this instance used to be instantiated.
+    ///
+    /// Strong references are stored to these arguments since pointers are saved
+    /// into the structures such as functions within the
+    /// `OwnedComponentInstance` but it's our job to keep them alive.
+    ///
+    /// One purpose of this storage is to enable embedders to drop a `Linker`,
+    /// for example, after a component is instantiated. In that situation if the
+    /// arguments weren't held here then they might be dropped, and structures
+    /// such as `.lowering()` which point back into the original function would
+    /// become stale and use-after-free conditions when used. By preserving the
+    /// entire list here though we're guaranteed that nothing is lost for the
+    /// duration of the lifetime of this instance.
+    // TODO: remove this pub(crate), make it private to this module
+    pub(crate) imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
 
     /// Self-pointer back to `Store<T>` and its functions.
     store: VMStoreRawPtr,
@@ -222,6 +238,7 @@ impl ComponentInstance {
         id: ComponentInstanceId,
         component: &Component,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+        imports: &Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
         store: NonNull<dyn VMStore>,
     ) {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
@@ -256,6 +273,7 @@ impl ComponentInstance {
                 ),
                 component: component.clone(),
                 resource_types,
+                imports: imports.clone(),
                 store: VMStoreRawPtr(store),
                 vmctx: VMComponentContext {
                     _marker: marker::PhantomPinned,
@@ -812,6 +830,7 @@ impl OwnedComponentInstance {
         id: ComponentInstanceId,
         component: &Component,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+        imports: &Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
         store: NonNull<dyn VMStore>,
     ) -> OwnedComponentInstance {
         let offsets = VMComponentOffsets::new(HostPtr, component.env_component());
@@ -835,6 +854,7 @@ impl OwnedComponentInstance {
                 id,
                 component,
                 resource_types,
+                imports,
                 store,
             );
 
