@@ -12,7 +12,7 @@ block0(v0: i32x4):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm3
-;   pcmpeqd %xmm3, %xmm3, %xmm3
+;   pcmpeqd %xmm3, %xmm3
 ;   pxor %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -68,7 +68,7 @@ block0(v0: i64x2):
 ; block0:
 ;   uninit  %xmm3
 ;   pxor %xmm3, %xmm3
-;   pcmpeqq %xmm0, %xmm3, %xmm0
+;   pcmpeqq %xmm3, %xmm0
 ;   ptest   %xmm0, %xmm0
 ;   setz    %al
 ;   movq    %rbp, %rsp

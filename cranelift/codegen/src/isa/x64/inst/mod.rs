@@ -178,6 +178,7 @@ impl Inst {
                         sse2 => features.push(InstructionSet::SSE2),
                         ssse3 => features.push(InstructionSet::SSSE3),
                         sse41 => features.push(InstructionSet::SSE41),
+                        sse42 => features.push(InstructionSet::SSE42),
                         bmi1 => features.push(InstructionSet::BMI1),
                         bmi2 => features.push(InstructionSet::BMI2),
                         lzcnt => features.push(InstructionSet::Lzcnt),

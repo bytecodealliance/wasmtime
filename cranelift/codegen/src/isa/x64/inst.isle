@@ -736,14 +736,6 @@
             Pavgb
             Pavgw
             Pblendvb
-            Pcmpeqb
-            Pcmpeqw
-            Pcmpeqd
-            Pcmpeqq
-            Pcmpgtb
-            Pcmpgtw
-            Pcmpgtd
-            Pcmpgtq
             Pmaddubsw
             Pmaddwd
             Pmovsxbd
@@ -4541,25 +4533,25 @@
             (x64_pand cmp32 cmp32_swapped)))
 
 (decl x64_pcmpeqb (Xmm XmmMem) Xmm)
-(rule 0 (x64_pcmpeqb x y) (xmm_rm_r (SseOpcode.Pcmpeqb) x y))
 (rule 1 (x64_pcmpeqb x y)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpcmpeqb) x y))
+(rule 0 (x64_pcmpeqb x y) (x64_pcmpeqb_a x y))
 (decl x64_pcmpeqw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pcmpeqw x y) (xmm_rm_r (SseOpcode.Pcmpeqw) x y))
 (rule 1 (x64_pcmpeqw x y)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpcmpeqw) x y))
+(rule 0 (x64_pcmpeqw x y) (x64_pcmpeqw_a x y))
 (decl x64_pcmpeqd (Xmm XmmMem) Xmm)
-(rule 0 (x64_pcmpeqd x y) (xmm_rm_r (SseOpcode.Pcmpeqd) x y))
 (rule 1 (x64_pcmpeqd x y)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpcmpeqd) x y))
+(rule 0 (x64_pcmpeqd x y) (x64_pcmpeqd_a x y))
 (decl x64_pcmpeqq (Xmm XmmMem) Xmm)
-(rule 0 (x64_pcmpeqq x y) (xmm_rm_r (SseOpcode.Pcmpeqq) x y))
 (rule 1 (x64_pcmpeqq x y)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpcmpeqq) x y))
+(rule 0 (x64_pcmpeqq x y) (x64_pcmpeqq_a x y))
 
 ;; Helpers for creating `pcmpgt*` instructions.
 (decl x64_pcmpgt (Type Xmm XmmMem) Xmm)
@@ -4613,25 +4605,25 @@
           (x64_por low_gt_and_high_eq high_halves_gt)))
 
 (decl x64_pcmpgtb (Xmm XmmMem) Xmm)
-(rule 0 (x64_pcmpgtb x y) (xmm_rm_r (SseOpcode.Pcmpgtb) x y))
 (rule 1 (x64_pcmpgtb x y)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpcmpgtb) x y))
+(rule 0 (x64_pcmpgtb x y) (x64_pcmpgtb_a x y))
 (decl x64_pcmpgtw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pcmpgtw x y) (xmm_rm_r (SseOpcode.Pcmpgtw) x y))
 (rule 1 (x64_pcmpgtw x y)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpcmpgtw) x y))
+(rule 0 (x64_pcmpgtw x y) (x64_pcmpgtw_a x y))
 (decl x64_pcmpgtd (Xmm XmmMem) Xmm)
-(rule 0 (x64_pcmpgtd x y) (xmm_rm_r (SseOpcode.Pcmpgtd) x y))
 (rule 1 (x64_pcmpgtd x y)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpcmpgtd) x y))
+(rule 0 (x64_pcmpgtd x y) (x64_pcmpgtd_a x y))
 (decl x64_pcmpgtq (Xmm XmmMem) Xmm)
-(rule 0 (x64_pcmpgtq x y) (xmm_rm_r (SseOpcode.Pcmpgtq) x y))
 (rule 1 (x64_pcmpgtq x y)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpcmpgtq) x y))
+(rule 0 (x64_pcmpgtq x y) (x64_pcmpgtq_a x y))
 
 (decl x64_add_mem (Type Amode Gpr) SideEffectNoResult)
 (spec (x64_add_mem ty addr val)

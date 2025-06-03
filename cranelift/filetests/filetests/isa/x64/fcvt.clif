@@ -1067,7 +1067,7 @@ block0(v0: f32x4):
 ;   uninit  %xmm6
 ;   xorps %xmm6, %xmm6
 ;   maxps %xmm6, %xmm0
-;   pcmpeqd %xmm6, %xmm6, %xmm6
+;   pcmpeqd %xmm6, %xmm6
 ;   psrld $0x1, %xmm6
 ;   cvtdq2ps %xmm6, %xmm7
 ;   cvttps2dq %xmm0, %xmm6
