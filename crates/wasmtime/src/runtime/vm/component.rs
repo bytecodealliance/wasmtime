@@ -941,8 +941,8 @@ impl OwnedComponentInstance {
     }
 
     /// Returns the underlying component instance's raw pointer.
-    pub fn instance_ptr(&self) -> *mut ComponentInstance {
-        self.ptr.as_ptr()
+    pub fn instance_ptr(&self) -> NonNull<ComponentInstance> {
+        self.ptr.as_non_null()
     }
 
     /// See `ComponentInstance::set_runtime_memory`

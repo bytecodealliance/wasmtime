@@ -1,5 +1,6 @@
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
+use crate::component::store::ComponentInstanceId;
 use crate::component::{
     Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower, ResourceType,
     TypedFunc, types::ComponentItem,
@@ -7,9 +8,9 @@ use crate::component::{
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
+use crate::runtime::vm::VMFuncRef;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
-use crate::runtime::vm::{CompiledModuleId, VMFuncRef};
-use crate::store::{StoreOpaque, Stored};
+use crate::store::{StoreId, StoreOpaque};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
@@ -32,13 +33,36 @@ use wasmtime_environ::{EntityType, PrimaryMap};
 /// [`wasmtime::Instance`](crate::Instance) except that it represents an
 /// instantiated component instead of an instantiated module.
 #[derive(Copy, Clone)]
-pub struct Instance(pub(crate) Stored<Option<Box<InstanceData>>>);
-
-pub(crate) struct InstanceData {
-    state: OwnedComponentInstance,
+#[repr(C)] // here for the C API
+pub struct Instance {
+    store: StoreId,
+    instance: ComponentInstanceId,
 }
 
+// Double-check that the C representation in `component/instance.h` matches our
+// in-Rust representation here in terms of size/alignment/etc.
+const _: () = {
+    #[repr(C)]
+    struct C(u64, usize);
+    assert!(core::mem::size_of::<C>() == core::mem::size_of::<Instance>());
+    assert!(core::mem::align_of::<C>() == core::mem::align_of::<Instance>());
+    assert!(core::mem::offset_of!(Instance, store) == 0);
+};
+
 impl Instance {
+    /// Creates a raw `Instance` from the internal identifiers within the store.
+    ///
+    /// # Safety
+    ///
+    /// The safety of this function relies on `id` belonging to the instance
+    /// within `store`.
+    pub(crate) unsafe fn from_wasmtime(store: &StoreOpaque, id: ComponentInstanceId) -> Instance {
+        Instance {
+            store: store.id(),
+            instance: id,
+        }
+    }
+
     /// Looks up an exported function by name within this [`Instance`].
     ///
     /// The `store` argument provided must be the store that this instance
@@ -139,16 +163,27 @@ impl Instance {
         name: impl InstanceExportLookup,
     ) -> Option<Func> {
         let store = store.as_context_mut().0;
-        let data = store[self.0].take().unwrap();
-        let ret = name.lookup(&data.state.component()).and_then(|index| {
-            match &data.state.component().env_component().export_items[index] {
-                Export::LiftedFunction { ty, func, options } => Some(Func::from_lifted_func(
-                    store, self, &data, *ty, func, options,
-                )),
+        self.store.assert_belongs_to(store.id());
+        // SAFETY: this should be deleted soon in a future refactoring which
+        // removes the need for `component_instance_replace`.
+        let data = unsafe {
+            store
+                .component_instance_replace(self.instance, None)
+                .unwrap()
+        };
+        let ret = name.lookup(&data.component()).and_then(|index| {
+            match &data.component().env_component().export_items[index] {
+                Export::LiftedFunction { ty, func, options } => {
+                    Some(unsafe { Func::from_lifted_func(store, &data, *ty, func, options) })
+                }
                 _ => None,
             }
         });
-        store[self.0] = Some(data);
+        // SAFETY: this should be deleted soon in a future refactoring which
+        // removes the need for `component_instance_replace`.
+        unsafe {
+            store.component_instance_replace(self.instance, Some(data));
+        }
         ret
     }
 
@@ -279,18 +314,18 @@ impl Instance {
         instance: Option<&ComponentExportIndex>,
         name: &str,
     ) -> Option<(ComponentItem, ComponentExportIndex)> {
-        let data = store[self.0].as_ref().unwrap();
-        let component = data.state.component();
+        let data = self.instance(store);
+        let component = data.component();
         let index = component.lookup_export_index(instance, name)?;
         let item = ComponentItem::from_export(
             &store.engine(),
             &component.env_component().export_items[index],
-            &data.ty(),
+            &InstanceType::new(data),
         );
         Some((
             item,
             ComponentExportIndex {
-                id: data.component_id(),
+                id: data.component().id(),
                 index,
             },
         ))
@@ -315,10 +350,10 @@ impl Instance {
         instance: Option<&ComponentExportIndex>,
         name: &str,
     ) -> Option<ComponentExportIndex> {
-        let data = store.as_context_mut().0[self.0].as_ref().unwrap();
-        let index = data.state.component().lookup_export_index(instance, name)?;
+        let data = self.instance(store.as_context_mut().0);
+        let index = data.component().lookup_export_index(instance, name)?;
         Some(ComponentExportIndex {
-            id: data.component_id(),
+            id: data.component().id(),
             index,
         })
     }
@@ -328,25 +363,36 @@ impl Instance {
         store: &'a StoreOpaque,
         name: impl InstanceExportLookup,
     ) -> Option<(&'a ComponentInstance, &'a Export)> {
-        let data = store[self.0].as_ref().unwrap();
-        let index = name.lookup(data.state.component())?;
-        Some((
-            &data.state,
-            &data.state.component().env_component().export_items[index],
-        ))
+        let data = self.instance(store);
+        let index = name.lookup(data.component())?;
+        Some((data, &data.component().env_component().export_items[index]))
     }
 
     /// Returns the [`InstancePre`] that was used to create this instance.
     pub fn instance_pre<T>(&self, store: impl AsContext<Data = T>) -> InstancePre<T> {
         // This indexing operation asserts the Store owns the Instance.
         // Therefore, the InstancePre<T> must match the Store<T>.
-        let data = store.as_context().0[self.0].as_ref().unwrap();
+        let data = self.instance(store.as_context().0);
 
         // SAFETY: calling this method safely here relies on matching the `T`
         // in `InstancePre<T>` to the store itself, which is happening in the
         // type signature just above by ensuring the store's data is `T` which
         // matches the return value.
-        unsafe { data.instance().instance_pre() }
+        unsafe { data.instance_pre() }
+    }
+
+    /// Returns the VM/runtime state for this instance as belonging to the
+    /// store provided.
+    pub(crate) fn instance<'a>(&self, store: &'a StoreOpaque) -> &'a ComponentInstance {
+        self.store.assert_belongs_to(store.id());
+        store.component_instance(self.instance)
+    }
+
+    /// Returns the VM/runtime state for this instance as belonging to the
+    /// store provided.
+    pub(crate) fn instance_ptr(&self, store: &StoreOpaque) -> NonNull<ComponentInstance> {
+        self.store.assert_belongs_to(store.id());
+        store.component_instance_ptr(self.instance)
     }
 }
 
@@ -388,33 +434,6 @@ impl InstanceExportLookup for str {
 impl InstanceExportLookup for String {
     fn lookup(&self, component: &Component) -> Option<ExportIndex> {
         str::lookup(self, component)
-    }
-}
-
-impl InstanceData {
-    #[inline]
-    pub fn instance(&self) -> &ComponentInstance {
-        &self.state
-    }
-
-    #[inline]
-    pub fn instance_ptr(&self) -> *mut ComponentInstance {
-        self.state.instance_ptr()
-    }
-
-    #[inline]
-    pub fn component_types(&self) -> &Arc<ComponentTypes> {
-        self.state.component().types()
-    }
-
-    #[inline]
-    pub fn component_id(&self) -> CompiledModuleId {
-        self.state.component().id()
-    }
-
-    #[inline]
-    pub fn ty(&self) -> InstanceType<'_> {
-        InstanceType::new(self.instance())
     }
 }
 
@@ -845,10 +864,14 @@ impl<T: 'static> InstancePre<T> {
                 .decrement_component_instance_count();
             e
         })?;
-        let data = Box::new(InstanceData {
-            state: instantiator.instance,
-        });
-        let instance = Instance(store.0.store_data_mut().push_component_instance(data));
+        let id = store
+            .0
+            .store_data_mut()
+            .push_component_instance(instantiator.instance);
+        // SAFETY: `from_wasmtime` requires that `id` belongs to the store
+        // provided, and it was just inserted above so the condition should be
+        // satisfied.
+        let instance = unsafe { Instance::from_wasmtime(store.0, id) };
         store.0.push_component_instance(instance);
         Ok(instance)
     }

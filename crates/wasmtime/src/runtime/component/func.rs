@@ -1,9 +1,10 @@
-use crate::component::instance::{Instance, InstanceData};
+use crate::component::instance::Instance;
+use crate::component::matching::InstanceType;
 use crate::component::storage::storage_as_slice;
 use crate::component::types::Type;
 use crate::component::values::Val;
 use crate::prelude::*;
-use crate::runtime::vm::component::ResourceTables;
+use crate::runtime::vm::component::{ComponentInstance, ResourceTables};
 use crate::runtime::vm::{Export, ExportFunction};
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
@@ -51,34 +52,35 @@ pub struct FuncData {
 }
 
 impl Func {
-    pub(crate) fn from_lifted_func(
+    pub(crate) unsafe fn from_lifted_func(
         store: &mut StoreOpaque,
-        instance: &Instance,
-        data: &InstanceData,
+        instance: &ComponentInstance,
         ty: TypeFuncIndex,
         func: &CoreDef,
         options: &CanonicalOptions,
     ) -> Func {
-        let export = match data.instance().lookup_def(store, func) {
+        let export = match instance.lookup_def(store, func) {
             Export::Function(f) => f,
             _ => unreachable!(),
         };
         let memory = options
             .memory
-            .map(|i| NonNull::new(data.instance().runtime_memory(i)).unwrap());
-        let realloc = options.realloc.map(|i| data.instance().runtime_realloc(i));
+            .map(|i| NonNull::new(instance.runtime_memory(i)).unwrap());
+        let realloc = options.realloc.map(|i| instance.runtime_realloc(i));
         let post_return = options.post_return.map(|i| {
-            let func_ref = data.instance().runtime_post_return(i);
+            let func_ref = instance.runtime_post_return(i);
             ExportFunction { func_ref }
         });
         let component_instance = options.instance;
         let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
+        let types = instance.component().types().clone();
+        let instance = Instance::from_wasmtime(store, instance.id());
         Func(store.store_data_mut().insert(FuncData {
             export,
             options,
             ty,
-            types: data.component_types().clone(),
-            instance: *instance,
+            types,
+            instance,
             component_instance,
             post_return,
             post_return_arg: None,
@@ -175,7 +177,7 @@ impl Func {
     pub(crate) fn _typed<Params, Return>(
         &self,
         store: &StoreOpaque,
-        instance: Option<&InstanceData>,
+        instance: Option<&ComponentInstance>,
     ) -> Result<TypedFunc<Params, Return>>
     where
         Params: ComponentNamedList + Lower,
@@ -188,16 +190,14 @@ impl Func {
     fn typecheck<Params, Return>(
         &self,
         store: &StoreOpaque,
-        instance: Option<&InstanceData>,
+        instance: Option<&ComponentInstance>,
     ) -> Result<()>
     where
         Params: ComponentNamedList + Lower,
         Return: ComponentNamedList + Lift,
     {
         let data = &store[self.0];
-        let cx = instance
-            .unwrap_or_else(|| &store[data.instance.0].as_ref().unwrap())
-            .ty();
+        let cx = InstanceType::new(instance.unwrap_or_else(|| data.instance.instance(store)));
         let ty = &cx.types[data.ty];
 
         Params::typecheck(&InterfaceType::Tuple(ty.params), &cx)
@@ -212,13 +212,13 @@ impl Func {
     pub fn params(&self, store: impl AsContext) -> Box<[(String, Type)]> {
         let store = store.as_context();
         let data = &store[self.0];
-        let instance = store[data.instance.0].as_ref().unwrap();
+        let instance = data.instance.instance(store.0);
         let func_ty = &data.types[data.ty];
         data.types[func_ty.params]
             .types
             .iter()
             .zip(&func_ty.param_names)
-            .map(|(ty, name)| (name.clone(), Type::from(ty, &instance.ty())))
+            .map(|(ty, name)| (name.clone(), Type::from(ty, &InstanceType::new(instance))))
             .collect()
     }
 
@@ -226,11 +226,11 @@ impl Func {
     pub fn results(&self, store: impl AsContext) -> Box<[Type]> {
         let store = store.as_context();
         let data = &store[self.0];
-        let instance = store[data.instance.0].as_ref().unwrap();
+        let instance = data.instance.instance(store.0);
         data.types[data.types[data.ty].results]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &instance.ty()))
+            .map(|ty| Type::from(ty, &InstanceType::new(instance)))
             .collect()
     }
 
@@ -426,9 +426,9 @@ impl Func {
         assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
-        let instance = store.0[instance.0].as_ref().unwrap();
-        let types = instance.component_types().clone();
-        let mut flags = instance.instance().instance_flags(component_instance);
+        let i = instance.instance(store.0);
+        let types = i.component().types().clone();
+        let mut flags = i.instance_flags(component_instance);
 
         unsafe {
             // Test the "may enter" flag which is a "lock" on this instance.
@@ -445,7 +445,7 @@ impl Func {
 
             debug_assert!(flags.may_leave());
             flags.set_may_leave(false);
-            let instance_ptr = instance.instance_ptr();
+            let instance_ptr = instance.instance_ptr(store.0).as_ptr();
             let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, instance_ptr);
             cx.enter_call();
             let result = lower(
@@ -572,7 +572,7 @@ impl Func {
         let post_return = data.post_return;
         let component_instance = data.component_instance;
         let post_return_arg = data.post_return_arg.take();
-        let instance = store.0[instance.0].as_ref().unwrap().instance_ptr();
+        let instance = instance.instance_ptr(store.0).as_ptr();
 
         unsafe {
             let mut flags = (*instance).instance_flags(component_instance);
