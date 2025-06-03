@@ -8,11 +8,10 @@ use crate::runtime::vm::component::{ComponentInstance, ResourceTables};
 use crate::runtime::vm::{Export, ExportFunction};
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
-use alloc::sync::Arc;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
-    CanonicalOptions, ComponentTypes, CoreDef, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalOptions, CoreDef, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
     RuntimeComponentInstanceIndex, TypeFuncIndex, TypeTuple,
 };
 
@@ -43,7 +42,6 @@ pub struct Func(Stored<FuncData>);
 pub struct FuncData {
     export: ExportFunction,
     ty: TypeFuncIndex,
-    types: Arc<ComponentTypes>,
     options: Options,
     instance: Instance,
     component_instance: RuntimeComponentInstanceIndex,
@@ -73,13 +71,11 @@ impl Func {
         });
         let component_instance = options.instance;
         let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
-        let types = instance.component().types().clone();
         let instance = Instance::from_wasmtime(store, instance.id());
         Func(store.store_data_mut().insert(FuncData {
             export,
             options,
             ty,
-            types,
             instance,
             component_instance,
             post_return,
@@ -213,8 +209,9 @@ impl Func {
         let store = store.as_context();
         let data = &store[self.0];
         let instance = data.instance.instance(store.0);
-        let func_ty = &data.types[data.ty];
-        data.types[func_ty.params]
+        let types = instance.component().types();
+        let func_ty = &types[data.ty];
+        types[func_ty.params]
             .types
             .iter()
             .zip(&func_ty.param_names)
@@ -227,7 +224,8 @@ impl Func {
         let store = store.as_context();
         let data = &store[self.0];
         let instance = data.instance.instance(store.0);
-        data.types[data.types[data.ty].results]
+        let types = instance.component().types();
+        types[types[data.ty].results]
             .types
             .iter()
             .map(|ty| Type::from(ty, &InstanceType::new(instance)))
