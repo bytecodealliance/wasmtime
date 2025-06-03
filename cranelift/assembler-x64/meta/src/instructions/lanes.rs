@@ -22,8 +22,12 @@ pub fn list() -> Vec<Inst> {
         inst("pinsrd", fmt("A", [rw(xmm1), r(rm32), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x22]).r().ib(), _64b | compat | sse41),
         inst("pinsrq", fmt("A", [rw(xmm1), r(rm64), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x22]).r().ib().w(), _64b | sse41),
 
+        // Extract sign masks from the floating-point lanes.
         inst("movmskps", fmt("RM", [w(r32), r(xmm2)]), rex([0x0F, 0x50]).r(), _64b | compat | sse),
         inst("movmskpd", fmt("RM", [w(r32), r(xmm2)]), rex([0x66, 0x0F, 0x50]).r(), _64b | compat | sse2),
         inst("pmovmskb", fmt("RM", [w(r32), r(xmm2)]), rex([0x66, 0x0F, 0xD7]).r(), _64b | compat | sse2),
+
+        // Move two lower 32-bit floats to the high two lanes.
+        inst("movlhps", fmt("RM", [rw(xmm1), r(xmm2)]), rex([0x0F, 0x16]).r(), _64b | compat | sse),
     ]
 }
