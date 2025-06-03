@@ -71,6 +71,14 @@ impl StoreOpaque {
     }
 
     // FIXME: this method should not exist, future refactorings should delete it
+    //
+    // Specifically we're in the process of requiring that all APIs, even
+    // libcalls and host functions, work with `&mut StoreThing` plus
+    // `ComponentInstanceId` (or a store-tagged index). When doing so there
+    // should be no need for raw pointers as access to a `ComponentInstance` is
+    // 100% delegated through the store itself. Until that happens though this
+    // will need to stick around as there's a few places that work with raw
+    // pointers instead of safe pointers.
     pub(crate) fn component_instance_ptr(
         &self,
         id: ComponentInstanceId,
@@ -82,6 +90,11 @@ impl StoreOpaque {
     }
 
     // FIXME: this method should not exist, future refactorings should delete it
+    //
+    // Specifically we're in the process of removing `Stored<T>` and the only
+    // location this API is required is for functions right now when they're
+    // being created. That needs to be refactored anyway and removing `Stored`
+    // should remove the need for this function.
     pub(crate) unsafe fn component_instance_replace(
         &mut self,
         id: ComponentInstanceId,
