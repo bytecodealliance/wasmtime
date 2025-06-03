@@ -252,7 +252,7 @@ mod resources_at_interface_level {
             r#"
                 (component
                     (import (interface "foo:foo/def") (instance $i
-                        (export $x "x" (type (sub resource)))
+                        (export "x" (type $x (sub resource)))
                         (export "[constructor]x" (func (result (own $x))))
                     ))
                     (alias export $i "x" (type $x))
@@ -489,7 +489,7 @@ mod exported_resources {
 (component
   ;; setup the `foo:foo/a` import
   (import (interface "foo:foo/a") (instance $a
-    (export $x "x" (type (sub resource)))
+    (export "x" (type $x (sub resource)))
     (export "[constructor]x" (func (result (own $x))))
   ))
   (alias export $a "x" (type $a-x))

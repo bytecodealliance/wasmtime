@@ -292,7 +292,7 @@ mod enum_error {
             (component
                 (type $err' (enum "a" "b" "c"))
                 (import (interface "inline:inline/imports") (instance $i
-                    (export $err "err" (type (eq $err')))
+                    (export "err" (type $err (eq $err')))
                     (export "enum-error" (func (param "a" f64) (result (result f64 (error $err)))))
                 ))
                 (core module $libc
@@ -455,7 +455,7 @@ mod record_error {
                     (field "col" u32)
                 ))
                 (import (interface "inline:inline/imports") (instance $i
-                    (export $e2 "e2" (type (eq $e2')))
+                    (export "e2" (type $e2 (eq $e2')))
                     (type $result (result f64 (error $e2)))
                     (export "record-error" (func (param "a" f64) (result $result)))
                 ))
@@ -630,13 +630,13 @@ mod variant_error {
                     (case "E2" $e2')
                 ))
                 (import (interface "inline:inline/imports") (instance $i
-                    (export $e1 "e1" (type (eq $e1')))
-                    (export $e2 "e2" (type (eq $e2')))
+                    (export "e1" (type $e1 (eq $e1')))
+                    (export "e2" (type $e2 (eq $e2')))
                     (type $e3' (variant
                         (case "E1" $e1)
                         (case "E2" $e2)
                     ))
-                    (export $e3 "e3" (type (eq $e3')))
+                    (export "e3" (type $e3 (eq $e3')))
                     (type $result (result f64 (error $e3)))
                     (export "variant-error" (func (param "a" f64) (result $result)))
                 ))
@@ -824,7 +824,7 @@ mod multiple_interfaces_error {
             (component
                 (type $err' (enum "a" "b" "c"))
                 (import (interface "inline:inline/imports") (instance $i
-                    (export $e1 "e1" (type (eq $err')))
+                    (export "e1" (type $e1 (eq $err')))
                     (export "enum-error" (func (param "a" f64) (result (result f64 (error $e1)))))
                 ))
                 (core module $libc
