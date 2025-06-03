@@ -1,9 +1,6 @@
-use crate::prelude::*;
 use crate::runtime::vm;
 use crate::store::StoreOpaque;
 use crate::{StoreContext, StoreContextMut};
-use core::fmt;
-use core::marker;
 use core::num::NonZeroU64;
 use core::ops::{Index, IndexMut};
 
@@ -33,11 +30,6 @@ pub struct StoreData {
     pub(crate) components: crate::component::ComponentStoreData,
 }
 
-pub trait StoredData: Sized {
-    fn list(data: &StoreData) -> &Vec<Self>;
-    fn list_mut(data: &mut StoreData) -> &mut Vec<Self>;
-}
-
 impl StoreData {
     pub fn new() -> StoreData {
         StoreData {
@@ -49,97 +41,6 @@ impl StoreData {
 
     pub fn id(&self) -> StoreId {
         self.id
-    }
-
-    pub fn insert<T>(&mut self, data: T) -> Stored<T>
-    where
-        T: StoredData,
-    {
-        let list = T::list_mut(self);
-        let index = list.len();
-        list.push(data);
-        Stored::new(self.id, index)
-    }
-
-    pub fn next_id<T>(&self) -> Stored<T>
-    where
-        T: StoredData,
-    {
-        Stored::new(self.id, T::list(self).len())
-    }
-
-    pub fn contains<T>(&self, id: Stored<T>) -> bool
-    where
-        T: StoredData,
-    {
-        if id.store_id != self.id {
-            return false;
-        }
-        // This should be true as an invariant of our API, but double-check with
-        // debug assertions enabled.
-        debug_assert!(id.index() < T::list(self).len());
-        true
-    }
-
-    pub fn iter<T>(&self) -> impl ExactSizeIterator<Item = Stored<T>> + use<T>
-    where
-        T: StoredData,
-    {
-        let id = self.id;
-        (0..T::list(self).len()).map(move |i| Stored::new(id, i))
-    }
-}
-
-impl<T> Index<Stored<T>> for StoreData
-where
-    T: StoredData,
-{
-    type Output = T;
-
-    #[inline]
-    fn index(&self, index: Stored<T>) -> &Self::Output {
-        index.assert_belongs_to(self.id);
-        // Note that if this is ever a performance bottleneck it should be safe
-        // to use unchecked indexing here because presence of a `Stored<T>` is
-        // proof of an item having been inserted into a store and lists in
-        // stores are never shrunk. After the store check above the actual index
-        // should always be valid.
-        &T::list(self)[index.index()]
-    }
-}
-
-impl<T> IndexMut<Stored<T>> for StoreData
-where
-    T: StoredData,
-{
-    #[inline]
-    fn index_mut(&mut self, index: Stored<T>) -> &mut Self::Output {
-        index.assert_belongs_to(self.id);
-        // Note that this could be unchecked indexing, see the note in `Index`
-        // above.
-        &mut T::list_mut(self)[index.index()]
-    }
-}
-
-// forward StoreOpaque => StoreData
-impl<I> Index<I> for StoreOpaque
-where
-    StoreData: Index<I>,
-{
-    type Output = <StoreData as Index<I>>::Output;
-
-    #[inline]
-    fn index(&self, index: I) -> &Self::Output {
-        self.store_data().index(index)
-    }
-}
-impl<I> IndexMut<I> for StoreOpaque
-where
-    StoreData: IndexMut<I>,
-{
-    #[inline]
-    fn index_mut(&mut self, index: I) -> &mut Self::Output {
-        self.store_data_mut().index_mut(index)
     }
 }
 
@@ -257,55 +158,9 @@ impl StoreId {
     }
 }
 
-#[repr(C)] // used by reference in the C API, also in `wasmtime_func_t`.
-pub struct Stored<T> {
-    store_id: StoreId,
-    index: usize,
-    _marker: marker::PhantomData<fn() -> T>,
-}
-
-impl<T> Stored<T> {
-    fn new(store_id: StoreId, index: usize) -> Stored<T> {
-        Stored {
-            store_id,
-            index,
-            _marker: marker::PhantomData,
-        }
-    }
-
-    #[inline]
-    pub fn assert_belongs_to(&self, store: StoreId) {
-        self.store_id.assert_belongs_to(store)
-    }
-
-    pub(crate) fn index(&self) -> usize {
-        self.index
-    }
-}
-
 #[cold]
 fn store_id_mismatch() {
     panic!("object used with the wrong store");
-}
-
-impl<T> PartialEq for Stored<T> {
-    fn eq(&self, other: &Stored<T>) -> bool {
-        self.store_id == other.store_id && self.index == other.index
-    }
-}
-
-impl<T> Copy for Stored<T> {}
-
-impl<T> Clone for Stored<T> {
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<T> fmt::Debug for Stored<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "store={}, index={}", self.store_id.0, self.index())
-    }
 }
 
 /// A type used to represent an allocated `vm::Instance` located within a store.
