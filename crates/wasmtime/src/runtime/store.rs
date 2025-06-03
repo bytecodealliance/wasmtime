@@ -99,7 +99,7 @@ use core::mem::{self, ManuallyDrop};
 use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
-use wasmtime_environ::{DefinedGlobalIndex, EntityRef, PrimaryMap, TripleExt};
+use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, PrimaryMap, TripleExt};
 
 mod context;
 pub use self::context::*;
@@ -1288,33 +1288,14 @@ impl StoreOpaque {
     /// Iterate over all tables (host- or Wasm-defined) within this store.
     pub fn for_each_table(&mut self, mut f: impl FnMut(&mut Self, Table)) {
         // NB: Host-created tables have dummy instances. Therefore, we can get
-        // all memories in the store by iterating over all instances (including
+        // all tables in the store by iterating over all instances (including
         // dummy instances) and getting each of their defined memories.
-
-        struct TempTakeInstances<'a> {
-            instances: Vec<StoreInstance>,
-            store: &'a mut StoreOpaque,
-        }
-
-        impl<'a> TempTakeInstances<'a> {
-            fn new(store: &'a mut StoreOpaque) -> Self {
-                let instances = mem::take(&mut store.instances);
-                Self { instances, store }
-            }
-        }
-
-        impl Drop for TempTakeInstances<'_> {
-            fn drop(&mut self) {
-                assert!(self.store.instances.is_empty());
-                self.store.instances = mem::take(&mut self.instances);
-            }
-        }
-
-        let mut temp = TempTakeInstances::new(self);
-        for instance in temp.instances.iter_mut() {
-            for table in instance.handle.defined_tables() {
-                let table = unsafe { Table::from_wasmtime_table(table, temp.store) };
-                f(temp.store, table);
+        for id in 0..self.instances.len() {
+            let id = InstanceId(id);
+            let instance = StoreInstanceId::new(self.id(), id);
+            for table in 0..self.instance(id).module().num_defined_tables() {
+                let table = DefinedTableIndex::new(table);
+                f(self, Table::from_raw(instance, table));
             }
         }
     }

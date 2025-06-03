@@ -507,8 +507,7 @@ impl Instance {
     }
 
     /// Return the indexed `VMTableDefinition`.
-    #[allow(dead_code)]
-    fn table(&mut self, index: DefinedTableIndex) -> VMTableDefinition {
+    pub fn table(&self, index: DefinedTableIndex) -> VMTableDefinition {
         unsafe { self.table_ptr(index).read() }
     }
 
@@ -519,8 +518,9 @@ impl Instance {
         }
     }
 
-    /// Return the indexed `VMTableDefinition`.
-    fn table_ptr(&self, index: DefinedTableIndex) -> NonNull<VMTableDefinition> {
+    /// Return a pointer to the `index`'th table within this instance, stored
+    /// in vmctx memory.
+    pub fn table_ptr(&self, index: DefinedTableIndex) -> NonNull<VMTableDefinition> {
         unsafe { self.vmctx_plus_offset_raw(self.offsets().vmctx_vmtable_definition(index)) }
     }
 
@@ -718,7 +718,7 @@ impl Instance {
         ExportFunction { func_ref }
     }
 
-    fn get_exported_table(&mut self, index: TableIndex) -> ExportTable {
+    fn get_exported_table(&self, index: TableIndex) -> ExportTable {
         let ty = self.env_module().tables[index];
         let (definition, vmctx, index) =
             if let Some(def_index) = self.env_module().defined_table_index(index) {

@@ -29,7 +29,6 @@ impl InstanceId {
 
 pub struct StoreData {
     id: StoreId,
-    tables: Vec<crate::runtime::vm::ExportTable>,
     instances: Vec<crate::instance::InstanceData>,
     #[cfg(feature = "component-model")]
     pub(crate) components: crate::component::ComponentStoreData,
@@ -52,7 +51,6 @@ macro_rules! impl_store_data {
 }
 
 impl_store_data! {
-    tables => crate::runtime::vm::ExportTable,
     instances => crate::instance::InstanceData,
 }
 
@@ -60,7 +58,6 @@ impl StoreData {
     pub fn new() -> StoreData {
         StoreData {
             id: StoreId::allocate(),
-            tables: Vec::new(),
             instances: Vec::new(),
             #[cfg(feature = "component-model")]
             components: Default::default(),
