@@ -348,7 +348,7 @@ impl Global {
     /// this hash key will be consistent across all of these globals.
     #[cfg(feature = "coredump")]
     pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<> {
-        self.definition(store).as_ptr() as usize
+        self.definition(store).as_ptr().addr()
     }
 
     fn definition(&self, store: &StoreOpaque) -> NonNull<VMGlobalDefinition> {
