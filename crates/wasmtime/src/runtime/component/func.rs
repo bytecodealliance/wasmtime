@@ -41,7 +41,6 @@ pub struct Func(Stored<FuncData>);
 pub struct FuncData {
     index: ExportIndex,
     instance: Instance,
-    post_return_arg: Option<ValRaw>,
 }
 
 impl Func {
@@ -51,11 +50,7 @@ impl Func {
         instance: &ComponentInstance,
     ) -> Func {
         let instance = Instance::from_wasmtime(store, instance.id());
-        Func(store.store_data_mut().insert(FuncData {
-            index,
-            instance,
-            post_return_arg: None,
-        }))
+        Func(store.store_data_mut().insert(FuncData { index, instance }))
     }
 
     /// Attempt to cast this [`Func`] to a statically typed [`TypedFunc`] with
@@ -487,13 +482,14 @@ impl Func {
                 ret,
             )?;
             let ret_slice = storage_as_slice(ret);
-            let data = &mut store.0[self.0];
-            assert!(data.post_return_arg.is_none());
-            match ret_slice.len() {
-                0 => data.post_return_arg = Some(ValRaw::i32(0)),
-                1 => data.post_return_arg = Some(ret_slice[0]),
-                _ => unreachable!(),
-            }
+            (*instance_ptr).post_return_arg_set(
+                index,
+                match ret_slice.len() {
+                    0 => ValRaw::i32(0),
+                    1 => ret_slice[0],
+                    _ => unreachable!(),
+                },
+            );
             return Ok(val);
         }
     }
@@ -558,17 +554,18 @@ impl Func {
         let mut store = store.as_context_mut();
         let data = &store.0[self.0];
         let instance = data.instance;
+        let index = data.index;
         let vminstance = instance.instance(store.0);
-        let (_ty, _def, options) = vminstance.component().export_lifted_function(data.index);
+        let (_ty, _def, options) = vminstance.component().export_lifted_function(index);
         let component_instance = options.instance;
         let post_return = options.post_return.map(|i| {
             let func_ref = vminstance.runtime_post_return(i);
             ExportFunction { func_ref }
         });
         let instance = instance.instance_ptr(store.0).as_ptr();
-        let post_return_arg = store.0[self.0].post_return_arg.take();
 
         unsafe {
+            let post_return_arg = (*instance).post_return_arg_take(index);
             let mut flags = (*instance).instance_flags(component_instance);
 
             // First assert that the instance is in a "needs post return" state.
