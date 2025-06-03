@@ -12,7 +12,7 @@ use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
     CanonicalOptions, CoreDef, ExportIndex, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
-    RuntimeComponentInstanceIndex, TypeFuncIndex, TypeTuple,
+    TypeFuncIndex, TypeTuple,
 };
 
 mod host;
@@ -41,12 +41,10 @@ pub struct Func(Stored<FuncData>);
 #[doc(hidden)]
 pub struct FuncData {
     export: ExportFunction,
-    #[expect(dead_code, reason = "to be used soon")]
     index: ExportIndex,
     ty: TypeFuncIndex,
     options: Options,
     instance: Instance,
-    component_instance: RuntimeComponentInstanceIndex,
     post_return: Option<ExportFunction>,
     post_return_arg: Option<ValRaw>,
 }
@@ -72,7 +70,6 @@ impl Func {
             let func_ref = instance.runtime_post_return(i);
             ExportFunction { func_ref }
         });
-        let component_instance = options.instance;
         let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
         let instance = Instance::from_wasmtime(store, instance.id());
         Func(store.store_data_mut().insert(FuncData {
@@ -81,7 +78,6 @@ impl Func {
             options,
             ty,
             instance,
-            component_instance,
             post_return,
             post_return_arg: None,
         }))
@@ -406,10 +402,15 @@ impl Func {
             export,
             options,
             instance,
-            component_instance,
+            index,
             ty,
             ..
         } = store.0[self.0];
+        let (_ty, _def, options2) = instance
+            .instance(store.0)
+            .component()
+            .export_lifted_function(index);
+        let component_instance = options2.instance;
 
         let space = &mut MaybeUninit::<ParamsAndResults<LowerParams, LowerReturn>>::uninit();
 
@@ -569,12 +570,16 @@ impl Func {
 
     fn post_return_impl(&self, mut store: impl AsContextMut) -> Result<()> {
         let mut store = store.as_context_mut();
-        let data = &mut store.0[self.0];
+        let data = &store.0[self.0];
         let instance = data.instance;
+        let (_ty, _def, options) = instance
+            .instance(store.0)
+            .component()
+            .export_lifted_function(data.index);
+        let component_instance = options.instance;
         let post_return = data.post_return;
-        let component_instance = data.component_instance;
-        let post_return_arg = data.post_return_arg.take();
         let instance = instance.instance_ptr(store.0).as_ptr();
+        let post_return_arg = store.0[self.0].post_return_arg.take();
 
         unsafe {
             let mut flags = (*instance).instance_flags(component_instance);
