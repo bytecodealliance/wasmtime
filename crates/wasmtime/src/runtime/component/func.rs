@@ -45,7 +45,6 @@ pub struct FuncData {
     ty: TypeFuncIndex,
     options: Options,
     instance: Instance,
-    post_return: Option<ExportFunction>,
     post_return_arg: Option<ValRaw>,
 }
 
@@ -66,10 +65,6 @@ impl Func {
             .memory
             .map(|i| NonNull::new(instance.runtime_memory(i)).unwrap());
         let realloc = options.realloc.map(|i| instance.runtime_realloc(i));
-        let post_return = options.post_return.map(|i| {
-            let func_ref = instance.runtime_post_return(i);
-            ExportFunction { func_ref }
-        });
         let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
         let instance = Instance::from_wasmtime(store, instance.id());
         Func(store.store_data_mut().insert(FuncData {
@@ -78,7 +73,6 @@ impl Func {
             options,
             ty,
             instance,
-            post_return,
             post_return_arg: None,
         }))
     }
@@ -572,12 +566,13 @@ impl Func {
         let mut store = store.as_context_mut();
         let data = &store.0[self.0];
         let instance = data.instance;
-        let (_ty, _def, options) = instance
-            .instance(store.0)
-            .component()
-            .export_lifted_function(data.index);
+        let vminstance = instance.instance(store.0);
+        let (_ty, _def, options) = vminstance.component().export_lifted_function(data.index);
         let component_instance = options.instance;
-        let post_return = data.post_return;
+        let post_return = options.post_return.map(|i| {
+            let func_ref = vminstance.runtime_post_return(i);
+            ExportFunction { func_ref }
+        });
         let instance = instance.instance_ptr(store.0).as_ptr();
         let post_return_arg = store.0[self.0].post_return_arg.take();
 
