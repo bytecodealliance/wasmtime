@@ -10,11 +10,11 @@ use crate::component::{Component, ResourceType, RuntimeImport};
 use crate::prelude::*;
 use crate::runtime::component::ComponentInstanceId;
 use crate::runtime::vm::{
-    SendSyncPtr, VMArrayCallFunction, VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction,
-    ValRaw, VmPtr, VmSafe,
+    Export, ExportFunction, ExportGlobal, ExportGlobalKind, SendSyncPtr, VMArrayCallFunction,
+    VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMOpaqueContext, VMStore,
+    VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction, ValRaw, VmPtr, VmSafe,
 };
-use crate::store::InstanceId;
+use crate::store::{InstanceId, StoreOpaque};
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
 use core::marker;
@@ -23,7 +23,9 @@ use core::mem::offset_of;
 use core::ops::Deref;
 use core::ptr::{self, NonNull};
 use wasmtime_environ::component::*;
-use wasmtime_environ::{DefinedTableIndex, HostPtr, PrimaryMap, VMSharedTypeIndex};
+use wasmtime_environ::{
+    DefinedTableIndex, EntityIndex, Global, HostPtr, PrimaryMap, VMSharedTypeIndex, WasmValType,
+};
 
 #[allow(clippy::cast_possible_truncation)] // it's intended this is truncated on
 // 32-bit platforms
@@ -789,16 +791,54 @@ impl ComponentInstance {
         self.id
     }
 
-    /// Returns the store-local id that `index` was assigned during
-    /// instantiation.
-    pub fn instance_id(&self, index: RuntimeInstanceIndex) -> InstanceId {
-        self.instances[index]
-    }
-
     /// Pushes a new runtime instance that's been created into
     /// `self.instances`.
     pub fn push_instance_id(&mut self, id: InstanceId) -> RuntimeInstanceIndex {
         self.instances.push(id)
+    }
+
+    /// Translates a `CoreDef`, a definition of a core wasm item, to an
+    /// [`Export`] which is the runtime core wasm definition.
+    pub fn lookup_def(&self, store: &StoreOpaque, def: &CoreDef) -> Export {
+        match def {
+            CoreDef::Export(e) => self.lookup_export(store, e),
+            CoreDef::Trampoline(idx) => Export::Function(ExportFunction {
+                func_ref: self.trampoline_func_ref(*idx),
+            }),
+            CoreDef::InstanceFlags(idx) => Export::Global(ExportGlobal {
+                definition: self.instance_flags(*idx).as_raw(),
+                global: Global {
+                    wasm_ty: WasmValType::I32,
+                    mutability: true,
+                },
+                kind: ExportGlobalKind::ComponentFlags(self.vmctx(), *idx),
+            }),
+        }
+    }
+
+    /// Translates a `CoreExport<T>`, an export of some core instance within
+    /// this component, to the actual runtime definition of that item.
+    pub fn lookup_export<T>(&self, store: &StoreOpaque, item: &CoreExport<T>) -> Export
+    where
+        T: Copy + Into<EntityIndex>,
+    {
+        let id = self.instances[item.instance];
+        let instance = store.instance(id);
+        let idx = match &item.item {
+            ExportItem::Index(idx) => (*idx).into(),
+
+            // FIXME: ideally at runtime we don't actually do any name lookups
+            // here. This will only happen when the host supplies an imported
+            // module so while the structure can't be known at compile time we
+            // do know at `InstancePre` time, for example, what all the host
+            // imports are. In theory we should be able to, as part of
+            // `InstancePre` construction, perform all name=>index mappings
+            // during that phase so the actual instantiation of an `InstancePre`
+            // skips all string lookups. This should probably only be
+            // investigated if this becomes a performance issue though.
+            ExportItem::Name(name) => instance.module().exports[name],
+        };
+        instance.instance().get_export_by_index(idx)
     }
 }
 

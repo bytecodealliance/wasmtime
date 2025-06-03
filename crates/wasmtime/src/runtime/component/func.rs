@@ -59,7 +59,7 @@ impl Func {
         func: &CoreDef,
         options: &CanonicalOptions,
     ) -> Func {
-        let export = match data.lookup_def(store, func) {
+        let export = match data.instance().lookup_def(store, func) {
             Export::Function(f) => f,
             _ => unreachable!(),
         };

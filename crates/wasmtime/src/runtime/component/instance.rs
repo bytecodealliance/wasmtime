@@ -8,14 +8,14 @@ use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
-use crate::runtime::vm::{CompiledModuleId, ExportGlobalKind, VMFuncRef};
+use crate::runtime::vm::{CompiledModuleId, VMFuncRef};
 use crate::store::{StoreOpaque, Stored};
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
 use core::ptr::NonNull;
 use wasmtime_environ::{EngineOrModuleTypeIndex, component::*};
-use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
+use wasmtime_environ::{EntityType, PrimaryMap};
 
 /// An instantiated component.
 ///
@@ -392,54 +392,6 @@ impl InstanceExportLookup for String {
 }
 
 impl InstanceData {
-    pub fn lookup_def(&self, store: &StoreOpaque, def: &CoreDef) -> crate::runtime::vm::Export {
-        match def {
-            CoreDef::Export(e) => self.lookup_export(store, e),
-            CoreDef::Trampoline(idx) => {
-                crate::runtime::vm::Export::Function(crate::runtime::vm::ExportFunction {
-                    func_ref: self.state.trampoline_func_ref(*idx),
-                })
-            }
-            CoreDef::InstanceFlags(idx) => {
-                crate::runtime::vm::Export::Global(crate::runtime::vm::ExportGlobal {
-                    definition: self.state.instance_flags(*idx).as_raw(),
-                    global: Global {
-                        wasm_ty: WasmValType::I32,
-                        mutability: true,
-                    },
-                    kind: ExportGlobalKind::ComponentFlags(self.state.vmctx(), *idx),
-                })
-            }
-        }
-    }
-
-    pub fn lookup_export<T>(
-        &self,
-        store: &StoreOpaque,
-        item: &CoreExport<T>,
-    ) -> crate::runtime::vm::Export
-    where
-        T: Copy + Into<EntityIndex>,
-    {
-        let id = self.state.instance_id(item.instance);
-        let instance = store.instance(id);
-        let idx = match &item.item {
-            ExportItem::Index(idx) => (*idx).into(),
-
-            // FIXME: ideally at runtime we don't actually do any name lookups
-            // here. This will only happen when the host supplies an imported
-            // module so while the structure can't be known at compile time we
-            // do know at `InstancePre` time, for example, what all the host
-            // imports are. In theory we should be able to, as part of
-            // `InstancePre` construction, perform all name=>index mappings
-            // during that phase so the actual instantiation of an `InstancePre`
-            // skips all string lookups. This should probably only be
-            // investigated if this becomes a performance issue though.
-            ExportItem::Name(name) => instance.module().exports[name],
-        };
-        instance.instance().get_export_by_index(idx)
-    }
-
     #[inline]
     pub fn instance(&self) -> &ComponentInstance {
         &self.state
@@ -649,7 +601,7 @@ impl<'a> Instantiator<'a> {
         let dtor = resource
             .dtor
             .as_ref()
-            .map(|dtor| self.data.lookup_def(store, dtor));
+            .map(|dtor| self.data.state.lookup_def(store, dtor));
         let dtor = dtor.map(|export| match export {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
@@ -665,7 +617,7 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_memory(&mut self, store: &StoreOpaque, memory: &ExtractMemory) {
-        let mem = match self.data.lookup_export(store, &memory.export) {
+        let mem = match self.data.state.lookup_export(store, &memory.export) {
             crate::runtime::vm::Export::Memory(m) => m,
             _ => unreachable!(),
         };
@@ -675,7 +627,7 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_realloc(&mut self, store: &StoreOpaque, realloc: &ExtractRealloc) {
-        let func_ref = match self.data.lookup_def(store, &realloc.def) {
+        let func_ref = match self.data.state.lookup_def(store, &realloc.def) {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
@@ -683,7 +635,7 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_callback(&mut self, store: &StoreOpaque, callback: &ExtractCallback) {
-        let func_ref = match self.data.lookup_def(store, &callback.def) {
+        let func_ref = match self.data.state.lookup_def(store, &callback.def) {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
@@ -693,7 +645,7 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_post_return(&mut self, store: &StoreOpaque, post_return: &ExtractPostReturn) {
-        let func_ref = match self.data.lookup_def(store, &post_return.def) {
+        let func_ref = match self.data.state.lookup_def(store, &post_return.def) {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
@@ -703,7 +655,7 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_table(&mut self, store: &StoreOpaque, table: &ExtractTable) {
-        let export = match self.data.lookup_export(store, &table.export) {
+        let export = match self.data.state.lookup_export(store, &table.export) {
             crate::runtime::vm::Export::Table(t) => t,
             _ => unreachable!(),
         };
@@ -739,7 +691,7 @@ impl<'a> Instantiator<'a> {
             // The unsafety here should be ok since the `export` is loaded
             // directly from an instance which should only give us valid export
             // items.
-            let export = self.data.lookup_def(store, arg);
+            let export = self.data.state.lookup_def(store, arg);
             unsafe {
                 self.core_imports.push_export(&export);
             }
@@ -758,7 +710,7 @@ impl<'a> Instantiator<'a> {
         imp_name: &str,
         expected: EntityType,
     ) {
-        let export = self.data.lookup_def(store, arg);
+        let export = self.data.state.lookup_def(store, arg);
 
         // If this value is a core wasm function then the type check is inlined
         // here. This can otherwise fail `Extern::from_wasmtime_export` because
