@@ -201,12 +201,12 @@ impl Instance {
         name: impl InstanceExportLookup,
     ) -> Option<Module> {
         let store = store.as_context_mut().0;
-        let (data, export, _) = self.lookup_export(store, name)?;
+        let (instance, export, _) = self.lookup_export(store, name)?;
         match export {
             Export::ModuleStatic { index, .. } => {
-                Some(data.state.component().static_module(*index).clone())
+                Some(instance.component().static_module(*index).clone())
             }
-            Export::ModuleImport { import, .. } => match &data.state.imports[*import] {
+            Export::ModuleImport { import, .. } => match &instance.imports[*import] {
                 RuntimeImport::Module(m) => Some(m.clone()),
                 _ => unreachable!(),
             },
@@ -236,9 +236,11 @@ impl Instance {
         name: impl InstanceExportLookup,
     ) -> Option<ResourceType> {
         let store = store.as_context_mut().0;
-        let (data, export, _) = self.lookup_export(store, name)?;
+        let (instance, export, _) = self.lookup_export(store, name)?;
         match export {
-            Export::Type(TypeDef::Resource(id)) => Some(data.ty().resource_type(*id)),
+            Export::Type(TypeDef::Resource(id)) => {
+                Some(InstanceType::new(instance).resource_type(*id))
+            }
             Export::Type(_)
             | Export::LiftedFunction { .. }
             | Export::ModuleStatic { .. }
@@ -325,11 +327,11 @@ impl Instance {
         &self,
         store: &'a StoreOpaque,
         name: impl InstanceExportLookup,
-    ) -> Option<(&'a InstanceData, &'a Export, ExportIndex)> {
+    ) -> Option<(&'a ComponentInstance, &'a Export, ExportIndex)> {
         let data = store[self.0].as_ref().unwrap();
         let index = name.lookup(data.state.component())?;
         Some((
-            data,
+            &data.state,
             &data.state.component().env_component().export_items[index],
             index,
         ))
