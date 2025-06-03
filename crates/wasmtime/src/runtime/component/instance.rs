@@ -173,11 +173,9 @@ impl Instance {
         };
         let ret = name.lookup(&data.component()).and_then(|index| {
             match &data.component().env_component().export_items[index] {
-                Export::LiftedFunction {
-                    ty: _,
-                    func: _,
-                    options,
-                } => Some(unsafe { Func::from_lifted_func(store, index, &data, options) }),
+                Export::LiftedFunction { .. } => {
+                    Some(unsafe { Func::from_lifted_func(store, index, &data) })
+                }
                 _ => None,
             }
         });

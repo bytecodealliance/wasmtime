@@ -11,8 +11,7 @@ use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
-    CanonicalOptions, ExportIndex, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, TypeFuncIndex,
-    TypeTuple,
+    ExportIndex, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, TypeFuncIndex, TypeTuple,
 };
 
 mod host;
@@ -41,7 +40,6 @@ pub struct Func(Stored<FuncData>);
 #[doc(hidden)]
 pub struct FuncData {
     index: ExportIndex,
-    options: Options,
     instance: Instance,
     post_return_arg: Option<ValRaw>,
 }
@@ -51,17 +49,10 @@ impl Func {
         store: &mut StoreOpaque,
         index: ExportIndex,
         instance: &ComponentInstance,
-        options: &CanonicalOptions,
     ) -> Func {
-        let memory = options
-            .memory
-            .map(|i| NonNull::new(instance.runtime_memory(i)).unwrap());
-        let realloc = options.realloc.map(|i| instance.runtime_realloc(i));
-        let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
         let instance = Instance::from_wasmtime(store, instance.id());
         Func(store.store_data_mut().insert(FuncData {
             index,
-            options,
             instance,
             post_return_arg: None,
         }))
@@ -391,18 +382,21 @@ impl Func {
         LowerReturn: Copy,
     {
         let FuncData {
-            options,
-            instance,
-            index,
-            ..
+            instance, index, ..
         } = store.0[self.0];
         let vminstance = instance.instance(store.0);
-        let (ty, def, options2) = vminstance.component().export_lifted_function(index);
+        let (ty, def, options) = vminstance.component().export_lifted_function(index);
         let export = match vminstance.lookup_def(store.0, def) {
             Export::Function(f) => f,
             _ => unreachable!(),
         };
-        let component_instance = options2.instance;
+        let component_instance = options.instance;
+        let memory = options
+            .memory
+            .map(|i| NonNull::new(vminstance.runtime_memory(i)).unwrap());
+        let realloc = options.realloc.map(|i| vminstance.runtime_realloc(i));
+        let options =
+            unsafe { Options::new(store.0.id(), memory, realloc, options.string_encoding) };
 
         let space = &mut MaybeUninit::<ParamsAndResults<LowerParams, LowerReturn>>::uninit();
 
