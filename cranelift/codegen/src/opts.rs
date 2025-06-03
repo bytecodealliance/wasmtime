@@ -43,7 +43,7 @@ pub(crate) struct IsleContext<'a, 'b, 'c> {
 }
 
 impl IsleContext<'_, '_, '_> {
-    #[allow(dead_code, reason = "FIXME(rust-lang/rust#141407)")]
+    #[allow(dead_code, reason = "dead code, only on nightly rust at this time")]
     pub(crate) fn dfg(&self) -> &crate::ir::DataFlowGraph {
         &self.ctx.func.dfg
     }
