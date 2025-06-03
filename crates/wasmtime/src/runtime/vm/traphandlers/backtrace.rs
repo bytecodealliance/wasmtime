@@ -284,27 +284,25 @@ impl Backtrace {
         // are continuations, due to the initial stack having one, too.
         assert_eq!(stack_limits_vec.len(), continuations_vec.len() + 1);
 
-        for i in 0..continuations_vec.len() {
-            let (continuation, parent_continuation, parent_limits) = unsafe {
-                // The continuation whose control context we want to
-                // access, to get information about how to continue
-                // execution in its parent.
-                let continuation = &*continuations_vec[i];
+        for (conts, &parent_limits) in continuations_vec
+            .chunks(2)
+            .zip(stack_limits_vec.iter().skip(1))
+        {
+            // The continuation whose control context we want to
+            // access, to get information about how to continue
+            // execution in its parent.
+            let continuation = conts[0];
+            let continuation = unsafe { &*continuation };
 
-                // The stack limits describing the parent of `continuation`.
-                let parent_limits = &*stack_limits_vec[i + 1];
+            // The stack limits describing the parent of `continuation`.
+            let parent_limits = unsafe { &*parent_limits };
 
-                // The parent of `continuation`, if the parent is itself a
-                // continuation. Otherwise, if `continuation` is the last
-                // continuation (i.e., its parent is the initial stack), this is
-                // None.
-                let parent_continuation = if i + 1 < continuations_vec.len() {
-                    Some(&*continuations_vec[i + 1])
-                } else {
-                    None
-                };
-                (continuation, parent_continuation, parent_limits)
-            };
+            // The parent of `continuation`, if the parent is itself a
+            // continuation. Otherwise, if `continuation` is the last
+            // continuation (i.e., its parent is the initial stack), this is
+            // None.
+            let parent_continuation = conts.get(1).map(|&p| unsafe { &*p });
+
             let fiber_stack = continuation.fiber_stack();
             let resume_pc = fiber_stack.control_context_instruction_pointer();
             let resume_fp = fiber_stack.control_context_frame_pointer();
