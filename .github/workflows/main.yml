@@ -778,7 +778,7 @@ jobs:
         echo CARGO_PROFILE_DEV_OPT_LEVEL=2 >> $GITHUB_ENV
         echo CARGO_PROFILE_TEST_OPT_LEVEL=2 >> $GITHUB_ENV
         echo RUSTFLAGS=-Zsanitizer=address >> $GITHUB_ENV
-        echo RUSTDOCFLAGS=-Zsanitizer=address >> $GITHUB_ENV
+        echo RUSTDOCFLAGS="-Zsanitizer=address -Copt-level=2 -Ccodegen-units=16" >> $GITHUB_ENV
       if: ${{ contains(matrix.name, 'ASAN') }}
 
     # Record some CPU details; this is helpful information if tests fail due
