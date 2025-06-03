@@ -42,7 +42,6 @@ pub struct Func(Stored<FuncData>);
 pub struct FuncData {
     export: ExportFunction,
     index: ExportIndex,
-    ty: TypeFuncIndex,
     options: Options,
     instance: Instance,
     post_return_arg: Option<ValRaw>,
@@ -53,7 +52,6 @@ impl Func {
         store: &mut StoreOpaque,
         index: ExportIndex,
         instance: &ComponentInstance,
-        ty: TypeFuncIndex,
         func: &CoreDef,
         options: &CanonicalOptions,
     ) -> Func {
@@ -71,7 +69,6 @@ impl Func {
             export,
             index,
             options,
-            ty,
             instance,
             post_return_arg: None,
         }))
@@ -188,7 +185,7 @@ impl Func {
     {
         let data = &store[self.0];
         let cx = InstanceType::new(instance.unwrap_or_else(|| data.instance.instance(store)));
-        let ty = &cx.types[data.ty];
+        let ty = &cx.types[self.ty(store)];
 
         Params::typecheck(&InterfaceType::Tuple(ty.params), &cx)
             .context("type mismatch with parameters")?;
@@ -204,7 +201,7 @@ impl Func {
         let data = &store[self.0];
         let instance = data.instance.instance(store.0);
         let types = instance.component().types();
-        let func_ty = &types[data.ty];
+        let func_ty = &types[self.ty(store.0)];
         types[func_ty.params]
             .types
             .iter()
@@ -219,11 +216,19 @@ impl Func {
         let data = &store[self.0];
         let instance = data.instance.instance(store.0);
         let types = instance.component().types();
-        types[types[data.ty].results]
+        let ty = self.ty(store.0);
+        types[types[ty].results]
             .types
             .iter()
             .map(|ty| Type::from(ty, &InstanceType::new(instance)))
             .collect()
+    }
+
+    fn ty(&self, store: &StoreOpaque) -> TypeFuncIndex {
+        let data = &store[self.0];
+        let instance = data.instance.instance(store);
+        let (ty, _, _) = instance.component().export_lifted_function(data.index);
+        ty
     }
 
     /// Invokes this function with the `params` given and returns the result.
@@ -397,10 +402,9 @@ impl Func {
             options,
             instance,
             index,
-            ty,
             ..
         } = store.0[self.0];
-        let (_ty, _def, options2) = instance
+        let (ty, _def, options2) = instance
             .instance(store.0)
             .component()
             .export_lifted_function(index);
