@@ -97,7 +97,6 @@ use core::mem::{self, ManuallyDrop};
 use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
 use core::ptr::NonNull;
-use wasmtime_environ::packed_option::ReservedValue;
 use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, PrimaryMap, TripleExt};
 
 mod context;
@@ -1347,6 +1346,8 @@ impl StoreOpaque {
             vmstore: NonNull<dyn vm::VMStore>,
             pkey: Option<ProtectionKey>,
         ) -> Result<GcStore> {
+            use wasmtime_environ::packed_option::ReservedValue;
+
             ensure!(
                 engine.features().gc_types(),
                 "cannot allocate a GC store when GC is disabled at configuration time"
