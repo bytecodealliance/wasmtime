@@ -6,7 +6,7 @@
 //! Eventually it's intended that module-to-module calls, which would be
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
-use crate::component::{Component, ResourceType, RuntimeImport};
+use crate::component::{Component, InstancePre, ResourceType, RuntimeImport};
 use crate::prelude::*;
 use crate::runtime::component::ComponentInstanceId;
 use crate::runtime::vm::{
@@ -98,8 +98,7 @@ pub struct ComponentInstance {
     /// become stale and use-after-free conditions when used. By preserving the
     /// entire list here though we're guaranteed that nothing is lost for the
     /// duration of the lifetime of this instance.
-    // TODO: remove this pub(crate), make it private to this module
-    pub(crate) imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
+    imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
 
     /// Self-pointer back to `Store<T>` and its functions.
     store: VMStoreRawPtr,
@@ -839,6 +838,36 @@ impl ComponentInstance {
             ExportItem::Name(name) => instance.module().exports[name],
         };
         instance.instance().get_export_by_index(idx)
+    }
+
+    /// Looks up the value used for `import` at runtime.
+    ///
+    /// # Panics
+    ///
+    /// Panics of `import` is out of bounds for this component.
+    pub(crate) fn runtime_import(&self, import: RuntimeImportIndex) -> &RuntimeImport {
+        &self.imports[import]
+    }
+
+    /// Returns an `InstancePre<T>` which can be used to re-instantiated this
+    /// component if desired.
+    ///
+    /// # Safety
+    ///
+    /// This function places no bounds on `T` so it's up to the caller to match
+    /// that up appropriately with the store that this instance resides within.
+    pub unsafe fn instance_pre<T>(&self) -> InstancePre<T> {
+        // SAFETY: The `T` part of `new_unchecked` is forwarded as a contract of
+        // this function, and otherwise the validity of the components of the
+        // InstancePre should be guaranteed as it's what we were built with
+        // ourselves.
+        unsafe {
+            InstancePre::new_unchecked(
+                self.component.clone(),
+                self.imports.clone(),
+                self.resource_types.clone(),
+            )
+        }
     }
 }
 

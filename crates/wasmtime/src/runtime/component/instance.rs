@@ -206,7 +206,7 @@ impl Instance {
             Export::ModuleStatic { index, .. } => {
                 Some(instance.component().static_module(*index).clone())
             }
-            Export::ModuleImport { import, .. } => match &instance.imports[*import] {
+            Export::ModuleImport { import, .. } => match instance.runtime_import(*import) {
                 RuntimeImport::Module(m) => Some(m.clone()),
                 _ => unreachable!(),
             },
@@ -337,17 +337,16 @@ impl Instance {
     }
 
     /// Returns the [`InstancePre`] that was used to create this instance.
-    pub fn instance_pre<T>(&self, store: &impl AsContext<Data = T>) -> InstancePre<T> {
+    pub fn instance_pre<T>(&self, store: impl AsContext<Data = T>) -> InstancePre<T> {
         // This indexing operation asserts the Store owns the Instance.
         // Therefore, the InstancePre<T> must match the Store<T>.
         let data = store.as_context().0[self.0].as_ref().unwrap();
-        unsafe {
-            InstancePre::new_unchecked(
-                data.state.component().clone(),
-                data.state.imports.clone(),
-                data.instance().resource_types().clone(),
-            )
-        }
+
+        // SAFETY: calling this method safely here relies on matching the `T`
+        // in `InstancePre<T>` to the store itself, which is happening in the
+        // type signature just above by ensuring the store's data is `T` which
+        // matches the return value.
+        unsafe { data.instance().instance_pre() }
     }
 }
 
