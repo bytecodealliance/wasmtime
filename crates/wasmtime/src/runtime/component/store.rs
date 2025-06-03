@@ -1,13 +1,16 @@
-use crate::component::instance::InstanceData;
 use crate::prelude::*;
-use crate::runtime::vm::component::ComponentInstance;
-use crate::store::{StoreData, StoreOpaque, Stored, StoredData};
+use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
+use crate::store::{StoreData, StoreOpaque, StoredData};
+use core::mem;
+use core::ptr::NonNull;
 
 macro_rules! component_store_data {
     ($($field:ident => $t:ty,)*) => (
         #[derive(Default)]
         pub struct ComponentStoreData {
             $($field: Vec<$t>,)*
+
+            instances: Vec<Option<OwnedComponentInstance>>,
         }
 
         $(
@@ -27,7 +30,6 @@ macro_rules! component_store_data {
 
 component_store_data! {
     funcs => crate::component::func::FuncData,
-    instances => Option<Box<InstanceData>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -52,13 +54,12 @@ impl ComponentStoreData {
 impl StoreData {
     pub(crate) fn push_component_instance(
         &mut self,
-        data: Box<InstanceData>,
-    ) -> Stored<Option<Box<InstanceData>>> {
-        assert_eq!(
-            data.instance().id(),
-            self.components.next_component_instance_id()
-        );
-        self.insert(Some(data))
+        data: OwnedComponentInstance,
+    ) -> ComponentInstanceId {
+        let ret = self.components.next_component_instance_id();
+        assert_eq!(data.id(), ret);
+        self.components.instances.push(Some(data));
+        ret
     }
 }
 
@@ -67,6 +68,28 @@ impl StoreOpaque {
         self.store_data().components.instances[id.0]
             .as_ref()
             .unwrap()
-            .instance()
+    }
+
+    // FIXME: this method should not exist, future refactorings should delete it
+    pub(crate) fn component_instance_ptr(
+        &self,
+        id: ComponentInstanceId,
+    ) -> NonNull<ComponentInstance> {
+        self.store_data().components.instances[id.0]
+            .as_ref()
+            .unwrap()
+            .instance_ptr()
+    }
+
+    // FIXME: this method should not exist, future refactorings should delete it
+    pub(crate) unsafe fn component_instance_replace(
+        &mut self,
+        id: ComponentInstanceId,
+        instance: Option<OwnedComponentInstance>,
+    ) -> Option<OwnedComponentInstance> {
+        mem::replace(
+            &mut self.store_data_mut().components.instances[id.0],
+            instance,
+        )
     }
 }

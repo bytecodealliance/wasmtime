@@ -130,6 +130,7 @@ pub use self::resources::{Resource, ResourceAny};
 pub use self::types::{ResourceType, Type};
 pub use self::values::Val;
 
+pub(crate) use self::instance::RuntimeImport;
 pub(crate) use self::resources::HostResourceData;
 pub(crate) use self::store::ComponentInstanceId;
 
