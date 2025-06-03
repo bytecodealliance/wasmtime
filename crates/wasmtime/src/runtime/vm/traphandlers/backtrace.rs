@@ -111,7 +111,7 @@ impl Backtrace {
 
     // Walk the stack of the given continuation, which must be suspended, and
     // all of its parent continuations (if any).
-    #[allow(dead_code, reason = "Only used by GC code at the moment")]
+    #[cfg(feature = "gc")]
     pub fn trace_suspended_continuation(
         store: &StoreOpaque,
         continuation: &VMContRef,

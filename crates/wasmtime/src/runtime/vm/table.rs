@@ -171,7 +171,7 @@ pub type FuncTableElem = Option<SendSyncPtr<VMFuncRef>>;
 pub type ContTableElem = Option<VMContObj>;
 
 /// The maximum of the sizes of any of the table element types
-#[allow(dead_code, reason = "Only used if pooling allocator is enabled")]
+#[cfg(feature = "pooling-allocator")]
 pub const NOMINAL_MAX_TABLE_ELEM_SIZE: usize = {
     // ContTableElem intentionally excluded for "nominal" calculation.
     let sizes = [
