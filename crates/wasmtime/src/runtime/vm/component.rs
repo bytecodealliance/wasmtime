@@ -103,6 +103,12 @@ pub struct ComponentInstance {
     /// Self-pointer back to `Store<T>` and its functions.
     store: VMStoreRawPtr,
 
+    /// Cached ABI return value from the last-invoked function call along with
+    /// the function index that was invoked.
+    ///
+    /// Used in `post_return_arg_set` and `post_return_arg_take` below.
+    post_return_arg: Option<(ExportIndex, ValRaw)>,
+
     /// A zero-sized field which represents the end of the struct for the actual
     /// `VMComponentContext` to be allocated behind.
     vmctx: VMComponentContext,
@@ -276,6 +282,7 @@ impl ComponentInstance {
                 resource_types,
                 imports: imports.clone(),
                 store: VMStoreRawPtr(store),
+                post_return_arg: None,
                 vmctx: VMComponentContext {
                     _marker: marker::PhantomPinned,
                 },
@@ -867,6 +874,43 @@ impl ComponentInstance {
                 self.imports.clone(),
                 self.resource_types.clone(),
             )
+        }
+    }
+
+    /// Sets the cached argument for the canonical ABI option `post-return` to
+    /// the `arg` specified.
+    ///
+    /// This function is used in conjunction with function calls to record,
+    /// after a fuction call completes, the optional ABI return value. This
+    /// return value is cached within this instance for future use when the
+    /// `post_return` Rust-API-level function is invoked.
+    ///
+    /// Note that `index` here is the index of the export that was just
+    /// invoked, and this is used to ensure that `post_return` is called on the
+    /// same function afterwards. This restriction technically isn't necessary
+    /// though and may be one we want to lift in the future.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if `post_return_arg` is already set to `Some`.
+    pub fn post_return_arg_set(&mut self, index: ExportIndex, arg: ValRaw) {
+        assert!(self.post_return_arg.is_none());
+        self.post_return_arg = Some((index, arg));
+    }
+
+    /// Re-acquires the value originally saved via `post_return_arg_set`.
+    ///
+    /// This function will take a function `index` that's having its
+    /// `post_return` function called. If an argument was previously stored and
+    /// `index` matches the index that was stored then `Some(arg)` is returned.
+    /// Otherwise `None` is returned.
+    pub fn post_return_arg_take(&mut self, index: ExportIndex) -> Option<ValRaw> {
+        let (expected_index, arg) = self.post_return_arg.take()?;
+        if index != expected_index {
+            self.post_return_arg = Some((expected_index, arg));
+            None
+        } else {
+            Some(arg)
         }
     }
 }

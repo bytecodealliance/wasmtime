@@ -19,9 +19,9 @@ use core::ptr::NonNull;
 use std::path::Path;
 use wasmtime_environ::TypeTrace;
 use wasmtime_environ::component::{
-    AllCallFunc, CompiledComponentInfo, ComponentArtifacts, ComponentTypes, Export, ExportIndex,
-    GlobalInitializer, InstantiateModule, NameMapNoIntern, StaticModuleIndex, TrampolineIndex,
-    TypeComponentIndex, VMComponentOffsets,
+    AllCallFunc, CanonicalOptions, CompiledComponentInfo, ComponentArtifacts, ComponentTypes,
+    CoreDef, Export, ExportIndex, GlobalInitializer, InstantiateModule, NameMapNoIntern,
+    StaticModuleIndex, TrampolineIndex, TypeComponentIndex, TypeFuncIndex, VMComponentOffsets,
 };
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
 
@@ -826,6 +826,21 @@ impl Component {
 
     pub(crate) fn realloc_func_ty(&self) -> &Arc<FuncType> {
         &self.inner.realloc_func_type
+    }
+
+    /// Returns the `Export::LiftedFunction` metadata associated with `export`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `export` is out of bounds or if it isn't a `LiftedFunction`.
+    pub(crate) fn export_lifted_function(
+        &self,
+        export: ExportIndex,
+    ) -> (TypeFuncIndex, &CoreDef, &CanonicalOptions) {
+        match &self.env_component().export_items[export] {
+            Export::LiftedFunction { ty, func, options } => (*ty, func, options),
+            _ => unreachable!(),
+        }
     }
 }
 

@@ -22,10 +22,15 @@ extern "C" {
 /// is passed to the wrong store then it may trigger an assertion to abort the
 /// process.
 typedef struct wasmtime_component_func {
-  /// Internal identifier of what store this belongs to, never zero.
-  uint64_t store_id;
-  /// Internal index within the store.
-  size_t index;
+  struct {
+    /// Internal identifier of what store this belongs to, never zero.
+    uint64_t store_id;
+    /// Private internal wasmtime information.
+    uint32_t __private1;
+  };
+
+  /// Private internal wasmtime information.
+  uint32_t __private2;
 } wasmtime_component_func_t;
 
 /**
