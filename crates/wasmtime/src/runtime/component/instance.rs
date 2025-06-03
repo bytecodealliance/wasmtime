@@ -42,7 +42,7 @@ pub struct Instance {
 // in-Rust representation here in terms of size/alignment/etc.
 const _: () = {
     #[repr(C)]
-    struct C(u64, usize);
+    struct C(u64, u32);
     assert!(core::mem::size_of::<C>() == core::mem::size_of::<Instance>());
     assert!(core::mem::align_of::<C>() == core::mem::align_of::<Instance>());
     assert!(core::mem::offset_of!(Instance, id) == 0);

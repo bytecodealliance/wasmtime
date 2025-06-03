@@ -1,50 +1,39 @@
-use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
 use crate::store::{StoreData, StoreId, StoreOpaque};
 use core::ops::Index;
 use core::ptr::NonNull;
+use wasmtime_environ::PrimaryMap;
 
 #[derive(Default)]
 pub struct ComponentStoreData {
-    instances: Vec<Option<OwnedComponentInstance>>,
+    instances: PrimaryMap<ComponentInstanceId, Option<OwnedComponentInstance>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct ComponentInstanceId(usize);
-
-impl ComponentInstanceId {
-    pub fn from_index(idx: usize) -> ComponentInstanceId {
-        ComponentInstanceId(idx)
-    }
-
-    pub(crate) fn index(&self) -> usize {
-        self.0
-    }
-}
-
-impl ComponentStoreData {
-    pub fn next_component_instance_id(&self) -> ComponentInstanceId {
-        ComponentInstanceId(self.instances.len())
-    }
-}
+pub struct ComponentInstanceId(u32);
+wasmtime_environ::entity_impl!(ComponentInstanceId);
 
 impl StoreData {
     pub(crate) fn push_component_instance(
         &mut self,
         data: OwnedComponentInstance,
     ) -> ComponentInstanceId {
-        let ret = self.components.next_component_instance_id();
-        assert_eq!(data.id(), ret);
-        self.components.instances.push(Some(data));
+        let expected = data.id();
+        let ret = self.components.instances.push(Some(data));
+        assert_eq!(expected, ret);
         ret
+    }
+}
+
+impl ComponentStoreData {
+    pub fn next_component_instance_id(&self) -> ComponentInstanceId {
+        self.instances.next_key()
     }
 }
 
 impl StoreOpaque {
     pub(crate) fn component_instance(&self, id: ComponentInstanceId) -> &ComponentInstance {
-        self.store_data().components.instances[id.0]
-            .as_ref()
-            .unwrap()
+        self.store_data().components.instances[id].as_ref().unwrap()
     }
 
     // FIXME: this method should not exist, future refactorings should delete it
@@ -60,7 +49,7 @@ impl StoreOpaque {
         &self,
         id: ComponentInstanceId,
     ) -> NonNull<ComponentInstance> {
-        self.store_data().components.instances[id.0]
+        self.store_data().components.instances[id]
             .as_ref()
             .unwrap()
             .instance_ptr()
@@ -112,7 +101,7 @@ impl Index<StoreComponentInstanceId> for StoreOpaque {
 
     fn index(&self, id: StoreComponentInstanceId) -> &Self::Output {
         id.assert_belongs_to(self.id());
-        self.store_data().components.instances[id.instance.0]
+        self.store_data().components.instances[id.instance]
             .as_ref()
             .unwrap()
     }
