@@ -11,8 +11,8 @@ use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
-    CanonicalOptions, CoreDef, ExportIndex, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
-    TypeFuncIndex, TypeTuple,
+    CanonicalOptions, ExportIndex, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, TypeFuncIndex,
+    TypeTuple,
 };
 
 mod host;
@@ -40,7 +40,6 @@ pub struct Func(Stored<FuncData>);
 
 #[doc(hidden)]
 pub struct FuncData {
-    export: ExportFunction,
     index: ExportIndex,
     options: Options,
     instance: Instance,
@@ -52,13 +51,8 @@ impl Func {
         store: &mut StoreOpaque,
         index: ExportIndex,
         instance: &ComponentInstance,
-        func: &CoreDef,
         options: &CanonicalOptions,
     ) -> Func {
-        let export = match instance.lookup_def(store, func) {
-            Export::Function(f) => f,
-            _ => unreachable!(),
-        };
         let memory = options
             .memory
             .map(|i| NonNull::new(instance.runtime_memory(i)).unwrap());
@@ -66,7 +60,6 @@ impl Func {
         let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
         let instance = Instance::from_wasmtime(store, instance.id());
         Func(store.store_data_mut().insert(FuncData {
-            export,
             index,
             options,
             instance,
@@ -398,16 +391,17 @@ impl Func {
         LowerReturn: Copy,
     {
         let FuncData {
-            export,
             options,
             instance,
             index,
             ..
         } = store.0[self.0];
-        let (ty, _def, options2) = instance
-            .instance(store.0)
-            .component()
-            .export_lifted_function(index);
+        let vminstance = instance.instance(store.0);
+        let (ty, def, options2) = vminstance.component().export_lifted_function(index);
+        let export = match vminstance.lookup_def(store.0, def) {
+            Export::Function(f) => f,
+            _ => unreachable!(),
+        };
         let component_instance = options2.instance;
 
         let space = &mut MaybeUninit::<ParamsAndResults<LowerParams, LowerReturn>>::uninit();

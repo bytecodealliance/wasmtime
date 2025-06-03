@@ -175,9 +175,9 @@ impl Instance {
             match &data.component().env_component().export_items[index] {
                 Export::LiftedFunction {
                     ty: _,
-                    func,
+                    func: _,
                     options,
-                } => Some(unsafe { Func::from_lifted_func(store, index, &data, func, options) }),
+                } => Some(unsafe { Func::from_lifted_func(store, index, &data, options) }),
                 _ => None,
             }
         });
