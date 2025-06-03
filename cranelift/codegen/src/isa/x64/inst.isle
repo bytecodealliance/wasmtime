@@ -13,19 +13,6 @@
        ;; =========================================
        ;; Integer instructions.
 
-       ;; Same as `UnaryRmR` but with the VEX prefix for BMI1 instructions.
-       (UnaryRmRVex (size OperandSize)
-                    (op UnaryRmRVexOpcode)
-                    (src GprMem)
-                    (dst WritableGpr))
-
-       ;; Same as `UnaryRmRVex` but with an immediate
-       (UnaryRmRImmVex (size OperandSize)
-                       (op UnaryRmRImmVexOpcode)
-                       (src GprMem)
-                       (dst WritableGpr)
-                       (imm u8))
-
        ;; A synthetic instruction sequence used as part of the lowering of the
        ;; `srem` instruction which returns 0 if the divisor is -1 and
        ;; otherwise executes an `idiv` instruction.
@@ -678,21 +665,6 @@
 (rule (operand_size_bits (OperandSize.Size16)) 16)
 (rule (operand_size_bits (OperandSize.Size32)) 32)
 (rule (operand_size_bits (OperandSize.Size64)) 64)
-
-(type UnaryRmROpcode extern
-      (enum Bsr
-            Bsf
-            Lzcnt
-            Tzcnt
-            Popcnt))
-
-(type UnaryRmRVexOpcode
-      (enum Blsi
-            Blsmsk
-            Blsr))
-
-(type UnaryRmRImmVexOpcode
-      (enum Rorx))
 
 (type SseOpcode extern
       (enum Blendvpd
@@ -1876,20 +1848,6 @@
 (rule (xmm_rmr_vex3 op src1 src2 src3)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmRVex3 op src1 src2 src3 dst))))
-        dst))
-
-;; Helper for creating `MInst.UnaryRmRVex` instructions.
-(decl unary_rm_r_vex (UnaryRmRVexOpcode GprMem OperandSize) Gpr)
-(rule (unary_rm_r_vex op src size)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.UnaryRmRVex size op src dst))))
-        dst))
-
-;; Helper for creating `MInst.UnaryRmRImmVex` instructions.
-(decl unary_rm_r_imm_vex (UnaryRmRImmVexOpcode GprMem OperandSize u8) Gpr)
-(rule (unary_rm_r_imm_vex op src size imm)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.UnaryRmRImmVex size op src dst imm))))
         dst))
 
 (decl cvt_int_to_float_vex (AvxOpcode Xmm GprMem OperandSize) Xmm)
@@ -4226,18 +4184,18 @@
 
 ;; Helper for creating `blsi` instructions.
 (decl x64_blsi (Type GprMem) Gpr)
-(rule (x64_blsi ty src)
-      (unary_rm_r_vex (UnaryRmRVexOpcode.Blsi) src (operand_size_of_type_32_64 ty)))
+(rule (x64_blsi $I32 src) (x64_blsil_vm src))
+(rule (x64_blsi $I64 src) (x64_blsiq_vm src))
 
 ;; Helper for creating `blsmsk` instructions.
 (decl x64_blsmsk (Type GprMem) Gpr)
-(rule (x64_blsmsk ty src)
-      (unary_rm_r_vex (UnaryRmRVexOpcode.Blsmsk) src (operand_size_of_type_32_64 ty)))
+(rule (x64_blsmsk $I32 src) (x64_blsmskl_vm src))
+(rule (x64_blsmsk $I64 src) (x64_blsmskq_vm src))
 
 ;; Helper for creating `blsr` instructions.
 (decl x64_blsr (Type GprMem) Gpr)
-(rule (x64_blsr ty src)
-      (unary_rm_r_vex (UnaryRmRVexOpcode.Blsr) src (operand_size_of_type_32_64 ty)))
+(rule (x64_blsr $I32 src) (x64_blsrl_vm src))
+(rule (x64_blsr $I64 src) (x64_blsrq_vm src))
 
 ;; Helper for creating `sarx` instructions.
 (decl x64_sarx (Type GprMem Gpr) Gpr)
@@ -4256,11 +4214,8 @@
 
 ;; Helper for creating `rorx` instructions.
 (decl x64_rorx (Type GprMem u8) Gpr)
-(rule (x64_rorx ty src imm)
-      (unary_rm_r_imm_vex (UnaryRmRImmVexOpcode.Rorx)
-                          src
-                          (operand_size_of_type_32_64 ty)
-                          imm))
+(rule (x64_rorx $I32 src imm) (x64_rorxl_rmi src imm))
+(rule (x64_rorx $I64 src imm) (x64_rorxq_rmi src imm))
 
 ;; Helper for creating `popcnt` instructions.
 (decl x64_popcnt (Type GprMem) Gpr)

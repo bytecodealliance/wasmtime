@@ -65,6 +65,8 @@ pub fn list() -> Vec<Inst> {
         inst("sarxq", fmt("RMV", [w(r64a), r(rm64), r(r64b)]), vex(LZ)._f3()._0f38().w1().op(0xF7), _64b | bmi2),
         inst("shlxq", fmt("RMV", [w(r64a), r(rm64), r(r64b)]), vex(LZ)._66()._0f38().w1().op(0xF7), _64b | bmi2),
         inst("shrxq", fmt("RMV", [w(r64a), r(rm64), r(r64b)]), vex(LZ)._f2()._0f38().w1().op(0xF7), _64b | bmi2),
+        inst("rorxl", fmt("RMI", [w(r32), r(rm32), r(imm8)]), vex(LZ)._f2()._0f3a().w0().op(0xF0).r().ib(), _64b | compat | bmi2),
+        inst("rorxq", fmt("RMI", [w(r64), r(rm64), r(imm8)]), vex(LZ)._f2()._0f3a().w1().op(0xF0).r().ib(), _64b | bmi2),
 
         // Vector instructions (shift left).
         inst("psllw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF1]).r(), _64b | compat | sse2),

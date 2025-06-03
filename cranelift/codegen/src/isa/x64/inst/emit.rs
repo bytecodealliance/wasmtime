@@ -141,65 +141,6 @@ pub(crate) fn emit(
         )
     }
     match inst {
-        Inst::UnaryRmRVex { size, op, src, dst } => {
-            let dst = dst.to_reg().to_reg();
-            let src = match src.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let (opcode, opcode_ext) = match op {
-                UnaryRmRVexOpcode::Blsr => (0xF3, 1),
-                UnaryRmRVexOpcode::Blsmsk => (0xF3, 2),
-                UnaryRmRVexOpcode::Blsi => (0xF3, 3),
-            };
-
-            VexInstruction::new()
-                .map(OpcodeMap::_0F38)
-                .w(*size == OperandSize::Size64)
-                .opcode(opcode)
-                .reg(opcode_ext)
-                .vvvv(dst.to_real_reg().unwrap().hw_enc())
-                .rm(src)
-                .encode(sink);
-        }
-
-        Inst::UnaryRmRImmVex {
-            size,
-            op,
-            src,
-            dst,
-            imm,
-        } => {
-            let dst = dst.to_reg().to_reg();
-            let src = match src.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let opcode = match op {
-                UnaryRmRImmVexOpcode::Rorx => 0xF0,
-            };
-
-            VexInstruction::new()
-                .prefix(LegacyPrefixes::_F2)
-                .map(OpcodeMap::_0F3A)
-                .w(*size == OperandSize::Size64)
-                .opcode(opcode)
-                .reg(dst.to_real_reg().unwrap().hw_enc())
-                .rm(src)
-                .imm(*imm)
-                .encode(sink);
-        }
-
         Inst::CheckedSRemSeq { divisor, .. } | Inst::CheckedSRemSeq8 { divisor, .. } => {
             // Validate that the register constraints of the dividend and the
             // destination are all as expected.

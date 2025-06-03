@@ -62,21 +62,6 @@ pub(crate) fn check(
             Ok(())
         }
 
-        Inst::UnaryRmRVex {
-            size, ref src, dst, ..
-        }
-        | Inst::UnaryRmRImmVex {
-            size, ref src, dst, ..
-        } => match <&RegMem>::from(src) {
-            RegMem::Mem { addr } => {
-                check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-                check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-                    clamp_range(ctx, 64, size.to_bits().into(), None)
-                })
-            }
-            RegMem::Reg { .. } => undefined_result(ctx, vcode, dst, 64, size.to_bits().into()),
-        },
-
         Inst::CheckedSRemSeq {
             dst_quotient,
             dst_remainder,
