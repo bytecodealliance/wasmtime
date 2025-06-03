@@ -35,18 +35,6 @@ use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType}
 pub struct Instance(pub(crate) Stored<Option<Box<InstanceData>>>);
 
 pub(crate) struct InstanceData {
-    // NB: in the future if necessary it would be possible to avoid storing an
-    // entire `Component` here and instead storing only information such as:
-    //
-    // * Some reference to `Arc<ComponentTypes>`
-    // * Necessary references to closed-over modules which are exported from the
-    //   component itself.
-    //
-    // Otherwise the full guts of this component should only ever be used during
-    // the instantiation of this instance, meaning that after instantiation much
-    // of the component can be thrown away (theoretically).
-    component: Component,
-
     state: OwnedComponentInstance,
 
     /// Arguments that this instance used to be instantiated.
@@ -167,8 +155,8 @@ impl Instance {
     ) -> Option<Func> {
         let store = store.as_context_mut().0;
         let data = store[self.0].take().unwrap();
-        let ret = name.lookup(&data.component).and_then(|index| {
-            match &data.component.env_component().export_items[index] {
+        let ret = name.lookup(&data.state.component()).and_then(|index| {
+            match &data.state.component().env_component().export_items[index] {
                 Export::LiftedFunction { ty, func, options } => Some(Func::from_lifted_func(
                     store, self, &data, *ty, func, options,
                 )),
@@ -231,7 +219,7 @@ impl Instance {
         let (data, export, _) = self.lookup_export(store, name)?;
         match export {
             Export::ModuleStatic { index, .. } => {
-                Some(data.component.static_module(*index).clone())
+                Some(data.state.component().static_module(*index).clone())
             }
             Export::ModuleImport { import, .. } => match &data.imports[*import] {
                 RuntimeImport::Module(m) => Some(m.clone()),
@@ -305,10 +293,11 @@ impl Instance {
         name: &str,
     ) -> Option<(ComponentItem, ComponentExportIndex)> {
         let data = store[self.0].as_ref().unwrap();
-        let index = data.component.lookup_export_index(instance, name)?;
+        let component = data.state.component();
+        let index = component.lookup_export_index(instance, name)?;
         let item = ComponentItem::from_export(
             &store.engine(),
-            &data.component.env_component().export_items[index],
+            &component.env_component().export_items[index],
             &data.ty(),
         );
         Some((
@@ -340,7 +329,7 @@ impl Instance {
         name: &str,
     ) -> Option<ComponentExportIndex> {
         let data = store.as_context_mut().0[self.0].as_ref().unwrap();
-        let index = data.component.lookup_export_index(instance, name)?;
+        let index = data.state.component().lookup_export_index(instance, name)?;
         Some(ComponentExportIndex {
             id: data.component_id(),
             index,
@@ -353,10 +342,10 @@ impl Instance {
         name: impl InstanceExportLookup,
     ) -> Option<(&'a InstanceData, &'a Export, ExportIndex)> {
         let data = store[self.0].as_ref().unwrap();
-        let index = name.lookup(&data.component)?;
+        let index = name.lookup(data.state.component())?;
         Some((
             data,
-            &data.component.env_component().export_items[index],
+            &data.state.component().env_component().export_items[index],
             index,
         ))
     }
@@ -368,7 +357,7 @@ impl Instance {
         let data = store.as_context().0[self.0].as_ref().unwrap();
         unsafe {
             InstancePre::new_unchecked(
-                data.component.clone(),
+                data.state.component().clone(),
                 data.imports.clone(),
                 data.instance().resource_types().clone(),
             )
@@ -478,12 +467,12 @@ impl InstanceData {
 
     #[inline]
     pub fn component_types(&self) -> &Arc<ComponentTypes> {
-        self.component.types()
+        self.state.component().types()
     }
 
     #[inline]
     pub fn component_id(&self) -> CompiledModuleId {
-        self.component.id()
+        self.state.component().id()
     }
 
     #[inline]
@@ -549,10 +538,9 @@ impl<'a> Instantiator<'a> {
             imports,
             core_imports: OwnedImports::empty(),
             data: InstanceData {
-                component: component.clone(),
                 state: OwnedComponentInstance::new(
                     store.store_data().components.next_component_instance_id(),
-                    component.runtime_info(),
+                    component,
                     Arc::new(imported_resources),
                     store.traitobj(),
                 ),

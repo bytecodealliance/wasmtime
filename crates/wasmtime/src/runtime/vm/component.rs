@@ -6,7 +6,7 @@
 //! Eventually it's intended that module-to-module calls, which would be
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
-use crate::component::ResourceType;
+use crate::component::{Component, ResourceType};
 use crate::prelude::*;
 use crate::runtime::component::ComponentInstanceId;
 use crate::runtime::vm::{
@@ -17,7 +17,6 @@ use crate::runtime::vm::{
 use crate::store::InstanceId;
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
-use core::any::Any;
 use core::marker;
 use core::mem;
 use core::mem::offset_of;
@@ -56,8 +55,19 @@ pub struct ComponentInstance {
     /// `Instance::vmctx_self_reference`.
     vmctx_self_reference: SendSyncPtr<VMComponentContext>,
 
-    /// Runtime type information about this component.
-    runtime_info: Arc<dyn ComponentRuntimeInfo>,
+    /// The component that this instance was created from.
+    //
+    // NB: in the future if necessary it would be possible to avoid storing an
+    // entire `Component` here and instead storing only information such as:
+    //
+    // * Some reference to `Arc<ComponentTypes>`
+    // * Necessary references to closed-over modules which are exported from the
+    //   component itself.
+    //
+    // Otherwise the full guts of this component should only ever be used during
+    // the instantiation of this instance, meaning that after instantiation much
+    // of the component can be thrown away (theoretically).
+    component: Component,
 
     /// State of resources for this component.
     ///
@@ -210,13 +220,13 @@ impl ComponentInstance {
         alloc_size: usize,
         offsets: VMComponentOffsets<HostPtr>,
         id: ComponentInstanceId,
-        runtime_info: Arc<dyn ComponentRuntimeInfo>,
+        component: &Component,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
         store: NonNull<dyn VMStore>,
     ) {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
 
-        let num_instances = runtime_info.component().num_runtime_component_instances;
+        let num_instances = component.env_component().num_runtime_component_instances;
         let mut instance_resource_tables =
             PrimaryMap::with_capacity(num_instances.try_into().unwrap());
         for _ in 0..num_instances {
@@ -238,13 +248,13 @@ impl ComponentInstance {
                 ),
                 instance_resource_tables,
                 instances: PrimaryMap::with_capacity(
-                    runtime_info
-                        .component()
+                    component
+                        .env_component()
                         .num_runtime_instances
                         .try_into()
                         .unwrap(),
                 ),
-                runtime_info,
+                component: component.clone(),
                 resource_types,
                 store: VMStoreRawPtr(store),
                 vmctx: VMComponentContext {
@@ -590,19 +600,10 @@ impl ComponentInstance {
         }
     }
 
-    /// Returns a reference to the component type information for this instance.
+    /// Returns a reference to the component type information for this
+    /// instance.
     pub fn component(&self) -> &Component {
-        self.runtime_info.component()
-    }
-
-    /// Returns the type information that this instance is instantiated with.
-    pub fn component_types(&self) -> &Arc<ComponentTypes> {
-        self.runtime_info.component_types()
-    }
-
-    /// Get the canonical ABI's `realloc` function's runtime type.
-    pub fn realloc_func_ty(&self) -> &Arc<dyn Any + Send + Sync> {
-        self.runtime_info.realloc_func_type()
+        &self.component
     }
 
     /// Returns a reference to the resource type information.
@@ -616,8 +617,8 @@ impl ComponentInstance {
     /// This is used when lowering borrows to skip table management and instead
     /// thread through the underlying representation directly.
     pub fn resource_owned_by_own_instance(&self, ty: TypeResourceTableIndex) -> bool {
-        let resource = &self.component_types()[ty];
-        let component = self.component();
+        let resource = &self.component.types()[ty];
+        let component = self.component.env_component();
         let idx = match component.defined_resource_index(resource.ty) {
             Some(idx) => idx,
             None => return false,
@@ -656,10 +657,7 @@ impl ComponentInstance {
         ResourceTables {
             host_table: None,
             calls: unsafe { (&mut *self.store()).component_calls() },
-            guest: Some((
-                &mut self.instance_resource_tables,
-                self.runtime_info.component_types(),
-            )),
+            guest: Some((&mut self.instance_resource_tables, self.component.types())),
         }
     }
 
@@ -671,10 +669,7 @@ impl ComponentInstance {
         &mut PrimaryMap<RuntimeComponentInstanceIndex, ResourceTable>,
         &ComponentTypes,
     ) {
-        (
-            &mut self.instance_resource_tables,
-            self.runtime_info.component_types(),
-        )
+        (&mut self.instance_resource_tables, self.component.types())
     }
 
     /// Returns the destructor and instance flags for the specified resource
@@ -686,9 +681,9 @@ impl ComponentInstance {
         &self,
         ty: TypeResourceTableIndex,
     ) -> (Option<NonNull<VMFuncRef>>, Option<InstanceFlags>) {
-        let resource = self.component_types()[ty].ty;
+        let resource = self.component.types()[ty].ty;
         let dtor = self.resource_destructor(resource);
-        let component = self.component();
+        let component = self.component.env_component();
         let flags = component.defined_resource_index(resource).map(|i| {
             let instance = component.defined_resource_instances[i];
             self.instance_flags(instance)
@@ -815,12 +810,11 @@ impl OwnedComponentInstance {
     /// heap with `malloc` and configures it for the `component` specified.
     pub fn new(
         id: ComponentInstanceId,
-        runtime_info: Arc<dyn ComponentRuntimeInfo>,
+        component: &Component,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
         store: NonNull<dyn VMStore>,
     ) -> OwnedComponentInstance {
-        let component = runtime_info.component();
-        let offsets = VMComponentOffsets::new(HostPtr, component);
+        let offsets = VMComponentOffsets::new(HostPtr, component.env_component());
         let layout = ComponentInstance::alloc_layout(&offsets);
         unsafe {
             // Technically it is not required to `alloc_zeroed` here. The
@@ -839,7 +833,7 @@ impl OwnedComponentInstance {
                 layout.size(),
                 offsets,
                 id,
-                runtime_info,
+                component,
                 resource_types,
                 store,
             );
@@ -1042,16 +1036,4 @@ impl InstanceFlags {
     pub fn as_raw(&self) -> NonNull<VMGlobalDefinition> {
         self.0.as_non_null()
     }
-}
-
-/// Runtime information about a component stored locally for reflection.
-pub trait ComponentRuntimeInfo: Send + Sync + 'static {
-    /// Returns the type information about the compiled component.
-    fn component(&self) -> &Component;
-
-    /// Returns a handle to the tables of type information for this component.
-    fn component_types(&self) -> &Arc<ComponentTypes>;
-
-    /// Get the `wasmtime::FuncType` for the canonical ABI's `realloc` function.
-    fn realloc_func_type(&self) -> &Arc<dyn Any + Send + Sync>;
 }
