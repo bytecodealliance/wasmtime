@@ -11,7 +11,7 @@ use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
-    CanonicalOptions, CoreDef, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalOptions, CoreDef, ExportIndex, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
     RuntimeComponentInstanceIndex, TypeFuncIndex, TypeTuple,
 };
 
@@ -41,6 +41,8 @@ pub struct Func(Stored<FuncData>);
 #[doc(hidden)]
 pub struct FuncData {
     export: ExportFunction,
+    #[expect(dead_code, reason = "to be used soon")]
+    index: ExportIndex,
     ty: TypeFuncIndex,
     options: Options,
     instance: Instance,
@@ -52,6 +54,7 @@ pub struct FuncData {
 impl Func {
     pub(crate) unsafe fn from_lifted_func(
         store: &mut StoreOpaque,
+        index: ExportIndex,
         instance: &ComponentInstance,
         ty: TypeFuncIndex,
         func: &CoreDef,
@@ -74,6 +77,7 @@ impl Func {
         let instance = Instance::from_wasmtime(store, instance.id());
         Func(store.store_data_mut().insert(FuncData {
             export,
+            index,
             options,
             ty,
             instance,
