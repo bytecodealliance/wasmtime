@@ -22,5 +22,5 @@ pub fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<Instan
         .exports
         .insert(String::new(), EntityIndex::Table(table_id));
 
-    create_handle(module, store, Box::new(()), &[], None)
+    create_handle(module, store, &[], None)
 }

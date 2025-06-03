@@ -20,7 +20,6 @@ use crate::store::{InstanceId, StoreInner, StoreOpaque};
 use crate::{StoreContextMut, prelude::*};
 use alloc::sync::Arc;
 use core::alloc::Layout;
-use core::any::Any;
 use core::ops::Range;
 use core::ptr::NonNull;
 #[cfg(target_has_atomic = "64")]
@@ -222,12 +221,6 @@ pub struct Instance {
     /// If the index is present in the set, the segment has been dropped.
     dropped_data: EntitySet<DataIndex>,
 
-    /// Hosts can store arbitrary per-instance information here.
-    ///
-    /// Most of the time from Wasmtime this is `Box::new(())`, a noop
-    /// allocation, but some host-defined objects will store their state here.
-    host_state: Box<dyn Any + Send + Sync>,
-
     /// A pointer to the `vmctx` field at the end of the `Instance`.
     ///
     /// If you're looking at this a reasonable question would be "why do we need
@@ -326,7 +319,6 @@ impl Instance {
                 tables,
                 dropped_elements,
                 dropped_data,
-                host_state: req.host_state,
                 vmctx_self_reference: SendSyncPtr::new(NonNull::new(ptr.add(1).cast()).unwrap()),
                 vmctx: VMContext {
                     _marker: core::marker::PhantomPinned,
@@ -713,7 +705,12 @@ impl Instance {
         NonNull::new(ret).unwrap()
     }
 
-    fn get_exported_func(&mut self, index: FuncIndex) -> ExportFunction {
+    /// Lookup a function by index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds for this instance.
+    pub fn get_exported_func(&self, index: FuncIndex) -> ExportFunction {
         let func_ref = self.get_func_ref(index).unwrap();
         ExportFunction { func_ref }
     }
@@ -739,7 +736,7 @@ impl Instance {
         }
     }
 
-    fn get_exported_memory(&mut self, index: MemoryIndex) -> ExportMemory {
+    fn get_exported_memory(&self, index: MemoryIndex) -> ExportMemory {
         let (definition, vmctx, def_index) =
             if let Some(def_index) = self.env_module().defined_memory_index(index) {
                 (self.memory_ptr(def_index), self.vmctx(), def_index)
@@ -772,7 +769,7 @@ impl Instance {
         }
     }
 
-    fn get_exported_tag(&mut self, index: TagIndex) -> ExportTag {
+    fn get_exported_tag(&self, index: TagIndex) -> ExportTag {
         let tag = self.env_module().tags[index];
         let (vmctx, definition, index) =
             if let Some(def_index) = self.env_module().defined_tag_index(index) {
@@ -800,12 +797,6 @@ impl Instance {
     /// resolved `lookup_by_declaration`.
     pub fn exports(&self) -> wasmparser::collections::index_map::Iter<String, EntityIndex> {
         self.env_module().exports.iter()
-    }
-
-    /// Return a reference to the custom state attached to this instance.
-    #[inline]
-    pub fn host_state(&self) -> &dyn Any {
-        &*self.host_state
     }
 
     /// Return the table index for the given `VMTableDefinition`.
@@ -936,7 +927,7 @@ impl Instance {
     /// before, because resetting that state on (re)instantiation is
     /// very expensive if there are many funcrefs.
     fn construct_func_ref(
-        &mut self,
+        &self,
         index: FuncIndex,
         type_index: VMSharedTypeIndex,
         into: *mut VMFuncRef,
@@ -975,7 +966,7 @@ impl Instance {
     ///
     /// The returned reference is a stable reference that won't be moved and can
     /// be passed into JIT code.
-    pub(crate) fn get_func_ref(&mut self, index: FuncIndex) -> Option<NonNull<VMFuncRef>> {
+    pub(crate) fn get_func_ref(&self, index: FuncIndex) -> Option<NonNull<VMFuncRef>> {
         if index == FuncIndex::reserved_value() {
             return None;
         }
@@ -1573,6 +1564,47 @@ impl Instance {
     pub fn id(&self) -> InstanceId {
         self.id
     }
+
+    /// Get all memories within this instance.
+    ///
+    /// Returns both import and defined memories.
+    ///
+    /// Returns both exported and non-exported memories.
+    ///
+    /// Gives access to the full memories space.
+    pub fn all_memories<'a>(
+        &'a self,
+    ) -> impl ExactSizeIterator<Item = (MemoryIndex, ExportMemory)> + 'a {
+        let indices = (0..self.env_module().memories.len())
+            .map(|i| MemoryIndex::new(i))
+            .collect::<Vec<_>>();
+        indices
+            .into_iter()
+            .map(|i| (i, self.get_exported_memory(i)))
+    }
+
+    /// Return the memories defined in this instance (not imported).
+    pub fn defined_memories<'a>(&'a self) -> impl ExactSizeIterator<Item = ExportMemory> + 'a {
+        let num_imported = self.env_module().num_imported_memories;
+        self.all_memories()
+            .skip(num_imported)
+            .map(|(_i, memory)| memory)
+    }
+
+    /// Lookup an item with the given index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `export` is not valid for this instance.
+    pub fn get_export_by_index(&self, export: EntityIndex) -> Export {
+        match export {
+            EntityIndex::Function(i) => Export::Function(self.get_exported_func(i)),
+            EntityIndex::Global(i) => Export::Global(self.get_exported_global(i)),
+            EntityIndex::Table(i) => Export::Table(self.get_exported_table(i)),
+            EntityIndex::Memory(i) => Export::Memory(self.get_exported_memory(i)),
+            EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(i)),
+        }
+    }
 }
 
 /// A handle holding an `Instance` of a WebAssembly module.
@@ -1600,39 +1632,28 @@ impl InstanceHandle {
     }
 
     /// Lookup a function by index.
-    pub fn get_exported_func(&mut self, export: FuncIndex) -> ExportFunction {
-        self.instance_mut().get_exported_func(export)
+    pub fn get_exported_func(&self, export: FuncIndex) -> ExportFunction {
+        self.instance().get_exported_func(export)
     }
 
     /// Lookup a global by index.
-    pub fn get_exported_global(&mut self, export: GlobalIndex) -> ExportGlobal {
-        self.instance_mut().get_exported_global(export)
+    pub fn get_exported_global(&self, export: GlobalIndex) -> ExportGlobal {
+        self.instance().get_exported_global(export)
     }
 
     /// Lookup a tag by index.
-    pub fn get_exported_tag(&mut self, export: TagIndex) -> ExportTag {
-        self.instance_mut().get_exported_tag(export)
+    pub fn get_exported_tag(&self, export: TagIndex) -> ExportTag {
+        self.instance().get_exported_tag(export)
     }
 
     /// Lookup a memory by index.
-    pub fn get_exported_memory(&mut self, export: MemoryIndex) -> ExportMemory {
-        self.instance_mut().get_exported_memory(export)
+    pub fn get_exported_memory(&self, export: MemoryIndex) -> ExportMemory {
+        self.instance().get_exported_memory(export)
     }
 
     /// Lookup a table by index.
-    pub fn get_exported_table(&mut self, export: TableIndex) -> ExportTable {
-        self.instance_mut().get_exported_table(export)
-    }
-
-    /// Lookup an item with the given index.
-    pub fn get_export_by_index(&mut self, export: EntityIndex) -> Export {
-        match export {
-            EntityIndex::Function(i) => Export::Function(self.get_exported_func(i)),
-            EntityIndex::Global(i) => Export::Global(self.get_exported_global(i)),
-            EntityIndex::Table(i) => Export::Table(self.get_exported_table(i)),
-            EntityIndex::Memory(i) => Export::Memory(self.get_exported_memory(i)),
-            EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(i)),
-        }
+    pub fn get_exported_table(&self, export: TableIndex) -> ExportTable {
+        self.instance().get_exported_table(export)
     }
 
     /// Return an iterator over the exports of this instance.
@@ -1642,11 +1663,6 @@ impl InstanceHandle {
     /// resolved `lookup_by_declaration`.
     pub fn exports(&self) -> wasmparser::collections::index_map::Iter<String, EntityIndex> {
         self.instance().exports()
-    }
-
-    /// Return a reference to the custom state attached to this instance.
-    pub fn host_state(&self) -> &dyn Any {
-        self.instance().host_state()
     }
 
     /// Get a table defined locally within this module.
@@ -1687,32 +1703,6 @@ impl InstanceHandle {
         self.all_tables()
             .skip(num_imported)
             .map(|(_i, table)| table)
-    }
-
-    /// Get all memories within this instance.
-    ///
-    /// Returns both import and defined memories.
-    ///
-    /// Returns both exported and non-exported memories.
-    ///
-    /// Gives access to the full memories space.
-    pub fn all_memories<'a>(
-        &'a mut self,
-    ) -> impl ExactSizeIterator<Item = (MemoryIndex, ExportMemory)> + 'a {
-        let indices = (0..self.module().memories.len())
-            .map(|i| MemoryIndex::new(i))
-            .collect::<Vec<_>>();
-        indices
-            .into_iter()
-            .map(|i| (i, self.get_exported_memory(i)))
-    }
-
-    /// Return the memories defined in this instance (not imported).
-    pub fn defined_memories<'a>(&'a mut self) -> impl ExactSizeIterator<Item = ExportMemory> + 'a {
-        let num_imported = self.module().num_imported_memories;
-        self.all_memories()
-            .skip(num_imported)
-            .map(|(_i, memory)| memory)
     }
 
     /// Get all globals within this instance.

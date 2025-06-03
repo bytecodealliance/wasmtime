@@ -862,14 +862,11 @@ impl Module {
     pub fn get_export_index(&self, name: &str) -> Option<ModuleExport> {
         let compiled_module = self.compiled_module();
         let module = compiled_module.module();
-        module
-            .exports
-            .get_full(name)
-            .map(|(export_name_index, _, &entity)| ModuleExport {
-                module: self.id(),
-                entity,
-                export_name_index,
-            })
+        let entity = *module.exports.get(name)?;
+        Some(ModuleExport {
+            module: self.id(),
+            entity,
+        })
     }
 
     /// Returns the [`Engine`] that this [`Module`] was compiled by.
@@ -1152,8 +1149,6 @@ pub struct ModuleExport {
     pub(crate) module: CompiledModuleId,
     /// A raw index into the wasm module.
     pub(crate) entity: EntityIndex,
-    /// The index of the export name.
-    pub(crate) export_name_index: usize,
 }
 
 fn _assert_send_sync() {

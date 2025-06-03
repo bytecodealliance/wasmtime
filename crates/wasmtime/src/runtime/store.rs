@@ -77,7 +77,6 @@
 //! `wasmtime`, must uphold for the public interface to be safe.
 
 use crate::RootSet;
-use crate::instance::InstanceData;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
 #[cfg(feature = "gc")]
@@ -92,7 +91,6 @@ use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
 use crate::{Global, Instance, Memory, Table, Uninhabited};
 use alloc::sync::Arc;
-use core::any::Any;
 use core::fmt;
 use core::marker;
 use core::mem::{self, ManuallyDrop};
@@ -604,7 +602,6 @@ impl<T> Store<T> {
                     },
                     &shim,
                     Default::default(),
-                    Box::new(()),
                 )
                 .expect("failed to allocate default callee");
             let default_caller_vmctx = inner.instance(id).vmctx();
@@ -1230,8 +1227,9 @@ impl StoreOpaque {
         &mut self.host_globals
     }
 
-    pub fn module_for_instance(&self, instance: InstanceId) -> Option<&'_ Module> {
-        match self.instances[instance.0].kind {
+    pub fn module_for_instance(&self, instance: StoreInstanceId) -> Option<&'_ Module> {
+        instance.store_id().assert_belongs_to(self.id());
+        match self.instances[instance.instance().0].kind {
             StoreInstanceKind::Dummy => None,
             StoreInstanceKind::Real { module_id } => {
                 let module = self
@@ -1262,7 +1260,7 @@ impl StoreOpaque {
                 if let StoreInstanceKind::Dummy = inst.kind {
                     None
                 } else {
-                    Some(InstanceData::from_id(id))
+                    Some(id)
                 }
             })
             .collect::<Vec<_>>();
@@ -1279,7 +1277,7 @@ impl StoreOpaque {
         let mems = self
             .instances
             .iter_mut()
-            .flat_map(|instance| instance.handle.defined_memories())
+            .flat_map(|instance| instance.handle.instance().defined_memories())
             .collect::<Vec<_>>();
         mems.into_iter()
             .map(|memory| unsafe { Memory::from_wasmtime_memory(memory, self) })
@@ -1364,7 +1362,6 @@ impl StoreOpaque {
                     wasmtime_environ::Module::default(),
                 )),
                 imports: vm::Imports::default(),
-                host_state: Box::new(()),
                 store: StorePtr::new(vmstore),
                 wmemcheck: false,
                 pkey,
@@ -1888,7 +1885,6 @@ at https://bytecodealliance.org/security.
         kind: AllocateInstanceKind<'_>,
         runtime_info: &ModuleRuntimeInfo,
         imports: Imports<'_>,
-        host_state: Box<dyn Any + Send + Sync>,
     ) -> Result<InstanceId> {
         let id = InstanceId(self.instances.len());
 
@@ -1900,7 +1896,6 @@ at https://bytecodealliance.org/security.
             id,
             runtime_info,
             imports,
-            host_state,
             store: StorePtr::new(self.traitobj()),
             wmemcheck: self.engine().config().wmemcheck,
             pkey: self.get_pkey(),
