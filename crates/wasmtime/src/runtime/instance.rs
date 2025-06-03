@@ -537,8 +537,8 @@ impl Instance {
     }
 
     #[cfg(feature = "component-model")]
-    pub(crate) fn id(&self, store: &StoreOpaque) -> InstanceId {
-        store[self.id].id()
+    pub(crate) fn id(&self) -> InstanceId {
+        self.id.instance()
     }
 
     /// Get all globals within this instance.

@@ -14,6 +14,7 @@ use crate::runtime::vm::{
     VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction,
     ValRaw, VmPtr, VmSafe,
 };
+use crate::store::InstanceId;
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
 use core::any::Any;
@@ -63,6 +64,10 @@ pub struct ComponentInstance {
     /// This is paired with other information to create a `ResourceTables` which
     /// is how this field is manipulated.
     instance_resource_tables: PrimaryMap<RuntimeComponentInstanceIndex, ResourceTable>,
+
+    /// What all compile-time-identified core instances are mapped to within the
+    /// `Store` that this component belongs to.
+    instances: PrimaryMap<RuntimeInstanceIndex, InstanceId>,
 
     /// Storage for the type information about resources within this component
     /// instance.
@@ -232,6 +237,13 @@ impl ComponentInstance {
                     .unwrap(),
                 ),
                 instance_resource_tables,
+                instances: PrimaryMap::with_capacity(
+                    runtime_info
+                        .component()
+                        .num_runtime_instances
+                        .try_into()
+                        .unwrap(),
+                ),
                 runtime_info,
                 resource_types,
                 store: VMStoreRawPtr(store),
@@ -763,6 +775,18 @@ impl ComponentInstance {
     pub fn id(&self) -> ComponentInstanceId {
         self.id
     }
+
+    /// Returns the store-local id that `index` was assigned during
+    /// instantiation.
+    pub fn instance_id(&self, index: RuntimeInstanceIndex) -> InstanceId {
+        self.instances[index]
+    }
+
+    /// Pushes a new runtime instance that's been created into
+    /// `self.instances`.
+    pub fn push_instance_id(&mut self, id: InstanceId) -> RuntimeInstanceIndex {
+        self.instances.push(id)
+    }
 }
 
 impl VMComponentContext {
@@ -911,6 +935,11 @@ impl OwnedComponentInstance {
     /// See `ComponentInstance::resource_types`
     pub fn resource_types_mut(&mut self) -> &mut Arc<PrimaryMap<ResourceIndex, ResourceType>> {
         unsafe { &mut (*self.ptr.as_ptr()).resource_types }
+    }
+
+    /// See `ComponentInstance::push_instance_id`
+    pub fn push_instance_id(&mut self, id: InstanceId) -> RuntimeInstanceIndex {
+        unsafe { self.instance_mut().push_instance_id(id) }
     }
 }
 

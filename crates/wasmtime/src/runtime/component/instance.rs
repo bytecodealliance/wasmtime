@@ -35,8 +35,6 @@ use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType}
 pub struct Instance(pub(crate) Stored<Option<Box<InstanceData>>>);
 
 pub(crate) struct InstanceData {
-    instances: PrimaryMap<RuntimeInstanceIndex, crate::Instance>,
-
     // NB: in the future if necessary it would be possible to avoid storing an
     // entire `Component` here and instead storing only information such as:
     //
@@ -449,8 +447,7 @@ impl InstanceData {
     where
         T: Copy + Into<EntityIndex>,
     {
-        let instance = &self.instances[item.instance];
-        let id = instance.id(store);
+        let id = self.state.instance_id(item.instance);
         let instance = store.instance(id);
         let idx = match &item.item {
             ExportItem::Index(idx) => (*idx).into(),
@@ -552,7 +549,6 @@ impl<'a> Instantiator<'a> {
             imports,
             core_imports: OwnedImports::empty(),
             data: InstanceData {
-                instances: PrimaryMap::with_capacity(env_component.num_runtime_instances as usize),
                 component: component.clone(),
                 state: OwnedComponentInstance::new(
                     store.store_data().components.next_component_instance_id(),
@@ -643,7 +639,7 @@ impl<'a> Instantiator<'a> {
                     let i = unsafe {
                         crate::Instance::new_started_impl(store, module, imports.as_ref())?
                     };
-                    self.data.instances.push(i);
+                    self.data.state.push_instance_id(i.id());
                 }
 
                 GlobalInitializer::LowerImport { import, index } => {
