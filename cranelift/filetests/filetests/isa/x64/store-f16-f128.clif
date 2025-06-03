@@ -38,7 +38,7 @@ block0(v0: f128, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqu  %xmm0, 0(%rdi)
+;   movdqu %xmm0, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

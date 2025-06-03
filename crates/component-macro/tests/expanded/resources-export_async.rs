@@ -182,14 +182,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::transitive_import::Host + Send,
-            T: Send + 'static,
+            T: 'static + Send,
         {
-            foo::foo::transitive_import::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::transitive_import::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_simple_export(&self) -> &exports::foo::foo::simple_export::Guest {
@@ -220,7 +220,7 @@ pub mod foo {
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Y {}
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait HostY: Sized {
+            pub trait HostY: Send {
                 async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Y>,
@@ -235,15 +235,16 @@ pub mod foo {
                 }
             }
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-            pub trait Host: Send + HostY + Sized {}
+            pub trait Host: Send + HostY {}
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
                 D: wasmtime::component::HasData,
-                for<'a> D::Data<'a>: Host + Send,
-                T: Send + 'static,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
             {
                 let mut inst = linker.instance("foo:foo/transitive-import")?;
                 inst.resource_async(
@@ -261,7 +262,6 @@ pub mod foo {
                 )?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
         }
     }
 }

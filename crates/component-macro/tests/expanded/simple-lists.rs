@@ -148,14 +148,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::simple_lists::Host,
             T: 'static,
         {
-            foo::foo::simple_lists::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::simple_lists::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_simple_lists(&self) -> &exports::foo::foo::simple_lists::Guest {
@@ -191,6 +191,37 @@ pub mod foo {
                 ) -> wasmtime::component::__internal::Vec<
                     wasmtime::component::__internal::Vec<u32>,
                 >;
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn simple_list1(
+                    &mut self,
+                    l: wasmtime::component::__internal::Vec<u32>,
+                ) -> () {
+                    Host::simple_list1(*self, l)
+                }
+                fn simple_list2(&mut self) -> wasmtime::component::__internal::Vec<u32> {
+                    Host::simple_list2(*self)
+                }
+                fn simple_list3(
+                    &mut self,
+                    a: wasmtime::component::__internal::Vec<u32>,
+                    b: wasmtime::component::__internal::Vec<u32>,
+                ) -> (
+                    wasmtime::component::__internal::Vec<u32>,
+                    wasmtime::component::__internal::Vec<u32>,
+                ) {
+                    Host::simple_list3(*self, a, b)
+                }
+                fn simple_list4(
+                    &mut self,
+                    l: wasmtime::component::__internal::Vec<
+                        wasmtime::component::__internal::Vec<u32>,
+                    >,
+                ) -> wasmtime::component::__internal::Vec<
+                    wasmtime::component::__internal::Vec<u32>,
+                > {
+                    Host::simple_list4(*self, l)
+                }
             }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -256,37 +287,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn simple_list1(
-                    &mut self,
-                    l: wasmtime::component::__internal::Vec<u32>,
-                ) -> () {
-                    Host::simple_list1(*self, l)
-                }
-                fn simple_list2(&mut self) -> wasmtime::component::__internal::Vec<u32> {
-                    Host::simple_list2(*self)
-                }
-                fn simple_list3(
-                    &mut self,
-                    a: wasmtime::component::__internal::Vec<u32>,
-                    b: wasmtime::component::__internal::Vec<u32>,
-                ) -> (
-                    wasmtime::component::__internal::Vec<u32>,
-                    wasmtime::component::__internal::Vec<u32>,
-                ) {
-                    Host::simple_list3(*self, a, b)
-                }
-                fn simple_list4(
-                    &mut self,
-                    l: wasmtime::component::__internal::Vec<
-                        wasmtime::component::__internal::Vec<u32>,
-                    >,
-                ) -> wasmtime::component::__internal::Vec<
-                    wasmtime::component::__internal::Vec<u32>,
-                > {
-                    Host::simple_list4(*self, l)
-                }
             }
         }
     }

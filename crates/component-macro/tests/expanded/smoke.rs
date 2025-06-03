@@ -140,14 +140,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: imports::Host,
             T: 'static,
         {
-            imports::add_to_linker::<T, D>(linker, get)?;
+            imports::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
     }
@@ -158,6 +158,11 @@ pub mod imports {
     use wasmtime::component::__internal::{anyhow, Box};
     pub trait Host {
         fn y(&mut self) -> ();
+    }
+    impl<_T: Host + ?Sized> Host for &mut _T {
+        fn y(&mut self) -> () {
+            Host::y(*self)
+        }
     }
     pub fn add_to_linker<T, D>(
         linker: &mut wasmtime::component::Linker<T>,
@@ -178,10 +183,5 @@ pub mod imports {
             },
         )?;
         Ok(())
-    }
-    impl<_T: Host + ?Sized> Host for &mut _T {
-        fn y(&mut self) -> () {
-            Host::y(*self)
-        }
     }
 }

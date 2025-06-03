@@ -4,7 +4,9 @@
 pub(super) mod isle;
 
 use crate::ir::pcc::{FactContext, PccResult};
-use crate::ir::{ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type, types};
+use crate::ir::{
+    Endianness, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type, types,
+};
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
@@ -116,6 +118,13 @@ fn is_mergeable_load(
         match size {
             MergeableLoadSize::Exact => {}
             MergeableLoadSize::Min32 => return None,
+        }
+    }
+
+    // If the load's flags specify big-endian, we can't merge.
+    if let Some(flags) = ctx.memflags(src_insn) {
+        if flags.explicit_endianness() == Some(Endianness::Big) {
+            return None;
         }
     }
 

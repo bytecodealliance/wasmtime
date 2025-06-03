@@ -140,14 +140,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: paths::path1::test::Host,
             T: 'static,
         {
-            paths::path1::test::add_to_linker::<T, D>(linker, get)?;
+            paths::path1::test::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
     }
@@ -159,6 +159,7 @@ pub mod paths {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub trait Host {}
+            impl<_T: Host + ?Sized> Host for &mut _T {}
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -171,7 +172,6 @@ pub mod paths {
                 let mut inst = linker.instance("paths:path1/test")?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized> Host for &mut _T {}
         }
     }
 }

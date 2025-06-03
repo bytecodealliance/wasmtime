@@ -24,8 +24,7 @@ pub fn rex(opcode: impl Into<Opcodes>) -> Rex {
     Rex {
         opcodes: opcode.into(),
         w: false,
-        r: false,
-        digit: None,
+        modrm: None,
         imm: Imm::None,
         opcode_mod: None,
     }
@@ -33,14 +32,15 @@ pub fn rex(opcode: impl Into<Opcodes>) -> Rex {
 
 /// An abbreviated constructor for VEX-encoded instructions.
 #[must_use]
-pub fn vex(opcode: impl Into<Opcodes>) -> Vex {
+pub fn vex(length: VexLength) -> Vex {
     Vex {
-        opcodes: opcode.into(),
-        w: false,
-        length: VexLength::_128,
-        mmmmm: VexMMMMM::None,
-        pp: VexPP::None,
-        imm: None,
+        length,
+        pp: None,
+        mmmmm: None,
+        w: VexW::WIG,
+        opcode: u8::MAX,
+        modrm: None,
+        imm: Imm::None,
     }
 }
 
@@ -66,6 +66,52 @@ impl fmt::Display for Encoding {
         match self {
             Encoding::Rex(rex) => write!(f, "{rex}"),
             Encoding::Vex(vex) => write!(f, "{vex}"),
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum ModRmKind {
+    /// Models `/digit`.
+    ///
+    /// From the reference manual: "a digit between 0 and 7 indicates that the
+    /// ModR/M byte of the instruction uses only the r/m (register or memory)
+    /// operand. The reg field contains the digit that provides an extension to
+    /// the instruction's opcode."
+    Digit(u8),
+
+    /// Models `/r`.
+    ///
+    /// From the reference manual: "indicates that the ModR/M byte of the
+    /// instruction contains a register operand and an r/m operand."
+    Reg,
+}
+
+impl ModRmKind {
+    /// Return the digit extending the opcode, if available.
+    #[must_use]
+    pub fn digit(&self) -> Option<u8> {
+        match self {
+            Self::Digit(digit) => Some(*digit),
+            _ => None,
+        }
+    }
+
+    /// Return the digit extending the opcode.
+    ///
+    /// # Panics
+    ///
+    /// Panics if not extension was defined.
+    pub fn unwrap_digit(&self) -> u8 {
+        self.digit().expect("expected an extension digit")
+    }
+}
+
+impl fmt::Display for ModRmKind {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ModRmKind::Digit(digit) => write!(f, "/{digit}"),
+            ModRmKind::Reg => write!(f, "/r"),
         }
     }
 }
@@ -97,14 +143,8 @@ pub struct Rex {
     /// in chapter 2. Note that REX prefixes that promote legacy instructions to
     /// 64-bit behavior are not listed explicitly in the opcode column."
     pub w: bool,
-    /// From the reference manual: "indicates that the ModR/M byte of the
-    /// instruction contains a register operand and an r/m operand."
-    pub r: bool,
-    /// From the reference manual: "a digit between 0 and 7 indicates that the
-    /// ModR/M byte of the instruction uses only the r/m (register or memory)
-    /// operand. The reg field contains the digit that provides an extension to
-    /// the instruction's opcode."
-    pub digit: Option<u8>,
+    /// Indicates modifications to the ModR/M byte.
+    pub modrm: Option<ModRmKind>,
     /// The number of bits used as an immediate operand to the instruction.
     pub imm: Imm,
     /// Used for `+rb`, `+rw`, `+rd`, and `+ro` instructions, which encode `reg`
@@ -133,7 +173,10 @@ impl Rex {
     /// equivalent to `/r` in the reference manual.
     #[must_use]
     pub fn r(self) -> Self {
-        Self { r: true, ..self }
+        Self {
+            modrm: Some(ModRmKind::Reg),
+            ..self
+        }
     }
 
     /// Set the digit extending the opcode; equivalent to `/<digit>` in the
@@ -141,13 +184,22 @@ impl Rex {
     ///
     /// # Panics
     ///
-    /// Panics if `digit` is too large.
+    /// Panics if `extension` is too large.
     #[must_use]
-    pub fn digit(self, digit: u8) -> Self {
-        assert!(digit <= 0b111, "must fit in 3 bits");
+    pub fn digit(self, extension: u8) -> Self {
+        assert!(extension <= 0b111, "must fit in 3 bits");
         Self {
-            digit: Some(digit),
+            modrm: Some(ModRmKind::Digit(extension)),
             ..self
+        }
+    }
+
+    /// Retrieve the digit extending the opcode, if available.
+    #[must_use]
+    pub fn unwrap_digit(&self) -> Option<u8> {
+        match self.modrm {
+            Some(ModRmKind::Digit(digit)) => Some(digit),
+            _ => None,
         }
     }
 
@@ -255,8 +307,6 @@ impl Rex {
     /// _Instruction Format_, of the Intel® 64 and IA-32 Architectures Software
     /// Developer’s Manual, Volume 2A.
     fn validate(&self, operands: &[Operand]) {
-        assert!(!(self.r && self.digit.is_some()));
-
         if let Some(OperandKind::Imm(op)) = operands
             .iter()
             .map(|o| o.location.kind())
@@ -280,7 +330,6 @@ impl Rex {
                     .all(|o| o.location.bits() == opcode_mod.bits().into()),
                 "the opcode modifier width must match the operand widths"
             );
-            assert!(!self.r, "the opcode modifier cannot be used with /r");
         }
     }
 }
@@ -315,11 +364,8 @@ impl fmt::Display for Rex {
         if let Some(secondary) = self.opcodes.secondary {
             write!(f, " {secondary:#04X}")?;
         }
-        if self.r {
-            write!(f, " /r")?;
-        }
-        if let Some(digit) = self.digit {
-            write!(f, " /{digit}")?;
+        if let Some(modrm) = self.modrm {
+            write!(f, " {modrm}")?;
         }
         if let Some(opcode_mod) = &self.opcode_mod {
             write!(f, " {opcode_mod}")?;
@@ -674,7 +720,7 @@ impl fmt::Display for Imm {
 /// let enc = rex([0x0F, 0xC8]).rd();
 /// assert_eq!(enc.to_string(), "0x0F + 0xC8 +rd");
 /// ```
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[allow(non_camel_case_types, reason = "makes DSL definitions easier to read")]
 pub enum OpcodeMod {
     rb,
@@ -705,98 +751,360 @@ impl fmt::Display for OpcodeMod {
     }
 }
 
-pub struct Vex {
-    pub opcodes: Opcodes,
-    pub w: bool,
-    pub length: VexLength,
-    pub mmmmm: VexMMMMM,
-    pub pp: VexPP,
-    pub imm: Option<u8>,
-}
-
-#[derive(PartialEq)]
-pub enum VexPP {
-    None,
-    /// Operand size override -- here, denoting "16-bit operation".
+/// Contains the legacy prefixes allowed for VEX-encoded instructions.
+///
+/// VEX encodes a subset of [`Group1Prefix`] and `0x66` (see [`Group3Prefix`])
+/// as part of the `pp` bit field.
+#[derive(Clone, Copy, PartialEq)]
+pub enum VexPrefix {
     _66,
-    /// REPNE, but no specific meaning here -- is just an opcode extension.
     _F2,
-    /// REP/REPE, but no specific meaning here -- is just an opcode extension.
     _F3,
 }
 
-impl fmt::Display for VexPP {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl VexPrefix {
+    /// Encode the `pp` bits.
+    #[inline(always)]
+    pub(crate) fn bits(self) -> u8 {
         match self {
-            VexPP::None => write!(f, "None"),
-            VexPP::_66 => write!(f, "_66"),
-            VexPP::_F3 => write!(f, "_F3"),
-            VexPP::_F2 => write!(f, "_F2"),
+            Self::_66 => 0b01,
+            Self::_F3 => 0b10,
+            Self::_F2 => 0b11,
         }
     }
 }
 
+impl fmt::Display for VexPrefix {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::_66 => write!(f, "66"),
+            Self::_F3 => write!(f, "F3"),
+            Self::_F2 => write!(f, "F2"),
+        }
+    }
+}
+
+/// Contains the escape sequences allowed for VEX-encoded instructions.
+///
+/// VEX encodes these in the `mmmmmm` bit field.
+#[derive(Clone, Copy, PartialEq)]
+pub enum VexEscape {
+    _0F,
+    _0F3A,
+    _0F38,
+}
+
+impl VexEscape {
+    /// Encode the `m-mmmm` bits.
+    #[inline(always)]
+    pub(crate) fn bits(&self) -> u8 {
+        match self {
+            Self::_0F => 0b01,
+            Self::_0F38 => 0b10,
+            Self::_0F3A => 0b11,
+        }
+    }
+}
+
+impl fmt::Display for VexEscape {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::_0F => write!(f, "0F"),
+            Self::_0F3A => write!(f, "0F3A"),
+            Self::_0F38 => write!(f, "0F38"),
+        }
+    }
+}
+
+/// Contains allowed VEX length definitions.
+///
+/// VEX encodes these in the `L` bit field, a single bit with `128-bit = 0` and
+/// `256-bit = 1`. For convenience, we also include the `LIG` and `LZ`
+/// syntax, used by the reference manual, and always set these to `0`.
 pub enum VexLength {
-    _128,
+    /// Set `VEX.L` to `0` (128-bit).
+    L128,
+    /// Set `VEX.L` to `1` (256-bit).
+    L256,
+    /// Set `VEX.L` to `0`, but not necessarily for 128-bit operation. From the
+    /// reference manual: "The VEX.L must be encoded to be 0B, an #UD occurs if
+    /// VEX.L is not zero."
+    LZ,
+    /// The `VEX.L` bit is ignored (e.g., for floating point scalar
+    /// instructions). This assembler will emit `0`.
+    LIG,
+}
+
+impl VexLength {
+    /// Encode the `L` bit.
+    pub fn bits(&self) -> u8 {
+        match self {
+            Self::L128 | Self::LIG | Self::LZ => 0b0,
+            Self::L256 => 0b1,
+        }
+    }
 }
 
 impl fmt::Display for VexLength {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            VexLength::_128 => write!(f, "_128"),
+            Self::L128 => write!(f, "128"),
+            Self::L256 => write!(f, "256"),
+            Self::LIG => write!(f, "LIG"),
+            Self::LZ => write!(f, "LZ"),
         }
     }
 }
 
-#[derive(PartialEq)]
-pub enum VexMMMMM {
-    None,
-    _OF,
-    /// Operand size override -- here, denoting "16-bit operation".
-    _OF3A,
-    /// The lock prefix.
-    _OF38,
+/// Model the `W` bit in VEX-encoded instructions.
+pub enum VexW {
+    /// The `W` bit is ignored; equivalent to `.WIG` in the manual.
+    WIG,
+    /// The `W` bit is set to `0`; equivalent to `.W0` in the manual.
+    W0,
+    /// The `W` bit is set to `1`; equivalent to `.W1` in the manual.
+    W1,
 }
 
-impl fmt::Display for VexMMMMM {
+impl VexW {
+    /// Return `true` if the `W` bit is ignored; this is useful to check in the
+    /// DSL for the default case.
+    fn is_ignored(&self) -> bool {
+        match self {
+            Self::WIG => true,
+            Self::W0 | Self::W1 => false,
+        }
+    }
+
+    /// Return `true` if the `W` bit is set (`W1`); otherwise, return `false`.
+    pub(crate) fn as_bool(&self) -> bool {
+        match self {
+            Self::W1 => true,
+            Self::W0 | Self::WIG => false,
+        }
+    }
+}
+
+impl fmt::Display for VexW {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            VexMMMMM::None => write!(f, "None"),
-            VexMMMMM::_OF => write!(f, "_0F"),
-            VexMMMMM::_OF3A => write!(f, "_OF3A"),
-            VexMMMMM::_OF38 => write!(f, "_OF38"),
+            Self::WIG => write!(f, "WIG"),
+            Self::W0 => write!(f, "W0"),
+            Self::W1 => write!(f, "W1"),
         }
     }
 }
 
-/// Describe the register index to use. This wrapper is a type-safe way to pass
-/// around the registers defined in `inst/regs.rs`.
-#[derive(Debug, Copy, Clone, Default)]
-pub struct Register(u8);
-impl From<u8> for Register {
-    fn from(reg: u8) -> Self {
-        debug_assert!(reg < 16);
-        Self(reg)
-    }
-}
-impl From<Register> for u8 {
-    fn from(reg: Register) -> u8 {
-        reg.0
-    }
+/// The VEX encoding, introduced for AVX instructions.
+///
+/// ```
+/// # use cranelift_assembler_x64_meta::dsl::{vex, VexLength::L128};
+/// // To encode a BLENDPD instruction in the manual: VEX.128.66.0F3A.WIG 0D /r ib
+/// let enc = vex(L128)._66()._0f3a().wig().op(0x0D).r().ib();
+/// assert_eq!(enc.to_string(), "VEX.128.66.0F3A.WIG 0x0D /r ib");
+/// ```
+pub struct Vex {
+    /// The length of the operand (e.g., 128-bit or 256-bit).
+    pub length: VexLength,
+    /// Map the `PP` field encodings.
+    pub pp: Option<VexPrefix>,
+    /// Map the `MMMMM` field encodings.
+    pub mmmmm: Option<VexEscape>,
+    /// The `W` bit.
+    pub w: VexW,
+    /// VEX-encoded instructions have a single-byte opcode. Other prefix-related
+    /// bytes (see [`Opcodes`]) are encoded in the VEX prefixes (see `pp`,
+    /// `mmmmmm`). From the reference manual: "One (and only one) opcode byte
+    /// follows the 2 or 3 byte VEX."
+    pub opcode: u8,
+    /// See [`Rex.modrm`](Rex.modrm).
+    pub modrm: Option<ModRmKind>,
+    /// See [`Rex.imm`](Rex.imm).
+    pub imm: Imm,
 }
 
 impl Vex {
-    pub fn length(self, length: VexLength) -> Self {
-        Self { length, ..self }
-    }
-    pub fn pp(self, pp: VexPP) -> Self {
-        Self { pp, ..self }
-    }
-    pub fn mmmmm(self, mmmmm: VexMMMMM) -> Self {
-        Self { mmmmm, ..self }
+    /// Set the `pp` field to use [`VexPrefix::_66`]; equivalent to `.66` in the
+    /// manual.
+    pub fn _66(self) -> Self {
+        assert!(self.pp.is_none());
+        Self {
+            pp: Some(VexPrefix::_66),
+            ..self
+        }
     }
 
-    fn validate(&self, _operands: &[Operand]) {}
+    /// Set the `pp` field to use [`VexPrefix::_F2`]; equivalent to `.F2` in the
+    /// manual.
+    pub fn _f2(self) -> Self {
+        assert!(self.pp.is_none());
+        Self {
+            pp: Some(VexPrefix::_F2),
+            ..self
+        }
+    }
+
+    /// Set the `pp` field to use [`VexPrefix::_F3`]; equivalent to `.F3` in the
+    /// manual.
+    pub fn _f3(self) -> Self {
+        assert!(self.pp.is_none());
+        Self {
+            pp: Some(VexPrefix::_F3),
+            ..self
+        }
+    }
+
+    /// Set the `mmmmmm` field to use [`VexEscape::_0F`]; equivalent to `.0F` in
+    /// the manual.
+    pub fn _0f(self) -> Self {
+        assert!(self.mmmmm.is_none());
+        Self {
+            mmmmm: Some(VexEscape::_0F),
+            ..self
+        }
+    }
+
+    /// Set the `mmmmmm` field to use [`VexEscape::_0F3A`]; equivalent to
+    /// `.0F3A` in the manual.
+    pub fn _0f3a(self) -> Self {
+        assert!(self.mmmmm.is_none());
+        Self {
+            mmmmm: Some(VexEscape::_0F3A),
+            ..self
+        }
+    }
+
+    /// Set the `mmmmmm` field to use [`VexEscape::_0F38`]; equivalent to
+    /// `.0F38` in the manual.
+    pub fn _0f38(self) -> Self {
+        assert!(self.mmmmm.is_none());
+        Self {
+            mmmmm: Some(VexEscape::_0F38),
+            ..self
+        }
+    }
+
+    /// Set the `W` bit to `0`; equivalent to `.W0` in the manual.
+    pub fn w0(self) -> Self {
+        assert!(self.w.is_ignored());
+        Self {
+            w: VexW::W0,
+            ..self
+        }
+    }
+
+    /// Set the `W` bit to `1`; equivalent to `.W1` in the manual.
+    pub fn w1(self) -> Self {
+        assert!(self.w.is_ignored());
+        Self {
+            w: VexW::W1,
+            ..self
+        }
+    }
+
+    /// Ignore the `W` bit; equivalent to `.WIG` in the manual.
+    pub fn wig(self) -> Self {
+        assert!(self.w.is_ignored());
+        Self {
+            w: VexW::WIG,
+            ..self
+        }
+    }
+
+    /// Set the single opcode for this VEX-encoded instruction.
+    pub fn op(self, opcode: u8) -> Self {
+        assert_eq!(self.opcode, u8::MAX);
+        Self { opcode, ..self }
+    }
+
+    /// Set the ModR/M byte to contain a register operand; see [`Rex::r`].
+    pub fn r(self) -> Self {
+        assert!(self.modrm.is_none());
+        Self {
+            modrm: Some(ModRmKind::Reg),
+            ..self
+        }
+    }
+
+    /// Append a byte-sized immediate operand (8-bit); equivalent to `ib` in the
+    /// reference manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an immediate operand is already set.
+    #[must_use]
+    pub fn ib(self) -> Self {
+        assert_eq!(self.imm, Imm::None);
+        Self {
+            imm: Imm::ib,
+            ..self
+        }
+    }
+
+    /// Append a word-sized immediate operand (16-bit); equivalent to `iw` in
+    /// the reference manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an immediate operand is already set.
+    #[must_use]
+    pub fn iw(self) -> Self {
+        assert_eq!(self.imm, Imm::None);
+        Self {
+            imm: Imm::iw,
+            ..self
+        }
+    }
+
+    /// Append a doubleword-sized immediate operand (32-bit); equivalent to `id`
+    /// in the reference manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an immediate operand is already set.
+    #[must_use]
+    pub fn id(self) -> Self {
+        assert_eq!(self.imm, Imm::None);
+        Self {
+            imm: Imm::id,
+            ..self
+        }
+    }
+
+    /// Append a quadword-sized immediate operand (64-bit); equivalent to `io`
+    /// in the reference manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an immediate operand is already set.
+    #[must_use]
+    pub fn io(self) -> Self {
+        assert_eq!(self.imm, Imm::None);
+        Self {
+            imm: Imm::io,
+            ..self
+        }
+    }
+
+    /// Set the digit extending the opcode; equivalent to `/<digit>` in the
+    /// reference manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `extension` is too large.
+    #[must_use]
+    pub fn digit(self, extension: u8) -> Self {
+        assert!(extension <= 0b111, "must fit in 3 bits");
+        Self {
+            modrm: Some(ModRmKind::Digit(extension)),
+            ..self
+        }
+    }
+
+    fn validate(&self, _operands: &[Operand]) {
+        assert!(self.opcode != u8::MAX);
+        assert!(self.mmmmm.is_some());
+    }
 }
 
 impl From<Vex> for Encoding {
@@ -807,11 +1115,20 @@ impl From<Vex> for Encoding {
 
 impl fmt::Display for Vex {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "VEX")?;
-        match self.length {
-            VexLength::_128 => write!(f, ".128")?,
+        write!(f, "VEX.{}", self.length)?;
+        if let Some(pp) = self.pp {
+            write!(f, ".{pp}")?;
         }
-        write!(f, " {:#04x}", self.opcodes.primary)?;
+        if let Some(mmmmm) = self.mmmmm {
+            write!(f, ".{mmmmm}")?;
+        }
+        write!(f, ".{} {:#04X}", self.w, self.opcode)?;
+        if let Some(modrm) = self.modrm {
+            write!(f, " {modrm}")?;
+        }
+        if self.imm != Imm::None {
+            write!(f, " {}", self.imm)?;
+        }
         Ok(())
     }
 }

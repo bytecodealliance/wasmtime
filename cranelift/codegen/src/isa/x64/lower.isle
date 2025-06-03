@@ -2996,48 +2996,49 @@
 ;; 8-bit loads.
 ;;
 ;; By default, we zero-extend all sub-64-bit loads to a GPR.
-(rule load_sub64_x64_movzx -4 (lower (has_type (and (fits_in_32 ty) (is_gpr_type _)) (load flags address offset)))
+(rule load_sub64_x64_movzx -4 (lower (has_type (and (fits_in_32 ty) (is_gpr_type _))
+                                               (load (little_or_native_endian flags) address offset)))
       (x64_movzx (ext_mode (ty_bits_u16 ty) 64) (to_amode flags address offset)))
 ;; But if we know that both the `from` and `to` are 64 bits, we simply load with
 ;; no extension.
-(rule load_64_x64_movzx -1 (lower (has_type (ty_int_ref_64 ty) (load flags address offset)))
+(rule load_64_x64_movzx -1 (lower (has_type (ty_int_ref_64 ty) (load (little_or_native_endian flags) address offset)))
       (x64_mov (to_amode flags address offset)))
 ;; Also, certain scalar loads have a specific `from` width and extension kind
 ;; (signed -> `sx`, zeroed -> `zx`). We overwrite the high bits of the 64-bit
 ;; GPR even if the `to` type is smaller (e.g., 16-bits).
-(rule (lower (has_type (is_gpr_type ty) (uload8 flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (uload8 (little_or_native_endian flags) address offset)))
       (x64_movzx (ExtMode.BQ) (to_amode flags address offset)))
-(rule (lower (has_type (is_gpr_type ty) (sload8 flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (sload8 (little_or_native_endian flags) address offset)))
       (x64_movsx (ExtMode.BQ) (to_amode flags address offset)))
-(rule (lower (has_type (is_gpr_type ty) (uload16 flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (uload16 (little_or_native_endian flags) address offset)))
       (x64_movzx (ExtMode.WQ) (to_amode flags address offset)))
-(rule (lower (has_type (is_gpr_type ty) (sload16 flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (sload16 (little_or_native_endian flags) address offset)))
       (x64_movsx (ExtMode.WQ) (to_amode flags address offset)))
-(rule (lower (has_type (is_gpr_type ty) (uload32 flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (uload32 (little_or_native_endian flags) address offset)))
       (x64_movzx (ExtMode.LQ) (to_amode flags address offset)))
-(rule (lower (has_type (is_gpr_type ty) (sload32 flags address offset)))
+(rule (lower (has_type (is_gpr_type ty) (sload32 (little_or_native_endian flags) address offset)))
       (x64_movsx (ExtMode.LQ) (to_amode flags address offset)))
 
 ;; To load to XMM registers, we use the x64-specific instructions for each type.
 ;; For `$F32` and `$F64` this is important--we only want to load 32 or 64 bits.
 ;; But for the 128-bit types, this is not strictly necessary for performance but
 ;; might help with clarity during disassembly.
-(rule 4 (lower (has_type (is_xmm_type (ty_16 _)) (load flags address offset)))
+(rule 4 (lower (has_type (is_xmm_type (ty_16 _)) (load (little_or_native_endian flags) address offset)))
       (x64_pinsrw (xmm_uninit_value) (to_amode flags address offset) 0))
-(rule 3 (lower (has_type (is_xmm_type (ty_32 _)) (load flags address offset)))
+(rule 3 (lower (has_type (is_xmm_type (ty_32 _)) (load (little_or_native_endian flags) address offset)))
       (x64_movss_load (to_amode flags address offset)))
-(rule 2 (lower (has_type (is_xmm_type (ty_64 _)) (load flags address offset)))
+(rule 2 (lower (has_type (is_xmm_type (ty_64 _)) (load (little_or_native_endian flags) address offset)))
       (x64_movsd_load (to_amode flags address offset)))
-(rule 1 (lower (has_type $F32X4 (load flags address offset)))
+(rule 1 (lower (has_type $F32X4 (load (little_or_native_endian flags) address offset)))
       (x64_movups_load (to_amode flags address offset)))
-(rule 1 (lower (has_type $F64X2 (load flags address offset)))
+(rule 1 (lower (has_type $F64X2 (load (little_or_native_endian flags) address offset)))
       (x64_movupd_load (to_amode flags address offset)))
-(rule 0 (lower (has_type (is_xmm_type (ty_128 _)) (load flags address offset)))
+(rule 0 (lower (has_type (is_xmm_type (ty_128 _)) (load (little_or_native_endian flags) address offset)))
       (x64_movdqu_load (to_amode flags address offset)))
 
 ;; We can load an I128 by doing two 64-bit loads.
 (rule -3 (lower (has_type $I128
-                       (load flags address offset)))
+                       (load (little_or_native_endian flags) address offset)))
       (let ((addr_lo Amode (to_amode flags address offset))
             (addr_hi Amode (amode_offset addr_lo 8))
             (value_lo Reg (x64_mov addr_lo))
@@ -3046,42 +3047,42 @@
 
 ;; We also include widening vector loads; these sign- or zero-extend each lane
 ;; to the next wider width (e.g., 16x4 -> 32x4).
-(rule 1 (lower (has_type $I16X8 (sload8x8 flags address offset)))
+(rule 1 (lower (has_type $I16X8 (sload8x8 (little_or_native_endian flags) address offset)))
         (if-let true (use_sse41))
         (x64_pmovsxbw (to_amode flags address offset)))
-(rule 1 (lower (has_type $I16X8 (uload8x8 flags address offset)))
+(rule 1 (lower (has_type $I16X8 (uload8x8 (little_or_native_endian flags) address offset)))
         (if-let true (use_sse41))
         (x64_pmovzxbw (to_amode flags address offset)))
-(rule 1 (lower (has_type $I32X4 (sload16x4 flags address offset)))
+(rule 1 (lower (has_type $I32X4 (sload16x4 (little_or_native_endian flags) address offset)))
         (if-let true (use_sse41))
         (x64_pmovsxwd (to_amode flags address offset)))
-(rule 1 (lower (has_type $I32X4 (uload16x4 flags address offset)))
+(rule 1 (lower (has_type $I32X4 (uload16x4 (little_or_native_endian flags) address offset)))
         (if-let true (use_sse41))
         (x64_pmovzxwd (to_amode flags address offset)))
-(rule 1 (lower (has_type $I64X2 (sload32x2 flags address offset)))
+(rule 1 (lower (has_type $I64X2 (sload32x2 (little_or_native_endian flags) address offset)))
         (if-let true (use_sse41))
         (x64_pmovsxdq (to_amode flags address offset)))
-(rule 1 (lower (has_type $I64X2 (uload32x2 flags address offset)))
+(rule 1 (lower (has_type $I64X2 (uload32x2 (little_or_native_endian flags) address offset)))
         (if-let true (use_sse41))
         (x64_pmovzxdq (to_amode flags address offset)))
 
-(rule (lower (has_type $I16X8 (sload8x8 flags address offset)))
+(rule (lower (has_type $I16X8 (sload8x8 (little_or_native_endian flags) address offset)))
       (lower_swiden_low $I16X8 (x64_movq_to_xmm (to_amode flags address offset))))
-(rule (lower (has_type $I16X8 (uload8x8 flags address offset)))
+(rule (lower (has_type $I16X8 (uload8x8 (little_or_native_endian flags) address offset)))
       (lower_uwiden_low $I16X8 (x64_movq_to_xmm (to_amode flags address offset))))
-(rule (lower (has_type $I32X4 (sload16x4 flags address offset)))
+(rule (lower (has_type $I32X4 (sload16x4 (little_or_native_endian flags) address offset)))
       (lower_swiden_low $I32X4 (x64_movq_to_xmm (to_amode flags address offset))))
-(rule (lower (has_type $I32X4 (uload16x4 flags address offset)))
+(rule (lower (has_type $I32X4 (uload16x4 (little_or_native_endian flags) address offset)))
       (lower_uwiden_low $I32X4 (x64_movq_to_xmm (to_amode flags address offset))))
-(rule (lower (has_type $I64X2 (sload32x2 flags address offset)))
+(rule (lower (has_type $I64X2 (sload32x2 (little_or_native_endian flags) address offset)))
       (lower_swiden_low $I64X2 (x64_movq_to_xmm (to_amode flags address offset))))
-(rule (lower (has_type $I64X2 (uload32x2 flags address offset)))
+(rule (lower (has_type $I64X2 (uload32x2 (little_or_native_endian flags) address offset)))
       (lower_uwiden_low $I64X2 (x64_movq_to_xmm (to_amode flags address offset))))
 
 ;; Rules for `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; 8-, 16-, 32- and 64-bit GPR stores.
-(rule store_x64_movrm -2 (lower (store flags
+(rule store_x64_movrm -2 (lower (store (little_or_native_endian flags)
                     value @ (value_type (is_gpr_type ty))
                     address
                     offset))
@@ -3089,31 +3090,31 @@
        (x64_movrm ty (to_amode flags address offset) value)))
 
 ;; Explicit 8/16/32-bit opcodes.
-(rule (lower (istore8 flags value address offset))
+(rule (lower (istore8 (little_or_native_endian flags) value address offset))
       (side_effect
        (x64_movrm $I8 (to_amode flags address offset) value)))
-(rule (lower (istore16 flags value address offset))
+(rule (lower (istore16 (little_or_native_endian flags) value address offset))
       (side_effect
        (x64_movrm $I16 (to_amode flags address offset) value)))
-(rule (lower (istore32 flags value address offset))
+(rule (lower (istore32 (little_or_native_endian flags) value address offset))
       (side_effect
        (x64_movrm $I32 (to_amode flags address offset) value)))
 
 ;; IMM stores
-(rule 4 (lower (store flags value @ (value_type (fits_in_64 ty)) address offset))
+(rule 4 (lower (store (little_or_native_endian flags) value @ (value_type (fits_in_64 ty)) address offset))
       (if-let (i32_from_iconst imm) value)
       (side_effect
        (x64_movimm_m ty (to_amode flags address offset) imm)))
 
 ;; F16 stores of values in XMM registers.
-(rule -2 (lower (store flags
+(rule -2 (lower (store (little_or_native_endian flags)
                     value @ (value_type (is_xmm_type (ty_16 _)))
                     address
                     offset))
       (side_effect
        (x64_movrm $I16 (to_amode flags address offset) (bitcast_xmm_to_gpr 16 value))))
 
-(rule -1 (lower (store flags
+(rule -1 (lower (store (little_or_native_endian flags)
                     value @ (value_type (is_xmm_type (ty_16 _)))
                     address
                     offset))
@@ -3122,7 +3123,7 @@
        (x64_pextrw_store (to_amode flags address offset) value 0)))
 
 ;; F32 stores of values in XMM registers.
-(rule -3 (lower (store flags
+(rule -3 (lower (store (little_or_native_endian flags)
                     value @ (value_type (is_xmm_type (ty_32 _)))
                     address
                     offset))
@@ -3130,7 +3131,7 @@
        (x64_movss_store (to_amode flags address offset) value)))
 
 ;; F64 stores of values in XMM registers.
-(rule -4 (lower (store flags
+(rule -4 (lower (store (little_or_native_endian flags)
                     value @ (value_type (is_xmm_type (ty_64 _)))
                     address
                     offset))
@@ -3138,7 +3139,7 @@
        (x64_movsd_store (to_amode flags address offset) value)))
 
 ;; Stores of F32X4 vectors.
-(rule 1 (lower (store flags
+(rule 1 (lower (store (little_or_native_endian flags)
                     value @ (value_type $F32X4)
                     address
                     offset))
@@ -3146,7 +3147,7 @@
        (x64_movups_store (to_amode flags address offset) value)))
 
 ;; Stores of F64X2 vectors.
-(rule 1 (lower (store flags
+(rule 1 (lower (store (little_or_native_endian flags)
                     value @ (value_type $F64X2)
                     address
                     offset))
@@ -3154,7 +3155,7 @@
        (x64_movupd_store (to_amode flags address offset) value)))
 
 ;; Stores of all other 128-bit vector types with integer lanes.
-(rule -5 (lower (store flags
+(rule -5 (lower (store (little_or_native_endian flags)
                     value @ (value_type (is_xmm_type (ty_128 _)))
                     address
                     offset))
@@ -3162,7 +3163,7 @@
        (x64_movdqu_store (to_amode flags address offset) value)))
 
 ;; Stores of I128 values: store the two 64-bit halves separately.
-(rule 0 (lower (store flags
+(rule 0 (lower (store (little_or_native_endian flags)
                     value @ (value_type $I128)
                     address
                     offset))
@@ -3181,40 +3182,40 @@
 ;; standard `movss` and `movsd` instructions can be used as-if we're storing a
 ;; f32 or f64 despite the source perhaps being an integer vector since the
 ;; result of the instruction is the same.
-(rule 2 (lower (store flags
+(rule 2 (lower (store (little_or_native_endian flags)
                     (has_type $F32 (extractlane value (u8_from_uimm8 0)))
                     address
                     offset))
       (side_effect
        (x64_movss_store (to_amode flags address offset) value)))
-(rule 2 (lower (store flags
+(rule 2 (lower (store (little_or_native_endian flags)
                     (has_type $F64 (extractlane value (u8_from_uimm8 0)))
                     address
                     offset))
       (side_effect
        (x64_movsd_store (to_amode flags address offset) value)))
-(rule 2 (lower (store flags
+(rule 2 (lower (store (little_or_native_endian flags)
                     (has_type $I8 (extractlane value (u8_from_uimm8 n)))
                     address
                     offset))
       (if-let true (use_sse41))
       (side_effect
        (x64_pextrb_store (to_amode flags address offset) value n)))
-(rule 2 (lower (store flags
+(rule 2 (lower (store (little_or_native_endian flags)
                     (has_type $I16 (extractlane value (u8_from_uimm8 n)))
                     address
                     offset))
       (if-let true (use_sse41))
       (side_effect
        (x64_pextrw_store (to_amode flags address offset) value n)))
-(rule 2 (lower (store flags
+(rule 2 (lower (store (little_or_native_endian flags)
                     (has_type $I32 (extractlane value (u8_from_uimm8 n)))
                     address
                     offset))
       (if-let true (use_sse41))
       (side_effect
        (x64_pextrd_store (to_amode flags address offset) value n)))
-(rule 2 (lower (store flags
+(rule 2 (lower (store (little_or_native_endian flags)
                     (has_type $I64 (extractlane value (u8_from_uimm8 n)))
                     address
                     offset))
@@ -3226,7 +3227,7 @@
 
 ;; Add mem, reg
 (rule store_x64_add_mem 3 (lower
-       (store flags
+       (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
                         (iadd (and
                                (sinkable_load sink)
@@ -3240,7 +3241,7 @@
 
 ;; Add mem, reg with args swapped
 (rule 2 (lower
-       (store flags
+       (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
                         (iadd src2
                               (and
@@ -3254,7 +3255,7 @@
 
 ;; Sub mem, reg
 (rule 2 (lower
-       (store flags
+       (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
                         (isub (and
                                (sinkable_load sink)
@@ -3268,7 +3269,7 @@
 
 ;; And mem, reg
 (rule 3 (lower
-       (store flags
+       (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
                         (band (and
                                (sinkable_load sink)
@@ -3282,7 +3283,7 @@
 
 ;; And mem, reg with args swapped
 (rule 2 (lower
-       (store flags
+       (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
                         (band src2
                               (and
@@ -3296,7 +3297,7 @@
 
 ;; Or mem, reg
 (rule 3 (lower
-       (store flags
+       (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
                         (bor (and
                                (sinkable_load sink)
@@ -3310,7 +3311,7 @@
 
 ;; Or mem, reg with args swapped
 (rule 2 (lower
-       (store flags
+       (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
                         (bor src2
                               (and
@@ -3324,7 +3325,7 @@
 
 ;; Xor mem, reg
 (rule 3 (lower
-       (store flags
+       (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
                         (bxor (and
                                (sinkable_load sink)
@@ -3338,7 +3339,7 @@
 
 ;; Xor mem, reg with args swapped
 (rule 2 (lower
-       (store flags
+       (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
                         (bxor src2
                               (and
@@ -3373,12 +3374,12 @@
 ;;
 ;; This lowering is only valid for I8, I16, I32, and I64. The sub-64-bit types
 ;; are zero extended, as with a normal load.
-(rule 1 (lower (has_type $I64 (atomic_load flags address)))
+(rule 1 (lower (has_type $I64 (atomic_load (little_or_native_endian flags) address)))
       (x64_mov (to_amode flags address (zero_offset))))
-(rule (lower (has_type (and (fits_in_32 ty) (ty_int _)) (atomic_load flags address)))
+(rule (lower (has_type (and (fits_in_32 ty) (ty_int _)) (atomic_load (little_or_native_endian flags) address)))
       (x64_movzx (ext_mode (ty_bits_u16 ty) 64) (to_amode flags address (zero_offset))))
 ;; Lower 128-bit `atomic_load` using `cmpxchg16b`.
-(rule 1 (lower (has_type $I128 (atomic_load flags address)))
+(rule 1 (lower (has_type $I128 (atomic_load (little_or_native_endian flags) address)))
       (if-let true (use_cmpxchg16b))
       (x64_cmpxchg16b (value_regs (imm $I64 0) (imm $I64 0)) (value_regs (imm $I64 0) (imm $I64 0)) (to_amode flags address (zero_offset))))
 
@@ -3386,21 +3387,21 @@
 
 ;; This is a normal store followed by an `mfence` instruction. This lowering is
 ;; only valid for I8, I16, I32, and I64.
-(rule (lower (atomic_store flags
+(rule (lower (atomic_store (little_or_native_endian flags)
                            value @ (value_type (and (fits_in_64 ty) (ty_int _)))
                            address))
       (side_effect (side_effect_concat
        (x64_movrm ty (to_amode flags address (zero_offset)) value)
        (x64_mfence))))
 ;; Lower 128-bit `atomic_store` using `cmpxchg16b`.
-(rule 1 (lower (atomic_store flags value @ (value_type $I128) address))
+(rule 1 (lower (atomic_store (little_or_native_endian flags) value @ (value_type $I128) address))
       (if-let true (use_cmpxchg16b))
       (side_effect (x64_atomic_128_store_seq (to_amode flags address (zero_offset)) value)))
 
 ;; Rules for `atomic_cas` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (and (fits_in_64 ty) (ty_int _))
-                  (atomic_cas flags address expected replacement)))
+                  (atomic_cas (little_or_native_endian flags) address expected replacement)))
       (x64_cmpxchg ty expected replacement (to_amode flags address (zero_offset))))
 (rule 1 (lower (has_type $I128 (atomic_cas flags address expected replacement)))
         (if-let true (use_cmpxchg16b))
@@ -3411,51 +3412,51 @@
 ;; This is a simple, general-case atomic update, based on a loop involving
 ;; `cmpxchg`.
 (rule (lower (has_type (and (fits_in_64 ty) (ty_int _))
-                  (atomic_rmw flags op address input)))
+                  (atomic_rmw (little_or_native_endian flags) op address input)))
       (x64_atomic_rmw_seq ty (atomic_rmw_seq_op op) (to_amode flags address (zero_offset)) input))
 
 ;; `Add` and `Sub` can use `lock xadd`
 (rule 1 (lower (has_type (and (fits_in_64 ty) (ty_int _))
-                  (atomic_rmw flags (AtomicRmwOp.Add) address input)))
+                  (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Add) address input)))
       (x64_xadd (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
 (rule 1 (lower (has_type (and (fits_in_64 ty) (ty_int _))
-                  (atomic_rmw flags (AtomicRmwOp.Sub) address input)))
+                  (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Sub) address input)))
       (x64_xadd (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) (x64_neg ty input)))
 ;; `Xchg` can use `xchg`
 (rule 1 (lower (has_type (and (fits_in_64 ty) (ty_int _))
-                  (atomic_rmw flags (AtomicRmwOp.Xchg) address input)))
+                  (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Xchg) address input)))
       (x64_xchg (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
 
 ;; `Add`, `Sub`, `And`, `Or` and `Xor` can use `lock`-prefixed instructions if
 ;; the old value is not required.
 (rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
-                  (atomic_rmw flags (AtomicRmwOp.Add) address input)))
+                  (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Add) address input)))
       (if-let (first_result res) i)
       (if-let true (value_is_unused res))
       (side_effect_as_invalid (x64_lock_add (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input)))
 (rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
-                  (atomic_rmw flags (AtomicRmwOp.Sub) address input)))
+                  (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Sub) address input)))
       (if-let (first_result res) i)
       (if-let true (value_is_unused res))
       (side_effect_as_invalid (x64_lock_sub (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input)))
 (rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
-                  (atomic_rmw flags (AtomicRmwOp.And) address input)))
+                  (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.And) address input)))
       (if-let (first_result res) i)
       (if-let true (value_is_unused res))
       (side_effect_as_invalid (x64_lock_and (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input)))
 (rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
-                  (atomic_rmw flags (AtomicRmwOp.Or) address input)))
+                  (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Or) address input)))
       (if-let (first_result res) i)
       (if-let true (value_is_unused res))
       (side_effect_as_invalid (x64_lock_or (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input)))
 (rule 2 (lower i @ (has_type (fits_in_64 (ty_int ty))
-                  (atomic_rmw flags (AtomicRmwOp.Xor) address input)))
+                  (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Xor) address input)))
       (if-let (first_result res) i)
       (if-let true (value_is_unused res))
       (side_effect_as_invalid (x64_lock_xor (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input)))
 
 ;; 128-bit integers always use a `lock cmpxchg16b` loop.
-(rule 3 (lower (has_type $I128 (atomic_rmw flags op address input)))
+(rule 3 (lower (has_type $I128 (atomic_rmw (little_or_native_endian flags) op address input)))
         (if-let true (use_cmpxchg16b))
         (x64_atomic_128_rmw_seq op (to_amode flags address (zero_offset)) input))
 

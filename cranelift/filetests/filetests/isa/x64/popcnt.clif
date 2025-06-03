@@ -73,7 +73,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    0(%rdi), %rdx
+;   movq (%rdi), %rdx
 ;   movq    %rdx, %rcx
 ;   shrq $0x1, %rcx
 ;   movabsq $8608480567731124087, %r8
@@ -194,7 +194,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movl    0(%rdi), %eax
+;   movl (%rdi), %eax
 ;   movq    %rax, %rcx
 ;   shrl $0x1, %ecx
 ;   movl    $2004318071, %r8d

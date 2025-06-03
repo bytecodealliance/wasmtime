@@ -86,3 +86,8 @@
                            (sextend ty a @ (value_type small))
                            (sextend ty b @ (value_type small))))
       (sextend ty (select small cond a b)))
+
+(rule (simplify (select ty (sgt _ x (iconst_u ty 0)) x (ineg ty x))) (subsume (iabs ty x)))
+(rule (simplify (select ty (sge _ x (iconst_u ty 0)) x (ineg ty x))) (subsume (iabs ty x)))
+(rule (simplify (select ty (sle _ x (iconst_u ty 0)) (ineg ty x) x)) (subsume (iabs ty x)))
+(rule (simplify (select ty (slt _ x (iconst_u ty 0)) (ineg ty x) x)) (subsume (iabs ty x)))

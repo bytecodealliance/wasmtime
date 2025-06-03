@@ -13,7 +13,7 @@ block0(v0: i8):
 ; block0:
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
-;   movsbl  %dil, %r9d
+;   movsbl %dil, %r9d
 ;   cvtsi2ssl %r9d, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -43,7 +43,7 @@ block0(v0: i16):
 ; block0:
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
-;   movswl  %di, %r9d
+;   movswl %di, %r9d
 ;   cvtsi2ssl %r9d, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -129,7 +129,7 @@ block0(v0: i8):
 ; block0:
 ;   uninit  %xmm0
 ;   xorpd %xmm0, %xmm0
-;   movsbl  %dil, %r9d
+;   movsbl %dil, %r9d
 ;   cvtsi2sdl %r9d, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -159,7 +159,7 @@ block0(v0: i16):
 ; block0:
 ;   uninit  %xmm0
 ;   xorpd %xmm0, %xmm0
-;   movswl  %di, %r9d
+;   movswl %di, %r9d
 ;   cvtsi2sdl %r9d, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -277,15 +277,15 @@ block0(v0: i8, v1: i16, v2: i32, v3: i64):
 ; block0:
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
-;   movzbq  %dil, %r8
+;   movzbq %dil, %r8
 ;   cvtsi2ssq %r8, %xmm0
 ;   uninit  %xmm6
 ;   xorps %xmm6, %xmm6
-;   movzwq  %si, %r8
+;   movzwq %si, %r8
 ;   cvtsi2ssq %r8, %xmm6
 ;   uninit  %xmm7
 ;   xorps %xmm7, %xmm7
-;   movl    %edx, %r8d
+;   movl %edx, %r8d
 ;   cvtsi2ssq %r8, %xmm7
 ;   u64_to_f32_seq %rcx, %xmm4, %r8, %rdx
 ;   addss %xmm6, %xmm0
@@ -338,7 +338,7 @@ block0(v0: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   unpcklps %xmm0, const(0), %xmm0
+;   unpcklps (%rip), %xmm0
 ;   subpd (%rip), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -383,7 +383,7 @@ block0(v0: i32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm3
+;   movdqa %xmm0, %xmm3
 ;   pslld $0x10, %xmm3
 ;   psrld $0x10, %xmm3
 ;   psubd %xmm3, %xmm0
@@ -1115,12 +1115,12 @@ block0(v0: f32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm4
+;   movdqa %xmm0, %xmm4
 ;   cmpps   $0, %xmm4, %xmm0, %xmm4
 ;   andps %xmm4, %xmm0
 ;   pxor %xmm0, %xmm4
 ;   cvttps2dq %xmm0, %xmm1
-;   movdqa  %xmm1, %xmm0
+;   movdqa %xmm1, %xmm0
 ;   pand %xmm4, %xmm0
 ;   psrad $0x1f, %xmm0
 ;   pxor %xmm1, %xmm0
@@ -1156,16 +1156,16 @@ block0(v0: i64x2):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movdqa  %xmm0, %xmm7
+;   movdqa %xmm0, %xmm7
 ;   pand (%rip), %xmm7
-;   movdqa  %xmm7, %xmm1
+;   movdqa %xmm7, %xmm1
 ;   por (%rip), %xmm1
-;   movdqa  %xmm1, %xmm7
+;   movdqa %xmm1, %xmm7
 ;   psrlq $0x20, %xmm0
 ;   por (%rip), %xmm0
 ;   subpd (%rip), %xmm0
-;   movdqa  %xmm0, %xmm1
-;   movdqa  %xmm7, %xmm0
+;   movdqa %xmm0, %xmm1
+;   movdqa %xmm7, %xmm0
 ;   addpd %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -1208,14 +1208,14 @@ block0(v0: i64x2):
 ; block0:
 ;   uninit  %xmm1
 ;   xorpd %xmm1, %xmm1
-;   movdqa  %xmm0, %xmm6
+;   movdqa %xmm0, %xmm6
 ;   movq %xmm6, %r9
-;   movdqa  %xmm1, %xmm0
+;   movdqa %xmm1, %xmm0
 ;   cvtsi2sdq %r9, %xmm0
 ;   pshufd  $238, %xmm6, %xmm2
 ;   movq %xmm2, %rcx
 ;   cvtsi2sdq %rcx, %xmm1
-;   unpcklpd %xmm0, %xmm1, %xmm0
+;   unpcklpd %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

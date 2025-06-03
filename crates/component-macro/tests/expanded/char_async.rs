@@ -152,14 +152,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::chars::Host + Send,
-            T: Send + 'static,
+            T: 'static + Send,
         {
-            foo::foo::chars::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::chars::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_chars(&self) -> &exports::foo::foo::chars::Guest {
@@ -180,14 +180,24 @@ pub mod foo {
                 /// A function that returns a character
                 async fn return_char(&mut self) -> char;
             }
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {
+                /// A function that accepts a character
+                async fn take_char(&mut self, x: char) -> () {
+                    Host::take_char(*self, x).await
+                }
+                /// A function that returns a character
+                async fn return_char(&mut self) -> char {
+                    Host::return_char(*self).await
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
                 D: wasmtime::component::HasData,
-                for<'a> D::Data<'a>: Host + Send,
-                T: Send + 'static,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
             {
                 let mut inst = linker.instance("foo:foo/chars")?;
                 inst.func_wrap_async(
@@ -214,16 +224,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                /// A function that accepts a character
-                async fn take_char(&mut self, x: char) -> () {
-                    Host::take_char(*self, x).await
-                }
-                /// A function that returns a character
-                async fn return_char(&mut self) -> char {
-                    Host::return_char(*self).await
-                }
             }
         }
     }

@@ -67,8 +67,10 @@ pub enum Feature {
     ssse3,
     sse41,
     bmi1,
+    bmi2,
     lzcnt,
     popcnt,
+    avx,
 }
 
 /// List all CPU features.
@@ -86,8 +88,10 @@ pub const ALL_FEATURES: &[Feature] = &[
     Feature::ssse3,
     Feature::sse41,
     Feature::bmi1,
+    Feature::bmi2,
     Feature::lzcnt,
     Feature::popcnt,
+    Feature::avx,
 ];
 
 impl fmt::Display for Feature {

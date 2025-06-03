@@ -141,151 +141,6 @@ pub(crate) fn emit(
         )
     }
     match inst {
-        Inst::AluRmRVex {
-            size,
-            op,
-            dst,
-            src1,
-            src2,
-        } => {
-            use AluRmROpcode::*;
-            use LegacyPrefixes as LP;
-
-            let dst = dst.to_reg().to_reg();
-            let src1 = src1.to_reg();
-            let src2 = match src2.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let w = match size {
-                OperandSize::Size32 => false,
-                OperandSize::Size64 => true,
-
-                // the other cases would be rejected by isle constructors
-                _ => unreachable!(),
-            };
-
-            let (prefix, opcode) = match op {
-                Andn => (LP::None, 0xf2),
-                Sarx => (LP::_F3, 0xf7),
-                Shrx => (LP::_F2, 0xf7),
-                Shlx => (LP::_66, 0xf7),
-                Bzhi => (LP::None, 0xf5),
-            };
-
-            VexInstruction::new()
-                .prefix(prefix)
-                .map(OpcodeMap::_0F38)
-                .w(w)
-                .reg(dst.to_real_reg().unwrap().hw_enc())
-                .vvvv(src1.to_real_reg().unwrap().hw_enc())
-                .rm(src2)
-                .opcode(opcode)
-                .encode(sink);
-        }
-
-        Inst::UnaryRmRVex { size, op, src, dst } => {
-            let dst = dst.to_reg().to_reg();
-            let src = match src.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let (opcode, opcode_ext) = match op {
-                UnaryRmRVexOpcode::Blsr => (0xF3, 1),
-                UnaryRmRVexOpcode::Blsmsk => (0xF3, 2),
-                UnaryRmRVexOpcode::Blsi => (0xF3, 3),
-            };
-
-            VexInstruction::new()
-                .map(OpcodeMap::_0F38)
-                .w(*size == OperandSize::Size64)
-                .opcode(opcode)
-                .reg(opcode_ext)
-                .vvvv(dst.to_real_reg().unwrap().hw_enc())
-                .rm(src)
-                .encode(sink);
-        }
-
-        Inst::UnaryRmRImmVex {
-            size,
-            op,
-            src,
-            dst,
-            imm,
-        } => {
-            let dst = dst.to_reg().to_reg();
-            let src = match src.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let opcode = match op {
-                UnaryRmRImmVexOpcode::Rorx => 0xF0,
-            };
-
-            VexInstruction::new()
-                .prefix(LegacyPrefixes::_F2)
-                .map(OpcodeMap::_0F3A)
-                .w(*size == OperandSize::Size64)
-                .opcode(opcode)
-                .reg(dst.to_real_reg().unwrap().hw_enc())
-                .rm(src)
-                .imm(*imm)
-                .encode(sink);
-        }
-
-        Inst::MulX {
-            size,
-            src1,
-            src2,
-            dst_lo,
-            dst_hi,
-        } => {
-            let src1 = src1.to_reg();
-            let dst_lo = dst_lo.to_reg().to_reg();
-            let dst_hi = dst_hi.to_reg().to_reg();
-            debug_assert_eq!(src1, regs::rdx());
-            let src2 = match src2.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let dst_hi = dst_hi.to_real_reg().unwrap().hw_enc();
-            let dst_lo = if dst_lo.is_invalid_sentinel() {
-                dst_hi
-            } else {
-                dst_lo.to_real_reg().unwrap().hw_enc()
-            };
-
-            VexInstruction::new()
-                .prefix(LegacyPrefixes::_F2)
-                .map(OpcodeMap::_0F38)
-                .w(*size == OperandSize::Size64)
-                .opcode(0xf6)
-                .reg(dst_hi)
-                .vvvv(dst_lo)
-                .rm(src2)
-                .encode(sink);
-        }
-
         Inst::CheckedSRemSeq { divisor, .. } | Inst::CheckedSRemSeq8 { divisor, .. } => {
             // Validate that the register constraints of the dividend and the
             // destination are all as expected.
@@ -492,92 +347,6 @@ pub(crate) fn emit(
             Inst::MovRR { size, src, dst }.emit(sink, info, state);
         }
 
-        Inst::MovzxRmR { ext_mode, src, dst } => {
-            let dst = dst.to_reg().to_reg();
-            let (opcodes, num_opcodes, mut rex_flags) = match ext_mode {
-                ExtMode::BL => {
-                    // MOVZBL is (REX.W==0) 0F B6 /r
-                    (0x0FB6, 2, RexFlags::clear_w())
-                }
-                ExtMode::BQ => {
-                    // MOVZBQ is (REX.W==1) 0F B6 /r
-                    // I'm not sure why the Intel manual offers different
-                    // encodings for MOVZBQ than for MOVZBL.  AIUI they should
-                    // achieve the same, since MOVZBL is just going to zero out
-                    // the upper half of the destination anyway.
-                    (0x0FB6, 2, RexFlags::set_w())
-                }
-                ExtMode::WL => {
-                    // MOVZWL is (REX.W==0) 0F B7 /r
-                    (0x0FB7, 2, RexFlags::clear_w())
-                }
-                ExtMode::WQ => {
-                    // MOVZWQ is (REX.W==1) 0F B7 /r
-                    (0x0FB7, 2, RexFlags::set_w())
-                }
-                ExtMode::LQ => {
-                    // This is just a standard 32 bit load, and we rely on the
-                    // default zero-extension rule to perform the extension.
-                    // Note that in reg/reg mode, gcc seems to use the swapped form R/RM, which we
-                    // don't do here, since it's the same encoding size.
-                    // MOV r/m32, r32 is (REX.W==0) 8B /r
-                    (0x8B, 1, RexFlags::clear_w())
-                }
-            };
-
-            match src.clone().to_reg_mem() {
-                RegMem::Reg { reg: src } => {
-                    match ext_mode {
-                        ExtMode::BL | ExtMode::BQ => {
-                            // A redundant REX prefix must be emitted for certain register inputs.
-                            rex_flags.always_emit_if_8bit_needed(src);
-                        }
-                        _ => {}
-                    }
-                    emit_std_reg_reg(
-                        sink,
-                        LegacyPrefixes::None,
-                        opcodes,
-                        num_opcodes,
-                        dst,
-                        src,
-                        rex_flags,
-                    )
-                }
-
-                RegMem::Mem { addr: src } => {
-                    let src = &src.finalize(state.frame_layout(), sink).clone();
-
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefixes::None,
-                        opcodes,
-                        num_opcodes,
-                        dst,
-                        src,
-                        rex_flags,
-                        0,
-                    )
-                }
-            }
-        }
-
-        Inst::Mov64MR { src, dst } => {
-            let dst = dst.to_reg().to_reg();
-            let src = &src.finalize(state.frame_layout(), sink).clone();
-
-            emit_std_reg_mem(
-                sink,
-                LegacyPrefixes::None,
-                0x8B,
-                1,
-                dst,
-                src,
-                RexFlags::set_w(),
-                0,
-            )
-        }
-
         Inst::LoadEffectiveAddress { addr, dst, size } => {
             let dst = dst.to_reg().to_reg();
             let amode = addr.finalize(state.frame_layout(), sink).clone();
@@ -658,68 +427,6 @@ pub(crate) fn emit(
                     emit_std_reg_mem(sink, LegacyPrefixes::None, 0x8D, 1, dst, &amode, flags, 0);
                 }
             };
-        }
-
-        Inst::MovsxRmR { ext_mode, src, dst } => {
-            let dst = dst.to_reg().to_reg();
-            let (opcodes, num_opcodes, mut rex_flags) = match ext_mode {
-                ExtMode::BL => {
-                    // MOVSBL is (REX.W==0) 0F BE /r
-                    (0x0FBE, 2, RexFlags::clear_w())
-                }
-                ExtMode::BQ => {
-                    // MOVSBQ is (REX.W==1) 0F BE /r
-                    (0x0FBE, 2, RexFlags::set_w())
-                }
-                ExtMode::WL => {
-                    // MOVSWL is (REX.W==0) 0F BF /r
-                    (0x0FBF, 2, RexFlags::clear_w())
-                }
-                ExtMode::WQ => {
-                    // MOVSWQ is (REX.W==1) 0F BF /r
-                    (0x0FBF, 2, RexFlags::set_w())
-                }
-                ExtMode::LQ => {
-                    // MOVSLQ is (REX.W==1) 63 /r
-                    (0x63, 1, RexFlags::set_w())
-                }
-            };
-
-            match src.clone().to_reg_mem() {
-                RegMem::Reg { reg: src } => {
-                    match ext_mode {
-                        ExtMode::BL | ExtMode::BQ => {
-                            // A redundant REX prefix must be emitted for certain register inputs.
-                            rex_flags.always_emit_if_8bit_needed(src);
-                        }
-                        _ => {}
-                    }
-                    emit_std_reg_reg(
-                        sink,
-                        LegacyPrefixes::None,
-                        opcodes,
-                        num_opcodes,
-                        dst,
-                        src,
-                        rex_flags,
-                    )
-                }
-
-                RegMem::Mem { addr: src } => {
-                    let src = &src.finalize(state.frame_layout(), sink).clone();
-
-                    emit_std_reg_mem(
-                        sink,
-                        LegacyPrefixes::None,
-                        opcodes,
-                        num_opcodes,
-                        dst,
-                        src,
-                        rex_flags,
-                        0,
-                    )
-                }
-            }
         }
 
         Inst::MovRM { size, src, dst } => {
@@ -880,10 +587,10 @@ pub(crate) fn emit(
             alternative,
             dst,
         } => {
-            let alternative = alternative.to_reg();
-            let dst = dst.to_writable_reg();
+            let alternative = *alternative;
+            let dst = *dst;
             debug_assert_eq!(alternative, dst.to_reg());
-            let consequent = consequent.to_reg();
+            let consequent = *consequent;
 
             // Lowering of the Select IR opcode when the input is an fcmp relies on the fact that
             // this doesn't clobber flags. Make sure to not do so here.
@@ -891,7 +598,8 @@ pub(crate) fn emit(
 
             // Jump if cc is *not* set.
             one_way_jmp(sink, cc.invert(), next);
-            Inst::gen_move(dst, consequent, *ty).emit(sink, info, state);
+            Inst::gen_move(dst.map(|r| r.to_reg()), consequent.to_reg(), *ty)
+                .emit(sink, info, state);
 
             sink.bind_label(next, state.ctrl_plane_mut());
         }
@@ -1253,11 +961,9 @@ pub(crate) fn emit(
             //
 
             let mut exchange = |offset, reg| {
-                let inst = Inst::Mov64MR {
-                    src: Amode::imm_reg(offset, **load_context_ptr).into(),
-                    dst: tmp1,
-                };
-                emit(&inst, sink, info, state);
+                let addr = SyntheticAmode::real(Amode::imm_reg(offset, **load_context_ptr));
+                let inst = asm::inst::movq_rm::new(tmp1, addr).into();
+                Inst::External { inst }.emit(sink, info, state);
 
                 let inst = Inst::MovRM {
                     size: OperandSize::Size64,
@@ -1282,11 +988,9 @@ pub(crate) fn emit(
             // Load target PC, store resume PC, jump to target PC
             //
 
-            let inst = Inst::Mov64MR {
-                src: Amode::imm_reg(pc_offset, **load_context_ptr).into(),
-                dst: tmp1,
-            };
-            emit(&inst, sink, info, state);
+            let addr = SyntheticAmode::real(Amode::imm_reg(pc_offset, **load_context_ptr));
+            let inst = asm::inst::movq_rm::new(tmp1, addr).into();
+            Inst::External { inst }.emit(sink, info, state);
 
             let amode = Amode::RipRelative { target: resume };
             let inst = Inst::lea(amode, tmp2.map(Reg::from));
@@ -1595,14 +1299,6 @@ pub(crate) fn emit(
             let rex = RexFlags::clear_w();
 
             let (prefix, opcode, num_opcodes) = match op {
-                SseOpcode::Movaps => (LegacyPrefixes::None, 0x0F28, 2),
-                SseOpcode::Movapd => (LegacyPrefixes::_66, 0x0F28, 2),
-                SseOpcode::Movdqa => (LegacyPrefixes::_66, 0x0F6F, 2),
-                SseOpcode::Movdqu => (LegacyPrefixes::_F3, 0x0F6F, 2),
-                SseOpcode::Movsd => (LegacyPrefixes::_F2, 0x0F10, 2),
-                SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F10, 2),
-                SseOpcode::Movups => (LegacyPrefixes::None, 0x0F10, 2),
-                SseOpcode::Movupd => (LegacyPrefixes::_66, 0x0F10, 2),
                 SseOpcode::Pabsb => (LegacyPrefixes::_66, 0x0F381C, 3),
                 SseOpcode::Pabsw => (LegacyPrefixes::_66, 0x0F381D, 3),
                 SseOpcode::Pabsd => (LegacyPrefixes::_66, 0x0F381E, 3),
@@ -1754,7 +1450,6 @@ pub(crate) fn emit(
                 SseOpcode::Divss => (LegacyPrefixes::_F3, 0x0F5E, 2),
                 SseOpcode::Divsd => (LegacyPrefixes::_F2, 0x0F5E, 2),
                 SseOpcode::Movlhps => (LegacyPrefixes::None, 0x0F16, 2),
-                SseOpcode::Movsd => (LegacyPrefixes::_F2, 0x0F10, 2),
                 SseOpcode::Packssdw => (LegacyPrefixes::_66, 0x0F6B, 2),
                 SseOpcode::Packsswb => (LegacyPrefixes::_66, 0x0F63, 2),
                 SseOpcode::Packusdw => (LegacyPrefixes::_66, 0x0F382B, 3),
@@ -1771,26 +1466,7 @@ pub(crate) fn emit(
                 SseOpcode::Pcmpgtd => (LegacyPrefixes::_66, 0x0F66, 2),
                 SseOpcode::Pcmpgtq => (LegacyPrefixes::_66, 0x0F3837, 3),
                 SseOpcode::Pmaddwd => (LegacyPrefixes::_66, 0x0FF5, 2),
-                SseOpcode::Pmuldq => (LegacyPrefixes::_66, 0x0F3828, 3),
-                SseOpcode::Pmulhw => (LegacyPrefixes::_66, 0x0FE5, 2),
-                SseOpcode::Pmulhrsw => (LegacyPrefixes::_66, 0x0F380B, 3),
-                SseOpcode::Pmulhuw => (LegacyPrefixes::_66, 0x0FE4, 2),
-                SseOpcode::Pmulld => (LegacyPrefixes::_66, 0x0F3840, 3),
-                SseOpcode::Pmullw => (LegacyPrefixes::_66, 0x0FD5, 2),
-                SseOpcode::Pmuludq => (LegacyPrefixes::_66, 0x0FF4, 2),
                 SseOpcode::Pshufb => (LegacyPrefixes::_66, 0x0F3800, 3),
-                SseOpcode::Punpckhbw => (LegacyPrefixes::_66, 0x0F68, 2),
-                SseOpcode::Punpckhwd => (LegacyPrefixes::_66, 0x0F69, 2),
-                SseOpcode::Punpcklbw => (LegacyPrefixes::_66, 0x0F60, 2),
-                SseOpcode::Punpcklwd => (LegacyPrefixes::_66, 0x0F61, 2),
-                SseOpcode::Punpckldq => (LegacyPrefixes::_66, 0x0F62, 2),
-                SseOpcode::Punpcklqdq => (LegacyPrefixes::_66, 0x0F6C, 2),
-                SseOpcode::Punpckhdq => (LegacyPrefixes::_66, 0x0F6A, 2),
-                SseOpcode::Punpckhqdq => (LegacyPrefixes::_66, 0x0F6D, 2),
-                SseOpcode::Unpcklps => (LegacyPrefixes::None, 0x0F14, 2),
-                SseOpcode::Unpckhps => (LegacyPrefixes::None, 0x0F15, 2),
-                SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F10, 2),
-                SseOpcode::Unpcklpd => (LegacyPrefixes::_66, 0x0F14, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
@@ -2685,24 +2361,6 @@ pub(crate) fn emit(
             // an instruction, such as `xor <tmp>, <tmp>`, that semantically
             // reads this undefined value but arithmetically produces the same
             // result regardless of its value.
-        }
-
-        Inst::XmmMovRM { op, src, dst } => {
-            let src = src.to_reg();
-            let dst = dst.clone();
-
-            let (prefix, opcode) = match op {
-                SseOpcode::Movaps => (LegacyPrefixes::None, 0x0F29),
-                SseOpcode::Movapd => (LegacyPrefixes::_66, 0x0F29),
-                SseOpcode::Movdqu => (LegacyPrefixes::_F3, 0x0F7F),
-                SseOpcode::Movss => (LegacyPrefixes::_F3, 0x0F11),
-                SseOpcode::Movsd => (LegacyPrefixes::_F2, 0x0F11),
-                SseOpcode::Movups => (LegacyPrefixes::None, 0x0F11),
-                SseOpcode::Movupd => (LegacyPrefixes::_66, 0x0F11),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            let dst = &dst.finalize(state.frame_layout(), sink);
-            emit_std_reg_mem(sink, prefix, opcode, 2, src, dst, RexFlags::clear_w(), 0);
         }
 
         Inst::XmmCmpRmR { op, src1, src2 } => {
@@ -4022,8 +3680,10 @@ fn emit_return_call_common_sequence<T>(
 
     let incoming_args_diff = state.frame_layout().tail_args_size - call_info.new_stack_arg_size;
     if incoming_args_diff > 0 {
-        // Move the saved return address up by `incoming_args_diff`
-        Inst::mov64_m_r(Amode::imm_reg(0, regs::rsp()), tmp).emit(sink, info, state);
+        // Move the saved return address up by `incoming_args_diff`.
+        let addr = Amode::imm_reg(0, regs::rsp());
+        let inst = asm::inst::movq_rm::new(tmp, addr).into();
+        Inst::External { inst }.emit(sink, info, state);
         Inst::mov_r_m(
             OperandSize::Size64,
             tmp.to_reg(),

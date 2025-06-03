@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::runtime::vm;
 use crate::store::StoreOpaque;
 use crate::{StoreContext, StoreContextMut};
 use core::fmt;
@@ -10,23 +11,24 @@ use core::ops::{Index, IndexMut};
 // it only as `pub(crate)`. This avoids a ton of
 // crate-private-type-in-public-interface errors that aren't really too
 // interesting to deal with.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct InstanceId(pub(super) usize);
 
 impl InstanceId {
+    pub const INVALID: InstanceId = InstanceId(usize::MAX);
+
     pub fn from_index(idx: usize) -> InstanceId {
+        debug_assert!(idx != Self::INVALID.0);
         InstanceId(idx)
+    }
+
+    pub fn index(&self) -> usize {
+        self.0
     }
 }
 
 pub struct StoreData {
     id: StoreId,
-    funcs: Vec<crate::func::FuncData>,
-    tables: Vec<crate::runtime::vm::ExportTable>,
-    globals: Vec<crate::runtime::vm::ExportGlobal>,
-    instances: Vec<crate::instance::InstanceData>,
-    memories: Vec<crate::runtime::vm::ExportMemory>,
-    tags: Vec<crate::runtime::vm::ExportTag>,
     #[cfg(feature = "component-model")]
     pub(crate) components: crate::component::ComponentStoreData,
 }
@@ -36,36 +38,10 @@ pub trait StoredData: Sized {
     fn list_mut(data: &mut StoreData) -> &mut Vec<Self>;
 }
 
-macro_rules! impl_store_data {
-    ($($field:ident => $t:ty,)*) => ($(
-        impl StoredData for $t {
-            #[inline]
-            fn list(data: &StoreData) -> &Vec<Self> { &data.$field }
-            #[inline]
-            fn list_mut(data: &mut StoreData) -> &mut Vec<Self> { &mut data.$field }
-        }
-    )*)
-}
-
-impl_store_data! {
-    funcs => crate::func::FuncData,
-    tables => crate::runtime::vm::ExportTable,
-    globals => crate::runtime::vm::ExportGlobal,
-    instances => crate::instance::InstanceData,
-    memories => crate::runtime::vm::ExportMemory,
-    tags => crate::runtime::vm::ExportTag,
-}
-
 impl StoreData {
     pub fn new() -> StoreData {
         StoreData {
             id: StoreId::allocate(),
-            funcs: Vec::new(),
-            tables: Vec::new(),
-            globals: Vec::new(),
-            instances: Vec::new(),
-            memories: Vec::new(),
-            tags: Vec::new(),
             #[cfg(feature = "component-model")]
             components: Default::default(),
         }
@@ -112,10 +88,6 @@ impl StoreData {
         let id = self.id;
         (0..T::list(self).len()).map(move |i| Stored::new(id, i))
     }
-
-    pub(crate) fn reserve_funcs(&mut self, count: usize) {
-        self.funcs.reserve(count);
-    }
 }
 
 impl<T> Index<Stored<T>> for StoreData
@@ -149,32 +121,6 @@ where
     }
 }
 
-// forward StoreContext => StoreData
-impl<I, T> Index<I> for StoreContext<'_, T>
-where
-    StoreData: Index<I>,
-{
-    type Output = <StoreData as Index<I>>::Output;
-
-    #[inline]
-    fn index(&self, index: I) -> &Self::Output {
-        self.0.store_data.index(index)
-    }
-}
-
-// forward StoreContextMut => StoreData
-impl<I, T> Index<I> for StoreContextMut<'_, T>
-where
-    StoreData: Index<I>,
-{
-    type Output = <StoreData as Index<I>>::Output;
-
-    #[inline]
-    fn index(&self, index: I) -> &Self::Output {
-        self.0.store_data.index(index)
-    }
-}
-
 // forward StoreOpaque => StoreData
 impl<I> Index<I> for StoreOpaque
 where
@@ -194,6 +140,42 @@ where
     #[inline]
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         self.store_data_mut().index_mut(index)
+    }
+}
+
+// forward StoreContext => StoreOpaque
+impl<I, T> Index<I> for StoreContext<'_, T>
+where
+    StoreOpaque: Index<I>,
+{
+    type Output = <StoreOpaque as Index<I>>::Output;
+
+    #[inline]
+    fn index(&self, index: I) -> &Self::Output {
+        self.0.index(index)
+    }
+}
+
+// forward StoreContextMut => StoreOpaque
+impl<I, T> Index<I> for StoreContextMut<'_, T>
+where
+    StoreOpaque: Index<I>,
+{
+    type Output = <StoreOpaque as Index<I>>::Output;
+
+    #[inline]
+    fn index(&self, index: I) -> &Self::Output {
+        self.0.index(index)
+    }
+}
+
+impl<I, T> IndexMut<I> for StoreContextMut<'_, T>
+where
+    StoreOpaque: IndexMut<I>,
+{
+    #[inline]
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        self.0.index_mut(index)
     }
 }
 
@@ -296,7 +278,7 @@ impl<T> Stored<T> {
         self.store_id.assert_belongs_to(store)
     }
 
-    fn index(&self) -> usize {
+    pub(crate) fn index(&self) -> usize {
         self.index
     }
 }
@@ -323,5 +305,59 @@ impl<T> Clone for Stored<T> {
 impl<T> fmt::Debug for Stored<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "store={}, index={}", self.store_id.0, self.index())
+    }
+}
+
+/// A type used to represent an allocated `vm::Instance` located within a store.
+///
+/// This type is held in various locations as a "safe index" into a store. This
+/// encapsulates a `StoreId` which owns the instance as well as the index within
+/// the store's list of which instance it's pointing to.
+///
+/// This type can notably be used to index into a `StoreOpaque` to project out
+/// the `vm::Instance` that is associated with this id.
+#[repr(C)] // used by reference in the C API
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct StoreInstanceId {
+    store_id: StoreId,
+    instance: InstanceId,
+}
+
+impl StoreInstanceId {
+    pub(crate) fn new(store_id: StoreId, instance: InstanceId) -> StoreInstanceId {
+        StoreInstanceId { store_id, instance }
+    }
+
+    #[inline]
+    pub fn assert_belongs_to(&self, store: StoreId) {
+        self.store_id.assert_belongs_to(store)
+    }
+
+    #[inline]
+    pub fn store_id(&self) -> StoreId {
+        self.store_id
+    }
+
+    #[inline]
+    pub(crate) fn instance(&self) -> InstanceId {
+        self.instance
+    }
+}
+
+impl Index<StoreInstanceId> for StoreOpaque {
+    type Output = vm::Instance;
+
+    #[inline]
+    fn index(&self, id: StoreInstanceId) -> &Self::Output {
+        id.assert_belongs_to(self.id());
+        self.instance(id.instance).instance()
+    }
+}
+
+impl IndexMut<StoreInstanceId> for StoreOpaque {
+    #[inline]
+    fn index_mut(&mut self, id: StoreInstanceId) -> &mut Self::Output {
+        id.assert_belongs_to(self.id());
+        self.instance_mut(id.instance).instance_mut()
     }
 }

@@ -1,13 +1,14 @@
 use crate::Trap;
 use crate::prelude::*;
 use crate::runtime::vm::VMMemoryImport;
-use crate::store::{StoreData, StoreOpaque, Stored};
+use crate::store::{StoreInstanceId, StoreOpaque};
 use crate::trampoline::generate_memory_export;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use core::cell::UnsafeCell;
 use core::fmt;
 use core::slice;
 use core::time::Duration;
+use wasmtime_environ::DefinedMemoryIndex;
 
 pub use crate::runtime::vm::WaitResult;
 
@@ -208,8 +209,26 @@ impl std::error::Error for MemoryAccessError {}
 /// recommended to use [`Memory::read`] and [`Memory::write`] which will still
 /// be provided.
 #[derive(Copy, Clone, Debug)]
-#[repr(transparent)] // here for the C API
-pub struct Memory(Stored<crate::runtime::vm::ExportMemory>);
+#[repr(C)] // here for the C API
+pub struct Memory {
+    /// The internal store instance that this memory belongs to.
+    instance: StoreInstanceId,
+    /// The index of the memory, within `instance` above, that this memory
+    /// refers to.
+    index: DefinedMemoryIndex,
+}
+
+// Double-check that the C representation in `extern.h` matches our in-Rust
+// representation here in terms of size/alignment/etc.
+const _: () = {
+    #[repr(C)]
+    struct Tmp(u64, usize);
+    #[repr(C)]
+    struct C(Tmp, u32);
+    assert!(core::mem::size_of::<C>() == core::mem::size_of::<Memory>());
+    assert!(core::mem::align_of::<C>() == core::mem::align_of::<Memory>());
+    assert!(core::mem::offset_of!(Memory, instance) == 0);
+};
 
 impl Memory {
     /// Creates a new WebAssembly memory given the configuration of `ty`.
@@ -297,8 +316,7 @@ impl Memory {
     /// ```
     pub fn ty(&self, store: impl AsContext) -> MemoryType {
         let store = store.as_context();
-        let ty = &store[self.0].memory;
-        MemoryType::from_wasmtime_memory(&ty)
+        MemoryType::from_wasmtime_memory(self.wasmtime_ty(store.0))
     }
 
     /// Safely reads memory contents at the given offset into a buffer.
@@ -362,7 +380,7 @@ impl Memory {
     pub fn data<'a, T: 'static>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a [u8] {
         unsafe {
             let store = store.into();
-            let definition = store[self.0].definition.as_ref();
+            let definition = store[self.instance].memory(self.index);
             debug_assert!(!self.ty(store).is_shared());
             slice::from_raw_parts(definition.base.as_ptr(), definition.current_length())
         }
@@ -382,7 +400,7 @@ impl Memory {
     ) -> &'a mut [u8] {
         unsafe {
             let store = store.into();
-            let definition = store[self.0].definition.as_ref();
+            let definition = store[self.instance].memory(self.index);
             debug_assert!(!self.ty(store).is_shared());
             slice::from_raw_parts_mut(definition.base.as_ptr(), definition.current_length())
         }
@@ -431,7 +449,10 @@ impl Memory {
     ///
     /// Panics if this memory doesn't belong to `store`.
     pub fn data_ptr(&self, store: impl AsContext) -> *mut u8 {
-        unsafe { store.as_context()[self.0].definition.as_ref().base.as_ptr() }
+        store.as_context()[self.instance]
+            .memory(self.index)
+            .base
+            .as_ptr()
     }
 
     /// Returns the byte length of this memory.
@@ -459,7 +480,7 @@ impl Memory {
     }
 
     pub(crate) fn internal_data_size(&self, store: &StoreOpaque) -> usize {
-        unsafe { store[self.0].definition.as_ref().current_length() }
+        store[self.instance].memory(self.index).current_length()
     }
 
     /// Returns the size, in units of pages, of this Wasm memory.
@@ -505,7 +526,7 @@ impl Memory {
     }
 
     pub(crate) fn _page_size(&self, store: &StoreOpaque) -> u64 {
-        store[self.0].memory.page_size()
+        self.wasmtime_ty(store).page_size()
     }
 
     /// Returns the log2 of this memory's page size, in bytes.
@@ -525,7 +546,7 @@ impl Memory {
     }
 
     pub(crate) fn _page_size_log2(&self, store: &StoreOpaque) -> u8 {
-        store[self.0].memory.page_size_log2
+        self.wasmtime_ty(store).page_size_log2
     }
 
     /// Grows this WebAssembly memory by `delta` pages.
@@ -588,7 +609,7 @@ impl Memory {
             match (*mem).grow(delta, Some(store))? {
                 Some(size) => {
                     let vm = (*mem).vmmemory();
-                    store[self.0].definition.write(vm);
+                    store[self.instance].memory_ptr(self.index).write(vm);
                     let page_size = (*mem).page_size();
                     Ok(u64::try_from(size).unwrap() / page_size)
                 }
@@ -619,36 +640,36 @@ impl Memory {
     }
 
     fn wasmtime_memory(&self, store: &mut StoreOpaque) -> *mut crate::runtime::vm::Memory {
-        unsafe {
-            let export = &store[self.0];
-            crate::runtime::vm::Instance::from_vmctx(export.vmctx, |handle| {
-                handle.get_defined_memory(export.index)
-            })
-        }
+        store[self.instance].get_defined_memory(self.index)
     }
 
     pub(crate) unsafe fn from_wasmtime_memory(
         wasmtime_export: crate::runtime::vm::ExportMemory,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
     ) -> Memory {
-        Memory(store.store_data_mut().insert(wasmtime_export))
+        Memory {
+            instance: store.vmctx_id(wasmtime_export.vmctx),
+            index: wasmtime_export.index,
+        }
     }
 
-    pub(crate) fn wasmtime_ty<'a>(&self, store: &'a StoreData) -> &'a wasmtime_environ::Memory {
-        &store[self.0].memory
+    pub(crate) fn wasmtime_ty<'a>(&self, store: &'a StoreOpaque) -> &'a wasmtime_environ::Memory {
+        let module = store[self.instance].env_module();
+        let index = module.memory_index(self.index);
+        &module.memories[index]
     }
 
     pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
-        let export = &store[self.0];
+        let instance = &store[self.instance];
         crate::runtime::vm::VMMemoryImport {
-            from: export.definition.into(),
-            vmctx: export.vmctx.into(),
-            index: export.index,
+            from: instance.memory_ptr(self.index).into(),
+            vmctx: instance.vmctx().into(),
+            index: self.index,
         }
     }
 
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
-        store.store_data().contains(self.0)
+        store.id() == self.instance.store_id()
     }
 
     /// Get a stable hash key for this memory.
@@ -658,7 +679,7 @@ impl Memory {
     /// this hash key will be consistent across all of these memories.
     #[cfg(feature = "coredump")]
     pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<> {
-        store[self.0].definition.as_ptr() as usize
+        store[self.instance].memory_ptr(self.index).as_ptr().addr()
     }
 }
 
@@ -1009,7 +1030,7 @@ impl SharedMemory {
     /// shared memory and the user wants host-side access to it.
     pub(crate) unsafe fn from_wasmtime_memory(
         wasmtime_export: crate::runtime::vm::ExportMemory,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
     ) -> Self {
         #[cfg_attr(not(feature = "threads"), allow(unused_variables, unreachable_code))]
         crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {
@@ -1056,7 +1077,10 @@ mod tests {
         let store = store.as_context();
         let tunables = store.engine().tunables();
         assert_eq!(tunables.memory_guard_size, 0);
-        assert!(!store[mem.0].memory.can_elide_bounds_check(tunables, 12));
+        assert!(
+            !mem.wasmtime_ty(store.0)
+                .can_elide_bounds_check(tunables, 12)
+        );
     }
 
     #[test]

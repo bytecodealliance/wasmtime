@@ -61,7 +61,7 @@ block0(v0: f32, v1: i64, v2: i32, v3: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm7
+;   movss (%rdi), %xmm7
 ;   ucomiss %xmm0, %xmm7
 ;   cmovpl  %edx, %esi, %esi
 ;   movq    %rsi, %rax
@@ -98,7 +98,7 @@ block0(v0: f32, v1: i64, v2: i32, v3: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm1
+;   movss (%rdi), %xmm1
 ;   ucomiss %xmm1, %xmm0
 ;   movq    %rsi, %rax
 ;   cmovpl  %edx, %eax, %eax
@@ -127,7 +127,6 @@ block0(v0: f32, v1: i64, v2: i32, v3: i32):
 ;   popq %rbp
 ;   retq
 
-
 function %select_cond_used_twice_lhs(f32, i64, i32, i32) -> i32, i32 {
 block0(v0: f32, v1: i64, v2: i32, v3: i32):
   ;; this load should NOT sink into either `select` below
@@ -142,7 +141,7 @@ block0(v0: f32, v1: i64, v2: i32, v3: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm1
+;   movss (%rdi), %xmm1
 ;   ucomiss %xmm0, %xmm1
 ;   movq    %rsi, %rax
 ;   cmovpl  %edx, %eax, %eax
@@ -184,7 +183,7 @@ block1(v8: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm6
+;   movss (%rdi), %xmm6
 ;   ucomiss %xmm6, %xmm0
 ;   jp,nz   label2; j label1
 ; block1:
@@ -230,7 +229,7 @@ block1(v8: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm6
+;   movss (%rdi), %xmm6
 ;   ucomiss %xmm0, %xmm6
 ;   jp,nz   label2; j label1
 ; block1:
@@ -278,7 +277,7 @@ block2(v7: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm7
+;   movss (%rdi), %xmm7
 ;   ucomiss %xmm7, %xmm0
 ;   jp,nz   label2; j label1
 ; block1:
@@ -340,7 +339,7 @@ block2(v7: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm7
+;   movss (%rdi), %xmm7
 ;   ucomiss %xmm0, %xmm7
 ;   jp,nz   label2; j label1
 ; block1:
@@ -401,7 +400,7 @@ block1(v7: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm1
+;   movss (%rdi), %xmm1
 ;   ucomiss %xmm1, %xmm0
 ;   movq    %rsi, %rax
 ;   cmovpl  %edx, %eax, %eax
@@ -452,7 +451,7 @@ block1(v7: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm1
+;   movss (%rdi), %xmm1
 ;   ucomiss %xmm0, %xmm1
 ;   movq    %rsi, %rax
 ;   cmovpl  %edx, %eax, %eax

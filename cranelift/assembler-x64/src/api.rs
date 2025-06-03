@@ -133,7 +133,7 @@ pub trait Registers {
 }
 
 /// Describe how to interact with an external register type.
-pub trait AsReg: Copy + Clone + std::fmt::Debug {
+pub trait AsReg: Copy + Clone + std::fmt::Debug + PartialEq {
     /// Create a register from its hardware encoding.
     ///
     /// This is primarily useful for fuzzing, though it is also useful for
@@ -249,6 +249,14 @@ pub trait RegisterVisitor<R: Registers> {
     fn read_xmm_mem(&mut self, op: &mut XmmMem<R::ReadXmm, R::ReadGpr>) {
         match op {
             XmmMem::Xmm(r) => self.read_xmm(r),
+            XmmMem::Mem(m) => self.read_amode(m),
+        }
+    }
+
+    /// Helper method to handle a write [`XmmMem`] operand.
+    fn write_xmm_mem(&mut self, op: &mut XmmMem<R::WriteXmm, R::ReadGpr>) {
+        match op {
+            XmmMem::Xmm(r) => self.write_xmm(r),
             XmmMem::Mem(m) => self.read_amode(m),
         }
     }

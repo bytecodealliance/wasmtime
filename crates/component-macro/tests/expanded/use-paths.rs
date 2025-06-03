@@ -140,7 +140,7 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
@@ -149,10 +149,10 @@ const _: () = {
             >: foo::foo::a::Host + foo::foo::b::Host + foo::foo::c::Host + d::Host,
             T: 'static,
         {
-            foo::foo::a::add_to_linker::<T, D>(linker, get)?;
-            foo::foo::b::add_to_linker::<T, D>(linker, get)?;
-            foo::foo::c::add_to_linker::<T, D>(linker, get)?;
-            d::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::a::add_to_linker::<T, D>(linker, host_getter)?;
+            foo::foo::b::add_to_linker::<T, D>(linker, host_getter)?;
+            foo::foo::c::add_to_linker::<T, D>(linker, host_getter)?;
+            d::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
     }
@@ -181,6 +181,11 @@ pub mod foo {
             pub trait Host {
                 fn a(&mut self) -> Foo;
             }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn a(&mut self) -> Foo {
+                    Host::a(*self)
+                }
+            }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
                 host_getter: fn(&mut T) -> D::Data<'_>,
@@ -201,11 +206,6 @@ pub mod foo {
                 )?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn a(&mut self) -> Foo {
-                    Host::a(*self)
-                }
-            }
         }
         #[allow(clippy::all)]
         pub mod b {
@@ -218,6 +218,11 @@ pub mod foo {
             };
             pub trait Host {
                 fn a(&mut self) -> Foo;
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn a(&mut self) -> Foo {
+                    Host::a(*self)
+                }
             }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -239,11 +244,6 @@ pub mod foo {
                 )?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn a(&mut self) -> Foo {
-                    Host::a(*self)
-                }
-            }
         }
         #[allow(clippy::all)]
         pub mod c {
@@ -256,6 +256,11 @@ pub mod foo {
             };
             pub trait Host {
                 fn a(&mut self) -> Foo;
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn a(&mut self) -> Foo {
+                    Host::a(*self)
+                }
             }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -277,11 +282,6 @@ pub mod foo {
                 )?;
                 Ok(())
             }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn a(&mut self) -> Foo {
-                    Host::a(*self)
-                }
-            }
         }
     }
 }
@@ -296,6 +296,11 @@ pub mod d {
     };
     pub trait Host {
         fn b(&mut self) -> Foo;
+    }
+    impl<_T: Host + ?Sized> Host for &mut _T {
+        fn b(&mut self) -> Foo {
+            Host::b(*self)
+        }
     }
     pub fn add_to_linker<T, D>(
         linker: &mut wasmtime::component::Linker<T>,
@@ -316,10 +321,5 @@ pub mod d {
             },
         )?;
         Ok(())
-    }
-    impl<_T: Host + ?Sized> Host for &mut _T {
-        fn b(&mut self) -> Foo {
-            Host::b(*self)
-        }
     }
 }

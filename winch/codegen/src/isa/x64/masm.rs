@@ -422,25 +422,7 @@ impl Masm for MacroAssembler {
                 (RegClass::Float, RegClass::Float) => Ok(self.asm.xmm_mov_rr(src, dst, size)),
                 _ => bail!(CodeGenError::invalid_operand_combination()),
             },
-            (RegImm::Imm(imm), _) => match imm {
-                I::I32(v) => Ok(self.asm.mov_ir(v as u64, dst, size)),
-                I::I64(v) => Ok(self.asm.mov_ir(v, dst, size)),
-                I::F32(v) => {
-                    let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
-                    self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
-                    Ok(())
-                }
-                I::F64(v) => {
-                    let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
-                    self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
-                    Ok(())
-                }
-                I::V128(v) => {
-                    let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
-                    self.asm.xmm_mov_mr(&addr, dst, size, TRUSTED_FLAGS);
-                    Ok(())
-                }
-            },
+            (RegImm::Imm(imm), _) => self.load_constant(&imm, dst, size),
         }
     }
 
@@ -3018,7 +3000,9 @@ impl MacroAssembler {
         match constant {
             I::I32(v) => Ok(self.asm.mov_ir(*v as u64, dst, size)),
             I::I64(v) => Ok(self.asm.mov_ir(*v, dst, size)),
-            _ => Err(anyhow!(CodeGenError::unsupported_imm())),
+            I::F32(_) => Ok(self.asm.load_fp_const(dst, &constant.to_bytes(), size)),
+            I::F64(_) => Ok(self.asm.load_fp_const(dst, &constant.to_bytes(), size)),
+            I::V128(_) => Ok(self.asm.load_fp_const(dst, &constant.to_bytes(), size)),
         }
     }
 

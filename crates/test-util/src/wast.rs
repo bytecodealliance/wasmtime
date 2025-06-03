@@ -440,7 +440,6 @@ impl WastTest {
                     "misc_testsuite/component-model/strings.wast",
                     "misc_testsuite/winch/select.wast",
                     "misc_testsuite/sink-float-but-dont-trap.wast",
-                    "misc_testsuite/issue4840.wast",
                     "misc_testsuite/winch/use-innermost-frame.wast",
                 ];
 
@@ -537,7 +536,6 @@ impl WastTest {
                     "spec_testsuite/f32_cmp.wast",
                     "spec_testsuite/f64_cmp.wast",
                     "spec_testsuite/func_ptrs.wast",
-                    "spec_testsuite/i64.wast",
                     "spec_testsuite/if.wast",
                     "spec_testsuite/imports.wast",
                     "spec_testsuite/local_set.wast",
@@ -581,6 +579,7 @@ impl WastTest {
                         "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
                         "misc_testsuite/simd/replace-lane-preserve.wast",
                         "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
+                        "misc_testsuite/simd/sse-cannot-fold-unaligned-loads.wast",
                         "misc_testsuite/winch/issue-10331.wast",
                         "misc_testsuite/winch/replace_lane.wast",
                         "spec_testsuite/simd_align.wast",

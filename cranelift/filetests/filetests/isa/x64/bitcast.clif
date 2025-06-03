@@ -194,7 +194,7 @@ block0(v0: i128):
 ; block0:
 ;   movq %rdi, %xmm0
 ;   movq %rsi, %xmm5
-;   punpcklqdq %xmm0, %xmm5, %xmm0
+;   punpcklqdq %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -252,7 +252,7 @@ block0(v0: i128):
 ; block0:
 ;   movq %rdi, %xmm0
 ;   movq %rsi, %xmm5
-;   punpcklqdq %xmm0, %xmm5, %xmm0
+;   punpcklqdq %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

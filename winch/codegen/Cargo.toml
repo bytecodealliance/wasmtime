@@ -27,6 +27,7 @@ gimli = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-cranelift = { workspace = true }
 thiserror = { workspace = true }
+wasmtime-math = { workspace = true }
 
 [features]
 x64 = ["cranelift-codegen/x86"]

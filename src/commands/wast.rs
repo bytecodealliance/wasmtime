@@ -16,6 +16,11 @@ pub struct WastCommand {
     /// The path of the WebAssembly test script to run
     #[arg(required = true, value_name = "SCRIPT_FILE")]
     scripts: Vec<PathBuf>,
+
+    /// Whether or not to generate DWARF debugging information in text-to-binary
+    /// transformations to show line numbers in backtraces.
+    #[arg(long, require_equals = true, value_name = "true|false")]
+    generate_dwarf: Option<Option<bool>>,
 }
 
 impl WastCommand {
@@ -35,6 +40,7 @@ impl WastCommand {
         }
         let mut wast_context = WastContext::new(store, wasmtime_wast::Async::Yes);
 
+        wast_context.generate_dwarf(optional_flag_with_default(self.generate_dwarf, true));
         wast_context
             .register_spectest(&SpectestConfig {
                 use_shared_memory: true,
@@ -49,5 +55,13 @@ impl WastCommand {
         }
 
         Ok(())
+    }
+}
+
+fn optional_flag_with_default(flag: Option<Option<bool>>, default: bool) -> bool {
+    match flag {
+        None => default,
+        Some(None) => true,
+        Some(Some(val)) => val,
     }
 }

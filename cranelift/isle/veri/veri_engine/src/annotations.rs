@@ -76,8 +76,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &[SpecExpr], pos: &Pos, env: &ParsingEnv) -
         assert_eq!(
             args.len(),
             1,
-            "Unexpected number of args for unary operator {:?}",
-            pos
+            "Unexpected number of args for unary operator {pos:?}",
         );
         u(Box::new(spec_to_expr(&args[0], env)))
     }
@@ -90,8 +89,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &[SpecExpr], pos: &Pos, env: &ParsingEnv) -
         assert_eq!(
             args.len(),
             2,
-            "Unexpected number of args for binary operator {:?}",
-            args
+            "Unexpected number of args for binary operator {args:?}",
         );
         b(
             Box::new(spec_to_expr(&args[0], env)),
@@ -107,8 +105,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &[SpecExpr], pos: &Pos, env: &ParsingEnv) -
     ) -> Expr {
         assert!(
             !args.is_empty(),
-            "Unexpected number of args for variadic binary operator {:?}",
-            pos
+            "Unexpected number of args for variadic binary operator {pos:?}",
         );
         let mut expr_args: Vec<Expr> = args.iter().map(|a| spec_to_expr(a, env)).collect();
         let last = expr_args.remove(expr_args.len() - 1);
@@ -189,8 +186,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &[SpecExpr], pos: &Pos, env: &ParsingEnv) -
             assert_eq!(
                 args.len(),
                 3,
-                "Unexpected number of args for extract operator {:?}",
-                pos
+                "Unexpected number of args for extract operator {pos:?}",
             );
             Expr::BVExtract(
                 spec_to_usize(&args[0]).unwrap(),
@@ -202,8 +198,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &[SpecExpr], pos: &Pos, env: &ParsingEnv) -
             assert_eq!(
                 args.len(),
                 2,
-                "Unexpected number of args for Int2BV operator {:?}",
-                pos
+                "Unexpected number of args for Int2BV operator {pos:?}",
             );
             Expr::BVIntToBv(
                 spec_to_usize(&args[0]).unwrap(),
@@ -214,8 +209,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &[SpecExpr], pos: &Pos, env: &ParsingEnv) -
             assert_eq!(
                 args.len(),
                 3,
-                "Unexpected number of args for subs operator {:?}",
-                pos
+                "Unexpected number of args for subs operator {pos:?}",
             );
             Expr::BVSubs(
                 Box::new(spec_to_expr(&args[0], env)),
@@ -228,8 +222,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &[SpecExpr], pos: &Pos, env: &ParsingEnv) -
             assert_eq!(
                 args.len(),
                 3,
-                "Unexpected number of args for extract operator {:?}",
-                pos
+                "Unexpected number of args for extract operator {pos:?}",
             );
             Expr::Conditional(
                 Box::new(spec_to_expr(&args[0], env)),
@@ -240,8 +233,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &[SpecExpr], pos: &Pos, env: &ParsingEnv) -
         SpecOp::Switch => {
             assert!(
                 args.len() > 1,
-                "Unexpected number of args for switch operator {:?}",
-                pos
+                "Unexpected number of args for switch operator {pos:?}",
             );
             let swith_on = spec_to_expr(&args[0], env);
             let arms: Vec<(Expr, Expr)> = args[1..]
@@ -261,8 +253,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &[SpecExpr], pos: &Pos, env: &ParsingEnv) -
             assert_eq!(
                 args.len(),
                 3,
-                "Unexpected number of args for load operator {:?}",
-                pos
+                "Unexpected number of args for load operator {pos:?}",
             );
             Expr::LoadEffect(
                 Box::new(spec_to_expr(&args[0], env)),
@@ -274,8 +265,7 @@ fn spec_op_to_expr(s: &SpecOp, args: &[SpecExpr], pos: &Pos, env: &ParsingEnv) -
             assert_eq!(
                 args.len(),
                 4,
-                "Unexpected number of args for store operator {:?}",
-                pos
+                "Unexpected number of args for store operator {pos:?}",
             );
             Expr::StoreEffect(
                 Box::new(spec_to_expr(&args[0], env)),
@@ -312,10 +302,7 @@ fn spec_to_expr(s: &SpecExpr, env: &ParsingEnv) -> Expr {
         SpecExpr::Var { var, pos: _ } => Expr::Var(var.0.clone()),
         SpecExpr::Op { op, args, pos } => spec_op_to_expr(op, args, pos, env),
         SpecExpr::Pair { l, r } => {
-            unreachable!(
-                "pairs currently only parsed as part of Switch statements, {:?} {:?}",
-                l, r
-            )
+            unreachable!("pairs currently only parsed as part of Switch statements, {l:?} {r:?}",)
         }
         SpecExpr::Enum { name } => {
             if let Some(e) = env.enums.get(&name.0) {
@@ -412,8 +399,7 @@ pub fn parse_annotations(defs: &[Def], termenv: &TermEnv, typeenv: &TypeEnv) -> 
                 .unwrap_or_else(|| panic!("Spec provided for unknown decl {termname}"));
             assert!(
                 !annotation_map.contains_key(&term_id),
-                "duplicate spec for {}",
-                termname
+                "duplicate spec for {termname}",
             );
             let sig = TermSignature {
                 args: spec.args.iter().map(spec_to_annotation_bound_var).collect(),

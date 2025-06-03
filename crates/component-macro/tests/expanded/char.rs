@@ -146,14 +146,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::chars::Host,
             T: 'static,
         {
-            foo::foo::chars::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::chars::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_chars(&self) -> &exports::foo::foo::chars::Guest {
@@ -172,6 +172,16 @@ pub mod foo {
                 fn take_char(&mut self, x: char) -> ();
                 /// A function that returns a character
                 fn return_char(&mut self) -> char;
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                /// A function that accepts a character
+                fn take_char(&mut self, x: char) -> () {
+                    Host::take_char(*self, x)
+                }
+                /// A function that returns a character
+                fn return_char(&mut self) -> char {
+                    Host::return_char(*self)
+                }
             }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -203,16 +213,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                /// A function that accepts a character
-                fn take_char(&mut self, x: char) -> () {
-                    Host::take_char(*self, x)
-                }
-                /// A function that returns a character
-                fn return_char(&mut self) -> char {
-                    Host::return_char(*self)
-                }
             }
         }
     }

@@ -8,10 +8,11 @@ mod encoding;
 mod features;
 pub mod format;
 
+pub use encoding::{Encoding, ModRmKind, OpcodeMod};
 pub use encoding::{
-    Encoding, Group1Prefix, Group2Prefix, Group3Prefix, Group4Prefix, Opcodes, Prefixes, Rex, Vex,
-    VexLength, VexMMMMM, VexPP, rex, vex,
+    Group1Prefix, Group2Prefix, Group3Prefix, Group4Prefix, Opcodes, Prefixes, Rex, rex,
 };
+pub use encoding::{Vex, VexEscape, VexLength, VexPrefix, vex};
 pub use features::{ALL_FEATURES, Feature, Features};
 pub use format::{Extension, Format, Location, Mutability, Operand, OperandKind, RegClass};
 pub use format::{align, fmt, implicit, r, rw, sxl, sxq, sxw, w};
@@ -31,6 +32,7 @@ pub fn inst(
         encoding,
         features: features.into(),
         has_trap: false,
+        custom_visit: false,
     }
 }
 
@@ -60,6 +62,9 @@ pub struct Inst {
     /// Whether or not this instruction can trap and thus needs a `TrapCode`
     /// payload in the instruction itself.
     pub has_trap: bool,
+    /// Whether or not this instruction has a custom visit function for register
+    /// allocation.
+    pub custom_visit: bool,
 }
 
 impl Inst {
@@ -88,6 +93,13 @@ impl Inst {
         self.has_trap = true;
         self
     }
+
+    /// Flags this instruction as having a custom visit function, skipping the
+    /// auto-generated one.
+    pub fn custom_visit(mut self) -> Self {
+        self.custom_visit = true;
+        self
+    }
 }
 
 impl core::fmt::Display for Inst {
@@ -98,6 +110,7 @@ impl core::fmt::Display for Inst {
             encoding,
             features,
             has_trap,
+            custom_visit,
         } = self;
         write!(f, "{name}: {format} => {encoding}")?;
         if !features.is_empty() {
@@ -105,6 +118,9 @@ impl core::fmt::Display for Inst {
         }
         if *has_trap {
             write!(f, " has_trap")?;
+        }
+        if *custom_visit {
+            write!(f, " custom_visit")?;
         }
         Ok(())
     }

@@ -25,7 +25,7 @@ pub fn rust_param_raw(op: &Operand) -> String {
             format!("&{reg}Mem{aligned}")
         }
         OperandKind::Mem(_) => {
-            format!("&Amode")
+            format!("&SyntheticAmode")
         }
         OperandKind::Reg(r) | OperandKind::FixedReg(r) => r.reg_class().unwrap().to_string(),
     }
@@ -88,6 +88,8 @@ pub fn rust_convert_isle_to_assembler(op: &Operand) -> String {
 ///
 /// This function panics if the instruction has no operands.
 pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
+    use OperandKind::*;
+
     let struct_name = inst.name();
     let operands = inst.format.operands.iter().cloned().collect::<Vec<_>>();
     let results = operands
@@ -152,16 +154,16 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
             match results.as_slice() {
                 [] => fmtln!(f, "SideEffectNoResult::Inst(inst)"),
                 [op] => match op.location.kind() {
-                    OperandKind::Imm(_) => unreachable!(),
-                    OperandKind::Reg(r) | OperandKind::FixedReg(r) => {
+                    Imm(_) => unreachable!(),
+                    Reg(r) | FixedReg(r) => {
                         let (ty, var) = ty_var_of_reg(r);
                         fmtln!(f, "let {var} = {r}.as_ref().{};", access_reg(op));
                         fmtln!(f, "AssemblerOutputs::Ret{ty} {{ inst, {var} }}");
                     }
-                    OperandKind::Mem(_) => {
+                    Mem(_) => {
                         fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }}")
                     }
-                    OperandKind::RegMem(rm) => {
+                    RegMem(rm) => {
                         let (ty, var) = ty_var_of_reg(rm);
                         f.add_block(&format!("match {rm}"), |f| {
                             f.add_block(&format!("{ASM}::{ty}Mem::{ty}(reg) => "), |f| {
@@ -178,7 +180,7 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                 // coming from a register-writing instruction like `mul`. The
                 // `match` below can be expanded as needed.
                 [op1, op2] => match (op1.location.kind(), op2.location.kind()) {
-                    (OperandKind::FixedReg(loc1), OperandKind::FixedReg(loc2)) => {
+                    (FixedReg(loc1) | Reg(loc1), FixedReg(loc2) | Reg(loc2)) => {
                         fmtln!(f, "let one = {loc1}.as_ref().{}.to_reg();", access_reg(op1));
                         fmtln!(f, "let two = {loc2}.as_ref().{}.to_reg();", access_reg(op2));
                         fmtln!(f, "let regs = ValueRegs::two(one, two);");
@@ -223,9 +225,9 @@ pub fn isle_param_raw(op: &Operand) -> String {
         OperandKind::Reg(r) | OperandKind::FixedReg(r) => r.reg_class().unwrap().to_string(),
         OperandKind::Mem(_) => {
             if op.align {
-                unimplemented!("no way yet to mark an Amode as aligned")
+                unimplemented!("no way yet to mark an SyntheticAmode as aligned")
             } else {
-                "Amode".to_string()
+                "SyntheticAmode".to_string()
             }
         }
         OperandKind::RegMem(rm) => {
@@ -316,7 +318,7 @@ pub fn isle_param_for_ctor(op: &Operand, ctor: IsleConstructor) -> String {
         // other constructor it's operating on registers so the argument is
         // a `Gpr`.
         OperandKind::RegMem(_) if op.mutability.is_write() => match ctor {
-            IsleConstructor::RetMemorySideEffect => "Amode".to_string(),
+            IsleConstructor::RetMemorySideEffect => "SyntheticAmode".to_string(),
             IsleConstructor::RetGpr => "Gpr".to_string(),
             IsleConstructor::RetXmm => "Xmm".to_string(),
             IsleConstructor::RetValueRegs => "ValueRegs".to_string(),
@@ -375,8 +377,8 @@ pub fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
             // For now, we assume that if there are two results, they are coming
             // from a register-writing instruction like `mul`. This can be
             // expanded as needed.
-            assert!(matches!(one.location.kind(), FixedReg(_)));
-            assert!(matches!(two.location.kind(), FixedReg(_)));
+            assert!(matches!(one.location.kind(), FixedReg(_) | Reg(_)));
+            assert!(matches!(two.location.kind(), FixedReg(_) | Reg(_)));
             vec![IsleConstructor::RetValueRegs]
         }
         other => panic!("unsupported number of write operands {other:?}"),
@@ -581,5 +583,9 @@ pub fn generate_isle(f: &mut Formatter, insts: &[Inst]) {
 /// `RegMem::Mem`, an operand from the constructor of the original entrypoint
 /// itself.
 fn is_raw_operand_param(o: &Operand) -> bool {
-    o.mutability.is_read() || matches!(o.location.kind(), OperandKind::RegMem(_))
+    o.mutability.is_read()
+        || matches!(
+            o.location.kind(),
+            OperandKind::RegMem(_) | OperandKind::Mem(_)
+        )
 }

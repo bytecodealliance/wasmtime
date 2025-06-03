@@ -662,7 +662,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ; block0:
 ;   lea     rsp(0 + virtual offset), %r8
 ;   vmovups %xmm0, 0(%r8)
-;   movdqa  %xmm1, %xmm0
+;   movdqa %xmm1, %xmm0
 ;   vfmsub132ps %xmm0, %xmm2, 0(%r8), %xmm0
 ;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp

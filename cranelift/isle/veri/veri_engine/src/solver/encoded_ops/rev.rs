@@ -6,7 +6,7 @@ use easy_smt::SExpr;
 pub fn rev64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
     // Generated code.
     let x1 = solver.declare(
-        format!("x1_{id}", id = id),
+        format!("x1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -21,7 +21,7 @@ pub fn rev64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let x2 = solver.declare(
-        format!("x2_{id}", id = id),
+        format!("x2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -42,7 +42,7 @@ pub fn rev64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let x3 = solver.declare(
-        format!("x3_{id}", id = id),
+        format!("x3_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -63,7 +63,7 @@ pub fn rev64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let x4 = solver.declare(
-        format!("x4_{id}", id = id),
+        format!("x4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -84,7 +84,7 @@ pub fn rev64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let x5 = solver.declare(
-        format!("x5_{id}", id = id),
+        format!("x5_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -105,7 +105,7 @@ pub fn rev64(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let rev64ret = solver.declare(
-        format!("rev64ret_{id}", id = id),
+        format!("rev64ret_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -134,7 +134,7 @@ pub fn rev32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
 
     // Generated code.
     let x1 = solver.declare(
-        format!("x1_{id}", id = id),
+        format!("x1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -149,7 +149,7 @@ pub fn rev32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let x2 = solver.declare(
-        format!("x2_{id}", id = id),
+        format!("x2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -170,7 +170,7 @@ pub fn rev32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let x3 = solver.declare(
-        format!("x3_{id}", id = id),
+        format!("x3_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -191,7 +191,7 @@ pub fn rev32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let x4 = solver.declare(
-        format!("x4_{id}", id = id),
+        format!("x4_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -212,7 +212,7 @@ pub fn rev32(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let rev32ret = solver.declare(
-        format!("rev32ret_{id}", id = id),
+        format!("rev32ret_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -241,7 +241,7 @@ pub fn rev16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
 
     // Generated code.
     let x1 = solver.declare(
-        format!("x1_{id}", id = id),
+        format!("x1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -256,7 +256,7 @@ pub fn rev16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let x2 = solver.declare(
-        format!("x2_{id}", id = id),
+        format!("x2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -277,7 +277,7 @@ pub fn rev16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let x3 = solver.declare(
-        format!("x3_{id}", id = id),
+        format!("x3_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -298,7 +298,7 @@ pub fn rev16(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let rev16ret = solver.declare(
-        format!("rev16ret_{id}", id = id),
+        format!("rev16ret_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -328,7 +328,7 @@ pub fn rev8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
 
     // Generated code.
     let x1 = solver.declare(
-        format!("x1_{id}", id = id),
+        format!("x1_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -343,7 +343,7 @@ pub fn rev8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let x2 = solver.declare(
-        format!("x2_{id}", id = id),
+        format!("x2_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -364,7 +364,7 @@ pub fn rev8(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
         ),
     ));
     let rev8ret = solver.declare(
-        format!("rev8ret_{id}", id = id),
+        format!("rev8ret_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),
@@ -394,7 +394,7 @@ pub fn rev1(solver: &mut SolverCtx, x: SExpr, id: u32) -> SExpr {
 
     // Generated code.
     let rev1ret = solver.declare(
-        format!("rev1ret_{id}", id = id),
+        format!("rev1ret_{id}"),
         solver.smt.list(vec![
             solver.smt.atoms().und,
             solver.smt.atom("BitVec"),

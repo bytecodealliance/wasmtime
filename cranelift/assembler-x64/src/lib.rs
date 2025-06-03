@@ -47,6 +47,7 @@
 )]
 
 mod api;
+mod custom;
 mod fixed;
 pub mod gpr;
 mod imm;
@@ -83,7 +84,7 @@ pub use api::{
 };
 pub use fixed::Fixed;
 pub use gpr::{Gpr, NonRspGpr, Size};
-pub use imm::{Extension, Imm8, Imm16, Imm32, Simm8, Simm16, Simm32};
+pub use imm::{Extension, Imm8, Imm16, Imm32, Imm64, Simm8, Simm16, Simm32};
 pub use mem::{
     Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, DeferredTarget, GprMem, Scale, XmmMem,
 };

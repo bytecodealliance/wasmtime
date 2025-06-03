@@ -583,6 +583,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         self.memories.validate_memory(memory)
     }
 
+    #[cfg(feature = "component-model")]
     fn increment_component_instance_count(&self) -> Result<()> {
         let old_count = self.live_component_instances.fetch_add(1, Ordering::AcqRel);
         if old_count >= u64::from(self.limits.total_component_instances) {
@@ -596,6 +597,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         Ok(())
     }
 
+    #[cfg(feature = "component-model")]
     fn decrement_component_instance_count(&self) {
         self.live_component_instances.fetch_sub(1, Ordering::AcqRel);
     }

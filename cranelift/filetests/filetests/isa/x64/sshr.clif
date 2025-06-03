@@ -17,7 +17,7 @@ block0(v0: i128, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzbq  %dl, %rcx
+;   movzbq %dl, %rcx
 ;   shrq %cl, %rdi
 ;   movq    %rsi, %r10
 ;   sarq %cl, %r10

@@ -186,6 +186,7 @@ macro_rules! hex_print_signed_imm {
 /// - omit the `0x` prefix when print small values (less than 10)
 /// - print negative values as `-0x...` (signed hex) instead of `0xff...`
 ///   (normal hex)
+/// - print `mov` immediates as base-10 instead of base-16 (?!).
 fn replace_signed_immediates(dis: &str) -> std::borrow::Cow<str> {
     match dis.find('$') {
         None => dis.into(),
@@ -195,12 +196,16 @@ fn replace_signed_immediates(dis: &str) -> std::borrow::Cow<str> {
             let (_, rest) = chomp("0x", rest); // Skip the '0x' if it's there.
             let n = rest.chars().take_while(char::is_ascii_hexdigit).count();
             let (hex, rest) = rest.split_at(n); // Split at next non-hex character.
-            let simm = match hex.len() {
-                1 | 2 => hex_print_signed_imm!(hex, u8 => i8),
-                4 => hex_print_signed_imm!(hex, u16 => i16),
-                8 => hex_print_signed_imm!(hex, u32 => i32),
-                16 => hex_print_signed_imm!(hex, u64 => i64),
-                _ => panic!("unexpected length for hex: {hex}"),
+            let simm = if dis.starts_with("mov") {
+                u64::from_str_radix(hex, 16).unwrap().to_string()
+            } else {
+                match hex.len() {
+                    1 | 2 => hex_print_signed_imm!(hex, u8 => i8),
+                    4 => hex_print_signed_imm!(hex, u16 => i16),
+                    8 => hex_print_signed_imm!(hex, u32 => i32),
+                    16 => hex_print_signed_imm!(hex, u64 => i64),
+                    _ => panic!("unexpected length for hex: {hex}"),
+                }
             };
             format!("{prefix}{simm}{rest}").into()
         }
@@ -229,6 +234,10 @@ fn replace() {
     assert_eq!(
         replace_signed_immediates("subl $0x3ca77a19, -0x1a030f40(%r14)"),
         "subl $0x3ca77a19, -0x1a030f40(%r14)"
+    );
+    assert_eq!(
+        replace_signed_immediates("movq $0xffffffff864ae103, %rsi"),
+        "movq $18446744071667638531, %rsi"
     );
 }
 
@@ -275,7 +284,7 @@ impl Registers for FuzzRegs {
 }
 
 /// A simple `u8` register type for fuzzing only.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FuzzReg(u8);
 
 impl<'a> Arbitrary<'a> for FuzzReg {

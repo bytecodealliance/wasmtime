@@ -121,7 +121,7 @@ impl Extern {
 
     pub(crate) unsafe fn from_wasmtime_export(
         wasmtime_export: crate::runtime::vm::Export,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
     ) -> Extern {
         match wasmtime_export {
             crate::runtime::vm::Export::Function(f) => {
@@ -147,11 +147,11 @@ impl Extern {
     pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
         match self {
             Extern::Func(f) => f.comes_from_same_store(store),
-            Extern::Global(g) => store.store_data().contains(g.0),
+            Extern::Global(g) => g.comes_from_same_store(store),
             Extern::Memory(m) => m.comes_from_same_store(store),
             Extern::SharedMemory(m) => Engine::same(m.engine(), store.engine()),
-            Extern::Table(t) => store.store_data().contains(t.0),
-            Extern::Tag(t) => store.store_data().contains(t.0),
+            Extern::Table(t) => t.comes_from_same_store(store),
+            Extern::Tag(t) => t.comes_from_same_store(store),
         }
     }
 }

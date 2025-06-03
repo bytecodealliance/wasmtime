@@ -59,6 +59,20 @@ impl<R: AsReg> Amode<R> {
     ) {
         emit_modrm_sib_disp(sink, offsets, enc_reg, self, bytes_at_end, None);
     }
+
+    /// Return the registers for encoding the `b` and `x` bits (e.g., in a VEX
+    /// prefix).
+    ///
+    /// During encoding, the `b` bit is set by the topmost bit (the fourth bit)
+    /// of either the `reg` register or, if this is a memory address, the `base`
+    /// register. The `x` bit is set by the `index` register, when used.
+    pub(crate) fn encode_bx_regs(&self) -> (Option<u8>, Option<u8>) {
+        match self {
+            Amode::ImmReg { base, .. } => (Some(base.enc()), None),
+            Amode::ImmRegRegShift { base, index, .. } => (Some(base.enc()), Some(index.enc())),
+            Amode::RipRelative { .. } => (None, None),
+        }
+    }
 }
 
 /// A 32-bit immediate for address offsets.
@@ -276,6 +290,14 @@ impl<R: AsReg, M: AsReg> GprMem<R, M> {
             }
         }
     }
+
+    /// Same as `XmmMem::encode_bx_regs`, but for `GprMem`.
+    pub(crate) fn encode_bx_regs(&self) -> (Option<u8>, Option<u8>) {
+        match self {
+            GprMem::Gpr(reg) => (Some(reg.enc()), None),
+            GprMem::Mem(amode) => amode.encode_bx_regs(),
+        }
+    }
 }
 
 impl<R: AsReg, M: AsReg> From<R> for GprMem<R, M> {
@@ -335,6 +357,19 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
             XmmMem::Mem(amode) => {
                 amode.encode_rex_suffixes(sink, offsets, enc_reg, bytes_at_end);
             }
+        }
+    }
+
+    /// Return the registers for encoding the `b` and `x` bits (e.g., in a VEX
+    /// prefix).
+    ///
+    /// During encoding, the `b` bit is set by the topmost bit (the fourth bit)
+    /// of either the `reg` register or, if this is a memory address, the `base`
+    /// register. The `x` bit is set by the `index` register, when used.
+    pub(crate) fn encode_bx_regs(&self) -> (Option<u8>, Option<u8>) {
+        match self {
+            XmmMem::Xmm(reg) => (Some(reg.enc()), None),
+            XmmMem::Mem(amode) => amode.encode_bx_regs(),
         }
     }
 }

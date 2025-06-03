@@ -2450,7 +2450,7 @@
 (decl sinkable_load (Inst Type MemFlags Value Offset32) Value)
 (extractor (sinkable_load inst ty flags addr offset)
            (and
-              (load flags addr offset)
+              (load (little_or_native_endian flags) addr offset)
               (sinkable_inst (has_type ty inst))))
 
 ;; Returns a canonical type for a LoadOP. We only return I64 or F64.

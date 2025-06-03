@@ -729,61 +729,6 @@ impl PrettyPrint for RegMem {
     }
 }
 
-pub use crate::isa::x64::lower::isle::generated_code::AluRmROpcode;
-
-impl AluRmROpcode {
-    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
-        match self {
-            AluRmROpcode::Andn => smallvec![InstructionSet::BMI1],
-            AluRmROpcode::Sarx | AluRmROpcode::Shrx | AluRmROpcode::Shlx | AluRmROpcode::Bzhi => {
-                smallvec![InstructionSet::BMI2]
-            }
-        }
-    }
-}
-
-impl fmt::Display for AluRmROpcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&format!("{self:?}").to_lowercase())
-    }
-}
-
-pub use crate::isa::x64::lower::isle::generated_code::UnaryRmRVexOpcode;
-
-impl UnaryRmRVexOpcode {
-    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
-        match self {
-            UnaryRmRVexOpcode::Blsi | UnaryRmRVexOpcode::Blsmsk | UnaryRmRVexOpcode::Blsr => {
-                smallvec![InstructionSet::BMI1]
-            }
-        }
-    }
-}
-
-impl fmt::Display for UnaryRmRVexOpcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&format!("{self:?}").to_lowercase())
-    }
-}
-
-pub use crate::isa::x64::lower::isle::generated_code::UnaryRmRImmVexOpcode;
-
-impl UnaryRmRImmVexOpcode {
-    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
-        match self {
-            UnaryRmRImmVexOpcode::Rorx => {
-                smallvec![InstructionSet::BMI2]
-            }
-        }
-    }
-}
-
-impl fmt::Display for UnaryRmRImmVexOpcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&format!("{self:?}").to_lowercase())
-    }
-}
-
 #[derive(Clone, Copy, PartialEq)]
 /// Comparison operations.
 pub enum CmpOpcode {
@@ -834,15 +779,7 @@ pub enum SseOpcode {
     Divss,
     Divsd,
     Insertps,
-    Movaps,
-    Movapd,
-    Movdqa,
-    Movdqu,
     Movlhps,
-    Movss,
-    Movsd,
-    Movups,
-    Movupd,
     Pabsb,
     Pabsw,
     Pabsd,
@@ -876,20 +813,9 @@ pub enum SseOpcode {
     Pmovzxwd,
     Pmovzxwq,
     Pmovzxdq,
-    Pmuldq,
-    Pmulhw,
-    Pmulhuw,
-    Pmulhrsw,
-    Pmulld,
-    Pmullw,
-    Pmuludq,
     Pshufb,
     Pshufd,
     Ptest,
-    Punpckhbw,
-    Punpckhwd,
-    Punpcklbw,
-    Punpcklwd,
     Rcpss,
     Roundps,
     Roundpd,
@@ -899,13 +825,6 @@ pub enum SseOpcode {
     Shufps,
     Ucomiss,
     Ucomisd,
-    Unpcklps,
-    Unpcklpd,
-    Unpckhps,
-    Punpckhdq,
-    Punpckldq,
-    Punpckhqdq,
-    Punpcklqdq,
     Pshuflw,
     Pshufhw,
     Pblendw,
@@ -922,27 +841,17 @@ impl SseOpcode {
             | SseOpcode::Cmpss
             | SseOpcode::Divps
             | SseOpcode::Divss
-            | SseOpcode::Movaps
             | SseOpcode::Movlhps
-            | SseOpcode::Movss
-            | SseOpcode::Movups
             | SseOpcode::Rcpss
             | SseOpcode::Rsqrtss
             | SseOpcode::Shufps
-            | SseOpcode::Ucomiss
-            | SseOpcode::Unpcklps
-            | SseOpcode::Unpckhps => SSE,
+            | SseOpcode::Ucomiss => SSE,
 
             SseOpcode::Cmppd
             | SseOpcode::Cmpsd
             | SseOpcode::Comisd
             | SseOpcode::Divpd
             | SseOpcode::Divsd
-            | SseOpcode::Movapd
-            | SseOpcode::Movsd
-            | SseOpcode::Movupd
-            | SseOpcode::Movdqa
-            | SseOpcode::Movdqu
             | SseOpcode::Packssdw
             | SseOpcode::Packsswb
             | SseOpcode::Packuswb
@@ -955,29 +864,15 @@ impl SseOpcode {
             | SseOpcode::Pcmpgtw
             | SseOpcode::Pcmpgtd
             | SseOpcode::Pmaddwd
-            | SseOpcode::Pmulhw
-            | SseOpcode::Pmulhuw
-            | SseOpcode::Pmullw
-            | SseOpcode::Pmuludq
             | SseOpcode::Pshufd
-            | SseOpcode::Punpckhbw
-            | SseOpcode::Punpckhwd
-            | SseOpcode::Punpcklbw
-            | SseOpcode::Punpcklwd
             | SseOpcode::Ucomisd
-            | SseOpcode::Punpckldq
-            | SseOpcode::Punpckhdq
-            | SseOpcode::Punpcklqdq
-            | SseOpcode::Punpckhqdq
             | SseOpcode::Pshuflw
-            | SseOpcode::Pshufhw
-            | SseOpcode::Unpcklpd => SSE2,
+            | SseOpcode::Pshufhw => SSE2,
 
             SseOpcode::Pabsb
             | SseOpcode::Pabsw
             | SseOpcode::Pabsd
             | SseOpcode::Palignr
-            | SseOpcode::Pmulhrsw
             | SseOpcode::Pshufb
             | SseOpcode::Pmaddubsw
             | SseOpcode::Movddup => SSSE3,
@@ -1000,8 +895,6 @@ impl SseOpcode {
             | SseOpcode::Pmovzxwd
             | SseOpcode::Pmovzxwq
             | SseOpcode::Pmovzxdq
-            | SseOpcode::Pmuldq
-            | SseOpcode::Pmulld
             | SseOpcode::Ptest
             | SseOpcode::Roundps
             | SseOpcode::Roundpd
@@ -1056,15 +949,7 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Divss => "divss",
             SseOpcode::Divsd => "divsd",
             SseOpcode::Insertps => "insertps",
-            SseOpcode::Movaps => "movaps",
-            SseOpcode::Movapd => "movapd",
-            SseOpcode::Movdqa => "movdqa",
-            SseOpcode::Movdqu => "movdqu",
             SseOpcode::Movlhps => "movlhps",
-            SseOpcode::Movss => "movss",
-            SseOpcode::Movsd => "movsd",
-            SseOpcode::Movups => "movups",
-            SseOpcode::Movupd => "movupd",
             SseOpcode::Pabsb => "pabsb",
             SseOpcode::Pabsw => "pabsw",
             SseOpcode::Pabsd => "pabsd",
@@ -1099,20 +984,9 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pmovzxwd => "pmovzxwd",
             SseOpcode::Pmovzxwq => "pmovzxwq",
             SseOpcode::Pmovzxdq => "pmovzxdq",
-            SseOpcode::Pmuldq => "pmuldq",
-            SseOpcode::Pmulhw => "pmulhw",
-            SseOpcode::Pmulhuw => "pmulhuw",
-            SseOpcode::Pmulhrsw => "pmulhrsw",
-            SseOpcode::Pmulld => "pmulld",
-            SseOpcode::Pmullw => "pmullw",
-            SseOpcode::Pmuludq => "pmuludq",
             SseOpcode::Pshufb => "pshufb",
             SseOpcode::Pshufd => "pshufd",
             SseOpcode::Ptest => "ptest",
-            SseOpcode::Punpckhbw => "punpckhbw",
-            SseOpcode::Punpckhwd => "punpckhwd",
-            SseOpcode::Punpcklbw => "punpcklbw",
-            SseOpcode::Punpcklwd => "punpcklwd",
             SseOpcode::Rcpss => "rcpss",
             SseOpcode::Roundps => "roundps",
             SseOpcode::Roundpd => "roundpd",
@@ -1122,17 +996,10 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Shufps => "shufps",
             SseOpcode::Ucomiss => "ucomiss",
             SseOpcode::Ucomisd => "ucomisd",
-            SseOpcode::Unpcklps => "unpcklps",
-            SseOpcode::Unpckhps => "unpckhps",
-            SseOpcode::Punpckldq => "punpckldq",
-            SseOpcode::Punpckhdq => "punpckhdq",
-            SseOpcode::Punpcklqdq => "punpcklqdq",
-            SseOpcode::Punpckhqdq => "punpckhqdq",
             SseOpcode::Pshuflw => "pshuflw",
             SseOpcode::Pshufhw => "pshufhw",
             SseOpcode::Pblendw => "pblendw",
             SseOpcode::Movddup => "movddup",
-            SseOpcode::Unpcklpd => "unpcklpd",
         };
         write!(fmt, "{name}")
     }
@@ -1507,32 +1374,6 @@ impl ExtMode {
             (16, 64) => Some(ExtMode::WQ),
             (32, 64) => Some(ExtMode::LQ),
             _ => None,
-        }
-    }
-
-    /// Return the source register size in bytes.
-    pub(crate) fn src_size(&self) -> u8 {
-        match self {
-            ExtMode::BL | ExtMode::BQ => 1,
-            ExtMode::WL | ExtMode::WQ => 2,
-            ExtMode::LQ => 4,
-        }
-    }
-
-    /// Return the destination register size in bytes.
-    pub(crate) fn dst_size(&self) -> u8 {
-        match self {
-            ExtMode::BL | ExtMode::WL => 4,
-            ExtMode::BQ | ExtMode::WQ | ExtMode::LQ => 8,
-        }
-    }
-
-    /// Source size, as an integer type.
-    pub(crate) fn src_type(&self) -> Type {
-        match self {
-            ExtMode::BL | ExtMode::BQ => I8,
-            ExtMode::WL | ExtMode::WQ => I16,
-            ExtMode::LQ => I32,
         }
     }
 }

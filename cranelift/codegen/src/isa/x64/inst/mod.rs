@@ -102,14 +102,11 @@ impl Inst {
             | Inst::LockCmpxchg { .. }
             | Inst::LockXadd { .. }
             | Inst::Xchg { .. }
-            | Inst::Mov64MR { .. }
             | Inst::MovImmM { .. }
             | Inst::MovRM { .. }
             | Inst::MovRR { .. }
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
-            | Inst::MovsxRmR { .. }
-            | Inst::MovzxRmR { .. }
             | Inst::Nop { .. }
             | Inst::Pop64 { .. }
             | Inst::Push64 { .. }
@@ -138,13 +135,8 @@ impl Inst {
             | Inst::Atomic128RmwSeq { .. }
             | Inst::Atomic128XchgSeq { .. } => smallvec![InstructionSet::CMPXCHG16b],
 
-            Inst::AluRmRVex { op, .. } => op.available_from(),
-            Inst::UnaryRmRVex { op, .. } => op.available_from(),
-            Inst::UnaryRmRImmVex { op, .. } => op.available_from(),
-
             // These use dynamic SSE opcodes.
-            Inst::XmmMovRM { op, .. }
-            | Inst::XmmRmR { op, .. }
+            Inst::XmmRmR { op, .. }
             | Inst::XmmRmRUnaligned { op, .. }
             | Inst::XmmRmRBlend { op, .. }
             | Inst::XmmRmRImm { op, .. }
@@ -172,8 +164,6 @@ impl Inst {
             | Inst::CvtIntToFloatVex { op, .. }
             | Inst::XmmCmpRmRVex { op, .. } => op.available_from(),
 
-            Inst::MulX { .. } => smallvec![InstructionSet::BMI2],
-
             Inst::External { inst } => {
                 use cranelift_assembler_x64::Feature::*;
                 let mut features = smallvec![];
@@ -185,8 +175,10 @@ impl Inst {
                         ssse3 => features.push(InstructionSet::SSSE3),
                         sse41 => features.push(InstructionSet::SSE41),
                         bmi1 => features.push(InstructionSet::BMI1),
+                        bmi2 => features.push(InstructionSet::BMI2),
                         lzcnt => features.push(InstructionSet::Lzcnt),
                         popcnt => features.push(InstructionSet::Popcnt),
+                        avx => features.push(InstructionSet::AVX),
                     }
                 }
                 features
@@ -247,6 +239,7 @@ impl Inst {
     }
 
     /// Convenient helper for unary float operations.
+    #[cfg(test)]
     pub(crate) fn xmm_unary_rm_r(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::Float);
         debug_assert!(dst.to_reg().class() == RegClass::Float);
@@ -283,15 +276,6 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_mov_r_m(op: SseOpcode, src: Reg, dst: impl Into<SyntheticAmode>) -> Inst {
-        debug_assert!(src.class() == RegClass::Float);
-        Inst::XmmMovRM {
-            op,
-            src: Xmm::unwrap_new(src),
-            dst: dst.into(),
-        }
-    }
-
     pub(crate) fn xmm_cmp_rm_r(op: SseOpcode, src1: Reg, src2: RegMem) -> Inst {
         src2.assert_regclass_is(RegClass::Float);
         debug_assert!(src1.class() == RegClass::Float);
@@ -324,25 +308,43 @@ impl Inst {
     pub(crate) fn movzx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::Int);
         debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let src = GprMem::unwrap_new(src);
-        let dst = WritableGpr::from_writable_reg(dst).unwrap();
-        Inst::MovzxRmR { ext_mode, src, dst }
+        let src = match src {
+            RegMem::Reg { reg } => asm::GprMem::Gpr(Gpr::new(reg).unwrap()),
+            RegMem::Mem { addr } => asm::GprMem::Mem(addr.into()),
+        };
+        let inst = match ext_mode {
+            ExtMode::BL => asm::inst::movzbl_rm::new(dst, src).into(),
+            ExtMode::BQ => asm::inst::movzbq_rm::new(dst, src).into(),
+            ExtMode::WL => asm::inst::movzwl_rm::new(dst, src).into(),
+            ExtMode::WQ => asm::inst::movzwq_rm::new(dst, src).into(),
+            ExtMode::LQ => {
+                // This instruction selection may seem strange but is correct in
+                // 64-bit mode: section 3.4.1.1 of the Intel manual says that
+                // "32-bit operands generate a 32-bit result, zero-extended to a
+                // 64-bit result in the destination general-purpose register."
+                // This is applicable beyond `mov` but we use this fact to
+                // zero-extend `src` into `dst`.
+                asm::inst::movl_rm::new(dst, src).into()
+            }
+        };
+        Inst::External { inst }
     }
 
     pub(crate) fn movsx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::Int);
         debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let src = GprMem::unwrap_new(src);
-        let dst = WritableGpr::from_writable_reg(dst).unwrap();
-        Inst::MovsxRmR { ext_mode, src, dst }
-    }
-
-    pub(crate) fn mov64_m_r(src: impl Into<SyntheticAmode>, dst: Writable<Reg>) -> Inst {
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Inst::Mov64MR {
-            src: src.into(),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-        }
+        let src = match src {
+            RegMem::Reg { reg } => asm::GprMem::Gpr(Gpr::new(reg).unwrap()),
+            RegMem::Mem { addr } => asm::GprMem::Mem(addr.into()),
+        };
+        let inst = match ext_mode {
+            ExtMode::BL => asm::inst::movsbl_rm::new(dst, src).into(),
+            ExtMode::BQ => asm::inst::movsbq_rm::new(dst, src).into(),
+            ExtMode::WL => asm::inst::movswl_rm::new(dst, src).into(),
+            ExtMode::WQ => asm::inst::movswq_rm::new(dst, src).into(),
+            ExtMode::LQ => asm::inst::movslq_rm::new(dst, src).into(),
+        };
+        Inst::External { inst }
     }
 
     pub(crate) fn mov_r_m(size: OperandSize, src: Reg, dst: impl Into<SyntheticAmode>) -> Inst {
@@ -468,22 +470,33 @@ impl Inst {
                     }
                 } else {
                     // 64-bit values can be moved directly.
-                    Inst::mov64_m_r(from_addr, to_reg)
+                    let from_addr = asm::GprMem::from(from_addr.into());
+                    Inst::External {
+                        inst: asm::inst::movq_rm::new(to_reg, from_addr).into(),
+                    }
                 }
             }
             RegClass::Float => {
-                let opcode = match ty {
+                let to_reg = to_reg.map(|r| Xmm::new(r).unwrap());
+                let from_addr = from_addr.into();
+                let inst = match ty {
                     types::F16 | types::I8X2 => {
                         panic!("loading a f16 or i8x2 requires multiple instructions")
                     }
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 32 => SseOpcode::Movss,
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 64 => SseOpcode::Movsd,
-                    types::F32X4 => SseOpcode::Movups,
-                    types::F64X2 => SseOpcode::Movupd,
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => SseOpcode::Movdqu,
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 32 => {
+                        asm::inst::movss_a_m::new(to_reg, from_addr).into()
+                    }
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 64 => {
+                        asm::inst::movsd_a_m::new(to_reg, from_addr).into()
+                    }
+                    types::F32X4 => asm::inst::movups_a::new(to_reg, from_addr).into(),
+                    types::F64X2 => asm::inst::movupd_a::new(to_reg, from_addr).into(),
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => {
+                        asm::inst::movdqu_a::new(to_reg, from_addr).into()
+                    }
                     _ => unimplemented!("unable to load type: {}", ty),
                 };
-                Inst::xmm_unary_rm_r(opcode, RegMem::mem(from_addr), to_reg)
+                Inst::External { inst }
             }
             RegClass::Vector => unreachable!(),
         }
@@ -495,18 +508,26 @@ impl Inst {
         match rc {
             RegClass::Int => Inst::mov_r_m(OperandSize::from_ty(ty), from_reg, to_addr),
             RegClass::Float => {
-                let opcode = match ty {
+                let to_addr = to_addr.into();
+                let from_reg = Xmm::new(from_reg).unwrap();
+                let inst = match ty {
                     types::F16 | types::I8X2 => {
                         panic!("storing a f16 or i8x2 requires multiple instructions")
                     }
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 32 => SseOpcode::Movss,
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 64 => SseOpcode::Movsd,
-                    types::F32X4 => SseOpcode::Movups,
-                    types::F64X2 => SseOpcode::Movupd,
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => SseOpcode::Movdqu,
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 32 => {
+                        asm::inst::movss_c_m::new(to_addr, from_reg).into()
+                    }
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 64 => {
+                        asm::inst::movsd_c_m::new(to_addr, from_reg).into()
+                    }
+                    types::F32X4 => asm::inst::movups_b::new(to_addr, from_reg).into(),
+                    types::F64X2 => asm::inst::movupd_b::new(to_addr, from_reg).into(),
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() == 128 => {
+                        asm::inst::movdqu_b::new(to_addr, from_reg).into()
+                    }
                     _ => unimplemented!("unable to store type: {}", ty),
                 };
-                Inst::xmm_mov_r_m(opcode, from_reg, to_addr)
+                Inst::External { inst }
             }
             RegClass::Vector => unreachable!(),
         }
@@ -562,63 +583,6 @@ impl PrettyPrint for Inst {
 
         match self {
             Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
-
-            Inst::AluRmRVex {
-                size,
-                op,
-                src1,
-                src2,
-                dst,
-            } => {
-                let size_bytes = size.to_bytes();
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let src1 = pretty_print_reg(src1.to_reg(), size_bytes);
-                let src2 = src2.pretty_print(size_bytes);
-                let op = ljustify2(op.to_string(), String::new());
-                format!("{op} {src2}, {src1}, {dst}")
-            }
-
-            Inst::UnaryRmRVex { src, dst, op, size } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let src = src.pretty_print(size.to_bytes());
-                let op = ljustify2(op.to_string(), suffix_bwlq(*size));
-                format!("{op} {src}, {dst}")
-            }
-
-            Inst::UnaryRmRImmVex {
-                src,
-                dst,
-                op,
-                size,
-                imm,
-            } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let src = src.pretty_print(size.to_bytes());
-                format!(
-                    "{} ${imm}, {src}, {dst}",
-                    ljustify2(op.to_string(), suffix_bwlq(*size))
-                )
-            }
-
-            Inst::MulX {
-                size,
-                src1,
-                src2,
-                dst_lo,
-                dst_hi,
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), size.to_bytes());
-                let dst_hi = pretty_print_reg(dst_hi.to_reg().to_reg(), size.to_bytes());
-                let dst_lo = if dst_lo.to_reg().is_invalid_sentinel() {
-                    dst_hi.clone()
-                } else {
-                    pretty_print_reg(dst_lo.to_reg().to_reg(), size.to_bytes())
-                };
-                let src2 = src2.pretty_print(size.to_bytes());
-                let suffix = suffix_bwlq(*size);
-                let op = ljustify(format!("mulx{suffix}"));
-                format!("{op} {src1}, {src2}, {dst_lo}, {dst_hi}")
-            }
 
             Inst::CheckedSRemSeq {
                 size,
@@ -705,13 +669,6 @@ impl PrettyPrint for Inst {
                 let src = src.pretty_print(8);
                 let op = ljustify(op.to_string());
                 format!("{op} ${imm}, {src}, {dst}")
-            }
-
-            Inst::XmmMovRM { op, src, dst, .. } => {
-                let src = pretty_print_reg(src.to_reg(), 8);
-                let dst = dst.pretty_print(8);
-                let op = ljustify(op.to_string());
-                format!("{op} {src}, {dst}")
             }
 
             Inst::XmmMovRMVex { op, src, dst, .. } => {
@@ -1123,47 +1080,11 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}")
             }
 
-            Inst::MovzxRmR {
-                ext_mode, src, dst, ..
-            } => {
-                let dst_size = if *ext_mode == ExtMode::LQ {
-                    4
-                } else {
-                    ext_mode.dst_size()
-                };
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size);
-                let src = src.pretty_print(ext_mode.src_size());
-
-                if *ext_mode == ExtMode::LQ {
-                    let op = ljustify("movl".to_string());
-                    format!("{op} {src}, {dst}")
-                } else {
-                    let op = ljustify2("movz".to_string(), ext_mode.to_string());
-                    format!("{op} {src}, {dst}")
-                }
-            }
-
-            Inst::Mov64MR { src, dst, .. } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let src = src.pretty_print(8);
-                let op = ljustify("movq".to_string());
-                format!("{op} {src}, {dst}")
-            }
-
             Inst::LoadEffectiveAddress { addr, dst, size } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
                 let addr = addr.pretty_print(8);
                 let op = ljustify("lea".to_string());
                 format!("{op} {addr}, {dst}")
-            }
-
-            Inst::MovsxRmR {
-                ext_mode, src, dst, ..
-            } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), ext_mode.dst_size());
-                let src = src.pretty_print(ext_mode.src_size());
-                let op = ljustify2("movs".to_string(), ext_mode.to_string());
-                format!("{op} {src}, {dst}")
             }
 
             Inst::MovRM { size, src, dst, .. } => {
@@ -1632,13 +1553,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
     // in `emit.rs`, and (ii) pretty-printing, in the `pretty_print`
     // method above.
     match inst {
-        Inst::AluRmRVex {
-            src1, src2, dst, ..
-        } => {
-            collector.reg_def(dst);
-            collector.reg_use(src1);
-            src2.get_operands(collector);
-        }
         Inst::CheckedSRemSeq {
             divisor,
             dividend_lo,
@@ -1662,24 +1576,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(divisor);
             collector.reg_fixed_use(dividend, regs::rax());
             collector.reg_fixed_def(dst, regs::rax());
-        }
-        Inst::MulX {
-            src1,
-            src2,
-            dst_lo,
-            dst_hi,
-            ..
-        } => {
-            if !dst_lo.to_reg().is_invalid_sentinel() {
-                collector.reg_def(dst_lo);
-            }
-            collector.reg_def(dst_hi);
-            collector.reg_fixed_use(src1, regs::rdx());
-            src2.get_operands(collector);
-        }
-        Inst::UnaryRmRVex { src, dst, .. } | Inst::UnaryRmRImmVex { src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
         }
         Inst::XmmUnaryRmR { src, dst, .. } | Inst::XmmUnaryRmRImm { src, dst, .. } => {
             collector.reg_def(dst);
@@ -1808,9 +1704,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(lhs);
             collector.reg_reuse_def(dst, 0); // Reuse RHS.
         }
-        Inst::XmmMovRM { src, dst, .. }
-        | Inst::XmmMovRMVex { src, dst, .. }
-        | Inst::XmmMovRMImmVex { src, dst, .. } => {
+        Inst::XmmMovRMVex { src, dst, .. } | Inst::XmmMovRMImmVex { src, dst, .. } => {
             collector.reg_use(src);
             dst.get_operands(collector);
         }
@@ -1896,20 +1790,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::MovImmM { dst, .. } => {
             dst.get_operands(collector);
         }
-
-        Inst::MovzxRmR { src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
-        }
-        Inst::Mov64MR { src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
-        }
         Inst::LoadEffectiveAddress { addr: src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
-        }
-        Inst::MovsxRmR { src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
         }
@@ -2261,6 +2142,7 @@ impl MachInst for Inst {
     }
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
+        use asm::inst::Inst as I;
         match self {
             // Note (carefully!) that a 32-bit mov *isn't* a no-op since it zeroes
             // out the upper 32 bits of the destination.  For example, we could
@@ -2269,26 +2151,41 @@ impl MachInst for Inst {
             Self::MovRR { size, src, dst, .. } if *size == OperandSize::Size64 => {
                 Some((dst.to_writable_reg(), src.to_reg()))
             }
-            // Note as well that MOVS[S|D] when used in the `XmmUnaryRmR` context are pure moves of
-            // scalar floating-point values (and annotate `dst` as `def`s to the register allocator)
-            // whereas the same operation in a packed context, e.g. `XMM_RM_R`, is used to merge a
-            // value into the lowest lane of a vector (not a move).
-            Self::XmmUnaryRmR { op, src, dst, .. }
-                if *op == SseOpcode::Movss
-                    || *op == SseOpcode::Movsd
-                    || *op == SseOpcode::Movaps
-                    || *op == SseOpcode::Movapd
-                    || *op == SseOpcode::Movups
-                    || *op == SseOpcode::Movupd
-                    || *op == SseOpcode::Movdqa
-                    || *op == SseOpcode::Movdqu =>
-            {
-                if let RegMem::Reg { reg } = src.clone().to_reg_mem() {
-                    Some((dst.to_writable_reg(), reg))
-                } else {
-                    None
-                }
-            }
+            // Note that `movss_a_r` and `movsd_a_r` are specifically omitted
+            // here because they only overwrite the low bits in the destination
+            // register, otherwise preserving the upper bits. That can be used
+            // for lane-insertion instructions, for example, meaning it's not
+            // classified as a register move.
+            //
+            // Otherwise though all register-to-register movement instructions
+            // which move 128-bits are registered as moves.
+            Self::External {
+                inst:
+                    I::movaps_a(asm::inst::movaps_a { xmm1, xmm_m128 })
+                    | I::movups_a(asm::inst::movups_a { xmm1, xmm_m128 })
+                    | I::movapd_a(asm::inst::movapd_a { xmm1, xmm_m128 })
+                    | I::movupd_a(asm::inst::movupd_a { xmm1, xmm_m128 })
+                    | I::movdqa_a(asm::inst::movdqa_a { xmm1, xmm_m128 })
+                    | I::movdqu_a(asm::inst::movdqu_a { xmm1, xmm_m128 }),
+            } => match xmm_m128 {
+                asm::XmmMem::Xmm(xmm2) => Some((xmm1.as_ref().map(|r| r.to_reg()), xmm2.to_reg())),
+                asm::XmmMem::Mem(_) => None,
+            },
+            // In addition to the "A" format of instructions above also
+            // recognize the "B" format which while it can be used for stores it
+            // can also be used for register moves.
+            Self::External {
+                inst:
+                    I::movaps_b(asm::inst::movaps_b { xmm_m128, xmm1 })
+                    | I::movups_b(asm::inst::movups_b { xmm_m128, xmm1 })
+                    | I::movapd_b(asm::inst::movapd_b { xmm_m128, xmm1 })
+                    | I::movupd_b(asm::inst::movupd_b { xmm_m128, xmm1 })
+                    | I::movdqa_b(asm::inst::movdqa_b { xmm_m128, xmm1 })
+                    | I::movdqu_b(asm::inst::movdqu_b { xmm_m128, xmm1 }),
+            } => match xmm_m128 {
+                asm::XmmMem::Xmm(dst) => Some((dst.map(|r| r.to_reg()), xmm1.as_ref().to_reg())),
+                asm::XmmMem::Mem(_) => None,
+            },
             _ => None,
         }
     }
@@ -2363,13 +2260,19 @@ impl MachInst for Inst {
                 // doesn't include MOVSS/MOVSD as instructions with zero-latency. Use movaps for
                 // those, which may write more lanes that we need, but are specified to have
                 // zero-latency.
-                let opcode = match ty {
-                    types::F16 | types::F32 | types::F64 | types::F32X4 => SseOpcode::Movaps,
-                    types::F64X2 => SseOpcode::Movapd,
-                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() <= 128 => SseOpcode::Movdqa,
+                let dst_reg = dst_reg.map(|r| Xmm::new(r).unwrap());
+                let src_reg = Xmm::new(src_reg).unwrap();
+                let inst = match ty {
+                    types::F16 | types::F32 | types::F64 | types::F32X4 => {
+                        asm::inst::movaps_a::new(dst_reg, src_reg).into()
+                    }
+                    types::F64X2 => asm::inst::movapd_a::new(dst_reg, src_reg).into(),
+                    _ if (ty.is_float() || ty.is_vector()) && ty.bits() <= 128 => {
+                        asm::inst::movdqa_a::new(dst_reg, src_reg).into()
+                    }
                     _ => unimplemented!("unable to move type: {}", ty),
                 };
-                Inst::xmm_unary_rm_r(opcode, RegMem::reg(src_reg), dst_reg)
+                Inst::External { inst }
             }
             RegClass::Vector => unreachable!(),
         }

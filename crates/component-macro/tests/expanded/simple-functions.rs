@@ -148,14 +148,14 @@ const _: () = {
         }
         pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: fn(&mut T) -> D::Data<'_>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
             D: wasmtime::component::HasData,
             for<'a> D::Data<'a>: foo::foo::simple::Host,
             T: 'static,
         {
-            foo::foo::simple::add_to_linker::<T, D>(linker, get)?;
+            foo::foo::simple::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_simple(&self) -> &exports::foo::foo::simple::Guest {
@@ -176,6 +176,26 @@ pub mod foo {
                 fn f4(&mut self) -> u32;
                 fn f5(&mut self) -> (u32, u32);
                 fn f6(&mut self, a: u32, b: u32, c: u32) -> (u32, u32, u32);
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn f1(&mut self) -> () {
+                    Host::f1(*self)
+                }
+                fn f2(&mut self, a: u32) -> () {
+                    Host::f2(*self, a)
+                }
+                fn f3(&mut self, a: u32, b: u32) -> () {
+                    Host::f3(*self, a, b)
+                }
+                fn f4(&mut self) -> u32 {
+                    Host::f4(*self)
+                }
+                fn f5(&mut self) -> (u32, u32) {
+                    Host::f5(*self)
+                }
+                fn f6(&mut self, a: u32, b: u32, c: u32) -> (u32, u32, u32) {
+                    Host::f6(*self, a, b, c)
+                }
             }
             pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
@@ -242,26 +262,6 @@ pub mod foo {
                     },
                 )?;
                 Ok(())
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn f1(&mut self) -> () {
-                    Host::f1(*self)
-                }
-                fn f2(&mut self, a: u32) -> () {
-                    Host::f2(*self, a)
-                }
-                fn f3(&mut self, a: u32, b: u32) -> () {
-                    Host::f3(*self, a, b)
-                }
-                fn f4(&mut self) -> u32 {
-                    Host::f4(*self)
-                }
-                fn f5(&mut self) -> (u32, u32) {
-                    Host::f5(*self)
-                }
-                fn f6(&mut self, a: u32, b: u32, c: u32) -> (u32, u32, u32) {
-                    Host::f6(*self, a, b, c)
-                }
             }
         }
     }

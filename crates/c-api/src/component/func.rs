@@ -19,13 +19,21 @@ pub unsafe extern "C" fn wasmtime_component_func_call(
     let args = c_args.iter().map(Val::from).collect::<Vec<_>>();
     let mut results = vec![Val::Bool(false); results_len];
 
-    let result = func
-        .call(&mut context, &args, &mut results)
-        .and_then(|_| func.post_return(&mut context));
+    let result = func.call(&mut context, &args, &mut results);
 
     crate::handle_result(result, |_| {
         for (c_val, rust_val) in std::iter::zip(c_results, results) {
             *c_val = wasmtime_component_val_t::from(&rust_val);
         }
     })
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_component_func_post_return(
+    func: &Func,
+    mut context: WasmtimeStoreContextMut<'_>,
+) -> Option<Box<wasmtime_error_t>> {
+    let result = func.post_return(&mut context);
+
+    crate::handle_result(result, |_| {})
 }

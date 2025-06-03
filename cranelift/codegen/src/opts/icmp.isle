@@ -286,3 +286,7 @@
                            (ult ty a_lo @ (value_type $I64) b_lo @ (value_type $I64))
                            (slt ty a_hi b_hi)))
       (slt ty (iconcat $I64 a_lo a_hi) (iconcat $I64 b_lo b_hi)))
+
+
+(rule (simplify (eq cty x (bxor bty x y))) (subsume (eq cty y (iconst_u bty 0))))
+(rule (simplify (ne cty x (bxor bty x y))) (subsume (ne cty y (iconst_u bty 0))))

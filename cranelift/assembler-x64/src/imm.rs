@@ -277,6 +277,41 @@ impl From<i32> for Simm32 {
     }
 }
 
+/// A 64-bit immediate operand.
+///
+/// This form is quite rare; see certain `mov` instructions.
+#[derive(Copy, Clone, Debug)]
+#[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
+pub struct Imm64(u64);
+
+impl Imm64 {
+    #[must_use]
+    pub fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
+    pub fn value(&self) -> u64 {
+        self.0
+    }
+
+    pub fn encode(&self, sink: &mut impl CodeSink) {
+        sink.put8(self.0);
+    }
+}
+
+impl From<u64> for Imm64 {
+    fn from(imm64: u64) -> Self {
+        Self(imm64)
+    }
+}
+
+impl fmt::Display for Imm64 {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "$0x{:x}", self.0)
+    }
+}
+
 /// Define the ways an immediate may be sign- or zero-extended.
 #[derive(Clone, Copy, Debug)]
 pub enum Extension {

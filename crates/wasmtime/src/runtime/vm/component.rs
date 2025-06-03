@@ -8,9 +8,10 @@
 
 use crate::component::ResourceType;
 use crate::prelude::*;
+use crate::runtime::component::ComponentInstanceId;
 use crate::runtime::vm::{
     SendSyncPtr, VMArrayCallFunction, VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTable, VMTableDefinition, VMWasmCallFunction,
+    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction,
     ValRaw, VmPtr, VmSafe,
 };
 use alloc::alloc::Layout;
@@ -21,9 +22,8 @@ use core::mem;
 use core::mem::offset_of;
 use core::ops::Deref;
 use core::ptr::{self, NonNull};
-use sptr::Strict;
 use wasmtime_environ::component::*;
-use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
+use wasmtime_environ::{DefinedTableIndex, HostPtr, PrimaryMap, VMSharedTypeIndex};
 
 #[allow(clippy::cast_possible_truncation)] // it's intended this is truncated on
 // 32-bit platforms
@@ -45,6 +45,9 @@ pub use self::resources::{
 /// contained within.
 #[repr(C)]
 pub struct ComponentInstance {
+    /// The index within the store of where to find this component instance.
+    id: ComponentInstanceId,
+
     /// Size and offset information for the trailing `VMComponentContext`.
     offsets: VMComponentOffsets<HostPtr>,
 
@@ -201,6 +204,7 @@ impl ComponentInstance {
         ptr: NonNull<ComponentInstance>,
         alloc_size: usize,
         offsets: VMComponentOffsets<HostPtr>,
+        id: ComponentInstanceId,
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
         store: NonNull<dyn VMStore>,
@@ -217,6 +221,7 @@ impl ComponentInstance {
         ptr::write(
             ptr.as_ptr(),
             ComponentInstance {
+                id,
                 offsets,
                 vmctx_self_reference: SendSyncPtr::new(
                     NonNull::new(
@@ -239,9 +244,9 @@ impl ComponentInstance {
         (*ptr.as_ptr()).initialize_vmctx();
     }
 
-    fn vmctx(&self) -> NonNull<VMComponentContext> {
+    pub fn vmctx(&self) -> NonNull<VMComponentContext> {
         let addr = &raw const self.vmctx;
-        let ret = Strict::with_addr(self.vmctx_self_reference.as_ptr(), Strict::addr(addr));
+        let ret = self.vmctx_self_reference.as_ptr().with_addr(addr.addr());
         NonNull::new(ret).unwrap()
     }
 
@@ -294,9 +299,9 @@ impl ComponentInstance {
     ///
     /// This can only be called after `idx` has been initialized at runtime
     /// during the instantiation process of a component.
-    pub fn runtime_table(&self, idx: RuntimeTableIndex) -> VMTable {
+    pub fn runtime_table(&self, idx: RuntimeTableIndex) -> VMTableImport {
         unsafe {
-            let ret = *self.vmctx_plus_offset::<VMTable>(self.offsets.runtime_table(idx));
+            let ret = *self.vmctx_plus_offset::<VMTableImport>(self.offsets.runtime_table(idx));
             debug_assert!(ret.from.as_ptr() as usize != INVALID_PTR);
             debug_assert!(ret.vmctx.as_ptr() as usize != INVALID_PTR);
             ret
@@ -431,14 +436,17 @@ impl ComponentInstance {
         idx: RuntimeTableIndex,
         ptr: NonNull<VMTableDefinition>,
         vmctx: NonNull<VMContext>,
+        index: DefinedTableIndex,
     ) {
         unsafe {
-            let storage = self.vmctx_plus_offset_mut::<VMTable>(self.offsets.runtime_table(idx));
+            let storage =
+                self.vmctx_plus_offset_mut::<VMTableImport>(self.offsets.runtime_table(idx));
             debug_assert!((*storage).vmctx.as_ptr() as usize == INVALID_PTR);
             debug_assert!((*storage).from.as_ptr() as usize == INVALID_PTR);
-            *storage = VMTable {
+            *storage = VMTableImport {
                 vmctx: vmctx.into(),
                 from: ptr.into(),
+                index,
             };
         }
     }
@@ -750,6 +758,11 @@ impl ComponentInstance {
         _ = (src_idx, src, dst);
         todo!()
     }
+
+    /// Returns the store-local id that points to this component.
+    pub fn id(&self) -> ComponentInstanceId {
+        self.id
+    }
 }
 
 impl VMComponentContext {
@@ -777,6 +790,7 @@ impl OwnedComponentInstance {
     /// Allocates a new `ComponentInstance + VMComponentContext` pair on the
     /// heap with `malloc` and configures it for the `component` specified.
     pub fn new(
+        id: ComponentInstanceId,
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
         store: NonNull<dyn VMStore>,
@@ -800,6 +814,7 @@ impl OwnedComponentInstance {
                 ptr,
                 layout.size(),
                 offsets,
+                id,
                 runtime_info,
                 resource_types,
                 store,
@@ -857,8 +872,12 @@ impl OwnedComponentInstance {
         idx: RuntimeTableIndex,
         ptr: NonNull<VMTableDefinition>,
         vmctx: NonNull<VMContext>,
+        index: DefinedTableIndex,
     ) {
-        unsafe { self.instance_mut().set_runtime_table(idx, ptr, vmctx) }
+        unsafe {
+            self.instance_mut()
+                .set_runtime_table(idx, ptr, vmctx, index)
+        }
     }
 
     /// See `ComponentInstance::set_lowering`

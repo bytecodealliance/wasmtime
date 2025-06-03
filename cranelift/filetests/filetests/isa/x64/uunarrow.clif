@@ -17,7 +17,7 @@ block0(v0: f64x2):
 ;   xorpd %xmm3, %xmm3
 ;   maxpd %xmm3, %xmm0
 ;   minpd (%rip), %xmm0
-;   roundpd $3, %xmm0, %xmm0
+;   roundpd $0x3, %xmm0, %xmm0
 ;   addpd (%rip), %xmm0
 ;   shufps  $136, %xmm0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp

@@ -79,6 +79,15 @@ macro_rules! declare_vecs {
             }
         }
 
+        impl$(<$lt>)? Default for $name $(<$lt>)? {
+            fn default() -> Self {
+                Self {
+                    size: 0,
+                    data: ptr::null_mut(),
+                }
+            }
+        }
+
         impl$(<$lt>)? Clone for $name $(<$lt>)? {
             fn clone(&self) -> Self {
                 self.as_slice().to_vec().into()
