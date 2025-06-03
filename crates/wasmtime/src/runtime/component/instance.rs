@@ -420,7 +420,7 @@ impl InstanceExportLookup for String {
 }
 
 impl InstanceData {
-    pub fn lookup_def(&self, store: &mut StoreOpaque, def: &CoreDef) -> crate::runtime::vm::Export {
+    pub fn lookup_def(&self, store: &StoreOpaque, def: &CoreDef) -> crate::runtime::vm::Export {
         match def {
             CoreDef::Export(e) => self.lookup_export(store, e),
             CoreDef::Trampoline(idx) => {
@@ -443,7 +443,7 @@ impl InstanceData {
 
     pub fn lookup_export<T>(
         &self,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
         item: &CoreExport<T>,
     ) -> crate::runtime::vm::Export
     where
@@ -451,7 +451,7 @@ impl InstanceData {
     {
         let instance = &self.instances[item.instance];
         let id = instance.id(store);
-        let instance = store.instance_mut(id);
+        let instance = store.instance(id);
         let idx = match &item.item {
             ExportItem::Index(idx) => (*idx).into(),
 
@@ -676,7 +676,7 @@ impl<'a> Instantiator<'a> {
         Ok(())
     }
 
-    fn resource(&mut self, store: &mut StoreOpaque, resource: &Resource) {
+    fn resource(&mut self, store: &StoreOpaque, resource: &Resource) {
         let dtor = resource
             .dtor
             .as_ref()
@@ -695,7 +695,7 @@ impl<'a> Instantiator<'a> {
         debug_assert_eq!(i, index);
     }
 
-    fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
+    fn extract_memory(&mut self, store: &StoreOpaque, memory: &ExtractMemory) {
         let mem = match self.data.lookup_export(store, &memory.export) {
             crate::runtime::vm::Export::Memory(m) => m,
             _ => unreachable!(),
@@ -705,7 +705,7 @@ impl<'a> Instantiator<'a> {
             .set_runtime_memory(memory.index, mem.definition);
     }
 
-    fn extract_realloc(&mut self, store: &mut StoreOpaque, realloc: &ExtractRealloc) {
+    fn extract_realloc(&mut self, store: &StoreOpaque, realloc: &ExtractRealloc) {
         let func_ref = match self.data.lookup_def(store, &realloc.def) {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
@@ -713,7 +713,7 @@ impl<'a> Instantiator<'a> {
         self.data.state.set_runtime_realloc(realloc.index, func_ref);
     }
 
-    fn extract_callback(&mut self, store: &mut StoreOpaque, callback: &ExtractCallback) {
+    fn extract_callback(&mut self, store: &StoreOpaque, callback: &ExtractCallback) {
         let func_ref = match self.data.lookup_def(store, &callback.def) {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
@@ -723,7 +723,7 @@ impl<'a> Instantiator<'a> {
             .set_runtime_callback(callback.index, func_ref);
     }
 
-    fn extract_post_return(&mut self, store: &mut StoreOpaque, post_return: &ExtractPostReturn) {
+    fn extract_post_return(&mut self, store: &StoreOpaque, post_return: &ExtractPostReturn) {
         let func_ref = match self.data.lookup_def(store, &post_return.def) {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
@@ -733,7 +733,7 @@ impl<'a> Instantiator<'a> {
             .set_runtime_post_return(post_return.index, func_ref);
     }
 
-    fn extract_table(&mut self, store: &mut StoreOpaque, table: &ExtractTable) {
+    fn extract_table(&mut self, store: &StoreOpaque, table: &ExtractTable) {
         let export = match self.data.lookup_export(store, &table.export) {
             crate::runtime::vm::Export::Table(t) => t,
             _ => unreachable!(),
@@ -748,7 +748,7 @@ impl<'a> Instantiator<'a> {
 
     fn build_imports<'b>(
         &mut self,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
         module: &Module,
         args: impl Iterator<Item = &'b CoreDef>,
     ) -> &OwnedImports {
@@ -782,7 +782,7 @@ impl<'a> Instantiator<'a> {
 
     fn assert_type_matches(
         &self,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
         module: &Module,
         arg: &CoreDef,
         imp_module: &str,
