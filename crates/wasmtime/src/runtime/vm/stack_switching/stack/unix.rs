@@ -302,8 +302,7 @@ unsafe extern "C" {
 }
 
 /// This function is responsible for actually running a wasm function inside a
-/// continuation. It is only ever called from `wasmtime_continuation_start`. Hence, it
-/// must never return.
+/// continuation. It is only ever called from `wasmtime_continuation_start`.
 unsafe extern "C" fn fiber_start(
     func_ref: *const VMFuncRef,
     caller_vmctx: *mut VMContext,
