@@ -1,6 +1,6 @@
 use crate::component::func::HostFunc;
 use crate::component::matching::InstanceType;
-use crate::component::store::ComponentInstanceId;
+use crate::component::store::{ComponentInstanceId, StoreComponentInstanceId};
 use crate::component::{
     Component, ComponentExportIndex, ComponentNamedList, Func, Lift, Lower, ResourceType,
     TypedFunc, types::ComponentItem,
@@ -10,7 +10,7 @@ use crate::linker::DefinitionType;
 use crate::prelude::*;
 use crate::runtime::vm::VMFuncRef;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
-use crate::store::{StoreId, StoreOpaque};
+use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
@@ -32,11 +32,10 @@ use wasmtime_environ::{EntityType, PrimaryMap};
 /// This type is similar to the core wasm version
 /// [`wasmtime::Instance`](crate::Instance) except that it represents an
 /// instantiated component instead of an instantiated module.
-#[derive(Copy, Clone)]
-#[repr(C)] // here for the C API
+#[derive(Copy, Clone, Debug)]
+#[repr(transparent)]
 pub struct Instance {
-    store: StoreId,
-    instance: ComponentInstanceId,
+    id: StoreComponentInstanceId,
 }
 
 // Double-check that the C representation in `component/instance.h` matches our
@@ -46,7 +45,7 @@ const _: () = {
     struct C(u64, usize);
     assert!(core::mem::size_of::<C>() == core::mem::size_of::<Instance>());
     assert!(core::mem::align_of::<C>() == core::mem::align_of::<Instance>());
-    assert!(core::mem::offset_of!(Instance, store) == 0);
+    assert!(core::mem::offset_of!(Instance, id) == 0);
 };
 
 impl Instance {
@@ -58,8 +57,7 @@ impl Instance {
     /// within `store`.
     pub(crate) unsafe fn from_wasmtime(store: &StoreOpaque, id: ComponentInstanceId) -> Instance {
         Instance {
-            store: store.id(),
-            instance: id,
+            id: StoreComponentInstanceId::new(store.id(), id),
         }
     }
 
@@ -163,28 +161,20 @@ impl Instance {
         name: impl InstanceExportLookup,
     ) -> Option<Func> {
         let store = store.as_context_mut().0;
-        self.store.assert_belongs_to(store.id());
-        // SAFETY: this should be deleted soon in a future refactoring which
-        // removes the need for `component_instance_replace`.
-        let data = unsafe {
-            store
-                .component_instance_replace(self.instance, None)
-                .unwrap()
-        };
-        let ret = name.lookup(&data.component()).and_then(|index| {
-            match &data.component().env_component().export_items[index] {
-                Export::LiftedFunction { .. } => {
-                    Some(unsafe { Func::from_lifted_func(store, index, &data) })
-                }
-                _ => None,
-            }
-        });
-        // SAFETY: this should be deleted soon in a future refactoring which
-        // removes the need for `component_instance_replace`.
-        unsafe {
-            store.component_instance_replace(self.instance, Some(data));
+        let instance = &store[self.id];
+        let component = instance.component();
+
+        // Validate that `name` exists within `self.`
+        let index = name.lookup(component)?;
+
+        // Validate that `index` is indeed a lifted function.
+        match &component.env_component().export_items[index] {
+            Export::LiftedFunction { .. } => {}
+            _ => return None,
         }
-        ret
+
+        // And package up the indices!
+        Some(Func::from_lifted_func(*self, index))
     }
 
     /// Looks up an exported [`Func`] value by name and with its type.
@@ -384,15 +374,18 @@ impl Instance {
     /// Returns the VM/runtime state for this instance as belonging to the
     /// store provided.
     pub(crate) fn instance<'a>(&self, store: &'a StoreOpaque) -> &'a ComponentInstance {
-        self.store.assert_belongs_to(store.id());
-        store.component_instance(self.instance)
+        &store[self.id]
     }
 
     /// Returns the VM/runtime state for this instance as belonging to the
     /// store provided.
     pub(crate) fn instance_ptr(&self, store: &StoreOpaque) -> NonNull<ComponentInstance> {
-        self.store.assert_belongs_to(store.id());
-        store.component_instance_ptr(self.instance)
+        self.id.assert_belongs_to(store.id());
+        store.component_instance_ptr(self.id.instance())
+    }
+
+    pub(crate) fn id(&self) -> StoreComponentInstanceId {
+        self.id
     }
 }
 

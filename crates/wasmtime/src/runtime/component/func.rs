@@ -6,7 +6,7 @@ use crate::component::values::Val;
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, ResourceTables};
 use crate::runtime::vm::{Export, ExportFunction};
-use crate::store::{StoreOpaque, Stored};
+use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
@@ -35,22 +35,27 @@ union ParamsAndResults<Params: Copy, Return: Copy> {
 /// [`wasmtime::Func`](crate::Func) it's possible to call functions either
 /// synchronously or asynchronously and either typed or untyped.
 #[derive(Copy, Clone, Debug)]
-pub struct Func(Stored<FuncData>);
-
-#[doc(hidden)]
-pub struct FuncData {
-    index: ExportIndex,
+#[repr(C)] // here for the C API.
+pub struct Func {
     instance: Instance,
+    index: ExportIndex,
 }
 
+// Double-check that the C representation in `component/instance.h` matches our
+// in-Rust representation here in terms of size/alignment/etc.
+const _: () = {
+    #[repr(C)]
+    struct T(u64, u32);
+    #[repr(C)]
+    struct C(T, u32);
+    assert!(core::mem::size_of::<C>() == core::mem::size_of::<Func>());
+    assert!(core::mem::align_of::<C>() == core::mem::align_of::<Func>());
+    assert!(core::mem::offset_of!(Func, instance) == 0);
+};
+
 impl Func {
-    pub(crate) unsafe fn from_lifted_func(
-        store: &mut StoreOpaque,
-        index: ExportIndex,
-        instance: &ComponentInstance,
-    ) -> Func {
-        let instance = Instance::from_wasmtime(store, instance.id());
-        Func(store.store_data_mut().insert(FuncData { index, instance }))
+    pub(crate) fn from_lifted_func(instance: Instance, index: ExportIndex) -> Func {
+        Func { instance, index }
     }
 
     /// Attempt to cast this [`Func`] to a statically typed [`TypedFunc`] with
@@ -162,8 +167,7 @@ impl Func {
         Params: ComponentNamedList + Lower,
         Return: ComponentNamedList + Lift,
     {
-        let data = &store[self.0];
-        let cx = InstanceType::new(instance.unwrap_or_else(|| data.instance.instance(store)));
+        let cx = InstanceType::new(instance.unwrap_or_else(|| &store[self.instance.id()]));
         let ty = &cx.types[self.ty(store)];
 
         Params::typecheck(&InterfaceType::Tuple(ty.params), &cx)
@@ -177,8 +181,7 @@ impl Func {
     /// Get the parameter names and types for this function.
     pub fn params(&self, store: impl AsContext) -> Box<[(String, Type)]> {
         let store = store.as_context();
-        let data = &store[self.0];
-        let instance = data.instance.instance(store.0);
+        let instance = &store[self.instance.id()];
         let types = instance.component().types();
         let func_ty = &types[self.ty(store.0)];
         types[func_ty.params]
@@ -192,8 +195,7 @@ impl Func {
     /// Get the result types for this function.
     pub fn results(&self, store: impl AsContext) -> Box<[Type]> {
         let store = store.as_context();
-        let data = &store[self.0];
-        let instance = data.instance.instance(store.0);
+        let instance = &store[self.instance.id()];
         let types = instance.component().types();
         let ty = self.ty(store.0);
         types[types[ty].results]
@@ -204,9 +206,8 @@ impl Func {
     }
 
     fn ty(&self, store: &StoreOpaque) -> TypeFuncIndex {
-        let data = &store[self.0];
-        let instance = data.instance.instance(store);
-        let (ty, _, _) = instance.component().export_lifted_function(data.index);
+        let instance = &store[self.instance.id()];
+        let (ty, _, _) = instance.component().export_lifted_function(self.index);
         ty
     }
 
@@ -376,11 +377,8 @@ impl Func {
         LowerParams: Copy,
         LowerReturn: Copy,
     {
-        let FuncData {
-            instance, index, ..
-        } = store.0[self.0];
-        let vminstance = instance.instance(store.0);
-        let (ty, def, options) = vminstance.component().export_lifted_function(index);
+        let vminstance = self.instance.instance(store.0);
+        let (ty, def, options) = vminstance.component().export_lifted_function(self.index);
         let export = match vminstance.lookup_def(store.0, def) {
             Export::Function(f) => f,
             _ => unreachable!(),
@@ -410,9 +408,8 @@ impl Func {
         assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
-        let i = instance.instance(store.0);
-        let types = i.component().types().clone();
-        let mut flags = i.instance_flags(component_instance);
+        let types = vminstance.component().types().clone();
+        let mut flags = vminstance.instance_flags(component_instance);
 
         unsafe {
             // Test the "may enter" flag which is a "lock" on this instance.
@@ -429,7 +426,7 @@ impl Func {
 
             debug_assert!(flags.may_leave());
             flags.set_may_leave(false);
-            let instance_ptr = instance.instance_ptr(store.0).as_ptr();
+            let instance_ptr = self.instance.instance_ptr(store.0).as_ptr();
             let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, instance_ptr);
             cx.enter_call();
             let result = lower(
@@ -483,7 +480,7 @@ impl Func {
             )?;
             let ret_slice = storage_as_slice(ret);
             (*instance_ptr).post_return_arg_set(
-                index,
+                self.index,
                 match ret_slice.len() {
                     0 => ValRaw::i32(0),
                     1 => ret_slice[0],
@@ -552,21 +549,18 @@ impl Func {
 
     fn post_return_impl(&self, mut store: impl AsContextMut) -> Result<()> {
         let mut store = store.as_context_mut();
-        let data = &store.0[self.0];
-        let instance = data.instance;
-        let index = data.index;
-        let vminstance = instance.instance(store.0);
+        let index = self.index;
+        let vminstance = &store.0[self.instance.id()];
         let (_ty, _def, options) = vminstance.component().export_lifted_function(index);
-        let component_instance = options.instance;
         let post_return = options.post_return.map(|i| {
             let func_ref = vminstance.runtime_post_return(i);
             ExportFunction { func_ref }
         });
-        let instance = instance.instance_ptr(store.0).as_ptr();
+        let instance = self.instance.instance_ptr(store.0).as_ptr();
 
         unsafe {
             let post_return_arg = (*instance).post_return_arg_take(index);
-            let mut flags = (*instance).instance_flags(component_instance);
+            let mut flags = (*instance).instance_flags(options.instance);
 
             // First assert that the instance is in a "needs post return" state.
             // This will ensure that the previous action on the instance was a

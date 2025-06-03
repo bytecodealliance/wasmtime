@@ -1,35 +1,12 @@
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
-use crate::store::{StoreData, StoreOpaque, StoredData};
-use core::mem;
+use crate::store::{StoreData, StoreId, StoreOpaque};
+use core::ops::Index;
 use core::ptr::NonNull;
 
-macro_rules! component_store_data {
-    ($($field:ident => $t:ty,)*) => (
-        #[derive(Default)]
-        pub struct ComponentStoreData {
-            $($field: Vec<$t>,)*
-
-            instances: Vec<Option<OwnedComponentInstance>>,
-        }
-
-        $(
-            impl StoredData for $t {
-                #[inline]
-                fn list(data: &StoreData) -> &Vec<Self> {
-                    &data.components.$field
-                }
-                #[inline]
-                fn list_mut(data: &mut StoreData) -> &mut Vec<Self> {
-                    &mut data.components.$field
-                }
-            }
-        )*
-    )
-}
-
-component_store_data! {
-    funcs => crate::component::func::FuncData,
+#[derive(Default)]
+pub struct ComponentStoreData {
+    instances: Vec<Option<OwnedComponentInstance>>,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -88,21 +65,55 @@ impl StoreOpaque {
             .unwrap()
             .instance_ptr()
     }
+}
 
-    // FIXME: this method should not exist, future refactorings should delete it
-    //
-    // Specifically we're in the process of removing `Stored<T>` and the only
-    // location this API is required is for functions right now when they're
-    // being created. That needs to be refactored anyway and removing `Stored`
-    // should remove the need for this function.
-    pub(crate) unsafe fn component_instance_replace(
-        &mut self,
-        id: ComponentInstanceId,
-        instance: Option<OwnedComponentInstance>,
-    ) -> Option<OwnedComponentInstance> {
-        mem::replace(
-            &mut self.store_data_mut().components.instances[id.0],
-            instance,
-        )
+/// A type used to represent an allocated `ComponentInstance` located within a
+/// store.
+///
+/// This type is held in various locations as a "safe index" into a store. This
+/// encapsulates a `StoreId` which owns the instance as well as the index within
+/// the store's list of which instance it's pointing to.
+///
+/// This type can notably be used to index into a `StoreOpaque` to project out
+/// the `ComponentInstance` that is associated with this id.
+#[repr(C)] // used by reference in the C API
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct StoreComponentInstanceId {
+    store_id: StoreId,
+    instance: ComponentInstanceId,
+}
+
+impl StoreComponentInstanceId {
+    pub(crate) fn new(
+        store_id: StoreId,
+        instance: ComponentInstanceId,
+    ) -> StoreComponentInstanceId {
+        StoreComponentInstanceId { store_id, instance }
+    }
+
+    #[inline]
+    pub fn assert_belongs_to(&self, store: StoreId) {
+        self.store_id.assert_belongs_to(store)
+    }
+
+    #[inline]
+    pub fn store_id(&self) -> StoreId {
+        self.store_id
+    }
+
+    #[inline]
+    pub(crate) fn instance(&self) -> ComponentInstanceId {
+        self.instance
+    }
+}
+
+impl Index<StoreComponentInstanceId> for StoreOpaque {
+    type Output = ComponentInstance;
+
+    fn index(&self, id: StoreComponentInstanceId) -> &Self::Output {
+        id.assert_belongs_to(self.id());
+        self.store_data().components.instances[id.instance.0]
+            .as_ref()
+            .unwrap()
     }
 }
