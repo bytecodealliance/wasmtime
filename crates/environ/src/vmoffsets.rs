@@ -592,12 +592,6 @@ impl<P: PtrSize> VMOffsets<P> {
         0 * self.pointer_size()
     }
 
-    /// The offset of the `vmctx` field.
-    #[inline]
-    pub fn vmtable_import_vmctx(&self) -> u8 {
-        1 * self.pointer_size()
-    }
-
     /// Return the size of `VMTableImport`.
     #[inline]
     pub fn size_of_vmtable_import(&self) -> u8 {
@@ -637,12 +631,6 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmmemory_import_from(&self) -> u8 {
         0 * self.pointer_size()
-    }
-
-    /// The offset of the `vmctx` field.
-    #[inline]
-    pub fn vmmemory_import_vmctx(&self) -> u8 {
-        1 * self.pointer_size()
     }
 
     /// Return the size of `VMMemoryImport`.
@@ -893,12 +881,6 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_vmmemory_import_from(&self, index: MemoryIndex) -> u32 {
         self.vmctx_vmmemory_import(index) + u32::from(self.vmmemory_import_from())
-    }
-
-    /// Return the offset to the `vmctx` field in `VMMemoryImport` index `index`.
-    #[inline]
-    pub fn vmctx_vmmemory_import_vmctx(&self, index: MemoryIndex) -> u32 {
-        self.vmctx_vmmemory_import(index) + u32::from(self.vmmemory_import_vmctx())
     }
 
     /// Return the offset to the `base` field in `VMMemoryDefinition` index `index`.
