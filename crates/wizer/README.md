@@ -124,7 +124,7 @@ Add a dependency in your `Cargo.toml`:
 # Cargo.toml
 
 [dependencies]
-wizer = "8"
+wizer = "9"
 ```
 
 And then use the `wizer::Wizer` builder to configure and run Wizer:
