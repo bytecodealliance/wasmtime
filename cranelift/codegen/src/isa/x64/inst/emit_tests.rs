@@ -1408,18 +1408,6 @@ fn test_x64_emit() {
     // XMM_RM_R: Integer Packed
 
     insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pavgb, RegMem::reg(xmm12), w_xmm13),
-        "66450FE0EC",
-        "pavgb   %xmm13, %xmm12, %xmm13",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pavgw, RegMem::reg(xmm1), w_xmm8),
-        "66440FE3C1",
-        "pavgw   %xmm8, %xmm1, %xmm8",
-    ));
-
-    insns.push((
         Inst::xmm_rm_r_evex(Avx512Opcode::Vpmullq, xmm10, RegMem::reg(xmm14), w_xmm1),
         "62D2AD0840CE",
         "vpmullq %xmm14, %xmm10, %xmm1",

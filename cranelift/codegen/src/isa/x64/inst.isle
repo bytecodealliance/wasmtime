@@ -689,8 +689,6 @@
             Packusdw
             Packuswb
             Palignr
-            Pavgb
-            Pavgw
             Pblendvb
             Pcmpeqb
             Pcmpeqw
@@ -3175,19 +3173,19 @@
 
 ;; Helper for creating `pavgb` instructions.
 (decl x64_pavgb (Xmm XmmMem) Xmm)
-(rule 0 (x64_pavgb src1 src2)
-      (xmm_rm_r (SseOpcode.Pavgb) src1 src2))
 (rule 1 (x64_pavgb src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpavgb) src1 src2))
+(rule 0 (x64_pavgb src1 src2)
+      (x64_pavgb_a src1 src2))
 
 ;; Helper for creating `pavgw` instructions.
 (decl x64_pavgw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pavgw src1 src2)
-      (xmm_rm_r (SseOpcode.Pavgw) src1 src2))
 (rule 1 (x64_pavgw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpavgw) src1 src2))
+(rule 0 (x64_pavgw src1 src2)
+      (x64_pavgw_a src1 src2))
 
 ;; Helper for creating `pand` instructions.
 (decl x64_pand (Xmm XmmMem) Xmm)
