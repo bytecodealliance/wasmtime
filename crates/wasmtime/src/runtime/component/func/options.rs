@@ -247,8 +247,7 @@ impl<'a, T: 'static> LowerContext<'a, T> {
         old_align: u32,
         new_size: usize,
     ) -> Result<usize> {
-        let realloc_func_ty = Arc::clone(unsafe { (*self.instance).realloc_func_ty() });
-        let realloc_func_ty = realloc_func_ty.downcast_ref::<FuncType>().unwrap();
+        let realloc_func_ty = Arc::clone(unsafe { (*self.instance).component().realloc_func_ty() });
         self.options
             .realloc(
                 &mut self.store,

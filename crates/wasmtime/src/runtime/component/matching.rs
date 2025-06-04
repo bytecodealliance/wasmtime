@@ -186,7 +186,7 @@ impl Definition {
 impl<'a> InstanceType<'a> {
     pub fn new(instance: &'a ComponentInstance) -> InstanceType<'a> {
         InstanceType {
-            types: instance.component_types(),
+            types: instance.component().types(),
             resources: instance.resource_types(),
         }
     }

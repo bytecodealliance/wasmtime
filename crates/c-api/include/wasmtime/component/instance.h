@@ -25,7 +25,7 @@ typedef struct wasmtime_component_instance {
   /// Internal identifier of what store this belongs to, never zero.
   uint64_t store_id;
   /// Internal index within the store.
-  size_t index;
+  uint32_t __private;
 } wasmtime_component_instance_t;
 
 /**

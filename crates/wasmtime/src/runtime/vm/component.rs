@@ -6,24 +6,26 @@
 //! Eventually it's intended that module-to-module calls, which would be
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
-use crate::component::ResourceType;
+use crate::component::{Component, InstancePre, ResourceType, RuntimeImport};
 use crate::prelude::*;
 use crate::runtime::component::ComponentInstanceId;
 use crate::runtime::vm::{
-    SendSyncPtr, VMArrayCallFunction, VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction,
-    ValRaw, VmPtr, VmSafe,
+    Export, ExportFunction, ExportGlobal, ExportGlobalKind, SendSyncPtr, VMArrayCallFunction,
+    VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMOpaqueContext, VMStore,
+    VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction, ValRaw, VmPtr, VmSafe,
 };
+use crate::store::{InstanceId, StoreOpaque};
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
-use core::any::Any;
 use core::marker;
 use core::mem;
 use core::mem::offset_of;
 use core::ops::Deref;
 use core::ptr::{self, NonNull};
 use wasmtime_environ::component::*;
-use wasmtime_environ::{DefinedTableIndex, HostPtr, PrimaryMap, VMSharedTypeIndex};
+use wasmtime_environ::{
+    DefinedTableIndex, EntityIndex, Global, HostPtr, PrimaryMap, VMSharedTypeIndex, WasmValType,
+};
 
 #[allow(clippy::cast_possible_truncation)] // it's intended this is truncated on
 // 32-bit platforms
@@ -55,8 +57,19 @@ pub struct ComponentInstance {
     /// `Instance::vmctx_self_reference`.
     vmctx_self_reference: SendSyncPtr<VMComponentContext>,
 
-    /// Runtime type information about this component.
-    runtime_info: Arc<dyn ComponentRuntimeInfo>,
+    /// The component that this instance was created from.
+    //
+    // NB: in the future if necessary it would be possible to avoid storing an
+    // entire `Component` here and instead storing only information such as:
+    //
+    // * Some reference to `Arc<ComponentTypes>`
+    // * Necessary references to closed-over modules which are exported from the
+    //   component itself.
+    //
+    // Otherwise the full guts of this component should only ever be used during
+    // the instantiation of this instance, meaning that after instantiation much
+    // of the component can be thrown away (theoretically).
+    component: Component,
 
     /// State of resources for this component.
     ///
@@ -64,12 +77,37 @@ pub struct ComponentInstance {
     /// is how this field is manipulated.
     instance_resource_tables: PrimaryMap<RuntimeComponentInstanceIndex, ResourceTable>,
 
+    /// What all compile-time-identified core instances are mapped to within the
+    /// `Store` that this component belongs to.
+    instances: PrimaryMap<RuntimeInstanceIndex, InstanceId>,
+
     /// Storage for the type information about resources within this component
     /// instance.
     resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
 
+    /// Arguments that this instance used to be instantiated.
+    ///
+    /// Strong references are stored to these arguments since pointers are saved
+    /// into the structures such as functions within the
+    /// `OwnedComponentInstance` but it's our job to keep them alive.
+    ///
+    /// One purpose of this storage is to enable embedders to drop a `Linker`,
+    /// for example, after a component is instantiated. In that situation if the
+    /// arguments weren't held here then they might be dropped, and structures
+    /// such as `.lowering()` which point back into the original function would
+    /// become stale and use-after-free conditions when used. By preserving the
+    /// entire list here though we're guaranteed that nothing is lost for the
+    /// duration of the lifetime of this instance.
+    imports: Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
+
     /// Self-pointer back to `Store<T>` and its functions.
     store: VMStoreRawPtr,
+
+    /// Cached ABI return value from the last-invoked function call along with
+    /// the function index that was invoked.
+    ///
+    /// Used in `post_return_arg_set` and `post_return_arg_take` below.
+    post_return_arg: Option<(ExportIndex, ValRaw)>,
 
     /// A zero-sized field which represents the end of the struct for the actual
     /// `VMComponentContext` to be allocated behind.
@@ -205,13 +243,14 @@ impl ComponentInstance {
         alloc_size: usize,
         offsets: VMComponentOffsets<HostPtr>,
         id: ComponentInstanceId,
-        runtime_info: Arc<dyn ComponentRuntimeInfo>,
+        component: &Component,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+        imports: &Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
         store: NonNull<dyn VMStore>,
     ) {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
 
-        let num_instances = runtime_info.component().num_runtime_component_instances;
+        let num_instances = component.env_component().num_runtime_component_instances;
         let mut instance_resource_tables =
             PrimaryMap::with_capacity(num_instances.try_into().unwrap());
         for _ in 0..num_instances {
@@ -232,9 +271,18 @@ impl ComponentInstance {
                     .unwrap(),
                 ),
                 instance_resource_tables,
-                runtime_info,
+                instances: PrimaryMap::with_capacity(
+                    component
+                        .env_component()
+                        .num_runtime_instances
+                        .try_into()
+                        .unwrap(),
+                ),
+                component: component.clone(),
                 resource_types,
+                imports: imports.clone(),
                 store: VMStoreRawPtr(store),
+                post_return_arg: None,
                 vmctx: VMComponentContext {
                     _marker: marker::PhantomPinned,
                 },
@@ -578,19 +626,10 @@ impl ComponentInstance {
         }
     }
 
-    /// Returns a reference to the component type information for this instance.
+    /// Returns a reference to the component type information for this
+    /// instance.
     pub fn component(&self) -> &Component {
-        self.runtime_info.component()
-    }
-
-    /// Returns the type information that this instance is instantiated with.
-    pub fn component_types(&self) -> &Arc<ComponentTypes> {
-        self.runtime_info.component_types()
-    }
-
-    /// Get the canonical ABI's `realloc` function's runtime type.
-    pub fn realloc_func_ty(&self) -> &Arc<dyn Any + Send + Sync> {
-        self.runtime_info.realloc_func_type()
+        &self.component
     }
 
     /// Returns a reference to the resource type information.
@@ -604,8 +643,8 @@ impl ComponentInstance {
     /// This is used when lowering borrows to skip table management and instead
     /// thread through the underlying representation directly.
     pub fn resource_owned_by_own_instance(&self, ty: TypeResourceTableIndex) -> bool {
-        let resource = &self.component_types()[ty];
-        let component = self.component();
+        let resource = &self.component.types()[ty];
+        let component = self.component.env_component();
         let idx = match component.defined_resource_index(resource.ty) {
             Some(idx) => idx,
             None => return false,
@@ -644,10 +683,7 @@ impl ComponentInstance {
         ResourceTables {
             host_table: None,
             calls: unsafe { (&mut *self.store()).component_calls() },
-            guest: Some((
-                &mut self.instance_resource_tables,
-                self.runtime_info.component_types(),
-            )),
+            guest: Some((&mut self.instance_resource_tables, self.component.types())),
         }
     }
 
@@ -659,10 +695,7 @@ impl ComponentInstance {
         &mut PrimaryMap<RuntimeComponentInstanceIndex, ResourceTable>,
         &ComponentTypes,
     ) {
-        (
-            &mut self.instance_resource_tables,
-            self.runtime_info.component_types(),
-        )
+        (&mut self.instance_resource_tables, self.component.types())
     }
 
     /// Returns the destructor and instance flags for the specified resource
@@ -674,9 +707,9 @@ impl ComponentInstance {
         &self,
         ty: TypeResourceTableIndex,
     ) -> (Option<NonNull<VMFuncRef>>, Option<InstanceFlags>) {
-        let resource = self.component_types()[ty].ty;
+        let resource = self.component.types()[ty].ty;
         let dtor = self.resource_destructor(resource);
-        let component = self.component();
+        let component = self.component.env_component();
         let flags = component.defined_resource_index(resource).map(|i| {
             let instance = component.defined_resource_instances[i];
             self.instance_flags(instance)
@@ -763,6 +796,123 @@ impl ComponentInstance {
     pub fn id(&self) -> ComponentInstanceId {
         self.id
     }
+
+    /// Pushes a new runtime instance that's been created into
+    /// `self.instances`.
+    pub fn push_instance_id(&mut self, id: InstanceId) -> RuntimeInstanceIndex {
+        self.instances.push(id)
+    }
+
+    /// Translates a `CoreDef`, a definition of a core wasm item, to an
+    /// [`Export`] which is the runtime core wasm definition.
+    pub fn lookup_def(&self, store: &StoreOpaque, def: &CoreDef) -> Export {
+        match def {
+            CoreDef::Export(e) => self.lookup_export(store, e),
+            CoreDef::Trampoline(idx) => Export::Function(ExportFunction {
+                func_ref: self.trampoline_func_ref(*idx),
+            }),
+            CoreDef::InstanceFlags(idx) => Export::Global(ExportGlobal {
+                definition: self.instance_flags(*idx).as_raw(),
+                global: Global {
+                    wasm_ty: WasmValType::I32,
+                    mutability: true,
+                },
+                kind: ExportGlobalKind::ComponentFlags(self.vmctx(), *idx),
+            }),
+        }
+    }
+
+    /// Translates a `CoreExport<T>`, an export of some core instance within
+    /// this component, to the actual runtime definition of that item.
+    pub fn lookup_export<T>(&self, store: &StoreOpaque, item: &CoreExport<T>) -> Export
+    where
+        T: Copy + Into<EntityIndex>,
+    {
+        let id = self.instances[item.instance];
+        let instance = store.instance(id);
+        let idx = match &item.item {
+            ExportItem::Index(idx) => (*idx).into(),
+
+            // FIXME: ideally at runtime we don't actually do any name lookups
+            // here. This will only happen when the host supplies an imported
+            // module so while the structure can't be known at compile time we
+            // do know at `InstancePre` time, for example, what all the host
+            // imports are. In theory we should be able to, as part of
+            // `InstancePre` construction, perform all name=>index mappings
+            // during that phase so the actual instantiation of an `InstancePre`
+            // skips all string lookups. This should probably only be
+            // investigated if this becomes a performance issue though.
+            ExportItem::Name(name) => instance.module().exports[name],
+        };
+        instance.instance().get_export_by_index(idx)
+    }
+
+    /// Looks up the value used for `import` at runtime.
+    ///
+    /// # Panics
+    ///
+    /// Panics of `import` is out of bounds for this component.
+    pub(crate) fn runtime_import(&self, import: RuntimeImportIndex) -> &RuntimeImport {
+        &self.imports[import]
+    }
+
+    /// Returns an `InstancePre<T>` which can be used to re-instantiated this
+    /// component if desired.
+    ///
+    /// # Safety
+    ///
+    /// This function places no bounds on `T` so it's up to the caller to match
+    /// that up appropriately with the store that this instance resides within.
+    pub unsafe fn instance_pre<T>(&self) -> InstancePre<T> {
+        // SAFETY: The `T` part of `new_unchecked` is forwarded as a contract of
+        // this function, and otherwise the validity of the components of the
+        // InstancePre should be guaranteed as it's what we were built with
+        // ourselves.
+        unsafe {
+            InstancePre::new_unchecked(
+                self.component.clone(),
+                self.imports.clone(),
+                self.resource_types.clone(),
+            )
+        }
+    }
+
+    /// Sets the cached argument for the canonical ABI option `post-return` to
+    /// the `arg` specified.
+    ///
+    /// This function is used in conjunction with function calls to record,
+    /// after a fuction call completes, the optional ABI return value. This
+    /// return value is cached within this instance for future use when the
+    /// `post_return` Rust-API-level function is invoked.
+    ///
+    /// Note that `index` here is the index of the export that was just
+    /// invoked, and this is used to ensure that `post_return` is called on the
+    /// same function afterwards. This restriction technically isn't necessary
+    /// though and may be one we want to lift in the future.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if `post_return_arg` is already set to `Some`.
+    pub fn post_return_arg_set(&mut self, index: ExportIndex, arg: ValRaw) {
+        assert!(self.post_return_arg.is_none());
+        self.post_return_arg = Some((index, arg));
+    }
+
+    /// Re-acquires the value originally saved via `post_return_arg_set`.
+    ///
+    /// This function will take a function `index` that's having its
+    /// `post_return` function called. If an argument was previously stored and
+    /// `index` matches the index that was stored then `Some(arg)` is returned.
+    /// Otherwise `None` is returned.
+    pub fn post_return_arg_take(&mut self, index: ExportIndex) -> Option<ValRaw> {
+        let (expected_index, arg) = self.post_return_arg.take()?;
+        if index != expected_index {
+            self.post_return_arg = Some((expected_index, arg));
+            None
+        } else {
+            Some(arg)
+        }
+    }
 }
 
 impl VMComponentContext {
@@ -791,12 +941,12 @@ impl OwnedComponentInstance {
     /// heap with `malloc` and configures it for the `component` specified.
     pub fn new(
         id: ComponentInstanceId,
-        runtime_info: Arc<dyn ComponentRuntimeInfo>,
+        component: &Component,
         resource_types: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
+        imports: &Arc<PrimaryMap<RuntimeImportIndex, RuntimeImport>>,
         store: NonNull<dyn VMStore>,
     ) -> OwnedComponentInstance {
-        let component = runtime_info.component();
-        let offsets = VMComponentOffsets::new(HostPtr, component);
+        let offsets = VMComponentOffsets::new(HostPtr, component.env_component());
         let layout = ComponentInstance::alloc_layout(&offsets);
         unsafe {
             // Technically it is not required to `alloc_zeroed` here. The
@@ -815,8 +965,9 @@ impl OwnedComponentInstance {
                 layout.size(),
                 offsets,
                 id,
-                runtime_info,
+                component,
                 resource_types,
+                imports,
                 store,
             );
 
@@ -834,8 +985,8 @@ impl OwnedComponentInstance {
     }
 
     /// Returns the underlying component instance's raw pointer.
-    pub fn instance_ptr(&self) -> *mut ComponentInstance {
-        self.ptr.as_ptr()
+    pub fn instance_ptr(&self) -> NonNull<ComponentInstance> {
+        self.ptr.as_non_null()
     }
 
     /// See `ComponentInstance::set_runtime_memory`
@@ -911,6 +1062,11 @@ impl OwnedComponentInstance {
     /// See `ComponentInstance::resource_types`
     pub fn resource_types_mut(&mut self) -> &mut Arc<PrimaryMap<ResourceIndex, ResourceType>> {
         unsafe { &mut (*self.ptr.as_ptr()).resource_types }
+    }
+
+    /// See `ComponentInstance::push_instance_id`
+    pub fn push_instance_id(&mut self, id: InstanceId) -> RuntimeInstanceIndex {
+        unsafe { self.instance_mut().push_instance_id(id) }
     }
 }
 
@@ -1013,16 +1169,4 @@ impl InstanceFlags {
     pub fn as_raw(&self) -> NonNull<VMGlobalDefinition> {
         self.0.as_non_null()
     }
-}
-
-/// Runtime information about a component stored locally for reflection.
-pub trait ComponentRuntimeInfo: Send + Sync + 'static {
-    /// Returns the type information about the compiled component.
-    fn component(&self) -> &Component;
-
-    /// Returns a handle to the tables of type information for this component.
-    fn component_types(&self) -> &Arc<ComponentTypes>;
-
-    /// Get the `wasmtime::FuncType` for the canonical ABI's `realloc` function.
-    fn realloc_func_type(&self) -> &Arc<dyn Any + Send + Sync>;
 }

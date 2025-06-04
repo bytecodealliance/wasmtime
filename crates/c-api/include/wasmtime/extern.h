@@ -45,7 +45,7 @@ typedef struct wasmtime_table {
     /// Internal identifier of what store this belongs to, never zero.
     uint64_t store_id;
     /// Private field for Wasmtime.
-    size_t __private1;
+    uint32_t __private1;
   };
   /// Private field for Wasmtime.
   uint32_t __private2;
@@ -63,7 +63,7 @@ typedef struct wasmtime_memory {
     /// Internal identifier of what store this belongs to, never zero.
     uint64_t store_id;
     /// Private field for Wasmtime.
-    size_t __private1;
+    uint32_t __private1;
   };
   /// Private field for Wasmtime.
   uint32_t __private2;
@@ -80,7 +80,7 @@ typedef struct wasmtime_global {
   /// Internal identifier of what store this belongs to, never zero.
   uint64_t store_id;
   /// Private field for Wasmtime.
-  size_t __private1;
+  uint32_t __private1;
   /// Private field for Wasmtime.
   uint32_t __private2;
   /// Private field for Wasmtime.

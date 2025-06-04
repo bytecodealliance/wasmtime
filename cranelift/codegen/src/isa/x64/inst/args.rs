@@ -774,10 +774,6 @@ pub enum SseOpcode {
     Cmppd,
     Cmpss,
     Cmpsd,
-    Divps,
-    Divpd,
-    Divss,
-    Divsd,
     Insertps,
     Movlhps,
     Pabsb,
@@ -839,8 +835,6 @@ impl SseOpcode {
             SseOpcode::Comiss
             | SseOpcode::Cmpps
             | SseOpcode::Cmpss
-            | SseOpcode::Divps
-            | SseOpcode::Divss
             | SseOpcode::Movlhps
             | SseOpcode::Rcpss
             | SseOpcode::Rsqrtss
@@ -850,8 +844,6 @@ impl SseOpcode {
             SseOpcode::Cmppd
             | SseOpcode::Cmpsd
             | SseOpcode::Comisd
-            | SseOpcode::Divpd
-            | SseOpcode::Divsd
             | SseOpcode::Packssdw
             | SseOpcode::Packsswb
             | SseOpcode::Packuswb
@@ -944,10 +936,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Cmpsd => "cmpsd",
             SseOpcode::Comiss => "comiss",
             SseOpcode::Comisd => "comisd",
-            SseOpcode::Divps => "divps",
-            SseOpcode::Divpd => "divpd",
-            SseOpcode::Divss => "divss",
-            SseOpcode::Divsd => "divsd",
             SseOpcode::Insertps => "insertps",
             SseOpcode::Movlhps => "movlhps",
             SseOpcode::Pabsb => "pabsb",

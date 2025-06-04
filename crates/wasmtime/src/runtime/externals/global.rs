@@ -31,7 +31,7 @@ pub struct Global {
     store: StoreId,
     /// Either `InstanceId` or `ComponentInstanceId` internals depending on
     /// `kind` below.
-    instance: usize,
+    instance: u32,
     /// Which method of definition was used when creating this global.
     kind: VMGlobalKind,
 }
@@ -40,7 +40,7 @@ pub struct Global {
 // representation here in terms of size/alignment/etc.
 const _: () = {
     #[repr(C)]
-    struct C(u64, usize, u32, u32);
+    struct C(u64, u32, u32, u32);
     assert!(core::mem::size_of::<C>() == core::mem::size_of::<Global>());
     assert!(core::mem::align_of::<C>() == core::mem::align_of::<Global>());
     assert!(core::mem::offset_of!(Global, store) == 0);
@@ -120,7 +120,7 @@ impl Global {
     ) -> Global {
         Global {
             store: store.id(),
-            instance: instance.index(),
+            instance: instance.as_u32(),
             kind: VMGlobalKind::Instance(index),
         }
     }
@@ -282,12 +282,12 @@ impl Global {
         let (instance, kind) = match wasmtime_export.kind {
             ExportGlobalKind::Host(index) => (0, VMGlobalKind::Host(index)),
             ExportGlobalKind::Instance(vmctx, index) => (
-                vm::Instance::from_vmctx(vmctx, |i| i.id().index()),
+                vm::Instance::from_vmctx(vmctx, |i| i.id().as_u32()),
                 VMGlobalKind::Instance(index),
             ),
             #[cfg(feature = "component-model")]
             ExportGlobalKind::ComponentFlags(vmctx, index) => (
-                vm::component::ComponentInstance::from_vmctx(vmctx, |i| i.id().index()),
+                vm::component::ComponentInstance::from_vmctx(vmctx, |i| i.id().as_u32()),
                 VMGlobalKind::ComponentFlags(index),
             ),
         };
@@ -302,7 +302,7 @@ impl Global {
         self.store.assert_belongs_to(store.id());
         match self.kind {
             VMGlobalKind::Instance(index) => {
-                let instance = InstanceId::from_index(self.instance);
+                let instance = InstanceId::from_u32(self.instance);
                 let module = store.instance(instance).module();
                 let index = module.global_index(index);
                 &module.globals[index]
@@ -322,13 +322,13 @@ impl Global {
     pub(crate) fn vmimport(&self, store: &StoreOpaque) -> vm::VMGlobalImport {
         let vmctx = match self.kind {
             VMGlobalKind::Instance(_) => {
-                let instance = InstanceId::from_index(self.instance);
+                let instance = InstanceId::from_u32(self.instance);
                 Some(VMOpaqueContext::from_vmcontext(store.instance(instance).vmctx()).into())
             }
             VMGlobalKind::Host(_) => None,
             #[cfg(feature = "component-model")]
             VMGlobalKind::ComponentFlags(_) => {
-                let instance = crate::component::ComponentInstanceId::from_index(self.instance);
+                let instance = crate::component::ComponentInstanceId::from_u32(self.instance);
                 Some(
                     VMOpaqueContext::from_vmcomponent(store.component_instance(instance).vmctx())
                         .into(),
@@ -360,7 +360,7 @@ impl Global {
         self.store.assert_belongs_to(store.id());
         match self.kind {
             VMGlobalKind::Instance(index) => {
-                let instance = InstanceId::from_index(self.instance);
+                let instance = InstanceId::from_u32(self.instance);
                 store.instance(instance).instance().global_ptr(index)
             }
             VMGlobalKind::Host(index) => unsafe {
@@ -368,7 +368,7 @@ impl Global {
             },
             #[cfg(feature = "component-model")]
             VMGlobalKind::ComponentFlags(index) => {
-                let instance = crate::component::ComponentInstanceId::from_index(self.instance);
+                let instance = crate::component::ComponentInstanceId::from_u32(self.instance);
                 store
                     .component_instance(instance)
                     .instance_flags(index)
