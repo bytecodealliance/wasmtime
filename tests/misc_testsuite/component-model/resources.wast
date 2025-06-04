@@ -188,7 +188,7 @@
 ;; equality constraints also work
 (component
   (import "host" (instance
-    (export $r1 "resource1" (type (sub resource)))
+    (export "resource1" (type $r1 (sub resource)))
     (export "resource2" (type (sub resource)))
     (export "resource1-again" (type (eq $r1)))
   ))
@@ -199,7 +199,7 @@
   (component
     (import "host" (instance
       (export "resource1" (type (sub resource)))
-      (export $r1 "resource2" (type (sub resource)))
+      (export "resource2" (type $r1 (sub resource)))
       (export "resource1-again" (type (eq $r1)))
     ))
   )
@@ -208,7 +208,7 @@
 ;; equality constraints mean that types don't need to be supplied
 (component
   (import "host" (instance
-    (export $r1 "resource1" (type (sub resource)))
+    (export "resource1" (type $r1 (sub resource)))
     (export "resource2" (type (sub resource)))
     (export "this-name-is-not-provided-in-the-wast-harness" (type (eq $r1)))
   ))
@@ -217,7 +217,7 @@
 ;; simple properties of handles
 (component
   (import "host" (instance $host
-    (export $r "resource1" (type (sub resource)))
+    (export "resource1" (type $r (sub resource)))
     (export "[constructor]resource1" (func (param "r" u32) (result (own $r))))
     (export "[static]resource1.assert" (func (param "r" (own $r)) (param "rep" u32)))
   ))
@@ -268,7 +268,7 @@
 ;; Using an index that has never been valid is a trap
 (component
   (import "host" (instance $host
-    (export $r "resource1" (type (sub resource)))
+    (export "resource1" (type $r (sub resource)))
     (export "[static]resource1.assert" (func (param "r" (own $r)) (param "rep" u32)))
   ))
   (alias export $host "resource1" (type $r))
@@ -296,7 +296,7 @@
 ;; Using an index which was previously valid but no longer valid is also a trap.
 (component
   (import "host" (instance $host
-    (export $r "resource1" (type (sub resource)))
+    (export "resource1" (type $r (sub resource)))
     (export "[constructor]resource1" (func (param "r" u32) (result (own $r))))
     (export "[static]resource1.assert" (func (param "r" (own $r)) (param "rep" u32)))
   ))
@@ -338,7 +338,7 @@
 ;; Also invalid to pass a previously valid handle to the drop intrinsic
 (component
   (import "host" (instance $host
-    (export $r "resource1" (type (sub resource)))
+    (export "resource1" (type $r (sub resource)))
     (export "[constructor]resource1" (func (param "r" u32) (result (own $r))))
   ))
   (alias export $host "resource1" (type $r))
@@ -380,7 +380,7 @@
 ;; should not implicitly have access to that resource.
 (component
   (import "host" (instance $host
-    (export $r "resource1" (type (sub resource)))
+    (export "resource1" (type $r (sub resource)))
     (export "[constructor]resource1" (func (param "r" u32) (result (own $r))))
   ))
 
@@ -388,7 +388,7 @@
   ;; assert that it's zero, and then forget about it.
   (component $inner
     (import "host" (instance $host
-      (export $r "resource1" (type (sub resource)))
+      (export "resource1" (type $r (sub resource)))
       (export "[constructor]resource1" (func (param "r" u32) (result (own $r))))
     ))
     (alias export $host "[constructor]resource1" (func $ctor))
@@ -534,7 +534,7 @@
 ;; should not be visible in the other.
 (component
   (import "host" (instance $host
-    (export $r "resource1" (type (sub resource)))
+    (export "resource1" (type $r (sub resource)))
     (export "[constructor]resource1" (func (param "r" u32) (result (own $r))))
   ))
   (alias export $host "resource1" (type $r))
@@ -745,7 +745,7 @@
 ;; Test dropping a host resource
 (component
   (import "host" (instance $host
-    (export $r "resource1" (type (sub resource)))
+    (export "resource1" (type $r (sub resource)))
     (export "[constructor]resource1" (func (param "r" u32) (result (own $r))))
     (export "[static]resource1.last-drop" (func (result u32)))
     (export "[static]resource1.drops" (func (result u32)))
@@ -809,7 +809,7 @@
 ;; Test some bare-bones basics of borrowed resources
 (component
   (import "host" (instance $host
-    (export $r "resource1" (type (sub resource)))
+    (export "resource1" (type $r (sub resource)))
     (export "[constructor]resource1" (func (param "r" u32) (result (own $r))))
     (export "[method]resource1.simple" (func (param "self" (borrow $r)) (param "rep" u32)))
     (export "[method]resource1.take-borrow" (func (param "self" (borrow $r)) (param "b" (borrow $r))))
@@ -886,7 +886,7 @@
 ;; Cannot pass out an owned resource when it's borrowed by the same call
 (component
   (import "host" (instance $host
-    (export $r "resource1" (type (sub resource)))
+    (export "resource1" (type $r (sub resource)))
     (export "[constructor]resource1" (func (param "r" u32) (result (own $r))))
     (export "[method]resource1.take-own" (func (param "self" (borrow $r)) (param "b" (own $r))))
   ))
@@ -927,7 +927,7 @@
 ;; Borrows must actually exist
 (component
   (import "host" (instance $host
-    (export $r "resource1" (type (sub resource)))
+    (export "resource1" (type $r (sub resource)))
     (export "[method]resource1.simple" (func (param "self" (borrow $r)) (param "b" u32)))
   ))
 
@@ -996,7 +996,7 @@
 
   (component $B
     (import "a" (instance $i
-      (export $t "t" (type (sub resource)))
+      (export "t" (type $t (sub resource)))
       (export "[constructor]t" (func (param "x" u32) (result (own $t))))
       (export "[method]t.assert" (func (param "self" (borrow $t)) (param "x" u32)))
       (export "[static]t.assert-own" (func (param "self" (own $t)) (param "x" u32)))
