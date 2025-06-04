@@ -71,16 +71,6 @@ impl VMContObj {
 unsafe impl Send for VMContObj {}
 unsafe impl Sync for VMContObj {}
 
-#[test]
-fn null_pointer_optimization() {
-    // The Rust spec does not technically guarantee that the null pointer
-    // optimization applies to a struct containing a `NonNull`.
-    assert_eq!(
-        core::mem::size_of::<Option<VMContObj>>(),
-        core::mem::size_of::<VMContObj>()
-    );
-}
-
 /// This type is used to save (and subsequently restore) a subset of the data in
 /// `VMStoreContext`. See documentation of `VMStackChain` for the exact uses.
 #[repr(C)]
@@ -90,23 +80,6 @@ pub struct VMStackLimits {
     pub stack_limit: usize,
     /// Saved version of `last_wasm_entry_fp` field of `VMStoreContext`
     pub last_wasm_entry_fp: usize,
-}
-
-#[test]
-fn check_vm_stack_limits_offsets() {
-    use core::mem::offset_of;
-    use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
-
-    let module = Module::new();
-    let offsets = VMOffsets::new(HostPtr, &module);
-    assert_eq!(
-        offset_of!(VMStackLimits, stack_limit),
-        usize::from(offsets.ptr.vmstack_limits_stack_limit())
-    );
-    assert_eq!(
-        offset_of!(VMStackLimits, last_wasm_entry_fp),
-        usize::from(offsets.ptr.vmstack_limits_last_wasm_entry_fp())
-    );
 }
 
 /// This type represents "common" information that we need to save both for the
@@ -167,40 +140,6 @@ impl VMCommonStackInformation {
     }
 }
 
-#[test]
-fn check_vm_common_stack_information_offsets() {
-    use core::mem::offset_of;
-    use std::mem::size_of;
-    use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
-
-    let module = Module::new();
-    let offsets = VMOffsets::new(HostPtr, &module);
-    assert_eq!(
-        size_of::<VMCommonStackInformation>(),
-        usize::from(offsets.ptr.size_of_vmcommon_stack_information())
-    );
-    assert_eq!(
-        offset_of!(VMCommonStackInformation, limits),
-        usize::from(offsets.ptr.vmcommon_stack_information_limits())
-    );
-    assert_eq!(
-        offset_of!(VMCommonStackInformation, state),
-        usize::from(offsets.ptr.vmcommon_stack_information_state())
-    );
-    assert_eq!(
-        offset_of!(VMCommonStackInformation, handlers),
-        usize::from(offsets.ptr.vmcommon_stack_information_handlers())
-    );
-    assert_eq!(
-        offset_of!(VMCommonStackInformation, first_switch_handler_index),
-        usize::from(
-            offsets
-                .ptr
-                .vmcommon_stack_information_first_switch_handler_index()
-        )
-    );
-}
-
 impl VMStackLimits {
     /// Default value, but uses the given value for `stack_limit`.
     pub fn with_stack_limit(stack_limit: usize) -> Self {
@@ -239,34 +178,6 @@ impl<T> VMHostArray<T> {
     pub fn clear(&mut self) {
         *self = Self::empty();
     }
-}
-
-#[test]
-fn check_vm_array_offsets() {
-    use core::mem::offset_of;
-    use std::mem::size_of;
-    use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
-
-    // Note that the type parameter has no influence on the size and offsets.
-
-    let module = Module::new();
-    let offsets = VMOffsets::new(HostPtr, &module);
-    assert_eq!(
-        size_of::<VMHostArray<()>>(),
-        usize::from(offsets.ptr.size_of_vmarray())
-    );
-    assert_eq!(
-        offset_of!(VMHostArray<()>, length),
-        usize::from(offsets.ptr.vmarray_length())
-    );
-    assert_eq!(
-        offset_of!(VMHostArray<()>, capacity),
-        usize::from(offsets.ptr.vmarray_capacity())
-    );
-    assert_eq!(
-        offset_of!(VMHostArray<()>, data),
-        usize::from(offsets.ptr.vmarray_data())
-    );
 }
 
 /// Type used for passing payloads to and from continuations. The actual type
@@ -385,47 +296,6 @@ impl Drop for VMContRef {
 // `VMContRef`s.
 unsafe impl Send for VMContRef {}
 unsafe impl Sync for VMContRef {}
-
-#[test]
-fn check_vm_contref_offsets() {
-    use core::mem::offset_of;
-    use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
-
-    let module = Module::new();
-    let offsets = VMOffsets::new(HostPtr, &module);
-    assert_eq!(
-        offset_of!(VMContRef, common_stack_information),
-        usize::from(offsets.ptr.vmcontref_common_stack_information())
-    );
-    assert_eq!(
-        offset_of!(VMContRef, parent_chain),
-        usize::from(offsets.ptr.vmcontref_parent_chain())
-    );
-    assert_eq!(
-        offset_of!(VMContRef, last_ancestor),
-        usize::from(offsets.ptr.vmcontref_last_ancestor())
-    );
-    // Some 32-bit platforms need this to be 8-byte aligned, some don't.
-    // So we need to make sure it always is, without padding.
-    assert_eq!(u8::vmcontref_revision(&4) % 8, 0);
-    assert_eq!(u8::vmcontref_revision(&8) % 8, 0);
-    assert_eq!(
-        offset_of!(VMContRef, revision),
-        usize::from(offsets.ptr.vmcontref_revision())
-    );
-    assert_eq!(
-        offset_of!(VMContRef, stack),
-        usize::from(offsets.ptr.vmcontref_stack())
-    );
-    assert_eq!(
-        offset_of!(VMContRef, args),
-        usize::from(offsets.ptr.vmcontref_args())
-    );
-    assert_eq!(
-        offset_of!(VMContRef, values),
-        usize::from(offsets.ptr.vmcontref_values())
-    );
-}
 
 /// Implements `cont.new` instructions (i.e., creation of continuations).
 #[cfg(feature = "stack-switching")]
@@ -608,19 +478,6 @@ impl VMStackChain {
     }
 }
 
-#[test]
-fn check_vm_stack_chain_offsets() {
-    use std::mem::size_of;
-    use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
-
-    let module = Module::new();
-    let offsets = VMOffsets::new(HostPtr, &module);
-    assert_eq!(
-        size_of::<VMStackChain>(),
-        usize::from(offsets.ptr.size_of_vmstack_chain())
-    );
-}
-
 /// Iterator for Continuations in a stack chain.
 pub struct ContinuationIterator(VMStackChain);
 
@@ -708,4 +565,135 @@ pub enum ControlEffect {
     } = wasmtime_environ::CONTROL_EFFECT_SUSPEND_DISCRIMINANT,
     /// Used to signal that a continuation has invoked a `suspend` instruction.
     Switch = wasmtime_environ::CONTROL_EFFECT_SWITCH_DISCRIMINANT,
+}
+
+#[cfg(test)]
+mod tests {
+    use core::mem::{offset_of, size_of};
+
+    use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
+
+    use super::*;
+
+    #[test]
+    fn null_pointer_optimization() {
+        // The Rust spec does not technically guarantee that the null pointer
+        // optimization applies to a struct containing a `NonNull`.
+        assert_eq!(size_of::<Option<VMContObj>>(), size_of::<VMContObj>());
+    }
+
+    #[test]
+    fn check_vm_stack_limits_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(
+            offset_of!(VMStackLimits, stack_limit),
+            usize::from(offsets.ptr.vmstack_limits_stack_limit())
+        );
+        assert_eq!(
+            offset_of!(VMStackLimits, last_wasm_entry_fp),
+            usize::from(offsets.ptr.vmstack_limits_last_wasm_entry_fp())
+        );
+    }
+
+    #[test]
+    fn check_vm_common_stack_information_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(
+            size_of::<VMCommonStackInformation>(),
+            usize::from(offsets.ptr.size_of_vmcommon_stack_information())
+        );
+        assert_eq!(
+            offset_of!(VMCommonStackInformation, limits),
+            usize::from(offsets.ptr.vmcommon_stack_information_limits())
+        );
+        assert_eq!(
+            offset_of!(VMCommonStackInformation, state),
+            usize::from(offsets.ptr.vmcommon_stack_information_state())
+        );
+        assert_eq!(
+            offset_of!(VMCommonStackInformation, handlers),
+            usize::from(offsets.ptr.vmcommon_stack_information_handlers())
+        );
+        assert_eq!(
+            offset_of!(VMCommonStackInformation, first_switch_handler_index),
+            usize::from(
+                offsets
+                    .ptr
+                    .vmcommon_stack_information_first_switch_handler_index()
+            )
+        );
+    }
+
+    #[test]
+    fn check_vm_array_offsets() {
+        // Note that the type parameter has no influence on the size and offsets.
+        let module = Module::new();
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(
+            size_of::<VMHostArray<()>>(),
+            usize::from(offsets.ptr.size_of_vmarray())
+        );
+        assert_eq!(
+            offset_of!(VMHostArray<()>, length),
+            usize::from(offsets.ptr.vmarray_length())
+        );
+        assert_eq!(
+            offset_of!(VMHostArray<()>, capacity),
+            usize::from(offsets.ptr.vmarray_capacity())
+        );
+        assert_eq!(
+            offset_of!(VMHostArray<()>, data),
+            usize::from(offsets.ptr.vmarray_data())
+        );
+    }
+
+    #[test]
+    fn check_vm_contref_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(
+            offset_of!(VMContRef, common_stack_information),
+            usize::from(offsets.ptr.vmcontref_common_stack_information())
+        );
+        assert_eq!(
+            offset_of!(VMContRef, parent_chain),
+            usize::from(offsets.ptr.vmcontref_parent_chain())
+        );
+        assert_eq!(
+            offset_of!(VMContRef, last_ancestor),
+            usize::from(offsets.ptr.vmcontref_last_ancestor())
+        );
+        // Some 32-bit platforms need this to be 8-byte aligned, some don't.
+        // So we need to make sure it always is, without padding.
+        assert_eq!(u8::vmcontref_revision(&4) % 8, 0);
+        assert_eq!(u8::vmcontref_revision(&8) % 8, 0);
+        assert_eq!(
+            offset_of!(VMContRef, revision),
+            usize::from(offsets.ptr.vmcontref_revision())
+        );
+        assert_eq!(
+            offset_of!(VMContRef, stack),
+            usize::from(offsets.ptr.vmcontref_stack())
+        );
+        assert_eq!(
+            offset_of!(VMContRef, args),
+            usize::from(offsets.ptr.vmcontref_args())
+        );
+        assert_eq!(
+            offset_of!(VMContRef, values),
+            usize::from(offsets.ptr.vmcontref_values())
+        );
+    }
+
+    #[test]
+    fn check_vm_stack_chain_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(
+            size_of::<VMStackChain>(),
+            usize::from(offsets.ptr.size_of_vmstack_chain())
+        );
+    }
 }
