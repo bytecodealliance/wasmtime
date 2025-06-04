@@ -182,9 +182,9 @@
 (component
   (import "host" (instance $i
     (type $x' (record (field "x" u32)))
-    (export $x "x" (type (eq $x')))
+    (export "x" (type $x (eq $x')))
     (type $rec' (record (field "x" $x) (field "y" string)))
-    (export $rec "rec" (type (eq $rec')))
+    (export "rec" (type $rec (eq $rec')))
     (export "some-record" (type (eq $rec)))))
 )
 

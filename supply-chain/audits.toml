@@ -255,7 +255,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -280,7 +280,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -338,7 +338,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -363,7 +363,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -534,7 +534,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -679,7 +679,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -704,7 +704,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -769,7 +769,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -794,7 +794,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -806,7 +806,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -831,7 +831,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -869,7 +869,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -894,7 +894,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -926,7 +926,7 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2023-01-01"
-end = "2025-05-08"
+end = "2026-06-03"
 notes = """
 The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
@@ -4836,11 +4836,47 @@ user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
 end = "2025-12-05"
 
+[[trusted.wasm-encoder]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2026-06-03"
+
+[[trusted.wasm-metadata]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2026-06-03"
+
 [[trusted.wasm-wave]]
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2024-06-19"
 end = "2025-11-13"
+
+[[trusted.wasmparser]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2026-06-03"
+
+[[trusted.wasmprinter]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2026-06-03"
+
+[[trusted.wast]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2026-06-03"
+
+[[trusted.wat]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2026-06-03"
 
 [[trusted.web-sys]]
 criteria = "safe-to-deploy"
@@ -4943,6 +4979,18 @@ criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2019-08-20"
 end = "2024-07-14"
+
+[[trusted.wit-component]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2026-06-03"
+
+[[trusted.wit-parser]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2024-02-15"
+end = "2026-06-03"
 
 [[trusted.witx]]
 criteria = "safe-to-deploy"
