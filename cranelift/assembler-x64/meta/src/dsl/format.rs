@@ -305,6 +305,10 @@ pub enum Location {
     rm64,
 
     // XMM registers, and their memory forms.
+    xmm1,
+    xmm2,
+    xmm3,
+    xmm_m16,
     xmm_m32,
     xmm_m64,
     xmm_m128,
@@ -314,9 +318,6 @@ pub enum Location {
     m16,
     m32,
     m64,
-    xmm1,
-    xmm2,
-    xmm3,
 }
 
 impl Location {
@@ -326,7 +327,7 @@ impl Location {
         use Location::*;
         match self {
             al | cl | imm8 | r8 | rm8 | m8 => 8,
-            ax | dx | imm16 | r16 | rm16 | m16 => 16,
+            ax | dx | imm16 | r16 | rm16 | m16 | xmm_m16 => 16,
             eax | edx | imm32 | r32 | r32a | r32b | rm32 | m32 | xmm_m32 => 32,
             rax | rdx | imm64 | r64 | r64a | r64b | rm64 | m64 | xmm_m64 => 64,
             xmm1 | xmm2 | xmm3 | xmm_m128 => 128,
@@ -370,7 +371,9 @@ impl Location {
             r8 | r16 | r32 | r32a | r32b | r64 | r64a | r64b | xmm1 | xmm2 | xmm3 => {
                 OperandKind::Reg(*self)
             }
-            rm8 | rm16 | rm32 | rm64 | xmm_m32 | xmm_m64 | xmm_m128 => OperandKind::RegMem(*self),
+            rm8 | rm16 | rm32 | rm64 | xmm_m16 | xmm_m32 | xmm_m64 | xmm_m128 => {
+                OperandKind::RegMem(*self)
+            }
             m8 | m16 | m32 | m64 => OperandKind::Mem(*self),
         }
     }
@@ -386,7 +389,7 @@ impl Location {
             imm8 | imm16 | imm32 | imm64 | m8 | m16 | m32 | m64 => None,
             al | ax | eax | rax | cl | dx | edx | rdx | r8 | r16 | r32 | r32a | r32b | r64
             | r64a | r64b | rm8 | rm16 | rm32 | rm64 => Some(RegClass::Gpr),
-            xmm1 | xmm2 | xmm3 | xmm_m32 | xmm_m64 | xmm_m128 => Some(RegClass::Xmm),
+            xmm1 | xmm2 | xmm3 | xmm_m16 | xmm_m32 | xmm_m64 | xmm_m128 => Some(RegClass::Xmm),
         }
     }
 }
@@ -422,6 +425,10 @@ impl core::fmt::Display for Location {
             rm32 => write!(f, "rm32"),
             rm64 => write!(f, "rm64"),
 
+            xmm1 => write!(f, "xmm1"),
+            xmm2 => write!(f, "xmm2"),
+            xmm3 => write!(f, "xmm3"),
+            xmm_m16 => write!(f, "xmm_m16"),
             xmm_m32 => write!(f, "xmm_m32"),
             xmm_m64 => write!(f, "xmm_m64"),
             xmm_m128 => write!(f, "xmm_m128"),
@@ -430,10 +437,6 @@ impl core::fmt::Display for Location {
             m16 => write!(f, "m16"),
             m32 => write!(f, "m32"),
             m64 => write!(f, "m64"),
-
-            xmm1 => write!(f, "xmm1"),
-            xmm2 => write!(f, "xmm2"),
-            xmm3 => write!(f, "xmm3"),
         }
     }
 }

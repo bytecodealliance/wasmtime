@@ -696,18 +696,6 @@
             Pcmpgtq
             Pmaddubsw
             Pmaddwd
-            Pmovsxbd
-            Pmovsxbw
-            Pmovsxbq
-            Pmovsxwd
-            Pmovsxwq
-            Pmovsxdq
-            Pmovzxbd
-            Pmovzxbw
-            Pmovzxbq
-            Pmovzxwd
-            Pmovzxwq
-            Pmovzxdq
             Pshufb
             Pshufd
             Ptest
@@ -2241,46 +2229,40 @@
         (xmm_movrm_vex (AvxOpcode.Vmovdqu) addr data))
 
 (decl x64_pmovsxbw (XmmMem) Xmm)
-(rule (x64_pmovsxbw from)
-      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovsxbw) from))
 (rule 1 (x64_pmovsxbw from)
       (if-let true (use_avx))
       (xmm_unary_rm_r_vex (AvxOpcode.Vpmovsxbw) from))
+(rule 0 (x64_pmovsxbw from) (x64_pmovsxbw_a from))
 
 (decl x64_pmovzxbw (XmmMem) Xmm)
-(rule (x64_pmovzxbw from)
-      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovzxbw) from))
 (rule 1 (x64_pmovzxbw from)
       (if-let true (use_avx))
       (xmm_unary_rm_r_vex (AvxOpcode.Vpmovzxbw) from))
+(rule 0 (x64_pmovzxbw from) (x64_pmovzxbw_a from))
 
 (decl x64_pmovsxwd (XmmMem) Xmm)
-(rule (x64_pmovsxwd from)
-      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovsxwd) from))
 (rule 1 (x64_pmovsxwd from)
       (if-let true (use_avx))
       (xmm_unary_rm_r_vex (AvxOpcode.Vpmovsxwd) from))
+(rule 0 (x64_pmovsxwd from) (x64_pmovsxwd_a from))
 
 (decl x64_pmovzxwd (XmmMem) Xmm)
-(rule (x64_pmovzxwd from)
-      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovzxwd) from))
 (rule 1 (x64_pmovzxwd from)
       (if-let true (use_avx))
       (xmm_unary_rm_r_vex (AvxOpcode.Vpmovzxwd) from))
+(rule 0 (x64_pmovzxwd from) (x64_pmovzxwd_a from))
 
 (decl x64_pmovsxdq (XmmMem) Xmm)
-(rule (x64_pmovsxdq from)
-      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovsxdq) from))
 (rule 1 (x64_pmovsxdq from)
       (if-let true (use_avx))
       (xmm_unary_rm_r_vex (AvxOpcode.Vpmovsxdq) from))
+(rule 0 (x64_pmovsxdq from) (x64_pmovsxdq_a from))
 
 (decl x64_pmovzxdq (XmmMem) Xmm)
-(rule (x64_pmovzxdq from)
-      (xmm_unary_rm_r_unaligned (SseOpcode.Pmovzxdq) from))
 (rule 1 (x64_pmovzxdq from)
       (if-let true (use_avx))
       (xmm_unary_rm_r_vex (AvxOpcode.Vpmovzxdq) from))
+(rule 0 (x64_pmovzxdq from) (x64_pmovzxdq_a from))
 
 (decl x64_movrm (Type SyntheticAmode Gpr) SideEffectNoResult)
 (spec (x64_movrm ty addr data)

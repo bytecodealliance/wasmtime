@@ -64,17 +64,6 @@ impl Inst {
         }
     }
 
-    // TODO Can be replaced by `Inst::move` (high-level) and `Inst::unary_rm_r` (low-level)
-    fn xmm_mov(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Inst {
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmUnaryRmR {
-            op,
-            src: XmmMemAligned::unwrap_new(src),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Int);
         let dst = WritableGpr::from_writable_reg(dst).unwrap();
@@ -1470,78 +1459,6 @@ fn test_x64_emit() {
 
     // ========================================================
     // XMM_MOV: Packed Move
-
-    insns.push((
-        Inst::xmm_mov(SseOpcode::Pmovsxbd, RegMem::reg(xmm6), w_xmm8),
-        "66440F3821C6",
-        "pmovsxbd %xmm6, %xmm8",
-    ));
-
-    insns.push((
-        Inst::xmm_mov(SseOpcode::Pmovsxbw, RegMem::reg(xmm9), w_xmm10),
-        "66450F3820D1",
-        "pmovsxbw %xmm9, %xmm10",
-    ));
-
-    insns.push((
-        Inst::xmm_mov(SseOpcode::Pmovsxbq, RegMem::reg(xmm1), w_xmm1),
-        "660F3822C9",
-        "pmovsxbq %xmm1, %xmm1",
-    ));
-
-    insns.push((
-        Inst::xmm_mov(SseOpcode::Pmovsxwd, RegMem::reg(xmm13), w_xmm10),
-        "66450F3823D5",
-        "pmovsxwd %xmm13, %xmm10",
-    ));
-
-    insns.push((
-        Inst::xmm_mov(SseOpcode::Pmovsxwq, RegMem::reg(xmm12), w_xmm12),
-        "66450F3824E4",
-        "pmovsxwq %xmm12, %xmm12",
-    ));
-
-    insns.push((
-        Inst::xmm_mov(SseOpcode::Pmovsxdq, RegMem::reg(xmm10), w_xmm8),
-        "66450F3825C2",
-        "pmovsxdq %xmm10, %xmm8",
-    ));
-
-    insns.push((
-        Inst::xmm_mov(SseOpcode::Pmovzxbd, RegMem::reg(xmm5), w_xmm6),
-        "660F3831F5",
-        "pmovzxbd %xmm5, %xmm6",
-    ));
-
-    insns.push((
-        Inst::xmm_mov(SseOpcode::Pmovzxbw, RegMem::reg(xmm5), w_xmm13),
-        "66440F3830ED",
-        "pmovzxbw %xmm5, %xmm13",
-    ));
-
-    insns.push((
-        Inst::xmm_mov(SseOpcode::Pmovzxbq, RegMem::reg(xmm10), w_xmm11),
-        "66450F3832DA",
-        "pmovzxbq %xmm10, %xmm11",
-    ));
-
-    insns.push((
-        Inst::xmm_mov(SseOpcode::Pmovzxwd, RegMem::reg(xmm2), w_xmm10),
-        "66440F3833D2",
-        "pmovzxwd %xmm2, %xmm10",
-    ));
-
-    insns.push((
-        Inst::xmm_mov(SseOpcode::Pmovzxwq, RegMem::reg(xmm7), w_xmm4),
-        "660F3834E7",
-        "pmovzxwq %xmm7, %xmm4",
-    ));
-
-    insns.push((
-        Inst::xmm_mov(SseOpcode::Pmovzxdq, RegMem::reg(xmm3), w_xmm4),
-        "660F3835E3",
-        "pmovzxdq %xmm3, %xmm4",
-    ));
 
     // XmmUnary: moves and unary float ops
 
