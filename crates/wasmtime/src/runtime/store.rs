@@ -1604,23 +1604,24 @@ impl StoreOpaque {
             // buffers used by `cont.bind` are GC values. As a workaround, note
             // that we currently disallow cont.bind-ing GC values altogether.
             // This way, it is okay not to check them here.
-
-            // Note that we only care about continuations that have state
-            // `Suspended`.
-            // - `Running` continuations will be handled by
-            //   `trace_wasm_stack_roots`.
-            // - For `Parent` continuations, we don't know if they are the
-            //   parent of a running continuation or a suspended one. But it
-            //   does not matter: They will be handled when traversing the stack
-            //   chain starting at either the running one, or the suspended
-            //   continuations below.
-            // - For `Fresh` continuations, we know that there are no GC values
-            //   on their stack, yet.
-            if state == VMStackState::Suspended {
-                Backtrace::trace_suspended_continuation(self, continuation.deref(), |frame| {
-                    self.trace_wasm_stack_frame(gc_roots_list, frame);
-                    core::ops::ControlFlow::Continue(())
-                });
+            match state {
+                VMStackState::Suspended => {
+                    Backtrace::trace_suspended_continuation(self, continuation.deref(), |frame| {
+                        self.trace_wasm_stack_frame(gc_roots_list, frame);
+                        core::ops::ControlFlow::Continue(())
+                    });
+                }
+                VMStackState::Running => {
+                    // Handled by `trace_wasm_stack_roots`.
+                }
+                VMStackState::Parent => {
+                    // We don't know whether our child is suspended or running, but in
+                    // either case things should be hanlded correctly when traversing
+                    // further along in the chain, nothing required at this point.
+                }
+                VMStackState::Fresh | VMStackState::Returned => {
+                    // Fresh/Returned continuations have no gc values on their stack.
+                }
             }
         }
 
