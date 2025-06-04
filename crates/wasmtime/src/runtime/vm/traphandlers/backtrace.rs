@@ -31,34 +31,11 @@ use crate::runtime::vm::{
 #[cfg(all(feature = "gc", feature = "stack-switching"))]
 use crate::vm::stack_switching::{VMContRef, VMStackState};
 use core::ops::ControlFlow;
+use wasmtime_unwinder::Frame;
 
 /// A WebAssembly stack trace.
 #[derive(Debug)]
 pub struct Backtrace(Vec<Frame>);
-
-/// A stack frame within a Wasm stack trace.
-#[derive(Debug)]
-pub struct Frame {
-    pc: usize,
-    #[cfg_attr(
-        not(feature = "gc"),
-        expect(dead_code, reason = "not worth #[cfg] annotations to remove")
-    )]
-    fp: usize,
-}
-
-impl Frame {
-    /// Get this frame's program counter.
-    pub fn pc(&self) -> usize {
-        self.pc
-    }
-
-    /// Get this frame's frame pointer.
-    #[cfg(feature = "gc")]
-    pub fn fp(&self) -> usize {
-        self.fp
-    }
-}
 
 impl Backtrace {
     /// Returns an empty backtrace
@@ -257,7 +234,7 @@ impl Backtrace {
 
         // Handle the stack that is currently running (which may be a
         // continuation or the initial stack).
-        Self::trace_through_wasm(unwind, pc, fp, trampoline_fp, &mut f)?;
+        wasmtime_unwinder::visit_frames(unwind, pc, fp, trampoline_fp, &mut f)?;
 
         // Note that the rest of this function has no effect if `chain` is
         // `Some(VMStackChain::InitialStack(_))` (i.e., there is only one stack to
@@ -318,7 +295,7 @@ impl Backtrace {
                 debug_assert!(parent_stack_range.contains(&parent_limits.stack_limit));
             });
 
-            Self::trace_through_wasm(
+            wasmtime_unwinder::visit_frames(
                 unwind,
                 resume_pc,
                 resume_fp,
@@ -326,108 +303,6 @@ impl Backtrace {
                 &mut f,
             )?
         }
-        ControlFlow::Continue(())
-    }
-
-    /// Walk through a contiguous sequence of Wasm frames starting with the
-    /// frame at the given PC and FP and ending at `trampoline_sp`.
-    unsafe fn trace_through_wasm(
-        unwind: &dyn Unwind,
-        mut pc: usize,
-        mut fp: usize,
-        trampoline_fp: usize,
-        mut f: impl FnMut(Frame) -> ControlFlow<()>,
-    ) -> ControlFlow<()> {
-        log::trace!("=== Tracing through contiguous sequence of Wasm frames ===");
-        log::trace!("trampoline_fp = 0x{:016x}", trampoline_fp);
-        log::trace!("   initial pc = 0x{:016x}", pc);
-        log::trace!("   initial fp = 0x{:016x}", fp);
-
-        // We already checked for this case in the `trace_with_trap_state`
-        // caller.
-        assert_ne!(pc, 0);
-        assert_ne!(fp, 0);
-        assert_ne!(trampoline_fp, 0);
-
-        // This loop will walk the linked list of frame pointers starting at
-        // `fp` and going up until `trampoline_fp`. We know that both `fp` and
-        // `trampoline_fp` are "trusted values" aka generated and maintained by
-        // Cranelift. This means that it should be safe to walk the linked list
-        // of pointers and inspect wasm frames.
-        //
-        // Note, though, that any frames outside of this range are not
-        // guaranteed to have valid frame pointers. For example native code
-        // might be using the frame pointer as a general purpose register. Thus
-        // we need to be careful to only walk frame pointers in this one
-        // contiguous linked list.
-        //
-        // To know when to stop iteration all architectures' stacks currently
-        // look something like this:
-        //
-        //     | ...               |
-        //     | Native Frames     |
-        //     | ...               |
-        //     |-------------------|
-        //     | ...               | <-- Trampoline FP            |
-        //     | Trampoline Frame  |                              |
-        //     | ...               | <-- Trampoline SP            |
-        //     |-------------------|                            Stack
-        //     | Return Address    |                            Grows
-        //     | Previous FP       | <-- Wasm FP                Down
-        //     | ...               |                              |
-        //     | Wasm Frames       |                              |
-        //     | ...               |                              V
-        //
-        // The trampoline records its own frame pointer (`trampoline_fp`),
-        // which is guaranteed to be above all Wasm. To check when we've
-        // reached the trampoline frame, it is therefore sufficient to
-        // check when the next frame pointer is equal to `trampoline_fp`. Once
-        // that's hit then we know that the entire linked list has been
-        // traversed.
-        //
-        // Note that it might be possible that this loop doesn't execute at all.
-        // For example if the entry trampoline called wasm which `return_call`'d
-        // an imported function which is an exit trampoline, then
-        // `fp == trampoline_fp` on the entry of this function, meaning the loop
-        // won't actually execute anything.
-        while fp != trampoline_fp {
-            // At the start of each iteration of the loop, we know that `fp` is
-            // a frame pointer from Wasm code. Therefore, we know it is not
-            // being used as an extra general-purpose register, and it is safe
-            // dereference to get the PC and the next older frame pointer.
-            //
-            // The stack also grows down, and therefore any frame pointer we are
-            // dealing with should be less than the frame pointer on entry to
-            // Wasm. Finally also assert that it's aligned correctly as an
-            // additional sanity check.
-            assert!(trampoline_fp > fp, "{trampoline_fp:#x} > {fp:#x}");
-            unwind.assert_fp_is_aligned(fp);
-
-            log::trace!("--- Tracing through one Wasm frame ---");
-            log::trace!("pc = {:p}", pc as *const ());
-            log::trace!("fp = {:p}", fp as *const ());
-
-            f(Frame { pc, fp })?;
-
-            pc = unwind.get_next_older_pc_from_fp(fp);
-
-            // We rely on this offset being zero for all supported architectures
-            // in `crates/cranelift/src/component/compiler.rs` when we set the
-            // Wasm exit FP. If this ever changes, we will need to update that
-            // code as well!
-            assert_eq!(unwind.next_older_fp_from_fp_offset(), 0);
-
-            // Get the next older frame pointer from the current Wasm frame
-            // pointer.
-            let next_older_fp = *(fp as *mut usize).add(unwind.next_older_fp_from_fp_offset());
-
-            // Because the stack always grows down, the older FP must be greater
-            // than the current FP.
-            assert!(next_older_fp > fp, "{next_older_fp:#x} > {fp:#x}");
-            fp = next_older_fp;
-        }
-
-        log::trace!("=== Done tracing contiguous sequence of Wasm frames ===");
         ControlFlow::Continue(())
     }
 

@@ -10,6 +10,7 @@ use crate::{Engine, ValRaw};
 use core::marker;
 use core::mem;
 use core::ptr::NonNull;
+use wasmtime_unwinder::Unwind;
 
 pub struct Interpreter {
     empty: Uninhabited,
@@ -24,6 +25,10 @@ impl Interpreter {
     }
 
     pub fn as_interpreter_ref(&mut self) -> InterpreterRef<'_> {
+        match self.empty {}
+    }
+
+    pub fn unwinder(&self) -> &'static dyn Unwind {
         match self.empty {}
     }
 }

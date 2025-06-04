@@ -191,7 +191,7 @@ fn run_test(
                     args.extend_from_slice(run_args);
 
                     let trampoline = testfile.get_trampoline(func).unwrap();
-                    Ok(trampoline.call(&args))
+                    Ok(trampoline.call(&testfile, &args))
                 })
                 .map_err(|s| anyhow::anyhow!("{}", s))?;
         }

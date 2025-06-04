@@ -15,6 +15,8 @@ pub(crate) struct CompiledBlob {
     pub(crate) ptr: *mut u8,
     pub(crate) size: usize,
     pub(crate) relocs: Vec<ModuleReloc>,
+    #[cfg(feature = "wasmtime-unwinder")]
+    pub(crate) exception_data: Option<Vec<u8>>,
 }
 
 unsafe impl Send for CompiledBlob {}

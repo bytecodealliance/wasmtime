@@ -796,6 +796,7 @@ dependencies = [
  "target-lexicon",
  "thiserror 2.0.12",
  "toml",
+ "wasmtime-unwinder",
  "wat",
 ]
 
@@ -864,6 +865,7 @@ dependencies = [
  "region",
  "target-lexicon",
  "wasmtime-jit-icache-coherence",
+ "wasmtime-unwinder",
  "windows-sys 0.59.0",
 ]
 
@@ -2629,15 +2631,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "psm"
-version = "0.1.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "871372391786ccec00d3c5d3d6608905b3d4db263639cfe075d3b60a736d115a"
-dependencies = [
- "cc",
-]
-
-[[package]]
 name = "pulley-interpreter"
 version = "35.0.0"
 dependencies = [
@@ -4173,7 +4166,6 @@ dependencies = [
  "once_cell",
  "postcard",
  "proptest",
- "psm",
  "pulley-interpreter",
  "rand",
  "rayon",
@@ -4202,6 +4194,7 @@ dependencies = [
  "wasmtime-math",
  "wasmtime-slab",
  "wasmtime-test-util",
+ "wasmtime-unwinder",
  "wasmtime-versioned-export-macros",
  "wasmtime-winch",
  "wasmtime-wmemcheck",
@@ -4610,6 +4603,17 @@ dependencies = [
  "wasmtime",
  "wasmtime-component-util",
  "wasmtime-environ",
+]
+
+[[package]]
+name = "wasmtime-unwinder"
+version = "35.0.0"
+dependencies = [
+ "anyhow",
+ "cfg-if",
+ "cranelift-codegen",
+ "log",
+ "object",
 ]
 
 [[package]]

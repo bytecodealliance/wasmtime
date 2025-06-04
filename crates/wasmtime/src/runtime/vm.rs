@@ -48,8 +48,6 @@ use wasmtime_environ::{
 #[cfg(feature = "gc")]
 use wasmtime_environ::ModuleInternedTypeIndex;
 
-#[cfg(has_host_compiler_backend)]
-mod arch;
 #[cfg(feature = "component-model")]
 pub mod component;
 mod const_expr;
@@ -66,7 +64,6 @@ mod store_box;
 mod sys;
 mod table;
 mod traphandlers;
-mod unwind;
 mod vmcontext;
 
 #[cfg(feature = "threads")]
@@ -90,8 +87,6 @@ pub(crate) use interpreter_disabled as interpreter;
 #[cfg(feature = "debug-builtins")]
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
-#[cfg(has_host_compiler_backend)]
-pub use crate::runtime::vm::arch::get_stack_pointer;
 pub use crate::runtime::vm::export::*;
 pub use crate::runtime::vm::gc::*;
 pub use crate::runtime::vm::imports::Imports;
@@ -119,7 +114,6 @@ pub use crate::runtime::vm::sys::mmap::open_file_for_mmap;
 pub use crate::runtime::vm::sys::unwind::UnwindRegistration;
 pub use crate::runtime::vm::table::{Table, TableElement};
 pub use crate::runtime::vm::traphandlers::*;
-pub use crate::runtime::vm::unwind::*;
 #[cfg(feature = "component-model")]
 pub use crate::runtime::vm::vmcontext::VMTableDefinition;
 pub use crate::runtime::vm::vmcontext::{
@@ -130,6 +124,10 @@ pub use crate::runtime::vm::vmcontext::{
 };
 
 pub use send_sync_ptr::SendSyncPtr;
+pub use wasmtime_unwinder::Unwind;
+
+#[cfg(has_host_compiler_backend)]
+pub use wasmtime_unwinder::{UnwindHost, get_stack_pointer};
 
 mod module_id;
 pub use module_id::CompiledModuleId;

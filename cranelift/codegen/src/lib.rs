@@ -59,8 +59,8 @@ pub mod write;
 
 pub use crate::entity::packed_option;
 pub use crate::machinst::buffer::{
-    FinalizedMachReloc, FinalizedRelocTarget, MachCallSite, MachSrcLoc, MachTextSectionBuilder,
-    MachTrap, OpenPatchRegion, PatchRegion,
+    FinalizedMachCallSite, FinalizedMachReloc, FinalizedRelocTarget, MachCallSite, MachSrcLoc,
+    MachTextSectionBuilder, MachTrap, OpenPatchRegion, PatchRegion,
 };
 pub use crate::machinst::{
     CallInfo, CompiledCode, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit,

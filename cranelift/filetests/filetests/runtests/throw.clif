@@ -1,0 +1,50 @@
+test run
+set preserve_frame_pointers=true
+target x86_64
+target aarch64
+target riscv64
+target s390x
+
+function %entry() -> i64 tail {
+  fn0 = %main(i64) -> i64 tail
+
+block0:
+  v1 = get_frame_pointer.i64
+  v2 = call fn0(v1)
+  return v2
+}
+
+; run: %entry() == 58
+
+function %main(i64) -> i64 tail {
+  sig0 = (i64, i32, i64, i64) tail
+  fn0 = %throw(i64, i32, i64, i64) tail
+
+block0(v0: i64):
+  v1 = iconst.i64 42
+  v2 = iconst.i64 100
+  v3 = iconst.i32 1
+  try_call fn0(v0, v3, v1, v2), sig0, block1(), [ tag1: block2(exn0, exn1) ]
+
+block1:
+  v4 = iconst.i64 1
+  return v4
+
+block2(v5: i64, v6: i64):
+  v7 = isub.i64 v6, v5
+  return v7
+}
+
+
+function %throw(i64, i32, i64, i64) tail {
+  sig0 = (i64, i64, i64, i32, i64, i64)
+  fn0 = %__cranelift_throw(i64, i64, i64, i32, i64, i64)
+
+block0(v0: i64, v1: i32, v2: i64, v3: i64):
+  v4 = get_frame_pointer.i64
+  v5 = get_return_address.i64
+  v6 = load.i64 v5 ; get caller's FP
+  v7 = func_addr.i64 fn0
+  call_indirect sig0, v7(v0, v4, v6, v1, v2, v3)
+  return
+}

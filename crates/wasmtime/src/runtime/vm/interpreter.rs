@@ -8,6 +8,7 @@ use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
 use pulley_interpreter::{FReg, Reg, XReg};
 use wasmtime_environ::{BuiltinFunctionIndex, HostCall, Trap};
+use wasmtime_unwinder::Unwind;
 
 /// Interpreter state stored within a `Store<T>`.
 #[repr(transparent)]
@@ -70,6 +71,11 @@ impl Interpreter {
     pub fn pulley(&self) -> &Vm {
         unsafe { self.pulley.get().as_ref() }
     }
+
+    /// Get an implementation of `Unwind` used to walk the Pulley stack.
+    pub fn unwinder(&self) -> &'static dyn Unwind {
+        &UnwindPulley
+    }
 }
 
 /// Wrapper around `&mut pulley_interpreter::Vm` to enable compiling this to a
@@ -78,6 +84,36 @@ impl Interpreter {
 pub struct InterpreterRef<'a> {
     vm: NonNull<Vm>,
     _phantom: marker::PhantomData<&'a mut Vm>,
+}
+
+/// An implementation of stack-walking details specifically designed
+/// for unwinding Pulley's runtime stack.
+pub struct UnwindPulley;
+
+unsafe impl Unwind for UnwindPulley {
+    fn next_older_fp_from_fp_offset(&self) -> usize {
+        0
+    }
+    fn next_older_sp_from_fp_offset(&self) -> usize {
+        if cfg!(target_pointer_width = "32") {
+            8
+        } else {
+            16
+        }
+    }
+    unsafe fn get_next_older_pc_from_fp(&self, fp: usize) -> usize {
+        // The calling convention always pushes the return pointer (aka the PC
+        // of the next older frame) just before this frame.
+        *(fp as *mut usize).offset(1)
+    }
+    fn assert_fp_is_aligned(&self, fp: usize) {
+        let expected = if cfg!(target_pointer_width = "32") {
+            8
+        } else {
+            16
+        };
+        assert_eq!(fp % expected, 0, "stack should always be aligned");
+    }
 }
 
 /// Equivalent of a native platform's `jmp_buf` (sort of).

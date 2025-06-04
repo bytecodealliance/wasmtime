@@ -1,9 +1,12 @@
 //! Provides functionality for compiling and running CLIF IR for `run` tests.
 use anyhow::{Result, anyhow};
 use core::mem;
+use cranelift::prelude::Imm64;
+use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
-    ExternalName, Function, InstBuilder, Signature, UserExternalName, UserFuncName,
+    ExternalName, Function, InstBuilder, InstructionData, LibCall, Opcode, Signature,
+    UserExternalName, UserFuncName,
 };
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::{CodegenError, Context, ir, settings};
@@ -14,9 +17,10 @@ use cranelift_module::{FuncId, Linkage, Module, ModuleError};
 use cranelift_native::builder_with_options;
 use cranelift_reader::TestFile;
 use pulley_interpreter::interp as pulley;
+use std::cell::Cell;
 use std::cmp::max;
-use std::collections::HashMap;
 use std::collections::hash_map::Entry;
+use std::collections::{HashMap, HashSet};
 use std::ptr::NonNull;
 use target_lexicon::Architecture;
 use thiserror::Error;
@@ -67,7 +71,7 @@ struct DefinedFunction {
 /// let compiled = compiler.compile().unwrap();
 /// let trampoline = compiled.get_trampoline(&func).unwrap();
 ///
-/// let returned = trampoline.call(&vec![DataValue::I32(2), DataValue::I32(40)]);
+/// let returned = trampoline.call(&compiled, &vec![DataValue::I32(2), DataValue::I32(40)]);
 /// assert_eq!(vec![DataValue::I32(42)], returned);
 /// ```
 pub struct TestFileCompiler {
@@ -255,7 +259,13 @@ impl TestFileCompiler {
     }
 
     /// Defines the body of a function
-    pub fn define_function(&mut self, func: Function, ctrl_plane: &mut ControlPlane) -> Result<()> {
+    pub fn define_function(
+        &mut self,
+        mut func: Function,
+        ctrl_plane: &mut ControlPlane,
+    ) -> Result<()> {
+        Self::replace_hostcall_references(&mut func);
+
         let defined_func = self
             .defined_functions
             .get(&func.name)
@@ -269,6 +279,47 @@ impl TestFileCompiler {
         )?;
         self.module.clear_context(&mut self.ctx);
         Ok(())
+    }
+
+    fn replace_hostcall_references(func: &mut Function) {
+        // For every `func_addr` referring to a hostcall that we
+        // define, replace with an `iconst` with the actual
+        // address. Then modify the external func references to
+        // harmless libcall references (that will be unused so
+        // ignored).
+        let mut funcrefs_to_remove = HashSet::new();
+        let mut cursor = FuncCursor::new(func);
+        while let Some(_block) = cursor.next_block() {
+            while let Some(inst) = cursor.next_inst() {
+                match &cursor.func.dfg.insts[inst] {
+                    InstructionData::FuncAddr {
+                        opcode: Opcode::FuncAddr,
+                        func_ref,
+                    } => {
+                        let ext_func = &cursor.func.dfg.ext_funcs[*func_ref];
+                        let hostcall_addr = match &ext_func.name {
+                            ExternalName::TestCase(tc) if tc.raw() == b"__cranelift_throw" => {
+                                Some(__cranelift_throw as usize)
+                            }
+                            _ => None,
+                        };
+
+                        if let Some(addr) = hostcall_addr {
+                            funcrefs_to_remove.insert(*func_ref);
+                            cursor.func.dfg.insts[inst] = InstructionData::UnaryImm {
+                                opcode: Opcode::Iconst,
+                                imm: Imm64::new(addr as i64),
+                            };
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        for to_remove in funcrefs_to_remove {
+            func.dfg.ext_funcs[to_remove].name = ExternalName::LibCall(LibCall::Probestack);
+        }
     }
 
     /// Creates and registers a trampoline for a function if none exists.
@@ -356,6 +407,13 @@ impl Drop for CompiledTestFile {
     }
 }
 
+std::thread_local! {
+    /// TLS slot used to store a CompiledTestFile reference so that it
+    /// can be recovered when a hostcall (such as the exception-throw
+    /// handler) is invoked.
+    pub static COMPILED_TEST_FILE: Cell<*const CompiledTestFile> = Cell::new(std::ptr::null());
+}
+
 /// A callable trampoline
 pub struct Trampoline<'a> {
     module: &'a JITModule,
@@ -366,16 +424,18 @@ pub struct Trampoline<'a> {
 
 impl<'a> Trampoline<'a> {
     /// Call the target function of this trampoline, passing in [DataValue]s using a compiled trampoline.
-    pub fn call(&self, arguments: &[DataValue]) -> Vec<DataValue> {
+    pub fn call(&self, compiled: &CompiledTestFile, arguments: &[DataValue]) -> Vec<DataValue> {
         let mut values = UnboxedValues::make_arguments(arguments, &self.func_signature);
         let arguments_address = values.as_mut_ptr();
 
         let function_ptr = self.module.get_finalized_function(self.func_id);
         let trampoline_ptr = self.module.get_finalized_function(self.trampoline_id);
 
+        COMPILED_TEST_FILE.set(compiled as *const _);
         unsafe {
             self.call_raw(trampoline_ptr, function_ptr, arguments_address);
         }
+        COMPILED_TEST_FILE.set(std::ptr::null());
 
         values.collect_returns(&self.func_signature)
     }
@@ -563,6 +623,71 @@ fn make_trampoline(name: UserFuncName, signature: &ir::Signature, isa: &dyn Targ
     func
 }
 
+/// Hostcall invoked directly from a compiled function body to test
+/// exception throws.
+///
+/// This function does not return normally: it either uses the
+/// unwinder to jump directly to a Cranelift frame further up the
+/// stack, if a handler is found; or it panics, if not.
+#[cfg(any(
+    target_arch = "x86_64",
+    target_arch = "aarch64",
+    target_arch = "s390x",
+    target_arch = "riscv64"
+))]
+extern "C-unwind" fn __cranelift_throw(
+    entry_fp: usize,
+    exit_fp: usize,
+    exit_pc: usize,
+    tag: u32,
+    payload1: usize,
+    payload2: usize,
+) -> ! {
+    let compiled_test_file = unsafe { &*COMPILED_TEST_FILE.get() };
+    let unwind_host = wasmtime_unwinder::UnwindHost;
+    let module_lookup = |pc| {
+        compiled_test_file
+            .module
+            .as_ref()
+            .unwrap()
+            .lookup_wasmtime_exception_data(pc)
+    };
+    unsafe {
+        match wasmtime_unwinder::compute_throw_action(
+            &unwind_host,
+            module_lookup,
+            exit_pc,
+            exit_fp,
+            entry_fp,
+            tag,
+        ) {
+            wasmtime_unwinder::ThrowAction::Handler { pc, sp, fp } => {
+                wasmtime_unwinder::resume_to_exception_handler(pc, sp, fp, payload1, payload2);
+            }
+            wasmtime_unwinder::ThrowAction::None => {
+                panic!("Expected a handler to exit for throw of tag {tag} at pc {exit_pc:x}");
+            }
+        }
+    }
+}
+
+#[cfg(not(any(
+    target_arch = "x86_64",
+    target_arch = "aarch64",
+    target_arch = "s390x",
+    target_arch = "riscv64"
+)))]
+extern "C-unwind" fn __cranelift_throw(
+    _entry_fp: usize,
+    _exit_fp: usize,
+    _exit_pc: usize,
+    _tag: u32,
+    _payload1: usize,
+    _payload2: usize,
+) -> ! {
+    panic!("Throw not implemented on platforms without native backends.");
+}
+
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::__m128i;
 #[cfg(target_arch = "x86_64")]
@@ -655,7 +780,7 @@ mod test {
             .unwrap();
         let compiled = compiler.compile().unwrap();
         let trampoline = compiled.get_trampoline(&function).unwrap();
-        let returned = trampoline.call(&[]);
+        let returned = trampoline.call(&compiled, &[]);
         assert_eq!(returned, vec![DataValue::I8(-1)])
     }
 
