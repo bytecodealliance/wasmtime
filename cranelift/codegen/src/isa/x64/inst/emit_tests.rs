@@ -64,17 +64,6 @@ impl Inst {
         }
     }
 
-    // TODO Can be replaced by `Inst::move` (high-level) and `Inst::unary_rm_r` (low-level)
-    fn xmm_mov(op: SseOpcode, src: RegMem, dst: Writable<Reg>) -> Inst {
-        src.assert_regclass_is(RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmUnaryRmR {
-            op,
-            src: XmmMemAligned::unwrap_new(src),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Int);
         let dst = WritableGpr::from_writable_reg(dst).unwrap();
