@@ -1,5 +1,5 @@
 use super::{Formatter, fmtln, generate_derive, generate_derive_arbitrary_bounds};
-use crate::dsl;
+use crate::dsl::{self, display};
 
 impl dsl::Inst {
     /// `struct <inst> { <op>: Reg, <op>: Reg, ... }`
@@ -148,15 +148,15 @@ impl dsl::Inst {
 
     /// `fn visit(&self, ...) { ... }`
     fn generate_visit_function(&self, f: &mut Formatter) {
-        use dsl::OperandKind::*;
+        use dsl::{CustomOperation::*, OperandKind::*};
         let extra_generic_bound = if self.requires_generic() {
             ""
         } else {
             "<R: Registers>"
         };
         f.add_block(&format!("pub fn visit{extra_generic_bound}(&mut self, visitor: &mut impl RegisterVisitor<R>)"), |f| {
-            if self.custom_visit {
-                fmtln!(f, "crate::custom::visit_{}(self, visitor)", self.name());
+            if self.custom.contains(Visit) {
+                fmtln!(f, "crate::custom::visit::{}(self, visitor)", self.name());
                 return;
             }
             for o in &self.format.operands {
@@ -208,6 +208,7 @@ impl dsl::Inst {
 
     /// `impl Display for <inst> { ... }`
     pub fn generate_display_impl(&self, f: &mut Formatter) {
+        use crate::dsl::CustomOperation::*;
         let impl_block = self.generate_impl_block_start();
         let struct_name = self.struct_name_with_generic();
         f.add_block(
@@ -221,13 +222,14 @@ impl dsl::Inst {
                             let to_string = location.generate_to_string(op.extension);
                             fmtln!(f, "let {location} = {to_string};");
                         }
-                        // Fix up the mnemonic for locked instructions: we want to print
-                        // "lock <inst>", not "lock_<inst>".
-                        let inst_name = if self.mnemonic.starts_with("lock_") {
-                            &format!("lock {}", &self.mnemonic[5..])
+                        let mut inst_name: String = "".to_string();
+                        if self.custom.contains(Display) {
+                            if self.name().starts_with("lock") {
+                                inst_name = display::lock(&self.mnemonic);
+                            }
                         } else {
-                            &self.mnemonic
-                        };
+                            inst_name = self.mnemonic.clone();
+                        }
                         let ordered_ops = self.format.generate_att_style_operands();
                         let mut implicit_ops = self.format.generate_implicit_operands();
                         if self.has_trap {

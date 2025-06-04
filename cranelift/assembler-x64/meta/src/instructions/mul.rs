@@ -1,4 +1,4 @@
-use crate::dsl::{Feature::*, Inst, Location::*, VexLength::*};
+use crate::dsl::{CustomOperation::*, Feature::*, Inst, Location::*, VexLength::*};
 use crate::dsl::{align, fmt, implicit, inst, r, rex, rw, sxl, sxq, sxw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
@@ -30,8 +30,8 @@ pub fn list() -> Vec<Inst> {
         // instruction only calculates the high half of the multiplication, as
         // opposed to when the operands are different to calculate both the high
         // and low halves.
-        inst("mulxl", fmt("RVM", [w(r32a), w(r32b), r(rm32), r(implicit(edx))]), vex(LZ)._f2()._0f38().w0().op(0xF6), _64b | compat | bmi2).custom_visit(),
-        inst("mulxq", fmt("RVM", [w(r64a), w(r64b), r(rm64), r(implicit(rdx))]), vex(LZ)._f2()._0f38().w1().op(0xF6), _64b | bmi2).custom_visit(),
+        inst("mulxl", fmt("RVM", [w(r32a), w(r32b), r(rm32), r(implicit(edx))]), vex(LZ)._f2()._0f38().w0().op(0xF6), _64b | compat | bmi2).custom(Visit),
+        inst("mulxq", fmt("RVM", [w(r64a), w(r64b), r(rm64), r(implicit(rdx))]), vex(LZ)._f2()._0f38().w1().op(0xF6), _64b | bmi2).custom(Visit),
         // Vector instructions.
         inst("mulss", fmt("A", [rw(xmm1), r(xmm_m32)]), rex([0xF3, 0x0F, 0x59]).r(), _64b | compat | sse),
         inst("mulsd", fmt("A", [rw(xmm1), r(xmm_m64)]), rex([0xF2, 0x0F, 0x59]).r(), _64b | compat | sse2),

@@ -4,10 +4,13 @@
 //! - compact--i.e., define an x64 instruction on a single line, and
 //! - a close-to-direct mapping of what we read in the x64 reference manual.
 
+pub(crate) mod custom;
+pub(crate) mod display;
 mod encoding;
 mod features;
 pub mod format;
 
+pub use custom::{Custom, CustomOperation};
 pub use encoding::{Encoding, ModRmKind, OpcodeMod};
 pub use encoding::{
     Group1Prefix, Group2Prefix, Group3Prefix, Group4Prefix, Opcodes, Prefixes, Rex, rex,
@@ -32,7 +35,7 @@ pub fn inst(
         encoding,
         features: features.into(),
         has_trap: false,
-        custom_visit: false,
+        custom: CustomOperation::None.into(),
     }
 }
 
@@ -64,7 +67,7 @@ pub struct Inst {
     pub has_trap: bool,
     /// Whether or not this instruction has a custom visit function for register
     /// allocation.
-    pub custom_visit: bool,
+    pub custom: Custom,
 }
 
 impl Inst {
@@ -93,11 +96,9 @@ impl Inst {
         self.has_trap = true;
         self
     }
-
-    /// Flags this instruction as having a custom visit function, skipping the
-    /// auto-generated one.
-    pub fn custom_visit(mut self) -> Self {
-        self.custom_visit = true;
+    /// Indicate this instruction as needing custom processing.
+    pub fn custom(mut self, custom: impl Into<Custom>) -> Self {
+        self.custom = custom.into();
         self
     }
 }
@@ -110,7 +111,7 @@ impl core::fmt::Display for Inst {
             encoding,
             features,
             has_trap,
-            custom_visit,
+            custom,
         } = self;
         write!(f, "{name}: {format} => {encoding}")?;
         if !features.is_empty() {
@@ -119,7 +120,7 @@ impl core::fmt::Display for Inst {
         if *has_trap {
             write!(f, " has_trap")?;
         }
-        if *custom_visit {
+        if custom.contains(CustomOperation::Visit) {
             write!(f, " custom_visit")?;
         }
         Ok(())
