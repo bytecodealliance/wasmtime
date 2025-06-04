@@ -1190,6 +1190,10 @@ mod test_vmstore_context {
             offset_of!(VMStoreContext, last_wasm_entry_fp),
             usize::from(offsets.ptr.vmstore_context_last_wasm_entry_fp())
         );
+        assert_eq!(
+            offset_of!(VMStoreContext, stack_chain),
+            usize::from(offsets.ptr.vmstore_context_stack_chain())
+        )
     }
 }
 
