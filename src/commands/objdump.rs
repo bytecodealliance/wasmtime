@@ -152,7 +152,10 @@ impl ObjdumpCommand {
                 Func::Builtin
             } else if name.contains("]::function[") {
                 Func::Wasm
-            } else if name.contains("trampoline") {
+            } else if name.contains("trampoline")
+                || name.ends_with("_array_call")
+                || name.ends_with("_wasm_call")
+            {
                 Func::Trampoline
             } else if name.contains("libcall") || name.starts_with("component") {
                 Func::Libcall
