@@ -8,7 +8,6 @@ use crate::runtime::vm::{
     mmap::AlignedLength,
 };
 use crate::{prelude::*, vm::HostAlignedByteCount};
-use std::mem;
 use std::ptr::NonNull;
 use wasmtime_environ::{Module, Tunables};
 
@@ -24,14 +23,14 @@ pub struct TablePool {
     max_total_tables: usize,
     tables_per_instance: usize,
     keep_resident: HostAlignedByteCount,
-    table_elements: usize,
+    nominal_table_elements: usize,
 }
 
 impl TablePool {
     /// Create a new `TablePool`.
     pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
         let table_size = HostAlignedByteCount::new_rounded_up(
-            mem::size_of::<*mut u8>()
+            crate::runtime::vm::table::NOMINAL_MAX_TABLE_ELEM_SIZE
                 .checked_mul(config.limits.table_elements)
                 .ok_or_else(|| anyhow!("table size exceeds addressable memory"))?,
         )?;
@@ -46,14 +45,16 @@ impl TablePool {
         let mapping = Mmap::accessible_reserved(allocation_size, allocation_size)
             .context("failed to create table pool mapping")?;
 
+        let keep_resident = HostAlignedByteCount::new_rounded_up(config.table_keep_resident)?;
+
         Ok(Self {
             index_allocator: SimpleIndexAllocator::new(config.limits.total_tables),
             mapping,
             table_size,
             max_total_tables,
             tables_per_instance,
-            keep_resident: HostAlignedByteCount::new_rounded_up(config.table_keep_resident)?,
-            table_elements: config.limits.table_elements,
+            keep_resident,
+            nominal_table_elements: config.limits.table_elements,
         })
     }
 
@@ -78,12 +79,12 @@ impl TablePool {
         }
 
         for (i, table) in module.tables.iter().skip(module.num_imported_tables) {
-            if table.limits.min > u64::try_from(self.table_elements)? {
+            if table.limits.min > u64::try_from(self.nominal_table_elements)? {
                 bail!(
                     "table index {} has a minimum element size of {} which exceeds the limit of {}",
                     i.as_u32(),
                     table.limits.min,
-                    self.table_elements,
+                    self.nominal_table_elements,
                 );
             }
         }
@@ -115,6 +116,20 @@ impl TablePool {
         }
     }
 
+    /// Returns the number of bytes occupied by table entry data
+    ///
+    /// This is typically just the `nominal_table_elements` multiplied by
+    /// the size of the table's element type, but may be less in the case
+    /// of types such as VMContRef for which less capacity will be avialable
+    /// (maintaining a consistent table size in the pool).
+    fn data_size(&self, table_type: crate::vm::table::TableElementType) -> usize {
+        let element_size = table_type.element_size();
+        let elements = self
+            .nominal_table_elements
+            .min(self.table_size.byte_count() / element_size);
+        elements * element_size
+    }
+
     /// Allocate a single table for the given instance allocation request.
     pub fn allocate(
         &self,
@@ -132,16 +147,13 @@ impl TablePool {
 
         match (|| {
             let base = self.get(allocation_index);
-
+            let data_size = self.data_size(crate::vm::table::wasm_to_table_type(ty.ref_type));
             unsafe {
-                commit_pages(base, self.table_elements * mem::size_of::<*mut u8>())?;
+                commit_pages(base, data_size)?;
             }
 
-            let ptr = NonNull::new(std::ptr::slice_from_raw_parts_mut(
-                base.cast(),
-                self.table_elements * mem::size_of::<*mut u8>(),
-            ))
-            .unwrap();
+            let ptr =
+                NonNull::new(std::ptr::slice_from_raw_parts_mut(base.cast(), data_size)).unwrap();
             unsafe {
                 Table::new_static(
                     ty,
@@ -193,12 +205,7 @@ impl TablePool {
     ) {
         assert!(table.is_static());
         let base = self.get(allocation_index);
-
-        // XXX Should we check that table.size() * mem::size_of::<*mut u8>()
-        // doesn't overflow? The only check that exists is for the boundary
-        // condition that table.size() * mem::size_of::<*mut u8>() is less than
-        // a host page smaller than usize::MAX.
-        let size = HostAlignedByteCount::new_rounded_up(table.size() * mem::size_of::<*mut u8>())
+        let size = HostAlignedByteCount::new_rounded_up(self.data_size(table.element_type()))
             .expect("table entry size doesn't overflow");
 
         // `memset` the first `keep_resident` bytes.
@@ -237,7 +244,7 @@ mod tests {
 
         assert_eq!(pool.table_size, host_page_size);
         assert_eq!(pool.max_total_tables, 7);
-        assert_eq!(pool.table_elements, 100);
+        assert_eq!(pool.nominal_table_elements, 100);
 
         let base = pool.mapping.as_ptr() as usize;
 
@@ -249,6 +256,53 @@ mod tests {
                 pool.table_size.checked_mul(i as usize).unwrap()
             );
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_table_pool_continuations_capacity() -> Result<()> {
+        let mkpool = |table_elements: usize| -> Result<TablePool> {
+            TablePool::new(&PoolingInstanceAllocatorConfig {
+                limits: InstanceLimits {
+                    table_elements,
+                    total_tables: 7,
+                    max_memory_size: 0,
+                    max_memories_per_module: 0,
+                    ..Default::default()
+                },
+                ..Default::default()
+            })
+        };
+
+        let host_page_size = HostAlignedByteCount::host_page_size();
+        let words_per_page = host_page_size.byte_count() / size_of::<*const u8>();
+        let pool_big = mkpool(words_per_page - 1)?;
+        let pool_small = mkpool(5)?;
+
+        assert_eq!(pool_small.table_size, host_page_size);
+        assert_eq!(pool_big.table_size, host_page_size);
+
+        // table should store nominal_table_elements of data for func in both cases
+        let func_table_type = crate::vm::table::TableElementType::Func;
+        assert_eq!(
+            pool_small.data_size(func_table_type),
+            pool_small.nominal_table_elements * func_table_type.element_size()
+        );
+        assert_eq!(
+            pool_big.data_size(func_table_type),
+            pool_big.nominal_table_elements * func_table_type.element_size()
+        );
+
+        // In the "big" case, continuations should fill page size (capacity limited).
+        // In the "small" case, continuations should fill only part of the page, capping
+        // at the requested table size for nominal elements.
+        let cont_table_type = crate::vm::table::TableElementType::Cont;
+        assert_eq!(
+            pool_small.data_size(cont_table_type),
+            pool_small.nominal_table_elements * cont_table_type.element_size()
+        );
+        assert_eq!(pool_big.data_size(cont_table_type), host_page_size);
 
         Ok(())
     }

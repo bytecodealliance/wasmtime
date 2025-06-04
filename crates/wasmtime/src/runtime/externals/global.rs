@@ -167,6 +167,11 @@ impl Global {
                             ExternRef::from_cloned_gc_ref(&mut store, r)
                         })),
 
+                        HeapType::NoCont | HeapType::ConcreteCont(_) | HeapType::Cont => {
+                            // TODO(#10248) Required to support stack switching in the embedder API.
+                            unimplemented!()
+                        }
+
                         HeapType::NoExtern => Ref::Extern(None),
 
                         HeapType::Any

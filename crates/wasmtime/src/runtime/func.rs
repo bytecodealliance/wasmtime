@@ -1,8 +1,9 @@
 use crate::prelude::*;
 use crate::runtime::Uninhabited;
 use crate::runtime::vm::{
-    ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext,
-    VMFuncRef, VMFunctionImport, VMOpaqueContext, VMStoreContext,
+    ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
+    VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
+    VMStoreContext,
 };
 use crate::store::{AutoAssertNoGc, StoreId, StoreOpaque};
 use crate::type_registry::RegisteredType;
@@ -313,6 +314,7 @@ macro_rules! for_each_function_signature {
 }
 
 mod typed;
+use crate::runtime::vm::VMStackChain;
 pub use typed::*;
 
 impl Func {
@@ -1140,6 +1142,7 @@ impl Func {
                 results.len()
             );
         }
+
         for (ty, arg) in ty.params().zip(params) {
             arg.ensure_matches_ty(store.0, &ty)
                 .context("argument type mismatch")?;
@@ -1516,7 +1519,15 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
     closure: impl FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 ) -> Result<()> {
     unsafe {
-        let previous_runtime_state = EntryStoreContext::enter_wasm(store);
+        // The `enter_wasm` call below will reset the store context's
+        // `stack_chain` to a new `InitialStack`, pointing to the
+        // stack-allocated `initial_stack_csi`.
+        let mut initial_stack_csi = VMCommonStackInformation::running_default();
+        // Stores some state of the runtime just before entering Wasm. Will be
+        // restored upon exiting Wasm. Note that the `CallThreadState` that is
+        // created by the `catch_traps` call below will store a pointer to this
+        // stack-allocated `previous_runtime_state`.
+        let previous_runtime_state = EntryStoreContext::enter_wasm(store, &mut initial_stack_csi);
 
         if let Err(trap) = store.0.call_hook(CallHook::CallingWasm) {
             // `previous_runtime_state` implicitly dropped here
@@ -1536,7 +1547,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
 /// are restored.
 pub(crate) struct EntryStoreContext {
     /// If set, contains value of `stack_limit` field to restore in
-    /// `VMRuntimeLimits` when exiting Wasm.
+    /// `VMStoreContext` when exiting Wasm.
     pub stack_limit: Option<usize>,
     /// Contains value of `last_wasm_exit_pc` field to restore in
     /// `VMStoreContext` when exiting Wasm.
@@ -1547,6 +1558,9 @@ pub(crate) struct EntryStoreContext {
     /// Contains value of `last_wasm_entry_fp` field to restore in
     /// `VMStoreContext` when exiting Wasm.
     pub last_wasm_entry_fp: usize,
+    /// Contains value of `stack_chain` field to restore in
+    /// `VMStoreContext` when exiting Wasm.
+    pub stack_chain: VMStackChain,
 
     /// We need a pointer to the runtime limits, so we can update them from
     /// `drop`/`exit_wasm`.
@@ -1563,8 +1577,11 @@ impl EntryStoreContext {
     ///   allocated by WebAssembly code and it's relative to the initial stack
     ///   pointer that called into wasm.
     ///
-    /// It also saves the different last_wasm_* values in the `VMRuntimeLimits`.
-    pub fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Self {
+    /// It also saves the different last_wasm_* values in the `VMStoreContext`.
+    pub fn enter_wasm<T>(
+        store: &mut StoreContextMut<'_, T>,
+        initial_stack_information: *mut VMCommonStackInformation,
+    ) -> Self {
         let stack_limit;
 
         // If this is a recursive call, e.g. our stack limit is already set, then
@@ -1633,6 +1650,11 @@ impl EntryStoreContext {
             let last_wasm_exit_fp = *store.0.vm_store_context().last_wasm_exit_fp.get();
             let last_wasm_entry_fp = *store.0.vm_store_context().last_wasm_entry_fp.get();
 
+            let stack_chain = (*store.0.vm_store_context().stack_chain.get()).clone();
+
+            let new_stack_chain = VMStackChain::InitialStack(initial_stack_information);
+            *store.0.vm_store_context().stack_chain.get() = new_stack_chain;
+
             let vm_store_context = store.0.vm_store_context();
 
             Self {
@@ -1640,6 +1662,7 @@ impl EntryStoreContext {
                 last_wasm_exit_pc,
                 last_wasm_exit_fp,
                 last_wasm_entry_fp,
+                stack_chain,
                 vm_store_context,
             }
         }
@@ -1659,6 +1682,7 @@ impl EntryStoreContext {
             *(*self.vm_store_context).last_wasm_exit_fp.get() = self.last_wasm_exit_fp;
             *(*self.vm_store_context).last_wasm_exit_pc.get() = self.last_wasm_exit_pc;
             *(*self.vm_store_context).last_wasm_entry_fp.get() = self.last_wasm_entry_fp;
+            *(*self.vm_store_context).stack_chain.get() = self.stack_chain.clone();
         }
     }
 }

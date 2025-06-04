@@ -371,6 +371,9 @@ jobs:
               -p wasmtime --no-default-features --features threads
               -p wasmtime --no-default-features --features runtime,threads
               -p wasmtime --no-default-features --features cranelift,threads
+              -p wasmtime --no-default-features --features stack-switching
+              -p wasmtime --no-default-features --features cranelift,stack-switching
+              -p wasmtime --no-default-features --features runtime,stack-switching
               -p wasmtime --features incremental-cache
               -p wasmtime --features profile-pulley
               -p wasmtime --all-features

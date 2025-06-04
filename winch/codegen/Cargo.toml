@@ -39,5 +39,6 @@ all-arch = [
 gc = ['wasmtime-environ/gc']
 gc-drc = ['wasmtime-environ/gc-drc']
 gc-null = ['wasmtime-environ/gc-null']
+stack-switching = ['wasmtime-environ/stack-switching']
 threads = ['wasmtime-environ/threads']
 wmemcheck = ['wasmtime-environ/wmemcheck']

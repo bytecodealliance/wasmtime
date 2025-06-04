@@ -23,10 +23,13 @@
 
 use crate::prelude::*;
 use crate::runtime::store::StoreOpaque;
+use crate::runtime::vm::stack_switching::VMStackChain;
 use crate::runtime::vm::{
     Unwind, VMStoreContext,
     traphandlers::{CallThreadState, tls},
 };
+#[cfg(all(feature = "gc", feature = "stack-switching"))]
+use crate::vm::stack_switching::{VMContRef, VMStackState};
 use core::ops::ControlFlow;
 
 /// A WebAssembly stack trace.
@@ -107,6 +110,48 @@ impl Backtrace {
         });
     }
 
+    // Walk the stack of the given continuation, which must be suspended, and
+    // all of its parent continuations (if any).
+    #[cfg(all(feature = "gc", feature = "stack-switching"))]
+    pub fn trace_suspended_continuation(
+        store: &StoreOpaque,
+        continuation: &VMContRef,
+        f: impl FnMut(Frame) -> ControlFlow<()>,
+    ) {
+        log::trace!("====== Capturing Backtrace (suspended continuation) ======");
+
+        assert_eq!(
+            continuation.common_stack_information.state,
+            VMStackState::Suspended
+        );
+
+        let unwind = store.unwinder();
+
+        let pc = continuation.stack.control_context_instruction_pointer();
+        let fp = continuation.stack.control_context_frame_pointer();
+        let trampoline_fp = continuation
+            .common_stack_information
+            .limits
+            .last_wasm_entry_fp;
+
+        unsafe {
+            // FIXME(frank-emrich) Casting from *const to *mut pointer is
+            // terrible, but we won't actually modify any of the continuations
+            // here.
+            let stack_chain =
+                VMStackChain::Continuation(continuation as *const VMContRef as *mut VMContRef);
+
+            if let ControlFlow::Break(()) =
+                Self::trace_through_continuations(unwind, stack_chain, pc, fp, trampoline_fp, f)
+            {
+                log::trace!("====== Done Capturing Backtrace (closure break) ======");
+                return;
+            }
+        }
+
+        log::trace!("====== Done Capturing Backtrace (reached end of stack chain) ======");
+    }
+
     /// Walk the current Wasm stack, calling `f` for each frame we walk.
     ///
     /// If Wasm hit a trap, and we calling this from the trap handler, then the
@@ -141,7 +186,17 @@ impl Backtrace {
             }
         };
 
+        let stack_chain = (*(*vm_store_context).stack_chain.get()).clone();
+
+        // The first value in `activations` is for the most recently running
+        // wasm. We thus provide the stack chain of `first_wasm_state` to
+        // traverse the potential continuation stacks. For the subsequent
+        // activations, we unconditionally use `None` as the corresponding stack
+        // chain. This is justified because only the most recent execution of
+        // wasm may execute off the initial stack (see comments in
+        // `wasmtime::invoke_wasm_and_catch_traps` for details).
         let activations = core::iter::once((
+            stack_chain,
             last_wasm_exit_pc,
             last_wasm_exit_fp,
             *(*vm_store_context).last_wasm_entry_fp.get(),
@@ -149,31 +204,129 @@ impl Backtrace {
         .chain(
             state
                 .iter()
+                .flat_map(|state| state.iter())
                 .filter(|state| core::ptr::eq(vm_store_context, state.vm_store_context.as_ptr()))
                 .map(|state| {
                     (
+                        state.old_stack_chain(),
                         state.old_last_wasm_exit_pc(),
                         state.old_last_wasm_exit_fp(),
                         state.old_last_wasm_entry_fp(),
                     )
                 }),
         )
-        .take_while(|&(pc, fp, sp)| {
-            if pc == 0 {
-                debug_assert_eq!(fp, 0);
-                debug_assert_eq!(sp, 0);
+        .take_while(|(chain, pc, fp, sp)| {
+            if *pc == 0 {
+                debug_assert_eq!(*fp, 0);
+                debug_assert_eq!(*sp, 0);
+            } else {
+                debug_assert_ne!(chain.clone(), VMStackChain::Absent)
             }
-            pc != 0
+            *pc != 0
         });
 
-        for (pc, fp, sp) in activations {
-            if let ControlFlow::Break(()) = Self::trace_through_wasm(unwind, pc, fp, sp, &mut f) {
+        for (chain, pc, fp, sp) in activations {
+            if let ControlFlow::Break(()) =
+                Self::trace_through_continuations(unwind, chain, pc, fp, sp, &mut f)
+            {
                 log::trace!("====== Done Capturing Backtrace (closure break) ======");
                 return;
             }
         }
 
         log::trace!("====== Done Capturing Backtrace (reached end of activations) ======");
+    }
+
+    /// Traces through a sequence of stacks, creating a backtrace for each one,
+    /// beginning at the given `pc` and `fp`.
+    ///
+    /// If `chain` is `InitialStack`, we are tracing through the initial stack,
+    /// and this function behaves like `trace_through_wasm`.
+    /// Otherwise, we can interpret `chain` as a linked list of stacks, which
+    /// ends with the initial stack. We then trace through each of these stacks
+    /// individually, up to (and including) the initial stack.
+    unsafe fn trace_through_continuations(
+        unwind: &dyn Unwind,
+        chain: VMStackChain,
+        pc: usize,
+        fp: usize,
+        trampoline_fp: usize,
+        mut f: impl FnMut(Frame) -> ControlFlow<()>,
+    ) -> ControlFlow<()> {
+        use crate::runtime::vm::stack_switching::{VMContRef, VMStackLimits};
+
+        // Handle the stack that is currently running (which may be a
+        // continuation or the initial stack).
+        Self::trace_through_wasm(unwind, pc, fp, trampoline_fp, &mut f)?;
+
+        // Note that the rest of this function has no effect if `chain` is
+        // `Some(VMStackChain::InitialStack(_))` (i.e., there is only one stack to
+        // trace through: the initial stack)
+
+        assert_ne!(chain, VMStackChain::Absent);
+        let stack_limits_vec: Vec<*mut VMStackLimits> =
+            chain.clone().into_stack_limits_iter().collect();
+        let continuations_vec: Vec<*mut VMContRef> =
+            chain.clone().into_continuation_iter().collect();
+
+        // The VMStackLimits of the currently running stack (whether that's a
+        // continuation or the initial stack) contains undefined data, the
+        // information about that stack is saved in the Store's
+        // `VMStoreContext` and handled at the top of this function
+        // already. That's why we ignore `stack_limits_vec[0]`.
+        //
+        // Note that a continuation stack's control context stores
+        // information about how to resume execution *in its parent*. Thus,
+        // we combine the information from continuations_vec[i] with
+        // stack_limits_vec[i + 1] below to get information about a
+        // particular stack.
+        //
+        // There must be exactly one more `VMStackLimits` object than there
+        // are continuations, due to the initial stack having one, too.
+        assert_eq!(stack_limits_vec.len(), continuations_vec.len() + 1);
+
+        for (conts, &parent_limits) in continuations_vec
+            .chunks(2)
+            .zip(stack_limits_vec.iter().skip(1))
+        {
+            // The continuation whose control context we want to
+            // access, to get information about how to continue
+            // execution in its parent.
+            let continuation = conts[0];
+            let continuation = unsafe { &*continuation };
+
+            // The stack limits describing the parent of `continuation`.
+            let parent_limits = unsafe { &*parent_limits };
+
+            // The parent of `continuation`, if the parent is itself a
+            // continuation. Otherwise, if `continuation` is the last
+            // continuation (i.e., its parent is the initial stack), this is
+            // None.
+            let parent_continuation = conts.get(1).map(|&p| unsafe { &*p });
+
+            let fiber_stack = continuation.fiber_stack();
+            let resume_pc = fiber_stack.control_context_instruction_pointer();
+            let resume_fp = fiber_stack.control_context_frame_pointer();
+
+            // If the parent is indeed a continuation, we know the
+            // boundaries of its stack and can perform some extra debugging
+            // checks.
+            let parent_stack_range = parent_continuation.and_then(|p| p.fiber_stack().range());
+            parent_stack_range.inspect(|parent_stack_range| {
+                debug_assert!(parent_stack_range.contains(&resume_fp));
+                debug_assert!(parent_stack_range.contains(&parent_limits.last_wasm_entry_fp));
+                debug_assert!(parent_stack_range.contains(&parent_limits.stack_limit));
+            });
+
+            Self::trace_through_wasm(
+                unwind,
+                resume_pc,
+                resume_fp,
+                parent_limits.last_wasm_entry_fp,
+                &mut f,
+            )?
+        }
+        ControlFlow::Continue(())
     }
 
     /// Walk through a contiguous sequence of Wasm frames starting with the

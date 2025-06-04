@@ -226,6 +226,25 @@ macro_rules! foreach_builtin_function {
             // Raises an unconditional trap where the trap information must have
             // been previously filled in.
             raise(vmctx: vmctx);
+
+            // Creates a new continuation from a funcref.
+            #[cfg(feature = "stack-switching")]
+            cont_new(vmctx: vmctx, r: pointer, param_count: u32, result_count: u32) -> pointer;
+
+            // Returns an index for Wasm's `table.grow` instruction
+            // for `contobj`s.  Note that the initial
+            // Option<VMContObj> (i.e., the value to fill the new
+            // slots with) is split into two arguments: The underlying
+            // continuation reference and the revision count.  To
+            // denote the continuation being `None`, `init_contref`
+            // may be 0.
+            #[cfg(feature = "stack-switching")]
+            table_grow_cont_obj(vmctx: vmctx, table: u32, delta: u64, init_contref: pointer, init_revision: u64) -> pointer;
+
+            // `value_contref` and `value_revision` together encode
+            // the Option<VMContObj>, as in previous libcall.
+            #[cfg(feature = "stack-switching")]
+            table_fill_cont_obj(vmctx: vmctx, table: u32, dst: u64, value_contref: pointer, value_revision: u64, len: u64) -> bool;
         }
     };
 }
@@ -367,6 +386,7 @@ impl BuiltinFunctionIndex {
             (@get memory32_grow pointer) => (TrapSentinel::NegativeTwo);
             (@get table_grow_func_ref pointer) => (TrapSentinel::NegativeTwo);
             (@get table_grow_gc_ref pointer) => (TrapSentinel::NegativeTwo);
+            (@get table_grow_cont_obj pointer) => (TrapSentinel::NegativeTwo);
 
             // Atomics-related functions return a negative value indicating trap
             // indicate a trap.
@@ -405,6 +425,8 @@ impl BuiltinFunctionIndex {
             (@get i8x16_shuffle i8x16) => (return None);
             (@get fma_f32x4 f32x4) => (return None);
             (@get fma_f64x2 f64x2) => (return None);
+
+            (@get cont_new pointer) => (TrapSentinel::Negative);
 
             // Bool-returning functions use `false` as an indicator of a trap.
             (@get $name:ident bool) => (TrapSentinel::Falsy);

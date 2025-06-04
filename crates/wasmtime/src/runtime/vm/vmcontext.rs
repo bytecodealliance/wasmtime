@@ -7,6 +7,7 @@ pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
 use crate::runtime::vm::{GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe, f32x4, f64x2, i8x16};
 use crate::store::StoreOpaque;
+use crate::vm::stack_switching::VMStackChain;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
 use core::fmt;
@@ -546,7 +547,7 @@ impl VMGlobalDefinition {
                     global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
                 }
                 WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
-                WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+                WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
             },
         }
         Ok(global)
@@ -1109,6 +1110,10 @@ pub struct VMStoreContext {
     /// Used to find the end of a contiguous sequence of Wasm frames when
     /// walking the stack.
     pub last_wasm_entry_fp: UnsafeCell<usize>,
+
+    /// Stack information used by stack switching instructions. See documentation
+    /// on `VMStackChain` for details.
+    pub stack_chain: UnsafeCell<VMStackChain>,
 }
 
 // The `VMStoreContext` type is a pod-type with no destructor, and we don't
@@ -1134,6 +1139,7 @@ impl Default for VMStoreContext {
             last_wasm_exit_fp: UnsafeCell::new(0),
             last_wasm_exit_pc: UnsafeCell::new(0),
             last_wasm_entry_fp: UnsafeCell::new(0),
+            stack_chain: UnsafeCell::new(VMStackChain::Absent),
         }
     }
 }
@@ -1184,6 +1190,10 @@ mod test_vmstore_context {
             offset_of!(VMStoreContext, last_wasm_entry_fp),
             usize::from(offsets.ptr.vmstore_context_last_wasm_entry_fp())
         );
+        assert_eq!(
+            offset_of!(VMStoreContext, stack_chain),
+            usize::from(offsets.ptr.vmstore_context_stack_chain())
+        )
     }
 }
 

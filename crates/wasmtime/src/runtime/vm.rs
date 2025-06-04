@@ -61,6 +61,7 @@ mod memory;
 mod mmap_vec;
 mod provenance;
 mod send_sync_ptr;
+mod stack_switching;
 mod store_box;
 mod sys;
 mod table;
@@ -110,6 +111,7 @@ pub use crate::runtime::vm::memory::{
 };
 pub use crate::runtime::vm::mmap_vec::MmapVec;
 pub use crate::runtime::vm::provenance::*;
+pub use crate::runtime::vm::stack_switching::*;
 pub use crate::runtime::vm::store_box::*;
 #[cfg(feature = "std")]
 pub use crate::runtime::vm::sys::mmap::open_file_for_mmap;
@@ -126,6 +128,7 @@ pub use crate::runtime::vm::vmcontext::{
     VMMemoryImport, VMOpaqueContext, VMStoreContext, VMTableImport, VMTagImport,
     VMWasmCallFunction, ValRaw,
 };
+
 pub use send_sync_ptr::SendSyncPtr;
 
 mod module_id;

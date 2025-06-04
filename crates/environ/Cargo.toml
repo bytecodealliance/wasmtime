@@ -69,6 +69,7 @@ compile = [
   "dep:wasm-encoder",
   "dep:wasmprinter",
 ]
+stack-switching = []
 threads = ['std']
 wmemcheck = ['std']
 std = [
