@@ -222,14 +222,18 @@ impl dsl::Inst {
                             let to_string = location.generate_to_string(op.extension);
                             fmtln!(f, "let {location} = {to_string};");
                         }
-                        let mut inst_name: String = "".to_string();
-                        if self.custom.contains(Display) {
+                        let inst_name = if self.custom.contains(Display) {
                             if self.name().starts_with("lock") {
-                                inst_name = display::lock(&self.mnemonic);
+                                display::lock(&self.mnemonic)
+                            } else {
+                                unimplemented!(
+                                    "Only lock instructions custom processing implemented for now"
+                                );
                             }
                         } else {
-                            inst_name = self.mnemonic.clone();
+                            self.mnemonic.clone()
                         }
+                        .to_string();
                         let ordered_ops = self.format.generate_att_style_operands();
                         let mut implicit_ops = self.format.generate_implicit_operands();
                         if self.has_trap {
