@@ -28,6 +28,7 @@ use crate::runtime::vm::{
     Unwind, VMStoreContext,
     traphandlers::{CallThreadState, tls},
 };
+#[cfg(all(feature = "gc", feature = "stack-switching"))]
 use crate::vm::stack_switching::{VMContRef, VMStackState};
 use core::ops::ControlFlow;
 
@@ -111,7 +112,7 @@ impl Backtrace {
 
     // Walk the stack of the given continuation, which must be suspended, and
     // all of its parent continuations (if any).
-    #[cfg(feature = "gc")]
+    #[cfg(all(feature = "gc", feature = "stack-switching"))]
     pub fn trace_suspended_continuation(
         store: &StoreOpaque,
         continuation: &VMContRef,
