@@ -222,7 +222,7 @@ pub struct Memory {
 // representation here in terms of size/alignment/etc.
 const _: () = {
     #[repr(C)]
-    struct Tmp(u64, usize);
+    struct Tmp(u64, u32);
     #[repr(C)]
     struct C(Tmp, u32);
     assert!(core::mem::size_of::<C>() == core::mem::size_of::<Memory>());
@@ -679,7 +679,7 @@ impl Memory {
     /// this hash key will be consistent across all of these memories.
     #[cfg(feature = "coredump")]
     pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<> {
-        store[self.instance].memory_ptr(self.index).as_ptr() as usize
+        store[self.instance].memory_ptr(self.index).as_ptr().addr()
     }
 }
 
@@ -1030,7 +1030,7 @@ impl SharedMemory {
     /// shared memory and the user wants host-side access to it.
     pub(crate) unsafe fn from_wasmtime_memory(
         wasmtime_export: crate::runtime::vm::ExportMemory,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
     ) -> Self {
         #[cfg_attr(not(feature = "threads"), allow(unused_variables, unreachable_code))]
         crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |handle| {

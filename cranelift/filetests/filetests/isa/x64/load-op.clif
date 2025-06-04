@@ -124,7 +124,7 @@ block0(v0: i64, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzbq  0(%rdi), %rax
+;   movzbq (%rdi), %rax
 ;   addl %esi, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -221,7 +221,7 @@ block0(v0: i64):
 ; block0:
 ;   cmpq    0(%rdi), %rdi
 ;   setz    %dl
-;   movzbq  %dl, %rax
+;   movzbq %dl, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

@@ -12,7 +12,7 @@ block0(v0: i8, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   andn    %edi, %esi, %eax
+;   andnl %edi, %esi, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -38,7 +38,7 @@ block0(v0: i8, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   andn    %esi, %edi, %eax
+;   andnl %esi, %edi, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

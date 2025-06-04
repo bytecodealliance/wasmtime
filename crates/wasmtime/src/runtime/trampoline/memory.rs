@@ -58,7 +58,6 @@ pub fn create_memory(
             },
             &ModuleRuntimeInfo::bare_maybe_imported_func(Arc::new(module), None),
             Default::default(),
-            Box::new(()),
         )
     }
 }
@@ -140,10 +139,12 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
         self.ondemand.validate_memory_impl(memory)
     }
 
+    #[cfg(feature = "component-model")]
     fn increment_component_instance_count(&self) -> Result<()> {
         self.ondemand.increment_component_instance_count()
     }
 
+    #[cfg(feature = "component-model")]
     fn decrement_component_instance_count(&self) {
         self.ondemand.decrement_component_instance_count();
     }

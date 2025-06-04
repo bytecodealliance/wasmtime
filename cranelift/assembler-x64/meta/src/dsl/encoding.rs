@@ -1086,6 +1086,21 @@ impl Vex {
         }
     }
 
+    /// Set the digit extending the opcode; equivalent to `/<digit>` in the
+    /// reference manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `extension` is too large.
+    #[must_use]
+    pub fn digit(self, extension: u8) -> Self {
+        assert!(extension <= 0b111, "must fit in 3 bits");
+        Self {
+            modrm: Some(ModRmKind::Digit(extension)),
+            ..self
+        }
+    }
+
     fn validate(&self, _operands: &[Operand]) {
         assert!(self.opcode != u8::MAX);
         assert!(self.mmmmm.is_some());

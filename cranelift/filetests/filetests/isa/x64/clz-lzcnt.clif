@@ -99,7 +99,7 @@ block0(v0: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzwq  %di, %rax
+;   movzwq %di, %rax
 ;   lzcntq %rax, %rax
 ;   subq $0x30, %rax
 ;   movq    %rbp, %rsp
@@ -128,7 +128,7 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzbq  %dil, %rax
+;   movzbq %dil, %rax
 ;   lzcntq %rax, %rax
 ;   subq $0x38, %rax
 ;   movq    %rbp, %rsp

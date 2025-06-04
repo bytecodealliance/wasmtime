@@ -88,7 +88,7 @@ fn main() -> anyhow::Result<()> {
         for w in widths {
             let w_str = w.as_str();
             if !valid_widths.contains(&w_str) {
-                panic!("Invalid width type: {}", w);
+                panic!("Invalid width type: {w}");
             }
         }
     }

@@ -319,7 +319,7 @@ where
 {
     let cx = VMComponentContext::from_opaque(cx);
     let instance = cx.as_ref().instance();
-    let types = (*instance).component_types();
+    let types = (*instance).component().types();
     let raw_store = (*instance).store();
     let mut store = StoreContextMut(&mut *raw_store.cast());
 

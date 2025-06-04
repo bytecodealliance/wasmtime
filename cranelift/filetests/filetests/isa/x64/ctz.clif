@@ -115,7 +115,7 @@ block0(v0: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzwl  %di, %ecx
+;   movzwl %di, %ecx
 ;   orl $0x10000, %ecx
 ;   movl    $16, %r9d
 ;   bsfl %ecx, %eax
@@ -148,7 +148,7 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movzbl  %dil, %ecx
+;   movzbl %dil, %ecx
 ;   orl $0x100, %ecx
 ;   movl    $8, %r9d
 ;   bsfl %ecx, %eax

@@ -107,8 +107,6 @@ impl Inst {
             | Inst::MovRR { .. }
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
-            | Inst::MovsxRmR { .. }
-            | Inst::MovzxRmR { .. }
             | Inst::Nop { .. }
             | Inst::Pop64 { .. }
             | Inst::Push64 { .. }
@@ -136,10 +134,6 @@ impl Inst {
             Inst::LockCmpxchg16b { .. }
             | Inst::Atomic128RmwSeq { .. }
             | Inst::Atomic128XchgSeq { .. } => smallvec![InstructionSet::CMPXCHG16b],
-
-            Inst::AluRmRVex { op, .. } => op.available_from(),
-            Inst::UnaryRmRVex { op, .. } => op.available_from(),
-            Inst::UnaryRmRImmVex { op, .. } => op.available_from(),
 
             // These use dynamic SSE opcodes.
             Inst::XmmRmR { op, .. }
@@ -170,8 +164,6 @@ impl Inst {
             | Inst::CvtIntToFloatVex { op, .. }
             | Inst::XmmCmpRmRVex { op, .. } => op.available_from(),
 
-            Inst::MulX { .. } => smallvec![InstructionSet::BMI2],
-
             Inst::External { inst } => {
                 use cranelift_assembler_x64::Feature::*;
                 let mut features = smallvec![];
@@ -183,6 +175,7 @@ impl Inst {
                         ssse3 => features.push(InstructionSet::SSSE3),
                         sse41 => features.push(InstructionSet::SSE41),
                         bmi1 => features.push(InstructionSet::BMI1),
+                        bmi2 => features.push(InstructionSet::BMI2),
                         lzcnt => features.push(InstructionSet::Lzcnt),
                         popcnt => features.push(InstructionSet::Popcnt),
                         avx => features.push(InstructionSet::AVX),
@@ -315,17 +308,43 @@ impl Inst {
     pub(crate) fn movzx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::Int);
         debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let src = GprMem::unwrap_new(src);
-        let dst = WritableGpr::from_writable_reg(dst).unwrap();
-        Inst::MovzxRmR { ext_mode, src, dst }
+        let src = match src {
+            RegMem::Reg { reg } => asm::GprMem::Gpr(Gpr::new(reg).unwrap()),
+            RegMem::Mem { addr } => asm::GprMem::Mem(addr.into()),
+        };
+        let inst = match ext_mode {
+            ExtMode::BL => asm::inst::movzbl_rm::new(dst, src).into(),
+            ExtMode::BQ => asm::inst::movzbq_rm::new(dst, src).into(),
+            ExtMode::WL => asm::inst::movzwl_rm::new(dst, src).into(),
+            ExtMode::WQ => asm::inst::movzwq_rm::new(dst, src).into(),
+            ExtMode::LQ => {
+                // This instruction selection may seem strange but is correct in
+                // 64-bit mode: section 3.4.1.1 of the Intel manual says that
+                // "32-bit operands generate a 32-bit result, zero-extended to a
+                // 64-bit result in the destination general-purpose register."
+                // This is applicable beyond `mov` but we use this fact to
+                // zero-extend `src` into `dst`.
+                asm::inst::movl_rm::new(dst, src).into()
+            }
+        };
+        Inst::External { inst }
     }
 
     pub(crate) fn movsx_rm_r(ext_mode: ExtMode, src: RegMem, dst: Writable<Reg>) -> Inst {
         src.assert_regclass_is(RegClass::Int);
         debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let src = GprMem::unwrap_new(src);
-        let dst = WritableGpr::from_writable_reg(dst).unwrap();
-        Inst::MovsxRmR { ext_mode, src, dst }
+        let src = match src {
+            RegMem::Reg { reg } => asm::GprMem::Gpr(Gpr::new(reg).unwrap()),
+            RegMem::Mem { addr } => asm::GprMem::Mem(addr.into()),
+        };
+        let inst = match ext_mode {
+            ExtMode::BL => asm::inst::movsbl_rm::new(dst, src).into(),
+            ExtMode::BQ => asm::inst::movsbq_rm::new(dst, src).into(),
+            ExtMode::WL => asm::inst::movswl_rm::new(dst, src).into(),
+            ExtMode::WQ => asm::inst::movswq_rm::new(dst, src).into(),
+            ExtMode::LQ => asm::inst::movslq_rm::new(dst, src).into(),
+        };
+        Inst::External { inst }
     }
 
     pub(crate) fn mov_r_m(size: OperandSize, src: Reg, dst: impl Into<SyntheticAmode>) -> Inst {
@@ -564,63 +583,6 @@ impl PrettyPrint for Inst {
 
         match self {
             Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
-
-            Inst::AluRmRVex {
-                size,
-                op,
-                src1,
-                src2,
-                dst,
-            } => {
-                let size_bytes = size.to_bytes();
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let src1 = pretty_print_reg(src1.to_reg(), size_bytes);
-                let src2 = src2.pretty_print(size_bytes);
-                let op = ljustify2(op.to_string(), String::new());
-                format!("{op} {src2}, {src1}, {dst}")
-            }
-
-            Inst::UnaryRmRVex { src, dst, op, size } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let src = src.pretty_print(size.to_bytes());
-                let op = ljustify2(op.to_string(), suffix_bwlq(*size));
-                format!("{op} {src}, {dst}")
-            }
-
-            Inst::UnaryRmRImmVex {
-                src,
-                dst,
-                op,
-                size,
-                imm,
-            } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let src = src.pretty_print(size.to_bytes());
-                format!(
-                    "{} ${imm}, {src}, {dst}",
-                    ljustify2(op.to_string(), suffix_bwlq(*size))
-                )
-            }
-
-            Inst::MulX {
-                size,
-                src1,
-                src2,
-                dst_lo,
-                dst_hi,
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), size.to_bytes());
-                let dst_hi = pretty_print_reg(dst_hi.to_reg().to_reg(), size.to_bytes());
-                let dst_lo = if dst_lo.to_reg().is_invalid_sentinel() {
-                    dst_hi.clone()
-                } else {
-                    pretty_print_reg(dst_lo.to_reg().to_reg(), size.to_bytes())
-                };
-                let src2 = src2.pretty_print(size.to_bytes());
-                let suffix = suffix_bwlq(*size);
-                let op = ljustify(format!("mulx{suffix}"));
-                format!("{op} {src1}, {src2}, {dst_lo}, {dst_hi}")
-            }
 
             Inst::CheckedSRemSeq {
                 size,
@@ -1118,40 +1080,11 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}")
             }
 
-            Inst::MovzxRmR {
-                ext_mode, src, dst, ..
-            } => {
-                let dst_size = if *ext_mode == ExtMode::LQ {
-                    4
-                } else {
-                    ext_mode.dst_size()
-                };
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size);
-                let src = src.pretty_print(ext_mode.src_size());
-
-                if *ext_mode == ExtMode::LQ {
-                    let op = ljustify("movl".to_string());
-                    format!("{op} {src}, {dst}")
-                } else {
-                    let op = ljustify2("movz".to_string(), ext_mode.to_string());
-                    format!("{op} {src}, {dst}")
-                }
-            }
-
             Inst::LoadEffectiveAddress { addr, dst, size } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
                 let addr = addr.pretty_print(8);
                 let op = ljustify("lea".to_string());
                 format!("{op} {addr}, {dst}")
-            }
-
-            Inst::MovsxRmR {
-                ext_mode, src, dst, ..
-            } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), ext_mode.dst_size());
-                let src = src.pretty_print(ext_mode.src_size());
-                let op = ljustify2("movs".to_string(), ext_mode.to_string());
-                format!("{op} {src}, {dst}")
             }
 
             Inst::MovRM { size, src, dst, .. } => {
@@ -1620,13 +1553,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
     // in `emit.rs`, and (ii) pretty-printing, in the `pretty_print`
     // method above.
     match inst {
-        Inst::AluRmRVex {
-            src1, src2, dst, ..
-        } => {
-            collector.reg_def(dst);
-            collector.reg_use(src1);
-            src2.get_operands(collector);
-        }
         Inst::CheckedSRemSeq {
             divisor,
             dividend_lo,
@@ -1650,24 +1576,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(divisor);
             collector.reg_fixed_use(dividend, regs::rax());
             collector.reg_fixed_def(dst, regs::rax());
-        }
-        Inst::MulX {
-            src1,
-            src2,
-            dst_lo,
-            dst_hi,
-            ..
-        } => {
-            if !dst_lo.to_reg().is_invalid_sentinel() {
-                collector.reg_def(dst_lo);
-            }
-            collector.reg_def(dst_hi);
-            collector.reg_fixed_use(src1, regs::rdx());
-            src2.get_operands(collector);
-        }
-        Inst::UnaryRmRVex { src, dst, .. } | Inst::UnaryRmRImmVex { src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
         }
         Inst::XmmUnaryRmR { src, dst, .. } | Inst::XmmUnaryRmRImm { src, dst, .. } => {
             collector.reg_def(dst);
@@ -1882,16 +1790,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::MovImmM { dst, .. } => {
             dst.get_operands(collector);
         }
-
-        Inst::MovzxRmR { src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
-        }
         Inst::LoadEffectiveAddress { addr: src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
-        }
-        Inst::MovsxRmR { src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
         }

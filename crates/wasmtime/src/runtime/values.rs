@@ -983,7 +983,7 @@ impl Ref {
                     f.comes_from_same_store(&store),
                     "checked in `ensure_matches_ty`"
                 );
-                Ok(TableElement::FuncRef(Some(f.vm_func_ref(&mut store))))
+                Ok(TableElement::FuncRef(Some(f.vm_func_ref(&store))))
             }
 
             (Ref::Extern(e), HeapType::Extern) => match e {

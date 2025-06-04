@@ -1,6 +1,7 @@
 //! Aarch64 addressing mode.
 
 use anyhow::{Context, Result, anyhow};
+use cranelift_codegen::VCodeConstant;
 use cranelift_codegen::{
     ir::types,
     isa::aarch64::inst::{AMode, PairAMode, SImm7Scaled, SImm9},
@@ -38,6 +39,8 @@ pub(crate) enum Address {
         /// Indexing mode.
         indexing: Indexing,
     },
+    /// Address of a constant in the constant pool.
+    Const(VCodeConstant),
 }
 
 impl Address {
@@ -82,6 +85,11 @@ impl Address {
             "stack pointer not allowed in arbitrary offset addressing mode"
         );
         Self::Offset { base, offset }
+    }
+
+    /// Create an address for a constant.
+    pub fn constant(data: VCodeConstant) -> Self {
+        Self::Const(data)
     }
 
     /// Returns the register base and immediate offset of the given [`Address`].
@@ -136,6 +144,7 @@ impl TryFrom<Address> for AMode {
         match addr {
             IndexedSPOffset { offset, indexing } => {
                 let simm9 = SImm9::maybe_from_i64(offset).ok_or_else(|| {
+                    // TODO: non-string error
                     anyhow!("Failed to convert {} to signed 9-bit offset", offset)
                 })?;
 
@@ -149,6 +158,7 @@ impl TryFrom<Address> for AMode {
                 rn: base.into(),
                 off: offset,
             }),
+            Const(data) => Ok(AMode::Const { addr: data }),
         }
     }
 }

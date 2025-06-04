@@ -284,7 +284,7 @@ impl Registers for FuzzRegs {
 }
 
 /// A simple `u8` register type for fuzzing only.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FuzzReg(u8);
 
 impl<'a> Arbitrary<'a> for FuzzReg {

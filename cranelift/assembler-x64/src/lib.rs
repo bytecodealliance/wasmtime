@@ -47,6 +47,7 @@
 )]
 
 mod api;
+mod custom;
 mod fixed;
 pub mod gpr;
 mod imm;

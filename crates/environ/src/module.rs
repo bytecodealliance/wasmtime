@@ -588,6 +588,12 @@ impl Module {
         self.memories.len() - self.num_imported_memories
     }
 
+    /// Returns the number of globals defined by this module itself: all
+    /// globals minus imported globals.
+    pub fn num_defined_globals(&self) -> usize {
+        self.globals.len() - self.num_imported_globals
+    }
+
     /// Returns the number of tags defined by this module itself: all tags
     /// minus imported tags.
     pub fn num_defined_tags(&self) -> usize {

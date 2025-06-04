@@ -1,5 +1,5 @@
-use crate::dsl::{Feature::*, Inst, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw};
+use crate::dsl::{Feature::*, Inst, Location::*, VexLength::*};
+use crate::dsl::{align, fmt, inst, r, rex, rw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -57,6 +57,17 @@ pub fn list() -> Vec<Inst> {
         inst("shldq", fmt("MRI", [rw(rm64), r(r64), r(imm8)]), rex([0x0F, 0xA4]).ib().w(), _64b),
         inst("shldl", fmt("MRC", [rw(rm32), r(r32), r(cl)]), rex([0x0F, 0xA5]).ib(), _64b | compat),
         inst("shldq", fmt("MRC", [rw(rm64), r(r64), r(cl)]), rex([0x0F, 0xA5]).ib().w(), _64b),
+
+        // BMI2 shifts
+        inst("sarxl", fmt("RMV", [w(r32a), r(rm32), r(r32b)]), vex(LZ)._f3()._0f38().w0().op(0xF7), _64b | compat | bmi2),
+        inst("shlxl", fmt("RMV", [w(r32a), r(rm32), r(r32b)]), vex(LZ)._66()._0f38().w0().op(0xF7), _64b | compat | bmi2),
+        inst("shrxl", fmt("RMV", [w(r32a), r(rm32), r(r32b)]), vex(LZ)._f2()._0f38().w0().op(0xF7), _64b | compat | bmi2),
+        inst("sarxq", fmt("RMV", [w(r64a), r(rm64), r(r64b)]), vex(LZ)._f3()._0f38().w1().op(0xF7), _64b | bmi2),
+        inst("shlxq", fmt("RMV", [w(r64a), r(rm64), r(r64b)]), vex(LZ)._66()._0f38().w1().op(0xF7), _64b | bmi2),
+        inst("shrxq", fmt("RMV", [w(r64a), r(rm64), r(r64b)]), vex(LZ)._f2()._0f38().w1().op(0xF7), _64b | bmi2),
+        inst("rorxl", fmt("RMI", [w(r32), r(rm32), r(imm8)]), vex(LZ)._f2()._0f3a().w0().op(0xF0).r().ib(), _64b | compat | bmi2),
+        inst("rorxq", fmt("RMI", [w(r64), r(rm64), r(imm8)]), vex(LZ)._f2()._0f3a().w1().op(0xF0).r().ib(), _64b | bmi2),
+
         // Vector instructions (shift left).
         inst("psllw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF1]).r(), _64b | compat | sse2),
         inst("psllw", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x71]).digit(6).ib(), _64b | compat | sse2),

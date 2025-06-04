@@ -13,43 +13,6 @@
        ;; =========================================
        ;; Integer instructions.
 
-       ;; Integer arithmetic binary op that relies on the VEX prefix.
-       ;; NOTE: we don't currently support emitting VEX instructions with memory
-       ;; arguments, so `src2` is artificially constrained to be a Gpr.
-       (AluRmRVex (size OperandSize)
-                  (op AluRmROpcode)
-                  (src1 Gpr)
-                  (src2 GprMem)
-                  (dst WritableGpr))
-
-       ;; Same as `UnaryRmR` but with the VEX prefix for BMI1 instructions.
-       (UnaryRmRVex (size OperandSize)
-                    (op UnaryRmRVexOpcode)
-                    (src GprMem)
-                    (dst WritableGpr))
-
-       ;; Same as `UnaryRmRVex` but with an immediate
-       (UnaryRmRImmVex (size OperandSize)
-                       (op UnaryRmRImmVexOpcode)
-                       (src GprMem)
-                       (dst WritableGpr)
-                       (imm u8))
-
-       ;; Same as `Mul`, but for the BMI2 `mulx` instruction. This is different
-       ;; where the two `dst_*` registers can be arbitrary registers and it
-       ;; is always unsigned multiplication. Note that this instruction does
-       ;; not modify or read flags.
-       ;;
-       ;; Note that `dst_hi` here is always a valid register but `dst_lo`
-       ;; is allowed to be `invalid_reg` to indicate that only the high
-       ;; bits are desired. If `dst_lo` is invalid then the instruction itself
-       ;; will only define `dst_hi`.
-       (MulX (size OperandSize)
-             (src1 Gpr)
-             (src2 GprMem)
-             (dst_lo WritableGpr)
-             (dst_hi WritableGpr))
-
        ;; A synthetic instruction sequence used as part of the lowering of the
        ;; `srem` instruction which returns 0 if the divisor is -1 and
        ;; otherwise executes an `idiv` instruction.
@@ -91,25 +54,10 @@
        (MovToPReg (src Gpr)
                   (dst PReg))
 
-       ;; Zero-extended loads, except for 64 bits: movz (bl bq wl wq lq) addr
-       ;; reg.
-       ;;
-       ;; Note that the lq variant doesn't really exist since the default
-       ;; zero-extend rule makes it unnecessary. For that case we emit the
-       ;; equivalent "movl AM, reg32".
-       (MovzxRmR (ext_mode ExtMode)
-                 (src GprMem)
-                 (dst WritableGpr))
-
        ;; Loads the memory address of addr into dst.
        (LoadEffectiveAddress (addr SyntheticAmode)
                              (dst WritableGpr)
                              (size OperandSize))
-
-       ;; Sign-extended loads and moves: movs (bl bq wl wq lq) addr reg.
-       (MovsxRmR (ext_mode ExtMode)
-                 (src GprMem)
-                 (dst WritableGpr))
 
        ;; Immediate store.
        (MovImmM (size OperandSize)
@@ -718,28 +666,6 @@
 (rule (operand_size_bits (OperandSize.Size32)) 32)
 (rule (operand_size_bits (OperandSize.Size64)) 64)
 
-(type AluRmROpcode
-      (enum Andn
-            Sarx
-            Shrx
-            Shlx
-            Bzhi))
-
-(type UnaryRmROpcode extern
-      (enum Bsr
-            Bsf
-            Lzcnt
-            Tzcnt
-            Popcnt))
-
-(type UnaryRmRVexOpcode
-      (enum Blsi
-            Blsmsk
-            Blsr))
-
-(type UnaryRmRImmVexOpcode
-      (enum Rorx))
-
 (type SseOpcode extern
       (enum Blendvpd
             Blendvps
@@ -763,8 +689,6 @@
             Packusdw
             Packuswb
             Palignr
-            Pavgb
-            Pavgw
             Pblendvb
             Pcmpeqb
             Pcmpeqw
@@ -1756,14 +1680,6 @@
             (_ Unit (emit (MInst.LoadExtName dst extname offset distance))))
         dst))
 
-;; Helper for emitting `MInst.AluRmRVex` instructions.
-(decl alu_rm_r_vex (Type AluRmROpcode Gpr GprMem) Gpr)
-(rule (alu_rm_r_vex ty opcode src1 src2)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.AluRmRVex size opcode src1 src2 dst))))
-        dst))
-
 ;; Helper for creating `MInst.XmmRmR` instructions.
 (decl xmm_rm_r (SseOpcode Xmm XmmMemAligned) Xmm)
 (rule (xmm_rm_r op src1 src2)
@@ -1918,20 +1834,6 @@
 (rule (xmm_rmr_vex3 op src1 src2 src3)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmRVex3 op src1 src2 src3 dst))))
-        dst))
-
-;; Helper for creating `MInst.UnaryRmRVex` instructions.
-(decl unary_rm_r_vex (UnaryRmRVexOpcode GprMem OperandSize) Gpr)
-(rule (unary_rm_r_vex op src size)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.UnaryRmRVex size op src dst))))
-        dst))
-
-;; Helper for creating `MInst.UnaryRmRImmVex` instructions.
-(decl unary_rm_r_imm_vex (UnaryRmRImmVexOpcode GprMem OperandSize u8) Gpr)
-(rule (unary_rm_r_imm_vex op src size imm)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.UnaryRmRImmVex size op src dst imm))))
         dst))
 
 (decl cvt_int_to_float_vex (AvxOpcode Xmm GprMem OperandSize) Xmm)
@@ -2224,16 +2126,23 @@
                   (= mode (ExtMode.WL))
                   (= mode (ExtMode.WQ))
                   (= mode (ExtMode.LQ)))))
-(rule (x64_movzx mode src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.MovzxRmR mode src dst))))
-        dst))
+(rule (x64_movzx (ExtMode.BL) src) (x64_movzbl_rm src))
+(rule (x64_movzx (ExtMode.BQ) src) (x64_movzbq_rm src))
+(rule (x64_movzx (ExtMode.WL) src) (x64_movzwl_rm src))
+(rule (x64_movzx (ExtMode.WQ) src) (x64_movzwq_rm src))
+;; This instruction selection may seem strange but is correct in 64-bit mode:
+;; section 3.4.1.1 of the Intel manual says that "32-bit operands generate a
+;; 32-bit result, zero-extended to a 64-bit result in the destination
+;; general-purpose register." This is applicable beyond `mov` but we use this
+;; fact to zero-extend `src` into `dst`.
+(rule (x64_movzx (ExtMode.LQ) src) (x64_movl_rm src))
 
 (decl x64_movsx (ExtMode GprMem) Gpr)
-(rule (x64_movsx mode src)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.MovsxRmR mode src dst))))
-        dst))
+(rule (x64_movsx (ExtMode.BL) src) (x64_movsbl_rm src))
+(rule (x64_movsx (ExtMode.BQ) src) (x64_movsbq_rm src))
+(rule (x64_movsx (ExtMode.WL) src) (x64_movswl_rm src))
+(rule (x64_movsx (ExtMode.WQ) src) (x64_movswq_rm src))
+(rule (x64_movsx (ExtMode.LQ) src) (x64_movslq_rm src))
 
 (decl x64_movss_load (SyntheticAmode) Xmm)
 (rule (x64_movss_load from) (x64_movss_a_m from))
@@ -2609,21 +2518,29 @@
 (decl x64_mul (Type bool Gpr GprMem) ValueRegs)
 (rule 0 (x64_mul ty signed src1 src2)
       (emit_ret_value_regs (x64_mul_raw ty signed src1 src2)))
+
 ;; Special case the `mulx` pattern with the BMI2 instruction set.
-(rule 1 (x64_mul (ty_32_or_64 ty) false src1 src2)
+;;
+;; Note that mulx returns the high bits in the first result and the low bits in
+;; the second result, so here the result registers are swapped to match
+;; `x64_mul` above.
+(rule 1 (x64_mul $I32 false src1 src2)
   (if-let true (use_bmi2))
-  (let ((dst_lo WritableGpr (temp_writable_gpr))
-        (dst_hi WritableGpr (temp_writable_gpr))
-        (size OperandSize (raw_operand_size_of_type ty))
-        (_ Unit (emit (MInst.MulX size src1 src2 dst_lo dst_hi))))
-    (value_gprs dst_lo dst_hi)))
+  (let ((regs ValueRegs (x64_mulxl_rvm src2 src1)))
+    (value_regs (value_regs_get regs 1) (value_regs_get regs 0))))
+(rule 1 (x64_mul $I64 false src1 src2)
+  (if-let true (use_bmi2))
+  (let ((regs ValueRegs (x64_mulxq_rvm src2 src1)))
+    (value_regs (value_regs_get regs 1) (value_regs_get regs 0))))
 
 (decl x64_mulx_hi (Type Gpr GprMem) Gpr)
-(rule (x64_mulx_hi (ty_32_or_64 ty) src1 src2)
-  (let ((dst WritableGpr (temp_writable_gpr))
-        (size OperandSize (raw_operand_size_of_type ty))
-        (_ Unit (emit (MInst.MulX size src1 src2 (writable_invalid_gpr) dst))))
-    dst))
+(rule (x64_mulx_hi $I32 src1 src2) (x64_mulxl_rvm_hi src2 src1))
+(rule (x64_mulx_hi $I64 src1 src2) (x64_mulxq_rvm_hi src2 src1))
+
+(decl x64_mulxl_rvm_hi (GprMem Gpr) Gpr)
+(extern constructor x64_mulxl_rvm_hi x64_mulxl_rvm_hi)
+(decl x64_mulxq_rvm_hi (GprMem Gpr) Gpr)
+(extern constructor x64_mulxq_rvm_hi x64_mulxq_rvm_hi)
 
 (decl x64_mul_lo_with_flags_paired (Type bool Gpr GprMem) ProducesFlags)
 (rule (x64_mul_lo_with_flags_paired ty signed src1 src2)
@@ -2754,11 +2671,16 @@
 (rule 0 (x64_xor $I32 src1 (is_gpr_mem src2)) (x64_xorl_rm src1 src2))
 (rule 0 (x64_xor $I64 src1 (is_gpr_mem src2)) (x64_xorq_rm src1 src2))
 
-
-
+;; Helper for `andn` instructions
+;;
+;; Note that 8/16-bit versions of these instructions do not exist, so for
+;; those bit-widths the 32-bit version of the instruction is used which has the
+;; desired semantics for the lower bits of the register.
 (decl x64_andn (Type Gpr GprMem) Gpr)
-(rule (x64_andn ty src1 src2)
-      (alu_rm_r_vex ty (AluRmROpcode.Andn) src1 src2))
+(rule (x64_andn $I8 src1 src2) (x64_andnl_rvm src1 src2))
+(rule (x64_andn $I16 src1 src2) (x64_andnl_rvm src1 src2))
+(rule (x64_andn $I32 src1 src2) (x64_andnl_rvm src1 src2))
+(rule (x64_andn $I64 src1 src2) (x64_andnq_rvm src1 src2))
 
 ;; Helper for emitting immediates with an `i64` value. Note that
 ;; integer constants in ISLE are always parsed as `i128`s; this enables
@@ -2916,12 +2838,9 @@
 (rule (x64_shld $I64 src1 src2 amt) (x64_shldq_mri src1 src2 amt))
 
 ;; Helper for creating zeroing-of-high-bits instructions bzhi
-;;
-;; Note that the `src` operands are swapped here. The amount-to-shift-by
-;; is stored in `vvvv` which is `src1` in the `AluRmRVex` instruction shape.
 (decl x64_bzhi (Type GprMem Gpr) Gpr)
-(rule (x64_bzhi ty src1 src2)
-      (alu_rm_r_vex ty (AluRmROpcode.Bzhi) src2 src1))
+(rule (x64_bzhi $I32 src1 src2) (x64_bzhil_rmv src1 src2))
+(rule (x64_bzhi $I64 src1 src2) (x64_bzhiq_rmv src1 src2))
 
 ;; Helper for creating byteswap instructions.
 ;; In x64, 32- and 64-bit registers use BSWAP instruction, and
@@ -3236,19 +3155,19 @@
 
 ;; Helper for creating `pavgb` instructions.
 (decl x64_pavgb (Xmm XmmMem) Xmm)
-(rule 0 (x64_pavgb src1 src2)
-      (xmm_rm_r (SseOpcode.Pavgb) src1 src2))
 (rule 1 (x64_pavgb src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpavgb) src1 src2))
+(rule 0 (x64_pavgb src1 src2)
+      (x64_pavgb_a src1 src2))
 
 ;; Helper for creating `pavgw` instructions.
 (decl x64_pavgw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pavgw src1 src2)
-      (xmm_rm_r (SseOpcode.Pavgw) src1 src2))
 (rule 1 (x64_pavgw src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vpavgw) src1 src2))
+(rule 0 (x64_pavgw src1 src2)
+      (x64_pavgw_a src1 src2))
 
 ;; Helper for creating `pand` instructions.
 (decl x64_pand (Xmm XmmMem) Xmm)
@@ -4245,41 +4164,38 @@
 
 ;; Helper for creating `blsi` instructions.
 (decl x64_blsi (Type GprMem) Gpr)
-(rule (x64_blsi ty src)
-      (unary_rm_r_vex (UnaryRmRVexOpcode.Blsi) src (operand_size_of_type_32_64 ty)))
+(rule (x64_blsi $I32 src) (x64_blsil_vm src))
+(rule (x64_blsi $I64 src) (x64_blsiq_vm src))
 
 ;; Helper for creating `blsmsk` instructions.
 (decl x64_blsmsk (Type GprMem) Gpr)
-(rule (x64_blsmsk ty src)
-      (unary_rm_r_vex (UnaryRmRVexOpcode.Blsmsk) src (operand_size_of_type_32_64 ty)))
+(rule (x64_blsmsk $I32 src) (x64_blsmskl_vm src))
+(rule (x64_blsmsk $I64 src) (x64_blsmskq_vm src))
 
 ;; Helper for creating `blsr` instructions.
 (decl x64_blsr (Type GprMem) Gpr)
-(rule (x64_blsr ty src)
-      (unary_rm_r_vex (UnaryRmRVexOpcode.Blsr) src (operand_size_of_type_32_64 ty)))
+(rule (x64_blsr $I32 src) (x64_blsrl_vm src))
+(rule (x64_blsr $I64 src) (x64_blsrq_vm src))
 
 ;; Helper for creating `sarx` instructions.
 (decl x64_sarx (Type GprMem Gpr) Gpr)
-(rule (x64_sarx ty val amt)
-      (alu_rm_r_vex ty (AluRmROpcode.Sarx) amt val))
+(rule (x64_sarx $I32 val amt) (x64_sarxl_rmv val amt))
+(rule (x64_sarx $I64 val amt) (x64_sarxq_rmv val amt))
 
 ;; Helper for creating `shrx` instructions.
 (decl x64_shrx (Type GprMem Gpr) Gpr)
-(rule (x64_shrx ty val amt)
-      (alu_rm_r_vex ty (AluRmROpcode.Shrx) amt val))
+(rule (x64_shrx $I32 val amt) (x64_shrxl_rmv val amt))
+(rule (x64_shrx $I64 val amt) (x64_shrxq_rmv val amt))
 
 ;; Helper for creating `shlx` instructions.
 (decl x64_shlx (Type GprMem Gpr) Gpr)
-(rule (x64_shlx ty val amt)
-      (alu_rm_r_vex ty (AluRmROpcode.Shlx) amt val))
+(rule (x64_shlx $I32 val amt) (x64_shlxl_rmv val amt))
+(rule (x64_shlx $I64 val amt) (x64_shlxq_rmv val amt))
 
 ;; Helper for creating `rorx` instructions.
 (decl x64_rorx (Type GprMem u8) Gpr)
-(rule (x64_rorx ty src imm)
-      (unary_rm_r_imm_vex (UnaryRmRImmVexOpcode.Rorx)
-                          src
-                          (operand_size_of_type_32_64 ty)
-                          imm))
+(rule (x64_rorx $I32 src imm) (x64_rorxl_rmi src imm))
+(rule (x64_rorx $I64 src imm) (x64_rorxq_rmi src imm))
 
 ;; Helper for creating `popcnt` instructions.
 (decl x64_popcnt (Type GprMem) Gpr)

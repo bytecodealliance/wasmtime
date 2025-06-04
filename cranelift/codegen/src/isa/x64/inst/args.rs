@@ -729,61 +729,6 @@ impl PrettyPrint for RegMem {
     }
 }
 
-pub use crate::isa::x64::lower::isle::generated_code::AluRmROpcode;
-
-impl AluRmROpcode {
-    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
-        match self {
-            AluRmROpcode::Andn => smallvec![InstructionSet::BMI1],
-            AluRmROpcode::Sarx | AluRmROpcode::Shrx | AluRmROpcode::Shlx | AluRmROpcode::Bzhi => {
-                smallvec![InstructionSet::BMI2]
-            }
-        }
-    }
-}
-
-impl fmt::Display for AluRmROpcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&format!("{self:?}").to_lowercase())
-    }
-}
-
-pub use crate::isa::x64::lower::isle::generated_code::UnaryRmRVexOpcode;
-
-impl UnaryRmRVexOpcode {
-    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
-        match self {
-            UnaryRmRVexOpcode::Blsi | UnaryRmRVexOpcode::Blsmsk | UnaryRmRVexOpcode::Blsr => {
-                smallvec![InstructionSet::BMI1]
-            }
-        }
-    }
-}
-
-impl fmt::Display for UnaryRmRVexOpcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&format!("{self:?}").to_lowercase())
-    }
-}
-
-pub use crate::isa::x64::lower::isle::generated_code::UnaryRmRImmVexOpcode;
-
-impl UnaryRmRImmVexOpcode {
-    pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
-        match self {
-            UnaryRmRImmVexOpcode::Rorx => {
-                smallvec![InstructionSet::BMI2]
-            }
-        }
-    }
-}
-
-impl fmt::Display for UnaryRmRImmVexOpcode {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str(&format!("{self:?}").to_lowercase())
-    }
-}
-
 #[derive(Clone, Copy, PartialEq)]
 /// Comparison operations.
 pub enum CmpOpcode {
@@ -1378,32 +1323,6 @@ impl ExtMode {
             (16, 64) => Some(ExtMode::WQ),
             (32, 64) => Some(ExtMode::LQ),
             _ => None,
-        }
-    }
-
-    /// Return the source register size in bytes.
-    pub(crate) fn src_size(&self) -> u8 {
-        match self {
-            ExtMode::BL | ExtMode::BQ => 1,
-            ExtMode::WL | ExtMode::WQ => 2,
-            ExtMode::LQ => 4,
-        }
-    }
-
-    /// Return the destination register size in bytes.
-    pub(crate) fn dst_size(&self) -> u8 {
-        match self {
-            ExtMode::BL | ExtMode::WL => 4,
-            ExtMode::BQ | ExtMode::WQ | ExtMode::LQ => 8,
-        }
-    }
-
-    /// Source size, as an integer type.
-    pub(crate) fn src_type(&self) -> Type {
-        match self {
-            ExtMode::BL | ExtMode::BQ => I8,
-            ExtMode::WL | ExtMode::WQ => I16,
-            ExtMode::LQ => I32,
         }
     }
 }

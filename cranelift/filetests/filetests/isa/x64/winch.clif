@@ -391,9 +391,9 @@ block0:
 ;   movl    $85, %r9d
 ;   movl    $11, %r10d
 ;   movq    %r11, 8(%rdi)
-;   movzbq  %r9b, %r11
+;   movzbq %r9b, %r11
 ;   movq    %r9, 0(%rdi)
-;   movzbq  %r10b, %rax
+;   movzbq %r10b, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
