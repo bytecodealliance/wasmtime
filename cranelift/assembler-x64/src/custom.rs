@@ -88,6 +88,7 @@ pub mod display {
 pub mod visit {
     use crate::inst::{mulxl_rvm, mulxq_rvm};
     use crate::{Fixed, Gpr, GprMem, RegisterVisitor, Registers, gpr};
+
     pub fn mulxl_rvm<R: Registers>(mulx: &mut mulxl_rvm<R>, visitor: &mut impl RegisterVisitor<R>) {
         visit_mulx(
             &mut mulx.r32a,

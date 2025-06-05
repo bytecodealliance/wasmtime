@@ -5,7 +5,7 @@ use std::ops::BitOr;
 pub enum CustomOperation {
     Visit,
     Display,
-    None,
+    Encode,
 }
 
 impl fmt::Display for CustomOperation {
@@ -34,8 +34,8 @@ impl BitOr<CustomOperation> for Custom {
     }
 }
 
-#[derive(PartialEq)]
-pub struct Custom(pub Vec<CustomOperation>);
+#[derive(PartialEq, Default)]
+pub struct Custom(Vec<CustomOperation>);
 
 impl Custom {
     #[must_use]
@@ -69,17 +69,5 @@ impl fmt::Display for Custom {
 impl From<CustomOperation> for Custom {
     fn from(operation: CustomOperation) -> Self {
         Custom(vec![operation])
-    }
-}
-
-impl From<Option<CustomOperation>> for Custom {
-    fn from(flag: Option<CustomOperation>) -> Self {
-        Custom(flag.into_iter().collect())
-    }
-}
-
-impl From<Vec<CustomOperation>> for Custom {
-    fn from(operations: Vec<CustomOperation>) -> Self {
-        Custom(operations)
     }
 }
