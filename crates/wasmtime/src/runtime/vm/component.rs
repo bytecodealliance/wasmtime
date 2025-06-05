@@ -637,6 +637,11 @@ impl ComponentInstance {
         &self.resource_types
     }
 
+    /// Returns mutable a reference to the resource type information.
+    pub fn resource_types_mut(&mut self) -> &mut Arc<PrimaryMap<ResourceIndex, ResourceType>> {
+        &mut self.resource_types
+    }
+
     /// Returns whether the resource that `ty` points to is owned by the
     /// instance that `ty` correspond to.
     ///
@@ -976,97 +981,9 @@ impl OwnedComponentInstance {
         }
     }
 
-    // Note that this is technically unsafe due to the fact that it enables
-    // `mem::swap`-ing two component instances which would get all the offsets
-    // mixed up and cause issues. This is scoped to just this module though as a
-    // convenience to forward to `&mut` methods on `ComponentInstance`.
-    unsafe fn instance_mut(&mut self) -> &mut ComponentInstance {
-        &mut *self.ptr.as_ptr()
-    }
-
     /// Returns the underlying component instance's raw pointer.
     pub fn instance_ptr(&self) -> NonNull<ComponentInstance> {
         self.ptr.as_non_null()
-    }
-
-    /// See `ComponentInstance::set_runtime_memory`
-    pub fn set_runtime_memory(
-        &mut self,
-        idx: RuntimeMemoryIndex,
-        ptr: NonNull<VMMemoryDefinition>,
-    ) {
-        unsafe { self.instance_mut().set_runtime_memory(idx, ptr) }
-    }
-
-    /// See `ComponentInstance::set_runtime_realloc`
-    pub fn set_runtime_realloc(&mut self, idx: RuntimeReallocIndex, ptr: NonNull<VMFuncRef>) {
-        unsafe { self.instance_mut().set_runtime_realloc(idx, ptr) }
-    }
-
-    /// See `ComponentInstance::set_runtime_callback`
-    pub fn set_runtime_callback(&mut self, idx: RuntimeCallbackIndex, ptr: NonNull<VMFuncRef>) {
-        unsafe { self.instance_mut().set_runtime_callback(idx, ptr) }
-    }
-
-    /// See `ComponentInstance::set_runtime_post_return`
-    pub fn set_runtime_post_return(
-        &mut self,
-        idx: RuntimePostReturnIndex,
-        ptr: NonNull<VMFuncRef>,
-    ) {
-        unsafe { self.instance_mut().set_runtime_post_return(idx, ptr) }
-    }
-
-    /// See `ComponentInstance::set_runtime_table`
-    pub fn set_runtime_table(
-        &mut self,
-        idx: RuntimeTableIndex,
-        ptr: NonNull<VMTableDefinition>,
-        vmctx: NonNull<VMContext>,
-        index: DefinedTableIndex,
-    ) {
-        unsafe {
-            self.instance_mut()
-                .set_runtime_table(idx, ptr, vmctx, index)
-        }
-    }
-
-    /// See `ComponentInstance::set_lowering`
-    pub fn set_lowering(&mut self, idx: LoweredIndex, lowering: VMLowering) {
-        unsafe { self.instance_mut().set_lowering(idx, lowering) }
-    }
-
-    /// See `ComponentInstance::set_resource_drop`
-    pub fn set_trampoline(
-        &mut self,
-        idx: TrampolineIndex,
-        wasm_call: NonNull<VMWasmCallFunction>,
-        array_call: NonNull<VMArrayCallFunction>,
-        type_index: VMSharedTypeIndex,
-    ) {
-        unsafe {
-            self.instance_mut()
-                .set_trampoline(idx, wasm_call, array_call, type_index)
-        }
-    }
-
-    /// See `ComponentInstance::set_resource_destructor`
-    pub fn set_resource_destructor(
-        &mut self,
-        idx: ResourceIndex,
-        dtor: Option<NonNull<VMFuncRef>>,
-    ) {
-        unsafe { self.instance_mut().set_resource_destructor(idx, dtor) }
-    }
-
-    /// See `ComponentInstance::resource_types`
-    pub fn resource_types_mut(&mut self) -> &mut Arc<PrimaryMap<ResourceIndex, ResourceType>> {
-        unsafe { &mut (*self.ptr.as_ptr()).resource_types }
-    }
-
-    /// See `ComponentInstance::push_instance_id`
-    pub fn push_instance_id(&mut self, id: InstanceId) -> RuntimeInstanceIndex {
-        unsafe { self.instance_mut().push_instance_id(id) }
     }
 }
 

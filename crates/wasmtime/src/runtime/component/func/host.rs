@@ -1,10 +1,10 @@
 use crate::component::func::{LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::storage::slice_to_storage_mut;
-use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Val};
+use crate::component::{ComponentNamedList, ComponentType, Instance, Lift, Lower, Val};
 use crate::prelude::*;
 use crate::runtime::vm::component::{
-    ComponentInstance, InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
+    InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
 };
 use crate::runtime::vm::{VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMOpaqueContext};
 use crate::{AsContextMut, CallHook, StoreContextMut, ValRaw};
@@ -66,11 +66,11 @@ impl HostFunc {
     {
         let data = data.as_ptr() as *const F;
         unsafe {
-            call_host_and_handle_result::<T>(cx, |instance, types, store| {
-                call_host::<_, _, _, _>(
+            call_host_and_handle_result::<T>(cx, |store, instance, types| {
+                call_host(
+                    store,
                     instance,
                     types,
-                    store,
                     TypeFuncIndex::from_u32(ty),
                     InstanceFlags::from_raw(flags),
                     memory,
@@ -146,9 +146,9 @@ where
 /// must be upheld. Generally that's done by ensuring this is only called from
 /// the select few places it's intended to be called from.
 unsafe fn call_host<T, Params, Return, F>(
-    instance: *mut ComponentInstance,
-    types: &Arc<ComponentTypes>,
     mut cx: StoreContextMut<'_, T>,
+    instance: Instance,
+    types: &Arc<ComponentTypes>,
     ty: TypeFuncIndex,
     mut flags: InstanceFlags,
     memory: *mut VMMemoryDefinition,
@@ -308,11 +308,7 @@ fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<us
 
 unsafe fn call_host_and_handle_result<T>(
     cx: NonNull<VMOpaqueContext>,
-    func: impl FnOnce(
-        *mut ComponentInstance,
-        &Arc<ComponentTypes>,
-        StoreContextMut<'_, T>,
-    ) -> Result<()>,
+    func: impl FnOnce(StoreContextMut<'_, T>, Instance, &Arc<ComponentTypes>) -> Result<()>,
 ) -> bool
 where
     T: 'static,
@@ -322,19 +318,20 @@ where
     let types = (*instance).component().types();
     let raw_store = (*instance).store();
     let mut store = StoreContextMut(&mut *raw_store.cast());
+    let instance = Instance::from_wasmtime(store.0, (*instance).id());
 
     crate::runtime::vm::catch_unwind_and_record_trap(|| {
         store.0.call_hook(CallHook::CallingHost)?;
-        let res = func(instance, types, store.as_context_mut());
+        let res = func(store.as_context_mut(), instance, types);
         store.0.call_hook(CallHook::ReturningFromHost)?;
         res
     })
 }
 
 unsafe fn call_host_dynamic<T, F>(
-    instance: *mut ComponentInstance,
-    types: &Arc<ComponentTypes>,
     mut store: StoreContextMut<'_, T>,
+    instance: Instance,
+    types: &Arc<ComponentTypes>,
     ty: TypeFuncIndex,
     mut flags: InstanceFlags,
     memory: *mut VMMemoryDefinition,
@@ -466,11 +463,11 @@ where
 {
     let data = data.as_ptr() as *const F;
     unsafe {
-        call_host_and_handle_result(cx, |instance, types, store| {
+        call_host_and_handle_result(cx, |store, instance, types| {
             call_host_dynamic::<T, _>(
+                store,
                 instance,
                 types,
-                store,
                 TypeFuncIndex::from_u32(ty),
                 InstanceFlags::from_raw(flags),
                 memory,
