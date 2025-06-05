@@ -91,7 +91,10 @@ mod trampolines {
                     }
                     $(
                         #[cfg(not($attr))]
-                        unreachable!();
+                        {
+                            let _ = vmctx;
+                            unreachable!();
+                        }
                     )?
                 }
             )*
