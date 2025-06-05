@@ -1547,6 +1547,7 @@ impl TrampolineCompiler<'_> {
         let to_base = self.load_runtime_memory_base(vmctx, to);
 
         let mut args = Vec::new();
+        args.push(vmctx);
 
         let uses_retptr = match op {
             Transcode::Utf16ToUtf8
