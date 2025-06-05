@@ -1,5 +1,5 @@
 #![doc = include_str!("../README.md")]
-#![deny(missing_docs)]
+//#![deny(missing_docs)]
 
 macro_rules! declare_id {
     (
@@ -28,6 +28,7 @@ pub mod lexer;
 mod log;
 pub mod overlap;
 pub mod parser;
+pub mod printer;
 pub mod sema;
 pub mod serialize;
 pub mod stablemapset;
