@@ -6,10 +6,7 @@ use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, MemFlags};
 use cranelift_codegen::ir::{Block, BlockCall, InstBuilder, JumpTableData};
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::stack_switching as stack_switching_environ;
 use wasmtime_environ::{PtrSize, TagIndex, TypeIndex, WasmResult, WasmValType};
-
-pub const DEBUG_ASSERT_TRAP_CODE: crate::TrapCode = crate::TRAP_DELETE_ME_DEBUG_ASSERTION;
 
 // TODO(frank-emrich) This is the size for x64 Linux. Once we support different
 // platforms for stack switching, must select appropriate value for target.
@@ -18,295 +15,8 @@ pub const CONTROL_CONTEXT_SIZE: usize = 24;
 use super::control_effect::ControlEffect;
 use super::fatpointer;
 
-// FIXME(frank-emrich) The debugging facilities in this module are very unsafe
-// (see comment on `emit_debug_print`). They are not supposed to be part of the
-// final, upstreamed code, but deleted beforehand.
-#[macro_use]
-pub(crate) mod delete_me {
-    use cranelift_codegen::ir;
-    use cranelift_codegen::ir::InstBuilder;
-    use cranelift_codegen::ir::condcodes::IntCC;
-    use cranelift_codegen::ir::types::*;
-    use cranelift_frontend::FunctionBuilder;
-
-    macro_rules! call_builtin {
-        ( $builder:ident, $env:ident, $f:ident( $($args:expr),* ) ) => (
-            {
-                let fname = $env.builtin_functions.$f(&mut $builder.func);
-                let vmctx = $env.vmctx_val(&mut $builder.cursor());
-                $builder.ins().call(fname, &[vmctx, $( $args ), * ]);
-            }
-        );
-    }
-
-    /// FIXME(frank-emrich) This printing functionality is inherently unsafe: It
-    /// hard-codes the addresses of the string literals it uses, without any
-    /// relocation information. Therefore, it will immediately crash and burn if
-    /// the compiled code is ever used in a different execution of wasmtime than
-    /// the one producing it.
-    /// As a result it is not supposed to be part of the final, upstreamed code.
-    ///
-    /// Low-level implementation of debug printing. Do not use directly; see
-    /// `emit_debug_println!` macro for doing actual printing.
-    ///
-    /// Takes a string literal which may contain placeholders similarly to those
-    /// supported by `std::fmt`.
-    ///
-    /// Currently supported placeholders:
-    /// {}       for unsigned integers
-    /// {:p}     for printing pointers (in hex form)
-    ///
-    /// When printing, we replace them with the corresponding values in `vals`.
-    /// Thus, the number of placeholders in `s` must match the number of entries
-    /// in `vals`.
-    pub fn emit_debug_print<'a>(
-        env: &mut crate::func_environ::FuncEnvironment<'a>,
-        builder: &mut FunctionBuilder,
-        s: &'static str,
-        vals: &[ir::Value],
-    ) {
-        let print_s_infix = |env: &mut crate::func_environ::FuncEnvironment<'a>,
-                             builder: &mut FunctionBuilder,
-                             start: usize,
-                             end: usize| {
-            if start < end {
-                let s: &'static str = &s[start..end];
-                // This is quite dodgy, which is why we can only do this for
-                // debugging purposes:
-                // At jit time, we take a pointer to the slice of the (static)
-                // string, thus yielding an address within wasmtime's DATA
-                // section. This pointer is hard-code into generated code. We do
-                // not emit any kind of relocation information, which means that
-                // this breaks if we were to store the generated code and use it
-                // during subsequent executions of wasmtime (e.g., when using
-                // wasmtime compile).
-                let ptr = s.as_ptr();
-                let ptr = builder.ins().iconst(env.pointer_type(), ptr as i64);
-                let len = s.len();
-                let len = builder.ins().iconst(I64, len as i64);
-
-                call_builtin!(builder, env, delete_me_print_str(ptr, len));
-            }
-        };
-        let print_int = |env: &mut crate::func_environ::FuncEnvironment<'a>,
-                         builder: &mut FunctionBuilder,
-                         val: ir::Value| {
-            let ty = builder.func.dfg.value_type(val);
-            let val = match ty {
-                I8 | I32 => builder.ins().uextend(I64, val),
-                I64 => val,
-                _ => panic!("Cannot print type {ty}"),
-            };
-            call_builtin!(builder, env, delete_me_print_int(val));
-        };
-        let print_pointer = |env: &mut crate::func_environ::FuncEnvironment<'a>,
-                             builder: &mut FunctionBuilder,
-                             ptr: ir::Value| {
-            call_builtin!(builder, env, delete_me_print_pointer(ptr));
-        };
-
-        if super::stack_switching_environ::ENABLE_DEBUG_PRINTING {
-            let mut prev_end = 0;
-            let mut i = 0;
-
-            let mut ph_matches: Vec<(usize, &'static str)> = s
-                .match_indices("{}")
-                .chain(s.match_indices("{:p}"))
-                .collect();
-            ph_matches.sort_by_key(|(index, _)| *index);
-
-            for (start, matched_ph) in ph_matches {
-                let end = start + matched_ph.len();
-
-                assert!(
-                    i < vals.len(),
-                    "Must supply as many entries in vals as there are placeholders in the string"
-                );
-
-                print_s_infix(env, builder, prev_end, start);
-                match matched_ph {
-                    "{}" => print_int(env, builder, vals[i]),
-                    "{:p}" => print_pointer(env, builder, vals[i]),
-                    u => panic!("Unsupported placeholder in debug_print input string: {u}"),
-                }
-                prev_end = end;
-                i += 1;
-            }
-            assert_eq!(
-                i,
-                vals.len(),
-                "Must supply as many entries in vals as there are placeholders in the string"
-            );
-
-            print_s_infix(env, builder, prev_end, s.len());
-        }
-    }
-
-    /// Emits code to print debug information. Only actually prints in debug
-    /// builds and if debug printing flag is enabled. The third and all
-    /// following arguments are like those to println!: A string literal with
-    /// placeholders followed by the actual values.
-    ///
-    /// Summary of arguments:
-    /// * `env` - Type &mut crate::func_environ::FuncEnvironment<'a>
-    /// * `builder` - Type &mut FunctionBuilder,
-    /// * `msg` : String literal, containing placeholders like those supported by println!
-    /// * remaining arguments: ir::Values filled into the placeholders in `msg`
-    #[allow(unused_macros, reason = "Only used in certain debug builds")]
-    macro_rules! emit_debug_println {
-        ($env : expr, $builder : expr, $msg : literal, $( $arg:expr ),*) => {
-            let msg_newline : &'static str= std::concat!(
-                $msg,
-                "\n"
-            );
-            emit_debug_print($env, $builder, msg_newline, &[$($arg),*]);
-        }
-    }
-
-    /// Low-level implementation of assertion mechanism. Use emit_debug_* macros
-    /// instead.
-    ///
-    /// If `ENABLE_DEBUG_PRINTING` is enabled, `error_str` is printed before
-    /// trapping in case of an assertion violation.
-    pub fn emit_debug_assert_generic<'a>(
-        env: &mut crate::func_environ::FuncEnvironment<'a>,
-        builder: &mut FunctionBuilder,
-        condition: ir::Value,
-        error_str: &'static str,
-    ) {
-        if cfg!(debug_assertions) {
-            if super::stack_switching_environ::ENABLE_DEBUG_PRINTING {
-                let failure_block = builder.create_block();
-                let continue_block = builder.create_block();
-
-                builder
-                    .ins()
-                    .brif(condition, continue_block, &[], failure_block, &[]);
-
-                builder.switch_to_block(failure_block);
-                builder.seal_block(failure_block);
-
-                emit_debug_print(env, builder, error_str, &[]);
-                builder.ins().debugtrap();
-                builder.ins().jump(continue_block, &[]);
-
-                builder.switch_to_block(continue_block);
-                builder.seal_block(continue_block);
-            } else {
-                builder
-                    .ins()
-                    .trapz(condition, super::DEBUG_ASSERT_TRAP_CODE);
-            }
-        }
-    }
-
-    /// Low-level implementation of assertion mechanism. Use emit_debug_* macros
-    /// instead.
-    ///
-    /// If `ENABLE_DEBUG_PRINTING` is enabled, `error_str` is printed before
-    /// trapping in case of an assertion violation. Here, `error_str` is expected
-    /// to contain two placeholders, such as {} or {:p}, which are replaced with
-    /// `v1` and `v2` when printing.
-    pub fn emit_debug_assert_icmp<'a>(
-        env: &mut crate::func_environ::FuncEnvironment<'a>,
-        builder: &mut FunctionBuilder,
-        operator: IntCC,
-        v1: ir::Value,
-        v2: ir::Value,
-        error_str: &'static str,
-    ) {
-        if cfg!(debug_assertions) {
-            let cmp_res = builder.ins().icmp(operator, v1, v2);
-
-            if super::stack_switching_environ::ENABLE_DEBUG_PRINTING {
-                let failure_block = builder.create_block();
-                let continue_block = builder.create_block();
-
-                builder
-                    .ins()
-                    .brif(cmp_res, continue_block, &[], failure_block, &[]);
-
-                builder.switch_to_block(failure_block);
-                builder.seal_block(failure_block);
-
-                emit_debug_print(env, builder, error_str, &[v1, v2]);
-                builder.ins().debugtrap();
-                builder.ins().jump(continue_block, &[]);
-
-                builder.switch_to_block(continue_block);
-                builder.seal_block(continue_block);
-            } else {
-                builder.ins().trapz(cmp_res, super::DEBUG_ASSERT_TRAP_CODE);
-            }
-        }
-    }
-
-    /// Used to implement other macros, do not use directly.
-    macro_rules! emit_debug_assert_icmp {
-        ( $env : expr,
-            $builder: expr,
-        $operator : expr,
-        $operator_string  : expr,
-        $v1 : expr,
-        $v2 : expr) => {
-            let msg: &'static str = std::concat!(
-                "assertion failure in ",
-                std::file!(),
-                ", line ",
-                std::line!(),
-                ": {} ",
-                $operator_string,
-                " {} does not hold\n"
-            );
-            emit_debug_assert_icmp($env, $builder, $operator, $v1, $v2, msg);
-        };
-    }
-
-    macro_rules! emit_debug_assert {
-        ($env: expr, $builder: expr, $condition: expr) => {
-            let msg: &'static str = std::concat!(
-                "assertion failure in ",
-                std::file!(),
-                ", line ",
-                std::line!(),
-                "\n"
-            );
-            // This makes the borrow checker happy if $condition uses env or builder.
-            let c = $condition;
-            emit_debug_assert_generic($env, $builder, c, msg);
-        };
-    }
-
-    macro_rules! emit_debug_assert_eq {
-        ($env: expr, $builder: expr, $v1 : expr, $v2: expr) => {
-            emit_debug_assert_icmp!($env, $builder, IntCC::Equal, "==", $v1, $v2);
-        };
-    }
-
-    macro_rules! emit_debug_assert_ne {
-        ($env: expr, $builder: expr, $v1 : expr, $v2: expr) => {
-            emit_debug_assert_icmp!($env, $builder, IntCC::NotEqual, "!=", $v1, $v2);
-        };
-    }
-
-    macro_rules! emit_debug_assert_ule {
-        ($env: expr, $builder: expr, $v1 : expr, $v2: expr) => {
-            emit_debug_assert_icmp!(
-                $env,
-                $builder,
-                IntCC::UnsignedLessThanOrEqual,
-                "<=",
-                $v1,
-                $v2
-            );
-        };
-    }
-}
-use delete_me::*;
-
 /// This module contains compile-time counterparts to types defined elsewhere.
 pub(crate) mod stack_switching_helpers {
-    use super::delete_me::*;
     use core::marker::PhantomData;
     use cranelift_codegen::ir;
     use cranelift_codegen::ir::InstBuilder;
@@ -332,7 +42,7 @@ pub(crate) mod stack_switching_helpers {
 
         /// The type parameter T is never used in the fields above. We still
         /// want to have it for consistency with
-        /// `stack_switching_environ::Vector` and to use it in the associated
+        /// `wasmtime_environ::Vector` and to use it in the associated
         /// functions.
         phantom: PhantomData<T>,
     }
@@ -342,7 +52,7 @@ pub(crate) mod stack_switching_helpers {
     // Actually a vector of *mut VMTagDefinition
     pub type VMHandlerList = VMArray<*mut u8>;
 
-    /// Compile-time representation of stack_switching_environ::VMStackChain,
+    /// Compile-time representation of wasmtime_environ::VMStackChain,
     /// consisting of two `ir::Value`s.
     pub struct VMStackChain {
         discriminant: ir::Value,
@@ -466,22 +176,12 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
             revision: ir::Value,
         ) -> ir::Value {
-            if cfg!(debug_assertions) {
-                let actual_revision = self.get_revision(env, builder);
-                emit_debug_assert_eq!(env, builder, revision, actual_revision);
-            }
             let mem_flags = ir::MemFlags::trusted();
             let offset = env.offsets.ptr.vmcontref_revision() as i32;
             let revision_plus1 = builder.ins().iadd_imm(revision, 1);
             builder
                 .ins()
                 .store(mem_flags, revision_plus1, self.address, offset);
-            if cfg!(debug_assertions) {
-                let new_revision = self.get_revision(env, builder);
-                emit_debug_assert_eq!(env, builder, revision_plus1, new_revision);
-                // Check for overflow:
-                emit_debug_assert_ule!(env, builder, revision, revision_plus1);
-            }
             revision_plus1
         }
 
@@ -531,16 +231,6 @@ pub(crate) mod stack_switching_helpers {
         ) -> ir::Value {
             let offset = env.offsets.ptr.vmarray_data() as i32;
             self.get(builder, env.pointer_type(), offset)
-        }
-
-        fn get_capacity<'a>(
-            &self,
-            env: &mut crate::func_environ::FuncEnvironment<'a>,
-            builder: &mut FunctionBuilder,
-        ) -> ir::Value {
-            // Array capacity is stored as u32.
-            let offset = env.offsets.ptr.vmarray_capacity() as i32;
-            self.get(builder, I32, offset)
         }
 
         pub fn get_length<'a>(
@@ -598,11 +288,6 @@ pub(crate) mod stack_switching_helpers {
             let new_length = builder.ins().iadd_imm(original_length, arg_count as i64);
             self.set_length(env, builder, new_length);
 
-            if cfg!(debug_assertions) {
-                let capacity = self.get_capacity(env, builder);
-                emit_debug_assert_ule!(env, builder, new_length, capacity);
-            }
-
             let value_size = mem::size_of::<T>() as i64;
             let original_length = builder.ins().uextend(I64, original_length);
             let byte_offset = builder.ins().imul_imm(original_length, value_size);
@@ -616,15 +301,6 @@ pub(crate) mod stack_switching_helpers {
             required_capacity: u32,
             existing_slot: Option<StackSlot>,
         ) -> StackSlot {
-            let zero = builder.ins().iconst(ir::types::I32, 0);
-            if cfg!(debug_assertions) {
-                // We must only allocate while there is no data in the buffer.
-                let length = self.get_length(env, builder);
-                emit_debug_assert_eq!(env, builder, length, zero);
-                let capacity = self.get_capacity(env, builder);
-                emit_debug_assert_eq!(env, builder, capacity, zero);
-            }
-
             let align = u8::try_from(std::mem::align_of::<T>()).unwrap();
             let entry_size = u32::try_from(std::mem::size_of::<T>()).unwrap();
             let required_size = required_capacity * entry_size;
@@ -635,12 +311,6 @@ pub(crate) mod stack_switching_helpers {
                     let existing_capacity = slot_data.size / entry_size;
 
                     let capacity_value = builder.ins().iconst(I32, existing_capacity as i64);
-                    emit_debug_println!(
-                        env,
-                        builder,
-                        "[Array::allocate_or_reuse_stack_slot] Reusing existing buffer with capacity {}",
-                        capacity_value
-                    );
                     debug_assert!(align <= builder.func.get_stack_slot_data(slot).align_shift);
                     debug_assert_eq!(builder.func.get_stack_slot_data(slot).kind, ExplicitSlot);
 
@@ -653,15 +323,6 @@ pub(crate) mod stack_switching_helpers {
                 }
                 _ => {
                     let capacity_value = builder.ins().iconst(I32, required_capacity as i64);
-                    emit_debug_assert_ne!(env, builder, capacity_value, zero);
-
-                    emit_debug_println!(
-                        env,
-                        builder,
-                        "[Array::allocate_or_reuse_stack_slot] allocating stack slot with capacity {}",
-                        capacity_value
-                    );
-
                     let slot_size = ir::StackSlotData::new(
                         ir::StackSlotKind::ExplicitSlot,
                         required_size,
@@ -687,12 +348,6 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
             load_types: &[ir::Type],
         ) -> Vec<ir::Value> {
-            if cfg!(debug_assertions) {
-                let length = self.get_length(env, builder);
-                let load_count = builder.ins().iconst(I32, load_types.len() as i64);
-                emit_debug_assert_ule!(env, builder, load_count, length);
-            }
-
             let memflags = ir::MemFlags::trusted();
 
             let data_start_pointer = self.get_data(env, builder);
@@ -725,6 +380,7 @@ pub(crate) mod stack_switching_helpers {
         ) {
             let store_count = builder.ins().iconst(I32, values.len() as i64);
 
+            // TODO(posborne): allow_smaller only used in debug_assert!
             if cfg!(debug_assertions) {
                 for val in values {
                     let ty = builder.func.dfg.value_type(*val);
@@ -734,12 +390,6 @@ pub(crate) mod stack_switching_helpers {
                         debug_assert!(ty.bytes() as usize == std::mem::size_of::<T>());
                     }
                 }
-
-                let capacity = self.get_capacity(env, builder);
-                let length = self.get_length(env, builder);
-                let zero = builder.ins().iconst(I32, 0);
-                emit_debug_assert_ule!(env, builder, store_count, capacity);
-                emit_debug_assert_eq!(env, builder, length, zero);
             }
 
             let memflags = ir::MemFlags::trusted();
@@ -788,8 +438,7 @@ pub(crate) mod stack_switching_helpers {
                 env.offsets.ptr.size_of_vmstack_chain(),
                 2 * env.offsets.ptr.size()
             );
-            let discriminant =
-                super::stack_switching_environ::STACK_CHAIN_CONTINUATION_DISCRIMINANT;
+            let discriminant = wasmtime_environ::STACK_CHAIN_CONTINUATION_DISCRIMINANT;
             let discriminant = builder
                 .ins()
                 .iconst(env.pointer_type(), discriminant as i64);
@@ -808,7 +457,7 @@ pub(crate) mod stack_switching_helpers {
                 env.offsets.ptr.size_of_vmstack_chain(),
                 2 * env.offsets.ptr.size()
             );
-            let discriminant = super::stack_switching_environ::STACK_CHAIN_ABSENT_DISCRIMINANT;
+            let discriminant = wasmtime_environ::STACK_CHAIN_ABSENT_DISCRIMINANT;
             let discriminant = builder
                 .ins()
                 .iconst(env.pointer_type(), discriminant as i64);
@@ -819,20 +468,6 @@ pub(crate) mod stack_switching_helpers {
             }
         }
 
-        /// For debugging purposes. Emits an assertion that `self` does not correspond to
-        /// `VMStackChain::Absent`.
-        pub fn assert_not_absent<'a>(
-            &self,
-            env: &mut crate::func_environ::FuncEnvironment<'a>,
-            builder: &mut FunctionBuilder,
-        ) {
-            let discriminant = super::stack_switching_environ::STACK_CHAIN_ABSENT_DISCRIMINANT;
-            let discriminant = builder
-                .ins()
-                .iconst(env.pointer_type(), discriminant as i64);
-            emit_debug_assert_ne!(env, builder, self.discriminant, discriminant);
-        }
-
         pub fn is_initial_stack<'a>(
             &self,
             _env: &mut crate::func_environ::FuncEnvironment<'a>,
@@ -841,19 +476,7 @@ pub(crate) mod stack_switching_helpers {
             builder.ins().icmp_imm(
                 IntCC::Equal,
                 self.discriminant,
-                super::stack_switching_environ::STACK_CHAIN_INITIAL_STACK_DISCRIMINANT as i64,
-            )
-        }
-
-        pub fn is_absent<'a>(
-            &self,
-            _env: &mut crate::func_environ::FuncEnvironment<'a>,
-            builder: &mut FunctionBuilder,
-        ) -> ir::Value {
-            builder.ins().icmp_imm(
-                IntCC::Equal,
-                self.discriminant,
-                super::stack_switching_environ::STACK_CHAIN_ABSENT_DISCRIMINANT as i64,
+                wasmtime_environ::STACK_CHAIN_INITIAL_STACK_DISCRIMINANT as i64,
             )
         }
 
@@ -911,19 +534,10 @@ pub(crate) mod stack_switching_helpers {
         /// Use this only if you've already checked that `self` corresponds to a `VMStackChain::Continuation`.
         pub fn unchecked_get_continuation<'a>(
             &self,
-            env: &mut crate::func_environ::FuncEnvironment<'a>,
-            builder: &mut FunctionBuilder,
+            _env: &mut crate::func_environ::FuncEnvironment<'a>,
+            _builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            if cfg!(debug_assertions) {
-                let continuation_discriminant =
-                    super::stack_switching_environ::STACK_CHAIN_CONTINUATION_DISCRIMINANT;
-                let is_continuation = builder.ins().icmp_imm(
-                    IntCC::Equal,
-                    self.discriminant,
-                    continuation_discriminant as i64,
-                );
-                emit_debug_assert!(env, builder, is_continuation);
-            }
+            // TODO(posborne): this used to have emitted assertions but now does not do much.
             self.payload
         }
 
@@ -933,10 +547,8 @@ pub(crate) mod stack_switching_helpers {
         pub fn get_common_stack_information<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
-            builder: &mut FunctionBuilder,
+            _builder: &mut FunctionBuilder,
         ) -> VMCommonStackInformation {
-            self.assert_not_absent(env, builder);
-
             // `self` corresponds to a VMStackChain::InitialStack or
             // VMStackChain::Continuation.
             // In both cases, the payload is a pointer.
@@ -995,14 +607,6 @@ pub(crate) mod stack_switching_helpers {
             discriminant: u32,
         ) {
             let discriminant = builder.ins().iconst(I32, discriminant as i64);
-            emit_debug_println!(
-                env,
-                builder,
-                "setting state of CommonStackInformation {:p} to {}",
-                self.address,
-                discriminant
-            );
-
             let mem_flags = ir::MemFlags::trusted();
             let state_ptr = self.get_state_ptr(env, builder);
 
@@ -1014,7 +618,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) {
-            let discriminant = wasmtime_environ::stack_switching::STACK_STATE_RUNNING_DISCRIMINANT;
+            let discriminant = wasmtime_environ::STACK_STATE_RUNNING_DISCRIMINANT;
             self.set_state_no_payload(env, builder, discriminant);
         }
 
@@ -1023,7 +627,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) {
-            let discriminant = wasmtime_environ::stack_switching::STACK_STATE_PARENT_DISCRIMINANT;
+            let discriminant = wasmtime_environ::STACK_STATE_PARENT_DISCRIMINANT;
             self.set_state_no_payload(env, builder, discriminant);
         }
 
@@ -1032,7 +636,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) {
-            let discriminant = wasmtime_environ::stack_switching::STACK_STATE_RETURNED_DISCRIMINANT;
+            let discriminant = wasmtime_environ::STACK_STATE_RETURNED_DISCRIMINANT;
             self.set_state_no_payload(env, builder, discriminant);
         }
 
@@ -1041,62 +645,9 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) {
-            let discriminant =
-                wasmtime_environ::stack_switching::STACK_STATE_SUSPENDED_DISCRIMINANT;
+            let discriminant = wasmtime_environ::STACK_STATE_SUSPENDED_DISCRIMINANT;
             self.set_state_no_payload(env, builder, discriminant);
         }
-
-        pub fn has_state_any_of<'a>(
-            &self,
-            env: &mut crate::func_environ::FuncEnvironment<'a>,
-            builder: &mut FunctionBuilder,
-            state_discriminants: &[u32],
-        ) -> ir::Value {
-            let actual_state = self.load_state(env, builder);
-            let zero = builder.ins().iconst(I8, 0);
-            let mut res = zero;
-            for state_discriminant in state_discriminants {
-                let eq =
-                    builder
-                        .ins()
-                        .icmp_imm(IntCC::Equal, actual_state, *state_discriminant as i64);
-                res = builder.ins().bor(res, eq);
-            }
-            res
-        }
-
-        pub fn has_state_returned<'a>(
-            &self,
-            env: &mut crate::func_environ::FuncEnvironment<'a>,
-            builder: &mut FunctionBuilder,
-        ) -> ir::Value {
-            self.has_state_any_of(
-                env,
-                builder,
-                &[wasmtime_environ::stack_switching::STACK_STATE_RETURNED_DISCRIMINANT],
-            )
-        }
-
-        pub fn has_state_running<'a>(
-            &self,
-            env: &mut crate::func_environ::FuncEnvironment<'a>,
-            builder: &mut FunctionBuilder,
-        ) -> ir::Value {
-            self.has_state_any_of(
-                env,
-                builder,
-                &[wasmtime_environ::stack_switching::STACK_STATE_RUNNING_DISCRIMINANT],
-            )
-        }
-
-        // pub fn has_state<'a>(
-        //     &self,
-        //     env: &mut crate::func_environ::FuncEnvironment<'a>,
-        //     builder: &mut FunctionBuilder,
-        //     state: super::stack_switching_environ::VMStackState,
-        // ) -> ir::Value {
-        //     self.has_state_any_of(env, builder, &[state])
-        // }
 
         /// Checks whether the `VMStackState` reflects that the stack has ever been
         /// active (instead of just having been allocated, but never resumed).
@@ -1106,7 +657,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
             let actual_state = self.load_state(env, builder);
-            let allocated = wasmtime_environ::stack_switching::STACK_STATE_FRESH_DISCRIMINANT;
+            let allocated = wasmtime_environ::STACK_STATE_FRESH_DISCRIMINANT;
             builder
                 .ins()
                 .icmp_imm(IntCC::NotEqual, actual_state, allocated as i64)
@@ -1164,12 +715,10 @@ pub(crate) mod stack_switching_helpers {
             let memflags = ir::MemFlags::trusted();
 
             let mut copy_to_vm_runtime_limits = |our_offset, their_offset| {
-                let our_value = builder.ins().load(
-                    env.pointer_type(),
-                    memflags,
-                    stack_limits_ptr,
-                    i32::try_from(our_offset).unwrap(),
-                );
+                let our_value =
+                    builder
+                        .ins()
+                        .load(env.pointer_type(), memflags, stack_limits_ptr, our_offset);
                 builder.ins().store(
                     memflags,
                     our_value,
@@ -1220,7 +769,7 @@ pub(crate) mod stack_switching_helpers {
                     memflags,
                     from_vm_runtime_limits,
                     stack_limits_ptr,
-                    i32::try_from(stack_limits_offset).unwrap(),
+                    stack_limits_offset,
                 );
             };
 
@@ -1273,9 +822,6 @@ pub(crate) mod stack_switching_helpers {
 }
 
 use helpers::VMStackChain;
-use stack_switching_environ::{
-    CONTROL_EFFECT_RESUME_DISCRIMINANT, CONTROL_EFFECT_SWITCH_DISCRIMINANT,
-};
 use stack_switching_helpers as helpers;
 
 /// Stores the given arguments in the appropriate `VMPayloads` object in the
@@ -1339,7 +885,7 @@ pub(crate) fn vmcontref_store_payloads<'a>(
             let mut offset = 0;
             for value in values {
                 builder.ins().store(memflags, *value, ptr, offset);
-                offset += env.offsets.ptr.maximum_value_size() as i32;
+                offset += i32::from(env.offsets.ptr.maximum_value_size());
             }
         }
     }
@@ -1355,7 +901,7 @@ pub(crate) fn tag_address<'a>(
     let pointer_type = env.pointer_type();
     if let Some(def_index) = env.module.defined_tag_index(tag_index) {
         let offset = i32::try_from(env.offsets.vmctx_vmtag_definition(def_index)).unwrap();
-        builder.ins().iadd_imm(vmctx, offset as i64)
+        builder.ins().iadd_imm(vmctx, i64::from(offset))
     } else {
         let offset = i32::try_from(env.offsets.vmctx_vmtag_import_from(tag_index)).unwrap();
         builder.ins().load(
@@ -1531,14 +1077,6 @@ fn search_handler<'a>(
         let contref = helpers::VMContRef::new(contref);
 
         let parent_link = contref.get_parent_stack_chain(env, builder);
-
-        emit_debug_println!(
-            env,
-            builder,
-            "[search_handler] beginning search in parent of continuation {:p}",
-            contref.address
-        );
-
         let parent_csi = parent_link.get_common_stack_information(env, builder);
 
         let handlers = parent_csi.get_handler_list(env, builder);
@@ -1549,10 +1087,6 @@ fn search_handler<'a>(
         // Note that these indices are inclusive-exclusive, i.e. [begin_range, end_range).
         let (begin_range, end_range) = if search_suspend_handlers {
             let zero = builder.ins().iconst(I32, 0);
-            if cfg!(debug_assertions) {
-                let length = handlers.get_length(env, builder);
-                emit_debug_assert_ule!(env, builder, first_switch_handler_index, length);
-            }
             (zero, first_switch_handler_index)
         } else {
             let length = handlers.get_length(env, builder);
@@ -1626,16 +1160,6 @@ fn search_handler<'a>(
     // final block: on_match
     builder.switch_to_block(on_match);
 
-    emit_debug_println!(
-        env,
-        builder,
-        "[search_handler] found handler at stack chain ({}, {:p}), whose child continuation is {:p}, index is {}",
-        parent_link.to_raw_parts()[0],
-        parent_link.to_raw_parts()[1],
-        contref.address,
-        index
-    );
-
     (parent_link, contref.address, index)
 }
 
@@ -1653,14 +1177,6 @@ pub(crate) fn translate_cont_bind<'a>(
     let mut vmcontref = helpers::VMContRef::new(contref);
     let revision = vmcontref.get_revision(env, builder);
     let evidence = builder.ins().icmp(IntCC::Equal, witness, revision);
-    emit_debug_println!(
-        env,
-        builder,
-        "[cont_bind] witness = {}, revision = {}, evidence = {}",
-        witness,
-        revision,
-        evidence
-    );
     builder
         .ins()
         .trapz(evidence, crate::TRAP_CONTINUATION_ALREADY_CONSUMED);
@@ -1668,9 +1184,7 @@ pub(crate) fn translate_cont_bind<'a>(
     vmcontref_store_payloads(env, builder, args, contref);
 
     let revision = vmcontref.incr_revision(env, builder, revision);
-    emit_debug_println!(env, builder, "new revision = {}", revision);
     let contobj = fatpointer::construct(env, &mut builder.cursor(), revision, contref);
-    emit_debug_println!(env, builder, "[cont_bind] contref = {:p}", contref);
     contobj
 }
 
@@ -1696,7 +1210,6 @@ pub(crate) fn translate_cont_new<'a>(
 
     let tag = helpers::VMContRef::new(contref).get_revision(env, builder);
     let contobj = fatpointer::construct(env, &mut builder.cursor(), tag, contref);
-    emit_debug_println!(env, builder, "[cont_new] contref = {:p}", contref);
     Ok(contobj)
 }
 
@@ -1780,28 +1293,10 @@ pub(crate) fn translate_resume<'a>(
 
         let revision = vmcontref.get_revision(env, builder);
         let evidence = builder.ins().icmp(IntCC::Equal, revision, witness);
-        emit_debug_println!(
-            env,
-            builder,
-            "[resume] resume_contref = {:p} witness = {}, revision = {}, evidence = {}",
-            resume_contref,
-            witness,
-            revision,
-            evidence
-        );
         builder
             .ins()
             .trapz(evidence, crate::TRAP_CONTINUATION_ALREADY_CONSUMED);
-        let next_revision = vmcontref.incr_revision(env, builder, revision);
-        emit_debug_println!(env, builder, "[resume] new revision = {}", next_revision);
-
-        if cfg!(debug_assertions) {
-            // This should be impossible due to the linearity check.
-            let zero = builder.ins().iconst(I8, 0);
-            let csi = vmcontref.common_stack_information(env, builder);
-            let has_returned = csi.has_state_returned(env, builder);
-            emit_debug_assert_eq!(env, builder, has_returned, zero);
-        }
+        let _next_revision = vmcontref.incr_revision(env, builder, revision);
 
         if resume_args.len() > 0 {
             // We store the arguments in the `VMContRef` to be resumed.
@@ -1814,24 +1309,7 @@ pub(crate) fn translate_resume<'a>(
 
         // Make the currently running continuation (if any) the parent of the one we are about to resume.
         let original_stack_chain = vmctx_load_stack_chain(env, builder, vmctx);
-        original_stack_chain.assert_not_absent(env, builder);
-        if cfg!(debug_assertions) {
-            // The continuation we are about to resume should have its chain broken up at last_ancestor.
-            let last_ancestor_chain = last_ancestor.get_parent_stack_chain(env, builder);
-            let is_absent = last_ancestor_chain.is_absent(env, builder);
-            emit_debug_assert!(env, builder, is_absent);
-        }
         last_ancestor.set_parent_stack_chain(env, builder, &original_stack_chain);
-
-        emit_debug_println!(
-            env,
-            builder,
-            "[resume] spliced together stack chains: parent of {:p} (last ancestor of {:p}) is now pointing to ({}, {:p})",
-            last_ancestor.address,
-            vmcontref.address,
-            original_stack_chain.to_raw_parts()[0],
-            original_stack_chain.to_raw_parts()[1]
-        );
 
         // Just for consistency: `vmcontref` is about to get state Running, so let's zero out its last_ancestor field.
         let zero = builder.ins().iconst(env.pointer_type(), 0);
@@ -1849,7 +1327,7 @@ pub(crate) fn translate_resume<'a>(
         // 2. Copy `stack_limit` and `last_wasm_entry_sp` in the
         // `VMStackLimits` of `resume_contref` into the `VMRuntimeLimits`.
         //
-        // See the comment on `stack_switching_environ::VMStackChain` for a
+        // See the comment on `wasmtime_environ::VMStackChain` for a
         // description of the invariants that we maintain for the various stack
         // limits.
 
@@ -1862,7 +1340,7 @@ pub(crate) fn translate_resume<'a>(
 
         // We update the `VMStackLimits` of the parent of the continuation to be resumed
         // as well as the `VMRuntimeLimits`.
-        // See the comment on `stack_switching_environ::VMStackChain` for a description
+        // See the comment on `wasmtime_environ::VMStackChain` for a description
         // of the invariants that we maintain for the various stack limits.
         let vm_runtime_limits_ptr = vmctx_load_vm_runtime_limits_ptr(env, builder, vmctx);
         parent_csi.load_limits_from_vmcontext(env, builder, vm_runtime_limits_ptr, true);
@@ -1917,26 +1395,10 @@ pub(crate) fn translate_resume<'a>(
         let fiber_stack = last_ancestor.get_fiber_stack(env, builder);
         let control_context_ptr = fiber_stack.load_control_context(env, builder);
 
-        emit_debug_println!(
-            env,
-            builder,
-            "[resume] about to execute stack_switch, control_context_ptr is {:p}",
-            control_context_ptr
-        );
-
         let result =
             builder
                 .ins()
                 .stack_switch(control_context_ptr, control_context_ptr, resume_payload);
-
-        emit_debug_println!(
-            env,
-            builder,
-            "[resume] continuing after stack_switch in frame with parent_stack_chain ({}, {:p}), result is {:p}",
-            original_stack_chain.to_raw_parts()[0],
-            original_stack_chain.to_raw_parts()[1],
-            result
-        );
 
         // At this point we know nothing about the continuation that just
         // suspended or returned. In particular, it does not have to be what we
@@ -1955,13 +1417,6 @@ pub(crate) fn translate_resume<'a>(
         // Extract the result and signal bit.
         let result = ControlEffect::from_u64(result);
         let signal = result.signal(env, builder);
-
-        emit_debug_println!(
-            env,
-            builder,
-            "[resume] in resume block, signal is {}",
-            signal
-        );
 
         // Jump to the return block if the result signal is 0, otherwise jump to
         // the suspend block.
@@ -2009,15 +1464,6 @@ pub(crate) fn translate_resume<'a>(
             &mut builder.cursor(),
             revision,
             suspended_continuation.address,
-        );
-
-        emit_debug_println!(
-            env,
-            builder,
-            "[resume] in suspend block, handler index is {}, new continuation is {:p}, with existing revision {}",
-            handler_index,
-            suspended_continuation.address,
-            revision
         );
 
         // We need to terminate this block before being allowed to switch to
@@ -2143,21 +1589,12 @@ pub(crate) fn translate_suspend<'a>(
     tag_return_types: &[ir::Type],
 ) -> Vec<ir::Value> {
     let tag_addr = tag_address(env, builder, tag_index);
-    emit_debug_println!(env, builder, "[suspend] suspending with tag {:p}", tag_addr);
 
     let vmctx = env.vmctx_val(&mut builder.cursor());
     let active_stack_chain = vmctx_load_stack_chain(env, builder, vmctx);
 
     let (_, end_of_chain_contref, handler_index) =
         search_handler(env, builder, &active_stack_chain, tag_addr, true);
-
-    emit_debug_println!(
-        env,
-        builder,
-        "[suspend] found handler: end of chain contref is {:p}, handler index is {}",
-        end_of_chain_contref,
-        handler_index
-    );
 
     // If we get here, the search_handler logic succeeded (i.e., did not trap).
     // Thus, there is at least one parent, so we are not on the initial stack.
@@ -2192,11 +1629,6 @@ pub(crate) fn translate_suspend<'a>(
 
     // Set current continuation to suspended and break up handler chain.
     let active_contref_csi = active_contref.common_stack_information(env, builder);
-    if cfg!(debug_assertions) {
-        let is_running = active_contref_csi.has_state_running(env, builder);
-        emit_debug_assert!(env, builder, is_running);
-    }
-
     active_contref_csi.set_state_suspended(env, builder);
     let absent_chain_link = VMStackChain::absent(env, builder);
     end_of_chain_contref.set_parent_stack_chain(env, builder, &absent_chain_link);
@@ -2251,15 +1683,6 @@ pub(crate) fn translate_switch<'a>(
 
         let revision = target_contref.get_revision(env, builder);
         let evidence = builder.ins().icmp(IntCC::Equal, revision, witness);
-        emit_debug_println!(
-            env,
-            builder,
-            "[switch] target_contref = {:p} witness = {}, revision = {}, evidence = {}",
-            target_contref.address,
-            witness,
-            revision,
-            evidence
-        );
         builder
             .ins()
             .trapz(evidence, crate::TRAP_CONTINUATION_ALREADY_CONSUMED);
@@ -2308,11 +1731,6 @@ pub(crate) fn translate_switch<'a>(
         }
 
         let switcher_contref_csi = switcher_contref.common_stack_information(env, builder);
-        emit_debug_assert!(
-            env,
-            builder,
-            switcher_contref_csi.has_state_running(env, builder)
-        );
         switcher_contref_csi.set_state_suspended(env, builder);
         // We break off `switcher_contref` from the chain of active
         // continuations, by separating the link between `last_ancestor` and its
@@ -2331,14 +1749,6 @@ pub(crate) fn translate_switch<'a>(
             &mut builder.cursor(),
             revision,
             switcher_contref.address,
-        );
-
-        emit_debug_println!(
-            env,
-            builder,
-            "[switch] created new contref = {:p}, revision = {}",
-            switcher_contref.address,
-            revision
         );
 
         (
@@ -2362,19 +1772,6 @@ pub(crate) fn translate_switch<'a>(
         vmcontref_store_payloads(env, builder, &combined_payloads, switchee_contref.address);
 
         let switchee_contref_csi = switchee_contref.common_stack_information(env, builder);
-
-        emit_debug_assert!(
-            env,
-            builder,
-            switchee_contref_csi.has_state_any_of(
-                env,
-                builder,
-                &[
-                    wasmtime_environ::stack_switching::STACK_STATE_FRESH_DISCRIMINANT,
-                    wasmtime_environ::stack_switching::STACK_STATE_SUSPENDED_DISCRIMINANT
-                ]
-            )
-        );
         switchee_contref_csi.set_state_running(env, builder);
 
         let switchee_contref_last_ancestor = switchee_contref.get_last_ancestor(env, builder);
@@ -2478,60 +1875,16 @@ pub(crate) fn translate_switch<'a>(
 
         let switch_payload = ControlEffect::encode_switch(env, builder).to_u64();
 
-        emit_debug_println!(
-            env,
-            builder,
-            "[switch] about to execute stack_switch, store_control_context_ptr is {:p}, load_control_context_ptr {:p}, tmp_control_context is {:p}",
-            switcher_last_ancestor_cc,
-            switchee_last_ancestor_cc,
-            tmp_control_context
-        );
-
-        let result = builder.ins().stack_switch(
+        let _result = builder.ins().stack_switch(
             switcher_last_ancestor_cc,
             tmp_control_context,
             switch_payload,
         );
-
-        emit_debug_println!(
-            env,
-            builder,
-            "[switch] continuing after stack_switch in frame with stack chain ({}, {:p}), result is {:p}",
-            handler_stack_chain.to_raw_parts()[0],
-            handler_stack_chain.to_raw_parts()[1],
-            result
-        );
-
-        if cfg!(debug_assertions) {
-            // The only way to switch back to this point is by using resume or switch instructions.
-            let result_control_effect = ControlEffect::from_u64(result);
-            let result_discriminant = result_control_effect.signal(env, builder);
-            let is_resume = builder.ins().icmp_imm(
-                IntCC::Equal,
-                result_discriminant,
-                CONTROL_EFFECT_RESUME_DISCRIMINANT as i64,
-            );
-            let is_switch = builder.ins().icmp_imm(
-                IntCC::Equal,
-                result_discriminant,
-                CONTROL_EFFECT_SWITCH_DISCRIMINANT as i64,
-            );
-            let is_switch_or_resume = builder.ins().bor(is_switch, is_resume);
-            emit_debug_assert!(env, builder, is_switch_or_resume);
-        }
     }
 
     // After switching back to the original stack: Load return values, they are
     // stored on the switcher continuation.
     let return_values = {
-        if cfg!(debug_assertions) {
-            // The originally active continuation (before the switch) should be active again.
-            let active_stack_chain = vmctx_load_stack_chain(env, builder, vmctx);
-            // This has a debug assertion that also checks that the `active_stack_chain` is indeed a continuation.
-            let active_contref = active_stack_chain.unchecked_get_continuation(env, builder);
-            emit_debug_assert_eq!(env, builder, switcher_contref.address, active_contref);
-        }
-
         let payloads = switcher_contref.values(env, builder);
         let return_values = payloads.load_data_entries(env, builder, return_types);
         // We consume the values and discard the buffer (allocated on this stack)

@@ -162,6 +162,12 @@ pub trait PtrSize {
         4
     }
 
+    /// This is the size of the largest value type (i.e. a V128).
+    #[inline]
+    fn maximum_value_size(&self) -> u8 {
+        self.size_of_vmglobal_definition()
+    }
+
     // Offsets within `VMStoreContext`
 
     /// Return the offset of the `fuel_consumed` field of `VMStoreContext`

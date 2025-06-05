@@ -3383,7 +3383,7 @@ impl FuncEnvironment<'_> {
         self.types[self.types[idx]
             .unwrap_cont()
             .clone()
-            .unwrap_interned_type_index()]
+            .unwrap_module_type_index()]
         .unwrap_func()
         .params()
     }
@@ -3393,7 +3393,7 @@ impl FuncEnvironment<'_> {
         self.types[self.types[idx]
             .unwrap_cont()
             .clone()
-            .unwrap_interned_type_index()]
+            .unwrap_module_type_index()]
         .unwrap_func()
         .returns()
     }
