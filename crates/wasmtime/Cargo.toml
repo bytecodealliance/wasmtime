@@ -92,7 +92,7 @@ memfd = { workspace = true, optional = true }
 mach2 = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, optional = true, features = ["mm", "param"] }
+rustix = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "s390x")'.dependencies]
 psm = { workspace = true, optional = true }
@@ -143,7 +143,6 @@ default = [
   'runtime',
   'component-model',
   'threads',
-  'stack-switching',
   'std',
 ]
 
@@ -307,13 +306,6 @@ threads = [
   "wasmtime-cranelift?/threads",
   "wasmtime-winch?/threads",
   "std",
-]
-
-stack-switching = [
-  "runtime",
-  "wasmtime-environ/stack-switching",
-  "wasmtime-cranelift?/stack-switching",
-  "wasmtime-winch?/stack-switching",
 ]
 
 # Controls whether backtraces will attempt to parse DWARF information in

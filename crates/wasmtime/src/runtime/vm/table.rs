@@ -5,7 +5,6 @@
 #![cfg_attr(feature = "gc", allow(irrefutable_let_patterns))]
 
 use crate::prelude::*;
-use crate::runtime::vm::stack_switching::VMContObj;
 use crate::runtime::vm::vmcontext::{VMFuncRef, VMTableDefinition};
 use crate::runtime::vm::{GcStore, SendSyncPtr, VMGcRef, VMStore};
 use core::alloc::Layout;
@@ -34,16 +33,12 @@ pub enum TableElement {
     /// (which has access to the info needed for lazy initialization)
     /// will replace it when fetched.
     UninitFunc,
-
-    /// A `contref`
-    ContRef(Option<VMContObj>),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum TableElementType {
     Func,
     GcRef,
-    Cont,
 }
 
 impl TableElementType {
@@ -51,17 +46,7 @@ impl TableElementType {
         match (val, self) {
             (TableElement::FuncRef(_), TableElementType::Func) => true,
             (TableElement::GcRef(_), TableElementType::GcRef) => true,
-            (TableElement::ContRef(_), TableElementType::Cont) => true,
             _ => false,
-        }
-    }
-
-    /// Returns the size required to actually store an element of this particular type
-    pub fn element_size(&self) -> usize {
-        match self {
-            TableElementType::Func => core::mem::size_of::<FuncTableElem>(),
-            TableElementType::GcRef => core::mem::size_of::<Option<VMGcRef>>(),
-            TableElementType::Cont => core::mem::size_of::<ContTableElem>(),
         }
     }
 }
@@ -88,7 +73,6 @@ impl TableElement {
             Self::FuncRef(e) => e,
             Self::UninitFunc => panic!("Uninitialized table element value outside of table slot"),
             Self::GcRef(_) => panic!("GC reference is not a function reference"),
-            Self::ContRef(_) => panic!("Continuation reference is not a function reference"),
         }
     }
 
@@ -117,18 +101,6 @@ impl From<Option<VMGcRef>> for TableElement {
 impl From<VMGcRef> for TableElement {
     fn from(x: VMGcRef) -> TableElement {
         TableElement::GcRef(Some(x))
-    }
-}
-
-impl From<Option<VMContObj>> for TableElement {
-    fn from(c: Option<VMContObj>) -> TableElement {
-        TableElement::ContRef(c)
-    }
-}
-
-impl From<VMContObj> for TableElement {
-    fn from(c: VMContObj) -> TableElement {
-        TableElement::ContRef(Some(c))
     }
 }
 
@@ -167,36 +139,10 @@ impl TaggedFuncRef {
 }
 
 pub type FuncTableElem = Option<SendSyncPtr<VMFuncRef>>;
-pub type ContTableElem = Option<VMContObj>;
-
-/// The maximum of the sizes of any of the table element types
-#[cfg(feature = "pooling-allocator")]
-pub const NOMINAL_MAX_TABLE_ELEM_SIZE: usize = {
-    // ContTableElem intentionally excluded for "nominal" calculation.
-    let sizes = [
-        core::mem::size_of::<FuncTableElem>(),
-        core::mem::size_of::<Option<VMGcRef>>(),
-    ];
-
-    // This is equivalent to `|data| {data.iter().reduce(std::cmp::max).unwrap()}`,
-    // but as a `const` function, so we can use it to define a constant.
-    const fn slice_max(data: &[usize]) -> usize {
-        match data {
-            [] => 0,
-            [head, tail @ ..] => {
-                let tail_max = slice_max(tail);
-                if *head >= tail_max { *head } else { tail_max }
-            }
-        }
-    }
-
-    slice_max(&sizes)
-};
 
 pub enum StaticTable {
     Func(StaticFuncTable),
     GcRef(StaticGcRefTable),
-    Cont(StaticContTable),
 }
 
 impl From<StaticFuncTable> for StaticTable {
@@ -208,12 +154,6 @@ impl From<StaticFuncTable> for StaticTable {
 impl From<StaticGcRefTable> for StaticTable {
     fn from(value: StaticGcRefTable) -> Self {
         Self::GcRef(value)
-    }
-}
-
-impl From<StaticContTable> for StaticTable {
-    fn from(value: StaticContTable) -> Self {
-        Self::Cont(value)
     }
 }
 
@@ -235,18 +175,9 @@ pub struct StaticGcRefTable {
     size: usize,
 }
 
-pub struct StaticContTable {
-    /// Where data for this table is stored. The length of this list is the
-    /// maximum size of the table.
-    data: SendSyncPtr<[ContTableElem]>,
-    /// The current size of the table.
-    size: usize,
-}
-
 pub enum DynamicTable {
     Func(DynamicFuncTable),
     GcRef(DynamicGcRefTable),
-    Cont(DynamicContTable),
 }
 
 impl From<DynamicFuncTable> for DynamicTable {
@@ -258,12 +189,6 @@ impl From<DynamicFuncTable> for DynamicTable {
 impl From<DynamicGcRefTable> for DynamicTable {
     fn from(value: DynamicGcRefTable) -> Self {
         Self::GcRef(value)
-    }
-}
-
-impl From<DynamicContTable> for DynamicTable {
-    fn from(value: DynamicContTable) -> Self {
-        Self::Cont(value)
     }
 }
 
@@ -281,14 +206,6 @@ pub struct DynamicGcRefTable {
     /// Dynamically managed storage space for this table. The length of this
     /// vector is the current size of the table.
     elements: Vec<Option<VMGcRef>>,
-    /// Maximum size that `elements` can grow to.
-    maximum: Option<usize>,
-}
-
-pub struct DynamicContTable {
-    /// Dynamically managed storage space for this table. The length of this
-    /// vector is the current size of the table.
-    elements: Vec<ContTableElem>,
     /// Maximum size that `elements` can grow to.
     maximum: Option<usize>,
 }
@@ -323,13 +240,6 @@ impl From<StaticGcRefTable> for Table {
     }
 }
 
-impl From<StaticContTable> for Table {
-    fn from(value: StaticContTable) -> Self {
-        let t: StaticTable = value.into();
-        t.into()
-    }
-}
-
 impl From<DynamicTable> for Table {
     fn from(value: DynamicTable) -> Self {
         Self::Dynamic(value)
@@ -350,18 +260,11 @@ impl From<DynamicGcRefTable> for Table {
     }
 }
 
-impl From<DynamicContTable> for Table {
-    fn from(value: DynamicContTable) -> Self {
-        let t: DynamicTable = value.into();
-        t.into()
-    }
-}
-
-pub(crate) fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
+fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
     match ty.heap_type.top() {
         WasmHeapTopType::Func => TableElementType::Func,
         WasmHeapTopType::Any | WasmHeapTopType::Extern => TableElementType::GcRef,
-        WasmHeapTopType::Cont => TableElementType::Cont,
+        WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
     }
 }
 
@@ -420,10 +323,6 @@ impl Table {
             })),
             TableElementType::GcRef => Ok(Self::from(DynamicGcRefTable {
                 elements: unsafe { alloc_dynamic_table_elements(minimum)? },
-                maximum,
-            })),
-            TableElementType::Cont => Ok(Self::from(DynamicContTable {
-                elements: vec![None; minimum],
                 maximum,
             })),
         }
@@ -485,26 +384,6 @@ impl Table {
                 ));
                 Ok(Self::from(StaticGcRefTable { data, size }))
             }
-            TableElementType::Cont => {
-                let len = {
-                    let data = data.as_non_null().as_ref();
-                    let (before, data, after) = data.align_to::<ContTableElem>();
-                    assert!(before.is_empty());
-                    assert!(after.is_empty());
-                    data.len()
-                };
-                ensure!(
-                    usize::try_from(ty.limits.min).unwrap() <= len,
-                    "initial table size of {} exceeds the pooling allocator's \
-                     configured maximum table size of {len} elements",
-                    ty.limits.min,
-                );
-                let data = SendSyncPtr::new(NonNull::slice_from_raw_parts(
-                    data.as_non_null().cast::<ContTableElem>(),
-                    cmp::min(len, max),
-                ));
-                Ok(Self::from(StaticContTable { data, size }))
-            }
         }
     }
 
@@ -561,9 +440,6 @@ impl Table {
             Table::Static(StaticTable::GcRef(_)) | Table::Dynamic(DynamicTable::GcRef(_)) => {
                 TableElementType::GcRef
             }
-            Table::Static(StaticTable::Cont(_)) | Table::Dynamic(DynamicTable::Cont(_)) => {
-                TableElementType::Cont
-            }
         }
     }
 
@@ -578,12 +454,10 @@ impl Table {
         match self {
             Table::Static(StaticTable::Func(StaticFuncTable { size, .. })) => *size,
             Table::Static(StaticTable::GcRef(StaticGcRefTable { size, .. })) => *size,
-            Table::Static(StaticTable::Cont(StaticContTable { size, .. })) => *size,
             Table::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => elements.len(),
             Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => {
                 elements.len()
             }
-            Table::Dynamic(DynamicTable::Cont(DynamicContTable { elements, .. })) => elements.len(),
         }
     }
 
@@ -595,12 +469,10 @@ impl Table {
     /// when it is being constrained by an instance allocator.
     pub fn maximum(&self) -> Option<usize> {
         match self {
-            Table::Static(StaticTable::Cont(StaticContTable { data, .. })) => Some(data.len()),
             Table::Static(StaticTable::Func(StaticFuncTable { data, .. })) => Some(data.len()),
             Table::Static(StaticTable::GcRef(StaticGcRefTable { data, .. })) => Some(data.len()),
             Table::Dynamic(DynamicTable::Func(DynamicFuncTable { maximum, .. })) => *maximum,
             Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { maximum, .. })) => *maximum,
-            Table::Dynamic(DynamicTable::Cont(DynamicContTable { maximum, .. })) => *maximum,
         }
     }
 
@@ -706,10 +578,6 @@ impl Table {
                 let (funcrefs, _lazy_init) = self.funcrefs_mut();
                 funcrefs[start..end].fill(TaggedFuncRef::UNINIT);
             }
-            TableElement::ContRef(c) => {
-                let contrefs = self.contrefs_mut();
-                contrefs[start..end].fill(c);
-            }
         }
 
         Ok(())
@@ -790,12 +658,6 @@ impl Table {
                 }
                 *size = new_size;
             }
-            Table::Static(StaticTable::Cont(StaticContTable { data, size })) => {
-                unsafe {
-                    debug_assert!(data.as_ref()[*size..new_size].iter().all(|x| x.is_none()));
-                }
-                *size = new_size;
-            }
 
             // These calls to `resize` could move the base address of
             // `elements`. If this table's limits declare it to be fixed-size,
@@ -809,9 +671,6 @@ impl Table {
             }
             Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => {
                 elements.resize_with(new_size, || None);
-            }
-            Table::Dynamic(DynamicTable::Cont(DynamicContTable { elements, .. })) => {
-                elements.resize(new_size, None);
             }
         }
 
@@ -849,11 +708,6 @@ impl Table {
 
                 TableElement::GcRef(r)
             }),
-            TableElementType::Cont => self
-                .contrefs()
-                .get(index)
-                .copied()
-                .map(|e| TableElement::ContRef(e)),
         }
     }
 
@@ -880,9 +734,6 @@ impl Table {
             }
             TableElement::GcRef(e) => {
                 *self.gc_refs_mut().get_mut(index).ok_or(())? = e;
-            }
-            TableElement::ContRef(c) => {
-                *self.contrefs_mut().get_mut(index).ok_or(())? = c;
             }
         }
         Ok(())
@@ -951,10 +802,6 @@ impl Table {
                     current_elements: *size,
                 }
             }
-            Table::Static(StaticTable::Cont(StaticContTable { data, size })) => VMTableDefinition {
-                base: data.cast().into(),
-                current_elements: *size,
-            },
             Table::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => {
                 VMTableDefinition {
                     base: NonNull::<[FuncTableElem]>::from(&mut elements[..])
@@ -966,14 +813,6 @@ impl Table {
             Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => {
                 VMTableDefinition {
                     base: NonNull::<[Option<VMGcRef>]>::from(&mut elements[..])
-                        .cast()
-                        .into(),
-                    current_elements: elements.len(),
-                }
-            }
-            Table::Dynamic(DynamicTable::Cont(DynamicContTable { elements, .. })) => {
-                VMTableDefinition {
-                    base: NonNull::<[Option<VMContObj>]>::from(&mut elements[..])
                         .cast()
                         .into(),
                     current_elements: elements.len(),
@@ -1043,32 +882,6 @@ impl Table {
         }
     }
 
-    fn contrefs(&self) -> &[Option<VMContObj>] {
-        assert_eq!(self.element_type(), TableElementType::Cont);
-        match self {
-            Self::Dynamic(DynamicTable::Cont(DynamicContTable { elements, .. })) => unsafe {
-                slice::from_raw_parts(elements.as_ptr().cast(), elements.len())
-            },
-            Self::Static(StaticTable::Cont(StaticContTable { data, size })) => unsafe {
-                slice::from_raw_parts(data.as_ptr().cast(), *size)
-            },
-            _ => unreachable!(),
-        }
-    }
-
-    fn contrefs_mut(&mut self) -> &mut [Option<VMContObj>] {
-        assert_eq!(self.element_type(), TableElementType::Cont);
-        match self {
-            Self::Dynamic(DynamicTable::Cont(DynamicContTable { elements, .. })) => unsafe {
-                slice::from_raw_parts_mut(elements.as_mut_ptr().cast(), elements.len())
-            },
-            Self::Static(StaticTable::Cont(StaticContTable { data, size })) => unsafe {
-                slice::from_raw_parts_mut(data.as_ptr().cast(), *size)
-            },
-            _ => unreachable!(),
-        }
-    }
-
     /// Get this table's GC references as a slice.
     ///
     /// Panics if this is not a table of GC references.
@@ -1117,11 +930,6 @@ impl Table {
                     );
                 }
             }
-            TableElementType::Cont => {
-                // `contref` are `Copy`, so just do a mempcy
-                dst_table.contrefs_mut()[dst_range]
-                    .copy_from_slice(&src_table.contrefs()[src_range]);
-            }
         }
     }
 
@@ -1169,10 +977,6 @@ impl Table {
                         gc_store.write_gc_ref(dst, src);
                     }
                 }
-            }
-            TableElementType::Cont => {
-                // `contref` are `Copy`, so just do a memmove
-                self.contrefs_mut().copy_within(src_range, dst_range.start);
             }
         }
     }

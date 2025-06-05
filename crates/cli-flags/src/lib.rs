@@ -377,8 +377,6 @@ wasmtime_option_group! {
         pub component_model_error_context: Option<bool>,
         /// Configure support for the function-references proposal.
         pub function_references: Option<bool>,
-        /// Configure support for the stack-switching proposal.
-        pub stack_switching: Option<bool>,
         /// Configure support for the GC proposal.
         pub gc: Option<bool>,
         /// Configure support for the custom-page-sizes proposal.
@@ -820,23 +818,6 @@ impl CommonOptions {
             config.native_unwind_info(enable);
         }
 
-        // async_stack_size enabled by either async or stack-switching, so
-        // cannot directly use match_feature!
-        #[cfg(any(feature = "async", feature = "stack-switching"))]
-        {
-            if let Some(size) = self.wasm.async_stack_size {
-                config.async_stack_size(size);
-            }
-        }
-        #[cfg(not(any(feature = "async", feature = "stack-switching")))]
-        {
-            if let Some(_size) = self.wasm.async_stack_size {
-                anyhow::bail!(concat!(
-                    "support for async/stack-switching disabled at compile time"
-                ));
-            }
-        }
-
         match_feature! {
             ["pooling-allocator" : self.opts.pooling_allocator.or(pooling_allocator_default)]
             enable => {
@@ -943,6 +924,11 @@ impl CommonOptions {
         }
 
         match_feature! {
+            ["async" : self.wasm.async_stack_size]
+            size => config.async_stack_size(size),
+            _ => err,
+        }
+        match_feature! {
             ["async" : self.wasm.async_stack_zeroing]
             enable => config.async_stack_zeroing(enable),
             _ => err,
@@ -954,7 +940,7 @@ impl CommonOptions {
             // If `-Wasync-stack-size` isn't passed then automatically adjust it
             // to the wasm stack size provided here too. That prevents the need
             // to pass both when one can generally be inferred from the other.
-            #[cfg(any(feature = "async", feature = "stack-switching"))]
+            #[cfg(feature = "async")]
             if self.wasm.async_stack_size.is_none() {
                 const DEFAULT_HOST_STACK: usize = 512 << 10;
                 config.async_stack_size(max + DEFAULT_HOST_STACK);
@@ -997,9 +983,6 @@ impl CommonOptions {
         if let Some(enable) = self.wasm.memory64.or(all) {
             config.wasm_memory64(enable);
         }
-        if let Some(enable) = self.wasm.stack_switching {
-            config.wasm_stack_switching(enable);
-        }
         if let Some(enable) = self.wasm.custom_page_sizes.or(all) {
             config.wasm_custom_page_sizes(enable);
         }
@@ -1040,7 +1023,6 @@ impl CommonOptions {
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)
             ("gc", function_references, wasm_function_references)
-            ("stack-switching", stack_switching, wasm_stack_switching)
         }
         Ok(())
     }

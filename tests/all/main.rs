@@ -43,7 +43,6 @@ mod stack_overflow;
 mod store;
 mod structs;
 mod table;
-#[cfg(all(feature = "stack-switching", unix, target_arch = "x86_64"))]
 mod tags;
 mod threads;
 mod traps;
