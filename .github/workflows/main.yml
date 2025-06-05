@@ -1175,7 +1175,6 @@ jobs:
       with:
         file: ${{ matrix.env.DOCKER_IMAGE }}
         context: ci/docker
-        push: true
         tags: build-image
         cache-from: type=gha
         cache-to: type=gha,mode=max
