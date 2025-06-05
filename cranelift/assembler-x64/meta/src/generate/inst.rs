@@ -1,5 +1,5 @@
 use super::{Formatter, fmtln, generate_derive, generate_derive_arbitrary_bounds};
-use crate::dsl::{self, display};
+use crate::dsl::{self};
 
 impl dsl::Inst {
     /// `struct <inst> { <op>: Reg, <op>: Reg, ... }`
@@ -59,6 +59,8 @@ impl dsl::Inst {
         f.add_block(&format!("{impl_block} {struct_name}"), |f| {
             self.generate_new_function(f);
             f.empty_line();
+            self.generate_mnemonic_function(f);
+            f.empty_line();
             self.generate_encode_function(f);
             f.empty_line();
             self.generate_visit_function(f);
@@ -91,6 +93,14 @@ impl dsl::Inst {
                     fmtln!(f, "trap: trap.into(),");
                 }
             });
+        });
+    }
+
+    /// `fn mnemonic(&self) -> &'static str { ... }`
+    pub fn generate_mnemonic_function(&self, f: &mut Formatter) {
+        fmtln!(f, "#[must_use]");
+        f.add_block(&format!("pub fn mnemonic(&self) -> &'static str"), |f| {
+            fmtln!(f, "\"{}\"", self.mnemonic);
         });
     }
 
@@ -222,18 +232,15 @@ impl dsl::Inst {
                             let to_string = location.generate_to_string(op.extension);
                             fmtln!(f, "let {location} = {to_string};");
                         }
-                        let inst_name = if self.custom.contains(Display) {
-                            if self.name().starts_with("lock") {
-                                display::lock(&self.mnemonic)
-                            } else {
-                                unimplemented!(
-                                    "Only lock instructions custom processing implemented for now"
-                                );
-                            }
+                        if self.custom.contains(Display) {
+                            fmtln!(
+                                f,
+                                "let name = crate::custom::display::{}(self);",
+                                self.name()
+                            )
                         } else {
-                            self.mnemonic.clone()
+                            fmtln!(f, "let name = \"{}\";", self.mnemonic);
                         }
-                        .to_string();
                         let ordered_ops = self.format.generate_att_style_operands();
                         let mut implicit_ops = self.format.generate_implicit_operands();
                         if self.has_trap {
@@ -244,13 +251,12 @@ impl dsl::Inst {
                                 implicit_ops.push_str(", {trap}");
                             }
                         }
-                        fmtln!(f, "write!(f, \"{inst_name} {ordered_ops}{implicit_ops}\")");
+                        fmtln!(f, "write!(f, \"{{name}} {ordered_ops}{implicit_ops}\")");
                     },
                 );
             },
         );
     }
-
     /// `impl From<struct> for Inst { ... }`
     pub fn generate_from_impl(&self, f: &mut Formatter) {
         let struct_name_r = self.struct_name_with_generic();

@@ -1,3 +1,90 @@
+pub mod display {
+    macro_rules! lock {
+        ($name:tt) => {
+            pub fn $name<R: $crate::Registers>(inst: &$crate::inst::$name<R>) -> String {
+                format!("lock {}", &inst.mnemonic()[5..])
+            }
+        };
+    }
+
+    lock!(lock_addb_mi);
+    lock!(lock_addw_mi);
+    lock!(lock_addl_mi);
+    lock!(lock_addq_mi_sxl);
+    lock!(lock_addl_mi_sxb);
+    lock!(lock_addq_mi_sxb);
+    lock!(lock_addb_mr);
+    lock!(lock_addw_mr);
+    lock!(lock_addl_mr);
+    lock!(lock_addq_mr);
+
+    lock!(lock_adcb_mi);
+    lock!(lock_adcw_mi);
+    lock!(lock_adcl_mi);
+    lock!(lock_adcq_mi_sxl);
+    lock!(lock_adcl_mi_sxb);
+    lock!(lock_adcq_mi_sxb);
+    lock!(lock_adcb_mr);
+    lock!(lock_adcw_mr);
+    lock!(lock_adcl_mr);
+    lock!(lock_adcq_mr);
+
+    lock!(lock_subb_mi);
+    lock!(lock_subw_mi);
+    lock!(lock_subl_mi);
+    lock!(lock_subq_mi_sxl);
+    lock!(lock_subl_mi_sxb);
+    lock!(lock_subq_mi_sxb);
+    lock!(lock_subb_mr);
+    lock!(lock_subw_mr);
+    lock!(lock_subl_mr);
+    lock!(lock_subq_mr);
+
+    lock!(lock_sbbb_mi);
+    lock!(lock_sbbw_mi);
+    lock!(lock_sbbl_mi);
+    lock!(lock_sbbq_mi_sxl);
+    lock!(lock_sbbl_mi_sxb);
+    lock!(lock_sbbq_mi_sxb);
+    lock!(lock_sbbb_mr);
+    lock!(lock_sbbw_mr);
+    lock!(lock_sbbl_mr);
+    lock!(lock_sbbq_mr);
+
+    lock!(lock_andb_mi);
+    lock!(lock_andw_mi);
+    lock!(lock_andl_mi);
+    lock!(lock_andq_mi_sxl);
+    lock!(lock_andl_mi_sxb);
+    lock!(lock_andq_mi_sxb);
+    lock!(lock_andb_mr);
+    lock!(lock_andw_mr);
+    lock!(lock_andl_mr);
+    lock!(lock_andq_mr);
+
+    lock!(lock_orb_mi);
+    lock!(lock_orw_mi);
+    lock!(lock_orl_mi);
+    lock!(lock_orq_mi_sxl);
+    lock!(lock_orl_mi_sxb);
+    lock!(lock_orq_mi_sxb);
+    lock!(lock_orb_mr);
+    lock!(lock_orw_mr);
+    lock!(lock_orl_mr);
+    lock!(lock_orq_mr);
+
+    lock!(lock_xorb_mi);
+    lock!(lock_xorw_mi);
+    lock!(lock_xorl_mi);
+    lock!(lock_xorq_mi_sxl);
+    lock!(lock_xorl_mi_sxb);
+    lock!(lock_xorq_mi_sxb);
+    lock!(lock_xorb_mr);
+    lock!(lock_xorw_mr);
+    lock!(lock_xorl_mr);
+    lock!(lock_xorq_mr);
+}
+
 pub mod visit {
     use crate::inst::{mulxl_rvm, mulxq_rvm};
     use crate::{Fixed, Gpr, GprMem, RegisterVisitor, Registers, gpr};

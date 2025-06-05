@@ -5,7 +5,6 @@
 //! - a close-to-direct mapping of what we read in the x64 reference manual.
 
 pub(crate) mod custom;
-pub(crate) mod display;
 mod encoding;
 mod features;
 pub mod format;
