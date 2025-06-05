@@ -377,7 +377,7 @@ impl Func {
         LowerParams: Copy,
         LowerReturn: Copy,
     {
-        let vminstance = self.instance.instance(store.0);
+        let vminstance = &store[self.instance.id()];
         let (ty, def, options) = vminstance.component().export_lifted_function(self.index);
         let export = match vminstance.lookup_def(store.0, def) {
             Export::Function(f) => f,
@@ -427,7 +427,7 @@ impl Func {
             debug_assert!(flags.may_leave());
             flags.set_may_leave(false);
             let instance_ptr = self.instance.instance_ptr(store.0).as_ptr();
-            let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, instance_ptr);
+            let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, self.instance);
             cx.enter_call();
             let result = lower(
                 &mut cx,
@@ -474,7 +474,7 @@ impl Func {
             // later get used in post-return.
             flags.set_needs_post_return(true);
             let val = lift(
-                &mut LiftContext::new(store.0, &options, &types, instance_ptr),
+                &mut LiftContext::new(store.0, &options, &types, self.instance),
                 InterfaceType::Tuple(types[ty].results),
                 ret,
             )?;

@@ -304,7 +304,7 @@ impl Instance {
         instance: Option<&ComponentExportIndex>,
         name: &str,
     ) -> Option<(ComponentItem, ComponentExportIndex)> {
-        let data = self.instance(store);
+        let data = &store[self.id()];
         let component = data.component();
         let index = component.lookup_export_index(instance, name)?;
         let item = ComponentItem::from_export(
@@ -340,7 +340,7 @@ impl Instance {
         instance: Option<&ComponentExportIndex>,
         name: &str,
     ) -> Option<ComponentExportIndex> {
-        let data = self.instance(store.as_context_mut().0);
+        let data = &store.as_context_mut()[self.id()];
         let index = data.component().lookup_export_index(instance, name)?;
         Some(ComponentExportIndex {
             id: data.component().id(),
@@ -353,7 +353,7 @@ impl Instance {
         store: &'a StoreOpaque,
         name: impl InstanceExportLookup,
     ) -> Option<(&'a ComponentInstance, &'a Export)> {
-        let data = self.instance(store);
+        let data = &store[self.id()];
         let index = name.lookup(data.component())?;
         Some((data, &data.component().env_component().export_items[index]))
     }
@@ -362,19 +362,13 @@ impl Instance {
     pub fn instance_pre<T>(&self, store: impl AsContext<Data = T>) -> InstancePre<T> {
         // This indexing operation asserts the Store owns the Instance.
         // Therefore, the InstancePre<T> must match the Store<T>.
-        let data = self.instance(store.as_context().0);
+        let data = &store.as_context()[self.id()];
 
         // SAFETY: calling this method safely here relies on matching the `T`
         // in `InstancePre<T>` to the store itself, which is happening in the
         // type signature just above by ensuring the store's data is `T` which
         // matches the return value.
         unsafe { data.instance_pre() }
-    }
-
-    /// Returns the VM/runtime state for this instance as belonging to the
-    /// store provided.
-    pub(crate) fn instance<'a>(&self, store: &'a StoreOpaque) -> &'a ComponentInstance {
-        &store[self.id]
     }
 
     /// Returns the VM/runtime state for this instance as belonging to the
@@ -432,7 +426,7 @@ impl InstanceExportLookup for String {
 
 struct Instantiator<'a> {
     component: &'a Component,
-    instance: OwnedComponentInstance,
+    id: ComponentInstanceId,
     core_imports: OwnedImports,
     imports: &'a PrimaryMap<RuntimeImportIndex, RuntimeImport>,
 }
@@ -473,17 +467,21 @@ impl<'a> Instantiator<'a> {
         store.modules_mut().register_component(component);
         let imported_resources: ImportedResources =
             PrimaryMap::with_capacity(env_component.imported_resources.len());
+
+        let instance = OwnedComponentInstance::new(
+            store.store_data().components.next_component_instance_id(),
+            component,
+            Arc::new(imported_resources),
+            imports,
+            store.traitobj(),
+        );
+        let id = store.store_data_mut().push_component_instance(instance);
+
         Instantiator {
             component,
             imports,
             core_imports: OwnedImports::empty(),
-            instance: OwnedComponentInstance::new(
-                store.store_data().components.next_component_instance_id(),
-                component,
-                Arc::new(imported_resources),
-                imports,
-                store.traitobj(),
-            ),
+            id,
         }
     }
 
@@ -500,9 +498,10 @@ impl<'a> Instantiator<'a> {
                 } => (*ty, NonNull::from(dtor_funcref)),
                 _ => unreachable!(),
             };
-            let i = self.instance_resource_types_mut().push(ty);
+            let i = self.instance_resource_types_mut(store.0).push(ty);
             assert_eq!(i, idx);
-            self.instance.set_resource_destructor(idx, Some(func_ref));
+            self.instance_mut(store.0)
+                .set_resource_destructor(idx, Some(func_ref));
         }
 
         // Next configure all `VMFuncRef`s for trampolines that this component
@@ -516,8 +515,12 @@ impl<'a> Instantiator<'a> {
                 None => panic!("found unregistered signature: {sig:?}"),
             };
 
-            self.instance
-                .set_trampoline(idx, ptrs.wasm_call, ptrs.array_call, signature);
+            self.instance_mut(store.0).set_trampoline(
+                idx,
+                ptrs.wasm_call,
+                ptrs.array_call,
+                signature,
+            );
         }
 
         for initializer in env_component.initializers.iter() {
@@ -564,7 +567,7 @@ impl<'a> Instantiator<'a> {
                     let i = unsafe {
                         crate::Instance::new_started_impl(store, module, imports.as_ref())?
                     };
-                    self.instance.push_instance_id(i.id());
+                    self.instance_mut(store.0).push_instance_id(i.id());
                 }
 
                 GlobalInitializer::LowerImport { import, index } => {
@@ -572,7 +575,8 @@ impl<'a> Instantiator<'a> {
                         RuntimeImport::Func(func) => func,
                         _ => unreachable!(),
                     };
-                    self.instance.set_lowering(*index, func.lowering());
+                    self.instance_mut(store.0)
+                        .set_lowering(*index, func.lowering());
                 }
 
                 GlobalInitializer::ExtractTable(table) => self.extract_table(store.0, table),
@@ -597,11 +601,12 @@ impl<'a> Instantiator<'a> {
         Ok(())
     }
 
-    fn resource(&mut self, store: &StoreOpaque, resource: &Resource) {
+    fn resource(&mut self, store: &mut StoreOpaque, resource: &Resource) {
+        let instance = self.instance(store);
         let dtor = resource
             .dtor
             .as_ref()
-            .map(|dtor| self.instance.lookup_def(store, dtor));
+            .map(|dtor| instance.lookup_def(store, dtor));
         let dtor = dtor.map(|export| match export {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
@@ -610,53 +615,60 @@ impl<'a> Instantiator<'a> {
             .component
             .env_component()
             .resource_index(resource.index);
-        self.instance.set_resource_destructor(index, dtor);
-        let ty = ResourceType::guest(store.id(), &self.instance, resource.index);
-        let i = self.instance_resource_types_mut().push(ty);
+        let ty = ResourceType::guest(store.id(), instance, resource.index);
+        self.instance_mut(store)
+            .set_resource_destructor(index, dtor);
+        let i = self.instance_resource_types_mut(store).push(ty);
         debug_assert_eq!(i, index);
     }
 
-    fn extract_memory(&mut self, store: &StoreOpaque, memory: &ExtractMemory) {
-        let mem = match self.instance.lookup_export(store, &memory.export) {
+    fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
+        let mem = match self.instance(store).lookup_export(store, &memory.export) {
             crate::runtime::vm::Export::Memory(m) => m,
             _ => unreachable!(),
         };
-        self.instance
+        self.instance_mut(store)
             .set_runtime_memory(memory.index, mem.definition);
     }
 
-    fn extract_realloc(&mut self, store: &StoreOpaque, realloc: &ExtractRealloc) {
-        let func_ref = match self.instance.lookup_def(store, &realloc.def) {
+    fn extract_realloc(&mut self, store: &mut StoreOpaque, realloc: &ExtractRealloc) {
+        let func_ref = match self.instance(store).lookup_def(store, &realloc.def) {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
-        self.instance.set_runtime_realloc(realloc.index, func_ref);
+        self.instance_mut(store)
+            .set_runtime_realloc(realloc.index, func_ref);
     }
 
-    fn extract_callback(&mut self, store: &StoreOpaque, callback: &ExtractCallback) {
-        let func_ref = match self.instance.lookup_def(store, &callback.def) {
+    fn extract_callback(&mut self, store: &mut StoreOpaque, callback: &ExtractCallback) {
+        let func_ref = match self.instance(store).lookup_def(store, &callback.def) {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
-        self.instance.set_runtime_callback(callback.index, func_ref);
+        self.instance_mut(store)
+            .set_runtime_callback(callback.index, func_ref);
     }
 
-    fn extract_post_return(&mut self, store: &StoreOpaque, post_return: &ExtractPostReturn) {
-        let func_ref = match self.instance.lookup_def(store, &post_return.def) {
+    fn extract_post_return(&mut self, store: &mut StoreOpaque, post_return: &ExtractPostReturn) {
+        let func_ref = match self.instance(store).lookup_def(store, &post_return.def) {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
-        self.instance
+        self.instance_mut(store)
             .set_runtime_post_return(post_return.index, func_ref);
     }
 
-    fn extract_table(&mut self, store: &StoreOpaque, table: &ExtractTable) {
-        let export = match self.instance.lookup_export(store, &table.export) {
+    fn extract_table(&mut self, store: &mut StoreOpaque, table: &ExtractTable) {
+        let export = match self.instance(store).lookup_export(store, &table.export) {
             crate::runtime::vm::Export::Table(t) => t,
             _ => unreachable!(),
         };
-        self.instance
-            .set_runtime_table(table.index, export.definition, export.vmctx, export.index);
+        self.instance_mut(store).set_runtime_table(
+            table.index,
+            export.definition,
+            export.vmctx,
+            export.index,
+        );
     }
 
     fn build_imports<'b>(
@@ -683,7 +695,7 @@ impl<'a> Instantiator<'a> {
             // The unsafety here should be ok since the `export` is loaded
             // directly from an instance which should only give us valid export
             // items.
-            let export = self.instance.lookup_def(store, arg);
+            let export = self.instance(store).lookup_def(store, arg);
             unsafe {
                 self.core_imports.push_export(&export);
             }
@@ -702,7 +714,7 @@ impl<'a> Instantiator<'a> {
         imp_name: &str,
         expected: EntityType,
     ) {
-        let export = self.instance.lookup_def(store, arg);
+        let export = self.instance(store).lookup_def(store, arg);
 
         // If this value is a core wasm function then the type check is inlined
         // here. This can otherwise fail `Extern::from_wasmtime_export` because
@@ -734,13 +746,27 @@ impl<'a> Instantiator<'a> {
             .expect("unexpected typecheck failure");
     }
 
+    /// Convenience helper to return the `&ComponentInstance` that's being
+    /// instantiated.
+    fn instance<'b>(&self, store: &'b StoreOpaque) -> &'b ComponentInstance {
+        store.store_data().component_instance(self.id)
+    }
+
+    /// Same as [`Self::instance`], but for mutability.
+    fn instance_mut<'b>(&self, store: &'b mut StoreOpaque) -> &'b mut ComponentInstance {
+        store.store_data_mut().component_instance_mut(self.id)
+    }
+
     // NB: This method is only intended to be called during the instantiation
     // process because the `Arc::get_mut` here is fallible and won't generally
     // succeed once the instance has been handed to the embedder. Before that
     // though it should be guaranteed that the single owning reference currently
     // lives within the `ComponentInstance` that's being built.
-    fn instance_resource_types_mut(&mut self) -> &mut ImportedResources {
-        Arc::get_mut(self.instance.resource_types_mut()).unwrap()
+    fn instance_resource_types_mut<'b>(
+        &self,
+        store: &'b mut StoreOpaque,
+    ) -> &'b mut ImportedResources {
+        Arc::get_mut(self.instance_mut(store).resource_types_mut()).unwrap()
     }
 }
 
@@ -857,14 +883,10 @@ impl<T: 'static> InstancePre<T> {
                 .decrement_component_instance_count();
             e
         })?;
-        let id = store
-            .0
-            .store_data_mut()
-            .push_component_instance(instantiator.instance);
         // SAFETY: `from_wasmtime` requires that `id` belongs to the store
         // provided, and it was just inserted above so the condition should be
         // satisfied.
-        let instance = unsafe { Instance::from_wasmtime(store.0, id) };
+        let instance = unsafe { Instance::from_wasmtime(store.0, instantiator.id) };
         store.0.push_component_instance(instance);
         Ok(instance)
     }

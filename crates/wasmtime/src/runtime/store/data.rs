@@ -1,4 +1,4 @@
-use crate::runtime::vm;
+use crate::runtime::vm::{self, VMStore};
 use crate::store::StoreOpaque;
 use crate::{StoreContext, StoreContextMut};
 use core::num::NonZeroU64;
@@ -29,6 +29,29 @@ impl StoreData {
 
     pub fn id(&self) -> StoreId {
         self.id
+    }
+}
+
+// forward StoreOpaque => StoreData
+impl<I> Index<I> for StoreOpaque
+where
+    StoreData: Index<I>,
+{
+    type Output = <StoreData as Index<I>>::Output;
+
+    #[inline]
+    fn index(&self, index: I) -> &Self::Output {
+        self.store_data.index(index)
+    }
+}
+
+impl<I> IndexMut<I> for StoreOpaque
+where
+    StoreData: IndexMut<I>,
+{
+    #[inline]
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        self.store_data.index_mut(index)
     }
 }
 
@@ -65,6 +88,27 @@ where
     #[inline]
     fn index_mut(&mut self, index: I) -> &mut Self::Output {
         self.0.index_mut(index)
+    }
+}
+
+// forward dyn VMStore => StoreOpaque
+impl<I> Index<I> for dyn VMStore + '_
+where
+    StoreOpaque: Index<I>,
+{
+    type Output = <StoreOpaque as Index<I>>::Output;
+
+    fn index(&self, index: I) -> &Self::Output {
+        self.store_opaque().index(index)
+    }
+}
+
+impl<I> IndexMut<I> for dyn VMStore + '_
+where
+    StoreOpaque: IndexMut<I>,
+{
+    fn index_mut(&mut self, index: I) -> &mut Self::Output {
+        self.store_opaque_mut().index_mut(index)
     }
 }
 
