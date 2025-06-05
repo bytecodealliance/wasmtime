@@ -42,6 +42,9 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-object",
     "cranelift-interpreter",
     "wasmtime-jit-icache-coherence",
+    // Wasmtime unwinder, used by both `cranelift-jit` (optionally) and filetests, and by Wasmtime.
+    "wasmtime-unwinder",
+    // Cranelift crates that use Wasmtime unwinder.
     "cranelift-jit",
     "cranelift",
     // wiggle

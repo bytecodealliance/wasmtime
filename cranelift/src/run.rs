@@ -96,7 +96,7 @@ fn run_file_contents(file_contents: String) -> Result<()> {
                 let trampoline = compiled.get_trampoline(&func).unwrap();
 
                 command
-                    .run(|_, args| Ok(trampoline.call(args)))
+                    .run(|_, args| Ok(trampoline.call(&compiled, args)))
                     .map_err(|s| anyhow::anyhow!("{}", s))?;
             }
         }

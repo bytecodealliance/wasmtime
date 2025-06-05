@@ -28,7 +28,7 @@ use core::ptr::{self, NonNull};
 
 pub use self::backtrace::Backtrace;
 #[cfg(feature = "gc")]
-pub use self::backtrace::Frame;
+pub use wasmtime_unwinder::Frame;
 
 pub use self::coredump::CoreDumpStack;
 pub use self::tls::tls_eager_initialize;

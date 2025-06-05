@@ -47,8 +47,39 @@ pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
     pc
 }
 
+pub unsafe fn resume_to_exception_handler(
+    pc: usize,
+    sp: usize,
+    fp: usize,
+    payload1: usize,
+    payload2: usize,
+) -> ! {
+    unsafe {
+        core::arch::asm!(
+            "mov x0, {}",
+            "mov x1, {}",
+            "mov sp, {}",
+            "mov fp, {}",
+            "br {}",
+            in(reg) payload1,
+            in(reg) payload2,
+            in(reg) sp,
+            in(reg) fp,
+            in(reg) pc,
+            out("x0") _,
+            out("x1") _,
+            options(nostack, nomem),
+        );
+
+        core::hint::unreachable_unchecked()
+    }
+}
+
 // And the current frame pointer points to the next older frame pointer.
 pub const NEXT_OLDER_FP_FROM_FP_OFFSET: usize = 0;
+
+// SP of caller is FP in callee plus size of FP/return address pair.
+pub const NEXT_OLDER_SP_FROM_FP_OFFSET: usize = 16;
 
 pub fn assert_fp_is_aligned(_fp: usize) {
     // From AAPCS64, section 6.2.3 The Frame Pointer[0]:

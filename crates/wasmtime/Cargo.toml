@@ -24,6 +24,7 @@ wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-fiber = { workspace = true, optional = true }
 wasmtime-cranelift = { workspace = true, optional = true, features = ['pulley'] }
+wasmtime-unwinder = { workspace = true, optional = true }
 wasmtime-winch = { workspace = true, optional = true }
 wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
@@ -94,9 +95,6 @@ mach2 = { workspace = true, optional = true }
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, optional = true, features = ["mm", "param"] }
 
-[target.'cfg(target_arch = "s390x")'.dependencies]
-psm = { workspace = true, optional = true }
-
 [dev-dependencies]
 env_logger = { workspace = true }
 proptest = { workspace = true }
@@ -151,7 +149,7 @@ default = [
 # with the Cranelift compiler. Cranelift is the default compilation backend of
 # Wasmtime. If disabled then WebAssembly modules can only be created from
 # precompiled WebAssembly modules.
-cranelift = ["dep:wasmtime-cranelift", "std"]
+cranelift = ["dep:wasmtime-cranelift", "std", "wasmtime-unwinder/cranelift"]
 
 # Enables support for Winch, the WebAssembly baseline compiler. The Winch compiler
 # strategy in `Config` will be available. It is currently in active development
@@ -256,11 +254,11 @@ runtime = [
   "dep:wasmtime-slab",
   "dep:wasmtime-versioned-export-macros",
   "dep:windows-sys",
-  "dep:psm",
   "dep:rustix",
   "rustix/mm",
   "pulley-interpreter/interp",
   "dep:wasmtime-jit-icache-coherence",
+  "dep:wasmtime-unwinder",
 ]
 
 # Enable support for garbage collection-related things.

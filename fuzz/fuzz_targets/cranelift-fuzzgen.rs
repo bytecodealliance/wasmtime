@@ -19,7 +19,7 @@ use std::sync::atomic::Ordering;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{LibCall, TrapCode};
 use cranelift_codegen::isa;
-use cranelift_filetests::function_runner::{TestFileCompiler, Trampoline};
+use cranelift_filetests::function_runner::{CompiledTestFile, TestFileCompiler, Trampoline};
 use cranelift_fuzzgen::*;
 use cranelift_interpreter::environment::FuncIndex;
 use cranelift_interpreter::environment::FunctionStore;
@@ -286,8 +286,12 @@ fn run_in_interpreter(interpreter: &mut Interpreter, args: &[DataValue]) -> RunR
     }
 }
 
-fn run_in_host(trampoline: &Trampoline, args: &[DataValue]) -> RunResult {
-    let res = trampoline.call(args);
+fn run_in_host(
+    compiled: &CompiledTestFile,
+    trampoline: &Trampoline,
+    args: &[DataValue],
+) -> RunResult {
+    let res = trampoline.call(compiled, args);
     RunResult::Success(res)
 }
 
@@ -413,6 +417,6 @@ fuzz_target!(|testcase: TestCase| {
         let compiled = compiler.compile().unwrap();
         let trampoline = compiled.get_trampoline(testcase.main()).unwrap();
 
-        run_test_inputs(&testcase, |args| run_in_host(&trampoline, args));
+        run_test_inputs(&testcase, |args| run_in_host(&compiled, &trampoline, args));
     }
 });

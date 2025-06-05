@@ -249,6 +249,7 @@ wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "=35.0.0" }
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=35.0.0" }
 wasmtime-math = { path = "crates/math", version = "=35.0.0" }
+wasmtime-unwinder = { path = "crates/unwinder", version = "=35.0.0" }
 test-programs-artifacts = { path = 'crates/test-programs/artifacts' }
 wasmtime-test-util = { path = "crates/test-util" }
 
