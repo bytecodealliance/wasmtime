@@ -1615,20 +1615,6 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
-    // XmmRmRImmVex
-    insns.push((
-        Inst::XmmVexPinsr {
-            op: AvxOpcode::Vpinsrb,
-            dst: Writable::from_reg(Xmm::unwrap_new(xmm13)),
-            src1: Xmm::unwrap_new(xmm14),
-            src2: GprMem::unwrap_new(RegMem::reg(r15)),
-            imm: 2,
-        },
-        "C4430920EF02",
-        "vpinsrb $2, %xmm14, %r15, %xmm13",
-    ));
-
-    // ========================================================
     // Pertaining to atomics.
     let am1: SyntheticAmode =
         Amode::imm_reg_reg_shift(321, Gpr::unwrap_new(r10), Gpr::unwrap_new(rdx), 2).into();

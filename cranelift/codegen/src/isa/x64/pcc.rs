@@ -279,10 +279,6 @@ pub(crate) fn check(
             let (ty, size) = match op {
                 AvxOpcode::Vmovss => (F32, 32),
                 AvxOpcode::Vmovsd => (F64, 64),
-                AvxOpcode::Vpinsrb => (I8, 8),
-                AvxOpcode::Vpinsrw => (I16, 16),
-                AvxOpcode::Vpinsrd => (I32, 32),
-                AvxOpcode::Vpinsrq => (I64, 64),
 
                 // We assume all other operations happen on 128-bit values.
                 _ => (I8X16, 128),
@@ -303,16 +299,6 @@ pub(crate) fn check(
                     check_load(ctx, None, addr, vcode, I8X16, 128)?;
                 }
                 RegMemImm::Reg { .. } | RegMemImm::Imm { .. } => {}
-            }
-            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
-        }
-
-        Inst::XmmVexPinsr { dst, ref src2, .. } => {
-            match <&RegMem>::from(src2) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, I64, 64)?;
-                }
-                RegMem::Reg { .. } => {}
             }
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }

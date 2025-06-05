@@ -90,7 +90,7 @@ block0(v0: i8x16, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vpinsrb $1, %xmm0, 0(%rdi), %xmm0
+;   vpinsrb $0x1, (%rdi), %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -116,7 +116,7 @@ block0(v0: i16x8, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vpinsrw $1, %xmm0, 0(%rdi), %xmm0
+;   vpinsrw $0x1, (%rdi), %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -142,7 +142,7 @@ block0(v0: i32x4, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vpinsrd $1, %xmm0, 0(%rdi), %xmm0
+;   vpinsrd $0x1, (%rdi), %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -168,7 +168,7 @@ block0(v0: i64x2, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vpinsrq $1, %xmm0, 0(%rdi), %xmm0
+;   vpinsrq $0x1, (%rdi), %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

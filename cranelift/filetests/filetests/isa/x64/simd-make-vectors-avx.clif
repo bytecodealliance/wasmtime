@@ -40,7 +40,7 @@ block0(v0: i64):
 ; block0:
 ;   uninit  %xmm3
 ;   vpxor   %xmm3, %xmm3, %xmm5
-;   vpinsrq $0, %xmm5, %rdi, %xmm0
+;   vpinsrq $0x0, %rdi, %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -68,7 +68,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vmovq   %rdi, %xmm3
-;   vpinsrq $1, %xmm3, %rsi, %xmm0
+;   vpinsrq $0x1, %rsi, %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
