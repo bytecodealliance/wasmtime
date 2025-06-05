@@ -16,11 +16,11 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    CanonicalAbiInfo, ComponentTypesBuilder, FixedEncoding as FE, FlatType, InterfaceType,
-    StringEncoding, Transcode, TypeComponentLocalErrorContextTableIndex, TypeEnumIndex,
-    TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
-    TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
-    TypeVariantIndex, VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS,
+    CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FixedEncoding as FE,
+    FlatType, InterfaceType, MAX_FLAT_PARAMS, StringEncoding, Transcode,
+    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFlagsIndex, TypeFutureTableIndex,
+    TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex,
+    TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
@@ -2682,11 +2682,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         debug_assert_eq!(src_ty.info.size, dst_ty.info.size);
         debug_assert_eq!(src_ty.names.len(), dst_ty.names.len());
-        debug_assert!(src_ty
-            .names
-            .iter()
-            .zip(dst_ty.names.iter())
-            .all(|(a, b)| a == b));
+        debug_assert!(
+            src_ty
+                .names
+                .iter()
+                .zip(dst_ty.names.iter())
+                .all(|(a, b)| a == b)
+        );
 
         // Get the discriminant.
         match src {
