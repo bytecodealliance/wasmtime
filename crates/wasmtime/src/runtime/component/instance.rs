@@ -50,11 +50,6 @@ const _: () = {
 
 impl Instance {
     /// Creates a raw `Instance` from the internal identifiers within the store.
-    ///
-    /// # Safety
-    ///
-    /// The safety of this function relies on `id` belonging to the instance
-    /// within `store`.
     pub(crate) fn from_wasmtime(store: &StoreOpaque, id: ComponentInstanceId) -> Instance {
         Instance {
             id: StoreComponentInstanceId::new(store.id(), id),
