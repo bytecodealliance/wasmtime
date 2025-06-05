@@ -3,6 +3,7 @@
 
 mod stack;
 
+use core::pin::Pin;
 use core::{marker::PhantomPinned, ptr::NonNull};
 
 pub use stack::*;
@@ -302,7 +303,7 @@ unsafe impl Sync for VMContRef {}
 #[inline(always)]
 pub fn cont_new(
     store: &mut dyn crate::vm::VMStore,
-    instance: &mut crate::vm::Instance,
+    instance: Pin<&mut crate::vm::Instance>,
     func: *mut u8,
     param_count: u32,
     result_count: u32,

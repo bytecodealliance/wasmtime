@@ -1,7 +1,7 @@
 use crate::linker::{Definition, DefinitionType};
 use crate::prelude::*;
 use crate::runtime::vm::{
-    Imports, ModuleRuntimeInfo, VMFuncRef, VMFunctionImport, VMGlobalImport, VMMemoryImport,
+    self, Imports, ModuleRuntimeInfo, VMFuncRef, VMFunctionImport, VMGlobalImport, VMMemoryImport,
     VMOpaqueContext, VMTableImport, VMTagImport,
 };
 use crate::store::{AllocateInstanceKind, InstanceId, StoreInstanceId, StoreOpaque};
@@ -311,10 +311,8 @@ impl Instance {
             .engine()
             .features()
             .contains(WasmFeatures::BULK_MEMORY);
-        store
-            .instance(id)
-            .clone()
-            .initialize(store, compiled_module.module(), bulk_memory)?;
+
+        vm::initialize_instance(store, id, compiled_module.module(), bulk_memory)?;
 
         Ok((instance, compiled_module.module().start_func))
     }
@@ -328,7 +326,7 @@ impl Instance {
     fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>, start: FuncIndex) -> Result<()> {
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
-        let instance = &mut store.0[self.id];
+        let instance = self.id.get_mut(store.0);
         let f = instance.get_exported_func(start);
         let caller_vmctx = instance.vmctx();
         unsafe {
