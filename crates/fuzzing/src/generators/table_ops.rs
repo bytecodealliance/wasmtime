@@ -1,14 +1,12 @@
 //! Generating series of `table.get` and `table.set` operations.
-
-use mutatis::{Generate, DefaultMutate, Candidates, Mutate, Context, Result as MutResult};
 use mutatis::mutators as m;
+use mutatis::{Candidates, Context, DefaultMutate, Generate, Mutate, Result as MutResult};
 use std::ops::RangeInclusive;
 use wasm_encoder::{
     CodeSection, ConstExpr, EntityType, ExportKind, ExportSection, Function, FunctionSection,
     GlobalSection, ImportSection, Instruction, Module, RefType, TableSection, TableType,
     TypeSection, ValType,
 };
-
 /// A description of a Wasm module that makes a series of `externref` table
 /// operations.
 #[derive(Debug)]
@@ -136,6 +134,16 @@ impl TableOps {
 
         module.finish()
     }
+    pub fn abstract_stack_depth(&self) -> usize {
+        let mut stack: usize = 0;
+        for op in &self.ops {
+            let pop = op.operands_len();
+            let push = op.results_len();
+            stack = stack.saturating_sub(pop);
+            stack += push;
+        }
+        stack
+    }
 }
 
 #[derive(Debug)]
@@ -144,7 +152,7 @@ pub struct TableOpsMutator;
 impl Mutate<TableOps> for TableOpsMutator {
     fn mutate(&mut self, c: &mut Candidates<'_>, ops: &mut TableOps) -> mutatis::Result<()> {
         c.mutation(|ctx| {
-            let mut stack = 0;
+            let mut stack = ops.abstract_stack_depth();
             add_table_op_mutatis(ops, ctx, &mut stack)
         })?;
         Ok(())
@@ -167,15 +175,16 @@ impl Generate<TableOps> for TableOpsMutator {
         let num_globals = m::range(NUM_GLOBALS_RANGE).generate(ctx)?;
         let table_size = m::range(TABLE_SIZE_RANGE).generate(ctx)?;
         let mut ops = Vec::new();
-        let mut stack = 0u32;
+        let stack = 0u32;
+
         let mut temp_ops = TableOps {
             num_params,
             num_globals,
             table_size,
             ops: vec![
-                TableOp::Null,
-                TableOp::Drop,
-                TableOp::Gc,
+                TableOp::Null(),
+                TableOp::Drop(),
+                TableOp::Gc(),
                 TableOp::LocalSet(0),
                 TableOp::LocalGet(0),
                 TableOp::GlobalSet(0),
@@ -183,8 +192,10 @@ impl Generate<TableOps> for TableOpsMutator {
             ],
         };
         while ops.len() < MAX_OPS {
-            temp_ops.ops = ops.clone(); 
+            temp_ops.ops = ops.clone();
+            let mut stack = temp_ops.abstract_stack_depth();
             let add_result = add_table_op_mutatis(&mut temp_ops, ctx, &mut stack);
+
             if let Ok(()) = add_result {
                 if let Some(last) = temp_ops.ops.last() {
                     ops.push(*last);
@@ -194,7 +205,7 @@ impl Generate<TableOps> for TableOpsMutator {
             }
         }
         for _ in 0..stack {
-            ops.push(TableOp::Drop);
+            ops.push(TableOp::Drop());
         }
         Ok(TableOps {
             num_params,
@@ -214,14 +225,49 @@ macro_rules! define_table_ops {
         #[derive(Copy, Clone, Debug)]
         pub(crate) enum TableOp {
             $(
-                $op $( ( $($ty),* ) )?,
+                $op ( $( $($ty),* )? ),
             )*
         }
+        #[cfg(test)]
+        const OP_NAMES: &'static[&'static str] = &[
+            $(
+                stringify!($op),
+            )*
+        ];
+
+        impl TableOp {
+            #[cfg(test)]
+            fn name(&self) -> &'static str  {
+                match self {
+                    $(
+                        Self::$op (..) => stringify!($op),
+                    )*
+                }
+            }
+
+            pub fn operands_len(&self) -> usize {
+                match self {
+                    $(
+                        Self::$op (..) => $params,
+                    )*
+                }
+            }
+
+            pub fn results_len(&self) -> usize {
+                match self {
+                    $(
+                        Self::$op (..) => $results,
+                    )*
+                }
+            }
+        }
+
+
         #[expect(unused_comparisons)]
         fn add_table_op_mutatis(
             ops: &mut TableOps,
             ctx: &mut mutatis::Context,
-            stack: &mut u32,
+            stack: &mut usize,
         ) -> mutatis::Result<()> {
             use mutatis::Generate;
             use mutatis::mutators as m;
@@ -236,15 +282,15 @@ macro_rules! define_table_ops {
             let selected = ctx.rng().choose(&valid_choices).unwrap();
             let op = match *selected {
                 $(
+                    // TODO: remove string comparison at runtime
                     stringify!($op) => {
                         *stack = *stack - $params + $results;
-                        TableOp::$op $(
+                        TableOp::$op
                             (
-                                $(
+                                $($(
                                     m::range(0..=($limit as fn(&TableOps) -> $ty)(ops) - 1).generate(ctx)?,
-                                )*
+                                )*)?
                             )
-                        )?
                     }
                 )*
                 _ => unreachable!(),
@@ -284,13 +330,13 @@ impl TableOp {
         let make_refs_func_idx = 2;
 
         match self {
-            Self::Gc => {
+            Self::Gc() => {
                 func.instruction(&Instruction::Call(gc_func_idx));
             }
-            Self::MakeRefs => {
+            Self::MakeRefs() => {
                 func.instruction(&Instruction::Call(make_refs_func_idx));
             }
-            Self::TakeRefs => {
+            Self::TakeRefs() => {
                 func.instruction(&Instruction::Call(take_refs_func_idx));
             }
             Self::TableGet(x) => {
@@ -315,10 +361,10 @@ impl TableOp {
             Self::LocalSet(x) => {
                 func.instruction(&Instruction::LocalSet(x));
             }
-            Self::Drop => {
+            Self::Drop() => {
                 func.instruction(&Instruction::Drop);
             }
-            Self::Null => {
+            Self::Null() => {
                 func.instruction(&Instruction::RefNull(wasm_encoder::HeapType::EXTERN));
             }
         }
@@ -336,9 +382,9 @@ mod tests {
                 num_globals: $num_globals,
                 table_size: $table_size,
                 ops: vec![
-                    TableOp::Null,
-                    TableOp::Drop,
-                    TableOp::Gc,
+                    TableOp::Null(),
+                    TableOp::Drop(),
+                    TableOp::Gc(),
                     TableOp::LocalSet(0),
                     TableOp::LocalGet(0),
                     TableOp::GlobalSet(0),
@@ -346,41 +392,72 @@ mod tests {
                 ],
             }
         };
-    }    
-    
+    }
+
+    macro_rules! empty_table_ops {
+        ($num_params:expr, $num_globals:expr, $table_size:expr) => {
+            TableOps {
+                num_params: $num_params,
+                num_globals: $num_globals,
+                table_size: $table_size,
+                ops: vec![],
+            }
+        };
+    }
+
     #[test]
     fn mutate_table_ops_with_default_mutator() -> mutatis::Result<()> {
         use mutatis::Session;
         use wasmparser::Validator;
         let mut res = default_table_ops![5, 5, 5];
         let mut session = Session::new();
-    
-        for _ in 0..10 {
+
+        for _ in 0..1024 {
             session.mutate(&mut res)?;
             let wasm = res.to_wasm_binary();
             let mut validator = Validator::new();
             let wat = wasmprinter::print_bytes(&wasm).unwrap();
             let result = validator.validate_all(&wasm);
-            println!("{wat}");
-            assert!(result.is_ok());
+            assert!(result.is_ok(), "\n\t\t==== Failed Wat ====\n {wat}");
         }
         Ok(())
-    }    
+    }
 
     #[test]
     fn test_tableops_mutate_with() -> mutatis::Result<()> {
         let mut res = default_table_ops![5, 5, 5];
         let mut generator = TableOpsMutator;
         let mut session = mutatis::Session::new();
-        for _ in 0..=10 {
+
+        for _ in 0..=1024 {
             session.mutate_with(&mut generator, &mut res)?;
             let wasm = res.to_wasm_binary();
             let mut validator = wasmparser::Validator::new();
             let result = validator.validate_all(&wasm);
             let wat = wasmprinter::print_bytes(&wasm).unwrap();
-            println!("{wat}");
-            assert!(result.is_ok());
+            assert!(result.is_ok(), "\n\t\t==== Failed Wat ====\n {wat}");
         }
         Ok(())
-    }    
+    }
+
+    #[test]
+    fn every_op_generated() -> mutatis::Result<()> {
+        let mut unseen_ops: std::collections::HashSet<_> = OP_NAMES.iter().copied().collect();
+
+        let mut res = empty_table_ops![5, 5, 5];
+        let mut generator = TableOpsMutator;
+        let mut session = mutatis::Session::new();
+
+        'outer: for _ in 0..=1024 {
+            session.mutate_with(&mut generator, &mut res)?;
+            for op in &res.ops {
+                unseen_ops.remove(op.name());
+                if unseen_ops.is_empty() {
+                    break 'outer;
+                }
+            }
+        }
+        assert!(unseen_ops.is_empty(), "Failed to generate {unseen_ops:?}");
+        Ok(())
+    }
 }
