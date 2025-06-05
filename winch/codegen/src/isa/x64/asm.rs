@@ -74,6 +74,12 @@ fn pair_gpr(reg: WritableReg) -> PairedGpr {
     PairedGpr { read, write }
 }
 
+impl From<Reg> for asm::Gpr<Gpr> {
+    fn from(reg: Reg) -> Self {
+        asm::Gpr::new(reg.into())
+    }
+}
+
 impl From<Reg> for asm::GprMem<Gpr, Gpr> {
     fn from(reg: Reg) -> Self {
         asm::GprMem::Gpr(reg.into())
@@ -87,6 +93,12 @@ fn pair_xmm(reg: WritableReg) -> PairedXmm {
     let read = Xmm::unwrap_new(reg.to_reg().into());
     let write = WritableXmm::from_reg(reg.to_reg().into());
     PairedXmm { read, write }
+}
+
+impl From<Reg> for asm::Xmm<Xmm> {
+    fn from(reg: Reg) -> Self {
+        asm::Xmm::new(reg.into())
+    }
 }
 
 impl From<Reg> for asm::XmmMem<Xmm, Gpr> {
@@ -1791,14 +1803,16 @@ impl Assembler {
         size: OperandSize,
     ) {
         let src2 = Self::to_synthetic_amode(src2, MemFlags::trusted());
+        let dst: WritableXmm = dst.map(|r| r.into());
 
-        self.emit(Inst::XmmVexPinsr {
-            op: Self::vpinsr_opcode(size),
-            src1: src1.into(),
-            src2: GprMem::unwrap_new(RegMem::mem(src2)),
-            dst: dst.to_reg().into(),
-            imm: count,
-        });
+        let inst = match size {
+            OperandSize::S8 => asm::inst::vpinsrb_b::new(dst, src1, src2, count).into(),
+            OperandSize::S16 => asm::inst::vpinsrw_b::new(dst, src1, src2, count).into(),
+            OperandSize::S32 => asm::inst::vpinsrd_b::new(dst, src1, src2, count).into(),
+            OperandSize::S64 => asm::inst::vpinsrq_b::new(dst, src1, src2, count).into(),
+            OperandSize::S128 => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Copy value from `src2`, merge into `src1`, and put result in `dst` at
@@ -1811,13 +1825,15 @@ impl Assembler {
         count: u8,
         size: OperandSize,
     ) {
-        self.emit(Inst::XmmVexPinsr {
-            op: Self::vpinsr_opcode(size),
-            src1: src1.into(),
-            src2: src2.into(),
-            dst: dst.to_reg().into(),
-            imm: count,
-        });
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = match size {
+            OperandSize::S8 => asm::inst::vpinsrb_b::new(dst, src1, src2, count).into(),
+            OperandSize::S16 => asm::inst::vpinsrw_b::new(dst, src1, src2, count).into(),
+            OperandSize::S32 => asm::inst::vpinsrd_b::new(dst, src1, src2, count).into(),
+            OperandSize::S64 => asm::inst::vpinsrq_b::new(dst, src1, src2, count).into(),
+            OperandSize::S128 => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Copy a 32-bit float in `src2`, merge into `src1`, and put result in `dst`.
@@ -1917,17 +1933,6 @@ impl Assembler {
             dst: dst.map(Into::into),
             src_size: size.into(),
         })
-    }
-
-    /// The `vpinsr` opcode to use.
-    fn vpinsr_opcode(size: OperandSize) -> AvxOpcode {
-        match size {
-            OperandSize::S8 => AvxOpcode::Vpinsrb,
-            OperandSize::S16 => AvxOpcode::Vpinsrw,
-            OperandSize::S32 => AvxOpcode::Vpinsrd,
-            OperandSize::S64 => AvxOpcode::Vpinsrq,
-            _ => unimplemented!(),
-        }
     }
 
     /// Perform an AVX opcode `op` involving registers `src1` and `src2`, writing the

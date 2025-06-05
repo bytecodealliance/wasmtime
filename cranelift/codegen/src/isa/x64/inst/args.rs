@@ -1076,10 +1076,6 @@ impl AvxOpcode {
             | AvxOpcode::Vpackuswb
             | AvxOpcode::Vpackusdw
             | AvxOpcode::Vpalignr
-            | AvxOpcode::Vpinsrb
-            | AvxOpcode::Vpinsrw
-            | AvxOpcode::Vpinsrd
-            | AvxOpcode::Vpinsrq
             | AvxOpcode::Vpmaddwd
             | AvxOpcode::Vpmaddubsw
             | AvxOpcode::Vinsertps

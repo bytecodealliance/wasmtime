@@ -1733,45 +1733,6 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
-        Inst::XmmVexPinsr {
-            op,
-            src1,
-            src2,
-            dst,
-            imm,
-        } => {
-            let dst = dst.to_reg().to_reg();
-            let src1 = src1.to_reg();
-            let src2 = match src2.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let (w, map, opcode) = match op {
-                AvxOpcode::Vpinsrb => (false, OpcodeMap::_0F3A, 0x20),
-                AvxOpcode::Vpinsrw => (false, OpcodeMap::_0F, 0xC4),
-                AvxOpcode::Vpinsrd => (false, OpcodeMap::_0F3A, 0x22),
-                AvxOpcode::Vpinsrq => (true, OpcodeMap::_0F3A, 0x22),
-                _ => panic!("unexpected vex_pinsr opcode {op:?}"),
-            };
-
-            VexInstruction::new()
-                .length(VexVectorLength::V128)
-                .prefix(LegacyPrefixes::_66)
-                .map(map)
-                .w(w)
-                .opcode(opcode)
-                .reg(dst.to_real_reg().unwrap().hw_enc())
-                .vvvv(src1.to_real_reg().unwrap().hw_enc())
-                .rm(src2)
-                .imm(*imm)
-                .encode(sink);
-        }
-
         Inst::XmmRmRVex3 {
             op,
             src1,
