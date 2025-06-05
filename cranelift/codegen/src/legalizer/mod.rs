@@ -55,8 +55,6 @@ pub fn simple_legalize(func: &mut ir::Function, isa: &dyn TargetIsa) {
     trace!("Pre-legalization function:\n{}", func.display());
 
     let mut pos = FuncCursor::new(func);
-    let func_begin = pos.position();
-    pos.set_position(func_begin);
     while let Some(_block) = pos.next_block() {
         let mut prev_pos = pos.position();
         while let Some(inst) = pos.next_inst() {
