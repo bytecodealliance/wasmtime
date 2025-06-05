@@ -5,208 +5,416 @@
 version = "0.121.0"
 audited_as = "0.120.0"
 
+[[unpublished.cranelift]]
+version = "0.122.0"
+audited_as = "0.120.0"
+
 [[unpublished.cranelift-assembler-x64]]
 version = "0.121.0"
+audited_as = "0.120.0"
+
+[[unpublished.cranelift-assembler-x64]]
+version = "0.122.0"
 audited_as = "0.120.0"
 
 [[unpublished.cranelift-assembler-x64-meta]]
 version = "0.121.0"
 audited_as = "0.120.0"
 
+[[unpublished.cranelift-assembler-x64-meta]]
+version = "0.122.0"
+audited_as = "0.120.0"
+
 [[unpublished.cranelift-bforest]]
 version = "0.121.0"
+audited_as = "0.120.0"
+
+[[unpublished.cranelift-bforest]]
+version = "0.122.0"
 audited_as = "0.120.0"
 
 [[unpublished.cranelift-bitset]]
 version = "0.121.0"
 audited_as = "0.120.0"
 
+[[unpublished.cranelift-bitset]]
+version = "0.122.0"
+audited_as = "0.120.0"
+
 [[unpublished.cranelift-codegen]]
 version = "0.121.0"
+audited_as = "0.120.0"
+
+[[unpublished.cranelift-codegen]]
+version = "0.122.0"
 audited_as = "0.120.0"
 
 [[unpublished.cranelift-codegen-meta]]
 version = "0.121.0"
 audited_as = "0.120.0"
 
+[[unpublished.cranelift-codegen-meta]]
+version = "0.122.0"
+audited_as = "0.120.0"
+
 [[unpublished.cranelift-codegen-shared]]
 version = "0.121.0"
+audited_as = "0.120.0"
+
+[[unpublished.cranelift-codegen-shared]]
+version = "0.122.0"
 audited_as = "0.120.0"
 
 [[unpublished.cranelift-control]]
 version = "0.121.0"
 audited_as = "0.120.0"
 
+[[unpublished.cranelift-control]]
+version = "0.122.0"
+audited_as = "0.120.0"
+
 [[unpublished.cranelift-entity]]
 version = "0.121.0"
+audited_as = "0.120.0"
+
+[[unpublished.cranelift-entity]]
+version = "0.122.0"
 audited_as = "0.120.0"
 
 [[unpublished.cranelift-frontend]]
 version = "0.121.0"
 audited_as = "0.120.0"
 
+[[unpublished.cranelift-frontend]]
+version = "0.122.0"
+audited_as = "0.120.0"
+
 [[unpublished.cranelift-interpreter]]
 version = "0.121.0"
+audited_as = "0.120.0"
+
+[[unpublished.cranelift-interpreter]]
+version = "0.122.0"
 audited_as = "0.120.0"
 
 [[unpublished.cranelift-isle]]
 version = "0.121.0"
 audited_as = "0.120.0"
 
+[[unpublished.cranelift-isle]]
+version = "0.122.0"
+audited_as = "0.120.0"
+
 [[unpublished.cranelift-jit]]
 version = "0.121.0"
+audited_as = "0.120.0"
+
+[[unpublished.cranelift-jit]]
+version = "0.122.0"
 audited_as = "0.120.0"
 
 [[unpublished.cranelift-module]]
 version = "0.121.0"
 audited_as = "0.120.0"
 
+[[unpublished.cranelift-module]]
+version = "0.122.0"
+audited_as = "0.120.0"
+
 [[unpublished.cranelift-native]]
 version = "0.121.0"
+audited_as = "0.120.0"
+
+[[unpublished.cranelift-native]]
+version = "0.122.0"
 audited_as = "0.120.0"
 
 [[unpublished.cranelift-object]]
 version = "0.121.0"
 audited_as = "0.120.0"
 
+[[unpublished.cranelift-object]]
+version = "0.122.0"
+audited_as = "0.120.0"
+
 [[unpublished.cranelift-reader]]
 version = "0.121.0"
+audited_as = "0.120.0"
+
+[[unpublished.cranelift-reader]]
+version = "0.122.0"
 audited_as = "0.120.0"
 
 [[unpublished.cranelift-serde]]
 version = "0.121.0"
 audited_as = "0.120.0"
 
+[[unpublished.cranelift-serde]]
+version = "0.122.0"
+audited_as = "0.120.0"
+
 [[unpublished.cranelift-srcgen]]
 version = "0.121.0"
+audited_as = "0.120.0"
+
+[[unpublished.cranelift-srcgen]]
+version = "0.122.0"
 audited_as = "0.120.0"
 
 [[unpublished.pulley-interpreter]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.pulley-interpreter]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasi-common]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasi-common]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasmtime-asm-macros]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasmtime-asm-macros]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime-cache]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-cache]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasmtime-cli]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasmtime-cli]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime-cli-flags]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-cli-flags]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasmtime-component-macro]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasmtime-component-macro]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime-component-util]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-component-util]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasmtime-cranelift]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasmtime-cranelift]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime-environ]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-environ]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasmtime-explorer]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasmtime-explorer]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime-fiber]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-fiber]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasmtime-jit-debug]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasmtime-jit-debug]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime-jit-icache-coherence]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-jit-icache-coherence]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasmtime-math]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasmtime-math]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime-slab]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-slab]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasmtime-wasi]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasmtime-wasi]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime-wasi-config]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-wasi-config]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasmtime-wasi-http]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasmtime-wasi-http]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime-wasi-io]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-wasi-io]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasmtime-wasi-keyvalue]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasmtime-wasi-keyvalue]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime-wasi-nn]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-wasi-nn]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasmtime-wasi-threads]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasmtime-wasi-threads]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime-wasi-tls]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-wasi-tls]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasmtime-wast]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasmtime-wast]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime-winch]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-winch]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wasmtime-wit-bindgen]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wasmtime-wit-bindgen]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wasmtime-wmemcheck]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wasmtime-wmemcheck]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wiggle]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wiggle]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wiggle-generate]]
 version = "34.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.wiggle-generate]]
+version = "35.0.0"
+audited_as = "33.0.0"
+
 [[unpublished.wiggle-macro]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.wiggle-macro]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[unpublished.wiggle-test]]
@@ -215,6 +423,10 @@ audited_as = "0.1.0"
 
 [[unpublished.winch-codegen]]
 version = "34.0.0"
+audited_as = "33.0.0"
+
+[[unpublished.winch-codegen]]
+version = "35.0.0"
 audited_as = "33.0.0"
 
 [[publisher.aho-corasick]]
