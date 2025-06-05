@@ -431,7 +431,6 @@ default = [
   "gc",
   "gc-drc",
   "gc-null",
-  "stack-switching",
   "winch",
   "pulley",
 
@@ -490,7 +489,6 @@ gc = ["wasmtime-cli-flags/gc", "wasmtime/gc"]
 gc-drc = ["gc", "wasmtime/gc-drc", "wasmtime-cli-flags/gc-drc"]
 gc-null = ["gc", "wasmtime/gc-null", "wasmtime-cli-flags/gc-null"]
 pulley = ["wasmtime-cli-flags/pulley"]
-stack-switching = ["wasmtime/stack-switching", "wasmtime-cli-flags/stack-switching"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.

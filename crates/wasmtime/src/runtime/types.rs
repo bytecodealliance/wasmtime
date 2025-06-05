@@ -158,12 +158,6 @@ impl ValType {
     /// The `nullref` type, aka `(ref null none)`.
     pub const NULLREF: Self = ValType::Ref(RefType::NULLREF);
 
-    /// The `contref` type, aka `(ref null cont)`.
-    pub const CONTREF: Self = ValType::Ref(RefType::CONTREF);
-
-    /// The `nullcontref` type, aka. `(ref null nocont)`.
-    pub const NULLCONTREF: Self = ValType::Ref(RefType::NULLCONTREF);
-
     /// Returns true if `ValType` matches any of the numeric types. (e.g. `I32`,
     /// `I64`, `F32`, `F64`).
     #[inline]
@@ -242,18 +236,6 @@ impl ValType {
             ValType::Ref(RefType {
                 is_nullable: true,
                 heap_type: HeapType::Any
-            })
-        )
-    }
-
-    /// Is this the `contref` (aka `(ref null cont)`) type?
-    #[inline]
-    pub fn is_contref(&self) -> bool {
-        matches!(
-            self,
-            ValType::Ref(RefType {
-                is_nullable: true,
-                heap_type: HeapType::Cont
             })
         )
     }
@@ -474,18 +456,6 @@ impl RefType {
     pub const NULLREF: Self = RefType {
         is_nullable: true,
         heap_type: HeapType::None,
-    };
-
-    /// The `contref` type, aka `(ref null cont)`.
-    pub const CONTREF: Self = RefType {
-        is_nullable: true,
-        heap_type: HeapType::Cont,
-    };
-
-    /// The `nullcontref` type, aka `(ref null nocont)`.
-    pub const NULLCONTREF: Self = RefType {
-        is_nullable: true,
-        heap_type: HeapType::NoCont,
     };
 
     /// Construct a new reference type.
@@ -748,23 +718,6 @@ pub enum HeapType {
     /// of `any` and `eq`) and supertypes of the `none` heap type.
     ConcreteStruct(StructType),
 
-    /// A reference to a continuation of a specific, concrete type.
-    ///
-    /// These are subtypes of `cont` and supertypes of `nocont`.
-    ConcreteCont(ContType),
-
-    /// The `cont` heap type represents a reference to any kind of continuation.
-    ///
-    /// This is the top type for the continuation objects type hierarchy, and is
-    /// therefore a supertype of every continuation object.
-    Cont,
-
-    /// The `nocont` heap type represents the null continuation object.
-    ///
-    /// This is the bottom type for the continuation objects type hierarchy, and
-    /// therefore `nocont` is a subtype of all continuation object types.
-    NoCont,
-
     /// The abstract `none` heap type represents the null internal reference.
     ///
     /// This is the bottom type for the internal type hierarchy, and therefore
@@ -788,9 +741,6 @@ impl Display for HeapType {
             HeapType::ConcreteFunc(ty) => write!(f, "(concrete func {:?})", ty.type_index()),
             HeapType::ConcreteArray(ty) => write!(f, "(concrete array {:?})", ty.type_index()),
             HeapType::ConcreteStruct(ty) => write!(f, "(concrete struct {:?})", ty.type_index()),
-            HeapType::ConcreteCont(ty) => write!(f, "(concrete cont {:?})", ty.type_index()),
-            HeapType::Cont => write!(f, "cont"),
-            HeapType::NoCont => write!(f, "nocont"),
         }
     }
 }
@@ -813,13 +763,6 @@ impl From<StructType> for HeapType {
     #[inline]
     fn from(s: StructType) -> Self {
         HeapType::ConcreteStruct(s)
-    }
-}
-
-impl From<ContType> for HeapType {
-    #[inline]
-    fn from(f: ContType) -> Self {
-        HeapType::ConcreteCont(f)
     }
 }
 
@@ -854,11 +797,6 @@ impl HeapType {
         matches!(self, HeapType::None)
     }
 
-    /// Is this the abstract `cont` heap type?
-    pub fn is_cont(&self) -> bool {
-        matches!(self, HeapType::Cont)
-    }
-
     /// Is this an abstract type?
     ///
     /// Types that are not abstract are concrete, user-defined types.
@@ -873,10 +811,7 @@ impl HeapType {
     pub fn is_concrete(&self) -> bool {
         matches!(
             self,
-            HeapType::ConcreteFunc(_)
-                | HeapType::ConcreteArray(_)
-                | HeapType::ConcreteStruct(_)
-                | HeapType::ConcreteCont(_)
+            HeapType::ConcreteFunc(_) | HeapType::ConcreteArray(_) | HeapType::ConcreteStruct(_)
         )
     }
 
@@ -922,21 +857,6 @@ impl HeapType {
         self.as_concrete_array().unwrap()
     }
 
-    /// Is this a concrete, user-defined continuation type?
-    pub fn is_concrete_cont(&self) -> bool {
-        matches!(self, HeapType::ConcreteCont(_))
-    }
-
-    /// Get the underlying concrete, user-defined continuation type, if any.
-    ///
-    /// Returns `None` if this is not a concrete continuation type.
-    pub fn as_concrete_cont(&self) -> Option<&ContType> {
-        match self {
-            HeapType::ConcreteCont(f) => Some(f),
-            _ => None,
-        }
-    }
-
     /// Is this a concrete, user-defined struct type?
     pub fn is_concrete_struct(&self) -> bool {
         matches!(self, HeapType::ConcreteStruct(_))
@@ -950,12 +870,6 @@ impl HeapType {
             HeapType::ConcreteStruct(f) => Some(f),
             _ => None,
         }
-    }
-
-    /// Get the underlying concrete, user-defined type, panicking if this is not
-    /// a concrete continuation type.
-    pub fn unwrap_concrete_cont(&self) -> &ContType {
-        self.as_concrete_cont().unwrap()
     }
 
     /// Get the underlying concrete, user-defined type, panicking if this is not
@@ -983,8 +897,6 @@ impl HeapType {
             | HeapType::Struct
             | HeapType::ConcreteStruct(_)
             | HeapType::None => HeapType::Any,
-
-            HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapType::Cont,
         }
     }
 
@@ -992,7 +904,7 @@ impl HeapType {
     #[inline]
     pub fn is_top(&self) -> bool {
         match self {
-            HeapType::Any | HeapType::Extern | HeapType::Func | HeapType::Cont => true,
+            HeapType::Any | HeapType::Extern | HeapType::Func => true,
             _ => false,
         }
     }
@@ -1016,8 +928,6 @@ impl HeapType {
             | HeapType::Struct
             | HeapType::ConcreteStruct(_)
             | HeapType::None => HeapType::None,
-
-            HeapType::Cont | HeapType::ConcreteCont(_) | HeapType::NoCont => HeapType::NoCont,
         }
     }
 
@@ -1025,7 +935,7 @@ impl HeapType {
     #[inline]
     pub fn is_bottom(&self) -> bool {
         match self {
-            HeapType::None | HeapType::NoExtern | HeapType::NoFunc | HeapType::NoCont => true,
+            HeapType::None | HeapType::NoExtern | HeapType::NoFunc => true,
             _ => false,
         }
     }
@@ -1062,18 +972,6 @@ impl HeapType {
 
             (HeapType::Func, HeapType::Func) => true,
             (HeapType::Func, _) => false,
-
-            (HeapType::Cont, HeapType::Cont) => true,
-            (HeapType::Cont, _) => false,
-
-            (HeapType::NoCont, HeapType::NoCont | HeapType::ConcreteCont(_) | HeapType::Cont) => {
-                true
-            }
-            (HeapType::NoCont, _) => false,
-
-            (HeapType::ConcreteCont(_), HeapType::Cont) => true,
-            (HeapType::ConcreteCont(a), HeapType::ConcreteCont(b)) => a.matches(b),
-            (HeapType::ConcreteCont(_), _) => false,
 
             (
                 HeapType::None,
@@ -1158,13 +1056,10 @@ impl HeapType {
             | HeapType::I31
             | HeapType::Array
             | HeapType::Struct
-            | HeapType::Cont
-            | HeapType::NoCont
             | HeapType::None => true,
             HeapType::ConcreteFunc(ty) => ty.comes_from_same_engine(engine),
             HeapType::ConcreteArray(ty) => ty.comes_from_same_engine(engine),
             HeapType::ConcreteStruct(ty) => ty.comes_from_same_engine(engine),
-            HeapType::ConcreteCont(ty) => ty.comes_from_same_engine(engine),
         }
     }
 
@@ -1188,11 +1083,6 @@ impl HeapType {
             }
             HeapType::ConcreteStruct(a) => {
                 WasmHeapType::ConcreteStruct(EngineOrModuleTypeIndex::Engine(a.type_index()))
-            }
-            HeapType::Cont => WasmHeapType::Cont,
-            HeapType::NoCont => WasmHeapType::NoCont,
-            HeapType::ConcreteCont(c) => {
-                WasmHeapType::ConcreteCont(EngineOrModuleTypeIndex::Engine(c.type_index()))
             }
         }
     }
@@ -1224,22 +1114,16 @@ impl HeapType {
             | WasmHeapType::ConcreteArray(EngineOrModuleTypeIndex::Module(_))
             | WasmHeapType::ConcreteArray(EngineOrModuleTypeIndex::RecGroup(_))
             | WasmHeapType::ConcreteStruct(EngineOrModuleTypeIndex::Module(_))
-            | WasmHeapType::ConcreteStruct(EngineOrModuleTypeIndex::RecGroup(_))
-            | WasmHeapType::ConcreteCont(EngineOrModuleTypeIndex::Module(_))
-            | WasmHeapType::ConcreteCont(EngineOrModuleTypeIndex::RecGroup(_)) => {
+            | WasmHeapType::ConcreteStruct(EngineOrModuleTypeIndex::RecGroup(_)) => {
                 panic!("HeapType::from_wasm_type on non-canonicalized-for-runtime-usage heap type")
             }
-            WasmHeapType::Cont => HeapType::Cont,
-            WasmHeapType::NoCont => HeapType::NoCont,
-            WasmHeapType::ConcreteCont(EngineOrModuleTypeIndex::Engine(idx)) => {
-                HeapType::ConcreteCont(ContType::from_shared_type_index(engine, *idx))
-            }
+
+            WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => todo!(), // FIXME: #10248 stack switching support.
         }
     }
 
     pub(crate) fn as_registered_type(&self) -> Option<&RegisteredType> {
         match self {
-            HeapType::ConcreteCont(c) => Some(&c.registered_type),
             HeapType::ConcreteFunc(f) => Some(&f.registered_type),
             HeapType::ConcreteArray(a) => Some(&a.registered_type),
             HeapType::ConcreteStruct(a) => Some(&a.registered_type),
@@ -1253,8 +1137,6 @@ impl HeapType {
             | HeapType::I31
             | HeapType::Array
             | HeapType::Struct
-            | HeapType::Cont
-            | HeapType::NoCont
             | HeapType::None => None,
         }
     }
@@ -1264,7 +1146,6 @@ impl HeapType {
         match self.top() {
             Self::Any | Self::Extern => true,
             Self::Func => false,
-            Self::Cont => false,
             ty => unreachable!("not a top type: {ty:?}"),
         }
     }
@@ -2566,53 +2447,6 @@ impl FuncType {
             }
             Ok(())
         }))
-    }
-}
-
-// Continuation types
-/// A WebAssembly continuation descriptor.
-#[derive(Debug, Clone, Hash)]
-pub struct ContType {
-    registered_type: RegisteredType,
-}
-
-impl ContType {
-    /// Get the engine that this function type is associated with.
-    pub fn engine(&self) -> &Engine {
-        self.registered_type.engine()
-    }
-
-    pub(crate) fn comes_from_same_engine(&self, engine: &Engine) -> bool {
-        Engine::same(self.registered_type.engine(), engine)
-    }
-
-    pub(crate) fn type_index(&self) -> VMSharedTypeIndex {
-        self.registered_type.index()
-    }
-
-    /// Does this continuation type match the other continuation type?
-    ///
-    /// That is, is this continuation type a subtype of the other continuation type?
-    ///
-    /// # Panics
-    ///
-    /// Panics if either type is associated with a different engine from the
-    /// other.
-    pub fn matches(&self, other: &ContType) -> bool {
-        assert!(self.comes_from_same_engine(other.engine()));
-
-        // Avoid matching on structure for subtyping checks when we have
-        // precisely the same type.
-        // TODO(dhil): Implement subtype check later.
-        self.type_index() == other.type_index()
-    }
-
-    pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> ContType {
-        let ty = RegisteredType::root(engine, index);
-        assert!(ty.is_cont());
-        Self {
-            registered_type: ty,
-        }
     }
 }
 

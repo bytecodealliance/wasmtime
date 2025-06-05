@@ -280,11 +280,6 @@ impl Val {
 
                     HeapType::NoFunc => Ref::Func(None),
 
-                    HeapType::NoCont | HeapType::ConcreteCont(_) | HeapType::Cont => {
-                        // TODO(#10248): Required to support stack switching in the embedder API.
-                        unimplemented!()
-                    }
-
                     HeapType::Extern => ExternRef::_from_raw(store, raw.get_externref()).into(),
 
                     HeapType::NoExtern => Ref::Extern(None),
