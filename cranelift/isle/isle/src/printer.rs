@@ -5,10 +5,7 @@ use std::{io::Write, vec};
 use crate::ast::{Def, Field, Ident, Type, TypeValue, Variant};
 
 /// Print ISLE definitions.
-pub fn print<N, W>(defs: &[Def], out: &mut W) -> std::io::Result<()>
-where
-    W: Write,
-{
+pub fn print<W: Write>(defs: &[Def], width: usize, out: &mut W) -> std::io::Result<()> {
     for def in defs {
         print_node(def, out)?;
         writeln!(out)?;
