@@ -856,12 +856,13 @@ fn initialize_globals(
                 .expect("should be a valid const expr")
         };
 
-        let to = store.instance(context.instance).global_ptr(index);
+        let instance = store.instance_mut(context.instance);
+        let to = instance.global_ptr(index);
         let wasm_ty = module.globals[module.global_index(index)].wasm_ty;
 
         #[cfg(feature = "wmemcheck")]
         if index.as_u32() == 0 && wasm_ty == wasmtime_environ::WasmValType::I32 {
-            if let Some(wmemcheck) = &mut context.instance.wmemcheck_state {
+            if let Some(wmemcheck) = instance.wmemcheck_state_mut() {
                 let size = usize::try_from(raw.get_i32()).unwrap();
                 wmemcheck.set_stack_size(size);
             }

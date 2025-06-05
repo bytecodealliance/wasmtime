@@ -1169,7 +1169,7 @@ unsafe fn check_malloc(
     addr: u32,
     len: u32,
 ) -> Result<()> {
-    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+    if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         let result = wmemcheck_state.malloc(addr as usize, len as usize);
         wmemcheck_state.memcheck_on();
         match result {
@@ -1195,7 +1195,7 @@ unsafe fn check_free(
     instance: Pin<&mut Instance>,
     addr: u32,
 ) -> Result<()> {
-    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+    if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         let result = wmemcheck_state.free(addr as usize);
         wmemcheck_state.memcheck_on();
         match result {
@@ -1220,7 +1220,7 @@ fn check_load(
     addr: u32,
     offset: u32,
 ) -> Result<()> {
-    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+    if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         let result = wmemcheck_state.read(addr as usize + offset as usize, num_bytes as usize);
         match result {
             Ok(()) => {}
@@ -1247,7 +1247,7 @@ fn check_store(
     addr: u32,
     offset: u32,
 ) -> Result<()> {
-    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+    if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         let result = wmemcheck_state.write(addr as usize + offset as usize, num_bytes as usize);
         match result {
             Ok(()) => {}
@@ -1268,7 +1268,7 @@ fn check_store(
 // Hook for turning wmemcheck load/store validation off when entering a malloc function.
 #[cfg(feature = "wmemcheck")]
 fn malloc_start(_store: &mut dyn VMStore, instance: Pin<&mut Instance>) {
-    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+    if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         wmemcheck_state.memcheck_off();
     }
 }
@@ -1276,7 +1276,7 @@ fn malloc_start(_store: &mut dyn VMStore, instance: Pin<&mut Instance>) {
 // Hook for turning wmemcheck load/store validation off when entering a free function.
 #[cfg(feature = "wmemcheck")]
 fn free_start(_store: &mut dyn VMStore, instance: Pin<&mut Instance>) {
-    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+    if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         wmemcheck_state.memcheck_off();
     }
 }
@@ -1295,7 +1295,7 @@ fn update_stack_pointer(_store: &mut dyn VMStore, _instance: Pin<&mut Instance>,
 // Hook updating wmemcheck_state memory state vector every time memory.grow is called.
 #[cfg(feature = "wmemcheck")]
 fn update_mem_size(_store: &mut dyn VMStore, instance: Pin<&mut Instance>, num_pages: u32) {
-    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+    if let Some(wmemcheck_state) = instance.wmemcheck_state_mut() {
         const KIB: usize = 1024;
         let num_bytes = num_pages as usize * 64 * KIB;
         wmemcheck_state.update_mem_size(num_bytes);

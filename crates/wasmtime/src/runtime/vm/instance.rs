@@ -1707,6 +1707,12 @@ impl Instance {
         // SAFETY: see `store_mut` above.
         unsafe { &mut self.get_unchecked_mut().tables }
     }
+
+    #[cfg(feature = "wmemcheck")]
+    pub(super) fn wmemcheck_state_mut(self: Pin<&mut Self>) -> &mut Option<Wmemcheck> {
+        // SAFETY: see `store_mut` above.
+        unsafe { &mut self.get_unchecked_mut().wmemcheck_state }
+    }
 }
 
 /// A handle holding an `Instance` of a WebAssembly module.
