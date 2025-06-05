@@ -55,7 +55,7 @@ impl Instance {
     ///
     /// The safety of this function relies on `id` belonging to the instance
     /// within `store`.
-    pub(crate) unsafe fn from_wasmtime(store: &StoreOpaque, id: ComponentInstanceId) -> Instance {
+    pub(crate) fn from_wasmtime(store: &StoreOpaque, id: ComponentInstanceId) -> Instance {
         Instance {
             id: StoreComponentInstanceId::new(store.id(), id),
         }
@@ -883,10 +883,7 @@ impl<T: 'static> InstancePre<T> {
                 .decrement_component_instance_count();
             e
         })?;
-        // SAFETY: `from_wasmtime` requires that `id` belongs to the store
-        // provided, and it was just inserted above so the condition should be
-        // satisfied.
-        let instance = unsafe { Instance::from_wasmtime(store.0, instantiator.id) };
+        let instance = Instance::from_wasmtime(store.0, instantiator.id);
         store.0.push_component_instance(instance);
         Ok(instance)
     }
