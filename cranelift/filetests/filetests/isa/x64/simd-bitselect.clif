@@ -13,7 +13,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqa %xmm0, %xmm4
-;   pcmpeqb %xmm4, %xmm1, %xmm4
+;   pcmpeqb %xmm1, %xmm4
 ;   movdqa %xmm0, %xmm7
 ;   movdqa %xmm4, %xmm0
 ;   movdqa %xmm1, %xmm4
