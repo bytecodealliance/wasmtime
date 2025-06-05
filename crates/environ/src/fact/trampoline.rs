@@ -16,11 +16,11 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FixedEncoding as FE,
-    FlatType, InterfaceType, MAX_FLAT_PARAMS, StringEncoding, Transcode,
-    TypeComponentLocalErrorContextTableIndex, TypeEnumIndex, TypeFlagsIndex, TypeFutureTableIndex,
-    TypeListIndex, TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex,
-    TypeStreamTableIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
+    CanonicalAbiInfo, ComponentTypesBuilder, FixedEncoding as FE, FlatType, InterfaceType,
+    StringEncoding, Transcode, TypeComponentLocalErrorContextTableIndex, TypeEnumIndex,
+    TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
+    TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
+    TypeVariantIndex, VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
@@ -2679,26 +2679,50 @@ impl<'a, 'b> Compiler<'a, 'b> {
             InterfaceType::Enum(t) => &self.types[*t],
             _ => panic!("expected an option"),
         };
-        let src_info = variant_info(self.types, src_ty.names.iter().map(|_| None));
-        let dst_info = variant_info(self.types, dst_ty.names.iter().map(|_| None));
 
-        self.convert_variant(
-            src,
-            &src_info,
-            dst,
-            &dst_info,
-            src_ty.names.iter().enumerate().map(|(src_i, src_name)| {
-                let dst_i = dst_ty.names.iter().position(|n| n == src_name).unwrap();
-                let src_i = u32::try_from(src_i).unwrap();
-                let dst_i = u32::try_from(dst_i).unwrap();
-                VariantCase {
-                    src_i,
-                    dst_i,
-                    src_ty: None,
-                    dst_ty: None,
+        debug_assert_eq!(src_ty.info.size, dst_ty.info.size);
+        debug_assert_eq!(src_ty.names.len(), dst_ty.names.len());
+        debug_assert!(src_ty
+            .names
+            .iter()
+            .zip(dst_ty.names.iter())
+            .all(|(a, b)| a == b));
+
+        // Get the discriminant.
+        match src {
+            Source::Stack(s) => self.stack_get(&s.slice(0..1), ValType::I32),
+            Source::Memory(mem) => match src_ty.info.size {
+                DiscriminantSize::Size1 => self.i32_load8u(mem),
+                DiscriminantSize::Size2 => self.i32_load16u(mem),
+                DiscriminantSize::Size4 => self.i32_load(mem),
+            },
+        }
+        let tmp = self.local_tee_new_tmp(ValType::I32);
+
+        // Assert that the discriminant is valid.
+        self.instruction(I32Const(i32::try_from(src_ty.names.len()).unwrap()));
+        self.instruction(I32GtU);
+        self.instruction(If(BlockType::Empty));
+        self.trap(Trap::InvalidDiscriminant);
+        self.instruction(End);
+
+        // Save the discriminant to the destination.
+        match dst {
+            Destination::Stack(stack, _) => {
+                self.local_get_tmp(&tmp);
+                self.stack_set(&stack[..1], ValType::I32)
+            }
+            Destination::Memory(mem) => {
+                self.push_dst_addr(dst);
+                self.local_get_tmp(&tmp);
+                match dst_ty.info.size {
+                    DiscriminantSize::Size1 => self.i32_store8(mem),
+                    DiscriminantSize::Size2 => self.i32_store16(mem),
+                    DiscriminantSize::Size4 => self.i32_store(mem),
                 }
-            }),
-        );
+            }
+        }
+        self.free_temp_local(tmp);
     }
 
     fn translate_option(
@@ -3116,6 +3140,10 @@ impl<'a, 'b> Compiler<'a, 'b> {
     /// instead of `LocalTee`.
     fn local_set_new_tmp(&mut self, ty: ValType) -> TempLocal {
         self.gen_temp_local(ty, LocalSet)
+    }
+
+    fn local_get_tmp(&mut self, local: &TempLocal) {
+        self.instruction(LocalGet(local.idx));
     }
 
     fn gen_temp_local(&mut self, ty: ValType, insn: fn(u32) -> Instruction<'static>) -> TempLocal {
