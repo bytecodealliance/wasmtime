@@ -17,8 +17,7 @@ use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
 use cranelift::prelude::isa::OwnedTargetIsa;
 use cranelift::prelude::{
-    EntityRef, ExtFuncData, FloatCC, InstBuilder, IntCC, JumpTableData, MemFlags, StackSlotData,
-    StackSlotKind,
+    ExtFuncData, FloatCC, InstBuilder, IntCC, JumpTableData, MemFlags, StackSlotData, StackSlotKind,
 };
 use std::collections::HashMap;
 use std::ops::RangeInclusive;
@@ -1907,9 +1906,8 @@ where
             vars.push((ty, value));
         }
 
-        for (id, (ty, value)) in vars.into_iter().enumerate() {
-            let var = Variable::new(id);
-            builder.declare_var(var, ty);
+        for (ty, value) in vars.into_iter() {
+            let var = builder.declare_var(ty);
             builder.def_var(var, value);
 
             // Randomly declare variables as needing a stack map.

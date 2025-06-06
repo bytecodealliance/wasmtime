@@ -12,7 +12,7 @@ use crate::translate::translation_utils::get_vmctx_value_label;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
-use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
+use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use wasmparser::{BinaryReader, FuncValidator, FunctionBody, OperatorsReader, WasmModuleResources};
 use wasmtime_environ::{TypeConvert, WasmResult};
 
@@ -113,8 +113,8 @@ fn declare_wasm_parameters(
         // signature parameters. For example, a `vmctx` pointer.
         if environ.is_wasm_parameter(&builder.func.signature, i) {
             // This is a normal WebAssembly signature parameter, so create a local for it.
-            let local = Variable::new(next_local);
-            builder.declare_var(local, param_type.value_type);
+            let local = builder.declare_var(param_type.value_type);
+            debug_assert_eq!(local.index(), next_local);
             next_local += 1;
 
             if environ.param_needs_stack_map(&builder.func.signature, i) {
@@ -154,8 +154,6 @@ fn parse_local_decls(
         validator.define_locals(pos, count, ty)?;
         declare_locals(builder, count, ty, &mut next_local, environ)?;
     }
-
-    environ.after_locals(next_local);
 
     Ok(())
 }
@@ -214,8 +212,8 @@ fn declare_locals(
     };
 
     for _ in 0..count {
-        let local = Variable::new(*next_local);
-        builder.declare_var(local, ty);
+        let local = builder.declare_var(ty);
+        debug_assert_eq!(local.index(), *next_local);
         if needs_stack_map {
             builder.declare_var_needs_stack_map(local);
         }
