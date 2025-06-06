@@ -1454,6 +1454,7 @@ impl ComponentCompiler for Compiler {
         types: &ComponentTypesBuilder,
         index: TrampolineIndex,
         tunables: &Tunables,
+        symbol: &str,
     ) -> Result<AllCallFunc<CompiledFunctionBody>> {
         let compile = |abi: Abi| -> Result<_> {
             let mut compiler = self.function_compiler();
@@ -1499,9 +1500,7 @@ impl ComponentCompiler for Compiler {
             c.builder.finalize();
 
             Ok(CompiledFunctionBody {
-                code: Box::new(
-                    compiler.finish(&format!("component_trampoline_{}_{abi:?}", index.as_u32()))?,
-                ),
+                code: Box::new(compiler.finish(symbol)?),
                 needs_gc_heap: false,
             })
         };

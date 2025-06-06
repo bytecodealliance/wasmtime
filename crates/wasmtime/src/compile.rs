@@ -381,14 +381,15 @@ impl<'a> CompileInputs<'a> {
 
         for (idx, trampoline) in component.trampolines.iter() {
             ret.push_input(move |compiler| {
+                let symbol = trampoline.symbol_name();
                 Ok(CompileOutput {
                     key: CompileKey::trampoline(idx),
-                    symbol: trampoline.symbol_name(),
                     function: compiler
                         .component_compiler()
-                        .compile_trampoline(component, types, idx, tunables)
-                        .with_context(|| format!("failed to compile {}", trampoline.symbol_name()))?
+                        .compile_trampoline(component, types, idx, tunables, &symbol)
+                        .with_context(|| format!("failed to compile {symbol}"))?
                         .into(),
+                    symbol,
                     start_srcloc: FilePos::default(),
                 })
             });
@@ -405,7 +406,7 @@ impl<'a> CompileInputs<'a> {
                 ret.push_input(move |compiler| {
                     let symbol = "resource_drop_trampoline".to_string();
                     let function = compiler
-                        .compile_wasm_to_array_trampoline(types[sig].unwrap_func())
+                        .compile_wasm_to_array_trampoline(types[sig].unwrap_func(), &symbol)
                         .with_context(|| format!("failed to compile `{symbol}`"))?;
                     Ok(CompileOutput {
                         key: CompileKey::resource_drop_wasm_to_array_trampoline(),
@@ -487,7 +488,7 @@ impl<'a> CompileInputs<'a> {
                     let offset = data.original_position();
                     let start_srcloc = FilePos::new(u32::try_from(offset).unwrap());
                     let function = compiler
-                        .compile_function(translation, def_func_index, func_body, types)
+                        .compile_function(translation, def_func_index, func_body, types, &symbol)
                         .with_context(|| format!("failed to compile: {symbol}"))?;
 
                     Ok(CompileOutput {
@@ -508,7 +509,12 @@ impl<'a> CompileInputs<'a> {
                             func_index.as_u32()
                         );
                         let trampoline = compiler
-                            .compile_array_to_wasm_trampoline(translation, types, def_func_index)
+                            .compile_array_to_wasm_trampoline(
+                                translation,
+                                types,
+                                def_func_index,
+                                &symbol,
+                            )
                             .with_context(|| format!("failed to compile: {symbol}"))?;
                         Ok(CompileOutput {
                             key: CompileKey::array_to_wasm_trampoline(module, def_func_index),
@@ -534,7 +540,7 @@ impl<'a> CompileInputs<'a> {
                     trampoline_type_index.as_u32()
                 );
                 let trampoline = compiler
-                    .compile_wasm_to_array_trampoline(trampoline_func_ty)
+                    .compile_wasm_to_array_trampoline(trampoline_func_ty, &symbol)
                     .with_context(|| format!("failed to compile: {symbol}"))?;
                 Ok(CompileOutput {
                     key: CompileKey::wasm_to_array_trampoline(trampoline_type_index),
@@ -579,7 +585,7 @@ fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutpu
         Box::new(move |compiler: &dyn Compiler| {
             let symbol = format!("wasmtime_builtin_{}", builtin.name());
             let trampoline = compiler
-                .compile_wasm_to_builtin(builtin)
+                .compile_wasm_to_builtin(builtin, &symbol)
                 .with_context(|| format!("failed to compile `{symbol}`"))?;
             Ok(CompileOutput {
                 key: CompileKey::wasm_to_builtin_trampoline(builtin),
