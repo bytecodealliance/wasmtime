@@ -39,16 +39,14 @@ pub fn expand_global_value(
             const_vector_scale(inst, func, vector_type, isa)
         }
     }
-
-    // `global_value` can expand to nested `global_value`s.
-    //
-    // TODO: We should only return this if we actually expanded to something
-    // that needs further legalization. That is, the `WalkCommand` return value
-    // should be pushed deeper into the helpers used in the above `match`.
-    WalkCommand::Revisit
 }
 
-fn const_vector_scale(inst: ir::Inst, func: &mut ir::Function, ty: ir::Type, isa: &dyn TargetIsa) {
+fn const_vector_scale(
+    inst: ir::Inst,
+    func: &mut ir::Function,
+    ty: ir::Type,
+    isa: &dyn TargetIsa,
+) -> WalkCommand {
     assert!(ty.bytes() <= 16);
 
     // Use a minimum of 128-bits for the base type.
@@ -57,10 +55,16 @@ fn const_vector_scale(inst: ir::Inst, func: &mut ir::Function, ty: ir::Type, isa
     assert!(scale > 0);
     let pos = FuncCursor::new(func).at_inst(inst);
     pos.func.dfg.replace(inst).iconst(isa.pointer_type(), scale);
+
+    WalkCommand::Continue
 }
 
 /// Expand a `global_value` instruction for a vmctx global.
-fn vmctx_addr(global_value: ir::GlobalValue, inst: ir::Inst, func: &mut ir::Function) {
+fn vmctx_addr(
+    global_value: ir::GlobalValue,
+    inst: ir::Inst,
+    func: &mut ir::Function,
+) -> WalkCommand {
     // Get the value representing the `vmctx` argument.
     let vmctx = func
         .special_param(ir::ArgumentPurpose::VMContext)
@@ -80,6 +84,12 @@ fn vmctx_addr(global_value: ir::GlobalValue, inst: ir::Inst, func: &mut ir::Func
             func.dfg.facts[vmctx] = Some(fact);
         }
     }
+
+    // We removed the instruction, so `cursor.next_inst()` will fail if we
+    // return `WalkCommand::Continue`; instead "revisit" the current
+    // instruction, which will be the next instruction since we removed the
+    // current instruction.
+    WalkCommand::Revisit
 }
 
 /// Expand a `global_value` instruction for an iadd_imm global.
@@ -89,7 +99,7 @@ fn iadd_imm_addr(
     base: ir::GlobalValue,
     offset: i64,
     global_type: ir::Type,
-) {
+) -> WalkCommand {
     let mut pos = FuncCursor::new(func).at_inst(inst);
 
     // Get the value for the lhs.
@@ -109,6 +119,9 @@ fn iadd_imm_addr(
 
     // Simply replace the `global_value` instruction with an `iadd_imm`, reusing the result value.
     pos.func.dfg.replace(inst).iadd(lhs, constant);
+
+    // Need to legalize the `global_value` that we emitted.
+    WalkCommand::Revisit
 }
 
 /// Expand a `global_value` instruction for a load global.
@@ -120,11 +133,12 @@ fn load_addr(
     global_type: ir::Type,
     flags: ir::MemFlags,
     isa: &dyn TargetIsa,
-) {
+) -> WalkCommand {
     // We need to load a pointer from the `base` global value, so insert a new `global_value`
     // instruction. This depends on the iterative legalization loop. Note that the IR verifier
     // detects any cycles in the `load` globals.
     let ptr_ty = isa.pointer_type();
+
     let mut pos = FuncCursor::new(func).at_inst(inst);
     pos.use_srcloc(inst);
 
@@ -139,6 +153,9 @@ fn load_addr(
         .dfg
         .replace(inst)
         .load(global_type, flags, base_addr, offset);
+
+    // Need to legalize the `global_value` for the base address.
+    WalkCommand::Revisit
 }
 
 /// Expand a `global_value` instruction for a symbolic name global.
@@ -148,7 +165,7 @@ fn symbol(
     gv: ir::GlobalValue,
     isa: &dyn TargetIsa,
     tls: bool,
-) {
+) -> WalkCommand {
     let ptr_ty = isa.pointer_type();
 
     if tls {
@@ -156,4 +173,6 @@ fn symbol(
     } else {
         func.dfg.replace(inst).symbol_value(ptr_ty, gv);
     }
+
+    WalkCommand::Continue
 }
