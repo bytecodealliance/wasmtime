@@ -1,3 +1,28 @@
+pub type U = foo::foo::i::T;
+const _: () = {
+    assert!(2 == < U as wasmtime::component::ComponentType >::SIZE32);
+    assert!(2 == < U as wasmtime::component::ComponentType >::ALIGN32);
+};
+pub type T = u32;
+const _: () = {
+    assert!(4 == < T as wasmtime::component::ComponentType >::SIZE32);
+    assert!(4 == < T as wasmtime::component::ComponentType >::ALIGN32);
+};
+#[derive(wasmtime::component::ComponentType)]
+#[derive(wasmtime::component::Lift)]
+#[derive(wasmtime::component::Lower)]
+#[component(record)]
+#[derive(Clone, Copy)]
+pub struct R {}
+impl core::fmt::Debug for R {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("R").finish()
+    }
+}
+const _: () = {
+    assert!(0 == < R as wasmtime::component::ComponentType >::SIZE32);
+    assert!(1 == < R as wasmtime::component::ComponentType >::ALIGN32);
+};
 /// Auto-generated bindings for a pre-instantiated version of a
 /// component which implements the world `foo`.
 ///
@@ -64,7 +89,7 @@ impl<_T: 'static> FooPre<_T> {
 /// For more information see [`Foo`] as well.
 #[derive(Clone)]
 pub struct FooIndices {
-    new: wasmtime::component::ComponentExportIndex,
+    f: wasmtime::component::ComponentExportIndex,
 }
 /// Auto-generated bindings for an instance a component which
 /// implements the world `foo`.
@@ -92,7 +117,7 @@ pub struct FooIndices {
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Foo {
-    new: wasmtime::component::Func,
+    f: wasmtime::component::Func,
 }
 const _: () = {
     #[allow(unused_imports)]
@@ -108,22 +133,22 @@ const _: () = {
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
             let _instance_type = _instance_pre.instance_type();
-            let new = {
+            let f = {
                 let (item, index) = _component
-                    .get_export(None, "new")
-                    .ok_or_else(|| anyhow::anyhow!("no export `new` found"))?;
+                    .get_export(None, "f")
+                    .ok_or_else(|| anyhow::anyhow!("no export `f` found"))?;
                 match item {
                     wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
                         anyhow::Context::context(
-                            func.typecheck::<(), ()>(&_instance_type),
-                            "type-checking export func `new`",
+                            func.typecheck::<(), ((T, U, R),)>(&_instance_type),
+                            "type-checking export func `f`",
                         )?;
                         index
                     }
-                    _ => Err(anyhow::anyhow!("export `new` is not a function"))?,
+                    _ => Err(anyhow::anyhow!("export `f` is not a function"))?,
                 }
             };
-            Ok(FooIndices { new })
+            Ok(FooIndices { f })
         }
         /// Uses the indices stored in `self` to load an instance
         /// of [`Foo`] from the instance provided.
@@ -137,8 +162,10 @@ const _: () = {
         ) -> wasmtime::Result<Foo> {
             let _ = &mut store;
             let _instance = instance;
-            let new = *_instance.get_typed_func::<(), ()>(&mut store, &self.new)?.func();
-            Ok(Foo { new })
+            let f = *_instance
+                .get_typed_func::<(), ((T, U, R),)>(&mut store, &self.f)?
+                .func();
+            Ok(Foo { f })
         }
     }
     impl Foo {
@@ -164,19 +191,63 @@ const _: () = {
             let indices = FooIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn call_new<S: wasmtime::AsContextMut>(
+        pub fn add_to_linker<T, D>(
+            linker: &mut wasmtime::component::Linker<T>,
+            host_getter: fn(&mut T) -> D::Data<'_>,
+        ) -> wasmtime::Result<()>
+        where
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<'a>: foo::foo::i::Host + Send,
+            T: 'static + Send,
+        {
+            foo::foo::i::add_to_linker::<T, D>(linker, host_getter)?;
+            Ok(())
+        }
+        pub fn call_f<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
         ) -> impl wasmtime::component::__internal::Future<
-            Output = wasmtime::Result<()>,
+            Output = wasmtime::Result<(T, U, R)>,
         > + Send + 'static + use<S>
         where
             <S as wasmtime::AsContext>::Data: Send + 'static,
         {
             let callee = unsafe {
-                wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.new)
+                wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)
             };
-            callee.call_concurrent(store.as_context_mut(), ())
+            wasmtime::component::__internal::FutureExt::map(
+                callee.call_concurrent(store.as_context_mut(), ()),
+                |v| v.map(|(v,)| v),
+            )
         }
     }
 };
+pub mod foo {
+    pub mod foo {
+        #[allow(clippy::all)]
+        pub mod i {
+            #[allow(unused_imports)]
+            use wasmtime::component::__internal::{anyhow, Box};
+            pub type T = u16;
+            const _: () = {
+                assert!(2 == < T as wasmtime::component::ComponentType >::SIZE32);
+                assert!(2 == < T as wasmtime::component::ComponentType >::ALIGN32);
+            };
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+            pub trait Host: Send {}
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
+            pub fn add_to_linker<T, D>(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
+            {
+                let mut inst = linker.instance("foo:foo/i")?;
+                Ok(())
+            }
+        }
+    }
+}

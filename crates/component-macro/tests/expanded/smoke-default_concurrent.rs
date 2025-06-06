@@ -63,7 +63,9 @@ impl<_T: 'static> TheWorldPre<_T> {
 ///
 /// For more information see [`TheWorld`] as well.
 #[derive(Clone)]
-pub struct TheWorldIndices {}
+pub struct TheWorldIndices {
+    y: wasmtime::component::ComponentExportIndex,
+}
 /// Auto-generated bindings for an instance a component which
 /// implements the world `the-world`.
 ///
@@ -89,7 +91,9 @@ pub struct TheWorldIndices {}
 /// [`Store`]: wasmtime::Store
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
-pub struct TheWorld {}
+pub struct TheWorld {
+    y: wasmtime::component::Func,
+}
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
@@ -104,7 +108,22 @@ const _: () = {
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
             let _instance_type = _instance_pre.instance_type();
-            Ok(TheWorldIndices {})
+            let y = {
+                let (item, index) = _component
+                    .get_export(None, "y")
+                    .ok_or_else(|| anyhow::anyhow!("no export `y` found"))?;
+                match item {
+                    wasmtime::component::types::ComponentItem::ComponentFunc(func) => {
+                        anyhow::Context::context(
+                            func.typecheck::<(), ()>(&_instance_type),
+                            "type-checking export func `y`",
+                        )?;
+                        index
+                    }
+                    _ => Err(anyhow::anyhow!("export `y` is not a function"))?,
+                }
+            };
+            Ok(TheWorldIndices { y })
         }
         /// Uses the indices stored in `self` to load an instance
         /// of [`TheWorld`] from the instance provided.
@@ -118,7 +137,8 @@ const _: () = {
         ) -> wasmtime::Result<TheWorld> {
             let _ = &mut store;
             let _instance = instance;
-            Ok(TheWorld {})
+            let y = *_instance.get_typed_func::<(), ()>(&mut store, &self.y)?.func();
+            Ok(TheWorld { y })
         }
     }
     impl TheWorld {
@@ -144,55 +164,19 @@ const _: () = {
             let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker<T, D>(
-            linker: &mut wasmtime::component::Linker<T>,
-            host_getter: fn(&mut T) -> D::Data<'_>,
-        ) -> wasmtime::Result<()>
+        pub fn call_y<S: wasmtime::AsContextMut>(
+            &self,
+            mut store: S,
+        ) -> impl wasmtime::component::__internal::Future<
+            Output = wasmtime::Result<()>,
+        > + Send + 'static + use<S>
         where
-            D: imports::HostConcurrent + Send,
-            for<'a> D::Data<'a>: imports::Host + Send,
-            T: 'static + Send,
+            <S as wasmtime::AsContext>::Data: Send + 'static,
         {
-            imports::add_to_linker::<T, D>(linker, host_getter)?;
-            Ok(())
+            let callee = unsafe {
+                wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
+            };
+            callee.call_concurrent(store.as_context_mut(), ())
         }
     }
 };
-#[allow(clippy::all)]
-pub mod imports {
-    #[allow(unused_imports)]
-    use wasmtime::component::__internal::{anyhow, Box};
-    #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-    pub trait HostConcurrent: wasmtime::component::HasData + Send {
-        fn y<T: 'static>(
-            accessor: &mut wasmtime::component::Accessor<T, Self>,
-        ) -> impl ::core::future::Future<Output = ()> + Send
-        where
-            Self: Sized;
-    }
-    #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-    pub trait Host: Send {}
-    impl<_T: Host + ?Sized + Send> Host for &mut _T {}
-    pub fn add_to_linker<T, D>(
-        linker: &mut wasmtime::component::Linker<T>,
-        host_getter: fn(&mut T) -> D::Data<'_>,
-    ) -> wasmtime::Result<()>
-    where
-        D: HostConcurrent,
-        for<'a> D::Data<'a>: Host,
-        T: 'static + Send,
-    {
-        let mut inst = linker.instance("imports")?;
-        inst.func_wrap_concurrent(
-            "y",
-            move |caller: &mut wasmtime::component::Accessor<T>, (): ()| {
-                wasmtime::component::__internal::Box::pin(async move {
-                    let accessor = &mut unsafe { caller.with_data(host_getter) };
-                    let r = <D as HostConcurrent>::y(accessor).await;
-                    Ok(r)
-                })
-            },
-        )?;
-        Ok(())
-    }
-}
