@@ -51,32 +51,32 @@ fn imm_const(pos: &mut FuncCursor, arg: Value, imm: Imm64, is_signed: bool) -> V
 
 /// A command describing how the walk over instructions should proceed.
 enum WalkCommand {
-    /// Continue to the next instruction, if any.
+    /// Continue walking to the next instruction, if any.
     Continue,
     /// Revisit the current instruction (presumably because it was legalized
     /// into a new instruction that may also require further legalization).
     Revisit,
 }
 
-/// A simple, naive forwards walk over every instruction in every block in the
+/// A simple, naive backwards walk over every instruction in every block in the
 /// function's layout.
 ///
-/// This does not guarantee any kind of post-order visitation or anything like
-/// that, it is just iterating over blocks in layout order, not any kind of
-/// control-flow graph visitation order.
+/// This does not guarantee any kind of reverse post-order visitation or
+/// anything like that, it is just iterating over blocks in reverse layout
+/// order, not any kind of control-flow graph visitation order.
 ///
 /// The `f` visitor closure controls how the walk proceeds via its `WalkCommand`
 /// result.
-fn forward_walk(
+fn backward_walk(
     func: &mut ir::Function,
     mut f: impl FnMut(&mut ir::Function, ir::Inst) -> WalkCommand,
 ) {
     let mut pos = FuncCursor::new(func);
-    while let Some(_block) = pos.next_block() {
+    while let Some(_block) = pos.prev_block() {
         let mut prev_pos;
         while let Some(inst) = {
             prev_pos = pos.position();
-            pos.next_inst()
+            pos.prev_inst()
         } {
             match f(pos.func, inst) {
                 WalkCommand::Continue => continue,
@@ -91,7 +91,7 @@ fn forward_walk(
 pub fn simple_legalize(func: &mut ir::Function, isa: &dyn TargetIsa) {
     trace!("Pre-legalization function:\n{}", func.display());
 
-    forward_walk(func, |func, inst| match func.dfg.insts[inst] {
+    backward_walk(func, |func, inst| match func.dfg.insts[inst] {
         InstructionData::UnaryGlobalValue {
             opcode: ir::Opcode::GlobalValue,
             global_value,
