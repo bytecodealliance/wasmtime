@@ -14,11 +14,7 @@ pub struct ControlEffect(ir::Value);
 
 impl ControlEffect {
     // Returns the discriminant
-    pub fn signal<'a>(
-        &self,
-        _env: &mut crate::func_environ::FuncEnvironment<'a>,
-        builder: &mut FunctionBuilder,
-    ) -> ir::Value {
+    pub fn signal(&self, builder: &mut FunctionBuilder) -> ir::Value {
         builder.ins().ushr_imm(self.0, 32)
     }
 
@@ -30,10 +26,7 @@ impl ControlEffect {
         self.0
     }
 
-    pub fn encode_resume<'a>(
-        _env: &mut crate::func_environ::FuncEnvironment<'a>,
-        builder: &mut FunctionBuilder,
-    ) -> Self {
+    pub fn encode_resume(builder: &mut FunctionBuilder) -> Self {
         let discriminant = builder.ins().iconst(
             I64,
             i64::from(wasmtime_environ::CONTROL_EFFECT_RESUME_DISCRIMINANT),
@@ -43,10 +36,7 @@ impl ControlEffect {
         Self(val)
     }
 
-    pub fn encode_switch<'a>(
-        _env: &mut crate::func_environ::FuncEnvironment<'a>,
-        builder: &mut FunctionBuilder,
-    ) -> Self {
+    pub fn encode_switch(builder: &mut FunctionBuilder) -> Self {
         let discriminant = builder.ins().iconst(
             I64,
             i64::from(wasmtime_environ::CONTROL_EFFECT_SWITCH_DISCRIMINANT),
@@ -56,11 +46,7 @@ impl ControlEffect {
         Self(val)
     }
 
-    pub fn encode_suspend<'a>(
-        _env: &mut crate::func_environ::FuncEnvironment<'a>,
-        builder: &mut FunctionBuilder,
-        handler_index: ir::Value,
-    ) -> Self {
+    pub fn encode_suspend(builder: &mut FunctionBuilder, handler_index: ir::Value) -> Self {
         let discriminant = builder.ins().iconst(
             I64,
             i64::from(wasmtime_environ::CONTROL_EFFECT_SUSPEND_DISCRIMINANT),
@@ -73,11 +59,7 @@ impl ControlEffect {
     }
 
     /// Returns the payload of the `Suspend` variant
-    pub fn handler_index<'a>(
-        self,
-        _env: &mut crate::func_environ::FuncEnvironment<'a>,
-        builder: &mut FunctionBuilder,
-    ) -> ir::Value {
+    pub fn handler_index(self, builder: &mut FunctionBuilder) -> ir::Value {
         builder.ins().ireduce(I32, self.0)
     }
 }

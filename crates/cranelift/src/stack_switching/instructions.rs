@@ -1402,7 +1402,7 @@ pub(crate) fn translate_resume<'a>(
             parent_csi.set_first_switch_handler_index(env, builder, first_switch_handler_index);
         }
 
-        let resume_payload = ControlEffect::encode_resume(env, builder).to_u64();
+        let resume_payload = ControlEffect::encode_resume(builder).to_u64();
 
         // Note that the control context we use for switching is not the one in
         // (the stack of) resume_contref, but in (the stack of) last_ancestor!
@@ -1430,7 +1430,7 @@ pub(crate) fn translate_resume<'a>(
 
         // Extract the result and signal bit.
         let result = ControlEffect::from_u64(result);
-        let signal = result.signal(env, builder);
+        let signal = result.signal(builder);
 
         // Jump to the return block if the result signal is 0, otherwise jump to
         // the suspend block.
@@ -1470,7 +1470,7 @@ pub(crate) fn translate_resume<'a>(
         parent_csi.write_limits_to_vmcontext(env, builder, vm_runtime_limits_ptr);
 
         // Extract the handler index
-        let handler_index = ControlEffect::handler_index(resume_result, env, builder);
+        let handler_index = resume_result.handler_index(builder);
 
         let revision = suspended_continuation.get_revision(env, builder);
         let suspended_contobj = fatpointer::construct(
@@ -1647,7 +1647,7 @@ pub(crate) fn translate_suspend<'a>(
     let absent_chain_link = VMStackChain::absent(env, builder);
     end_of_chain_contref.set_parent_stack_chain(env, builder, &absent_chain_link);
 
-    let suspend_payload = ControlEffect::encode_suspend(env, builder, handler_index).to_u64();
+    let suspend_payload = ControlEffect::encode_suspend(builder, handler_index).to_u64();
 
     // Note that the control context we use for switching is the one
     // at the end of the chain, not the one in active_contref!
@@ -1887,7 +1887,7 @@ pub(crate) fn translate_switch<'a>(
             offset += i32::try_from(env.pointer_type().bytes()).unwrap();
         }
 
-        let switch_payload = ControlEffect::encode_switch(env, builder).to_u64();
+        let switch_payload = ControlEffect::encode_switch(builder).to_u64();
 
         let _result = builder.ins().stack_switch(
             switcher_last_ancestor_cc,
