@@ -201,3 +201,25 @@ block0(v0: i32, v1: i32):
 ;     v5 = icmp ne v1, v4  ; v4 = 0
 ;     return v5
 ; }
+
+function %issue_10929_no_crash_on_icmp_vectors() -> i32x4 {
+  const0 = 0x40ad3fb47cb16076c8cb1fdd8189d40f
+
+block0():
+  v1 = vconst.i32x4 const0
+  v2 = bxor_not v1, v1
+  v3 = icmp.i32x4 ne v1, v2
+  return v3
+}
+
+; function %issue_10929_no_crash_on_icmp_vectors() -> i32x4 fast {
+;     const0 = 0x40ad3fb47cb16076c8cb1fdd8189d40f
+;
+; block0:
+;     v1 = vconst.i32x4 const0
+;     v4 = bnot v1  ; v1 = const0
+;     v2 = bxor v1, v4  ; v1 = const0
+;     v3 = icmp ne v1, v2  ; v1 = const0
+;     return v3
+; }
+
