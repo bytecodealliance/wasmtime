@@ -30,7 +30,7 @@ pub unsafe extern "C" fn wasmtime_component_linker_new(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_linker_root(
     linker: &mut wasmtime_component_linker_t,
-) -> Box<wasmtime_component_linker_instance_t> {
+) -> Box<wasmtime_component_linker_instance_t<'_>> {
     Box::new(wasmtime_component_linker_instance_t {
         linker_instance: linker.linker.root(),
     })

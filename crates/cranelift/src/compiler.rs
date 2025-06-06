@@ -678,7 +678,7 @@ mod incremental_cache {
     struct CraneliftCacheStore(Arc<dyn CacheStore>);
 
     impl cranelift_codegen::incremental_cache::CacheKvStore for CraneliftCacheStore {
-        fn get(&self, key: &[u8]) -> Option<std::borrow::Cow<[u8]>> {
+        fn get(&self, key: &[u8]) -> Option<std::borrow::Cow<'_, [u8]>> {
             self.0.get(key)
         }
         fn insert(&mut self, key: &[u8], val: Vec<u8>) {

@@ -37,7 +37,7 @@ pub enum OwnedFlagsOrIsa {
 
 impl OwnedFlagsOrIsa {
     /// Produce a FlagsOrIsa reference.
-    pub fn as_fisa(&self) -> FlagsOrIsa {
+    pub fn as_fisa(&self) -> FlagsOrIsa<'_> {
         match *self {
             Self::Flags(ref flags) => FlagsOrIsa::from(flags),
             Self::Isa(ref isa) => FlagsOrIsa::from(&**isa),

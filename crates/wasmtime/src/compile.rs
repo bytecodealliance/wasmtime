@@ -421,7 +421,7 @@ impl<'a> CompileInputs<'a> {
         ret
     }
 
-    fn clean_symbol(name: &str) -> Cow<str> {
+    fn clean_symbol(name: &str) -> Cow<'_, str> {
         /// Maximum length of symbols generated in objects.
         const MAX_SYMBOL_LEN: usize = 96;
 

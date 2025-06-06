@@ -75,7 +75,7 @@ impl Worker {
 
         Ok(state.write_budget)
     }
-    fn state(&self) -> std::sync::MutexGuard<WorkerState> {
+    fn state(&self) -> std::sync::MutexGuard<'_, WorkerState> {
         self.state.lock().unwrap()
     }
     fn pop(&self) -> Option<Job> {

@@ -301,7 +301,7 @@ impl fmt::Debug for ValueNameSummary {
     }
 }
 
-pub fn log_get_value_loc(loc: LabelValueLoc, isa: &dyn TargetIsa) -> ValueLocSummary {
+pub fn log_get_value_loc(loc: LabelValueLoc, isa: &dyn TargetIsa) -> ValueLocSummary<'_> {
     ValueLocSummary { loc, isa }
 }
 

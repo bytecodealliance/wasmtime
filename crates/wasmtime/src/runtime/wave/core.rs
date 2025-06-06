@@ -98,7 +98,7 @@ impl WasmValue for crate::Val {
         canonicalize_nan64(val)
     }
     #[allow(clippy::cast_possible_truncation)]
-    fn unwrap_tuple(&self) -> Box<dyn Iterator<Item = Cow<Self>> + '_> {
+    fn unwrap_tuple(&self) -> Box<dyn Iterator<Item = Cow<'_, Self>> + '_> {
         let v = unwrap_val!(self, Self::V128, "tuple").as_u128();
         let low = v as i64;
         let high = (v >> 64) as i64;

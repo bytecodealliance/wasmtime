@@ -351,7 +351,7 @@ impl Variant {
     }
 
     /// Retrieve the cases of this `variant` in declaration order.
-    pub fn cases(&self) -> impl ExactSizeIterator<Item = Case> {
+    pub fn cases(&self) -> impl ExactSizeIterator<Item = Case<'_>> {
         self.0.types[self.0.index]
             .cases
             .iter()
