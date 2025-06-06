@@ -639,6 +639,7 @@ pub struct Resource {
 ///
 /// Note that this type does not implement `Serialize` or `Deserialize` and
 /// that's intentional as this isn't stored in the final compilation artifact.
+#[derive(Debug)]
 pub enum Trampoline {
     /// Description of a lowered import used in conjunction with
     /// `GlobalInitializer::LowerImport`.
@@ -716,6 +717,14 @@ pub enum Trampoline {
         options: CanonicalOptions,
     },
 
+    /// A `task.cancel` intrinsic, which acknowledges a `CANCELLED` event
+    /// delivered to a guest task previously created by a call to an async
+    /// export.
+    TaskCancel {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
     /// A `waitable-set.new` intrinsic.
     WaitableSetNew {
         /// The specific component instance which is calling the intrinsic.
@@ -771,6 +780,15 @@ pub enum Trampoline {
         instance: RuntimeComponentInstanceIndex,
     },
 
+    /// A `subtask.cancel` intrinsic to drop an in-progress task.
+    SubtaskCancel {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// If `false`, block until cancellation completes rather than return
+        /// `BLOCKED`.
+        async_: bool,
+    },
+
     /// A `stream.new` intrinsic to create a new `stream` handle of the
     /// specified type.
     StreamNew {
@@ -792,6 +810,7 @@ pub enum Trampoline {
     StreamWrite {
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
+
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
         options: CanonicalOptions,
@@ -852,6 +871,7 @@ pub enum Trampoline {
     FutureWrite {
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
+
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
         options: CanonicalOptions,
@@ -936,29 +956,30 @@ pub enum Trampoline {
     /// Same as `ResourceEnterCall` except for when exiting a call.
     ResourceExitCall,
 
-    /// An intrinsic used by FACT-generated modules to begin a call involving a
-    /// sync-lowered import and async-lifted export.
-    SyncEnterCall,
+    /// An intrinsic used by FACT-generated modules to prepare a call involving
+    /// an async-lowered import and/or an async-lifted export.
+    PrepareCall {
+        /// The memory used to verify that the memory specified for the
+        /// `task.return` that is called at runtime matches the one specified in
+        /// the lifted export.
+        memory: Option<RuntimeMemoryIndex>,
+    },
 
-    /// An intrinsic used by FACT-generated modules to complete a call involving
-    /// a sync-lowered import and async-lifted export.
-    SyncExitCall {
+    /// An intrinsic used by FACT-generated modules to start a call involving a
+    /// sync-lowered import and async-lifted export.
+    SyncStartCall {
         /// The callee's callback function, if any.
         callback: Option<RuntimeCallbackIndex>,
     },
 
-    /// An intrinsic used by FACT-generated modules to begin a call involving an
-    /// async-lowered import function.
-    AsyncEnterCall,
-
-    /// An intrinsic used by FACT-generated modules to complete a call involving
+    /// An intrinsic used by FACT-generated modules to start a call involving
     /// an async-lowered import function.
     ///
-    /// Note that `AsyncEnterCall` and `AsyncExitCall` could theoretically be
+    /// Note that `AsyncPrepareCall` and `AsyncStartCall` could theoretically be
     /// combined into a single `AsyncCall` intrinsic, but we separate them to
     /// allow the FACT-generated module to optionally call the callee directly
     /// without an intermediate host stack frame.
-    AsyncExitCall {
+    AsyncStartCall {
         /// The callee's callback, if any.
         callback: Option<RuntimeCallbackIndex>,
 
@@ -989,6 +1010,18 @@ pub enum Trampoline {
     /// are reference counted, meaning that sharing the handle with another
     /// component does not invalidate the handle in the original component.
     ErrorContextTransfer,
+
+    /// Intrinsic used to implement the `context.get` component model builtin.
+    ///
+    /// The payload here represents that this is accessing the Nth slot of local
+    /// storage.
+    ContextGet(u32),
+
+    /// Intrinsic used to implement the `context.set` component model builtin.
+    ///
+    /// The payload here represents that this is accessing the Nth slot of local
+    /// storage.
+    ContextSet(u32),
 }
 
 impl Trampoline {
@@ -1014,6 +1047,7 @@ impl Trampoline {
             ResourceDrop(i) => format!("component-resource-drop[{}]", i.as_u32()),
             BackpressureSet { .. } => format!("backpressure-set"),
             TaskReturn { .. } => format!("task-return"),
+            TaskCancel { .. } => format!("task-cancel"),
             WaitableSetNew { .. } => format!("waitable-set-new"),
             WaitableSetWait { .. } => format!("waitable-set-wait"),
             WaitableSetPoll { .. } => format!("waitable-set-poll"),
@@ -1021,6 +1055,7 @@ impl Trampoline {
             WaitableJoin { .. } => format!("waitable-join"),
             Yield { .. } => format!("yield"),
             SubtaskDrop { .. } => format!("subtask-drop"),
+            SubtaskCancel { .. } => format!("subtask-cancel"),
             StreamNew { .. } => format!("stream-new"),
             StreamRead { .. } => format!("stream-read"),
             StreamWrite { .. } => format!("stream-write"),
@@ -1042,13 +1077,14 @@ impl Trampoline {
             ResourceTransferBorrow => format!("component-resource-transfer-borrow"),
             ResourceEnterCall => format!("component-resource-enter-call"),
             ResourceExitCall => format!("component-resource-exit-call"),
-            SyncEnterCall => format!("component-sync-enter-call"),
-            SyncExitCall { .. } => format!("component-sync-exit-call"),
-            AsyncEnterCall => format!("component-async-enter-call"),
-            AsyncExitCall { .. } => format!("component-async-exit-call"),
+            PrepareCall { .. } => format!("component-prepare-call"),
+            SyncStartCall { .. } => format!("component-sync-start-call"),
+            AsyncStartCall { .. } => format!("component-async-start-call"),
             FutureTransfer => format!("future-transfer"),
             StreamTransfer => format!("stream-transfer"),
             ErrorContextTransfer => format!("error-context-transfer"),
+            ContextGet(_) => format!("context-get"),
+            ContextSet(_) => format!("context-set"),
         }
     }
 }

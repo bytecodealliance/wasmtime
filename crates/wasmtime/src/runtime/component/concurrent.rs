@@ -13,6 +13,7 @@ use {
     },
 };
 
+pub(crate) use futures_and_streams::ResourcePair;
 pub use futures_and_streams::{ErrorContext, FutureReader, StreamReader};
 
 mod futures_and_streams;
