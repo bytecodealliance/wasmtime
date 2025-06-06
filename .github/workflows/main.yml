@@ -380,9 +380,9 @@ jobs:
 
           - name: wasmtime-fiber
             checks: |
-              -p wasmtime-fiber --no-default-features
-              -p wasmtime-fiber --no-default-features --features std
-              -p wasmtime-fiber --all-features
+              -p wasmtime-internal-fiber --no-default-features
+              -p wasmtime-internal-fiber --no-default-features --features std
+              -p wasmtime-internal-fiber --all-features
 
           - name: wasmtime-cli
             checks: |
@@ -446,7 +446,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: cargo test -p wasmtime-fiber --no-default-features
+    - run: cargo test -p wasmtime-internal-fiber --no-default-features
     - run: cargo test -p cranelift-tools --test logged-filetests
 
     # common logic to cancel the entire run if this job fails

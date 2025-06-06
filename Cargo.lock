@@ -736,7 +736,7 @@ dependencies = [
  "smallvec",
  "souper-ir",
  "target-lexicon",
- "wasmtime-math",
+ "wasmtime-internal-math",
 ]
 
 [[package]]
@@ -796,7 +796,7 @@ dependencies = [
  "target-lexicon",
  "thiserror 2.0.12",
  "toml",
- "wasmtime-unwinder",
+ "wasmtime-internal-unwinder",
  "wat",
 ]
 
@@ -864,8 +864,8 @@ dependencies = [
  "memmap2",
  "region",
  "target-lexicon",
- "wasmtime-jit-icache-coherence",
- "wasmtime-unwinder",
+ "wasmtime-internal-jit-icache-coherence",
+ "wasmtime-internal-unwinder",
  "windows-sys 0.59.0",
 ]
 
@@ -2642,7 +2642,7 @@ dependencies = [
  "log",
  "pulley-macros",
  "termcolor",
- "wasmtime-math",
+ "wasmtime-internal-math",
 ]
 
 [[package]]
@@ -4182,31 +4182,24 @@ dependencies = [
  "wasm-encoder 0.233.0",
  "wasm-wave",
  "wasmparser 0.233.0",
- "wasmtime-asm-macros",
- "wasmtime-cache",
- "wasmtime-component-macro",
- "wasmtime-component-util",
- "wasmtime-cranelift",
  "wasmtime-environ",
- "wasmtime-fiber",
- "wasmtime-jit-debug",
- "wasmtime-jit-icache-coherence",
- "wasmtime-math",
- "wasmtime-slab",
+ "wasmtime-internal-asm-macros",
+ "wasmtime-internal-cache",
+ "wasmtime-internal-component-macro",
+ "wasmtime-internal-component-util",
+ "wasmtime-internal-cranelift",
+ "wasmtime-internal-fiber",
+ "wasmtime-internal-jit-debug",
+ "wasmtime-internal-jit-icache-coherence",
+ "wasmtime-internal-math",
+ "wasmtime-internal-slab",
+ "wasmtime-internal-unwinder",
+ "wasmtime-internal-versioned-export-macros",
+ "wasmtime-internal-winch",
+ "wasmtime-internal-wmemcheck",
  "wasmtime-test-util",
- "wasmtime-unwinder",
- "wasmtime-versioned-export-macros",
- "wasmtime-winch",
- "wasmtime-wmemcheck",
  "wat",
  "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "wasmtime-asm-macros"
-version = "35.0.0"
-dependencies = [
- "cfg-if",
 ]
 
 [[package]]
@@ -4244,38 +4237,9 @@ dependencies = [
  "tokio",
  "tracing",
  "wasmtime",
- "wasmtime-c-api-macros",
+ "wasmtime-internal-c-api-macros",
  "wasmtime-wasi",
  "wat",
-]
-
-[[package]]
-name = "wasmtime-c-api-macros"
-version = "35.0.0"
-dependencies = [
- "proc-macro2",
- "quote",
-]
-
-[[package]]
-name = "wasmtime-cache"
-version = "35.0.0"
-dependencies = [
- "anyhow",
- "base64",
- "directories-next",
- "env_logger 0.11.5",
- "filetime",
- "log",
- "postcard",
- "rustix 1.0.3",
- "serde",
- "serde_derive",
- "sha2",
- "tempfile",
- "toml",
- "windows-sys 0.59.0",
- "zstd 0.13.0",
 ]
 
 [[package]]
@@ -4329,12 +4293,12 @@ dependencies = [
  "wasm-encoder 0.233.0",
  "wasmparser 0.233.0",
  "wasmtime",
- "wasmtime-cache",
  "wasmtime-cli-flags",
- "wasmtime-component-util",
- "wasmtime-cranelift",
  "wasmtime-environ",
- "wasmtime-explorer",
+ "wasmtime-internal-cache",
+ "wasmtime-internal-component-util",
+ "wasmtime-internal-cranelift",
+ "wasmtime-internal-explorer",
  "wasmtime-test-macros",
  "wasmtime-test-util",
  "wasmtime-wasi",
@@ -4367,55 +4331,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasmtime-component-macro"
-version = "35.0.0"
-dependencies = [
- "anyhow",
- "component-macro-test-helpers",
- "prettyplease",
- "proc-macro2",
- "quote",
- "serde",
- "serde_json",
- "similar",
- "syn 2.0.100",
- "tracing",
- "wasmtime",
- "wasmtime-component-util",
- "wasmtime-wit-bindgen",
- "wit-parser 0.233.0",
-]
-
-[[package]]
-name = "wasmtime-component-util"
-version = "35.0.0"
-
-[[package]]
-name = "wasmtime-cranelift"
-version = "35.0.0"
-dependencies = [
- "anyhow",
- "cfg-if",
- "cranelift-codegen",
- "cranelift-control",
- "cranelift-entity",
- "cranelift-frontend",
- "cranelift-native",
- "gimli",
- "itertools 0.14.0",
- "log",
- "object",
- "pulley-interpreter",
- "smallvec",
- "target-lexicon",
- "thiserror 2.0.12",
- "wasmparser 0.233.0",
- "wasmtime-environ",
- "wasmtime-math",
- "wasmtime-versioned-export-macros",
-]
-
-[[package]]
 name = "wasmtime-environ"
 version = "35.0.0"
 dependencies = [
@@ -4439,7 +4354,7 @@ dependencies = [
  "wasm-encoder 0.233.0",
  "wasmparser 0.233.0",
  "wasmprinter",
- "wasmtime-component-util",
+ "wasmtime-internal-component-util",
  "wat",
 ]
 
@@ -4455,36 +4370,6 @@ dependencies = [
  "wasmtime-environ",
  "wasmtime-test-util",
  "wat",
-]
-
-[[package]]
-name = "wasmtime-explorer"
-version = "35.0.0"
-dependencies = [
- "anyhow",
- "capstone",
- "serde",
- "serde_derive",
- "serde_json",
- "target-lexicon",
- "wasmprinter",
- "wasmtime",
- "wasmtime-environ",
-]
-
-[[package]]
-name = "wasmtime-fiber"
-version = "35.0.0"
-dependencies = [
- "anyhow",
- "backtrace",
- "cc",
- "cfg-if",
- "libc",
- "rustix 1.0.3",
- "wasmtime-asm-macros",
- "wasmtime-versioned-export-macros",
- "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4546,17 +4431,132 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasmtime-jit-debug"
+name = "wasmtime-internal-asm-macros"
+version = "35.0.0"
+dependencies = [
+ "cfg-if",
+]
+
+[[package]]
+name = "wasmtime-internal-c-api-macros"
+version = "35.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+]
+
+[[package]]
+name = "wasmtime-internal-cache"
+version = "35.0.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "directories-next",
+ "env_logger 0.11.5",
+ "filetime",
+ "log",
+ "postcard",
+ "rustix 1.0.3",
+ "serde",
+ "serde_derive",
+ "sha2",
+ "tempfile",
+ "toml",
+ "windows-sys 0.59.0",
+ "zstd 0.13.0",
+]
+
+[[package]]
+name = "wasmtime-internal-component-macro"
+version = "35.0.0"
+dependencies = [
+ "anyhow",
+ "component-macro-test-helpers",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_json",
+ "similar",
+ "syn 2.0.100",
+ "tracing",
+ "wasmtime",
+ "wasmtime-internal-component-util",
+ "wasmtime-internal-wit-bindgen",
+ "wit-parser 0.233.0",
+]
+
+[[package]]
+name = "wasmtime-internal-component-util"
+version = "35.0.0"
+
+[[package]]
+name = "wasmtime-internal-cranelift"
+version = "35.0.0"
+dependencies = [
+ "anyhow",
+ "cfg-if",
+ "cranelift-codegen",
+ "cranelift-control",
+ "cranelift-entity",
+ "cranelift-frontend",
+ "cranelift-native",
+ "gimli",
+ "itertools 0.14.0",
+ "log",
+ "object",
+ "pulley-interpreter",
+ "smallvec",
+ "target-lexicon",
+ "thiserror 2.0.12",
+ "wasmparser 0.233.0",
+ "wasmtime-environ",
+ "wasmtime-internal-math",
+ "wasmtime-internal-versioned-export-macros",
+]
+
+[[package]]
+name = "wasmtime-internal-explorer"
+version = "35.0.0"
+dependencies = [
+ "anyhow",
+ "capstone",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "target-lexicon",
+ "wasmprinter",
+ "wasmtime",
+ "wasmtime-environ",
+]
+
+[[package]]
+name = "wasmtime-internal-fiber"
+version = "35.0.0"
+dependencies = [
+ "anyhow",
+ "backtrace",
+ "cc",
+ "cfg-if",
+ "libc",
+ "rustix 1.0.3",
+ "wasmtime-internal-asm-macros",
+ "wasmtime-internal-versioned-export-macros",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "wasmtime-internal-jit-debug"
 version = "35.0.0"
 dependencies = [
  "cc",
  "object",
  "rustix 1.0.3",
- "wasmtime-versioned-export-macros",
+ "wasmtime-internal-versioned-export-macros",
 ]
 
 [[package]]
-name = "wasmtime-jit-icache-coherence"
+name = "wasmtime-internal-jit-icache-coherence"
 version = "35.0.0"
 dependencies = [
  "anyhow",
@@ -4566,14 +4566,63 @@ dependencies = [
 ]
 
 [[package]]
-name = "wasmtime-math"
+name = "wasmtime-internal-math"
 version = "35.0.0"
 dependencies = [
  "libm",
 ]
 
 [[package]]
-name = "wasmtime-slab"
+name = "wasmtime-internal-slab"
+version = "35.0.0"
+
+[[package]]
+name = "wasmtime-internal-unwinder"
+version = "35.0.0"
+dependencies = [
+ "anyhow",
+ "cfg-if",
+ "cranelift-codegen",
+ "log",
+ "object",
+]
+
+[[package]]
+name = "wasmtime-internal-versioned-export-macros"
+version = "35.0.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
+name = "wasmtime-internal-winch"
+version = "35.0.0"
+dependencies = [
+ "anyhow",
+ "cranelift-codegen",
+ "gimli",
+ "object",
+ "target-lexicon",
+ "wasmparser 0.233.0",
+ "wasmtime-environ",
+ "wasmtime-internal-cranelift",
+ "winch-codegen",
+]
+
+[[package]]
+name = "wasmtime-internal-wit-bindgen"
+version = "35.0.0"
+dependencies = [
+ "anyhow",
+ "heck 0.5.0",
+ "indexmap 2.7.0",
+ "wit-parser 0.233.0",
+]
+
+[[package]]
+name = "wasmtime-internal-wmemcheck"
 version = "35.0.0"
 
 [[package]]
@@ -4601,28 +4650,8 @@ dependencies = [
  "target-lexicon",
  "toml",
  "wasmtime",
- "wasmtime-component-util",
  "wasmtime-environ",
-]
-
-[[package]]
-name = "wasmtime-unwinder"
-version = "35.0.0"
-dependencies = [
- "anyhow",
- "cfg-if",
- "cranelift-codegen",
- "log",
- "object",
-]
-
-[[package]]
-name = "wasmtime-versioned-export-macros"
-version = "35.0.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.100",
+ "wasmtime-internal-component-util",
 ]
 
 [[package]]
@@ -4778,35 +4807,6 @@ dependencies = [
  "wasmtime",
  "wast 233.0.0",
 ]
-
-[[package]]
-name = "wasmtime-winch"
-version = "35.0.0"
-dependencies = [
- "anyhow",
- "cranelift-codegen",
- "gimli",
- "object",
- "target-lexicon",
- "wasmparser 0.233.0",
- "wasmtime-cranelift",
- "wasmtime-environ",
- "winch-codegen",
-]
-
-[[package]]
-name = "wasmtime-wit-bindgen"
-version = "35.0.0"
-dependencies = [
- "anyhow",
- "heck 0.5.0",
- "indexmap 2.7.0",
- "wit-parser 0.233.0",
-]
-
-[[package]]
-name = "wasmtime-wmemcheck"
-version = "35.0.0"
 
 [[package]]
 name = "wast"
@@ -4968,9 +4968,9 @@ dependencies = [
  "target-lexicon",
  "thiserror 2.0.12",
  "wasmparser 0.233.0",
- "wasmtime-cranelift",
  "wasmtime-environ",
- "wasmtime-math",
+ "wasmtime-internal-cranelift",
+ "wasmtime-internal-math",
 ]
 
 [[package]]
