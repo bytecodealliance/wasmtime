@@ -436,7 +436,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(compiler.finish(&symbol)),
+            code: Box::new(compiler.finish(&symbol)?),
             needs_gc_heap: false,
         })
     }
