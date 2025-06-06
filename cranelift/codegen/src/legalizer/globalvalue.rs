@@ -3,6 +3,7 @@
 //! This module exports the `expand_global_value` function which transforms a `global_value`
 //! instruction into code that depends on the kind of global value referenced.
 
+use super::WalkCommand;
 use crate::cursor::{Cursor, FuncCursor};
 use crate::ir::{self, InstBuilder, pcc::Fact};
 use crate::isa::TargetIsa;
@@ -13,7 +14,7 @@ pub fn expand_global_value(
     func: &mut ir::Function,
     isa: &dyn TargetIsa,
     global_value: ir::GlobalValue,
-) {
+) -> WalkCommand {
     crate::trace!(
         "expanding global value: {:?}: {}",
         inst,
@@ -38,6 +39,13 @@ pub fn expand_global_value(
             const_vector_scale(inst, func, vector_type, isa)
         }
     }
+
+    // `global_value` can expand to nested `global_value`s.
+    //
+    // TODO: We should only return this if we actually expanded to something
+    // that needs further legalization. That is, the `WalkCommand` return value
+    // should be pushed deeper into the helpers used in the above `match`.
+    WalkCommand::Revisit
 }
 
 fn const_vector_scale(inst: ir::Inst, func: &mut ir::Function, ty: ir::Type, isa: &dyn TargetIsa) {
