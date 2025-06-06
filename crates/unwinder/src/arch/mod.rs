@@ -99,7 +99,9 @@ cfg_if::cfg_if! {
                 NEXT_OLDER_SP_FROM_FP_OFFSET
             }
             unsafe fn get_next_older_pc_from_fp(&self, fp: usize) -> usize {
-                get_next_older_pc_from_fp(fp)
+                unsafe {
+                    get_next_older_pc_from_fp(fp)
+                }
             }
             fn assert_fp_is_aligned(&self, fp: usize) {
                 assert_fp_is_aligned(fp)
