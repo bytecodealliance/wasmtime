@@ -1900,6 +1900,9 @@
 (rule 1 (lower (trapz (icmp cc a b) code))
         (side_effect (trap_if_icmp (emit_cmp (intcc_complement cc) a b) code)))
 
+(rule 1 (lower (trapz (fcmp cc a b) code))
+        (side_effect (trap_if_fcmp (emit_fcmp (floatcc_complement cc) a b) code)))
+
 ;;;; Rules for `trapnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (trapnz val code))
@@ -1907,6 +1910,9 @@
 
 (rule 1 (lower (trapnz (icmp cc a b) code))
         (side_effect (trap_if_icmp (emit_cmp cc a b) code)))
+
+(rule 1 (lower (trapnz (fcmp cc a b) code))
+        (side_effect (trap_if_fcmp (emit_fcmp cc a b) code)))
 
 ;;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
