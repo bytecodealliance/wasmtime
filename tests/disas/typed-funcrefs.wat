@@ -142,8 +142,8 @@
 ;;                                     v68 = iconst.i64 8
 ;; @0048                               v14 = iadd v12, v68  ; v68 = 8
 ;; @0048                               v17 = load.i64 user5 aligned table v14
-;;                                     v56 = iconst.i64 -2
-;; @0048                               v18 = band v17, v56  ; v56 = -2
+;;                                     v57 = iconst.i64 -2
+;; @0048                               v18 = band v17, v57  ; v57 = -2
 ;; @0048                               brif v17, block3(v18), block2
 ;;
 ;;                                 block2 cold:
@@ -196,8 +196,8 @@
 ;;                                     v68 = iconst.i64 8
 ;; @0075                               v14 = iadd v12, v68  ; v68 = 8
 ;; @0075                               v17 = load.i64 user5 aligned table v14
-;;                                     v56 = iconst.i64 -2
-;; @0075                               v18 = band v17, v56  ; v56 = -2
+;;                                     v57 = iconst.i64 -2
+;; @0075                               v18 = band v17, v57  ; v57 = -2
 ;; @0075                               brif v17, block3(v18), block2
 ;;
 ;;                                 block2 cold:

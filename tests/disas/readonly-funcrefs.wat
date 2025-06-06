@@ -53,8 +53,8 @@
 ;; @0031                               v8 = iadd v6, v7
 ;; @0031                               v10 = select_spectre_guard v4, v9, v8  ; v9 = 0
 ;; @0031                               v11 = load.i64 user5 aligned table v10
-;;                                     v27 = iconst.i64 -2
-;; @0031                               v12 = band v11, v27  ; v27 = -2
+;;                                     v25 = iconst.i64 -2
+;; @0031                               v12 = band v11, v25  ; v25 = -2
 ;; @0031                               brif v11, block3(v12), block2
 ;;
 ;;                                 block2 cold:

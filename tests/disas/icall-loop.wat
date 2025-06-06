@@ -43,7 +43,7 @@
 ;; @002b                               v8 = ishl v6, v29  ; v29 = 3
 ;; @002b                               v9 = iadd v7, v8
 ;; @002b                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
-;;                                     v30 = iconst.i64 -2
+;;                                     v28 = iconst.i64 -2
 ;; @002b                               v15 = iconst.i32 0
 ;; @002b                               v20 = load.i64 notrap aligned readonly can_move v0+48
 ;; @002b                               v21 = load.i32 notrap aligned readonly can_move v20
@@ -85,7 +85,7 @@
 ;; @0038                               v6 = load.i64 notrap aligned readonly can_move v0+56
 ;;                                     v37 = iconst.i64 8
 ;; @0038                               v8 = iadd v6, v37  ; v37 = 8
-;;                                     v28 = iconst.i64 -2
+;;                                     v26 = iconst.i64 -2
 ;; @0038                               v14 = iconst.i32 0
 ;;                                     v36 = iconst.i64 1
 ;; @0038                               v19 = load.i64 notrap aligned readonly can_move v0+48

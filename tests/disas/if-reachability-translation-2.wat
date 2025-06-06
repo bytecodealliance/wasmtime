@@ -20,10 +20,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @001b                               brif v2, block2, block4
-;;
-;;                                 block2:
-;; @001d                               trap user11
+;;                                     trapnz v2, user11
+;; @001b                               jump block4
 ;;
 ;;                                 block4:
 ;; @0020                               jump block3

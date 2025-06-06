@@ -638,15 +638,12 @@ block202:
 ;   ucomiss const(1), %xmm0
 ;   jp,nz   label2; j label1
 ; block1:
-;   jmp     label5
+;   jmp     label3
 ; block2:
 ;   ucomiss const(0), %xmm0
-;   jnp     label4; j label3
+;   jnp #trap=heap_oob
+;   jmp     label3
 ; block3:
-;   jmp     label5
-; block4:
-;   ud2 heap_oob
-; block5:
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -658,16 +655,15 @@ block202:
 ; block1: ; offset 0x4
 ;   ucomiss 0x25(%rip), %xmm0
 ;   jp 0x17
-;   je 0x26
+;   je 0x24
 ; block2: ; offset 0x17
 ;   ucomiss 0x22(%rip), %xmm0
-;   jp 0x26
+;   jnp 0x29
 ; block3: ; offset 0x24
-;   ud2 ; trap: heap_oob
-; block4: ; offset 0x26
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
+;   ud2 ; trap: heap_oob
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
