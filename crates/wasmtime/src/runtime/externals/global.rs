@@ -303,7 +303,7 @@ impl Global {
         match self.kind {
             VMGlobalKind::Instance(index) => {
                 let instance = InstanceId::from_u32(self.instance);
-                let module = store.instance(instance).module();
+                let module = store.instance(instance).env_module();
                 let index = module.global_index(index);
                 &module.globals[index]
             }
@@ -361,7 +361,7 @@ impl Global {
         match self.kind {
             VMGlobalKind::Instance(index) => {
                 let instance = InstanceId::from_u32(self.instance);
-                store.instance(instance).instance().global_ptr(index)
+                store.instance(instance).global_ptr(index)
             }
             VMGlobalKind::Host(index) => unsafe {
                 NonNull::from(&mut store.host_globals()[index].get().as_mut().global)

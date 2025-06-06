@@ -847,9 +847,9 @@ impl ComponentInstance {
             // during that phase so the actual instantiation of an `InstancePre`
             // skips all string lookups. This should probably only be
             // investigated if this becomes a performance issue though.
-            ExportItem::Name(name) => instance.module().exports[name],
+            ExportItem::Name(name) => instance.env_module().exports[name],
         };
-        instance.instance().get_export_by_index(idx)
+        instance.get_export_by_index(idx)
     }
 
     /// Looks up the value used for `import` at runtime.

@@ -302,7 +302,7 @@ unsafe impl Sync for VMContRef {}
 #[inline(always)]
 pub fn cont_new(
     store: &mut dyn crate::vm::VMStore,
-    instance: &mut crate::vm::Instance,
+    instance: core::pin::Pin<&mut crate::vm::Instance>,
     func: *mut u8,
     param_count: u32,
     result_count: u32,

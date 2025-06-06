@@ -21,6 +21,7 @@ use crate::{StoreContextMut, prelude::*};
 use alloc::sync::Arc;
 use core::alloc::Layout;
 use core::ops::Range;
+use core::pin::Pin;
 use core::ptr::NonNull;
 #[cfg(target_has_atomic = "64")]
 use core::sync::atomic::AtomicU64;
@@ -43,6 +44,12 @@ pub use allocator::*;
 /// The pair of an instance and a raw pointer its associated store.
 ///
 /// ### Safety
+///
+/// > **Note**: it's known that the documentation below is documenting an
+/// > unsound pattern and we're in the process of fixing it, but it'll take
+/// > some time to refactor. Notably `unpack_mut` is not sound because the
+/// > returned store pointer can be used to accidentally alias the instance
+/// > pointer returned as well.
 ///
 /// Getting a borrow of a vmctx's store is one of the fundamental bits of unsafe
 /// code in Wasmtime. No matter how we architect the runtime, some kind of
@@ -69,7 +76,7 @@ pub use allocator::*;
 /// 2. You call `InstanceAndStore::from_vmctx` on that raw pointer
 ///
 /// 3. You then call `InstanceAndStore::unpack_mut` (or another helper) to get
-///    the underlying `&mut Instance` and `&mut dyn VMStore` (or `&mut
+///    the underlying `Pin<&mut Instance>` and `&mut dyn VMStore` (or `&mut
 ///    StoreInner<T>`).
 ///
 /// 4. You then use whatever `Instance` methods you need to, each of which take
@@ -128,10 +135,10 @@ impl InstanceAndStore {
     /// Unpacks this `InstanceAndStore` into its underlying `Instance` and `dyn
     /// VMStore`.
     #[inline]
-    pub(crate) fn unpack_mut(&mut self) -> (&mut Instance, &mut dyn VMStore) {
+    pub(crate) fn unpack_mut(&mut self) -> (Pin<&mut Instance>, &mut dyn VMStore) {
         unsafe {
             let store = &mut *self.store_ptr();
-            (&mut self.instance, store)
+            (Pin::new_unchecked(&mut self.instance), store)
         }
     }
 
@@ -145,9 +152,12 @@ impl InstanceAndStore {
     #[inline]
     pub(crate) unsafe fn unpack_context_mut<T>(
         &mut self,
-    ) -> (&mut Instance, StoreContextMut<'_, T>) {
+    ) -> (Pin<&mut Instance>, StoreContextMut<'_, T>) {
         let store_ptr = self.store_ptr().cast::<StoreInner<T>>();
-        (&mut self.instance, StoreContextMut(&mut *store_ptr))
+        (
+            Pin::new_unchecked(&mut self.instance),
+            StoreContextMut(&mut *store_ptr),
+        )
     }
 
     /// Gets a pointer to this instance's `Store` which was originally
@@ -169,11 +179,6 @@ impl InstanceAndStore {
 /// A type that roughly corresponds to a WebAssembly instance, but is also used
 /// for host-defined objects.
 ///
-/// This structure is never allocated directly but is instead managed through
-/// an `InstanceHandle`. This structure ends with a `VMContext` which has a
-/// dynamic size corresponding to the `module` configured within. Memory
-/// management of this structure is always externalized.
-///
 /// Instances here can correspond to actual instantiated modules, but it's also
 /// used ubiquitously for host-defined objects. For example creating a
 /// host-defined memory will have a `module` that looks like it exports a single
@@ -181,6 +186,39 @@ impl InstanceAndStore {
 ///
 /// This `Instance` type is used as a ubiquitous representation for WebAssembly
 /// values, whether or not they were created on the host or through a module.
+///
+/// # Ownership
+///
+/// This structure is never allocated directly but is instead managed through
+/// an `InstanceHandle`. This structure ends with a `VMContext` which has a
+/// dynamic size corresponding to the `module` configured within. Memory
+/// management of this structure is always done through `InstanceHandle` as the
+/// sole owner of an instance.
+///
+/// # `Instance` and `Pin`
+///
+/// Given an instance it is accompanied with trailing memory for the
+/// appropriate `VMContext`. The `Instance` also holds `runtime_info` and other
+/// information pointing to relevant offsets for the `VMContext`. Thus it is
+/// not sound to mutate `runtime_info` after an instance is created. More
+/// generally it's also not safe to "swap" instances, for example given two
+/// `&mut Instance` values it's not sound to swap them as then the `VMContext`
+/// values are inaccurately described.
+///
+/// To encapsulate this guarantee this type is only ever mutated through Rust's
+/// `Pin` type. All mutable methods here take `self: Pin<&mut Self>` which
+/// statically disallows safe access to `&mut Instance`. There are assorted
+/// "projection methods" to go from `Pin<&mut Instance>` to `&mut T` for
+/// individual fields, for example `memories_mut`. More methods can be added as
+/// necessary or methods may also be added to project multiple fields at a time
+/// if necessary to. The precise ergonomics around getting mutable access to
+/// some fields (but notably not `runtime_info`) is probably going to evolve
+/// over time.
+///
+/// Note that is is not sound to basically ever pass around `&mut Instance`.
+/// That should always instead be `Pin<&mut Instance>`. All usage of
+/// `Pin::new_unchecked` should be here in this module in just a few `unsafe`
+/// locations and it's recommended to use existing helpers if you can.
 #[repr(C)] // ensure that the vmctx field is last.
 pub struct Instance {
     /// The index, within a `Store` that this instance lives at
@@ -235,7 +273,7 @@ pub struct Instance {
     /// derived from `&mut T`, then that invalidates all prior pointers drived
     /// from the `&mut T`. This means that while we liberally want to re-acquire
     /// a `*mut VMContext` throughout the implementation of `Instance` the
-    /// trivial way, a function `fn vmctx(&mut Instance) -> *mut VMContext`
+    /// trivial way, a function `fn vmctx(Pin<&mut Instance>) -> *mut VMContext`
     /// would effectively invalidate all prior `*mut VMContext` pointers
     /// acquired. The purpose of this field is to serve as a sort of
     /// source-of-truth for where `*mut VMContext` pointers come from.
@@ -246,7 +284,7 @@ pub struct Instance {
     /// This provenance bit is then "carried through" where `fn vmctx` will base
     /// all returned pointers on this pointer itself. This provides the means of
     /// never invalidating this pointer throughout MIRI and additionally being
-    /// able to still temporarily have `&mut Instance` methods and such.
+    /// able to still temporarily have `Pin<&mut Instance>` methods and such.
     ///
     /// It's important to note, though, that this is not here purely for MIRI.
     /// The careful construction of the `fn vmctx` method has ramifications on
@@ -342,10 +380,12 @@ impl Instance {
             },
         );
 
-        (*ptr).initialize_vmctx(module, req.runtime_info.offsets(), req.store, req.imports);
-        InstanceHandle {
-            instance: Some(SendSyncPtr::new(NonNull::new(ptr).unwrap())),
-        }
+        let mut ret = InstanceHandle {
+            instance: SendSyncPtr::new(NonNull::new(ptr).unwrap()),
+        };
+        ret.get_mut()
+            .initialize_vmctx(module, req.runtime_info.offsets(), req.store, req.imports);
+        ret
     }
 
     /// Converts the provided `*mut VMContext` to an `Instance` pointer and runs
@@ -359,18 +399,18 @@ impl Instance {
     /// # Unsafety
     ///
     /// Callers must validate that the `vmctx` pointer is a valid allocation
-    /// and that it's valid to acquire `&mut Instance` at this time. For example
+    /// and that it's valid to acquire `Pin<&mut Instance>` at this time. For example
     /// this can't be called twice on the same `VMContext` to get two active
     /// pointers to the same `Instance`.
     #[inline]
     pub unsafe fn from_vmctx<R>(
         vmctx: NonNull<VMContext>,
-        f: impl FnOnce(&mut Instance) -> R,
+        f: impl FnOnce(Pin<&mut Instance>) -> R,
     ) -> R {
         let mut ptr = vmctx
             .byte_sub(mem::size_of::<Instance>())
             .cast::<Instance>();
-        f(ptr.as_mut())
+        f(Pin::new_unchecked(ptr.as_mut()))
     }
 
     /// Helper function to access various locations offset from our `*mut
@@ -438,7 +478,10 @@ impl Instance {
     /// # Safety
     ///
     /// See the safety documentation of `vmctx_plus_offset_raw`.
-    unsafe fn vmctx_plus_offset_mut<T: VmSafe>(&mut self, offset: impl Into<u32>) -> &mut T {
+    unsafe fn vmctx_plus_offset_mut<T: VmSafe>(
+        self: Pin<&mut Self>,
+        offset: impl Into<u32>,
+    ) -> &mut T {
         // SAFETY: this method has the same safety requirements as
         // `vmctx_plus_offset_raw`.
         unsafe { self.vmctx_plus_offset_raw(offset).as_mut() }
@@ -504,7 +547,7 @@ impl Instance {
     }
 
     /// Updates the value for a defined table to `VMTableDefinition`.
-    fn set_table(&mut self, index: DefinedTableIndex, table: VMTableDefinition) {
+    fn set_table(self: Pin<&mut Self>, index: DefinedTableIndex, table: VMTableDefinition) {
         unsafe {
             self.table_ptr(index).write(table);
         }
@@ -528,7 +571,7 @@ impl Instance {
 
     /// Get a locally defined or imported memory.
     #[cfg(feature = "threads")]
-    pub(crate) fn get_runtime_memory(&mut self, index: MemoryIndex) -> &mut Memory {
+    pub(crate) fn get_runtime_memory(self: Pin<&mut Self>, index: MemoryIndex) -> &mut Memory {
         if let Some(defined_index) = self.env_module().defined_memory_index(index) {
             unsafe { &mut *self.get_defined_memory(defined_index) }
         } else {
@@ -576,7 +619,7 @@ impl Instance {
     ///
     /// Panics if the index is out of bound or is the reserved value.
     pub(crate) fn defined_or_imported_global_ptr(
-        &mut self,
+        self: Pin<&mut Self>,
         index: GlobalIndex,
     ) -> NonNull<VMGlobalDefinition> {
         if let Some(index) = self.env_module().defined_global_index(index) {
@@ -593,9 +636,7 @@ impl Instance {
     /// Returns both exported and non-exported globals.
     ///
     /// Gives access to the full globals space.
-    pub fn all_globals<'a>(
-        &'a mut self,
-    ) -> impl ExactSizeIterator<Item = (GlobalIndex, ExportGlobal)> + 'a {
+    pub fn all_globals(&self) -> impl ExactSizeIterator<Item = (GlobalIndex, ExportGlobal)> + '_ {
         let module = self.env_module().clone();
         module
             .globals
@@ -604,9 +645,9 @@ impl Instance {
     }
 
     /// Get the globals defined in this instance (not imported).
-    pub fn defined_globals<'a>(
-        &'a mut self,
-    ) -> impl ExactSizeIterator<Item = (DefinedGlobalIndex, ExportGlobal)> + 'a {
+    pub fn defined_globals(
+        &self,
+    ) -> impl ExactSizeIterator<Item = (DefinedGlobalIndex, ExportGlobal)> + '_ {
         let module = self.env_module().clone();
         module
             .globals
@@ -625,51 +666,54 @@ impl Instance {
 
     /// Return a pointer to the interrupts structure
     #[inline]
-    pub fn vm_store_context(&mut self) -> NonNull<Option<VmPtr<VMStoreContext>>> {
+    pub fn vm_store_context(&self) -> NonNull<Option<VmPtr<VMStoreContext>>> {
         unsafe { self.vmctx_plus_offset_raw(self.offsets().ptr.vmctx_store_context()) }
     }
 
     /// Return a pointer to the global epoch counter used by this instance.
     #[cfg(target_has_atomic = "64")]
-    pub fn epoch_ptr(&mut self) -> &mut Option<VmPtr<AtomicU64>> {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_epoch_ptr()) }
+    pub fn epoch_ptr(self: Pin<&mut Self>) -> &mut Option<VmPtr<AtomicU64>> {
+        let offset = self.offsets().ptr.vmctx_epoch_ptr();
+        unsafe { self.vmctx_plus_offset_mut(offset) }
     }
 
     /// Return a pointer to the collector-specific heap data.
-    pub fn gc_heap_data(&mut self) -> &mut Option<VmPtr<u8>> {
-        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_gc_heap_data()) }
+    pub fn gc_heap_data(self: Pin<&mut Self>) -> &mut Option<VmPtr<u8>> {
+        let offset = self.offsets().ptr.vmctx_gc_heap_data();
+        unsafe { self.vmctx_plus_offset_mut(offset) }
     }
 
-    pub(crate) unsafe fn set_store(&mut self, store: Option<NonNull<dyn VMStore>>) {
-        self.store = store.map(VMStoreRawPtr);
+    pub(crate) unsafe fn set_store(mut self: Pin<&mut Self>, store: Option<NonNull<dyn VMStore>>) {
+        *self.as_mut().store_mut() = store.map(VMStoreRawPtr);
         if let Some(mut store) = store {
             let store = store.as_mut();
             self.vm_store_context()
                 .write(Some(store.vm_store_context_ptr().into()));
             #[cfg(target_has_atomic = "64")]
             {
-                *self.epoch_ptr() = Some(NonNull::from(store.engine().epoch_counter()).into());
+                *self.as_mut().epoch_ptr() =
+                    Some(NonNull::from(store.engine().epoch_counter()).into());
             }
 
             if self.env_module().needs_gc_heap {
-                self.set_gc_heap(Some(store.gc_store().expect(
+                self.as_mut().set_gc_heap(Some(store.gc_store().expect(
                     "if we need a GC heap, then `Instance::new_raw` should have already \
                      allocated it for us",
                 )));
             } else {
-                self.set_gc_heap(None);
+                self.as_mut().set_gc_heap(None);
             }
         } else {
             self.vm_store_context().write(None);
             #[cfg(target_has_atomic = "64")]
             {
-                *self.epoch_ptr() = None;
+                *self.as_mut().epoch_ptr() = None;
             }
-            self.set_gc_heap(None);
+            self.as_mut().set_gc_heap(None);
         }
     }
 
-    unsafe fn set_gc_heap(&mut self, gc_store: Option<&GcStore>) {
+    unsafe fn set_gc_heap(self: Pin<&mut Self>, gc_store: Option<&GcStore>) {
         if let Some(gc_store) = gc_store {
             *self.gc_heap_data() = Some(gc_store.gc_heap.vmctx_gc_heap_data().into());
         } else {
@@ -677,9 +721,10 @@ impl Instance {
         }
     }
 
-    pub(crate) unsafe fn set_callee(&mut self, callee: Option<NonNull<VMFunctionBody>>) {
+    pub(crate) unsafe fn set_callee(self: Pin<&mut Self>, callee: Option<NonNull<VMFunctionBody>>) {
         let callee = callee.map(|p| VmPtr::from(p));
-        *self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_callee()) = callee;
+        let offset = self.offsets().ptr.vmctx_callee();
+        *self.vmctx_plus_offset_mut(offset) = callee;
     }
 
     /// Return a reference to the vmctx used by compiled wasm code.
@@ -715,7 +760,12 @@ impl Instance {
         ExportFunction { func_ref }
     }
 
-    fn get_exported_table(&self, index: TableIndex) -> ExportTable {
+    /// Lookup a table by index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of bounds for this instance.
+    pub fn get_exported_table(&self, index: TableIndex) -> ExportTable {
         let ty = self.env_module().tables[index];
         let (definition, vmctx, index) =
             if let Some(def_index) = self.env_module().defined_table_index(index) {
@@ -736,7 +786,12 @@ impl Instance {
         }
     }
 
-    fn get_exported_memory(&self, index: MemoryIndex) -> ExportMemory {
+    /// Lookup a memory by index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out-of-bounds for this instance.
+    pub fn get_exported_memory(&self, index: MemoryIndex) -> ExportMemory {
         let (definition, vmctx, def_index) =
             if let Some(def_index) = self.env_module().defined_memory_index(index) {
                 (self.memory_ptr(def_index), self.vmctx(), def_index)
@@ -800,7 +855,7 @@ impl Instance {
     }
 
     /// Return the table index for the given `VMTableDefinition`.
-    pub unsafe fn table_index(&mut self, table: &VMTableDefinition) -> DefinedTableIndex {
+    pub unsafe fn table_index(&self, table: &VMTableDefinition) -> DefinedTableIndex {
         let index = DefinedTableIndex::new(
             usize::try_from(
                 (table as *const VMTableDefinition)
@@ -823,7 +878,7 @@ impl Instance {
     /// of pages. Returns `Some` with the old size in bytes if growth was
     /// successful.
     pub(crate) fn memory_grow(
-        &mut self,
+        self: Pin<&mut Self>,
         store: &mut dyn VMStore,
         index: MemoryIndex,
         delta: u64,
@@ -842,12 +897,12 @@ impl Instance {
     }
 
     fn defined_memory_grow(
-        &mut self,
+        mut self: Pin<&mut Self>,
         store: &mut dyn VMStore,
         idx: DefinedMemoryIndex,
         delta: u64,
     ) -> Result<Option<usize>, Error> {
-        let memory = &mut self.memories[idx].1;
+        let memory = &mut self.as_mut().memories_mut()[idx].1;
 
         let result = unsafe { memory.grow(delta, Some(store)) };
 
@@ -861,7 +916,10 @@ impl Instance {
         result
     }
 
-    pub(crate) fn table_element_type(&mut self, table_index: TableIndex) -> TableElementType {
+    pub(crate) fn table_element_type(
+        self: Pin<&mut Self>,
+        table_index: TableIndex,
+    ) -> TableElementType {
         unsafe { (*self.get_table(table_index)).element_type() }
     }
 
@@ -871,7 +929,7 @@ impl Instance {
     /// Returns `None` if table can't be grown by the specified amount of
     /// elements, or if `init_value` is the wrong type of table element.
     pub(crate) fn table_grow(
-        &mut self,
+        self: Pin<&mut Self>,
         store: &mut dyn VMStore,
         table_index: TableIndex,
         delta: u64,
@@ -883,14 +941,15 @@ impl Instance {
     }
 
     fn defined_table_grow(
-        &mut self,
+        mut self: Pin<&mut Self>,
         store: &mut dyn VMStore,
         table_index: DefinedTableIndex,
         delta: u64,
         init_value: TableElement,
     ) -> Result<Option<usize>, Error> {
         let table = &mut self
-            .tables
+            .as_mut()
+            .tables_mut()
             .get_mut(table_index)
             .unwrap_or_else(|| panic!("no table for index {}", table_index.index()))
             .1;
@@ -899,7 +958,7 @@ impl Instance {
 
         // Keep the `VMContext` pointers used by compiled Wasm code up to
         // date.
-        let element = self.tables[table_index].1.vmtable();
+        let element = table.vmtable();
         self.set_table(table_index, element);
 
         result
@@ -913,7 +972,7 @@ impl Instance {
         Layout::from_size_align(size, align).unwrap()
     }
 
-    fn type_ids_array(&mut self) -> NonNull<VmPtr<VMSharedTypeIndex>> {
+    fn type_ids_array(&self) -> NonNull<VmPtr<VMSharedTypeIndex>> {
         unsafe { self.vmctx_plus_offset_raw(self.offsets().ptr.vmctx_type_ids_array()) }
     }
 
@@ -1051,7 +1110,7 @@ impl Instance {
     /// Returns a `Trap` error when the range within the table is out of bounds
     /// or the range within the passive element is out of bounds.
     pub(crate) fn table_init(
-        &mut self,
+        self: Pin<&mut Self>,
         store: &mut StoreOpaque,
         table_index: TableIndex,
         elem_index: ElemIndex,
@@ -1062,8 +1121,9 @@ impl Instance {
         let mut storage = None;
         let elements = self.passive_element_segment(&mut storage, elem_index);
         let mut const_evaluator = ConstExprEvaluator::default();
-        self.table_init_segment(
+        Self::table_init_segment(
             store,
+            self.id,
             &mut const_evaluator,
             table_index,
             elements,
@@ -1074,8 +1134,8 @@ impl Instance {
     }
 
     pub(crate) fn table_init_segment(
-        &mut self,
         store: &mut StoreOpaque,
+        id: InstanceId,
         const_evaluator: &mut ConstExprEvaluator,
         table_index: TableIndex,
         elements: &TableSegmentElements,
@@ -1085,10 +1145,11 @@ impl Instance {
     ) -> Result<(), Trap> {
         // https://webassembly.github.io/bulk-memory-operations/core/exec/instructions.html#exec-table-init
 
-        let table = unsafe { &mut *self.get_table(table_index) };
+        let mut instance = store.instance_mut(id);
+        let table = unsafe { &mut *instance.as_mut().get_table(table_index) };
         let src = usize::try_from(src).map_err(|_| Trap::TableOutOfBounds)?;
         let len = usize::try_from(len).map_err(|_| Trap::TableOutOfBounds)?;
-        let module = self.env_module().clone();
+        let module = instance.env_module().clone();
 
         match elements {
             TableSegmentElements::Functions(funcs) => {
@@ -1096,15 +1157,16 @@ impl Instance {
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
-                table.init_func(dst, elements.iter().map(|idx| self.get_func_ref(*idx)))?;
+                table.init_func(dst, elements.iter().map(|idx| instance.get_func_ref(*idx)))?;
             }
             TableSegmentElements::Expressions(exprs) => {
                 let exprs = exprs
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
-                let mut context = ConstEvalContext::new(self);
-                match module.tables[table_index].ref_type.heap_type.top() {
+                let top = module.tables[table_index].ref_type.heap_type.top();
+                let mut context = ConstEvalContext::new(id);
+                match top {
                     WasmHeapTopType::Extern => table.init_gc_refs(
                         dst,
                         exprs.iter().map(|expr| unsafe {
@@ -1144,20 +1206,20 @@ impl Instance {
     }
 
     /// Drop an element.
-    pub(crate) fn elem_drop(&mut self, elem_index: ElemIndex) {
+    pub(crate) fn elem_drop(self: Pin<&mut Self>, elem_index: ElemIndex) {
         // https://webassembly.github.io/reference-types/core/exec/instructions.html#exec-elem-drop
 
-        self.dropped_elements.insert(elem_index);
+        self.dropped_elements_mut().insert(elem_index);
 
         // Note that we don't check that we actually removed a segment because
         // dropping a non-passive segment is a no-op (not a trap).
     }
 
     /// Get a locally-defined memory.
-    pub fn get_defined_memory(&mut self, index: DefinedMemoryIndex) -> *mut Memory {
+    pub fn get_defined_memory(self: Pin<&mut Self>, index: DefinedMemoryIndex) -> *mut Memory {
         // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
         // `*mut A`, which should be a safe operation to do.
-        unsafe { &raw mut (*self.memories.get_raw_mut(index).unwrap()).1 }
+        unsafe { &raw mut (*self.memories_mut().get_raw_mut(index).unwrap()).1 }
     }
 
     /// Do a `memory.copy`
@@ -1167,7 +1229,7 @@ impl Instance {
     /// Returns a `Trap` error when the source or destination ranges are out of
     /// bounds.
     pub(crate) fn memory_copy(
-        &mut self,
+        self: Pin<&mut Self>,
         dst_index: MemoryIndex,
         dst: u64,
         src_index: MemoryIndex,
@@ -1215,7 +1277,7 @@ impl Instance {
     ///
     /// Returns a `Trap` error if the memory range is out of bounds.
     pub(crate) fn memory_fill(
-        &mut self,
+        self: Pin<&mut Self>,
         memory_index: MemoryIndex,
         dst: u64,
         val: u8,
@@ -1261,7 +1323,7 @@ impl Instance {
     /// memory's bounds or if the source range is outside the data segment's
     /// bounds.
     pub(crate) fn memory_init(
-        &mut self,
+        self: Pin<&mut Self>,
         memory_index: MemoryIndex,
         data_index: DataIndex,
         dst: u64,
@@ -1273,7 +1335,7 @@ impl Instance {
     }
 
     pub(crate) fn memory_init_segment(
-        &mut self,
+        self: Pin<&mut Self>,
         memory_index: MemoryIndex,
         range: Range<u32>,
         dst: u64,
@@ -1300,8 +1362,8 @@ impl Instance {
     }
 
     /// Drop the given data segment, truncating its length to zero.
-    pub(crate) fn data_drop(&mut self, data_index: DataIndex) {
-        self.dropped_data.insert(data_index);
+    pub(crate) fn data_drop(self: Pin<&mut Self>, data_index: DataIndex) {
+        self.dropped_data_mut().insert(data_index);
 
         // Note that we don't check that we actually removed a segment because
         // dropping a non-passive segment is a no-op (not a trap).
@@ -1319,7 +1381,7 @@ impl Instance {
     /// increasing order, so that the break-at-out-of-bounds behavior
     /// works correctly.
     pub(crate) fn get_table_with_lazy_init(
-        &mut self,
+        self: Pin<&mut Self>,
         table_index: TableIndex,
         range: impl Iterator<Item = u64>,
     ) -> *mut Table {
@@ -1333,7 +1395,7 @@ impl Instance {
     ///
     /// The `range` specified is eagerly initialized for funcref tables.
     pub fn get_defined_table_with_lazy_init(
-        &mut self,
+        mut self: Pin<&mut Self>,
         idx: DefinedTableIndex,
         range: impl Iterator<Item = u64>,
     ) -> *mut Table {
@@ -1370,7 +1432,7 @@ impl Instance {
                 // Panicking here helps catch bugs rather than silently truncating by accident.
                 let func_index = precomputed.get(usize::try_from(i).unwrap()).cloned();
                 let func_ref = func_index.and_then(|func_index| self.get_func_ref(func_index));
-                self.tables[idx]
+                self.as_mut().tables_mut()[idx]
                     .1
                     .set(i, TableElement::FuncRef(func_ref))
                     .expect("Table type should match and index should be in-bounds");
@@ -1379,30 +1441,30 @@ impl Instance {
 
         // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
         // `*mut A`, which should be a safe operation to do.
-        unsafe { &raw mut (*self.tables.get_raw_mut(idx).unwrap()).1 }
+        unsafe { &raw mut (*self.tables_mut().get_raw_mut(idx).unwrap()).1 }
     }
 
     /// Get a table by index regardless of whether it is locally-defined or an
     /// imported, foreign table.
-    pub(crate) fn get_table(&mut self, table_index: TableIndex) -> *mut Table {
+    pub(crate) fn get_table(self: Pin<&mut Self>, table_index: TableIndex) -> *mut Table {
         self.with_defined_table_index_and_instance(table_index, |idx, instance| unsafe {
             // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
             // `*mut A`, which should be a safe operation to do.
-            &raw mut (*instance.tables.get_raw_mut(idx).unwrap()).1
+            &raw mut (*instance.tables_mut().get_raw_mut(idx).unwrap()).1
         })
     }
 
     /// Get a locally-defined table.
-    pub(crate) fn get_defined_table(&mut self, index: DefinedTableIndex) -> *mut Table {
+    pub(crate) fn get_defined_table(self: Pin<&mut Self>, index: DefinedTableIndex) -> *mut Table {
         // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
         // `*mut A`, which should be a safe operation to do.
-        unsafe { &raw mut (*self.tables.get_raw_mut(index).unwrap()).1 }
+        unsafe { &raw mut (*self.tables_mut().get_raw_mut(index).unwrap()).1 }
     }
 
     pub(crate) fn with_defined_table_index_and_instance<R>(
-        &mut self,
+        self: Pin<&mut Self>,
         index: TableIndex,
-        f: impl FnOnce(DefinedTableIndex, &mut Instance) -> R,
+        f: impl FnOnce(DefinedTableIndex, Pin<&mut Instance>) -> R,
     ) -> R {
         if let Some(defined_table_index) = self.env_module().defined_table_index(index) {
             f(defined_table_index, self)
@@ -1424,7 +1486,7 @@ impl Instance {
     /// that we need in a certain state will be explicitly written by this
     /// function.
     unsafe fn initialize_vmctx(
-        &mut self,
+        mut self: Pin<&mut Self>,
         module: &Module,
         offsets: &VMOffsets<HostPtr>,
         store: StorePtr,
@@ -1434,8 +1496,8 @@ impl Instance {
 
         self.vmctx_plus_offset_raw::<u32>(offsets.ptr.vmctx_magic())
             .write(VMCONTEXT_MAGIC);
-        self.set_callee(None);
-        self.set_store(store.as_raw());
+        self.as_mut().set_callee(None);
+        self.as_mut().set_store(store.as_raw());
 
         // Initialize shared types
         let types = NonNull::from(self.runtime_info.type_ids());
@@ -1492,8 +1554,9 @@ impl Instance {
 
         // Initialize the defined tables
         let mut ptr = self.vmctx_plus_offset_raw(offsets.vmctx_tables_begin());
+        let tables = self.as_mut().tables_mut();
         for i in 0..module.num_defined_tables() {
-            ptr.write(self.tables[DefinedTableIndex::new(i)].1.vmtable());
+            ptr.write(tables[DefinedTableIndex::new(i)].1.vmtable());
             ptr = ptr.add(1);
         }
 
@@ -1504,18 +1567,19 @@ impl Instance {
         // definitions of memories owned (not shared) in the module.
         let mut ptr = self.vmctx_plus_offset_raw(offsets.vmctx_memories_begin());
         let mut owned_ptr = self.vmctx_plus_offset_raw(offsets.vmctx_owned_memories_begin());
+        let memories = self.as_mut().memories_mut();
         for i in 0..module.num_defined_memories() {
             let defined_memory_index = DefinedMemoryIndex::new(i);
             let memory_index = module.memory_index(defined_memory_index);
             if module.memories[memory_index].shared {
-                let def_ptr = self.memories[defined_memory_index]
+                let def_ptr = memories[defined_memory_index]
                     .1
                     .as_shared_memory()
                     .unwrap()
                     .vmmemory_ptr();
                 ptr.write(VmPtr::from(def_ptr));
             } else {
-                owned_ptr.write(self.memories[defined_memory_index].1.vmmemory());
+                owned_ptr.write(memories[defined_memory_index].1.vmmemory());
                 ptr.write(VmPtr::from(owned_ptr));
                 owned_ptr = owned_ptr.add(1);
             }
@@ -1543,7 +1607,14 @@ impl Instance {
         }
     }
 
-    fn wasm_fault(&self, addr: usize) -> Option<WasmFault> {
+    /// Attempts to convert from the host `addr` specified to a WebAssembly
+    /// based address recorded in `WasmFault`.
+    ///
+    /// This method will check all linear memories that this instance contains
+    /// to see if any of them contain `addr`. If one does then `Some` is
+    /// returned with metadata about the wasm fault. Otherwise `None` is
+    /// returned and `addr` doesn't belong to this instance.
+    pub fn wasm_fault(&self, addr: usize) -> Option<WasmFault> {
         let mut fault = None;
         for (_, (_, memory)) in self.memories.iter() {
             let accessible = memory.wasm_accessible();
@@ -1605,196 +1676,89 @@ impl Instance {
             EntityIndex::Tag(i) => Export::Tag(self.get_exported_tag(i)),
         }
     }
+
+    fn store_mut(self: Pin<&mut Self>) -> &mut Option<VMStoreRawPtr> {
+        // SAFETY: this is a pin-projection to get a mutable reference to an
+        // internal field and is safe so long as the `&mut Self` temporarily
+        // created is not overwritten, which it isn't here.
+        unsafe { &mut self.get_unchecked_mut().store }
+    }
+
+    fn dropped_elements_mut(self: Pin<&mut Self>) -> &mut EntitySet<ElemIndex> {
+        // SAFETY: see `store_mut` above.
+        unsafe { &mut self.get_unchecked_mut().dropped_elements }
+    }
+
+    fn dropped_data_mut(self: Pin<&mut Self>) -> &mut EntitySet<DataIndex> {
+        // SAFETY: see `store_mut` above.
+        unsafe { &mut self.get_unchecked_mut().dropped_data }
+    }
+
+    fn memories_mut(
+        self: Pin<&mut Self>,
+    ) -> &mut PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)> {
+        // SAFETY: see `store_mut` above.
+        unsafe { &mut self.get_unchecked_mut().memories }
+    }
+
+    fn tables_mut(
+        self: Pin<&mut Self>,
+    ) -> &mut PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)> {
+        // SAFETY: see `store_mut` above.
+        unsafe { &mut self.get_unchecked_mut().tables }
+    }
+
+    #[cfg(feature = "wmemcheck")]
+    pub(super) fn wmemcheck_state_mut(self: Pin<&mut Self>) -> &mut Option<Wmemcheck> {
+        // SAFETY: see `store_mut` above.
+        unsafe { &mut self.get_unchecked_mut().wmemcheck_state }
+    }
 }
 
 /// A handle holding an `Instance` of a WebAssembly module.
+///
+/// This structure is an owning handle of the `instance` contained internally.
+/// When this value goes out of scope it will deallocate the `Instance` and all
+/// memory associated with it.
+///
+/// Note that this lives within a `StoreOpaque` on a list of instances that a
+/// store is keeping alive.
 #[derive(Debug)]
 pub struct InstanceHandle {
-    instance: Option<SendSyncPtr<Instance>>,
+    /// The raw pointer to the instance that was allocated.
+    ///
+    /// Note that this is not equivalent to `Box<Instance>` because the
+    /// allocation here has a `VMContext` trailing after it. Thus the custom
+    /// destructor to invoke the `dealloc` function with the appropriate
+    /// layout.
+    instance: SendSyncPtr<Instance>,
 }
 
 impl InstanceHandle {
-    /// Creates an "empty" instance handle which internally has a null pointer
-    /// to an instance.
-    pub fn null() -> InstanceHandle {
-        InstanceHandle { instance: None }
+    /// Gets the raw underlying `&Instance` from this handle.
+    pub fn get(&self) -> &Instance {
+        // SAFETY: this is an owned instance handle that retains exclusive
+        // ownership of the `Instance` inside. With `&self` given we know
+        // this pointer is valid valid and the returned lifetime is connected
+        // to `self` so that should also be valid.
+        unsafe { self.instance.as_non_null().as_ref() }
     }
 
-    /// Return a raw pointer to the vmctx used by compiled wasm code.
-    #[inline]
-    pub fn vmctx(&self) -> NonNull<VMContext> {
-        self.instance().vmctx()
+    /// Same as [`Self::get`] except for mutability.
+    pub fn get_mut(&mut self) -> Pin<&mut Instance> {
+        // SAFETY: The lifetime concerns here are the same as `get` above.
+        // Otherwise `new_unchecked` is used here to uphold the contract that
+        // instances are always pinned in memory.
+        unsafe { Pin::new_unchecked(self.instance.as_non_null().as_mut()) }
     }
+}
 
-    /// Return a reference to a module.
-    pub fn module(&self) -> &Arc<Module> {
-        self.instance().env_module()
-    }
-
-    /// Lookup a function by index.
-    pub fn get_exported_func(&self, export: FuncIndex) -> ExportFunction {
-        self.instance().get_exported_func(export)
-    }
-
-    /// Lookup a global by index.
-    pub fn get_exported_global(&self, export: GlobalIndex) -> ExportGlobal {
-        self.instance().get_exported_global(export)
-    }
-
-    /// Lookup a tag by index.
-    pub fn get_exported_tag(&self, export: TagIndex) -> ExportTag {
-        self.instance().get_exported_tag(export)
-    }
-
-    /// Lookup a memory by index.
-    pub fn get_exported_memory(&self, export: MemoryIndex) -> ExportMemory {
-        self.instance().get_exported_memory(export)
-    }
-
-    /// Lookup a table by index.
-    pub fn get_exported_table(&self, export: TableIndex) -> ExportTable {
-        self.instance().get_exported_table(export)
-    }
-
-    /// Return an iterator over the exports of this instance.
-    ///
-    /// Specifically, it provides access to the key-value pairs, where the keys
-    /// are export names, and the values are export declarations which can be
-    /// resolved `lookup_by_declaration`.
-    pub fn exports(&self) -> wasmparser::collections::index_map::Iter<String, EntityIndex> {
-        self.instance().exports()
-    }
-
-    /// Get a table defined locally within this module.
-    pub fn get_defined_table(&mut self, index: DefinedTableIndex) -> *mut Table {
-        self.instance_mut().get_defined_table(index)
-    }
-
-    /// Get a table defined locally within this module, lazily
-    /// initializing the given range first.
-    pub fn get_defined_table_with_lazy_init(
-        &mut self,
-        index: DefinedTableIndex,
-        range: impl Iterator<Item = u64>,
-    ) -> *mut Table {
-        let index = self.instance().env_module().table_index(index);
-        self.instance_mut().get_table_with_lazy_init(index, range)
-    }
-
-    /// Get all tables within this instance.
-    ///
-    /// Returns both import and defined tables.
-    ///
-    /// Returns both exported and non-exported tables.
-    ///
-    /// Gives access to the full tables space.
-    pub fn all_tables<'a>(
-        &'a mut self,
-    ) -> impl ExactSizeIterator<Item = (TableIndex, ExportTable)> + 'a {
-        let indices = (0..self.module().tables.len())
-            .map(|i| TableIndex::new(i))
-            .collect::<Vec<_>>();
-        indices.into_iter().map(|i| (i, self.get_exported_table(i)))
-    }
-
-    /// Return the tables defined in this instance (not imported).
-    pub fn defined_tables<'a>(&'a mut self) -> impl ExactSizeIterator<Item = ExportTable> + 'a {
-        let num_imported = self.module().num_imported_tables;
-        self.all_tables()
-            .skip(num_imported)
-            .map(|(_i, table)| table)
-    }
-
-    /// Get all globals within this instance.
-    ///
-    /// Returns both import and defined globals.
-    ///
-    /// Returns both exported and non-exported globals.
-    ///
-    /// Gives access to the full globals space.
-    pub fn all_globals<'a>(
-        &'a mut self,
-    ) -> impl ExactSizeIterator<Item = (GlobalIndex, ExportGlobal)> + 'a {
-        self.instance_mut().all_globals()
-    }
-
-    /// Get the globals defined in this instance (not imported).
-    pub fn defined_globals<'a>(
-        &'a mut self,
-    ) -> impl ExactSizeIterator<Item = (DefinedGlobalIndex, ExportGlobal)> + 'a {
-        self.instance_mut().defined_globals()
-    }
-
-    /// Return a reference to the contained `Instance`.
-    #[inline]
-    pub(crate) fn instance(&self) -> &Instance {
-        unsafe { &*self.instance.unwrap().as_ptr() }
-    }
-
-    pub(crate) fn instance_mut(&mut self) -> &mut Instance {
-        unsafe { &mut *self.instance.unwrap().as_ptr() }
-    }
-
-    /// Get this instance's `dyn VMStore` trait object.
-    ///
-    /// This should only be used for initializing a vmctx's store pointer. It
-    /// should never be used to access the store itself. Use `InstanceAndStore`
-    /// for that instead.
-    pub fn traitobj(&self, store: &StoreOpaque) -> NonNull<dyn VMStore> {
-        // By requiring a store argument, we are ensuring that callers aren't
-        // getting this trait object in order to access the store, since they
-        // already have access. See `InstanceAndStore` and its documentation for
-        // details about the store access patterns we want to restrict host code
-        // to.
-        let _ = store;
-
-        self.instance().store.unwrap().0
-    }
-
-    /// Configure the `*mut dyn Store` internal pointer after-the-fact.
-    ///
-    /// This is provided for the original `Store` itself to configure the first
-    /// self-pointer after the original `Box` has been initialized.
-    pub unsafe fn set_store(&mut self, store: Option<NonNull<dyn VMStore>>) {
-        self.instance_mut().set_store(store);
-    }
-
-    /// Returns a clone of this instance.
-    ///
-    /// This is unsafe because the returned handle here is just a cheap clone
-    /// of the internals, there's no lifetime tracking around its validity.
-    /// You'll need to ensure that the returned handles all go out of scope at
-    /// the same time.
-    #[inline]
-    pub unsafe fn clone(&self) -> InstanceHandle {
-        InstanceHandle {
-            instance: self.instance,
+impl Drop for InstanceHandle {
+    fn drop(&mut self) {
+        unsafe {
+            let layout = Instance::alloc_layout(self.get().offsets());
+            ptr::drop_in_place(self.instance.as_ptr());
+            alloc::alloc::dealloc(self.instance.as_ptr().cast(), layout);
         }
-    }
-
-    /// Performs post-initialization of an instance after its handle has been
-    /// created and registered with a store.
-    ///
-    /// Failure of this function means that the instance still must persist
-    /// within the store since failure may indicate partial failure, or some
-    /// state could be referenced by other instances.
-    pub fn initialize(
-        &mut self,
-        store: &mut StoreOpaque,
-        module: &Module,
-        is_bulk_memory: bool,
-    ) -> Result<()> {
-        allocator::initialize_instance(store, self.instance_mut(), module, is_bulk_memory)
-    }
-
-    /// Attempts to convert from the host `addr` specified to a WebAssembly
-    /// based address recorded in `WasmFault`.
-    ///
-    /// This method will check all linear memories that this instance contains
-    /// to see if any of them contain `addr`. If one does then `Some` is
-    /// returned with metadata about the wasm fault. Otherwise `None` is
-    /// returned and `addr` doesn't belong to this instance.
-    pub fn wasm_fault(&self, addr: usize) -> Option<WasmFault> {
-        self.instance().wasm_fault(addr)
     }
 }

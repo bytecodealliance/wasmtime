@@ -640,7 +640,7 @@ impl Memory {
     }
 
     fn wasmtime_memory(&self, store: &mut StoreOpaque) -> *mut crate::runtime::vm::Memory {
-        store[self.instance].get_defined_memory(self.index)
+        self.instance.get_mut(store).get_defined_memory(self.index)
     }
 
     pub(crate) unsafe fn from_wasmtime_memory(

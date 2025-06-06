@@ -3,6 +3,7 @@ use crate::store::StoreOpaque;
 use crate::{StoreContext, StoreContextMut};
 use core::num::NonZeroU64;
 use core::ops::{Index, IndexMut};
+use core::pin::Pin;
 
 // This is defined here, in a private submodule, so we can explicitly reexport
 // it only as `pub(crate)`. This avoids a ton of
@@ -229,6 +230,26 @@ impl StoreInstanceId {
     pub(crate) fn instance(&self) -> InstanceId {
         self.instance
     }
+
+    /// Looks up the `vm::Instance` within `store` that this id points to.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` does not belong to `store`.
+    pub(crate) fn get<'a>(&self, store: &'a StoreOpaque) -> &'a vm::Instance {
+        self.assert_belongs_to(store.id());
+        store.instance(self.instance)
+    }
+
+    /// Mutable version of `get` above.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` does not belong to `store`.
+    pub(crate) fn get_mut<'a>(&self, store: &'a mut StoreOpaque) -> Pin<&'a mut vm::Instance> {
+        self.assert_belongs_to(store.id());
+        store.instance_mut(self.instance)
+    }
 }
 
 impl Index<StoreInstanceId> for StoreOpaque {
@@ -236,15 +257,6 @@ impl Index<StoreInstanceId> for StoreOpaque {
 
     #[inline]
     fn index(&self, id: StoreInstanceId) -> &Self::Output {
-        id.assert_belongs_to(self.id());
-        self.instance(id.instance).instance()
-    }
-}
-
-impl IndexMut<StoreInstanceId> for StoreOpaque {
-    #[inline]
-    fn index_mut(&mut self, id: StoreInstanceId) -> &mut Self::Output {
-        id.assert_belongs_to(self.id());
-        self.instance_mut(id.instance).instance_mut()
+        id.get(self)
     }
 }

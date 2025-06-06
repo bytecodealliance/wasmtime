@@ -98,6 +98,7 @@ use core::marker;
 use core::mem::{self, ManuallyDrop};
 use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
+use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, PrimaryMap, TripleExt};
 
@@ -1252,12 +1253,22 @@ impl StoreOpaque {
         }
     }
 
-    pub fn instance(&self, id: InstanceId) -> &InstanceHandle {
-        &self.instances[id].handle
+    /// Accessor from `InstanceId` to `&vm::Instance`.
+    ///
+    /// Note that if you have a `StoreInstanceId` you should use
+    /// `StoreInstanceId::get` instead. This assumes that `id` has been
+    /// validated to already belong to this store.
+    pub fn instance(&self, id: InstanceId) -> &vm::Instance {
+        self.instances[id].handle.get()
     }
 
-    pub fn instance_mut(&mut self, id: InstanceId) -> &mut InstanceHandle {
-        &mut self.instances[id].handle
+    /// Accessor from `InstanceId` to `Pin<&mut vm::Instance>`.
+    ///
+    /// Note that if you have a `StoreInstanceId` you should use
+    /// `StoreInstanceId::get_mut` instead. This assumes that `id` has been
+    /// validated to already belong to this store.
+    pub fn instance_mut(&mut self, id: InstanceId) -> Pin<&mut vm::Instance> {
+        self.instances[id].handle.get_mut()
     }
 
     /// Get all instances (ignoring dummy instances) within this store.
@@ -1286,7 +1297,7 @@ impl StoreOpaque {
         let mems = self
             .instances
             .iter_mut()
-            .flat_map(|(_, instance)| instance.handle.instance().defined_memories())
+            .flat_map(|(_, instance)| instance.handle.get().defined_memories())
             .collect::<Vec<_>>();
         mems.into_iter()
             .map(|memory| unsafe { Memory::from_wasmtime_memory(memory, self) })
@@ -1299,7 +1310,7 @@ impl StoreOpaque {
         // dummy instances) and getting each of their defined memories.
         for id in self.instances.keys() {
             let instance = StoreInstanceId::new(self.id(), id);
-            for table in 0..self.instance(id).module().num_defined_tables() {
+            for table in 0..self.instance(id).env_module().num_defined_tables() {
                 let table = DefinedTableIndex::new(table);
                 f(self, Table::from_raw(instance, table));
             }
@@ -1316,7 +1327,7 @@ impl StoreOpaque {
 
         // Then enumerate all instances' defined globals.
         for id in self.instances.keys() {
-            for index in 0..self.instance(id).module().num_defined_globals() {
+            for index in 0..self.instance(id).env_module().num_defined_globals() {
                 let index = DefinedGlobalIndex::new(index);
                 let global = Global::new_instance(self, id, index);
                 f(self, global);
@@ -1810,7 +1821,7 @@ impl StoreOpaque {
         // a quicker lookup.
         let mut fault = None;
         for (_, instance) in self.instances.iter() {
-            if let Some(f) = instance.handle.wasm_fault(addr) {
+            if let Some(f) = instance.handle.get().wasm_fault(addr) {
                 assert!(fault.is_none());
                 fault = Some(f);
             }
