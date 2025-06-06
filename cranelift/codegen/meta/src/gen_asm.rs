@@ -504,6 +504,38 @@ pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
             f,
             "(rule ({rule_name} {param_names}) ({convert} ({raw_name} {implicit_params} {param_names})))"
         );
+
+        if let Some(avx_name) = &inst.alternate {
+            use OperandKind::*;
+            match inst.format.operands_by_kind().as_slice() {
+                [Reg(dst), RegMem(_)] => {
+                    assert!(matches!(dst.reg_class(), Some(RegClass::Xmm)));
+                    let param_tys = param_tys.replace("Aligned", "");
+                    let sse_name = inst.name();
+                    let rule_name = format!("x64_{sse_name}_or_avx");
+                    fmtln!(f, "(decl {rule_name} ({param_tys}) {result_ty})");
+                    fmtln!(f, "(rule 1 ({rule_name} {param_names})");
+                    f.indent(|f| {
+                        fmtln!(f, "(if-let true (use_avx))");
+                        fmtln!(f, "(x64_{avx_name} {param_names}))");
+                    });
+                    fmtln!(
+                        f,
+                        "(rule 0 ({rule_name} {param_names}) (x64_{sse_name} {param_names}))"
+                    );
+                }
+                _ => {
+                    // We don't bother to add other decision functions for now:
+                    // (1) it isn't clear that this is needed since the vast
+                    // majority of these SSE/AVX pairs look like `rw(xmm),
+                    // r(xmm_m128)`; but also (2) instructions using other
+                    // formats can tend to have tricky semantics, e.g.,
+                    // `roundss`/`vroundss` where the destination register is
+                    // partially written to in SSE but fully written to in AVX
+                    // by merging in the second operand.
+                }
+            }
+        }
     }
 }
 
