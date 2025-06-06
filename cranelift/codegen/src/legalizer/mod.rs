@@ -49,205 +49,259 @@ fn imm_const(pos: &mut FuncCursor, arg: Value, imm: Imm64, is_signed: bool) -> V
     }
 }
 
+/// A command describing how the walk over instructions should proceed.
+enum WalkCommand {
+    /// Continue to the next instruction, if any.
+    Continue,
+    /// Revisit the current instruction (presumably because it was legalized
+    /// into a new instruction that may also require further legalization).
+    Revisit,
+}
+
+/// A simple, naive forwards walk over every instruction in every block in the
+/// function's layout.
+///
+/// This does not guarantee any kind of post-order visitation or anything like
+/// that, it is just iterating over blocks in layout order, not any kind of
+/// control-flow graph visitation order.
+///
+/// The `f` visitor closure controls how the walk proceeds via its `WalkCommand`
+/// result.
+fn forward_walk(
+    func: &mut ir::Function,
+    mut f: impl FnMut(&mut ir::Function, ir::Inst) -> WalkCommand,
+) {
+    let mut pos = FuncCursor::new(func);
+    while let Some(_block) = pos.next_block() {
+        let prev_pos = pos.position();
+        while let Some(inst) = pos.next_inst() {
+            match f(pos.func, inst) {
+                WalkCommand::Continue => continue,
+                WalkCommand::Revisit => pos.set_position(prev_pos),
+            }
+        }
+    }
+}
+
 /// Perform a simple legalization by expansion of the function, without
 /// platform-specific transforms.
 pub fn simple_legalize(func: &mut ir::Function, isa: &dyn TargetIsa) {
     trace!("Pre-legalization function:\n{}", func.display());
 
-    let mut pos = FuncCursor::new(func);
-    while let Some(_block) = pos.next_block() {
-        let mut prev_pos = pos.position();
-        while let Some(inst) = pos.next_inst() {
-            match pos.func.dfg.insts[inst] {
-                // memory and constants
-                InstructionData::UnaryGlobalValue {
-                    opcode: ir::Opcode::GlobalValue,
-                    global_value,
-                } => expand_global_value(inst, &mut pos.func, isa, global_value),
-                InstructionData::StackLoad {
-                    opcode: ir::Opcode::StackLoad,
-                    stack_slot,
-                    offset,
-                } => {
-                    let ty = pos.func.dfg.value_type(pos.func.dfg.first_result(inst));
-                    let addr_ty = isa.pointer_type();
+    forward_walk(func, |func, inst| {
+        match func.dfg.insts[inst] {
+            // memory and constants
+            InstructionData::UnaryGlobalValue {
+                opcode: ir::Opcode::GlobalValue,
+                global_value,
+            } => {
+                expand_global_value(inst, func, isa, global_value);
 
-                    let mut pos = FuncCursor::new(pos.func).at_inst(inst);
-                    pos.use_srcloc(inst);
-
-                    let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
-
-                    // Stack slots are required to be accessible.
-                    // We can't currently ensure that they are aligned.
-                    let mut mflags = MemFlags::new();
-                    mflags.set_notrap();
-                    pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
-                }
-                InstructionData::StackStore {
-                    opcode: ir::Opcode::StackStore,
-                    arg,
-                    stack_slot,
-                    offset,
-                } => {
-                    let addr_ty = isa.pointer_type();
-
-                    let mut pos = FuncCursor::new(pos.func).at_inst(inst);
-                    pos.use_srcloc(inst);
-
-                    let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
-
-                    // Stack slots are required to be accessible.
-                    // We can't currently ensure that they are aligned.
-                    let mut mflags = MemFlags::new();
-                    mflags.set_notrap();
-                    pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
-                }
-                InstructionData::DynamicStackLoad {
-                    opcode: ir::Opcode::DynamicStackLoad,
-                    dynamic_stack_slot,
-                } => {
-                    let ty = pos.func.dfg.value_type(pos.func.dfg.first_result(inst));
-                    assert!(ty.is_dynamic_vector());
-                    let addr_ty = isa.pointer_type();
-
-                    let mut pos = FuncCursor::new(pos.func).at_inst(inst);
-                    pos.use_srcloc(inst);
-
-                    let addr = pos.ins().dynamic_stack_addr(addr_ty, dynamic_stack_slot);
-
-                    // Stack slots are required to be accessible and aligned.
-                    let mflags = MemFlags::trusted();
-                    pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
-                }
-                InstructionData::DynamicStackStore {
-                    opcode: ir::Opcode::DynamicStackStore,
-                    arg,
-                    dynamic_stack_slot,
-                } => {
-                    pos.use_srcloc(inst);
-                    let addr_ty = isa.pointer_type();
-                    let vector_ty = pos.func.dfg.value_type(arg);
-                    assert!(vector_ty.is_dynamic_vector());
-
-                    let addr = pos.ins().dynamic_stack_addr(addr_ty, dynamic_stack_slot);
-
-                    let mut mflags = MemFlags::new();
-                    // Stack slots are required to be accessible and aligned.
-                    mflags.set_notrap();
-                    mflags.set_aligned();
-                    pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
-                }
-
-                InstructionData::BinaryImm64 { opcode, arg, imm } => {
-                    let is_signed = match opcode {
-                        ir::Opcode::IaddImm
-                        | ir::Opcode::IrsubImm
-                        | ir::Opcode::ImulImm
-                        | ir::Opcode::SdivImm
-                        | ir::Opcode::SremImm => true,
-                        _ => false,
-                    };
-
-                    let imm = imm_const(&mut pos, arg, imm, is_signed);
-                    let replace = pos.func.dfg.replace(inst);
-                    match opcode {
-                        // bitops
-                        ir::Opcode::BandImm => {
-                            replace.band(arg, imm);
-                        }
-                        ir::Opcode::BorImm => {
-                            replace.bor(arg, imm);
-                        }
-                        ir::Opcode::BxorImm => {
-                            replace.bxor(arg, imm);
-                        }
-                        // bitshifting
-                        ir::Opcode::IshlImm => {
-                            replace.ishl(arg, imm);
-                        }
-                        ir::Opcode::RotlImm => {
-                            replace.rotl(arg, imm);
-                        }
-                        ir::Opcode::RotrImm => {
-                            replace.rotr(arg, imm);
-                        }
-                        ir::Opcode::SshrImm => {
-                            replace.sshr(arg, imm);
-                        }
-                        ir::Opcode::UshrImm => {
-                            replace.ushr(arg, imm);
-                        }
-                        // math
-                        ir::Opcode::IaddImm => {
-                            replace.iadd(arg, imm);
-                        }
-                        ir::Opcode::IrsubImm => {
-                            // note: arg order reversed
-                            replace.isub(imm, arg);
-                        }
-                        ir::Opcode::ImulImm => {
-                            replace.imul(arg, imm);
-                        }
-                        ir::Opcode::SdivImm => {
-                            replace.sdiv(arg, imm);
-                        }
-                        ir::Opcode::SremImm => {
-                            replace.srem(arg, imm);
-                        }
-                        ir::Opcode::UdivImm => {
-                            replace.udiv(arg, imm);
-                        }
-                        ir::Opcode::UremImm => {
-                            replace.urem(arg, imm);
-                        }
-                        _ => prev_pos = pos.position(),
-                    };
-                }
-
-                // comparisons
-                InstructionData::IntCompareImm {
-                    opcode: ir::Opcode::IcmpImm,
-                    cond,
-                    arg,
-                    imm,
-                } => {
-                    let imm = imm_const(&mut pos, arg, imm, true);
-                    pos.func.dfg.replace(inst).icmp(cond, arg, imm);
-                }
-
-                // Legalize the fused bitwise-plus-not instructions into simpler
-                // instructions to assist with optimizations. Lowering will
-                // pattern match this sequence regardless when architectures
-                // support the instruction natively.
-                InstructionData::Binary { opcode, args } => {
-                    match opcode {
-                        ir::Opcode::BandNot => {
-                            let neg = pos.ins().bnot(args[1]);
-                            pos.func.dfg.replace(inst).band(args[0], neg);
-                        }
-                        ir::Opcode::BorNot => {
-                            let neg = pos.ins().bnot(args[1]);
-                            pos.func.dfg.replace(inst).bor(args[0], neg);
-                        }
-                        ir::Opcode::BxorNot => {
-                            let neg = pos.ins().bnot(args[1]);
-                            pos.func.dfg.replace(inst).bxor(args[0], neg);
-                        }
-                        _ => prev_pos = pos.position(),
-                    };
-                }
-
-                _ => {
-                    prev_pos = pos.position();
-                    continue;
-                }
+                // `global_value` can expand to nested `global_value`s.
+                WalkCommand::Revisit
             }
 
-            // Legalization implementations require fixpoint loop here.
-            // TODO: fix this.
-            pos.set_position(prev_pos);
+            InstructionData::StackLoad {
+                opcode: ir::Opcode::StackLoad,
+                stack_slot,
+                offset,
+            } => {
+                let ty = func.dfg.value_type(func.dfg.first_result(inst));
+                let addr_ty = isa.pointer_type();
+
+                let mut pos = FuncCursor::new(func).at_inst(inst);
+                pos.use_srcloc(inst);
+
+                let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
+
+                // Stack slots are required to be accessible.
+                // We can't currently ensure that they are aligned.
+                let mut mflags = MemFlags::new();
+                mflags.set_notrap();
+                pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
+
+                WalkCommand::Continue
+            }
+
+            InstructionData::StackStore {
+                opcode: ir::Opcode::StackStore,
+                arg,
+                stack_slot,
+                offset,
+            } => {
+                let addr_ty = isa.pointer_type();
+
+                let mut pos = FuncCursor::new(func).at_inst(inst);
+                pos.use_srcloc(inst);
+
+                let addr = pos.ins().stack_addr(addr_ty, stack_slot, offset);
+
+                // Stack slots are required to be accessible.
+                // We can't currently ensure that they are aligned.
+                let mut mflags = MemFlags::new();
+                mflags.set_notrap();
+                pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
+
+                WalkCommand::Continue
+            }
+
+            InstructionData::DynamicStackLoad {
+                opcode: ir::Opcode::DynamicStackLoad,
+                dynamic_stack_slot,
+            } => {
+                let ty = func.dfg.value_type(func.dfg.first_result(inst));
+                assert!(ty.is_dynamic_vector());
+                let addr_ty = isa.pointer_type();
+
+                let mut pos = FuncCursor::new(func).at_inst(inst);
+                pos.use_srcloc(inst);
+
+                let addr = pos.ins().dynamic_stack_addr(addr_ty, dynamic_stack_slot);
+
+                // Stack slots are required to be accessible and aligned.
+                let mflags = MemFlags::trusted();
+                pos.func.dfg.replace(inst).load(ty, mflags, addr, 0);
+
+                WalkCommand::Continue
+            }
+
+            InstructionData::DynamicStackStore {
+                opcode: ir::Opcode::DynamicStackStore,
+                arg,
+                dynamic_stack_slot,
+            } => {
+                let mut pos = FuncCursor::new(func);
+                pos.goto_inst(inst);
+                pos.use_srcloc(inst);
+                let addr_ty = isa.pointer_type();
+                let vector_ty = pos.func.dfg.value_type(arg);
+                assert!(vector_ty.is_dynamic_vector());
+
+                let addr = pos.ins().dynamic_stack_addr(addr_ty, dynamic_stack_slot);
+
+                let mut mflags = MemFlags::new();
+                // Stack slots are required to be accessible and aligned.
+                mflags.set_notrap();
+                mflags.set_aligned();
+                pos.func.dfg.replace(inst).store(mflags, arg, addr, 0);
+
+                WalkCommand::Continue
+            }
+
+            InstructionData::BinaryImm64 { opcode, arg, imm } => {
+                let is_signed = match opcode {
+                    ir::Opcode::IaddImm
+                    | ir::Opcode::IrsubImm
+                    | ir::Opcode::ImulImm
+                    | ir::Opcode::SdivImm
+                    | ir::Opcode::SremImm => true,
+                    _ => false,
+                };
+
+                let mut pos = FuncCursor::new(func);
+                pos.goto_inst(inst);
+                let imm = imm_const(&mut pos, arg, imm, is_signed);
+                let replace = pos.func.dfg.replace(inst);
+                match opcode {
+                    // bitops
+                    ir::Opcode::BandImm => {
+                        replace.band(arg, imm);
+                    }
+                    ir::Opcode::BorImm => {
+                        replace.bor(arg, imm);
+                    }
+                    ir::Opcode::BxorImm => {
+                        replace.bxor(arg, imm);
+                    }
+                    // bitshifting
+                    ir::Opcode::IshlImm => {
+                        replace.ishl(arg, imm);
+                    }
+                    ir::Opcode::RotlImm => {
+                        replace.rotl(arg, imm);
+                    }
+                    ir::Opcode::RotrImm => {
+                        replace.rotr(arg, imm);
+                    }
+                    ir::Opcode::SshrImm => {
+                        replace.sshr(arg, imm);
+                    }
+                    ir::Opcode::UshrImm => {
+                        replace.ushr(arg, imm);
+                    }
+                    // math
+                    ir::Opcode::IaddImm => {
+                        replace.iadd(arg, imm);
+                    }
+                    ir::Opcode::IrsubImm => {
+                        // note: arg order reversed
+                        replace.isub(imm, arg);
+                    }
+                    ir::Opcode::ImulImm => {
+                        replace.imul(arg, imm);
+                    }
+                    ir::Opcode::SdivImm => {
+                        replace.sdiv(arg, imm);
+                    }
+                    ir::Opcode::SremImm => {
+                        replace.srem(arg, imm);
+                    }
+                    ir::Opcode::UdivImm => {
+                        replace.udiv(arg, imm);
+                    }
+                    ir::Opcode::UremImm => {
+                        replace.urem(arg, imm);
+                    }
+                    _ => {}
+                }
+
+                WalkCommand::Continue
+            }
+
+            // comparisons
+            InstructionData::IntCompareImm {
+                opcode: ir::Opcode::IcmpImm,
+                cond,
+                arg,
+                imm,
+            } => {
+                let mut pos = FuncCursor::new(func);
+                pos.goto_inst(inst);
+                let imm = imm_const(&mut pos, arg, imm, true);
+                pos.func.dfg.replace(inst).icmp(cond, arg, imm);
+                WalkCommand::Continue
+            }
+
+            // Legalize the fused bitwise-plus-not instructions into simpler
+            // instructions to assist with optimizations. Lowering will
+            // pattern match this sequence regardless when architectures
+            // support the instruction natively.
+            InstructionData::Binary { opcode, args } => {
+                let mut pos = FuncCursor::new(func);
+                pos.goto_inst(inst);
+
+                match opcode {
+                    ir::Opcode::BandNot => {
+                        let neg = pos.ins().bnot(args[1]);
+                        pos.func.dfg.replace(inst).band(args[0], neg);
+                    }
+                    ir::Opcode::BorNot => {
+                        let neg = pos.ins().bnot(args[1]);
+                        pos.func.dfg.replace(inst).bor(args[0], neg);
+                    }
+                    ir::Opcode::BxorNot => {
+                        let neg = pos.ins().bnot(args[1]);
+                        pos.func.dfg.replace(inst).bxor(args[0], neg);
+                    }
+                    _ => {}
+                }
+
+                WalkCommand::Continue
+            }
+
+            _ => WalkCommand::Continue,
         }
-    }
+    });
 
     trace!("Post-legalization function:\n{}", func.display());
 }
