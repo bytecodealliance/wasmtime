@@ -10,7 +10,5 @@ pub fn list() -> Vec<Inst> {
         // AVX versions
         inst("vpavgb", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xE0), _64b | compat | avx),
         inst("vpavgw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xE3), _64b | compat | avx),
-
-
     ]
 }

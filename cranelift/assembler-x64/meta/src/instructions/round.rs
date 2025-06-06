@@ -14,6 +14,5 @@ pub fn list() -> Vec<Inst> {
         inst("vroundps", fmt("RMI", [w(xmm1), r(xmm_m128), r(imm8)]), vex(L128)._66()._0f3a().ib().op(0x08), _64b | compat | avx),
         inst("vroundsd", fmt("RVMI", [w(xmm1), r(xmm2), r(xmm_m64), r(imm8)]), vex(LIG)._66()._0f3a().ib().op(0x0b), _64b | compat | avx),
         inst("vroundss", fmt("RVMI", [w(xmm1), r(xmm2), r(xmm_m32), r(imm8)]), vex(LIG)._66()._0f3a().ib().op(0x0a), _64b | compat | avx),
-
-        ]
+   ]
 }
