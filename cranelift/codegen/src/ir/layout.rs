@@ -516,6 +516,12 @@ impl Layout {
         }
     }
 
+    /// Does the given block contain exactly one instruction?
+    pub fn block_contains_exactly_one_inst(&self, block: Block) -> bool {
+        let block = &self.blocks[block];
+        block.first_inst.is_some() && block.first_inst == block.last_inst
+    }
+
     /// Split the block containing `before` in two.
     ///
     /// Insert `new_block` after the old block and move `before` and the following instructions to

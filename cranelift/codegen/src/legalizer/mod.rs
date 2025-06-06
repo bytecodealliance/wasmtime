@@ -19,9 +19,13 @@ use crate::ir::types::{self, I64, I128};
 use crate::ir::{self, InstBuilder, InstructionData, MemFlags, Value};
 use crate::isa::TargetIsa;
 use crate::trace;
+use cranelift_entity::EntitySet;
+use smallvec::SmallVec;
 
+mod branch_to_trap;
 mod globalvalue;
 
+use self::branch_to_trap::BranchToTrap;
 use self::globalvalue::expand_global_value;
 
 fn imm_const(pos: &mut FuncCursor, arg: Value, imm: Imm64, is_signed: bool) -> Value {
@@ -69,16 +73,16 @@ enum WalkCommand {
 /// result.
 fn backward_walk(
     func: &mut ir::Function,
-    mut f: impl FnMut(&mut ir::Function, ir::Inst) -> WalkCommand,
+    mut f: impl FnMut(&mut ir::Function, ir::Block, ir::Inst) -> WalkCommand,
 ) {
     let mut pos = FuncCursor::new(func);
-    while let Some(_block) = pos.prev_block() {
+    while let Some(block) = pos.prev_block() {
         let mut prev_pos;
         while let Some(inst) = {
             prev_pos = pos.position();
             pos.prev_inst()
         } {
-            match f(pos.func, inst) {
+            match f(pos.func, block, inst) {
                 WalkCommand::Continue => continue,
                 WalkCommand::Revisit => pos.set_position(prev_pos),
             }
@@ -91,7 +95,31 @@ fn backward_walk(
 pub fn simple_legalize(func: &mut ir::Function, isa: &dyn TargetIsa) {
     trace!("Pre-legalization function:\n{}", func.display());
 
-    backward_walk(func, |func, inst| match func.dfg.insts[inst] {
+    let mut branch_to_trap = BranchToTrap::default();
+
+    // We walk the IR backwards because in practice, given the way that
+    // frontends tend to produce CLIF, this means we will visit in roughly
+    // reverse post order, which is helpful for getting the most optimizations
+    // out of the `branch-to-trap` pass that we can (it must analyze trapping
+    // blocks before it can rewrite branches to them) but the order does not
+    // actually affect correctness.
+    backward_walk(func, |func, block, inst| match func.dfg.insts[inst] {
+        InstructionData::Trap {
+            opcode: ir::Opcode::Trap,
+            code: _,
+        } => {
+            branch_to_trap.analyze_trapping_block(func, block);
+            WalkCommand::Continue
+        }
+        InstructionData::Brif {
+            opcode: ir::Opcode::Brif,
+            arg,
+            blocks,
+        } => {
+            branch_to_trap.process_brif(func, inst, arg, blocks);
+            WalkCommand::Continue
+        }
+
         InstructionData::UnaryGlobalValue {
             opcode: ir::Opcode::GlobalValue,
             global_value,
