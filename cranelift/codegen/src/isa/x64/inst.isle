@@ -5058,7 +5058,7 @@
 
 (decl bitcast_gpr_to_xmm (u8 Gpr) Xmm)
 (rule (bitcast_gpr_to_xmm 16 src)
-      (x64_pinsrw (xmm_uninit_value) src 0))
+      (x64_pinsrw (xmm_zero $I16X8) src 0))
 (rule (bitcast_gpr_to_xmm 32 src)
       (x64_movd_to_xmm src))
 (rule (bitcast_gpr_to_xmm 64 src)
