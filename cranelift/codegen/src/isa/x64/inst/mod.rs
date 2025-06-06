@@ -160,7 +160,6 @@ impl Inst {
             | Inst::XmmToGprImmVex { op, .. }
             | Inst::XmmToGprVex { op, .. }
             | Inst::GprToXmmVex { op, .. }
-            | Inst::CvtIntToFloatVex { op, .. }
             | Inst::XmmCmpRmRVex { op, .. } => op.available_from(),
 
             Inst::External { inst } => {
@@ -921,20 +920,6 @@ impl PrettyPrint for Inst {
                 let src2 = src2.pretty_print(8);
                 let op = ljustify(op.to_string());
                 format!("{op} {src2}, {src1}")
-            }
-
-            Inst::CvtIntToFloatVex {
-                op,
-                src1,
-                src2,
-                dst,
-                src2_size,
-            } => {
-                let dst = pretty_print_reg(*dst.to_reg(), 8);
-                let src1 = pretty_print_reg(src1.to_reg(), 8);
-                let src2 = src2.pretty_print(src2_size.to_bytes());
-                let op = ljustify(op.to_string());
-                format!("{op} {src1}, {src2}, {dst}")
             }
 
             Inst::XmmCmpRmRVex { op, src1, src2 } => {
@@ -1718,13 +1703,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::GprToXmmVex { src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
-        }
-        Inst::CvtIntToFloatVex {
-            src1, src2, dst, ..
-        } => {
-            collector.reg_def(dst);
-            collector.reg_use(src1);
-            src2.get_operands(collector);
         }
         Inst::CvtUint64ToFloatSeq {
             src,

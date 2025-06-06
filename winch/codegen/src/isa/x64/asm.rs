@@ -2000,20 +2000,17 @@ impl Assembler {
 
     /// Converts vector of integers into vector of floating values.
     pub fn xmm_vcvt_rr(&mut self, src: Reg, dst: WritableReg, kind: VcvtKind) {
-        let op = match kind {
-            VcvtKind::I32ToF32 => AvxOpcode::Vcvtdq2ps,
-            VcvtKind::I32ToF64 => AvxOpcode::Vcvtdq2pd,
-            VcvtKind::F64ToF32 => AvxOpcode::Vcvtpd2ps,
-            VcvtKind::F64ToI32 => AvxOpcode::Vcvttpd2dq,
-            VcvtKind::F32ToF64 => AvxOpcode::Vcvtps2pd,
-            VcvtKind::F32ToI32 => AvxOpcode::Vcvttps2dq,
+        let dst: WritableXmm = dst.map(|x| x.into());
+        let inst = match kind {
+            VcvtKind::I32ToF32 => asm::inst::vcvtdq2ps_a::new(dst, src).into(),
+            VcvtKind::I32ToF64 => asm::inst::vcvtdq2pd_a::new(dst, src).into(),
+            VcvtKind::F64ToF32 => asm::inst::vcvtpd2ps_a::new(dst, src).into(),
+            VcvtKind::F64ToI32 => asm::inst::vcvttpd2dq_a::new(dst, src).into(),
+            VcvtKind::F32ToF64 => asm::inst::vcvtps2pd_a::new(dst, src).into(),
+            VcvtKind::F32ToI32 => asm::inst::vcvttps2dq_a::new(dst, src).into(),
         };
 
-        self.emit(Inst::XmmUnaryRmRVex {
-            op,
-            src: src.into(),
-            dst: dst.to_reg().into(),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Shift vector data left by `imm`.

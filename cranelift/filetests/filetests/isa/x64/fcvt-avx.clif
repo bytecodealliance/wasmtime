@@ -13,7 +13,7 @@ block0(v0: i32):
 ; block0:
 ;   uninit  %xmm2
 ;   vxorps  %xmm2, %xmm2, %xmm4
-;   vcvtsi2ss %xmm4, %edi, %xmm0
+;   vcvtsi2ssl %edi, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -41,7 +41,7 @@ block0(v0: i64):
 ; block0:
 ;   uninit  %xmm2
 ;   vxorps  %xmm2, %xmm2, %xmm4
-;   vcvtsi2ss %xmm4, %rdi, %xmm0
+;   vcvtsi2ssq %rdi, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -69,7 +69,7 @@ block0(v0: i32):
 ; block0:
 ;   uninit  %xmm2
 ;   vxorpd  %xmm2, %xmm2, %xmm4
-;   vcvtsi2sd %xmm4, %edi, %xmm0
+;   vcvtsi2sdl %edi, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -97,7 +97,7 @@ block0(v0: i64):
 ; block0:
 ;   uninit  %xmm2
 ;   vxorpd  %xmm2, %xmm2, %xmm4
-;   vcvtsi2sd %xmm4, %rdi, %xmm0
+;   vcvtsi2sdq %rdi, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -168,10 +168,10 @@ block0(v0: i64x2):
 ;   uninit  %xmm2
 ;   vxorpd  %xmm2, %xmm2, %xmm4
 ;   vmovq   %xmm0, %r9
-;   vcvtsi2sd %xmm4, %r9, %xmm1
+;   vcvtsi2sdq %r9, %xmm4, %xmm1
 ;   vpshufd $238, %xmm0, %xmm2
 ;   vmovq   %xmm2, %rcx
-;   vcvtsi2sd %xmm4, %rcx, %xmm6
+;   vcvtsi2sdq %rcx, %xmm4, %xmm6
 ;   vunpcklpd %xmm1, %xmm6, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp

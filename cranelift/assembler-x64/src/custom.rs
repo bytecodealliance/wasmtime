@@ -1,7 +1,10 @@
 pub mod display {
+    use crate::inst;
+    use crate::{Registers, XmmMem};
+
     macro_rules! lock {
         ($name:tt) => {
-            pub fn $name<R: $crate::Registers>(inst: &$crate::inst::$name<R>) -> String {
+            pub fn $name<R: Registers>(inst: &inst::$name<R>) -> String {
                 format!("lock {}", &inst.mnemonic()[5..])
             }
         };
@@ -83,6 +86,20 @@ pub mod display {
     lock!(lock_xorw_mr);
     lock!(lock_xorl_mr);
     lock!(lock_xorq_mr);
+
+    pub fn vcvtpd2ps_a<R: Registers>(inst: &inst::vcvtpd2ps_a<R>) -> String {
+        match inst.xmm_m128 {
+            XmmMem::Xmm(_) => "vcvtpd2ps".to_string(),
+            XmmMem::Mem(_) => "vcvtpd2psx".to_string(),
+        }
+    }
+
+    pub fn vcvttpd2dq_a<R: Registers>(inst: &inst::vcvttpd2dq_a<R>) -> String {
+        match inst.xmm_m128 {
+            XmmMem::Xmm(_) => "vcvttpd2dq".to_string(),
+            XmmMem::Mem(_) => "vcvttpd2dqx".to_string(),
+        }
+    }
 }
 
 pub mod visit {

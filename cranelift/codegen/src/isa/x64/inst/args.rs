@@ -1111,12 +1111,6 @@ impl AvxOpcode {
             | AvxOpcode::Vsqrtpd
             | AvxOpcode::Vroundpd
             | AvxOpcode::Vroundps
-            | AvxOpcode::Vcvtdq2pd
-            | AvxOpcode::Vcvtdq2ps
-            | AvxOpcode::Vcvtpd2ps
-            | AvxOpcode::Vcvtps2pd
-            | AvxOpcode::Vcvttpd2dq
-            | AvxOpcode::Vcvttps2dq
             | AvxOpcode::Vphaddw
             | AvxOpcode::Vphaddd
             | AvxOpcode::Vpunpckldq
@@ -1143,10 +1137,6 @@ impl AvxOpcode {
             | AvxOpcode::Vmovmskps
             | AvxOpcode::Vmovmskpd
             | AvxOpcode::Vpmovmskb
-            | AvxOpcode::Vcvtsi2ss
-            | AvxOpcode::Vcvtsi2sd
-            | AvxOpcode::Vcvtss2sd
-            | AvxOpcode::Vcvtsd2ss
             | AvxOpcode::Vsqrtss
             | AvxOpcode::Vsqrtsd
             | AvxOpcode::Vroundss
