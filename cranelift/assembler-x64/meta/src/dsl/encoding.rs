@@ -1105,6 +1105,15 @@ impl Vex {
         assert!(self.opcode != u8::MAX);
         assert!(self.mmmmm.is_some());
     }
+
+    /// Retrieve the digit extending the opcode, if available.
+    #[must_use]
+    pub fn unwrap_digit(&self) -> Option<u8> {
+        match self.modrm {
+            Some(ModRmKind::Digit(digit)) => Some(digit),
+            _ => None,
+        }
+    }
 }
 
 impl From<Vex> for Encoding {
