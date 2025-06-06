@@ -81,12 +81,9 @@
 //!     let block1 = builder.create_block();
 //!     let block2 = builder.create_block();
 //!     let block3 = builder.create_block();
-//!     let x = Variable::new(0);
-//!     let y = Variable::new(1);
-//!     let z = Variable::new(2);
-//!     builder.declare_var(x, I32);
-//!     builder.declare_var(y, I32);
-//!     builder.declare_var(z, I32);
+//!     let x = builder.declare_var(I32);
+//!     let y = builder.declare_var(I32);
+//!     let z = builder.declare_var(I32);
 //!     builder.append_block_params_for_function_params(block0);
 //!
 //!     builder.switch_to_block(block0);
