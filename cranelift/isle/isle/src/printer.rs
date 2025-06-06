@@ -16,6 +16,7 @@ pub fn print<W: Write>(defs: &[Def], width: usize, out: &mut W) -> std::io::Resu
     Ok(())
 }
 
+/// Print a single ISLE node.
 pub fn print_node<N: ToSExpr, W: Write>(
     node: &N,
     width: usize,
@@ -26,27 +27,33 @@ pub fn print_node<N: ToSExpr, W: Write>(
     printer.print(&sexpr)
 }
 
+/// S-expression representation of ISLE source code prior to printing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SExpr {
+    /// Atom is a plain string to be printed.
     Atom(String),
+    /// A binding for an ISLE structure, e.g. `x @ (...)`.
     Binding(String, Box<SExpr>),
+    /// A parenthesized list of S-expressions, e.g. `(x y z)`.
     List(Vec<SExpr>),
 }
 
+/// Trait for converting ISLE definitions to S-expressions.
 pub trait ToSExpr {
+    /// Convert the given value to an S-expression.
     fn to_sexpr(&self) -> SExpr;
 }
 
 impl SExpr {
-    pub fn atom<S: ToString>(atom: S) -> Self {
+    fn atom<S: ToString>(atom: S) -> Self {
         SExpr::Atom(atom.to_string())
     }
 
-    pub fn list(items: &[impl ToSExpr]) -> Self {
+    fn list(items: &[impl ToSExpr]) -> Self {
         SExpr::List(items.into_iter().map(|i| i.to_sexpr()).collect())
     }
 
-    pub fn tagged(tag: &str, items: &[impl ToSExpr]) -> Self {
+    fn tagged(tag: &str, items: &[impl ToSExpr]) -> Self {
         let mut parts = vec![SExpr::atom(tag)];
         parts.extend(items.iter().map(ToSExpr::to_sexpr));
         SExpr::List(parts)
