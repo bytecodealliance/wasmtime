@@ -1499,7 +1499,7 @@ pub(crate) fn translate_resume<'a>(
             let param_types = env.tag_params(TagIndex::from_u32(handle_tag));
             let param_types: Vec<ir::Type> = param_types
                 .iter()
-                .map(|wty| crate::value_type(env.isa, *wty))
+                .map(|wty| crate::value_type(env.isa(), *wty))
                 .collect();
 
             let values = suspended_contref.values(env, builder);
@@ -1571,7 +1571,7 @@ pub(crate) fn translate_resume<'a>(
         let return_types: Vec<_> = env
             .continuation_returns(TypeIndex::from_u32(type_index))
             .iter()
-            .map(|ty| crate::value_type(env.isa, *ty))
+            .map(|ty| crate::value_type(env.isa(), *ty))
             .collect();
         let payloads = returned_contref.args(env, builder);
         let return_values = payloads.load_data_entries(env, builder, &return_types);

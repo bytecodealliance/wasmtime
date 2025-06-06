@@ -2944,7 +2944,7 @@ pub fn translate_operator(
             let return_types: Vec<_> = environ
                 .tag_returns(tag_index)
                 .iter()
-                .map(|ty| crate::value_type(environ.isa, *ty))
+                .map(|ty| crate::value_type(environ.isa(), *ty))
                 .collect();
 
             let params = state.peekn(param_types.len());
@@ -3026,7 +3026,7 @@ pub fn translate_operator(
                     environ
                         .continuation_arguments(TypeIndex::from_u32(mti.as_u32()))
                         .iter()
-                        .map(|ty| crate::value_type(environ.isa, *ty))
+                        .map(|ty| crate::value_type(environ.isa(), *ty))
                         .collect()
                 }
                 _ => panic!("Invalid type on switch"),

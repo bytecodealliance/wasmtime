@@ -24,7 +24,7 @@ pub(crate) fn deconstruct<'a>(
 
     let (lsbs, msbs) = pos.ins().isplit(contobj);
 
-    let (revision_counter, contref) = match env.isa.endianness() {
+    let (revision_counter, contref) = match env.isa().endianness() {
         ir::Endianness::Little => (lsbs, msbs),
         ir::Endianness::Big => {
             let pad_bits = 64 - env.pointer_type().bits();
@@ -55,7 +55,7 @@ pub(crate) fn construct<'a>(
     } else {
         contref_addr
     };
-    let (msbs, lsbs) = match env.isa.endianness() {
+    let (msbs, lsbs) = match env.isa().endianness() {
         ir::Endianness::Little => (contref_addr, revision_counter),
         ir::Endianness::Big => {
             let pad_bits = 64 - env.pointer_type().bits();
