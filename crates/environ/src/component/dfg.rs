@@ -32,6 +32,7 @@ use crate::prelude::*;
 use crate::{EntityIndex, EntityRef, ModuleInternedTypeIndex, PrimaryMap, WasmValType};
 use anyhow::Result;
 use indexmap::IndexMap;
+use info::LinearMemoryOptions;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;
@@ -194,6 +195,7 @@ pub enum Export {
     LiftedFunction {
         ty: TypeFuncIndex,
         func: CoreDef,
+        func_ty: ModuleInternedTypeIndex,
         options: CanonicalOptions,
     },
     ModuleStatic {
@@ -414,17 +416,29 @@ pub struct StreamInfo {
     pub payload_type: InterfaceType,
 }
 
+/// Same as `info::CanonicalOptionsDataModel`.
+#[derive(Clone, Hash, Eq, PartialEq)]
+#[expect(missing_docs, reason = "self-describing fields")]
+pub enum CanonicalOptionsDataModel {
+    Gc {
+        core_type: ModuleInternedTypeIndex,
+    },
+    LinearMemory {
+        memory: Option<MemoryId>,
+        realloc: Option<ReallocId>,
+    },
+}
+
 /// Same as `info::CanonicalOptions`
 #[derive(Clone, Hash, Eq, PartialEq)]
 #[expect(missing_docs, reason = "self-describing fields")]
 pub struct CanonicalOptions {
     pub instance: RuntimeComponentInstanceIndex,
     pub string_encoding: StringEncoding,
-    pub memory: Option<MemoryId>,
-    pub realloc: Option<ReallocId>,
     pub callback: Option<CallbackId>,
     pub post_return: Option<PostReturnId>,
     pub async_: bool,
+    pub data_model: CanonicalOptionsDataModel,
 }
 
 /// Same as `info::Resource`
@@ -651,12 +665,18 @@ impl LinearizeDfg<'_> {
         wasmparser_types: wasmparser::types::TypesRef<'_>,
     ) -> Result<ExportIndex> {
         let item = match export {
-            Export::LiftedFunction { ty, func, options } => {
+            Export::LiftedFunction {
+                ty,
+                func,
+                func_ty,
+                options,
+            } => {
                 let func = self.core_def(func);
                 let options = self.options(options);
                 info::Export::LiftedFunction {
                     ty: *ty,
                     func,
+                    func_ty: *func_ty,
                     options,
                 }
             }
@@ -686,18 +706,26 @@ impl LinearizeDfg<'_> {
     }
 
     fn options(&mut self, options: &CanonicalOptions) -> info::CanonicalOptions {
-        let memory = options.memory.map(|mem| self.runtime_memory(mem));
-        let realloc = options.realloc.map(|mem| self.runtime_realloc(mem));
+        let data_model = match options.data_model {
+            CanonicalOptionsDataModel::Gc { core_type } => {
+                info::CanonicalOptionsDataModel::Gc { core_type }
+            }
+            CanonicalOptionsDataModel::LinearMemory { memory, realloc } => {
+                info::CanonicalOptionsDataModel::LinearMemory(LinearMemoryOptions {
+                    memory: memory.map(|mem| self.runtime_memory(mem)),
+                    realloc: realloc.map(|mem| self.runtime_realloc(mem)),
+                })
+            }
+        };
         let callback = options.callback.map(|mem| self.runtime_callback(mem));
         let post_return = options.post_return.map(|mem| self.runtime_post_return(mem));
         info::CanonicalOptions {
             instance: options.instance,
             string_encoding: options.string_encoding,
-            memory,
-            realloc,
             callback,
             post_return,
             async_: options.async_,
+            data_model,
         }
     }
 

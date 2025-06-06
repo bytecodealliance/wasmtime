@@ -4,8 +4,10 @@ use crate::component::{
     ComponentTypesBuilder, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 use crate::fact::{AdapterOptions, Context, Options};
-use crate::prelude::*;
+use crate::{WasmValType, prelude::*};
 use wasm_encoder::ValType;
+
+use super::{DataModel, LinearMemoryOptions};
 
 /// Metadata about a core wasm signature which is created for a component model
 /// signature.
@@ -25,8 +27,22 @@ impl ComponentTypesBuilder {
     /// imported (matching whatever was `canon lift`'d) and functions that are
     /// exported (matching the generated function from `canon lower`).
     pub(super) fn signature(&self, options: &AdapterOptions, context: Context) -> Signature {
+        let mem_opts = match &options.options.data_model {
+            DataModel::LinearMemory(mem_opts) => mem_opts,
+            DataModel::Gc { core_type } => {
+                match &self.module_types_builder()[*core_type].composite_type.inner {
+                    crate::WasmCompositeInnerType::Func(f) => {
+                        return Signature {
+                            params: f.params().iter().map(|ty| self.val_type(ty)).collect(),
+                            results: f.returns().iter().map(|ty| self.val_type(ty)).collect(),
+                        };
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        };
         let ty = &self[options.ty];
-        let ptr_ty = options.options.ptr();
+        let ptr_ty = mem_opts.ptr();
 
         let max_flat_params = match (&context, options.options.async_) {
             // Async imports have a lower limit on their flat parameters than
@@ -103,6 +119,17 @@ impl ComponentTypesBuilder {
         Signature { params, results }
     }
 
+    fn val_type(&self, ty: &WasmValType) -> ValType {
+        match ty {
+            WasmValType::I32 => ValType::I32,
+            WasmValType::I64 => ValType::I64,
+            WasmValType::F32 => ValType::F32,
+            WasmValType::F64 => ValType::F64,
+            WasmValType::V128 => ValType::V128,
+            WasmValType::Ref(_) => todo!("CM+GC"),
+        }
+    }
+
     /// Generates the signature for a function to be exported by the adapter
     /// module and called by the host to lift the parameters from the caller and
     /// lower them to the callee.
@@ -119,7 +146,7 @@ impl ComponentTypesBuilder {
         lift: &AdapterOptions,
     ) -> Signature {
         let lower_ty = &self[lower.ty];
-        let lower_ptr_ty = lower.options.ptr();
+        let lower_ptr_ty = lower.options.data_model.unwrap_memory().ptr();
         let max_flat_params = if lower.options.async_ {
             MAX_FLAT_ASYNC_PARAMS
         } else {
@@ -135,7 +162,7 @@ impl ComponentTypesBuilder {
         };
 
         let lift_ty = &self[lift.ty];
-        let lift_ptr_ty = lift.options.ptr();
+        let lift_ptr_ty = lift.options.data_model.unwrap_memory().ptr();
         let results = match self.flatten_types(
             &lift.options,
             // Both sync- and async-lifted functions accept up to this many core
@@ -203,7 +230,7 @@ impl ComponentTypesBuilder {
         lift: &AdapterOptions,
     ) -> Signature {
         let lift_ty = &self[lift.ty];
-        let lift_ptr_ty = lift.options.ptr();
+        let lift_ptr_ty = lift.options.data_model.unwrap_memory().ptr();
         let mut params = match self
             .flatten_lifting_types(&lift.options, self[lift_ty.results].types.iter().copied())
         {
@@ -259,7 +286,7 @@ impl ComponentTypesBuilder {
         Some(dst)
     }
 
-    pub(super) fn align(&self, opts: &Options, ty: &InterfaceType) -> u32 {
+    pub(super) fn align(&self, opts: &LinearMemoryOptions, ty: &InterfaceType) -> u32 {
         self.size_align(opts, ty).1
     }
 
@@ -268,7 +295,7 @@ impl ComponentTypesBuilder {
     //
     // TODO: this is probably inefficient to entire recalculate at all phases,
     // seems like it would be best to intern this in some sort of map somewhere.
-    pub(super) fn size_align(&self, opts: &Options, ty: &InterfaceType) -> (u32, u32) {
+    pub(super) fn size_align(&self, opts: &LinearMemoryOptions, ty: &InterfaceType) -> (u32, u32) {
         let abi = self.canonical_abi(ty);
         if opts.memory64 {
             (abi.size64, abi.align64)

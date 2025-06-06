@@ -11,7 +11,8 @@ use crate::{AsContext, AsContextMut, StoreContextMut, ValRaw};
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
-    ExportIndex, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, TypeFuncIndex, TypeTuple,
+    CanonicalOptionsDataModel, ExportIndex, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    TypeFuncIndex, TypeTuple,
 };
 
 mod host;
@@ -207,7 +208,7 @@ impl Func {
 
     fn ty(&self, store: &StoreOpaque) -> TypeFuncIndex {
         let instance = self.instance.id().get(store);
-        let (ty, _, _) = instance.component().export_lifted_function(self.index);
+        let (ty, _, _, _) = instance.component().export_lifted_function(self.index);
         ty
     }
 
@@ -379,17 +380,23 @@ impl Func {
     {
         let vminstance = self.instance.id().get(store.0);
         let component = vminstance.component().clone();
-        let (ty, def, options) = component.export_lifted_function(self.index);
+        let (ty, def, _core_ty, options) = component.export_lifted_function(self.index);
+
+        let mem_opts = match options.data_model {
+            CanonicalOptionsDataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            CanonicalOptionsDataModel::LinearMemory(opts) => opts,
+        };
+
         let export = match self.instance.lookup_vmdef(store.0, def) {
             Export::Function(f) => f,
             _ => unreachable!(),
         };
         let vminstance = self.instance.id().get(store.0);
         let component_instance = options.instance;
-        let memory = options
+        let memory = mem_opts
             .memory
             .map(|i| NonNull::new(vminstance.runtime_memory(i)).unwrap());
-        let realloc = options.realloc.map(|i| vminstance.runtime_realloc(i));
+        let realloc = mem_opts.realloc.map(|i| vminstance.runtime_realloc(i));
         let options =
             unsafe { Options::new(store.0.id(), memory, realloc, options.string_encoding) };
 
@@ -552,7 +559,7 @@ impl Func {
         let mut store = store.as_context_mut();
         let index = self.index;
         let vminstance = self.instance.id().get(store.0);
-        let (_ty, _def, options) = vminstance.component().export_lifted_function(index);
+        let (_ty, _def, _core_ty, options) = vminstance.component().export_lifted_function(index);
         let post_return = options.post_return.map(|i| {
             let func_ref = vminstance.runtime_post_return(i);
             ExportFunction { func_ref }
