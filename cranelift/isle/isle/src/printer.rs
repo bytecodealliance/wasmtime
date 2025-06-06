@@ -36,6 +36,12 @@ impl SExpr {
         SExpr::List(items.into_iter().map(|i| i.to_sexpr()).collect())
     }
 
+    pub fn tagged(tag: &str, items: &[impl ToSExpr]) -> Self {
+        let mut parts = vec![SExpr::atom(tag)];
+        parts.extend(items.iter().map(ToSExpr::to_sexpr));
+        SExpr::List(parts)
+    }
+
     pub fn print<W: Write>(&self, out: &mut W) -> std::io::Result<()> {
         match self {
             SExpr::Atom(s) => write!(out, "{}", s),
@@ -103,19 +109,15 @@ impl ToSExpr for Rule {
 
 impl ToSExpr for Extractor {
     fn to_sexpr(&self) -> SExpr {
-        todo!("extractor")
+        let mut sig = vec![self.term.to_sexpr()];
+        sig.extend(self.args.iter().map(ToSExpr::to_sexpr));
+
+        let mut parts = vec![SExpr::atom("extractor")];
+        parts.push(SExpr::List(sig));
+        parts.push(self.template.to_sexpr());
+        SExpr::List(parts)
     }
 }
-
-//             Def::Extractor(ref e) => sexp(vec![
-//                 RcDoc::text("extractor"),
-//                 sexp(
-//                     Vec::from([e.term.to_doc()])
-//                         .into_iter()
-//                         .chain(e.args.iter().map(|v| v.to_doc())),
-//                 ),
-//                 e.template.to_doc(),
-//             ]),
 
 impl ToSExpr for Decl {
     fn to_sexpr(&self) -> SExpr {
@@ -138,45 +140,20 @@ impl ToSExpr for Decl {
 
 impl ToSExpr for Spec {
     fn to_sexpr(&self) -> SExpr {
-        todo!("spec")
+        let mut sig = vec![self.term.to_sexpr()];
+        sig.extend(self.args.iter().map(ToSExpr::to_sexpr));
+
+        let mut parts = vec![SExpr::atom("spec")];
+        parts.push(SExpr::List(sig));
+        if !self.provides.is_empty() {
+            parts.push(SExpr::tagged("provide", &self.provides));
+        }
+        if !self.requires.is_empty() {
+            parts.push(SExpr::tagged("require", &self.requires));
+        }
+        SExpr::List(parts)
     }
 }
-
-// impl Printable for Spec {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         let mut parts = vec![RcDoc::text("spec")];
-//         parts.push(sexp(
-//             Vec::from([self.term.to_doc()])
-//                 .into_iter()
-//                 .chain(self.args.iter().map(|a| a.to_doc())),
-//         ));
-//         for modifies in &self.modifies {
-//             parts.push(modifies.to_doc());
-//         }
-//         if !self.provides.is_empty() {
-//             parts.push(sexp(
-//                 Vec::from([RcDoc::text("provide")])
-//                     .into_iter()
-//                     .chain(self.provides.iter().map(|e| e.to_doc())),
-//             ));
-//         }
-//         if !self.requires.is_empty() {
-//             parts.push(sexp(
-//                 Vec::from([RcDoc::text("require")])
-//                     .into_iter()
-//                     .chain(self.requires.iter().map(|e| e.to_doc())),
-//             ));
-//         }
-//         if !self.matches.is_empty() {
-//             parts.push(sexp(
-//                 Vec::from([RcDoc::text("match")])
-//                     .into_iter()
-//                     .chain(self.matches.iter().map(|e| e.to_doc())),
-//             ));
-//         }
-//         sexp(parts)
-//     }
-// }
 
 impl ToSExpr for Model {
     fn to_sexpr(&self) -> SExpr {
@@ -188,51 +165,67 @@ impl ToSExpr for Model {
 
 impl ToSExpr for Form {
     fn to_sexpr(&self) -> SExpr {
-        todo!("form")
+        let mut parts = vec![SExpr::atom("form"), self.name.to_sexpr()];
+        parts.extend(self.signatures.iter().map(ToSExpr::to_sexpr));
+        SExpr::List(parts)
     }
 }
-
-//             Def::Form(ref f) => {
-//                 let mut parts = vec![RcDoc::text("form")];
-//                 parts.push(f.name.to_doc());
-//                 parts.extend(f.signatures.iter().map(|s| s.to_doc()));
-//                 sexp(parts)
-//             }
 
 impl ToSExpr for Instantiation {
     fn to_sexpr(&self) -> SExpr {
-        todo!("instantiation")
+        let mut parts = vec![SExpr::atom("instantiate"), self.term.to_sexpr()];
+        if let Some(form) = &self.form {
+            parts.push(form.to_sexpr());
+        } else {
+            parts.extend(self.signatures.iter().map(ToSExpr::to_sexpr));
+        }
+        SExpr::List(parts)
     }
 }
 
-//             Def::Instantiation(ref i) => {
-//                 let mut parts = vec![RcDoc::text("instantiate"), i.term.to_doc()];
-//                 if let Some(form) = &i.form {
-//                     parts.push(form.to_doc());
-//                 } else {
-//                     parts.extend(i.signatures.iter().map(|s| s.to_doc()));
-//                 }
-//                 sexp(parts)
-//             }
-
 impl ToSExpr for Extern {
     fn to_sexpr(&self) -> SExpr {
-        todo!("extern")
+        match self {
+            Extern::Extractor {
+                term,
+                func,
+                pos: _,
+                infallible,
+            } => {
+                let mut parts = vec![SExpr::atom("extern"), SExpr::atom("extractor")];
+                if *infallible {
+                    parts.push(SExpr::atom("infallible"));
+                }
+                parts.push(term.to_sexpr());
+                parts.push(func.to_sexpr());
+                SExpr::List(parts)
+            }
+            Extern::Constructor { term, func, .. } => SExpr::List(vec![
+                SExpr::atom("extern"),
+                SExpr::atom("constructor"),
+                term.to_sexpr(),
+                func.to_sexpr(),
+            ]),
+            Extern::Const { name, ty, .. } => SExpr::List(vec![
+                SExpr::atom("extern"),
+                SExpr::atom("const"),
+                SExpr::atom(format!("${}", name.0)),
+                ty.to_sexpr(),
+            ]),
+        }
     }
 }
 
 impl ToSExpr for Converter {
     fn to_sexpr(&self) -> SExpr {
-        todo!("converter")
+        SExpr::List(vec![
+            SExpr::atom("convert"),
+            self.inner_ty.to_sexpr(),
+            self.outer_ty.to_sexpr(),
+            self.term.to_sexpr(),
+        ])
     }
 }
-
-//             Def::Converter(ref c) => sexp(vec![
-//                 RcDoc::text("convert"),
-//                 c.inner_ty.to_doc(),
-//                 c.outer_ty.to_doc(),
-//                 c.term.to_doc(),
-//             ]),
 
 impl ToSExpr for TypeValue {
     fn to_sexpr(&self) -> SExpr {
@@ -242,9 +235,7 @@ impl ToSExpr for TypeValue {
             }
             TypeValue::Enum(variants, _) => {
                 let mut parts = vec![SExpr::atom("enum")];
-                for variant in variants {
-                    parts.push(variant.to_sexpr());
-                }
+                parts.extend(variants.iter().map(ToSExpr::to_sexpr));
                 SExpr::List(parts)
             }
         }
@@ -253,11 +244,9 @@ impl ToSExpr for TypeValue {
 
 impl ToSExpr for Variant {
     fn to_sexpr(&self) -> SExpr {
-        SExpr::List(vec![
-            SExpr::atom("variant"),
-            self.name.to_sexpr(),
-            SExpr::list(&self.fields),
-        ])
+        let mut parts = vec![self.name.to_sexpr()];
+        parts.extend(self.fields.iter().map(ToSExpr::to_sexpr));
+        SExpr::List(parts)
     }
 }
 
@@ -301,215 +290,119 @@ impl ToSExpr for Field {
 //     }
 // }
 //
-// impl Printable for ModelType {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         match self {
-//             ModelType::Unspecified => RcDoc::text("!"),
-//             ModelType::Auto => RcDoc::text("_"),
-//             ModelType::Unit => RcDoc::text("Unit"),
-//             ModelType::Int => RcDoc::text("Int"),
-//             ModelType::Bool => RcDoc::text("Bool"),
-//             ModelType::BitVec(Some(size)) => sexp(vec![RcDoc::text("bv"), RcDoc::as_string(size)]),
-//             ModelType::BitVec(None) => sexp(vec![RcDoc::text("bv")]),
-//             ModelType::Struct(fields) => sexp(
-//                 vec![RcDoc::text("struct")]
-//                     .into_iter()
-//                     .chain(fields.iter().map(|f| f.to_doc())),
-//             ),
-//             ModelType::Named(name) => sexp(vec![RcDoc::text("named"), name.to_doc()]),
-//         }
-//     }
-// }
-//
+
+impl ToSExpr for ModelType {
+    fn to_sexpr(&self) -> SExpr {
+        match self {
+            ModelType::Unit => SExpr::atom("Unit"),
+            ModelType::Int => SExpr::atom("Int"),
+            ModelType::Bool => SExpr::atom("Bool"),
+            ModelType::BitVec(Some(size)) => {
+                SExpr::List(vec![SExpr::atom("bv"), SExpr::atom(size)])
+            }
+            ModelType::BitVec(None) => SExpr::List(vec![SExpr::atom("bv")]),
+        }
+    }
+}
+
 // impl Printable for ModelField {
 //     fn to_doc(&self) -> RcDoc<()> {
 //         sexp(vec![self.name.to_doc(), self.ty.to_doc()])
 //     }
 // }
 //
-// impl Printable for Signature {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         sexp(vec![
-//             sexp(
-//                 Vec::from([RcDoc::text("args")])
-//                     .into_iter()
-//                     .chain(self.args.iter().map(|a| a.to_doc())),
-//             ),
-//             sexp(vec![RcDoc::text("ret"), self.ret.to_doc()]),
-//         ])
-//     }
-// }
-//
-// impl Printable for SpecExpr {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         match self {
-//             SpecExpr::ConstInt { val, .. } => RcDoc::as_string(val),
-//             SpecExpr::ConstBitVec { val, width, .. } => RcDoc::text(if width % 4 == 0 {
-//                 format!("#x{val:0width$x}", width = *width / 4)
-//             } else {
-//                 format!("#b{val:0width$b}", width = *width)
-//             }),
-//             SpecExpr::ConstBool { val, .. } => RcDoc::text(if *val { "true" } else { "false" }),
-//             SpecExpr::Var { var, .. } => var.to_doc(),
-//             SpecExpr::As { x, ty, pos: _ } => {
-//                 sexp(vec![RcDoc::text("as"), x.to_doc(), ty.to_doc()])
-//             }
-//             SpecExpr::Op { op, args, .. } => sexp(
-//                 Vec::from([op.to_doc()])
-//                     .into_iter()
-//                     .chain(args.iter().map(|a| a.to_doc())),
-//             ),
-//             SpecExpr::Pair { l, r, .. } => sexp(vec![l.to_doc(), r.to_doc()]),
-//             SpecExpr::Enum {
-//                 name,
-//                 variant,
-//                 args,
-//                 pos: _,
-//             } => sexp(
-//                 Vec::from([RcDoc::text(format!("{}.{}", name.0, variant.0))])
-//                     .into_iter()
-//                     .chain(args.iter().map(|a| a.to_doc())),
-//             ),
-//             SpecExpr::Field { field, x, pos: _ } => {
-//                 sexp(vec![RcDoc::text(format!(":{}", field.0)), x.to_doc()])
-//             }
-//             SpecExpr::Discriminator { variant, x, pos: _ } => {
-//                 sexp(vec![RcDoc::text(format!("{}?", variant.0)), x.to_doc()])
-//             }
-//             SpecExpr::Match { x, arms, pos: _ } => sexp(
-//                 Vec::from([RcDoc::text("match"), x.to_doc()])
-//                     .into_iter()
-//                     .chain(arms.iter().map(|arm| arm.to_doc())),
-//             ),
-//             SpecExpr::Let { defs, body, pos: _ } => sexp(vec![
-//                 RcDoc::text("let"),
-//                 sexp(defs.iter().map(|(n, e)| sexp(vec![n.to_doc(), e.to_doc()]))),
-//                 body.to_doc(),
-//             ]),
-//             SpecExpr::With {
-//                 decls,
-//                 body,
-//                 pos: _,
-//             } => sexp(vec![
-//                 RcDoc::text("with"),
-//                 sexp(decls.iter().map(Printable::to_doc)),
-//                 body.to_doc(),
-//             ]),
-//             SpecExpr::Macro {
-//                 params,
-//                 body,
-//                 pos: _,
-//             } => sexp(vec![
-//                 RcDoc::text("macro"),
-//                 sexp(params.iter().map(Printable::to_doc)),
-//                 body.to_doc(),
-//             ]),
-//             SpecExpr::Expand { name, args, pos: _ } => sexp(
-//                 Vec::from([RcDoc::text(format!("{}!", name.0))])
-//                     .into_iter()
-//                     .chain(args.iter().map(Printable::to_doc)),
-//             ),
-//             SpecExpr::Struct { fields, pos: _ } => sexp(
-//                 Vec::from([RcDoc::text("struct")])
-//                     .into_iter()
-//                     .chain(fields.iter().map(Printable::to_doc)),
-//             ),
-//         }
-//     }
-// }
-//
-// impl Printable for SpecOp {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         RcDoc::text(match self {
-//             SpecOp::Eq => "=",
-//             SpecOp::And => "and",
-//             SpecOp::Not => "not",
-//             SpecOp::Imp => "=>",
-//             SpecOp::Or => "or",
-//             SpecOp::Add => "+",
-//             SpecOp::Sub => "-",
-//             SpecOp::Mul => "*",
-//             SpecOp::Lte => "<=",
-//             SpecOp::Lt => "<",
-//             SpecOp::Gte => ">=",
-//             SpecOp::Gt => ">",
-//             SpecOp::BVNot => "bvnot",
-//             SpecOp::BVAnd => "bvand",
-//             SpecOp::BVOr => "bvor",
-//             SpecOp::BVXor => "bvxor",
-//             SpecOp::BVNeg => "bvneg",
-//             SpecOp::BVAdd => "bvadd",
-//             SpecOp::BVSub => "bvsub",
-//             SpecOp::BVMul => "bvmul",
-//             SpecOp::BVUdiv => "bvudiv",
-//             SpecOp::BVUrem => "bvurem",
-//             SpecOp::BVSdiv => "bvsdiv",
-//             SpecOp::BVSrem => "bvsrem",
-//             SpecOp::BVShl => "bvshl",
-//             SpecOp::BVLshr => "bvlshr",
-//             SpecOp::BVAshr => "bvashr",
-//             SpecOp::BVSaddo => "bvsaddo",
-//             SpecOp::BVUle => "bvule",
-//             SpecOp::BVUlt => "bvult",
-//             SpecOp::BVUgt => "bvugt",
-//             SpecOp::BVUge => "bvuge",
-//             SpecOp::BVSlt => "bvslt",
-//             SpecOp::BVSle => "bvsle",
-//             SpecOp::BVSgt => "bvsgt",
-//             SpecOp::BVSge => "bvsge",
-//             SpecOp::Rotr => "rotr",
-//             SpecOp::Rotl => "rotl",
-//             SpecOp::Extract => "extract",
-//             SpecOp::ZeroExt => "zero_ext",
-//             SpecOp::SignExt => "sign_ext",
-//             SpecOp::Concat => "concat",
-//             SpecOp::Replicate => "replicate",
-//             SpecOp::ConvTo => "conv_to",
-//             SpecOp::Int2BV => "int2bv",
-//             SpecOp::BV2Nat => "bv2nat",
-//             SpecOp::ToFP => "to_fp",
-//             SpecOp::FPToUBV => "fp.to_ubv",
-//             SpecOp::FPToSBV => "fp.to_sbv",
-//             SpecOp::ToFPUnsigned => "to_fp_unsigned",
-//             SpecOp::ToFPFromFP => "to_fp_from_fp",
-//             SpecOp::WidthOf => "widthof",
-//             SpecOp::If => "if",
-//             SpecOp::Switch => "switch",
-//             SpecOp::Popcnt => "popcnt",
-//             SpecOp::Rev => "rev",
-//             SpecOp::Cls => "cls",
-//             SpecOp::Clz => "clz",
-//             SpecOp::FPPositiveInfinity => "fp.+oo",
-//             SpecOp::FPNegativeInfinity => "fp.-oo",
-//             SpecOp::FPPositiveZero => "fp.+zero",
-//             SpecOp::FPNegativeZero => "fp.-zero",
-//             SpecOp::FPNaN => "fp.NaN",
-//             SpecOp::FPEq => "fp.eq",
-//             SpecOp::FPNe => "fp.ne",
-//             SpecOp::FPLt => "fp.lt",
-//             SpecOp::FPGt => "fp.gt",
-//             SpecOp::FPLe => "fp.le",
-//             SpecOp::FPGe => "fp.ge",
-//             SpecOp::FPAdd => "fp.add",
-//             SpecOp::FPSub => "fp.sub",
-//             SpecOp::FPMul => "fp.mul",
-//             SpecOp::FPDiv => "fp.div",
-//             SpecOp::FPMin => "fp.min",
-//             SpecOp::FPMax => "fp.max",
-//             SpecOp::FPNeg => "fp.neg",
-//             SpecOp::FPCeil => "fp.ceil",
-//             SpecOp::FPFloor => "fp.floor",
-//             SpecOp::FPSqrt => "fp.sqrt",
-//             SpecOp::FPTrunc => "fp.trunc",
-//             SpecOp::FPNearest => "fp.nearest",
-//             SpecOp::FPIsZero => "fp.isZero",
-//             SpecOp::FPIsInfinite => "fp.isInfinite",
-//             SpecOp::FPIsNaN => "fp.isNaN",
-//             SpecOp::FPIsNegative => "fp.isNegative",
-//             SpecOp::FPIsPositive => "fp.isPositive",
-//         })
-//     }
-// }
+
+impl ToSExpr for Signature {
+    fn to_sexpr(&self) -> SExpr {
+        SExpr::List(vec![
+            SExpr::tagged("args", &self.args),
+            SExpr::tagged("ret", std::slice::from_ref(&self.ret)),
+            SExpr::tagged("canon", std::slice::from_ref(&self.canonical)),
+        ])
+    }
+}
+
+impl ToSExpr for SpecExpr {
+    fn to_sexpr(&self) -> SExpr {
+        match self {
+            SpecExpr::ConstInt { val, .. } => SExpr::atom(val),
+            SpecExpr::ConstBitVec { val, width, .. } => SExpr::atom(if *width % 4 == 0 {
+                format!("#x{val:0width$x}", width = *width as usize / 4)
+            } else {
+                format!("#b{val:0width$b}", width = *width as usize)
+            }),
+            SpecExpr::ConstBool { val, .. } => SExpr::atom(if *val { "true" } else { "false" }),
+            SpecExpr::ConstUnit { .. } => SExpr::List(Vec::new()),
+            SpecExpr::Var { var, pos: _ } => var.to_sexpr(),
+            SpecExpr::Op { op, args, .. } => {
+                let mut parts = vec![op.to_sexpr()];
+                parts.extend(args.iter().map(ToSExpr::to_sexpr));
+                SExpr::List(parts)
+            }
+            SpecExpr::Pair { l, r } => SExpr::List(vec![l.to_sexpr(), r.to_sexpr()]),
+            SpecExpr::Enum { name } => SExpr::List(vec![name.to_sexpr()]),
+        }
+    }
+}
+
+impl ToSExpr for SpecOp {
+    fn to_sexpr(&self) -> SExpr {
+        SExpr::atom(match self {
+            SpecOp::Eq => "=",
+            SpecOp::And => "and",
+            SpecOp::Not => "not",
+            SpecOp::Imp => "=>",
+            SpecOp::Or => "or",
+            SpecOp::Lte => "<=",
+            SpecOp::Lt => "<",
+            SpecOp::Gte => ">=",
+            SpecOp::Gt => ">",
+            SpecOp::BVNot => "bvnot",
+            SpecOp::BVAnd => "bvand",
+            SpecOp::BVOr => "bvor",
+            SpecOp::BVXor => "bvxor",
+            SpecOp::BVNeg => "bvneg",
+            SpecOp::BVAdd => "bvadd",
+            SpecOp::BVSub => "bvsub",
+            SpecOp::BVMul => "bvmul",
+            SpecOp::BVUdiv => "bvudiv",
+            SpecOp::BVUrem => "bvurem",
+            SpecOp::BVSdiv => "bvsdiv",
+            SpecOp::BVSrem => "bvsrem",
+            SpecOp::BVShl => "bvshl",
+            SpecOp::BVLshr => "bvlshr",
+            SpecOp::BVAshr => "bvashr",
+            SpecOp::BVSaddo => "bvsaddo",
+            SpecOp::BVUle => "bvule",
+            SpecOp::BVUlt => "bvult",
+            SpecOp::BVUgt => "bvugt",
+            SpecOp::BVUge => "bvuge",
+            SpecOp::BVSlt => "bvslt",
+            SpecOp::BVSle => "bvsle",
+            SpecOp::BVSgt => "bvsgt",
+            SpecOp::BVSge => "bvsge",
+            SpecOp::Rotr => "rotr",
+            SpecOp::Rotl => "rotl",
+            SpecOp::Extract => "extract",
+            SpecOp::ZeroExt => "zero_ext",
+            SpecOp::SignExt => "sign_ext",
+            SpecOp::Concat => "concat",
+            SpecOp::ConvTo => "conv_to",
+            SpecOp::Int2BV => "int2bv",
+            SpecOp::WidthOf => "widthof",
+            SpecOp::If => "if",
+            SpecOp::Switch => "switch",
+            SpecOp::Popcnt => "popcnt",
+            SpecOp::Rev => "rev",
+            SpecOp::Cls => "cls",
+            SpecOp::Clz => "clz",
+            SpecOp::Subs => "subs",
+            SpecOp::BV2Int => "bv2int",
+            SpecOp::LoadEffect => "load_effect",
+            SpecOp::StoreEffect => "store_effect",
+        })
+    }
+}
 //
 // impl Printable for Arm {
 //     fn to_doc(&self) -> RcDoc<()> {
@@ -633,38 +526,6 @@ impl ToSExpr for LetDef {
     }
 }
 
-// impl Printable for Extern {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         match self {
-//             Extern::Extractor {
-//                 term,
-//                 func,
-//                 pos: _,
-//                 infallible,
-//             } => {
-//                 let mut parts = vec![RcDoc::text("extern"), RcDoc::text("extractor")];
-//                 if *infallible {
-//                     parts.push(RcDoc::text("infallible"));
-//                 }
-//                 parts.push(term.to_doc());
-//                 parts.push(func.to_doc());
-//                 sexp(parts)
-//             }
-//             Extern::Constructor { term, func, .. } => sexp(vec![
-//                 RcDoc::text("extern"),
-//                 RcDoc::text("constructor"),
-//                 term.to_doc(),
-//                 func.to_doc(),
-//             ]),
-//             Extern::Const { name, ty, .. } => sexp(vec![
-//                 RcDoc::text("extern"),
-//                 RcDoc::text("const"),
-//                 RcDoc::text("$").append(name.to_doc()),
-//                 ty.to_doc(),
-//             ]),
-//         }
-//     }
-// }
 //
 // fn sexp<'a, I, A>(docs: I) -> RcDoc<'a, A>
 // where

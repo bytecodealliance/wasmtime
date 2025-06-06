@@ -9,6 +9,8 @@ use std::iter::zip;
 pub fn run_print(isle_filename: &str) {
     // Parse.
     let original_source = std::fs::read_to_string(isle_filename).unwrap();
+    eprintln!("original:\n{original_source}");
+
     let lexer = lexer::Lexer::new(0, &original_source).unwrap();
     let original = parser::parse_without_pos(lexer).unwrap();
 
@@ -17,6 +19,7 @@ pub fn run_print(isle_filename: &str) {
     printer::print(&original, 78, &mut buf).unwrap();
     let bytes = buf.into_inner().unwrap();
     let isle_source = String::from_utf8(bytes).unwrap();
+    eprintln!("printed:\n{isle_source}");
 
     // Round trip.
     let lexer = lexer::Lexer::new(0, &isle_source).unwrap();
