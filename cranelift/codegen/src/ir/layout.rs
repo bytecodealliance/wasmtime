@@ -315,7 +315,7 @@ impl Layout {
     }
 
     /// Return an iterator over all blocks in layout order.
-    pub fn blocks(&self) -> Blocks {
+    pub fn blocks(&self) -> Blocks<'_> {
         Blocks {
             layout: self,
             next: self.first_block,
@@ -508,7 +508,7 @@ impl Layout {
     }
 
     /// Iterate over the instructions in `block` in layout order.
-    pub fn block_insts(&self, block: Block) -> Insts {
+    pub fn block_insts(&self, block: Block) -> Insts<'_> {
         Insts {
             layout: self,
             head: self.blocks[block].first_inst.into(),

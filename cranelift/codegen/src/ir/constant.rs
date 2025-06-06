@@ -92,7 +92,7 @@ impl ConstantData {
     }
 
     /// Iterate over the constant's bytes.
-    pub fn iter(&self) -> Iter<u8> {
+    pub fn iter(&self) -> Iter<'_, u8> {
         self.0.iter()
     }
 

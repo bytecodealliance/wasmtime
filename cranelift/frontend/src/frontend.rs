@@ -659,7 +659,7 @@ impl<'a> FunctionBuilder<'a> {
     ///
     /// This can be used to insert SSA code that doesn't need to access locals and that doesn't
     /// need to know about [`FunctionBuilder`] at all.
-    pub fn cursor(&mut self) -> FuncCursor {
+    pub fn cursor(&mut self) -> FuncCursor<'_> {
         self.ensure_inserted_block();
         FuncCursor::new(self.func)
             .with_srcloc(self.srcloc)

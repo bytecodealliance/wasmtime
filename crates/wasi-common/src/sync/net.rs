@@ -82,7 +82,7 @@ macro_rules! wasi_listen_write_impl {
                 self
             }
             #[cfg(unix)]
-            fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+            fn pollable(&self) -> Option<rustix::fd::BorrowedFd<'_>> {
                 Some(self.0.as_fd())
             }
             #[cfg(windows)]
@@ -175,7 +175,7 @@ macro_rules! wasi_stream_write_impl {
                 self
             }
             #[cfg(unix)]
-            fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+            fn pollable(&self) -> Option<rustix::fd::BorrowedFd<'_>> {
                 Some(self.0.as_fd())
             }
             #[cfg(windows)]

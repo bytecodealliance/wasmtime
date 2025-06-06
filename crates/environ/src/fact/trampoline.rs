@@ -3632,7 +3632,7 @@ impl<'a> Destination<'a> {
         types: &ComponentTypesBuilder,
         info: &VariantInfo,
         case: Option<&InterfaceType>,
-    ) -> Destination {
+    ) -> Destination<'_> {
         match self {
             Destination::Stack(s, opts) => {
                 let flat_len = match case {

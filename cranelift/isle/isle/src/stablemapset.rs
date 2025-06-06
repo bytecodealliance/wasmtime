@@ -65,7 +65,7 @@ impl<K: Hash + Eq, V> StableMap<K, V> {
         self.0.get(k)
     }
 
-    pub(crate) fn entry(&mut self, k: K) -> Entry<K, V> {
+    pub(crate) fn entry(&mut self, k: K) -> Entry<'_, K, V> {
         self.0.entry(k)
     }
 }

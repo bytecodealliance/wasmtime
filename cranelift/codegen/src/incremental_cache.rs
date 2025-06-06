@@ -42,7 +42,7 @@ impl Context {
         isa: &dyn TargetIsa,
         cache_store: &mut dyn CacheKvStore,
         ctrl_plane: &mut ControlPlane,
-    ) -> CompileResult<(&CompiledCode, bool)> {
+    ) -> CompileResult<'_, (&CompiledCode, bool)> {
         let cache_key_hash = {
             let _tt = timing::try_incremental_cache();
 

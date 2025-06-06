@@ -32,7 +32,7 @@ impl<'entries, T: Eq + Hash> UniqueTable<'entries, T> {
     pub fn len(&self) -> usize {
         self.table.len()
     }
-    pub fn iter(&self) -> slice::Iter<&'entries T> {
+    pub fn iter(&self) -> slice::Iter<'_, &'entries T> {
         self.table.iter()
     }
 }
@@ -77,7 +77,7 @@ impl<T: PartialEq + Clone> UniqueSeqTable<T> {
     pub fn len(&self) -> usize {
         self.table.len()
     }
-    pub fn iter(&self) -> slice::Iter<T> {
+    pub fn iter(&self) -> slice::Iter<'_, T> {
         self.table.iter()
     }
 }
