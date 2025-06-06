@@ -194,20 +194,6 @@
                        (dst WritableGpr)
                        (imm u8))
 
-       ;; XMM (scalar) unary op (from integer to float reg): vmovd, vmovq,
-       ;; vcvtsi2s{s,d}
-       (GprToXmmVex (op AvxOpcode)
-                    (src GprMem)
-                    (dst WritableXmm)
-                    (src_size OperandSize))
-
-       ;; XMM (scalar) unary op (from xmm to integer reg): vmovd, vmovq,
-       ;; vcvtts{s,d}2si
-       (XmmToGprVex (op AvxOpcode)
-                    (src Xmm)
-                    (dst WritableGpr)
-                    (dst_size OperandSize))
-
        ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
        (XmmCmpRmRVex (op AvxOpcode)
                      (src1 Xmm)
@@ -1144,11 +1130,6 @@
             Vpbroadcastw
             Vpbroadcastd
             Vbroadcastss
-            Vmovd
-            Vmovq
-            Vmovmskps
-            Vmovmskpd
-            Vpmovmskb
             Vsqrtss
             Vsqrtsd
             Vroundss
@@ -1728,20 +1709,6 @@
             (_ Unit (emit (MInst.XmmToGprImmVex op src dst imm))))
         dst))
 
-;; Helper for creating `MInst.GprToXmmVex` instructions.
-(decl gpr_to_xmm_vex (AvxOpcode GprMem OperandSize) Xmm)
-(rule (gpr_to_xmm_vex op src size)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.GprToXmmVex op src dst size))))
-        dst))
-
-;; Helper for creating `MInst.XmmToGprVex` instructions.
-(decl xmm_to_gpr_vex (AvxOpcode Xmm OperandSize) Gpr)
-(rule (xmm_to_gpr_vex op src size)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.XmmToGprVex op src dst size))))
-        dst))
-
 ;; Helper for creating `xmm_min_max_seq` pseudo-instructions.
 (decl xmm_min_max_seq (Type bool Xmm Xmm) Xmm)
 (rule (xmm_min_max_seq ty is_min lhs rhs)
@@ -2126,28 +2093,28 @@
 (rule (x64_movd_to_gpr from) (x64_movd_b from))
 (rule 1 (x64_movd_to_gpr from)
         (if-let true (use_avx))
-        (xmm_to_gpr_vex (AvxOpcode.Vmovd) from (OperandSize.Size32)))
+        (x64_vmovd_b from))
 
 ;; Helper for creating `movd` instructions.
 (decl x64_movd_to_xmm (GprMem) Xmm)
 (rule (x64_movd_to_xmm from) (x64_movd_a from))
 (rule 1 (x64_movd_to_xmm from)
         (if-let true (use_avx))
-        (gpr_to_xmm_vex (AvxOpcode.Vmovd) from (OperandSize.Size32)))
+        (x64_vmovd_a from))
 
 ;; Helper for creating `movq` instructions.
 (decl x64_movq_to_xmm (GprMem) Xmm)
 (rule (x64_movq_to_xmm src) (x64_movq_a src))
 (rule 1 (x64_movq_to_xmm from)
         (if-let true (use_avx))
-        (gpr_to_xmm_vex (AvxOpcode.Vmovq) from (OperandSize.Size64)))
+        (x64_vmovq_a from))
 
 ;; Helper for creating `movq` instructions.
 (decl x64_movq_to_gpr (Xmm) Gpr)
 (rule (x64_movq_to_gpr src) (x64_movq_b src))
 (rule 1 (x64_movq_to_gpr from)
         (if-let true (use_avx))
-        (xmm_to_gpr_vex (AvxOpcode.Vmovq) from (OperandSize.Size64)))
+        (x64_vmovq_b from))
 
 (decl x64_movdqu_load (XmmMem) Xmm)
 (rule (x64_movdqu_load from) (x64_movdqu_a from))
@@ -3986,21 +3953,21 @@
 (rule (x64_pmovmskb src) (x64_pmovmskb_rm src))
 (rule 1 (x64_pmovmskb src)
         (if-let true (use_avx))
-        (xmm_to_gpr_vex (AvxOpcode.Vpmovmskb) src (OperandSize.Size32)))
+        (x64_vpmovmskb_rm src))
 
 ;; Helper for creating `movmskps` instructions.
 (decl x64_movmskps (Xmm) Gpr)
 (rule (x64_movmskps src) (x64_movmskps_rm src))
 (rule 1 (x64_movmskps src)
         (if-let true (use_avx))
-        (xmm_to_gpr_vex (AvxOpcode.Vmovmskps) src (OperandSize.Size32)))
+        (x64_vmovmskps_rm src))
 
 ;; Helper for creating `movmskpd` instructions.
 (decl x64_movmskpd (Xmm) Gpr)
 (rule (x64_movmskpd src) (x64_movmskpd_rm src))
 (rule 1 (x64_movmskpd src)
         (if-let true (use_avx))
-        (xmm_to_gpr_vex (AvxOpcode.Vmovmskpd) src (OperandSize.Size32)))
+        (x64_vmovmskpd_rm src))
 
 ;; Helper for creating `not` instructions.
 (decl x64_not (Type Gpr) Gpr)

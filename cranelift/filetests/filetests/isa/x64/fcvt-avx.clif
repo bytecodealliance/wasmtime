@@ -167,10 +167,10 @@ block0(v0: i64x2):
 ; block0:
 ;   uninit  %xmm2
 ;   vxorpd  %xmm2, %xmm2, %xmm4
-;   vmovq   %xmm0, %r9
+;   vmovq %xmm0, %r9
 ;   vcvtsi2sdq %r9, %xmm4, %xmm1
 ;   vpshufd $238, %xmm0, %xmm2
-;   vmovq   %xmm2, %rcx
+;   vmovq %xmm2, %rcx
 ;   vcvtsi2sdq %rcx, %xmm4, %xmm6
 ;   vunpcklpd %xmm1, %xmm6, %xmm0
 ;   movq    %rbp, %rsp

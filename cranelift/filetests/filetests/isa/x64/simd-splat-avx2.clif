@@ -11,7 +11,7 @@ block0(v0: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vmovd   %edi, %xmm2
+;   vmovd %edi, %xmm2
 ;   vpbroadcastb %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -38,7 +38,7 @@ block0(v0: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vmovd   %edi, %xmm2
+;   vmovd %edi, %xmm2
 ;   vpbroadcastw %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -65,7 +65,7 @@ block0(v0: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vmovd   %edi, %xmm2
+;   vmovd %edi, %xmm2
 ;   vpbroadcastd %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -92,7 +92,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vmovq   %rdi, %xmm2
+;   vmovq %rdi, %xmm2
 ;   vpshufd $68, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
