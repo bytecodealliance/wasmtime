@@ -187,6 +187,7 @@ impl wasmtime_environ::Compiler for Compiler {
         func_index: DefinedFuncIndex,
         input: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let module = &translation.module;
@@ -275,10 +276,7 @@ impl wasmtime_environ::Compiler for Compiler {
             &mut func_env,
         )?;
 
-        let func = compiler.finish_with_info(
-            Some((&body, &self.tunables)),
-            &format!("wasm_func_{}", func_index.as_u32()),
-        )?;
+        let func = compiler.finish_with_info(Some((&body, &self.tunables)), symbol)?;
 
         let timing = cranelift_codegen::timing::take_current();
         log::debug!("{:?} translated in {:?}", func_index, timing.total());
@@ -295,6 +293,7 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
         def_func_index: DefinedFuncIndex,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let func_index = translation.module.func_index(def_func_index);
         let sig = translation.module.functions[func_index]
@@ -363,7 +362,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(compiler.finish(&format!("array_to_wasm_{}", func_index.as_u32(),))?),
+            code: Box::new(compiler.finish(symbol)?),
             needs_gc_heap: false,
         })
     }
@@ -371,6 +370,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &WasmFuncType,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
@@ -436,7 +436,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(compiler.finish(&format!("wasm_to_array_trampoline_{wasm_func_ty}"))?),
+            code: Box::new(compiler.finish(&symbol)?),
             needs_gc_heap: false,
         })
     }
@@ -586,6 +586,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_builtin(
         &self,
         index: BuiltinFunctionIndex,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let ptr_size = isa.pointer_bytes();
@@ -656,7 +657,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(compiler.finish(&format!("wasm_to_builtin_{}", index.name()))?),
+            code: Box::new(compiler.finish(&symbol)?),
             needs_gc_heap: false,
         })
     }
@@ -974,14 +975,14 @@ impl FunctionCompiler<'_> {
         (builder, block0)
     }
 
-    fn finish(self, clif_filename: &str) -> Result<CompiledFunction, CompileError> {
-        self.finish_with_info(None, clif_filename)
+    fn finish(self, symbol: &str) -> Result<CompiledFunction, CompileError> {
+        self.finish_with_info(None, symbol)
     }
 
     fn finish_with_info(
         mut self,
         body_and_tunables: Option<(&FunctionBody<'_>, &Tunables)>,
-        clif_filename: &str,
+        symbol: &str,
     ) -> Result<CompiledFunction, CompileError> {
         let context = &mut self.cx.codegen_context;
         let isa = &*self.compiler.isa;
@@ -997,7 +998,7 @@ impl FunctionCompiler<'_> {
         if let Some(path) = &self.compiler.clif_dir {
             use std::io::Write;
 
-            let mut path = path.join(clif_filename);
+            let mut path = path.join(symbol.replace(":", "-"));
             path.set_extension("clif");
 
             let mut output = std::fs::File::create(path).unwrap();

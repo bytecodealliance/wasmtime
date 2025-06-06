@@ -1,6 +1,6 @@
 ;;! target = "riscv64"
 ;;! test = 'optimize'
-;;! filter = 'component_trampoline_0_Wasm'
+;;! filter = 'component-resource-drop[0]_wasm_call'
 
 (component
   (type $a (resource (rep i32)))
