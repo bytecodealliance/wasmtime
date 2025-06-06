@@ -1201,7 +1201,7 @@ pub(crate) fn translate_cont_new<'a>(
     let nargs = builder.ins().iconst(I32, arg_types.len() as i64);
     let nreturns = builder.ins().iconst(I32, return_types.len() as i64);
 
-    let cont_new_func = env.builtin_functions.cont_new(&mut builder.func);
+    let cont_new_func = super::builtins::cont_new(env, &mut builder.func)?;
     let vmctx = env.vmctx_val(&mut builder.cursor());
     let call_inst = builder
         .ins()

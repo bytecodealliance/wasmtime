@@ -1860,8 +1860,7 @@ impl FuncEnvironment<'_> {
                         init_value,
                     );
                     args.extend_from_slice(&[contref, revision]);
-                    self.builtin_functions
-                        .table_grow_cont_obj(&mut builder.func)
+                    stack_switching::builtins::table_grow_cont_obj(self, &mut builder.func)?
                 }
 
                 _ => panic!("unsupported table type."),
@@ -1999,8 +1998,7 @@ impl FuncEnvironment<'_> {
                     let (revision, contref) =
                         stack_switching::fatpointer::deconstruct(self, &mut builder.cursor(), val);
                     args.extend_from_slice(&[contref, revision]);
-                    self.builtin_functions
-                        .table_fill_cont_obj(&mut builder.func)
+                    stack_switching::builtins::table_fill_cont_obj(self, &mut builder.func)?
                 }
                 _ => panic!("unsupported table type"),
             }
