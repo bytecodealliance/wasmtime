@@ -7,19 +7,24 @@ use crate::ast::*;
 /// Print ISLE definitions.
 pub fn print<W: Write>(defs: &[Def], width: usize, out: &mut W) -> std::io::Result<()> {
     for def in defs {
-        print_node(def, out)?;
+        print_node(def, width, out)?;
         writeln!(out)?;
     }
     Ok(())
 }
 
-pub fn print_node<N: ToSExpr, W: Write>(node: &N, out: &mut W) -> std::io::Result<()> {
-    node.to_sexpr().print(out)
+pub fn print_node<N: ToSExpr, W: Write>(
+    node: &N,
+    width: usize,
+    out: &mut W,
+) -> std::io::Result<()> {
+    node.to_sexpr().print(width, out)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SExpr {
     Atom(String),
+    Binding(String, Box<SExpr>),
     List(Vec<SExpr>),
 }
 
@@ -42,16 +47,20 @@ impl SExpr {
         SExpr::List(parts)
     }
 
-    pub fn print<W: Write>(&self, out: &mut W) -> std::io::Result<()> {
+    pub fn print<W: Write>(&self, width: usize, out: &mut W) -> std::io::Result<()> {
         match self {
-            SExpr::Atom(s) => write!(out, "{}", s),
+            SExpr::Atom(s) => write!(out, "{s}"),
+            SExpr::Binding(name, expr) => {
+                write!(out, "{name} @ ")?;
+                expr.print(width, out)
+            }
             SExpr::List(items) => {
                 write!(out, "(")?;
                 for (i, item) in items.iter().enumerate() {
                     if i > 0 {
                         write!(out, " ")?;
                     }
-                    item.print(out)?;
+                    item.print(width, out)?;
                 }
                 write!(out, ")")
             }
@@ -157,11 +166,13 @@ impl ToSExpr for Spec {
 
 impl ToSExpr for Model {
     fn to_sexpr(&self) -> SExpr {
-        todo!("model")
+        SExpr::List(vec![
+            SExpr::atom("model"),
+            self.name.to_sexpr(),
+            self.val.to_sexpr(),
+        ])
     }
 }
-
-//             Def::Model(ref m) => sexp(vec![RcDoc::text("model"), m.name.to_doc(), m.val.to_doc()]),
 
 impl ToSExpr for Form {
     fn to_sexpr(&self) -> SExpr {
@@ -256,40 +267,20 @@ impl ToSExpr for Field {
     }
 }
 
-// impl Printable for Attr {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         let mut parts = vec![RcDoc::text("attr")];
-//         match &self.target {
-//             AttrTarget::Term(name) => parts.push(name.to_doc()),
-//             AttrTarget::Rule(name) => {
-//                 parts.push(RcDoc::text("rule"));
-//                 parts.push(name.to_doc());
-//             }
-//         }
-//         parts.extend(self.kinds.iter().map(Printable::to_doc));
-//         sexp(parts)
-//     }
-// }
-//
-// impl Printable for AttrKind {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         match self {
-//             AttrKind::Chain => sexp(vec![RcDoc::text("veri"), RcDoc::text("chain")]),
-//             AttrKind::Priority => sexp(vec![RcDoc::text("veri"), RcDoc::text("priority")]),
-//             AttrKind::Tag(tag) => sexp(vec![RcDoc::text("tag"), tag.to_doc()]),
-//         }
-//     }
-// }
-//
-// impl Printable for ModelValue {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         match self {
-//             ModelValue::TypeValue(ref mt) => sexp(vec![RcDoc::text("type"), mt.to_doc()]),
-//             ModelValue::ConstValue(ref c) => sexp(vec![RcDoc::text("const"), c.to_doc()]),
-//         }
-//     }
-// }
-//
+impl ToSExpr for ModelValue {
+    fn to_sexpr(&self) -> SExpr {
+        match self {
+            ModelValue::TypeValue(mt) => SExpr::List(vec![SExpr::atom("type"), mt.to_sexpr()]),
+            ModelValue::EnumValues(enumerators) => {
+                let mut parts = vec![SExpr::atom("enum")];
+                for (variant, value) in enumerators {
+                    parts.push(SExpr::List(vec![variant.to_sexpr(), value.to_sexpr()]));
+                }
+                SExpr::List(parts)
+            }
+        }
+    }
+}
 
 impl ToSExpr for ModelType {
     fn to_sexpr(&self) -> SExpr {
@@ -403,67 +394,13 @@ impl ToSExpr for SpecOp {
         })
     }
 }
-//
-// impl Printable for Arm {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         sexp(vec![
-//             sexp(
-//                 Vec::from([self.variant.to_doc()])
-//                     .into_iter()
-//                     .chain(self.args.iter().map(|a| a.to_doc())),
-//             ),
-//             self.body.to_doc(),
-//         ])
-//     }
-// }
-//
-// impl Printable for FieldInit {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         sexp(vec![self.name.to_doc(), self.value.to_doc()])
-//     }
-// }
-//
-// impl Printable for SpecMacro {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         let mut parts = vec![RcDoc::text("macro")];
-//         parts.push(sexp(
-//             Vec::from([self.name.to_doc()])
-//                 .into_iter()
-//                 .chain(self.params.iter().map(|a| a.to_doc())),
-//         ));
-//         parts.push(self.body.to_doc());
-//         sexp(parts)
-//     }
-// }
-//
-// impl Printable for Modifies {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         let mut parts = vec![RcDoc::text("modifies"), self.state.to_doc()];
-//         if let Some(cond) = &self.cond {
-//             parts.push(cond.to_doc());
-//         }
-//         sexp(parts)
-//     }
-// }
-//
-//
-// impl Printable for State {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         sexp(vec![
-//             RcDoc::text("state"),
-//             self.name.to_doc(),
-//             sexp(vec![RcDoc::text("type"), self.ty.to_doc()]),
-//             sexp(vec![RcDoc::text("default"), self.default.to_doc()]),
-//         ])
-//     }
-// }
 
 impl ToSExpr for Pattern {
     fn to_sexpr(&self) -> SExpr {
         match self {
             Pattern::Var { var, .. } => SExpr::atom(var.0.clone()),
             Pattern::BindPattern { var, subpat, .. } => {
-                SExpr::List(vec![var.to_sexpr(), SExpr::atom("@"), subpat.to_sexpr()])
+                SExpr::Binding(var.0.clone(), Box::new(subpat.to_sexpr()))
             }
             Pattern::ConstInt { val, .. } => SExpr::atom(val),
             Pattern::ConstBool { val, .. } => SExpr::atom(if *val { "true" } else { "false" }),
@@ -525,18 +462,6 @@ impl ToSExpr for LetDef {
         ])
     }
 }
-
-//
-// fn sexp<'a, I, A>(docs: I) -> RcDoc<'a, A>
-// where
-//     I: IntoIterator,
-//     I::Item: Pretty<'a, RcAllocator, A>,
-//     A: Clone,
-// {
-//     RcDoc::text("(")
-//         .append(RcDoc::intersperse(docs, Doc::line()).nest(4).group())
-//         .append(RcDoc::text(")"))
-// }
 
 impl ToSExpr for Ident {
     fn to_sexpr(&self) -> SExpr {
