@@ -243,7 +243,7 @@ mod view;
 mod write_stream;
 
 pub use self::ctx::{WasiCtx, WasiCtxBuilder};
-pub use self::filesystem::{FileInputStream, FsError, FsResult};
+pub use self::filesystem::{FsError, FsResult};
 pub use self::network::{SocketError, SocketResult};
 pub use self::stdio::{
     AsyncStdinStream, AsyncStdoutStream, IsATTY, OutputFile, Stderr, Stdin, StdinStream, Stdout,
