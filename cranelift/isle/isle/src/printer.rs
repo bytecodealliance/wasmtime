@@ -18,7 +18,9 @@ pub fn print_node<N: ToSExpr, W: Write>(
     width: usize,
     out: &mut W,
 ) -> std::io::Result<()> {
-    node.to_sexpr().print(width, out)
+    let mut printer = Printer::new(out, width);
+    let sexpr = node.to_sexpr();
+    printer.print(&sexpr)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,25 +48,125 @@ impl SExpr {
         parts.extend(items.iter().map(ToSExpr::to_sexpr));
         SExpr::List(parts)
     }
+}
 
-    pub fn print<W: Write>(&self, width: usize, out: &mut W) -> std::io::Result<()> {
-        match self {
-            SExpr::Atom(s) => write!(out, "{s}"),
-            SExpr::Binding(name, expr) => {
-                write!(out, "{name} @ ")?;
-                expr.print(width, out)
+struct Printer<'a, W: Write> {
+    out: &'a mut W,
+    col: usize,
+    indent: usize,
+    width: usize,
+}
+
+impl<'a, W: Write> Printer<'a, W> {
+    fn new(out: &'a mut W, width: usize) -> Self {
+        Self {
+            out,
+            col: 0,
+            indent: 0,
+            width,
+        }
+    }
+
+    fn print(&mut self, sexpr: &SExpr) -> std::io::Result<()> {
+        match sexpr {
+            SExpr::Atom(atom) => self.put(atom),
+            SExpr::Binding(name, sexpr) => {
+                self.put(name)?;
+                self.put(" @ ")?;
+                self.print(sexpr)
             }
             SExpr::List(items) => {
-                write!(out, "(")?;
-                for (i, item) in items.iter().enumerate() {
-                    if i > 0 {
-                        write!(out, " ")?;
+                if self.fits(sexpr) {
+                    self.print_line(sexpr)
+                } else {
+                    let (first, rest) = items.split_first().expect("non-empty list");
+                    self.put("(")?;
+                    self.print(first)?;
+                    self.indent += 1;
+                    for item in rest {
+                        self.nl()?;
+                        self.print(item)?;
                     }
-                    item.print(width, out)?;
+                    self.indent -= 1;
+                    self.nl()?;
+                    self.put(")")?;
+                    Ok(())
                 }
-                write!(out, ")")
             }
         }
+    }
+
+    // Print the expression in a single line.
+    fn print_line(&mut self, sexpr: &SExpr) -> std::io::Result<()> {
+        match sexpr {
+            SExpr::Atom(atom) => self.put(atom),
+            SExpr::Binding(name, sexpr) => {
+                self.put(name)?;
+                self.put(" @ ")?;
+                self.print_line(sexpr)
+            }
+            SExpr::List(items) => {
+                self.put("(")?;
+                for (i, item) in items.iter().enumerate() {
+                    if i > 0 {
+                        self.put(" ")?;
+                    }
+                    self.print_line(item)?;
+                }
+                self.put(")")
+            }
+        }
+    }
+
+    // Would the expressions fit in the current line?
+    fn fits(&self, sexpr: &SExpr) -> bool {
+        let Some(mut remaining) = self.width.checked_sub(self.col) else {
+            return false;
+        };
+        let mut stack = vec![sexpr];
+        while let Some(sexpr) = stack.pop() {
+            match sexpr {
+                SExpr::Atom(atom) => {
+                    if atom.len() > remaining {
+                        return false;
+                    }
+                    remaining -= atom.len();
+                }
+                SExpr::Binding(name, inner) => {
+                    let binding_size = name.len() + 3; // " @ "
+                    if binding_size > remaining {
+                        return false;
+                    }
+                    remaining -= binding_size;
+                    stack.push(inner);
+                }
+                SExpr::List(items) => {
+                    // Account for parentheses and spaces
+                    let punct_size = 2 + items.len() - 1; // "(" + ")" + spaces
+                    if punct_size > remaining {
+                        return false;
+                    }
+                    remaining -= punct_size;
+                    stack.extend(items.iter().rev());
+                }
+            }
+        }
+        true
+    }
+
+    fn put(&mut self, s: &str) -> std::io::Result<()> {
+        write!(self.out, "{s}")?;
+        self.col += s.len();
+        Ok(())
+    }
+
+    fn nl(&mut self) -> std::io::Result<()> {
+        writeln!(self.out)?;
+        self.col = 0;
+        for _ in 0..self.indent {
+            write!(self.out, "    ")?;
+        }
+        Ok(())
     }
 }
 
