@@ -1,6 +1,6 @@
 ;;! target = "riscv64"
 ;;! test = 'optimize'
-;;! filter = 'wasm_func_1'
+;;! filter = 'wasm[2]::function[1]'
 
 (component
   (type $a (enum "a" "b" "c"))

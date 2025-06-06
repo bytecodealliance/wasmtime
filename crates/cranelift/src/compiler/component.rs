@@ -1498,9 +1498,12 @@ impl ComponentCompiler for Compiler {
 
             c.translate(&component.trampolines[index]);
             c.builder.finalize();
-
+            let symbol = match abi {
+                Abi::Wasm => format!("{symbol}_wasm_call"),
+                Abi::Array => format!("{symbol}_array_call"),
+            };
             Ok(CompiledFunctionBody {
-                code: Box::new(compiler.finish(symbol)?),
+                code: Box::new(compiler.finish(&symbol)?),
                 needs_gc_heap: false,
             })
         };
