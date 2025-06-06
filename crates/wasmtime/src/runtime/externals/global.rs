@@ -287,7 +287,9 @@ impl Global {
             ),
             #[cfg(feature = "component-model")]
             ExportGlobalKind::ComponentFlags(vmctx, index) => (
-                vm::component::ComponentInstance::from_vmctx(vmctx, |i| i.id().as_u32()),
+                vm::component::ComponentInstance::from_vmctx(vmctx, |_, i| {
+                    i.id().instance().as_u32()
+                }),
                 VMGlobalKind::ComponentFlags(index),
             ),
         };
