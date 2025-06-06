@@ -114,6 +114,7 @@ pub(crate) fn emit(
             // Cranelift assumes SSE2 at least.
             InstructionSet::SSE | InstructionSet::SSE2 => true,
             InstructionSet::CMPXCHG16b => info.isa_flags.use_cmpxchg16b(),
+            InstructionSet::SSE3 => info.isa_flags.use_sse3(),
             InstructionSet::SSSE3 => info.isa_flags.use_ssse3(),
             InstructionSet::SSE41 => info.isa_flags.use_sse41(),
             InstructionSet::SSE42 => info.isa_flags.use_sse42(),
@@ -1275,20 +1276,7 @@ pub(crate) fn emit(
             one_way_jmp(sink, *cc2, trap_label);
         }
 
-        Inst::XmmUnaryRmR { op, src, dst } => {
-            emit(
-                &Inst::XmmUnaryRmRUnaligned {
-                    op: *op,
-                    src: XmmMem::unwrap_new(src.clone().into()),
-                    dst: *dst,
-                },
-                sink,
-                info,
-                state,
-            );
-        }
-
-        Inst::XmmUnaryRmRUnaligned {
+        Inst::XmmUnaryRmR {
             op,
             src: src_e,
             dst: reg_g,
@@ -1302,7 +1290,6 @@ pub(crate) fn emit(
                 SseOpcode::Pabsb => (LegacyPrefixes::_66, 0x0F381C, 3),
                 SseOpcode::Pabsw => (LegacyPrefixes::_66, 0x0F381D, 3),
                 SseOpcode::Pabsd => (LegacyPrefixes::_66, 0x0F381E, 3),
-                SseOpcode::Movddup => (LegacyPrefixes::_F2, 0x0F12, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
@@ -1885,7 +1872,6 @@ pub(crate) fn emit(
                 AvxOpcode::Vpbroadcastw => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x79),
                 AvxOpcode::Vpbroadcastd => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x58),
                 AvxOpcode::Vbroadcastss => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x18),
-                AvxOpcode::Vmovddup => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x12),
 
                 _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
             };

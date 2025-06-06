@@ -4883,7 +4883,7 @@
 (rule 0 (lower (has_type $F64X2 (splat src)))
         (x64_pshufd src 0b01_00_01_00))
 (rule 6 (lower (has_type (multi_lane 64 2) (splat (sinkable_load addr))))
-        (if-let true (use_ssse3))
+        (if-let true (use_sse3))
         (x64_movddup addr))
 
 ;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

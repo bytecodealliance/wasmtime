@@ -264,7 +264,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vmovddup 0(%rdi), %xmm0
+;   vmovddup (%rdi), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -316,7 +316,7 @@ block0(v0: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vmovddup 0(%rdi), %xmm0
+;   vmovddup (%rdi), %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

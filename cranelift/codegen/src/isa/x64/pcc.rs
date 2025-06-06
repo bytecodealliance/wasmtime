@@ -232,9 +232,6 @@ pub(crate) fn check(
         | Inst::XmmUnaryRmRImmEvex {
             dst, src: ref src2, ..
         }
-        | Inst::XmmUnaryRmRUnaligned {
-            dst, src: ref src2, ..
-        }
         | Inst::XmmUnaryRmREvex {
             dst, src: ref src2, ..
         }

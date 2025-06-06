@@ -245,12 +245,6 @@
                     (src XmmMemAligned)
                     (dst WritableXmm))
 
-       ;; Same as `XmmUnaryRmR` but used for opcodes where the memory address
-       ;; can be unaligned.
-       (XmmUnaryRmRUnaligned (op SseOpcode)
-                             (src XmmMem)
-                             (dst WritableXmm))
-
        ;; XMM (scalar or vector) unary op with immediate: roundss, roundsd, etc.
        ;;
        ;; This differs from XMM_RM_R_IMM in that the dst register of
@@ -679,7 +673,6 @@
             Pshuflw
             Pshufhw
             Pblendw
-            Movddup
           ))
 
 (type CmpOpcode extern
@@ -1147,7 +1140,6 @@
             Vpextrd
             Vpextrq
             Vpblendw
-            Vmovddup
             Vpbroadcastb
             Vpbroadcastw
             Vpbroadcastd
@@ -1524,6 +1516,9 @@
 (decl pure use_fma () bool)
 (extern constructor use_fma use_fma)
 
+(decl pure use_sse3 () bool)
+(extern constructor use_sse3 use_sse3)
+
 (decl pure use_ssse3 () bool)
 (extern constructor use_ssse3 use_ssse3)
 
@@ -1700,13 +1695,6 @@
 (rule (xmm_unary_rm_r op src)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmUnaryRmR op src dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmUnaryRmRUnaligned` instructions.
-(decl xmm_unary_rm_r_unaligned (SseOpcode XmmMem) Xmm)
-(rule (xmm_unary_rm_r_unaligned op src)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmRUnaligned op src dst))))
         dst))
 
 ;; Helper for creating `MInst.XmmUnaryRmREvex` instructions.
@@ -4592,11 +4580,10 @@
 
 ;; Helper for creating `movddup` instructions
 (decl x64_movddup (XmmMem) Xmm)
-(rule (x64_movddup src)
-      (xmm_unary_rm_r_unaligned (SseOpcode.Movddup) src))
+(rule (x64_movddup src) (x64_movddup_a src))
 (rule 1 (x64_movddup src)
         (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vmovddup) src))
+        (x64_vmovddup_a src))
 
 ;; Helper for creating `vpbroadcastb` instructions
 (decl x64_vpbroadcastb (XmmMem) Xmm)

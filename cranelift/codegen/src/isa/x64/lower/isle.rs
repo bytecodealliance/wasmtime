@@ -306,6 +306,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
+    fn use_sse3(&mut self) -> bool {
+        self.backend.x64_flags.use_sse3()
+    }
+
+    #[inline]
     fn use_ssse3(&mut self) -> bool {
         self.backend.x64_flags.use_ssse3()
     }
