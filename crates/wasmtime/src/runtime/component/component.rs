@@ -15,13 +15,13 @@ use core::ops::Range;
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::path::Path;
-use wasmtime_environ::TypeTrace;
 use wasmtime_environ::component::{
     AllCallFunc, CanonicalOptions, CompiledComponentInfo, ComponentArtifacts, ComponentTypes,
     CoreDef, Export, ExportIndex, GlobalInitializer, InstantiateModule, NameMapNoIntern,
     StaticModuleIndex, TrampolineIndex, TypeComponentIndex, TypeFuncIndex, VMComponentOffsets,
 };
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
+use wasmtime_environ::{ModuleInternedTypeIndex, TypeTrace};
 
 /// A compiled WebAssembly Component.
 ///
@@ -834,9 +834,19 @@ impl Component {
     pub(crate) fn export_lifted_function(
         &self,
         export: ExportIndex,
-    ) -> (TypeFuncIndex, &CoreDef, &CanonicalOptions) {
+    ) -> (
+        TypeFuncIndex,
+        &CoreDef,
+        ModuleInternedTypeIndex,
+        &CanonicalOptions,
+    ) {
         match &self.env_component().export_items[export] {
-            Export::LiftedFunction { ty, func, options } => (*ty, func, options),
+            Export::LiftedFunction {
+                ty,
+                func,
+                func_ty,
+                options,
+            } => (*ty, func, *func_ty, options),
             _ => unreachable!(),
         }
     }
