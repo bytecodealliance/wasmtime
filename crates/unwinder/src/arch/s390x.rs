@@ -1,7 +1,6 @@
 //! s390x-specific definitions of architecture-specific functions in Wasmtime.
 
 #[inline]
-#[allow(missing_docs)]
 pub fn get_stack_pointer() -> usize {
     let mut sp;
     unsafe {
@@ -18,7 +17,7 @@ pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
     // The next older PC can be found in register %r14 at function entry, which
     // was saved into slot 14 of the register save area pointed to by "FP" (the
     // backchain pointer).
-    *(fp as *mut usize).offset(14)
+    unsafe { *(fp as *mut usize).offset(14) }
 }
 
 pub unsafe fn resume_to_exception_handler(

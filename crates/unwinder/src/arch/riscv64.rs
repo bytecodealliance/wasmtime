@@ -1,7 +1,6 @@
 //! Riscv64-specific definitions of architecture-specific functions in Wasmtime.
 
 #[inline]
-#[allow(missing_docs)]
 pub fn get_stack_pointer() -> usize {
     let stack_pointer: usize;
     unsafe {
@@ -15,7 +14,7 @@ pub fn get_stack_pointer() -> usize {
 }
 
 pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
-    *(fp as *mut usize).offset(1)
+    unsafe { *(fp as *mut usize).offset(1) }
 }
 
 pub unsafe fn resume_to_exception_handler(
