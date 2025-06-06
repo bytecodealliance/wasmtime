@@ -2048,7 +2048,8 @@ impl<T> Caller<'_, T> {
         R: 'static,
     {
         crate::runtime::vm::InstanceAndStore::from_vmctx(caller, |pair| {
-            let (instance, mut store) = pair.unpack_context_mut::<T>();
+            let (instance, store) = pair.unpack_mut();
+            let mut store = store.unchecked_context_mut::<T>();
             let caller = Instance::from_wasmtime(instance.id(), store.0);
 
             let (gc_lifo_scope, ret) = {

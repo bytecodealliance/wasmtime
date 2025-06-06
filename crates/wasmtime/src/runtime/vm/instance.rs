@@ -2,6 +2,7 @@
 //! wasm module (except its callstack and register state). An
 //! `InstanceHandle` is a reference-counting handle for an `Instance`.
 
+use crate::prelude::*;
 use crate::runtime::vm::const_expr::{ConstEvalContext, ConstExprEvaluator};
 use crate::runtime::vm::export::Export;
 use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
@@ -16,8 +17,7 @@ use crate::runtime::vm::{
     Imports, ModuleRuntimeInfo, SendSyncPtr, VMFunctionBody, VMGcRef, VMStore, VMStoreRawPtr,
     VmPtr, VmSafe, WasmFault,
 };
-use crate::store::{InstanceId, StoreInner, StoreOpaque};
-use crate::{StoreContextMut, prelude::*};
+use crate::store::{InstanceId, StoreOpaque};
 use alloc::sync::Arc;
 use core::alloc::Layout;
 use core::ops::Range;
@@ -140,24 +140,6 @@ impl InstanceAndStore {
             let store = &mut *self.store_ptr();
             (Pin::new_unchecked(&mut self.instance), store)
         }
-    }
-
-    /// Unpacks this `InstanceAndStore` into its underlying `Instance` and
-    /// `StoreInner<T>`.
-    ///
-    /// # Safety
-    ///
-    /// The `T` must be the same `T` that was used to define this store's
-    /// instance.
-    #[inline]
-    pub(crate) unsafe fn unpack_context_mut<T>(
-        &mut self,
-    ) -> (Pin<&mut Instance>, StoreContextMut<'_, T>) {
-        let store_ptr = self.store_ptr().cast::<StoreInner<T>>();
-        (
-            Pin::new_unchecked(&mut self.instance),
-            StoreContextMut(&mut *store_ptr),
-        )
     }
 
     /// Gets a pointer to this instance's `Store` which was originally

@@ -6,8 +6,7 @@
 //! Eventually it's intended that module-to-module calls, which would be
 //! cranelift-compiled adapters, will use this `VMComponentContext` as well.
 
-use crate::component::{Component, InstancePre, ResourceType, RuntimeImport};
-use crate::prelude::*;
+use crate::component::{Component, Instance, InstancePre, ResourceType, RuntimeImport};
 use crate::runtime::component::ComponentInstanceId;
 use crate::runtime::vm::{
     Export, ExportFunction, ExportGlobal, ExportGlobalKind, SendSyncPtr, VMArrayCallFunction,
@@ -210,12 +209,15 @@ impl ComponentInstance {
     /// mutable reference at this time to the instance from `vmctx`.
     pub unsafe fn from_vmctx<R>(
         vmctx: NonNull<VMComponentContext>,
-        f: impl FnOnce(&mut ComponentInstance) -> R,
+        f: impl FnOnce(&mut dyn VMStore, Instance) -> R,
     ) -> R {
         let mut ptr = vmctx
             .byte_sub(mem::size_of::<ComponentInstance>())
             .cast::<ComponentInstance>();
-        f(ptr.as_mut())
+        let reference = ptr.as_mut();
+        let store = &mut *reference.store.0.as_ptr();
+        let instance = Instance::from_wasmtime(store, reference.id);
+        f(store, instance)
     }
 
     /// Returns the layout corresponding to what would be an allocation of a
@@ -322,11 +324,6 @@ impl ComponentInstance {
                 .cast_mut();
             InstanceFlags(SendSyncPtr::new(NonNull::new(ptr).unwrap()))
         }
-    }
-
-    /// Returns the store that this component was created with.
-    pub fn store(&self) -> *mut dyn VMStore {
-        self.store.0.as_ptr()
     }
 
     /// Returns the runtime memory definition corresponding to the index of the
@@ -577,7 +574,7 @@ impl ComponentInstance {
         }
 
         // In debug mode set non-null bad values to all "pointer looking" bits
-        // and pices related to lowering and such. This'll help detect any
+        // and pieces related to lowering and such. This'll help detect any
         // erroneous usage and enable debug assertions above as well to prevent
         // loading these before they're configured or setting them twice.
         if cfg!(debug_assertions) {
@@ -637,7 +634,7 @@ impl ComponentInstance {
         &self.resource_types
     }
 
-    /// Returns mutable a reference to the resource type information.
+    /// Returns a mutable reference to the resource type information.
     pub fn resource_types_mut(&mut self) -> &mut Arc<PrimaryMap<ResourceIndex, ResourceType>> {
         &mut self.resource_types
     }
@@ -655,41 +652,6 @@ impl ComponentInstance {
             None => return false,
         };
         resource.instance == component.defined_resource_instances[idx]
-    }
-
-    /// Implementation of the `resource.new` intrinsic for `i32`
-    /// representations.
-    pub fn resource_new32(&mut self, ty: TypeResourceTableIndex, rep: u32) -> Result<u32> {
-        self.resource_tables()
-            .resource_new(TypedResource::Component { ty, rep })
-    }
-
-    /// Implementation of the `resource.rep` intrinsic for `i32`
-    /// representations.
-    pub fn resource_rep32(&mut self, ty: TypeResourceTableIndex, index: u32) -> Result<u32> {
-        self.resource_tables()
-            .resource_rep(TypedResourceIndex::Component { ty, index })
-    }
-
-    /// Implementation of the `resource.drop` intrinsic.
-    pub fn resource_drop(&mut self, ty: TypeResourceTableIndex, index: u32) -> Result<Option<u32>> {
-        self.resource_tables()
-            .resource_drop(TypedResourceIndex::Component { ty, index })
-    }
-
-    /// NB: this is intended to be a private method. This does not have
-    /// `host_table` information at this time meaning it's only suitable for
-    /// working with resources specified to this component which is currently
-    /// all that this is used for.
-    ///
-    /// If necessary though it's possible to enhance the `Store` trait to thread
-    /// through the relevant information and get `host_table` to be `Some` here.
-    fn resource_tables(&mut self) -> ResourceTables<'_> {
-        ResourceTables {
-            host_table: None,
-            calls: unsafe { (&mut *self.store()).component_calls() },
-            guest: Some((&mut self.instance_resource_tables, self.component.types())),
-        }
     }
 
     /// Returns the runtime state of resources associated with this component.
@@ -720,48 +682,6 @@ impl ComponentInstance {
             self.instance_flags(instance)
         });
         (dtor, flags)
-    }
-
-    pub(crate) fn resource_transfer_own(
-        &mut self,
-        index: u32,
-        src: TypeResourceTableIndex,
-        dst: TypeResourceTableIndex,
-    ) -> Result<u32> {
-        let mut tables = self.resource_tables();
-        let rep = tables.resource_lift_own(TypedResourceIndex::Component { ty: src, index })?;
-        tables.resource_lower_own(TypedResource::Component { ty: dst, rep })
-    }
-
-    pub(crate) fn resource_transfer_borrow(
-        &mut self,
-        index: u32,
-        src: TypeResourceTableIndex,
-        dst: TypeResourceTableIndex,
-    ) -> Result<u32> {
-        let dst_owns_resource = self.resource_owned_by_own_instance(dst);
-        let mut tables = self.resource_tables();
-        let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
-        // Implement `lower_borrow`'s special case here where if a borrow's
-        // resource type is owned by `dst` then the destination receives the
-        // representation directly rather than a handle to the representation.
-        //
-        // This can perhaps become a different libcall in the future to avoid
-        // this check at runtime since we know at compile time whether the
-        // destination type owns the resource, but that's left as a future
-        // refactoring if truly necessary.
-        if dst_owns_resource {
-            return Ok(rep);
-        }
-        tables.resource_lower_borrow(TypedResource::Component { ty: dst, rep })
-    }
-
-    pub(crate) fn resource_enter_call(&mut self) {
-        self.resource_tables().enter_call()
-    }
-
-    pub(crate) fn resource_exit_call(&mut self) -> Result<()> {
-        self.resource_tables().exit_call()
     }
 
     /// Returns the store-local id that points to this component.
