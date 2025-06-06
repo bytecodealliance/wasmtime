@@ -141,7 +141,6 @@ impl Inst {
             | Inst::XmmRmRBlend { op, .. }
             | Inst::XmmRmRImm { op, .. }
             | Inst::XmmUnaryRmRImm { op, .. }
-            | Inst::XmmUnaryRmRUnaligned { op, .. }
             | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
 
             Inst::XmmUnaryRmREvex { op, .. }
@@ -170,6 +169,7 @@ impl Inst {
                         _64b | compat => {}
                         sse => features.push(InstructionSet::SSE),
                         sse2 => features.push(InstructionSet::SSE2),
+                        sse3 => features.push(InstructionSet::SSE3),
                         ssse3 => features.push(InstructionSet::SSSE3),
                         sse41 => features.push(InstructionSet::SSE41),
                         sse42 => features.push(InstructionSet::SSE42),
@@ -616,13 +616,6 @@ impl PrettyPrint for Inst {
             }
 
             Inst::XmmUnaryRmR { op, src, dst, .. } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), op.src_size());
-                let src = src.pretty_print(op.src_size());
-                let op = ljustify(op.to_string());
-                format!("{op} {src}, {dst}")
-            }
-
-            Inst::XmmUnaryRmRUnaligned { op, src, dst, .. } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), op.src_size());
                 let src = src.pretty_print(op.src_size());
                 let op = ljustify(op.to_string());
@@ -1553,7 +1546,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
         Inst::XmmUnaryRmREvex { src, dst, .. }
         | Inst::XmmUnaryRmRImmEvex { src, dst, .. }
-        | Inst::XmmUnaryRmRUnaligned { src, dst, .. }
         | Inst::XmmUnaryRmRVex { src, dst, .. }
         | Inst::XmmUnaryRmRImmVex { src, dst, .. } => {
             collector.reg_def(dst);

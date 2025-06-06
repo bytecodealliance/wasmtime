@@ -743,6 +743,7 @@ pub(crate) enum InstructionSet {
     SSE,
     SSE2,
     CMPXCHG16b,
+    SSE3,
     SSSE3,
     SSE41,
     SSE42,
@@ -812,7 +813,6 @@ pub enum SseOpcode {
     Pshuflw,
     Pshufhw,
     Pblendw,
-    Movddup,
 }
 
 impl SseOpcode {
@@ -854,8 +854,7 @@ impl SseOpcode {
             | SseOpcode::Pabsd
             | SseOpcode::Palignr
             | SseOpcode::Pshufb
-            | SseOpcode::Pmaddubsw
-            | SseOpcode::Movddup => SSSE3,
+            | SseOpcode::Pmaddubsw => SSSE3,
 
             SseOpcode::Blendvpd
             | SseOpcode::Blendvps
@@ -936,7 +935,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Pshuflw => "pshuflw",
             SseOpcode::Pshufhw => "pshufhw",
             SseOpcode::Pblendw => "pblendw",
-            SseOpcode::Movddup => "movddup",
         };
         write!(fmt, "{name}")
     }
@@ -1130,7 +1128,6 @@ impl AvxOpcode {
             | AvxOpcode::Vpextrd
             | AvxOpcode::Vpextrq
             | AvxOpcode::Vpblendw
-            | AvxOpcode::Vmovddup
             | AvxOpcode::Vbroadcastss
             | AvxOpcode::Vmovd
             | AvxOpcode::Vmovq
