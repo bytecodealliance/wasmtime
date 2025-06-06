@@ -138,7 +138,7 @@ mod component {
         }
 
         let module = quote! {
-            #[allow(unused_imports)]
+            #[allow(unused_imports, reason = "macro-generated code")]
             fn static_component_api_target(input: &mut libfuzzer_sys::arbitrary::Unstructured) -> libfuzzer_sys::arbitrary::Result<()> {
                 use anyhow::Result;
                 use wasmtime_test_util::component_fuzz::Declarations;
