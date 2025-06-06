@@ -81,7 +81,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             _builder: &mut FunctionBuilder,
         ) -> VMPayloads {
-            let offset = env.offsets.ptr.vmcontref_args() as i32;
+            let offset = env.offsets.ptr.vmcontref_args().into();
             VMPayloads::new(self.address, offset)
         }
 
@@ -90,7 +90,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             _builder: &mut FunctionBuilder,
         ) -> VMPayloads {
-            let offset = env.offsets.ptr.vmcontref_values() as i32;
+            let offset = env.offsets.ptr.vmcontref_values().into();
             VMPayloads::new(self.address, offset)
         }
 
@@ -99,7 +99,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> VMCommonStackInformation {
-            let offset = env.offsets.ptr.vmcontref_common_stack_information() as i64;
+            let offset: i64 = env.offsets.ptr.vmcontref_common_stack_information().into();
             let address = builder.ins().iadd_imm(self.address, offset);
             VMCommonStackInformation { address }
         }
@@ -113,7 +113,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
             new_stack_chain: &VMStackChain,
         ) {
-            let offset = env.offsets.ptr.vmcontref_parent_chain() as i32;
+            let offset = env.offsets.ptr.vmcontref_parent_chain().into();
             new_stack_chain.store(env, builder, self.address, offset)
         }
 
@@ -125,7 +125,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> VMStackChain {
-            let offset = env.offsets.ptr.vmcontref_parent_chain() as i32;
+            let offset = env.offsets.ptr.vmcontref_parent_chain().into();
             VMStackChain::load(env, builder, self.address, offset, env.pointer_type())
         }
 
@@ -135,7 +135,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
             last_ancestor: ir::Value,
         ) {
-            let offset = env.offsets.ptr.vmcontref_last_ancestor() as i32;
+            let offset: i32 = env.offsets.ptr.vmcontref_last_ancestor().into();
             let mem_flags = ir::MemFlags::trusted();
             builder
                 .ins()
@@ -147,7 +147,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            let offset = env.offsets.ptr.vmcontref_last_ancestor() as i32;
+            let offset: i32 = env.offsets.ptr.vmcontref_last_ancestor().into();
             let mem_flags = ir::MemFlags::trusted();
             builder
                 .ins()
@@ -162,7 +162,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
             let mem_flags = ir::MemFlags::trusted();
-            let offset = env.offsets.ptr.vmcontref_revision() as i32;
+            let offset: i32 = env.offsets.ptr.vmcontref_revision().into();
             let revision = builder.ins().load(I64, mem_flags, self.address, offset);
             revision
         }
@@ -177,7 +177,7 @@ pub(crate) mod stack_switching_helpers {
             revision: ir::Value,
         ) -> ir::Value {
             let mem_flags = ir::MemFlags::trusted();
-            let offset = env.offsets.ptr.vmcontref_revision() as i32;
+            let offset: i32 = env.offsets.ptr.vmcontref_revision().into();
             let revision_plus1 = builder.ins().iadd_imm(revision, 1);
             builder
                 .ins()
@@ -191,7 +191,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
         ) -> VMContinuationStack {
             // The top of stack field is stored at offset 0 of the `FiberStack`.
-            let offset = env.offsets.ptr.vmcontref_stack() as i64;
+            let offset: i64 = env.offsets.ptr.vmcontref_stack().into();
             let fiber_stack_top_of_stack_ptr = builder.ins().iadd_imm(self.address, offset);
             VMContinuationStack::new(fiber_stack_top_of_stack_ptr)
         }
@@ -229,7 +229,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            let offset = env.offsets.ptr.vmarray_data() as i32;
+            let offset = env.offsets.ptr.vmarray_data().into();
             self.get(builder, env.pointer_type(), offset)
         }
 
@@ -239,7 +239,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
             // Array length is stored as u32.
-            let offset = env.offsets.ptr.vmarray_length() as i32;
+            let offset = env.offsets.ptr.vmarray_length().into();
             self.get(builder, I32, offset)
         }
 
@@ -250,7 +250,7 @@ pub(crate) mod stack_switching_helpers {
             length: ir::Value,
         ) {
             // Array length is stored as u32.
-            let offset = env.offsets.ptr.vmarray_length() as i32;
+            let offset = env.offsets.ptr.vmarray_length().into();
             self.set::<u32>(builder, offset, length);
         }
 
@@ -261,7 +261,7 @@ pub(crate) mod stack_switching_helpers {
             capacity: ir::Value,
         ) {
             // Array capacity is stored as u32.
-            let offset = env.offsets.ptr.vmarray_capacity() as i32;
+            let offset = env.offsets.ptr.vmarray_capacity().into();
             self.set::<u32>(builder, offset, capacity);
         }
 
@@ -271,7 +271,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
             data: ir::Value,
         ) {
-            let offset = env.offsets.ptr.vmarray_data() as i32;
+            let offset = env.offsets.ptr.vmarray_data().into();
             self.set::<*mut T>(builder, offset, data);
         }
 
@@ -285,10 +285,12 @@ pub(crate) mod stack_switching_helpers {
         ) -> ir::Value {
             let data = self.get_data(env, builder);
             let original_length = self.get_length(env, builder);
-            let new_length = builder.ins().iadd_imm(original_length, arg_count as i64);
+            let new_length = builder
+                .ins()
+                .iadd_imm(original_length, i64::from(arg_count));
             self.set_length(env, builder, new_length);
 
-            let value_size = mem::size_of::<T>() as i64;
+            let value_size: i64 = mem::size_of::<T>().try_into().unwrap();
             let original_length = builder.ins().uextend(I64, original_length);
             let byte_offset = builder.ins().imul_imm(original_length, value_size);
             builder.ins().iadd(data, byte_offset)
@@ -310,7 +312,7 @@ pub(crate) mod stack_switching_helpers {
                     let slot_data = builder.func.get_stack_slot_data(slot).clone();
                     let existing_capacity = slot_data.size / entry_size;
 
-                    let capacity_value = builder.ins().iconst(I32, existing_capacity as i64);
+                    let capacity_value = builder.ins().iconst(I32, i64::from(existing_capacity));
                     debug_assert!(align <= builder.func.get_stack_slot_data(slot).align_shift);
                     debug_assert_eq!(builder.func.get_stack_slot_data(slot).kind, ExplicitSlot);
 
@@ -322,7 +324,7 @@ pub(crate) mod stack_switching_helpers {
                     slot
                 }
                 _ => {
-                    let capacity_value = builder.ins().iconst(I32, required_capacity as i64);
+                    let capacity_value = builder.ins().iconst(I32, i64::from(required_capacity));
                     let slot_size = ir::StackSlotData::new(
                         ir::StackSlotKind::ExplicitSlot,
                         required_size,
@@ -378,16 +380,19 @@ pub(crate) mod stack_switching_helpers {
             values: &[ir::Value],
             allow_smaller: bool,
         ) {
-            let store_count = builder.ins().iconst(I32, values.len() as i64);
+            let store_count = builder
+                .ins()
+                .iconst(I32, i64::try_from(values.len()).unwrap());
 
             // TODO(posborne): allow_smaller only used in debug_assert!
             if cfg!(debug_assertions) {
                 for val in values {
                     let ty = builder.func.dfg.value_type(*val);
+                    let size = usize::try_from(ty.bytes()).unwrap();
                     if allow_smaller {
-                        debug_assert!(ty.bytes() as usize <= std::mem::size_of::<T>());
+                        debug_assert!(size <= std::mem::size_of::<T>());
                     } else {
-                        debug_assert!(ty.bytes() as usize == std::mem::size_of::<T>());
+                        debug_assert!(size == std::mem::size_of::<T>());
                     }
                 }
             }
@@ -441,7 +446,7 @@ pub(crate) mod stack_switching_helpers {
             let discriminant = wasmtime_environ::STACK_CHAIN_CONTINUATION_DISCRIMINANT;
             let discriminant = builder
                 .ins()
-                .iconst(env.pointer_type(), discriminant as i64);
+                .iconst(env.pointer_type(), i64::try_from(discriminant).unwrap());
             VMStackChain {
                 discriminant,
                 payload: contref,
@@ -460,7 +465,7 @@ pub(crate) mod stack_switching_helpers {
             let discriminant = wasmtime_environ::STACK_CHAIN_ABSENT_DISCRIMINANT;
             let discriminant = builder
                 .ins()
-                .iconst(env.pointer_type(), discriminant as i64);
+                .iconst(env.pointer_type(), i64::try_from(discriminant).unwrap());
             let zero_filler = builder.ins().iconst(env.pointer_type(), 0i64);
             VMStackChain {
                 discriminant,
@@ -476,7 +481,7 @@ pub(crate) mod stack_switching_helpers {
             builder.ins().icmp_imm(
                 IntCC::Equal,
                 self.discriminant,
-                wasmtime_environ::STACK_CHAIN_INITIAL_STACK_DISCRIMINANT as i64,
+                i64::try_from(wasmtime_environ::STACK_CHAIN_INITIAL_STACK_DISCRIMINANT).unwrap(),
             )
         }
 
@@ -506,7 +511,7 @@ pub(crate) mod stack_switching_helpers {
             let mut data = vec![];
             for _ in 0..2 {
                 data.push(builder.ins().load(pointer_type, memflags, pointer, offset));
-                offset += pointer_type.bytes() as i32;
+                offset += i32::try_from(pointer_type.bytes()).unwrap();
             }
             let data = <[ir::Value; 2]>::try_from(data).unwrap();
             Self::from_raw_parts(data)
@@ -527,7 +532,7 @@ pub(crate) mod stack_switching_helpers {
             for value in data {
                 debug_assert_eq!(builder.func.dfg.value_type(value), env.pointer_type());
                 builder.ins().store(memflags, value, target_pointer, offset);
-                offset += env.pointer_type().bytes() as i32;
+                offset += i32::try_from(env.pointer_type().bytes()).unwrap();
             }
         }
 
@@ -571,20 +576,20 @@ pub(crate) mod stack_switching_helpers {
     impl VMCommonStackInformation {
         fn get_state_ptr<'a>(
             &self,
-            _env: &mut crate::func_environ::FuncEnvironment<'a>,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            let offset = _env.offsets.ptr.vmcommon_stack_information_state() as i64;
+            let offset: i64 = env.offsets.ptr.vmcommon_stack_information_state().into();
 
             builder.ins().iadd_imm(self.address, offset)
         }
 
         fn get_stack_limits_ptr<'a>(
             &self,
-            _env: &mut crate::func_environ::FuncEnvironment<'a>,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            let offset = _env.offsets.ptr.vmcommon_stack_information_limits() as i64;
+            let offset: i64 = env.offsets.ptr.vmcommon_stack_information_limits().into();
 
             builder.ins().iadd_imm(self.address, offset)
         }
@@ -606,7 +611,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
             discriminant: u32,
         ) {
-            let discriminant = builder.ins().iconst(I32, discriminant as i64);
+            let discriminant = builder.ins().iconst(I32, i64::from(discriminant));
             let mem_flags = ir::MemFlags::trusted();
             let state_ptr = self.get_state_ptr(env, builder);
 
@@ -660,7 +665,7 @@ pub(crate) mod stack_switching_helpers {
             let allocated = wasmtime_environ::STACK_STATE_FRESH_DISCRIMINANT;
             builder
                 .ins()
-                .icmp_imm(IntCC::NotEqual, actual_state, allocated as i64)
+                .icmp_imm(IntCC::NotEqual, actual_state, i64::from(allocated))
         }
 
         pub fn get_handler_list<'a>(
@@ -668,7 +673,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             _builder: &mut FunctionBuilder,
         ) -> VMHandlerList {
-            let offset = env.offsets.ptr.vmcommon_stack_information_handlers() as i32;
+            let offset = env.offsets.ptr.vmcommon_stack_information_handlers().into();
             VMHandlerList::new(self.address, offset)
         }
 
@@ -679,10 +684,11 @@ pub(crate) mod stack_switching_helpers {
         ) -> ir::Value {
             // Field first_switch_handler_index has type u32
             let memflags = ir::MemFlags::trusted();
-            let offset =
-                env.offsets
-                    .ptr
-                    .vmcommon_stack_information_first_switch_handler_index() as i32;
+            let offset: i32 = env
+                .offsets
+                .ptr
+                .vmcommon_stack_information_first_switch_handler_index()
+                .into();
             builder.ins().load(I32, memflags, self.address, offset)
         }
 
@@ -694,10 +700,11 @@ pub(crate) mod stack_switching_helpers {
         ) {
             // Field first_switch_handler_index has type u32
             let memflags = ir::MemFlags::trusted();
-            let offset =
-                env.offsets
-                    .ptr
-                    .vmcommon_stack_information_first_switch_handler_index() as i32;
+            let offset: i32 = env
+                .offsets
+                .ptr
+                .vmcommon_stack_information_first_switch_handler_index()
+                .into();
             builder.ins().store(memflags, value, self.address, offset);
         }
 
@@ -715,22 +722,23 @@ pub(crate) mod stack_switching_helpers {
             let memflags = ir::MemFlags::trusted();
 
             let mut copy_to_vm_runtime_limits = |our_offset, their_offset| {
-                let our_value =
-                    builder
-                        .ins()
-                        .load(env.pointer_type(), memflags, stack_limits_ptr, our_offset);
+                let our_value = builder.ins().load(
+                    env.pointer_type(),
+                    memflags,
+                    stack_limits_ptr,
+                    i32::from(our_offset),
+                );
                 builder.ins().store(
                     memflags,
                     our_value,
                     vmruntime_limits_ptr,
-                    their_offset as i32,
+                    i32::from(their_offset),
                 );
             };
 
             let pointer_size = u8::try_from(env.pointer_type().bytes()).unwrap();
-            let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit() as i32;
-            let last_wasm_entry_fp_offset =
-                env.offsets.ptr.vmstack_limits_last_wasm_entry_fp() as i32;
+            let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit();
+            let last_wasm_entry_fp_offset = env.offsets.ptr.vmstack_limits_last_wasm_entry_fp();
             copy_to_vm_runtime_limits(
                 stack_limit_offset,
                 pointer_size.vmstore_context_stack_limit(),
@@ -773,15 +781,14 @@ pub(crate) mod stack_switching_helpers {
                 );
             };
 
-            let last_wasm_entry_fp_offset =
-                env.offsets.ptr.vmstack_limits_last_wasm_entry_fp() as i32;
+            let last_wasm_entry_fp_offset = env.offsets.ptr.vmstack_limits_last_wasm_entry_fp();
             copy(
                 pointer_size.vmstore_context_last_wasm_entry_fp(),
                 last_wasm_entry_fp_offset,
             );
 
             if load_stack_limit {
-                let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit() as i32;
+                let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit();
                 copy(
                     pointer_size.vmstore_context_stack_limit(),
                     stack_limit_offset,
@@ -921,7 +928,7 @@ pub fn vmctx_load_stack_chain<'a>(
     builder: &mut FunctionBuilder,
     vmctx: ir::Value,
 ) -> VMStackChain {
-    let stack_chain_offset = env.offsets.ptr.vmstore_context_stack_chain() as i32;
+    let stack_chain_offset = env.offsets.ptr.vmstore_context_stack_chain().into();
 
     // First we need to get the `VMStoreContext`.
     let vm_store_context_offset = env.offsets.ptr.vmctx_store_context();
@@ -949,7 +956,7 @@ pub fn vmctx_store_stack_chain<'a>(
     vmctx: ir::Value,
     stack_chain: &VMStackChain,
 ) {
-    let stack_chain_offset = env.offsets.ptr.vmstore_context_stack_chain() as i32;
+    let stack_chain_offset = env.offsets.ptr.vmstore_context_stack_chain().into();
 
     // First we need to get the `VMStoreContext`.
     let vm_store_context_offset = env.offsets.ptr.vmctx_store_context();
@@ -1122,7 +1129,9 @@ fn search_handler<'a>(
 
         let base = handler_list_data_ptr;
         let entry_size = std::mem::size_of::<*mut u8>();
-        let offset = builder.ins().imul_imm(index, entry_size as i64);
+        let offset = builder
+            .ins()
+            .imul_imm(index, i64::try_from(entry_size).unwrap());
         let offset = builder.ins().uextend(I64, offset);
         let entry_address = builder.ins().iadd(base, offset);
 
@@ -1198,8 +1207,12 @@ pub(crate) fn translate_cont_new<'a>(
     // The typing rules for cont.new allow a null reference to be passed to it.
     builder.ins().trapz(func, crate::TRAP_NULL_REFERENCE);
 
-    let nargs = builder.ins().iconst(I32, arg_types.len() as i64);
-    let nreturns = builder.ins().iconst(I32, return_types.len() as i64);
+    let nargs = builder
+        .ins()
+        .iconst(I32, i64::try_from(arg_types.len()).unwrap());
+    let nreturns = builder
+        .ins()
+        .iconst(I32, i64::try_from(return_types.len()).unwrap());
 
     let cont_new_func = super::builtins::cont_new(env, &mut builder.func)?;
     let vmctx = env.vmctx_val(&mut builder.cursor());
@@ -1383,8 +1396,9 @@ pub(crate) fn translate_resume<'a>(
 
             // To enable distinguishing switch and suspend handlers when searching the handler list:
             // Store at which index the switch handlers start.
-            let first_switch_handler_index =
-                builder.ins().iconst(I32, suspend_handler_count as i64);
+            let first_switch_handler_index = builder
+                .ins()
+                .iconst(I32, i64::try_from(suspend_handler_count).unwrap());
             parent_csi.set_first_switch_handler_index(env, builder, first_switch_handler_index);
         }
 
@@ -1870,7 +1884,7 @@ pub(crate) fn translate_switch<'a>(
                 .ins()
                 .store(flags, tmp2, switchee_last_ancestor_cc, offset);
 
-            offset += env.pointer_type().bytes() as i32;
+            offset += i32::try_from(env.pointer_type().bytes()).unwrap();
         }
 
         let switch_payload = ControlEffect::encode_switch(env, builder).to_u64();
