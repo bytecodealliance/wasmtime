@@ -38,6 +38,7 @@ block0(v0: i16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm0
+;   pxor %xmm0, %xmm0
 ;   pinsrw $0x0, %edi, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -48,6 +49,7 @@ block0(v0: i16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   pxor %xmm0, %xmm0
 ;   pinsrw $0, %edi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -405,6 +407,7 @@ block0(v0: i16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm0
+;   pxor %xmm0, %xmm0
 ;   pinsrw $0x0, %edi, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -415,6 +418,7 @@ block0(v0: i16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
+;   pxor %xmm0, %xmm0
 ;   pinsrw $0, %edi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp

@@ -1,0 +1,72 @@
+;; This has an associated runtest; this test explains that one by disassembling
+;; the test case here.
+
+test compile precise-output
+set opt_level=none
+set preserve_frame_pointers=true
+set enable_multi_ret_implicit_sret=true
+target x86_64
+
+function %munge_xmm0() -> i16x8 fast {
+block0:
+    v0 = vconst.i16x8 [0xffff 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff]
+    return v0
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   uninit  %xmm0
+;   pcmpeqd %xmm0, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   pcmpeqd %xmm0, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
+function %scalar_to_vector() -> i16x8 fast {
+    fn0 = %munge_xmm0() -> i16x8 fast
+block0:
+    v0 = call fn0()
+    v1 = iconst.i16 42
+    v2 = scalar_to_vector.i16x8 v1
+    return v2
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   load_ext_name %munge_xmm0+0, %r8
+;   call    *%r8
+;   movl    $42, %r8d
+;   uninit  %xmm0
+;   pxor %xmm0, %xmm0
+;   pinsrw $0x0, %r8d, %xmm0
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movabsq $0, %r8 ; reloc_external Abs8 %munge_xmm0 0
+;   callq *%r8
+;   movl $0x2a, %r8d
+;   pxor %xmm0, %xmm0
+;   pinsrw $0, %r8d, %xmm0
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
