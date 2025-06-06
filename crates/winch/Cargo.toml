@@ -1,6 +1,6 @@
 [package]
-name = "wasmtime-winch"
-description = "Integration between Wasmtime and Winch"
+name = "wasmtime-internal-winch"
+description = "INTERNAL: Integration between Wasmtime and Winch"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

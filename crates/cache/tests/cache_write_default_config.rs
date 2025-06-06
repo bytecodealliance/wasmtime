@@ -1,4 +1,4 @@
-use wasmtime_cache::create_new_config;
+use wasmtime_internal_cache::create_new_config;
 
 #[test]
 fn test_cache_write_default_config() {

@@ -1,8 +1,8 @@
 [package]
-name = "wasmtime-math"
+name = "wasmtime-internal-math"
 version.workspace = true
 authors.workspace = true
-description = "Low-level math routines used in Wasmtime"
+description = "INTERNAL: Low-level math routines used in Wasmtime"
 documentation = "https://docs.rs/wasmtime-math"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"

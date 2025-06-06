@@ -1,8 +1,8 @@
 [package]
-name = "wasmtime-jit-debug"
+name = "wasmtime-internal-jit-debug"
 version.workspace = true
 authors.workspace = true
-description = "JIT debug interfaces support for Wasmtime"
+description = "INTERNAL: JIT debug interfaces support for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 categories = ["development-tools::debugging"]
 keywords = ["gdb", "jit"]
