@@ -1,5 +1,5 @@
-use crate::dsl::{Feature::*, Inst, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, sxw, w};
+use crate::dsl::{Feature::*, Inst, Location::*, VexLength::*};
+use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, sxw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -56,6 +56,10 @@ pub fn list() -> Vec<Inst> {
         inst("movq", fmt("A", [w(xmm1), r(rm64)]), rex([0x66, 0x0F, 0x6E]).r().w(), _64b | sse2),
         inst("movd", fmt("B", [w(rm32), r(xmm2)]), rex([0x66, 0x0F, 0x7E]).r(), _64b | compat | sse2),
         inst("movq", fmt("B", [w(rm64), r(xmm2)]), rex([0x66, 0x0F, 0x7E]).r().w(), _64b | sse2),
+        inst("vmovd", fmt("A", [w(xmm1), r(rm32)]), vex(L128)._66()._0f().w0().op(0x6E).r(), _64b | compat | avx),
+        inst("vmovq", fmt("A", [w(xmm1), r(rm64)]), vex(L128)._66()._0f().w1().op(0x6E).r(), _64b | avx),
+        inst("vmovd", fmt("B", [w(rm32), r(xmm2)]), vex(L128)._66()._0f().w0().op(0x7E).r(), _64b | compat | avx),
+        inst("vmovq", fmt("B", [w(rm64), r(xmm2)]), vex(L128)._66()._0f().w1().op(0x7E).r(), _64b | avx),
 
         // Move floating-point values to and from XMM locations. Some
         // memory-loading versions of `movs*` clear the upper bits of the XMM

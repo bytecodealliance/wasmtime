@@ -1132,11 +1132,6 @@ impl AvxOpcode {
             | AvxOpcode::Vpblendw
             | AvxOpcode::Vmovddup
             | AvxOpcode::Vbroadcastss
-            | AvxOpcode::Vmovd
-            | AvxOpcode::Vmovq
-            | AvxOpcode::Vmovmskps
-            | AvxOpcode::Vmovmskpd
-            | AvxOpcode::Vpmovmskb
             | AvxOpcode::Vsqrtss
             | AvxOpcode::Vsqrtsd
             | AvxOpcode::Vroundss
