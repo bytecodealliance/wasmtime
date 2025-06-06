@@ -33,7 +33,7 @@ pub(crate) mod stack_switching_helpers {
     }
 
     #[derive(Copy, Clone)]
-    pub struct VMArray<T> {
+    pub struct VMHostArray<T> {
         /// Base address of this object, which must be shifted by `offset` below.
         base: ir::Value,
 
@@ -47,10 +47,10 @@ pub(crate) mod stack_switching_helpers {
         phantom: PhantomData<T>,
     }
 
-    pub type VMPayloads = VMArray<u128>;
+    pub type VMPayloads = VMHostArray<u128>;
 
     // Actually a vector of *mut VMTagDefinition
-    pub type VMHandlerList = VMArray<*mut u8>;
+    pub type VMHandlerList = VMHostArray<*mut u8>;
 
     /// Compile-time representation of wasmtime_environ::VMStackChain,
     /// consisting of two `ir::Value`s.
@@ -197,7 +197,7 @@ pub(crate) mod stack_switching_helpers {
         }
     }
 
-    impl<T> VMArray<T> {
+    impl<T> VMHostArray<T> {
         pub(crate) fn new(base: ir::Value, offset: i32) -> Self {
             Self {
                 base,
@@ -229,7 +229,7 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            let offset = env.offsets.ptr.vmarray_data().into();
+            let offset = env.offsets.ptr.vmhostarray_data().into();
             self.get(builder, env.pointer_type(), offset)
         }
 
@@ -239,7 +239,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
             // Array length is stored as u32.
-            let offset = env.offsets.ptr.vmarray_length().into();
+            let offset = env.offsets.ptr.vmhostarray_length().into();
             self.get(builder, I32, offset)
         }
 
@@ -250,7 +250,7 @@ pub(crate) mod stack_switching_helpers {
             length: ir::Value,
         ) {
             // Array length is stored as u32.
-            let offset = env.offsets.ptr.vmarray_length().into();
+            let offset = env.offsets.ptr.vmhostarray_length().into();
             self.set::<u32>(builder, offset, length);
         }
 
@@ -261,7 +261,7 @@ pub(crate) mod stack_switching_helpers {
             capacity: ir::Value,
         ) {
             // Array capacity is stored as u32.
-            let offset = env.offsets.ptr.vmarray_capacity().into();
+            let offset = env.offsets.ptr.vmhostarray_capacity().into();
             self.set::<u32>(builder, offset, capacity);
         }
 
@@ -271,7 +271,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
             data: ir::Value,
         ) {
-            let offset = env.offsets.ptr.vmarray_data().into();
+            let offset = env.offsets.ptr.vmhostarray_data().into();
             self.set::<*mut T>(builder, offset, data);
         }
 
