@@ -73,8 +73,11 @@ fn forward_walk(
 ) {
     let mut pos = FuncCursor::new(func);
     while let Some(_block) = pos.next_block() {
-        let prev_pos = pos.position();
-        while let Some(inst) = pos.next_inst() {
+        let mut prev_pos;
+        while let Some(inst) = {
+            prev_pos = pos.position();
+            pos.next_inst()
+        } {
             match f(pos.func, inst) {
                 WalkCommand::Continue => continue,
                 WalkCommand::Revisit => pos.set_position(prev_pos),
