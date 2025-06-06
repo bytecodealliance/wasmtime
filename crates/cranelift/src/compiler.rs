@@ -975,14 +975,14 @@ impl FunctionCompiler<'_> {
         (builder, block0)
     }
 
-    fn finish(self, clif_filename: &str) -> Result<CompiledFunction, CompileError> {
-        self.finish_with_info(None, clif_filename)
+    fn finish(self, symbol: &str) -> Result<CompiledFunction, CompileError> {
+        self.finish_with_info(None, symbol)
     }
 
     fn finish_with_info(
         mut self,
         body_and_tunables: Option<(&FunctionBody<'_>, &Tunables)>,
-        clif_filename: &str,
+        symbol: &str,
     ) -> Result<CompiledFunction, CompileError> {
         let context = &mut self.cx.codegen_context;
         let isa = &*self.compiler.isa;
@@ -998,7 +998,7 @@ impl FunctionCompiler<'_> {
         if let Some(path) = &self.compiler.clif_dir {
             use std::io::Write;
 
-            let mut path = path.join(clif_filename);
+            let mut path = path.join(symbol.replace(":", "-"));
             path.set_extension("clif");
 
             let mut output = std::fs::File::create(path).unwrap();

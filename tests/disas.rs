@@ -221,7 +221,7 @@ impl Test {
                     let entry = entry.context("failed to iterate over tempdir")?;
                     let path = entry.path();
                     if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                        let filter = self.config.filter.as_deref().unwrap_or("wasm[0]::function");
+                        let filter = self.config.filter.as_deref().unwrap_or("wasm[0]--function");
                         if !name.contains(filter) {
                             continue;
                         }
