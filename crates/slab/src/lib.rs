@@ -14,7 +14,7 @@
 //! # Example
 //!
 //! ```
-//! use wasmtime_slab::{Id, Slab};
+//! use wasmtime_internal_slab::{Id, Slab};
 //!
 //! let mut slab = Slab::new();
 //!
@@ -79,7 +79,7 @@
 //!
 //! ```rust
 //! pub struct GenerationalId {
-//!     id: wasmtime_slab::Id,
+//!     id: wasmtime_internal_slab::Id,
 //!     generation: u32,
 //! }
 //!
@@ -89,7 +89,7 @@
 //! }
 //!
 //! pub struct GenerationalSlab<T> {
-//!     slab: wasmtime_slab::Slab<GenerationalEntry<T>>,
+//!     slab: wasmtime_internal_slab::Slab<GenerationalEntry<T>>,
 //!     generation: u32,
 //! }
 //!
