@@ -12,3 +12,8 @@ pub struct StreamReader<T> {
 
 /// Represents a Component Model `error-context`.
 pub struct ErrorContext {}
+
+pub(crate) struct ResourcePair {
+    pub(crate) write: u32,
+    pub(crate) read: u32,
+}

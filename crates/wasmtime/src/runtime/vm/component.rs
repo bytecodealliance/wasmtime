@@ -764,39 +764,6 @@ impl ComponentInstance {
         self.resource_tables().exit_call()
     }
 
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn future_transfer(
-        &mut self,
-        src_idx: u32,
-        src: TypeFutureTableIndex,
-        dst: TypeFutureTableIndex,
-    ) -> Result<u32> {
-        _ = (src_idx, src, dst);
-        todo!()
-    }
-
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn stream_transfer(
-        &mut self,
-        src_idx: u32,
-        src: TypeStreamTableIndex,
-        dst: TypeStreamTableIndex,
-    ) -> Result<u32> {
-        _ = (src_idx, src, dst);
-        todo!()
-    }
-
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn error_context_transfer(
-        &mut self,
-        src_idx: u32,
-        src: TypeComponentLocalErrorContextTableIndex,
-        dst: TypeComponentLocalErrorContextTableIndex,
-    ) -> Result<u32> {
-        _ = (src_idx, src, dst);
-        todo!()
-    }
-
     /// Returns the store-local id that points to this component.
     pub fn id(&self) -> ComponentInstanceId {
         self.id

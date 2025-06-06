@@ -38,22 +38,24 @@ mod traps;
 
 /// Bit flag for indicating async-lifted exports
 ///
-/// This flag may be passed to the `async-exit` built-in function (which is
+/// This flag may be passed to the `async-start` built-in function (which is
 /// called from both async->async and async->sync adapters) to indicate that the
 /// callee is an async-lifted export.
-pub const EXIT_FLAG_ASYNC_CALLEE: i32 = 1 << 0;
+pub const START_FLAG_ASYNC_CALLEE: i32 = 1 << 0;
 
-/// Fixed parameter types for the `sync-enter` built-in function.
+/// Fixed parameter types for the `prepare_call` built-in function.
 ///
-/// Note that `sync-enter` also takes a variable number of parameters in
+/// Note that `prepare_call` also takes a variable number of parameters in
 /// addition to these, determined by the signature of the function for which
 /// we're generating an adapter.
-pub static SYNC_ENTER_FIXED_PARAMS: &[ValType] = &[
-    ValType::FUNCREF,
-    ValType::FUNCREF,
-    ValType::I32,
-    ValType::I32,
-    ValType::I32,
+pub static PREPARE_CALL_FIXED_PARAMS: &[ValType] = &[
+    ValType::FUNCREF, // start
+    ValType::FUNCREF, // return
+    ValType::I32,     // caller_instance
+    ValType::I32,     // callee_instance
+    ValType::I32,     // task_return_type
+    ValType::I32,     // string_encoding
+    ValType::I32,     // result_count_or_max_if_async
 ];
 
 /// Representation of an adapter module.
@@ -86,15 +88,7 @@ pub struct Module<'a> {
     imported_resource_exit_call: Option<FuncIndex>,
 
     // Cached versions of imported trampolines for working with the async ABI.
-    imported_async_enter_call: Option<FuncIndex>,
-    imported_async_exit_call: Option<FuncIndex>,
-
-    // Cached versions of imported trampolines for fusing sync-lowered imports
-    // with async-lifted exports.  These are `HashMap`s (using the adapter
-    // function name) because the signatures of the trampolines vary depending
-    // on the signature of the adapter function we're generating code for.
-    imported_sync_enter_call: HashMap<String, FuncIndex>,
-    imported_sync_exit_call: HashMap<String, FuncIndex>,
+    imported_async_start_calls: HashMap<(Option<FuncIndex>, Option<FuncIndex>), FuncIndex>,
 
     // Cached versions of imported trampolines for working with `stream`s,
     // `future`s, and `error-context`s.
@@ -229,13 +223,10 @@ impl<'a> Module<'a> {
             imported_resource_transfer_borrow: None,
             imported_resource_enter_call: None,
             imported_resource_exit_call: None,
-            imported_async_enter_call: None,
-            imported_async_exit_call: None,
+            imported_async_start_calls: HashMap::new(),
             imported_future_transfer: None,
             imported_stream_transfer: None,
             imported_error_context_transfer: None,
-            imported_sync_enter_call: HashMap::new(),
-            imported_sync_exit_call: HashMap::new(),
             exports: Vec::new(),
         }
     }
@@ -341,14 +332,9 @@ impl<'a> Module<'a> {
             )
         });
         let callback = callback.as_ref().map(|func| {
-            let ptr = if *memory64 {
-                ValType::I64
-            } else {
-                ValType::I32
-            };
             let ty = self
                 .core_types
-                .function(&[ptr, ValType::I32, ValType::I32], &[ValType::I32]);
+                .function(&[ValType::I32, ValType::I32, ValType::I32], &[ValType::I32]);
             self.import_func(
                 "callback",
                 &format!("f{}", self.imported_funcs.len()),
@@ -497,26 +483,30 @@ impl<'a> Module<'a> {
     /// the parameters, the adapter must use this function to set up the subtask
     /// and stash the parameters as part of that subtask until any backpressure
     /// has cleared.
-    fn import_sync_enter_call(&mut self, suffix: &str, params: &[ValType]) -> FuncIndex {
-        self.import_simple_get_and_set(
-            "sync",
-            &format!("[enter-call]{suffix}"),
-            &SYNC_ENTER_FIXED_PARAMS
+    fn import_prepare_call(
+        &mut self,
+        suffix: &str,
+        params: &[ValType],
+        memory: Option<MemoryIndex>,
+    ) -> FuncIndex {
+        let ty = self.core_types.function(
+            &PREPARE_CALL_FIXED_PARAMS
                 .iter()
                 .copied()
                 .chain(params.iter().copied())
                 .collect::<Vec<_>>(),
             &[],
-            Import::SyncEnterCall,
-            |me| me.imported_sync_enter_call.get(suffix).copied(),
-            |me, v| {
-                assert!(
-                    me.imported_sync_enter_call
-                        .insert(suffix.to_owned(), v)
-                        .is_none()
-                )
-            },
-        )
+        );
+        self.core_imports.import(
+            "sync",
+            &format!("[prepare-call]{suffix}"),
+            EntityType::Function(ty),
+        );
+        let import = Import::PrepareCall {
+            memory: memory.map(|v| self.imported_memories[v].clone()),
+        };
+        self.imports.push(import);
+        self.imported_funcs.push(None)
     }
 
     /// Import a host built-in function to start a subtask for a sync-lowered
@@ -525,83 +515,53 @@ impl<'a> Module<'a> {
     /// This call with block until the subtask has produced result(s) via the
     /// `task.return` intrinsic.
     ///
-    /// Note that this could potentially be combined with the `sync-enter`
+    /// Note that this could potentially be combined with the `sync-prepare`
     /// built-in into a single built-in function that does both jobs.  However,
     /// we've kept them separate to allow a future optimization where the caller
-    /// calls the callee directly rather than using `sync-exit` to have the host
+    /// calls the callee directly rather than using `sync-start` to have the host
     /// do it.
-    fn import_sync_exit_call(
+    fn import_sync_start_call(
         &mut self,
         suffix: &str,
         callback: Option<FuncIndex>,
         results: &[ValType],
     ) -> FuncIndex {
-        self.import_simple_get_and_set(
+        let ty = self
+            .core_types
+            .function(&[ValType::FUNCREF, ValType::I32], results);
+        self.core_imports.import(
             "sync",
-            &format!("[exit-call]{suffix}"),
-            &[ValType::I32, ValType::FUNCREF, ValType::I32, ValType::I32],
-            results,
-            Import::SyncExitCall {
-                callback: callback
-                    .map(|callback| self.imported_funcs.get(callback).unwrap().clone().unwrap()),
-            },
-            |me| me.imported_sync_exit_call.get(suffix).copied(),
-            |me, v| {
-                assert!(
-                    me.imported_sync_exit_call
-                        .insert(suffix.to_owned(), v)
-                        .is_none()
-                )
-            },
-        )
-    }
-
-    /// Import a host built-in function to set up a subtask for an async-lowered
-    /// import call to an async- or sync-lifted export.
-    fn import_async_enter_call(&mut self) -> FuncIndex {
-        self.import_simple(
-            "async",
-            "enter-call",
-            &[
-                ValType::FUNCREF,
-                ValType::FUNCREF,
-                ValType::I32,
-                ValType::I32,
-                ValType::I32,
-                ValType::I32,
-            ],
-            &[],
-            Import::AsyncEnterCall,
-            |me| &mut me.imported_async_enter_call,
-        )
+            &format!("[start-call]{suffix}"),
+            EntityType::Function(ty),
+        );
+        let import = Import::SyncStartCall {
+            callback: callback
+                .map(|callback| self.imported_funcs.get(callback).unwrap().clone().unwrap()),
+        };
+        self.imports.push(import);
+        self.imported_funcs.push(None)
     }
 
     /// Import a host built-in function to start a subtask for an async-lowered
     /// import call to an async- or sync-lifted export.
     ///
-    /// Note that this could potentially be combined with the `async-enter`
+    /// Note that this could potentially be combined with the `async-prepare`
     /// built-in into a single built-in function that does both jobs.  However,
     /// we've kept them separate to allow a future optimization where the caller
-    /// calls the callee directly rather than using `async-exit` to have the
+    /// calls the callee directly rather than using `async-start` to have the
     /// host do it.
-    fn import_async_exit_call(
+    fn import_async_start_call(
         &mut self,
+        suffix: &str,
         callback: Option<FuncIndex>,
         post_return: Option<FuncIndex>,
     ) -> FuncIndex {
-        self.import_simple(
+        self.import_simple_get_and_set(
             "async",
-            "exit-call",
-            &[
-                ValType::I32,
-                ValType::FUNCREF,
-                ValType::I32,
-                ValType::I32,
-                ValType::I32,
-                ValType::I32,
-            ],
+            &format!("[start-call]{suffix}"),
+            &[ValType::FUNCREF, ValType::I32, ValType::I32, ValType::I32],
             &[ValType::I32],
-            Import::AsyncExitCall {
+            Import::AsyncStartCall {
                 callback: callback
                     .map(|callback| self.imported_funcs.get(callback).unwrap().clone().unwrap()),
                 post_return: post_return.map(|post_return| {
@@ -612,7 +572,18 @@ impl<'a> Module<'a> {
                         .unwrap()
                 }),
             },
-            |me| &mut me.imported_async_exit_call,
+            |me| {
+                me.imported_async_start_calls
+                    .get(&(callback, post_return))
+                    .copied()
+            },
+            |me, v| {
+                assert!(
+                    me.imported_async_start_calls
+                        .insert((callback, post_return), v)
+                        .is_none()
+                )
+            },
         )
     }
 
@@ -819,21 +790,23 @@ pub enum Import {
     /// Tears down a previous entry and handles checking borrow-related
     /// metadata.
     ResourceExitCall,
-    /// An intrinsic used by FACT-generated modules to begin a call involving a
-    /// sync-lowered import and async-lifted export.
-    SyncEnterCall,
+    /// An intrinsic used by FACT-generated modules to begin a call involving
+    /// an async-lowered import and/or an async-lifted export.
+    PrepareCall {
+        /// The memory used to verify that the memory specified for the
+        /// `task.return` that is called at runtime (if any) matches the one
+        /// specified in the lifted export.
+        memory: Option<CoreDef>,
+    },
     /// An intrinsic used by FACT-generated modules to complete a call involving
     /// a sync-lowered import and async-lifted export.
-    SyncExitCall {
+    SyncStartCall {
         /// The callee's callback function, if any.
         callback: Option<CoreDef>,
     },
-    /// An intrinsic used by FACT-generated modules to begin a call involving an
-    /// async-lowered import function.
-    AsyncEnterCall,
     /// An intrinsic used by FACT-generated modules to complete a call involving
     /// an async-lowered import function.
-    AsyncExitCall {
+    AsyncStartCall {
         /// The callee's callback function, if any.
         callback: Option<CoreDef>,
 
