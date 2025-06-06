@@ -6,7 +6,10 @@ use crate::ast::*;
 
 /// Print ISLE definitions.
 pub fn print<W: Write>(defs: &[Def], width: usize, out: &mut W) -> std::io::Result<()> {
-    for def in defs {
+    for (i, def) in defs.iter().enumerate() {
+        if i > 0 {
+            writeln!(out)?;
+        }
         print_node(def, width, out)?;
         writeln!(out)?;
     }
@@ -57,6 +60,12 @@ struct Printer<'a, W: Write> {
     width: usize,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Wrapping {
+    Wrap,
+    SingleLine,
+}
+
 impl<'a, W: Write> Printer<'a, W> {
     fn new(out: &'a mut W, width: usize) -> Self {
         Self {
@@ -68,52 +77,41 @@ impl<'a, W: Write> Printer<'a, W> {
     }
 
     fn print(&mut self, sexpr: &SExpr) -> std::io::Result<()> {
+        self.print_wrapped(sexpr, Wrapping::Wrap)
+    }
+
+    fn print_wrapped(&mut self, sexpr: &SExpr, wrapping: Wrapping) -> std::io::Result<()> {
         match sexpr {
             SExpr::Atom(atom) => self.put(atom),
             SExpr::Binding(name, sexpr) => {
                 self.put(name)?;
                 self.put(" @ ")?;
-                self.print(sexpr)
+                self.print_wrapped(sexpr, wrapping)
             }
             SExpr::List(items) => {
-                if self.fits(sexpr) {
-                    self.print_line(sexpr)
+                if wrapping == Wrapping::SingleLine || self.fits(sexpr) {
+                    self.put("(")?;
+                    for (i, item) in items.iter().enumerate() {
+                        if i > 0 {
+                            self.put(" ")?;
+                        }
+                        self.print_wrapped(item, Wrapping::SingleLine)?;
+                    }
+                    self.put(")")
                 } else {
                     let (first, rest) = items.split_first().expect("non-empty list");
                     self.put("(")?;
-                    self.print(first)?;
+                    self.print_wrapped(first, wrapping)?;
                     self.indent += 1;
                     for item in rest {
                         self.nl()?;
-                        self.print(item)?;
+                        self.print_wrapped(item, wrapping)?;
                     }
                     self.indent -= 1;
                     self.nl()?;
                     self.put(")")?;
                     Ok(())
                 }
-            }
-        }
-    }
-
-    // Print the expression in a single line.
-    fn print_line(&mut self, sexpr: &SExpr) -> std::io::Result<()> {
-        match sexpr {
-            SExpr::Atom(atom) => self.put(atom),
-            SExpr::Binding(name, sexpr) => {
-                self.put(name)?;
-                self.put(" @ ")?;
-                self.print_line(sexpr)
-            }
-            SExpr::List(items) => {
-                self.put("(")?;
-                for (i, item) in items.iter().enumerate() {
-                    if i > 0 {
-                        self.put(" ")?;
-                    }
-                    self.print_line(item)?;
-                }
-                self.put(")")
             }
         }
     }
@@ -397,13 +395,6 @@ impl ToSExpr for ModelType {
         }
     }
 }
-
-// impl Printable for ModelField {
-//     fn to_doc(&self) -> RcDoc<()> {
-//         sexp(vec![self.name.to_doc(), self.ty.to_doc()])
-//     }
-// }
-//
 
 impl ToSExpr for Signature {
     fn to_sexpr(&self) -> SExpr {
