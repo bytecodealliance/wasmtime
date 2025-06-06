@@ -50,8 +50,8 @@ pub fn list() -> Vec<Inst> {
         inst("vcvtdq2ps", fmt("A", [w(xmm1), r(xmm_m128)]), vex(L128)._0f().op(0x5B).r(), _64b | compat | avx),
         inst("vcvtsi2sdl", fmt("B", [w(xmm1), r(xmm2), r(rm32)]), vex(LIG)._f2()._0f().w0().op(0x2A).r(), _64b | compat | avx),
         inst("vcvtsi2sdq", fmt("B", [w(xmm1), r(xmm2), r(rm64)]), vex(LIG)._f2()._0f().w1().op(0x2A).r(), _64b | avx),
-        inst("vcvtsi2ssl", fmt("B", [w(xmm1), r(xmm2),r(rm32)]), vex(LIG)._f3()._0f().w0().op(0x2A).r(), _64b | compat | avx),
-        inst("vcvtsi2ssq", fmt("B", [w(xmm1), r(xmm2),r(rm64)]), vex(LIG)._f3()._0f().w1().op(0x2A).r(), _64b | avx),
+        inst("vcvtsi2ssl", fmt("B", [w(xmm1), r(xmm2), r(rm32)]), vex(LIG)._f3()._0f().w0().op(0x2A).r(), _64b | compat | avx),
+        inst("vcvtsi2ssq", fmt("B", [w(xmm1), r(xmm2), r(rm64)]), vex(LIG)._f3()._0f().w1().op(0x2A).r(), _64b | avx),
 
         // Currently omitted as Cranelift doesn't need them but could be added
         // in the future:
