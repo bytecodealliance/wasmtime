@@ -123,31 +123,21 @@ impl<'a, W: Write> Printer<'a, W> {
         };
         let mut stack = vec![sexpr];
         while let Some(sexpr) = stack.pop() {
-            match sexpr {
-                SExpr::Atom(atom) => {
-                    if atom.len() > remaining {
-                        return false;
-                    }
-                    remaining -= atom.len();
-                }
+            let consume = match sexpr {
+                SExpr::Atom(atom) => atom.len(),
                 SExpr::Binding(name, inner) => {
-                    let binding_size = name.len() + 3; // " @ "
-                    if binding_size > remaining {
-                        return false;
-                    }
-                    remaining -= binding_size;
                     stack.push(inner);
+                    name.len() + 3 // " @ "
                 }
                 SExpr::List(items) => {
-                    // Account for parentheses and spaces
-                    let punct_size = 2 + items.len() - 1; // "(" + ")" + spaces
-                    if punct_size > remaining {
-                        return false;
-                    }
-                    remaining -= punct_size;
                     stack.extend(items.iter().rev());
+                    2 + items.len() - 1 // "(" + ")" + spaces
                 }
+            };
+            if consume > remaining {
+                return false;
             }
+            remaining -= consume;
         }
         true
     }
