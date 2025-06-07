@@ -1,5 +1,5 @@
 use crate::dsl::{Feature::*, Inst, Location::*, VexLength::*};
-use crate::dsl::{fmt, inst, r, rex, rw, vex, w};
+use crate::dsl::{align, fmt, inst, r, rex, rw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -36,5 +36,12 @@ pub fn list() -> Vec<Inst> {
 
         inst("movddup", fmt("A", [w(xmm1), r(xmm_m64)]), rex([0xF2, 0x0F, 0x12]).r(), _64b | compat | sse3),
         inst("vmovddup", fmt("A", [w(xmm1), r(xmm_m64)]), vex(L128)._f2()._0f().op(0x12).r(), _64b | compat | avx),
+
+        inst("pblendvb", fmt("RM", [rw(xmm1), r(align(xmm_m128)), r(xmm0)]), rex([0x66, 0x0F, 0x38, 0x10]).r(), _64b | compat | sse41),
+        inst("blendvps", fmt("RM0", [rw(xmm1), r(align(xmm_m128)), r(xmm0)]), rex([0x66, 0x0F, 0x38, 0x14]).r(), _64b | compat | sse41),
+        inst("blendvpd", fmt("RM0", [rw(xmm1), r(align(xmm_m128)), r(xmm0)]), rex([0x66, 0x0F, 0x38, 0x15]).r(), _64b | compat | sse41),
+        inst("vpblendvb", fmt("RVMR", [w(xmm1), r(xmm2), r(xmm_m128), r(xmm3)]), vex(L128)._66()._0f3a().w0().op(0x4C).r().is4(), _64b | compat | avx),
+        inst("vblendvps", fmt("RVMR", [w(xmm1), r(xmm2), r(xmm_m128), r(xmm3)]), vex(L128)._66()._0f3a().w0().op(0x4A).r().is4(), _64b | compat | avx),
+        inst("vblendvpd", fmt("RVMR", [w(xmm1), r(xmm2), r(xmm_m128), r(xmm3)]), vex(L128)._66()._0f3a().w0().op(0x4B).r().is4(), _64b | compat | avx),
     ]
 }

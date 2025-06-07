@@ -283,6 +283,7 @@ pub enum Location {
     edx,
     rdx,
     cl,
+    xmm0,
 
     // Immediate values.
     imm8,
@@ -330,7 +331,7 @@ impl Location {
             ax | dx | imm16 | r16 | rm16 | m16 | xmm_m16 => 16,
             eax | edx | imm32 | r32 | r32a | r32b | rm32 | m32 | xmm_m32 => 32,
             rax | rdx | imm64 | r64 | r64a | r64b | rm64 | m64 | xmm_m64 => 64,
-            xmm1 | xmm2 | xmm3 | xmm_m128 => 128,
+            xmm1 | xmm2 | xmm3 | xmm_m128 | xmm0 => 128,
         }
     }
 
@@ -366,7 +367,7 @@ impl Location {
     pub fn kind(&self) -> OperandKind {
         use Location::*;
         match self {
-            al | ax | eax | rax | cl | dx | edx | rdx => OperandKind::FixedReg(*self),
+            al | ax | eax | rax | cl | dx | edx | rdx | xmm0 => OperandKind::FixedReg(*self),
             imm8 | imm16 | imm32 | imm64 => OperandKind::Imm(*self),
             r8 | r16 | r32 | r32a | r32b | r64 | r64a | r64b | xmm1 | xmm2 | xmm3 => {
                 OperandKind::Reg(*self)
@@ -389,7 +390,9 @@ impl Location {
             imm8 | imm16 | imm32 | imm64 | m8 | m16 | m32 | m64 => None,
             al | ax | eax | rax | cl | dx | edx | rdx | r8 | r16 | r32 | r32a | r32b | r64
             | r64a | r64b | rm8 | rm16 | rm32 | rm64 => Some(RegClass::Gpr),
-            xmm1 | xmm2 | xmm3 | xmm_m16 | xmm_m32 | xmm_m64 | xmm_m128 => Some(RegClass::Xmm),
+            xmm1 | xmm2 | xmm3 | xmm_m16 | xmm_m32 | xmm_m64 | xmm_m128 | xmm0 => {
+                Some(RegClass::Xmm)
+            }
         }
     }
 }
@@ -411,6 +414,7 @@ impl core::fmt::Display for Location {
             dx => write!(f, "dx"),
             edx => write!(f, "edx"),
             rdx => write!(f, "rdx"),
+            xmm0 => write!(f, "xmm0"),
 
             r8 => write!(f, "r8"),
             r16 => write!(f, "r16"),

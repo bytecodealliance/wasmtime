@@ -21,7 +21,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   movdqa %xmm0, %xmm2
 ;   movdqa %xmm1, %xmm0
 ;   movdqa %xmm2, %xmm1
-;   pblendvb %xmm1, %xmm7, %xmm1
+;   pblendvb %xmm0, %xmm7, %xmm1
 ;   movdqa %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -73,7 +73,7 @@ block0(v0: f64, v1: f64):
 ;   cmppd   $3, %xmm7, %xmm0, %xmm7
 ;   movdqa %xmm0, %xmm5
 ;   movdqa %xmm7, %xmm0
-;   pblendvb %xmm5, %xmm1, %xmm5
+;   pblendvb %xmm0, %xmm1, %xmm5
 ;   movdqa %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -114,7 +114,7 @@ block0(v0: f32, v1: f32):
 ;   cmpps   $3, %xmm7, %xmm0, %xmm7
 ;   movdqa %xmm0, %xmm5
 ;   movdqa %xmm7, %xmm0
-;   pblendvb %xmm5, %xmm1, %xmm5
+;   pblendvb %xmm0, %xmm1, %xmm5
 ;   movdqa %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
