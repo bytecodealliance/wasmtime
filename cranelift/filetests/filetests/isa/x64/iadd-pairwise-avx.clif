@@ -8,12 +8,12 @@ block0(v0: i16x8, v1: i16x8):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vphaddw %xmm0, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -33,12 +33,12 @@ block0(v0: i32x4, v1: i32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vphaddd %xmm0, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

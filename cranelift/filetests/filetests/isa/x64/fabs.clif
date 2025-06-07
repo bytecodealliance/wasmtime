@@ -8,14 +8,14 @@ block0(v0: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $2147483647, %eax
 ;   movd %eax, %xmm4
 ;   andps %xmm4, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -37,14 +37,14 @@ block0(v0: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movabsq $9223372036854775807, %rax
 ;   movq %rax, %xmm4
 ;   andpd %xmm4, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -66,7 +66,7 @@ block0(v0: f32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm4
@@ -74,7 +74,7 @@ block0(v0: f32x4):
 ;   psrld $0x1, %xmm4
 ;   andps %xmm4, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -96,7 +96,7 @@ block0(v0: f64x2):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm4
@@ -104,7 +104,7 @@ block0(v0: f64x2):
 ;   psrlq $0x1, %xmm4
 ;   andpd %xmm4, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

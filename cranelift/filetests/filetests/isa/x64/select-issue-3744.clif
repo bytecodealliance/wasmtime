@@ -13,7 +13,7 @@ block0(v0: f32, v1: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $1, %eax
@@ -21,7 +21,7 @@ block0(v0: f32, v1: f32):
 ;   cmovpl  const(0), %eax, %eax
 ;   cmovnzl const(0), %eax, %eax
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

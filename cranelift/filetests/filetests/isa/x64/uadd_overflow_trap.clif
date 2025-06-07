@@ -9,14 +9,14 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addl $0x7f, %eax
 ;   jb #trap=user1
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -40,14 +40,14 @@ block0(v0: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addl $0x7f, %eax
 ;   jb #trap=user1
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -70,14 +70,14 @@ block0(v0: i32, v1: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addl %esi, %eax
 ;   jb #trap=user1
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -101,14 +101,14 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addq $0x7f, %rax
 ;   jb #trap=user1
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -132,14 +132,14 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addq $0x7f, %rax
 ;   jb #trap=user1
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -162,14 +162,14 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
 ;   addq %rsi, %rax
 ;   jb #trap=user1
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

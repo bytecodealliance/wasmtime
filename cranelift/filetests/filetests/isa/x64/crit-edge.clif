@@ -20,7 +20,7 @@ function %f(i32) -> i32 {
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   lea     1(%rdi), %eax
@@ -44,11 +44,11 @@ function %f(i32) -> i32 {
 ;   jmp     label7
 ; block7:
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ; block8:
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

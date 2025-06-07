@@ -9,14 +9,14 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movq    %rcx, %rax
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -35,14 +35,14 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movq    %rdx, %rax
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -61,14 +61,14 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movq    %r8, %rax
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -87,14 +87,14 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movq    %r9, %rax
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -113,14 +113,14 @@ block0(v0: i64, v1: i64, v2: f64, v3: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movdqa %xmm2, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -139,14 +139,14 @@ block0(v0: i64, v1: i64, v2: f64, v3: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movq    %r9, %rax
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -175,14 +175,14 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
 ; block0:
 ;   movq <offset:0>+-8(%rbp), %rax
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -201,7 +201,7 @@ block0(v0: i128, v1: i64, v2: i128, v3: i128):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
@@ -209,7 +209,7 @@ block0(v0: i128, v1: i64, v2: i128, v3: i128):
 ;   movq <offset:0>+-0x18(%rbp), %rax
 ;   movq <offset:0>+-0x10(%rbp), %rdx
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -234,7 +234,7 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 0 }
@@ -251,7 +251,7 @@ block0(v0: i64):
 ;   call    *%r11
 ;   addq $0x30, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -324,7 +324,7 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   unwind PushFrameRegs { offset_upward_to_caller_sp: 16 }
 ;   movq    %rsp, %rbp
 ;   unwind DefineNewFrame { offset_upward_to_caller_sp: 16, offset_downward_to_clobbers: 160 }
@@ -410,7 +410,7 @@ block0(v0: i64):
 ;   movdqu 0xd0(%rsp), %xmm15
 ;   addq $0xe0, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

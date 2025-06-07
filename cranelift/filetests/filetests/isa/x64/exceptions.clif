@@ -21,7 +21,7 @@ function %f0(i32) -> i32, f32, f64 {
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x40, %rsp
 ;   movq    %rbx, 16(%rsp)
@@ -45,7 +45,7 @@ function %f0(i32) -> i32, f32, f64 {
 ;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ; block2:
 ;   movdqu <offset:1>+(%rsp), %xmm1
@@ -59,7 +59,7 @@ function %f0(i32) -> i32, f32, f64 {
 ;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -134,7 +134,7 @@ function %f1(i32) -> i32, f32, f64 {
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x40, %rsp
 ;   movq    %rbx, 16(%rsp)
@@ -181,7 +181,7 @@ function %f1(i32) -> i32, f32, f64 {
 ;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ; block8:
 ;   lea     1(%r11), %eax
@@ -196,7 +196,7 @@ function %f1(i32) -> i32, f32, f64 {
 ;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -285,7 +285,7 @@ function %f2(i32) -> i32, f32, f64 {
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x40, %rsp
 ;   movq    %rbx, 16(%rsp)
@@ -309,7 +309,7 @@ function %f2(i32) -> i32, f32, f64 {
 ;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ; block2:
 ;   movdqu <offset:1>+(%rsp), %xmm1
@@ -323,7 +323,7 @@ function %f2(i32) -> i32, f32, f64 {
 ;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -383,7 +383,7 @@ block2:
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   jmp     label1

@@ -11,7 +11,7 @@ block0(v0: i32, v1: i128, v2: i128):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   cmpl    $42, %edi
@@ -21,7 +21,7 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   movq    %r8, %rdx
 ;   cmovzq  %rdi, %rdx, %rdx
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -47,7 +47,7 @@ block0(v0: f32, v1: i128, v2: i128):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm0, %xmm0
@@ -58,7 +58,7 @@ block0(v0: f32, v1: i128, v2: i128):
 ;   movq    %rsi, %rdx
 ;   cmovnzq %rcx, %rdx, %rdx
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
