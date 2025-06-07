@@ -138,7 +138,6 @@ impl Inst {
             // These use dynamic SSE opcodes.
             Inst::XmmRmR { op, .. }
             | Inst::XmmRmRUnaligned { op, .. }
-            | Inst::XmmRmRBlend { op, .. }
             | Inst::XmmRmRImm { op, .. }
             | Inst::XmmUnaryRmRImm { op, .. }
             | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
@@ -151,7 +150,6 @@ impl Inst {
             Inst::XmmRmiRVex { op, .. }
             | Inst::XmmRmRVex3 { op, .. }
             | Inst::XmmRmRImmVex { op, .. }
-            | Inst::XmmRmRBlendVex { op, .. }
             | Inst::XmmUnaryRmRVex { op, .. }
             | Inst::XmmUnaryRmRImmVex { op, .. }
             | Inst::XmmMovRMVex { op, .. }
@@ -705,27 +703,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {src1}, {src2}, {dst}")
             }
 
-            Inst::XmmRmRBlend {
-                op,
-                src1,
-                src2,
-                mask,
-                dst,
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), 8);
-                let mask = mask.to_reg();
-                let mask = if mask.is_virtual() {
-                    format!(" <{}>", show_ireg_sized(mask, 8))
-                } else {
-                    debug_assert_eq!(mask, regs::xmm0());
-                    String::new()
-                };
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let src2 = src2.pretty_print(8);
-                let op = ljustify(op.to_string());
-                format!("{op} {src1}, {src2}, {dst}{mask}")
-            }
-
             Inst::XmmRmiRVex {
                 op,
                 src1,
@@ -769,22 +746,6 @@ impl PrettyPrint for Inst {
                 let src3 = src3.pretty_print(8);
                 let op = ljustify(op.to_string());
                 format!("{op} {src1}, {src2}, {src3}, {dst}")
-            }
-
-            Inst::XmmRmRBlendVex {
-                op,
-                src1,
-                src2,
-                mask,
-                dst,
-                ..
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), 8);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let src2 = src2.pretty_print(8);
-                let mask = pretty_print_reg(mask.to_reg(), 8);
-                let op = ljustify(op.to_string());
-                format!("{op} {src1}, {src2}, {mask}, {dst}")
             }
 
             Inst::XmmRmREvex {
@@ -1538,22 +1499,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_reuse_def(dst, 0);
             src2.get_operands(collector);
         }
-        Inst::XmmRmRBlend {
-            src1,
-            src2,
-            mask,
-            dst,
-            op,
-        } => {
-            assert!(matches!(
-                op,
-                SseOpcode::Blendvpd | SseOpcode::Blendvps | SseOpcode::Pblendvb
-            ));
-            collector.reg_use(src1);
-            collector.reg_fixed_use(mask, regs::xmm0());
-            collector.reg_reuse_def(dst, 0);
-            src2.get_operands(collector);
-        }
         Inst::XmmRmiRVex {
             src1, src2, dst, ..
         } => {
@@ -1579,18 +1524,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_reuse_def(dst, 0);
             collector.reg_use(src2);
             src3.get_operands(collector);
-        }
-        Inst::XmmRmRBlendVex {
-            src1,
-            src2,
-            mask,
-            dst,
-            ..
-        } => {
-            collector.reg_def(dst);
-            collector.reg_use(src1);
-            src2.get_operands(collector);
-            collector.reg_use(mask);
         }
         Inst::XmmRmREvex {
             op,

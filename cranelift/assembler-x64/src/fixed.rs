@@ -35,11 +35,11 @@ impl<R, const E: u8> Fixed<R, E> {
     }
 
     /// Return the register name at the given `size`.
-    pub fn to_string(&self, size: Size) -> String
+    pub fn to_string(&self, size: Option<Size>) -> String
     where
         R: AsReg,
     {
-        self.0.to_string(Some(size))
+        self.0.to_string(size)
     }
 }
 
