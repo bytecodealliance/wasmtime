@@ -58,6 +58,59 @@ impl StdinStream for pipe::ClosedInputStream {
     }
 }
 
+/// This implementation will yield input streams that block on reads, and
+/// reads directly from a file. If truly async input is required,
+/// [`AsyncStdinStream`] should be used instead.
+pub struct InputFile {
+    file: Arc<std::fs::File>,
+}
+
+impl InputFile {
+    pub fn new(file: std::fs::File) -> Self {
+        Self {
+            file: Arc::new(file),
+        }
+    }
+}
+
+impl StdinStream for InputFile {
+    fn stream(&self) -> Box<dyn InputStream> {
+        Box::new(InputFileStream {
+            file: Arc::clone(&self.file),
+        })
+    }
+
+    fn isatty(&self) -> bool {
+        false
+    }
+}
+
+struct InputFileStream {
+    file: Arc<std::fs::File>,
+}
+
+#[async_trait::async_trait]
+impl Pollable for InputFileStream {
+    async fn ready(&mut self) {}
+}
+
+impl InputStream for InputFileStream {
+    fn read(&mut self, size: usize) -> StreamResult<Bytes> {
+        use std::io::Read;
+
+        let mut buf = bytes::BytesMut::zeroed(size);
+        let bytes_read = self
+            .file
+            .read(&mut buf)
+            .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))?;
+        if bytes_read == 0 {
+            return Err(StreamError::Closed);
+        }
+        buf.truncate(bytes_read);
+        StreamResult::Ok(buf.into())
+    }
+}
+
 /// An impl of [`StdinStream`] built on top of [`crate::p2::pipe::AsyncReadStream`].
 //
 // Note the usage of `tokio::sync::Mutex` here as opposed to a
