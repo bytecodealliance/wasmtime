@@ -99,12 +99,6 @@
        ;; =========================================
        ;; Stack manipulation.
 
-       ;; pushq (reg addr imm)
-       (Push64 (src GprMemImm))
-
-       ;; popq reg
-       (Pop64 (dst WritableGpr))
-
       ;; Emits a inline stack probe loop.
       (StackProbeLoop (tmp WritableReg)
                       (frame_size u32)

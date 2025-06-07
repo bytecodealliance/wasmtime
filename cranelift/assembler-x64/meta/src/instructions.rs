@@ -17,6 +17,7 @@ mod or;
 mod round;
 mod shift;
 mod sqrt;
+mod stack;
 mod sub;
 mod unpack;
 mod xor;
@@ -43,6 +44,7 @@ pub fn list() -> Vec<Inst> {
     all.extend(round::list());
     all.extend(shift::list());
     all.extend(sqrt::list());
+    all.extend(stack::list());
     all.extend(sub::list());
     all.extend(xor::list());
     all.extend(unpack::list());

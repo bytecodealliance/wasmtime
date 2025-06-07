@@ -538,7 +538,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         let mut insts = SmallVec::new();
         // `push %rbp`
         // RSP before the call will be 0 % 16.  So here, it is 8 % 16.
-        insts.push(Inst::push64(RegMemImm::reg(r_rbp)));
+        insts.push(Inst::External {
+            inst: asm::inst::pushq_o::new(Gpr::new(r_rbp).unwrap()).into(),
+        });
 
         if flags.unwind_info() {
             insts.push(Inst::Unwind {
@@ -569,7 +571,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             Writable::from_reg(regs::rsp()),
         ));
         // `pop %rbp`
-        insts.push(Inst::pop64(Writable::from_reg(regs::rbp())));
+        insts.push(Inst::External {
+            inst: asm::inst::popq_o::new(Writable::from_reg(Gpr::new(regs::rbp()).unwrap())).into(),
+        });
         insts
     }
 
