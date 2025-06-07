@@ -1,16 +1,16 @@
 /// Auto-generated bindings for a pre-instantiated version of a
-/// component which implements the world `path2`.
+/// component which implements the world `nope`.
 ///
-/// This structure is created through [`Path2Pre::new`] which
+/// This structure is created through [`NopePre::new`] which
 /// takes a [`InstancePre`](wasmtime::component::InstancePre) that
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
-/// For more information see [`Path2`] as well.
-pub struct Path2Pre<T: 'static> {
+/// For more information see [`Nope`] as well.
+pub struct NopePre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
-    indices: Path2Indices,
+    indices: NopeIndices,
 }
-impl<T: 'static> Clone for Path2Pre<T> {
+impl<T: 'static> Clone for NopePre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,8 +18,8 @@ impl<T: 'static> Clone for Path2Pre<T> {
         }
     }
 }
-impl<_T: 'static> Path2Pre<_T> {
-    /// Creates a new copy of `Path2Pre` bindings which can then
+impl<_T: 'static> NopePre<_T> {
+    /// Creates a new copy of `NopePre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
     /// This method may fail if the component behind `instance_pre`
@@ -27,7 +27,7 @@ impl<_T: 'static> Path2Pre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = Path2Indices::new(&instance_pre)?;
+        let indices = NopeIndices::new(&instance_pre)?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -36,7 +36,7 @@ impl<_T: 'static> Path2Pre<_T> {
     pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
         &self.instance_pre
     }
-    /// Instantiates a new instance of [`Path2`] within the
+    /// Instantiates a new instance of [`Nope`] within the
     /// `store` provided.
     ///
     /// This function will use `self` as the pre-instantiated
@@ -46,7 +46,7 @@ impl<_T: 'static> Path2Pre<_T> {
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<Path2>
+    ) -> wasmtime::Result<Nope>
     where
         _T: Send,
     {
@@ -56,32 +56,32 @@ impl<_T: 'static> Path2Pre<_T> {
     }
 }
 /// Auto-generated bindings for index of the exports of
-/// `path2`.
+/// `nope`.
 ///
-/// This is an implementation detail of [`Path2Pre`] and can
+/// This is an implementation detail of [`NopePre`] and can
 /// be constructed if needed as well.
 ///
-/// For more information see [`Path2`] as well.
+/// For more information see [`Nope`] as well.
 #[derive(Clone)]
-pub struct Path2Indices {}
+pub struct NopeIndices {}
 /// Auto-generated bindings for an instance a component which
-/// implements the world `path2`.
+/// implements the world `nope`.
 ///
 /// This structure can be created through a number of means
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`Path2::instantiate_async`] which only needs a
+///   [`Nope::instantiate_async`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
-/// * Alternatively you can create a [`Path2Pre`] ahead of
+/// * Alternatively you can create a [`NopePre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`Path2Pre::instantiate_async`] to
-///   create a [`Path2`].
+///   method then uses [`NopePre::instantiate_async`] to
+///   create a [`Nope`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`Path2::new`].
+///   then you can use [`Nope::new`].
 ///
 /// These methods are all equivalent to one another and move
 /// around the tradeoff of what work is performed when.
@@ -89,12 +89,12 @@ pub struct Path2Indices {}
 /// [`Store`]: wasmtime::Store
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
-pub struct Path2 {}
+pub struct Nope {}
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
-    impl Path2Indices {
-        /// Creates a new copy of `Path2Indices` bindings which can then
+    impl NopeIndices {
+        /// Creates a new copy of `NopeIndices` bindings which can then
         /// be used to instantiate into a particular store.
         ///
         /// This method may fail if the component does not have the
@@ -104,10 +104,10 @@ const _: () = {
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
             let _instance_type = _instance_pre.instance_type();
-            Ok(Path2Indices {})
+            Ok(NopeIndices {})
         }
         /// Uses the indices stored in `self` to load an instance
-        /// of [`Path2`] from the instance provided.
+        /// of [`Nope`] from the instance provided.
         ///
         /// Note that at this time this method will additionally
         /// perform type-checks of all exports.
@@ -115,33 +115,33 @@ const _: () = {
             &self,
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Path2> {
+        ) -> wasmtime::Result<Nope> {
             let _ = &mut store;
             let _instance = instance;
-            Ok(Path2 {})
+            Ok(Nope {})
         }
     }
-    impl Path2 {
-        /// Convenience wrapper around [`Path2Pre::new`] and
-        /// [`Path2Pre::instantiate_async`].
+    impl Nope {
+        /// Convenience wrapper around [`NopePre::new`] and
+        /// [`NopePre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<Path2>
+        ) -> wasmtime::Result<Nope>
         where
             _T: Send,
         {
             let pre = linker.instantiate_pre(component)?;
-            Path2Pre::new(pre)?.instantiate_async(store).await
+            NopePre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`Path2Indices::new`] and
-        /// [`Path2Indices::load`].
+        /// Convenience wrapper around [`NopeIndices::new`] and
+        /// [`NopeIndices::load`].
         pub fn new(
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Path2> {
-            let indices = Path2Indices::new(&instance.instance_pre(&store))?;
+        ) -> wasmtime::Result<Nope> {
+            let indices = NopeIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
         pub fn add_to_linker<T, D>(
@@ -149,21 +149,57 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: wasmtime::component::HasData,
-            for<'a> D::Data<'a>: paths::path2::test::Host + Send,
+            D: foo::foo::a::HostConcurrent + Send,
+            for<'a> D::Data<'a>: foo::foo::a::Host + Send,
             T: 'static + Send,
         {
-            paths::path2::test::add_to_linker::<T, D>(linker, host_getter)?;
+            foo::foo::a::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
     }
 };
-pub mod paths {
-    pub mod path2 {
+pub mod foo {
+    pub mod foo {
         #[allow(clippy::all)]
-        pub mod test {
+        pub mod a {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
+            #[derive(wasmtime::component::ComponentType)]
+            #[derive(wasmtime::component::Lift)]
+            #[derive(wasmtime::component::Lower)]
+            #[component(variant)]
+            #[derive(Clone)]
+            pub enum Error {
+                #[component(name = "other")]
+                Other(wasmtime::component::__internal::String),
+            }
+            impl core::fmt::Debug for Error {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    match self {
+                        Error::Other(e) => {
+                            f.debug_tuple("Error::Other").field(e).finish()
+                        }
+                    }
+                }
+            }
+            impl core::fmt::Display for Error {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    write!(f, "{:?}", self)
+                }
+            }
+            impl core::error::Error for Error {}
+            const _: () = {
+                assert!(12 == < Error as wasmtime::component::ComponentType >::SIZE32);
+                assert!(4 == < Error as wasmtime::component::ComponentType >::ALIGN32);
+            };
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+            pub trait HostConcurrent: wasmtime::component::HasData + Send {
+                fn g<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                ) -> impl ::core::future::Future<Output = Result<(), Error>> + Send
+                where
+                    Self: Sized;
+            }
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {}
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
@@ -172,11 +208,21 @@ pub mod paths {
                 host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                D: wasmtime::component::HasData,
+                D: HostConcurrent,
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                let mut inst = linker.instance("paths:path2/test")?;
+                let mut inst = linker.instance("foo:foo/a")?;
+                inst.func_wrap_concurrent(
+                    "g",
+                    move |caller: &mut wasmtime::component::Accessor<T>, (): ()| {
+                        wasmtime::component::__internal::Box::pin(async move {
+                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let r = <D as HostConcurrent>::g(accessor).await;
+                            Ok((r,))
+                        })
+                    },
+                )?;
                 Ok(())
             }
         }

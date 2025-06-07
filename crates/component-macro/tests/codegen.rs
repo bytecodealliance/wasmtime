@@ -12,15 +12,14 @@ macro_rules! gentest {
                     async: true,
                 });
             }
-            // TODO: re-enable this when wasip3 is merged back into this repo
-            // mod concurrent {
-            //     wasmtime::component::bindgen!({
-            //         path: $path,
-            //         async: true,
-            //         concurrent_imports: true,
-            //         concurrent_exports: true,
-            //     });
-            // }
+            mod concurrent {
+                wasmtime::component::bindgen!({
+                    path: $path,
+                    async: true,
+                    concurrent_imports: true,
+                    concurrent_exports: true,
+                });
+            }
             mod tracing {
                 wasmtime::component::bindgen!({
                     path: $path,

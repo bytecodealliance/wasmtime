@@ -1,16 +1,16 @@
 /// Auto-generated bindings for a pre-instantiated version of a
-/// component which implements the world `the-world`.
+/// component which implements the world `my-world`.
 ///
-/// This structure is created through [`TheWorldPre::new`] which
+/// This structure is created through [`MyWorldPre::new`] which
 /// takes a [`InstancePre`](wasmtime::component::InstancePre) that
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
-/// For more information see [`TheWorld`] as well.
-pub struct TheWorldPre<T: 'static> {
+/// For more information see [`MyWorld`] as well.
+pub struct MyWorldPre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
-    indices: TheWorldIndices,
+    indices: MyWorldIndices,
 }
-impl<T: 'static> Clone for TheWorldPre<T> {
+impl<T: 'static> Clone for MyWorldPre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,8 +18,8 @@ impl<T: 'static> Clone for TheWorldPre<T> {
         }
     }
 }
-impl<_T: 'static> TheWorldPre<_T> {
-    /// Creates a new copy of `TheWorldPre` bindings which can then
+impl<_T: 'static> MyWorldPre<_T> {
+    /// Creates a new copy of `MyWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
     /// This method may fail if the component behind `instance_pre`
@@ -27,7 +27,7 @@ impl<_T: 'static> TheWorldPre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = TheWorldIndices::new(&instance_pre)?;
+        let indices = MyWorldIndices::new(&instance_pre)?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -36,7 +36,7 @@ impl<_T: 'static> TheWorldPre<_T> {
     pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
         &self.instance_pre
     }
-    /// Instantiates a new instance of [`TheWorld`] within the
+    /// Instantiates a new instance of [`MyWorld`] within the
     /// `store` provided.
     ///
     /// This function will use `self` as the pre-instantiated
@@ -46,7 +46,7 @@ impl<_T: 'static> TheWorldPre<_T> {
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<TheWorld>
+    ) -> wasmtime::Result<MyWorld>
     where
         _T: Send,
     {
@@ -56,34 +56,34 @@ impl<_T: 'static> TheWorldPre<_T> {
     }
 }
 /// Auto-generated bindings for index of the exports of
-/// `the-world`.
+/// `my-world`.
 ///
-/// This is an implementation detail of [`TheWorldPre`] and can
+/// This is an implementation detail of [`MyWorldPre`] and can
 /// be constructed if needed as well.
 ///
-/// For more information see [`TheWorld`] as well.
+/// For more information see [`MyWorld`] as well.
 #[derive(Clone)]
-pub struct TheWorldIndices {
-    interface0: exports::foo::foo::strings::GuestIndices,
+pub struct MyWorldIndices {
+    interface0: exports::foo::foo::simple_lists::GuestIndices,
 }
 /// Auto-generated bindings for an instance a component which
-/// implements the world `the-world`.
+/// implements the world `my-world`.
 ///
 /// This structure can be created through a number of means
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`TheWorld::instantiate_async`] which only needs a
+///   [`MyWorld::instantiate_async`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
-/// * Alternatively you can create a [`TheWorldPre`] ahead of
+/// * Alternatively you can create a [`MyWorldPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`TheWorldPre::instantiate_async`] to
-///   create a [`TheWorld`].
+///   method then uses [`MyWorldPre::instantiate_async`] to
+///   create a [`MyWorld`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`TheWorld::new`].
+///   then you can use [`MyWorld::new`].
 ///
 /// These methods are all equivalent to one another and move
 /// around the tradeoff of what work is performed when.
@@ -91,14 +91,14 @@ pub struct TheWorldIndices {
 /// [`Store`]: wasmtime::Store
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
-pub struct TheWorld {
-    interface0: exports::foo::foo::strings::Guest,
+pub struct MyWorld {
+    interface0: exports::foo::foo::simple_lists::Guest,
 }
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
-    impl TheWorldIndices {
-        /// Creates a new copy of `TheWorldIndices` bindings which can then
+    impl MyWorldIndices {
+        /// Creates a new copy of `MyWorldIndices` bindings which can then
         /// be used to instantiate into a particular store.
         ///
         /// This method may fail if the component does not have the
@@ -108,13 +108,13 @@ const _: () = {
         ) -> wasmtime::Result<Self> {
             let _component = _instance_pre.component();
             let _instance_type = _instance_pre.instance_type();
-            let interface0 = exports::foo::foo::strings::GuestIndices::new(
+            let interface0 = exports::foo::foo::simple_lists::GuestIndices::new(
                 _instance_pre,
             )?;
-            Ok(TheWorldIndices { interface0 })
+            Ok(MyWorldIndices { interface0 })
         }
         /// Uses the indices stored in `self` to load an instance
-        /// of [`TheWorld`] from the instance provided.
+        /// of [`MyWorld`] from the instance provided.
         ///
         /// Note that at this time this method will additionally
         /// perform type-checks of all exports.
@@ -122,34 +122,34 @@ const _: () = {
             &self,
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<TheWorld> {
+        ) -> wasmtime::Result<MyWorld> {
             let _ = &mut store;
             let _instance = instance;
             let interface0 = self.interface0.load(&mut store, &_instance)?;
-            Ok(TheWorld { interface0 })
+            Ok(MyWorld { interface0 })
         }
     }
-    impl TheWorld {
-        /// Convenience wrapper around [`TheWorldPre::new`] and
-        /// [`TheWorldPre::instantiate_async`].
+    impl MyWorld {
+        /// Convenience wrapper around [`MyWorldPre::new`] and
+        /// [`MyWorldPre::instantiate_async`].
         pub async fn instantiate_async<_T>(
             store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<TheWorld>
+        ) -> wasmtime::Result<MyWorld>
         where
             _T: Send,
         {
             let pre = linker.instantiate_pre(component)?;
-            TheWorldPre::new(pre)?.instantiate_async(store).await
+            MyWorldPre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`TheWorldIndices::new`] and
-        /// [`TheWorldIndices::load`].
+        /// Convenience wrapper around [`MyWorldIndices::new`] and
+        /// [`MyWorldIndices::load`].
         pub fn new(
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<TheWorld> {
-            let indices = TheWorldIndices::new(&instance.instance_pre(&store))?;
+        ) -> wasmtime::Result<MyWorld> {
+            let indices = MyWorldIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
         pub fn add_to_linker<T, D>(
@@ -157,14 +157,14 @@ const _: () = {
             host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            D: foo::foo::strings::HostConcurrent + Send,
-            for<'a> D::Data<'a>: foo::foo::strings::Host + Send,
+            D: foo::foo::simple_lists::HostConcurrent + Send,
+            for<'a> D::Data<'a>: foo::foo::simple_lists::Host + Send,
             T: 'static + Send,
         {
-            foo::foo::strings::add_to_linker::<T, D>(linker, host_getter)?;
+            foo::foo::simple_lists::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
-        pub fn foo_foo_strings(&self) -> &exports::foo::foo::strings::Guest {
+        pub fn foo_foo_simple_lists(&self) -> &exports::foo::foo::simple_lists::Guest {
             &self.interface0
         }
     }
@@ -172,30 +172,45 @@ const _: () = {
 pub mod foo {
     pub mod foo {
         #[allow(clippy::all)]
-        pub mod strings {
+        pub mod simple_lists {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait HostConcurrent: wasmtime::component::HasData + Send {
-                fn a<T: 'static>(
+                fn simple_list1<T: 'static>(
                     accessor: &mut wasmtime::component::Accessor<T, Self>,
-                    x: wasmtime::component::__internal::String,
+                    l: wasmtime::component::__internal::Vec<u32>,
                 ) -> impl ::core::future::Future<Output = ()> + Send
                 where
                     Self: Sized;
-                fn b<T: 'static>(
+                fn simple_list2<T: 'static>(
                     accessor: &mut wasmtime::component::Accessor<T, Self>,
                 ) -> impl ::core::future::Future<
-                    Output = wasmtime::component::__internal::String,
+                    Output = wasmtime::component::__internal::Vec<u32>,
                 > + Send
                 where
                     Self: Sized;
-                fn c<T: 'static>(
+                fn simple_list3<T: 'static>(
                     accessor: &mut wasmtime::component::Accessor<T, Self>,
-                    a: wasmtime::component::__internal::String,
-                    b: wasmtime::component::__internal::String,
+                    a: wasmtime::component::__internal::Vec<u32>,
+                    b: wasmtime::component::__internal::Vec<u32>,
                 ) -> impl ::core::future::Future<
-                    Output = wasmtime::component::__internal::String,
+                    Output = (
+                        wasmtime::component::__internal::Vec<u32>,
+                        wasmtime::component::__internal::Vec<u32>,
+                    ),
+                > + Send
+                where
+                    Self: Sized;
+                fn simple_list4<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                    l: wasmtime::component::__internal::Vec<
+                        wasmtime::component::__internal::Vec<u32>,
+                    >,
+                ) -> impl ::core::future::Future<
+                    Output = wasmtime::component::__internal::Vec<
+                        wasmtime::component::__internal::Vec<u32>,
+                    >,
                 > + Send
                 where
                     Self: Sized;
@@ -212,45 +227,71 @@ pub mod foo {
                 for<'a> D::Data<'a>: Host,
                 T: 'static + Send,
             {
-                let mut inst = linker.instance("foo:foo/strings")?;
+                let mut inst = linker.instance("foo:foo/simple-lists")?;
                 inst.func_wrap_concurrent(
-                    "a",
+                    "simple-list1",
                     move |
                         caller: &mut wasmtime::component::Accessor<T>,
-                        (arg0,): (wasmtime::component::__internal::String,)|
+                        (arg0,): (wasmtime::component::__internal::Vec<u32>,)|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::a(accessor, arg0).await;
+                            let r = <D as HostConcurrent>::simple_list1(accessor, arg0)
+                                .await;
                             Ok(r)
                         })
                     },
                 )?;
                 inst.func_wrap_concurrent(
-                    "b",
+                    "simple-list2",
                     move |caller: &mut wasmtime::component::Accessor<T>, (): ()| {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::b(accessor).await;
+                            let r = <D as HostConcurrent>::simple_list2(accessor).await;
                             Ok((r,))
                         })
                     },
                 )?;
                 inst.func_wrap_concurrent(
-                    "c",
+                    "simple-list3",
                     move |
                         caller: &mut wasmtime::component::Accessor<T>,
                         (
                             arg0,
                             arg1,
                         ): (
-                            wasmtime::component::__internal::String,
-                            wasmtime::component::__internal::String,
+                            wasmtime::component::__internal::Vec<u32>,
+                            wasmtime::component::__internal::Vec<u32>,
                         )|
                     {
                         wasmtime::component::__internal::Box::pin(async move {
                             let accessor = &mut unsafe { caller.with_data(host_getter) };
-                            let r = <D as HostConcurrent>::c(accessor, arg0, arg1).await;
+                            let r = <D as HostConcurrent>::simple_list3(
+                                    accessor,
+                                    arg0,
+                                    arg1,
+                                )
+                                .await;
+                            Ok((r,))
+                        })
+                    },
+                )?;
+                inst.func_wrap_concurrent(
+                    "simple-list4",
+                    move |
+                        caller: &mut wasmtime::component::Accessor<T>,
+                        (
+                            arg0,
+                        ): (
+                            wasmtime::component::__internal::Vec<
+                                wasmtime::component::__internal::Vec<u32>,
+                            >,
+                        )|
+                    {
+                        wasmtime::component::__internal::Box::pin(async move {
+                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let r = <D as HostConcurrent>::simple_list4(accessor, arg0)
+                                .await;
                             Ok((r,))
                         })
                     },
@@ -264,19 +305,21 @@ pub mod exports {
     pub mod foo {
         pub mod foo {
             #[allow(clippy::all)]
-            pub mod strings {
+            pub mod simple_lists {
                 #[allow(unused_imports)]
                 use wasmtime::component::__internal::{anyhow, Box};
                 pub struct Guest {
-                    a: wasmtime::component::Func,
-                    b: wasmtime::component::Func,
-                    c: wasmtime::component::Func,
+                    simple_list1: wasmtime::component::Func,
+                    simple_list2: wasmtime::component::Func,
+                    simple_list3: wasmtime::component::Func,
+                    simple_list4: wasmtime::component::Func,
                 }
                 #[derive(Clone)]
                 pub struct GuestIndices {
-                    a: wasmtime::component::ComponentExportIndex,
-                    b: wasmtime::component::ComponentExportIndex,
-                    c: wasmtime::component::ComponentExportIndex,
+                    simple_list1: wasmtime::component::ComponentExportIndex,
+                    simple_list2: wasmtime::component::ComponentExportIndex,
+                    simple_list3: wasmtime::component::ComponentExportIndex,
+                    simple_list4: wasmtime::component::ComponentExportIndex,
                 }
                 impl GuestIndices {
                     /// Constructor for [`GuestIndices`] which takes a
@@ -290,10 +333,10 @@ pub mod exports {
                     ) -> wasmtime::Result<GuestIndices> {
                         let instance = _instance_pre
                             .component()
-                            .get_export_index(None, "foo:foo/strings")
+                            .get_export_index(None, "foo:foo/simple-lists")
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
-                                    "no exported instance named `foo:foo/strings`"
+                                    "no exported instance named `foo:foo/simple-lists`"
                                 )
                             })?;
                         let mut lookup = move |name| {
@@ -302,16 +345,22 @@ pub mod exports {
                                 .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
-                                        "instance export `foo:foo/strings` does \
+                                        "instance export `foo:foo/simple-lists` does \
                 not have export `{name}`"
                                     )
                                 })
                         };
                         let _ = &mut lookup;
-                        let a = lookup("a")?;
-                        let b = lookup("b")?;
-                        let c = lookup("c")?;
-                        Ok(GuestIndices { a, b, c })
+                        let simple_list1 = lookup("simple-list1")?;
+                        let simple_list2 = lookup("simple-list2")?;
+                        let simple_list3 = lookup("simple-list3")?;
+                        let simple_list4 = lookup("simple-list4")?;
+                        Ok(GuestIndices {
+                            simple_list1,
+                            simple_list2,
+                            simple_list3,
+                            simple_list4,
+                        })
                     }
                     pub fn load(
                         &self,
@@ -323,29 +372,52 @@ pub mod exports {
                         let _instance_type = _instance_pre.instance_type();
                         let mut store = store.as_context_mut();
                         let _ = &mut store;
-                        let a = *_instance
-                            .get_typed_func::<(&str,), ()>(&mut store, &self.a)?
+                        let simple_list1 = *_instance
+                            .get_typed_func::<
+                                (&[u32],),
+                                (),
+                            >(&mut store, &self.simple_list1)?
                             .func();
-                        let b = *_instance
+                        let simple_list2 = *_instance
                             .get_typed_func::<
                                 (),
-                                (wasmtime::component::__internal::String,),
-                            >(&mut store, &self.b)?
+                                (wasmtime::component::__internal::Vec<u32>,),
+                            >(&mut store, &self.simple_list2)?
                             .func();
-                        let c = *_instance
+                        let simple_list3 = *_instance
                             .get_typed_func::<
-                                (&str, &str),
-                                (wasmtime::component::__internal::String,),
-                            >(&mut store, &self.c)?
+                                (&[u32], &[u32]),
+                                (
+                                    (
+                                        wasmtime::component::__internal::Vec<u32>,
+                                        wasmtime::component::__internal::Vec<u32>,
+                                    ),
+                                ),
+                            >(&mut store, &self.simple_list3)?
                             .func();
-                        Ok(Guest { a, b, c })
+                        let simple_list4 = *_instance
+                            .get_typed_func::<
+                                (&[wasmtime::component::__internal::Vec<u32>],),
+                                (
+                                    wasmtime::component::__internal::Vec<
+                                        wasmtime::component::__internal::Vec<u32>,
+                                    >,
+                                ),
+                            >(&mut store, &self.simple_list4)?
+                            .func();
+                        Ok(Guest {
+                            simple_list1,
+                            simple_list2,
+                            simple_list3,
+                            simple_list4,
+                        })
                     }
                 }
                 impl Guest {
-                    pub fn call_a<S: wasmtime::AsContextMut>(
+                    pub fn call_simple_list1<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                        arg0: wasmtime::component::__internal::String,
+                        arg0: wasmtime::component::__internal::Vec<u32>,
                     ) -> impl wasmtime::component::__internal::Future<
                         Output = wasmtime::Result<()>,
                     > + Send + 'static + use<S>
@@ -354,18 +426,18 @@ pub mod exports {
                     {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
-                                (wasmtime::component::__internal::String,),
+                                (wasmtime::component::__internal::Vec<u32>,),
                                 (),
-                            >::new_unchecked(self.a)
+                            >::new_unchecked(self.simple_list1)
                         };
                         callee.call_concurrent(store.as_context_mut(), (arg0,))
                     }
-                    pub fn call_b<S: wasmtime::AsContextMut>(
+                    pub fn call_simple_list2<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                     ) -> impl wasmtime::component::__internal::Future<
                         Output = wasmtime::Result<
-                            wasmtime::component::__internal::String,
+                            wasmtime::component::__internal::Vec<u32>,
                         >,
                     > + Send + 'static + use<S>
                     where
@@ -374,22 +446,25 @@ pub mod exports {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
-                                (wasmtime::component::__internal::String,),
-                            >::new_unchecked(self.b)
+                                (wasmtime::component::__internal::Vec<u32>,),
+                            >::new_unchecked(self.simple_list2)
                         };
                         wasmtime::component::__internal::FutureExt::map(
                             callee.call_concurrent(store.as_context_mut(), ()),
                             |v| v.map(|(v,)| v),
                         )
                     }
-                    pub fn call_c<S: wasmtime::AsContextMut>(
+                    pub fn call_simple_list3<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                        arg0: wasmtime::component::__internal::String,
-                        arg1: wasmtime::component::__internal::String,
+                        arg0: wasmtime::component::__internal::Vec<u32>,
+                        arg1: wasmtime::component::__internal::Vec<u32>,
                     ) -> impl wasmtime::component::__internal::Future<
                         Output = wasmtime::Result<
-                            wasmtime::component::__internal::String,
+                            (
+                                wasmtime::component::__internal::Vec<u32>,
+                                wasmtime::component::__internal::Vec<u32>,
+                            ),
                         >,
                     > + Send + 'static + use<S>
                     where
@@ -398,14 +473,54 @@ pub mod exports {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (
-                                    wasmtime::component::__internal::String,
-                                    wasmtime::component::__internal::String,
+                                    wasmtime::component::__internal::Vec<u32>,
+                                    wasmtime::component::__internal::Vec<u32>,
                                 ),
-                                (wasmtime::component::__internal::String,),
-                            >::new_unchecked(self.c)
+                                (
+                                    (
+                                        wasmtime::component::__internal::Vec<u32>,
+                                        wasmtime::component::__internal::Vec<u32>,
+                                    ),
+                                ),
+                            >::new_unchecked(self.simple_list3)
                         };
                         wasmtime::component::__internal::FutureExt::map(
                             callee.call_concurrent(store.as_context_mut(), (arg0, arg1)),
+                            |v| v.map(|(v,)| v),
+                        )
+                    }
+                    pub fn call_simple_list4<S: wasmtime::AsContextMut>(
+                        &self,
+                        mut store: S,
+                        arg0: wasmtime::component::__internal::Vec<
+                            wasmtime::component::__internal::Vec<u32>,
+                        >,
+                    ) -> impl wasmtime::component::__internal::Future<
+                        Output = wasmtime::Result<
+                            wasmtime::component::__internal::Vec<
+                                wasmtime::component::__internal::Vec<u32>,
+                            >,
+                        >,
+                    > + Send + 'static + use<S>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send + 'static,
+                    {
+                        let callee = unsafe {
+                            wasmtime::component::TypedFunc::<
+                                (
+                                    wasmtime::component::__internal::Vec<
+                                        wasmtime::component::__internal::Vec<u32>,
+                                    >,
+                                ),
+                                (
+                                    wasmtime::component::__internal::Vec<
+                                        wasmtime::component::__internal::Vec<u32>,
+                                    >,
+                                ),
+                            >::new_unchecked(self.simple_list4)
+                        };
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), (arg0,)),
                             |v| v.map(|(v,)| v),
                         )
                     }

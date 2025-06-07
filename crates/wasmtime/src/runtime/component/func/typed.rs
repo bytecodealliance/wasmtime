@@ -17,7 +17,7 @@ use wasmtime_environ::component::{
 };
 
 #[cfg(feature = "component-model-async")]
-use crate::component::concurrent::Promise;
+use core::pin::Pin;
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -191,28 +191,29 @@ where
             .await?
     }
 
-    /// Start concurrent call to this function.
+    /// Start a concurrent call to this function.
     ///
     /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
     /// exclusive access to the store until the completion of the call), calls
     /// made using this method may run concurrently with other calls to the same
     /// instance.
+    ///
+    /// Note that the `Future` returned by this method will panic if polled or
+    /// `.await`ed outside of the event loop of the component instance this
+    /// function belongs to; use `Instance::run`, `Instance::run_with`, or
+    /// `Instance::spawn` to poll it from within the event loop.  See
+    /// [`Instance::run`] for examples.
     #[cfg(feature = "component-model-async")]
-    pub async fn call_concurrent(
+    pub fn call_concurrent(
         self,
-        mut store: impl AsContextMut<Data: Send>,
+        store: impl AsContextMut<Data: Send>,
         params: Params,
-    ) -> Result<Promise<Return>>
+    ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send + 'static>>
     where
         Params: Send + Sync + 'static,
         Return: Send + Sync + 'static,
     {
-        let store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `call_concurrent` when async support is not enabled on the config"
-        );
-        _ = params;
+        let _ = (self, store, params);
         todo!()
     }
 

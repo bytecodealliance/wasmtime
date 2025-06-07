@@ -15,14 +15,13 @@ macro_rules! genexpand {
             stringify: true,
         }))?;
 
-        // TODO: re-enable this when wasip3 is merged back into this repo
-        // process_expanded($path, "_concurrent", wasmtime::component::bindgen!({
-        //     path: $path,
-        //     async: true,
-        //     concurrent_imports: true,
-        //     concurrent_exports: true,
-        //     stringify: true,
-        // }))?;
+        process_expanded($path, "_concurrent", wasmtime::component::bindgen!({
+            path: $path,
+            async: true,
+            concurrent_imports: true,
+            concurrent_exports: true,
+            stringify: true,
+        }))?;
 
         process_expanded($path, "_tracing_async", wasmtime::component::bindgen!({
             path: $path,
