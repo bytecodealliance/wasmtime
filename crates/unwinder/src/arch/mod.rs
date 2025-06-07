@@ -88,7 +88,9 @@ cfg_if::cfg_if! {
                     __asan_handle_no_return();
                 }
             }
-            imp::resume_to_exception_handler(pc, sp, fp, payload1, payload2)
+            unsafe {
+                imp::resume_to_exception_handler(pc, sp, fp, payload1, payload2)
+            }
         }
 
         /// Get the return address in the function at the next-older
