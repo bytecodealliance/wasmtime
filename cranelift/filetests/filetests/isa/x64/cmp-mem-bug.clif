@@ -11,7 +11,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq (%rsi), %r9
@@ -22,7 +22,7 @@ block0(v0: i64, v1: i64):
 ;   movq    %rsi, %rdx
 ;   cmovzq  %rdi, %rdx, %rdx
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -51,7 +51,7 @@ block0(v0: f64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movsd (%rdi), %xmm1
@@ -65,7 +65,7 @@ block0(v0: f64, v1: i64):
 ;   movsd %xmm0, %xmm0; jnp $next; movsd %xmm2, %xmm0; $next:
 ;   movsd %xmm0, %xmm0; jz $next; movsd %xmm2, %xmm0; $next:
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

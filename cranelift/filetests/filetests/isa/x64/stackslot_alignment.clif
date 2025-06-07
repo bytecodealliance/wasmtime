@@ -14,7 +14,7 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   movq    %rdi, %r10
 ;   addq $0x30, %r10
@@ -26,7 +26,7 @@ block0(v0: i64):
 ;   lea     rsp(16 + virtual offset), %rdx
 ;   addq $0x30, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

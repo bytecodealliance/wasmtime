@@ -3,8 +3,7 @@ use crate::ir::immediates::{Ieee32, Ieee64};
 use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength, RegisterOrAmode};
 use crate::isa::x64::encoding::rex::{
     LegacyPrefixes, OpcodeMap, RexFlags, emit_simm, emit_std_enc_enc, emit_std_enc_mem,
-    emit_std_reg_mem, emit_std_reg_reg, int_reg_enc, low8_will_sign_extend_to_32,
-    low8_will_sign_extend_to_64, reg_enc,
+    emit_std_reg_mem, emit_std_reg_reg, int_reg_enc, low8_will_sign_extend_to_32, reg_enc,
 };
 use crate::isa::x64::encoding::vex::{VexInstruction, VexVectorLength};
 use crate::isa::x64::external::PairedGpr;
@@ -603,55 +602,6 @@ pub(crate) fn emit(
                 .emit(sink, info, state);
 
             sink.bind_label(next, state.ctrl_plane_mut());
-        }
-
-        Inst::Push64 { src } => {
-            let src = src.clone().to_reg_mem_imm().clone();
-
-            match src {
-                RegMemImm::Reg { reg } => {
-                    let enc_reg = int_reg_enc(reg);
-                    let rex = 0x40 | ((enc_reg >> 3) & 1);
-                    if rex != 0x40 {
-                        sink.put1(rex);
-                    }
-                    sink.put1(0x50 | (enc_reg & 7));
-                }
-
-                RegMemImm::Mem { addr } => {
-                    let addr = &addr.finalize(state.frame_layout(), sink);
-                    emit_std_enc_mem(
-                        sink,
-                        LegacyPrefixes::None,
-                        0xFF,
-                        1,
-                        6, /*subopcode*/
-                        addr,
-                        RexFlags::clear_w(),
-                        0,
-                    );
-                }
-
-                RegMemImm::Imm { simm32 } => {
-                    if low8_will_sign_extend_to_64(simm32) {
-                        sink.put1(0x6A);
-                        sink.put1(simm32 as u8);
-                    } else {
-                        sink.put1(0x68);
-                        sink.put4(simm32);
-                    }
-                }
-            }
-        }
-
-        Inst::Pop64 { dst } => {
-            let dst = dst.to_reg().to_reg();
-            let enc_dst = int_reg_enc(dst);
-            if enc_dst >= 8 {
-                // 0x41 == REX.{W=0, B=1}.  It seems that REX.W is irrelevant here.
-                sink.put1(0x41);
-            }
-            sink.put1(0x58 + (enc_dst & 7));
         }
 
         Inst::StackProbeLoop {

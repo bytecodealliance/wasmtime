@@ -8,7 +8,7 @@ block0(v0: i16x8, v1: i16x8):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   pmulhrsw %xmm1, %xmm0
@@ -16,7 +16,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pcmpeqw (%rip), %xmm5
 ;   pxor %xmm5, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

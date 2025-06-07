@@ -8,7 +8,7 @@ block0(v0: i8, v1: i8):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
@@ -17,7 +17,7 @@ block0(v0: i8, v1: i8):
 ;   jz #trap=int_divz
 ;   idivb %sil ;; implicit: %ax, trap=252
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -42,7 +42,7 @@ block0(v0: i16, v1: i16):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
@@ -51,7 +51,7 @@ block0(v0: i16, v1: i16):
 ;   jz #trap=int_divz
 ;   idivw %si ;; implicit: %ax, %dx, trap=252
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -76,7 +76,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
@@ -85,7 +85,7 @@ block0(v0: i32, v1: i32):
 ;   jz #trap=int_divz
 ;   idivl %esi ;; implicit: %eax, %edx, trap=252
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -110,7 +110,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
@@ -119,7 +119,7 @@ block0(v0: i64, v1: i64):
 ;   jz #trap=int_divz
 ;   idivq %rsi ;; implicit: %rax, %rdx, trap=252
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

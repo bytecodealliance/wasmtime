@@ -11,13 +11,13 @@ block0(v0: i64x2, v1: i64x2):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vpmullq %xmm1, %xmm0, %xmm0
 ;   vpmullq %xmm1, %xmm0, %xmm1
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

@@ -15,7 +15,7 @@ block2:
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   testl   %edi, %edi
@@ -28,7 +28,7 @@ block2:
 ;   jmp     label3
 ; block3:
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -61,7 +61,7 @@ block2 cold:
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   testl   %edi, %edi
@@ -71,7 +71,7 @@ block2 cold:
 ;   jmp     label3
 ; block3:
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ; block2:
 ;   movl    $97, %eax

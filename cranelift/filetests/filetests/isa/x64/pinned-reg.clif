@@ -11,14 +11,14 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %r15, %rdi
 ;   lea     1(%rdi), %rdi
 ;   movq    %rdi, %r15
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -42,7 +42,7 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x10, %rsp
 ;   movq    %rdi, 0(%rsp)
@@ -53,7 +53,7 @@ block0:
 ;   movq (%rsp), %rdi
 ;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

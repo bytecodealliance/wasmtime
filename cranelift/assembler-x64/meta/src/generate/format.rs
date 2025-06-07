@@ -101,6 +101,14 @@ impl dsl::Format {
 
     fn generate_rex_prefix(&self, f: &mut Formatter, rex: &dsl::Rex) -> ModRmStyle {
         use dsl::OperandKind::{FixedReg, Imm, Mem, Reg, RegMem};
+
+        // If this instruction has only immediates there's no rex/modrm/etc, so
+        // skip everything below.
+        match self.operands_by_kind().as_slice() {
+            [Imm(_)] => return ModRmStyle::None,
+            _ => {}
+        }
+
         f.empty_line();
         f.comment("Possibly emit REX prefix.");
 

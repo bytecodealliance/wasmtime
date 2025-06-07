@@ -8,13 +8,13 @@ block0(v0: i32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vptest  %xmm0, %xmm0
 ;   setnz   %al
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -35,7 +35,7 @@ block0(v0: i64x2):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm2
@@ -44,7 +44,7 @@ block0(v0: i64x2):
 ;   vptest  %xmm6, %xmm6
 ;   setz    %al
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

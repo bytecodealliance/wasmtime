@@ -108,8 +108,6 @@ impl Inst {
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
             | Inst::Nop { .. }
-            | Inst::Pop64 { .. }
-            | Inst::Push64 { .. }
             | Inst::StackProbeLoop { .. }
             | Inst::Args { .. }
             | Inst::Rets { .. }
@@ -397,18 +395,6 @@ impl Inst {
             alternative: Gpr::unwrap_new(dst.to_reg()),
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
-    }
-
-    pub(crate) fn push64(src: RegMemImm) -> Inst {
-        src.assert_regclass_is(RegClass::Int);
-        let src = GprMemImm::unwrap_new(src);
-        Inst::Push64 { src }
-    }
-
-    pub(crate) fn pop64(dst: Writable<Reg>) -> Inst {
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let dst = WritableGpr::from_writable_reg(dst).unwrap();
-        Inst::Pop64 { dst }
     }
 
     pub(crate) fn call_known(info: Box<CallInfo<ExternalName>>) -> Inst {
@@ -1095,12 +1081,6 @@ impl PrettyPrint for Inst {
                 )
             }
 
-            Inst::Push64 { src } => {
-                let src = src.pretty_print(8);
-                let op = ljustify("pushq".to_string());
-                format!("{op} {src}")
-            }
-
             Inst::StackProbeLoop {
                 tmp,
                 frame_size,
@@ -1109,12 +1089,6 @@ impl PrettyPrint for Inst {
                 let tmp = pretty_print_reg(tmp.to_reg(), 8);
                 let op = ljustify("stack_probe_loop".to_string());
                 format!("{op} {tmp}, frame_size={frame_size}, guard_size={guard_size}")
-            }
-
-            Inst::Pop64 { dst } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let op = ljustify("popq".to_string());
-                format!("{op} {dst}")
             }
 
             Inst::CallKnown { info } => {
@@ -1741,12 +1715,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(alternative);
             collector.reg_reuse_def(dst, 0);
             collector.reg_use(consequent);
-        }
-        Inst::Push64 { src } => {
-            src.get_operands(collector);
-        }
-        Inst::Pop64 { dst } => {
-            collector.reg_def(dst);
         }
         Inst::StackProbeLoop { tmp, .. } => {
             collector.reg_early_def(tmp);

@@ -16,7 +16,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movabsq $-18765284782900, %r10
@@ -31,7 +31,7 @@ block0(v0: i64, v1: i64):
 ;   orq (%rip), %rdi
 ;   movq    %rdi, 0(%rsi)
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

@@ -9,12 +9,12 @@ block0(v0: f32, v1: f32, v2: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfmsub213ss %xmm0, %xmm1, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -36,12 +36,12 @@ block0(v0: f64, v1: f64, v2: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfmsub213sd %xmm0, %xmm1, 0(%rdi), %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -62,12 +62,12 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfmsub213ps %xmm0, %xmm1, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -88,12 +88,12 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfmsub213pd %xmm0, %xmm1, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -115,12 +115,12 @@ block0(v0: f32, v1: i64, v2: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfmsub132ss %xmm0, %xmm1, 0(%rdi), %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -142,12 +142,12 @@ block0(v0: i64, v1: f64, v2: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfmsub132sd %xmm0, %xmm1, 0(%rdi), %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -169,12 +169,12 @@ block0(v0: f32x4, v1: i64, v2: f32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfmsub132ps %xmm0, %xmm1, 0(%rdi), %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -196,12 +196,12 @@ block0(v0: i64, v1: f64x2, v2: f64x2):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfmsub132pd %xmm0, %xmm1, 0(%rdi), %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -223,12 +223,12 @@ block0(v0: f32, v1: f32, v2: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfnmsub213ss %xmm0, %xmm1, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -250,12 +250,12 @@ block0(v0: f64, v1: f64, v2: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfnmsub213sd %xmm0, %xmm1, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -278,12 +278,12 @@ block0(v0: f32x4, v1: f32x4, v2: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfnmsub213ps %xmm0, %xmm1, 0(%rdi), %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -306,12 +306,12 @@ block0(v0: f64x2, v1: f64x2, v2: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfnmsub213pd %xmm0, %xmm1, 0(%rdi), %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -334,12 +334,12 @@ block0(v0: f32, v1: i64, v2: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfnmsub132ss %xmm0, %xmm1, 0(%rdi), %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -362,12 +362,12 @@ block0(v0: i64, v1: f64, v2: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfnmsub132sd %xmm0, %xmm1, 0(%rdi), %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -390,12 +390,12 @@ block0(v0: i64, v1: f32x4, v2: f32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfnmsub132ps %xmm0, %xmm1, 0(%rdi), %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -418,12 +418,12 @@ block0(v0: f64x2, v1: i64, v2: f64x2):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vfnmsub132pd %xmm0, %xmm1, 0(%rdi), %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -453,7 +453,7 @@ block0(v0: f64, v1: f64, v2: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
@@ -462,7 +462,7 @@ block0(v0: f64, v1: f64, v2: f64):
 ;   vfnmsub213sd %xmm0, %xmm1, 0(%r8), %xmm0
 ;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -491,7 +491,7 @@ block0(v0: f64, v1: f64, v2: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
@@ -500,7 +500,7 @@ block0(v0: f64, v1: f64, v2: f64):
 ;   vfmsub213sd %xmm0, %xmm1, 0(%r8), %xmm0
 ;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -529,7 +529,7 @@ block0(v0: f32, v1: f32, v2: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
@@ -538,7 +538,7 @@ block0(v0: f32, v1: f32, v2: f32):
 ;   vfmsub132ss %xmm0, %xmm2, 0(%r8), %xmm0
 ;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -569,7 +569,7 @@ block0(v0: f32, v1: f32, v2: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
@@ -578,7 +578,7 @@ block0(v0: f32, v1: f32, v2: f32):
 ;   vfnmsub132ss %xmm0, %xmm2, 0(%r8), %xmm0
 ;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -612,7 +612,7 @@ block0(v0: f32, v1: f32, v2: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
@@ -624,7 +624,7 @@ block0(v0: f32, v1: f32, v2: f32):
 ;   vfmsub132ss %xmm0, %xmm2, 0(%r11), %xmm0
 ;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -656,7 +656,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
@@ -666,7 +666,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   vfmsub132ps %xmm0, %xmm2, 0(%r8), %xmm0
 ;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

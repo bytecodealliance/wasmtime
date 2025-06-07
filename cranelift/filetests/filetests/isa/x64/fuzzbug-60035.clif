@@ -13,7 +13,7 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x10, %rsp
 ;   movq    %rbx, 0(%rsp)
@@ -24,7 +24,7 @@ block0:
 ;   movq (%rsp), %rbx
 ;   addq $0x10, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

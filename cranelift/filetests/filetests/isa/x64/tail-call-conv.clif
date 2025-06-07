@@ -12,12 +12,12 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq <offset:0>+-0x10(%rbp), %rax
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret 80
 ;
 ; Disassembled:
@@ -54,7 +54,7 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x90, %rsp
 ;   movq    %rbx, 96(%rsp)
@@ -98,7 +98,7 @@ block0:
 ;   movq 0x80(%rsp), %r15
 ;   addq $0x90, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -185,7 +185,7 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0xa0, %rsp
 ;   movq    %rbx, 112(%rsp)
@@ -273,7 +273,7 @@ block0:
 ;   movq 0x90(%rsp), %r15
 ;   addq $0xa0, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -378,7 +378,7 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x130, %rsp
 ;   movq    %rbx, 256(%rsp)
@@ -397,7 +397,7 @@ block0:
 ;   movq 0x120(%rsp), %r15
 ;   addq $0x130, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -464,7 +464,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0xa0, %rsp
 ;   movq    %rbx, 112(%rsp)
@@ -547,7 +547,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   movq 0x90(%rsp), %r15
 ;   addq $0xa0, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret 176
 ;
 ; Disassembled:
@@ -673,7 +673,7 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x1e0, %rsp
 ;   movq    %rbx, 432(%rsp)
@@ -766,7 +766,7 @@ block0:
 ;   movq 0x1d0(%rsp), %r15
 ;   addq $0x1e0, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -912,7 +912,7 @@ block0(v0: f64, v1: f64, v2: i8, v3: i32, v4: i128, v5: i32, v6: i128, v7: i32, 
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   load_ext_name %callee_simple+0, %r10

@@ -8,7 +8,7 @@ block0(v0: f32, v1: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $-2147483648, %ecx
@@ -19,7 +19,7 @@ block0(v0: f32, v1: f32):
 ;   andps %xmm1, %xmm7
 ;   orps %xmm7, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -45,7 +45,7 @@ block0(v0: f64, v1: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movabsq $-9223372036854775808, %rcx
@@ -56,7 +56,7 @@ block0(v0: f64, v1: f64):
 ;   andpd %xmm1, %xmm7
 ;   orpd %xmm7, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

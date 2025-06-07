@@ -11,7 +11,7 @@ block0(v0: i8):
     return
 }
 
-; check:  pushq   %rbp
+; check:  pushq %rbp
 ; nextln: movq    %rsp, %rbp
 ; nextln: block0:
 ; nextln: movzbq %dil, %rdi
@@ -28,7 +28,7 @@ block0(v0: i8):
     return
 }
 
-; check: pushq   %rbp
+; check: pushq %rbp
 ; nextln: movq    %rsp, %rbp
 ; nextln: subq $$0x20, %rsp
 ; nextln: block0:

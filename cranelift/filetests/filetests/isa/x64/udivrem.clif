@@ -11,7 +11,7 @@ block0(v0: i8, v1: i8):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movzbl %dil, %eax
@@ -23,7 +23,7 @@ block0(v0: i8, v1: i8):
 ;   shrq $0x8, %rdx
 ;   movq    %rcx, %rax
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -51,7 +51,7 @@ block0(v0: i16, v1: i16):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %rdx
@@ -65,7 +65,7 @@ block0(v0: i16, v1: i16):
 ;   divw %si ;; implicit: %ax, %dx, trap=254
 ;   movq    %r8, %rax
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -93,7 +93,7 @@ block0(v0: i32, v1: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %rdx
@@ -107,7 +107,7 @@ block0(v0: i32, v1: i32):
 ;   divl %esi ;; implicit: %eax, %edx, trap=254
 ;   movq    %r8, %rax
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -135,7 +135,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %rdx
@@ -149,7 +149,7 @@ block0(v0: i64, v1: i64):
 ;   divq %rsi ;; implicit: %rax, %rdx, trap=254
 ;   movq    %r8, %rax
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

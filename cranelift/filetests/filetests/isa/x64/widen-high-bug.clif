@@ -9,7 +9,7 @@ block0(v0: i64, v2: i8x16):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqu 0x50(%rdi), %xmm0
@@ -17,7 +17,7 @@ block0(v0: i64, v2: i8x16):
 ;   pxor %xmm4, %xmm4
 ;   punpckhbw %xmm4, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
