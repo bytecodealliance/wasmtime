@@ -185,76 +185,112 @@ impl ToSExpr for Def {
 
 impl ToSExpr for Type {
     fn to_sexpr(&self) -> SExpr {
-        let mut parts = vec![SExpr::atom("type"), self.name.to_sexpr()];
-        if self.is_extern {
+        let Type {
+            name,
+            ty,
+            is_extern,
+            is_nodebug,
+            pos: _,
+        } = self;
+        let mut parts = vec![SExpr::atom("type"), name.to_sexpr()];
+        if *is_extern {
             parts.push(SExpr::atom("extern"));
         }
-        if self.is_nodebug {
+        if *is_nodebug {
             parts.push(SExpr::Atom("nodebug".to_string()));
         }
-        parts.push(self.ty.to_sexpr());
+        parts.push(ty.to_sexpr());
         SExpr::List(parts)
     }
 }
 
 impl ToSExpr for Rule {
     fn to_sexpr(&self) -> SExpr {
+        let Rule {
+            name,
+            prio,
+            pattern,
+            iflets,
+            expr,
+            pos: _,
+        } = self;
         let mut parts = vec![SExpr::atom("rule")];
-        if let Some(name) = &self.name {
+        if let Some(name) = name {
             parts.push(name.to_sexpr());
         }
-        if let Some(prio) = &self.prio {
+        if let Some(prio) = prio {
             parts.push(SExpr::atom(prio.to_string()));
         }
-        parts.push(self.pattern.to_sexpr());
-        parts.extend(self.iflets.iter().map(ToSExpr::to_sexpr));
-        parts.push(self.expr.to_sexpr());
+        parts.push(pattern.to_sexpr());
+        parts.extend(iflets.iter().map(ToSExpr::to_sexpr));
+        parts.push(expr.to_sexpr());
         SExpr::List(parts)
     }
 }
 
 impl ToSExpr for Extractor {
     fn to_sexpr(&self) -> SExpr {
-        let mut sig = vec![self.term.to_sexpr()];
-        sig.extend(self.args.iter().map(ToSExpr::to_sexpr));
+        let Extractor {
+            term,
+            args,
+            template,
+            pos: _,
+        } = self;
+        let mut sig = vec![term.to_sexpr()];
+        sig.extend(args.iter().map(ToSExpr::to_sexpr));
 
         let mut parts = vec![SExpr::atom("extractor")];
         parts.push(SExpr::List(sig));
-        parts.push(self.template.to_sexpr());
+        parts.push(template.to_sexpr());
         SExpr::List(parts)
     }
 }
 
 impl ToSExpr for Decl {
     fn to_sexpr(&self) -> SExpr {
+        let Decl {
+            term,
+            arg_tys,
+            ret_ty,
+            pure,
+            multi,
+            partial,
+            pos: _,
+        } = self;
         let mut parts = vec![SExpr::atom("decl")];
-        if self.pure {
+        if *pure {
             parts.push(SExpr::atom("pure"));
         }
-        if self.multi {
+        if *multi {
             parts.push(SExpr::atom("multi"));
         }
-        if self.partial {
+        if *partial {
             parts.push(SExpr::atom("partial"));
         }
-        parts.push(self.term.to_sexpr());
-        parts.push(SExpr::list(&self.arg_tys));
-        parts.push(self.ret_ty.to_sexpr());
+        parts.push(term.to_sexpr());
+        parts.push(SExpr::list(arg_tys));
+        parts.push(ret_ty.to_sexpr());
         SExpr::List(parts)
     }
 }
 
 impl ToSExpr for Spec {
     fn to_sexpr(&self) -> SExpr {
-        let mut sig = vec![self.term.to_sexpr()];
-        sig.extend(self.args.iter().map(ToSExpr::to_sexpr));
+        let Spec {
+            term,
+            args,
+            provides,
+            requires,
+        } = self;
+        let mut sig = vec![term.to_sexpr()];
+        sig.extend(args.iter().map(ToSExpr::to_sexpr));
 
         let mut parts = vec![SExpr::atom("spec")];
         parts.push(SExpr::List(sig));
-        if !self.provides.is_empty() {
+        if !provides.is_empty() {
             parts.push(SExpr::tagged("provide", &self.provides));
         }
-        if !self.requires.is_empty() {
+        if !requires.is_empty() {
             parts.push(SExpr::tagged("require", &self.requires));
         }
         SExpr::List(parts)
@@ -263,29 +299,37 @@ impl ToSExpr for Spec {
 
 impl ToSExpr for Model {
     fn to_sexpr(&self) -> SExpr {
-        SExpr::List(vec![
-            SExpr::atom("model"),
-            self.name.to_sexpr(),
-            self.val.to_sexpr(),
-        ])
+        let Model { name, val } = self;
+        SExpr::List(vec![SExpr::atom("model"), name.to_sexpr(), val.to_sexpr()])
     }
 }
 
 impl ToSExpr for Form {
     fn to_sexpr(&self) -> SExpr {
-        let mut parts = vec![SExpr::atom("form"), self.name.to_sexpr()];
-        parts.extend(self.signatures.iter().map(ToSExpr::to_sexpr));
+        let Form {
+            name,
+            signatures,
+            pos: _,
+        } = self;
+        let mut parts = vec![SExpr::atom("form"), name.to_sexpr()];
+        parts.extend(signatures.iter().map(ToSExpr::to_sexpr));
         SExpr::List(parts)
     }
 }
 
 impl ToSExpr for Instantiation {
     fn to_sexpr(&self) -> SExpr {
-        let mut parts = vec![SExpr::atom("instantiate"), self.term.to_sexpr()];
-        if let Some(form) = &self.form {
+        let Instantiation {
+            term,
+            form,
+            signatures,
+            pos: _,
+        } = self;
+        let mut parts = vec![SExpr::atom("instantiate"), term.to_sexpr()];
+        if let Some(form) = form {
             parts.push(form.to_sexpr());
         } else {
-            parts.extend(self.signatures.iter().map(ToSExpr::to_sexpr));
+            parts.extend(signatures.iter().map(ToSExpr::to_sexpr));
         }
         SExpr::List(parts)
     }
@@ -297,8 +341,8 @@ impl ToSExpr for Extern {
             Extern::Extractor {
                 term,
                 func,
-                pos: _,
                 infallible,
+                pos: _,
             } => {
                 let mut parts = vec![SExpr::atom("extern"), SExpr::atom("extractor")];
                 if *infallible {
@@ -308,13 +352,13 @@ impl ToSExpr for Extern {
                 parts.push(func.to_sexpr());
                 SExpr::List(parts)
             }
-            Extern::Constructor { term, func, .. } => SExpr::List(vec![
+            Extern::Constructor { term, func, pos: _ } => SExpr::List(vec![
                 SExpr::atom("extern"),
                 SExpr::atom("constructor"),
                 term.to_sexpr(),
                 func.to_sexpr(),
             ]),
-            Extern::Const { name, ty, .. } => SExpr::List(vec![
+            Extern::Const { name, ty, pos: _ } => SExpr::List(vec![
                 SExpr::atom("extern"),
                 SExpr::atom("const"),
                 SExpr::atom(format!("${}", name.0)),
@@ -326,11 +370,17 @@ impl ToSExpr for Extern {
 
 impl ToSExpr for Converter {
     fn to_sexpr(&self) -> SExpr {
+        let Converter {
+            inner_ty,
+            outer_ty,
+            term,
+            pos: _,
+        } = self;
         SExpr::List(vec![
             SExpr::atom("convert"),
-            self.inner_ty.to_sexpr(),
-            self.outer_ty.to_sexpr(),
-            self.term.to_sexpr(),
+            inner_ty.to_sexpr(),
+            outer_ty.to_sexpr(),
+            term.to_sexpr(),
         ])
     }
 }
@@ -352,15 +402,21 @@ impl ToSExpr for TypeValue {
 
 impl ToSExpr for Variant {
     fn to_sexpr(&self) -> SExpr {
-        let mut parts = vec![self.name.to_sexpr()];
-        parts.extend(self.fields.iter().map(ToSExpr::to_sexpr));
+        let Variant {
+            name,
+            fields,
+            pos: _,
+        } = self;
+        let mut parts = vec![name.to_sexpr()];
+        parts.extend(fields.iter().map(ToSExpr::to_sexpr));
         SExpr::List(parts)
     }
 }
 
 impl ToSExpr for Field {
     fn to_sexpr(&self) -> SExpr {
-        SExpr::List(vec![self.name.to_sexpr(), self.ty.to_sexpr()])
+        let Field { name, ty, pos: _ } = self;
+        SExpr::List(vec![name.to_sexpr(), ty.to_sexpr()])
     }
 }
 
@@ -395,10 +451,16 @@ impl ToSExpr for ModelType {
 
 impl ToSExpr for Signature {
     fn to_sexpr(&self) -> SExpr {
+        let Signature {
+            args,
+            ret,
+            canonical,
+            pos: _,
+        } = self;
         SExpr::List(vec![
-            SExpr::tagged("args", &self.args),
-            SExpr::tagged("ret", std::slice::from_ref(&self.ret)),
-            SExpr::tagged("canon", std::slice::from_ref(&self.canonical)),
+            SExpr::tagged("args", args),
+            SExpr::tagged("ret", std::slice::from_ref(ret)),
+            SExpr::tagged("canon", std::slice::from_ref(canonical)),
         ])
     }
 }
@@ -406,16 +468,16 @@ impl ToSExpr for Signature {
 impl ToSExpr for SpecExpr {
     fn to_sexpr(&self) -> SExpr {
         match self {
-            SpecExpr::ConstInt { val, .. } => SExpr::atom(val),
-            SpecExpr::ConstBitVec { val, width, .. } => SExpr::atom(if *width % 4 == 0 {
+            SpecExpr::ConstInt { val, pos: _ } => SExpr::atom(val),
+            SpecExpr::ConstBitVec { val, width, pos: _ } => SExpr::atom(if *width % 4 == 0 {
                 format!("#x{val:0width$x}", width = *width as usize / 4)
             } else {
                 format!("#b{val:0width$b}", width = *width as usize)
             }),
-            SpecExpr::ConstBool { val, .. } => SExpr::atom(if *val { "true" } else { "false" }),
-            SpecExpr::ConstUnit { .. } => SExpr::List(Vec::new()),
+            SpecExpr::ConstBool { val, pos: _ } => SExpr::atom(if *val { "true" } else { "false" }),
+            SpecExpr::ConstUnit { pos: _ } => SExpr::List(Vec::new()),
             SpecExpr::Var { var, pos: _ } => var.to_sexpr(),
-            SpecExpr::Op { op, args, .. } => {
+            SpecExpr::Op { op, args, pos: _ } => {
                 let mut parts = vec![op.to_sexpr()];
                 parts.extend(args.iter().map(ToSExpr::to_sexpr));
                 SExpr::List(parts)
@@ -488,20 +550,25 @@ impl ToSExpr for SpecOp {
 impl ToSExpr for Pattern {
     fn to_sexpr(&self) -> SExpr {
         match self {
-            Pattern::Var { var, .. } => SExpr::atom(var.0.clone()),
-            Pattern::BindPattern { var, subpat, .. } => {
-                SExpr::Binding(var.0.clone(), Box::new(subpat.to_sexpr()))
-            }
-            Pattern::ConstInt { val, .. } => SExpr::atom(val),
-            Pattern::ConstBool { val, .. } => SExpr::atom(if *val { "true" } else { "false" }),
-            Pattern::ConstPrim { val, .. } => SExpr::atom(format!("${}", val.0)),
-            Pattern::Wildcard { .. } => SExpr::atom("_"),
-            Pattern::Term { sym, args, .. } => {
+            Pattern::Var {
+                var: Ident(var, _),
+                pos: _,
+            } => SExpr::atom(var.clone()),
+            Pattern::BindPattern {
+                var: Ident(var, _),
+                subpat,
+                pos: _,
+            } => SExpr::Binding(var.clone(), Box::new(subpat.to_sexpr())),
+            Pattern::ConstInt { val, pos: _ } => SExpr::atom(val),
+            Pattern::ConstBool { val, pos: _ } => SExpr::atom(if *val { "true" } else { "false" }),
+            Pattern::ConstPrim { val, pos: _ } => SExpr::atom(format!("${}", val.0)),
+            Pattern::Wildcard { pos: _ } => SExpr::atom("_"),
+            Pattern::Term { sym, args, pos: _ } => {
                 let mut parts = vec![sym.to_sexpr()];
                 parts.extend(args.iter().map(ToSExpr::to_sexpr));
                 SExpr::List(parts)
             }
-            Pattern::And { subpats, .. } => {
+            Pattern::And { subpats, pos: _ } => {
                 let mut parts = vec![SExpr::atom("and")];
                 parts.extend(subpats.iter().map(ToSExpr::to_sexpr));
                 SExpr::List(parts)
@@ -513,10 +580,15 @@ impl ToSExpr for Pattern {
 
 impl ToSExpr for IfLet {
     fn to_sexpr(&self) -> SExpr {
+        let IfLet {
+            pattern,
+            expr,
+            pos: _,
+        } = self;
         SExpr::List(vec![
             SExpr::atom("if-let"),
-            self.pattern.to_sexpr(),
-            self.expr.to_sexpr(),
+            pattern.to_sexpr(),
+            expr.to_sexpr(),
         ])
     }
 }
@@ -524,16 +596,16 @@ impl ToSExpr for IfLet {
 impl ToSExpr for Expr {
     fn to_sexpr(&self) -> SExpr {
         match self {
-            Expr::Term { sym, args, .. } => {
+            Expr::Term { sym, args, pos: _ } => {
                 let mut parts = vec![sym.to_sexpr()];
                 parts.extend(args.iter().map(ToSExpr::to_sexpr));
                 SExpr::List(parts)
             }
-            Expr::Var { name, .. } => name.to_sexpr(),
-            Expr::ConstInt { val, .. } => SExpr::atom(val),
-            Expr::ConstBool { val, .. } => SExpr::atom(if *val { "true" } else { "false" }),
-            Expr::ConstPrim { val, .. } => SExpr::atom(format!("${}", val.0)),
-            Expr::Let { defs, body, .. } => {
+            Expr::Var { name, pos: _ } => name.to_sexpr(),
+            Expr::ConstInt { val, pos: _ } => SExpr::atom(val),
+            Expr::ConstBool { val, pos: _ } => SExpr::atom(if *val { "true" } else { "false" }),
+            Expr::ConstPrim { val, pos: _ } => SExpr::atom(format!("${}", val.0)),
+            Expr::Let { defs, body, pos: _ } => {
                 let mut parts = vec![SExpr::atom("let")];
                 parts.push(SExpr::list(&defs));
                 parts.push(body.to_sexpr());
@@ -545,16 +617,19 @@ impl ToSExpr for Expr {
 
 impl ToSExpr for LetDef {
     fn to_sexpr(&self) -> SExpr {
-        SExpr::List(vec![
-            self.var.to_sexpr(),
-            self.ty.to_sexpr(),
-            self.val.to_sexpr(),
-        ])
+        let LetDef {
+            var,
+            ty,
+            val,
+            pos: _,
+        } = self;
+        SExpr::List(vec![var.to_sexpr(), ty.to_sexpr(), val.to_sexpr()])
     }
 }
 
 impl ToSExpr for Ident {
     fn to_sexpr(&self) -> SExpr {
-        SExpr::atom(self.0.clone())
+        let Ident(name, _) = self;
+        SExpr::atom(name.clone())
     }
 }
