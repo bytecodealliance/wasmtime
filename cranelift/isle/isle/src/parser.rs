@@ -15,8 +15,7 @@ pub fn parse(lexer: Lexer) -> Result<Vec<Def>> {
 /// Parse without positional information. Provided mainly to support testing, to
 /// enable equality testing on structure alone.
 pub fn parse_without_pos(lexer: Lexer) -> Result<Vec<Def>> {
-    let mut parser = Parser::new(lexer);
-    parser.disable_pos();
+    let parser = Parser::new_without_pos_tracking(lexer);
     parser.parse_defs()
 }
 
@@ -46,8 +45,11 @@ impl<'a> Parser<'a> {
         }
     }
 
-    pub fn disable_pos(&mut self) {
-        self.disable_pos = true;
+    fn new_without_pos_tracking(lexer: Lexer<'a>) -> Parser<'a> {
+        Parser {
+            lexer,
+            disable_pos: true,
+        }
     }
 
     fn error(&self, pos: Pos, msg: String) -> Error {
