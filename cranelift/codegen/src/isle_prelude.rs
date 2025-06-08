@@ -197,6 +197,11 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn i64_not(&mut self, x: i64) -> i64 {
+            !x
+        }
+
+        #[inline]
         fn u64_eq(&mut self, x: u64, y: u64) -> bool {
             x == y
         }
