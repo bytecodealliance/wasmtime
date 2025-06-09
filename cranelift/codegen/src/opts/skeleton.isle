@@ -36,3 +36,11 @@
 ;; (rule (simplify_skeleton (sdiv _ (iconst_s ty 0)))
 ;;       (replace_with_val (trap (trap_code_division_by_zero))
 ;;                         (iconst_s ty 0)))
+
+(rule
+  (simplify_skeleton (udiv y
+                       (select ty
+                         x
+                         (iconst ty (imm64_power_of_two n))
+                         (iconst ty (imm64_power_of_two m)))))
+  (ushr ty y (select ty x (iconst ty (imm64 n)) (iconst ty (imm64 m)))))
