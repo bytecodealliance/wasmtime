@@ -262,24 +262,17 @@ impl Backtrace {
         // are continuations, due to the initial stack having one, too.
         assert_eq!(stack_limits_vec.len(), continuations_vec.len() + 1);
 
-        for (conts, &parent_limits) in continuations_vec
-            .chunks(2)
-            .zip(stack_limits_vec.iter().skip(1))
-        {
+        for i in 0..continuations_vec.len() {
             // The continuation whose control context we want to
             // access, to get information about how to continue
             // execution in its parent.
-            let continuation = conts[0];
-            let continuation = unsafe { &*continuation };
+            let continuation = unsafe { &*continuations_vec[i] };
 
             // The stack limits describing the parent of `continuation`.
-            let parent_limits = unsafe { &*parent_limits };
+            let parent_limits = unsafe { &*stack_limits_vec[i + 1] };
 
-            // The parent of `continuation`, if the parent is itself a
-            // continuation. Otherwise, if `continuation` is the last
-            // continuation (i.e., its parent is the initial stack), this is
-            // None.
-            let parent_continuation = conts.get(1).map(|&p| unsafe { &*p });
+            // The parent of `continuation` if present not the last in the chain.
+            let parent_continuation = continuations_vec.get(i + 1).map(|&c| unsafe { &*c });
 
             let fiber_stack = continuation.fiber_stack();
             let resume_pc = fiber_stack.control_context_instruction_pointer();
