@@ -1546,8 +1546,18 @@ impl Masm for MacroAssembler {
                 let dst = context.reg(regs::rax(), self)?;
                 let operand = context.pop_to_reg(self, None)?;
 
-                self.asm
-                    .atomic_rmw_seq(addr, operand.reg, writable!(dst), size, flags, op);
+                self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                    masm.asm.atomic_rmw_seq(
+                        addr,
+                        operand.reg,
+                        writable!(dst),
+                        scratch.writable(),
+                        size,
+                        flags,
+                        op,
+                    );
+                    Ok(())
+                })?;
 
                 context.free_reg(operand.reg);
                 dst

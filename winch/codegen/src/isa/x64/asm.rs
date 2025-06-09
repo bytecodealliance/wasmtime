@@ -8,7 +8,6 @@ use crate::{
         RoundingMode, ShiftKind, Signed, V128ExtendKind, V128LoadExtendKind, Zero,
     },
     reg::writable,
-    x64::regs::scratch,
 };
 use cranelift_codegen::{
     CallInfo, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
@@ -1226,6 +1225,7 @@ impl Assembler {
         addr: Address,
         operand: Reg,
         dst: WritableReg,
+        temp: WritableReg,
         size: OperandSize,
         flags: MemFlags,
         op: AtomicRmwSeqOp,
@@ -1236,7 +1236,7 @@ impl Assembler {
             ty: Type::int_with_byte_size(size.bytes() as _).unwrap(),
             mem,
             operand: operand.into(),
-            temp: writable!(scratch().into()),
+            temp: temp.map(Into::into),
             dst_old: dst.map(Into::into),
             op,
         });

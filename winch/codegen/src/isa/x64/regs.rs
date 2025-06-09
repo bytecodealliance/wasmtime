@@ -92,6 +92,7 @@ pub(crate) fn r11() -> Reg {
     gpr(ENC_R11)
 }
 
+#[deprecated]
 pub(crate) fn scratch() -> Reg {
     r11()
 }
@@ -151,6 +152,7 @@ pub(crate) fn xmm15() -> Reg {
     fpr(15)
 }
 
+#[deprecated]
 pub(crate) fn scratch_xmm() -> Reg {
     xmm15()
 }

@@ -27,13 +27,14 @@ pub(crate) const fn ip0() -> Reg {
     xreg(16)
 }
 
-// TODO: delete this.
 /// Alias to the IP0 register.
+#[deprecated]
 pub(crate) const fn scratch() -> Reg {
     ip0()
 }
 
 // Alias to register v31.
+#[deprecated]
 pub(crate) const fn float_scratch() -> Reg {
     vreg(31)
 }
@@ -156,6 +157,8 @@ const ALLOCATABLE_GPR: u32 = u32::MAX & !NON_ALLOCATABLE_GPR;
 
 /// Bitmask for non-allocatable FPR.
 /// All FPRs are allocatable, v0..=v7 are generally used for params and results.
+
+#[expect(deprecated, reason = "Not used for instruction emission")]
 const NON_ALLOCATABLE_FPR: u32 = 1 << float_scratch().hw_enc();
 /// Bitmask to represent the available floating point registers.
 const ALLOCATABLE_FPR: u32 = u32::MAX & !NON_ALLOCATABLE_FPR;
@@ -165,6 +168,7 @@ const ALLOCATABLE_SCRATCH_GPR: u32 = (1 << ip0().hw_enc()) | (1 << ip1().hw_enc(
 /// Non-allocatable scratch general purpose registers.
 const NON_ALLOCATABLE_SCRATCH_GPR: u32 = u32::MAX & !ALLOCATABLE_SCRATCH_GPR;
 
+#[expect(deprecated, reason = "Not used for instruction emission")]
 const ALLOCATABLE_SCRATCH_FPR: u32 = 1 << float_scratch().hw_enc();
 /// Non-allocatable scratch general purpose registers.
 const NON_ALLOCATABLE_SCRATCH_FPR: u32 = u32::MAX & !ALLOCATABLE_SCRATCH_FPR;

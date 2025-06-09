@@ -495,6 +495,7 @@ impl Assembler {
         divisor: Reg,
         dividend: Reg,
         dest: Writable<Reg>,
+        scratch: WritableReg,
         kind: RemKind,
         size: OperandSize,
     ) {
@@ -525,12 +526,11 @@ impl Assembler {
             RemKind::Unsigned => ALUOp::UDiv,
         };
 
-        let scratch = regs::scratch();
-        self.alu_rrr(op, divisor, dividend, writable!(scratch), size);
+        self.alu_rrr(op, divisor, dividend, scratch, size);
 
         self.alu_rrrr(
             ALUOp3::MSub,
-            scratch,
+            scratch.to_reg(),
             divisor,
             dest.map(Into::into),
             dividend,
@@ -1138,6 +1138,7 @@ impl Assembler {
         &mut self,
         dst: Writable<Reg>,
         src: Reg,
+        tmp_reg: WritableReg,
         src_size: OperandSize,
         dst_size: OperandSize,
         kind: TruncKind,
@@ -1149,7 +1150,6 @@ impl Assembler {
             // - check bounds
             self.check_nan(src, src_size);
 
-            let tmp_reg = writable!(regs::float_scratch());
             self.min_fp_value(signed, src_size, dst_size, tmp_reg);
             self.fcmp(src, tmp_reg.to_reg(), src_size);
             self.trapif(Cond::Le, TrapCode::INTEGER_OVERFLOW);

@@ -224,10 +224,12 @@ impl Scratch {
         Self(r)
     }
 
+    #[inline]
     pub fn inner(&self) -> Reg {
         self.0
     }
 
+    #[inline]
     pub fn writable(&self) -> WritableReg {
         writable!(self.0)
     }
