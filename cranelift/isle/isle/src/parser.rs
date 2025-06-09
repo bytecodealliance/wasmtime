@@ -402,7 +402,7 @@ impl<'a> Parser<'a> {
         };
 
         Ok(Spec {
-            term: term,
+            term,
             args,
             provides,
             requires,

@@ -59,10 +59,7 @@ impl<'a> records::Records for WasiCtx<'a> {
         first: GuestPtr<i32>,
         second: GuestPtr<i32>,
     ) -> Result<types::PairIntPtrs, types::Errno> {
-        Ok(types::PairIntPtrs {
-            first: first,
-            second: second,
-        })
+        Ok(types::PairIntPtrs { first, second })
     }
 
     fn sum_array(

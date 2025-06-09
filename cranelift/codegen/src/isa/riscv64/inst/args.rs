@@ -1445,13 +1445,13 @@ impl AtomicOP {
         let mut insts = SmallInstVec::new();
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::Srl,
-            rd: rd,
+            rd,
             rs1: rs,
             rs2: offset,
         });
         //
         insts.push(Inst::Extend {
-            rd: rd,
+            rd,
             rn: rd.to_reg(),
             signed: false,
             from_bits: ty.bits() as u8,
@@ -1471,13 +1471,13 @@ impl AtomicOP {
         let mut insts = SmallInstVec::new();
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::Srl,
-            rd: rd,
+            rd,
             rs1: rs,
             rs2: offset,
         });
         //
         insts.push(Inst::Extend {
-            rd: rd,
+            rd,
             rn: rd.to_reg(),
             signed: true,
             from_bits: ty.bits() as u8,
@@ -1504,7 +1504,7 @@ impl AtomicOP {
         insts.push(Inst::construct_bit_not(tmp, tmp.to_reg()));
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::And,
-            rd: rd,
+            rd,
             rs1: rd.to_reg(),
             rs2: tmp.to_reg(),
         });
@@ -1536,7 +1536,7 @@ impl AtomicOP {
         });
         insts.push(Inst::AluRRR {
             alu_op: AluOPRRR::Or,
-            rd: rd,
+            rd,
             rs1: rd.to_reg(),
             rs2: tmp.to_reg(),
         });

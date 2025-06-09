@@ -114,7 +114,7 @@ impl Inst {
             I32 | I16 => {
                 insts.push(Inst::load_imm12(rd, Imm12::from_i16(-1)));
                 insts.push(Inst::Extend {
-                    rd: rd,
+                    rd,
                     rn: rd.to_reg(),
                     signed: false,
                     from_bits: ty.bits() as u8,
@@ -1328,7 +1328,7 @@ impl Inst {
                 match rm.class() {
                     RegClass::Int => Inst::AluRRImm12 {
                         alu_op: AluOPRRI::Addi,
-                        rd: rd,
+                        rd,
                         rs: rm,
                         imm12: Imm12::ZERO,
                     },
@@ -1336,7 +1336,7 @@ impl Inst {
                         alu_op: FpuOPRRR::Fsgnj,
                         width: FpuOPWidth::try_from(ty).unwrap(),
                         frm: FRM::RNE,
-                        rd: rd,
+                        rd,
                         rs1: rm,
                         rs2: rm,
                     },
@@ -2009,7 +2009,7 @@ impl Inst {
                     // Get the current PC.
                     sink.add_reloc(Reloc::RiscvGotHi20, &**name, 0);
                     Inst::Auipc {
-                        rd: rd,
+                        rd,
                         imm: Imm20::from_i32(0),
                     }
                     .emit_uncompressed(sink, emit_info, state, start_off);
@@ -2080,7 +2080,7 @@ impl Inst {
                 // Get the current PC.
                 sink.add_reloc(Reloc::RiscvTlsGdHi20, &**name, 0);
                 Inst::Auipc {
-                    rd: rd,
+                    rd,
                     imm: Imm20::from_i32(0),
                 }
                 .emit_uncompressed(sink, emit_info, state, start_off);
@@ -2089,7 +2089,7 @@ impl Inst {
                 sink.add_reloc(Reloc::RiscvPCRelLo12I, &auipc_label, 0);
                 Inst::AluRRImm12 {
                     alu_op: AluOPRRI::Addi,
-                    rd: rd,
+                    rd,
                     rs: rd.to_reg(),
                     imm12: Imm12::from_i16(0),
                 }
@@ -2137,7 +2137,7 @@ impl Inst {
                 .emit(sink, emit_info, state);
                 // load.
                 Inst::Load {
-                    rd: rd,
+                    rd,
                     op: LoadOP::from_type(ty),
                     flags: MemFlags::new(),
                     from: AMode::RegOffset(p, 0),
@@ -2399,7 +2399,7 @@ impl Inst {
                     .emit(sink, emit_info, state);
                     Inst::AluRRR {
                         alu_op: AluOPRRR::Or,
-                        rd: rd,
+                        rd,
                         rs1: rd.to_reg(),
                         rs2: tmp2.to_reg(),
                     }
