@@ -3280,17 +3280,11 @@
 
 ;; Helper for creating `addps` instructions.
 (decl x64_addps (Xmm XmmMem) Xmm)
-(rule 1 (x64_addps src1 src2)
-      (if-let true (use_avx))
-      (x64_vaddps_b src1 src2))
-(rule 0 (x64_addps src1 src2) (x64_addps_a src1 src2))
+(rule (x64_addps src1 src2) (x64_addps_a_or_avx src1 src2))
 
 ;; Helper for creating `addpd` instructions.
 (decl x64_addpd (Xmm XmmMem) Xmm)
-(rule 1 (x64_addpd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vaddpd) src1 src2))
-(rule 0 (x64_addpd src1 src2) (x64_addpd_a src1 src2))
+(rule (x64_addpd src1 src2) (x64_addpd_a_or_avx src1 src2))
 
 ;; Helper for creating `subss` instructions.
 (decl x64_subss (Xmm XmmMem) Xmm)

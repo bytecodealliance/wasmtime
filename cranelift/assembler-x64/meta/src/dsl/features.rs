@@ -32,6 +32,19 @@ impl Features {
     pub fn iter(&self) -> impl Iterator<Item = &Feature> {
         self.0.iter()
     }
+
+    pub fn contains(&self, feature: Feature) -> bool {
+        self.0.contains(&feature)
+    }
+
+    pub(crate) fn is_sse(&self) -> bool {
+        self.0.iter().any(|f| {
+            matches!(
+                f,
+                Feature::sse | Feature::sse2 | Feature::ssse3 | Feature::sse41
+            )
+        })
+    }
 }
 
 impl fmt::Display for Features {

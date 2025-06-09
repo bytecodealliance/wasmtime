@@ -59,6 +59,14 @@ impl Encoding {
             Encoding::Vex(vex) => vex.validate(operands),
         }
     }
+
+    /// Return the opcode for this encoding.
+    pub fn opcode(&self) -> u8 {
+        match self {
+            Encoding::Rex(rex) => rex.opcodes.opcode(),
+            Encoding::Vex(vex) => vex.opcode,
+        }
+    }
 }
 
 impl fmt::Display for Encoding {
@@ -416,6 +424,22 @@ pub struct Opcodes {
     pub primary: u8,
     /// Some instructions (e.g., SIMD) may have a secondary opcode.
     pub secondary: Option<u8>,
+}
+
+impl Opcodes {
+    /// Return the main opcode for this instruction.
+    ///
+    /// Note that [`Rex`]-encoded instructions have a complex opcode scheme (see
+    /// [`Opcodes`] documentation); the opcode one is usually looking for is the
+    /// last one. This returns the last opcode: the secondary opcode if one is
+    /// available and the primary otherwise.
+    fn opcode(&self) -> u8 {
+        if let Some(secondary) = self.secondary {
+            secondary
+        } else {
+            self.primary
+        }
+    }
 }
 
 impl From<u8> for Opcodes {

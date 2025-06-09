@@ -33,6 +33,7 @@ pub fn inst(
         format,
         encoding,
         features: features.into(),
+        alternate: None,
         has_trap: false,
         custom: Custom::default(),
     }
@@ -61,6 +62,8 @@ pub struct Inst {
     /// "64-bit/32-bit Mode Support" and "CPUID Feature Flag" columns of the x64
     /// reference manual.
     pub features: Features,
+    /// An alternate version of this instruction, if it exists.
+    pub alternate: Option<Alternate>,
     /// Whether or not this instruction can trap and thus needs a `TrapCode`
     /// payload in the instruction itself.
     pub has_trap: bool,
@@ -101,6 +104,15 @@ impl Inst {
         self.custom = custom.into();
         self
     }
+
+    /// Sets the alternate version of this instruction, if it exists.
+    pub fn alt(mut self, feature: Feature, alternate: impl Into<String>) -> Self {
+        self.alternate = Some(Alternate {
+            feature,
+            name: alternate.into(),
+        });
+        self
+    }
 }
 
 impl core::fmt::Display for Inst {
@@ -110,12 +122,16 @@ impl core::fmt::Display for Inst {
             format,
             encoding,
             features,
+            alternate,
             has_trap,
             custom,
         } = self;
         write!(f, "{name}: {format} => {encoding}")?;
         if !features.is_empty() {
             write!(f, " [{features}]")?;
+        }
+        if let Some(alternate) = alternate {
+            write!(f, " (alternate: {alternate})")?;
         }
         if *has_trap {
             write!(f, " has_trap")?;
@@ -124,5 +140,30 @@ impl core::fmt::Display for Inst {
             write!(f, " custom({custom})")?;
         }
         Ok(())
+    }
+}
+
+/// An alternate version of an instruction.
+///
+/// Some AVX-specific context: some instructions have the same semantics in
+/// their SSE and AVX encodings. In these cases, we use this structure to record
+/// the name of the upgraded version of the instruction, allowing us to replace
+/// the SSE instruction with its AVX version during lowering. For AVX, using the
+/// VEX-encoded instruction is typically better than its legacy SSE version:
+/// - VEX can encode three operands
+/// - VEX allows unaligned memory access (avoids additional `MOVUPS`)
+/// - VEX can compact byte-long prefixes into the VEX prefix
+/// - VEX instructions zero the upper bits of XMM registers by default
+pub struct Alternate {
+    /// Indicate the feature check to use to trigger the replacement.
+    pub feature: Feature,
+    /// The full name (see [`Inst::name`]) of the instruction used for
+    /// replacement.
+    pub name: String,
+}
+
+impl core::fmt::Display for Alternate {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "{} => {}", self.feature, self.name)
     }
 }

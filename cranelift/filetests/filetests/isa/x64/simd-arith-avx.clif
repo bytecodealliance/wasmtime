@@ -739,7 +739,7 @@ block0(v0: f64x2, v1: f64x2):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vaddpd  %xmm0, %xmm1, %xmm0
+;   vaddpd %xmm1, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -1346,7 +1346,7 @@ block0(v0: f64x2):
 ;   vmaxpd  %xmm0, %xmm4, %xmm6
 ;   vminpd  %xmm6, const(0), %xmm0
 ;   vroundpd $3, %xmm0, %xmm2
-;   vaddpd  %xmm2, const(1), %xmm5
+;   vaddpd (%rip), %xmm2, %xmm5
 ;   vshufps $136, %xmm5, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
