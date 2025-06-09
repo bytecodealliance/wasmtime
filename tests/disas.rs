@@ -58,6 +58,17 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
+    // There's not a ton of use in emulating these tests on other architectures
+    // since they only exercise architecture-independent code of compiling to
+    // multiple architectures. Additionally CI seems to occasionally deadlock or
+    // get stuck in these tests when using QEMU, and it's not entirely clear
+    // why. Finally QEMU-emulating these tests is relatively slow and without
+    // much benefit from emulation it's hard to justify this. In the end disable
+    // this test suite when QEMU is enabled.
+    if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
+        return Ok(());
+    }
+
     let _ = env_logger::try_init();
 
     let mut tests = Vec::new();
