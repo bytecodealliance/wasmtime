@@ -65,7 +65,7 @@ fn main() -> Result<()> {
     // why. Finally QEMU-emulating these tests is relatively slow and without
     // much benefit from emulation it's hard to justify this. In the end disable
     // this test suite when QEMU is enabled.
-    if env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
+    if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
         return Ok(());
     }
 
