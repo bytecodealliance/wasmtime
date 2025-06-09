@@ -457,7 +457,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // `gen_add_imm` is only ever called after register allocation has taken place, and as a
             // result it's ok to reuse the scratch2 register here. If that changes, we'll need to
             // plumb through a way to allocate temporary virtual registers
-            insts.extend(Inst::load_constant(scratch2, imm, &mut |_| scratch2));
+            insts.extend(Inst::load_constant(scratch2, imm));
             insts.push(Inst::AluRRRExtend {
                 alu_op: ALUOp::Add,
                 size: OperandSize::Size64,
@@ -542,7 +542,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             let tmp = writable_spilltmp_reg();
             // `gen_sp_reg_adjust` is called after regalloc2, so it's acceptable to reuse `tmp` for
             // intermediates in `load_constant`.
-            let const_inst = Inst::load_constant(tmp, amount, &mut |_| tmp);
+            let const_inst = Inst::load_constant(tmp, amount);
             let adj_inst = Inst::AluRRRExtend {
                 alu_op,
                 size: OperandSize::Size64,
@@ -1043,7 +1043,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
         let arg1 = writable_xreg(1);
         let arg2 = writable_xreg(2);
         let tmp = alloc_tmp(Self::word_type());
-        insts.extend(Inst::load_constant(tmp, size as u64, &mut alloc_tmp));
+        insts.extend(Inst::load_constant(tmp, size as u64));
         insts.push(Inst::Call {
             info: Box::new(CallInfo {
                 dest: ExternalName::LibCall(LibCall::Memcpy),
@@ -1221,8 +1221,8 @@ impl AArch64MachineDeps {
         let end = writable_tmp2_reg();
         // `gen_inline_probestack` is called after regalloc2, so it's acceptable to reuse
         // `start` and `end` as temporaries in load_constant.
-        insts.extend(Inst::load_constant(start, 0, &mut |_| start));
-        insts.extend(Inst::load_constant(end, frame_size.into(), &mut |_| end));
+        insts.extend(Inst::load_constant(start, 0));
+        insts.extend(Inst::load_constant(end, frame_size.into()));
         insts.push(Inst::StackProbeLoop {
             start,
             end: end.to_reg(),
