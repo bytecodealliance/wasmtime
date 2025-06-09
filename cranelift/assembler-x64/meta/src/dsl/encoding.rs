@@ -41,6 +41,7 @@ pub fn vex(length: VexLength) -> Vex {
         opcode: u8::MAX,
         modrm: None,
         imm: Imm::None,
+        is4: false,
     }
 }
 
@@ -945,6 +946,8 @@ pub struct Vex {
     pub modrm: Option<ModRmKind>,
     /// See [`Rex.imm`](Rex.imm).
     pub imm: Imm,
+    /// See [`Vex::is4`]
+    pub is4: bool,
 }
 
 impl Vex {
@@ -1123,6 +1126,14 @@ impl Vex {
             modrm: Some(ModRmKind::Digit(extension)),
             ..self
         }
+    }
+
+    /// An 8-bit immediate byte is present containing a source register
+    /// specifier in either imm8[7:4] (for 64-bit
+    /// mode) or imm8[6:4] (for 32-bit mode), and instruction-specific payload
+    /// in imm8[3:0].
+    pub fn is4(self) -> Self {
+        Self { is4: true, ..self }
     }
 
     fn validate(&self, _operands: &[Operand]) {

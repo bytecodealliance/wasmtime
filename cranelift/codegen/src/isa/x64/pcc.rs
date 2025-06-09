@@ -198,7 +198,6 @@ pub(crate) fn check(
         Inst::StackProbeLoop { tmp, .. } => ensure_no_fact(vcode, tmp.to_reg()),
 
         Inst::XmmRmR { dst, ref src2, .. }
-        | Inst::XmmRmRBlend { dst, ref src2, .. }
         | Inst::XmmUnaryRmR {
             dst, src: ref src2, ..
         }
@@ -247,9 +246,6 @@ pub(crate) fn check(
             dst,
             src3: ref src2,
             ..
-        }
-        | Inst::XmmRmRBlendVex {
-            op, dst, ref src2, ..
         }
         | Inst::XmmUnaryRmRVex {
             op,

@@ -32,6 +32,7 @@ impl dsl::Operand {
                 format!("XmmMem<R::{mut_}Xmm, R::ReadGpr>")
             }
             m8 | m16 | m32 | m64 => format!("Amode<R::ReadGpr>"),
+            xmm0 => format!("Fixed<R::{mut_}Xmm, {{ xmm::enc::XMM0 }}>"),
         }
     }
 }
@@ -50,10 +51,15 @@ impl dsl::Location {
                     format!("self.{self}.to_string()")
                 }
             }
-            al | ax | eax | rax | cl | dx | edx | rdx | r8 | r16 | r32 | r32a | r32b | r64
-            | r64a | r64b | rm8 | rm16 | rm32 | rm64 => match self.generate_size() {
-                Some(size) => format!("self.{self}.to_string({size})"),
-                None => unreachable!(),
+            r8 | r16 | r32 | r32a | r32b | r64 | r64a | r64b | rm8 | rm16 | rm32 | rm64 => {
+                match self.generate_size() {
+                    Some(size) => format!("self.{self}.to_string({size})"),
+                    None => unreachable!(),
+                }
+            }
+            al | ax | eax | rax | cl | dx | edx | rdx | xmm0 => match self.generate_size() {
+                Some(size) => format!("self.{self}.to_string(Some({size}))"),
+                None => format!("self.{self}.to_string(None)"),
             },
             xmm_m16 | xmm_m32 | xmm_m64 | xmm1 | xmm2 | xmm3 | xmm_m128 | m8 | m16 | m32 | m64 => {
                 format!("self.{self}.to_string()")
@@ -74,9 +80,7 @@ impl dsl::Location {
             m8 | m16 | m32 | m64 => {
                 panic!("no need to generate a size for memory-only access")
             }
-            xmm1 | xmm2 | xmm3 | xmm_m16 | xmm_m32 | xmm_m64 | xmm_m128 => {
-                panic!("no need to generate a size for XMM-sized access")
-            }
+            xmm1 | xmm2 | xmm3 | xmm_m16 | xmm_m32 | xmm_m64 | xmm_m128 | xmm0 => None,
         }
     }
 }

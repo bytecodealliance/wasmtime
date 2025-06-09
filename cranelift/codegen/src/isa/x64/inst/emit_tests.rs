@@ -87,16 +87,6 @@ impl Inst {
             size,
         }
     }
-
-    fn xmm_rm_r_blend(op: SseOpcode, src2: RegMem, dst: Writable<Reg>) -> Inst {
-        Inst::XmmRmRBlend {
-            op,
-            src1: Xmm::unwrap_new(dst.to_reg()),
-            src2: XmmMemAligned::unwrap_new(src2),
-            mask: Xmm::unwrap_new(regs::xmm0()),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
 }
 
 #[test]
@@ -165,7 +155,6 @@ fn test_x64_emit() {
     let w_xmm10 = Writable::<Reg>::from_reg(xmm10);
     let w_xmm11 = Writable::<Reg>::from_reg(xmm11);
     let w_xmm12 = Writable::<Reg>::from_reg(xmm12);
-    let w_xmm13 = Writable::<Reg>::from_reg(xmm13);
 
     let mut insns = Vec::<(Inst, &str, &str)>::new();
 
@@ -1300,27 +1289,6 @@ fn test_x64_emit() {
         Inst::xmm_cmp_rm_r(SseOpcode::Ucomisd, xmm12, RegMem::reg(xmm11)),
         "66450F2EE3",
         "ucomisd %xmm11, %xmm12",
-    ));
-
-    // ========================================================
-    // XMM_RM_R: float binary ops
-
-    insns.push((
-        Inst::xmm_rm_r_blend(SseOpcode::Blendvpd, RegMem::reg(xmm15), w_xmm4),
-        "66410F3815E7",
-        "blendvpd %xmm4, %xmm15, %xmm4",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r_blend(SseOpcode::Blendvps, RegMem::reg(xmm2), w_xmm3),
-        "660F3814DA",
-        "blendvps %xmm3, %xmm2, %xmm3",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r_blend(SseOpcode::Pblendvb, RegMem::reg(xmm12), w_xmm13),
-        "66450F3810EC",
-        "pblendvb %xmm13, %xmm12, %xmm13",
     ));
 
     // ========================================================

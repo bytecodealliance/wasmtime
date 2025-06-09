@@ -120,17 +120,6 @@
                         (src2 XmmMem)
                         (dst WritableXmm))
 
-       ;; XMM (scalar or vector) blend op. The mask is used to blend between
-       ;; src1 and src2. This differs from a use of `XmmRmR` as the mask is
-       ;; implicitly in register xmm0; this special case exists to allow us to
-       ;; communicate the constraint on the `mask` register to regalloc2.
-       (XmmRmRBlend
-         (op SseOpcode)
-         (src1 Xmm)
-         (src2 XmmMemAligned)
-         (mask Xmm)
-         (dst WritableXmm))
-
        ;; XMM (scalar or vector) binary op that relies on the VEX prefix and
        ;; has two inputs.
        (XmmRmiRVex (op AvxOpcode)
@@ -153,13 +142,6 @@
                    (src2 Xmm)
                    (src3 XmmMem)
                    (dst WritableXmm))
-
-       ;; XMM blend operation using the VEX encoding.
-       (XmmRmRBlendVex (op AvxOpcode)
-                       (src1 Xmm)
-                       (src2 XmmMem)
-                       (mask Xmm)
-                       (dst WritableXmm))
 
        ;; XMM unary op using a VEX encoding (aka AVX).
        (XmmUnaryRmRVex (op AvxOpcode)
@@ -621,9 +603,7 @@
 (rule (operand_size_bits (OperandSize.Size64)) 64)
 
 (type SseOpcode extern
-      (enum Blendvpd
-            Blendvps
-            Comiss
+      (enum Comiss
             Comisd
             Cmpps
             Cmppd
@@ -639,7 +619,6 @@
             Packusdw
             Packuswb
             Palignr
-            Pblendvb
             Pmaddubsw
             Pmaddwd
             Pshufb
@@ -1043,9 +1022,6 @@
             Vminpd
             Vmaxps
             Vmaxpd
-            Vblendvpd
-            Vblendvps
-            Vpblendvb
             Vmovlhps
             Vpmaxsb
             Vpmaxsw
@@ -1616,20 +1592,6 @@
 (rule (xmm_rm_r_unaligned op src1 src2)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmRUnaligned op src1 src2 dst))))
-        dst))
-
-;; Helper for creating `XmmRmRBlend` instructions
-(decl xmm_rm_r_blend (SseOpcode Xmm XmmMemAligned Xmm) Xmm)
-(rule (xmm_rm_r_blend op src1 src2 mask)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRBlend op src1 src2 mask dst))))
-        dst))
-
-;; Helper for creating `XmmRmRBlendVex` instructions
-(decl xmm_rmr_blend_vex (AvxOpcode Xmm XmmMem Xmm) Xmm)
-(rule (xmm_rmr_blend_vex op src1 src2 mask)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRBlendVex op src1 src2 mask dst))))
         dst))
 
 ;; Helper for creating `XmmUnaryRmRVex` instructions
@@ -3376,27 +3338,24 @@
 
 ;; Helper for creating `blendvpd` instructions.
 (decl x64_blendvpd (Xmm XmmMem Xmm) Xmm)
-(rule 0 (x64_blendvpd src1 src2 mask)
-      (xmm_rm_r_blend (SseOpcode.Blendvpd) src1 src2 mask))
+(rule 0 (x64_blendvpd src1 src2 mask) (x64_blendvpd_rm0 src1 src2 mask))
 (rule 1 (x64_blendvpd src1 src2 mask)
       (if-let true (use_avx))
-      (xmm_rmr_blend_vex (AvxOpcode.Vblendvpd) src1 src2 mask))
+      (x64_vblendvpd_rvmr src1 src2 mask))
 
 ;; Helper for creating `blendvps` instructions.
 (decl x64_blendvps (Xmm XmmMem Xmm) Xmm)
-(rule 0 (x64_blendvps src1 src2 mask)
-      (xmm_rm_r_blend (SseOpcode.Blendvps) src1 src2 mask))
+(rule 0 (x64_blendvps src1 src2 mask) (x64_blendvps_rm0 src1 src2 mask))
 (rule 1 (x64_blendvps src1 src2 mask)
       (if-let true (use_avx))
-      (xmm_rmr_blend_vex (AvxOpcode.Vblendvps) src1 src2 mask))
+      (x64_vblendvps_rvmr src1 src2 mask))
 
 ;; Helper for creating `pblendvb` instructions.
 (decl x64_pblendvb (Xmm XmmMem Xmm) Xmm)
-(rule 0 (x64_pblendvb src1 src2 mask)
-      (xmm_rm_r_blend (SseOpcode.Pblendvb) src1 src2 mask))
+(rule 0 (x64_pblendvb src1 src2 mask) (x64_pblendvb_rm src1 src2 mask))
 (rule 1 (x64_pblendvb src1 src2 mask)
       (if-let true (use_avx))
-      (xmm_rmr_blend_vex (AvxOpcode.Vpblendvb) src1 src2 mask))
+      (x64_vpblendvb_rvmr src1 src2 mask))
 
 ;; Helper for creating `pblendw` instructions.
 (decl x64_pblendw (Xmm XmmMem u8) Xmm)
