@@ -4988,6 +4988,8 @@
 (rule (bitcast_xmm_to_gprs src)
       (value_regs (x64_movq_to_gpr src) (x64_movq_to_gpr (x64_pshufd src 0b11101110))))
 
+;; This rule zeroes out the upper bits of the XMM register; we need this to
+;; avoid undefined bits in scaler_to_vector.
 (decl bitcast_gpr_to_xmm (u8 Gpr) Xmm)
 (rule (bitcast_gpr_to_xmm 16 src)
       (x64_pinsrw (xmm_zero $I16X8) src 0))
