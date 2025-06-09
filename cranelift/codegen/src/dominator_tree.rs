@@ -84,7 +84,7 @@ impl SpanningTree {
 
         self.nodes.push(SpanningTreeNode {
             block: block.into(),
-            ancestor: ancestor,
+            ancestor,
             label: pre_number,
             semi: pre_number,
             idom: ancestor,

@@ -193,8 +193,8 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
             .accumulate_tail_args_size(callee_pop_size);
 
         Box::new(ReturnCallInfo {
-            dest: dest,
-            uses: uses,
+            dest,
+            uses,
             callee_pop_size,
         })
     }

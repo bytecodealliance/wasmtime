@@ -313,11 +313,11 @@ impl IpSocketAddress {
     pub const fn new(ip: IpAddress, port: u16) -> IpSocketAddress {
         match ip {
             IpAddress::Ipv4(addr) => IpSocketAddress::Ipv4(Ipv4SocketAddress {
-                port: port,
+                port,
                 address: addr,
             }),
             IpAddress::Ipv6(addr) => IpSocketAddress::Ipv6(Ipv6SocketAddress {
-                port: port,
+                port,
                 address: addr,
                 flow_info: 0,
                 scope_id: 0,

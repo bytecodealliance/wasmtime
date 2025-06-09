@@ -1073,7 +1073,7 @@ impl Assembler {
 
     fn fpu_round(&mut self, op: FpuRoundMode, rn: Reg, rd: WritableReg) {
         self.emit(Inst::FpuRound {
-            op: op,
+            op,
             rd: rd.map(Into::into),
             rn: rn.into(),
         });

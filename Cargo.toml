@@ -213,6 +213,7 @@ unnecessary_fallible_conversions = 'warn'
 unnecessary_cast = 'warn'
 allow_attributes_without_reason = 'warn'
 from_over_into = 'warn'
+redundant_field_names = 'warn'
 
 [workspace.dependencies]
 # Public crates related to Wasmtime.
