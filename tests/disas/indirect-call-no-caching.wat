@@ -84,8 +84,8 @@
 ;; @0050                               v10 = iconst.i64 0
 ;; @0050                               v11 = select_spectre_guard v5, v10, v9  ; v10 = 0
 ;; @0050                               v12 = load.i64 user5 aligned table v11
-;;                                     v29 = iconst.i64 -2
-;; @0050                               v13 = band v12, v29  ; v29 = -2
+;;                                     v27 = iconst.i64 -2
+;; @0050                               v13 = band v12, v27  ; v27 = -2
 ;; @0050                               brif v12, block3(v13), block2
 ;;
 ;;                                 block2 cold:

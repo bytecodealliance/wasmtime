@@ -25,8 +25,8 @@
 ;; @0022                               v6 = uextend.i64 v3
 ;;                                     v55 = iconst.i64 3
 ;;                                     v56 = ishl v6, v55  ; v55 = 3
-;;                                     v49 = iconst.i64 32
-;; @0022                               v8 = ushr v56, v49  ; v49 = 32
+;;                                     v53 = iconst.i64 32
+;; @0022                               v8 = ushr v56, v53  ; v53 = 32
 ;; @0022                               trapnz v8, user18
 ;; @0022                               v5 = iconst.i32 16
 ;;                                     v62 = iconst.i32 3
@@ -42,8 +42,8 @@
 ;;                                     v73 = iconst.i32 -8
 ;; @0022                               v21 = band v19, v73  ; v73 = -8
 ;; @0022                               v22 = uadd_overflow_trap v21, v10, user18
-;; @0022                               v50 = load.i64 notrap aligned readonly can_move v0+8
-;; @0022                               v24 = load.i64 notrap aligned v50+32
+;; @0022                               v51 = load.i64 notrap aligned readonly can_move v0+8
+;; @0022                               v24 = load.i64 notrap aligned v51+32
 ;; @0022                               v23 = uextend.i64 v22
 ;; @0022                               v25 = icmp ule v23, v24
 ;; @0022                               brif v25, block2, block3
@@ -51,7 +51,7 @@
 ;;                                 block2:
 ;; @0022                               v32 = iconst.i32 -1476395008
 ;;                                     v74 = bor.i32 v10, v32  ; v32 = -1476395008
-;; @0022                               v29 = load.i64 notrap aligned readonly can_move v50+24
+;; @0022                               v29 = load.i64 notrap aligned readonly can_move v51+24
 ;;                                     v95 = band.i32 v19, v73  ; v73 = -8
 ;;                                     v96 = uextend.i64 v95
 ;; @0022                               v31 = iadd v29, v96
@@ -60,8 +60,8 @@
 ;; @0022                               v36 = load.i32 notrap aligned readonly can_move v35
 ;; @0022                               store notrap aligned v36, v31+4
 ;; @0022                               store.i32 notrap aligned v22, v15
-;;                                     v48 = iconst.i64 8
-;; @0022                               v37 = iadd v31, v48  ; v48 = 8
+;;                                     v54 = iconst.i64 8
+;; @0022                               v37 = iadd v31, v54  ; v54 = 8
 ;; @0022                               store.i32 notrap aligned v3, v37
 ;;                                     v77 = iconst.i64 16
 ;;                                     v83 = iadd v31, v77  ; v77 = 16

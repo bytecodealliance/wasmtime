@@ -22,12 +22,12 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;;                                     v29 = stack_addr.i64 ss0
-;;                                     store notrap v2, v29
-;;                                     v31 = iconst.i32 0
-;; @001e                               v4 = icmp eq v2, v31  ; v31 = 0
+;;                                     v36 = stack_addr.i64 ss0
+;;                                     store notrap v2, v36
+;;                                     v34 = iconst.i32 0
+;; @001e                               v4 = icmp eq v2, v34  ; v34 = 0
 ;; @001e                               v5 = uextend.i32 v4
-;; @001e                               brif v5, block4(v31), block2  ; v31 = 0
+;; @001e                               brif v5, block4(v34), block2  ; v34 = 0
 ;;
 ;;                                 block2:
 ;; @001e                               v7 = iconst.i32 1
@@ -36,8 +36,8 @@
 ;; @001e                               brif v8, block4(v37), block3  ; v37 = 0
 ;;
 ;;                                 block3:
-;; @001e                               v34 = load.i64 notrap aligned readonly can_move v0+8
-;; @001e                               v14 = load.i64 notrap aligned readonly can_move v34+24
+;; @001e                               v30 = load.i64 notrap aligned readonly can_move v0+8
+;; @001e                               v14 = load.i64 notrap aligned readonly can_move v30+24
 ;; @001e                               v13 = uextend.i64 v2
 ;; @001e                               v15 = iadd v14, v13
 ;; @001e                               v16 = iconst.i64 4
@@ -58,7 +58,7 @@
 ;;
 ;;                                 block4(v24: i32):
 ;; @001e                               trapz v24, user19
-;;                                     v25 = load.i32 notrap v29
+;;                                     v25 = load.i32 notrap v36
 ;; @0021                               jump block1
 ;;
 ;;                                 block1:

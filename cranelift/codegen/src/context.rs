@@ -168,13 +168,13 @@ impl Context {
             self.func.display()
         );
 
-        self.compute_cfg();
         if isa.flags().enable_nan_canonicalization() {
             self.canonicalize_nans(isa)?;
         }
 
         self.legalize(isa)?;
 
+        self.compute_cfg();
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
         self.remove_constant_phis(isa)?;
@@ -291,6 +291,7 @@ impl Context {
         // TODO: Avoid doing this when legalization doesn't actually mutate the CFG.
         self.domtree.clear();
         self.loop_analysis.clear();
+        self.cfg.clear();
 
         // Run some specific legalizations only.
         simple_legalize(&mut self.func, isa);

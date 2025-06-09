@@ -32,15 +32,15 @@
 ;; @0020                               v15 = band v13, v54  ; v54 = -8
 ;; @0020                               v4 = iconst.i32 16
 ;; @0020                               v16 = uadd_overflow_trap v15, v4, user18  ; v4 = 16
-;; @0020                               v35 = load.i64 notrap aligned readonly can_move v0+8
-;; @0020                               v18 = load.i64 notrap aligned v35+32
+;; @0020                               v38 = load.i64 notrap aligned readonly can_move v0+8
+;; @0020                               v18 = load.i64 notrap aligned v38+32
 ;; @0020                               v17 = uextend.i64 v16
 ;; @0020                               v19 = icmp ule v17, v18
 ;; @0020                               brif v19, block2, block3
 ;;
 ;;                                 block2:
 ;;                                     v55 = iconst.i32 -1342177264
-;; @0020                               v23 = load.i64 notrap aligned readonly can_move v35+24
+;; @0020                               v23 = load.i64 notrap aligned readonly can_move v38+24
 ;;                                     v62 = band.i32 v13, v54  ; v54 = -8
 ;;                                     v63 = uextend.i64 v62
 ;; @0020                               v25 = iadd v23, v63
@@ -51,8 +51,8 @@
 ;; @0020                               store.i32 notrap aligned v16, v9
 ;; @0020                               v33 = call fn1(v0, v2)
 ;; @0020                               v34 = ireduce.i32 v33
-;;                                     v39 = iconst.i64 8
-;; @0020                               v31 = iadd v25, v39  ; v39 = 8
+;;                                     v35 = iconst.i64 8
+;; @0020                               v31 = iadd v25, v35  ; v35 = 8
 ;; @0020                               store notrap aligned little v34, v31
 ;; @0023                               jump block1
 ;;

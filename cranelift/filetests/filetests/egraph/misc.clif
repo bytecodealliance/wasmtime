@@ -14,7 +14,7 @@ block0(v0: i64):
 ; check: function %stack_load(i64) -> i64 fast {
 ; nextln:    ss0 = explicit_slot 8
 ; check:  block0(v0: i64):
-; nextln:     v2 = stack_addr.i64 ss0
-; nextln:     store notrap v0, v2
+; nextln:     v3 = stack_addr.i64 ss0
+; nextln:     store notrap v0, v3
 ; nextln:     return v0
 ; nextln: }

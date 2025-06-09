@@ -21,8 +21,8 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i64):
 ;; @0024                               trapz v2, user16
-;; @0024                               v29 = load.i64 notrap aligned readonly can_move v0+8
-;; @0024                               v6 = load.i64 notrap aligned readonly can_move v29+24
+;; @0024                               v32 = load.i64 notrap aligned readonly can_move v0+8
+;; @0024                               v6 = load.i64 notrap aligned readonly can_move v32+24
 ;; @0024                               v5 = uextend.i64 v2
 ;; @0024                               v7 = iadd v6, v5
 ;; @0024                               v8 = iconst.i64 16
