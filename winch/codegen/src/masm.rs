@@ -2,7 +2,7 @@ use crate::abi::{self, LocalSlot, align_to, scratch};
 use crate::codegen::{CodeGenContext, Emission, FuncEnv};
 use crate::isa::{
     CallingConvention,
-    reg::{Reg, WritableReg, writable, RegClass},
+    reg::{Reg, RegClass, WritableReg, writable},
 };
 use anyhow::Result;
 use cranelift_codegen::{
@@ -206,13 +206,13 @@ pub struct FloatScratch;
 
 impl ScratchType for IntScratch {
     fn reg_class() -> RegClass {
-	RegClass::Int
+        RegClass::Int
     }
 }
 
 impl ScratchType for FloatScratch {
     fn reg_class() -> RegClass {
-	RegClass::Float
+        RegClass::Float
     }
 }
 
@@ -221,15 +221,15 @@ pub struct Scratch(Reg);
 
 impl Scratch {
     pub fn new(r: Reg) -> Self {
-	Self(r)
+        Self(r)
     }
 
     pub fn inner(&self) -> Reg {
-	self.0
+        self.0
     }
 
     pub fn writable(&self) -> WritableReg {
-	writable!(self.0)
+        writable!(self.0)
     }
 }
 
@@ -1170,13 +1170,13 @@ impl Imm {
     /// This function panics if the underlying value can't be represented
     /// as u64.
     pub fn unwrap_as_u64(&self) -> u64 {
-	match self {
-	    Self::I32(v) => *v as u64,
-	    Self::I64(v) => *v,
-	    Self::F32(v) => *v as u64,
-	    Self::F64(v) => *v,
-	    _ => unreachable!()
-	}
+        match self {
+            Self::I32(v) => *v as u64,
+            Self::I64(v) => *v,
+            Self::F32(v) => *v as u64,
+            Self::F64(v) => *v,
+            _ => unreachable!(),
+        }
     }
 
     /// Get the operand size of the immediate.
@@ -1433,8 +1433,9 @@ pub(crate) trait MacroAssembler {
     ) -> Result<u32>;
 
     /// Acquire a scratch register and execute the given callback.
-    fn with_scratch<T: ScratchType, F>(&mut self, f:  F) -> Result<()>
-	where F: FnMut(&mut Self, Scratch) -> Result<()>;
+    fn with_scratch<T: ScratchType, F>(&mut self, f: F) -> Result<()>
+    where
+        F: FnMut(&mut Self, Scratch) -> Result<()>;
 
     /// Get stack pointer offset.
     fn sp_offset(&self) -> Result<SPOffset>;

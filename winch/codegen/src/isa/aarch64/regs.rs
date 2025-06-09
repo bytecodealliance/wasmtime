@@ -169,7 +169,6 @@ const ALLOCATABLE_SCRATCH_FPR: u32 = 1 << float_scratch().hw_enc();
 /// Non-allocatable scratch general purpose registers.
 const NON_ALLOCATABLE_SCRATCH_FPR: u32 = u32::MAX & !ALLOCATABLE_SCRATCH_FPR;
 
-
 /// Bitset for allocatable general purpose registers.
 pub fn gpr_bit_set() -> RegBitSet {
     RegBitSet::int(

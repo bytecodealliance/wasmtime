@@ -298,29 +298,31 @@ impl Assembler {
     /// into the destination register.
     /// The emitted instructions will depend on the destination register class.
     pub fn mov_ir(&mut self, rd: WritableReg, imm: Imm, size: OperandSize) {
-	match rd.to_reg().class() {
-	    RegClass::Int => {
-		Inst::load_constant(rd.map(Into::into), imm.unwrap_as_u64(), &mut |_| rd.map(Into::into))
-		    .into_iter()
-		    .for_each(|i| self.emit(i));
-	    },
-	    RegClass::Float => {
-		match ASIMDFPModImm::maybe_from_u64(imm.unwrap_as_u64(), size.into()) {
-		    Some(imm) => {
-			self.emit(Inst::FpuMoveFPImm {
-			    rd: rd.map(Into::into),
-			    imm,
-			    size: size.into(),
-			});
-		    }
-		    _ => {
-			let addr = self.add_constant(&imm.to_bytes());
-			self.uload(addr, rd, size, TRUSTED_FLAGS);
-		    }
-		}
-	    },
-	    _ => unreachable!()
-	}
+        match rd.to_reg().class() {
+            RegClass::Int => {
+                Inst::load_constant(rd.map(Into::into), imm.unwrap_as_u64(), &mut |_| {
+                    rd.map(Into::into)
+                })
+                .into_iter()
+                .for_each(|i| self.emit(i));
+            }
+            RegClass::Float => {
+                match ASIMDFPModImm::maybe_from_u64(imm.unwrap_as_u64(), size.into()) {
+                    Some(imm) => {
+                        self.emit(Inst::FpuMoveFPImm {
+                            rd: rd.map(Into::into),
+                            imm,
+                            size: size.into(),
+                        });
+                    }
+                    _ => {
+                        let addr = self.add_constant(&imm.to_bytes());
+                        self.uload(addr, rd, size, TRUSTED_FLAGS);
+                    }
+                }
+            }
+            _ => unreachable!(),
+        }
     }
 
     /// Register to register move.
@@ -401,12 +403,12 @@ impl Assembler {
 
     /// Subtract immediate and register.
     pub fn sub_ir(&mut self, imm: Imm12, rn: Reg, rd: WritableReg, size: OperandSize) {
-	self.alu_rri(ALUOp::Sub, imm, rn, rd, size);
+        self.alu_rri(ALUOp::Sub, imm, rn, rd, size);
     }
 
     /// Subtract immediate and register, setting flags.
     pub fn subs_ir(&mut self, imm: Imm12, rn: Reg, size: OperandSize) {
-	self.alu_rri(ALUOp::SubS, imm, rn, writable!(regs::zero()), size);
+        self.alu_rri(ALUOp::SubS, imm, rn, writable!(regs::zero()), size);
     }
 
     /// Subtract with three registers.
@@ -543,7 +545,7 @@ impl Assembler {
 
     /// And immediate and register.
     pub fn and_ir(&mut self, imm: ImmLogic, rn: Reg, rd: WritableReg, size: OperandSize) {
-	self.alu_rri_logic(ALUOp::And, imm, rn, rd, size);
+        self.alu_rri_logic(ALUOp::And, imm, rn, rd, size);
     }
 
     /// Or with three registers.
@@ -553,7 +555,7 @@ impl Assembler {
 
     /// Or immediate and register.
     pub fn or_ir(&mut self, imm: ImmLogic, rn: Reg, rd: WritableReg, size: OperandSize) {
-	self.alu_rri_logic(ALUOp::Orr, imm, rn, rd, size);
+        self.alu_rri_logic(ALUOp::Orr, imm, rn, rd, size);
     }
 
     /// Xor with three registers.
@@ -563,7 +565,7 @@ impl Assembler {
 
     /// Xor immediate and register.
     pub fn xor_ir(&mut self, imm: ImmLogic, rn: Reg, rd: WritableReg, size: OperandSize) {
-	self.alu_rri_logic(ALUOp::Eor, imm, rn, rd, size);
+        self.alu_rri_logic(ALUOp::Eor, imm, rn, rd, size);
     }
 
     /// Shift with three registers.
@@ -589,7 +591,7 @@ impl Assembler {
         size: OperandSize,
     ) {
         let shift_op = self.shift_kind_to_alu_op(kind, rn, size);
-	self.alu_rri_shift(shift_op, imm, rn, rd, size);
+        self.alu_rri_shift(shift_op, imm, rn, rd, size);
     }
 
     /// Count Leading Zeros.

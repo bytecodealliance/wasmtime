@@ -9,8 +9,8 @@ use crate::{
     frame::Frame,
     isa::reg::RegClass,
     masm::{
-        ExtractLaneKind, MacroAssembler, MemMoveDirection, OperandSize, RegImm, ReplaceLaneKind,
-        SPOffset, ShiftKind, StackSlot, Imm,
+        ExtractLaneKind, Imm, MacroAssembler, MemMoveDirection, OperandSize, RegImm,
+        ReplaceLaneKind, SPOffset, ShiftKind, StackSlot,
     },
     reg::{Reg, WritableReg, writable},
     regalloc::RegAlloc,

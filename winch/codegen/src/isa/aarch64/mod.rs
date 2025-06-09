@@ -1,4 +1,4 @@
-use self::regs::{gpr_bit_set, fpr_bit_set};
+use self::regs::{fpr_bit_set, gpr_bit_set};
 use crate::{
     BuiltinFunctions,
     abi::{ABI, wasm_sig},

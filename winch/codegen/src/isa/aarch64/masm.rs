@@ -1,25 +1,36 @@
 use super::{
-    RegAlloc,
-    ABI,
+    ABI, RegAlloc,
     abi::Aarch64ABI,
     address::Address,
     asm::{Assembler, PatchableAddToReg},
-    regs::{self, scratch_gpr_bitset, scratch_fpr_bitset},
+    regs::{self, scratch_fpr_bitset, scratch_gpr_bitset},
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, local::LocalSlot, vmctx},
-    codegen::{ptr_type_from_ptr_size, CodeGenContext, CodeGenError, Emission, FuncEnv},
+    codegen::{CodeGenContext, CodeGenError, Emission, FuncEnv, ptr_type_from_ptr_size},
     isa::{
-        aarch64::abi::SHADOW_STACK_POINTER_SLOT_SIZE, reg::{writable, Reg, WritableReg}, CallingConvention
+        CallingConvention,
+        aarch64::abi::SHADOW_STACK_POINTER_SLOT_SIZE,
+        reg::{Reg, WritableReg, writable},
     },
     masm::{
-	CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, FloatScratch, Imm as I, IntCmpKind, IntScratch, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, Scratch, ScratchType, ShiftKind, SplatKind, StackSlot, StoreKind, TrapCode, TruncKind, V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind, V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind, V128NegKind, V128SubKind, V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS
+        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, FloatScratch,
+        Imm as I, IntCmpKind, IntScratch, LoadKind, MacroAssembler as Masm, MulWideKind,
+        OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, Scratch,
+        ScratchType, ShiftKind, SplatKind, StackSlot, StoreKind, TRUSTED_FLAGS, TrapCode,
+        TruncKind, UNTRUSTED_FLAGS, V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind,
+        V128ExtMulKind, V128ExtendKind, V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind,
+        V128NegKind, V128SubKind, V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
     },
     stack::TypedReg,
 };
 use anyhow::{Result, anyhow, bail};
 use cranelift_codegen::{
-    binemit::CodeOffset, ir::{MemFlags, RelSourceLoc, SourceLoc}, isa::aarch64::inst::{self, Cond, Imm12, ImmLogic, ImmShift, VectorSize}, settings, Final, MachBufferFinalized, MachLabel
+    Final, MachBufferFinalized, MachLabel,
+    binemit::CodeOffset,
+    ir::{MemFlags, RelSourceLoc, SourceLoc},
+    isa::aarch64::inst::{self, Cond, Imm12, ImmLogic, ImmShift, VectorSize},
+    settings,
 };
 use regalloc2::RegClass;
 use wasmtime_environ::{PtrSize, WasmValType};
@@ -56,7 +67,7 @@ impl MacroAssembler {
             asm: Assembler::new(shared_flags),
             sp_offset: 0u32,
             ptr_size: ptr_type_from_ptr_size(ptr_size.size()).try_into()?,
-	    scratch_scope: RegAlloc::from(scratch_gpr_bitset(), scratch_fpr_bitset()),
+            scratch_scope: RegAlloc::from(scratch_gpr_bitset(), scratch_fpr_bitset()),
         })
     }
 
@@ -84,22 +95,22 @@ impl MacroAssembler {
         let addend: u32 = <Aarch64ABI as ABI>::initial_frame_size().into();
         let delta = calculate_frame_adjustment(self.sp_offset()?.as_u32(), addend, alignment);
         if delta != 0 {
-
-	    self.sub(writable!(regs::sp()),
-		     // Since we don't need to synchronize the shadow stack pointer
-		     // when freeing stack space [^1], the stack pointer may become
-		     // out of sync with the primary shadow stack pointer. Therefore,
-		     // we use the shadow stack pointer as the reference for
-		     // calculating any alignment delta (self.sp_offset).
-		     //
-		     // [1]: This approach avoids an unnecessary move instruction and
-		     // maintains the invariant of not accessing memory below the
-		     // current stack pointer, preventing issues with signal handlers
-		     // and interrupts.
-		     regs::shadow_sp(),
-		     RegImm::i32(delta as i32),
-		     OperandSize::S64
-	    )?;
+            self.sub(
+                writable!(regs::sp()),
+                // Since we don't need to synchronize the shadow stack pointer
+                // when freeing stack space [^1], the stack pointer may become
+                // out of sync with the primary shadow stack pointer. Therefore,
+                // we use the shadow stack pointer as the reference for
+                // calculating any alignment delta (self.sp_offset).
+                //
+                // [1]: This approach avoids an unnecessary move instruction and
+                // maintains the invariant of not accessing memory below the
+                // current stack pointer, preventing issues with signal handlers
+                // and interrupts.
+                regs::shadow_sp(),
+                RegImm::i32(delta as i32),
+                OperandSize::S64,
+            )?;
 
             aligned = true;
         }
@@ -150,38 +161,38 @@ impl Masm for MacroAssembler {
         //
         // Luckily on aarch64 we have 2 available scratch registers, ip0 and
         // ip1.
-	// NB that this in this case, we manually allocate the scratch registers
-	// as precision when it comes to its usage is 
+        // NB that this in this case, we manually allocate the scratch registers
+        // as precision when it comes to its usage is
 
         let ptr_size = self.ptr_size;
-	self.with_aligned_sp(|masm| {
-	    masm.with_scratch::<IntScratch, _>(|masm, scratch_stk_limit| {
-		masm.with_scratch::<IntScratch, _>(|masm, scratch_tmp| {
-		    masm.load_ptr(
-		        masm.address_at_reg(vmctx, ptr_size_u8.vmcontext_store_context().into())?,
-		        scratch_stk_limit.writable(),
-		    )?;
+        self.with_aligned_sp(|masm| {
+            masm.with_scratch::<IntScratch, _>(|masm, scratch_stk_limit| {
+                masm.with_scratch::<IntScratch, _>(|masm, scratch_tmp| {
+                    masm.load_ptr(
+                        masm.address_at_reg(vmctx, ptr_size_u8.vmcontext_store_context().into())?,
+                        scratch_stk_limit.writable(),
+                    )?;
 
-		    masm.load_ptr(
-		        Address::offset(
-		            scratch_stk_limit.inner(),
-		            ptr_size_u8.vmstore_context_stack_limit().into(),
-		        ),
-		        scratch_stk_limit.writable(), 
-		    )?;
+                    masm.load_ptr(
+                        Address::offset(
+                            scratch_stk_limit.inner(),
+                            ptr_size_u8.vmstore_context_stack_limit().into(),
+                        ),
+                        scratch_stk_limit.writable(),
+                    )?;
 
-		    masm.add_stack_max(scratch_stk_limit.writable(), scratch_tmp.writable());
+                    masm.add_stack_max(scratch_stk_limit.writable(), scratch_tmp.writable());
 
-		    // Aarch can only do a cmp with sp in the first operand, which means we
-		    // use a less-than comparison, not a greater-than (stack grows down).
-		    masm.cmp(regs::sp(), scratch_stk_limit.inner().into(), ptr_size)?;
-		    masm.asm
-			.trapif(IntCmpKind::LtU.into(), TrapCode::STACK_OVERFLOW);
+                    // Aarch can only do a cmp with sp in the first operand, which means we
+                    // use a less-than comparison, not a greater-than (stack grows down).
+                    masm.cmp(regs::sp(), scratch_stk_limit.inner().into(), ptr_size)?;
+                    masm.asm
+                        .trapif(IntCmpKind::LtU.into(), TrapCode::STACK_OVERFLOW);
 
-		    Ok(())
-		})
-	    })
-	})
+                    Ok(())
+                })
+            })
+        })
     }
 
     fn frame_restore(&mut self) -> Result<()> {
@@ -219,16 +230,18 @@ impl Masm for MacroAssembler {
 
         let ssp = regs::shadow_sp();
 
-	match Imm12::maybe_from_u64(bytes as u64) {
-	    Some(v) => self.asm.sub_ir(v, ssp, writable!(ssp), OperandSize::S64),
-	    None => {
-		self.with_scratch::<IntScratch, _>(|masm, scratch| {
-		    masm.asm.mov_ir(scratch.writable(), I::I64(bytes as u64), OperandSize::S64);
-		    masm.asm.sub_rrr(scratch.inner(), ssp, writable!(ssp), OperandSize::S64);
-		    Ok(())
-		})?;
-	    }
-	}
+        match Imm12::maybe_from_u64(bytes as u64) {
+            Some(v) => self.asm.sub_ir(v, ssp, writable!(ssp), OperandSize::S64),
+            None => {
+                self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                    masm.asm
+                        .mov_ir(scratch.writable(), I::I64(bytes as u64), OperandSize::S64);
+                    masm.asm
+                        .sub_rrr(scratch.inner(), ssp, writable!(ssp), OperandSize::S64);
+                    Ok(())
+                })?;
+            }
+        }
 
         // Even though we're using the shadow stack pointer to reserve stack, we
         // must ensure that the real stack pointer reflects the stack claimed so
@@ -246,16 +259,18 @@ impl Masm for MacroAssembler {
         }
 
         let ssp = regs::shadow_sp();
-	match Imm12::maybe_from_u64(bytes as u64) {
-	    Some(v) => self.asm.add_ir(v, ssp, writable!(ssp), OperandSize::S64),
-	    None => {
-		self.with_scratch::<IntScratch, _>(|masm, scratch| {
-		    masm.asm.mov_ir(scratch.writable(), I::I64(bytes as u64), OperandSize::S64);
-		    masm.asm.add_rrr(ssp, scratch.inner(), writable!(ssp), OperandSize::S64);
-		    Ok(())
-		})?;
-	    }
-	}
+        match Imm12::maybe_from_u64(bytes as u64) {
+            Some(v) => self.asm.add_ir(v, ssp, writable!(ssp), OperandSize::S64),
+            None => {
+                self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                    masm.asm
+                        .mov_ir(scratch.writable(), I::I64(bytes as u64), OperandSize::S64);
+                    masm.asm
+                        .add_rrr(ssp, scratch.inner(), writable!(ssp), OperandSize::S64);
+                    Ok(())
+                })?;
+            }
+        }
 
         // We must ensure that the real stack pointer reflects the offset
         // tracked by `self.sp_offset`, we use such value to calculate
@@ -311,33 +326,32 @@ impl Masm for MacroAssembler {
     }
 
     fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) -> Result<()> {
-	match src {
-	    RegImm::Imm(v) => {
-		match v {
-		   I::I32(_) | I::I64(_) => {
-			self.with_scratch::<IntScratch, _>(|masm, scratch| {
-			    masm.asm.mov_ir(scratch.writable(), v, v.size());
-			    masm.asm.str(scratch.inner(), dst, size, TRUSTED_FLAGS);
-			    Ok(())
-			})?;
-		    }
-		    imm @ (I::F32(_) | I::F64(_)) => {
-			self.with_scratch::<FloatScratch, _>(|masm, scratch| {
-			    masm.asm.mov_ir(scratch.writable(), imm, imm.size());
-			    masm.asm.str(scratch.inner(), dst, size, TRUSTED_FLAGS);
-			    Ok(())
-			})?;
-		    },
-		    _ => bail!(CodeGenError::unsupported_wasm_type()),
-		};
-		Ok(())
-	    },
-	    RegImm::Reg(r) => {
-		self.asm.str(r, dst, size, TRUSTED_FLAGS);
-		Ok(())
-	    }
-	}
-	
+        match src {
+            RegImm::Imm(v) => {
+                match v {
+                    I::I32(_) | I::I64(_) => {
+                        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                            masm.asm.mov_ir(scratch.writable(), v, v.size());
+                            masm.asm.str(scratch.inner(), dst, size, TRUSTED_FLAGS);
+                            Ok(())
+                        })?;
+                    }
+                    imm @ (I::F32(_) | I::F64(_)) => {
+                        self.with_scratch::<FloatScratch, _>(|masm, scratch| {
+                            masm.asm.mov_ir(scratch.writable(), imm, imm.size());
+                            masm.asm.str(scratch.inner(), dst, size, TRUSTED_FLAGS);
+                            Ok(())
+                        })?;
+                    }
+                    _ => bail!(CodeGenError::unsupported_wasm_type()),
+                };
+                Ok(())
+            }
+            RegImm::Reg(r) => {
+                self.asm.str(r, dst, size, TRUSTED_FLAGS);
+                Ok(())
+            }
+        }
     }
 
     fn wasm_store(&mut self, src: Reg, dst: Self::Address, op_kind: StoreKind) -> Result<()> {
@@ -355,16 +369,19 @@ impl Masm for MacroAssembler {
         })
     }
 
-    fn with_scratch<T: ScratchType, F>(&mut self, mut f:  F) -> Result<()>
-	where F: FnMut(&mut Self, Scratch) -> Result<()> {
+    fn with_scratch<T: ScratchType, F>(&mut self, mut f: F) -> Result<()>
+    where
+        F: FnMut(&mut Self, Scratch) -> Result<()>,
+    {
+        let r = self
+            .scratch_scope
+            .reg_for_class(T::reg_class(), &mut |_| Ok(()))
+            .expect("Scratch register to be available");
 
-	let r = self.scratch_scope.reg_for_class(T::reg_class(), &mut |_| Ok(()))
-	    .expect("Scratch register to be available");
+        f(self, Scratch::new(r))?;
 
-	f(self, Scratch::new(r))?;
-
-	self.scratch_scope.free(r);
-	Ok(())
+        self.scratch_scope.free(r);
+        Ok(())
     }
 
     fn call(
@@ -431,16 +448,17 @@ impl Masm for MacroAssembler {
         size: OperandSize,
     ) -> Result<()> {
         let (base, offset) = src.unwrap_offset();
-	match Imm12::maybe_from_u64(offset as u64) {
-	    Some(imm12) => self.asm.add_ir(imm12, base, dst, size),
-	    None => {
-		self.with_scratch::<IntScratch, _>(|masm, scratch| {
-		    masm.asm.mov_ir(scratch.writable(), I::i64(offset), OperandSize::S64,);
-		    masm.asm.add_rrr(scratch.inner(), base, dst, size);
-		    Ok(())
-		})?;
-	    }
-	}
+        match Imm12::maybe_from_u64(offset as u64) {
+            Some(imm12) => self.asm.add_ir(imm12, base, dst, size),
+            None => {
+                self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                    masm.asm
+                        .mov_ir(scratch.writable(), I::i64(offset), OperandSize::S64);
+                    masm.asm.add_rrr(scratch.inner(), base, dst, size);
+                    Ok(())
+                })?;
+            }
+        }
         Ok(())
     }
 
@@ -465,10 +483,10 @@ impl Masm for MacroAssembler {
     fn mov(&mut self, dst: WritableReg, src: RegImm, size: OperandSize) -> Result<()> {
         match (src, dst) {
             (RegImm::Imm(v), _) => match v {
-		I::I32(_) | I::I64(_) => {
-		    self.asm.mov_ir(dst, v, v.size());
-		    Ok(())
-		},
+                I::I32(_) | I::I64(_) => {
+                    self.asm.mov_ir(dst, v, v.size());
+                    Ok(())
+                }
                 imm @ (I::F32(_) | I::F64(_)) => {
                     self.asm.mov_ir(dst, imm, imm.size());
                     Ok(())
@@ -498,17 +516,17 @@ impl Masm for MacroAssembler {
     fn add(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
-		let imm = v.unwrap_as_u64();
-		match Imm12::maybe_from_u64(imm) {
-		    Some(imm12) => self.asm.add_ir(imm12, rn, rd, size),
-		    None => {
-			self.with_scratch::<IntScratch, _>(|masm, scratch| {
-			    masm.asm.mov_ir(scratch.writable(), v, v.size());
-			    masm.asm.add_rrr(scratch.inner(), rn, rd, size);
-			    Ok(())
-			})?;
-		    },
-		};
+                let imm = v.unwrap_as_u64();
+                match Imm12::maybe_from_u64(imm) {
+                    Some(imm12) => self.asm.add_ir(imm12, rn, rd, size),
+                    None => {
+                        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                            masm.asm.mov_ir(scratch.writable(), v, v.size());
+                            masm.asm.add_rrr(scratch.inner(), rn, rd, size);
+                            Ok(())
+                        })?;
+                    }
+                };
                 Ok(())
             }
 
@@ -533,17 +551,17 @@ impl Masm for MacroAssembler {
         self.with_aligned_sp(|masm| {
             match (rhs, lhs, dst) {
                 (RegImm::Imm(i), rn, rd) => {
-		    let imm  = i.unwrap_as_u64();
-		    match Imm12::maybe_from_u64(imm) {
-			Some(imm12) => masm.asm.adds_ir(imm12, rn, rd, size),
-			None => {
-			    masm.with_scratch::<IntScratch, _>(|masm, scratch| {
-				masm.asm.mov_ir(scratch.writable(), i, i.size());
-				masm.asm.adds_rrr(scratch.inner(), rn, rd, size);
-				Ok(())
-			    })?;
-			}
-		    }
+                    let imm = i.unwrap_as_u64();
+                    match Imm12::maybe_from_u64(imm) {
+                        Some(imm12) => masm.asm.adds_ir(imm12, rn, rd, size),
+                        None => {
+                            masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+                                masm.asm.mov_ir(scratch.writable(), i, i.size());
+                                masm.asm.adds_rrr(scratch.inner(), rn, rd, size);
+                                Ok(())
+                            })?;
+                        }
+                    }
                 }
 
                 (RegImm::Reg(rm), rn, rd) => {
@@ -558,17 +576,17 @@ impl Masm for MacroAssembler {
     fn sub(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
-		let imm = v.unwrap_as_u64();
-		match Imm12::maybe_from_u64(imm) {
-		    Some(imm12) => self.asm.sub_ir(imm12, rn, rd, size),
-		    None => {
-			self.with_scratch::<IntScratch, _>(|masm, scratch| {
-			    masm.asm.mov_ir(scratch.writable(), v, v.size());
-			    masm.asm.sub_rrr(scratch.inner(), rn, rd, size);
-			    Ok(())
-			})?;
-		    },
-		};
+                let imm = v.unwrap_as_u64();
+                match Imm12::maybe_from_u64(imm) {
+                    Some(imm12) => self.asm.sub_ir(imm12, rn, rd, size),
+                    None => {
+                        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                            masm.asm.mov_ir(scratch.writable(), v, v.size());
+                            masm.asm.sub_rrr(scratch.inner(), rn, rd, size);
+                            Ok(())
+                        })?;
+                    }
+                };
 
                 Ok(())
             }
@@ -582,13 +600,11 @@ impl Masm for MacroAssembler {
 
     fn mul(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
         match (rhs, lhs, dst) {
-            (RegImm::Imm(v), rn, rd) => {
-		self.with_scratch::<IntScratch, _>(|masm, scratch| {
-		    masm.asm.mov_ir(scratch.writable(), v, v.size());
-		    masm.asm.mul_rrr(scratch.inner(), rn, rd, size);
-		    Ok(())
-		})
-            }
+            (RegImm::Imm(v), rn, rd) => self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                masm.asm.mov_ir(scratch.writable(), v, v.size());
+                masm.asm.mul_rrr(scratch.inner(), rn, rd, size);
+                Ok(())
+            }),
 
             (RegImm::Reg(rm), rn, rd) => {
                 self.asm.mul_rrr(rm, rn, rd, size);
@@ -679,19 +695,19 @@ impl Masm for MacroAssembler {
     fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
-		let imm = v.unwrap_as_u64();
-		let csize: inst::OperandSize = size.into();
+                let imm = v.unwrap_as_u64();
+                let csize: inst::OperandSize = size.into();
 
-		match ImmLogic::maybe_from_u64(imm, csize.to_ty())  {
-		    Some(imml) => self.asm.and_ir(imml, rn, rd, size),
-		    None => {
-			self.with_scratch::<IntScratch, _>(|masm, scratch| {
-			    masm.asm.mov_ir(scratch.writable(), v, v.size());
-			    masm.asm.and_rrr(scratch.inner(), rn, rd, size);
-			    Ok(())
-			})?;
-		    },
-		};
+                match ImmLogic::maybe_from_u64(imm, csize.to_ty()) {
+                    Some(imml) => self.asm.and_ir(imml, rn, rd, size),
+                    None => {
+                        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                            masm.asm.mov_ir(scratch.writable(), v, v.size());
+                            masm.asm.and_rrr(scratch.inner(), rn, rd, size);
+                            Ok(())
+                        })?;
+                    }
+                };
 
                 Ok(())
             }
@@ -707,18 +723,18 @@ impl Masm for MacroAssembler {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = v.unwrap_as_u64();
-		let csize: inst::OperandSize = size.into();
+                let csize: inst::OperandSize = size.into();
 
-		match ImmLogic::maybe_from_u64(imm, csize.to_ty())  {
-		    Some(imml) => self.asm.or_ir(imml, rn, rd, size),
-		    None => {
-			self.with_scratch::<IntScratch, _>(|masm, scratch| {
-			    masm.asm.mov_ir(scratch.writable(), v, v.size());
-			    masm.asm.or_rrr(scratch.inner(), rn, rd, size);
-			    Ok(())
-			})?;
-		    },
-		};
+                match ImmLogic::maybe_from_u64(imm, csize.to_ty()) {
+                    Some(imml) => self.asm.or_ir(imml, rn, rd, size),
+                    None => {
+                        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                            masm.asm.mov_ir(scratch.writable(), v, v.size());
+                            masm.asm.or_rrr(scratch.inner(), rn, rd, size);
+                            Ok(())
+                        })?;
+                    }
+                };
 
                 Ok(())
             }
@@ -734,20 +750,19 @@ impl Masm for MacroAssembler {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = v.unwrap_as_u64();
-		let csize: inst::OperandSize = size.into();
+                let csize: inst::OperandSize = size.into();
 
-		match ImmLogic::maybe_from_u64(imm, csize.to_ty())  {
-		    Some(imml) => self.asm.xor_ir(imml, rn, rd, size),
-		    None => {
-			self.with_scratch::<IntScratch, _>(|masm, scratch| {
-			    masm.asm.mov_ir(scratch.writable(), v, v.size());
-			    masm.asm.xor_rrr(scratch.inner(), rn, rd, size);
-			    Ok(())
-			})?;
-		    },
-		};
-		Ok(())
-
+                match ImmLogic::maybe_from_u64(imm, csize.to_ty()) {
+                    Some(imml) => self.asm.xor_ir(imml, rn, rd, size),
+                    None => {
+                        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                            masm.asm.mov_ir(scratch.writable(), v, v.size());
+                            masm.asm.xor_rrr(scratch.inner(), rn, rd, size);
+                            Ok(())
+                        })?;
+                    }
+                };
+                Ok(())
             }
 
             (RegImm::Reg(rm), rn, rd) => {
@@ -765,16 +780,16 @@ impl Masm for MacroAssembler {
         kind: ShiftKind,
         size: OperandSize,
     ) -> Result<()> {
-	match ImmShift::maybe_from_u64(imm.unwrap_as_u64())  {
-	    Some(imml) => self.asm.shift_ir(imml, lhs, dst, kind, size),
-	    None => {
-		self.with_scratch::<IntScratch, _>(|masm, scratch| {
-		    masm.asm.mov_ir(scratch.writable(), imm, imm.size());
-		    masm.asm.shift_rrr(scratch.inner(), lhs, dst, kind, size);
-		    Ok(())
-		})?;
-	    },
-	};
+        match ImmShift::maybe_from_u64(imm.unwrap_as_u64()) {
+            Some(imml) => self.asm.shift_ir(imml, lhs, dst, kind, size),
+            None => {
+                self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                    masm.asm.mov_ir(scratch.writable(), imm, imm.size());
+                    masm.asm.shift_rrr(scratch.inner(), lhs, dst, kind, size);
+                    Ok(())
+                })?;
+            }
+        };
         Ok(())
     }
 
@@ -971,17 +986,17 @@ impl Masm for MacroAssembler {
                 Ok(())
             }
             RegImm::Imm(v) => {
-		let val = v.unwrap_as_u64();
-		match Imm12::maybe_from_u64(val) {
-		    Some(imm12)  => self.asm.subs_ir(imm12, src1, size),
-		    None => {
-			self.with_scratch::<IntScratch, _>(|masm, scratch| {
-			    masm.asm.mov_ir(scratch.writable(), v, v.size());
-			    masm.asm.subs_rrr(scratch.inner(), src1, size);
-			    Ok(())
-			})?;
-		    },
-		};
+                let val = v.unwrap_as_u64();
+                match Imm12::maybe_from_u64(val) {
+                    Some(imm12) => self.asm.subs_ir(imm12, src1, size),
+                    None => {
+                        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                            masm.asm.mov_ir(scratch.writable(), v, v.size());
+                            masm.asm.subs_rrr(scratch.inner(), src1, size);
+                            Ok(())
+                        })?;
+                    }
+                };
                 Ok(())
             }
         }
@@ -1006,11 +1021,11 @@ impl Masm for MacroAssembler {
     }
 
     fn ctz(&mut self, dst: WritableReg, src: Reg, size: OperandSize) -> Result<()> {
-	self.with_scratch::<IntScratch, _>(|masm, scratch| {
-	    masm.asm.rbit(src, scratch.writable(), size);
-	    masm.asm.clz(scratch.inner(), dst, size);
-	    Ok(())
-	})
+        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+            masm.asm.rbit(src, scratch.writable(), size);
+            masm.asm.clz(scratch.inner(), dst, size);
+            Ok(())
+        })
     }
 
     fn wrap(&mut self, dst: WritableReg, src: Reg) -> Result<()> {
@@ -1075,18 +1090,23 @@ impl Masm for MacroAssembler {
         debug_assert!(targets.len() >= 1);
         let default_index = targets.len() - 1;
         let max = default_index;
-	self.asm.mov_ir(writable!(tmp), I::i32(i32::try_from(max).unwrap()), OperandSize::S32); 
-	// NB: We only emit the comparison instruction, since
-	// `Assembler::jmp_table` (and the underlying Cranelift
-	// instruction) will emit spectre mitigation and bounds
-	// checks.
+        self.asm.mov_ir(
+            writable!(tmp),
+            I::i32(i32::try_from(max).unwrap()),
+            OperandSize::S32,
+        );
+        // NB: We only emit the comparison instruction, since
+        // `Assembler::jmp_table` (and the underlying Cranelift
+        // instruction) will emit spectre mitigation and bounds
+        // checks.
         self.asm.subs_rrr(tmp, index, OperandSize::S32);
         let default = targets[default_index];
         let rest = &targets[0..default_index];
-	self.with_scratch::<IntScratch, _>(|masm, scratch| {
-	    masm.asm.jmp_table(rest, default, index, scratch.inner(), tmp);
-	    Ok(())
-	})
+        self.with_scratch::<IntScratch, _>(|masm, scratch| {
+            masm.asm
+                .jmp_table(rest, default, index, scratch.inner(), tmp);
+            Ok(())
+        })
     }
 
     fn trap(&mut self, code: TrapCode) -> Result<()> {
@@ -1551,7 +1571,7 @@ impl MacroAssembler {
     fn move_shadow_sp_to_sp(&mut self) {
         let shadow_sp = regs::shadow_sp();
         let sp = writable!(regs::sp());
-	let imm = Imm12::maybe_from_u64(0).unwrap();
+        let imm = Imm12::maybe_from_u64(0).unwrap();
         self.asm.add_ir(imm, shadow_sp, sp, OperandSize::S64);
     }
 }
