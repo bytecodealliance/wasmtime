@@ -29,22 +29,16 @@ pub unsafe fn resume_to_exception_handler(
 ) -> ! {
     unsafe {
         core::arch::asm!(
-            "mov rax, {}",
-            "mov rdx, {}",
             "mov rsp, {}",
             "mov rbp, {}",
             "jmp {}",
-            in(reg) payload1,
-            in(reg) payload2,
             in(reg) sp,
             in(reg) fp,
             in(reg) pc,
-            out("rax") _,
-            out("rdx") _,
-            options(nostack, nomem),
+            in("rax") payload1,
+            in("rdx") payload2,
+            options(nostack, nomem, noreturn),
         );
-
-        core::hint::unreachable_unchecked()
     }
 }
 
