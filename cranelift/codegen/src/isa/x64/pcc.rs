@@ -200,9 +200,6 @@ pub(crate) fn check(
         Inst::XmmRmR { dst, ref src2, .. }
         | Inst::XmmUnaryRmR {
             dst, src: ref src2, ..
-        }
-        | Inst::XmmUnaryRmRImm {
-            dst, src: ref src2, ..
         } => {
             match <&RegMem>::from(src2) {
                 RegMem::Mem { addr } => {
@@ -248,12 +245,6 @@ pub(crate) fn check(
             ..
         }
         | Inst::XmmUnaryRmRVex {
-            op,
-            dst,
-            src: ref src2,
-            ..
-        }
-        | Inst::XmmUnaryRmRImmVex {
             op,
             dst,
             src: ref src2,

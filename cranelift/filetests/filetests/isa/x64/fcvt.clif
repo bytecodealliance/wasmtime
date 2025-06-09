@@ -1212,7 +1212,7 @@ block0(v0: i64x2):
 ;   movq %xmm6, %r9
 ;   movdqa %xmm1, %xmm0
 ;   cvtsi2sdq %r9, %xmm0
-;   pshufd  $238, %xmm6, %xmm2
+;   pshufd $0xee, %xmm6, %xmm2
 ;   movq %xmm2, %rcx
 ;   cvtsi2sdq %rcx, %xmm1
 ;   unpcklpd %xmm1, %xmm0

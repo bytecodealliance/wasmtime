@@ -190,8 +190,8 @@ block0:
 ; block0:
 ;   movl    $65535, %ecx
 ;   movd %ecx, %xmm1
-;   pshuflw $0, %xmm1, %xmm3
-;   pshufd  $0, %xmm3, %xmm0
+;   pshuflw $0x0, %xmm1, %xmm3
+;   pshufd $0x0, %xmm3, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -220,7 +220,7 @@ block0(v0: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movd %edi, %xmm2
-;   pshufd  $0, %xmm2, %xmm0
+;   pshufd $0x0, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -246,7 +246,7 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufd  $68, %xmm0, %xmm0
+;   pshufd $0x44, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret

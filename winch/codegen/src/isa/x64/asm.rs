@@ -21,7 +21,7 @@ use cranelift_codegen::{
             args::{
                 self, Amode, Avx512Opcode, AvxOpcode, CC, CmpOpcode, ExtMode, FenceKind,
                 FromWritableReg, Gpr, GprMem, GprMemImm, RegMem, RegMemImm, SseOpcode,
-                SyntheticAmode, WritableGpr, WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm,
+                SyntheticAmode, WritableGpr, WritableXmm, Xmm, XmmMem, XmmMemImm,
             },
             encoding::rex::{RexFlags, encode_modrm},
             external::{PairedGpr, PairedXmm},
@@ -659,38 +659,26 @@ impl Assembler {
         size: OperandSize,
         flags: MemFlags,
     ) {
-        assert!(dst.to_reg().is_float());
-
-        let op = match size {
-            OperandSize::S32 => AvxOpcode::Vpshufd,
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let src = Self::to_synthetic_amode(src, flags);
+        let inst = match size {
+            OperandSize::S32 => asm::inst::vpshufd_a::new(dst, src, mask).into(),
             _ => unimplemented!(),
         };
-
-        let src = Self::to_synthetic_amode(src, flags);
-        self.emit(Inst::XmmUnaryRmRImmVex {
-            op,
-            src: XmmMem::unwrap_new(RegMem::Mem { addr: src }),
-            dst: dst.to_reg().into(),
-            imm: mask,
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Register to register shuffle of bytes in vector.
     pub fn xmm_vpshuf_rr(&mut self, src: Reg, dst: WritableReg, mask: u8, size: OperandSize) {
-        assert!(src.is_float() && dst.to_reg().is_float());
+        let dst: WritableXmm = dst.map(|r| r.into());
 
-        let op = match size {
-            OperandSize::S16 => AvxOpcode::Vpshuflw,
-            OperandSize::S32 => AvxOpcode::Vpshufd,
+        let inst = match size {
+            OperandSize::S16 => asm::inst::vpshuflw_a::new(dst, src, mask).into(),
+            OperandSize::S32 => asm::inst::vpshufd_a::new(dst, src, mask).into(),
             _ => unimplemented!(),
         };
 
-        self.emit(Inst::XmmUnaryRmRImmVex {
-            op,
-            src: XmmMem::from(Xmm::from(src)),
-            imm: mask,
-            dst: dst.to_reg().into(),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Single and double precision floating point store.
@@ -1534,11 +1522,7 @@ impl Assembler {
         mode: RoundingMode,
         size: OperandSize,
     ) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Roundss,
-            OperandSize::S64 => SseOpcode::Roundsd,
-            OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
-        };
+        let dst = dst.map(|r| r.into());
 
         let imm: u8 = match mode {
             RoundingMode::Nearest => 0x00,
@@ -1547,12 +1531,13 @@ impl Assembler {
             RoundingMode::Zero => 0x03,
         };
 
-        self.emit(Inst::XmmUnaryRmRImm {
-            op,
-            src: XmmMemAligned::from(Xmm::from(src)),
-            imm,
-            dst: dst.map(Into::into),
-        })
+        let inst = match size {
+            OperandSize::S32 => asm::inst::roundss_rmi::new(dst, src, imm).into(),
+            OperandSize::S64 => asm::inst::roundsd_rmi::new(dst, src, imm).into(),
+            OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::External { inst });
     }
 
     pub fn sqrt(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
@@ -2620,23 +2605,21 @@ impl Assembler {
         mode: VroundMode,
         size: OperandSize,
     ) {
-        let op = match size {
-            OperandSize::S32 => AvxOpcode::Vroundps,
-            OperandSize::S64 => AvxOpcode::Vroundpd,
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let imm = match mode {
+            VroundMode::TowardNearest => 0,
+            VroundMode::TowardNegativeInfinity => 1,
+            VroundMode::TowardPositiveInfinity => 2,
+            VroundMode::TowardZero => 3,
+        };
+
+        let inst = match size {
+            OperandSize::S32 => asm::inst::vroundps_rmi::new(dst, src, imm).into(),
+            OperandSize::S64 => asm::inst::vroundpd_rmi::new(dst, src, imm).into(),
             _ => unimplemented!(),
         };
 
-        self.emit(Inst::XmmUnaryRmRImmVex {
-            op,
-            src: src.into(),
-            dst: dst.to_reg().into(),
-            imm: match mode {
-                VroundMode::TowardNearest => 0,
-                VroundMode::TowardNegativeInfinity => 1,
-                VroundMode::TowardPositiveInfinity => 2,
-                VroundMode::TowardZero => 3,
-            },
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Shuffle of vectors of floats.

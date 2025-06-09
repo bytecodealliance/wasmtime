@@ -120,7 +120,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufd  $160, %xmm0, %xmm0
+;   pshufd $0xa0, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -148,7 +148,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufd  $39, %xmm0, %xmm0
+;   pshufd $0x27, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -176,7 +176,7 @@ block0(v0: i32x4, v1: i32x4):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufd  $135, %xmm1, %xmm0
+;   pshufd $0x87, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -404,7 +404,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshuflw $27, %xmm0, %xmm0
+;   pshuflw $0x1b, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -432,7 +432,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshuflw $187, %xmm0, %xmm0
+;   pshuflw $0xbb, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -460,7 +460,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshuflw $27, %xmm1, %xmm0
+;   pshuflw $0x1b, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -488,7 +488,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshuflw $119, %xmm1, %xmm0
+;   pshuflw $0x77, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -516,7 +516,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufhw $27, %xmm0, %xmm0
+;   pshufhw $0x1b, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -544,7 +544,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufhw $119, %xmm0, %xmm0
+;   pshufhw $0x77, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -572,7 +572,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufhw $27, %xmm1, %xmm0
+;   pshufhw $0x1b, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -600,7 +600,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufhw $119, %xmm1, %xmm0
+;   pshufhw $0x77, %xmm1, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret

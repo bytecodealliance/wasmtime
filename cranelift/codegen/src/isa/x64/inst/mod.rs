@@ -137,7 +137,6 @@ impl Inst {
             Inst::XmmRmR { op, .. }
             | Inst::XmmRmRUnaligned { op, .. }
             | Inst::XmmRmRImm { op, .. }
-            | Inst::XmmUnaryRmRImm { op, .. }
             | Inst::XmmUnaryRmR { op, .. } => smallvec![op.available_from()],
 
             Inst::XmmUnaryRmREvex { op, .. }
@@ -149,7 +148,6 @@ impl Inst {
             | Inst::XmmRmRVex3 { op, .. }
             | Inst::XmmRmRImmVex { op, .. }
             | Inst::XmmUnaryRmRVex { op, .. }
-            | Inst::XmmUnaryRmRImmVex { op, .. }
             | Inst::XmmMovRMVex { op, .. }
             | Inst::XmmMovRMImmVex { op, .. }
             | Inst::XmmToGprImmVex { op, .. }
@@ -604,29 +602,11 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}")
             }
 
-            Inst::XmmUnaryRmRImm {
-                op, src, dst, imm, ..
-            } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), op.src_size());
-                let src = src.pretty_print(op.src_size());
-                let op = ljustify(op.to_string());
-                format!("{op} ${imm}, {src}, {dst}")
-            }
-
             Inst::XmmUnaryRmRVex { op, src, dst, .. } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
                 let src = src.pretty_print(8);
                 let op = ljustify(op.to_string());
                 format!("{op} {src}, {dst}")
-            }
-
-            Inst::XmmUnaryRmRImmVex {
-                op, src, dst, imm, ..
-            } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let src = src.pretty_print(8);
-                let op = ljustify(op.to_string());
-                format!("{op} ${imm}, {src}, {dst}")
             }
 
             Inst::XmmUnaryRmREvex { op, src, dst, .. } => {
@@ -1448,14 +1428,13 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_fixed_use(dividend, regs::rax());
             collector.reg_fixed_def(dst, regs::rax());
         }
-        Inst::XmmUnaryRmR { src, dst, .. } | Inst::XmmUnaryRmRImm { src, dst, .. } => {
+        Inst::XmmUnaryRmR { src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
         }
         Inst::XmmUnaryRmREvex { src, dst, .. }
         | Inst::XmmUnaryRmRImmEvex { src, dst, .. }
-        | Inst::XmmUnaryRmRVex { src, dst, .. }
-        | Inst::XmmUnaryRmRImmVex { src, dst, .. } => {
+        | Inst::XmmUnaryRmRVex { src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
         }

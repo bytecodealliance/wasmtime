@@ -166,7 +166,7 @@ block0(v0: f128):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq %xmm0, %rax
-;   pshufd  $238, %xmm0, %xmm4
+;   pshufd $0xee, %xmm0, %xmm4
 ;   movq %xmm4, %rdx
 ;   movq    %rbp, %rsp
 ;   popq %rbp
@@ -224,7 +224,7 @@ block0(v0: i64x2):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq %xmm0, %rax
-;   pshufd  $238, %xmm0, %xmm4
+;   pshufd $0xee, %xmm0, %xmm4
 ;   movq %xmm4, %rdx
 ;   movq    %rbp, %rsp
 ;   popq %rbp

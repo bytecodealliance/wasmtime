@@ -1254,34 +1254,6 @@ pub(crate) fn emit(
             };
         }
 
-        Inst::XmmUnaryRmRImm { op, src, dst, imm } => {
-            let dst = dst.to_reg().to_reg();
-            let src = src.clone().to_reg_mem().clone();
-            let rex = RexFlags::clear_w();
-
-            let (prefix, opcode, len) = match op {
-                SseOpcode::Roundps => (LegacyPrefixes::_66, 0x0F3A08, 3),
-                SseOpcode::Roundss => (LegacyPrefixes::_66, 0x0F3A0A, 3),
-                SseOpcode::Roundpd => (LegacyPrefixes::_66, 0x0F3A09, 3),
-                SseOpcode::Roundsd => (LegacyPrefixes::_66, 0x0F3A0B, 3),
-                SseOpcode::Pshufd => (LegacyPrefixes::_66, 0x0F70, 2),
-                SseOpcode::Pshuflw => (LegacyPrefixes::_F2, 0x0F70, 2),
-                SseOpcode::Pshufhw => (LegacyPrefixes::_F3, 0x0F70, 2),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            match src {
-                RegMem::Reg { reg } => {
-                    emit_std_reg_reg(sink, prefix, opcode, len, dst, reg, rex);
-                }
-                RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state.frame_layout(), sink);
-                    // N.B.: bytes_at_end == 1, because of the `imm` byte below.
-                    emit_std_reg_mem(sink, prefix, opcode, len, dst, addr, rex, 1);
-                }
-            }
-            sink.put1(*imm);
-        }
-
         Inst::XmmUnaryRmREvex { op, src, dst } => {
             let dst = dst.to_reg().to_reg();
             let src = match src.clone().to_reg_mem().clone() {
@@ -1760,48 +1732,6 @@ pub(crate) fn emit(
                 .reg(dst.to_real_reg().unwrap().hw_enc())
                 .rm(src)
                 .encode(sink);
-        }
-
-        Inst::XmmUnaryRmRImmVex { op, src, dst, imm } => {
-            let dst = dst.to_reg().to_reg();
-            let src = match src.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let (prefix, map, opcode) = match op {
-                AvxOpcode::Vroundps => (LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x08),
-                AvxOpcode::Vroundpd => (LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x09),
-                AvxOpcode::Vpshuflw => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x70),
-                AvxOpcode::Vpshufhw => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x70),
-                AvxOpcode::Vpshufd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x70),
-                AvxOpcode::Vroundss => (LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x0A),
-                AvxOpcode::Vroundsd => (LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x0B),
-                _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
-            };
-
-            let vex = VexInstruction::new()
-                .length(VexVectorLength::V128)
-                .prefix(prefix)
-                .map(map)
-                .opcode(opcode)
-                .reg(dst.to_real_reg().unwrap().hw_enc())
-                .rm(src)
-                .imm(*imm);
-
-            // See comments in similar block above in `XmmUnaryRmRVex` for what
-            // this is doing.
-            let vex = match op {
-                AvxOpcode::Vroundss | AvxOpcode::Vroundsd => {
-                    vex.vvvv(dst.to_real_reg().unwrap().hw_enc())
-                }
-                _ => vex,
-            };
-            vex.encode(sink);
         }
 
         Inst::XmmMovRMVex { op, src, dst } => {

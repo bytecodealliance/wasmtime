@@ -111,7 +111,7 @@ block0(v0: f32x4):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufd  $1, %xmm0, %xmm0
+;   pshufd $0x1, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -136,7 +136,7 @@ block0(v0: f64x2):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufd  $238, %xmm0, %xmm0
+;   pshufd $0xee, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
