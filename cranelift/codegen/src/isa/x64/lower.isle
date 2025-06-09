@@ -1900,6 +1900,9 @@
 (rule 1 (lower (trapz (icmp cc a b) code))
         (side_effect (trap_if_icmp (emit_cmp (intcc_complement cc) a b) code)))
 
+(rule 1 (lower (trapz (fcmp cc a b) code))
+        (side_effect (trap_if_fcmp (emit_fcmp (floatcc_complement cc) a b) code)))
+
 ;;;; Rules for `trapnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (trapnz val code))
@@ -1907,6 +1910,9 @@
 
 (rule 1 (lower (trapnz (icmp cc a b) code))
         (side_effect (trap_if_icmp (emit_cmp cc a b) code)))
+
+(rule 1 (lower (trapnz (fcmp cc a b) code))
+        (side_effect (trap_if_fcmp (emit_fcmp cc a b) code)))
 
 ;;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4883,7 +4889,7 @@
 (rule 0 (lower (has_type $F64X2 (splat src)))
         (x64_pshufd src 0b01_00_01_00))
 (rule 6 (lower (has_type (multi_lane 64 2) (splat (sinkable_load addr))))
-        (if-let true (use_ssse3))
+        (if-let true (use_sse3))
         (x64_movddup addr))
 
 ;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -61,7 +61,37 @@ cfg_if::cfg_if! {
         /// - The Rust frames between the unwind destination and this
         ///   frame to be unwind-safe: that is, they cannot have `Drop`
         ///   handlers for which safety requires that they run.
-        pub use imp::resume_to_exception_handler;
+        pub unsafe fn resume_to_exception_handler(
+            pc: usize,
+            sp: usize,
+            fp: usize,
+            payload1: usize,
+            payload2: usize,
+        ) -> ! {
+            // Without this ASAN seems to nondeterministically trigger an
+            // internal assertion when running tests with threads. Not entirely
+            // clear what's going on here but it seems related to the fact that
+            // there's Rust code on the stack which is never cleaned up due to
+            // the jump out of `imp::resume_to_exception_handler`.
+            //
+            // This function is documented as something that should be called to
+            // clean up the entire thread's shadow memory and stack which isn't
+            // exactly what we want but this at least seems to resolve ASAN
+            // issues for now. Probably a heavy hammer but better than false
+            // positives I suppose...
+            #[cfg(asan)]
+            {
+                unsafe extern "C" {
+                    fn __asan_handle_no_return();
+                }
+                unsafe {
+                    __asan_handle_no_return();
+                }
+            }
+            unsafe {
+                imp::resume_to_exception_handler(pc, sp, fp, payload1, payload2)
+            }
+        }
 
         /// Get the return address in the function at the next-older
         /// frame from the given FP.
@@ -99,7 +129,9 @@ cfg_if::cfg_if! {
                 NEXT_OLDER_SP_FROM_FP_OFFSET
             }
             unsafe fn get_next_older_pc_from_fp(&self, fp: usize) -> usize {
-                get_next_older_pc_from_fp(fp)
+                unsafe {
+                    get_next_older_pc_from_fp(fp)
+                }
             }
             fn assert_fp_is_aligned(&self, fp: usize) {
                 assert_fp_is_aligned(fp)

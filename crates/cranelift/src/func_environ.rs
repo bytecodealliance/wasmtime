@@ -14,6 +14,7 @@ use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, types};
 use cranelift_codegen::ir::{ArgumentPurpose, ConstantData, Function, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
+use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::Variable;
 use cranelift_frontend::{FuncInstBuilder, FunctionBuilder};
@@ -215,9 +216,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             builtin_functions,
             offsets: VMOffsets::new(compiler.isa().pointer_bytes(), &translation.module),
             tunables,
-            fuel_var: Variable::new(0),
-            epoch_deadline_var: Variable::new(0),
-            epoch_ptr_var: Variable::new(0),
+            fuel_var: Variable::reserved_value(),
+            epoch_deadline_var: Variable::reserved_value(),
+            epoch_ptr_var: Variable::reserved_value(),
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
@@ -352,7 +353,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // `self.fuel_var` to make fuel modifications fast locally. This cache
         // is then periodically flushed to the Store-defined location in
         // `VMStoreContext` later.
-        builder.declare_var(self.fuel_var, ir::types::I64);
+        debug_assert!(self.fuel_var.is_reserved_value());
+        self.fuel_var = builder.declare_var(ir::types::I64);
         self.fuel_load_into_var(builder);
         self.fuel_check(builder);
     }
@@ -565,10 +567,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn epoch_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
-        builder.declare_var(self.epoch_deadline_var, ir::types::I64);
+        debug_assert!(self.epoch_deadline_var.is_reserved_value());
+        self.epoch_deadline_var = builder.declare_var(ir::types::I64);
         // Let epoch_check_full load the current deadline and call def_var
 
-        builder.declare_var(self.epoch_ptr_var, self.pointer_type());
+        debug_assert!(self.epoch_ptr_var.is_reserved_value());
+        self.epoch_ptr_var = builder.declare_var(self.pointer_type());
         let epoch_ptr = self.epoch_ptr(builder);
         builder.def_var(self.epoch_ptr_var, epoch_ptr);
 
@@ -1802,12 +1806,6 @@ impl FuncEnvironment<'_> {
         let sig_ref = func.dfg.ext_funcs[func_ref].signature;
         let wasm_func_ty = self.sig_ref_to_ty[sig_ref].as_ref().unwrap();
         wasm_func_ty.returns()[index].is_vmgcref_type_and_not_i31()
-    }
-
-    pub fn after_locals(&mut self, num_locals: usize) {
-        self.fuel_var = Variable::new(num_locals);
-        self.epoch_deadline_var = Variable::new(num_locals + 1);
-        self.epoch_ptr_var = Variable::new(num_locals + 2);
     }
 
     pub fn translate_table_grow(

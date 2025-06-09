@@ -196,6 +196,9 @@ enum LocalInitializer<'data> {
         result: Option<ComponentValType>,
         options: LocalCanonicalOptions,
     },
+    TaskCancel {
+        func: ModuleInternedTypeIndex,
+    },
     WaitableSetNew {
         func: ModuleInternedTypeIndex,
     },
@@ -221,6 +224,10 @@ enum LocalInitializer<'data> {
     },
     SubtaskDrop {
         func: ModuleInternedTypeIndex,
+    },
+    SubtaskCancel {
+        func: ModuleInternedTypeIndex,
+        async_: bool,
     },
     StreamNew {
         ty: ComponentDefinedTypeId,
@@ -296,6 +303,14 @@ enum LocalInitializer<'data> {
     },
     ErrorContextDrop {
         func: ModuleInternedTypeIndex,
+    },
+    ContextGet {
+        func: ModuleInternedTypeIndex,
+        i: u32,
+    },
+    ContextSet {
+        func: ModuleInternedTypeIndex,
+        i: u32,
     },
 
     // core wasm modules
@@ -639,6 +654,11 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::ResourceRep(resource, ty)
                         }
+                        wasmparser::CanonicalFunction::ThreadSpawnRef { .. }
+                        | wasmparser::CanonicalFunction::ThreadSpawnIndirect { .. }
+                        | wasmparser::CanonicalFunction::ThreadAvailableParallelism => {
+                            bail!("unsupported intrinsic")
+                        }
                         wasmparser::CanonicalFunction::BackpressureSet => {
                             let core_type = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
@@ -661,6 +681,11 @@ impl<'a, 'data> Translator<'a, 'data> {
                                 result,
                                 options,
                             }
+                        }
+                        wasmparser::CanonicalFunction::TaskCancel => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::TaskCancel { func }
                         }
                         wasmparser::CanonicalFunction::WaitableSetNew => {
                             let func = self.core_func_signature(core_func_index)?;
@@ -704,6 +729,11 @@ impl<'a, 'data> Translator<'a, 'data> {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::SubtaskDrop { func }
+                        }
+                        wasmparser::CanonicalFunction::SubtaskCancel { async_ } => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::SubtaskCancel { func, async_ }
                         }
                         wasmparser::CanonicalFunction::StreamNew { ty } => {
                             let ty = types.component_defined_type_at(ty);
@@ -810,14 +840,15 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::ErrorContextDrop { func }
                         }
-                        wasmparser::CanonicalFunction::ContextGet(..)
-                        | wasmparser::CanonicalFunction::ContextSet(..)
-                        | wasmparser::CanonicalFunction::TaskCancel
-                        | wasmparser::CanonicalFunction::SubtaskCancel { .. }
-                        | wasmparser::CanonicalFunction::ThreadSpawnRef { .. }
-                        | wasmparser::CanonicalFunction::ThreadSpawnIndirect { .. }
-                        | wasmparser::CanonicalFunction::ThreadAvailableParallelism => {
-                            bail!("unsupported intrinsic")
+                        wasmparser::CanonicalFunction::ContextGet(i) => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::ContextGet { i, func }
+                        }
+                        wasmparser::CanonicalFunction::ContextSet(i) => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::ContextSet { i, func }
                         }
                     };
                     self.result.initializers.push(init);

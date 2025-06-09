@@ -305,7 +305,7 @@ const ALLOWED_LIBCALLS: &'static [LibCall] = &[
     LibCall::TruncF64,
 ];
 
-fn build_interpreter(testcase: &TestCase) -> Interpreter {
+fn build_interpreter(testcase: &TestCase) -> Interpreter<'_> {
     let mut env = FunctionStore::default();
     for func in testcase.functions.iter() {
         env.add(func.name.to_string(), &func);

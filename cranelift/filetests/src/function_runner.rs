@@ -383,7 +383,7 @@ impl CompiledTestFile {
     /// Return a trampoline for calling.
     ///
     /// Returns None if [TestFileCompiler::create_trampoline_for_function] wasn't called for this function.
-    pub fn get_trampoline(&self, func: &Function) -> Option<Trampoline> {
+    pub fn get_trampoline(&self, func: &Function) -> Option<Trampoline<'_>> {
         let defined_func = self.defined_functions.get(&func.name)?;
         let trampoline_id = self
             .trampolines

@@ -132,7 +132,7 @@ where
     /// assert_eq!(iter.next(), Some(Entity::new(3)));
     /// assert!(iter.next().is_none());
     /// ```
-    pub fn iter(&self) -> SetIter<K> {
+    pub fn iter(&self) -> SetIter<'_, K> {
         SetIter {
             inner: self.bitset.iter(),
             _phantom: PhantomData,

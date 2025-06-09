@@ -22,3 +22,23 @@ block0(v0: i128):
 }
 
 ; run: %trapnz_i128(0) == 0
+
+function %trapnz_icmp(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  trapnz v2, user42
+  return v0
+}
+
+; run: %trapnz_icmp(123, 0) == 123
+; run: %trapnz_icmp(0, -1) == 0
+
+function %trapnz_fcmp(f64, f64) -> f64 {
+block0(v0: f64, v1: f64):
+  v2 = fcmp eq v0, v1
+  trapnz v2, user42
+  return v0
+}
+
+; run: %trapnz_fcmp(0x5.0, 0x0.0) == 0x5.0
+; run: %trapnz_fcmp(0x0.0, 0x1.0) == 0x0.0

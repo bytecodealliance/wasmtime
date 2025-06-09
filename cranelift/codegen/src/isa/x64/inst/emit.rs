@@ -114,6 +114,7 @@ pub(crate) fn emit(
             // Cranelift assumes SSE2 at least.
             InstructionSet::SSE | InstructionSet::SSE2 => true,
             InstructionSet::CMPXCHG16b => info.isa_flags.use_cmpxchg16b(),
+            InstructionSet::SSE3 => info.isa_flags.use_sse3(),
             InstructionSet::SSSE3 => info.isa_flags.use_ssse3(),
             InstructionSet::SSE41 => info.isa_flags.use_sse41(),
             InstructionSet::SSE42 => info.isa_flags.use_sse42(),
@@ -1275,20 +1276,7 @@ pub(crate) fn emit(
             one_way_jmp(sink, *cc2, trap_label);
         }
 
-        Inst::XmmUnaryRmR { op, src, dst } => {
-            emit(
-                &Inst::XmmUnaryRmRUnaligned {
-                    op: *op,
-                    src: XmmMem::unwrap_new(src.clone().into()),
-                    dst: *dst,
-                },
-                sink,
-                info,
-                state,
-            );
-        }
-
-        Inst::XmmUnaryRmRUnaligned {
+        Inst::XmmUnaryRmR {
             op,
             src: src_e,
             dst: reg_g,
@@ -1302,7 +1290,6 @@ pub(crate) fn emit(
                 SseOpcode::Pabsb => (LegacyPrefixes::_66, 0x0F381C, 3),
                 SseOpcode::Pabsw => (LegacyPrefixes::_66, 0x0F381D, 3),
                 SseOpcode::Pabsd => (LegacyPrefixes::_66, 0x0F381E, 3),
-                SseOpcode::Movddup => (LegacyPrefixes::_F2, 0x0F12, 2),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
 
@@ -1674,8 +1661,6 @@ pub(crate) fn emit(
                 AvxOpcode::Vpunpckhqdq => (LP::_66, OM::_0F, 0x6D),
                 AvxOpcode::Vmovsd => (LP::_F2, OM::_0F, 0x10),
                 AvxOpcode::Vmovss => (LP::_F3, OM::_0F, 0x10),
-                AvxOpcode::Vcvtss2sd => (LP::_F3, OM::_0F, 0x5A),
-                AvxOpcode::Vcvtsd2ss => (LP::_F2, OM::_0F, 0x5A),
                 AvxOpcode::Vsqrtss => (LP::_F3, OM::_0F, 0x51),
                 AvxOpcode::Vsqrtsd => (LP::_F2, OM::_0F, 0x51),
                 AvxOpcode::Vunpcklpd => (LP::_66, OM::_0F, 0x14),
@@ -1865,12 +1850,6 @@ pub(crate) fn emit(
                 AvxOpcode::Vpabsd => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x1E),
                 AvxOpcode::Vsqrtps => (LegacyPrefixes::None, OpcodeMap::_0F, 0x51),
                 AvxOpcode::Vsqrtpd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x51),
-                AvxOpcode::Vcvtdq2pd => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0xE6),
-                AvxOpcode::Vcvtdq2ps => (LegacyPrefixes::None, OpcodeMap::_0F, 0x5B),
-                AvxOpcode::Vcvtpd2ps => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x5A),
-                AvxOpcode::Vcvtps2pd => (LegacyPrefixes::None, OpcodeMap::_0F, 0x5A),
-                AvxOpcode::Vcvttpd2dq => (LegacyPrefixes::_66, OpcodeMap::_0F, 0xE6),
-                AvxOpcode::Vcvttps2dq => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x5B),
                 AvxOpcode::Vmovdqu => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x6F),
                 AvxOpcode::Vmovups => (LegacyPrefixes::None, OpcodeMap::_0F, 0x10),
                 AvxOpcode::Vmovupd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x10),
@@ -1893,7 +1872,6 @@ pub(crate) fn emit(
                 AvxOpcode::Vpbroadcastw => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x79),
                 AvxOpcode::Vpbroadcastd => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x58),
                 AvxOpcode::Vbroadcastss => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x18),
-                AvxOpcode::Vmovddup => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x12),
 
                 _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
             };
@@ -2015,82 +1993,6 @@ pub(crate) fn emit(
                 .rm(dst.to_real_reg().unwrap().hw_enc())
                 .reg(src.to_real_reg().unwrap().hw_enc())
                 .imm(*imm)
-                .encode(sink);
-        }
-
-        Inst::XmmToGprVex {
-            op,
-            src,
-            dst,
-            dst_size,
-        } => {
-            let src = src.to_reg();
-            let dst = dst.to_reg().to_reg();
-
-            let (prefix, map, opcode) = match op {
-                // vmovd/vmovq are differentiated by `w`
-                AvxOpcode::Vmovd | AvxOpcode::Vmovq => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x7E),
-                AvxOpcode::Vmovmskps => (LegacyPrefixes::None, OpcodeMap::_0F, 0x50),
-                AvxOpcode::Vmovmskpd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x50),
-                AvxOpcode::Vpmovmskb => (LegacyPrefixes::_66, OpcodeMap::_0F, 0xD7),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            let w = match dst_size {
-                OperandSize::Size64 => true,
-                _ => false,
-            };
-            let mut vex = VexInstruction::new()
-                .length(VexVectorLength::V128)
-                .w(w)
-                .prefix(prefix)
-                .map(map)
-                .opcode(opcode);
-            vex = match op {
-                // The `vmovq/vmovd` reverse the order of the destination/source
-                // relative to other opcodes using this shape of instruction.
-                AvxOpcode::Vmovd | AvxOpcode::Vmovq => vex
-                    .rm(dst.to_real_reg().unwrap().hw_enc())
-                    .reg(src.to_real_reg().unwrap().hw_enc()),
-                _ => vex
-                    .rm(src.to_real_reg().unwrap().hw_enc())
-                    .reg(dst.to_real_reg().unwrap().hw_enc()),
-            };
-            vex.encode(sink);
-        }
-
-        Inst::GprToXmmVex {
-            op,
-            src,
-            dst,
-            src_size,
-        } => {
-            let dst = dst.to_reg().to_reg();
-            let src = match src.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let (prefix, map, opcode) = match op {
-                // vmovd/vmovq are differentiated by `w`
-                AvxOpcode::Vmovd | AvxOpcode::Vmovq => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x6E),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            let w = match src_size {
-                OperandSize::Size64 => true,
-                _ => false,
-            };
-            VexInstruction::new()
-                .length(VexVectorLength::V128)
-                .w(w)
-                .prefix(prefix)
-                .map(map)
-                .opcode(opcode)
-                .rm(src)
-                .reg(dst.to_real_reg().unwrap().hw_enc())
                 .encode(sink);
         }
 
@@ -2329,45 +2231,6 @@ pub(crate) fn emit(
                     emit_std_reg_mem(sink, prefix, opcode, len, src1, addr, rex, 0);
                 }
             }
-        }
-
-        Inst::CvtIntToFloatVex {
-            op,
-            src1,
-            src2,
-            dst,
-            src2_size,
-        } => {
-            let dst = dst.to_reg().to_reg();
-            let src1 = src1.to_reg();
-            let src2 = match src2.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let (prefix, map, opcode) = match op {
-                AvxOpcode::Vcvtsi2ss => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x2A),
-                AvxOpcode::Vcvtsi2sd => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x2A),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            let w = match src2_size {
-                OperandSize::Size64 => true,
-                _ => false,
-            };
-            VexInstruction::new()
-                .length(VexVectorLength::V128)
-                .w(w)
-                .prefix(prefix)
-                .map(map)
-                .opcode(opcode)
-                .rm(src2)
-                .reg(dst.to_real_reg().unwrap().hw_enc())
-                .vvvv(src1.to_real_reg().unwrap().hw_enc())
-                .encode(sink);
         }
 
         Inst::CvtUint64ToFloatSeq {

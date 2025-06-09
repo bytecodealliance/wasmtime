@@ -1,7 +1,7 @@
 [package]
-name = "wasmtime-explorer"
+name = "wasmtime-internal-explorer"
 authors.workspace = true
-description = "Compiler explorer for Wasmtime and Cranelift"
+description = "INTERNAL: Compiler explorer for Wasmtime and Cranelift"
 documentation = "https://docs.rs/wasmtime-explorer/"
 edition.workspace = true
 rust-version.workspace = true

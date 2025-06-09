@@ -187,7 +187,7 @@ macro_rules! hex_print_signed_imm {
 /// - print negative values as `-0x...` (signed hex) instead of `0xff...`
 ///   (normal hex)
 /// - print `mov` immediates as base-10 instead of base-16 (?!).
-fn replace_signed_immediates(dis: &str) -> std::borrow::Cow<str> {
+fn replace_signed_immediates(dis: &str) -> std::borrow::Cow<'_, str> {
     match dis.find('$') {
         None => dis.into(),
         Some(idx) => {
@@ -263,7 +263,7 @@ fn remove_after_parenthesis_test() {
 }
 
 /// Run some post-processing on the disassembly to make it match Capstone.
-fn fix_up(dis: &str) -> std::borrow::Cow<str> {
+fn fix_up(dis: &str) -> std::borrow::Cow<'_, str> {
     let dis = remove_after_semicolon(dis);
     replace_signed_immediates(&dis)
 }

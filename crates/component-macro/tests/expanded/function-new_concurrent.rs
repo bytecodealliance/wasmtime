@@ -48,7 +48,7 @@ impl<_T: 'static> FooPre<_T> {
         mut store: impl wasmtime::AsContextMut<Data = _T>,
     ) -> wasmtime::Result<Foo>
     where
-        _T: Send + 'static,
+        _T: Send,
     {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
@@ -150,7 +150,7 @@ const _: () = {
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<Foo>
         where
-            _T: Send + 'static,
+            _T: Send,
         {
             let pre = linker.instantiate_pre(component)?;
             FooPre::new(pre)?.instantiate_async(store).await
@@ -164,18 +164,19 @@ const _: () = {
             let indices = FooIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub async fn call_new<S: wasmtime::AsContextMut>(
+        pub fn call_new<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
-        ) -> wasmtime::Result<wasmtime::component::Promise<()>>
+        ) -> impl wasmtime::component::__internal::Future<
+            Output = wasmtime::Result<()>,
+        > + Send + 'static + use<S>
         where
             <S as wasmtime::AsContext>::Data: Send + 'static,
         {
             let callee = unsafe {
                 wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.new)
             };
-            let promise = callee.call_concurrent(store.as_context_mut(), ()).await?;
-            Ok(promise)
+            callee.call_concurrent(store.as_context_mut(), ())
         }
     }
 };

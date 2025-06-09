@@ -19,7 +19,7 @@ use std::time::Duration;
 const CRATES_TO_PUBLISH: &[&str] = &[
     // pulley
     "cranelift-bitset",
-    "wasmtime-math",
+    "wasmtime-internal-math",
     "pulley-macros",
     "pulley-interpreter",
     // cranelift
@@ -41,9 +41,9 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cranelift-native",
     "cranelift-object",
     "cranelift-interpreter",
-    "wasmtime-jit-icache-coherence",
+    "wasmtime-internal-jit-icache-coherence",
     // Wasmtime unwinder, used by both `cranelift-jit` (optionally) and filetests, and by Wasmtime.
-    "wasmtime-unwinder",
+    "wasmtime-internal-unwinder",
     // Cranelift crates that use Wasmtime unwinder.
     "cranelift-jit",
     "cranelift",
@@ -53,20 +53,20 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     // winch
     "winch",
     // wasmtime
-    "wasmtime-asm-macros",
-    "wasmtime-versioned-export-macros",
-    "wasmtime-slab",
-    "wasmtime-component-util",
-    "wasmtime-wit-bindgen",
-    "wasmtime-component-macro",
-    "wasmtime-jit-debug",
-    "wasmtime-fiber",
+    "wasmtime-internal-asm-macros",
+    "wasmtime-internal-versioned-export-macros",
+    "wasmtime-internal-slab",
+    "wasmtime-internal-component-util",
+    "wasmtime-internal-wit-bindgen",
+    "wasmtime-internal-component-macro",
+    "wasmtime-internal-jit-debug",
+    "wasmtime-internal-fiber",
     "wasmtime-environ",
-    "wasmtime-wmemcheck",
-    "wasmtime-cranelift",
-    "wasmtime-cache",
+    "wasmtime-internal-wmemcheck",
+    "wasmtime-internal-cranelift",
+    "wasmtime-internal-cache",
     "winch-codegen",
-    "wasmtime-winch",
+    "wasmtime-internal-winch",
     "wasmtime",
     // wasi-common/wiggle
     "wiggle",
@@ -81,10 +81,10 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wasi-threads",
     "wasmtime-wasi-tls",
     "wasmtime-wast",
-    "wasmtime-c-api-macros",
+    "wasmtime-internal-c-api-macros",
     "wasmtime-c-api-impl",
     "wasmtime-cli-flags",
-    "wasmtime-explorer",
+    "wasmtime-internal-explorer",
     "wasmtime-cli",
 ];
 
@@ -340,7 +340,10 @@ fn bump_version(krate: &Crate, crates: &[Crate], patch: bool) {
             if !other.publish {
                 continue;
             }
-            if !is_deps || !line.starts_with(&format!("{} ", other.name)) {
+            if !is_deps
+                || (!line.starts_with(&format!("{} ", other.name))
+                    && !line.contains(&format!("package = '{}'", other.name)))
+            {
                 continue;
             }
             if !line.contains(&other.version) {

@@ -200,6 +200,7 @@ pub trait Compiler: Send + Sync {
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError>;
 
     /// Compile a trampoline for an array-call host function caller calling the
@@ -212,6 +213,7 @@ pub trait Compiler: Send + Sync {
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
         index: DefinedFuncIndex,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError>;
 
     /// Compile a trampoline for a Wasm caller calling a array callee with the
@@ -222,6 +224,7 @@ pub trait Compiler: Send + Sync {
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &WasmFuncType,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError>;
 
     /// Creates a trampoline that can be used to call Wasmtime's implementation
@@ -236,6 +239,7 @@ pub trait Compiler: Send + Sync {
     fn compile_wasm_to_builtin(
         &self,
         index: BuiltinFunctionIndex,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError>;
 
     /// Returns the list of relocations required for a function from one of the

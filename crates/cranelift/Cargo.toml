@@ -1,8 +1,8 @@
 [package]
-name = "wasmtime-cranelift"
+name = "wasmtime-internal-cranelift"
 version.workspace = true
 authors.workspace = true
-description = "Integration between Cranelift and Wasmtime"
+description = "INTERNAL: Integration between Cranelift and Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 documentation = "https://docs.rs/wasmtime-cranelift/"

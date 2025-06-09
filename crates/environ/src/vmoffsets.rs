@@ -276,25 +276,25 @@ pub trait PtrSize {
         self.size()
     }
 
-    // Offsets within `VMArray`
+    // Offsets within `VMHostArray`
 
-    /// Return the offset of `VMArray::length`.
-    fn vmarray_length(&self) -> u8 {
+    /// Return the offset of `VMHostArray::length`.
+    fn vmhostarray_length(&self) -> u8 {
         0
     }
 
-    /// Return the offset of `VMArray::capacity`.
-    fn vmarray_capacity(&self) -> u8 {
+    /// Return the offset of `VMHostArray::capacity`.
+    fn vmhostarray_capacity(&self) -> u8 {
         4
     }
 
-    /// Return the offset of `VMArray::data`.
-    fn vmarray_data(&self) -> u8 {
+    /// Return the offset of `VMHostArray::data`.
+    fn vmhostarray_data(&self) -> u8 {
         8
     }
 
-    /// Return the size of `VMArray`.
-    fn size_of_vmarray(&self) -> u8 {
+    /// Return the size of `VMHostArray`.
+    fn size_of_vmhostarray(&self) -> u8 {
         8 + self.size()
     }
 
@@ -321,7 +321,7 @@ pub trait PtrSize {
 
     /// Return the offset of `VMCommonStackInformation::first_switch_handler_index`.
     fn vmcommon_stack_information_first_switch_handler_index(&self) -> u8 {
-        self.vmcommon_stack_information_handlers() + self.size_of_vmarray()
+        self.vmcommon_stack_information_handlers() + self.size_of_vmhostarray()
     }
 
     /// Return the size of `VMCommonStackInformation`.
@@ -372,7 +372,7 @@ pub trait PtrSize {
 
     /// Return the offset of `VMContRef::values`.
     fn vmcontref_values(&self) -> u8 {
-        self.vmcontref_args() + self.size_of_vmarray()
+        self.vmcontref_args() + self.size_of_vmhostarray()
     }
 
     /// Return the offset to the `magic` value in this `VMContext`.

@@ -115,7 +115,7 @@ impl Context {
         isa: &dyn TargetIsa,
         mem: &mut Vec<u8>,
         ctrl_plane: &mut ControlPlane,
-    ) -> CompileResult<&CompiledCode> {
+    ) -> CompileResult<'_, &CompiledCode> {
         let compiled_code = self.compile(isa, ctrl_plane)?;
         mem.extend_from_slice(compiled_code.code_buffer());
         Ok(compiled_code)
@@ -204,7 +204,7 @@ impl Context {
         &mut self,
         isa: &dyn TargetIsa,
         ctrl_plane: &mut ControlPlane,
-    ) -> CompileResult<&CompiledCode> {
+    ) -> CompileResult<'_, &CompiledCode> {
         let stencil = self
             .compile_stencil(isa, ctrl_plane)
             .map_err(|error| CompileError {

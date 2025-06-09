@@ -40,6 +40,12 @@ pub enum ThrowAction {
 /// This function searches for a handler in the given range of stack
 /// frames, starting from the throw stub and up to a specified entry
 /// frame.
+///
+/// # Safety
+///
+/// The safety of this function is the same as [`crate::visit_frames`] where the
+/// values passed in configuring the frame pointer walk must be correct and
+/// Wasm-defined for this to not have UB.
 pub unsafe fn compute_throw_action<'a, F: Fn(usize) -> Option<(usize, ExceptionTable<'a>)>>(
     unwind: &dyn Unwind,
     module_lookup: F,
@@ -49,31 +55,38 @@ pub unsafe fn compute_throw_action<'a, F: Fn(usize) -> Option<(usize, ExceptionT
     tag: u32,
 ) -> ThrowAction {
     let mut last_fp = exit_frame;
-    match crate::stackwalk::visit_frames(unwind, exit_pc, exit_frame, entry_frame, |frame| {
-        if let Some((base, table)) = module_lookup(frame.pc()) {
-            let relative_pc = u32::try_from(
-                frame
-                    .pc()
-                    .checked_sub(base)
-                    .expect("module lookup did not return a module base below the PC"),
-            )
-            .expect("module larger than 4GiB");
 
-            if let Some(handler) = table.lookup(relative_pc, tag) {
-                let abs_handler_pc = base
-                    .checked_add(usize::try_from(handler).unwrap())
-                    .expect("Handler address computation overflowed");
+    // SAFETY: the safety of `visit_frames` relies on the correctness of the
+    // parameters passed in which is forwarded as a contract to this function
+    // tiself.
+    let result = unsafe {
+        crate::stackwalk::visit_frames(unwind, exit_pc, exit_frame, entry_frame, |frame| {
+            if let Some((base, table)) = module_lookup(frame.pc()) {
+                let relative_pc = u32::try_from(
+                    frame
+                        .pc()
+                        .checked_sub(base)
+                        .expect("module lookup did not return a module base below the PC"),
+                )
+                .expect("module larger than 4GiB");
 
-                return ControlFlow::Break(ThrowAction::Handler {
-                    pc: abs_handler_pc,
-                    sp: last_fp + unwind.next_older_sp_from_fp_offset(),
-                    fp: frame.fp(),
-                });
+                if let Some(handler) = table.lookup(relative_pc, tag) {
+                    let abs_handler_pc = base
+                        .checked_add(usize::try_from(handler).unwrap())
+                        .expect("Handler address computation overflowed");
+
+                    return ControlFlow::Break(ThrowAction::Handler {
+                        pc: abs_handler_pc,
+                        sp: last_fp + unwind.next_older_sp_from_fp_offset(),
+                        fp: frame.fp(),
+                    });
+                }
             }
-        }
-        last_fp = frame.fp();
-        ControlFlow::Continue(())
-    }) {
+            last_fp = frame.fp();
+            ControlFlow::Continue(())
+        })
+    };
+    match result {
         ControlFlow::Break(action) => action,
         ControlFlow::Continue(()) => ThrowAction::None,
     }

@@ -1308,18 +1308,6 @@ when = "2025-05-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
-[[publisher.wasmtime-asm-macros]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cache]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
 [[publisher.wasmtime-cli]]
 version = "33.0.0"
 when = "2025-05-20"
@@ -1332,61 +1320,7 @@ when = "2025-05-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
-[[publisher.wasmtime-component-macro]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-component-util]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-cranelift]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
 [[publisher.wasmtime-environ]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-explorer]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-fiber]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-debug]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-jit-icache-coherence]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-math]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-slab]]
 version = "33.0.0"
 when = "2025-05-20"
 user-id = 73222
@@ -1441,24 +1375,6 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmtime-wast]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-winch]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wit-bindgen]]
-version = "33.0.0"
-when = "2025-05-20"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmtime-wmemcheck]]
 version = "33.0.0"
 when = "2025-05-20"
 user-id = 73222

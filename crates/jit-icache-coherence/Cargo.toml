@@ -1,8 +1,8 @@
 [package]
-name = "wasmtime-jit-icache-coherence"
+name = "wasmtime-internal-jit-icache-coherence"
 version.workspace = true
 authors.workspace = true
-description = "Utilities for JIT icache maintenance"
+description = "INTERNAL: Utilities for JIT icache maintenance"
 documentation = "https://docs.rs/jit-icache-coherence"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"

@@ -308,6 +308,14 @@ unsafe impl HostResultHasUnwindSentinel for core::convert::Infallible {
     }
 }
 
+unsafe impl HostResultHasUnwindSentinel for bool {
+    type Abi = u32;
+    const SENTINEL: Self::Abi = u32::MAX;
+    fn into_abi(self) -> Self::Abi {
+        u32::from(self)
+    }
+}
+
 /// Stores trace message with backtrace.
 #[derive(Debug)]
 pub struct Trap {

@@ -24,6 +24,13 @@
 use core::ops::ControlFlow;
 
 /// Implementation necessary to unwind the stack, used by `Backtrace`.
+///
+/// # Safety
+///
+/// This trait is `unsafe` because the return values of each function are
+/// required to be semantically correct when connected to the `visit_frames`
+/// function below. Incorrect and/or arbitrary values in this trait will cause
+/// unwinding to segfault or otherwise result in UB.
 pub unsafe trait Unwind {
     /// Returns the offset, from the current frame pointer, of where to get to
     /// the previous frame pointer on the stack.
@@ -35,6 +42,12 @@ pub unsafe trait Unwind {
 
     /// Load the return address of a frame given the frame pointer for that
     /// frame.
+    ///
+    /// # Safety
+    ///
+    /// This function is expected to read raw memory from `fp` and thus is not
+    /// safe to operate on any value of `fp` passed in, instead it must be a
+    /// trusted Cranelift-defined frame pointer.
     unsafe fn get_next_older_pc_from_fp(&self, fp: usize) -> usize;
 
     /// Debug assertion that the frame pointer is aligned.
@@ -73,6 +86,14 @@ impl Frame {
 ///
 /// We require that the initial PC, FP, and `trampoline_fp` values are
 /// non-null (non-zero).
+///
+/// # Safety
+///
+/// This function is not safe as `unwind`, `pc`, `fp`, and `trampoline_fp` must
+/// all be "correct" in that if they're wrong or mistakenly have the wrong value
+/// then this method may segfault. These values must point to valid Wasmtime
+/// compiled code which respects the frame pointers that Wasmtime currently
+/// requires.
 pub unsafe fn visit_frames<R>(
     unwind: &dyn Unwind,
     mut pc: usize,
@@ -151,23 +172,28 @@ pub unsafe fn visit_frames<R>(
 
         f(Frame { pc, fp })?;
 
-        pc = unwind.get_next_older_pc_from_fp(fp);
+        // SAFETY: this unsafe traversal of the linked list on the stack is
+        // reflected in the contract of this function where `pc`, `fp`,
+        // `trampoline_fp`, and `unwind` must all be trusted/correct values.
+        unsafe {
+            pc = unwind.get_next_older_pc_from_fp(fp);
 
-        // We rely on this offset being zero for all supported
-        // architectures in
-        // `crates/cranelift/src/component/compiler.rs` when we set
-        // the Wasm exit FP. If this ever changes, we will need to
-        // update that code as well!
-        assert_eq!(unwind.next_older_fp_from_fp_offset(), 0);
+            // We rely on this offset being zero for all supported
+            // architectures in
+            // `crates/cranelift/src/component/compiler.rs` when we set
+            // the Wasm exit FP. If this ever changes, we will need to
+            // update that code as well!
+            assert_eq!(unwind.next_older_fp_from_fp_offset(), 0);
 
-        // Get the next older frame pointer from the current Wasm
-        // frame pointer.
-        let next_older_fp = *(fp as *mut usize).add(unwind.next_older_fp_from_fp_offset());
+            // Get the next older frame pointer from the current Wasm
+            // frame pointer.
+            let next_older_fp = *(fp as *mut usize).add(unwind.next_older_fp_from_fp_offset());
 
-        // Because the stack always grows down, the older FP must be greater
-        // than the current FP.
-        assert!(next_older_fp > fp, "{next_older_fp:#x} > {fp:#x}");
-        fp = next_older_fp;
+            // Because the stack always grows down, the older FP must be greater
+            // than the current FP.
+            assert!(next_older_fp > fp, "{next_older_fp:#x} > {fp:#x}");
+            fp = next_older_fp;
+        }
     }
 
     log::trace!("=== Done tracing contiguous sequence of Wasm frames ===");

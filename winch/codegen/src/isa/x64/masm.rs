@@ -2530,7 +2530,9 @@ impl Masm for MacroAssembler {
                 self.asm
                     .shift_ir(0x8, dst, ShiftKind::ShrU, OperandSize::S32);
             }
-            OperandSize::S32 | OperandSize::S64 => self.asm.xmm_vmovskp_rr(src, dst, size, size),
+            OperandSize::S32 | OperandSize::S64 => {
+                self.asm.xmm_vmovskp_rr(src, dst, size, OperandSize::S32)
+            }
             _ => unimplemented!(),
         }
 

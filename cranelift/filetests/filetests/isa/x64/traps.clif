@@ -222,3 +222,63 @@ block0(v0: i64, v1: i64):
 ;   retq
 ;   ud2 ; trap: user1
 
+function %trapz_fcmp(f64, f64) {
+block0(v0: f64, v1: f64):
+  v2 = fcmp eq v0, v1
+  trapz v2, user1
+  return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomisd %xmm1, %xmm0
+;   trap_if_or p, z, user1
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   ucomisd %xmm1, %xmm0
+;   jp 0x19
+;   jne 0x19
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user1
+
+function %trapnz_fcmp(f64, f64) {
+block0(v0: f64, v1: f64):
+  v2 = fcmp eq v0, v1
+  trapnz v2, user1
+  return
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomisd %xmm1, %xmm0
+;   trap_if_and p, nz, user1
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   ucomisd %xmm1, %xmm0
+;   jp 0x14
+;   je 0x19
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user1
+

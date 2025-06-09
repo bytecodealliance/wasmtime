@@ -234,3 +234,30 @@ above can be used to update an `exemptions` entry or add a new entry. Note that
 when the "popular threshold" is used **do not add a vet entry** because the
 crate is, in fact, not vetted. This is required to go through an
 `[[exemptions]]` entry.
+
+### Crate Organization
+
+The Wasmtime repository is a bit of a monorepo with lots of crates internally
+within it. The Wasmtime project and `wasmtime` crate also consists of a variety
+of crates intended for various purposes. As such not all crates are treated
+exactly the same and so there are some rough guidelines here about adding new
+crates to the repository and where to place/name them:
+
+* Wasmtime-related crates live in `crates/foo/Cargo.toml` where the crate name
+  is typically `wasmtime-foo` or `wasmtime-internal-foo`.
+
+* Cranelift-related crates live in `cranelift/foo/Cargo.toml` where the crate is
+  named `cranelift-foo`.
+
+* Some projects such as Winch, Pulley, and Wiggle are exceptions to the above
+  rules and live in `winch/*`, `pulley/*` and `crates/wiggle/*`.
+
+* Some crates are "internal" to Wasmtime. This means that they only exist for
+  crate organization purposes (such as optional dependencies, or code
+  organization). These crates are not intended for public consumption and are
+  intended for exclusively being used by the `wasmtime` crate, for example, or
+  other public crates. These crates should be named `wasmtime-internal-foo` and
+  live in `crates/foo`. The `[workspace.dependencies]` directive in `Cargo.toml`
+  at the root of the repository should rename it to `wasmtime-foo` in
+  workspace-local usage, meaning that the "internal" part is only relevant on
+  crates.io.

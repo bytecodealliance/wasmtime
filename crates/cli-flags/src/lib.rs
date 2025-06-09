@@ -375,6 +375,9 @@ wasmtime_option_group! {
         /// Component model support for `error-context`: this corresponds
         /// to the 📝 emoji in the component model specification.
         pub component_model_error_context: Option<bool>,
+        /// GC support in the component model: this corresponds to the 🛸 emoji
+        /// in the component model specification.
+        pub component_model_gc: Option<bool>,
         /// Configure support for the function-references proposal.
         pub function_references: Option<bool>,
         /// Configure support for the stack-switching proposal.
@@ -1042,6 +1045,16 @@ impl CommonOptions {
             ("gc", function_references, wasm_function_references)
             ("stack-switching", stack_switching, wasm_stack_switching)
         }
+
+        if let Some(enable) = self.wasm.component_model_gc {
+            #[cfg(all(feature = "component-model", feature = "gc"))]
+            config.wasm_component_model_gc(enable);
+            #[cfg(not(all(feature = "component-model", feature = "gc")))]
+            if enable && all.is_none() {
+                anyhow::bail!("support for `component-model-gc` was disabled at compile time")
+            }
+        }
+
         Ok(())
     }
 

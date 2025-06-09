@@ -1,9 +1,8 @@
+use crate::component::Instance;
 use crate::component::func::{Func, LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::storage::{storage_as_slice, storage_as_slice_mut};
 use crate::prelude::*;
-use crate::runtime::vm::SendSyncPtr;
-use crate::runtime::vm::component::ComponentInstance;
 use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use alloc::borrow::Cow;
 use alloc::sync::Arc;
@@ -11,7 +10,6 @@ use core::fmt;
 use core::iter;
 use core::marker;
 use core::mem::{self, MaybeUninit};
-use core::ptr::NonNull;
 use core::str;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
@@ -19,7 +17,7 @@ use wasmtime_environ::component::{
 };
 
 #[cfg(feature = "component-model-async")]
-use crate::component::concurrent::Promise;
+use core::pin::Pin;
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -193,28 +191,29 @@ where
             .await?
     }
 
-    /// Start concurrent call to this function.
+    /// Start a concurrent call to this function.
     ///
     /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
     /// exclusive access to the store until the completion of the call), calls
     /// made using this method may run concurrently with other calls to the same
     /// instance.
+    ///
+    /// Note that the `Future` returned by this method will panic if polled or
+    /// `.await`ed outside of the event loop of the component instance this
+    /// function belongs to; use `Instance::run`, `Instance::run_with`, or
+    /// `Instance::spawn` to poll it from within the event loop.  See
+    /// [`Instance::run`] for examples.
     #[cfg(feature = "component-model-async")]
-    pub async fn call_concurrent(
+    pub fn call_concurrent(
         self,
-        mut store: impl AsContextMut<Data: Send>,
+        store: impl AsContextMut<Data: Send>,
         params: Params,
-    ) -> Result<Promise<Return>>
+    ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send + 'static>>
     where
         Params: Send + Sync + 'static,
         Return: Send + Sync + 'static,
     {
-        let store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `call_concurrent` when async support is not enabled on the config"
-        );
-        _ = params;
+        let _ = (self, store, params);
         todo!()
     }
 
@@ -1584,7 +1583,7 @@ pub struct WasmList<T> {
     // reference to something inside a `StoreOpaque`, but that's not easily
     // available at this time, so it's left as a future exercise.
     types: Arc<ComponentTypes>,
-    instance: SendSyncPtr<ComponentInstance>,
+    instance: Instance,
     _marker: marker::PhantomData<T>,
 }
 
@@ -1611,7 +1610,7 @@ impl<T: Lift> WasmList<T> {
             options: *cx.options,
             elem,
             types: cx.types.clone(),
-            instance: SendSyncPtr::new(NonNull::new(cx.instance_ptr()).unwrap()),
+            instance: cx.instance_handle(),
             _marker: marker::PhantomData,
         })
     }
@@ -1639,14 +1638,7 @@ impl<T: Lift> WasmList<T> {
     pub fn get(&self, mut store: impl AsContextMut, index: usize) -> Option<Result<T>> {
         let store = store.as_context_mut().0;
         self.options.store_id().assert_belongs_to(store.id());
-        // This should be safe because the unsafety lies in the `self.instance`
-        // pointer passed in has previously been validated by the lifting
-        // context this was originally created within and with the check above
-        // this is guaranteed to be the same store. This means that this should
-        // be carrying over the original assertion from the original creation of
-        // the lifting context that created this type.
-        let mut cx =
-            unsafe { LiftContext::new(store, &self.options, &self.types, self.instance.as_ptr()) };
+        let mut cx = LiftContext::new(store, &self.options, &self.types, self.instance);
         self.get_from_store(&mut cx, index)
     }
 
@@ -1674,9 +1666,7 @@ impl<T: Lift> WasmList<T> {
     ) -> impl ExactSizeIterator<Item = Result<T>> + 'a {
         let store = store.into().0;
         self.options.store_id().assert_belongs_to(store.id());
-        // See comments about unsafety in the `get` method.
-        let mut cx =
-            unsafe { LiftContext::new(store, &self.options, &self.types, self.instance.as_ptr()) };
+        let mut cx = LiftContext::new(store, &self.options, &self.types, self.instance);
         (0..self.len).map(move |i| self.get_from_store(&mut cx, i).unwrap())
     }
 }

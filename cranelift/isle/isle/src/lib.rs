@@ -28,6 +28,7 @@ pub mod lexer;
 mod log;
 pub mod overlap;
 pub mod parser;
+pub mod printer;
 pub mod sema;
 pub mod serialize;
 pub mod stablemapset;

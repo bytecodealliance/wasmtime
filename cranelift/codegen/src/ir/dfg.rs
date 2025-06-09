@@ -992,7 +992,7 @@ impl DataFlowGraph {
     }
 
     /// Create a `ReplaceBuilder` that will replace `inst` with a new instruction in place.
-    pub fn replace(&mut self, inst: Inst) -> ReplaceBuilder {
+    pub fn replace(&mut self, inst: Inst) -> ReplaceBuilder<'_> {
         ReplaceBuilder::new(self, inst)
     }
 

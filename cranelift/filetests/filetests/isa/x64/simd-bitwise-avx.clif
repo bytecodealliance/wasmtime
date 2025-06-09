@@ -40,7 +40,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movl    $-2147483648, %eax
-;   vmovd   %eax, %xmm4
+;   vmovd %eax, %xmm4
 ;   vandnps %xmm4, const(0), %xmm6
 ;   vandps  %xmm4, 0(%rdi), %xmm0
 ;   vorps   %xmm6, %xmm0, %xmm0

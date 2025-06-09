@@ -1,8 +1,8 @@
 [package]
-name = "wasmtime-unwinder"
+name = "wasmtime-internal-unwinder"
 authors.workspace = true
 version.workspace = true
-description = "Wasmtime's unwind format and unwinder"
+description = "INTERNAL: Wasmtime's unwind format and unwinder"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/wasmtime-unwinder"
 repository = "https://github.com/bytecodealliance/wasmtime"

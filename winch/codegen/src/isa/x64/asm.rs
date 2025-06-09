@@ -1921,18 +1921,14 @@ impl Assembler {
 
     /// Move integer from `src` to xmm register `dst` using an AVX instruction.
     pub fn avx_gpr_to_xmm(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => AvxOpcode::Vmovd,
-            OperandSize::S64 => AvxOpcode::Vmovq,
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = match size {
+            OperandSize::S32 => asm::inst::vmovd_a::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::vmovq_a::new(dst, src).into(),
             _ => unreachable!(),
         };
 
-        self.emit(Inst::GprToXmmVex {
-            op,
-            src: src.into(),
-            dst: dst.map(Into::into),
-            src_size: size.into(),
-        })
+        self.emit(Inst::External { inst });
     }
 
     /// Perform an AVX opcode `op` involving registers `src1` and `src2`, writing the
@@ -2000,20 +1996,17 @@ impl Assembler {
 
     /// Converts vector of integers into vector of floating values.
     pub fn xmm_vcvt_rr(&mut self, src: Reg, dst: WritableReg, kind: VcvtKind) {
-        let op = match kind {
-            VcvtKind::I32ToF32 => AvxOpcode::Vcvtdq2ps,
-            VcvtKind::I32ToF64 => AvxOpcode::Vcvtdq2pd,
-            VcvtKind::F64ToF32 => AvxOpcode::Vcvtpd2ps,
-            VcvtKind::F64ToI32 => AvxOpcode::Vcvttpd2dq,
-            VcvtKind::F32ToF64 => AvxOpcode::Vcvtps2pd,
-            VcvtKind::F32ToI32 => AvxOpcode::Vcvttps2dq,
+        let dst: WritableXmm = dst.map(|x| x.into());
+        let inst = match kind {
+            VcvtKind::I32ToF32 => asm::inst::vcvtdq2ps_a::new(dst, src).into(),
+            VcvtKind::I32ToF64 => asm::inst::vcvtdq2pd_a::new(dst, src).into(),
+            VcvtKind::F64ToF32 => asm::inst::vcvtpd2ps_a::new(dst, src).into(),
+            VcvtKind::F64ToI32 => asm::inst::vcvttpd2dq_a::new(dst, src).into(),
+            VcvtKind::F32ToF64 => asm::inst::vcvtps2pd_a::new(dst, src).into(),
+            VcvtKind::F32ToI32 => asm::inst::vcvttps2dq_a::new(dst, src).into(),
         };
 
-        self.emit(Inst::XmmUnaryRmRVex {
-            op,
-            src: src.into(),
-            dst: dst.to_reg().into(),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Shift vector data left by `imm`.
@@ -2445,17 +2438,14 @@ impl Assembler {
         src_size: OperandSize,
         dst_size: OperandSize,
     ) {
-        let op = match src_size {
-            OperandSize::S8 => AvxOpcode::Vpmovmskb,
+        assert_eq!(dst_size, OperandSize::S32);
+        let dst: WritableGpr = dst.map(|r| r.into());
+        let inst = match src_size {
+            OperandSize::S8 => asm::inst::vpmovmskb_rm::new(dst, src).into(),
             _ => unimplemented!(),
         };
 
-        self.emit(Inst::XmmToGprVex {
-            op,
-            src: src.into(),
-            dst: dst.to_reg().into(),
-            dst_size: dst_size.into(),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Creates a mask made up of the most significant bit of each byte of
@@ -2467,18 +2457,15 @@ impl Assembler {
         src_size: OperandSize,
         dst_size: OperandSize,
     ) {
-        let op = match src_size {
-            OperandSize::S32 => AvxOpcode::Vmovmskps,
-            OperandSize::S64 => AvxOpcode::Vmovmskpd,
+        assert_eq!(dst_size, OperandSize::S32);
+        let dst: WritableGpr = dst.map(|r| r.into());
+        let inst = match src_size {
+            OperandSize::S32 => asm::inst::vmovmskps_rm::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::vmovmskpd_rm::new(dst, src).into(),
             _ => unimplemented!(),
         };
 
-        self.emit(Inst::XmmToGprVex {
-            op,
-            src: src.into(),
-            dst: dst.to_reg().into(),
-            dst_size: dst_size.into(),
-        })
+        self.emit(Inst::External { inst });
     }
 
     /// Compute the absolute value of elements in vector `src` and put the

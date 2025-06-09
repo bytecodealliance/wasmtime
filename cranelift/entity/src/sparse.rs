@@ -194,7 +194,7 @@ where
     /// The iteration order is entirely determined by the preceding sequence of `insert` and
     /// `remove` operations. In particular, if no elements were removed, this is the insertion
     /// order.
-    pub fn values(&self) -> slice::Iter<V> {
+    pub fn values(&self) -> slice::Iter<'_, V> {
         self.dense.iter()
     }
 

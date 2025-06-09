@@ -2,7 +2,6 @@
 //! Wasmtime.
 
 #[inline]
-#[allow(missing_docs)]
 pub fn get_stack_pointer() -> usize {
     let stack_pointer: usize;
     unsafe {
@@ -18,7 +17,7 @@ pub fn get_stack_pointer() -> usize {
 pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
     // The calling convention always pushes the return pointer (aka the PC of
     // the next older frame) just before this frame.
-    *(fp as *mut usize).offset(1)
+    unsafe { *(fp as *mut usize).offset(1) }
 }
 
 pub unsafe fn resume_to_exception_handler(

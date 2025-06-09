@@ -302,7 +302,7 @@ unsafe impl Sync for VMContRef {}
 #[inline(always)]
 pub fn cont_new(
     store: &mut dyn crate::vm::VMStore,
-    instance: &mut crate::vm::Instance,
+    instance: core::pin::Pin<&mut crate::vm::Instance>,
     func: *mut u8,
     param_count: u32,
     result_count: u32,
@@ -633,19 +633,19 @@ mod tests {
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             size_of::<VMHostArray<()>>(),
-            usize::from(offsets.ptr.size_of_vmarray())
+            usize::from(offsets.ptr.size_of_vmhostarray())
         );
         assert_eq!(
             offset_of!(VMHostArray<()>, length),
-            usize::from(offsets.ptr.vmarray_length())
+            usize::from(offsets.ptr.vmhostarray_length())
         );
         assert_eq!(
             offset_of!(VMHostArray<()>, capacity),
-            usize::from(offsets.ptr.vmarray_capacity())
+            usize::from(offsets.ptr.vmhostarray_capacity())
         );
         assert_eq!(
             offset_of!(VMHostArray<()>, data),
-            usize::from(offsets.ptr.vmarray_data())
+            usize::from(offsets.ptr.vmhostarray_data())
         );
     }
 

@@ -12,12 +12,20 @@ pub fn parse(lexer: Lexer) -> Result<Vec<Def>> {
     parser.parse_defs()
 }
 
+/// Parse without positional information. Provided mainly to support testing, to
+/// enable equality testing on structure alone.
+pub fn parse_without_pos(lexer: Lexer) -> Result<Vec<Def>> {
+    let parser = Parser::new_without_pos_tracking(lexer);
+    parser.parse_defs()
+}
+
 /// The ISLE parser.
 ///
 /// Takes in a lexer and creates an AST.
 #[derive(Clone, Debug)]
 struct Parser<'a> {
     lexer: Lexer<'a>,
+    disable_pos: bool,
 }
 
 /// Used during parsing a `(rule ...)` to encapsulate some form that
@@ -31,7 +39,17 @@ enum IfLetOrExpr {
 impl<'a> Parser<'a> {
     /// Construct a new parser from the given lexer.
     pub fn new(lexer: Lexer<'a>) -> Parser<'a> {
-        Parser { lexer }
+        Parser {
+            lexer,
+            disable_pos: false,
+        }
+    }
+
+    fn new_without_pos_tracking(lexer: Lexer<'a>) -> Parser<'a> {
+        Parser {
+            lexer,
+            disable_pos: true,
+        }
     }
 
     fn error(&self, pos: Pos, msg: String) -> Error {
@@ -72,9 +90,13 @@ impl<'a> Parser<'a> {
     }
 
     fn pos(&self) -> Pos {
-        self.lexer
-            .peek()
-            .map_or_else(|| self.lexer.pos(), |(pos, _)| *pos)
+        if !self.disable_pos {
+            self.lexer
+                .peek()
+                .map_or_else(|| self.lexer.pos(), |(pos, _)| *pos)
+        } else {
+            Pos::default()
+        }
     }
 
     fn is_lparen(&self) -> bool {

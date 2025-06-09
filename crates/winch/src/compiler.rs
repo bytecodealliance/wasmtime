@@ -95,6 +95,7 @@ impl wasmtime_environ::Compiler for Compiler {
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
+        _symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let index = translation.module.func_index(index);
         let sig = translation.module.functions[index]
@@ -144,17 +145,19 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
         index: DefinedFuncIndex,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         self.trampolines
-            .compile_array_to_wasm_trampoline(translation, types, index)
+            .compile_array_to_wasm_trampoline(translation, types, index, symbol)
     }
 
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &wasmtime_environ::WasmFuncType,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         self.trampolines
-            .compile_wasm_to_array_trampoline(wasm_func_ty)
+            .compile_wasm_to_array_trampoline(wasm_func_ty, symbol)
     }
 
     fn append_code(
@@ -234,8 +237,9 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_builtin(
         &self,
         index: BuiltinFunctionIndex,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
-        self.trampolines.compile_wasm_to_builtin(index)
+        self.trampolines.compile_wasm_to_builtin(index, symbol)
     }
 
     fn compiled_function_relocation_targets<'a>(

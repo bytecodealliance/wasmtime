@@ -243,11 +243,11 @@ mod view;
 mod write_stream;
 
 pub use self::ctx::{WasiCtx, WasiCtxBuilder};
-pub use self::filesystem::{FileInputStream, FsError, FsResult};
+pub use self::filesystem::{FsError, FsResult};
 pub use self::network::{SocketError, SocketResult};
 pub use self::stdio::{
-    AsyncStdinStream, AsyncStdoutStream, IsATTY, OutputFile, Stderr, Stdin, StdinStream, Stdout,
-    StdoutStream, stderr, stdin, stdout,
+    AsyncStdinStream, AsyncStdoutStream, InputFile, IsATTY, OutputFile, Stderr, Stdin, StdinStream,
+    Stdout, StdoutStream, stderr, stdin, stdout,
 };
 pub use self::view::{WasiImpl, WasiView};
 // These contents of wasmtime-wasi-io are re-exported by this module for compatibility:

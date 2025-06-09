@@ -39,6 +39,7 @@ block0():
 ; block0:
 ;   movl    $15360, %esi
 ;   uninit  %xmm0
+;   pxor %xmm0, %xmm0
 ;   pinsrw $0x0, %esi, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -50,6 +51,7 @@ block0():
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movl $0x3c00, %esi
+;   pxor %xmm0, %xmm0
 ;   pinsrw $0, %esi, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp

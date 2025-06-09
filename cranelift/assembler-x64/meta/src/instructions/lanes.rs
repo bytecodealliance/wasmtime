@@ -25,10 +25,16 @@ pub fn list() -> Vec<Inst> {
         inst("movmskps", fmt("RM", [w(r32), r(xmm2)]), rex([0x0F, 0x50]).r(), _64b | compat | sse),
         inst("movmskpd", fmt("RM", [w(r32), r(xmm2)]), rex([0x66, 0x0F, 0x50]).r(), _64b | compat | sse2),
         inst("pmovmskb", fmt("RM", [w(r32), r(xmm2)]), rex([0x66, 0x0F, 0xD7]).r(), _64b | compat | sse2),
+        inst("vmovmskps", fmt("RM", [w(r32), r(xmm2)]), vex(L128)._0f().op(0x50).r(), _64b | compat | avx),
+        inst("vmovmskpd", fmt("RM", [w(r32), r(xmm2)]), vex(L128)._66()._0f().op(0x50).r(), _64b | compat | avx),
+        inst("vpmovmskb", fmt("RM", [w(r32), r(xmm2)]), vex(L128)._66()._0f().op(0xD7).r(), _64b | compat | avx),
 
         inst("vpinsrb", fmt("B", [w(xmm1), r(xmm2), r(r32m8), r(imm8)]), vex(L128)._66()._0f3a().w0().op(0x20).r().ib(), _64b | compat | avx),
         inst("vpinsrw", fmt("B", [w(xmm1), r(xmm2), r(r32m16), r(imm8)]), vex(L128)._66()._0f().w0().op(0xC4).r().ib(), _64b | compat | avx),
         inst("vpinsrd", fmt("B", [w(xmm1), r(xmm2), r(rm32), r(imm8)]), vex(L128)._66()._0f3a().w0().op(0x22).r().ib(), _64b | compat | avx),
         inst("vpinsrq", fmt("B", [w(xmm1), r(xmm2), r(rm64), r(imm8)]), vex(L128)._66()._0f3a().w1().op(0x22).r().ib(), _64b | avx),
+
+        inst("movddup", fmt("A", [w(xmm1), r(xmm_m64)]), rex([0xF2, 0x0F, 0x12]).r(), _64b | compat | sse3),
+        inst("vmovddup", fmt("A", [w(xmm1), r(xmm_m64)]), vex(L128)._f2()._0f().op(0x12).r(), _64b | compat | avx),
     ]
 }
