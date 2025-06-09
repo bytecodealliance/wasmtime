@@ -9,8 +9,8 @@ use crate::{
     frame::Frame,
     isa::reg::RegClass,
     masm::{
-        ExtractLaneKind, MacroAssembler, MemMoveDirection, OperandSize, RegImm, ReplaceLaneKind,
-        SPOffset, ShiftKind, StackSlot,
+        ExtractLaneKind, Imm, MacroAssembler, MemMoveDirection, OperandSize, RegImm,
+        ReplaceLaneKind, SPOffset, ShiftKind, StackSlot,
     },
     reg::{Reg, WritableReg, writable},
     regalloc::RegAlloc,
@@ -64,7 +64,7 @@ impl<'a> CodeGenContext<'a, Emission> {
             let typed_reg = self.pop_to_reg(masm, None)?;
             masm.shift_ir(
                 writable!(typed_reg.reg),
-                val as u64,
+                Imm::i32(val),
                 typed_reg.reg,
                 kind,
                 OperandSize::S32,
@@ -93,7 +93,7 @@ impl<'a> CodeGenContext<'a, Emission> {
             let typed_reg = self.pop_to_reg(masm, None)?;
             masm.shift_ir(
                 writable!(typed_reg.reg),
-                val as u64,
+                Imm::i64(val),
                 typed_reg.reg,
                 kind,
                 OperandSize::S64,

@@ -757,8 +757,8 @@
 ;;       stur    x1, [x28, #8]
 ;;       stur    w2, [x28, #4]
 ;;       ldur    w0, [x28, #4]
-;;       mov     x16, #0x6027
-;;       cmp     x0, x16, uxtx
+;;       mov     x1, #0x6027
+;;       cmp     w0, w1, uxtx
 ;;       b.hs    #0x18110
 ;;   54: csel    x1, xzr, x0, hs
 ;;       csdb

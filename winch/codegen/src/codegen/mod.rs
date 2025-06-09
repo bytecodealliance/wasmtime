@@ -1102,7 +1102,7 @@ where
         let pow = heap_data.memory.page_size_log2;
         self.masm.shift_ir(
             writable!(dst.reg),
-            pow as u64,
+            Imm::i32(pow as i32),
             dst.into(),
             ShiftKind::ShrU,
             heap_data.index_type().try_into()?,

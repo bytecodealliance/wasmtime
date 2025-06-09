@@ -1,5 +1,4 @@
-use self::regs::{ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_GPR};
-use crate::isa::aarch64::regs::{ALL_FPR, NON_ALLOCATABLE_FPR};
+use self::regs::{fpr_bit_set, gpr_bit_set};
 use crate::{
     BuiltinFunctions,
     abi::{ABI, wasm_sig},
@@ -8,7 +7,6 @@ use crate::{
     isa::{Builder, TargetIsa},
     masm::MacroAssembler,
     regalloc::RegAlloc,
-    regset::RegBitSet,
     stack::Stack,
 };
 use anyhow::Result;
@@ -111,17 +109,7 @@ impl TargetIsa for Aarch64 {
         let defined_locals =
             DefinedLocals::new::<abi::Aarch64ABI>(&type_converter, &mut body, validator)?;
         let frame = Frame::new::<abi::Aarch64ABI>(&abi_sig, &defined_locals)?;
-        let gpr = RegBitSet::int(
-            ALL_GPR.into(),
-            NON_ALLOCATABLE_GPR.into(),
-            usize::try_from(MAX_GPR).unwrap(),
-        );
-        let fpr = RegBitSet::float(
-            ALL_FPR.into(),
-            NON_ALLOCATABLE_FPR.into(),
-            usize::try_from(MAX_FPR).unwrap(),
-        );
-        let regalloc = RegAlloc::from(gpr, fpr);
+        let regalloc = RegAlloc::from(gpr_bit_set(), fpr_bit_set());
         let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
         let codegen = CodeGen::new(tunables, &mut masm, codegen_context, env, abi_sig);
 

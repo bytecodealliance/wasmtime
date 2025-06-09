@@ -2048,7 +2048,7 @@ where
         // Find the innermost target and use it as the relative frame
         // for result handling below.
         //
-        // This approch ensures that
+        // This approach ensures that
         // 1. The stack pointer offset is correctly positioned
         //    according to the expectations of the innermost block end
         //    sequence.

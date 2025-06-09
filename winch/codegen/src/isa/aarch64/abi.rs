@@ -122,12 +122,14 @@ impl ABI for Aarch64ABI {
 
     fn scratch_for(ty: &WasmValType) -> Reg {
         match ty {
+            #[expect(deprecated, reason = "Pending migration to Masm::with_scratch")]
             WasmValType::I32
             | WasmValType::I64
             | WasmValType::Ref(WasmRefType {
                 heap_type: WasmHeapType::Func,
                 ..
             }) => regs::scratch(),
+            #[expect(deprecated, reason = "Pending migration to Masm::with_scratch")]
             WasmValType::F32 | WasmValType::F64 | WasmValType::V128 => regs::float_scratch(),
             _ => unimplemented!(),
         }
