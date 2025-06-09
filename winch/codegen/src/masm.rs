@@ -2,7 +2,7 @@ use crate::abi::{self, LocalSlot, align_to, scratch};
 use crate::codegen::{CodeGenContext, Emission, FuncEnv};
 use crate::isa::{
     CallingConvention,
-    reg::{Reg, WritableReg, writable},
+    reg::{Reg, WritableReg, writable, RegClass},
 };
 use anyhow::Result;
 use cranelift_codegen::{
@@ -191,6 +191,45 @@ pub struct StackSlot {
 impl StackSlot {
     pub fn new(offs: SPOffset, size: u32) -> Self {
         Self { offset: offs, size }
+    }
+}
+
+pub trait ScratchType {
+    /// Derive the register class from the scratch register type.
+    fn reg_class() -> RegClass;
+}
+
+/// A scratch register type of integer class.
+pub struct IntScratch;
+/// A scratch register type of floating point class.
+pub struct FloatScratch;
+
+impl ScratchType for IntScratch {
+    fn reg_class() -> RegClass {
+	RegClass::Int
+    }
+}
+
+impl ScratchType for FloatScratch {
+    fn reg_class() -> RegClass {
+	RegClass::Float
+    }
+}
+
+/// A scratch register scope.
+pub struct Scratch(Reg);
+
+impl Scratch {
+    pub fn new(r: Reg) -> Self {
+	Self(r)
+    }
+
+    pub fn inner(&self) -> Reg {
+	self.0
+    }
+
+    pub fn writable(&self) -> WritableReg {
+	writable!(self.0)
     }
 }
 
@@ -883,6 +922,7 @@ pub(crate) enum V128MulKind {
 }
 
 /// Kinds of vector negation supported by WebAssembly.
+#[derive(Copy, Clone)]
 pub(crate) enum V128NegKind {
     /// 4 lanes of 32-bit floats.
     F32x4,
@@ -1125,12 +1165,18 @@ impl Imm {
         }
     }
 
-    /// Returns true if the [`Imm`] is float.
-    pub fn is_float(&self) -> bool {
-        match self {
-            Self::F32(_) | Self::F64(_) => true,
-            _ => false,
-        }
+    /// Unwraps the underlying integer value as u64.
+    /// # Panics
+    /// This function panics if the underlying value can't be represented
+    /// as u64.
+    pub fn unwrap_as_u64(&self) -> u64 {
+	match self {
+	    Self::I32(v) => *v as u64,
+	    Self::I64(v) => *v,
+	    Self::F32(v) => *v as u64,
+	    Self::F64(v) => *v,
+	    _ => unreachable!()
+	}
     }
 
     /// Get the operand size of the immediate.
@@ -1386,6 +1432,10 @@ pub(crate) trait MacroAssembler {
         f: impl FnMut(&mut Self) -> Result<(CalleeKind, CallingConvention)>,
     ) -> Result<u32>;
 
+    /// Acquire a scratch register and execute the given callback.
+    fn with_scratch<T: ScratchType, F>(&mut self, f:  F) -> Result<()>
+	where F: FnMut(&mut Self, Scratch) -> Result<()>;
+
     /// Get stack pointer offset.
     fn sp_offset(&self) -> Result<SPOffset>;
 
@@ -1608,7 +1658,7 @@ pub(crate) trait MacroAssembler {
     fn shift_ir(
         &mut self,
         dst: WritableReg,
-        imm: u64,
+        imm: Imm,
         lhs: Reg,
         kind: ShiftKind,
         size: OperandSize,

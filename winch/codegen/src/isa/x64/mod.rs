@@ -5,13 +5,10 @@ use crate::{
 
 use crate::frame::{DefinedLocals, Frame};
 use crate::isa::x64::masm::MacroAssembler as X64Masm;
+use crate::isa::{Builder, TargetIsa};
 use crate::masm::MacroAssembler;
 use crate::regalloc::RegAlloc;
 use crate::stack::Stack;
-use crate::{
-    isa::{Builder, TargetIsa},
-    regset::RegBitSet,
-};
 use anyhow::Result;
 use cranelift_codegen::settings::{self, Flags};
 use cranelift_codegen::{Final, MachBufferFinalized, isa::x64::settings as x64_settings};
@@ -21,7 +18,7 @@ use wasmparser::{FuncValidator, FunctionBody, ValidatorResources};
 use wasmtime_cranelift::CompiledFunction;
 use wasmtime_environ::{ModuleTranslation, ModuleTypesBuilder, Tunables, VMOffsets, WasmFuncType};
 
-use self::regs::{ALL_FPR, ALL_GPR, MAX_FPR, MAX_GPR, NON_ALLOCATABLE_FPR, NON_ALLOCATABLE_GPR};
+use self::regs::{fpr_bit_set, gpr_bit_set};
 
 mod abi;
 mod address;
@@ -121,18 +118,7 @@ impl TargetIsa for X64 {
         let defined_locals =
             DefinedLocals::new::<abi::X64ABI>(&type_converter, &mut body, validator)?;
         let frame = Frame::new::<abi::X64ABI>(&abi_sig, &defined_locals)?;
-        let gpr = RegBitSet::int(
-            ALL_GPR.into(),
-            NON_ALLOCATABLE_GPR.into(),
-            usize::try_from(MAX_GPR).unwrap(),
-        );
-        let fpr = RegBitSet::float(
-            ALL_FPR.into(),
-            NON_ALLOCATABLE_FPR.into(),
-            usize::try_from(MAX_FPR).unwrap(),
-        );
-
-        let regalloc = RegAlloc::from(gpr, fpr);
+        let regalloc = RegAlloc::from(gpr_bit_set(), fpr_bit_set());
         let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
         let codegen = CodeGen::new(tunables, &mut masm, codegen_context, env, abi_sig);
 
