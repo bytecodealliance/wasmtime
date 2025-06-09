@@ -383,14 +383,15 @@ impl Assembler {
 
     /// Push register.
     pub fn push_r(&mut self, reg: Reg) {
-        self.emit(Inst::Push64 { src: reg.into() });
+        let inst = asm::inst::pushq_o::new(reg).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Pop to register.
     pub fn pop_r(&mut self, dst: WritableReg) {
-        let writable = dst.map(Into::into);
-        let dst = WritableGpr::from_writable_reg(writable).expect("valid writable gpr");
-        self.emit(Inst::Pop64 { dst });
+        let writable: WritableGpr = dst.map(Into::into);
+        let inst = asm::inst::popq_o::new(writable).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Return instruction.

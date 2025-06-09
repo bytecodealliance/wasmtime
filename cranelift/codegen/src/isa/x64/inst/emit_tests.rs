@@ -1129,65 +1129,6 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
-    // Push64
-    insns.push((Inst::push64(RegMemImm::reg(rdi)), "57", "pushq   %rdi"));
-    insns.push((Inst::push64(RegMemImm::reg(r8)), "4150", "pushq   %r8"));
-    insns.push((
-        Inst::push64(RegMemImm::mem(Amode::imm_reg_reg_shift(
-            321,
-            Gpr::unwrap_new(rsi),
-            Gpr::unwrap_new(rcx),
-            3,
-        ))),
-        "FFB4CE41010000",
-        "pushq   321(%rsi,%rcx,8)",
-    ));
-    insns.push((
-        Inst::push64(RegMemImm::mem(Amode::imm_reg_reg_shift(
-            321,
-            Gpr::unwrap_new(r9),
-            Gpr::unwrap_new(rbx),
-            2,
-        ))),
-        "41FFB49941010000",
-        "pushq   321(%r9,%rbx,4)",
-    ));
-    insns.push((Inst::push64(RegMemImm::imm(0)), "6A00", "pushq   $0"));
-    insns.push((Inst::push64(RegMemImm::imm(127)), "6A7F", "pushq   $127"));
-    insns.push((
-        Inst::push64(RegMemImm::imm(128)),
-        "6880000000",
-        "pushq   $128",
-    ));
-    insns.push((
-        Inst::push64(RegMemImm::imm(0x31415927)),
-        "6827594131",
-        "pushq   $826366247",
-    ));
-    insns.push((
-        Inst::push64(RegMemImm::imm(-128i32 as u32)),
-        "6A80",
-        "pushq   $-128",
-    ));
-    insns.push((
-        Inst::push64(RegMemImm::imm(-129i32 as u32)),
-        "687FFFFFFF",
-        "pushq   $-129",
-    ));
-    insns.push((
-        Inst::push64(RegMemImm::imm(-0x75c4e8a1i32 as u32)),
-        "685F173B8A",
-        "pushq   $-1975838881",
-    ));
-
-    // ========================================================
-    // Pop64
-    insns.push((Inst::pop64(w_rax), "58", "popq    %rax"));
-    insns.push((Inst::pop64(w_rdi), "5F", "popq    %rdi"));
-    insns.push((Inst::pop64(w_r8), "4158", "popq    %r8"));
-    insns.push((Inst::pop64(w_r15), "415F", "popq    %r15"));
-
-    // ========================================================
     // CallKnown
     insns.push((
         Inst::call_known(Box::new(CallInfo::empty(

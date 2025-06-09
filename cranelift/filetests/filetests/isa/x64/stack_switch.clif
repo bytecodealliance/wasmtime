@@ -11,7 +11,7 @@ block0(v0: i64, v1: i64, v2: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x30, %rsp
 ;   movq    %rbx, 0(%rsp)
@@ -31,7 +31,7 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   movq 0x20(%rsp), %r15
 ;   addq $0x30, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -141,7 +141,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0xb0, %rsp
 ;   movq    %rbx, 128(%rsp)
@@ -242,7 +242,7 @@ block0(v0: i64, v1: i64):
 ;   movq 0xa0(%rsp), %r15
 ;   addq $0xb0, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -413,7 +413,7 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x130, %rsp
 ;   movq    %rbx, 256(%rsp)
@@ -497,7 +497,7 @@ block0(v0: i64, v1: i64):
 ;   movq 0x120(%rsp), %r15
 ;   addq $0x130, %rsp
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

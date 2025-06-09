@@ -9,7 +9,7 @@ block0(v0: f32x4, v1: f32x4):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   addps %xmm1, %xmm0
@@ -24,7 +24,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   pblendvb %xmm1, %xmm7, %xmm1
 ;   movdqa %xmm1, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -63,7 +63,7 @@ block0(v0: f64, v1: f64):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   addsd %xmm1, %xmm0
@@ -76,7 +76,7 @@ block0(v0: f64, v1: f64):
 ;   pblendvb %xmm5, %xmm1, %xmm5
 ;   movdqa %xmm5, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:
@@ -104,7 +104,7 @@ block0(v0: f32, v1: f32):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   addss %xmm1, %xmm0
@@ -117,7 +117,7 @@ block0(v0: f32, v1: f32):
 ;   pblendvb %xmm5, %xmm1, %xmm5
 ;   movdqa %xmm5, %xmm0
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

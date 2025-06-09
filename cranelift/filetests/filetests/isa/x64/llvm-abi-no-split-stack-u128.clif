@@ -8,13 +8,13 @@ block0(v0: i64, v1: i128, v2: i128, v3: i128):
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq <offset:0>+-0x10(%rbp), %rax
 ;   movq <offset:0>+-8(%rbp), %rdx
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

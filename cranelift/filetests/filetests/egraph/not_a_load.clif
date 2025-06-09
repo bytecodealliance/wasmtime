@@ -13,13 +13,13 @@ function u0:1302(i64) -> i64 system_v {
 }
 
 ; VCode:
-;   pushq   %rbp
+;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
 ;   lock addq %rdi, (%rdi)
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
-;   popq    %rbp
+;   popq %rbp
 ;   ret
 ;
 ; Disassembled:

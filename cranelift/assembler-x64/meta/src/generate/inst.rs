@@ -175,6 +175,11 @@ impl dsl::Inst {
                 match o.location.kind() {
                     Imm(_) => {
                         // Immediates do not need register allocation.
+                        //
+                        // If an instruction happens to only have immediates
+                        // then generate a dummy use of the `visitor` variable
+                        // to suppress unused variables warnings.
+                        fmtln!(f, "let _ = visitor;");
                     }
                     FixedReg(loc) => {
                         let reg_lower = reg.unwrap().to_string().to_lowercase();
