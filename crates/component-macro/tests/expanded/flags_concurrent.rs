@@ -48,7 +48,7 @@ impl<_T: 'static> TheFlagsPre<_T> {
         mut store: impl wasmtime::AsContextMut<Data = _T>,
     ) -> wasmtime::Result<TheFlags>
     where
-        _T: Send + 'static,
+        _T: Send,
     {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
@@ -136,7 +136,7 @@ const _: () = {
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<TheFlags>
         where
-            _T: Send + 'static,
+            _T: Send,
         {
             let pre = linker.instantiate_pre(component)?;
             TheFlagsPre::new(pre)?.instantiate_async(store).await
@@ -150,16 +150,16 @@ const _: () = {
             let indices = TheFlagsIndices::new(&instance.instance_pre(&store))?;
             indices.load(&mut store, instance)
         }
-        pub fn add_to_linker<T, U>(
+        pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            T: 'static,
-            T: Send + foo::foo::flegs::Host<Data = T>,
-            U: Send + foo::foo::flegs::Host<Data = T>,
+            D: foo::foo::flegs::HostConcurrent + Send,
+            for<'a> D::Data<'a>: foo::foo::flegs::Host + Send,
+            T: 'static + Send,
         {
-            foo::foo::flegs::add_to_linker(linker, get)?;
+            foo::foo::flegs::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_flegs(&self) -> &exports::foo::foo::flegs::Guest {
@@ -287,429 +287,184 @@ pub mod foo {
                 assert!(8 == < Flag64 as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Flag64 as wasmtime::component::ComponentType >::ALIGN32);
             };
-            pub trait Host {
-                type Data;
-                fn roundtrip_flag1(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+            pub trait HostConcurrent: wasmtime::component::HasData + Send {
+                fn roundtrip_flag1<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
                     x: Flag1,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag1 + Send + Sync + 'static,
-                > + Send + Sync + 'static
+                ) -> impl ::core::future::Future<Output = Flag1> + Send
                 where
                     Self: Sized;
-                fn roundtrip_flag2(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
+                fn roundtrip_flag2<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
                     x: Flag2,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag2 + Send + Sync + 'static,
-                > + Send + Sync + 'static
+                ) -> impl ::core::future::Future<Output = Flag2> + Send
                 where
                     Self: Sized;
-                fn roundtrip_flag4(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
+                fn roundtrip_flag4<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
                     x: Flag4,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag4 + Send + Sync + 'static,
-                > + Send + Sync + 'static
+                ) -> impl ::core::future::Future<Output = Flag4> + Send
                 where
                     Self: Sized;
-                fn roundtrip_flag8(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
+                fn roundtrip_flag8<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
                     x: Flag8,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag8 + Send + Sync + 'static,
-                > + Send + Sync + 'static
+                ) -> impl ::core::future::Future<Output = Flag8> + Send
                 where
                     Self: Sized;
-                fn roundtrip_flag16(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
+                fn roundtrip_flag16<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
                     x: Flag16,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag16 + Send + Sync + 'static,
-                > + Send + Sync + 'static
+                ) -> impl ::core::future::Future<Output = Flag16> + Send
                 where
                     Self: Sized;
-                fn roundtrip_flag32(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
+                fn roundtrip_flag32<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
                     x: Flag32,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag32 + Send + Sync + 'static,
-                > + Send + Sync + 'static
+                ) -> impl ::core::future::Future<Output = Flag32> + Send
                 where
                     Self: Sized;
-                fn roundtrip_flag64(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
+                fn roundtrip_flag64<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
                     x: Flag64,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag64 + Send + Sync + 'static,
-                > + Send + Sync + 'static
+                ) -> impl ::core::future::Future<Output = Flag64> + Send
                 where
                     Self: Sized;
             }
-            pub fn add_to_linker_get_host<T, G>(
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
+            pub trait Host: Send {}
+            impl<_T: Host + ?Sized + Send> Host for &mut _T {}
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
+                host_getter: fn(&mut T) -> D::Data<'_>,
             ) -> wasmtime::Result<()>
             where
-                T: 'static,
-                G: for<'a> wasmtime::component::GetHost<
-                    &'a mut T,
-                    Host: Host<Data = T> + Send,
-                >,
-                T: Send + 'static,
+                D: HostConcurrent,
+                for<'a> D::Data<'a>: Host,
+                T: 'static + Send,
             {
                 let mut inst = linker.instance("foo:foo/flegs")?;
                 inst.func_wrap_concurrent(
                     "roundtrip-flag1",
                     move |
-                        mut caller: wasmtime::StoreContextMut<'_, T>,
+                        caller: &mut wasmtime::component::Accessor<T>,
                         (arg0,): (Flag1,)|
                     {
-                        let host = caller;
-                        let r = <G::Host as Host>::roundtrip_flag1(host, arg0);
-                        Box::pin(async move {
-                            let fun = r.await;
-                            Box::new(move |mut caller: wasmtime::StoreContextMut<'_, T>| {
-                                let r = fun(caller);
-                                Ok((r,))
-                            })
-                                as Box<
-                                    dyn FnOnce(
-                                        wasmtime::StoreContextMut<'_, T>,
-                                    ) -> wasmtime::Result<(Flag1,)> + Send + Sync,
-                                >
+                        wasmtime::component::__internal::Box::pin(async move {
+                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let r = <D as HostConcurrent>::roundtrip_flag1(
+                                    accessor,
+                                    arg0,
+                                )
+                                .await;
+                            Ok((r,))
                         })
-                            as ::core::pin::Pin<
-                                Box<
-                                    dyn ::core::future::Future<
-                                        Output = Box<
-                                            dyn FnOnce(
-                                                wasmtime::StoreContextMut<'_, T>,
-                                            ) -> wasmtime::Result<(Flag1,)> + Send + Sync,
-                                        >,
-                                    > + Send + Sync + 'static,
-                                >,
-                            >
                     },
                 )?;
                 inst.func_wrap_concurrent(
                     "roundtrip-flag2",
                     move |
-                        mut caller: wasmtime::StoreContextMut<'_, T>,
+                        caller: &mut wasmtime::component::Accessor<T>,
                         (arg0,): (Flag2,)|
                     {
-                        let host = caller;
-                        let r = <G::Host as Host>::roundtrip_flag2(host, arg0);
-                        Box::pin(async move {
-                            let fun = r.await;
-                            Box::new(move |mut caller: wasmtime::StoreContextMut<'_, T>| {
-                                let r = fun(caller);
-                                Ok((r,))
-                            })
-                                as Box<
-                                    dyn FnOnce(
-                                        wasmtime::StoreContextMut<'_, T>,
-                                    ) -> wasmtime::Result<(Flag2,)> + Send + Sync,
-                                >
+                        wasmtime::component::__internal::Box::pin(async move {
+                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let r = <D as HostConcurrent>::roundtrip_flag2(
+                                    accessor,
+                                    arg0,
+                                )
+                                .await;
+                            Ok((r,))
                         })
-                            as ::core::pin::Pin<
-                                Box<
-                                    dyn ::core::future::Future<
-                                        Output = Box<
-                                            dyn FnOnce(
-                                                wasmtime::StoreContextMut<'_, T>,
-                                            ) -> wasmtime::Result<(Flag2,)> + Send + Sync,
-                                        >,
-                                    > + Send + Sync + 'static,
-                                >,
-                            >
                     },
                 )?;
                 inst.func_wrap_concurrent(
                     "roundtrip-flag4",
                     move |
-                        mut caller: wasmtime::StoreContextMut<'_, T>,
+                        caller: &mut wasmtime::component::Accessor<T>,
                         (arg0,): (Flag4,)|
                     {
-                        let host = caller;
-                        let r = <G::Host as Host>::roundtrip_flag4(host, arg0);
-                        Box::pin(async move {
-                            let fun = r.await;
-                            Box::new(move |mut caller: wasmtime::StoreContextMut<'_, T>| {
-                                let r = fun(caller);
-                                Ok((r,))
-                            })
-                                as Box<
-                                    dyn FnOnce(
-                                        wasmtime::StoreContextMut<'_, T>,
-                                    ) -> wasmtime::Result<(Flag4,)> + Send + Sync,
-                                >
+                        wasmtime::component::__internal::Box::pin(async move {
+                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let r = <D as HostConcurrent>::roundtrip_flag4(
+                                    accessor,
+                                    arg0,
+                                )
+                                .await;
+                            Ok((r,))
                         })
-                            as ::core::pin::Pin<
-                                Box<
-                                    dyn ::core::future::Future<
-                                        Output = Box<
-                                            dyn FnOnce(
-                                                wasmtime::StoreContextMut<'_, T>,
-                                            ) -> wasmtime::Result<(Flag4,)> + Send + Sync,
-                                        >,
-                                    > + Send + Sync + 'static,
-                                >,
-                            >
                     },
                 )?;
                 inst.func_wrap_concurrent(
                     "roundtrip-flag8",
                     move |
-                        mut caller: wasmtime::StoreContextMut<'_, T>,
+                        caller: &mut wasmtime::component::Accessor<T>,
                         (arg0,): (Flag8,)|
                     {
-                        let host = caller;
-                        let r = <G::Host as Host>::roundtrip_flag8(host, arg0);
-                        Box::pin(async move {
-                            let fun = r.await;
-                            Box::new(move |mut caller: wasmtime::StoreContextMut<'_, T>| {
-                                let r = fun(caller);
-                                Ok((r,))
-                            })
-                                as Box<
-                                    dyn FnOnce(
-                                        wasmtime::StoreContextMut<'_, T>,
-                                    ) -> wasmtime::Result<(Flag8,)> + Send + Sync,
-                                >
+                        wasmtime::component::__internal::Box::pin(async move {
+                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let r = <D as HostConcurrent>::roundtrip_flag8(
+                                    accessor,
+                                    arg0,
+                                )
+                                .await;
+                            Ok((r,))
                         })
-                            as ::core::pin::Pin<
-                                Box<
-                                    dyn ::core::future::Future<
-                                        Output = Box<
-                                            dyn FnOnce(
-                                                wasmtime::StoreContextMut<'_, T>,
-                                            ) -> wasmtime::Result<(Flag8,)> + Send + Sync,
-                                        >,
-                                    > + Send + Sync + 'static,
-                                >,
-                            >
                     },
                 )?;
                 inst.func_wrap_concurrent(
                     "roundtrip-flag16",
                     move |
-                        mut caller: wasmtime::StoreContextMut<'_, T>,
+                        caller: &mut wasmtime::component::Accessor<T>,
                         (arg0,): (Flag16,)|
                     {
-                        let host = caller;
-                        let r = <G::Host as Host>::roundtrip_flag16(host, arg0);
-                        Box::pin(async move {
-                            let fun = r.await;
-                            Box::new(move |mut caller: wasmtime::StoreContextMut<'_, T>| {
-                                let r = fun(caller);
-                                Ok((r,))
-                            })
-                                as Box<
-                                    dyn FnOnce(
-                                        wasmtime::StoreContextMut<'_, T>,
-                                    ) -> wasmtime::Result<(Flag16,)> + Send + Sync,
-                                >
+                        wasmtime::component::__internal::Box::pin(async move {
+                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let r = <D as HostConcurrent>::roundtrip_flag16(
+                                    accessor,
+                                    arg0,
+                                )
+                                .await;
+                            Ok((r,))
                         })
-                            as ::core::pin::Pin<
-                                Box<
-                                    dyn ::core::future::Future<
-                                        Output = Box<
-                                            dyn FnOnce(
-                                                wasmtime::StoreContextMut<'_, T>,
-                                            ) -> wasmtime::Result<(Flag16,)> + Send + Sync,
-                                        >,
-                                    > + Send + Sync + 'static,
-                                >,
-                            >
                     },
                 )?;
                 inst.func_wrap_concurrent(
                     "roundtrip-flag32",
                     move |
-                        mut caller: wasmtime::StoreContextMut<'_, T>,
+                        caller: &mut wasmtime::component::Accessor<T>,
                         (arg0,): (Flag32,)|
                     {
-                        let host = caller;
-                        let r = <G::Host as Host>::roundtrip_flag32(host, arg0);
-                        Box::pin(async move {
-                            let fun = r.await;
-                            Box::new(move |mut caller: wasmtime::StoreContextMut<'_, T>| {
-                                let r = fun(caller);
-                                Ok((r,))
-                            })
-                                as Box<
-                                    dyn FnOnce(
-                                        wasmtime::StoreContextMut<'_, T>,
-                                    ) -> wasmtime::Result<(Flag32,)> + Send + Sync,
-                                >
+                        wasmtime::component::__internal::Box::pin(async move {
+                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let r = <D as HostConcurrent>::roundtrip_flag32(
+                                    accessor,
+                                    arg0,
+                                )
+                                .await;
+                            Ok((r,))
                         })
-                            as ::core::pin::Pin<
-                                Box<
-                                    dyn ::core::future::Future<
-                                        Output = Box<
-                                            dyn FnOnce(
-                                                wasmtime::StoreContextMut<'_, T>,
-                                            ) -> wasmtime::Result<(Flag32,)> + Send + Sync,
-                                        >,
-                                    > + Send + Sync + 'static,
-                                >,
-                            >
                     },
                 )?;
                 inst.func_wrap_concurrent(
                     "roundtrip-flag64",
                     move |
-                        mut caller: wasmtime::StoreContextMut<'_, T>,
+                        caller: &mut wasmtime::component::Accessor<T>,
                         (arg0,): (Flag64,)|
                     {
-                        let host = caller;
-                        let r = <G::Host as Host>::roundtrip_flag64(host, arg0);
-                        Box::pin(async move {
-                            let fun = r.await;
-                            Box::new(move |mut caller: wasmtime::StoreContextMut<'_, T>| {
-                                let r = fun(caller);
-                                Ok((r,))
-                            })
-                                as Box<
-                                    dyn FnOnce(
-                                        wasmtime::StoreContextMut<'_, T>,
-                                    ) -> wasmtime::Result<(Flag64,)> + Send + Sync,
-                                >
+                        wasmtime::component::__internal::Box::pin(async move {
+                            let accessor = &mut unsafe { caller.with_data(host_getter) };
+                            let r = <D as HostConcurrent>::roundtrip_flag64(
+                                    accessor,
+                                    arg0,
+                                )
+                                .await;
+                            Ok((r,))
                         })
-                            as ::core::pin::Pin<
-                                Box<
-                                    dyn ::core::future::Future<
-                                        Output = Box<
-                                            dyn FnOnce(
-                                                wasmtime::StoreContextMut<'_, T>,
-                                            ) -> wasmtime::Result<(Flag64,)> + Send + Sync,
-                                        >,
-                                    > + Send + Sync + 'static,
-                                >,
-                            >
                     },
                 )?;
                 Ok(())
-            }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                T: 'static,
-                U: Host<Data = T> + Send,
-                T: Send + 'static,
-            {
-                add_to_linker_get_host(linker, get)
-            }
-            impl<_T: Host> Host for &mut _T {
-                type Data = _T::Data;
-                fn roundtrip_flag1(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
-                    x: Flag1,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag1 + Send + Sync + 'static,
-                > + Send + Sync + 'static
-                where
-                    Self: Sized,
-                {
-                    <_T as Host>::roundtrip_flag1(store, x)
-                }
-                fn roundtrip_flag2(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
-                    x: Flag2,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag2 + Send + Sync + 'static,
-                > + Send + Sync + 'static
-                where
-                    Self: Sized,
-                {
-                    <_T as Host>::roundtrip_flag2(store, x)
-                }
-                fn roundtrip_flag4(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
-                    x: Flag4,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag4 + Send + Sync + 'static,
-                > + Send + Sync + 'static
-                where
-                    Self: Sized,
-                {
-                    <_T as Host>::roundtrip_flag4(store, x)
-                }
-                fn roundtrip_flag8(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
-                    x: Flag8,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag8 + Send + Sync + 'static,
-                > + Send + Sync + 'static
-                where
-                    Self: Sized,
-                {
-                    <_T as Host>::roundtrip_flag8(store, x)
-                }
-                fn roundtrip_flag16(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
-                    x: Flag16,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag16 + Send + Sync + 'static,
-                > + Send + Sync + 'static
-                where
-                    Self: Sized,
-                {
-                    <_T as Host>::roundtrip_flag16(store, x)
-                }
-                fn roundtrip_flag32(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
-                    x: Flag32,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag32 + Send + Sync + 'static,
-                > + Send + Sync + 'static
-                where
-                    Self: Sized,
-                {
-                    <_T as Host>::roundtrip_flag32(store, x)
-                }
-                fn roundtrip_flag64(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
-                    x: Flag64,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Flag64 + Send + Sync + 'static,
-                > + Send + Sync + 'static
-                where
-                    Self: Sized,
-                {
-                    <_T as Host>::roundtrip_flag64(store, x)
-                }
             }
         }
     }
@@ -1000,11 +755,13 @@ pub mod exports {
                     }
                 }
                 impl Guest {
-                    pub async fn call_roundtrip_flag1<S: wasmtime::AsContextMut>(
+                    pub fn call_roundtrip_flag1<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: Flag1,
-                    ) -> wasmtime::Result<wasmtime::component::Promise<Flag1>>
+                    ) -> impl wasmtime::component::__internal::Future<
+                        Output = wasmtime::Result<Flag1>,
+                    > + Send + 'static + use<S>
                     where
                         <S as wasmtime::AsContext>::Data: Send + 'static,
                     {
@@ -1014,16 +771,18 @@ pub mod exports {
                                 (Flag1,),
                             >::new_unchecked(self.roundtrip_flag1)
                         };
-                        let promise = callee
-                            .call_concurrent(store.as_context_mut(), (arg0,))
-                            .await?;
-                        Ok(promise.map(|(v,)| v))
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), (arg0,)),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
-                    pub async fn call_roundtrip_flag2<S: wasmtime::AsContextMut>(
+                    pub fn call_roundtrip_flag2<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: Flag2,
-                    ) -> wasmtime::Result<wasmtime::component::Promise<Flag2>>
+                    ) -> impl wasmtime::component::__internal::Future<
+                        Output = wasmtime::Result<Flag2>,
+                    > + Send + 'static + use<S>
                     where
                         <S as wasmtime::AsContext>::Data: Send + 'static,
                     {
@@ -1033,16 +792,18 @@ pub mod exports {
                                 (Flag2,),
                             >::new_unchecked(self.roundtrip_flag2)
                         };
-                        let promise = callee
-                            .call_concurrent(store.as_context_mut(), (arg0,))
-                            .await?;
-                        Ok(promise.map(|(v,)| v))
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), (arg0,)),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
-                    pub async fn call_roundtrip_flag4<S: wasmtime::AsContextMut>(
+                    pub fn call_roundtrip_flag4<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: Flag4,
-                    ) -> wasmtime::Result<wasmtime::component::Promise<Flag4>>
+                    ) -> impl wasmtime::component::__internal::Future<
+                        Output = wasmtime::Result<Flag4>,
+                    > + Send + 'static + use<S>
                     where
                         <S as wasmtime::AsContext>::Data: Send + 'static,
                     {
@@ -1052,16 +813,18 @@ pub mod exports {
                                 (Flag4,),
                             >::new_unchecked(self.roundtrip_flag4)
                         };
-                        let promise = callee
-                            .call_concurrent(store.as_context_mut(), (arg0,))
-                            .await?;
-                        Ok(promise.map(|(v,)| v))
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), (arg0,)),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
-                    pub async fn call_roundtrip_flag8<S: wasmtime::AsContextMut>(
+                    pub fn call_roundtrip_flag8<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: Flag8,
-                    ) -> wasmtime::Result<wasmtime::component::Promise<Flag8>>
+                    ) -> impl wasmtime::component::__internal::Future<
+                        Output = wasmtime::Result<Flag8>,
+                    > + Send + 'static + use<S>
                     where
                         <S as wasmtime::AsContext>::Data: Send + 'static,
                     {
@@ -1071,16 +834,18 @@ pub mod exports {
                                 (Flag8,),
                             >::new_unchecked(self.roundtrip_flag8)
                         };
-                        let promise = callee
-                            .call_concurrent(store.as_context_mut(), (arg0,))
-                            .await?;
-                        Ok(promise.map(|(v,)| v))
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), (arg0,)),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
-                    pub async fn call_roundtrip_flag16<S: wasmtime::AsContextMut>(
+                    pub fn call_roundtrip_flag16<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: Flag16,
-                    ) -> wasmtime::Result<wasmtime::component::Promise<Flag16>>
+                    ) -> impl wasmtime::component::__internal::Future<
+                        Output = wasmtime::Result<Flag16>,
+                    > + Send + 'static + use<S>
                     where
                         <S as wasmtime::AsContext>::Data: Send + 'static,
                     {
@@ -1090,16 +855,18 @@ pub mod exports {
                                 (Flag16,),
                             >::new_unchecked(self.roundtrip_flag16)
                         };
-                        let promise = callee
-                            .call_concurrent(store.as_context_mut(), (arg0,))
-                            .await?;
-                        Ok(promise.map(|(v,)| v))
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), (arg0,)),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
-                    pub async fn call_roundtrip_flag32<S: wasmtime::AsContextMut>(
+                    pub fn call_roundtrip_flag32<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: Flag32,
-                    ) -> wasmtime::Result<wasmtime::component::Promise<Flag32>>
+                    ) -> impl wasmtime::component::__internal::Future<
+                        Output = wasmtime::Result<Flag32>,
+                    > + Send + 'static + use<S>
                     where
                         <S as wasmtime::AsContext>::Data: Send + 'static,
                     {
@@ -1109,16 +876,18 @@ pub mod exports {
                                 (Flag32,),
                             >::new_unchecked(self.roundtrip_flag32)
                         };
-                        let promise = callee
-                            .call_concurrent(store.as_context_mut(), (arg0,))
-                            .await?;
-                        Ok(promise.map(|(v,)| v))
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), (arg0,)),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
-                    pub async fn call_roundtrip_flag64<S: wasmtime::AsContextMut>(
+                    pub fn call_roundtrip_flag64<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
                         arg0: Flag64,
-                    ) -> wasmtime::Result<wasmtime::component::Promise<Flag64>>
+                    ) -> impl wasmtime::component::__internal::Future<
+                        Output = wasmtime::Result<Flag64>,
+                    > + Send + 'static + use<S>
                     where
                         <S as wasmtime::AsContext>::Data: Send + 'static,
                     {
@@ -1128,10 +897,10 @@ pub mod exports {
                                 (Flag64,),
                             >::new_unchecked(self.roundtrip_flag64)
                         };
-                        let promise = callee
-                            .call_concurrent(store.as_context_mut(), (arg0,))
-                            .await?;
-                        Ok(promise.map(|(v,)| v))
+                        wasmtime::component::__internal::FutureExt::map(
+                            callee.call_concurrent(store.as_context_mut(), (arg0,)),
+                            |v| v.map(|(v,)| v),
+                        )
                     }
                 }
             }

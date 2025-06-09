@@ -1,8 +1,9 @@
 use {
     crate::{
         AsContextMut, ValRaw,
+        component::{HasData, HasSelf, Instance},
         store::StoreInner,
-        vm::{VMFuncRef, VMMemoryDefinition, component::ComponentInstance},
+        vm::{VMFuncRef, VMMemoryDefinition, VMStore, component::ComponentInstance},
     },
     anyhow::Result,
     futures::{FutureExt, stream::FuturesUnordered},
@@ -78,6 +79,37 @@ impl<T: 'static> PromisesUnordered<T> {
     /// Get the next result from this collection, if any.
     pub async fn next<U: Send>(&mut self, store: impl AsContextMut<Data = U>) -> Result<Option<T>> {
         _ = store;
+        todo!()
+    }
+}
+
+/// Provides scoped mutable access to store data in the context of a concurrent
+/// host task future.
+///
+/// This allows multiple host task futures to execute concurrently and access
+/// the store between (but not across) `await` points.
+pub struct Accessor<T: 'static, D = HasSelf<T>>
+where
+    D: HasData,
+{
+    #[expect(dead_code, reason = "to be used in the future")]
+    get: fn() -> *mut dyn VMStore,
+    #[expect(dead_code, reason = "to be used in the future")]
+    get_data: fn(&mut T) -> D::Data<'_>,
+    #[expect(dead_code, reason = "to be used in the future")]
+    instance: Instance,
+}
+
+impl<T, D> Accessor<T, D>
+where
+    D: HasData,
+{
+    #[doc(hidden)]
+    pub fn with_data<D2: HasData>(
+        &mut self,
+        get_data: fn(&mut T) -> D2::Data<'_>,
+    ) -> Accessor<T, D2> {
+        let _ = get_data;
         todo!()
     }
 }

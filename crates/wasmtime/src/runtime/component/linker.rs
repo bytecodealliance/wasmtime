@@ -1,3 +1,5 @@
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent::Accessor;
 use crate::component::func::HostFunc;
 use crate::component::instance::RuntimeImport;
 use crate::component::matching::{InstanceType, TypeChecker};
@@ -455,30 +457,21 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// method because it takes a function which returns a future that owns a
     /// unique reference to the Store, meaning the Store can't be used for
     /// anything else until the future resolves.
-    ///
-    /// Ideally, we'd have a way to thread a `StoreContextMut<T>` through an
-    /// arbitrary `Future` such that it has access to the `Store` only while
-    /// being polled (i.e. between, but not across, await points). However,
-    /// there's currently no way to express that in async Rust, so we make do
-    /// with a more awkward scheme: each function registered using
-    /// `func_wrap_concurrent` gets access to the `Store` twice: once before
-    /// doing any concurrent operations (i.e. before awaiting) and once
-    /// afterward. This allows multiple calls to proceed concurrently without
-    /// any one of them monopolizing the store.
     #[cfg(feature = "component-model-async")]
-    pub fn func_wrap_concurrent<Params, Return, F, N, FN>(&mut self, name: &str, f: F) -> Result<()>
+    pub fn func_wrap_concurrent<Params, Return, F>(&mut self, name: &str, f: F) -> Result<()>
     where
-        N: FnOnce(StoreContextMut<T>) -> Result<Return> + Send + Sync + 'static,
-        FN: Future<Output = N> + Send + Sync + 'static,
-        F: Fn(StoreContextMut<T>, Params) -> FN + Send + Sync + 'static,
-        Params: ComponentNamedList + Lift + 'static,
+        T: 'static,
+        F: for<'a> Fn(
+                &'a mut Accessor<T>,
+                Params,
+            ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send + 'a>>
+            + Send
+            + Sync
+            + 'static,
+        Params: ComponentNamedList + Lift + Send + Sync + 'static,
         Return: ComponentNamedList + Lower + Send + Sync + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_wrap_concurrent` without enabling async support in the config"
-        );
-        _ = (name, f);
+        let _ = (name, f);
         todo!()
     }
 
