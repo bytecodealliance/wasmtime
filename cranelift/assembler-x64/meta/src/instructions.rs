@@ -46,80 +46,56 @@ pub fn list() -> Vec<Inst> {
     all.extend(xor::list());
     all.extend(unpack::list());
 
-    // Automatically assign AVX alternates to SSE instructions (see
-    // `Inst::alternate`). This allows later code generation to
-    // instruction-select between the AVX and SSE versions of an instruction.
-    assign_avx_alternates(&mut all);
+    check_avx_alternates(&mut all);
 
     all
 }
 
-/// Assigns AVX alternates to SSE instructions.
+/// Checks that assigned AVX alternates are correctly applied to SSE
+/// instructions.
 ///
-/// This works by:
-/// - finding the mnemonics of all AVX instructions
-/// - finding the mnemonics of all SSE* instructions
-/// - looking up each AVX mnemonic, minus its 'v' prefix, to see if an SSE
-///   version exists
-/// - checking that the SSE and AVX instructions have the same opcode
-/// - assigning the AVX instruction name as the alternate for the SSE
-///   instruction
-fn assign_avx_alternates(all: &mut [Inst]) {
-    let sse = map_mnemonic_to_index(&all, is_sse);
-    let avx = map_mnemonic_to_index(&all, is_avx);
-
-    for (avx_mnemonic, avx_index) in avx {
-        let sse_mnemonic = &avx_mnemonic[1..]; // Remove the 'v' prefix.
-        if let Some(sse_index) = sse.get(sse_mnemonic) {
-            if let Some(avx_name) = sse_matches_avx(*sse_index, avx_index, all) {
-                let sse_inst = &mut all[*sse_index];
-                sse_inst.alternate = Some(avx_name);
-            }
-        }
+/// # Panics
+///
+/// Expects that each AVX alternate to be of an SSE instruction (currently).
+fn check_avx_alternates(all: &mut [Inst]) {
+    let name_to_index: HashMap<String, usize> = all
+        .iter()
+        .enumerate()
+        .map(|(index, inst)| (inst.name().clone(), index))
+        .collect();
+    for inst in all.iter().filter(|inst| inst.alternate.is_some()) {
+        assert!(inst.features.is_sse());
+        let alternate = inst.alternate.as_ref().unwrap();
+        assert_eq!(alternate.feature, Feature::avx);
+        let avx_index = name_to_index.get(&alternate.name).expect(&format!(
+            "invalid alternate name: {} (did you use the full `<mnemonic>_<format>` form?)",
+            alternate.name
+        ));
+        check_sse_matches_avx(inst, &all[*avx_index]);
     }
 }
 
-/// Check if `inst` is an SSE instructions (any SSE-based feature).
-fn is_sse((_, inst): &(usize, &Inst)) -> bool {
-    inst.features.contains(Feature::sse)
-        || inst.features.contains(Feature::sse2)
-        || inst.features.contains(Feature::ssse3)
-        || inst.features.contains(Feature::sse41)
-}
-
-/// Check if `inst` is an AVX instructions.
-fn is_avx((_, inst): &(usize, &Inst)) -> bool {
-    inst.features.contains(Feature::avx)
-}
-
-/// Create a map of an instruction mnemonic to its index in `insts`; this speeds
-/// up lookups and avoids borrowing from a `Vec` we are attempting to modify.
-fn map_mnemonic_to_index(
-    insts: &[Inst],
-    filter: impl Fn(&(usize, &Inst)) -> bool,
-) -> HashMap<String, usize> {
-    insts
-        .iter()
-        .enumerate()
-        .filter(filter)
-        .map(|(index, inst)| (inst.mnemonic.clone(), index))
-        .collect()
-}
-
-/// Checks if the SSE instruction at `sse_index` matches the AVX instruction at
-/// `avx_index` in terms of operands and opcode, and returns the AVX mnemonic if
-/// they match.
-fn sse_matches_avx(sse_index: usize, avx_index: usize, insts: &[Inst]) -> Option<String> {
+/// Checks if the SSE instruction `sse_inst` matches the AVX instruction
+/// `avx_inst` in terms of operands and opcode.
+///
+/// # Panics
+///
+/// Panics for any condition indicating that the SSE and AVX instructions do not
+/// match:
+/// - the AVX instruction does not have a 'v' prefix
+/// - the SSE and AVX instructions do not have the same opcode
+/// - the operand formats do not match the expected patterns
+fn check_sse_matches_avx(sse_inst: &Inst, avx_inst: &Inst) {
     use crate::dsl::{Mutability::*, OperandKind::*};
 
-    let sse_inst = &insts[sse_index];
-    let avx_inst = &insts[avx_index];
-
-    // Just to double-check:
-    debug_assert_eq!(&format!("v{}", sse_inst.mnemonic), &avx_inst.mnemonic);
+    debug_assert_eq!(
+        &format!("v{}", sse_inst.mnemonic),
+        &avx_inst.mnemonic,
+        "an alternate AVX instruction should have a 'v' prefix: {avx_inst}"
+    );
 
     if sse_inst.encoding.opcode() != avx_inst.encoding.opcode() {
-        panic!("the following instructions should have the same opcode:\n{sse_inst}\n{avx_inst}");
+        panic!("alternate instructions should have the same opcode:\n{sse_inst}\n{avx_inst}");
     }
 
     match (list_ops(sse_inst).as_slice(), list_ops(avx_inst).as_slice()) {
@@ -132,9 +108,10 @@ fn sse_matches_avx(sse_index: usize, avx_index: usize, insts: &[Inst]) -> Option
         (
             [(ReadWrite, Reg(_)), (Read, RegMem(_))],
             [(Write, Reg(_)), (Read, Reg(_)), (Read, RegMem(_))],
-        ) => Some(avx_inst.name()),
-        // We ignore other formats for now.
-        _ => None,
+        ) => {}
+        // We panic on other formats for now; feel free to add more patterns to
+        // avoid this.
+        _ => panic!("unmatched formats for SSE-to-AVX alternate:\n{sse_inst}\n{avx_inst}"),
     }
 }
 

@@ -1,7 +1,7 @@
 //! Generate the Cranelift-specific integration of the x64 assembler.
 
 use cranelift_assembler_x64_meta::dsl::{
-    Format, Inst, Location, Mutability, Operand, OperandKind, RegClass,
+    Feature, Format, Inst, Location, Mutability, Operand, OperandKind, RegClass,
 };
 use cranelift_srcgen::{Formatter, fmtln};
 
@@ -505,36 +505,34 @@ pub fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
             "(rule ({rule_name} {param_names}) ({convert} ({raw_name} {implicit_params} {param_names})))"
         );
 
-        if let Some(avx_name) = &inst.alternate {
-            use OperandKind::*;
-            match inst.format.operands_by_kind().as_slice() {
-                [Reg(dst), RegMem(_)] => {
-                    assert!(matches!(dst.reg_class(), Some(RegClass::Xmm)));
-                    let param_tys = param_tys.replace("Aligned", "");
-                    let sse_name = inst.name();
-                    let rule_name = format!("x64_{sse_name}_or_avx");
-                    fmtln!(f, "(decl {rule_name} ({param_tys}) {result_ty})");
-                    fmtln!(f, "(rule 1 ({rule_name} {param_names})");
-                    f.indent(|f| {
-                        fmtln!(f, "(if-let true (use_avx))");
-                        fmtln!(f, "(x64_{avx_name} {param_names}))");
-                    });
-                    fmtln!(
-                        f,
-                        "(rule 0 ({rule_name} {param_names}) (x64_{sse_name} {param_names}))"
-                    );
-                }
-                _ => {
-                    // We don't bother to add other decision functions for now:
-                    // (1) it isn't clear that this is needed since the vast
-                    // majority of these SSE/AVX pairs look like `rw(xmm),
-                    // r(xmm_m128)`; but also (2) instructions using other
-                    // formats can tend to have tricky semantics, e.g.,
-                    // `roundss`/`vroundss` where the destination register is
-                    // partially written to in SSE but fully written to in AVX
-                    // by merging in the second operand.
-                }
-            }
+        if let Some(alternate) = &inst.alternate {
+            // We currently plan to use alternate instructions for SSE/AVX
+            // pairs, so we expect the destination register to be an XMM
+            // register. In the future we could relax this, but would need to
+            // handle more cases below.
+            assert!(matches!(
+                inst.format.operands.first().unwrap().location.reg_class(),
+                Some(RegClass::Xmm)
+            ));
+            let param_tys = if alternate.feature == Feature::avx {
+                param_tys.replace("Aligned", "")
+            } else {
+                param_tys
+            };
+            let name = inst.name();
+            let alt_feature = alternate.feature.to_string();
+            let alt_name = &alternate.name;
+            let rule_name = format!("x64_{name}_or_{alt_feature}");
+            fmtln!(f, "(decl {rule_name} ({param_tys}) {result_ty})");
+            fmtln!(f, "(rule 1 ({rule_name} {param_names})");
+            f.indent(|f| {
+                fmtln!(f, "(if-let true (use_{alt_feature}))");
+                fmtln!(f, "(x64_{alt_name} {param_names}))");
+            });
+            fmtln!(
+                f,
+                "(rule 0 ({rule_name} {param_names}) (x64_{name} {param_names}))"
+            );
         }
     }
 }

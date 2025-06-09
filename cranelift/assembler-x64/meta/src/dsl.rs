@@ -61,18 +61,7 @@ pub struct Inst {
     /// reference manual.
     pub features: Features,
     /// An alternate version of this instruction, if it exists.
-    ///
-    /// Some instructions have the same semantics in their SSE or AVX encodings.
-    /// In these cases, we use this field to record the mnemonic of the upgraded
-    /// version of the instruction.
-    ///
-    /// For AVX specifically, using the VEX-encoded
-    /// instruction is typically better than its legacy SSE version:
-    /// - VEX can encode three operands
-    /// - VEX allows unaligned memory access (avoids additional `MOVUPS`)
-    /// - VEX can compact byte-long prefixes into the VEX prefix
-    /// - VEX instructions zero the upper bits of XMM registers by default
-    pub alternate: Option<String>,
+    pub alternate: Option<Alternate>,
     /// Whether or not this instruction can trap and thus needs a `TrapCode`
     /// payload in the instruction itself.
     pub has_trap: bool,
@@ -114,6 +103,15 @@ impl Inst {
         self.custom_visit = true;
         self
     }
+
+    /// Sets the alternate version of this instruction, if it exists.
+    pub fn alt(mut self, feature: Feature, alternate: impl Into<String>) -> Self {
+        self.alternate = Some(Alternate {
+            feature,
+            name: alternate.into(),
+        });
+        self
+    }
 }
 
 impl core::fmt::Display for Inst {
@@ -141,5 +139,30 @@ impl core::fmt::Display for Inst {
             write!(f, " custom_visit")?;
         }
         Ok(())
+    }
+}
+
+/// An alternate version of an instruction.
+///
+/// Some AVX-specific context: some instructions have the same semantics in
+/// their SSE and AVX encodings. In these cases, we use this structure to record
+/// the name of the upgraded version of the instruction, allowing us to replace
+/// the SSE instruction with its AVX version during lowering. For AVX, using the
+/// VEX-encoded instruction is typically better than its legacy SSE version:
+/// - VEX can encode three operands
+/// - VEX allows unaligned memory access (avoids additional `MOVUPS`)
+/// - VEX can compact byte-long prefixes into the VEX prefix
+/// - VEX instructions zero the upper bits of XMM registers by default
+pub struct Alternate {
+    /// Indicate the feature check to use to trigger the replacement.
+    pub feature: Feature,
+    /// The full name (see [`Inst::name`]) of the instruction used for
+    /// replacement.
+    pub name: String,
+}
+
+impl core::fmt::Display for Alternate {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+        write!(f, "{} => {}", self.feature, self.name)
     }
 }
