@@ -4,7 +4,82 @@ Unreleased.
 
 ### Added
 
+* Support for SIMD in the Pulley interpreter can now be disabled at compile-time
+  to shrink the size of the final binary.
+  [#10727](https://github.com/bytecodealliance/wasmtime/pull/10727)
+
+* The C API now has `wasmtime_trap_new_code` to create a `wasm_trap_t` from
+  its code.
+  [#10765](https://github.com/bytecodealliance/wasmtime/pull/10765)
+
+* Winch's support for x86\_64 is now classified with tier 1 support in Wasmtime.
+  [#10755](https://github.com/bytecodealliance/wasmtime/pull/10755)
+
+* Winch's support for aarch64 now implements stack checks to pass many more spec
+  tests.
+  [#10763](https://github.com/bytecodealliance/wasmtime/pull/10763)
+
+* Cranelift's s390x backend now has full support for the `f128` type.
+  [#10774](https://github.com/bytecodealliance/wasmtime/pull/10774)
+
+* Wasmtime's C API for the component model has initial support for calling
+  functions.
+  [#10697](https://github.com/bytecodealliance/wasmtime/pull/10697)
+  [#10841](https://github.com/bytecodealliance/wasmtime/pull/10841)
+  [#10858](https://github.com/bytecodealliance/wasmtime/pull/10858)
+  [#10864](https://github.com/bytecodealliance/wasmtime/pull/10864)
+  [#10877](https://github.com/bytecodealliance/wasmtime/pull/10877)
+
+* The `wasmtime wast` command now has a `--generate-dwarf` flag to show
+  filename/line number information for backtraces.
+  [#10780](https://github.com/bytecodealliance/wasmtime/pull/10780)
+
 ### Changed
+
+* The shape of `bindgen!`-generated `add_to_linker` functions has changed with
+  the removal of `GetHost` and replacement of a `HasData` trait. For more
+  information see the associated PR.
+  [#10770](https://github.com/bytecodealliance/wasmtime/pull/10770)
+
+* Wasmtime's `Store<T>` now requires that `T: 'static`. This is done in
+  preparation for merging WASIp3 work to the main repository with some more
+  information on the associated PR.
+  [#10760](https://github.com/bytecodealliance/wasmtime/pull/10760)
+
+* The `wasmtime::component::Instance::instance_pre` method is now public.
+  [#10761](https://github.com/bytecodealliance/wasmtime/pull/10761)
+
+* Wasmtime and Cranelift's minimnum supported version of Rust (MSRV) is now
+  1.85.0.
+  [#10785](https://github.com/bytecodealliance/wasmtime/pull/10785)
+
+* Cranelift's `debugtrap` on aarch64 now generates `brk #0xf000` for debuggers
+  to recognize it.
+  [#10813](https://github.com/bytecodealliance/wasmtime/pull/10813)
+
+* The wasi-http implementation no longer generates a trap if the handle to
+  receive the response on the host is dropped early.
+  [#10833](https://github.com/bytecodealliance/wasmtime/pull/10833)
+
+* The `wasmtime serve` command will now send some boilerplate descriptive HTML
+  on a 500 server error instead of nothing.
+  [#10851](https://github.com/bytecodealliance/wasmtime/pull/10851)
+
+* A significant amount of work has gone into the new assembler for the x64
+  backend. Too many PRs to list here but progress continues apace at defining
+  all machine instructions in a standalone crate.
+
+* Cranelift will now reject unimplemented big-endian loads/stores on backends
+  that do not implement this functionality.
+  [#10863](https://github.com/bytecodealliance/wasmtime/pull/10863)
+
+* The `wasmtime explore` generated HTML handles large modules better now.
+  [#10892](https://github.com/bytecodealliance/wasmtime/pull/10892)
+
+* Wasmtime's internal representation of `wasmtime::Func` has changed and a
+  previous optimization of `Func::call` has been lost. If affected it'd
+  recommended to use `Func::call_unchecked` instead or to open an issue.
+  [#10897](https://github.com/bytecodealliance/wasmtime/pull/10897)
 
 --------------------------------------------------------------------------------
 
