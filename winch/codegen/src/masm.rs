@@ -1435,9 +1435,7 @@ pub(crate) trait MacroAssembler {
     ) -> Result<u32>;
 
     /// Acquire a scratch register and execute the given callback.
-    fn with_scratch<T: ScratchType, F>(&mut self, f: F) -> Result<()>
-    where
-        F: FnMut(&mut Self, Scratch) -> Result<()>;
+    fn with_scratch<T: ScratchType, R>(&mut self, f: impl FnOnce(&mut Self, Scratch) -> R) -> R;
 
     /// Get stack pointer offset.
     fn sp_offset(&self) -> Result<SPOffset>;
