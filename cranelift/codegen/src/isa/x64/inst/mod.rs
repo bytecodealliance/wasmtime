@@ -99,7 +99,6 @@ impl Inst {
             | Inst::JmpUnknown { .. }
             | Inst::LoadEffectiveAddress { .. }
             | Inst::LoadExtName { .. }
-            | Inst::LockCmpxchg { .. }
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
             | Inst::Nop { .. }
@@ -124,9 +123,9 @@ impl Inst {
             | Inst::Unwind { .. }
             | Inst::DummyUse { .. } => smallvec![],
 
-            Inst::LockCmpxchg16b { .. }
-            | Inst::Atomic128RmwSeq { .. }
-            | Inst::Atomic128XchgSeq { .. } => smallvec![InstructionSet::CMPXCHG16b],
+            Inst::Atomic128RmwSeq { .. } | Inst::Atomic128XchgSeq { .. } => {
+                smallvec![InstructionSet::CMPXCHG16b]
+            }
 
             // These use dynamic SSE opcodes.
             Inst::XmmRmR { op, .. }
@@ -165,6 +164,7 @@ impl Inst {
                         lzcnt => features.push(InstructionSet::Lzcnt),
                         popcnt => features.push(InstructionSet::Popcnt),
                         avx => features.push(InstructionSet::AVX),
+                        cmpxchg16b => features.push(InstructionSet::CMPXCHG16b),
                     }
                 }
                 features
@@ -1149,47 +1149,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {name}+{offset}, {dst}")
             }
 
-            Inst::LockCmpxchg {
-                ty,
-                replacement,
-                expected,
-                mem,
-                dst_old,
-                ..
-            } => {
-                let size = ty.bytes() as u8;
-                let replacement = pretty_print_reg(**replacement, size);
-                let expected = pretty_print_reg(**expected, size);
-                let dst_old = pretty_print_reg(*dst_old.to_reg(), size);
-                let mem = mem.pretty_print(size);
-                let suffix = suffix_bwlq(OperandSize::from_bytes(size as u32));
-                format!(
-                    "lock cmpxchg{suffix} {replacement}, {mem}, expected={expected}, dst_old={dst_old}"
-                )
-            }
-
-            Inst::LockCmpxchg16b {
-                replacement_low,
-                replacement_high,
-                expected_low,
-                expected_high,
-                mem,
-                dst_old_low,
-                dst_old_high,
-                ..
-            } => {
-                let replacement_low = pretty_print_reg(**replacement_low, 8);
-                let replacement_high = pretty_print_reg(**replacement_high, 8);
-                let expected_low = pretty_print_reg(**expected_low, 8);
-                let expected_high = pretty_print_reg(**expected_high, 8);
-                let dst_old_low = pretty_print_reg(*dst_old_low.to_reg(), 8);
-                let dst_old_high = pretty_print_reg(*dst_old_high.to_reg(), 8);
-                let mem = mem.pretty_print(16);
-                format!(
-                    "lock cmpxchg16b {mem}, replacement={replacement_high}:{replacement_low}, expected={expected_high}:{expected_low}, dst_old={dst_old_high}:{dst_old_low}"
-                )
-            }
-
             Inst::AtomicRmwSeq { ty, op, .. } => {
                 let ty = ty.bits();
                 format!(
@@ -1650,38 +1609,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
 
         Inst::LoadExtName { dst, .. } => {
             collector.reg_def(dst);
-        }
-
-        Inst::LockCmpxchg {
-            replacement,
-            expected,
-            mem,
-            dst_old,
-            ..
-        } => {
-            collector.reg_use(replacement);
-            collector.reg_fixed_use(expected, regs::rax());
-            collector.reg_fixed_def(dst_old, regs::rax());
-            mem.get_operands(collector);
-        }
-
-        Inst::LockCmpxchg16b {
-            replacement_low,
-            replacement_high,
-            expected_low,
-            expected_high,
-            mem,
-            dst_old_low,
-            dst_old_high,
-            ..
-        } => {
-            collector.reg_fixed_use(replacement_low, regs::rbx());
-            collector.reg_fixed_use(replacement_high, regs::rcx());
-            collector.reg_fixed_use(expected_low, regs::rax());
-            collector.reg_fixed_use(expected_high, regs::rdx());
-            collector.reg_fixed_def(dst_old_low, regs::rax());
-            collector.reg_fixed_def(dst_old_high, regs::rdx());
-            mem.get_operands(collector);
         }
 
         Inst::AtomicRmwSeq {

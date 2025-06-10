@@ -362,40 +362,6 @@
        ;; =========================================
        ;; Instructions pertaining to atomic memory accesses.
 
-       ;; A standard (native) `lock cmpxchg src, (amode)`, with register
-       ;; conventions:
-       ;;
-       ;; `mem`          (read) address
-       ;; `replacement`  (read) replacement value
-       ;; %rax           (modified) in: expected value, out: value that was actually at `dst`
-       ;; %rflags is written.  Do not assume anything about it after the instruction.
-       ;;
-       ;; The instruction "succeeded" iff the lowest `ty` bits of %rax
-       ;; afterwards are the same as they were before.
-       (LockCmpxchg (ty Type) ;; I8, I16, I32, or I64
-                    (replacement Gpr)
-                    (expected Gpr)
-                    (mem SyntheticAmode)
-                    (dst_old WritableGpr))
-
-       ;; A standard (native) `lock cmpxchg16b (amode)`, with register
-       ;; conventions:
-       ;;
-       ;; `mem`                    (read) address
-       ;; %rbx (low), %rcx (high)  (read) replacement value
-       ;; %rax (low), %rdx (high)  (modified) in: expected value, out: value that was actually at `dst`
-       ;; %rflags is written.  Do not assume anything about it after the instruction.
-       ;;
-       ;; The instruction "succeeded" iff the bits of %rax and %rdx
-       ;; afterwards are the same as they were before.
-       (LockCmpxchg16b (replacement_low Gpr)
-                       (replacement_high Gpr)
-                       (expected_low Gpr)
-                       (expected_high Gpr)
-                       (mem BoxSyntheticAmode)
-                       (dst_old_low WritableGpr)
-                       (dst_old_high WritableGpr))
-
        ;; A synthetic instruction, based on a loop around a native `lock
        ;; cmpxchg` instruction.
        ;;
@@ -4694,21 +4660,18 @@
       (SideEffectNoResult.Inst (MInst.Fence (FenceKind.MFence))))
 
 (decl x64_cmpxchg (Type Gpr Gpr SyntheticAmode) Gpr)
-(rule (x64_cmpxchg ty expected replacement addr)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.LockCmpxchg ty replacement expected addr dst))))
-        dst))
+(rule (x64_cmpxchg $I8 expected replacement addr) (x64_lock_cmpxchgb_mr addr replacement expected))
+(rule (x64_cmpxchg $I16 expected replacement addr) (x64_lock_cmpxchgw_mr addr replacement expected))
+(rule (x64_cmpxchg $I32 expected replacement addr) (x64_lock_cmpxchgl_mr addr replacement expected))
+(rule (x64_cmpxchg $I64 expected replacement addr) (x64_lock_cmpxchgq_mr addr replacement expected))
 
 (decl x64_cmpxchg16b (ValueRegs ValueRegs SyntheticAmode) ValueRegs)
 (rule (x64_cmpxchg16b expected replacement addr)
       (let ((expected_low Gpr (value_regs_get_gpr expected 0))
             (expected_high Gpr (value_regs_get_gpr expected 1))
             (replacement_low Gpr (value_regs_get_gpr replacement 0))
-            (replacement_high Gpr (value_regs_get_gpr replacement 1))
-            (dst_low WritableGpr (temp_writable_gpr))
-            (dst_high WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.LockCmpxchg16b replacement_low replacement_high expected_low expected_high addr dst_low dst_high))))
-        (value_regs dst_low dst_high)))
+            (replacement_high Gpr (value_regs_get_gpr replacement 1)))
+        (x64_lock_cmpxchg16b_m expected_low expected_high replacement_low replacement_high addr)))
 
 (decl x64_xadd (Type SyntheticAmode Gpr) Gpr)
 (rule (x64_xadd $I8 addr operand) (x64_lock_xaddb_mr addr operand))

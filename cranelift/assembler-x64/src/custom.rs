@@ -93,6 +93,12 @@ pub mod mnemonic {
     lock!(lock_xaddl_mr => "xaddl");
     lock!(lock_xaddq_mr => "xaddq");
 
+    lock!(lock_cmpxchgb_mr => "cmpxchgb");
+    lock!(lock_cmpxchgw_mr => "cmpxchgw");
+    lock!(lock_cmpxchgl_mr => "cmpxchgl");
+    lock!(lock_cmpxchgq_mr => "cmpxchgq");
+    lock!(lock_cmpxchg16b_m => "cmpxchg16b");
+
     pub fn vcvtpd2ps_a<R: Registers>(inst: &inst::vcvtpd2ps_a<R>) -> Cow<'static, str> {
         match inst.xmm_m128 {
             XmmMem::Xmm(_) => "vcvtpd2ps".into(),

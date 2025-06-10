@@ -22,7 +22,7 @@ block0(v0: i64):
 ;   xorq %rbx, %rbx
 ;   uninit  %rcx
 ;   xorq %rcx, %rcx
-;   lock cmpxchg16b 0(%rdi), replacement=%rcx:%rbx, expected=%rdx:%rax, dst_old=%rdx:%rax
+;   lock cmpxchg16b (%rdi) ;; implicit: %rax, %rdx, %rbx, %rcx
 ;   movq (%rsp), %rbx
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
@@ -104,7 +104,7 @@ block0(v0: i64, v1: i128, v2: i128):
 ;   movq %rcx, %rbx
 ;   movq %r8, %rcx
 ;   movq %rsi, %rax
-;   lock cmpxchg16b 0(%rdi), replacement=%rcx:%rbx, expected=%rdx:%rax, dst_old=%rdx:%rax
+;   lock cmpxchg16b (%rdi) ;; implicit: %rax, %rdx, %rbx, %rcx
 ;   movq (%rsp), %rbx
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
