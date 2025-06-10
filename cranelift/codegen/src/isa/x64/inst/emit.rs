@@ -2571,26 +2571,6 @@ pub(crate) fn emit(
             );
         }
 
-        Inst::LockXadd {
-            size,
-            operand,
-            mem,
-            dst_old,
-        } => {
-            debug_assert_eq!(dst_old.to_reg(), *operand);
-            // lock xadd{b,w,l,q} %operand, (mem)
-            // Note that 0xF0 is the Lock prefix.
-            let (prefix, opcodes) = match size {
-                OperandSize::Size8 => (LegacyPrefixes::_F0, 0x0FC0),
-                OperandSize::Size16 => (LegacyPrefixes::_66F0, 0x0FC1),
-                OperandSize::Size32 => (LegacyPrefixes::_F0, 0x0FC1),
-                OperandSize::Size64 => (LegacyPrefixes::_F0, 0x0FC1),
-            };
-            let rex = RexFlags::from((*size, **operand));
-            let amode = mem.finalize(state.frame_layout(), sink);
-            emit_std_reg_mem(sink, prefix, opcodes, 2, **operand, &amode, rex, 0);
-        }
-
         Inst::AtomicRmwSeq {
             ty,
             op,

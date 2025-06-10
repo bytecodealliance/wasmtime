@@ -3424,10 +3424,10 @@
 ;; `Add` and `Sub` can use `lock xadd`
 (rule 1 (lower (has_type (and (fits_in_64 ty) (ty_int _))
                   (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Add) address input)))
-      (x64_xadd (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+      (x64_xadd ty (to_amode flags address (zero_offset)) input))
 (rule 1 (lower (has_type (and (fits_in_64 ty) (ty_int _))
                   (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Sub) address input)))
-      (x64_xadd (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) (x64_neg ty input)))
+      (x64_xadd ty (to_amode flags address (zero_offset)) (x64_neg ty input)))
 ;; `Xchg` can use `xchg`
 (rule 1 (lower (has_type (and (fits_in_64 ty) (ty_int _))
                   (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Xchg) address input)))
