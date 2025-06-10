@@ -528,8 +528,6 @@ impl WastTest {
                     "misc_testsuite/winch/table_get.wast",
                     "misc_testsuite/winch/table_set.wast",
                     "misc_testsuite/winch/table_fill.wast",
-                    // Known bugs that don't cause segfaults.
-                    "spec_testsuite/imports.wast",
                     "misc_testsuite/winch/table_grow.wast",
                 ];
 
