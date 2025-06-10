@@ -11,7 +11,7 @@ use cranelift_codegen::{
     ir::{Endianness, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
 };
 use std::{fmt::Debug, ops::Range};
-use wasmtime_environ::{PtrSize, WasmValType, WasmRefType, WasmHeapType};
+use wasmtime_environ::{PtrSize, WasmHeapType, WasmRefType, WasmValType};
 
 pub(crate) use cranelift_codegen::ir::TrapCode;
 
@@ -1437,24 +1437,25 @@ pub(crate) trait MacroAssembler {
     /// Acquire a scratch register and execute the given callback.
     fn with_scratch<T: ScratchType, R>(&mut self, f: impl FnOnce(&mut Self, Scratch) -> R) -> R;
 
-
     /// Convenience wrapper over [`Self::with_scratch`], derives the register class
     /// for a particular Wasm value type.
-    fn with_scratch_for<R>(&mut self, ty: WasmValType, f: impl FnOnce(&mut Self, Scratch) -> R) -> R {
-	match ty {
-	    WasmValType::I32
-		| WasmValType::I64
-		| WasmValType::Ref(WasmRefType {
-		    heap_type: WasmHeapType::Func,
-		    ..
-		}) => self.with_scratch::<IntScratch, _>(f),
-	    WasmValType::F32
-		| WasmValType::F64
-		| WasmValType::V128 => {
-		    self.with_scratch::<FloatScratch, _>(f)
-		}
-	    _ => unimplemented!(),
-	}
+    fn with_scratch_for<R>(
+        &mut self,
+        ty: WasmValType,
+        f: impl FnOnce(&mut Self, Scratch) -> R,
+    ) -> R {
+        match ty {
+            WasmValType::I32
+            | WasmValType::I64
+            | WasmValType::Ref(WasmRefType {
+                heap_type: WasmHeapType::Func,
+                ..
+            }) => self.with_scratch::<IntScratch, _>(f),
+            WasmValType::F32 | WasmValType::F64 | WasmValType::V128 => {
+                self.with_scratch::<FloatScratch, _>(f)
+            }
+            _ => unimplemented!(),
+        }
     }
 
     /// Get stack pointer offset.

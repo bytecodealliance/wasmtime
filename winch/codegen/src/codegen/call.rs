@@ -64,7 +64,7 @@ use crate::{
     codegen::{BuiltinFunction, BuiltinType, Callee, CodeGenContext, CodeGenError, Emission},
     masm::{
         CalleeKind, ContextArgs, IntScratch, MacroAssembler, MemMoveDirection, OperandSize,
-        SPOffset, VMContextLoc, 
+        SPOffset, VMContextLoc,
     },
     reg::{Reg, writable},
     stack::Val,
