@@ -293,7 +293,7 @@ pub unsafe trait VMComponentAsyncStore {
         reader: u32,
     ) -> Result<u32>;
 
-    /// The `future.close-writable` intrinsic.
+    /// The `future.drop-writable` intrinsic.
     fn future_drop_writable(
         &mut self,
         instance: &mut ComponentInstance,
@@ -301,7 +301,7 @@ pub unsafe trait VMComponentAsyncStore {
         writer: u32,
     ) -> Result<()>;
 
-    /// The `future.close-readable` intrinsic.
+    /// The `future.drop-readable` intrinsic.
     fn future_drop_readable(
         &mut self,
         instance: &mut ComponentInstance,
@@ -360,7 +360,7 @@ pub unsafe trait VMComponentAsyncStore {
         reader: u32,
     ) -> Result<u32>;
 
-    /// The `stream.close-writable` intrinsic.
+    /// The `stream.drop-writable` intrinsic.
     fn stream_drop_writable(
         &mut self,
         instance: &mut ComponentInstance,
@@ -368,7 +368,7 @@ pub unsafe trait VMComponentAsyncStore {
         writer: u32,
     ) -> Result<()>;
 
-    /// The `stream.close-readable` intrinsic.
+    /// The `stream.drop-readable` intrinsic.
     fn stream_drop_readable(
         &mut self,
         instance: &mut ComponentInstance,

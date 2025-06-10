@@ -504,7 +504,7 @@ mod test {
         // Allow the crank to turn more:
         resolves_immediately(reader.ready()).await;
 
-        // Now we expect the reader to be empty, and the stream closed:
+        // Now we expect the reader to be empty, and the stream.dropd:
         assert!(matches!(reader.read(4097), Err(StreamError::Closed)));
     }
 
