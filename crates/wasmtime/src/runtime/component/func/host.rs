@@ -105,7 +105,7 @@ impl HostFunc {
     pub fn lowering(&self) -> VMLowering {
         let data = NonNull::from(&*self.func).cast();
         VMLowering {
-            callee: self.entrypoint,
+            callee: NonNull::new(self.entrypoint as *mut _).unwrap().into(),
             data: data.into(),
         }
     }
