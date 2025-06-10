@@ -10,7 +10,7 @@ use crate::{
     isa::reg::RegClass,
     masm::{
         ExtractLaneKind, Imm, IntScratch, MacroAssembler, MemMoveDirection, OperandSize, RegImm,
-        ReplaceLaneKind, SPOffset, ShiftKind, StackSlot, with_scratch,
+        ReplaceLaneKind, SPOffset, ShiftKind, StackSlot,
     },
     reg::{Reg, WritableReg, writable},
     regalloc::RegAlloc,
@@ -295,7 +295,7 @@ impl<'a> CodeGenContext<'a, Emission> {
                 })?;
             }
             Val::Memory(_) => {
-                with_scratch!(masm, &ty, |masm, scratch| {
+                masm.with_scratch_for(ty, |masm, scratch| {
                     masm.pop(scratch.writable(), size)?;
                     masm.store(scratch.inner().into(), addr, size)
                 })?;
@@ -846,7 +846,7 @@ impl<'a> CodeGenContext<'a, Emission> {
                 Val::Local(local) => {
                     let slot = frame.get_wasm_local(local.index);
                     let addr = masm.local_address(&slot)?;
-                    with_scratch!(masm, &slot.ty, |masm, scratch| {
+                    masm.with_scratch_for(slot.ty, |masm, scratch| {
                         masm.load(addr, scratch.writable(), slot.ty.try_into()?)?;
                         let stack_slot = masm.push(scratch.inner(), slot.ty.try_into()?)?;
                         *v = Val::mem(slot.ty, stack_slot);

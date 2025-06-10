@@ -64,7 +64,7 @@ use crate::{
     codegen::{BuiltinFunction, BuiltinType, Callee, CodeGenContext, CodeGenError, Emission},
     masm::{
         CalleeKind, ContextArgs, IntScratch, MacroAssembler, MemMoveDirection, OperandSize,
-        SPOffset, VMContextLoc, with_scratch,
+        SPOffset, VMContextLoc, 
     },
     reg::{Reg, writable},
     stack::Val,
@@ -314,7 +314,7 @@ impl FnCall {
                 &ABIOperand::Stack { ty, offset, .. } => {
                     let addr = masm.address_at_sp(SPOffset::from_u32(offset))?;
                     let size: OperandSize = ty.try_into()?;
-                    with_scratch!(masm, &ty, |masm, scratch| {
+                    masm.with_scratch_for(ty, |masm, scratch| {
                         context.move_val_to_reg(val, scratch.inner(), masm)?;
                         masm.store(scratch.inner().into(), addr, size)
                     })?;

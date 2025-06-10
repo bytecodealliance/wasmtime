@@ -11,31 +11,9 @@ use cranelift_codegen::{
     ir::{Endianness, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
 };
 use std::{fmt::Debug, ops::Range};
-use wasmtime_environ::PtrSize;
+use wasmtime_environ::{PtrSize, WasmValType, WasmRefType, WasmHeapType};
 
 pub(crate) use cranelift_codegen::ir::TrapCode;
-
-/// A macro to acquire a scratch register for the given Wasm value type.
-macro_rules! with_scratch {
-    ($self:expr, $val_type:expr, $callback:expr) => {
-        match $val_type {
-            wasmtime_environ::WasmValType::I32
-            | wasmtime_environ::WasmValType::I64
-            | wasmtime_environ::WasmValType::Ref(wasmtime_environ::WasmRefType {
-                heap_type: wasmtime_environ::WasmHeapType::Func,
-                ..
-            }) => $self.with_scratch::<$crate::masm::IntScratch, _>($callback),
-            wasmtime_environ::WasmValType::F32
-            | wasmtime_environ::WasmValType::F64
-            | wasmtime_environ::WasmValType::V128 => {
-                $self.with_scratch::<$crate::masm::FloatScratch, _>($callback)
-            }
-            _ => unimplemented!(),
-        }
-    };
-}
-
-pub(crate) use with_scratch;
 
 #[derive(Eq, PartialEq)]
 pub(crate) enum DivKind {
@@ -1458,6 +1436,26 @@ pub(crate) trait MacroAssembler {
 
     /// Acquire a scratch register and execute the given callback.
     fn with_scratch<T: ScratchType, R>(&mut self, f: impl FnOnce(&mut Self, Scratch) -> R) -> R;
+
+
+    /// Convenience wrapper over [`Self::with_scratch`], derives the register class
+    /// for a particular Wasm value type.
+    fn with_scratch_for<R>(&mut self, ty: WasmValType, f: impl FnOnce(&mut Self, Scratch) -> R) -> R {
+	match ty {
+	    WasmValType::I32
+		| WasmValType::I64
+		| WasmValType::Ref(WasmRefType {
+		    heap_type: WasmHeapType::Func,
+		    ..
+		}) => self.with_scratch::<IntScratch, _>(f),
+	    WasmValType::F32
+		| WasmValType::F64
+		| WasmValType::V128 => {
+		    self.with_scratch::<FloatScratch, _>(f)
+		}
+	    _ => unimplemented!(),
+	}
+    }
 
     /// Get stack pointer offset.
     fn sp_offset(&self) -> Result<SPOffset>;
