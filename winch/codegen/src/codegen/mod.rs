@@ -1,9 +1,11 @@
 use crate::{
-    abi::{vmctx, ABIOperand, ABISig, RetArea},
+    abi::{ABIOperand, ABISig, RetArea, vmctx},
     codegen::BlockSig,
-    isa::reg::{writable, Reg},
+    isa::reg::{Reg, writable},
     masm::{
-        AtomicWaitKind, Extend, Imm, IntCmpKind, IntScratch, LaneSelector, LoadKind, MacroAssembler, OperandSize, RegImm, RmwOp, SPOffset, ShiftKind, StoreKind, TrapCode, Zero, UNTRUSTED_FLAGS
+        AtomicWaitKind, Extend, Imm, IntCmpKind, IntScratch, LaneSelector, LoadKind,
+        MacroAssembler, OperandSize, RegImm, RmwOp, SPOffset, ShiftKind, StoreKind, TrapCode,
+        UNTRUSTED_FLAGS, Zero,
     },
     stack::TypedReg,
 };
@@ -466,23 +468,21 @@ where
         // Get the caller id.
         let caller_id = self.context.any_gpr(self.masm)?;
 
-	self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
-	    // Load the signatures address into the scratch register.
-	    masm.load(
-		masm.address_at_vmctx(signatures_base_offset.into())?,
-		scratch.writable(),
-		ptr_size,
-	    )?;
+        self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+            // Load the signatures address into the scratch register.
+            masm.load(
+                masm.address_at_vmctx(signatures_base_offset.into())?,
+                scratch.writable(),
+                ptr_size,
+            )?;
 
             masm.load(
-		masm.address_at_reg(scratch.inner(), sig_offset)?,
-		writable!(caller_id),
-		sig_size,
+                masm.address_at_reg(scratch.inner(), sig_offset)?,
+                writable!(caller_id),
+                sig_size,
             )?;
-	    Ok(())
-	})?;
-	
-
+            Ok(())
+        })?;
 
         let callee_id = self.context.any_gpr(self.masm)?;
         self.masm.load(
@@ -1027,27 +1027,25 @@ where
         // element address.
         // Moving the value of the index register to the scratch register
         // also avoids overwriting the context of the index register.
-	self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
-	    masm
-		.mov(scratch.writable(), index.into(), bound_size)?;
-	    masm.mul(
-		scratch.writable(),
-		scratch.inner(),
-		RegImm::i32(table_data.element_size.bytes() as i32),
-		table_data.element_size,
-	    )?;
-	    masm.load_ptr(
-		masm.address_at_reg(base, table_data.offset)?,
-		writable!(base),
-	    )?;
-	    // Copy the value of the table base into a temporary register
-	    // so that we can use it later in case of a misspeculation.
-	    masm.mov(writable!(tmp), base.into(), ptr_size)?;
-	    // Calculate the address of the table element.
-	    masm
-		.add(writable!(base), base, scratch.inner().into(), ptr_size)?;
-	    Ok(())
-	})?;
+        self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+            masm.mov(scratch.writable(), index.into(), bound_size)?;
+            masm.mul(
+                scratch.writable(),
+                scratch.inner(),
+                RegImm::i32(table_data.element_size.bytes() as i32),
+                table_data.element_size,
+            )?;
+            masm.load_ptr(
+                masm.address_at_reg(base, table_data.offset)?,
+                writable!(base),
+            )?;
+            // Copy the value of the table base into a temporary register
+            // so that we can use it later in case of a misspeculation.
+            masm.mov(writable!(tmp), base.into(), ptr_size)?;
+            // Calculate the address of the table element.
+            masm.add(writable!(base), base, scratch.inner().into(), ptr_size)?;
+            Ok(())
+        })?;
         if self.env.table_access_spectre_mitigation() {
             // Perform a bounds check and override the value of the
             // table element address in case the index is out of bounds.
@@ -1065,22 +1063,18 @@ where
         let size = self.context.any_gpr(self.masm)?;
         let ptr_size: OperandSize = self.env.ptr_type().try_into()?;
 
-	self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
-	    if let Some(offset) = table_data.import_from {
-		masm
-		    .load_ptr(masm.address_at_vmctx(offset)?, scratch.writable())?;
-	    } else {
-		masm
-		    .mov(scratch.writable(), vmctx!(M).into(), ptr_size)?;
-	    };
+        self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+            if let Some(offset) = table_data.import_from {
+                masm.load_ptr(masm.address_at_vmctx(offset)?, scratch.writable())?;
+            } else {
+                masm.mov(scratch.writable(), vmctx!(M).into(), ptr_size)?;
+            };
 
-            let size_addr = 
-		masm
-		.address_at_reg(scratch.inner(), table_data.current_elems_offset)?;
-            masm
-		.load(size_addr, writable!(size), table_data.current_elements_size)?;
-	    Ok(())
-	})?;
+            let size_addr =
+                masm.address_at_reg(scratch.inner(), table_data.current_elems_offset)?;
+            masm.load(size_addr, writable!(size), table_data.current_elements_size)?;
+            Ok(())
+        })?;
 
         self.context.stack.push(TypedReg::i32(size).into());
         Ok(())
@@ -1090,20 +1084,18 @@ where
     pub fn emit_compute_memory_size(&mut self, heap_data: &HeapData) -> Result<()> {
         let size_reg = self.context.any_gpr(self.masm)?;
 
-	self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
-	    let base = if let Some(offset) = heap_data.import_from {
-		masm
-		    .load_ptr(masm.address_at_vmctx(offset)?, scratch.writable())?;
-		scratch.inner()
-	    } else {
-		vmctx!(M)
-	    };
+        self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+            let base = if let Some(offset) = heap_data.import_from {
+                masm.load_ptr(masm.address_at_vmctx(offset)?, scratch.writable())?;
+                scratch.inner()
+            } else {
+                vmctx!(M)
+            };
 
-            let size_addr = masm
-		.address_at_reg(base, heap_data.current_length_offset)?;
+            let size_addr = masm.address_at_reg(base, heap_data.current_length_offset)?;
             masm.load_ptr(size_addr, writable!(size_reg))?;
-	    Ok(())
-	})?;
+            Ok(())
+        })?;
         // Emit a shift to get the size in pages rather than in bytes.
         let dst = TypedReg::new(heap_data.index_type(), size_reg);
         let pow = heap_data.memory.page_size_log2;
@@ -1301,32 +1293,30 @@ where
             writable!(limits_reg),
         )?;
 
-	self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
-	    // Load the fuel consumed at point into the scratch register.
-	    masm.load(
-		masm
-		    .address_at_reg(limits_reg, u32::from(fuel_offset))?,
-		scratch.writable(),
-		OperandSize::S64,
-	    )?;
+        self.masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+            // Load the fuel consumed at point into the scratch register.
+            masm.load(
+                masm.address_at_reg(limits_reg, u32::from(fuel_offset))?,
+                scratch.writable(),
+                OperandSize::S64,
+            )?;
 
             // Add the fuel consumed at point with the value in the scratch
             // register.
             masm.add(
-		scratch.writable(),
-		scratch.inner(),
-		RegImm::i64(fuel_at_point),
-		OperandSize::S64,
+                scratch.writable(),
+                scratch.inner(),
+                RegImm::i64(fuel_at_point),
+                OperandSize::S64,
             )?;
 
             // Store the updated fuel consumed to `VMStoreContext`.
             masm.store(
-		scratch.inner().into(),
-		masm
-                    .address_at_reg(limits_reg, u32::from(fuel_offset))?,
-		OperandSize::S64,
+                scratch.inner().into(),
+                masm.address_at_reg(limits_reg, u32::from(fuel_offset))?,
+                OperandSize::S64,
             )
-	})?;
+        })?;
 
         self.context.free_reg(limits_reg);
 

@@ -4,15 +4,15 @@ use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
 
 use super::ControlStackFrame;
 use crate::{
-    abi::{vmctx, ABIOperand, ABIResults, RetArea},
+    abi::{ABIOperand, ABIResults, RetArea, vmctx},
     codegen::{BranchState, CodeGenError, CodeGenPhase, Emission, Prologue},
     frame::Frame,
     isa::reg::RegClass,
     masm::{
-	with_scratch,
-        ExtractLaneKind, Imm, IntScratch, MacroAssembler, MemMoveDirection, OperandSize, RegImm, ReplaceLaneKind, SPOffset, ShiftKind, StackSlot
+        ExtractLaneKind, Imm, IntScratch, MacroAssembler, MemMoveDirection, OperandSize, RegImm,
+        ReplaceLaneKind, SPOffset, ShiftKind, StackSlot, with_scratch,
     },
-    reg::{writable, Reg, WritableReg},
+    reg::{Reg, WritableReg, writable},
     regalloc::RegAlloc,
     stack::{Stack, TypedReg, Val},
 };
@@ -287,20 +287,20 @@ impl<'a> CodeGenContext<'a, Emission> {
             Val::F64(v) => masm.store(RegImm::f64(v.bits()), addr, size)?,
             Val::V128(v) => masm.store(RegImm::v128(v), addr, size)?,
             Val::Local(local) => {
-		let slot = self.frame.get_wasm_local(local.index);
-		let local_addr = masm.local_address(&slot)?;
-		masm.with_scratch::<IntScratch, _>(|masm, scratch| {
-		    masm.load(local_addr, scratch.writable(), size)?;
-		    masm.store(scratch.inner().into(), addr, size)?;
-		    Ok(())
-		})?;
+                let slot = self.frame.get_wasm_local(local.index);
+                let local_addr = masm.local_address(&slot)?;
+                masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+                    masm.load(local_addr, scratch.writable(), size)?;
+                    masm.store(scratch.inner().into(), addr, size)?;
+                    Ok(())
+                })?;
             }
             Val::Memory(_) => {
-		with_scratch!(masm, &ty, |masm, scratch| {
-		    masm.pop(scratch.writable(), size)?;
-		    masm.store(scratch.inner().into(), addr, size)?;
-		    Ok(())
-		})?;
+                with_scratch!(masm, &ty, |masm, scratch| {
+                    masm.pop(scratch.writable(), size)?;
+                    masm.store(scratch.inner().into(), addr, size)?;
+                    Ok(())
+                })?;
             }
         }
 
@@ -849,11 +849,11 @@ impl<'a> CodeGenContext<'a, Emission> {
                     let slot = frame.get_wasm_local(local.index);
                     let addr = masm.local_address(&slot)?;
                     with_scratch!(masm, &slot.ty, |masm, scratch| {
-			masm.load(addr, scratch.writable(), slot.ty.try_into()?)?;
-			let stack_slot = masm.push(scratch.inner(), slot.ty.try_into()?)?;
-			*v = Val::mem(slot.ty, stack_slot);
-			Ok(())
-		    })?;
+                        masm.load(addr, scratch.writable(), slot.ty.try_into()?)?;
+                        let stack_slot = masm.push(scratch.inner(), slot.ty.try_into()?)?;
+                        *v = Val::mem(slot.ty, stack_slot);
+                        Ok(())
+                    })?;
                 }
                 _ => {}
             }

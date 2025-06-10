@@ -5,7 +5,7 @@ use super::env::HeapData;
 use crate::{
     abi::vmctx,
     codegen::{CodeGenContext, Emission},
-    isa::reg::{writable, Reg},
+    isa::reg::{Reg, writable},
     masm::{IntCmpKind, IntScratch, MacroAssembler, OperandSize, RegImm, TrapCode},
     stack::TypedReg,
 };
@@ -97,18 +97,18 @@ where
         Some(size) => masm.mov(writable!(dst), RegImm::i64(size.signed()), ptr_size)?,
 
         None => {
-	    masm.with_scratch::<IntScratch, _>(|masm, scratch| {
-		let base = if let Some(offset) = heap.import_from {
-		    let addr = masm.address_at_vmctx(offset)?;
-		    masm.load_ptr(addr, scratch.writable())?;
-		    scratch.inner()
-		} else {
-		    vmctx!(M)
-		};
-		let addr = masm.address_at_reg(base, heap.current_length_offset)?;
-		masm.load_ptr(addr, writable!(dst))?;
-		Ok(())
-	    })?;
+            masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+                let base = if let Some(offset) = heap.import_from {
+                    let addr = masm.address_at_vmctx(offset)?;
+                    masm.load_ptr(addr, scratch.writable())?;
+                    scratch.inner()
+                } else {
+                    vmctx!(M)
+                };
+                let addr = masm.address_at_reg(base, heap.current_length_offset)?;
+                masm.load_ptr(addr, writable!(dst))?;
+                Ok(())
+            })?;
         }
     }
 
@@ -203,20 +203,20 @@ where
     M: MacroAssembler,
 {
     masm.with_scratch::<IntScratch, _>(|masm, scratch| {
-	let base = if let Some(offset) = heap.import_from {
-	    // If the WebAssembly memory is imported, load the address into
-	    // the scratch register.
-	    masm.load_ptr(masm.address_at_vmctx(offset)?, scratch.writable())?;
-	    scratch.inner()
-	} else {
-	    // Else if the WebAssembly memory is defined in the current module,
-	    // simply use the `VMContext` as the base for subsequent operations.
-	    vmctx!(M)
-	};
+        let base = if let Some(offset) = heap.import_from {
+            // If the WebAssembly memory is imported, load the address into
+            // the scratch register.
+            masm.load_ptr(masm.address_at_vmctx(offset)?, scratch.writable())?;
+            scratch.inner()
+        } else {
+            // Else if the WebAssembly memory is defined in the current module,
+            // simply use the `VMContext` as the base for subsequent operations.
+            vmctx!(M)
+        };
 
-	// Load the base of the memory into the `addr` register.
-	masm.load_ptr(masm.address_at_reg(base, heap.offset)?, writable!(dst))?;
-	Ok(())
+        // Load the base of the memory into the `addr` register.
+        masm.load_ptr(masm.address_at_reg(base, heap.offset)?, writable!(dst))?;
+        Ok(())
     })?;
 
     // Start by adding the index to the heap base addr.
