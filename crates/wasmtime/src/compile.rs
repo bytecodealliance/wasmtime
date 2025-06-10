@@ -557,6 +557,24 @@ impl<'a> CompileInputs<'a> {
     fn compile(self, engine: &Engine) -> Result<UnlinkedCompileOutputs> {
         let compiler = engine.compiler();
 
+        if self.inputs.len() > 0 && cfg!(miri) {
+            bail!(
+                "\
+You are attempting to compile a WebAssembly module or component that contains
+functions in Miri. Running Cranelift through Miri is known to take quite a long
+time and isn't what we want in CI at least. If this is a mistake then you should
+ignore this test in Miri with:
+
+    #[cfg_attr(miri, ignore)]
+
+If this is not a mistake then try to edit the `pulley_provenance_test` test
+which runs Cranelift outside of Miri. If you still feel this is a mistake then
+please open an issue or a topic on Zulip to talk about how best to accomodate
+the use case.
+"
+            );
+        }
+
         // Compile each individual input in parallel.
         let mut raw_outputs = engine.run_maybe_parallel(self.inputs, |f| f(compiler))?;
 

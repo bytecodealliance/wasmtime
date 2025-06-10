@@ -1092,7 +1092,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - crate: "wasmtime --features pulley"
+          - crate: "wasmtime"
           - crate: "wasmtime-cli"
           - crate: "wasmtime-environ --all-features"
           - crate: "pulley-interpreter --all-features"

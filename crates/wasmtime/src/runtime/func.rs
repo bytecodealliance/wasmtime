@@ -2580,6 +2580,7 @@ mod tests {
     use crate::{Module, Store};
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn hash_key_is_stable_across_duplicate_store_data_entries() -> Result<()> {
         let mut store = Store::<()>::default();
         let module = Module::new(

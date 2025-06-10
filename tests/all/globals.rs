@@ -352,6 +352,7 @@ fn i31ref_as_anyref_global_ty() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn instantiate_global_with_subtype() -> Result<()> {
     let mut config = Config::new();
     config.wasm_function_references(true);

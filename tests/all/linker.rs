@@ -24,6 +24,7 @@ fn link_undefined() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_unknown_import_error() -> Result<()> {
     let mut store = Store::<()>::default();
     let linker = Linker::new(store.engine());
