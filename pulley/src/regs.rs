@@ -491,6 +491,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)] // takes 30s+ in miri
     fn binary_operands() {
         let mut i = 0;
         for src2 in XReg::RANGE {

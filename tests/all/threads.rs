@@ -23,6 +23,7 @@ pub fn engine() -> Option<Engine> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_instantiate_shared_memory() -> Result<()> {
     let wat = r#"(module (memory 1 1 shared))"#;
     let Some(engine) = engine() else {
@@ -35,6 +36,7 @@ fn test_instantiate_shared_memory() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_import_shared_memory() -> Result<()> {
     let wat = r#"(module (import "env" "memory" (memory 1 5 shared)))"#;
     let Some(engine) = engine() else {
@@ -48,6 +50,7 @@ fn test_import_shared_memory() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_export_shared_memory() -> Result<()> {
     let wat = r#"(module (memory (export "memory") 1 5 shared))"#;
     let Some(engine) = engine() else {
@@ -137,6 +140,7 @@ fn test_probe_shared_memory_size() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn test_multi_memory() -> Result<()> {
     let wat = r#"(module
         (import "env" "imported" (memory $imported 5 10 shared))
