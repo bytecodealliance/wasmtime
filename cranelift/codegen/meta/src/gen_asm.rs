@@ -196,6 +196,11 @@ fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                         fmtln!(f, "let regs = ValueRegs::two(one, two);");
                         fmtln!(f, "AssemblerOutputs::RetValueRegs {{ inst, regs }}");
                     }
+                    (Reg(reg), Mem(_)) => {
+                        let (ty, var) = ty_var_of_reg(reg);
+                        fmtln!(f, "let {var} = {reg}.as_ref().{};", access_reg(op2));
+                        fmtln!(f, "AssemblerOutputs::Ret{ty} {{ inst, {var} }}");
+                    }
                     _ => unimplemented!("unhandled results: {results:?}"),
                 },
                 _ => panic!("instruction has more than one result"),
@@ -395,14 +400,16 @@ fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
                 },
             },
         },
-        [one, two] => {
-            // For now, we assume that if there are two results, they are coming
-            // from a register-writing instruction like `mul`. This can be
-            // expanded as needed.
-            assert!(matches!(one.location.kind(), FixedReg(_) | Reg(_)));
-            assert!(matches!(two.location.kind(), FixedReg(_) | Reg(_)));
-            vec![IsleConstructor::RetValueRegs]
-        }
+        [one, two] => match (one.location.kind(), two.location.kind()) {
+            (FixedReg(_) | Reg(_), FixedReg(_) | Reg(_)) => {
+                vec![IsleConstructor::RetValueRegs]
+            }
+            (Reg(r), Mem(_)) => {
+                assert!(matches!(r.reg_class().unwrap(), RegClass::Gpr));
+                vec![IsleConstructor::RetGpr]
+            }
+            other => panic!("unsupported number of write operands {other:?}"),
+        },
         other => panic!("unsupported number of write operands {other:?}"),
     }
 }

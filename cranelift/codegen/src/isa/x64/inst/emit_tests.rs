@@ -852,48 +852,6 @@ fn test_x64_emit() {
         "lock xaddb %r13b, 0(%r9), dst_old=%r13b",
     ));
 
-    // Xchg
-    insns.push((
-        Inst::Xchg {
-            size: OperandSize::Size64,
-            operand: Gpr::unwrap_new(r10),
-            mem: am3.clone(),
-            dst_old: w_r10.map(Gpr::unwrap_new),
-        },
-        "4D8711",
-        "xchgq %r10, 0(%r9), dst_old=%r10",
-    ));
-    insns.push((
-        Inst::Xchg {
-            size: OperandSize::Size32,
-            operand: Gpr::unwrap_new(r11),
-            mem: am3.clone(),
-            dst_old: w_r11.map(Gpr::unwrap_new),
-        },
-        "458719",
-        "xchgl %r11d, 0(%r9), dst_old=%r11d",
-    ));
-    insns.push((
-        Inst::Xchg {
-            size: OperandSize::Size16,
-            operand: Gpr::unwrap_new(r12),
-            mem: am3.clone(),
-            dst_old: w_r12.map(Gpr::unwrap_new),
-        },
-        "66458721",
-        "xchgw %r12w, 0(%r9), dst_old=%r12w",
-    ));
-    insns.push((
-        Inst::Xchg {
-            size: OperandSize::Size8,
-            operand: Gpr::unwrap_new(r13),
-            mem: am3.clone(),
-            dst_old: w_r13.map(Gpr::unwrap_new),
-        },
-        "458629",
-        "xchgb %r13b, 0(%r9), dst_old=%r13b",
-    ));
-
     // AtomicRmwSeq
     insns.push((
         Inst::AtomicRmwSeq {

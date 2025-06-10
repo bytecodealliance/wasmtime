@@ -1523,8 +1523,7 @@ impl Masm for MacroAssembler {
             }
             RmwOp::Xchg => {
                 let operand = context.pop_to_reg(self, None)?;
-                self.asm
-                    .xchg(addr, operand.reg, writable!(operand.reg), size, flags);
+                self.asm.xchg(addr, writable!(operand.reg), size, flags);
                 operand.reg
             }
             RmwOp::And | RmwOp::Or | RmwOp::Xor => {

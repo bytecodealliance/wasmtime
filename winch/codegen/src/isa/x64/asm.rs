@@ -1260,23 +1260,19 @@ impl Assembler {
         });
     }
 
-    pub fn xchg(
-        &mut self,
-        addr: Address,
-        operand: Reg,
-        dst: WritableReg,
-        size: OperandSize,
-        flags: MemFlags,
-    ) {
+    pub fn xchg(&mut self, addr: Address, dst: WritableReg, size: OperandSize, flags: MemFlags) {
         assert!(addr.is_offset());
         let mem = Self::to_synthetic_amode(&addr, flags);
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::xchgb_rm::new(dst, mem).into(),
+            OperandSize::S16 => asm::inst::xchgw_rm::new(dst, mem).into(),
+            OperandSize::S32 => asm::inst::xchgl_rm::new(dst, mem).into(),
+            OperandSize::S64 => asm::inst::xchgq_rm::new(dst, mem).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
 
-        self.emit(Inst::Xchg {
-            size: size.into(),
-            operand: operand.into(),
-            mem,
-            dst_old: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
     pub fn cmpxchg(
         &mut self,

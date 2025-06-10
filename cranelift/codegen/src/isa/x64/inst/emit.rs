@@ -2591,25 +2591,6 @@ pub(crate) fn emit(
             emit_std_reg_mem(sink, prefix, opcodes, 2, **operand, &amode, rex, 0);
         }
 
-        Inst::Xchg {
-            size,
-            operand,
-            mem,
-            dst_old,
-        } => {
-            debug_assert_eq!(dst_old.to_reg(), *operand);
-            // xchg{b,w,l,q} %operand, (mem)
-            let (prefix, opcodes) = match size {
-                OperandSize::Size8 => (LegacyPrefixes::None, 0x86),
-                OperandSize::Size16 => (LegacyPrefixes::_66, 0x87),
-                OperandSize::Size32 => (LegacyPrefixes::None, 0x87),
-                OperandSize::Size64 => (LegacyPrefixes::None, 0x87),
-            };
-            let rex = RexFlags::from((*size, **operand));
-            let amode = mem.finalize(state.frame_layout(), sink);
-            emit_std_reg_mem(sink, prefix, opcodes, 1, **operand, &amode, rex, 0);
-        }
-
         Inst::AtomicRmwSeq {
             ty,
             op,

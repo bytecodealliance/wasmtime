@@ -1204,7 +1204,7 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movq %rsi, %rax
-;   xchgq %rax, 0(%rdi), dst_old=%rax
+;   xchgq %rax, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -1231,7 +1231,7 @@ block0(v0: i64, v1: i32):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movq %rsi, %rax
-;   xchgl %eax, 0(%rdi), dst_old=%eax
+;   xchgl %eax, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -1258,7 +1258,7 @@ block0(v0: i64, v1: i16):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movq %rsi, %rax
-;   xchgw %ax, 0(%rdi), dst_old=%ax
+;   xchgw %ax, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -1285,7 +1285,7 @@ block0(v0: i64, v1: i8):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movq %rsi, %rax
-;   xchgb %al, 0(%rdi), dst_old=%al
+;   xchgb %al, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret

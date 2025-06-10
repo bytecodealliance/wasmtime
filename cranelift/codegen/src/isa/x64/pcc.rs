@@ -445,17 +445,6 @@ pub(crate) fn check(
             Ok(())
         }
 
-        Inst::Xchg {
-            size,
-            ref mem,
-            dst_old,
-            operand: _,
-        } => {
-            ensure_no_fact(vcode, *dst_old.to_reg())?;
-            check_store(ctx, None, mem, vcode, size.to_type())?;
-            Ok(())
-        }
-
         Inst::AtomicRmwSeq {
             ref mem,
             temp,

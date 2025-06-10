@@ -402,12 +402,6 @@
                  (mem SyntheticAmode)
                  (dst_old WritableGpr))
 
-       ;; A standard (native) `xchg src, (amode)`
-       (Xchg (size OperandSize)
-                 (operand Gpr)
-                 (mem SyntheticAmode)
-                 (dst_old WritableGpr))
-
        ;; A synthetic instruction, based on a loop around a native `lock
        ;; cmpxchg` instruction.
        ;;
@@ -4728,11 +4722,11 @@
             (_ Unit (emit (MInst.LockXadd size operand addr dst))))
         dst))
 
-(decl x64_xchg (OperandSize SyntheticAmode Gpr) Gpr)
-(rule (x64_xchg size addr operand)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.Xchg size operand addr dst))))
-        dst))
+(decl x64_xchg (Type SyntheticAmode Gpr) Gpr)
+(rule (x64_xchg $I8 addr operand) (x64_xchgb_rm operand addr))
+(rule (x64_xchg $I16 addr operand) (x64_xchgw_rm operand addr))
+(rule (x64_xchg $I32 addr operand) (x64_xchgl_rm operand addr))
+(rule (x64_xchg $I64 addr operand) (x64_xchgq_rm operand addr))
 
 (decl x64_lock_add (OperandSize Amode Gpr) SideEffectNoResult)
 (rule (x64_lock_add (OperandSize.Size8) addr reg)   (x64_lock_addb_mr_mem addr reg))
