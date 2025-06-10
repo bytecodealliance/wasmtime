@@ -836,16 +836,16 @@ pub enum Trampoline {
         async_: bool,
     },
 
-    /// A `stream.close-readable` intrinsic to close the readable end of a
+    /// A `stream.drop-readable` intrinsic to close the readable end of a
     /// `stream` of the specified type.
-    StreamCloseReadable {
+    StreamDropReadable {
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
     },
 
-    /// A `stream.close-writable` intrinsic to close the writable end of a
+    /// A `stream.drop-writable` intrinsic to close the writable end of a
     /// `stream` of the specified type.
-    StreamCloseWritable {
+    StreamDropWritable {
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
     },
@@ -897,16 +897,16 @@ pub enum Trampoline {
         async_: bool,
     },
 
-    /// A `future.close-readable` intrinsic to close the readable end of a
+    /// A `future.drop-readable` intrinsic to close the readable end of a
     /// `future` of the specified type.
-    FutureCloseReadable {
+    FutureDropReadable {
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
     },
 
-    /// A `future.close-writable` intrinsic to close the writable end of a
+    /// A `future.drop-writable` intrinsic to close the writable end of a
     /// `future` of the specified type.
-    FutureCloseWritable {
+    FutureDropWritable {
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
     },
@@ -1061,15 +1061,15 @@ impl Trampoline {
             StreamWrite { .. } => format!("stream-write"),
             StreamCancelRead { .. } => format!("stream-cancel-read"),
             StreamCancelWrite { .. } => format!("stream-cancel-write"),
-            StreamCloseReadable { .. } => format!("stream-close-readable"),
-            StreamCloseWritable { .. } => format!("stream-close-writable"),
+            StreamDropReadable { .. } => format!("stream.drop-readable"),
+            StreamDropWritable { .. } => format!("stream.drop-writable"),
             FutureNew { .. } => format!("future-new"),
             FutureRead { .. } => format!("future-read"),
             FutureWrite { .. } => format!("future-write"),
             FutureCancelRead { .. } => format!("future-cancel-read"),
             FutureCancelWrite { .. } => format!("future-cancel-write"),
-            FutureCloseReadable { .. } => format!("future-close-readable"),
-            FutureCloseWritable { .. } => format!("future-close-writable"),
+            FutureDropReadable { .. } => format!("future.drop-readable"),
+            FutureDropWritable { .. } => format!("future.drop-writable"),
             ErrorContextNew { .. } => format!("error-context-new"),
             ErrorContextDebugMessage { .. } => format!("error-context-debug-message"),
             ErrorContextDrop { .. } => format!("error-context-drop"),

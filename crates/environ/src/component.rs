@@ -149,9 +149,9 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             future_cancel_read(vmctx: vmctx, ty: u32, async_: u8, reader: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            future_close_writable(vmctx: vmctx, ty: u32, writer: u32) -> bool;
+            future_drop_writable(vmctx: vmctx, ty: u32, writer: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            future_close_readable(vmctx: vmctx, ty: u32, reader: u32) -> bool;
+            future_drop_readable(vmctx: vmctx, ty: u32, reader: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             stream_new(vmctx: vmctx, ty: u32) -> u64;
             #[cfg(feature = "component-model-async")]
@@ -163,9 +163,9 @@ macro_rules! foreach_builtin_component_function {
             #[cfg(feature = "component-model-async")]
             stream_cancel_read(vmctx: vmctx, ty: u32, async_: u8, reader: u32) -> u64;
             #[cfg(feature = "component-model-async")]
-            stream_close_writable(vmctx: vmctx, ty: u32, writer: u32) -> bool;
+            stream_drop_writable(vmctx: vmctx, ty: u32, writer: u32) -> bool;
             #[cfg(feature = "component-model-async")]
-            stream_close_readable(vmctx: vmctx, ty: u32, reader: u32) -> bool;
+            stream_drop_readable(vmctx: vmctx, ty: u32, reader: u32) -> bool;
             #[cfg(feature = "component-model-async")]
             flat_stream_write(vmctx: vmctx, memory: ptr_u8, realloc: ptr_u8, async_: u8, ty: u32, payload_size: u32, payload_align: u32, stream: u32, address: u32, count: u32) -> u64;
             #[cfg(feature = "component-model-async")]

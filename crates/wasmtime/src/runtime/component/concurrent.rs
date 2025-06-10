@@ -293,16 +293,16 @@ pub unsafe trait VMComponentAsyncStore {
         reader: u32,
     ) -> Result<u32>;
 
-    /// The `future.close-writable` intrinsic.
-    fn future_close_writable(
+    /// The `future.drop-writable` intrinsic.
+    fn future_drop_writable(
         &mut self,
         instance: &mut ComponentInstance,
         ty: TypeFutureTableIndex,
         writer: u32,
     ) -> Result<()>;
 
-    /// The `future.close-readable` intrinsic.
-    fn future_close_readable(
+    /// The `future.drop-readable` intrinsic.
+    fn future_drop_readable(
         &mut self,
         instance: &mut ComponentInstance,
         ty: TypeFutureTableIndex,
@@ -360,16 +360,16 @@ pub unsafe trait VMComponentAsyncStore {
         reader: u32,
     ) -> Result<u32>;
 
-    /// The `stream.close-writable` intrinsic.
-    fn stream_close_writable(
+    /// The `stream.drop-writable` intrinsic.
+    fn stream_drop_writable(
         &mut self,
         instance: &mut ComponentInstance,
         ty: TypeStreamTableIndex,
         writer: u32,
     ) -> Result<()>;
 
-    /// The `stream.close-readable` intrinsic.
-    fn stream_close_readable(
+    /// The `stream.drop-readable` intrinsic.
+    fn stream_drop_readable(
         &mut self,
         instance: &mut ComponentInstance,
         ty: TypeStreamTableIndex,
@@ -698,7 +698,7 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         todo!()
     }
 
-    fn future_close_writable(
+    fn future_drop_writable(
         &mut self,
         instance: &mut ComponentInstance,
         ty: TypeFutureTableIndex,
@@ -708,7 +708,7 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         todo!()
     }
 
-    fn future_close_readable(
+    fn future_drop_readable(
         &mut self,
         instance: &mut ComponentInstance,
         ty: TypeFutureTableIndex,
@@ -797,7 +797,7 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         todo!()
     }
 
-    fn stream_close_writable(
+    fn stream_drop_writable(
         &mut self,
         instance: &mut ComponentInstance,
         ty: TypeStreamTableIndex,
@@ -807,7 +807,7 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         todo!()
     }
 
-    fn stream_close_readable(
+    fn stream_drop_readable(
         &mut self,
         instance: &mut ComponentInstance,
         ty: TypeStreamTableIndex,
