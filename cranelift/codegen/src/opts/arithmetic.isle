@@ -234,6 +234,7 @@
       (fcvt_from_sint ty val))
 
 
+;; or(x, C) + (-C)  -->  and(x, ~C)
 (rule
   (simplify (iadd ty
               (bor ty x (iconst_s ty n))
