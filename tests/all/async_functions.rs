@@ -1,5 +1,3 @@
-#![cfg(not(miri))]
-
 use anyhow::{anyhow, bail};
 use std::future::Future;
 use std::pin::Pin;
@@ -139,6 +137,7 @@ async fn smoke_host_func_with_suspension() -> Result<()> {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn recursive_call() {
     let mut store = async_store();
     let func_ty = FuncType::new(store.engine(), None, None);
@@ -186,6 +185,7 @@ async fn recursive_call() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn suspend_while_suspending() {
     let mut store = async_store();
 
@@ -291,6 +291,7 @@ async fn cancel_during_run() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn iloop_with_fuel() {
     let engine = Engine::new(Config::new().async_support(true).consume_fuel(true)).unwrap();
     let mut store = Store::new(&engine, ());
@@ -314,6 +315,7 @@ async fn iloop_with_fuel() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn fuel_eventually_finishes() {
     let engine = Engine::new(Config::new().async_support(true).consume_fuel(true)).unwrap();
     let mut store = Store::new(&engine, ());
@@ -395,6 +397,7 @@ async fn async_host_func_with_pooling_stacks() -> Result<()> {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn async_mpk_protection() -> Result<()> {
     let _ = env_logger::try_init();
 
@@ -494,6 +497,7 @@ where
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn resume_separate_thread() {
     // This test will poll the following future on two threads. Simulating a
     // trap requires accessing TLS info, so that should be preserved correctly.
@@ -522,6 +526,7 @@ async fn resume_separate_thread() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn resume_separate_thread2() {
     // This test will poll the following future on two threads. Catching a
     // signal requires looking up TLS information to determine whether it's a
@@ -553,6 +558,7 @@ async fn resume_separate_thread2() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn resume_separate_thread3() {
     let _ = env_logger::try_init();
 
@@ -614,6 +620,7 @@ async fn resume_separate_thread3() {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn recursive_async() -> Result<()> {
     let _ = env_logger::try_init();
     let mut store = async_store();
@@ -650,6 +657,7 @@ async fn recursive_async() -> Result<()> {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn linker_module_command() -> Result<()> {
     let mut store = async_store();
     let mut linker = Linker::new(store.engine());
@@ -692,6 +700,7 @@ async fn linker_module_command() -> Result<()> {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn linker_module_reactor() -> Result<()> {
     let mut store = async_store();
     let mut linker = Linker::new(store.engine());
@@ -781,6 +790,7 @@ where
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn non_stacky_async_activations() -> Result<()> {
     let mut config = Config::new();
     config.async_support(true);
@@ -919,6 +929,7 @@ async fn non_stacky_async_activations() -> Result<()> {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
     let _ = env_logger::try_init();
 
@@ -992,6 +1003,7 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
 }
 
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn async_gc_with_func_new_and_func_wrap() -> Result<()> {
     let _ = env_logger::try_init();
 

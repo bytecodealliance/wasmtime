@@ -1,5 +1,3 @@
-#![cfg(not(miri))]
-
 use crate::async_functions::{PollOnce, execute_across_threads};
 use anyhow::Result;
 use wasmtime::component::*;
@@ -8,6 +6,7 @@ use wasmtime_component_util::REALLOC_AND_FREE;
 
 /// This is super::func::thunks, except with an async store.
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn smoke() -> Result<()> {
     let component = r#"
         (component
@@ -49,6 +48,7 @@ async fn smoke() -> Result<()> {
 
 /// Handle an import function, created using component::Linker::func_wrap_async.
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn smoke_func_wrap() -> Result<()> {
     let component = r#"
         (component
@@ -103,6 +103,7 @@ async fn smoke_func_wrap() -> Result<()> {
 // Overall a yield should happen during malloc which should be an "interesting
 // situation" with respect to the runtime.
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn resume_separate_thread() -> Result<()> {
     let mut config = wasmtime_test_util::component::config();
     config.async_support(true);
@@ -179,6 +180,7 @@ async fn resume_separate_thread() -> Result<()> {
 // Overall a yield should happen during malloc which should be an "interesting
 // situation" with respect to the runtime.
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn poll_through_wasm_activation() -> Result<()> {
     let mut config = wasmtime_test_util::component::config();
     config.async_support(true);
@@ -246,6 +248,7 @@ async fn poll_through_wasm_activation() -> Result<()> {
 
 /// Test async drop method for host resources.
 #[tokio::test]
+#[cfg_attr(miri, ignore)]
 async fn drop_resource_async() -> Result<()> {
     use std::sync::Arc;
     use std::sync::Mutex;

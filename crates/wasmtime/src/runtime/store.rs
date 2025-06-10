@@ -2267,20 +2267,12 @@ impl<T> StoreInner<T> {
     pub(crate) fn set_epoch_deadline(&mut self, delta: u64) {
         // Set a new deadline based on the "epoch deadline delta".
         //
-        // Safety: this is safe because the epoch deadline in the
-        // `VMStoreContext` is accessed only here and by Wasm guest code
-        // running in this store, and we have a `&mut self` here.
-        //
         // Also, note that when this update is performed while Wasm is
         // on the stack, the Wasm will reload the new value once we
         // return into it.
-        let epoch_deadline = unsafe {
-            self.vm_store_context_ptr()
-                .as_mut()
-                .epoch_deadline
-                .get_mut()
-        };
-        *epoch_deadline = self.engine().current_epoch() + delta;
+        let current_epoch = self.engine().current_epoch();
+        let epoch_deadline = self.vm_store_context.epoch_deadline.get_mut();
+        *epoch_deadline = current_epoch + delta;
     }
 
     #[cfg(target_has_atomic = "64")]
@@ -2296,17 +2288,8 @@ impl<T> StoreInner<T> {
         self.epoch_deadline_behavior = Some(callback);
     }
 
-    fn get_epoch_deadline(&self) -> u64 {
-        // Safety: this is safe because, as above, it is only invoked
-        // from within `new_epoch` which is called from guest Wasm
-        // code, which will have an exclusive borrow on the Store.
-        let epoch_deadline = unsafe {
-            self.vm_store_context_ptr()
-                .as_mut()
-                .epoch_deadline
-                .get_mut()
-        };
-        *epoch_deadline
+    fn get_epoch_deadline(&mut self) -> u64 {
+        *self.vm_store_context.epoch_deadline.get_mut()
     }
 }
 
