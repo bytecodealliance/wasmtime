@@ -64,6 +64,7 @@ else
 fi
 
 if [[ "$target" = "x86_64-pc-windows-msvc" ]]; then
+  # Avoid emitting `/DEFAULTLIB:MSVCRT` into the static library by using clang.
   export CC=clang
   export CXX=clang++
 fi
