@@ -903,7 +903,7 @@ fn future_cancel_read(
 }
 
 #[cfg(feature = "component-model-async")]
-fn future_close_writable(
+fn future_drop_writable(
     store: &mut dyn VMStore,
     instance: Instance,
     ty: u32,
@@ -913,7 +913,7 @@ fn future_close_writable(
 }
 
 #[cfg(feature = "component-model-async")]
-fn future_close_readable(
+fn future_drop_readable(
     store: &mut dyn VMStore,
     instance: Instance,
     ty: u32,
@@ -982,7 +982,7 @@ fn stream_cancel_read(
 }
 
 #[cfg(feature = "component-model-async")]
-fn stream_close_writable(
+fn stream_drop_writable(
     store: &mut dyn VMStore,
     instance: Instance,
     ty: u32,
@@ -992,7 +992,7 @@ fn stream_close_writable(
 }
 
 #[cfg(feature = "component-model-async")]
-fn stream_close_readable(
+fn stream_drop_readable(
     store: &mut dyn VMStore,
     instance: Instance,
     ty: u32,

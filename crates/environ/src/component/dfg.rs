@@ -337,10 +337,10 @@ pub enum Trampoline {
         ty: TypeStreamTableIndex,
         async_: bool,
     },
-    StreamCloseReadable {
+    StreamDropReadable {
         ty: TypeStreamTableIndex,
     },
-    StreamCloseWritable {
+    StreamDropWritable {
         ty: TypeStreamTableIndex,
     },
     FutureNew {
@@ -362,10 +362,10 @@ pub enum Trampoline {
         ty: TypeFutureTableIndex,
         async_: bool,
     },
-    FutureCloseReadable {
+    FutureDropReadable {
         ty: TypeFutureTableIndex,
     },
-    FutureCloseWritable {
+    FutureDropWritable {
         ty: TypeFutureTableIndex,
     },
     ErrorContextNew {
@@ -848,11 +848,11 @@ impl LinearizeDfg<'_> {
                 ty: *ty,
                 async_: *async_,
             },
-            Trampoline::StreamCloseReadable { ty } => {
-                info::Trampoline::StreamCloseReadable { ty: *ty }
+            Trampoline::StreamDropReadable { ty } => {
+                info::Trampoline::StreamDropReadable { ty: *ty }
             }
-            Trampoline::StreamCloseWritable { ty } => {
-                info::Trampoline::StreamCloseWritable { ty: *ty }
+            Trampoline::StreamDropWritable { ty } => {
+                info::Trampoline::StreamDropWritable { ty: *ty }
             }
             Trampoline::FutureNew { ty } => info::Trampoline::FutureNew { ty: *ty },
             Trampoline::FutureRead { ty, options } => info::Trampoline::FutureRead {
@@ -871,11 +871,11 @@ impl LinearizeDfg<'_> {
                 ty: *ty,
                 async_: *async_,
             },
-            Trampoline::FutureCloseReadable { ty } => {
-                info::Trampoline::FutureCloseReadable { ty: *ty }
+            Trampoline::FutureDropReadable { ty } => {
+                info::Trampoline::FutureDropReadable { ty: *ty }
             }
-            Trampoline::FutureCloseWritable { ty } => {
-                info::Trampoline::FutureCloseWritable { ty: *ty }
+            Trampoline::FutureDropWritable { ty } => {
+                info::Trampoline::FutureDropWritable { ty: *ty }
             }
             Trampoline::ErrorContextNew { ty, options } => info::Trampoline::ErrorContextNew {
                 ty: *ty,
