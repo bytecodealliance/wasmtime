@@ -148,12 +148,6 @@
                        (src XmmMem)
                        (dst WritableXmm))
 
-       ;; XMM unary op using a VEX encoding (aka AVX) with an immediate.
-       (XmmUnaryRmRImmVex (op AvxOpcode)
-                          (src XmmMem)
-                          (dst WritableXmm)
-                          (imm u8))
-
        ;; XMM (scalar or vector) unary op (from xmm to reg/mem) using the
        ;; VEX prefix
        (XmmMovRMVex (op AvxOpcode)
@@ -206,16 +200,6 @@
        (XmmUnaryRmR (op SseOpcode)
                     (src XmmMemAligned)
                     (dst WritableXmm))
-
-       ;; XMM (scalar or vector) unary op with immediate: roundss, roundsd, etc.
-       ;;
-       ;; This differs from XMM_RM_R_IMM in that the dst register of
-       ;; XmmUnaryRmRImm is not used in the computation of the instruction dst
-       ;; value and so does not have to be a previously valid value.
-       (XmmUnaryRmRImm (op SseOpcode)
-                       (src XmmMemAligned)
-                       (imm u8)
-                       (dst WritableXmm))
 
        ;; XMM (scalar or vector) unary op that relies on the EVEX prefix.
        (XmmUnaryRmREvex (op Avx512Opcode)
@@ -622,15 +606,12 @@
             Pmaddubsw
             Pmaddwd
             Pshufb
-            Pshufd
             Ptest
             Rcpss
             Rsqrtss
             Shufps
             Ucomiss
             Ucomisd
-            Pshuflw
-            Pshufhw
             Pblendw
           ))
 
@@ -1075,17 +1056,12 @@
             Vmaxsd
             Vsqrtps
             Vsqrtpd
-            Vroundps
-            Vroundpd
             Vphaddw
             Vphaddd
             Vpunpckhdq
             Vpunpckldq
             Vpunpckhqdq
             Vpunpcklqdq
-            Vpshuflw
-            Vpshufhw
-            Vpshufd
             Vmovss
             Vmovsd
             Vmovups
@@ -1102,8 +1078,6 @@
             Vbroadcastss
             Vsqrtss
             Vsqrtsd
-            Vroundss
-            Vroundsd
             Vucomiss
             Vucomisd
             Vptest
@@ -1601,13 +1575,6 @@
             (_ Unit (emit (MInst.XmmUnaryRmRVex op src dst))))
         dst))
 
-;; Helper for creating `XmmUnaryRmRImmVex` instructions
-(decl xmm_unary_rm_r_imm_vex (AvxOpcode XmmMem u8) Xmm)
-(rule (xmm_unary_rm_r_imm_vex op src imm)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmRImmVex op src dst imm))))
-        dst))
-
 ;; Helper for creating `MInst.XmmRmRImm` instructions.
 (decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Xmm)
 (rule (xmm_rm_r_imm op src1 src2 imm size)
@@ -1618,13 +1585,6 @@
                                            dst
                                            imm
                                            size))))
-        dst))
-
-;; Helper for constructing `XmmUnaryRmRImm` instructions.
-(decl xmm_unary_rm_r_imm (SseOpcode XmmMemAligned u8) Xmm)
-(rule (xmm_unary_rm_r_imm op src1 imm)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmRImm op src1 imm dst))))
         dst))
 
 ;; Helper for creating `MInst.XmmUnaryRmR` instructions.
@@ -3609,7 +3569,7 @@
 (decl x64_roundss (XmmMem RoundImm) Xmm)
 (rule 1 (x64_roundss src1 round)
         (if-let true (use_avx))
-        (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundss) src1 (encode_round_imm round)))
+        (x64_vroundss_rvmi (xmm_zero $F32X4) src1 (encode_round_imm round)))
 (rule 0 (x64_roundss src1 round)
         (x64_roundss_rmi src1 (encode_round_imm round)))
 
@@ -3617,7 +3577,7 @@
 (decl x64_roundsd (XmmMem RoundImm) Xmm)
 (rule 1 (x64_roundsd src1 round)
         (if-let true (use_avx))
-        (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundsd) src1 (encode_round_imm round)))
+        (x64_vroundsd_rvmi (xmm_zero $F64X2) src1 (encode_round_imm round)))
 (rule 0 (x64_roundsd src1 round)
         (x64_roundsd_rmi src1 (encode_round_imm round)))
 
@@ -3625,7 +3585,7 @@
 (decl x64_roundps (XmmMem RoundImm) Xmm)
 (rule 1 (x64_roundps src1 round)
       (if-let true (use_avx))
-      (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundps) src1 (encode_round_imm round)))
+      (x64_vroundps_rmi src1 (encode_round_imm round)))
 (rule (x64_roundps src1 round)
       (x64_roundps_rmi src1 (encode_round_imm round)))
 
@@ -3633,7 +3593,7 @@
 (decl x64_roundpd (XmmMem RoundImm) Xmm)
 (rule 1 (x64_roundpd src1 round)
       (if-let true (use_avx))
-      (xmm_unary_rm_r_imm_vex (AvxOpcode.Vroundpd) src1 (encode_round_imm round)))
+      (x64_vroundpd_rmi src1 (encode_round_imm round)))
 (rule 0 (x64_roundpd src1 round)
       (x64_roundpd_rmi src1 (encode_round_imm round)))
 
@@ -3666,11 +3626,10 @@
 
 ;; Helper for creating `pshufd` instructions.
 (decl x64_pshufd (XmmMem u8) Xmm)
-(rule (x64_pshufd src imm)
-      (xmm_unary_rm_r_imm (SseOpcode.Pshufd) src imm))
+(rule (x64_pshufd src imm) (x64_pshufd_a src imm))
 (rule 1 (x64_pshufd src imm)
       (if-let true (use_avx))
-      (xmm_unary_rm_r_imm_vex (AvxOpcode.Vpshufd) src imm))
+      (x64_vpshufd_a src imm))
 
 ;; Helper for creating `pshufb` instructions.
 (decl x64_pshufb (Xmm XmmMem) Xmm)
@@ -3682,19 +3641,17 @@
 
 ;; Helper for creating `pshuflw` instructions.
 (decl x64_pshuflw (XmmMem u8) Xmm)
-(rule (x64_pshuflw src imm)
-      (xmm_unary_rm_r_imm (SseOpcode.Pshuflw) src imm))
+(rule (x64_pshuflw src imm) (x64_pshuflw_a src imm))
 (rule 1 (x64_pshuflw src imm)
       (if-let true (use_avx))
-      (xmm_unary_rm_r_imm_vex (AvxOpcode.Vpshuflw) src imm))
+      (x64_vpshuflw_a src imm))
 
 ;; Helper for creating `pshufhw` instructions.
 (decl x64_pshufhw (XmmMem u8) Xmm)
-(rule (x64_pshufhw src imm)
-      (xmm_unary_rm_r_imm (SseOpcode.Pshufhw) src imm))
+(rule (x64_pshufhw src imm) (x64_pshufhw_a src imm))
 (rule 1 (x64_pshufhw src imm)
       (if-let true (use_avx))
-      (xmm_unary_rm_r_imm_vex (AvxOpcode.Vpshufhw) src imm))
+      (x64_vpshufhw_a src imm))
 
 ;; Helper for creating `shufps` instructions.
 (decl x64_shufps (Xmm XmmMem u8) Xmm)

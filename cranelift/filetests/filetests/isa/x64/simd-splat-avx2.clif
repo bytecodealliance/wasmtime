@@ -93,7 +93,7 @@ block0(v0: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   vmovq %rdi, %xmm2
-;   vpshufd $68, %xmm2, %xmm0
+;   vpshufd $0x44, %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -144,7 +144,7 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vpshufd $68, %xmm0, %xmm0
+;   vpshufd $0x44, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret

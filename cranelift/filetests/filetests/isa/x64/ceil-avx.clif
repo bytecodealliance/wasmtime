@@ -11,7 +11,9 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vroundss $2, %xmm0, %xmm0
+;   uninit  %xmm2
+;   vxorps  %xmm2, %xmm2, %xmm4
+;   vroundss $0x2, %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -21,7 +23,8 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   vroundss $2, %xmm0, %xmm0, %xmm0
+;   vxorps %xmm2, %xmm2, %xmm4
+;   vroundss $2, %xmm0, %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -36,7 +39,9 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vroundsd $2, %xmm0, %xmm0
+;   uninit  %xmm2
+;   vxorpd  %xmm2, %xmm2, %xmm4
+;   vroundsd $0x2, %xmm0, %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -46,7 +51,8 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   vroundsd $2, %xmm0, %xmm0, %xmm0
+;   vxorpd %xmm2, %xmm2, %xmm4
+;   vroundsd $2, %xmm0, %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -61,7 +67,7 @@ block0(v0: f32x4):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vroundps $2, %xmm0, %xmm0
+;   vroundps $0x2, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -86,7 +92,7 @@ block0(v0: f64x2):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vroundpd $2, %xmm0, %xmm0
+;   vroundpd $0x2, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret

@@ -140,7 +140,7 @@ block0(v0: i32x4):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   pshufd  $238, %xmm0, %xmm2
+;   pshufd $0xee, %xmm0, %xmm2
 ;   pmovsxdq %xmm2, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp

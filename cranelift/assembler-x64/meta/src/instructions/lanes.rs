@@ -43,5 +43,12 @@ pub fn list() -> Vec<Inst> {
         inst("vpblendvb", fmt("RVMR", [w(xmm1), r(xmm2), r(xmm_m128), r(xmm3)]), vex(L128)._66()._0f3a().w0().op(0x4C).r().is4(), _64b | compat | avx),
         inst("vblendvps", fmt("RVMR", [w(xmm1), r(xmm2), r(xmm_m128), r(xmm3)]), vex(L128)._66()._0f3a().w0().op(0x4A).r().is4(), _64b | compat | avx),
         inst("vblendvpd", fmt("RVMR", [w(xmm1), r(xmm2), r(xmm_m128), r(xmm3)]), vex(L128)._66()._0f3a().w0().op(0x4B).r().is4(), _64b | compat | avx),
+
+        inst("pshufd", fmt("A", [w(xmm1), r(align(xmm_m128)), r(imm8)]), rex([0x66, 0x0F, 0x70]).r().ib(), _64b | compat | sse2),
+        inst("pshuflw", fmt("A", [w(xmm1), r(align(xmm_m128)), r(imm8)]), rex([0xF2, 0x0F, 0x70]).r().ib(), _64b | compat | sse2),
+        inst("pshufhw", fmt("A", [w(xmm1), r(align(xmm_m128)), r(imm8)]), rex([0xF3, 0x0F, 0x70]).r().ib(), _64b | compat | sse2),
+        inst("vpshufd", fmt("A", [w(xmm1), r(xmm_m128), r(imm8)]), vex(L128)._66()._0f().op(0x70).r().ib(), _64b | compat | avx),
+        inst("vpshuflw", fmt("A", [w(xmm1), r(xmm_m128), r(imm8)]), vex(L128)._f2()._0f().op(0x70).r().ib(), _64b | compat | avx),
+        inst("vpshufhw", fmt("A", [w(xmm1), r(xmm_m128), r(imm8)]), vex(L128)._f3()._0f().op(0x70).r().ib(), _64b | compat | avx),
     ]
 }

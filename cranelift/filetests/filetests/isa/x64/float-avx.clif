@@ -365,7 +365,7 @@ block0(v0: f32x4):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vroundps $1, %xmm0, %xmm0
+;   vroundps $0x1, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -390,7 +390,7 @@ block0(v0: f64x2):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vroundpd $1, %xmm0, %xmm0
+;   vroundpd $0x1, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
