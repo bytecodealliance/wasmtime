@@ -1556,7 +1556,7 @@ pub(crate) trait MacroAssembler {
                             masm.address_from_sp(SPOffset::from_u32(dst_offs))?,
                         )?;
                     }
-                    Ok(())
+                    anyhow::Ok(())
                 })?;
             }
             MemMoveDirection::HighToLow => {
@@ -1578,7 +1578,7 @@ pub(crate) trait MacroAssembler {
                         src_offs -= word_bytes;
                         dst_offs -= word_bytes;
                     }
-                    Ok(())
+                    anyhow::Ok(())
                 })?;
             }
         }
@@ -1605,7 +1605,7 @@ pub(crate) trait MacroAssembler {
                     masm.address_from_sp(SPOffset::from_u32(dst_offs))?,
                     ptr_size,
                 )?;
-                Ok(())
+                anyhow::Ok(())
             })?;
         }
         Ok(())
@@ -1916,7 +1916,7 @@ pub(crate) trait MacroAssembler {
                     let addr: Self::Address = masm.local_address(&slot)?;
                     masm.store(zero, addr, OperandSize::S64)?;
                 }
-                Ok(())
+                anyhow::Ok(())
             })?;
         }
 

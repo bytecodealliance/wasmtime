@@ -106,8 +106,7 @@ where
                     vmctx!(M)
                 };
                 let addr = masm.address_at_reg(base, heap.current_length_offset)?;
-                masm.load_ptr(addr, writable!(dst))?;
-                Ok(())
+                masm.load_ptr(addr, writable!(dst))
             })?;
         }
     }
@@ -215,8 +214,7 @@ where
         };
 
         // Load the base of the memory into the `addr` register.
-        masm.load_ptr(masm.address_at_reg(base, heap.offset)?, writable!(dst))?;
-        Ok(())
+        masm.load_ptr(masm.address_at_reg(base, heap.offset)?, writable!(dst))
     })?;
 
     // Start by adding the index to the heap base addr.

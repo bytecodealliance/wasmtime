@@ -316,8 +316,7 @@ impl FnCall {
                     let size: OperandSize = ty.try_into()?;
                     with_scratch!(masm, &ty, |masm, scratch| {
                         context.move_val_to_reg(val, scratch.inner(), masm)?;
-                        masm.store(scratch.inner().into(), addr, size)?;
-                        Ok(())
+                        masm.store(scratch.inner().into(), addr, size)
                     })?;
                 }
             }
@@ -338,8 +337,7 @@ impl FnCall {
                     // an int register as the return pointer.
                     masm.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.compute_addr(addr, scratch.writable(), ty.try_into()?)?;
-                        masm.store(scratch.inner().into(), slot, ty.try_into()?)?;
-                        Ok(())
+                        masm.store(scratch.inner().into(), slot, ty.try_into()?)
                     })?;
                 }
             }

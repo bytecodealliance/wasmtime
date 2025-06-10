@@ -291,15 +291,13 @@ impl<'a> CodeGenContext<'a, Emission> {
                 let local_addr = masm.local_address(&slot)?;
                 masm.with_scratch::<IntScratch, _>(|masm, scratch| {
                     masm.load(local_addr, scratch.writable(), size)?;
-                    masm.store(scratch.inner().into(), addr, size)?;
-                    Ok(())
+                    masm.store(scratch.inner().into(), addr, size)
                 })?;
             }
             Val::Memory(_) => {
                 with_scratch!(masm, &ty, |masm, scratch| {
                     masm.pop(scratch.writable(), size)?;
-                    masm.store(scratch.inner().into(), addr, size)?;
-                    Ok(())
+                    masm.store(scratch.inner().into(), addr, size)
                 })?;
             }
         }
@@ -852,7 +850,7 @@ impl<'a> CodeGenContext<'a, Emission> {
                         masm.load(addr, scratch.writable(), slot.ty.try_into()?)?;
                         let stack_slot = masm.push(scratch.inner(), slot.ty.try_into()?)?;
                         *v = Val::mem(slot.ty, stack_slot);
-                        Ok(())
+                        anyhow::Ok(())
                     })?;
                 }
                 _ => {}

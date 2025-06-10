@@ -480,8 +480,7 @@ where
                 masm.address_at_reg(scratch.inner(), sig_offset)?,
                 writable!(caller_id),
                 sig_size,
-            )?;
-            Ok(())
+            )
         })?;
 
         let callee_id = self.context.any_gpr(self.masm)?;
@@ -498,7 +497,7 @@ where
         self.masm.trapif(IntCmpKind::Ne, TRAP_BAD_SIGNATURE)?;
         self.context.free_reg(callee_id);
         self.context.free_reg(caller_id);
-        Ok(())
+        anyhow::Ok(())
     }
 
     /// Emit the usual function end instruction sequence.
@@ -1043,8 +1042,7 @@ where
             // so that we can use it later in case of a misspeculation.
             masm.mov(writable!(tmp), base.into(), ptr_size)?;
             // Calculate the address of the table element.
-            masm.add(writable!(base), base, scratch.inner().into(), ptr_size)?;
-            Ok(())
+            masm.add(writable!(base), base, scratch.inner().into(), ptr_size)
         })?;
         if self.env.table_access_spectre_mitigation() {
             // Perform a bounds check and override the value of the
@@ -1072,8 +1070,7 @@ where
 
             let size_addr =
                 masm.address_at_reg(scratch.inner(), table_data.current_elems_offset)?;
-            masm.load(size_addr, writable!(size), table_data.current_elements_size)?;
-            Ok(())
+            masm.load(size_addr, writable!(size), table_data.current_elements_size)
         })?;
 
         self.context.stack.push(TypedReg::i32(size).into());
@@ -1093,8 +1090,7 @@ where
             };
 
             let size_addr = masm.address_at_reg(base, heap_data.current_length_offset)?;
-            masm.load_ptr(size_addr, writable!(size_reg))?;
-            Ok(())
+            masm.load_ptr(size_addr, writable!(size_reg))
         })?;
         // Emit a shift to get the size in pages rather than in bytes.
         let dst = TypedReg::new(heap_data.index_type(), size_reg);
