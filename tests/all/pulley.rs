@@ -288,6 +288,10 @@ fn pulley_provenance_test_components() -> Result<()> {
         let (result,) = guest_list.call(&mut store, (&["a", "", "b", "c"],))?;
         assert_eq!(result, ["a", "", "b", "c"]);
         guest_list.post_return(&mut store)?;
+
+        instance
+            .get_typed_func::<(), ()>(&mut store, "resource-intrinsics")?
+            .call(&mut store, ())?;
     }
     {
         use wasmtime::component::Val;

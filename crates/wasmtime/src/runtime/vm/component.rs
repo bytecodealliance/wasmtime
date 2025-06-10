@@ -568,8 +568,10 @@ impl ComponentInstance {
 
     unsafe fn initialize_vmctx(&mut self) {
         *self.vmctx_plus_offset_mut(self.offsets.magic()) = VMCOMPONENT_MAGIC;
-        *self.vmctx_plus_offset_mut(self.offsets.builtins()) =
-            VmPtr::from(NonNull::from(&libcalls::VMComponentBuiltins::INIT));
+        // Initialize the built-in functions
+        static BUILTINS: libcalls::VMComponentBuiltins = libcalls::VMComponentBuiltins::INIT;
+        let ptr = BUILTINS.expose_provenance();
+        *self.vmctx_plus_offset_mut(self.offsets.builtins()) = VmPtr::from(ptr);
         *self.vmctx_plus_offset_mut(self.offsets.vm_store_context()) =
             VmPtr::from(self.store.0.as_ref().vm_store_context_ptr());
 

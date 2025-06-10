@@ -82,6 +82,10 @@
   (core func $host-list (canon lower (func $host-list)
     (memory $libc "memory") (realloc (func $libc "realloc"))))
 
+  (type $a (resource (rep i32)))
+  (core func $new-a (canon resource.new $a))
+  (core func $drop-a (canon resource.drop $a))
+
   (core module $m
     (import "" "host-u32" (func $host-u32 (param i32) (result i32)))
     (import "" "host-enum" (func $host-enum (param i32) (result i32)))
@@ -89,6 +93,8 @@
     (import "" "host-result" (func $host-result (param i32 i64 i32)))
     (import "" "host-string" (func $host-string (param i32 i32 i32)))
     (import "" "host-list" (func $host-list (param i32 i32 i32)))
+    (import "" "new-a" (func $new-a (param i32) (result i32)))
+    (import "" "drop-a" (func $drop-a (param i32)))
 
     (func (export "guest-u32") (param i32) (result i32) local.get 0 call $host-u32)
     (func (export "guest-enum") (param i32) (result i32) local.get 0 call $host-enum)
@@ -116,6 +122,10 @@
       i32.const 96
       call $host-list
       i32.const 96)
+
+    (func (export "resource-intrinsics")
+      (call $drop-a (call $new-a (i32.const 100)))
+    )
   )
 
   (core instance $i (instantiate $m
@@ -127,6 +137,8 @@
         (export "host-result" (func $host-result))
         (export "host-string" (func $host-string))
         (export "host-list" (func $host-list))
+        (export "new-a" (func $new-a))
+        (export "drop-a" (func $drop-a))
     ))
   ))
   (func (export "guest-u32") (param "x" u32) (result u32)
@@ -143,5 +155,7 @@
   (func (export "guest-list") (param "x" (list string)) (result (list string))
     (canon lift (core func $i "guest-list") (memory $libc "memory")
                 (realloc (func $libc "realloc"))))
+  (func (export "resource-intrinsics")
+    (canon lift (core func $i "resource-intrinsics") ))
 
 )
