@@ -961,10 +961,11 @@ impl VMGcRefTableAlloc {
     /// Reset this bump region, retaining any underlying allocation, but moving
     /// the bump pointer and limit to their default positions.
     fn reset(&mut self) {
-        self.next = SendSyncPtr::new(NonNull::new(self.chunk.as_mut_ptr()).unwrap());
-        self.end = SendSyncPtr::new(
-            NonNull::new(unsafe { self.chunk.as_mut_ptr().add(self.chunk.len()) }).unwrap(),
-        );
+        let len = self.chunk.len();
+        let next = NonNull::new(self.chunk.as_mut_ptr()).unwrap();
+        let end = unsafe { next.add(len) };
+        self.next = SendSyncPtr::new(next);
+        self.end = SendSyncPtr::new(end);
     }
 }
 
