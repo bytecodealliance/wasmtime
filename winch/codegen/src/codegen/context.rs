@@ -296,7 +296,7 @@ impl<'a> CodeGenContext<'a, Emission> {
 		})?;
             }
             Val::Memory(_) => {
-		masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+		with_scratch!(masm, &ty, |masm, scratch| {
 		    masm.pop(scratch.writable(), size)?;
 		    masm.store(scratch.inner().into(), addr, size)?;
 		    Ok(())
