@@ -211,8 +211,10 @@ fn pulley_provenance_test_components() -> Result<()> {
         #[component(enum)]
         #[repr(u8)]
         enum E {
+            #[expect(dead_code, reason = "only testing other variants")]
             A,
             B,
+            #[expect(dead_code, reason = "only testing other variants")]
             C,
         }
 
