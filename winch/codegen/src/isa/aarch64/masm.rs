@@ -238,8 +238,7 @@ impl Masm for MacroAssembler {
                         .mov_ir(scratch.writable(), I::I64(bytes as u64), OperandSize::S64);
                     masm.asm
                         .sub_rrr(scratch.inner(), ssp, writable!(ssp), OperandSize::S64);
-                    Ok(())
-                })?;
+                });
             }
         }
 
@@ -267,8 +266,7 @@ impl Masm for MacroAssembler {
                         .mov_ir(scratch.writable(), I::I64(bytes as u64), OperandSize::S64);
                     masm.asm
                         .add_rrr(ssp, scratch.inner(), writable!(ssp), OperandSize::S64);
-                    Ok(())
-                })?;
+                });
             }
         }
 
@@ -333,15 +331,13 @@ impl Masm for MacroAssembler {
                         self.with_scratch::<IntScratch, _>(|masm, scratch| {
                             masm.asm.mov_ir(scratch.writable(), v, v.size());
                             masm.asm.str(scratch.inner(), dst, size, TRUSTED_FLAGS);
-                            Ok(())
-                        })?;
+                        });
                     }
                     imm @ (I::F32(_) | I::F64(_)) => {
                         self.with_scratch::<FloatScratch, _>(|masm, scratch| {
                             masm.asm.mov_ir(scratch.writable(), imm, imm.size());
                             masm.asm.str(scratch.inner(), dst, size, TRUSTED_FLAGS);
-                            Ok(())
-                        })?;
+                        });
                     }
                     _ => bail!(CodeGenError::unsupported_wasm_type()),
                 };
@@ -369,19 +365,16 @@ impl Masm for MacroAssembler {
         })
     }
 
-    fn with_scratch<T: ScratchType, F>(&mut self, mut f: F) -> Result<()>
-    where
-        F: FnMut(&mut Self, Scratch) -> Result<()>,
-    {
+    fn with_scratch<T: ScratchType, R>(&mut self, f: impl FnOnce(&mut Self, Scratch) -> R) -> R {
         let r = self
             .scratch_scope
             .reg_for_class(T::reg_class(), &mut |_| Ok(()))
             .expect("Scratch register to be available");
 
-        f(self, Scratch::new(r))?;
+        let ret = f(self, Scratch::new(r));
 
         self.scratch_scope.free(r);
-        Ok(())
+        ret
     }
 
     fn call(
@@ -537,8 +530,7 @@ impl Masm for MacroAssembler {
                             masm.with_scratch::<IntScratch, _>(|masm, scratch| {
                                 masm.asm.mov_ir(scratch.writable(), i, i.size());
                                 masm.asm.adds_rrr(scratch.inner(), rn, rd, size);
-                                Ok(())
-                            })?;
+                            });
                         }
                     }
                 }
@@ -562,8 +554,7 @@ impl Masm for MacroAssembler {
                         self.with_scratch::<IntScratch, _>(|masm, scratch| {
                             masm.asm.mov_ir(scratch.writable(), v, v.size());
                             masm.asm.sub_rrr(scratch.inner(), rn, rd, size);
-                            Ok(())
-                        })?;
+                        });
                     }
                 };
 
@@ -683,8 +674,7 @@ impl Masm for MacroAssembler {
                         self.with_scratch::<IntScratch, _>(|masm, scratch| {
                             masm.asm.mov_ir(scratch.writable(), v, v.size());
                             masm.asm.and_rrr(scratch.inner(), rn, rd, size);
-                            Ok(())
-                        })?;
+                        });
                     }
                 };
 
@@ -710,8 +700,7 @@ impl Masm for MacroAssembler {
                         self.with_scratch::<IntScratch, _>(|masm, scratch| {
                             masm.asm.mov_ir(scratch.writable(), v, v.size());
                             masm.asm.or_rrr(scratch.inner(), rn, rd, size);
-                            Ok(())
-                        })?;
+                        });
                     }
                 };
 
@@ -737,8 +726,7 @@ impl Masm for MacroAssembler {
                         self.with_scratch::<IntScratch, _>(|masm, scratch| {
                             masm.asm.mov_ir(scratch.writable(), v, v.size());
                             masm.asm.xor_rrr(scratch.inner(), rn, rd, size);
-                            Ok(())
-                        })?;
+                        });
                     }
                 };
                 Ok(())
@@ -765,8 +753,7 @@ impl Masm for MacroAssembler {
                 self.with_scratch::<IntScratch, _>(|masm, scratch| {
                     masm.asm.mov_ir(scratch.writable(), imm, imm.size());
                     masm.asm.shift_rrr(scratch.inner(), lhs, dst, kind, size);
-                    Ok(())
-                })?;
+                });
             }
         };
         Ok(())
@@ -823,8 +810,7 @@ impl Masm for MacroAssembler {
                     kind,
                     size,
                 );
-                Ok(())
-            })?;
+            });
             match size {
                 OperandSize::S32 => Ok(TypedReg::new(WasmValType::I32, dividend)),
                 OperandSize::S64 => Ok(TypedReg::new(WasmValType::I64, dividend)),
@@ -847,8 +833,7 @@ impl Masm for MacroAssembler {
                 .addv(tmp.inner(), tmp.writable(), VectorSize::Size8x8);
             masm.asm
                 .mov_from_vec(tmp.inner(), writable!(src.into()), 0, OperandSize::S8);
-            Ok(())
-        })?;
+        });
         context.stack.push(src.into());
         Ok(())
     }
@@ -864,8 +849,7 @@ impl Masm for MacroAssembler {
         self.with_scratch::<FloatScratch, _>(|masm, scratch| {
             masm.asm
                 .fpu_to_int(dst, src, scratch.writable(), src_size, dst_size, kind, true);
-            Ok(())
-        })?;
+        });
 
         Ok(())
     }
@@ -995,8 +979,7 @@ impl Masm for MacroAssembler {
                         self.with_scratch::<IntScratch, _>(|masm, scratch| {
                             masm.asm.mov_ir(scratch.writable(), v, v.size());
                             masm.asm.subs_rrr(scratch.inner(), src1, size);
-                            Ok(())
-                        })?;
+                        });
                     }
                 };
                 Ok(())
@@ -1565,8 +1548,7 @@ impl MacroAssembler {
                 self.with_scratch::<IntScratch, _>(|masm, scratch| {
                     masm.asm.mov_ir(scratch.writable(), rhs, rhs.size());
                     masm.asm.add_rrr(scratch.inner(), lhs, dst, size);
-                    Ok(())
-                })?;
+                });
             }
         };
         Ok(())

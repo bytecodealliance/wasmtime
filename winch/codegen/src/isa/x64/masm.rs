@@ -148,7 +148,7 @@ impl Masm for MacroAssembler {
 
             masm.asm.cmp_rr(scratch.inner(), regs::rsp(), masm.ptr_size);
             masm.asm.trapif(IntCmpKind::GtU, TrapCode::STACK_OVERFLOW);
-            Ok(())
+            anyhow::Ok(())
         })?;
 
         // Emit unwind info.
@@ -315,18 +315,15 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn with_scratch<T: ScratchType, F>(&mut self, mut f: F) -> Result<()>
-    where
-        F: FnMut(&mut Self, Scratch) -> Result<()>,
-    {
+    fn with_scratch<T: ScratchType, R>(&mut self, f: impl FnOnce(&mut Self, Scratch) -> R) -> R {
         let r = self
             .scratch_scope
             .reg_for_class(T::reg_class(), &mut |_| Ok(()))
             .expect("Scratch register to be available");
 
-        f(self, Scratch::new(r))?;
+        let ret = f(self, Scratch::new(r));
         self.scratch_scope.free(r);
-        Ok(())
+        ret
     }
 
     fn call(
@@ -413,7 +410,7 @@ impl Masm for MacroAssembler {
                     masm.load_impl(src, byte_tmp.writable(), size, UNTRUSTED_FLAGS)?;
                     masm.asm
                         .xmm_vpinsr_rrr(dst, dst.to_reg(), byte_tmp.inner(), lane, size);
-                    Ok(())
+                    anyhow::Ok(())
                 })?;
             }
             LoadKind::VectorZero(size) => {
@@ -421,7 +418,7 @@ impl Masm for MacroAssembler {
                 self.with_scratch::<IntScratch, _>(|masm, scratch| {
                     masm.load_impl(src, scratch.writable(), size, UNTRUSTED_FLAGS)?;
                     masm.asm.avx_gpr_to_xmm(scratch.inner(), dst, size);
-                    Ok(())
+                    anyhow::Ok(())
                 })?;
             }
         }
@@ -477,7 +474,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.add_rr(scratch.inner(), dst, size);
-                        Ok(())
+                        anyhow::Ok(())
                     })?;
                 }
             }
@@ -513,7 +510,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.sub_rr(scratch.inner(), reg, size);
-                        Ok(())
+                        anyhow::Ok(())
                     })?;
                 }
             }
@@ -536,7 +533,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.mul_rr(scratch.inner(), dst, size);
-                        Ok(())
+                        anyhow::Ok(())
                     })?;
                 }
             }
@@ -702,7 +699,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.and_rr(scratch.inner(), dst, size);
-                        Ok(())
+                        anyhow::Ok(())
                     })?;
                 }
             }
@@ -725,7 +722,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.or_rr(scratch.inner(), dst, size);
-                        Ok(())
+                        anyhow::Ok(())
                     })?;
                 }
             }
@@ -748,7 +745,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.xor_rr(scratch.inner(), dst, size);
-                        Ok(())
+                        anyhow::Ok(())
                     })?;
                 }
             }
@@ -879,7 +876,7 @@ impl Masm for MacroAssembler {
                     self.with_scratch::<IntScratch, _>(|masm, scratch| {
                         masm.load_constant(&imm, scratch.writable(), size)?;
                         masm.asm.cmp_rr(src1, scratch.inner(), size);
-                        Ok(())
+                        anyhow::Ok(())
                     })?;
                 }
             }
@@ -940,8 +937,7 @@ impl Masm for MacroAssembler {
                 self.with_scratch::<IntScratch, _>(|masm, scratch| {
                     masm.asm.setnp(scratch.writable());
                     masm.asm.and_rr(scratch.inner(), dst, size);
-                    Ok(())
-                })?;
+                });
             }
             FloatCmpKind::Ne => {
                 // Return true if either operand is NaN by checking if PF is
@@ -949,8 +945,7 @@ impl Masm for MacroAssembler {
                 self.with_scratch::<IntScratch, _>(|masm, scratch| {
                     masm.asm.setp(scratch.writable());
                     masm.asm.or_rr(scratch.inner(), dst, size);
-                    Ok(())
-                })?;
+                });
             }
             FloatCmpKind::Lt | FloatCmpKind::Le => (),
         };
@@ -970,8 +965,7 @@ impl Masm for MacroAssembler {
                 masm.asm.neg(dst.to_reg(), dst, size);
                 masm.asm.add_ir(size.num_bits() as i32, dst, size);
                 masm.asm.sub_rr(scratch.inner(), dst, size);
-                Ok(())
-            })?;
+            });
         }
 
         Ok(())
@@ -993,8 +987,7 @@ impl Masm for MacroAssembler {
                 masm.asm
                     .shift_ir(size.log2(), scratch.writable(), ShiftKind::Shl, size);
                 masm.asm.add_rr(scratch.inner(), dst, size);
-                Ok(())
-            })?;
+            });
         }
 
         Ok(())
@@ -1091,7 +1084,7 @@ impl Masm for MacroAssembler {
                 masm.asm.and_rr(scratch.inner(), dst, size);
                 masm.asm.shift_ir(2u8, tmp, ShiftKind::ShrU, size);
                 masm.asm.and_rr(scratch.inner(), tmp, size);
-                Ok(())
+                anyhow::Ok(())
             })?;
             self.asm.add_rr(dst.to_reg(), tmp, size);
 
@@ -1556,8 +1549,7 @@ impl Masm for MacroAssembler {
                         flags,
                         op,
                     );
-                    Ok(())
-                })?;
+                });
 
                 context.free_reg(operand.reg);
                 dst
@@ -1683,8 +1675,7 @@ impl Masm for MacroAssembler {
                             self.with_scratch::<FloatScratch, _>(|masm, scratch| {
                                 masm.asm.xmm_vmovsd_rm(scratch.writable(), &address);
                                 masm.asm.xmm_vmovsd_rrr(dst, dst.to_reg(), scratch.inner());
-                                Ok(())
-                            })?;
+                            });
                         }
                         1 => self.asm.xmm_vmovlhps_rrm(dst, dst.to_reg(), &address),
                         _ => unreachable!(),
@@ -2053,8 +2044,7 @@ impl Masm for MacroAssembler {
                         dst,
                         kind.src_lane_size(),
                     );
-                    Ok(())
-                })?;
+                });
             }
             V128ConvertKind::I32x4LowU => {
                 // See
@@ -2141,8 +2131,7 @@ impl Masm for MacroAssembler {
                     );
                     masm.asm
                         .xmm_vpunpckh_rrr(src, scratch.inner(), dst, kind.src_lane_size());
-                    Ok(())
-                })?;
+                });
             }
             V128ExtendKind::HighI32x4S => {
                 // Move the 3rd element (i.e., 0b10) to the 1st (rightmost)
@@ -2164,8 +2153,7 @@ impl Masm for MacroAssembler {
                     // Interleave the 0 bits into the two 32-bit integers to zero extend them.
                     masm.asm
                         .xmm_vunpckhp_rrr(src, scratch.inner(), dst, kind.src_lane_size());
-                    Ok(())
-                })?;
+                });
             }
         }
         Ok(())
@@ -2290,8 +2278,7 @@ impl Masm for MacroAssembler {
                 // lhs = (lhs_low * rhs_low) + ((lhs_hi * rhs_low) + (lhs_lo * rhs_hi)) = tmp1 + tmp2
                 this.asm
                     .xmm_vex_rr(AvxOpcode::Vpaddq, tmp1.inner(), tmp2, writable!(lhs.reg));
-                Ok(())
-            })?;
+            });
 
             context.free_reg(tmp2);
 
@@ -2351,8 +2338,7 @@ impl Masm for MacroAssembler {
                     // complete the two's complement for lanes which were negative.
                     masm.asm
                         .xmm_vpsub_rrr(dst.to_reg(), scratch.inner(), dst, kind.lane_size());
-                    Ok(())
-                })?;
+                });
             }
             V128AbsKind::F32x4 | V128AbsKind::F64x2 => {
                 self.with_scratch::<FloatScratch, _>(|masm, scratch| {
@@ -2375,8 +2361,7 @@ impl Masm for MacroAssembler {
                     // make the float value positive.
                     masm.asm
                         .xmm_vandp_rrr(src, scratch.inner(), dst, kind.lane_size());
-                    Ok(())
-                })?;
+                });
             }
         }
         Ok(())
@@ -2390,7 +2375,7 @@ impl Masm for MacroAssembler {
                 self.with_scratch::<FloatScratch, _>(|masm, tmp| {
                     masm.v128_xor(tmp.inner(), tmp.inner(), tmp.writable())?;
                     masm.v128_sub(tmp.inner(), op.to_reg(), op, kind.into())?;
-                    Ok(())
+                    anyhow::Ok(())
                 })?;
             }
             V128NegKind::F32x4 | V128NegKind::F64x2 => {
@@ -2413,8 +2398,7 @@ impl Masm for MacroAssembler {
                     // Use the mask to flip the sign bit.
                     masm.asm
                         .xmm_vxorp_rrr(op.to_reg(), tmp.inner(), op, kind.lane_size());
-                    Ok(())
-                })?;
+                });
             }
         }
         Ok(())
@@ -2682,8 +2666,7 @@ impl Masm for MacroAssembler {
             // Sets ZF if all values are zero (i.e., if all original values were not zero).
             masm.asm.xmm_vptest(src, src);
             // Set byte if ZF=1.
-            Ok(())
-        })?;
+        });
         self.asm.setcc(IntCmpKind::Eq, dst);
         Ok(())
     }
@@ -2794,8 +2777,7 @@ impl Masm for MacroAssembler {
                     // result has the sign bit set to correctly propagate -0.
                     masm.asm
                         .xmm_vorp_rrr(dst.to_reg(), scratch.inner(), dst, kind.lane_size());
-                    Ok(())
-                })?;
+                });
                 // Set lanes with NaN to all 1s.
                 self.asm.xmm_vcmpp_rrr(
                     writable!(src2),
@@ -2862,8 +2844,7 @@ impl Masm for MacroAssembler {
                         writable!(src2),
                         kind.lane_size(),
                     );
-                    Ok(())
-                })?;
+                });
                 self.asm
                     .xmm_vsub_rrr(src2, dst.to_reg(), dst, kind.lane_size());
                 // Set lanes of NaN values to 1.
@@ -2927,8 +2908,7 @@ impl Masm for MacroAssembler {
                     );
                     masm.asm
                         .xmm_vex_rr(AvxOpcode::Vpmaddubsw, scratch.inner(), src, dst);
-                    Ok(())
-                })?;
+                });
             }
             V128ExtAddKind::I8x16U => {
                 // Same approach as the signed variant but treat `src` as
@@ -3046,7 +3026,7 @@ impl Masm for MacroAssembler {
             // total number of bits set.
             masm.asm
                 .xmm_vpadd_rrr(reg.to_reg(), scratch.inner(), reg, OperandSize::S8);
-            Ok(())
+            anyhow::Ok(())
         })?;
 
         context.stack.push(TypedReg::v128(reg.to_reg()).into());
@@ -3231,8 +3211,7 @@ impl MacroAssembler {
                         self.with_scratch::<IntScratch, _>(|masm, scratch| {
                             masm.asm.mov_ir(v, scratch.writable(), size);
                             masm.asm.mov_rm(scratch.inner(), &dst, size, flags);
-                            Ok(())
-                        })?;
+                        });
                     }
                 },
                 I::F32(v) => {
@@ -3248,8 +3227,7 @@ impl MacroAssembler {
                         );
                         masm.asm
                             .xmm_mov_rm(float_scratch.inner(), &dst, size, flags);
-                        Ok(())
-                    })?;
+                    });
                 }
                 I::F64(v) => {
                     let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
@@ -3265,8 +3243,7 @@ impl MacroAssembler {
                         );
                         masm.asm
                             .xmm_mov_rm(float_scratch.inner(), &dst, size, flags);
-                        Ok(())
-                    })?;
+                    });
                 }
                 I::V128(v) => {
                     let addr = self.asm.add_constant(v.to_le_bytes().as_slice());
@@ -3281,8 +3258,7 @@ impl MacroAssembler {
                         );
                         masm.asm
                             .xmm_mov_rm(vector_scratch.inner(), &dst, size, flags);
-                        Ok(())
-                    })?;
+                    });
                 }
             },
             RegImm::Reg(reg) => {
@@ -3430,8 +3406,7 @@ impl MacroAssembler {
             // excess values and zero.
             masm.asm
                 .xmm_vpmaxs_rrr(reg, scratch.inner(), reg.to_reg(), dst_lane_size);
-            Ok(())
-        })?;
+        });
         // Perform the addition between the signed conversion value (in
         // `reg2`) and the flipped excess value (in `reg`) to get the
         // unsigned value.
