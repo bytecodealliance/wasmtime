@@ -45,10 +45,10 @@
 ;;       mov     sp, x28
 ;;       stur    s31, [x28]
 ;;       ldur    x0, [x28, #0xc]
-;;       ldur    s31, [x28]
+;;       ldur    w16, [x28]
 ;;       add     x28, x28, #4
 ;;       mov     sp, x28
-;;       stur    s31, [x0]
+;;       stur    w16, [x0]
 ;;       ldur    w16, [x28]
 ;;       add     x28, x28, #4
 ;;       mov     sp, x28

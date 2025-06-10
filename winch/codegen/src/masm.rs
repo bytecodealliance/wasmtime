@@ -1,4 +1,4 @@
-use crate::abi::{self, LocalSlot, align_to, scratch};
+use crate::abi::{self, LocalSlot, align_to};
 use crate::codegen::{CodeGenContext, Emission, FuncEnv};
 use crate::isa::{
     CallingConvention,
@@ -14,6 +14,25 @@ use std::{fmt::Debug, ops::Range};
 use wasmtime_environ::PtrSize;
 
 pub(crate) use cranelift_codegen::ir::TrapCode;
+
+/// A macro to acquire a scratch register for the given Wasm value type.
+macro_rules! with_scratch {
+    ($self:expr, $val_type:expr, $callback:expr) => {
+        match $val_type {
+            wasmtime_environ::WasmValType::I32 | wasmtime_environ::WasmValType::I64 | wasmtime_environ::WasmValType::Ref(wasmtime_environ::WasmRefType {
+		heap_type: wasmtime_environ::WasmHeapType::Func,
+		..
+	    }) => $self.with_scratch::<$crate::masm::IntScratch, _>($callback),
+            wasmtime_environ::WasmValType::F32 | wasmtime_environ::WasmValType::F64 | wasmtime_environ::WasmValType::V128 => {
+                $self.with_scratch::<$crate::masm::FloatScratch, _>($callback)
+            },
+            _ => unimplemented!()
+        }
+    }
+}
+
+pub(crate) use with_scratch;
+
 
 #[derive(Eq, PartialEq)]
 pub(crate) enum DivKind {
@@ -1510,7 +1529,6 @@ pub(crate) trait MacroAssembler {
         debug_assert!(bytes % 4 == 0);
         let mut remaining = bytes;
         let word_bytes = <Self::ABI as abi::ABI>::word_bytes();
-        let scratch = scratch!(Self);
 
         let word_bytes = word_bytes as u32;
 
@@ -1520,33 +1538,39 @@ pub(crate) trait MacroAssembler {
             MemMoveDirection::LowToHigh => {
                 dst_offs = dst.as_u32() - bytes;
                 src_offs = src.as_u32() - bytes;
-                while remaining >= word_bytes {
-                    remaining -= word_bytes;
-                    dst_offs += word_bytes;
-                    src_offs += word_bytes;
+		self.with_scratch::<IntScratch, _>(|masm, scratch| {
+		    while remaining >= word_bytes {
+			remaining -= word_bytes;
+			dst_offs += word_bytes;
+			src_offs += word_bytes;
 
-                    self.load_ptr(
-                        self.address_from_sp(SPOffset::from_u32(src_offs))?,
-                        writable!(scratch),
-                    )?;
-                    self.store_ptr(scratch, self.address_from_sp(SPOffset::from_u32(dst_offs))?)?;
-                }
+			masm.load_ptr(
+                            masm.address_from_sp(SPOffset::from_u32(src_offs))?,
+                            scratch.writable(),
+			)?;
+			masm.store_ptr(scratch.inner(), masm.address_from_sp(SPOffset::from_u32(dst_offs))?)?;
+                    }
+		    Ok(())
+		})?;
             }
             MemMoveDirection::HighToLow => {
                 // Go from the end to the beginning to handle overlapping addresses.
                 src_offs = src.as_u32();
                 dst_offs = dst.as_u32();
-                while remaining >= word_bytes {
-                    self.load_ptr(
-                        self.address_from_sp(SPOffset::from_u32(src_offs))?,
-                        writable!(scratch),
-                    )?;
-                    self.store_ptr(scratch, self.address_from_sp(SPOffset::from_u32(dst_offs))?)?;
+		self.with_scratch::<IntScratch, _>(|masm, scratch| {
+		    while remaining >= word_bytes {
+			masm.load_ptr(
+			    masm.address_from_sp(SPOffset::from_u32(src_offs))?,
+			    scratch.writable(),
+			)?;
+			masm.store_ptr(scratch.inner(), masm.address_from_sp(SPOffset::from_u32(dst_offs))?)?;
 
-                    remaining -= word_bytes;
-                    src_offs -= word_bytes;
-                    dst_offs -= word_bytes;
-                }
+			remaining -= word_bytes;
+			src_offs -= word_bytes;
+			dst_offs -= word_bytes;
+                    }
+		    Ok(())
+		})?;
             }
         }
 
@@ -1561,16 +1585,19 @@ pub(crate) trait MacroAssembler {
                 src_offs += half_word;
             }
 
-            self.load(
-                self.address_from_sp(SPOffset::from_u32(src_offs))?,
-                writable!(scratch),
-                ptr_size,
-            )?;
-            self.store(
-                scratch.into(),
-                self.address_from_sp(SPOffset::from_u32(dst_offs))?,
-                ptr_size,
-            )?;
+	    self.with_scratch::<IntScratch, _>(|masm, scratch| {
+		masm.load(
+		    masm.address_from_sp(SPOffset::from_u32(src_offs))?,
+		    scratch.writable(),
+		    ptr_size,
+		)?;
+		masm.store(
+		    scratch.inner().into(),
+		    masm.address_from_sp(SPOffset::from_u32(dst_offs))?,
+		    ptr_size,
+		)?;
+		Ok(())
+	    })?;
         }
         Ok(())
     }
@@ -1871,15 +1898,17 @@ pub(crate) trait MacroAssembler {
             // Add an upper bound to this generation;
             // given a considerably large amount of slots
             // this will be inefficient.
-            let zero = scratch!(Self);
-            self.zero(writable!(zero))?;
-            let zero = RegImm::reg(zero);
+	    self.with_scratch::<IntScratch, _>(|masm, scratch| {
+		masm.zero(scratch.writable())?;
+		let zero = RegImm::reg(scratch.inner());
 
-            for step in (start..end).step_by(word_size as usize) {
-                let slot = LocalSlot::i64(step + word_size);
-                let addr: Self::Address = self.local_address(&slot)?;
-                self.store(zero, addr, OperandSize::S64)?;
-            }
+		for step in (start..end).step_by(word_size as usize) {
+                    let slot = LocalSlot::i64(step + word_size);
+                    let addr: Self::Address = masm.local_address(&slot)?;
+                    masm.store(zero, addr, OperandSize::S64)?;
+		}
+		Ok(())
+	    })?;
         }
 
         Ok(())

@@ -92,10 +92,10 @@ pub(crate) fn r11() -> Reg {
     gpr(ENC_R11)
 }
 
-#[deprecated]
-pub(crate) fn scratch() -> Reg {
-    r11()
-}
+// #[deprecated]
+// pub(crate) fn scratch() -> Reg {
+//     r11()
+// }
 
 fn fpr(enc: u8) -> Reg {
     Reg::new(PReg::new(enc as usize, RegClass::Float))

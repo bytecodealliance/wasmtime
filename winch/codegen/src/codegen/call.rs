@@ -59,16 +59,9 @@
 //! └──────────────────────────────────────────────────┘ ------> Stack pointer when emitting the call
 
 use crate::{
-    FuncEnv,
-    abi::{ABIOperand, ABISig, RetArea, scratch, vmctx},
-    codegen::{BuiltinFunction, BuiltinType, Callee, CodeGenContext, CodeGenError, Emission},
-    masm::{
-        CalleeKind, ContextArgs, MacroAssembler, MemMoveDirection, OperandSize, SPOffset,
-        VMContextLoc,
-    },
-    reg::Reg,
-    reg::writable,
-    stack::Val,
+    abi::{vmctx, ABIOperand, ABISig, RetArea}, codegen::{BuiltinFunction, BuiltinType, Callee, CodeGenContext, CodeGenError, Emission}, masm::{
+	with_scratch, CalleeKind, ContextArgs, IntScratch, MacroAssembler, MemMoveDirection, OperandSize, SPOffset, VMContextLoc
+    }, reg::{writable, Reg}, stack::Val, FuncEnv
 };
 use anyhow::{Result, ensure};
 use wasmtime_environ::{FuncIndex, PtrSize, VMOffsets};
@@ -315,9 +308,11 @@ impl FnCall {
                 &ABIOperand::Stack { ty, offset, .. } => {
                     let addr = masm.address_at_sp(SPOffset::from_u32(offset))?;
                     let size: OperandSize = ty.try_into()?;
-                    let scratch = scratch!(M, &ty);
-                    context.move_val_to_reg(val, scratch, masm)?;
-                    masm.store(scratch.into(), addr, size)?;
+                    with_scratch!(masm, &ty, |masm, scratch| {
+			context.move_val_to_reg(val, scratch.inner(), masm)?;
+			masm.store(scratch.inner().into(), addr, size)?;
+			Ok(())
+		    })?;
                 }
             }
         }
@@ -335,9 +330,11 @@ impl FnCall {
                     let slot = masm.address_at_sp(SPOffset::from_u32(offset))?;
                     // Don't rely on `ABI::scratch_for` as we always use
                     // an int register as the return pointer.
-                    let scratch = scratch!(M);
-                    masm.compute_addr(addr, writable!(scratch), ty.try_into()?)?;
-                    masm.store(scratch.into(), slot, ty.try_into()?)?;
+		    masm.with_scratch::<IntScratch, _>(|masm, scratch| {
+			masm.compute_addr(addr, scratch.writable(), ty.try_into()?)?;
+			masm.store(scratch.inner().into(), slot, ty.try_into()?)?;
+			Ok(())
+		    })?;
                 }
             }
         }

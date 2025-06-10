@@ -424,11 +424,8 @@ impl WastTest {
         if config.compiler == Compiler::Winch {
             if cfg!(target_arch = "aarch64") {
                 let unsupported = [
-                    // Fails intermittently
-                    "misc_testsuite/table_copy_on_imported_tables.wast",
                     // Segfault
                     "spec_testsuite/conversions.wast",
-                    "spec_testsuite/func.wast",
                     "spec_testsuite/float_exprs.wast",
                     "spec_testsuite/int_exprs.wast",
                     "spec_testsuite/left-to-right.wast",
@@ -532,19 +529,8 @@ impl WastTest {
                     "misc_testsuite/winch/table_set.wast",
                     "misc_testsuite/winch/table_fill.wast",
                     // Known bugs that don't cause segfaults.
-                    "spec_testsuite/call_indirect.wast",
-                    "spec_testsuite/f32_cmp.wast",
-                    "spec_testsuite/f64_cmp.wast",
-                    "spec_testsuite/func_ptrs.wast",
-                    "spec_testsuite/if.wast",
                     "spec_testsuite/imports.wast",
-                    "spec_testsuite/local_set.wast",
-                    "spec_testsuite/local_tee.wast",
-                    "spec_testsuite/loop.wast",
-                    "spec_testsuite/table_copy.wast",
-                    "spec_testsuite/table_init.wast",
                     "misc_testsuite/winch/table_grow.wast",
-                    "misc_testsuite/call_indirect.wast",
                 ];
 
                 if unsupported.iter().any(|part| self.path.ends_with(part)) {

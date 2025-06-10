@@ -4,7 +4,7 @@ use crate::abi::{ABI, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns
 use crate::codegen::CodeGenError;
 use crate::isa::{CallingConvention, reg::Reg};
 use anyhow::{Result, bail};
-use wasmtime_environ::{WasmHeapType, WasmRefType, WasmValType};
+use wasmtime_environ::{WasmHeapType, WasmValType};
 
 #[derive(Default)]
 pub(crate) struct Aarch64ABI;
@@ -120,20 +120,20 @@ impl ABI for Aarch64ABI {
         })
     }
 
-    fn scratch_for(ty: &WasmValType) -> Reg {
-        match ty {
-            #[expect(deprecated, reason = "Pending migration to Masm::with_scratch")]
-            WasmValType::I32
-            | WasmValType::I64
-            | WasmValType::Ref(WasmRefType {
-                heap_type: WasmHeapType::Func,
-                ..
-            }) => regs::scratch(),
-            #[expect(deprecated, reason = "Pending migration to Masm::with_scratch")]
-            WasmValType::F32 | WasmValType::F64 | WasmValType::V128 => regs::float_scratch(),
-            _ => unimplemented!(),
-        }
-    }
+    // fn scratch_for(ty: &WasmValType) -> Reg {
+    //     match ty {
+    //         #[expect(deprecated, reason = "Pending migration to Masm::with_scratch")]
+    //         WasmValType::I32
+    //         | WasmValType::I64
+    //         | WasmValType::Ref(WasmRefType {
+    //             heap_type: WasmHeapType::Func,
+    //             ..
+    //         }) => regs::scratch(),
+    //         #[expect(deprecated, reason = "Pending migration to Masm::with_scratch")]
+    //         WasmValType::F32 | WasmValType::F64 | WasmValType::V128 => regs::float_scratch(),
+    //         _ => unimplemented!(),
+    //     }
+    // }
 
     fn vmctx_reg() -> Reg {
         regs::xreg(9)

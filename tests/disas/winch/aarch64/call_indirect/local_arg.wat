@@ -74,8 +74,8 @@
 ;;       b.hs    #0x1c4
 ;;   d0: mov     sp, x28
 ;;       mov     x16, x1
-;;       mov     x16, #8
-;;       mul     x16, x16, x16
+;;       mov     x17, #8
+;;       mul     x16, x16, x17
 ;;       ldur    x2, [x2, #0x38]
 ;;       mov     x4, x2
 ;;       add     x2, x2, x16, uxtx
