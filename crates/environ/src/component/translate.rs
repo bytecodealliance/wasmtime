@@ -1,13 +1,13 @@
-use crate::ScopeVec;
 use crate::component::*;
 use crate::prelude::*;
+use crate::ScopeVec;
 use crate::{
     EngineOrModuleTypeIndex, EntityIndex, ModuleEnvironment, ModuleInternedTypeIndex,
     ModuleTranslation, ModuleTypesBuilder, PrimaryMap, TagIndex, Tunables, TypeConvert,
     WasmHeapType, WasmResult, WasmValType,
 };
 use anyhow::anyhow;
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::mem;
@@ -767,13 +767,13 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::StreamCancelWrite { ty, func, async_ }
                         }
-                        wasmparser::CanonicalFunction::StreamCloseReadable { ty } => {
+                        wasmparser::CanonicalFunction::StreamDropReadable { ty } => {
                             let ty = types.component_defined_type_at(ty);
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::StreamCloseReadable { ty, func }
                         }
-                        wasmparser::CanonicalFunction::StreamCloseWritable { ty } => {
+                        wasmparser::CanonicalFunction::StreamDropWritable { ty } => {
                             let ty = types.component_defined_type_at(ty);
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
@@ -811,13 +811,13 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::FutureCancelWrite { ty, func, async_ }
                         }
-                        wasmparser::CanonicalFunction::FutureCloseReadable { ty } => {
+                        wasmparser::CanonicalFunction::FutureDropReadable { ty } => {
                             let ty = types.component_defined_type_at(ty);
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
                             LocalInitializer::FutureCloseReadable { ty, func }
                         }
-                        wasmparser::CanonicalFunction::FutureCloseWritable { ty } => {
+                        wasmparser::CanonicalFunction::FutureDropWritable { ty } => {
                             let ty = types.component_defined_type_at(ty);
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
