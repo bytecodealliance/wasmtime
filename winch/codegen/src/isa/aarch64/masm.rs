@@ -1074,8 +1074,10 @@ impl Masm for MacroAssembler {
     }
 
     fn unreachable(&mut self) -> Result<()> {
-        self.asm.udf(wasmtime_cranelift::TRAP_UNREACHABLE);
-        Ok(())
+        self.with_aligned_sp(|masm| {
+            masm.asm.udf(wasmtime_cranelift::TRAP_UNREACHABLE);
+            Ok(())
+        })
     }
 
     fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) -> Result<()> {
