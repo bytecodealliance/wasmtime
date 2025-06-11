@@ -489,9 +489,17 @@ impl Masm for MacroAssembler {
         dst: WritableReg,
         src: Reg,
         cc: IntCmpKind,
-        _size: OperandSize,
+        size: OperandSize,
     ) -> Result<()> {
-        self.asm.csel(src, dst.to_reg(), dst, Cond::from(cc));
+        match (src.class(), dst.to_reg().class()) {
+            (RegClass::Int, RegClass::Int) => self.asm.csel(src, dst.to_reg(), dst, Cond::from(cc)),
+            (RegClass::Float, RegClass::Float) => {
+                self.asm
+                    .fpu_csel(src, dst.to_reg(), dst, Cond::from(cc), size)
+            }
+            _ => return Err(anyhow!(CodeGenError::invalid_operand_combination())),
+        }
+
         Ok(())
     }
 
@@ -1066,8 +1074,10 @@ impl Masm for MacroAssembler {
     }
 
     fn unreachable(&mut self) -> Result<()> {
-        self.asm.udf(wasmtime_cranelift::TRAP_UNREACHABLE);
-        Ok(())
+        self.with_aligned_sp(|masm| {
+            masm.asm.udf(wasmtime_cranelift::TRAP_UNREACHABLE);
+            Ok(())
+        })
     }
 
     fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) -> Result<()> {

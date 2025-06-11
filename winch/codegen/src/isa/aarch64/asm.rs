@@ -840,6 +840,30 @@ impl Assembler {
         });
     }
 
+    /// If the condition is true, `csel` writes rn to rd. If the
+    /// condition is false, it writes rm to rd
+    pub fn fpu_csel(&mut self, rn: Reg, rm: Reg, rd: WritableReg, cond: Cond, size: OperandSize) {
+        match size {
+            OperandSize::S32 => {
+                self.emit(Inst::FpuCSel32 {
+                    rd: rd.map(Into::into),
+                    rn: rn.into(),
+                    rm: rm.into(),
+                    cond,
+                });
+            }
+            OperandSize::S64 => {
+                self.emit(Inst::FpuCSel64 {
+                    rd: rd.map(Into::into),
+                    rn: rn.into(),
+                    rm: rm.into(),
+                    cond,
+                });
+            }
+            _ => todo!(),
+        }
+    }
+
     /// Population count per byte.
     pub fn cnt(&mut self, rd: WritableReg) {
         self.emit(Inst::VecMisc {
