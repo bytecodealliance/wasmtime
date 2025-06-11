@@ -51,11 +51,11 @@ block0:
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x10000, %rsp
-;   movl    %esp, 0(%rsp)
+;   movl %esp, (%rsp)
 ;   subq $0x10000, %rsp
-;   movl    %esp, 0(%rsp)
+;   movl %esp, (%rsp)
 ;   subq $0x10000, %rsp
-;   movl    %esp, 0(%rsp)
+;   movl %esp, (%rsp)
 ;   addq $0x30000, %rsp
 ;   subq $0x30000, %rsp
 ; block0:

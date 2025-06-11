@@ -45,7 +45,7 @@ block0:
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x10, %rsp
-;   movq    %rdi, 0(%rsp)
+;   movq %rdi, (%rsp)
 ; block0:
 ;   movq    %r15, %rdi
 ;   lea     1(%rdi), %rdi

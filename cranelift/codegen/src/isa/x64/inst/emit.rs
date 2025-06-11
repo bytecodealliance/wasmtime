@@ -288,32 +288,6 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::MovImmM { size, simm32, dst } => {
-            let dst = &dst.finalize(state.frame_layout(), sink).clone();
-            let default_rex = RexFlags::clear_w();
-            let default_opcode = 0xC7;
-            let bytes = size.to_bytes();
-            let prefix = LegacyPrefixes::None;
-
-            let (opcode, rex, size, prefix) = match *size {
-                // In the 8-bit case, we don't need to enforce REX flags via
-                // `always_emit_if_8bit_needed()` since the destination
-                // operand is a memory operand, not a possibly 8-bit register.
-                OperandSize::Size8 => (0xC6, default_rex, bytes, prefix),
-                OperandSize::Size16 => (0xC7, default_rex, bytes, LegacyPrefixes::_66),
-                OperandSize::Size64 => (default_opcode, RexFlags::from(*size), bytes, prefix),
-
-                _ => (default_opcode, default_rex, bytes, prefix),
-            };
-
-            // 8-bit C6 /0 ib
-            // 16-bit 0x66 C7 /0 iw
-            // 32-bit C7 /0 id
-            // 64-bit REX.W C7 /0 id
-            emit_std_enc_mem(sink, prefix, opcode, 1, /*subopcode*/ 0, dst, rex, 0);
-            emit_simm(sink, size, *simm32 as u32);
-        }
-
         Inst::MovRR { size, src, dst } => {
             let src = src.to_reg();
             let dst = dst.to_reg().to_reg();
@@ -427,32 +401,6 @@ pub(crate) fn emit(
                     emit_std_reg_mem(sink, LegacyPrefixes::None, 0x8D, 1, dst, &amode, flags, 0);
                 }
             };
-        }
-
-        Inst::MovRM { size, src, dst } => {
-            let src = src.to_reg();
-            let dst = &dst.finalize(state.frame_layout(), sink).clone();
-
-            let prefix = match size {
-                OperandSize::Size16 => LegacyPrefixes::_66,
-                _ => LegacyPrefixes::None,
-            };
-
-            let opcode = match size {
-                OperandSize::Size8 => 0x88,
-                _ => 0x89,
-            };
-
-            // This is one of the few places where the presence of a
-            // redundant REX prefix changes the meaning of the
-            // instruction.
-            let rex = RexFlags::from((*size, src));
-
-            //  8-bit: MOV r8, r/m8 is (REX.W==0) 88 /r
-            // 16-bit: MOV r16, r/m16 is 66 (REX.W==0) 89 /r
-            // 32-bit: MOV r32, r/m32 is (REX.W==0) 89 /r
-            // 64-bit: MOV r64, r/m64 is (REX.W==1) 89 /r
-            emit_std_reg_mem(sink, prefix, opcode, 1, src, dst, rex, 0);
         }
 
         Inst::CmpRmiR {
@@ -664,12 +612,12 @@ pub(crate) fn emit(
             // Probe the stack! We don't use Inst::gen_store_stack here because we need a predictable
             // instruction size.
             // mov  [rsp], rsp
-            let inst = Inst::mov_r_m(
-                OperandSize::Size32, // Use Size32 since it saves us one byte
-                regs::rsp(),
-                SyntheticAmode::Real(Amode::imm_reg(0, regs::rsp())),
-            );
-            inst.emit(sink, info, state);
+            let inst = asm::inst::movl_mr::new(
+                Amode::imm_reg(0, regs::rsp()),
+                Gpr::unwrap_new(regs::rsp()),
+            )
+            .into();
+            Inst::External { inst }.emit(sink, info, state);
 
             // Compare and jump if we are not done yet
             // cmp  rsp, tmp_reg
@@ -916,11 +864,12 @@ pub(crate) fn emit(
                 let inst = asm::inst::movq_rm::new(tmp1, addr).into();
                 Inst::External { inst }.emit(sink, info, state);
 
-                let inst = Inst::MovRM {
-                    size: OperandSize::Size64,
-                    src: Gpr::new(reg).unwrap(),
-                    dst: Amode::imm_reg(offset, **store_context_ptr).into(),
-                };
+                let inst = asm::inst::movq_mr::new(
+                    Amode::imm_reg(offset, **store_context_ptr),
+                    Gpr::new(reg).unwrap(),
+                )
+                .into();
+                let inst = Inst::External { inst };
                 emit(&inst, sink, info, state);
 
                 let dst = Writable::from_reg(reg);
@@ -947,11 +896,12 @@ pub(crate) fn emit(
             let inst = Inst::lea(amode, tmp2.map(Reg::from));
             inst.emit(sink, info, state);
 
-            let inst = Inst::MovRM {
-                size: OperandSize::Size64,
-                src: tmp2.to_reg(),
-                dst: Amode::imm_reg(pc_offset, **store_context_ptr).into(),
-            };
+            let inst = asm::inst::movq_mr::new(
+                Amode::imm_reg(pc_offset, **store_context_ptr),
+                tmp2.to_reg(),
+            )
+            .into();
+            let inst = Inst::External { inst };
             emit(&inst, sink, info, state);
 
             let inst = Inst::JmpUnknown {
@@ -3298,12 +3248,12 @@ fn emit_return_call_common_sequence<T>(
         let addr = Amode::imm_reg(0, regs::rsp());
         let inst = asm::inst::movq_rm::new(tmp, addr).into();
         Inst::External { inst }.emit(sink, info, state);
-        Inst::mov_r_m(
-            OperandSize::Size64,
-            tmp.to_reg(),
+        let inst = asm::inst::movq_mr::new(
             Amode::imm_reg(i32::try_from(incoming_args_diff).unwrap(), regs::rsp()),
+            Gpr::unwrap_new(tmp.to_reg()),
         )
-        .emit(sink, info, state);
+        .into();
+        Inst::External { inst }.emit(sink, info, state);
 
         // Increment the stack pointer to shrink the argument area for the new
         // call.

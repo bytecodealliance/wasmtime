@@ -971,6 +971,10 @@ macro_rules! isle_common_prelude_methods {
             i8::try_from(val).ok()
         }
 
+        fn i8_as_u8(&mut self, val: i8) -> u8 {
+            val as u8
+        }
+
         fn i16_as_u16(&mut self, val: i16) -> u16 {
             val as u16
         }

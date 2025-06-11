@@ -318,11 +318,11 @@ block0(v0: i128, v1: i128):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x30, %rsp
-;   movq    %rbx, 0(%rsp)
-;   movq    %r12, 8(%rsp)
-;   movq    %r13, 16(%rsp)
-;   movq    %r14, 24(%rsp)
-;   movq    %r15, 32(%rsp)
+;   movq %rbx, (%rsp)
+;   movq %r12, 8(%rsp)
+;   movq %r13, 0x10(%rsp)
+;   movq %r14, 0x18(%rsp)
+;   movq %r15, 0x20(%rsp)
 ; block0:
 ;   movq    %rdi, %rax
 ;   xorq %rdx, %rax
@@ -1048,8 +1048,8 @@ block0(v0: i128, v1: i64):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdi, 0(%rdx)
-;   movq    %rsi, 8(%rdx)
+;   movq %rdi, (%rdx)
+;   movq %rsi, 8(%rdx)
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -1173,9 +1173,9 @@ block0(v0: i128, v1: i128, v2: i64, v3: i128, v4: i128, v5: i128):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x20, %rsp
-;   movq    %r13, 0(%rsp)
-;   movq    %r14, 8(%rsp)
-;   movq    %r15, 16(%rsp)
+;   movq %r13, (%rsp)
+;   movq %r14, 8(%rsp)
+;   movq %r15, 0x10(%rsp)
 ; block0:
 ;   movq    %rcx, %r13
 ;   movq    %rdx, %r15
@@ -1248,14 +1248,14 @@ block0(v0: i128):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %rdx, 0(%rdi)
-;   movq    %rsi, 8(%rdi)
-;   movq    %rdx, 16(%rdi)
-;   movq    %rsi, 24(%rdi)
-;   movq    %rsi, 32(%rdi)
-;   movq    %rdx, 40(%rdi)
-;   movq    %rsi, 48(%rdi)
-;   movq    %rdx, 56(%rdi)
+;   movq %rdx, (%rdi)
+;   movq %rsi, 8(%rdi)
+;   movq %rdx, 0x10(%rdi)
+;   movq %rsi, 0x18(%rdi)
+;   movq %rsi, 0x20(%rdi)
+;   movq %rdx, 0x28(%rdi)
+;   movq %rsi, 0x30(%rdi)
+;   movq %rdx, 0x38(%rdi)
 ;   movq    %rsi, %rcx
 ;   movq    %rcx, %rax
 ;   movq    %rbp, %rsp
@@ -1292,15 +1292,15 @@ block0(v0: i128, v1: i128):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x20, %rsp
-;   movq    %r12, 16(%rsp)
-;   movq    %r13, 24(%rsp)
+;   movq %r12, 0x10(%rsp)
+;   movq %r13, 0x18(%rsp)
 ; block0:
 ;   movq    %rdi, %r13
 ;   lea     0(%rsp), %rdi
 ;   load_ext_name %g+0, %r9
 ;   call    *%r9
 ;   movq    %r13, %rdi
-;   movq    %r12, 0(%rdi)
+;   movq %r12, (%rdi)
 ;   movq 0x10(%rsp), %r12
 ;   movq 0x18(%rsp), %r13
 ;   addq $0x20, %rsp
