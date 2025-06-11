@@ -147,6 +147,8 @@ impl Fiber {
             }
         }
     }
+
+    pub(crate) unsafe fn drop<A, B, C>(&mut self) {}
 }
 
 impl Drop for Fiber {
@@ -168,6 +170,12 @@ impl Suspend {
             self.take_resume::<A, B, C>()
         }
     }
+
+    pub(crate) fn exit<A, B, C>(&mut self, result: RunResult<A, B, C>) {
+        self.switch(result);
+        unreachable!()
+    }
+
     unsafe fn take_resume<A, B, C>(&self) -> A {
         unsafe {
             match (*self.result_location::<A, B, C>()).replace(RunResult::Executing) {
