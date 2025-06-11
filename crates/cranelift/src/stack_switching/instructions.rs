@@ -378,24 +378,16 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
             values: &[ir::Value],
-            allow_smaller: bool,
         ) {
             let store_count = builder
                 .ins()
                 .iconst(I32, i64::try_from(values.len()).unwrap());
 
-            // TODO(posborne): allow_smaller only used in debug_assert!
-            if cfg!(debug_assertions) {
-                for val in values {
-                    let ty = builder.func.dfg.value_type(*val);
-                    let size = usize::try_from(ty.bytes()).unwrap();
-                    if allow_smaller {
-                        debug_assert!(size <= std::mem::size_of::<T>());
-                    } else {
-                        debug_assert!(size == std::mem::size_of::<T>());
-                    }
-                }
-            }
+            debug_assert!(values.iter().all(|val| {
+                let ty = builder.func.dfg.value_type(*val);
+                let size = usize::try_from(ty.bytes()).unwrap();
+                size <= std::mem::size_of::<T>()
+            }));
 
             let memflags = ir::MemFlags::trusted();
 
@@ -1387,7 +1379,7 @@ pub(crate) fn translate_resume<'a>(
                 .collect();
 
             // Store all tag addresess in the handler list.
-            handler_list.store_data_entries(env, builder, &all_tag_addresses, false);
+            handler_list.store_data_entries(env, builder, &all_tag_addresses);
 
             // To enable distinguishing switch and suspend handlers when searching the handler list:
             // Store at which index the switch handlers start.
@@ -1633,7 +1625,7 @@ pub(crate) fn translate_suspend<'a>(
     }
 
     if suspend_args.len() > 0 {
-        values.store_data_entries(env, builder, suspend_args, true)
+        values.store_data_entries(env, builder, suspend_args)
     }
 
     // Set current continuation to suspended and break up handler chain.
