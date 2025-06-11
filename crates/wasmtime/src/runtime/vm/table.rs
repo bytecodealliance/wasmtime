@@ -957,25 +957,19 @@ impl Table {
             },
             Table::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => {
                 VMTableDefinition {
-                    base: NonNull::<[FuncTableElem]>::from(&mut elements[..])
-                        .cast()
-                        .into(),
+                    base: NonNull::new(elements.as_mut_ptr()).unwrap().cast().into(),
                     current_elements: elements.len(),
                 }
             }
             Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => {
                 VMTableDefinition {
-                    base: NonNull::<[Option<VMGcRef>]>::from(&mut elements[..])
-                        .cast()
-                        .into(),
+                    base: NonNull::new(elements.as_mut_ptr()).unwrap().cast().into(),
                     current_elements: elements.len(),
                 }
             }
             Table::Dynamic(DynamicTable::Cont(DynamicContTable { elements, .. })) => {
                 VMTableDefinition {
-                    base: NonNull::<[Option<VMContObj>]>::from(&mut elements[..])
-                        .cast()
-                        .into(),
+                    base: NonNull::new(elements.as_mut_ptr()).unwrap().cast().into(),
                     current_elements: elements.len(),
                 }
             }

@@ -177,6 +177,9 @@ fn pulley_provenance_test() -> Result<()> {
     instance
         .get_typed_func::<(), ()>(&mut store, "table-intrinsics")?
         .call(&mut store, ())?;
+    instance
+        .get_typed_func::<(), ()>(&mut store, "table-intrinsics2")?
+        .call(&mut store, ())?;
 
     let funcref = Func::wrap(&mut store, move |mut caller: Caller<'_, ()>| {
         let func = instance.get_typed_func::<(), (i32, i32, i32)>(&mut caller, "call-wasm")?;
