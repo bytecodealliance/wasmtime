@@ -9,7 +9,7 @@ mod encoding;
 mod features;
 pub mod format;
 
-pub use custom::{Custom, CustomOperation};
+pub use custom::{Custom, Customization};
 pub use encoding::{Encoding, ModRmKind, OpcodeMod};
 pub use encoding::{
     Group1Prefix, Group2Prefix, Group3Prefix, Group4Prefix, Opcodes, Prefixes, Rex, rex,
