@@ -10,7 +10,6 @@
 //      _padding: u32, // (On 64-bit systems)
 //      vm_store_context: *const VMStoreContext,
 //      builtin_functions: *mut VMBuiltinFunctionsArray,
-//      callee: *mut VMFunctionBody,
 //      epoch_ptr: *mut AtomicU64,
 //      gc_heap_data: *mut T, // Collector-specific pointer
 //      type_ids: *const VMSharedTypeIndex,
@@ -396,17 +395,11 @@ pub trait PtrSize {
         self.vmctx_store_context() + self.size()
     }
 
-    /// Return the offset to the `callee` member in this `VMContext`.
-    #[inline]
-    fn vmctx_callee(&self) -> u8 {
-        self.vmctx_builtin_functions() + self.size()
-    }
-
     /// Return the offset to the `*const AtomicU64` epoch-counter
     /// pointer.
     #[inline]
     fn vmctx_epoch_ptr(&self) -> u8 {
-        self.vmctx_callee() + self.size()
+        self.vmctx_builtin_functions() + self.size()
     }
 
     /// Return the offset to the `*mut T` collector-specific data.

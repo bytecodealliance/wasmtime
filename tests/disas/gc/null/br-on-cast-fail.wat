@@ -55,7 +55,7 @@
 ;; @002e                               v16 = iconst.i64 4
 ;; @002e                               v17 = iadd v15, v16  ; v16 = 4
 ;; @002e                               v18 = load.i32 notrap aligned readonly v17
-;; @002e                               v11 = load.i64 notrap aligned readonly can_move v0+48
+;; @002e                               v11 = load.i64 notrap aligned readonly can_move v0+40
 ;; @002e                               v12 = load.i32 notrap aligned readonly can_move v11
 ;; @002e                               v19 = icmp eq v18, v12
 ;; @002e                               v20 = uextend.i32 v19
@@ -73,14 +73,14 @@
 ;; @002e                               brif v24, block8, block2
 ;;
 ;;                                 block8:
-;; @0034                               v26 = load.i64 notrap aligned readonly can_move v0+56
-;; @0034                               v27 = load.i64 notrap aligned readonly can_move v0+72
+;; @0034                               v26 = load.i64 notrap aligned readonly can_move v0+48
+;; @0034                               v27 = load.i64 notrap aligned readonly can_move v0+64
 ;; @0034                               call_indirect sig1, v26(v27, v0)
 ;; @0036                               return
 ;;
 ;;                                 block2:
-;; @0038                               v29 = load.i64 notrap aligned readonly can_move v0+80
-;; @0038                               v30 = load.i64 notrap aligned readonly can_move v0+96
+;; @0038                               v29 = load.i64 notrap aligned readonly can_move v0+72
+;; @0038                               v30 = load.i64 notrap aligned readonly can_move v0+88
 ;; @0038                               call_indirect sig2, v29(v30, v0)
 ;; @003a                               return
 ;; }

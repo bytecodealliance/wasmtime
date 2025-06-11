@@ -14,8 +14,8 @@ use crate::runtime::vm::vmcontext::{
 };
 use crate::runtime::vm::{
     ExportFunction, ExportGlobal, ExportGlobalKind, ExportMemory, ExportTable, ExportTag, GcStore,
-    Imports, ModuleRuntimeInfo, SendSyncPtr, VMFunctionBody, VMGcRef, VMStore, VMStoreRawPtr,
-    VmPtr, VmSafe, WasmFault,
+    Imports, ModuleRuntimeInfo, SendSyncPtr, VMGcRef, VMStore, VMStoreRawPtr, VmPtr, VmSafe,
+    WasmFault,
 };
 use crate::store::{InstanceId, StoreOpaque};
 use alloc::sync::Arc;
@@ -701,12 +701,6 @@ impl Instance {
         } else {
             *self.gc_heap_data() = None;
         }
-    }
-
-    pub(crate) unsafe fn set_callee(self: Pin<&mut Self>, callee: Option<NonNull<VMFunctionBody>>) {
-        let callee = callee.map(|p| VmPtr::from(p));
-        let offset = self.offsets().ptr.vmctx_callee();
-        *self.vmctx_plus_offset_mut(offset) = callee;
     }
 
     /// Return a reference to the vmctx used by compiled wasm code.
@@ -1478,7 +1472,6 @@ impl Instance {
 
         self.vmctx_plus_offset_raw::<u32>(offsets.ptr.vmctx_magic())
             .write(VMCONTEXT_MAGIC);
-        self.as_mut().set_callee(None);
         self.as_mut().set_store(store.as_raw());
 
         // Initialize shared types

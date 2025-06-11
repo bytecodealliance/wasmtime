@@ -23,7 +23,7 @@
 ;;       cmpw    $0, %cx
 ;;       jne     0x6a
 ;;   48: movl    $0, %ecx
-;;       movq    0x38(%r14), %r11
+;;       movq    0x30(%r14), %r11
 ;;       movq    (%r11), %rdx
 ;;       addq    %rcx, %rdx
 ;;       lock xaddw %ax, (%rdx)

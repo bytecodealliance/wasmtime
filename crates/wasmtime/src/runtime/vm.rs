@@ -119,10 +119,9 @@ pub use crate::runtime::vm::traphandlers::*;
 #[cfg(feature = "component-model")]
 pub use crate::runtime::vm::vmcontext::VMTableDefinition;
 pub use crate::runtime::vm::vmcontext::{
-    VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionBody,
-    VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMMemoryDefinition,
-    VMMemoryImport, VMOpaqueContext, VMStoreContext, VMTableImport, VMTagImport,
-    VMWasmCallFunction, ValRaw,
+    VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionImport,
+    VMGlobalDefinition, VMGlobalImport, VMGlobalKind, VMMemoryDefinition, VMMemoryImport,
+    VMOpaqueContext, VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
 
 pub use send_sync_ptr::SendSyncPtr;

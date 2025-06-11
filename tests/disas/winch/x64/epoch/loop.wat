@@ -18,7 +18,7 @@
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
-;;       movq    0x20(%r14), %rdx
+;;       movq    0x18(%r14), %rdx
 ;;       movq    (%rdx), %rdx
 ;;       movq    8(%r14), %rcx
 ;;       movq    8(%rcx), %rcx
@@ -27,7 +27,7 @@
 ;;   47: movq    %r14, %rdi
 ;;       callq   0x157
 ;;       movq    8(%rsp), %r14
-;;       movq    0x20(%r14), %rdx
+;;       movq    0x18(%r14), %rdx
 ;;       movq    (%rdx), %rdx
 ;;       movq    8(%r14), %rcx
 ;;       movq    8(%rcx), %rcx

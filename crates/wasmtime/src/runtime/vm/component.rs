@@ -8,11 +8,11 @@
 
 use crate::component::{Component, Instance, InstancePre, ResourceType, RuntimeImport};
 use crate::runtime::component::ComponentInstanceId;
+use crate::runtime::vm::vmcontext::VMFunctionBody;
 use crate::runtime::vm::{
     Export, ExportFunction, ExportGlobal, ExportGlobalKind, SendSyncPtr, VMArrayCallFunction,
-    VMContext, VMFuncRef, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition, VMOpaqueContext,
-    VMStore, VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction, ValRaw, VmPtr,
-    VmSafe,
+    VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMOpaqueContext, VMStore,
+    VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction, ValRaw, VmPtr, VmSafe,
 };
 use crate::store::{InstanceId, StoreOpaque};
 use alloc::alloc::Layout;

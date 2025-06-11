@@ -34,8 +34,8 @@
 ;;       movq    (%rax), %r11
 ;;       addq    $1, %r11
 ;;       movq    %r11, (%rax)
-;;       movq    0x48(%r14), %rcx
-;;       movq    0x38(%r14), %rax
+;;       movq    0x40(%r14), %rcx
+;;       movq    0x30(%r14), %rax
 ;;       movq    %rcx, %rdi
 ;;       movq    %r14, %rsi
 ;;       callq   *%rax
