@@ -2,7 +2,7 @@ use cranelift_codegen::ir;
 use cranelift_codegen::ir::InstBuilder;
 use cranelift_codegen::ir::types::I64;
 
-/// The Cranelfift type used to represent all of the following:
+/// The Cranelift type used to represent all of the following:
 /// - wasm values of type `(ref null $ct)` and `(ref $ct)`
 /// - equivalently: runtime values of type `Option<VMContObj>` and `VMContObj`
 /// Note that a `VMContObj` is a fat pointer
