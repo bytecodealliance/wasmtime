@@ -4,9 +4,7 @@ use crate::component::types;
 use crate::prelude::*;
 #[cfg(feature = "std")]
 use crate::runtime::vm::open_file_for_mmap;
-use crate::runtime::vm::{
-    CompiledModuleId, VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMWasmCallFunction,
-};
+use crate::runtime::vm::{CompiledModuleId, VMArrayCallFunction, VMFuncRef, VMWasmCallFunction};
 use crate::{
     Engine, Module, ResourcesRequired, code::CodeObject, code_memory::CodeMemory,
     type_registry::TypeCollection,
@@ -502,10 +500,10 @@ impl Component {
         }
     }
 
-    fn func(&self, loc: &FunctionLoc) -> NonNull<VMFunctionBody> {
+    fn func(&self, loc: &FunctionLoc) -> NonNull<u8> {
         let text = self.text();
         let trampoline = &text[loc.start as usize..][..loc.length as usize];
-        NonNull::new(trampoline.as_ptr() as *mut VMFunctionBody).unwrap()
+        NonNull::from(trampoline).cast()
     }
 
     pub(crate) fn code_object(&self) -> &Arc<CodeObject> {
