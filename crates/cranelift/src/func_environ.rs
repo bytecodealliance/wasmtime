@@ -18,7 +18,7 @@ use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
 use cranelift_frontend::Variable;
 use cranelift_frontend::{FuncInstBuilder, FunctionBuilder};
-use smallvec::SmallVec;
+use smallvec::{SmallVec, smallvec};
 use std::mem;
 use wasmparser::{Operator, WasmFeatures};
 use wasmtime_environ::{
@@ -1838,7 +1838,7 @@ impl FuncEnvironment<'_> {
         let index_type = table.idx_type;
         let delta = self.cast_index_to_i64(&mut builder.cursor(), delta, index_type);
         let table_index_arg = builder.ins().iconst(I32, table_index.as_u32() as i64);
-        let mut args = vec![vmctx, table_index_arg, delta];
+        let mut args: SmallVec<[_; 6]> = smallvec![vmctx, table_index_arg, delta];
         let grow = if ty.is_vmgcref_type() {
             args.push(init_value);
             gc::builtins::table_grow_gc_ref(self, &mut builder.cursor().func)?
@@ -1983,7 +1983,7 @@ impl FuncEnvironment<'_> {
         let table_index_arg = builder.ins().iconst(I32, table_index.as_u32() as i64);
         let dst = self.cast_index_to_i64(&mut builder.cursor(), dst, index_type);
         let len = self.cast_index_to_i64(&mut builder.cursor(), len, index_type);
-        let mut args = vec![vmctx, table_index_arg, dst];
+        let mut args: SmallVec<[_; 6]> = smallvec![vmctx, table_index_arg, dst];
         let libcall = if ty.is_vmgcref_type() {
             args.push(val);
             gc::builtins::table_fill_gc_ref(self, &mut builder.cursor().func)?

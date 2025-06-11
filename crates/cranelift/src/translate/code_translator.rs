@@ -88,7 +88,7 @@ use cranelift_codegen::ir::{BlockArg, types::*};
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use itertools::Itertools;
-use smallvec::SmallVec;
+use smallvec::{SmallVec, ToSmallVec};
 use std::collections::{HashMap, hash_map};
 use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
@@ -2900,8 +2900,8 @@ pub fn translate_operator(
 
         Operator::ContNew { cont_type_index } => {
             let cont_type_index = TypeIndex::from_u32(*cont_type_index);
-            let arg_types = environ.continuation_arguments(cont_type_index).to_vec();
-            let result_types = environ.continuation_returns(cont_type_index).to_vec();
+            let arg_types: SmallVec<[_; 8]> = environ.continuation_arguments(cont_type_index).to_smallvec();
+            let result_types: SmallVec<[_; 8]> = environ.continuation_returns(cont_type_index).to_smallvec();
             let r = state.pop1();
             let contobj =
                 environ.translate_cont_new(builder, state, r, &arg_types, &result_types)?;
@@ -2941,7 +2941,7 @@ pub fn translate_operator(
         Operator::Suspend { tag_index } => {
             let tag_index = TagIndex::from_u32(*tag_index);
             let param_types = environ.tag_params(tag_index).to_vec();
-            let return_types: Vec<_> = environ
+            let return_types: SmallVec<[_; 8]> = environ
                 .tag_returns(tag_index)
                 .iter()
                 .map(|ty| crate::value_type(environ.isa(), *ty))
@@ -3002,9 +3002,9 @@ pub fn translate_operator(
             tag_index,
         } => {
             // Arguments of the continuation we are going to switch to
-            let continuation_argument_types = environ
+            let continuation_argument_types: SmallVec<[_; 8]> = environ
                 .continuation_arguments(TypeIndex::from_u32(*cont_type_index))
-                .to_vec();
+                .to_smallvec();
             // Arity includes the continuation argument
             let arity = continuation_argument_types.len();
             let (contobj, switch_args) = state.peekn(arity).split_last().unwrap();
@@ -3017,7 +3017,7 @@ pub fn translate_operator(
             // Argument types of current_continuation_type. These will in turn
             // be the types of the arguments we receive when someone switches
             // back to this switch instruction
-            let current_continuation_arg_types: Vec<_> = match current_continuation_type.heap_type {
+            let current_continuation_arg_types: SmallVec<[_; 8]> = match current_continuation_type.heap_type {
                 WasmHeapType::ConcreteCont(index) => {
                     let mti = index
                         .as_module_type_index()
