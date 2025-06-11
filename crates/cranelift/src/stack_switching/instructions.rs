@@ -537,12 +537,7 @@ pub(crate) mod stack_switching_helpers {
         }
 
         /// Use this only if you've already checked that `self` corresponds to a `VMStackChain::Continuation`.
-        pub fn unchecked_get_continuation<'a>(
-            &self,
-            _env: &mut crate::func_environ::FuncEnvironment<'a>,
-            _builder: &mut FunctionBuilder,
-        ) -> ir::Value {
-            // TODO(posborne): this used to have emitted assertions but now does not do much.
+        pub fn unchecked_get_continuation(&self) -> ir::Value {
             self.payload
         }
 
@@ -1080,7 +1075,7 @@ fn search_handler<'a>(
     // Block begin_search_handler_list
     let (contref, parent_link, handler_list_data_ptr, end_range) = {
         builder.switch_to_block(begin_search_handler_list);
-        let contref = chain_link.unchecked_get_continuation(env, builder);
+        let contref = chain_link.unchecked_get_continuation();
         let contref = helpers::VMContRef::new(contref);
 
         let parent_link = contref.get_parent_stack_chain(env, builder);
@@ -1452,7 +1447,7 @@ pub(crate) fn translate_resume<'a>(
         builder.switch_to_block(suspend_block);
         builder.seal_block(suspend_block);
 
-        let suspended_continuation = new_stack_chain.unchecked_get_continuation(env, builder);
+        let suspended_continuation = new_stack_chain.unchecked_get_continuation();
         let mut suspended_continuation = helpers::VMContRef::new(suspended_continuation);
         let suspended_csi = suspended_continuation.common_stack_information(env, builder);
 
@@ -1570,7 +1565,7 @@ pub(crate) fn translate_resume<'a>(
         builder.seal_block(return_block);
 
         // If we got a return signal, a continuation must have been running.
-        let returned_contref = new_stack_chain.unchecked_get_continuation(env, builder);
+        let returned_contref = new_stack_chain.unchecked_get_continuation();
         let returned_contref = helpers::VMContRef::new(returned_contref);
 
         // Restore parts of the VMRuntimeLimits from the parent of the
@@ -1613,7 +1608,7 @@ pub(crate) fn translate_suspend<'a>(
     // If we get here, the search_handler logic succeeded (i.e., did not trap).
     // Thus, there is at least one parent, so we are not on the initial stack.
     // Can therefore extract continuation directly.
-    let active_contref = active_stack_chain.unchecked_get_continuation(env, builder);
+    let active_contref = active_stack_chain.unchecked_get_continuation();
     let active_contref = helpers::VMContRef::new(active_contref);
     let mut end_of_chain_contref = helpers::VMContRef::new(end_of_chain_contref);
 
@@ -1726,7 +1721,7 @@ pub(crate) fn translate_switch<'a>(
         // If we get here, the search_handler logic succeeded (i.e., did not trap).
         // Thus, there is at least one parent, so we are not on the initial stack.
         // Can therefore extract continuation directly.
-        let switcher_contref = active_stack_chain.unchecked_get_continuation(env, builder);
+        let switcher_contref = active_stack_chain.unchecked_get_continuation();
         let mut switcher_contref = helpers::VMContRef::new(switcher_contref);
 
         switcher_contref.set_last_ancestor(env, builder, last_ancestor.address);
