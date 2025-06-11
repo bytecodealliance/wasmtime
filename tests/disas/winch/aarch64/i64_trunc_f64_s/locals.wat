@@ -20,7 +20,7 @@
 ;;       movk    x17, #0x18
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0x88
+;;       b.lo    #0x90
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
@@ -29,26 +29,28 @@
 ;;       mov     x16, #0
 ;;       stur    x16, [x28]
 ;;       ldur    d0, [x28]
+;;       sub     sp, x28, #8
 ;;       fcmp    d0, d0
-;;       b.vs    #0x8c
-;;   54: ldr     d31, #0x98
+;;       b.vs    #0x94
+;;   58: ldr     d31, #0xa0
 ;;       fcmp    d0, d31
-;;       b.le    #0x90
-;;   60: ldr     d31, #0xa0
+;;       b.le    #0x98
+;;   64: ldr     d31, #0xa8
 ;;       fcmp    d0, d31
-;;       b.ge    #0x94
-;;   6c: fcvtzs  x0, d0
+;;       b.ge    #0x9c
+;;   70: fcvtzs  x0, d0
+;;       mov     sp, x28
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   88: .byte   0x1f, 0xc1, 0x00, 0x00
-;;   8c: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;   90: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;   94: .byte   0x1f, 0xc1, 0x00, 0x00
-;;   98: .byte   0x01, 0x00, 0x00, 0x00
-;;   9c: .byte   0x00, 0x00, 0xe0, 0xc3
-;;   a0: .byte   0x00, 0x00, 0x00, 0x00
-;;   a4: .byte   0x00, 0x00, 0xe0, 0x43
+;;   98: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   9c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   a0: .byte   0x01, 0x00, 0x00, 0x00
+;;   a4: .byte   0x00, 0x00, 0xe0, 0xc3
+;;   a8: .byte   0x00, 0x00, 0x00, 0x00
+;;   ac: .byte   0x00, 0x00, 0xe0, 0x43
