@@ -2958,21 +2958,21 @@ pub fn translate_operator(
         }
         Operator::Resume {
             cont_type_index,
-            resume_table,
+            resume_table: wasm_resume_table,
         } => {
-            // We translate the block indices in the resumetable to actual Blocks.
-            let mut resumetable = vec![];
-            for handle in &resume_table.handlers {
+            // We translate the block indices in the wasm resume_table to actual Blocks.
+            let mut clif_resume_table = vec![];
+            for handle in &wasm_resume_table.handlers {
                 match handle {
                     wasmparser::Handle::OnLabel { tag, label } => {
                         let i = state.control_stack.len() - 1 - (*label as usize);
                         let frame = &mut state.control_stack[i];
                         // This is side-effecting!
                         frame.set_branched_to_exit();
-                        resumetable.push((*tag, Some(frame.br_destination())));
+                        clif_resume_table.push((*tag, Some(frame.br_destination())));
                     }
                     wasmparser::Handle::OnSwitch { tag } => {
-                        resumetable.push((*tag, None));
+                        clif_resume_table.push((*tag, None));
                     }
                 }
             }
@@ -2986,7 +2986,7 @@ pub fn translate_operator(
                 cont_type_index.as_u32(),
                 *contobj,
                 call_args,
-                resumetable.as_slice(),
+                &clif_resume_table
             )?;
 
             state.popn(arity + 1); // arguments + continuation
@@ -2996,7 +2996,12 @@ pub fn translate_operator(
             cont_type_index: _,
             tag_index: _,
             resume_table: _,
-        } => todo!("unimplemented stack switching instruction"),
+        } => {
+            // TODO(10248) This depends on exception handling
+            return Err(wasmtime_environ::WasmError::Unsupported(
+                "resume.throw instructions not supported, yet".to_string(),
+            ));
+        }
         Operator::Switch {
             cont_type_index,
             tag_index,
