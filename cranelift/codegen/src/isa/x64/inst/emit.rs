@@ -1,4 +1,3 @@
-use super::external::CraneliftRegisters;
 use crate::ir::KnownSymbol;
 use crate::ir::immediates::{Ieee32, Ieee64};
 use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength, RegisterOrAmode};
