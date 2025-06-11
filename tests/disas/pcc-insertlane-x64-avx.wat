@@ -139,7 +139,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movl    %edx, %r10d
-;;       movq    0x40(%rdi), %r11
+;;       movq    0x38(%rdi), %r11
 ;;       vmovsd  (%r11, %r10), %xmm7
 ;;       vmovlhps %xmm7, %xmm0, %xmm0
 ;;       movq    %rbp, %rsp

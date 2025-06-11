@@ -1048,7 +1048,6 @@ impl AvxOpcode {
             | AvxOpcode::Vpcmpgtw
             | AvxOpcode::Vpcmpgtd
             | AvxOpcode::Vpcmpgtq
-            | AvxOpcode::Vmovlhps
             | AvxOpcode::Vpminsb
             | AvxOpcode::Vpminsw
             | AvxOpcode::Vpminsd

@@ -110,8 +110,8 @@ fn check_sse_matches_avx(sse_inst: &Inst, avx_inst: &Inst) {
         // may have slightly different operand semantics (e.g., `roundss` ->
         // `vroundss`) and we want to be careful about matching too freely.
         (
-            [(ReadWrite, Reg(_)), (Read, RegMem(_))],
-            [(Write, Reg(_)), (Read, Reg(_)), (Read, RegMem(_))],
+            [(ReadWrite, Reg(_)), (Read, RegMem(_) | Reg(_))],
+            [(Write, Reg(_)), (Read, Reg(_)), (Read, RegMem(_) | Reg(_))],
         ) => {}
         // We panic on other formats for now; feel free to add more patterns to
         // avoid this.

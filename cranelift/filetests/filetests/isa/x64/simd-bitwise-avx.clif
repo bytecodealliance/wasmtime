@@ -554,7 +554,7 @@ block0(v0: f64x2, v1: f64):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   vmovlhps %xmm0, %xmm1, %xmm0
+;   vmovlhps %xmm1, %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret

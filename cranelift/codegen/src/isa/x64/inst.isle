@@ -1002,7 +1002,6 @@
             Vminpd
             Vmaxps
             Vmaxpd
-            Vmovlhps
             Vpmaxsb
             Vpmaxsw
             Vpmaxsd
@@ -3346,10 +3345,7 @@
 
 ;; Helper for creating `movlhps` instructions.
 (decl x64_movlhps (Xmm Xmm) Xmm)
-(rule 1 (x64_movlhps src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vmovlhps) src1 src2))
-(rule 0 (x64_movlhps src1 src2) (x64_movlhps_rm src1 src2))
+(rule (x64_movlhps src1 src2) (x64_movlhps_rm_or_avx src1 src2))
 
 ;; Helpers for creating `pmaxs*` instructions.
 (decl x64_pmaxs (Type Xmm XmmMem) Xmm)

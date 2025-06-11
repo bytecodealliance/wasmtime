@@ -1887,12 +1887,9 @@ impl Assembler {
     /// 64-bits of `dst`. Copies two 32-bit floats from the lower 64-bits of
     /// `src1` to lower 64-bits of `dst`.
     pub fn xmm_vmovlhps_rrr(&mut self, dst: WritableReg, src1: Reg, src2: Reg) {
-        self.emit(Inst::XmmRmiRVex {
-            op: AvxOpcode::Vmovlhps,
-            src1: src1.into(),
-            src2: XmmMemImm::unwrap_new(src2.into()),
-            dst: dst.to_reg().into(),
-        });
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vmovlhps_rvm::new(dst, src1, src2).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Move unaligned packed integer values from address `src` to `dst`.
