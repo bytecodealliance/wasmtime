@@ -1839,31 +1839,25 @@ impl FuncEnvironment<'_> {
         let delta = self.cast_index_to_i64(&mut builder.cursor(), delta, index_type);
         let table_index_arg = builder.ins().iconst(I32, table_index.as_u32() as i64);
         let mut args: SmallVec<[_; 6]> = smallvec![vmctx, table_index_arg, delta];
-        let grow = if ty.is_vmgcref_type() {
-            args.push(init_value);
-            gc::builtins::table_grow_gc_ref(self, &mut builder.cursor().func)?
-        } else {
-            debug_assert!(matches!(
-                ty.top(),
-                WasmHeapTopType::Func | WasmHeapTopType::Cont
-            ));
-            match ty.top() {
-                WasmHeapTopType::Func => {
-                    args.push(init_value);
-                    self.builtin_functions
-                        .table_grow_func_ref(&mut builder.func)
-                }
-                WasmHeapTopType::Cont => {
-                    let (revision, contref) = stack_switching::fatpointer::deconstruct(
-                        self,
-                        &mut builder.cursor(),
-                        init_value,
-                    );
-                    args.extend_from_slice(&[contref, revision]);
-                    stack_switching::builtins::table_grow_cont_obj(self, &mut builder.func)?
-                }
 
-                _ => panic!("unsupported table type."),
+        let grow = match ty.top() {
+            WasmHeapTopType::Extern | WasmHeapTopType::Any => {
+                args.push(init_value);
+                gc::builtins::table_grow_gc_ref(self, &mut builder.cursor().func)?
+            }
+            WasmHeapTopType::Func => {
+                args.push(init_value);
+                self.builtin_functions
+                    .table_grow_func_ref(&mut builder.func)
+            }
+            WasmHeapTopType::Cont => {
+                let (revision, contref) = stack_switching::fatpointer::deconstruct(
+                    self,
+                    &mut builder.cursor(),
+                    init_value,
+                );
+                args.extend_from_slice(&[contref, revision]);
+                stack_switching::builtins::table_grow_cont_obj(self, &mut builder.func)?
             }
         };
 
@@ -1984,27 +1978,25 @@ impl FuncEnvironment<'_> {
         let dst = self.cast_index_to_i64(&mut builder.cursor(), dst, index_type);
         let len = self.cast_index_to_i64(&mut builder.cursor(), len, index_type);
         let mut args: SmallVec<[_; 6]> = smallvec![vmctx, table_index_arg, dst];
-        let libcall = if ty.is_vmgcref_type() {
-            args.push(val);
-            gc::builtins::table_fill_gc_ref(self, &mut builder.cursor().func)?
-        } else {
-            match ty.top() {
-                WasmHeapTopType::Func => {
-                    args.push(val);
-                    self.builtin_functions
-                        .table_fill_func_ref(&mut builder.func)
-                }
-                WasmHeapTopType::Cont => {
-                    let (revision, contref) =
-                        stack_switching::fatpointer::deconstruct(self, &mut builder.cursor(), val);
-                    args.extend_from_slice(&[contref, revision]);
-                    stack_switching::builtins::table_fill_cont_obj(self, &mut builder.func)?
-                }
-                _ => panic!("unsupported table type"),
+        let libcall = match ty.top() {
+            WasmHeapTopType::Any | WasmHeapTopType::Extern => {
+                args.push(val);
+                gc::builtins::table_fill_gc_ref(self, &mut builder.cursor().func)?
+            }
+            WasmHeapTopType::Func => {
+                args.push(val);
+                self.builtin_functions
+                    .table_fill_func_ref(&mut builder.func)
+            }
+            WasmHeapTopType::Cont => {
+                let (revision, contref) =
+                    stack_switching::fatpointer::deconstruct(self, &mut builder.cursor(), val);
+                args.extend_from_slice(&[contref, revision]);
+                stack_switching::builtins::table_fill_cont_obj(self, &mut builder.func)?
             }
         };
-        args.push(len);
 
+        args.push(len);
         builder.ins().call(libcall, &args);
 
         Ok(())
