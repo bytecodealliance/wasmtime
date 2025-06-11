@@ -17,14 +17,6 @@
 //!
 //! Note that this entire module is gated behind the `component-model` Cargo
 //! feature.
-//!
-//! ## Warning: In-progress
-//!
-//! As-of the time of this writing this module is incomplete and under
-//! development. It will be added to incrementally over time as more features
-//! are implemented. Current design decisions are also susceptible to change at
-//! any time. Some comments may reflect historical rather than current state as
-//! well (sorry).
 
 /// Canonical ABI-defined constant for the maximum number of "flat" parameters
 /// to a wasm function, or the maximum number of parameters a core wasm function
