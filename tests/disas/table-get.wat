@@ -20,8 +20,8 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+56
-;;     gv5 = load.i64 notrap aligned gv3+64
+;;     gv4 = load.i64 notrap aligned gv3+48
+;;     gv5 = load.i64 notrap aligned gv3+56
 ;;     gv6 = load.i64 notrap aligned readonly can_move gv3+8
 ;;     gv7 = load.i64 notrap aligned readonly can_move gv6+24
 ;;     gv8 = load.i64 notrap aligned gv6+32
@@ -31,11 +31,11 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0051                               v3 = iconst.i32 0
-;; @0053                               v4 = load.i64 notrap aligned v0+64
+;; @0053                               v4 = load.i64 notrap aligned v0+56
 ;; @0053                               v5 = ireduce.i32 v4
 ;; @0053                               v6 = icmp uge v3, v5  ; v3 = 0
 ;; @0053                               v7 = uextend.i64 v3  ; v3 = 0
-;; @0053                               v8 = load.i64 notrap aligned v0+56
+;; @0053                               v8 = load.i64 notrap aligned v0+48
 ;;                                     v61 = iconst.i64 2
 ;; @0053                               v9 = ishl v7, v61  ; v61 = 2
 ;; @0053                               v10 = iadd v8, v9
@@ -57,7 +57,7 @@
 ;; @0053                               brif v17, block5, block2
 ;;
 ;;                                 block2:
-;; @0053                               v19 = load.i64 notrap aligned readonly v0+40
+;; @0053                               v19 = load.i64 notrap aligned readonly v0+32
 ;; @0053                               v20 = load.i64 notrap aligned v19
 ;; @0053                               v21 = load.i64 notrap aligned v19+8
 ;; @0053                               v22 = icmp eq v20, v21
@@ -113,8 +113,8 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+56
-;;     gv5 = load.i64 notrap aligned gv3+64
+;;     gv4 = load.i64 notrap aligned gv3+48
+;;     gv5 = load.i64 notrap aligned gv3+56
 ;;     gv6 = load.i64 notrap aligned readonly can_move gv3+8
 ;;     gv7 = load.i64 notrap aligned readonly can_move gv6+24
 ;;     gv8 = load.i64 notrap aligned gv6+32
@@ -123,11 +123,11 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @005a                               v4 = load.i64 notrap aligned v0+64
+;; @005a                               v4 = load.i64 notrap aligned v0+56
 ;; @005a                               v5 = ireduce.i32 v4
 ;; @005a                               v6 = icmp uge v2, v5
 ;; @005a                               v7 = uextend.i64 v2
-;; @005a                               v8 = load.i64 notrap aligned v0+56
+;; @005a                               v8 = load.i64 notrap aligned v0+48
 ;;                                     v61 = iconst.i64 2
 ;; @005a                               v9 = ishl v7, v61  ; v61 = 2
 ;; @005a                               v10 = iadd v8, v9
@@ -149,7 +149,7 @@
 ;; @005a                               brif v17, block5, block2
 ;;
 ;;                                 block2:
-;; @005a                               v19 = load.i64 notrap aligned readonly v0+40
+;; @005a                               v19 = load.i64 notrap aligned readonly v0+32
 ;; @005a                               v20 = load.i64 notrap aligned v19
 ;; @005a                               v21 = load.i64 notrap aligned v19+8
 ;; @005a                               v22 = icmp eq v20, v21

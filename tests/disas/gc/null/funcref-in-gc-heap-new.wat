@@ -24,7 +24,7 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
-;; @0020                               v9 = load.i64 notrap aligned readonly v0+40
+;; @0020                               v9 = load.i64 notrap aligned readonly v0+32
 ;; @0020                               v10 = load.i32 notrap aligned v9
 ;;                                     v47 = iconst.i32 7
 ;; @0020                               v13 = uadd_overflow_trap v10, v47, user18  ; v47 = 7
@@ -45,7 +45,7 @@
 ;;                                     v63 = uextend.i64 v62
 ;; @0020                               v25 = iadd v23, v63
 ;; @0020                               store notrap aligned v55, v25  ; v55 = -1342177264
-;; @0020                               v29 = load.i64 notrap aligned readonly can_move v0+48
+;; @0020                               v29 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0020                               v30 = load.i32 notrap aligned readonly can_move v29
 ;; @0020                               store notrap aligned v30, v25+4
 ;; @0020                               store.i32 notrap aligned v16, v9

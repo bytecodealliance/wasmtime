@@ -25,7 +25,7 @@
 ;;       movl    %edx, %eax
 ;;       xorq    %rdi, %rdi
 ;;       movq    %rax, %rdx
-;;       addq    0x40(%r8), %rdx
+;;       addq    0x38(%r8), %rdx
 ;;       movl    $0xffff0000, %r8d
 ;;       leaq    (%rdx, %r8), %rsi
 ;;       cmpq    $0xffff, %rax
@@ -43,7 +43,7 @@
 ;;       xorq    %rdi, %rdi
 ;;       movq    %rcx, %r8
 ;;       movq    %rax, %rcx
-;;       addq    0x40(%r8), %rcx
+;;       addq    0x38(%r8), %rcx
 ;;       movl    $0xffff0000, %edx
 ;;       leaq    (%rcx, %rdx), %rsi
 ;;       cmpq    $0xffff, %rax

@@ -133,7 +133,7 @@
 ;; @004e                               brif v13, block5, block2
 ;;
 ;;                                 block2:
-;; @004e                               v15 = load.i64 notrap aligned readonly v0+40
+;; @004e                               v15 = load.i64 notrap aligned readonly v0+32
 ;; @004e                               v16 = load.i64 notrap aligned v15
 ;; @004e                               v17 = load.i64 notrap aligned v15+8
 ;; @004e                               v18 = icmp eq v16, v17

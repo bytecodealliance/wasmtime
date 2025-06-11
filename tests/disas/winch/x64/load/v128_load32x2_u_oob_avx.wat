@@ -26,7 +26,7 @@
 ;;       jb      0x78
 ;;   4a: cmpq    %rcx, %rdx
 ;;       ja      0x7a
-;;   53: movq    0x40(%r14), %rbx
+;;   53: movq    0x38(%r14), %rbx
 ;;       addq    %rax, %rbx
 ;;       movq    $0, %rsi
 ;;       cmpq    %rcx, %rdx
