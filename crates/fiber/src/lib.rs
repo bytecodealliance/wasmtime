@@ -151,19 +151,19 @@ enum RunResult<Resume, Yield, Return> {
     /// resuming with and hasn't yet completed.
     Executing,
 
-    /// Resume: resume with this value. Called for each invocation of
+    /// Resume with this value. Called for each invocation of
     /// `Fiber::resume`.
     Resuming(Resume),
 
-    /// Suspend: the fiber hasn't finished but has provided the following value
+    /// The fiber hasn't finished but has provided the following value
     /// during its suspension.
     Yield(Yield),
 
-    /// Suspend: the fiber has completed with the provided value and can no
+    /// The fiber has completed with the provided value and can no
     /// longer be resumed.
     Returned(Return),
 
-    /// Suspend: the fiber execution panicked.
+    /// The fiber execution panicked.
     #[cfg(feature = "std")]
     Panicked(Box<dyn core::any::Any + Send>),
 }
