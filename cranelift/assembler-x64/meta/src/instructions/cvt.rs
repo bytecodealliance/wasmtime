@@ -1,4 +1,4 @@
-use crate::dsl::{CustomOperation::*, Feature::*, Inst, Location::*, VexLength::*};
+use crate::dsl::{Customization::*, Feature::*, Inst, Location::*, VexLength::*};
 use crate::dsl::{align, fmt, inst, r, rex, rw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
@@ -30,8 +30,8 @@ pub fn list() -> Vec<Inst> {
         inst("cvttsd2si", fmt("A", [w(r32), r(xmm_m64)]), rex([0xF2, 0x0F, 0x2C]).r(), _64b | compat | sse2),
         inst("cvttsd2si", fmt("AQ", [w(r64), r(xmm_m64)]), rex([0xF2, 0x0F, 0x2C]).w().r(), _64b | sse2),
 
-        inst("vcvtpd2ps", fmt("A", [w(xmm1), r(xmm_m128)]), vex(L128)._66()._0f().op(0x5A).r(), _64b | compat | avx).custom(Display),
-        inst("vcvttpd2dq", fmt("A", [w(xmm1), r(xmm_m128)]), vex(L128)._66()._0f().op(0xE6).r(), _64b | compat | avx).custom(Display),
+        inst("vcvtpd2ps", fmt("A", [w(xmm1), r(xmm_m128)]), vex(L128)._66()._0f().op(0x5A).r(), _64b | compat | avx).custom(Mnemonic),
+        inst("vcvttpd2dq", fmt("A", [w(xmm1), r(xmm_m128)]), vex(L128)._66()._0f().op(0xE6).r(), _64b | compat | avx).custom(Mnemonic),
         inst("vcvtsd2ss", fmt("B", [w(xmm1), r(xmm2), r(xmm_m64)]), vex(LIG)._f2()._0f().op(0x5A).r(), _64b | compat | avx),
         inst("vcvtsd2si", fmt("A", [w(r32), r(xmm_m64)]), vex(LIG)._f2()._0f().w0().op(0x2D).r(), _64b | compat | avx),
         inst("vcvtsd2si", fmt("AQ", [w(r64), r(xmm_m64)]), vex(LIG)._f2()._0f().w1().op(0x2D).r(), _64b | avx),

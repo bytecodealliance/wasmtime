@@ -98,10 +98,20 @@ impl dsl::Inst {
 
     /// `fn mnemonic(&self) -> &'static str { ... }`
     pub fn generate_mnemonic_function(&self, f: &mut Formatter) {
+        use dsl::Customization::*;
+
         fmtln!(f, "#[must_use]");
-        f.add_block(&format!("pub fn mnemonic(&self) -> &'static str"), |f| {
-            fmtln!(f, "\"{}\"", self.mnemonic);
-        });
+        fmtln!(f, "#[inline]");
+        f.add_block(
+            &format!("pub fn mnemonic(&self) -> std::borrow::Cow<'static, str>"),
+            |f| {
+                if self.custom.contains(Mnemonic) {
+                    fmtln!(f, "crate::custom::mnemonic::{}(self)", self.name());
+                } else {
+                    fmtln!(f, "std::borrow::Cow::Borrowed(\"{}\")", self.mnemonic);
+                }
+            },
+        );
     }
 
     /// `fn encode(&self, ...) { ... }`
@@ -158,7 +168,7 @@ impl dsl::Inst {
 
     /// `fn visit(&self, ...) { ... }`
     fn generate_visit_function(&self, f: &mut Formatter) {
-        use dsl::{CustomOperation::*, OperandKind::*};
+        use dsl::{Customization::*, OperandKind::*};
         let extra_generic_bound = if self.requires_generic() {
             ""
         } else {
@@ -223,7 +233,7 @@ impl dsl::Inst {
 
     /// `impl Display for <inst> { ... }`
     pub fn generate_display_impl(&self, f: &mut Formatter) {
-        use crate::dsl::CustomOperation::*;
+        use crate::dsl::Customization::*;
         let impl_block = self.generate_impl_block_start();
         let struct_name = self.struct_name_with_generic();
         f.add_block(
@@ -232,19 +242,16 @@ impl dsl::Inst {
                 f.add_block(
                     "fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result",
                     |f| {
+                        if self.custom.contains(Display) {
+                            fmtln!(f, "crate::custom::display::{}(f, self)", self.name());
+                            return;
+                        }
+
+                        fmtln!(f, "let name = self.mnemonic();");
                         for op in self.format.operands.iter() {
                             let location = op.location;
                             let to_string = location.generate_to_string(op.extension);
                             fmtln!(f, "let {location} = {to_string};");
-                        }
-                        if self.custom.contains(Display) {
-                            fmtln!(
-                                f,
-                                "let name = crate::custom::display::{}(self);",
-                                self.name()
-                            )
-                        } else {
-                            fmtln!(f, "let name = \"{}\";", self.mnemonic);
                         }
                         let ordered_ops = self.format.generate_att_style_operands();
                         let mut implicit_ops = self.format.generate_implicit_operands();

@@ -1,4 +1,4 @@
-use crate::dsl::{CustomOperation::*, Feature::*, Inst, Location::*, VexLength::*};
+use crate::dsl::{Customization::*, Feature::*, Inst, Location::*, VexLength::*};
 use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
@@ -33,16 +33,16 @@ pub fn list() -> Vec<Inst> {
         inst("andnl", fmt("RVM", [w(r32a), r(r32b), r(rm32)]), vex(LZ)._0f38().w0().op(0xF2), _64b | compat | bmi1),
         inst("andnq", fmt("RVM", [w(r64a), r(r64b), r(rm64)]), vex(LZ)._0f38().w1().op(0xF2), _64b | bmi1),
         // `LOCK`-prefixed memory-writing instructions.
-        inst("lock_andb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(4).ib(), _64b | compat).custom(Display),
-        inst("lock_andw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(4).iw(), _64b | compat).custom(Display),
-        inst("lock_andl", fmt("MI", [rw(m32), r(imm32)]), rex([0xf0, 0x81]).digit(4).id(), _64b | compat).custom(Display),
-        inst("lock_andq", fmt("MI_SXL", [rw(m64), sxq(imm32)]), rex([0xf0, 0x81]).w().digit(4).id(), _64b).custom(Display),
-        inst("lock_andl", fmt("MI_SXB", [rw(m32), sxl(imm8)]), rex([0xf0, 0x83]).digit(4).ib(), _64b | compat).custom(Display),
-        inst("lock_andq", fmt("MI_SXB", [rw(m64), sxq(imm8)]), rex([0xf0, 0x83]).w().digit(4).ib(), _64b).custom(Display),
-        inst("lock_andb", fmt("MR", [rw(m8), r(r8)]), rex([0xf0, 0x20]).r(), _64b | compat).custom(Display),
-        inst("lock_andw", fmt("MR", [rw(m16), r(r16)]), rex([0xf0, 0x66, 0x21]).r(), _64b | compat).custom(Display),
-        inst("lock_andl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x21]).r(), _64b | compat).custom(Display),
-        inst("lock_andq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x21]).w().r(), _64b).custom(Display),
+        inst("lock_andb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(4).ib(), _64b | compat).custom(Mnemonic),
+        inst("lock_andw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(4).iw(), _64b | compat).custom(Mnemonic),
+        inst("lock_andl", fmt("MI", [rw(m32), r(imm32)]), rex([0xf0, 0x81]).digit(4).id(), _64b | compat).custom(Mnemonic),
+        inst("lock_andq", fmt("MI_SXL", [rw(m64), sxq(imm32)]), rex([0xf0, 0x81]).w().digit(4).id(), _64b).custom(Mnemonic),
+        inst("lock_andl", fmt("MI_SXB", [rw(m32), sxl(imm8)]), rex([0xf0, 0x83]).digit(4).ib(), _64b | compat).custom(Mnemonic),
+        inst("lock_andq", fmt("MI_SXB", [rw(m64), sxq(imm8)]), rex([0xf0, 0x83]).w().digit(4).ib(), _64b).custom(Mnemonic),
+        inst("lock_andb", fmt("MR", [rw(m8), r(r8)]), rex([0xf0, 0x20]).r(), _64b | compat).custom(Mnemonic),
+        inst("lock_andw", fmt("MR", [rw(m16), r(r16)]), rex([0xf0, 0x66, 0x21]).r(), _64b | compat).custom(Mnemonic),
+        inst("lock_andl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x21]).r(), _64b | compat).custom(Mnemonic),
+        inst("lock_andq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x21]).w().r(), _64b).custom(Mnemonic),
         // Vector instructions.
         inst("andps", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x0F, 0x54]).r(), _64b | compat | sse),
         inst("andpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x54]).r(), _64b | compat | sse2),
