@@ -116,7 +116,7 @@ impl dsl::Format {
         // If this instruction has only immediates there's no rex/modrm/etc, so
         // skip everything below.
         match self.operands_by_kind().as_slice() {
-            [Imm(_)] => return ModRmStyle::None,
+            [] | [Imm(_)] => return ModRmStyle::None,
             _ => {}
         }
 

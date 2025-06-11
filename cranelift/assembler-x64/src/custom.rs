@@ -1,3 +1,77 @@
+pub mod encode {
+    use crate::{CodeSink, KnownOffsetTable, inst};
+
+    /// `NOP`
+    pub fn nop_1b(_: &inst::nop_1b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x90);
+    }
+
+    /// `66 NOP`
+    pub fn nop_2b(_: &inst::nop_2b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x66);
+        buf.put1(0x90);
+    }
+
+    /// `NOP DWORD ptr [EAX]`
+    pub fn nop_3b(_: &inst::nop_3b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x00);
+    }
+
+    /// `NOP DWORD ptr [EAX + 00H]`
+    pub fn nop_4b(_: &inst::nop_4b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x40);
+        buf.put1(0x00);
+    }
+
+    /// `NOP DWORD ptr [EAX + EAX*1 + 00H]`
+    pub fn nop_5b(_: &inst::nop_5b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x44);
+        buf.put2(0x00_00);
+    }
+
+    /// `66 NOP DWORD ptr [EAX + EAX*1 + 00H]`
+    pub fn nop_6b(_: &inst::nop_6b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x66);
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x44);
+        buf.put2(0x00_00);
+    }
+
+    /// `NOP DWORD ptr [EAX + 00000000H]`
+    pub fn nop_7b(_: &inst::nop_7b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x80);
+        buf.put4(0x00_00_00_00);
+    }
+
+    /// `NOP DWORD ptr [EAX + EAX*1 + 00000000H]`
+    pub fn nop_8b(_: &inst::nop_8b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x84);
+        buf.put1(0x00);
+        buf.put4(0x00_00_00_00);
+    }
+
+    /// `66 NOP DWORD ptr [EAX + EAX*1 + 00000000H]`
+    pub fn nop_9b(_: &inst::nop_9b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x66);
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x84);
+        buf.put1(0x00);
+        buf.put4(0x00_00_00_00);
+    }
+}
+
 pub mod mnemonic {
     use crate::inst;
     use crate::{Registers, XmmMem};
@@ -175,6 +249,42 @@ pub mod display {
         }
         let name = format!("cmp{}pd", pseudo_op(inst.imm8.value()));
         write!(f, "{name} {xmm_m128}, {xmm1}")
+    }
+
+    pub fn nop_1b(f: &mut fmt::Formatter, _: &inst::nop_1b) -> fmt::Result {
+        write!(f, "nop")
+    }
+
+    pub fn nop_2b(f: &mut fmt::Formatter, _: &inst::nop_2b) -> fmt::Result {
+        write!(f, "nop")
+    }
+
+    pub fn nop_3b(f: &mut fmt::Formatter, _: &inst::nop_3b) -> fmt::Result {
+        write!(f, "nopl (%rax)")
+    }
+
+    pub fn nop_4b(f: &mut fmt::Formatter, _: &inst::nop_4b) -> fmt::Result {
+        write!(f, "nopl (%rax)")
+    }
+
+    pub fn nop_5b(f: &mut fmt::Formatter, _: &inst::nop_5b) -> fmt::Result {
+        write!(f, "nopl (%rax, %rax)")
+    }
+
+    pub fn nop_6b(f: &mut fmt::Formatter, _: &inst::nop_6b) -> fmt::Result {
+        write!(f, "nopw (%rax, %rax)")
+    }
+
+    pub fn nop_7b(f: &mut fmt::Formatter, _: &inst::nop_7b) -> fmt::Result {
+        write!(f, "nopl (%rax)")
+    }
+
+    pub fn nop_8b(f: &mut fmt::Formatter, _: &inst::nop_8b) -> fmt::Result {
+        write!(f, "nopl (%rax, %rax)")
+    }
+
+    pub fn nop_9b(f: &mut fmt::Formatter, _: &inst::nop_9b) -> fmt::Result {
+        write!(f, "nopw (%rax, %rax)")
     }
 
     pub fn xchgb_rm<R: Registers>(
