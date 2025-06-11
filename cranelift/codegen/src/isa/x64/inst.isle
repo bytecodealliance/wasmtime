@@ -577,13 +577,7 @@
 (rule (operand_size_bits (OperandSize.Size64)) 64)
 
 (type SseOpcode extern
-      (enum Comiss
-            Comisd
-            Cmpps
-            Cmppd
-            Cmpss
-            Cmpsd
-            Insertps
+      (enum Insertps
             Pabsb
             Pabsw
             Pabsd
@@ -599,8 +593,6 @@
             Rcpss
             Rsqrtss
             Shufps
-            Ucomiss
-            Ucomisd
             Pblendw
           ))
 
@@ -2145,6 +2137,8 @@
 (decl asm_produce_flags_side_effect (AssemblerOutputs) ProducesFlags)
 (rule (asm_produce_flags_side_effect (AssemblerOutputs.RetGpr inst gpr))
       (ProducesFlags.ProducesFlagsSideEffect inst))
+(rule (asm_produce_flags_side_effect (AssemblerOutputs.SideEffect inst))
+      (ProducesFlags.ProducesFlagsSideEffect inst))
 
 ;; Other helpers for instruction emission.
 
@@ -2685,9 +2679,9 @@
 ;; Helper for creating floating-point comparison instructions (`UCOMIS[S|D]`).
 (decl x64_ucomis (Type Xmm XmmMem) ProducesFlags)
 (rule (x64_ucomis $F32 src1 src2)
-      (xmm_cmp_rm_r (SseOpcode.Ucomiss) src1 src2))
+      (asm_produce_flags_side_effect (x64_ucomiss_a_raw src1 src2)))
 (rule (x64_ucomis $F64 src1 src2)
-      (xmm_cmp_rm_r (SseOpcode.Ucomisd) src1 src2))
+      (asm_produce_flags_side_effect (x64_ucomisd_a_raw src1 src2)))
 (rule 1 (x64_ucomis $F32 src1 src2)
         (if-let true (use_avx))
         (xmm_cmp_rm_r_vex (AvxOpcode.Vucomiss) src1 src2))
@@ -3493,12 +3487,7 @@
 (rule (x64_cmpp $F64X2 x y imm) (x64_cmppd x y imm))
 
 (decl x64_cmpps (Xmm XmmMem FcmpImm) Xmm)
-(rule 0 (x64_cmpps src1 src2 imm)
-      (xmm_rm_r_imm (SseOpcode.Cmpps)
-                    src1
-                    src2
-                    (encode_fcmp_imm imm)
-                    (OperandSize.Size32)))
+(rule 0 (x64_cmpps src1 src2 imm) (x64_cmpps_a src1 src2 (encode_fcmp_imm imm)))
 (rule 1 (x64_cmpps src1 src2 imm)
       (if-let true (use_avx))
       (xmm_rmr_imm_vex (AvxOpcode.Vcmpps)
@@ -3510,12 +3499,7 @@
 ;; operations, since this presumably induces the correct encoding of the
 ;; instruction.
 (decl x64_cmppd (Xmm XmmMem FcmpImm) Xmm)
-(rule 0 (x64_cmppd src1 src2 imm)
-      (xmm_rm_r_imm (SseOpcode.Cmppd)
-                    src1
-                    src2
-                    (encode_fcmp_imm imm)
-                    (OperandSize.Size32)))
+(rule 0 (x64_cmppd src1 src2 imm) (x64_cmppd_a src1 src2 (encode_fcmp_imm imm)))
 (rule 1 (x64_cmppd src1 src2 imm)
       (if-let true (use_avx))
       (xmm_rmr_imm_vex (AvxOpcode.Vcmppd)

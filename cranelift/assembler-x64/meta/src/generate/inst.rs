@@ -263,7 +263,22 @@ impl dsl::Inst {
                                 implicit_ops.push_str(", {trap}");
                             }
                         }
-                        fmtln!(f, "write!(f, \"{{name}} {ordered_ops}{implicit_ops}\")");
+                        if self.custom.contains(Display) {
+                            fmtln!(
+                                f,
+                                "let sequence = crate::custom::display::{}(self, format!(\"{}\"));",
+                                self.name(),
+                                ordered_ops
+                            )
+                        } else {
+                            fmtln!(f, "let ordered_ops = format!(\"{}\");", ordered_ops);
+                            fmtln!(
+                                f,
+                                "let sequence = format!(\"{} {{ordered_ops}}\");",
+                                self.mnemonic
+                            );
+                        }
+                        fmtln!(f, "write!(f, \"{{sequence}}{implicit_ops}\")");
                     },
                 );
             },

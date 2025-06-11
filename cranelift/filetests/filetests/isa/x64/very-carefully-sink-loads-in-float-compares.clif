@@ -27,7 +27,7 @@ block0(v0: f32, v1: i64, v2: i32, v3: i32):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   ucomiss 0(%rdi), %xmm0
+;   ucomiss (%rdi), %xmm0
 ;   cmovpl  %edx, %esi, %esi
 ;   movq    %rsi, %rax
 ;   cmovnzl %edx, %eax, %eax

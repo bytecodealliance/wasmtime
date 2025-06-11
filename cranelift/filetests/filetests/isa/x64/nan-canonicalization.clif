@@ -17,7 +17,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   movl    $2143289344, %esi
 ;   movd %esi, %xmm5
 ;   shufps  $0, %xmm5, const(0), %xmm5
-;   cmpps   $3, %xmm0, %xmm1, %xmm0
+;   cmpunordps %xmm1, %xmm0
 ;   andps %xmm0, %xmm5
 ;   andnps %xmm1, %xmm0
 ;   orps %xmm5, %xmm0
