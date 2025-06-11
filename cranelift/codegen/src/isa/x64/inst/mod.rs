@@ -96,7 +96,6 @@ impl Inst {
             | Inst::LoadExtName { .. }
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
-            | Inst::Nop { .. }
             | Inst::StackProbeLoop { .. }
             | Inst::Args { .. }
             | Inst::Rets { .. }
@@ -172,8 +171,20 @@ impl Inst {
 
 impl Inst {
     pub(crate) fn nop(len: u8) -> Self {
-        debug_assert!(len <= 15);
-        Self::Nop { len }
+        assert!(len > 0 && len <= 9);
+        let inst = match len {
+            1 => asm::inst::nop_1b::new().into(),
+            2 => asm::inst::nop_2b::new().into(),
+            3 => asm::inst::nop_3b::new().into(),
+            4 => asm::inst::nop_4b::new().into(),
+            5 => asm::inst::nop_5b::new().into(),
+            6 => asm::inst::nop_6b::new().into(),
+            7 => asm::inst::nop_7b::new().into(),
+            8 => asm::inst::nop_8b::new().into(),
+            9 => asm::inst::nop_9b::new().into(),
+            _ => unreachable!("nop length must be between 1 and 9"),
+        };
+        Self::External { inst }
     }
 
     pub(crate) fn addq_mi(dst: Writable<Reg>, simm32: i32) -> Self {
@@ -536,8 +547,6 @@ impl PrettyPrint for Inst {
         }
 
         match self {
-            Inst::Nop { len } => format!("{} len={}", ljustify("nop".to_string()), len),
-
             Inst::CheckedSRemSeq {
                 size,
                 divisor,
@@ -1677,7 +1686,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         | Inst::JmpCond { .. }
         | Inst::JmpCondOr { .. }
         | Inst::Ret { .. }
-        | Inst::Nop { .. }
         | Inst::TrapIf { .. }
         | Inst::TrapIfAnd { .. }
         | Inst::TrapIfOr { .. }
@@ -1885,7 +1893,7 @@ impl MachInst for Inst {
     }
 
     fn gen_nop(preferred_size: usize) -> Inst {
-        Inst::nop(std::cmp::min(preferred_size, 15) as u8)
+        Inst::nop(std::cmp::min(preferred_size, 9) as u8)
     }
 
     fn rc_for_type(ty: Type) -> CodegenResult<(&'static [RegClass], &'static [Type])> {
