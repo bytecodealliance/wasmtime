@@ -424,11 +424,11 @@ impl<'a> LiftContext<'a> {
         // so it's hacked around a bit. This unsafe pointer cast could be fixed
         // with more methods in more places, but it doesn't seem worth doing it
         // at this time.
-        let (calls, host_table, host_resource_data, instance) = unsafe {
-            (&mut *(store as *mut StoreOpaque))
-                .component_resource_state_with_instance(instance_handle)
-        };
-        let memory = options.memory.map(|_| options.memory(store));
+        let memory = options
+            .memory
+            .map(|_| options.memory(unsafe { &*(store as *const StoreOpaque) }));
+        let (calls, host_table, host_resource_data, instance) =
+            store.component_resource_state_with_instance(instance_handle);
 
         LiftContext {
             memory,

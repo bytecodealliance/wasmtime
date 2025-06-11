@@ -1,4 +1,5 @@
 use anyhow::Result;
+use wasmtime::component::{self, Component};
 use wasmtime::{
     Caller, Config, Engine, Func, FuncType, Instance, Module, Store, Trap, Val, ValType,
 };
@@ -75,6 +76,15 @@ fn can_run_on_cli() -> Result<()> {
     Ok(())
 }
 
+fn provenance_test_config() -> Config {
+    let mut config = pulley_config();
+    config.wasm_function_references(true);
+    config.memory_reservation(1 << 20);
+    config.memory_guard_size(0);
+    config.signals_based_traps(false);
+    config
+}
+
 /// This is a one-size-fits-all test to test out pointer provenance in Pulley.
 ///
 /// The goal of this test is to exercise an actual wasm module being run in
@@ -102,11 +112,7 @@ fn can_run_on_cli() -> Result<()> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn pulley_provenance_test() -> Result<()> {
-    let mut config = pulley_config();
-    config.wasm_function_references(true);
-    config.memory_reservation(1 << 20);
-    config.memory_guard_size(0);
-    config.signals_based_traps(false);
+    let config = provenance_test_config();
     let engine = Engine::new(&config)?;
     let module = if cfg!(miri) {
         unsafe { Module::deserialize_file(&engine, "./tests/all/pulley_provenance_test.cwasm")? }
@@ -179,6 +185,202 @@ fn pulley_provenance_test() -> Result<()> {
     let func = instance.get_typed_func::<Func, (i32, i32, i32)>(&mut store, "call_ref-wasm")?;
     let results = func.call(&mut store, funcref)?;
     assert_eq!(results, (1, 2, 3));
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn pulley_provenance_test_components() -> Result<()> {
+    let config = provenance_test_config();
+    let engine = Engine::new(&config)?;
+    let component = if cfg!(miri) {
+        unsafe {
+            Component::deserialize_file(
+                &engine,
+                "./tests/all/pulley_provenance_test_component.cwasm",
+            )?
+        }
+    } else {
+        Component::from_file(&engine, "./tests/all/pulley_provenance_test_component.wat")?
+    };
+    {
+        use wasmtime::component::{ComponentType, Lift, Lower};
+
+        #[derive(ComponentType, Lift, Lower, Clone, Copy, PartialEq, Debug)]
+        #[component(enum)]
+        #[repr(u8)]
+        enum E {
+            #[expect(dead_code, reason = "only testing other variants")]
+            A,
+            B,
+            #[expect(dead_code, reason = "only testing other variants")]
+            C,
+        }
+
+        let mut store = Store::new(&engine, ());
+        let mut linker = component::Linker::new(&engine);
+        linker
+            .root()
+            .func_wrap("host-u32", |_, (value,): (u32,)| Ok((value,)))?;
+        linker
+            .root()
+            .func_wrap("host-enum", |_, (value,): (E,)| Ok((value,)))?;
+        linker
+            .root()
+            .func_wrap("host-option", |_, (value,): (Option<u8>,)| Ok((value,)))?;
+        linker
+            .root()
+            .func_wrap("host-result", |_, (value,): (Result<u16, i64>,)| {
+                Ok((value,))
+            })?;
+        linker
+            .root()
+            .func_wrap("host-string", |_, (value,): (String,)| Ok((value,)))?;
+        linker
+            .root()
+            .func_wrap("host-list", |_, (value,): (Vec<String>,)| Ok((value,)))?;
+        let instance = linker.instantiate(&mut store, &component)?;
+
+        let guest_u32 = instance.get_typed_func::<(u32,), (u32,)>(&mut store, "guest-u32")?;
+        let guest_enum = instance.get_typed_func::<(E,), (E,)>(&mut store, "guest-enum")?;
+        let guest_option =
+            instance.get_typed_func::<(Option<u8>,), (Option<u8>,)>(&mut store, "guest-option")?;
+        let guest_result = instance.get_typed_func::<(Result<u16, i64>,), (Result<u16, i64>,)>(
+            &mut store,
+            "guest-result",
+        )?;
+        let guest_string =
+            instance.get_typed_func::<(&str,), (String,)>(&mut store, "guest-string")?;
+        let guest_list =
+            instance.get_typed_func::<(&[&str],), (Vec<String>,)>(&mut store, "guest-list")?;
+
+        let (result,) = guest_u32.call(&mut store, (42,))?;
+        assert_eq!(result, 42);
+        guest_u32.post_return(&mut store)?;
+
+        let (result,) = guest_enum.call(&mut store, (E::B,))?;
+        assert_eq!(result, E::B);
+        guest_enum.post_return(&mut store)?;
+
+        let (result,) = guest_option.call(&mut store, (None,))?;
+        assert_eq!(result, None);
+        guest_option.post_return(&mut store)?;
+        let (result,) = guest_option.call(&mut store, (Some(200),))?;
+        assert_eq!(result, Some(200));
+        guest_option.post_return(&mut store)?;
+
+        let (result,) = guest_result.call(&mut store, (Ok(10),))?;
+        assert_eq!(result, Ok(10));
+        guest_result.post_return(&mut store)?;
+        let (result,) = guest_result.call(&mut store, (Err(i64::MIN),))?;
+        assert_eq!(result, Err(i64::MIN));
+        guest_result.post_return(&mut store)?;
+
+        let (result,) = guest_string.call(&mut store, ("",))?;
+        assert_eq!(result, "");
+        guest_string.post_return(&mut store)?;
+        let (result,) = guest_string.call(&mut store, ("hello",))?;
+        assert_eq!(result, "hello");
+        guest_string.post_return(&mut store)?;
+
+        let (result,) = guest_list.call(&mut store, (&[],))?;
+        assert!(result.is_empty());
+        guest_list.post_return(&mut store)?;
+        let (result,) = guest_list.call(&mut store, (&["a", "", "b", "c"],))?;
+        assert_eq!(result, ["a", "", "b", "c"]);
+        guest_list.post_return(&mut store)?;
+
+        instance
+            .get_typed_func::<(), ()>(&mut store, "resource-intrinsics")?
+            .call(&mut store, ())?;
+    }
+    {
+        use wasmtime::component::Val;
+        let mut store = Store::new(&engine, ());
+        let mut linker = component::Linker::new(&engine);
+        linker.root().func_new("host-u32", |_, args, results| {
+            results[0] = args[0].clone();
+            Ok(())
+        })?;
+        linker.root().func_new("host-enum", |_, args, results| {
+            results[0] = args[0].clone();
+            Ok(())
+        })?;
+        linker.root().func_new("host-option", |_, args, results| {
+            results[0] = args[0].clone();
+            Ok(())
+        })?;
+        linker.root().func_new("host-result", |_, args, results| {
+            results[0] = args[0].clone();
+            Ok(())
+        })?;
+        linker.root().func_new("host-string", |_, args, results| {
+            results[0] = args[0].clone();
+            Ok(())
+        })?;
+        linker.root().func_new("host-list", |_, args, results| {
+            results[0] = args[0].clone();
+            Ok(())
+        })?;
+        let instance = linker.instantiate(&mut store, &component)?;
+
+        let guest_u32 = instance.get_func(&mut store, "guest-u32").unwrap();
+        let guest_enum = instance.get_func(&mut store, "guest-enum").unwrap();
+        let guest_option = instance.get_func(&mut store, "guest-option").unwrap();
+        let guest_result = instance.get_func(&mut store, "guest-result").unwrap();
+        let guest_string = instance.get_func(&mut store, "guest-string").unwrap();
+        let guest_list = instance.get_func(&mut store, "guest-list").unwrap();
+
+        let mut results = [Val::U32(0)];
+        guest_u32.call(&mut store, &[Val::U32(42)], &mut results)?;
+        assert_eq!(results[0], Val::U32(42));
+        guest_u32.post_return(&mut store)?;
+
+        guest_enum.call(&mut store, &[Val::Enum("B".into())], &mut results)?;
+        assert_eq!(results[0], Val::Enum("B".into()));
+        guest_enum.post_return(&mut store)?;
+
+        guest_option.call(&mut store, &[Val::Option(None)], &mut results)?;
+        assert_eq!(results[0], Val::Option(None));
+        guest_option.post_return(&mut store)?;
+        guest_option.call(
+            &mut store,
+            &[Val::Option(Some(Box::new(Val::U8(201))))],
+            &mut results,
+        )?;
+        assert_eq!(results[0], Val::Option(Some(Box::new(Val::U8(201)))));
+        guest_option.post_return(&mut store)?;
+
+        guest_result.call(
+            &mut store,
+            &[Val::Result(Ok(Some(Box::new(Val::U16(20)))))],
+            &mut results,
+        )?;
+        assert_eq!(results[0], Val::Result(Ok(Some(Box::new(Val::U16(20))))));
+        guest_result.post_return(&mut store)?;
+        guest_result.call(
+            &mut store,
+            &[Val::Result(Err(Some(Box::new(Val::S64(i64::MAX)))))],
+            &mut results,
+        )?;
+        assert_eq!(
+            results[0],
+            Val::Result(Err(Some(Box::new(Val::S64(i64::MAX)))))
+        );
+        guest_result.post_return(&mut store)?;
+
+        guest_string.call(&mut store, &[Val::String("B".into())], &mut results)?;
+        assert_eq!(results[0], Val::String("B".into()));
+        guest_string.post_return(&mut store)?;
+        guest_string.call(&mut store, &[Val::String("".into())], &mut results)?;
+        assert_eq!(results[0], Val::String("".into()));
+        guest_string.post_return(&mut store)?;
+
+        guest_list.call(&mut store, &[Val::List(Vec::new())], &mut results)?;
+        assert_eq!(results[0], Val::List(Vec::new()));
+        guest_list.post_return(&mut store)?;
+    }
 
     Ok(())
 }

@@ -10,8 +10,9 @@ use crate::component::{Component, Instance, InstancePre, ResourceType, RuntimeIm
 use crate::runtime::component::ComponentInstanceId;
 use crate::runtime::vm::{
     Export, ExportFunction, ExportGlobal, ExportGlobalKind, SendSyncPtr, VMArrayCallFunction,
-    VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMOpaqueContext, VMStore,
-    VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction, ValRaw, VmPtr, VmSafe,
+    VMContext, VMFuncRef, VMFunctionBody, VMGlobalDefinition, VMMemoryDefinition, VMOpaqueContext,
+    VMStore, VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction, ValRaw, VmPtr,
+    VmSafe,
 };
 use crate::store::{InstanceId, StoreOpaque};
 use alloc::alloc::Layout;
@@ -165,6 +166,12 @@ pub type VMLoweringCallee = extern "C" fn(
     nargs_and_results: usize,
 ) -> bool;
 
+/// An opaque function pointer which is a `VMLoweringFunction` under the hood
+/// but this is stored as `VMPtr<VMLoweringFunction>` within `VMLowering` below
+/// to handle provenance correctly when using Pulley.
+#[repr(transparent)]
+pub struct VMLoweringFunction(VMFunctionBody);
+
 /// Structure describing a lowered host function stored within a
 /// `VMComponentContext` per-lowering.
 #[derive(Copy, Clone)]
@@ -172,7 +179,7 @@ pub type VMLoweringCallee = extern "C" fn(
 pub struct VMLowering {
     /// The host function pointer that is invoked when this lowering is
     /// invoked.
-    pub callee: VMLoweringCallee,
+    pub callee: VmPtr<VMLoweringFunction>,
     /// The host data pointer (think void* pointer) to get passed to `callee`.
     pub data: VmPtr<u8>,
 }
@@ -385,7 +392,7 @@ impl ComponentInstance {
     pub fn lowering(&self, idx: LoweredIndex) -> VMLowering {
         unsafe {
             let ret = *self.vmctx_plus_offset::<VMLowering>(self.offsets.lowering(idx));
-            debug_assert!(ret.callee as usize != INVALID_PTR);
+            debug_assert!(ret.callee.as_ptr() as usize != INVALID_PTR);
             debug_assert!(ret.data.as_ptr() as usize != INVALID_PTR);
             ret
         }
@@ -561,8 +568,10 @@ impl ComponentInstance {
 
     unsafe fn initialize_vmctx(&mut self) {
         *self.vmctx_plus_offset_mut(self.offsets.magic()) = VMCOMPONENT_MAGIC;
-        *self.vmctx_plus_offset_mut(self.offsets.builtins()) =
-            VmPtr::from(NonNull::from(&libcalls::VMComponentBuiltins::INIT));
+        // Initialize the built-in functions
+        static BUILTINS: libcalls::VMComponentBuiltins = libcalls::VMComponentBuiltins::INIT;
+        let ptr = BUILTINS.expose_provenance();
+        *self.vmctx_plus_offset_mut(self.offsets.builtins()) = VmPtr::from(ptr);
         *self.vmctx_plus_offset_mut(self.offsets.vm_store_context()) =
             VmPtr::from(self.store.0.as_ref().vm_store_context_ptr());
 
