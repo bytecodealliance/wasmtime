@@ -162,7 +162,7 @@ fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                 (ty, var)
             };
             match results.as_slice() {
-                [] => fmtln!(f, "SideEffectNoResult::Inst(inst)"),
+                [] => fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }}"),
                 [op] => match op.location.kind() {
                     Imm(_) => unreachable!(),
                     Reg(r) | FixedReg(r) => {
@@ -274,16 +274,21 @@ enum IsleConstructor {
     /// This "special" constructor captures multiple written-to registers (e.g.
     /// `mul`).
     RetValueRegs,
+
+    /// This constructor does not return any results, but produces a side effect affecting EFLAGs.
+    NoReturnSideEffect,
 }
 
 impl IsleConstructor {
     /// Returns the result type, in ISLE, that this constructor generates.
     fn result_ty(&self) -> &'static str {
         match self {
-            IsleConstructor::RetMemorySideEffect => "SideEffectNoResult",
             IsleConstructor::RetGpr => "Gpr",
             IsleConstructor::RetXmm => "Xmm",
             IsleConstructor::RetValueRegs => "ValueRegs",
+            IsleConstructor::NoReturnSideEffect | IsleConstructor::RetMemorySideEffect => {
+                "SideEffectNoResult"
+            }
         }
     }
 
@@ -291,7 +296,9 @@ impl IsleConstructor {
     /// type returned by [`Self::result_ty`].
     fn conversion_constructor(&self) -> &'static str {
         match self {
-            IsleConstructor::RetMemorySideEffect => "defer_side_effect",
+            IsleConstructor::NoReturnSideEffect | IsleConstructor::RetMemorySideEffect => {
+                "defer_side_effect"
+            }
             IsleConstructor::RetGpr => "emit_ret_gpr",
             IsleConstructor::RetXmm => "emit_ret_xmm",
             IsleConstructor::RetValueRegs => "emit_ret_value_regs",
@@ -302,7 +309,10 @@ impl IsleConstructor {
     fn suffix(&self) -> &'static str {
         match self {
             IsleConstructor::RetMemorySideEffect => "_mem",
-            IsleConstructor::RetGpr | IsleConstructor::RetXmm | IsleConstructor::RetValueRegs => "",
+            IsleConstructor::RetGpr
+            | IsleConstructor::RetXmm
+            | IsleConstructor::RetValueRegs
+            | IsleConstructor::NoReturnSideEffect => "",
         }
     }
 
@@ -314,9 +324,10 @@ impl IsleConstructor {
     fn includes_write_only_reg_mem(&self) -> bool {
         match self {
             IsleConstructor::RetMemorySideEffect => true,
-            IsleConstructor::RetGpr | IsleConstructor::RetXmm | IsleConstructor::RetValueRegs => {
-                false
-            }
+            IsleConstructor::RetGpr
+            | IsleConstructor::RetXmm
+            | IsleConstructor::RetValueRegs
+            | IsleConstructor::NoReturnSideEffect => false,
         }
     }
 }
@@ -331,6 +342,7 @@ fn isle_param_for_ctor(op: &Operand, ctor: IsleConstructor) -> String {
         // a `Gpr`.
         OperandKind::RegMem(_) if op.mutability.is_write() => match ctor {
             IsleConstructor::RetMemorySideEffect => "SyntheticAmode".to_string(),
+            IsleConstructor::NoReturnSideEffect => "".to_string(),
             IsleConstructor::RetGpr => "Gpr".to_string(),
             IsleConstructor::RetXmm => "Xmm".to_string(),
             IsleConstructor::RetValueRegs => "ValueRegs".to_string(),
@@ -356,9 +368,7 @@ fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
         .filter(|o| o.mutability.is_write())
         .collect::<Vec<_>>();
     match &write_operands[..] {
-        [] => unimplemented!(
-            "if you truly need this (and not a `SideEffect*`), add a `NoReturn` variant to `AssemblerOutputs`"
-        ),
+        [] => vec![IsleConstructor::NoReturnSideEffect],
         [one] => match one.mutability {
             Read => unreachable!(),
             ReadWrite | Write => match one.location.kind() {
@@ -502,7 +512,9 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
             .map(|o| {
                 assert!(matches!(o.location.kind(), OperandKind::RegMem(_)));
                 match ctor {
-                    IsleConstructor::RetMemorySideEffect => unreachable!(),
+                    IsleConstructor::RetMemorySideEffect | IsleConstructor::NoReturnSideEffect => {
+                        unreachable!()
+                    }
                     IsleConstructor::RetGpr => "(temp_writable_gpr)",
                     IsleConstructor::RetXmm => "(temp_writable_xmm)",
                     IsleConstructor::RetValueRegs => todo!(),

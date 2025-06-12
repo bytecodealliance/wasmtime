@@ -17,7 +17,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   movd %r10d, %xmm7
 ;   shufps  $0, %xmm7, const(0), %xmm7
 ;   movdqa %xmm0, %xmm1
-;   cmpps   $3, %xmm1, %xmm0, %xmm1
+;   cmpunordps %xmm0, %xmm1
 ;   movdqa %xmm0, %xmm2
 ;   movdqa %xmm1, %xmm0
 ;   movdqa %xmm2, %xmm1
@@ -78,7 +78,7 @@ block0(v0: f64, v1: f64):
 ;   movdqa %xmm7, %xmm6
 ;   movsd %xmm6, %xmm0
 ;   movdqa %xmm0, %xmm6
-;   cmppd   $3, %xmm6, %xmm0, %xmm6
+;   cmpunordpd %xmm0, %xmm6
 ;   movdqa %xmm0, %xmm3
 ;   movdqa %xmm6, %xmm0
 ;   pblendvb %xmm0, %xmm5, %xmm3
@@ -133,7 +133,7 @@ block0(v0: f32, v1: f32):
 ;   movdqa %xmm7, %xmm6
 ;   movss %xmm6, %xmm0
 ;   movdqa %xmm0, %xmm6
-;   cmpps   $3, %xmm6, %xmm0, %xmm6
+;   cmpunordps %xmm0, %xmm6
 ;   movdqa %xmm0, %xmm3
 ;   movdqa %xmm6, %xmm0
 ;   pblendvb %xmm0, %xmm5, %xmm3

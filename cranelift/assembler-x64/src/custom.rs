@@ -103,6 +103,81 @@ pub mod mnemonic {
     }
 }
 
+pub mod display {
+    use crate::Registers;
+    use crate::inst;
+
+    pub fn pseudo_op(imm: u8) -> &'static str {
+        match imm {
+            0 => "eq",
+            1 => "lt",
+            2 => "le",
+            3 => "unord",
+            4 => "neq",
+            5 => "nlt",
+            6 => "nle",
+            7 => "ord",
+            _ => panic!("not a valid immediate for pseudo op"),
+        }
+    }
+
+    pub fn cmpps_a<R: Registers>(
+        f: &mut std::fmt::Formatter,
+        inst: &inst::cmpps_a<R>,
+    ) -> std::fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m128 = inst.xmm_m128.to_string();
+        let imm8 = inst.imm8.to_string();
+        if inst.imm8.value() > 7 {
+            return write!(f, "{} {imm8}, {xmm_m128}, {xmm1}", inst.mnemonic());
+        }
+        let name = format!("cmp{}ps", pseudo_op(inst.imm8.value()));
+        write!(f, "{name} {xmm_m128}, {xmm1}")
+    }
+
+    pub fn cmpss_a<R: Registers>(
+        f: &mut std::fmt::Formatter,
+        inst: &inst::cmpss_a<R>,
+    ) -> std::fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m32 = inst.xmm_m32.to_string();
+        let imm8 = inst.imm8.to_string();
+        if inst.imm8.value() > 7 {
+            return write!(f, "{} {imm8}, {xmm_m32}, {xmm1}", inst.mnemonic());
+        }
+        let name = format!("cmp{}ss", pseudo_op(inst.imm8.value()));
+        write!(f, "{name} {xmm_m32}, {xmm1}")
+    }
+
+    pub fn cmpsd_a<R: Registers>(
+        f: &mut std::fmt::Formatter,
+        inst: &inst::cmpsd_a<R>,
+    ) -> std::fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m64 = inst.xmm_m64.to_string();
+        let imm8 = inst.imm8.to_string();
+        if inst.imm8.value() > 7 {
+            return write!(f, "{} {imm8}, {xmm_m64}, {xmm1}", inst.mnemonic());
+        }
+        let name = format!("cmp{}sd", pseudo_op(inst.imm8.value()));
+        write!(f, "{name} {xmm_m64}, {xmm1}")
+    }
+
+    pub fn cmppd_a<R: Registers>(
+        f: &mut std::fmt::Formatter,
+        inst: &inst::cmppd_a<R>,
+    ) -> std::fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m128 = inst.xmm_m128.to_string();
+        let imm8 = inst.imm8.to_string();
+        if inst.imm8.value() > 7 {
+            return write!(f, "{} {imm8}, {xmm_m128}, {xmm1}", inst.mnemonic());
+        }
+        let name = format!("cmp{}pd", pseudo_op(inst.imm8.value()));
+        write!(f, "{name} {xmm_m128}, {xmm1}")
+    }
+}
+
 pub mod visit {
     use crate::inst::{mulxl_rvm, mulxq_rvm};
     use crate::{Fixed, Gpr, GprMem, RegisterVisitor, Registers, gpr};

@@ -265,14 +265,6 @@ impl Inst {
         }
     }
 
-    pub(crate) fn xmm_cmp_rm_r(op: SseOpcode, src1: Reg, src2: RegMem) -> Inst {
-        src2.assert_regclass_is(RegClass::Float);
-        debug_assert!(src1.class() == RegClass::Float);
-        let src2 = XmmMemAligned::unwrap_new(src2);
-        let src1 = Xmm::unwrap_new(src1);
-        Inst::XmmCmpRmR { op, src1, src2 }
-    }
-
     #[allow(dead_code)]
     pub(crate) fn xmm_min_max_seq(
         size: OperandSize,

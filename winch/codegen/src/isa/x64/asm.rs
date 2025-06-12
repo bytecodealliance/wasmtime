@@ -19,8 +19,8 @@ use cranelift_codegen::{
             AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
             args::{
                 self, Amode, Avx512Opcode, AvxOpcode, CC, CmpOpcode, ExtMode, FenceKind,
-                FromWritableReg, Gpr, GprMem, GprMemImm, RegMem, RegMemImm, SseOpcode,
-                SyntheticAmode, WritableGpr, WritableXmm, Xmm, XmmMem, XmmMemImm,
+                FromWritableReg, Gpr, GprMem, GprMemImm, RegMem, RegMemImm, SyntheticAmode,
+                WritableGpr, WritableXmm, Xmm, XmmMem, XmmMemImm,
             },
             encoding::rex::{RexFlags, encode_modrm},
             external::{PairedGpr, PairedXmm},
@@ -1318,17 +1318,12 @@ impl Assembler {
     /// Compares values in src1 and src2 and sets ZF, PF, and CF flags in EFLAGS
     /// register.
     pub fn ucomis(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Ucomiss,
-            OperandSize::S64 => SseOpcode::Ucomisd,
+        let inst = match size {
+            OperandSize::S32 => asm::inst::ucomiss_a::new(src1, src2).into(),
+            OperandSize::S64 => asm::inst::ucomisd_a::new(src1, src2).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmCmpRmR {
-            op,
-            src1: src1.into(),
-            src2: Xmm::from(src2).into(),
-        });
+        self.emit(Inst::External { inst });
     }
 
     pub fn popcnt(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
