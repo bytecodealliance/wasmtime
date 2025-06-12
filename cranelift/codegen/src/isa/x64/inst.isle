@@ -39,11 +39,6 @@
             (simm64 u64)
             (dst WritableGpr))
 
-       ;; GPR to GPR move: mov (64 32) reg reg.
-       (MovRR (size OperandSize) ;; 4 or 8
-              (src Gpr)
-              (dst WritableGpr))
-
        ;; Like `MovRR` but with a physical register source (for implementing
        ;; CLIF instructions like `get_stack_pointer`).
        (MovFromPReg (src PReg)

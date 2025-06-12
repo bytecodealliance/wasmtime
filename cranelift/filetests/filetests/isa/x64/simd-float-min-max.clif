@@ -10,7 +10,7 @@ block0(v0: i64, v1: f32x4):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movups (%rdi), %xmm4
 ;   movdqa %xmm0, %xmm6
@@ -24,7 +24,7 @@ block0(v0: i64, v1: f32x4):
 ;   cmpunordps %xmm0, %xmm0
 ;   psrld $0xa, %xmm0
 ;   andnps %xmm4, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -58,7 +58,7 @@ block0(v0: i64, v1: f32x4):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movups (%rdi), %xmm4
 ;   movdqa %xmm0, %xmm1
@@ -70,7 +70,7 @@ block0(v0: i64, v1: f32x4):
 ;   orps %xmm0, %xmm1
 ;   psrld $0xa, %xmm0
 ;   andnps %xmm1, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -102,7 +102,7 @@ block0(v0: i64, v1: f64x2):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movupd (%rdi), %xmm4
 ;   movdqa %xmm0, %xmm6
@@ -116,7 +116,7 @@ block0(v0: i64, v1: f64x2):
 ;   cmpunordpd %xmm0, %xmm0
 ;   psrlq $0xd, %xmm0
 ;   andnpd %xmm4, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -150,7 +150,7 @@ block0(v0: i64, v1: f64x2):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movupd (%rdi), %xmm4
 ;   movdqa %xmm0, %xmm5
@@ -162,7 +162,7 @@ block0(v0: i64, v1: f64x2):
 ;   orpd %xmm0, %xmm2
 ;   psrlq $0xd, %xmm0
 ;   andnpd %xmm2, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;

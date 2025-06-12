@@ -22,7 +22,7 @@ function %f0(i32) -> i32, f32, f64 {
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ;   subq $0x40, %rsp
 ;   movq %rbx, 0x10(%rsp)
 ;   movq %r12, 0x18(%rsp)
@@ -44,7 +44,7 @@ function %f0(i32) -> i32, f32, f64 {
 ;   movq 0x28(%rsp), %r14
 ;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block2:
@@ -58,7 +58,7 @@ function %f0(i32) -> i32, f32, f64 {
 ;   movq 0x28(%rsp), %r14
 ;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -135,7 +135,7 @@ function %f1(i32) -> i32, f32, f64 {
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ;   subq $0x40, %rsp
 ;   movq %rbx, 0x10(%rsp)
 ;   movq %r12, 0x18(%rsp)
@@ -154,7 +154,7 @@ function %f1(i32) -> i32, f32, f64 {
 ;   testl   %edi, %edi
 ;   jnz     label2; j label3
 ; block2:
-;   movq    %rax, %r11
+;   movq %rax, %r11
 ;   jmp     label8
 ; block3:
 ;   movdqu %xmm1, <offset:1>+(%rsp)
@@ -166,8 +166,8 @@ function %f1(i32) -> i32, f32, f64 {
 ;   load_ext_name %g+0, %r11
 ;   call    *%r11; jmp MachLabel(6); catch [None: MachLabel(5)]
 ; block5:
-;   movq    %rax, %rsi
-;   movq    %rsi, %r11
+;   movq %rax, %rsi
+;   movq %rsi, %r11
 ;   jmp     label8
 ; block6:
 ;   jmp     label7
@@ -180,12 +180,12 @@ function %f1(i32) -> i32, f32, f64 {
 ;   movq 0x28(%rsp), %r14
 ;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block8:
 ;   lea     1(%r11), %eax
-;   movq    %r11, %rsi
+;   movq %r11, %rsi
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
 ;   movq %rsi, %xmm1
@@ -195,7 +195,7 @@ function %f1(i32) -> i32, f32, f64 {
 ;   movq 0x28(%rsp), %r14
 ;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -286,7 +286,7 @@ function %f2(i32) -> i32, f32, f64 {
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ;   subq $0x40, %rsp
 ;   movq %rbx, 0x10(%rsp)
 ;   movq %r12, 0x18(%rsp)
@@ -308,7 +308,7 @@ function %f2(i32) -> i32, f32, f64 {
 ;   movq 0x28(%rsp), %r14
 ;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block2:
@@ -322,7 +322,7 @@ function %f2(i32) -> i32, f32, f64 {
 ;   movq 0x28(%rsp), %r14
 ;   movq 0x30(%rsp), %r15
 ;   addq $0x40, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -384,7 +384,7 @@ block2:
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   jmp     label1
 ; block1:

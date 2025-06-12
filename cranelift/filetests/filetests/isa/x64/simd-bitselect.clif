@@ -10,7 +10,7 @@ block0(v0: i8x16, v1: i8x16):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movdqa %xmm0, %xmm4
 ;   pcmpeqb %xmm1, %xmm4
@@ -19,7 +19,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movdqa %xmm1, %xmm4
 ;   pblendvb %xmm0, %xmm7, %xmm4
 ;   movdqa %xmm4, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -48,13 +48,13 @@ block0(v0: f32x4, v1: f32x4, v2: i32x4, v3: i32x4):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   cmpeqps %xmm1, %xmm0
 ;   movdqa %xmm3, %xmm6
 ;   pblendvb %xmm0, %xmm2, %xmm6
 ;   movdqa %xmm6, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -80,7 +80,7 @@ block0(v0: i8x16, v1: i8x16, v2: i32x4):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   pand %xmm2, %xmm0
 ;   movdqa %xmm0, %xmm7
@@ -88,7 +88,7 @@ block0(v0: i8x16, v1: i8x16, v2: i32x4):
 ;   movdqa %xmm7, %xmm1
 ;   movdqa %xmm2, %xmm0
 ;   por %xmm1, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -116,7 +116,7 @@ block0(v0: i8x16, v1: i8x16):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movdqa %xmm0, %xmm5
 ;   movdqu (%rip), %xmm0
@@ -124,7 +124,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   movdqa %xmm1, %xmm4
 ;   pblendvb %xmm0, %xmm6, %xmm4
 ;   movdqa %xmm4, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -165,7 +165,7 @@ block0(v0: i16x8, v1: i16x8):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movdqa %xmm0, %xmm5
 ;   movdqu (%rip), %xmm0
@@ -173,7 +173,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   movdqa %xmm1, %xmm4
 ;   pblendvb %xmm0, %xmm6, %xmm4
 ;   movdqa %xmm4, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -211,7 +211,7 @@ block0(v0: i8x16, v1: i8x16):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movdqa %xmm0, %xmm7
 ;   movdqu (%rip), %xmm0
@@ -219,7 +219,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   pand %xmm0, %xmm2
 ;   pandn %xmm1, %xmm0
 ;   por %xmm2, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;

@@ -9,12 +9,12 @@ block0(v0: i8, v1: i32, v2: i32):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   testb   %dil, %dil
-;   movq    %rdx, %rax
+;   movq %rdx, %rax
 ;   cmovnzl %esi, %eax, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -43,18 +43,18 @@ block2:
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   testb   %dil, %dil
 ;   jnz     label2; j label1
 ; block1:
 ;   movl    $2, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block2:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -89,18 +89,18 @@ block2:
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   testb   %dil, %dil
 ;   jnz     label2; j label1
 ; block1:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block2:
 ;   movl    $2, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -138,19 +138,19 @@ block2:
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movl (%rdi), %edx
 ;   cmpl    $1, %edx
 ;   jz      label2; j label1
 ; block1:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block2:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -189,19 +189,19 @@ block2:
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movl (%rdi), %edx
 ;   cmpl    $1, %edx
 ;   jz      label2; j label1
 ; block1:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block2:
 ;   movl    $1, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -233,11 +233,11 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   shrq $0x3f, %rax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -261,11 +261,11 @@ block0(v0: i32):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   shrl $0x1f, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -289,11 +289,11 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   shrq $0x3f, %rax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -317,11 +317,11 @@ block0(v0: i32):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   shrl $0x1f, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -345,12 +345,12 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   notq %rdi
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   shrq $0x3f, %rax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -375,12 +375,12 @@ block0(v0: i32):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   notq %rdi
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   shrl $0x1f, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -405,12 +405,12 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   notq %rdi
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   shrq $0x3f, %rax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -435,12 +435,12 @@ block0(v0: i32):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   notq %rdi
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   shrl $0x1f, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;

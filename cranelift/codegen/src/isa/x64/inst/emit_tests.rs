@@ -211,49 +211,6 @@ fn test_x64_emit() {
     ));
 
     // ========================================================
-    // Mov_R_R
-    insns.push((
-        Inst::mov_r_r(OperandSize::Size32, rbx, w_rsi),
-        "89DE",
-        "movl    %ebx, %esi",
-    ));
-    insns.push((
-        Inst::mov_r_r(OperandSize::Size32, rbx, w_r9),
-        "4189D9",
-        "movl    %ebx, %r9d",
-    ));
-    insns.push((
-        Inst::mov_r_r(OperandSize::Size32, r11, w_rsi),
-        "4489DE",
-        "movl    %r11d, %esi",
-    ));
-    insns.push((
-        Inst::mov_r_r(OperandSize::Size32, r12, w_r9),
-        "4589E1",
-        "movl    %r12d, %r9d",
-    ));
-    insns.push((
-        Inst::mov_r_r(OperandSize::Size64, rbx, w_rsi),
-        "4889DE",
-        "movq    %rbx, %rsi",
-    ));
-    insns.push((
-        Inst::mov_r_r(OperandSize::Size64, rbx, w_r9),
-        "4989D9",
-        "movq    %rbx, %r9",
-    ));
-    insns.push((
-        Inst::mov_r_r(OperandSize::Size64, r11, w_rsi),
-        "4C89DE",
-        "movq    %r11, %rsi",
-    ));
-    insns.push((
-        Inst::mov_r_r(OperandSize::Size64, r12, w_r9),
-        "4D89E1",
-        "movq    %r12, %r9",
-    ));
-
-    // ========================================================
     // LoadEffectiveAddress
     insns.push((
         Inst::lea(Amode::imm_reg(42, r10), w_r8),

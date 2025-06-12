@@ -12,17 +12,17 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movzbl %dil, %eax
 ;   divb %sil ;; implicit: %ax, trap=254
-;   movq    %rax, %rcx
+;   movq %rax, %rcx
 ;   movzbl %dil, %eax
 ;   divb %sil ;; implicit: %ax, trap=254
-;   movq    %rax, %rdx
+;   movq %rax, %rdx
 ;   shrq $0x8, %rdx
-;   movq    %rcx, %rax
-;   movq    %rbp, %rsp
+;   movq %rcx, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -52,19 +52,19 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   uninit  %rdx
 ;   xorq %rdx, %rdx
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   divw %si ;; implicit: %ax, %dx, trap=254
-;   movq    %rax, %r8
+;   movq %rax, %r8
 ;   uninit  %rdx
 ;   xorq %rdx, %rdx
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   divw %si ;; implicit: %ax, %dx, trap=254
-;   movq    %r8, %rax
-;   movq    %rbp, %rsp
+;   movq %r8, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -94,19 +94,19 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   uninit  %rdx
 ;   xorq %rdx, %rdx
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   divl %esi ;; implicit: %eax, %edx, trap=254
-;   movq    %rax, %r8
+;   movq %rax, %r8
 ;   uninit  %rdx
 ;   xorq %rdx, %rdx
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   divl %esi ;; implicit: %eax, %edx, trap=254
-;   movq    %r8, %rax
-;   movq    %rbp, %rsp
+;   movq %r8, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -136,19 +136,19 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   uninit  %rdx
 ;   xorq %rdx, %rdx
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   divq %rsi ;; implicit: %rax, %rdx, trap=254
-;   movq    %rax, %r8
+;   movq %rax, %r8
 ;   uninit  %rdx
 ;   xorq %rdx, %rdx
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   divq %rsi ;; implicit: %rax, %rdx, trap=254
-;   movq    %r8, %rax
-;   movq    %rbp, %rsp
+;   movq %r8, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;

@@ -12,10 +12,10 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   lea     10(%rdi), %rax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -40,7 +40,7 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   load_ext_name %callee_i64+0, %r10
 ;   return_call_unknown %r10 (0) tmp=%r11 %rdi=%rdi
@@ -68,7 +68,7 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   load_ext_name %callee_i64+0, %r10
 ;   return_call_unknown %r10 (0) tmp=%r11 %rdi=%rdi
@@ -94,10 +94,10 @@ block0(v0: f64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   addsd (%rip), %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -137,7 +137,7 @@ block0(v0: f64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   load_ext_name %callee_f64+0, %r10
 ;   return_call_unknown %r10 (0) tmp=%r11 %xmm0=%xmm0
@@ -163,11 +163,11 @@ block0(v0: i8):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   testb   %dil, %dil
 ;   setz    %al
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -193,7 +193,7 @@ block0(v0: i8):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   load_ext_name %callee_i8+0, %r10
 ;   return_call_unknown %r10 (0) tmp=%r11 %rdi=%rdi
@@ -246,9 +246,9 @@ block0:
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ;   subq $0xa0, %rsp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ;   movq 0xa0(%rsp), %r11
 ;   movq %r11, (%rsp)
 ;   movq 0xa8(%rsp), %r11

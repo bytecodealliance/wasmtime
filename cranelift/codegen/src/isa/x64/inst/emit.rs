@@ -287,37 +287,17 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::MovRR { size, src, dst } => {
-            let src = src.to_reg();
-            let dst = dst.to_reg().to_reg();
-            emit_std_reg_reg(
-                sink,
-                LegacyPrefixes::None,
-                0x89,
-                1,
-                src,
-                dst,
-                RexFlags::from(*size),
-            );
-        }
-
         Inst::MovFromPReg { src, dst } => {
             let src: Reg = (*src).into();
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&src));
-            let src = Gpr::unwrap_new(src);
-            let size = OperandSize::Size64;
-            let dst = WritableGpr::from_writable_reg(dst.to_writable_reg()).unwrap();
-            Inst::MovRR { size, src, dst }.emit(sink, info, state);
+            asm::inst::movq_mr::new(*dst, Gpr::unwrap_new(src)).emit(sink, info, state);
         }
 
         Inst::MovToPReg { src, dst } => {
-            let src = src.to_reg();
-            let src = Gpr::unwrap_new(src);
             let dst: Reg = (*dst).into();
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&dst));
             let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
-            let size = OperandSize::Size64;
-            Inst::MovRR { size, src, dst }.emit(sink, info, state);
+            asm::inst::movq_mr::new(dst, *src).emit(sink, info, state);
         }
 
         Inst::LoadEffectiveAddress { addr, dst, size } => {
@@ -865,12 +845,8 @@ pub(crate) fn emit(
                 .emit(sink, info, state);
 
                 let dst = Writable::from_reg(reg);
-                let inst = Inst::MovRR {
-                    size: OperandSize::Size64,
-                    src: tmp1.to_reg(),
-                    dst: WritableGpr::from_writable_reg(dst).unwrap(),
-                };
-                emit(&inst, sink, info, state);
+                asm::inst::movq_mr::new(dst.map(Gpr::unwrap_new), tmp1.to_reg())
+                    .emit(sink, info, state);
             };
 
             exchange(rsp_offset, regs::rsp());
@@ -1877,8 +1853,9 @@ pub(crate) fn emit(
             let add_op: AsmInst = add_op;
             let or_op: AsmInst = or_op;
             let min_max_op: AsmInst = min_max_op;
+            let cmp_op: AsmInst = cmp_op;
 
-            Inst::External { inst: cmp_op }.emit(sink, info, state);
+            cmp_op.emit(sink, info, state);
 
             one_way_jmp(sink, CC::NZ, do_min_max);
             one_way_jmp(sink, CC::P, propagate_nan);
@@ -2131,7 +2108,7 @@ pub(crate) fn emit(
             //
             // done:
 
-            let cmp_op = match src_size {
+            let cmp_op: AsmInst = match src_size {
                 Size64 => asm::inst::ucomisd_a::new(src, src).into(),
                 Size32 => asm::inst::ucomiss_a::new(src, src).into(),
                 _ => unreachable!(),
@@ -2159,7 +2136,7 @@ pub(crate) fn emit(
             one_way_jmp(sink, CC::NO, done); // no overflow => done
 
             // Check for NaN.
-            Inst::External { inst: cmp_op }.emit(sink, info, state);
+            cmp_op.emit(sink, info, state);
 
             if *is_saturating {
                 let not_nan = sink.get_label();
@@ -2183,12 +2160,12 @@ pub(crate) fn emit(
                 // Zero out tmp_xmm.
                 asm::inst::xorpd_a::new(tmp_xmm, tmp_xmm.to_reg()).emit(sink, info, state);
 
-                let inst = match src_size {
+                let inst: AsmInst = match src_size {
                     Size64 => asm::inst::ucomisd_a::new(tmp_xmm.to_reg(), src).into(),
                     Size32 => asm::inst::ucomiss_a::new(tmp_xmm.to_reg(), src).into(),
                     _ => unreachable!(),
                 };
-                Inst::External { inst }.emit(sink, info, state);
+                inst.emit(sink, info, state);
 
                 // Jump if >= to done.
                 one_way_jmp(sink, CC::NB, done);
@@ -2244,12 +2221,12 @@ pub(crate) fn emit(
                 };
                 inst.emit(sink, info, state);
 
-                let inst = match src_size {
+                let inst: AsmInst = match src_size {
                     Size64 => asm::inst::ucomisd_a::new(src, tmp_xmm.to_reg()).into(),
                     Size32 => asm::inst::ucomiss_a::new(src, tmp_xmm.to_reg()).into(),
                     _ => unreachable!(),
                 };
-                Inst::External { inst }.emit(sink, info, state);
+                inst.emit(sink, info, state);
 
                 // no trap if src >= or > threshold
                 let inst = Inst::trap_if(no_overflow_cc.invert(), TrapCode::INTEGER_OVERFLOW);
@@ -2260,12 +2237,12 @@ pub(crate) fn emit(
                 // Zero out the tmp_xmm register.
                 asm::inst::xorpd_a::new(tmp_xmm, tmp_xmm.to_reg()).emit(sink, info, state);
 
-                let inst = match src_size {
+                let inst: AsmInst = match src_size {
                     Size64 => asm::inst::ucomisd_a::new(tmp_xmm.to_reg(), src).into(),
                     Size32 => asm::inst::ucomiss_a::new(tmp_xmm.to_reg(), src).into(),
                     _ => unreachable!(),
                 };
-                Inst::External { inst }.emit(sink, info, state);
+                inst.emit(sink, info, state);
 
                 // no trap if 0 >= src
                 let inst = Inst::trap_if(CC::B, TrapCode::INTEGER_OVERFLOW);
@@ -2376,12 +2353,12 @@ pub(crate) fn emit(
             };
             inst.emit(sink, info, state);
 
-            let inst = match src_size {
+            let inst: AsmInst = match src_size {
                 Size64 => asm::inst::ucomisd_a::new(src, tmp_xmm.to_reg()).into(),
                 Size32 => asm::inst::ucomiss_a::new(src, tmp_xmm.to_reg()).into(),
                 _ => unreachable!(),
             };
-            Inst::External { inst }.emit(sink, info, state);
+            inst.emit(sink, info, state);
 
             let handle_large = sink.get_label();
             one_way_jmp(sink, CC::NB, handle_large); // jump to handle_large if src >= large_threshold
@@ -2670,8 +2647,7 @@ pub(crate) fn emit(
             sink.bind_label(again_label, state.ctrl_plane_mut());
 
             // movq %rax, %r_temp
-            let i2 = Inst::mov_r_r(OperandSize::Size64, *dst_old.to_reg(), temp_r);
-            i2.emit(sink, info, state);
+            asm::inst::movq_mr::new(temp, dst_old.to_reg()).emit(sink, info, state);
 
             use AtomicRmwSeqOp as RmwOp;
             match op {

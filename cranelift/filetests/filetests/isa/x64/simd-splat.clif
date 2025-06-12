@@ -9,13 +9,13 @@ block0(v0: i8):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movd %edi, %xmm0
 ;   uninit  %xmm5
 ;   pxor %xmm5, %xmm5
 ;   pshufb  %xmm0, %xmm5, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -39,12 +39,12 @@ block0(v0: i16):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movd %edi, %xmm2
 ;   pshuflw $0x0, %xmm2, %xmm4
 ;   pshufd $0x0, %xmm4, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -68,11 +68,11 @@ block0(v0: i32):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movd %edi, %xmm2
 ;   pshufd $0x0, %xmm2, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -95,11 +95,11 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movq %rdi, %xmm2
 ;   pshufd $0x44, %xmm2, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -122,10 +122,10 @@ block0(v0: f32):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   shufps  $0, %xmm0, %xmm0, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -147,10 +147,10 @@ block0(v0: f64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   pshufd $0x44, %xmm0, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -173,14 +173,14 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   uninit  %xmm0
 ;   pinsrb $0x0, (%rdi), %xmm0
 ;   uninit  %xmm7
 ;   pxor %xmm7, %xmm7
 ;   pshufb  %xmm0, %xmm7, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -205,13 +205,13 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   uninit  %xmm3
 ;   pinsrw $0x0, (%rdi), %xmm3
 ;   pshuflw $0x0, %xmm3, %xmm6
 ;   pshufd $0x0, %xmm6, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -236,11 +236,11 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movss (%rdi), %xmm0
 ;   shufps  $0, %xmm0, %xmm0, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -264,10 +264,10 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movddup (%rdi), %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -290,11 +290,11 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movss (%rdi), %xmm0
 ;   shufps  $0, %xmm0, %xmm0, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -318,10 +318,10 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movddup (%rdi), %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;

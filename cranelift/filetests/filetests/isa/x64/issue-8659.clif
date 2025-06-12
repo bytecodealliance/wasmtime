@@ -8,10 +8,10 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;

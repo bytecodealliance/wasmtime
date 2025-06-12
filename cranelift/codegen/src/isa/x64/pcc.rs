@@ -80,10 +80,6 @@ pub(crate) fn check(
             })
         }
 
-        Inst::MovRR { size, dst, .. } => {
-            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())
-        }
-
         Inst::MovFromPReg { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
         Inst::MovToPReg { .. } => Ok(()),
 

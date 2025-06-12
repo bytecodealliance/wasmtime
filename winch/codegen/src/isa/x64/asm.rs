@@ -403,11 +403,15 @@ impl Assembler {
 
     /// Register-to-register move.
     pub fn mov_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::MovRR {
-            src: src.into(),
-            dst: dst.map(Into::into),
-            size: size.into(),
-        });
+        let dst: WritableGpr = dst.map(|r| r.into());
+        let inst = match size {
+            OperandSize::S8 => asm::inst::movb_mr::new(dst, src).into(),
+            OperandSize::S16 => asm::inst::movw_mr::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::movl_mr::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::movq_mr::new(dst, src).into(),
+            _ => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Register-to-memory move.
