@@ -100,82 +100,81 @@ pub mod mnemonic {
             XmmMem::Xmm(_) => "vcvttpd2dq".into(),
             XmmMem::Mem(_) => "vcvttpd2dqx".into(),
         }
+    }
+}
 
-    pub fn cmpps_a<R: Registers>(inst: &inst::cmpps_a<R>, ordered_ops: String) -> String {
-        let name = match inst.imm8.value() {
-            0 => "cmpeqps".to_string(),
-            1 => "cmpltps".to_string(),
-            2 => "cmpleps".to_string(),
-            3 => "cmpunordps".to_string(),
-            4 => "cmpneqps".to_string(),
-            5 => "cmpnltps".to_string(),
-            6 => "cmpnleps".to_string(),
-            7 => "cmpordps".to_string(),
-            _ => return format!("{} {ordered_ops}", inst.mnemonic().to_string()),
-        };
-        let ordered_ops = ordered_ops
-            .split_once(", ")
-            .map(|(_, rest)| rest.to_string())
-            .unwrap_or(ordered_ops);
+pub mod display {
+    use crate::Registers;
+    use crate::inst;
 
-        format!("{name} {ordered_ops}")
+    pub fn pseudo_op(imm: u8) -> &'static str {
+        match imm {
+            0 => "eq",
+            1 => "lt",
+            2 => "le",
+            3 => "unord",
+            4 => "neq",
+            5 => "nlt",
+            6 => "nle",
+            7 => "ord",
+            _ => panic!("not a u8"),
+        }
     }
 
-    pub fn cmpss_a<R: Registers>(inst: &inst::cmpss_a<R>, ordered_ops: String) -> String {
-        let name = match inst.imm8.value() {
-            0 => "cmpeqss".to_string(),
-            1 => "cmpltss".to_string(),
-            2 => "cmpless".to_string(),
-            3 => "cmpunordss".to_string(),
-            4 => "cmpneqss".to_string(),
-            5 => "cmpnltss".to_string(),
-            6 => "cmpnless".to_string(),
-            7 => "cmpordss".to_string(),
-            _ => return format!("{} {ordered_ops}", inst.mnemonic().to_string()),
-        };
-        let ordered_ops = ordered_ops
-            .split_once(", ")
-            .map(|(_, rest)| rest.to_string())
-            .unwrap_or(ordered_ops);
-        format!("{name} {ordered_ops}")
+    pub fn cmpps_a<R: Registers>(
+        f: &mut std::fmt::Formatter,
+        inst: &inst::cmpps_a<R>,
+    ) -> std::fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m128 = inst.xmm_m128.to_string();
+        let imm8 = inst.imm8.to_string();
+        if inst.imm8.value() > 7 {
+            return write!(f, "{} {imm8}, {xmm_m128}, {xmm1}", inst.mnemonic());
+        }
+        let name = format!("cmp{}ps", pseudo_op(inst.imm8.value()));
+        write!(f, "{name} {xmm_m128}, {xmm1}")
     }
 
-    pub fn cmpsd_a<R: Registers>(inst: &inst::cmpsd_a<R>, ordered_ops: String) -> String {
-        let name = match inst.imm8.value() {
-            0 => "cmpeqsd".to_string(),
-            1 => "cmpltsd".to_string(),
-            2 => "cmplesd".to_string(),
-            3 => "cmpunordsd".to_string(),
-            4 => "cmpneqsd".to_string(),
-            5 => "cmpnltsd".to_string(),
-            6 => "cmpnlesd".to_string(),
-            7 => "cmpordsd".to_string(),
-            _ => return format!("{} {ordered_ops}", inst.mnemonic().to_string()),
-        };
-        let ordered_ops = ordered_ops
-            .split_once(", ")
-            .map(|(_, rest)| rest.to_string())
-            .unwrap_or(ordered_ops);
-        format!("{name} {ordered_ops}")
+    pub fn cmpss_a<R: Registers>(
+        f: &mut std::fmt::Formatter,
+        inst: &inst::cmpss_a<R>,
+    ) -> std::fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m32 = inst.xmm_m32.to_string();
+        let imm8 = inst.imm8.to_string();
+        if inst.imm8.value() > 7 {
+            return write!(f, "{} {imm8}, {xmm_m32}, {xmm1}", inst.mnemonic());
+        }
+        let name = format!("cmp{}ss", pseudo_op(inst.imm8.value()));
+        write!(f, "{name} {xmm_m32}, {xmm1}")
     }
 
-    pub fn cmppd_a<R: Registers>(inst: &inst::cmppd_a<R>, ordered_ops: String) -> String {
-        let name = match inst.imm8.value() {
-            0 => "cmpeqpd".to_string(),
-            1 => "cmpltpd".to_string(),
-            2 => "cmplepd".to_string(),
-            3 => "cmpunordpd".to_string(),
-            4 => "cmpneqpd".to_string(),
-            5 => "cmpnltpd".to_string(),
-            6 => "cmpnlepd".to_string(),
-            7 => "cmpordpd".to_string(),
-            _ => return format!("{} {ordered_ops}", inst.mnemonic().to_string()),
-        };
-        let ordered_ops = ordered_ops
-            .split_once(", ")
-            .map(|(_, rest)| rest.to_string())
-            .unwrap_or(ordered_ops);
-        format!("{name} {ordered_ops}")
+    pub fn cmpsd_a<R: Registers>(
+        f: &mut std::fmt::Formatter,
+        inst: &inst::cmpsd_a<R>,
+    ) -> std::fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m64 = inst.xmm_m64.to_string();
+        let imm8 = inst.imm8.to_string();
+        if inst.imm8.value() > 7 {
+            return write!(f, "{} {imm8}, {xmm_m64}, {xmm1}", inst.mnemonic());
+        }
+        let name = format!("cmp{}sd", pseudo_op(inst.imm8.value()));
+        write!(f, "{name} {xmm_m64}, {xmm1}")
+    }
+
+    pub fn cmppd_a<R: Registers>(
+        f: &mut std::fmt::Formatter,
+        inst: &inst::cmppd_a<R>,
+    ) -> std::fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m128 = inst.xmm_m128.to_string();
+        let imm8 = inst.imm8.to_string();
+        if inst.imm8.value() > 7 {
+            return write!(f, "{} {imm8}, {xmm_m128}, {xmm1}", inst.mnemonic());
+        }
+        let name = format!("cmp{}pd", pseudo_op(inst.imm8.value()));
+        write!(f, "{name} {xmm_m128}, {xmm1}")
     }
 }
 
