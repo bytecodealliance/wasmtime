@@ -1196,9 +1196,9 @@ impl PrettyPrint for Inst {
                 ..
             } => {
                 let size = ty.bytes() as u8;
-                let replacement = pretty_print_reg(*replacement, size);
-                let expected = pretty_print_reg(*expected, size);
-                let dst_old = pretty_print_reg(dst_old.to_reg(), size);
+                let replacement = pretty_print_reg(**replacement, size);
+                let expected = pretty_print_reg(**expected, size);
+                let dst_old = pretty_print_reg(*dst_old.to_reg(), size);
                 let mem = mem.pretty_print(size);
                 let suffix = suffix_bwlq(OperandSize::from_bytes(size as u32));
                 format!(
@@ -1216,12 +1216,12 @@ impl PrettyPrint for Inst {
                 dst_old_high,
                 ..
             } => {
-                let replacement_low = pretty_print_reg(*replacement_low, 8);
-                let replacement_high = pretty_print_reg(*replacement_high, 8);
-                let expected_low = pretty_print_reg(*expected_low, 8);
-                let expected_high = pretty_print_reg(*expected_high, 8);
-                let dst_old_low = pretty_print_reg(dst_old_low.to_reg(), 8);
-                let dst_old_high = pretty_print_reg(dst_old_high.to_reg(), 8);
+                let replacement_low = pretty_print_reg(**replacement_low, 8);
+                let replacement_high = pretty_print_reg(**replacement_high, 8);
+                let expected_low = pretty_print_reg(**expected_low, 8);
+                let expected_high = pretty_print_reg(**expected_high, 8);
+                let dst_old_low = pretty_print_reg(*dst_old_low.to_reg(), 8);
+                let dst_old_high = pretty_print_reg(*dst_old_high.to_reg(), 8);
                 let mem = mem.pretty_print(16);
                 format!(
                     "lock cmpxchg16b {mem}, replacement={replacement_high}:{replacement_low}, expected={expected_high}:{expected_low}, dst_old={dst_old_high}:{dst_old_low}"
@@ -1234,8 +1234,8 @@ impl PrettyPrint for Inst {
                 mem,
                 dst_old,
             } => {
-                let operand = pretty_print_reg(*operand, size.to_bytes());
-                let dst_old = pretty_print_reg(dst_old.to_reg(), size.to_bytes());
+                let operand = pretty_print_reg(**operand, size.to_bytes());
+                let dst_old = pretty_print_reg(*dst_old.to_reg(), size.to_bytes());
                 let mem = mem.pretty_print(size.to_bytes());
                 let suffix = suffix_bwlq(*size);
                 format!("lock xadd{suffix} {operand}, {mem}, dst_old={dst_old}")
@@ -1247,8 +1247,8 @@ impl PrettyPrint for Inst {
                 mem,
                 dst_old,
             } => {
-                let operand = pretty_print_reg(*operand, size.to_bytes());
-                let dst_old = pretty_print_reg(dst_old.to_reg(), size.to_bytes());
+                let operand = pretty_print_reg(**operand, size.to_bytes());
+                let dst_old = pretty_print_reg(*dst_old.to_reg(), size.to_bytes());
                 let mem = mem.pretty_print(size.to_bytes());
                 let suffix = suffix_bwlq(*size);
                 format!("xchg{suffix} {operand}, {mem}, dst_old={dst_old}")
@@ -1271,12 +1271,12 @@ impl PrettyPrint for Inst {
                 dst_old_low,
                 dst_old_high,
             } => {
-                let operand_low = pretty_print_reg(*operand_low, 8);
-                let operand_high = pretty_print_reg(*operand_high, 8);
-                let temp_low = pretty_print_reg(temp_low.to_reg(), 8);
-                let temp_high = pretty_print_reg(temp_high.to_reg(), 8);
-                let dst_old_low = pretty_print_reg(dst_old_low.to_reg(), 8);
-                let dst_old_high = pretty_print_reg(dst_old_high.to_reg(), 8);
+                let operand_low = pretty_print_reg(**operand_low, 8);
+                let operand_high = pretty_print_reg(**operand_high, 8);
+                let temp_low = pretty_print_reg(*temp_low.to_reg(), 8);
+                let temp_high = pretty_print_reg(*temp_high.to_reg(), 8);
+                let dst_old_low = pretty_print_reg(*dst_old_low.to_reg(), 8);
+                let dst_old_high = pretty_print_reg(*dst_old_high.to_reg(), 8);
                 let mem = mem.pretty_print(16);
                 format!(
                     "atomically {{ {dst_old_high}:{dst_old_low} = {mem}; {temp_high}:{temp_low} = {dst_old_high}:{dst_old_low} {op:?} {operand_high}:{operand_low}; {mem} = {temp_high}:{temp_low} }}"
@@ -1290,10 +1290,10 @@ impl PrettyPrint for Inst {
                 dst_old_low,
                 dst_old_high,
             } => {
-                let operand_low = pretty_print_reg(*operand_low, 8);
-                let operand_high = pretty_print_reg(*operand_high, 8);
-                let dst_old_low = pretty_print_reg(dst_old_low.to_reg(), 8);
-                let dst_old_high = pretty_print_reg(dst_old_high.to_reg(), 8);
+                let operand_low = pretty_print_reg(**operand_low, 8);
+                let operand_high = pretty_print_reg(**operand_high, 8);
+                let dst_old_low = pretty_print_reg(*dst_old_low.to_reg(), 8);
+                let dst_old_high = pretty_print_reg(*dst_old_high.to_reg(), 8);
                 let mem = mem.pretty_print(16);
                 format!(
                     "atomically {{ {dst_old_high}:{dst_old_low} = {mem}; {mem} = {operand_high}:{operand_low} }}"

@@ -378,10 +378,10 @@
        ;; The instruction "succeeded" iff the lowest `ty` bits of %rax
        ;; afterwards are the same as they were before.
        (LockCmpxchg (ty Type) ;; I8, I16, I32, or I64
-                    (replacement Reg)
-                    (expected Reg)
+                    (replacement Gpr)
+                    (expected Gpr)
                     (mem SyntheticAmode)
-                    (dst_old WritableReg))
+                    (dst_old WritableGpr))
 
        ;; A standard (native) `lock cmpxchg16b (amode)`, with register
        ;; conventions:
@@ -393,25 +393,25 @@
        ;;
        ;; The instruction "succeeded" iff the bits of %rax and %rdx
        ;; afterwards are the same as they were before.
-       (LockCmpxchg16b (replacement_low Reg)
-                       (replacement_high Reg)
-                       (expected_low Reg)
-                       (expected_high Reg)
+       (LockCmpxchg16b (replacement_low Gpr)
+                       (replacement_high Gpr)
+                       (expected_low Gpr)
+                       (expected_high Gpr)
                        (mem BoxSyntheticAmode)
-                       (dst_old_low WritableReg)
-                       (dst_old_high WritableReg))
+                       (dst_old_low WritableGpr)
+                       (dst_old_high WritableGpr))
 
        ;; A standard (native) `lock xadd src, (amode)`
        (LockXadd (size OperandSize)
-                 (operand Reg)
+                 (operand Gpr)
                  (mem SyntheticAmode)
-                 (dst_old WritableReg))
+                 (dst_old WritableGpr))
 
        ;; A standard (native) `xchg src, (amode)`
        (Xchg (size OperandSize)
-                 (operand Reg)
+                 (operand Gpr)
                  (mem SyntheticAmode)
-                 (dst_old WritableReg))
+                 (dst_old WritableGpr))
 
        ;; A synthetic instruction, based on a loop around a native `lock
        ;; cmpxchg` instruction.
@@ -441,9 +441,9 @@
        (AtomicRmwSeq (ty Type) ;; I8, I16, I32, or I64
                      (op AtomicRmwSeqOp)
                      (mem SyntheticAmode)
-                     (operand Reg)
-                     (temp WritableReg)
-                     (dst_old WritableReg))
+                     (operand Gpr)
+                     (temp WritableGpr)
+                     (dst_old WritableGpr))
 
        ;; A synthetic instruction, based on a loop around a native `lock
        ;; cmpxchg16b` instruction.
@@ -460,12 +460,12 @@
        ;;   instruction.
        (Atomic128RmwSeq (op Atomic128RmwSeqOp)
                         (mem BoxSyntheticAmode)
-                        (operand_low Reg)
-                        (operand_high Reg)
-                        (temp_low WritableReg)
-                        (temp_high WritableReg)
-                        (dst_old_low WritableReg)
-                        (dst_old_high WritableReg))
+                        (operand_low Gpr)
+                        (operand_high Gpr)
+                        (temp_low WritableGpr)
+                        (temp_high WritableGpr)
+                        (dst_old_low WritableGpr)
+                        (dst_old_high WritableGpr))
 
        ;; A synthetic instruction, based on a loop around a native `lock
        ;; cmpxchg16b` instruction.
@@ -480,10 +480,10 @@
        ;; - %rflags is written.  Do not assume anything about it after the
        ;;   instruction.
        (Atomic128XchgSeq (mem SyntheticAmode)
-                         (operand_low Reg)
-                         (operand_high Reg)
-                         (dst_old_low WritableReg)
-                         (dst_old_high WritableReg))
+                         (operand_low Gpr)
+                         (operand_high Gpr)
+                         (dst_old_low WritableGpr)
+                         (dst_old_high WritableGpr))
 
        ;; A memory fence (mfence, lfence or sfence).
        (Fence (kind FenceKind))

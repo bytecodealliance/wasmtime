@@ -421,7 +421,7 @@ pub(crate) fn check(
         Inst::LockCmpxchg {
             ref mem, dst_old, ..
         } => {
-            ensure_no_fact(vcode, dst_old.to_reg())?;
+            ensure_no_fact(vcode, *dst_old.to_reg())?;
             check_store(ctx, None, mem, vcode, I64)?;
             Ok(())
         }
@@ -432,8 +432,8 @@ pub(crate) fn check(
             dst_old_high,
             ..
         } => {
-            ensure_no_fact(vcode, dst_old_low.to_reg())?;
-            ensure_no_fact(vcode, dst_old_high.to_reg())?;
+            ensure_no_fact(vcode, *dst_old_low.to_reg())?;
+            ensure_no_fact(vcode, *dst_old_high.to_reg())?;
             check_store(ctx, None, mem, vcode, I128)?;
             Ok(())
         }
@@ -444,7 +444,7 @@ pub(crate) fn check(
             dst_old,
             operand: _,
         } => {
-            ensure_no_fact(vcode, dst_old.to_reg())?;
+            ensure_no_fact(vcode, *dst_old.to_reg())?;
             check_store(ctx, None, mem, vcode, size.to_type())?;
             Ok(())
         }
@@ -455,7 +455,7 @@ pub(crate) fn check(
             dst_old,
             operand: _,
         } => {
-            ensure_no_fact(vcode, dst_old.to_reg())?;
+            ensure_no_fact(vcode, *dst_old.to_reg())?;
             check_store(ctx, None, mem, vcode, size.to_type())?;
             Ok(())
         }
@@ -466,8 +466,8 @@ pub(crate) fn check(
             dst_old,
             ..
         } => {
-            ensure_no_fact(vcode, dst_old.to_reg())?;
-            ensure_no_fact(vcode, temp.to_reg())?;
+            ensure_no_fact(vcode, *dst_old.to_reg())?;
+            ensure_no_fact(vcode, *temp.to_reg())?;
             check_store(ctx, None, mem, vcode, I64)?;
             Ok(())
         }
@@ -480,10 +480,10 @@ pub(crate) fn check(
             dst_old_high,
             ..
         } => {
-            ensure_no_fact(vcode, dst_old_low.to_reg())?;
-            ensure_no_fact(vcode, dst_old_high.to_reg())?;
-            ensure_no_fact(vcode, temp_low.to_reg())?;
-            ensure_no_fact(vcode, temp_high.to_reg())?;
+            ensure_no_fact(vcode, *dst_old_low.to_reg())?;
+            ensure_no_fact(vcode, *dst_old_high.to_reg())?;
+            ensure_no_fact(vcode, *temp_low.to_reg())?;
+            ensure_no_fact(vcode, *temp_high.to_reg())?;
             check_store(ctx, None, mem, vcode, I128)?;
             Ok(())
         }
@@ -494,8 +494,8 @@ pub(crate) fn check(
             dst_old_high,
             ..
         } => {
-            ensure_no_fact(vcode, dst_old_low.to_reg())?;
-            ensure_no_fact(vcode, dst_old_high.to_reg())?;
+            ensure_no_fact(vcode, *dst_old_low.to_reg())?;
+            ensure_no_fact(vcode, *dst_old_high.to_reg())?;
             check_store(ctx, None, mem, vcode, I128)?;
             Ok(())
         }
