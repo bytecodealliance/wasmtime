@@ -811,9 +811,7 @@ impl SseOpcode {
     pub(crate) fn available_from(&self) -> InstructionSet {
         use InstructionSet::*;
         match self {
-            SseOpcode::Rcpss
-            | SseOpcode::Rsqrtss
-            | SseOpcode::Shufps => SSE,
+            SseOpcode::Rcpss | SseOpcode::Rsqrtss | SseOpcode::Shufps => SSE,
 
             SseOpcode::Packssdw
             | SseOpcode::Packsswb
