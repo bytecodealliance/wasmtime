@@ -39,7 +39,7 @@ impl<R: AsReg> Amode<R> {
     pub(crate) fn as_rex_prefix(&self, enc_reg: u8, has_w_bit: bool, uses_8bit: bool) -> RexPrefix {
         match self {
             Amode::ImmReg { base, .. } => {
-                RexPrefix::two_op(enc_reg, base.enc(), has_w_bit, uses_8bit)
+                RexPrefix::mem_op(enc_reg, base.enc(), has_w_bit, uses_8bit)
             }
             Amode::ImmRegRegShift { base, index, .. } => {
                 RexPrefix::three_op(enc_reg, index.enc(), base.enc(), has_w_bit, uses_8bit)
