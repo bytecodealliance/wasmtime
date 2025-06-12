@@ -337,6 +337,7 @@ wasm-wave = "0.234.0"
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
 arbitrary = "1.4.0"
+mutatis = "0.3.1"
 cc = "1.0"
 object = { version = "0.36.5", default-features = false, features = ['read_core', 'elf'] }
 gimli = { version = "0.31.0", default-features = false, features = ['read'] }

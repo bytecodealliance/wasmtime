@@ -2318,6 +2318,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "685a9ac4b61f4e728e1d2c6a7844609c16527aeb5e6c865915c08e619c16410f"
 
 [[package]]
+name = "mutatis"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f433cdf0901e1f31df267311aaf26e35574d001bf774aa5d56e177a7b7240a00"
+dependencies = [
+ "rand",
+]
+
+[[package]]
 name = "ndarray"
 version = "0.15.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4410,6 +4419,7 @@ dependencies = [
  "env_logger 0.11.5",
  "futures",
  "log",
+ "mutatis",
  "rand",
  "rayon",
  "serde_json",
