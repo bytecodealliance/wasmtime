@@ -3319,20 +3319,6 @@ impl FuncEnvironment<'_> {
         )
     }
 
-    #[allow(dead_code, reason = "TODO")]
-    pub fn translate_resume_throw(
-        &mut self,
-        _pos: FuncCursor,
-        _state: &FuncTranslationState,
-        _tag_index: u32,
-        _cont: ir::Value,
-    ) -> WasmResult<ir::Value> {
-        // TODO(#10248)
-        Err(wasmtime_environ::WasmError::Unsupported(
-            "resume.throw instruction not implemented, yet".to_string(),
-        ))
-    }
-
     pub fn translate_suspend(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
