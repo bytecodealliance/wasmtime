@@ -10,11 +10,11 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movb $0x12, (%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -38,11 +38,11 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movw $0x1234, (%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -66,11 +66,11 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movl $0x12345678, (%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -94,11 +94,11 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movq $0x12345678, (%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -122,11 +122,11 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movq $0x7fffffff, (%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -150,11 +150,11 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movq $0xffffffff80000000, (%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -178,12 +178,12 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movabsq $9223372036854775807, %rax
 ;   movq %rax, (%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;

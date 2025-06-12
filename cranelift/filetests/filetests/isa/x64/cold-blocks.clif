@@ -16,18 +16,18 @@ block2:
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   testl   %edi, %edi
 ;   jnz     label1; j label2
 ; block1:
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   jmp     label3
 ; block2:
 ;   movl    $97, %eax
 ;   jmp     label3
 ; block3:
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
@@ -62,15 +62,15 @@ block2 cold:
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   testl   %edi, %edi
 ;   jnz     label1; j label2
 ; block1:
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   jmp     label3
 ; block3:
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block2:

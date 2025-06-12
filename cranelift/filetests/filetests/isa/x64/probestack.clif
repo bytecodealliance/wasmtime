@@ -12,14 +12,14 @@ block0:
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ;   movl    $100000, %eax
 ;   call    LibCall(Probestack)
 ;   subq $0x186a0, %rsp
 ; block0:
 ;   lea     rsp(0 + virtual offset), %rax
 ;   addq $0x186a0, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;

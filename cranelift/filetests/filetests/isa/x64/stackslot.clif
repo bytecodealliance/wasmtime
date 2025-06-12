@@ -20,8 +20,8 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
-;   movq    %rsi, %r10
+;   movq %rsp, %rbp
+;   movq %rsi, %r10
 ;   addq $0x30, %r10
 ;   cmpq    %rsp, %r10
 ;   jnbe #trap=stk_ovf
@@ -34,7 +34,7 @@ block0(v0: i64):
 ;   movq %r8, (%rdi)
 ;   movq %r9, 8(%rdi)
 ;   addq $0x30, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ;
