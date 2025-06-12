@@ -243,7 +243,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
         // Winch currently only offers support for x64, and it requires
         // signals-based-traps which MIRI disables so disable winch tests on MIRI
         let target = if *strategy == Compiler::Winch {
-            quote! { #[cfg(all(target_arch = "x86_64", not(miri)))] }
+            quote! { #[cfg(all(any(target_arch = "x86_64", target_arch = "aarch64"), not(miri)))] }
         } else {
             quote! {}
         };

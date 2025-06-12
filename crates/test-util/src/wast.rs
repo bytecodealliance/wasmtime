@@ -359,7 +359,7 @@ impl Compiler {
                 }
 
                 if cfg!(target_arch = "aarch64") {
-                    return unsupported_base || config.wide_arithmetic() || config.threads();
+                    return unsupported_base || config.wide_arithmetic() || config.threads() || config.simd();
                 }
 
                 false
