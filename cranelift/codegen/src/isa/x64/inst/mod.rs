@@ -102,7 +102,6 @@ impl Inst {
             | Inst::LockCmpxchg { .. }
             | Inst::LockXadd { .. }
             | Inst::Xchg { .. }
-            | Inst::MovRR { .. }
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
             | Inst::Nop { .. }
@@ -216,15 +215,6 @@ impl Inst {
             simm64,
             dst: WritableGpr::from_writable_reg(dst).unwrap(),
         }
-    }
-
-    pub(crate) fn mov_r_r(size: OperandSize, src: Reg, dst: Writable<Reg>) -> Inst {
-        debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        debug_assert!(src.class() == RegClass::Int);
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let src = Gpr::unwrap_new(src);
-        let dst = WritableGpr::from_writable_reg(dst).unwrap();
-        Inst::MovRR { size, src, dst }
     }
 
     /// Convenient helper for unary float operations.
@@ -520,25 +510,6 @@ impl PrettyPrint for Inst {
 
         fn ljustify2(s1: String, s2: String) -> String {
             ljustify(s1 + &s2)
-        }
-
-        fn suffix_lq(size: OperandSize) -> String {
-            match size {
-                OperandSize::Size32 => "l",
-                OperandSize::Size64 => "q",
-                _ => unreachable!(),
-            }
-            .to_string()
-        }
-
-        #[allow(dead_code)]
-        fn suffix_lqb(size: OperandSize) -> String {
-            match size {
-                OperandSize::Size32 => "l",
-                OperandSize::Size64 => "q",
-                _ => unreachable!(),
-            }
-            .to_string()
         }
 
         fn suffix_bwlq(size: OperandSize) -> String {
@@ -895,13 +866,6 @@ impl PrettyPrint for Inst {
                     let imm = (*simm64 as u32) as i32;
                     format!("{op} ${imm}, {dst}")
                 }
-            }
-
-            Inst::MovRR { size, src, dst } => {
-                let src = pretty_print_reg(src.to_reg(), size.to_bytes());
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let op = ljustify2("mov".to_string(), suffix_lq(*size));
-                format!("{op} {src}, {dst}")
             }
 
             Inst::MovFromPReg { src, dst } => {
@@ -1503,10 +1467,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::Imm { dst, .. } => {
             collector.reg_def(dst);
         }
-        Inst::MovRR { src, dst, .. } => {
-            collector.reg_use(src);
-            collector.reg_def(dst);
-        }
         Inst::MovFromPReg { dst, src } => {
             debug_assert!(dst.to_reg().to_reg().is_virtual());
             collector.reg_fixed_nonallocatable(*src);
@@ -1908,9 +1868,19 @@ impl MachInst for Inst {
             // out the upper 32 bits of the destination.  For example, we could
             // conceivably use `movl %reg, %reg` to zero out the top 32 bits of
             // %reg.
-            Self::MovRR { size, src, dst, .. } if *size == OperandSize::Size64 => {
-                Some((dst.to_writable_reg(), src.to_reg()))
-            }
+            Self::External {
+                inst: I::movq_mr(asm::inst::movq_mr { rm64, r64 }),
+            } => match rm64 {
+                asm::GprMem::Gpr(reg) => Some((reg.map(|r| r.to_reg()), r64.as_ref().to_reg())),
+                asm::GprMem::Mem(_) => None,
+            },
+            Self::External {
+                inst: I::movq_rm(asm::inst::movq_rm { r64, rm64 }),
+            } => match rm64 {
+                asm::GprMem::Gpr(reg) => Some((r64.as_ref().map(|r| r.to_reg()), reg.to_reg())),
+                asm::GprMem::Mem(_) => None,
+            },
+
             // Note that `movss_a_r` and `movsd_a_r` are specifically omitted
             // here because they only overwrite the low bits in the destination
             // register, otherwise preserving the upper bits. That can be used
@@ -2013,8 +1983,11 @@ impl MachInst for Inst {
         let rc_src = src_reg.class();
         // If this isn't true, we have gone way off the rails.
         debug_assert!(rc_dst == rc_src);
-        match rc_dst {
-            RegClass::Int => Inst::mov_r_r(OperandSize::Size64, src_reg, dst_reg),
+        let inst = match rc_dst {
+            RegClass::Int => {
+                asm::inst::movq_mr::new(dst_reg.map(Gpr::unwrap_new), Gpr::unwrap_new(src_reg))
+                    .into()
+            }
             RegClass::Float => {
                 // The Intel optimization manual, in "3.5.1.13 Zero-Latency MOV Instructions",
                 // doesn't include MOVSS/MOVSD as instructions with zero-latency. Use movaps for
@@ -2022,7 +1995,7 @@ impl MachInst for Inst {
                 // zero-latency.
                 let dst_reg = dst_reg.map(|r| Xmm::new(r).unwrap());
                 let src_reg = Xmm::new(src_reg).unwrap();
-                let inst = match ty {
+                match ty {
                     types::F16 | types::F32 | types::F64 | types::F32X4 => {
                         asm::inst::movaps_a::new(dst_reg, src_reg).into()
                     }
@@ -2031,11 +2004,11 @@ impl MachInst for Inst {
                         asm::inst::movdqa_a::new(dst_reg, src_reg).into()
                     }
                     _ => unimplemented!("unable to move type: {}", ty),
-                };
-                Inst::External { inst }
+                }
             }
             RegClass::Vector => unreachable!(),
-        }
+        };
+        Inst::External { inst }
     }
 
     fn gen_nop(preferred_size: usize) -> Inst {
