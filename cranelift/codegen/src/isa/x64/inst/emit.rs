@@ -1292,7 +1292,6 @@ pub(crate) fn emit(
 
             let rex = RexFlags::clear_w();
             let (prefix, opcode, length) = match op {
-                SseOpcode::Movlhps => (LegacyPrefixes::None, 0x0F16, 2),
                 SseOpcode::Packssdw => (LegacyPrefixes::_66, 0x0F6B, 2),
                 SseOpcode::Packsswb => (LegacyPrefixes::_66, 0x0F63, 2),
                 SseOpcode::Packusdw => (LegacyPrefixes::_66, 0x0F382B, 3),
@@ -1453,7 +1452,6 @@ pub(crate) fn emit(
                 AvxOpcode::Vpcmpgtw => (LP::_66, OM::_0F, 0x65),
                 AvxOpcode::Vpcmpgtd => (LP::_66, OM::_0F, 0x66),
                 AvxOpcode::Vpcmpgtq => (LP::_66, OM::_0F38, 0x37),
-                AvxOpcode::Vmovlhps => (LP::None, OM::_0F, 0x16),
                 AvxOpcode::Vpminsb => (LP::_66, OM::_0F38, 0x38),
                 AvxOpcode::Vpminsw => (LP::_66, OM::_0F, 0xEA),
                 AvxOpcode::Vpminsd => (LP::_66, OM::_0F38, 0x39),

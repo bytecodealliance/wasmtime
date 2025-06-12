@@ -189,7 +189,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   call    *%r9
 ;   movdqa %xmm0, %xmm6
 ;   movdqu <offset:1>+0x30(%rsp), %xmm0
-;   movlhps %xmm0, %xmm6, %xmm0
+;   movlhps %xmm6, %xmm0
 ;   addq $0x40, %rsp
 ;   movq    %rbp, %rsp
 ;   popq %rbp

@@ -205,7 +205,8 @@ impl dsl::Format {
     }
 
     fn generate_vex_prefix(&self, f: &mut Formatter, vex: &dsl::Vex) -> ModRmStyle {
-        use dsl::OperandKind::{FixedReg, Imm, Reg, RegMem};
+        use dsl::OperandKind::{FixedReg, Imm, Mem, Reg, RegMem};
+
         f.empty_line();
         f.comment("Emit VEX prefix.");
         fmtln!(f, "let len = {:#03b};", vex.length.bits());
@@ -215,7 +216,19 @@ impl dsl::Format {
         let bits = "len, pp, mmmmm, w";
 
         let style = match self.operands_by_kind().as_slice() {
+            [Reg(reg), Reg(vvvv), Reg(rm)] => {
+                assert!(!vex.is4);
+                fmtln!(f, "let reg = self.{reg}.enc();");
+                fmtln!(f, "let vvvv = self.{vvvv}.enc();");
+                fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
+                fmtln!(f, "let vex = VexPrefix::three_op(reg, vvvv, rm, {bits});");
+                ModRmStyle::Reg {
+                    reg: ModRmReg::Reg(*reg),
+                    rm: *rm,
+                }
+            }
             [Reg(reg), Reg(vvvv), RegMem(rm)]
+            | [Reg(reg), Reg(vvvv), Mem(rm)]
             | [Reg(reg), Reg(vvvv), RegMem(rm), Imm(_) | FixedReg(_)]
             | [Reg(reg), RegMem(rm), Reg(vvvv)] => {
                 assert!(!vex.is4);
