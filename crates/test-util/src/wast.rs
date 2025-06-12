@@ -597,6 +597,7 @@ impl WastTest {
                         "misc_testsuite/issue6562.wast",
                         "misc_testsuite/simd/almost-extmul.wast",
                         "misc_testsuite/simd/cvt-from-uint.wast",
+                        "misc_testsuite/simd/edge-of-memory.wast",
                         "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
                         "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
                         "misc_testsuite/simd/replace-lane-preserve.wast",
