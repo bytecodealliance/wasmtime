@@ -134,6 +134,7 @@ impl TableOps {
 
         module.finish()
     }
+    /// Computes the abstract stack depth after executing all operations
     pub fn abstract_stack_depth(&self) -> usize {
         let mut stack: usize = 0;
         for op in &self.ops {
@@ -146,14 +147,124 @@ impl TableOps {
     }
 }
 
+/// A mutator for the table ops
 #[derive(Debug)]
 pub struct TableOpsMutator;
 
 impl Mutate<TableOps> for TableOpsMutator {
     fn mutate(&mut self, c: &mut Candidates<'_>, ops: &mut TableOps) -> mutatis::Result<()> {
+        //  1. Append
         c.mutation(|ctx| {
             let mut stack = ops.abstract_stack_depth();
             add_table_op_mutatis(ops, ctx, &mut stack)
+        })?;
+        // 2. Remove
+        c.mutation(|ctx| {
+            if ops.ops.is_empty() {
+                return Ok(());
+            }
+            if let Some(idx) = ctx.rng().gen_index(ops.ops.len()) {
+                let removed = ops.ops.remove(idx);
+                log::debug!("Remove called at idx: {} with opcode {:?}", idx, removed);
+                let mut stack = 0isize;
+                for op in &ops.ops[..idx] {
+                    stack += op.results_len() as isize;
+                    stack -= op.operands_len() as isize;
+                }
+                stack -= removed.results_len() as isize;
+                stack += removed.operands_len() as isize;
+
+                log::debug!(
+                    "op = {:?}, pop = {}, push = {}, resulting stack = {}",
+                    removed,
+                    removed.operands_len(),
+                    removed.results_len(),
+                    stack
+                );
+                for _ in 0..removed.results_len() {
+                    ops.ops.insert(idx, TableOp::Null());
+                    log::debug!(
+                        "Patched with ref.null at idx {} after removing {:?}",
+                        idx,
+                        removed
+                    );
+                    stack += 1;
+                }
+            }
+            Ok(())
+        })?;
+        // 3. Replace
+        c.mutation(|ctx| {
+            if ops.ops.is_empty() {
+                return Ok(());
+            }
+
+            let i = match ctx.rng().gen_index(ops.ops.len()) {
+                Some(i) => i,
+                None => return Ok(()),
+            };
+
+            let old_op = ops.ops.remove(i);
+            let old_push = old_op.results_len();
+            let old_pop = old_op.operands_len();
+
+            // Stack at point of removal
+            let mut temp_ops = TableOps {
+                num_params: ops.num_params,
+                num_globals: ops.num_globals,
+                table_size: ops.table_size,
+                ops: ops.ops[..i].to_vec(),
+            };
+
+            let mut stack = temp_ops.abstract_stack_depth();
+
+            while stack
+                < (old_pop as isize).try_into().expect(
+                    "[-] Failed to convert old_pop to usize: value may be negative or too large",
+                )
+            {
+                ops.ops.insert(i, TableOp::Null());
+                stack += 1;
+                log::debug!("Patching before replace at idx {i} due to underflow");
+            }
+            let mut new_ops = vec![];
+            let mut total_push = 0;
+            let mut total_pop = 0;
+            let mut attempts = 0;
+            while (total_push < old_push || total_pop < old_pop) && attempts < 10 {
+                attempts += 1;
+                add_table_op_mutatis(&mut temp_ops, ctx, &mut stack).ok();
+                if let Some(new_op) = temp_ops.ops.pop() {
+                    total_push += new_op.results_len();
+                    total_pop += new_op.operands_len();
+                    new_ops.push(new_op);
+                }
+            }
+            if total_push == old_push && total_pop == old_pop {
+                log::debug!(
+                    "Replacing op at idx {i}: {:?} (pop {}, push {}) with {} op(s): [ {} ]",
+                    old_op,
+                    old_pop,
+                    old_push,
+                    new_ops.len(),
+                    new_ops
+                        .iter()
+                        .map(|op| format!("{:?}", op))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+                for (j, op) in new_ops.into_iter().enumerate() {
+                    ops.ops.insert(i + j, op);
+                }
+            } else {
+                ops.ops.insert(i, old_op);
+                log::debug!(
+                    "Replace at idx {i} failed: could not generate matching ops (pop {}, push {})",
+                    old_pop,
+                    old_push
+                );
+            }
+            Ok(())
         })?;
         Ok(())
     }
@@ -262,40 +373,56 @@ macro_rules! define_table_ops {
             }
         }
 
+        type TableOpConstructor = fn(
+                    &mut TableOps,
+                    &mut mutatis::Context,
+                    &mut usize
+                ) -> Option<TableOp>;
 
-        #[expect(unused_comparisons)]
+        $(
+            #[allow(unused_variables, unused_comparisons, non_snake_case)]
+            fn $op(
+                ops: &mut TableOps,
+                ctx: &mut mutatis::Context,
+                stack: &mut usize
+            ) -> Option<TableOp> {
+                if $( $(($limit as fn(&TableOps) -> $ty)(ops) > 0 &&)* )? *stack >= $params {
+                    let result = TableOp::$op(
+                        $($(
+                            m::range(0..=($limit as fn(&TableOps) -> $ty)(ops) - 1)
+                                .generate(ctx)
+                                .ok()?,
+                        )*)?
+                    );
+                    *stack = *stack - $params + $results;
+                    Some(result)
+                } else {
+                    None
+                }
+            }
+        )*
+        const TABLE_OP_GENERATORS: &[TableOpConstructor] = &[
+            $(
+                $op,
+            )*
+        ];
         fn add_table_op_mutatis(
             ops: &mut TableOps,
             ctx: &mut mutatis::Context,
             stack: &mut usize,
         ) -> mutatis::Result<()> {
-            use mutatis::Generate;
-            use mutatis::mutators as m;
-
             let mut valid_choices = vec![];
-
-            $(
-                if $( $(($limit as fn(&TableOps) -> $ty)(ops) > 0 &&)* )? *stack >= $params {
-                    valid_choices.push(stringify!($op));
+            for f in TABLE_OP_GENERATORS {
+                let mut temp_stack = *stack;
+                if let Some(op) = f(ops, ctx, &mut temp_stack) {
+                    valid_choices.push((f, op, temp_stack));
                 }
-            )*
-            let selected = ctx.rng().choose(&valid_choices).unwrap();
-            let op = match *selected {
-                $(
-                    // TODO: remove string comparison at runtime
-                    stringify!($op) => {
-                        *stack = *stack - $params + $results;
-                        TableOp::$op
-                            (
-                                $($(
-                                    m::range(0..=($limit as fn(&TableOps) -> $ty)(ops) - 1).generate(ctx)?,
-                                )*)?
-                            )
-                    }
-                )*
-                _ => unreachable!(),
-            };
+            }
+            let (_, op, new_stack) = *ctx.rng()
+                .choose(&valid_choices)
+                .expect("[-] .choose(&valid_choices) failed.");
 
+            *stack = new_stack;
             ops.ops.push(op);
             Ok(())
         }
@@ -374,7 +501,6 @@ impl TableOp {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     macro_rules! default_table_ops {
         ($num_params:expr, $num_globals:expr, $table_size:expr) => {
             TableOps {
@@ -407,6 +533,7 @@ mod tests {
 
     #[test]
     fn mutate_table_ops_with_default_mutator() -> mutatis::Result<()> {
+        let _ = env_logger::try_init();
         use mutatis::Session;
         use wasmparser::Validator;
         let mut res = default_table_ops![5, 5, 5];
@@ -416,15 +543,21 @@ mod tests {
             session.mutate(&mut res)?;
             let wasm = res.to_wasm_binary();
             let mut validator = Validator::new();
-            let wat = wasmprinter::print_bytes(&wasm).unwrap();
+            let wat = wasmprinter::print_bytes(&wasm).expect("[-] Failed .print_bytes(&wasm).");
             let result = validator.validate_all(&wasm);
-            assert!(result.is_ok(), "\n\t\t==== Failed Wat ====\n {wat}");
+            assert!(
+                result.is_ok(),
+                "\n[-] Invalid wat: {}\n\t\t==== Failed Wat ====\n{}",
+                result.err().expect("[-] Failed .err() in assert macro."),
+                wat
+            );
         }
         Ok(())
     }
 
     #[test]
     fn test_tableops_mutate_with() -> mutatis::Result<()> {
+        let _ = env_logger::try_init();
         let mut res = default_table_ops![5, 5, 5];
         let mut generator = TableOpsMutator;
         let mut session = mutatis::Session::new();
@@ -435,13 +568,20 @@ mod tests {
             let mut validator = wasmparser::Validator::new();
             let result = validator.validate_all(&wasm);
             let wat = wasmprinter::print_bytes(&wasm).unwrap();
-            assert!(result.is_ok(), "\n\t\t==== Failed Wat ====\n {wat}");
+            println!("{wat}");
+            assert!(
+                result.is_ok(),
+                "\n[-] Invalid wat: {}\n\t\t==== Failed Wat ====\n{}",
+                result.err().expect("[-] Failed .err() in assert macro."),
+                wat
+            );
         }
         Ok(())
     }
 
     #[test]
     fn every_op_generated() -> mutatis::Result<()> {
+        let _ = env_logger::try_init();
         let mut unseen_ops: std::collections::HashSet<_> = OP_NAMES.iter().copied().collect();
 
         let mut res = empty_table_ops![5, 5, 5];
@@ -458,6 +598,12 @@ mod tests {
             }
         }
         assert!(unseen_ops.is_empty(), "Failed to generate {unseen_ops:?}");
+        Ok(())
+    }
+    // TODO: Write a test for expected wat
+    #[test]
+    fn test_wat_string() -> mutatis::Result<()> {
+        let _ = env_logger::try_init();
         Ok(())
     }
 }
