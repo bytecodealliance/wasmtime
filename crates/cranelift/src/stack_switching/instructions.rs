@@ -6,11 +6,14 @@ use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, MemFlags};
 use cranelift_codegen::ir::{Block, BlockCall, InstBuilder, JumpTableData};
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::{PtrSize, TagIndex, TypeIndex, WasmResult, WasmValType};
+use wasmtime_environ::{PtrSize, TagIndex, TypeIndex, WasmResult, WasmValType, wasm_unsupported};
 
-// TODO(frank-emrich) This is the size for x64 Linux. Once we support different
-// platforms for stack switching, must select appropriate value for target.
-pub const CONTROL_CONTEXT_SIZE: usize = 24;
+fn control_context_size(triple: &target_lexicon::Triple) -> WasmResult<u8> {
+    match (triple.architecture, triple.operating_system) {
+        (target_lexicon::Architecture::X86_64, target_lexicon::OperatingSystem::Linux) => Ok(24),
+        _ => Err(wasm_unsupported!("stack switching not support on {triple}")),
+    }
+}
 
 use super::control_effect::ControlEffect;
 use super::fatpointer;
@@ -1842,9 +1845,10 @@ pub(crate) fn translate_switch<'a>(
         // that would be a rather ad-hoc change to how the instruction uses the
         // two pointers given to it.
 
+        let cctx_size = control_context_size(env.isa().triple())?;
         let slot_size = ir::StackSlotData::new(
             ir::StackSlotKind::ExplicitSlot,
-            u32::try_from(CONTROL_CONTEXT_SIZE).unwrap(),
+            u32::from(cctx_size),
             u8::try_from(env.pointer_type().bytes()).unwrap(),
         );
         let slot = builder.create_sized_stack_slot(slot_size);
@@ -1852,7 +1856,7 @@ pub(crate) fn translate_switch<'a>(
 
         let flags = MemFlags::trusted();
         let mut offset: i32 = 0;
-        while offset < i32::try_from(CONTROL_CONTEXT_SIZE).unwrap() {
+        while offset < i32::from(cctx_size) {
             // switchee_last_ancestor_cc -> tmp control context
             let tmp1 =
                 builder
