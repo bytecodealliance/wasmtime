@@ -184,6 +184,16 @@ start = "2020-01-14"
 end = "2025-07-30"
 notes = "I am an author of this crate"
 
+[[wildcard-audits.mutatis]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2019-03-16"
+end = "2025-07-30"
+notes = """
+I am the author of this crate.
+"""
+
 [[wildcard-audits.pulley-interpreter]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
