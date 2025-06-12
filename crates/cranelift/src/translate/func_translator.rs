@@ -241,15 +241,34 @@ fn parse_function_body(
     debug_assert_eq!(state.control_stack.len(), 1, "State not initialized");
 
     environ.before_translate_function(builder, state)?;
+
     let mut reader = OperatorsReader::new(reader);
+    let mut operand_types = vec![];
+
     while !reader.eof() {
         let pos = reader.original_position();
         builder.set_srcloc(cur_srcloc(&reader.get_binary_reader()));
+
         let op = reader.read()?;
+
+        // Get the operand types for this operator.
+        let arity = op.operator_arity(&*validator);
+        operand_types.clear();
+        let operand_types = arity.and_then(|(operand_arity, _result_arity)| {
+            for i in (0..operand_arity).rev() {
+                let i = usize::try_from(i).unwrap();
+                let ty = validator.get_operand_type(i)??;
+                let ty = environ.convert_valtype(ty).ok()?;
+                operand_types.push(ty);
+            }
+            Some(&operand_types[..])
+        });
+
         validator.op(pos, &op)?;
-        environ.before_translate_operator(&op, builder, state)?;
-        translate_operator(validator, &op, builder, state, environ)?;
-        environ.after_translate_operator(&op, builder, state)?;
+
+        environ.before_translate_operator(&op, operand_types, builder, state)?;
+        translate_operator(validator, &op, operand_types, builder, state, environ)?;
+        environ.after_translate_operator(&op, operand_types, builder, state)?;
     }
     environ.after_translate_function(builder, state)?;
     reader.finish()?;
