@@ -490,6 +490,7 @@ impl WastTest {
                     "misc_testsuite/simd/almost-extmul.wast",
                     "misc_testsuite/simd/canonicalize-nan.wast",
                     "misc_testsuite/simd/cvt-from-uint.wast",
+                    "misc_testsuite/simd/edge-of-memory.wast",
                     "misc_testsuite/simd/interesting-float-splat.wast",
                     "misc_testsuite/simd/issue4807.wast",
                     "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
