@@ -117,7 +117,7 @@ pub mod display {
             5 => "nlt",
             6 => "nle",
             7 => "ord",
-            _ => panic!("not a u8"),
+            _ => panic!("not a valid immediate for pseudo op"),
         }
     }
 
