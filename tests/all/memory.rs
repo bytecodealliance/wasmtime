@@ -133,7 +133,7 @@ fn offsets_static_dynamic_oh_my(config: &mut Config) -> Result<()> {
             test_traps(&mut store, &funcs, 65536, &mem);
             test_traps(&mut store, &funcs, u32::MAX, &mem);
         }
-	Ok::<_, wasmtime::Error>(())
+        Ok::<_, wasmtime::Error>(())
     })?;
 
     Ok(())

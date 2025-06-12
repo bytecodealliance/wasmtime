@@ -410,12 +410,12 @@ impl Masm for MacroAssembler {
         let size = kind.derive_operand_size();
         self.with_aligned_sp(|masm| match &kind {
             LoadKind::Operand(_) => {
-		if size == OperandSize::S128 {
-		    bail!(CodeGenError::UnimplementedWasmLoadKind)
-		} else {
-		    Ok(masm.asm.uload(src, dst, size, UNTRUSTED_FLAGS))
-		}
-	    },
+                if size == OperandSize::S128 {
+                    bail!(CodeGenError::UnimplementedWasmLoadKind)
+                } else {
+                    Ok(masm.asm.uload(src, dst, size, UNTRUSTED_FLAGS))
+                }
+            }
             LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
             LoadKind::ScalarExtend(extend_kind) => {
                 if extend_kind.signed() {
