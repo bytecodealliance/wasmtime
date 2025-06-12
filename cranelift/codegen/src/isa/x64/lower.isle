@@ -4780,12 +4780,14 @@
 
 ;; Rules for `scalar_to_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Case 1: when moving a scalar float, we simply move from one XMM register
-;; to another, expecting the register allocator to elide this. Here we
-;; assume that the upper bits of a scalar float have not been munged with
-;; (the same assumption the old backend makes).
-(rule 1 (lower (scalar_to_vector src @ (value_type (ty_scalar_float _))))
-      src)
+;; Case 1: when moving a scalar float the `movss` and `movsd` variants with
+;; xmm-register-to-xmm-register semantics are used to modify only the low bits
+;; of a guaranteed-zero register. This ensures that the upper bits are cleared
+;; as the upper bits of `src` in a register are otherwise undefined.
+(rule 1 (lower (scalar_to_vector src @ (value_type $F32)))
+  (x64_movss_regmove (xmm_zero $F32X4) src))
+(rule 1 (lower (scalar_to_vector src @ (value_type $F64)))
+  (x64_movsd_regmove (xmm_zero $F64X2) src))
 
 ;; Case 2: when moving a scalar value of any other type, use MOVD to zero
 ;; the upper lanes.
