@@ -24,11 +24,11 @@ function %f0(i32) -> i32, f32, f64 {
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x40, %rsp
-;   movq    %rbx, 16(%rsp)
-;   movq    %r12, 24(%rsp)
-;   movq    %r13, 32(%rsp)
-;   movq    %r14, 40(%rsp)
-;   movq    %r15, 48(%rsp)
+;   movq %rbx, 0x10(%rsp)
+;   movq %r12, 0x18(%rsp)
+;   movq %r13, 0x20(%rsp)
+;   movq %r14, 0x28(%rsp)
+;   movq %r15, 0x30(%rsp)
 ; block0:
 ;   movabsq $4607182418800017408, %rcx
 ;   movq %rcx, %xmm1
@@ -137,11 +137,11 @@ function %f1(i32) -> i32, f32, f64 {
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x40, %rsp
-;   movq    %rbx, 16(%rsp)
-;   movq    %r12, 24(%rsp)
-;   movq    %r13, 32(%rsp)
-;   movq    %r14, 40(%rsp)
-;   movq    %r15, 48(%rsp)
+;   movq %rbx, 0x10(%rsp)
+;   movq %r12, 0x18(%rsp)
+;   movq %r13, 0x20(%rsp)
+;   movq %r14, 0x28(%rsp)
+;   movq %r15, 0x30(%rsp)
 ; block0:
 ;   testl   %edi, %edi
 ;   jnz     label4; j label1
@@ -288,11 +288,11 @@ function %f2(i32) -> i32, f32, f64 {
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x40, %rsp
-;   movq    %rbx, 16(%rsp)
-;   movq    %r12, 24(%rsp)
-;   movq    %r13, 32(%rsp)
-;   movq    %r14, 40(%rsp)
-;   movq    %r15, 48(%rsp)
+;   movq %rbx, 0x10(%rsp)
+;   movq %r12, 0x18(%rsp)
+;   movq %r13, 0x20(%rsp)
+;   movq %r14, 0x28(%rsp)
+;   movq %r15, 0x30(%rsp)
 ; block0:
 ;   movabsq $4607182418800017408, %rcx
 ;   movq %rcx, %xmm1

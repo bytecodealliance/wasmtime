@@ -12,7 +12,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    $42, 0(%rdi)
+;   movq $0x2a, (%rdi)
 ;   movq    %rdi, %rax
 ;   movq    %rbp, %rsp
 ;   popq %rbp
@@ -41,7 +41,7 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x10, %rsp
-;   movq    %r15, 0(%rsp)
+;   movq %r15, (%rsp)
 ; block0:
 ;   movq    %rsi, %r15
 ;   load_ext_name %f2+0, %rax
@@ -84,7 +84,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x10, %rsp
-;   movq    %r15, 0(%rsp)
+;   movq %r15, (%rsp)
 ; block0:
 ;   movq    %rdi, %r15
 ;   load_ext_name %f4+0, %rax

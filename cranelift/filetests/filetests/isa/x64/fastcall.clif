@@ -243,8 +243,8 @@ block0(v0: i64):
 ;   uninit  %xmm3
 ;   xorpd %xmm3, %xmm3
 ;   cvtsi2sdq %rcx, %xmm3
-;   movq    %rcx, 32(%rsp)
-;   movq    %rcx, 40(%rsp)
+;   movq %rcx, 0x20(%rsp)
+;   movq %rcx, 0x28(%rsp)
 ;   load_ext_name %g+0, %r11
 ;   movq    %rcx, %rdx
 ;   movdqa %xmm3, %xmm2

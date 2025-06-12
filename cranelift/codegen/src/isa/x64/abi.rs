@@ -662,25 +662,18 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
             // Move the saved frame pointer down by `incoming_args_diff`.
             let addr = Amode::imm_reg(incoming_args_diff, regs::rsp());
-            let r11 = Writable::from_reg(regs::r11());
+            let r11 = Writable::from_reg(Gpr::unwrap_new(regs::r11()));
             let inst = asm::inst::movq_rm::new(r11, addr).into();
             insts.push(Inst::External { inst });
-            insts.push(Inst::mov_r_m(
-                OperandSize::Size64,
-                regs::r11(),
-                Amode::imm_reg(0, regs::rsp()),
-            ));
+            let inst = asm::inst::movq_mr::new(Amode::imm_reg(0, regs::rsp()), r11.to_reg()).into();
+            insts.push(Inst::External { inst });
 
             // Move the saved return address down by `incoming_args_diff`.
             let addr = Amode::imm_reg(incoming_args_diff + 8, regs::rsp());
-            let r11 = Writable::from_reg(regs::r11());
             let inst = asm::inst::movq_rm::new(r11, addr).into();
             insts.push(Inst::External { inst });
-            insts.push(Inst::mov_r_m(
-                OperandSize::Size64,
-                regs::r11(),
-                Amode::imm_reg(8, regs::rsp()),
-            ));
+            let inst = asm::inst::movq_mr::new(Amode::imm_reg(8, regs::rsp()), r11.to_reg()).into();
+            insts.push(Inst::External { inst });
         }
 
         // We need to factor `incoming_args_diff` into the offset upward here, as we have grown

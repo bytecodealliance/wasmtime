@@ -32,6 +32,7 @@ use cranelift_codegen::{
 
 use crate::reg::WritableReg;
 use cranelift_assembler_x64 as asm;
+use wasmtime_environ::Unsigned;
 
 use super::address::Address;
 use smallvec::SmallVec;
@@ -413,22 +414,34 @@ impl Assembler {
     pub fn mov_rm(&mut self, src: Reg, addr: &Address, size: OperandSize, flags: MemFlags) {
         assert!(addr.is_offset());
         let dst = Self::to_synthetic_amode(addr, flags);
-        self.emit(Inst::MovRM {
-            size: size.into(),
-            src: src.into(),
-            dst,
-        });
+        let inst = match size {
+            OperandSize::S8 => asm::inst::movb_mr::new(dst, src).into(),
+            OperandSize::S16 => asm::inst::movw_mr::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::movl_mr::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::movq_mr::new(dst, src).into(),
+            _ => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Immediate-to-memory move.
     pub fn mov_im(&mut self, src: i32, addr: &Address, size: OperandSize, flags: MemFlags) {
         assert!(addr.is_offset());
         let dst = Self::to_synthetic_amode(addr, flags);
-        self.emit(Inst::MovImmM {
-            size: size.into(),
-            simm32: src,
-            dst,
-        });
+        let inst = match size {
+            OperandSize::S8 => {
+                let src = i8::try_from(src).unwrap();
+                asm::inst::movb_mi::new(dst, src.unsigned()).into()
+            }
+            OperandSize::S16 => {
+                let src = i16::try_from(src).unwrap();
+                asm::inst::movw_mi::new(dst, src.unsigned()).into()
+            }
+            OperandSize::S32 => asm::inst::movl_mi::new(dst, src.unsigned()).into(),
+            OperandSize::S64 => asm::inst::movq_mi_sxl::new(dst, src).into(),
+            _ => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Immediate-to-register move.

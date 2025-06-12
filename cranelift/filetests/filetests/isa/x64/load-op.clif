@@ -156,7 +156,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   movq (%rdi), %r8
 ;   lea     0(%r8,%rdi,1), %r9
-;   movq    %r9, 0(%rsi)
+;   movq %r9, (%rsi)
 ;   movq (%r8, %rdi), %rax
 ;   movq    %rbp, %rsp
 ;   popq %rbp

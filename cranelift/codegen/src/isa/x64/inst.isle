@@ -59,16 +59,6 @@
                              (dst WritableGpr)
                              (size OperandSize))
 
-       ;; Immediate store.
-       (MovImmM (size OperandSize)
-		(simm32 i32)
-		(dst SyntheticAmode))
-
-       ;; Integer stores: mov (b w l q) reg addr.
-       (MovRM (size OperandSize) ;; 1, 2, 4, or 8
-              (src Gpr)
-              (dst SyntheticAmode))
-
        ;; Integer comparisons/tests: cmp or test (b w l q) (reg addr imm) reg.
        (CmpRmiR (size OperandSize) ;; 1, 2, 4, or 8
                 (opcode CmpOpcode)
@@ -2083,14 +2073,16 @@
 (decl x64_movrm (Type SyntheticAmode Gpr) SideEffectNoResult)
 (spec (x64_movrm ty addr data)
        (provide (= result (store_effect (extract 79 64 addr) ty (conv_to ty data) (extract 63 0 addr)))))
-(rule (x64_movrm ty addr data)
-      (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (SideEffectNoResult.Inst (MInst.MovRM size data addr))))
+(rule (x64_movrm $I8 addr data) (x64_movb_mr_mem addr data))
+(rule (x64_movrm $I16 addr data) (x64_movw_mr_mem addr data))
+(rule (x64_movrm $I32 addr data) (x64_movl_mr_mem addr data))
+(rule (x64_movrm $I64 addr data) (x64_movq_mr_mem addr data))
 
 (decl x64_movimm_m (Type SyntheticAmode i32) SideEffectNoResult)
-(rule (x64_movimm_m ty addr imm)
-      (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (SideEffectNoResult.Inst (MInst.MovImmM size imm addr))))
+(rule (x64_movimm_m $I8 addr (i8_try_from_i32 imm)) (x64_movb_mi_mem addr (i8_as_u8 imm)))
+(rule (x64_movimm_m $I16 addr (i16_try_from_i32 imm)) (x64_movw_mi_mem addr (i16_as_u16 imm)))
+(rule (x64_movimm_m $I32 addr imm) (x64_movl_mi_mem addr (i32_as_u32 imm)))
+(rule (x64_movimm_m $I64 addr imm) (x64_movq_mi_sxl_mem addr imm))
 
 (decl xmm_movrm_vex (AvxOpcode SyntheticAmode Xmm) SideEffectNoResult)
 (rule (xmm_movrm_vex op addr data)

@@ -104,12 +104,6 @@ pub(crate) fn check(
             })
         }
 
-        Inst::MovImmM { size, ref dst, .. } => check_store(ctx, None, dst, vcode, size.to_type()),
-
-        Inst::MovRM { size, src, ref dst } => {
-            check_store(ctx, Some(src.to_reg()), dst, vcode, size.to_type())
-        }
-
         Inst::CmpRmiR {
             size,
             src1,

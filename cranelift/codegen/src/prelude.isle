@@ -158,7 +158,10 @@
 (extern constructor u32_as_u64 u32_as_u64)
 (convert u32 u64 u32_as_u64)
 
-(decl i32_as_u32 (i32) u32)
+(decl pure i8_as_u8 (i8) u8)
+(extern constructor i8_as_u8 i8_as_u8)
+
+(decl pure i32_as_u32 (i32) u32)
 (extern constructor i32_as_u32 i32_as_u32)
 
 (decl pure i32_as_i64 (i32) i64)

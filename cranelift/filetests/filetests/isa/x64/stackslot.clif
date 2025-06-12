@@ -31,8 +31,8 @@ block0(v0: i64):
 ;   lea     rsp(16 + virtual offset), %rdx
 ;   lea     rsp(24 + virtual offset), %r8
 ;   lea     rsp(32 + virtual offset), %r9
-;   movq    %r8, 0(%rdi)
-;   movq    %r9, 8(%rdi)
+;   movq %r8, (%rdi)
+;   movq %r9, 8(%rdi)
 ;   addq $0x30, %rsp
 ;   movq    %rbp, %rsp
 ;   popq %rbp

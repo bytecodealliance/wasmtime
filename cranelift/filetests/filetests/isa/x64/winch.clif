@@ -38,7 +38,7 @@ block0(v0:i64, v1:i64, v2:i64, v3:i64, v4:i64, v5:i64):
 ;   movq    %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
-;   movq    %rdi, rsp(0 + virtual offset)
+;   movq %rdi, <offset:1>+(%rsp)
 ;   load_ext_name %g+0, %r10
 ;   call    *%r10
 ;   movq <offset:1>+(%rsp), %rax
@@ -75,13 +75,13 @@ block0(v0:i64, v1:i64, v2:i64, v3:i64, v4:i64, v5:i64):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x40, %rsp
-;   movq    %rbx, 16(%rsp)
-;   movq    %r12, 24(%rsp)
-;   movq    %r13, 32(%rsp)
-;   movq    %r14, 40(%rsp)
-;   movq    %r15, 48(%rsp)
+;   movq %rbx, 0x10(%rsp)
+;   movq %r12, 0x18(%rsp)
+;   movq %r13, 0x20(%rsp)
+;   movq %r14, 0x28(%rsp)
+;   movq %r15, 0x30(%rsp)
 ; block0:
-;   movq    %rdi, rsp(0 + virtual offset)
+;   movq %rdi, <offset:1>+(%rsp)
 ;   load_ext_name %g+0, %r10
 ;   call    *%r10
 ;   movq <offset:1>+(%rsp), %rax
@@ -169,11 +169,11 @@ block0(v0:i64, v1:i64, v2:i64, v3:i64, v4:i64, v5:i64):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x30, %rsp
-;   movq    %rbx, 0(%rsp)
-;   movq    %r12, 8(%rsp)
-;   movq    %r13, 16(%rsp)
-;   movq    %r14, 24(%rsp)
-;   movq    %r15, 32(%rsp)
+;   movq %rbx, (%rsp)
+;   movq %r12, 8(%rsp)
+;   movq %r13, 0x10(%rsp)
+;   movq %r14, 0x18(%rsp)
+;   movq %r15, 0x20(%rsp)
 ; block0:
 ;   load_ext_name %g+0, %r10
 ;   movq    %rdi, %rax
@@ -231,14 +231,14 @@ block0:
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x40, %rsp
-;   movq    %rbx, 16(%rsp)
-;   movq    %r12, 24(%rsp)
-;   movq    %r13, 32(%rsp)
-;   movq    %r14, 40(%rsp)
-;   movq    %r15, 48(%rsp)
+;   movq %rbx, 0x10(%rsp)
+;   movq %r12, 0x18(%rsp)
+;   movq %r13, 0x20(%rsp)
+;   movq %r14, 0x28(%rsp)
+;   movq %r15, 0x30(%rsp)
 ; block0:
 ;   load_ext_name userextname0+0, %r10
-;   movq    %r10, rsp(0 + virtual offset)
+;   movq %r10, <offset:1>+(%rsp)
 ;   call    *%r10
 ;   movq <offset:1>+(%rsp), %r10
 ;   call    *%r10
@@ -292,11 +292,11 @@ block0(v0:i64):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ;   subq $0x50, %rsp
-;   movq    %rbx, 32(%rsp)
-;   movq    %r12, 40(%rsp)
-;   movq    %r13, 48(%rsp)
-;   movq    %r14, 56(%rsp)
-;   movq    %r15, 64(%rsp)
+;   movq %rbx, 0x20(%rsp)
+;   movq %r12, 0x28(%rsp)
+;   movq %r13, 0x30(%rsp)
+;   movq %r14, 0x38(%rsp)
+;   movq %r15, 0x40(%rsp)
 ; block0:
 ;   lea     0(%rsp), %rdi
 ;   load_ext_name %g+0, %r10
@@ -354,9 +354,9 @@ block0(v0: i32, v1: i64, v2: i32, v3: i64):
 ;   pushq %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movq    %r8, 12(%rdi)
-;   movl    %ecx, 8(%rdi)
-;   movq    %rdx, 0(%rdi)
+;   movq %r8, 0xc(%rdi)
+;   movl %ecx, 8(%rdi)
+;   movq %rdx, (%rdi)
 ;   movq    %rsi, %rax
 ;   movq    %rbp, %rsp
 ;   popq %rbp
@@ -390,9 +390,9 @@ block0:
 ;   movl    $-56798, %r11d
 ;   movl    $85, %r9d
 ;   movl    $11, %r10d
-;   movq    %r11, 8(%rdi)
+;   movq %r11, 8(%rdi)
 ;   movzbq %r9b, %r11
-;   movq    %r9, 0(%rdi)
+;   movq %r9, (%rdi)
 ;   movzbq %r10b, %rax
 ;   movq    %rbp, %rsp
 ;   popq %rbp
@@ -429,8 +429,8 @@ block0:
 ;   movl    $-56798, %edx
 ;   movl    $85, %r8d
 ;   movl    $11, %eax
-;   movq    %rdx, 1(%rdi)
-;   movb    %r8b, 0(%rdi)
+;   movq %rdx, 1(%rdi)
+;   movb %r8b, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq %rbp
 ;   ret

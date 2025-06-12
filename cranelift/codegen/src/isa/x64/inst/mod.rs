@@ -102,8 +102,6 @@ impl Inst {
             | Inst::LockCmpxchg { .. }
             | Inst::LockXadd { .. }
             | Inst::Xchg { .. }
-            | Inst::MovImmM { .. }
-            | Inst::MovRM { .. }
             | Inst::MovRR { .. }
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
@@ -338,15 +336,6 @@ impl Inst {
         Inst::External { inst }
     }
 
-    pub(crate) fn mov_r_m(size: OperandSize, src: Reg, dst: impl Into<SyntheticAmode>) -> Inst {
-        debug_assert!(src.class() == RegClass::Int);
-        Inst::MovRM {
-            size,
-            src: Gpr::unwrap_new(src),
-            dst: dst.into(),
-        }
-    }
-
     pub(crate) fn lea(addr: impl Into<SyntheticAmode>, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst.to_reg().class() == RegClass::Int);
         Inst::LoadEffectiveAddress {
@@ -484,12 +473,21 @@ impl Inst {
     /// Choose which instruction to use for storing a register value to memory.
     pub(crate) fn store(ty: Type, from_reg: Reg, to_addr: impl Into<SyntheticAmode>) -> Inst {
         let rc = from_reg.class();
-        match rc {
-            RegClass::Int => Inst::mov_r_m(OperandSize::from_ty(ty), from_reg, to_addr),
+        let to_addr = to_addr.into();
+        let inst = match rc {
+            RegClass::Int => {
+                let from_reg = Gpr::unwrap_new(from_reg);
+                match ty {
+                    types::I8 => asm::inst::movb_mr::new(to_addr, from_reg).into(),
+                    types::I16 => asm::inst::movw_mr::new(to_addr, from_reg).into(),
+                    types::I32 => asm::inst::movl_mr::new(to_addr, from_reg).into(),
+                    types::I64 => asm::inst::movq_mr::new(to_addr, from_reg).into(),
+                    _ => unreachable!(),
+                }
+            }
             RegClass::Float => {
-                let to_addr = to_addr.into();
                 let from_reg = Xmm::new(from_reg).unwrap();
-                let inst = match ty {
+                match ty {
                     types::F16 | types::I8X2 => {
                         panic!("storing a f16 or i8x2 requires multiple instructions")
                     }
@@ -505,11 +503,11 @@ impl Inst {
                         asm::inst::movdqu_b::new(to_addr, from_reg).into()
                     }
                     _ => unimplemented!("unable to store type: {}", ty),
-                };
-                Inst::External { inst }
+                }
             }
             RegClass::Vector => unreachable!(),
-        }
+        };
+        Inst::External { inst }
     }
 }
 
@@ -907,19 +905,6 @@ impl PrettyPrint for Inst {
                 }
             }
 
-            Inst::MovImmM { size, simm32, dst } => {
-                let dst = dst.pretty_print(size.to_bytes());
-                let suffix = suffix_bwlq(*size);
-                let imm = match *size {
-                    OperandSize::Size8 => ((*simm32 as u8) as i8).to_string(),
-                    OperandSize::Size16 => ((*simm32 as u16) as i16).to_string(),
-                    OperandSize::Size32 => simm32.to_string(),
-                    OperandSize::Size64 => (*simm32 as i64).to_string(),
-                };
-                let op = ljustify2("mov".to_string(), suffix);
-                format!("{op} ${imm}, {dst}")
-            }
-
             Inst::MovRR { size, src, dst } => {
                 let src = pretty_print_reg(src.to_reg(), size.to_bytes());
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
@@ -948,13 +933,6 @@ impl PrettyPrint for Inst {
                 let addr = addr.pretty_print(8);
                 let op = ljustify("lea".to_string());
                 format!("{op} {addr}, {dst}")
-            }
-
-            Inst::MovRM { size, src, dst, .. } => {
-                let src = pretty_print_reg(src.to_reg(), size.to_bytes());
-                let dst = dst.pretty_print(size.to_bytes());
-                let op = ljustify2("mov".to_string(), suffix_bwlq(*size));
-                format!("{op} {src}, {dst}")
             }
 
             Inst::CmpRmiR {
@@ -1590,16 +1568,9 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(tmp_xmm2);
         }
 
-        Inst::MovImmM { dst, .. } => {
-            dst.get_operands(collector);
-        }
         Inst::LoadEffectiveAddress { addr: src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
-        }
-        Inst::MovRM { src, dst, .. } => {
-            collector.reg_use(src);
-            dst.get_operands(collector);
         }
         Inst::CmpRmiR { src1, src2, .. } => {
             collector.reg_use(src1);
