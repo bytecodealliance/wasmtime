@@ -189,6 +189,9 @@ impl dsl::Inst {
                 fmtln!(f, "crate::custom::visit::{}(self, visitor)", self.name());
                 return;
             }
+            if self.format.operands.is_empty() {
+                fmtln!(f, "let _ = visitor;");
+            }
             for o in &self.format.operands {
                 let mutability = o.mutability.generate_snake_case();
                 let reg = o.location.reg_class();

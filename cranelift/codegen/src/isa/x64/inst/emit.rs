@@ -2369,8 +2369,7 @@ pub(crate) fn emit(
                 inst.emit(sink, info, state);
             } else {
                 // Trap.
-                let inst = Inst::trap(TrapCode::INTEGER_OVERFLOW);
-                inst.emit(sink, info, state);
+                asm::inst::ud2_zo::new(TrapCode::INTEGER_OVERFLOW).emit(sink, info, state);
             }
 
             // Now handle large inputs.
@@ -2721,25 +2720,6 @@ pub(crate) fn emit(
 
             // jnz again
             one_way_jmp(sink, CC::NZ, again_label);
-        }
-
-        Inst::Fence { kind } => {
-            sink.put1(0x0F);
-            sink.put1(0xAE);
-            match kind {
-                FenceKind::MFence => sink.put1(0xF0), // mfence = 0F AE F0
-                FenceKind::LFence => sink.put1(0xE8), // lfence = 0F AE E8
-                FenceKind::SFence => sink.put1(0xF8), // sfence = 0F AE F8
-            }
-        }
-
-        Inst::Hlt => {
-            sink.put1(0xcc);
-        }
-
-        Inst::Ud2 { trap_code } => {
-            sink.add_trap(*trap_code);
-            sink.put_data(Inst::TRAP_OPCODE);
         }
 
         Inst::ElfTlsGetAddr { symbol, dst } => {

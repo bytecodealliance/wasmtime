@@ -11,6 +11,7 @@ mod div;
 mod lanes;
 mod max;
 mod min;
+mod misc;
 mod mov;
 mod mul;
 mod neg;
@@ -41,6 +42,7 @@ pub fn list() -> Vec<Inst> {
     all.extend(lanes::list());
     all.extend(max::list());
     all.extend(min::list());
+    all.extend(misc::list());
     all.extend(mov::list());
     all.extend(mul::list());
     all.extend(neg::list());

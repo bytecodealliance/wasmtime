@@ -371,9 +371,7 @@ pub(crate) fn check(
         | Inst::JmpCondOr { .. }
         | Inst::TrapIf { .. }
         | Inst::TrapIfAnd { .. }
-        | Inst::TrapIfOr { .. }
-        | Inst::Hlt {}
-        | Inst::Ud2 { .. } => Ok(()),
+        | Inst::TrapIfOr { .. } => Ok(()),
         Inst::Rets { .. } => Ok(()),
 
         Inst::ReturnCallUnknown { .. } => Ok(()),
@@ -445,8 +443,6 @@ pub(crate) fn check(
             check_store(ctx, None, mem, vcode, I128)?;
             Ok(())
         }
-
-        Inst::Fence { .. } => Ok(()),
 
         Inst::XmmUninitializedValue { dst } => {
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
