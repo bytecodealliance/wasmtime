@@ -198,11 +198,6 @@ struct Options {
     data_model: DataModel,
 }
 
-enum Context {
-    Lift,
-    Lower,
-}
-
 /// Representation of a "helper function" which may be generated as part of
 /// generating an adapter trampoline.
 ///
@@ -292,7 +287,7 @@ impl<'a> Module<'a> {
         // Import the core wasm function which was lifted using its appropriate
         // signature since the exported function this adapter generates will
         // call the lifted function.
-        let signature = self.types.signature(&lift, Context::Lift);
+        let signature = self.types.signature(&lift);
         let ty = self
             .core_types
             .function(&signature.params, &signature.results);

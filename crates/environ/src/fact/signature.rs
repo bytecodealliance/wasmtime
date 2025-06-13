@@ -3,11 +3,11 @@
 use crate::component::{
     ComponentTypesBuilder, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
-use crate::fact::{AdapterOptions, Context, Options};
+use crate::fact::{AdapterOptions, Options};
 use crate::{WasmValType, prelude::*};
 use wasm_encoder::ValType;
 
-use super::{DataModel, LinearMemoryOptions};
+use super::LinearMemoryOptions;
 
 /// Metadata about a core wasm signature which is created for a component model
 /// signature.
@@ -26,100 +26,15 @@ impl ComponentTypesBuilder {
     /// This is used to generate the core wasm signatures for functions that are
     /// imported (matching whatever was `canon lift`'d) and functions that are
     /// exported (matching the generated function from `canon lower`).
-    pub(super) fn signature(&self, options: &AdapterOptions, context: Context) -> Signature {
-        let mem_opts = match &options.options.data_model {
-            DataModel::LinearMemory(mem_opts) => mem_opts,
-            DataModel::Gc {} => {
-                match &self.module_types_builder()[options.options.core_type]
-                    .composite_type
-                    .inner
-                {
-                    crate::WasmCompositeInnerType::Func(f) => {
-                        return Signature {
-                            params: f.params().iter().map(|ty| self.val_type(ty)).collect(),
-                            results: f.returns().iter().map(|ty| self.val_type(ty)).collect(),
-                        };
-                    }
-                    _ => unreachable!(),
-                }
-            }
-        };
-        let ty = &self[options.ty];
-        let ptr_ty = mem_opts.ptr();
-
-        let max_flat_params = match (&context, options.options.async_) {
-            // Async imports have a lower limit on their flat parameters than
-            // normal functions, so account for that here.
-            (Context::Lower, true) => MAX_FLAT_ASYNC_PARAMS,
-            _ => MAX_FLAT_PARAMS,
-        };
-
-        // If we're lifting async or sync, or if we're lowering sync, we can
-        // pass up to `max_flat_params` via the stack.
-        let mut params = match self.flatten_types(
-            &options.options,
-            max_flat_params,
-            self[ty.params].types.iter().copied(),
-        ) {
-            Some(list) => list,
-            None => vec![ptr_ty],
-        };
-
-        let results = match (&context, options.options.async_) {
-            // Async lowered functions store their results in a pointer passed
-            // as a function argument, so if results are present then add
-            // another pointer to the list of parameters.
-            //
-            // The actual ABI results are then a status code, so account for
-            // that here.
-            (Context::Lower, true) => {
-                if !self[ty.results].types.is_empty() {
-                    params.push(ptr_ty);
-                }
-                vec![ValType::I32]
-            }
-
-            // Async lifted functions transmit results through `task.return`
-            // meaning there's no handling in the ABI of results. If this is a
-            // callback-based functions then the export returns a status code,
-            // otherwise for stackful functions there is no return value.
-            (Context::Lift, true) => {
-                if options.options.callback.is_some() {
-                    vec![ptr_ty]
-                } else {
-                    Vec::new()
-                }
-            }
-
-            // If we've reached this point, we're either lifting or lowering
-            // sync, in which case the guest will return up to
-            // `MAX_FLAT_RESULTS` via the stack or spill to linear memory
-            // otherwise.
-            (_, false) => match self.flatten_types(
-                &options.options,
-                MAX_FLAT_RESULTS,
-                self[ty.results].types.iter().copied(),
-            ) {
-                Some(list) => list,
-                None => {
-                    match context {
-                        // For a lifted function too-many-results gets translated to a
-                        // returned pointer where results are read from. The callee
-                        // allocates space here.
-                        Context::Lift => vec![ptr_ty],
-                        // For a lowered function too-many-results becomes a return
-                        // pointer which is passed as the last argument. The caller
-                        // allocates space here.
-                        Context::Lower => {
-                            params.push(ptr_ty);
-                            Vec::new()
-                        }
-                    }
-                }
-            },
-        };
-
-        Signature { params, results }
+    pub(super) fn signature(&self, options: &AdapterOptions) -> Signature {
+        let f = &self.module_types_builder()[options.options.core_type]
+            .composite_type
+            .inner
+            .unwrap_func();
+        Signature {
+            params: f.params().iter().map(|ty| self.val_type(ty)).collect(),
+            results: f.returns().iter().map(|ty| self.val_type(ty)).collect(),
+        }
     }
 
     fn val_type(&self, ty: &WasmValType) -> ValType {

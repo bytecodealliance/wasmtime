@@ -208,7 +208,7 @@ impl Func {
 
     fn ty(&self, store: &StoreOpaque) -> TypeFuncIndex {
         let instance = &store[self.instance.id()];
-        let (ty, _, _, _) = instance.component().export_lifted_function(self.index);
+        let (ty, _, _) = instance.component().export_lifted_function(self.index);
         ty
     }
 
@@ -379,8 +379,7 @@ impl Func {
         LowerReturn: Copy,
     {
         let vminstance = &store[self.instance.id()];
-        let (ty, def, _core_ty, options) =
-            vminstance.component().export_lifted_function(self.index);
+        let (ty, def, options) = vminstance.component().export_lifted_function(self.index);
         let mem_opts = match options.data_model {
             CanonicalOptionsDataModel::Gc {} => todo!("CM+GC"),
             CanonicalOptionsDataModel::LinearMemory(opts) => opts,
@@ -558,7 +557,7 @@ impl Func {
         let mut store = store.as_context_mut();
         let index = self.index;
         let vminstance = &store.0[self.instance.id()];
-        let (_ty, _def, _core_ty, options) = vminstance.component().export_lifted_function(index);
+        let (_ty, _def, options) = vminstance.component().export_lifted_function(index);
         let post_return = options.post_return.map(|i| {
             let func_ref = vminstance.runtime_post_return(i);
             ExportFunction { func_ref }

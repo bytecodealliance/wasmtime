@@ -195,7 +195,6 @@ pub enum Export {
     LiftedFunction {
         ty: TypeFuncIndex,
         func: CoreDef,
-        func_ty: ModuleInternedTypeIndex,
         options: CanonicalOptions,
     },
     ModuleStatic {
@@ -667,7 +666,6 @@ impl LinearizeDfg<'_> {
             Export::LiftedFunction {
                 ty,
                 func,
-                func_ty,
                 options,
             } => {
                 let func = self.core_def(func);
@@ -675,7 +673,6 @@ impl LinearizeDfg<'_> {
                 info::Export::LiftedFunction {
                     ty: *ty,
                     func,
-                    func_ty: *func_ty,
                     options,
                 }
             }

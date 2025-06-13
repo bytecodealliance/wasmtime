@@ -140,8 +140,6 @@ pub struct Adapter {
     pub lower_options: AdapterOptions,
     /// The original core wasm function which was lifted.
     pub func: dfg::CoreDef,
-    /// The core type of the core wasm function which was lifted.
-    pub func_ty: ModuleInternedTypeIndex,
 }
 
 /// The data model for objects that are not unboxed in locals.

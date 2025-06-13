@@ -450,8 +450,6 @@ pub enum Export {
         ty: TypeFuncIndex,
         /// Which core WebAssembly export is being lifted.
         func: CoreDef,
-        /// The core function's type.
-        func_ty: ModuleInternedTypeIndex,
         /// Any options, if present, associated with this lifting.
         options: CanonicalOptions,
     },

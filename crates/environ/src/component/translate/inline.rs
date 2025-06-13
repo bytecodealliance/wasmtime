@@ -311,8 +311,6 @@ enum ComponentFuncDef<'a> {
         ty: TypeFuncIndex,
         /// The core Wasm function.
         func: dfg::CoreDef,
-        /// The core Wasm function type.
-        func_ty: ModuleInternedTypeIndex,
         /// Canonical options.
         options: AdapterOptions,
     },
@@ -588,7 +586,6 @@ impl<'a> Inliner<'a> {
                     ComponentFuncDef::Lifted {
                         ty: lift_ty,
                         func,
-                        func_ty,
                         options: options_lift,
                     } => {
                         let adapter_idx = self.result.adapters.push(Adapter {
@@ -597,7 +594,6 @@ impl<'a> Inliner<'a> {
                             lower_ty,
                             lower_options: options_lower,
                             func: func.clone(),
-                            func_ty: *func_ty,
                         });
                         dfg::CoreDef::Adapter(adapter_idx)
                     }
@@ -611,13 +607,10 @@ impl<'a> Inliner<'a> {
             Lift(ty, func, options) => {
                 let ty = types.convert_component_func_type(frame.translation.types_ref(), *ty)?;
                 let options = self.adapter_options(frame, types, options);
-                let (func_ty, func) = frame.funcs[*func].clone();
-                frame.component_funcs.push(ComponentFuncDef::Lifted {
-                    ty,
-                    func,
-                    func_ty,
-                    options,
-                });
+                let func = frame.funcs[*func].1.clone();
+                frame
+                    .component_funcs
+                    .push(ComponentFuncDef::Lifted { ty, func, options });
             }
 
             // A new resource type is being introduced, so it's recorded as a
@@ -1486,19 +1479,9 @@ impl<'a> Inliner<'a> {
                 // If this is a lifted function from something lowered in this
                 // component then the configured options are plumbed through
                 // here.
-                ComponentFuncDef::Lifted {
-                    ty,
-                    func,
-                    func_ty,
-                    options,
-                } => {
+                ComponentFuncDef::Lifted { ty, func, options } => {
                     let options = self.canonical_options(options);
-                    dfg::Export::LiftedFunction {
-                        ty,
-                        func,
-                        func_ty,
-                        options,
-                    }
+                    dfg::Export::LiftedFunction { ty, func, options }
                 }
 
                 // Currently reexported functions from an import are not
