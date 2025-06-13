@@ -1002,6 +1002,12 @@ impl FunctionCompiler<'_> {
             path.set_extension("clif");
 
             let mut output = std::fs::File::create(path).unwrap();
+            write!(
+                output,
+                ";;Intermediate Representation of function <{}>:\n",
+                symbol.split("::").last().unwrap()
+            )
+            .unwrap();
             write!(output, "{}", context.func.display()).unwrap();
         }
 
