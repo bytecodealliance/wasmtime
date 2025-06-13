@@ -100,7 +100,6 @@ impl Inst {
             | Inst::LoadEffectiveAddress { .. }
             | Inst::LoadExtName { .. }
             | Inst::LockCmpxchg { .. }
-            | Inst::LockXadd { .. }
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
             | Inst::Nop { .. }
@@ -1191,19 +1190,6 @@ impl PrettyPrint for Inst {
                 )
             }
 
-            Inst::LockXadd {
-                size,
-                operand,
-                mem,
-                dst_old,
-            } => {
-                let operand = pretty_print_reg(**operand, size.to_bytes());
-                let dst_old = pretty_print_reg(*dst_old.to_reg(), size.to_bytes());
-                let mem = mem.pretty_print(size.to_bytes());
-                let suffix = suffix_bwlq(*size);
-                format!("lock xadd{suffix} {operand}, {mem}, dst_old={dst_old}")
-            }
-
             Inst::AtomicRmwSeq { ty, op, .. } => {
                 let ty = ty.bits();
                 format!(
@@ -1695,17 +1681,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_fixed_use(expected_high, regs::rdx());
             collector.reg_fixed_def(dst_old_low, regs::rax());
             collector.reg_fixed_def(dst_old_high, regs::rdx());
-            mem.get_operands(collector);
-        }
-
-        Inst::LockXadd {
-            operand,
-            mem,
-            dst_old,
-            ..
-        } => {
-            collector.reg_use(operand);
-            collector.reg_reuse_def(dst_old, 0);
             mem.get_operands(collector);
         }
 

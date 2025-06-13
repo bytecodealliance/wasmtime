@@ -1511,14 +1511,14 @@ impl Masm for MacroAssembler {
             RmwOp::Add => {
                 let operand = context.pop_to_reg(self, None)?;
                 self.asm
-                    .lock_xadd(addr, operand.reg, writable!(operand.reg), size, flags);
+                    .lock_xadd(addr, writable!(operand.reg), size, flags);
                 operand.reg
             }
             RmwOp::Sub => {
                 let operand = context.pop_to_reg(self, None)?;
                 self.asm.neg(operand.reg, writable!(operand.reg), size);
                 self.asm
-                    .lock_xadd(addr, operand.reg, writable!(operand.reg), size, flags);
+                    .lock_xadd(addr, writable!(operand.reg), size, flags);
                 operand.reg
             }
             RmwOp::Xchg => {

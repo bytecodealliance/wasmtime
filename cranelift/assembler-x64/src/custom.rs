@@ -88,6 +88,11 @@ pub mod mnemonic {
     lock!(lock_xorl_mr => "xorl");
     lock!(lock_xorq_mr => "xorq");
 
+    lock!(lock_xaddb_mr => "xaddb");
+    lock!(lock_xaddw_mr => "xaddw");
+    lock!(lock_xaddl_mr => "xaddl");
+    lock!(lock_xaddq_mr => "xaddq");
+
     pub fn vcvtpd2ps_a<R: Registers>(inst: &inst::vcvtpd2ps_a<R>) -> Cow<'static, str> {
         match inst.xmm_m128 {
             XmmMem::Xmm(_) => "vcvtpd2ps".into(),
@@ -219,7 +224,7 @@ pub mod display {
 
 pub mod visit {
     use crate::inst::*;
-    use crate::{Fixed, Gpr, GprMem, RegisterVisitor, Registers, gpr};
+    use crate::{Amode, Fixed, Gpr, GprMem, RegisterVisitor, Registers, gpr};
 
     pub fn mulxl_rvm<R: Registers>(mulx: &mut mulxl_rvm<R>, visitor: &mut impl RegisterVisitor<R>) {
         visit_mulx(
@@ -262,5 +267,49 @@ pub mod visit {
         visitor.read_gpr_mem(src1);
         let enc = src2.expected_enc();
         visitor.fixed_read_gpr(&mut src2.0, enc);
+    }
+
+    pub fn lock_xaddb_mr<R: Registers>(
+        lock_xadd: &mut lock_xaddb_mr<R>,
+        visitor: &mut impl RegisterVisitor<R>,
+    ) {
+        let lock_xaddb_mr { r8, m8 } = lock_xadd;
+        lock_xadd_mr(r8, m8, visitor)
+    }
+
+    pub fn lock_xaddw_mr<R: Registers>(
+        lock_xadd: &mut lock_xaddw_mr<R>,
+        visitor: &mut impl RegisterVisitor<R>,
+    ) {
+        let lock_xaddw_mr { r16, m16 } = lock_xadd;
+        lock_xadd_mr(r16, m16, visitor)
+    }
+
+    pub fn lock_xaddl_mr<R: Registers>(
+        lock_xadd: &mut lock_xaddl_mr<R>,
+        visitor: &mut impl RegisterVisitor<R>,
+    ) {
+        let lock_xaddl_mr { r32, m32 } = lock_xadd;
+        lock_xadd_mr(r32, m32, visitor)
+    }
+
+    pub fn lock_xaddq_mr<R: Registers>(
+        lock_xadd: &mut lock_xaddq_mr<R>,
+        visitor: &mut impl RegisterVisitor<R>,
+    ) {
+        let lock_xaddq_mr { r64, m64 } = lock_xadd;
+        lock_xadd_mr(r64, m64, visitor)
+    }
+
+    /// Intel says the memory operand comes first, but regalloc requires the
+    /// register operand comes first, so the custom visit implementation here
+    /// resolves that.
+    fn lock_xadd_mr<R: Registers>(
+        reg: &mut Gpr<R::ReadWriteGpr>,
+        mem: &mut Amode<R::ReadGpr>,
+        visitor: &mut impl RegisterVisitor<R>,
+    ) {
+        visitor.read_write_gpr(reg.as_mut());
+        visitor.read_amode(mem);
     }
 }

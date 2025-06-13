@@ -196,7 +196,7 @@ fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                         fmtln!(f, "let regs = ValueRegs::two(one, two);");
                         fmtln!(f, "AssemblerOutputs::RetValueRegs {{ inst, regs }}");
                     }
-                    (Reg(reg), Mem(_)) => {
+                    (Reg(reg), Mem(_)) | (Mem(_), Reg(reg)) => {
                         let (ty, var) = ty_var_of_reg(reg);
                         fmtln!(f, "let {var} = {reg}.as_ref().{};", access_reg(op2));
                         fmtln!(f, "AssemblerOutputs::Ret{ty} {{ inst, {var} }}");
@@ -404,7 +404,7 @@ fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
             (FixedReg(_) | Reg(_), FixedReg(_) | Reg(_)) => {
                 vec![IsleConstructor::RetValueRegs]
             }
-            (Reg(r), Mem(_)) => {
+            (Reg(r), Mem(_)) | (Mem(_), Reg(r)) => {
                 assert!(matches!(r.reg_class().unwrap(), RegClass::Gpr));
                 vec![IsleConstructor::RetGpr]
             }

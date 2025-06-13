@@ -396,12 +396,6 @@
                        (dst_old_low WritableGpr)
                        (dst_old_high WritableGpr))
 
-       ;; A standard (native) `lock xadd src, (amode)`
-       (LockXadd (size OperandSize)
-                 (operand Gpr)
-                 (mem SyntheticAmode)
-                 (dst_old WritableGpr))
-
        ;; A synthetic instruction, based on a loop around a native `lock
        ;; cmpxchg` instruction.
        ;;
@@ -4716,11 +4710,11 @@
             (_ Unit (emit (MInst.LockCmpxchg16b replacement_low replacement_high expected_low expected_high addr dst_low dst_high))))
         (value_regs dst_low dst_high)))
 
-(decl x64_xadd (OperandSize SyntheticAmode Gpr) Gpr)
-(rule (x64_xadd size addr operand)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.LockXadd size operand addr dst))))
-        dst))
+(decl x64_xadd (Type SyntheticAmode Gpr) Gpr)
+(rule (x64_xadd $I8 addr operand) (x64_lock_xaddb_mr addr operand))
+(rule (x64_xadd $I16 addr operand) (x64_lock_xaddw_mr addr operand))
+(rule (x64_xadd $I32 addr operand) (x64_lock_xaddl_mr addr operand))
+(rule (x64_xadd $I64 addr operand) (x64_lock_xaddq_mr addr operand))
 
 (decl x64_xchg (Type SyntheticAmode Gpr) Gpr)
 (rule (x64_xchg $I8 addr operand) (x64_xchgb_rm operand addr))

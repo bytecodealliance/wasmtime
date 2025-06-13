@@ -103,8 +103,6 @@ fn test_x64_emit() {
     let r9 = regs::r9();
     let r10 = regs::r10();
     let r11 = regs::r11();
-    let r12 = regs::r12();
-    let r13 = regs::r13();
     let r14 = regs::r14();
     let r15 = regs::r15();
 
@@ -136,10 +134,7 @@ fn test_x64_emit() {
     let _w_rbp = Writable::<Reg>::from_reg(rbp);
     let w_r8 = Writable::<Reg>::from_reg(r8);
     let w_r9 = Writable::<Reg>::from_reg(r9);
-    let w_r10 = Writable::<Reg>::from_reg(r10);
     let w_r11 = Writable::<Reg>::from_reg(r11);
-    let w_r12 = Writable::<Reg>::from_reg(r12);
-    let w_r13 = Writable::<Reg>::from_reg(r13);
     let w_r14 = Writable::<Reg>::from_reg(r14);
     let w_r15 = Writable::<Reg>::from_reg(r15);
 
@@ -808,48 +803,6 @@ fn test_x64_emit() {
         },
         "F0480FC78CF1C7CFFFFF",
         "lock cmpxchg16b -12345(%rcx,%rsi,8), replacement=%rcx:%rbx, expected=%rdx:%rax, dst_old=%rdx:%rax",
-    ));
-
-    // LockXadd
-    insns.push((
-        Inst::LockXadd {
-            size: OperandSize::Size64,
-            operand: Gpr::unwrap_new(r10),
-            mem: am3.clone(),
-            dst_old: w_r10.map(Gpr::unwrap_new),
-        },
-        "F04D0FC111",
-        "lock xaddq %r10, 0(%r9), dst_old=%r10",
-    ));
-    insns.push((
-        Inst::LockXadd {
-            size: OperandSize::Size32,
-            operand: Gpr::unwrap_new(r11),
-            mem: am3.clone(),
-            dst_old: w_r11.map(Gpr::unwrap_new),
-        },
-        "F0450FC119",
-        "lock xaddl %r11d, 0(%r9), dst_old=%r11d",
-    ));
-    insns.push((
-        Inst::LockXadd {
-            size: OperandSize::Size16,
-            operand: Gpr::unwrap_new(r12),
-            mem: am3.clone(),
-            dst_old: w_r12.map(Gpr::unwrap_new),
-        },
-        "66F0450FC121",
-        "lock xaddw %r12w, 0(%r9), dst_old=%r12w",
-    ));
-    insns.push((
-        Inst::LockXadd {
-            size: OperandSize::Size8,
-            operand: Gpr::unwrap_new(r13),
-            mem: am3.clone(),
-            dst_old: w_r13.map(Gpr::unwrap_new),
-        },
-        "F0450FC029",
-        "lock xaddb %r13b, 0(%r9), dst_old=%r13b",
     ));
 
     // AtomicRmwSeq

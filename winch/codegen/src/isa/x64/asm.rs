@@ -1222,20 +1222,22 @@ impl Assembler {
     pub fn lock_xadd(
         &mut self,
         addr: Address,
-        operand: Reg,
         dst: WritableReg,
         size: OperandSize,
         flags: MemFlags,
     ) {
         assert!(addr.is_offset());
         let mem = Self::to_synthetic_amode(&addr, flags);
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::lock_xaddb_mr::new(mem, dst).into(),
+            OperandSize::S16 => asm::inst::lock_xaddw_mr::new(mem, dst).into(),
+            OperandSize::S32 => asm::inst::lock_xaddl_mr::new(mem, dst).into(),
+            OperandSize::S64 => asm::inst::lock_xaddq_mr::new(mem, dst).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
 
-        self.emit(Inst::LockXadd {
-            size: size.into(),
-            operand: operand.into(),
-            mem,
-            dst_old: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     pub fn atomic_rmw_seq(
