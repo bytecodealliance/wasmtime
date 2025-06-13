@@ -2860,8 +2860,6 @@ pub fn translate_operator(
         Operator::BrOnCast {
             relative_depth,
             to_ref_type,
-            // TODO: we should take advantage of our knowledge of the type we
-            // are casting from when generating the test.
             from_ref_type: _,
         } => {
             let r = state.peek1();
@@ -2896,8 +2894,6 @@ pub fn translate_operator(
         Operator::BrOnCastFail {
             relative_depth,
             to_ref_type,
-            // TODO: we should take advantage of our knowledge of the type we
-            // are casting from when generating the test.
             from_ref_type: _,
         } => {
             let r = state.peek1();
