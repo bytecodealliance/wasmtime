@@ -116,7 +116,8 @@ impl Factc {
             }
         };
 
-        let mut validator = Validator::new();
+        let mut features = WasmFeatures::default() | WasmFeatures::COMPONENT_MODEL_GC;
+        let mut validator = Validator::new_with_features(features);
         let mut types = ComponentTypesBuilder::new(&validator);
 
         let mut adapters = Vec::new();
@@ -137,25 +138,25 @@ impl Factc {
                 lower_options: AdapterOptions {
                     instance: RuntimeComponentInstanceIndex::from_u32(0),
                     string_encoding: self.lower_str,
-                    memory64: self.lower64,
-                    // Pessimistically assume that memory/realloc are going to be
-                    // required for this trampoline and provide it. Avoids doing
-                    // calculations to figure out whether they're necessary and
-                    // simplifies the fuzzer here without reducing coverage within FACT
-                    // itself.
-                    memory: Some(dummy_memory(self.lower64)),
-                    realloc: Some(dummy_def()),
                     // Lowering never allows `post-return`
                     post_return: None,
                     async_: false,
                     callback: None,
+                    core_type: todo!("FITZGEN"),
+                    data_model: DataModel::LinearMemory {
+                        // Pessimistically assume that memory/realloc are going to be
+                        // required for this trampoline and provide it. Avoids doing
+                        // calculations to figure out whether they're necessary and
+                        // simplifies the fuzzer here without reducing coverage within FACT
+                        // itself.
+                        memory: Some(dummy_memory(self.lower64)),
+                        realloc: Some(dummy_def()),
+                        memory64: self.lower64,
+                    },
                 },
                 lift_options: AdapterOptions {
                     instance: RuntimeComponentInstanceIndex::from_u32(1),
                     string_encoding: self.lift_str,
-                    memory64: self.lift64,
-                    memory: Some(dummy_memory(self.lift64)),
-                    realloc: Some(dummy_def()),
                     post_return: if self.post_return {
                         Some(dummy_def())
                     } else {
@@ -163,6 +164,12 @@ impl Factc {
                     },
                     async_: false,
                     callback: None,
+                    core_type: todo!("FITZGEN"),
+                    data_model: DataModel::LinearMemory {
+                        memory64: self.lift64,
+                        memory: Some(dummy_memory(self.lift64)),
+                        realloc: Some(dummy_def()),
+                    },
                 },
                 func: dummy_def(),
             });
