@@ -29,8 +29,11 @@ impl ComponentTypesBuilder {
     pub(super) fn signature(&self, options: &AdapterOptions, context: Context) -> Signature {
         let mem_opts = match &options.options.data_model {
             DataModel::LinearMemory(mem_opts) => mem_opts,
-            DataModel::Gc { core_type } => {
-                match &self.module_types_builder()[*core_type].composite_type.inner {
+            DataModel::Gc {} => {
+                match &self.module_types_builder()[options.options.core_type]
+                    .composite_type
+                    .inner
+                {
                     crate::WasmCompositeInnerType::Func(f) => {
                         return Signature {
                             params: f.params().iter().map(|ty| self.val_type(ty)).collect(),

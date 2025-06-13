@@ -524,7 +524,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             &adapter.name,
             &lower_sig.params,
             match adapter.lift.options.data_model {
-                DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+                DataModel::Gc {} => todo!("CM+GC"),
                 DataModel::LinearMemory(LinearMemoryOptions { memory, .. }) => memory,
             },
         );
@@ -884,7 +884,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         } else {
             let abi = CanonicalAbiInfo::record(dst_tys.iter().map(|t| self.types.canonical_abi(t)));
             match lift_opts.data_model {
-                DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+                DataModel::Gc {} => todo!("CM+GC"),
                 DataModel::LinearMemory(LinearMemoryOptions { memory64, .. }) => {
                     let (size, align) = if memory64 {
                         (abi.size64, abi.align64)
@@ -1526,11 +1526,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         let dst_opts = dst.opts();
 
         let src_mem_opts = match &src_opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => opts,
         };
         let dst_mem_opts = match &dst_opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => opts,
         };
 
@@ -1689,13 +1689,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
         let src_mem_opts = {
             match &src.opts.data_model {
-                DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+                DataModel::Gc {} => todo!("CM+GC"),
                 DataModel::LinearMemory(opts) => opts,
             }
         };
         let dst_mem_opts = {
             match &dst_opts.data_model {
-                DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+                DataModel::Gc {} => todo!("CM+GC"),
                 DataModel::LinearMemory(opts) => opts,
             }
         };
@@ -1796,11 +1796,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         dst_opts: &'c Options,
     ) -> WasmString<'c> {
         let src_mem_opts = match &src.opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => opts,
         };
         let dst_mem_opts = match &dst_opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => opts,
         };
 
@@ -1993,11 +1993,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         dst_opts: &'c Options,
     ) -> WasmString<'c> {
         let src_mem_opts = match &src.opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => opts,
         };
         let dst_mem_opts = match &dst_opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => opts,
         };
 
@@ -2048,7 +2048,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.ptr_uconst(dst_mem_opts, 1);
         self.ptr_shl(dst_mem_opts);
         self.instruction(Call(match dst.opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(LinearMemoryOptions { realloc, .. }) => {
                 realloc.unwrap().as_u32()
             }
@@ -2080,11 +2080,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         dst_opts: &'c Options,
     ) -> WasmString<'c> {
         let src_mem_opts = match &src.opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => opts,
         };
         let dst_mem_opts = match &dst_opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => opts,
         };
 
@@ -2168,11 +2168,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         dst_opts: &'c Options,
     ) -> WasmString<'c> {
         let src_mem_opts = match &src.opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => opts,
         };
         let dst_mem_opts = match &dst_opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => opts,
         };
 
@@ -2315,7 +2315,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
     fn validate_string_length_u8(&mut self, s: &WasmString<'_>, dst: u8) {
         let mem_opts = match &s.opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => opts,
         };
 
@@ -2337,7 +2337,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
         op: Transcode,
     ) -> FuncIndex {
         match (src.opts.data_model, dst.opts.data_model) {
-            (DataModel::Gc { core_type: _ }, _) | (_, DataModel::Gc { core_type: _ }) => {
+            (DataModel::Gc {}, _) | (_, DataModel::Gc {}) => {
                 todo!("CM+GC")
             }
             (
@@ -2363,7 +2363,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
     fn validate_string_inbounds(&mut self, s: &WasmString<'_>, byte_len: u32) {
         match &s.opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => {
                 self.validate_memory_inbounds(opts, s.ptr.idx, byte_len, Trap::StringLengthOverflow)
             }
@@ -2432,11 +2432,11 @@ impl<'a, 'b> Compiler<'a, 'b> {
         dst: &Destination,
     ) {
         let src_mem_opts = match &src.opts().data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => opts,
         };
         let dst_mem_opts = match &dst.opts().data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(opts) => opts,
         };
 
@@ -3317,7 +3317,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
 
     fn malloc<'c>(&mut self, opts: &'c Options, size: MallocSize, align: u32) -> Memory<'c> {
         match &opts.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(mem_opts) => {
                 let realloc = mem_opts.realloc.unwrap();
                 self.ptr_uconst(mem_opts, 0);

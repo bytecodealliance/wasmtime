@@ -420,9 +420,7 @@ pub struct StreamInfo {
 #[derive(Clone, Hash, Eq, PartialEq)]
 #[expect(missing_docs, reason = "self-describing fields")]
 pub enum CanonicalOptionsDataModel {
-    Gc {
-        core_type: ModuleInternedTypeIndex,
-    },
+    Gc {},
     LinearMemory {
         memory: Option<MemoryId>,
         realloc: Option<ReallocId>,
@@ -438,6 +436,7 @@ pub struct CanonicalOptions {
     pub callback: Option<CallbackId>,
     pub post_return: Option<PostReturnId>,
     pub async_: bool,
+    pub core_type: ModuleInternedTypeIndex,
     pub data_model: CanonicalOptionsDataModel,
 }
 
@@ -707,9 +706,7 @@ impl LinearizeDfg<'_> {
 
     fn options(&mut self, options: &CanonicalOptions) -> info::CanonicalOptions {
         let data_model = match options.data_model {
-            CanonicalOptionsDataModel::Gc { core_type } => {
-                info::CanonicalOptionsDataModel::Gc { core_type }
-            }
+            CanonicalOptionsDataModel::Gc {} => info::CanonicalOptionsDataModel::Gc {},
             CanonicalOptionsDataModel::LinearMemory { memory, realloc } => {
                 info::CanonicalOptionsDataModel::LinearMemory(LinearMemoryOptions {
                     memory: memory.map(|mem| self.runtime_memory(mem)),
@@ -725,6 +722,7 @@ impl LinearizeDfg<'_> {
             callback,
             post_return,
             async_: options.async_,
+            core_type: options.core_type,
             data_model,
         }
     }

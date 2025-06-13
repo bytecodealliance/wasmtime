@@ -148,10 +148,7 @@ pub struct Adapter {
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub enum DataModel {
     /// Data is stored in GC objects.
-    Gc {
-        /// The core function type that is being lifted from / lowered to.
-        core_type: ModuleInternedTypeIndex,
-    },
+    Gc {},
 
     /// Data is stored in a linear memory.
     LinearMemory {
@@ -179,6 +176,8 @@ pub struct AdapterOptions {
     pub post_return: Option<dfg::CoreDef>,
     /// Whether to use the async ABI for lifting or lowering.
     pub async_: bool,
+    /// The core function type that is being lifted from / lowered to.
+    pub core_type: ModuleInternedTypeIndex,
     /// The data model used by this adapter: linear memory or GC objects.
     pub data_model: DataModel,
 }
@@ -406,7 +405,7 @@ impl PartitionAdapterModules {
             self.core_def(dfg, def);
         }
         match &options.data_model {
-            DataModel::Gc { core_type: _ } => {
+            DataModel::Gc {} => {
                 // Nothing to do here yet.
             }
             DataModel::LinearMemory {

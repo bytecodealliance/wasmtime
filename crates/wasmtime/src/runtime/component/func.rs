@@ -383,7 +383,7 @@ impl Func {
         let (ty, def, _core_ty, options) = component.export_lifted_function(self.index);
 
         let mem_opts = match options.data_model {
-            CanonicalOptionsDataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            CanonicalOptionsDataModel::Gc {} => todo!("CM+GC"),
             CanonicalOptionsDataModel::LinearMemory(opts) => opts,
         };
 

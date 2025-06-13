@@ -389,7 +389,7 @@ impl<'a> TrampolineCompiler<'a> {
 
     fn translate_task_return_call(&mut self, results: TypeTupleIndex, options: &CanonicalOptions) {
         let mem_opts = match &options.data_model {
-            CanonicalOptionsDataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            CanonicalOptionsDataModel::Gc {} => todo!("CM+GC"),
             CanonicalOptionsDataModel::LinearMemory(opts) => opts,
         };
 
@@ -748,13 +748,14 @@ impl<'a> TrampolineCompiler<'a> {
             post_return,
             string_encoding,
             async_,
+            core_type: _,
             data_model,
         } = *options;
 
         assert!(callback.is_none());
 
         let LinearMemoryOptions { memory, realloc } = match data_model {
-            CanonicalOptionsDataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            CanonicalOptionsDataModel::Gc {} => todo!("CM+GC"),
             CanonicalOptionsDataModel::LinearMemory(opts) => opts,
         };
 
@@ -1308,7 +1309,7 @@ impl<'a> TrampolineCompiler<'a> {
 
         if let Some(options) = options {
             let mem_opts = match options.data_model {
-                CanonicalOptionsDataModel::Gc { core_type: _ } => todo!("CM+GC"),
+                CanonicalOptionsDataModel::Gc {} => todo!("CM+GC"),
                 CanonicalOptionsDataModel::LinearMemory(opts) => opts,
             };
 
@@ -1343,7 +1344,7 @@ impl<'a> TrampolineCompiler<'a> {
         info: &CanonicalAbiInfo,
     ) {
         let mem_opts = match &options.data_model {
-            CanonicalOptionsDataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            CanonicalOptionsDataModel::Gc {} => todo!("CM+GC"),
             CanonicalOptionsDataModel::LinearMemory(opts) => opts,
         };
 
@@ -1388,7 +1389,7 @@ impl<'a> TrampolineCompiler<'a> {
         sentinel: TrapSentinel,
     ) {
         let mem_opts = match &options.data_model {
-            CanonicalOptionsDataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            CanonicalOptionsDataModel::Gc {} => todo!("CM+GC"),
             CanonicalOptionsDataModel::LinearMemory(opts) => opts,
         };
 
