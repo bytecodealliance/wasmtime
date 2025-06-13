@@ -663,11 +663,7 @@ impl LinearizeDfg<'_> {
         wasmparser_types: wasmparser::types::TypesRef<'_>,
     ) -> Result<ExportIndex> {
         let item = match export {
-            Export::LiftedFunction {
-                ty,
-                func,
-                options,
-            } => {
+            Export::LiftedFunction { ty, func, options } => {
                 let func = self.core_def(func);
                 let options = self.options(options);
                 info::Export::LiftedFunction {
