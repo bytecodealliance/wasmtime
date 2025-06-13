@@ -387,9 +387,9 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movl    $-56798, %r11d
-;   movl    $85, %r9d
-;   movl    $11, %r10d
+;   movl $0xffff2222, %r11d
+;   movl $0x55, %r9d
+;   movl $0xb, %r10d
 ;   movq %r11, 8(%rdi)
 ;   movzbq %r9b, %r11
 ;   movq %r9, (%rdi)
@@ -426,9 +426,9 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movl    $-56798, %edx
-;   movl    $85, %r8d
-;   movl    $11, %eax
+;   movl $0xffff2222, %edx
+;   movl $0x55, %r8d
+;   movl $0xb, %eax
 ;   movq %rdx, 1(%rdi)
 ;   movb %r8b, (%rdi)
 ;   movq %rbp, %rsp

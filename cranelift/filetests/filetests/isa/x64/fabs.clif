@@ -11,7 +11,7 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movl    $2147483647, %eax
+;   movl $0x7fffffff, %eax
 ;   movd %eax, %xmm4
 ;   andps %xmm4, %xmm0
 ;   movq %rbp, %rsp
@@ -40,7 +40,7 @@ block0(v0: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movabsq $9223372036854775807, %rax
+;   movabsq $0x7fffffffffffffff, %rax
 ;   movq %rax, %xmm4
 ;   andpd %xmm4, %xmm0
 ;   movq %rbp, %rsp

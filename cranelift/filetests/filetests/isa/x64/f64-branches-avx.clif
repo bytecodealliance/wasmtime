@@ -22,12 +22,12 @@ block2:
 ;   vucomiss %xmm1, %xmm0
 ;   jp,nz   label1; j label2
 ; block1:
-;   movl    $2, %eax
+;   movl $0x2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block2:
-;   movl    $1, %eax
+;   movl $0x1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -72,12 +72,12 @@ block2:
 ;   vucomisd %xmm1, %xmm0
 ;   jp,nz   label1; j label2
 ; block1:
-;   movl    $2, %eax
+;   movl $0x2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block2:
-;   movl    $1, %eax
+;   movl $0x1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret

@@ -13,7 +13,7 @@ block0:
 ; VCode:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
-;   movl    $100000, %eax
+;   movl $0x186a0, %eax
 ;   call    LibCall(Probestack)
 ;   subq $0x186a0, %rsp
 ; block0:

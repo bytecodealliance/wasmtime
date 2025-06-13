@@ -22,7 +22,7 @@ block0(v0: i128, v1: i8):
 ;   movq %rsi, %r10
 ;   sarq %cl, %r10
 ;   movq %rcx, %r11
-;   movl    $64, %ecx
+;   movl $0x40, %ecx
 ;   movq %r11, %rdx
 ;   subq %rdx, %rcx
 ;   movq %rsi, %r11
@@ -87,7 +87,7 @@ block0(v0: i128, v1: i64):
 ;   movq %rsi, %r9
 ;   sarq %cl, %r9
 ;   movq %rcx, %r11
-;   movl    $64, %ecx
+;   movl $0x40, %ecx
 ;   movq %r11, %rax
 ;   subq %rax, %rcx
 ;   movq %rsi, %r10
@@ -153,7 +153,7 @@ block0(v0: i128, v1: i32):
 ;   movq %rsi, %r9
 ;   sarq %cl, %r9
 ;   movq %rcx, %r11
-;   movl    $64, %ecx
+;   movl $0x40, %ecx
 ;   movq %r11, %rax
 ;   subq %rax, %rcx
 ;   movq %rsi, %r10
@@ -219,7 +219,7 @@ block0(v0: i128, v1: i16):
 ;   movq %rsi, %r9
 ;   sarq %cl, %r9
 ;   movq %rcx, %r11
-;   movl    $64, %ecx
+;   movl $0x40, %ecx
 ;   movq %r11, %rax
 ;   subq %rax, %rcx
 ;   movq %rsi, %r10
@@ -285,7 +285,7 @@ block0(v0: i128, v1: i8):
 ;   movq %rsi, %r9
 ;   sarq %cl, %r9
 ;   movq %rcx, %r11
-;   movl    $64, %ecx
+;   movl $0x40, %ecx
 ;   movq %r11, %rax
 ;   subq %rax, %rcx
 ;   movq %rsi, %r10
