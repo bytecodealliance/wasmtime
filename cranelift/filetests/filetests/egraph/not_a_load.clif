@@ -20,7 +20,7 @@ function u0:1302(i64) -> i64 system_v {
 ;   movq %rdi, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

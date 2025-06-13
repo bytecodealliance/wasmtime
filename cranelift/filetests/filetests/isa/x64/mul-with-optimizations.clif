@@ -17,7 +17,7 @@ block0(v0: i32):
 ;   imulw $0x1111, %di, %ax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

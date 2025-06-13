@@ -46,7 +46,7 @@ function %f0(i32) -> i32, f32, f64 {
 ;   addq $0x40, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ; block2:
 ;   movdqu <offset:1>+(%rsp), %xmm1
 ;   lea     1(%rax), %eax
@@ -60,7 +60,7 @@ function %f0(i32) -> i32, f32, f64 {
 ;   addq $0x40, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -182,7 +182,7 @@ function %f1(i32) -> i32, f32, f64 {
 ;   addq $0x40, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ; block8:
 ;   lea     1(%r11), %eax
 ;   movq %r11, %rsi
@@ -197,7 +197,7 @@ function %f1(i32) -> i32, f32, f64 {
 ;   addq $0x40, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -310,7 +310,7 @@ function %f2(i32) -> i32, f32, f64 {
 ;   addq $0x40, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ; block2:
 ;   movdqu <offset:1>+(%rsp), %xmm1
 ;   lea     1(%rax), %eax
@@ -324,7 +324,7 @@ function %f2(i32) -> i32, f32, f64 {
 ;   addq $0x40, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

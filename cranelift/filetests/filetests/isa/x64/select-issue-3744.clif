@@ -22,7 +22,7 @@ block0(v0: f32, v1: f32):
 ;   cmovnzl const(0), %eax, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

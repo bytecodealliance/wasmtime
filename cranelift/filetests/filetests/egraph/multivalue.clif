@@ -22,7 +22,7 @@ function u0:359(i64) -> i8, i8 system_v {
 ;   call    User(userextname0)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

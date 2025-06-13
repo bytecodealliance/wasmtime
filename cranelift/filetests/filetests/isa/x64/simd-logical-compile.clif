@@ -16,7 +16,7 @@ block0(v0: i32x4):
 ;   pxor %xmm3, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -43,7 +43,7 @@ block0(v0: i32x4):
 ;   setnz   %al
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -73,7 +73,7 @@ block0(v0: i64x2):
 ;   setz    %al
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

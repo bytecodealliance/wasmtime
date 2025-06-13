@@ -18,7 +18,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   vpermi2b %xmm1, %xmm6, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -57,7 +57,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   vpermi2b %xmm1, %xmm6, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

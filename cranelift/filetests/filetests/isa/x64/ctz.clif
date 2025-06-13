@@ -26,7 +26,7 @@ block0(v0: i128):
 ;   xorq %rdx, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -62,7 +62,7 @@ block0(v0: i64):
 ;   cmovzq  %rcx, %rax, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -91,7 +91,7 @@ block0(v0: i32):
 ;   cmovzl  %ecx, %eax, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -122,7 +122,7 @@ block0(v0: i16):
 ;   cmovzl  %r9d, %eax, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -155,7 +155,7 @@ block0(v0: i8):
 ;   cmovzl  %r9d, %eax, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

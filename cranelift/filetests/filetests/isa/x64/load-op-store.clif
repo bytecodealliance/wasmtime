@@ -16,7 +16,7 @@ block0(v0: i64, v1: i32):
 ;   addl %esi, 0x20(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -43,7 +43,7 @@ block0(v0: i64, v1: i32):
 ;   addl %esi, 0x20(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -70,7 +70,7 @@ block0(v0: i64, v1: i32):
 ;   subl %esi, 0x20(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -97,7 +97,7 @@ block0(v0: i64, v1: i32):
 ;   andl %esi, 0x20(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -124,7 +124,7 @@ block0(v0: i64, v1: i32):
 ;   andl %esi, 0x20(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -151,7 +151,7 @@ block0(v0: i64, v1: i32):
 ;   orl %esi, 0x20(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -178,7 +178,7 @@ block0(v0: i64, v1: i32):
 ;   orl %esi, 0x20(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -205,7 +205,7 @@ block0(v0: i64, v1: i32):
 ;   xorl %esi, 0x20(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -232,7 +232,7 @@ block0(v0: i64, v1: i32):
 ;   xorl %esi, 0x20(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -260,7 +260,7 @@ block0(v0: i64):
 ;   orl $0x1, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -288,7 +288,7 @@ block0(v0: i64):
 ;   andl $0x1, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -316,7 +316,7 @@ block0(v0: i64):
 ;   addl $0x1, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -344,7 +344,7 @@ block0(v0: i64):
 ;   subl $0x1, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

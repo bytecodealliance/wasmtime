@@ -45,11 +45,11 @@ function %f(i32) -> i32 {
 ; block7:
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ; block8:
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

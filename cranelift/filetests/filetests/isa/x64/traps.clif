@@ -11,7 +11,7 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   ud2  ;; trap=1
+;   ud2
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -34,7 +34,7 @@ block0(v0: i64, v1: i64):
 ;   jb #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -62,7 +62,7 @@ block0(v0: i64):
 ;   jz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -91,7 +91,7 @@ block0(v0: i128):
 ;   jz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -120,7 +120,7 @@ block0(v0: i64):
 ;   jnz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -149,7 +149,7 @@ block0(v0: i128):
 ;   jnz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -179,7 +179,7 @@ block0(v0: i64, v1: i64):
 ;   jnz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -208,7 +208,7 @@ block0(v0: i64, v1: i64):
 ;   jz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -237,7 +237,7 @@ block0(v0: f64, v1: f64):
 ;   trap_if_or p, z, user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -267,7 +267,7 @@ block0(v0: f64, v1: f64):
 ;   trap_if_and p, nz, user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -298,7 +298,7 @@ block0(v0: i64, v1: i64):
 ;   jnz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -328,7 +328,7 @@ block0(v0: i64, v1: i64):
 ;   jz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -358,7 +358,7 @@ block0(v0: f64, v1: f64):
 ;   trap_if_or p, z, user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -389,7 +389,7 @@ block0(v0: f64, v1: f64):
 ;   trap_if_and p, nz, user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

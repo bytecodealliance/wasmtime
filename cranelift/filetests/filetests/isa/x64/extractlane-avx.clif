@@ -14,7 +14,7 @@ block0(v0: i8x16):
 ;   vpextrb $1, %xmm0, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -39,7 +39,7 @@ block0(v0: i16x8):
 ;   vpextrw $1, %xmm0, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -64,7 +64,7 @@ block0(v0: i32x4):
 ;   vpextrd $1, %xmm0, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -89,7 +89,7 @@ block0(v0: i64x2):
 ;   vpextrq $1, %xmm0, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -114,7 +114,7 @@ block0(v0: f32x4):
 ;   vpshufd $0x1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -139,7 +139,7 @@ block0(v0: f64x2):
 ;   vpshufd $0xee, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -165,7 +165,7 @@ block0(v0: i8x16, v1: i64):
 ;   vpextrb $0, %xmm0, 0(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -191,7 +191,7 @@ block0(v0: i16x8, v1: i64):
 ;   vpextrw $0, %xmm0, 0(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -217,7 +217,7 @@ block0(v0: i32x4, v1: i64):
 ;   vpextrd $0, %xmm0, 0(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -243,7 +243,7 @@ block0(v0: f32x4, v1: i64):
 ;   vmovss  %xmm0, 0(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -269,7 +269,7 @@ block0(v0: i64x2, v1: i64):
 ;   vpextrq $0, %xmm0, 0(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -295,7 +295,7 @@ block0(v0: f64x2, v1: i64):
 ;   vmovsd  %xmm0, 0(%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

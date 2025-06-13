@@ -365,7 +365,6 @@ pub(crate) fn check(
         Inst::CallKnown { .. }
         | Inst::ReturnCallKnown { .. }
         | Inst::JmpKnown { .. }
-        | Inst::Ret { .. }
         | Inst::WinchJmpIf { .. }
         | Inst::JmpCond { .. }
         | Inst::JmpCondOr { .. }

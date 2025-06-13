@@ -258,6 +258,10 @@ impl dsl::Inst {
                         }
 
                         fmtln!(f, "let name = self.mnemonic();");
+                        if self.format.operands.is_empty() {
+                            fmtln!(f, "f.write_str(&name)");
+                            return;
+                        }
                         for op in self.format.operands.iter() {
                             let location = op.location;
                             let to_string = location.generate_to_string(op.extension);

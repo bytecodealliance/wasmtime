@@ -15,7 +15,7 @@ block0(v0: i64):
 ;   pinsrw $0x0, (%rdi), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -40,7 +40,7 @@ block0(v0: i64):
 ;   movss (%rdi), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -65,7 +65,7 @@ block0(v0: i64):
 ;   movsd (%rdi), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

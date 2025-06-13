@@ -30,7 +30,7 @@ block0(v0: i64, v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8, v8: i128
 ;   addq $0x10, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret 32
+;   retq $0x20
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
