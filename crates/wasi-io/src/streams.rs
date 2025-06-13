@@ -212,8 +212,18 @@ pub trait OutputStream: Pollable {
             }
         }
 
-        self.flush()?;
-        self.write_ready().await?;
+        // If the stream encounters an error, return it, but if the stream
+        // has become closed, do not.
+        match self.flush() {
+            Ok(_) => {}
+            Err(StreamError::Closed) => {}
+            Err(e) => Err(e)?,
+        };
+        match self.write_ready().await {
+            Ok(_) => {}
+            Err(StreamError::Closed) => {}
+            Err(e) => Err(e)?,
+        };
 
         Ok(())
     }
