@@ -66,7 +66,7 @@ use std::ops::Range;
 use std::ptr;
 
 use crate::runtime::vm::stack_switching::VMHostArray;
-use crate::runtime::vm::{VMContext, VMFuncRef, VMOpaqueContext, ValRaw};
+use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Allocator {
@@ -311,7 +311,7 @@ unsafe extern "C" fn fiber_start(
 ) {
     unsafe {
         let func_ref = func_ref.as_ref().expect("Non-null function reference");
-        let caller_vmxtx = VMOpaqueContext::from_vmcontext(NonNull::new_unchecked(caller_vmctx));
+        let caller_vmxtx = NonNull::new_unchecked(caller_vmctx);
         let args = &mut *args;
         let params_and_returns: NonNull<[ValRaw]> = if args.capacity == 0 {
             NonNull::from(&[])
