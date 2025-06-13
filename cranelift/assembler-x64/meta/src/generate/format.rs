@@ -168,7 +168,8 @@ impl dsl::Format {
             | [RegMem(mem), FixedReg(_)]
             | [Mem(mem), Imm(_)]
             | [RegMem(mem), Imm(_)]
-            | [RegMem(mem)] => {
+            | [RegMem(mem)]
+            | [FixedReg(_), FixedReg(_), FixedReg(_), FixedReg(_), Mem(mem)] => {
                 let digit = rex.unwrap_digit().unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "let rex = self.{mem}.as_rex_prefix(digit, {bits});");
@@ -180,7 +181,7 @@ impl dsl::Format {
             [Reg(reg), RegMem(mem) | Mem(mem)]
             | [Reg(reg), RegMem(mem), Imm(_) | FixedReg(_)]
             | [RegMem(mem) | Mem(mem), Reg(reg)]
-            | [RegMem(mem), Reg(reg), Imm(_) | FixedReg(_)] => {
+            | [RegMem(mem) | Mem(mem), Reg(reg), Imm(_) | FixedReg(_)] => {
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let rex = self.{mem}.as_rex_prefix(reg, {bits});");
                 ModRmStyle::RegMem {
@@ -197,6 +198,7 @@ impl dsl::Format {
                     rm: *src,
                 }
             }
+
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
         };
 

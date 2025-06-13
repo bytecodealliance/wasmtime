@@ -14,10 +14,11 @@ impl dsl::Operand {
                     format!("Imm{bits}")
                 }
             }
-            al | ax | eax | rax | cl | dx | edx | rdx => {
+            al | ax | eax | rax | rbx | cl | rcx | dx | edx | rdx => {
                 let enc = match self.location {
                     al | ax | eax | rax => "{ gpr::enc::RAX }",
-                    cl => "{ gpr::enc::RCX }",
+                    rbx => "{ gpr::enc::RBX }",
+                    cl | rcx => "{ gpr::enc::RCX }",
                     dx | edx | rdx => "{ gpr::enc::RDX }",
                     _ => unreachable!(),
                 };
@@ -31,7 +32,7 @@ impl dsl::Operand {
             xmm_m16 | xmm_m32 | xmm_m64 | xmm_m128 => {
                 format!("XmmMem<R::{mut_}Xmm, R::ReadGpr>")
             }
-            m8 | m16 | m32 | m64 => format!("Amode<R::ReadGpr>"),
+            m8 | m16 | m32 | m64 | m128 => format!("Amode<R::ReadGpr>"),
             xmm0 => format!("Fixed<R::{mut_}Xmm, {{ xmm::enc::XMM0 }}>"),
         }
     }
@@ -57,11 +58,14 @@ impl dsl::Location {
                     None => unreachable!(),
                 }
             }
-            al | ax | eax | rax | cl | dx | edx | rdx | xmm0 => match self.generate_size() {
-                Some(size) => format!("self.{self}.to_string(Some({size}))"),
-                None => format!("self.{self}.to_string(None)"),
-            },
-            xmm_m16 | xmm_m32 | xmm_m64 | xmm1 | xmm2 | xmm3 | xmm_m128 | m8 | m16 | m32 | m64 => {
+            al | ax | eax | rax | rbx | cl | rcx | dx | edx | rdx | xmm0 => {
+                match self.generate_size() {
+                    Some(size) => format!("self.{self}.to_string(Some({size}))"),
+                    None => format!("self.{self}.to_string(None)"),
+                }
+            }
+            xmm_m16 | xmm_m32 | xmm_m64 | xmm1 | xmm2 | xmm3 | xmm_m128 | m8 | m16 | m32 | m64
+            | m128 => {
                 format!("self.{self}.to_string()")
             }
         }
@@ -76,8 +80,8 @@ impl dsl::Location {
             al | cl | r8 | rm8 => Some("Size::Byte"),
             ax | dx | r16 | rm16 => Some("Size::Word"),
             eax | edx | r32 | r32a | r32b | rm32 => Some("Size::Doubleword"),
-            rax | rdx | r64 | r64a | r64b | rm64 => Some("Size::Quadword"),
-            m8 | m16 | m32 | m64 => {
+            rax | rbx | rcx | rdx | r64 | r64a | r64b | rm64 => Some("Size::Quadword"),
+            m8 | m16 | m32 | m64 | m128 => {
                 panic!("no need to generate a size for memory-only access")
             }
             xmm1 | xmm2 | xmm3 | xmm_m16 | xmm_m32 | xmm_m64 | xmm_m128 | xmm0 => None,

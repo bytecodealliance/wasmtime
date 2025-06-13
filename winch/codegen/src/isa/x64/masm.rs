@@ -1703,14 +1703,8 @@ impl Masm for MacroAssembler {
         context.free_reg(rax);
         let expected = context.pop_to_reg(self, Some(regs::rax()))?;
 
-        self.asm.cmpxchg(
-            addr,
-            expected.reg,
-            replacement.reg,
-            writable!(expected.reg),
-            size,
-            flags,
-        );
+        self.asm
+            .cmpxchg(addr, replacement.reg, writable!(expected.reg), size, flags);
 
         if let Some(extend) = extend {
             // We don't need to zero-extend from 32 to 64bits.

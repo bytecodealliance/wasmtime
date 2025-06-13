@@ -2510,67 +2510,6 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::LockCmpxchg {
-            ty,
-            replacement,
-            expected,
-            mem,
-            dst_old,
-        } => {
-            let replacement = **replacement;
-            let expected = *expected;
-            let dst_old = dst_old.to_reg();
-            let mem = mem.clone();
-
-            debug_assert_eq!(expected, regs::rax());
-            debug_assert_eq!(dst_old, regs::rax());
-
-            // lock cmpxchg{b,w,l,q} %replacement, (mem)
-            // Note that 0xF0 is the Lock prefix.
-            let (prefix, opcodes) = match *ty {
-                types::I8 => (LegacyPrefixes::_F0, 0x0FB0),
-                types::I16 => (LegacyPrefixes::_66F0, 0x0FB1),
-                types::I32 => (LegacyPrefixes::_F0, 0x0FB1),
-                types::I64 => (LegacyPrefixes::_F0, 0x0FB1),
-                _ => unreachable!(),
-            };
-            let rex = RexFlags::from((OperandSize::from_ty(*ty), replacement));
-            let amode = mem.finalize(state.frame_layout(), sink);
-            emit_std_reg_mem(sink, prefix, opcodes, 2, replacement, &amode, rex, 0);
-        }
-
-        Inst::LockCmpxchg16b {
-            replacement_low,
-            replacement_high,
-            expected_low,
-            expected_high,
-            mem,
-            dst_old_low,
-            dst_old_high,
-        } => {
-            let mem = mem.clone();
-            debug_assert_eq!(*replacement_low, regs::rbx());
-            debug_assert_eq!(*replacement_high, regs::rcx());
-            debug_assert_eq!(*expected_low, regs::rax());
-            debug_assert_eq!(*expected_high, regs::rdx());
-            debug_assert_eq!(dst_old_low.to_reg(), regs::rax());
-            debug_assert_eq!(dst_old_high.to_reg(), regs::rdx());
-
-            let amode = mem.finalize(state.frame_layout(), sink);
-            // lock cmpxchg16b (mem)
-            // Note that 0xF0 is the Lock prefix.
-            emit_std_enc_mem(
-                sink,
-                LegacyPrefixes::_F0,
-                0x0FC7,
-                2,
-                1,
-                &amode,
-                RexFlags::set_w(),
-                0,
-            );
-        }
-
         Inst::AtomicRmwSeq {
             ty,
             op,
@@ -2655,14 +2594,16 @@ pub(crate) fn emit(
 
             // lock cmpxchg{b,w,l,q} %r_temp, (%r_address)
             // No need to call `add_trap` here, since the `i4` emit will do that.
-            let i4 = Inst::LockCmpxchg {
-                ty: *ty,
-                replacement: temp.to_reg(),
-                expected: dst_old.to_reg(),
-                mem: mem.into(),
-                dst_old,
+            let temp = temp.to_reg();
+            let dst_old = PairedGpr::from(dst_old);
+            let inst: AsmInst = match *ty {
+                types::I8 => asm::inst::lock_cmpxchgb_mr::new(mem, temp, dst_old).into(),
+                types::I16 => asm::inst::lock_cmpxchgw_mr::new(mem, temp, dst_old).into(),
+                types::I32 => asm::inst::lock_cmpxchgl_mr::new(mem, temp, dst_old).into(),
+                types::I64 => asm::inst::lock_cmpxchgq_mr::new(mem, temp, dst_old).into(),
+                _ => unreachable!(),
             };
-            i4.emit(sink, info, state);
+            inst.emit(sink, info, state);
 
             // jnz again
             one_way_jmp(sink, CC::NZ, again_label);
@@ -2763,15 +2704,13 @@ pub(crate) fn emit(
             }
 
             // cmpxchg16b (mem)
-            Inst::LockCmpxchg16b {
-                replacement_low: temp_low.to_reg(),
-                replacement_high: temp_high.to_reg(),
-                expected_low: dst_old_low.to_reg(),
-                expected_high: dst_old_high.to_reg(),
-                mem: Box::new(mem.into()),
-                dst_old_low,
-                dst_old_high,
-            }
+            asm::inst::lock_cmpxchg16b_m::new(
+                PairedGpr::from(dst_old_low),
+                PairedGpr::from(dst_old_high),
+                temp_low.to_reg(),
+                temp_high.to_reg(),
+                mem,
+            )
             .emit(sink, info, state);
 
             // jnz again
@@ -2805,15 +2744,13 @@ pub(crate) fn emit(
             sink.bind_label(again_label, state.ctrl_plane_mut());
 
             // cmpxchg16b (mem)
-            Inst::LockCmpxchg16b {
-                replacement_low: operand_low,
-                replacement_high: operand_high,
-                expected_low: dst_old_low.to_reg(),
-                expected_high: dst_old_high.to_reg(),
-                mem: Box::new(mem.into()),
-                dst_old_low,
-                dst_old_high,
-            }
+            asm::inst::lock_cmpxchg16b_m::new(
+                PairedGpr::from(dst_old_low),
+                PairedGpr::from(dst_old_high),
+                operand_low,
+                operand_high,
+                mem,
+            )
             .emit(sink, info, state);
 
             // jnz again

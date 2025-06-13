@@ -196,13 +196,28 @@ fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                         fmtln!(f, "let regs = ValueRegs::two(one, two);");
                         fmtln!(f, "AssemblerOutputs::RetValueRegs {{ inst, regs }}");
                     }
-                    (Reg(reg), Mem(_)) | (Mem(_), Reg(reg)) => {
+                    (Reg(reg), Mem(_)) | (Mem(_) | RegMem(_), Reg(reg) | FixedReg(reg)) => {
                         let (ty, var) = ty_var_of_reg(reg);
                         fmtln!(f, "let {var} = {reg}.as_ref().{};", access_reg(op2));
                         fmtln!(f, "AssemblerOutputs::Ret{ty} {{ inst, {var} }}");
                     }
                     _ => unimplemented!("unhandled results: {results:?}"),
                 },
+
+                [op1, op2, op3] => match (
+                    op1.location.kind(),
+                    op2.location.kind(),
+                    op3.location.kind(),
+                ) {
+                    (FixedReg(loc1), FixedReg(loc2), Mem(_)) => {
+                        fmtln!(f, "let one = {loc1}.as_ref().{}.to_reg();", access_reg(op1));
+                        fmtln!(f, "let two = {loc2}.as_ref().{}.to_reg();", access_reg(op2));
+                        fmtln!(f, "let regs = ValueRegs::two(one, two);");
+                        fmtln!(f, "AssemblerOutputs::RetValueRegs {{ inst, regs }}");
+                    }
+                    _ => unimplemented!("unhandled results: {results:?}"),
+                },
+
                 _ => panic!("instruction has more than one result"),
             }
         },
@@ -404,12 +419,23 @@ fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
             (FixedReg(_) | Reg(_), FixedReg(_) | Reg(_)) => {
                 vec![IsleConstructor::RetValueRegs]
             }
-            (Reg(r), Mem(_)) | (Mem(_), Reg(r)) => {
+            (Reg(r), Mem(_)) | (Mem(_) | RegMem(_), Reg(r) | FixedReg(r)) => {
                 assert!(matches!(r.reg_class().unwrap(), RegClass::Gpr));
                 vec![IsleConstructor::RetGpr]
             }
             other => panic!("unsupported number of write operands {other:?}"),
         },
+        [one, two, three] => match (
+            one.location.kind(),
+            two.location.kind(),
+            three.location.kind(),
+        ) {
+            (FixedReg(_), FixedReg(_), Mem(_)) => {
+                vec![IsleConstructor::RetValueRegs]
+            }
+            other => panic!("unsupported number of write operands {other:?}"),
+        },
+
         other => panic!("unsupported number of write operands {other:?}"),
     }
 }
