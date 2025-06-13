@@ -103,8 +103,6 @@ fn test_x64_emit() {
     let r9 = regs::r9();
     let r10 = regs::r10();
     let r11 = regs::r11();
-    let r12 = regs::r12();
-    let r13 = regs::r13();
     let r14 = regs::r14();
     let r15 = regs::r15();
 
