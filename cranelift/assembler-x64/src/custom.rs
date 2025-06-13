@@ -104,8 +104,9 @@ pub mod mnemonic {
 }
 
 pub mod display {
-    use crate::Registers;
     use crate::inst;
+    use crate::{Amode, Gpr, Registers, Size};
+    use std::fmt;
 
     pub fn pseudo_op(imm: u8) -> &'static str {
         match imm {
@@ -121,10 +122,7 @@ pub mod display {
         }
     }
 
-    pub fn cmpps_a<R: Registers>(
-        f: &mut std::fmt::Formatter,
-        inst: &inst::cmpps_a<R>,
-    ) -> std::fmt::Result {
+    pub fn cmpps_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpps_a<R>) -> fmt::Result {
         let xmm1 = inst.xmm1.to_string();
         let xmm_m128 = inst.xmm_m128.to_string();
         let imm8 = inst.imm8.to_string();
@@ -135,10 +133,7 @@ pub mod display {
         write!(f, "{name} {xmm_m128}, {xmm1}")
     }
 
-    pub fn cmpss_a<R: Registers>(
-        f: &mut std::fmt::Formatter,
-        inst: &inst::cmpss_a<R>,
-    ) -> std::fmt::Result {
+    pub fn cmpss_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpss_a<R>) -> fmt::Result {
         let xmm1 = inst.xmm1.to_string();
         let xmm_m32 = inst.xmm_m32.to_string();
         let imm8 = inst.imm8.to_string();
@@ -149,10 +144,7 @@ pub mod display {
         write!(f, "{name} {xmm_m32}, {xmm1}")
     }
 
-    pub fn cmpsd_a<R: Registers>(
-        f: &mut std::fmt::Formatter,
-        inst: &inst::cmpsd_a<R>,
-    ) -> std::fmt::Result {
+    pub fn cmpsd_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpsd_a<R>) -> fmt::Result {
         let xmm1 = inst.xmm1.to_string();
         let xmm_m64 = inst.xmm_m64.to_string();
         let imm8 = inst.imm8.to_string();
@@ -163,10 +155,7 @@ pub mod display {
         write!(f, "{name} {xmm_m64}, {xmm1}")
     }
 
-    pub fn cmppd_a<R: Registers>(
-        f: &mut std::fmt::Formatter,
-        inst: &inst::cmppd_a<R>,
-    ) -> std::fmt::Result {
+    pub fn cmppd_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmppd_a<R>) -> fmt::Result {
         let xmm1 = inst.xmm1.to_string();
         let xmm_m128 = inst.xmm_m128.to_string();
         let imm8 = inst.imm8.to_string();
@@ -176,10 +165,60 @@ pub mod display {
         let name = format!("cmp{}pd", pseudo_op(inst.imm8.value()));
         write!(f, "{name} {xmm_m128}, {xmm1}")
     }
+
+    pub fn xchgb_rm<R: Registers>(
+        f: &mut fmt::Formatter<'_>,
+        inst: &inst::xchgb_rm<R>,
+    ) -> fmt::Result {
+        let inst::xchgb_rm { r8, m8 } = inst;
+        xchg_rm::<R>(f, r8, m8, Size::Byte)
+    }
+
+    pub fn xchgw_rm<R: Registers>(
+        f: &mut fmt::Formatter<'_>,
+        inst: &inst::xchgw_rm<R>,
+    ) -> fmt::Result {
+        let inst::xchgw_rm { r16, m16 } = inst;
+        xchg_rm::<R>(f, r16, m16, Size::Word)
+    }
+
+    pub fn xchgl_rm<R: Registers>(
+        f: &mut fmt::Formatter<'_>,
+        inst: &inst::xchgl_rm<R>,
+    ) -> fmt::Result {
+        let inst::xchgl_rm { r32, m32 } = inst;
+        xchg_rm::<R>(f, r32, m32, Size::Doubleword)
+    }
+
+    pub fn xchgq_rm<R: Registers>(
+        f: &mut fmt::Formatter<'_>,
+        inst: &inst::xchgq_rm<R>,
+    ) -> fmt::Result {
+        let inst::xchgq_rm { r64, m64 } = inst;
+        xchg_rm::<R>(f, r64, m64, Size::Quadword)
+    }
+
+    /// Swap the order of printing (register first) to match Capstone.
+    fn xchg_rm<R: Registers>(
+        f: &mut fmt::Formatter<'_>,
+        reg: &Gpr<R::ReadWriteGpr>,
+        mem: &Amode<R::ReadGpr>,
+        size: Size,
+    ) -> fmt::Result {
+        let reg = reg.to_string(size);
+        let mem = mem.to_string();
+        let suffix = match size {
+            Size::Byte => "b",
+            Size::Word => "w",
+            Size::Doubleword => "l",
+            Size::Quadword => "q",
+        };
+        write!(f, "xchg{suffix} {reg}, {mem}")
+    }
 }
 
 pub mod visit {
-    use crate::inst::{mulxl_rvm, mulxq_rvm};
+    use crate::inst::*;
     use crate::{Fixed, Gpr, GprMem, RegisterVisitor, Registers, gpr};
 
     pub fn mulxl_rvm<R: Registers>(mulx: &mut mulxl_rvm<R>, visitor: &mut impl RegisterVisitor<R>) {

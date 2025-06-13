@@ -2,6 +2,7 @@
 
 mod add;
 mod and;
+mod atomic;
 mod avg;
 mod bitmanip;
 mod cmp;
@@ -30,6 +31,7 @@ pub fn list() -> Vec<Inst> {
     let mut all = vec![];
     all.extend(add::list());
     all.extend(and::list());
+    all.extend(atomic::list());
     all.extend(avg::list());
     all.extend(bitmanip::list());
     all.extend(cmp::list());
