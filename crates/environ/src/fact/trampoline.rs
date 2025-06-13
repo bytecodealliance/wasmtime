@@ -27,7 +27,7 @@ use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
 use crate::fact::traps::Trap;
 use crate::fact::{
-    AdapterData, Body, Context, Function, FunctionId, Helper, HelperLocation, HelperType,
+    AdapterData, Body, Function, FunctionId, Helper, HelperLocation, HelperType,
     LinearMemoryOptions, Module, Options,
 };
 use crate::prelude::*;
@@ -89,8 +89,8 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
         module: &'b mut Module<'a>,
         adapter: &AdapterData,
     ) -> (Compiler<'a, 'b>, Signature, Signature) {
-        let lower_sig = module.types.signature(&adapter.lower, Context::Lower);
-        let lift_sig = module.types.signature(&adapter.lift, Context::Lift);
+        let lower_sig = module.types.signature(&adapter.lower);
+        let lift_sig = module.types.signature(&adapter.lift);
         let ty = module
             .core_types
             .function(&lower_sig.params, &lower_sig.results);
@@ -243,7 +243,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             // `async-return` function to write the result to the caller's
             // linear memory and deliver a `STATUS_RETURNED` event to the
             // caller.
-            let lift_sig = module.types.signature(&adapter.lift, Context::Lift);
+            let lift_sig = module.types.signature(&adapter.lift);
             let start = async_start_adapter(module);
             let return_ = async_return_adapter(module);
             let (compiler, lower_sig, ..) = compiler(module, adapter);
