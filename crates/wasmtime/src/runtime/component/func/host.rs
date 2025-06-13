@@ -179,7 +179,7 @@ where
         bail!("cannot leave component instance");
     }
 
-    let types = store[instance.id()].component().types().clone();
+    let types = instance.id().get(store.0).component().types().clone();
     let ty = &types[ty];
     let param_tys = InterfaceType::Tuple(ty.params);
     let result_tys = InterfaceType::Tuple(ty.results);
@@ -494,7 +494,7 @@ where
     let args;
     let ret_index;
 
-    let types = store[instance.id()].component().types().clone();
+    let types = instance.id().get(store.0).component().types().clone();
     let func_ty = &types[ty];
     let param_tys = &types[func_ty.params];
     let result_tys = &types[func_ty.results];

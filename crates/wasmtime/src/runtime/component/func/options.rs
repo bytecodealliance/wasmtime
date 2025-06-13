@@ -9,6 +9,7 @@ use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition};
 use crate::store::{StoreId, StoreOpaque};
 use crate::{FuncType, StoreContextMut};
 use alloc::sync::Arc;
+use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::component::{ComponentTypes, StringEncoding, TypeResourceTableIndex};
 
@@ -216,12 +217,12 @@ impl<'a, T: 'static> LowerContext<'a, T> {
 
     /// Returns the `&ComponentInstance` that's being lowered into.
     pub fn instance(&self) -> &ComponentInstance {
-        &self.store[self.instance.id()]
+        self.instance.id().get(self.store.0)
     }
 
     /// Returns the `&mut ComponentInstance` that's being lowered into.
-    pub fn instance_mut(&mut self) -> &mut ComponentInstance {
-        &mut self.store[self.instance.id()]
+    pub fn instance_mut(&mut self) -> Pin<&mut ComponentInstance> {
+        self.instance.id().get_mut(self.store.0)
     }
 
     /// Returns a view into memory as a mutable slice of bytes.
@@ -399,7 +400,7 @@ pub struct LiftContext<'a> {
 
     memory: Option<&'a [u8]>,
 
-    instance: &'a mut ComponentInstance,
+    instance: Pin<&'a mut ComponentInstance>,
     instance_handle: Instance,
 
     host_table: &'a mut ResourceTable,
@@ -460,8 +461,8 @@ impl<'a> LiftContext<'a> {
     }
 
     /// Returns the component instance that is being lifted from.
-    pub fn instance_mut(&mut self) -> &mut ComponentInstance {
-        self.instance
+    pub fn instance_mut(&mut self) -> Pin<&mut ComponentInstance> {
+        self.instance.as_mut()
     }
     /// Returns the component instance that is being lifted from.
     pub fn instance_handle(&self) -> Instance {
@@ -518,7 +519,7 @@ impl<'a> LiftContext<'a> {
     /// Returns instance type information for the component instance that is
     /// being lifted from.
     pub fn instance_type(&self) -> InstanceType<'_> {
-        InstanceType::new(self.instance)
+        InstanceType::new(&self.instance)
     }
 
     fn resource_tables(&mut self) -> HostResourceTables<'_> {
@@ -528,7 +529,7 @@ impl<'a> LiftContext<'a> {
                 calls: self.calls,
                 // Note that the unsafety here should be valid given the contract of
                 // `LiftContext::new`.
-                guest: Some(self.instance.guest_tables()),
+                guest: Some(self.instance.as_mut().guest_tables()),
             },
             self.host_resource_data,
         )

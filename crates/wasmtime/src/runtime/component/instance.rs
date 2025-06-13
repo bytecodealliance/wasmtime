@@ -10,13 +10,13 @@ use crate::linker::DefinitionType;
 use crate::prelude::*;
 use crate::runtime::vm::VMFuncRef;
 use crate::runtime::vm::component::{
-    CallContexts, ComponentInstance, OwnedComponentInstance, ResourceTables, TypedResource,
-    TypedResourceIndex,
+    CallContexts, ComponentInstance, ResourceTables, TypedResource, TypedResourceIndex,
 };
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
+use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::{EngineOrModuleTypeIndex, component::*};
 use wasmtime_environ::{EntityType, PrimaryMap};
@@ -159,7 +159,7 @@ impl Instance {
         name: impl InstanceExportLookup,
     ) -> Option<Func> {
         let store = store.as_context_mut().0;
-        let instance = &store[self.id];
+        let instance = self.id.get(store);
         let component = instance.component();
 
         // Validate that `name` exists within `self.`
@@ -302,7 +302,7 @@ impl Instance {
         instance: Option<&ComponentExportIndex>,
         name: &str,
     ) -> Option<(ComponentItem, ComponentExportIndex)> {
-        let data = &store[self.id()];
+        let data = self.id().get(store);
         let component = data.component();
         let index = component.lookup_export_index(instance, name)?;
         let item = ComponentItem::from_export(
@@ -338,7 +338,7 @@ impl Instance {
         instance: Option<&ComponentExportIndex>,
         name: &str,
     ) -> Option<ComponentExportIndex> {
-        let data = &store.as_context_mut()[self.id()];
+        let data = self.id().get(store.as_context_mut().0);
         let index = data.component().lookup_export_index(instance, name)?;
         Some(ComponentExportIndex {
             id: data.component().id(),
@@ -351,7 +351,7 @@ impl Instance {
         store: &'a StoreOpaque,
         name: impl InstanceExportLookup,
     ) -> Option<(&'a ComponentInstance, &'a Export)> {
-        let data = &store[self.id()];
+        let data = self.id().get(store);
         let index = name.lookup(data.component())?;
         Some((data, &data.component().env_component().export_items[index]))
     }
@@ -360,20 +360,13 @@ impl Instance {
     pub fn instance_pre<T>(&self, store: impl AsContext<Data = T>) -> InstancePre<T> {
         // This indexing operation asserts the Store owns the Instance.
         // Therefore, the InstancePre<T> must match the Store<T>.
-        let data = &store.as_context()[self.id()];
+        let data = self.id().get(store.as_context().0);
 
         // SAFETY: calling this method safely here relies on matching the `T`
         // in `InstancePre<T>` to the store itself, which is happening in the
         // type signature just above by ensuring the store's data is `T` which
         // matches the return value.
         unsafe { data.instance_pre() }
-    }
-
-    /// Returns the VM/runtime state for this instance as belonging to the
-    /// store provided.
-    pub(crate) fn instance_ptr(&self, store: &StoreOpaque) -> NonNull<ComponentInstance> {
-        self.id.assert_belongs_to(store.id());
-        store.component_instance_ptr(self.id.instance())
     }
 
     pub(crate) fn id(&self) -> StoreComponentInstanceId {
@@ -435,7 +428,7 @@ impl Instance {
         src: TypeResourceTableIndex,
         dst: TypeResourceTableIndex,
     ) -> Result<u32> {
-        let dst_owns_resource = store[self.id()].resource_owned_by_own_instance(dst);
+        let dst_owns_resource = self.id().get(store).resource_owned_by_own_instance(dst);
         let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
         let mut tables = resource_tables(calls, instance);
         let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
@@ -466,7 +459,7 @@ impl Instance {
 
 fn resource_tables<'a>(
     calls: &'a mut CallContexts,
-    instance: &'a mut ComponentInstance,
+    instance: Pin<&'a mut ComponentInstance>,
 ) -> ResourceTables<'a> {
     ResourceTables {
         host_table: None,
@@ -560,7 +553,7 @@ impl<'a> Instantiator<'a> {
         let imported_resources: ImportedResources =
             PrimaryMap::with_capacity(env_component.imported_resources.len());
 
-        let instance = OwnedComponentInstance::new(
+        let instance = ComponentInstance::new(
             store.store_data().components.next_component_instance_id(),
             component,
             Arc::new(imported_resources),
@@ -845,7 +838,7 @@ impl<'a> Instantiator<'a> {
     }
 
     /// Same as [`Self::instance`], but for mutability.
-    fn instance_mut<'b>(&self, store: &'b mut StoreOpaque) -> &'b mut ComponentInstance {
+    fn instance_mut<'b>(&self, store: &'b mut StoreOpaque) -> Pin<&'b mut ComponentInstance> {
         store.store_data_mut().component_instance_mut(self.id)
     }
 
