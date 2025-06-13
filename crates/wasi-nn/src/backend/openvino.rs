@@ -156,7 +156,7 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
 
                     // Currently openvino backend returns output index only, not output tensor name
                     output_tensors.push(NamedTensor {
-                        name: format!("{}", i),
+                        name: format!("{i}"),
                         tensor: Tensor {
                             dimensions,
                             ty,
