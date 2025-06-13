@@ -680,7 +680,7 @@ fn test_x64_emit() {
             temp: w_r11.map(Gpr::unwrap_new),
             dst_old: w_rax.map(Gpr::unwrap_new)
         },
-        "490FB7014989C34D23DA66F0450FB1190F85EEFFFFFF",
+        "490FB7014989C34D23DAF066450FB1190F85EEFFFFFF",
         "atomically { 16_bits_at_[%r9] And= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }"
     ));
     insns.push((
