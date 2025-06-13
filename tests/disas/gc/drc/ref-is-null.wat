@@ -1,13 +1,13 @@
 ;;! target = "x86_64"
-;;! flags = "-W function-references,gc -C collector=null"
+;;! flags = "-W function-references,gc -C collector=drc"
 ;;! test = "optimize"
 
 (module
   (func (param anyref) (result i32)
-    (ref.test (ref any) (local.get 0))
+    (ref.is_null (local.get 0))
   )
   (func (param (ref any)) (result i32)
-    (ref.test (ref any) (local.get 0))
+    (ref.is_null (local.get 0))
   )
 )
 ;; function u0:0(i64 vmctx, i64, i32) -> i32 tail {
@@ -17,13 +17,13 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0025                               jump block1
+;; @0023                               jump block1
 ;;
 ;;                                 block1:
-;; @0022                               v7 = iconst.i32 1
-;;                                     v9 = iconst.i32 0
-;;                                     v14 = select v2, v7, v9  ; v7 = 1, v9 = 0
-;; @0025                               return v14
+;;                                     v6 = iconst.i32 0
+;;                                     v4 = icmp.i32 eq v2, v6  ; v6 = 0
+;;                                     v5 = uextend.i32 v4
+;; @0023                               return v5
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i32) -> i32 tail {
@@ -33,9 +33,9 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @002d                               jump block1
+;; @0029                               jump block1
 ;;
 ;;                                 block1:
-;; @002a                               v6 = iconst.i32 1
-;; @002d                               return v6  ; v6 = 1
+;;                                     v4 = iconst.i32 0
+;; @0029                               return v4  ; v4 = 0
 ;; }

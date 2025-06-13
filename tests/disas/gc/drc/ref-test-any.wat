@@ -36,8 +36,6 @@
 ;; @002d                               jump block1
 ;;
 ;;                                 block1:
-;; @002a                               v7 = iconst.i32 1
-;;                                     v9 = iconst.i32 0
-;;                                     v14 = select v2, v7, v9  ; v7 = 1, v9 = 0
-;; @002d                               return v14
+;; @002a                               v6 = iconst.i32 1
+;; @002d                               return v6  ; v6 = 1
 ;; }

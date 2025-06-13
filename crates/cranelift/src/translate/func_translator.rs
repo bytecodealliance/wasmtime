@@ -241,15 +241,21 @@ fn parse_function_body(
     debug_assert_eq!(state.control_stack.len(), 1, "State not initialized");
 
     environ.before_translate_function(builder, state)?;
+
     let mut reader = OperatorsReader::new(reader);
+    let mut operand_types = vec![];
+
     while !reader.eof() {
         let pos = reader.original_position();
         builder.set_srcloc(cur_srcloc(&reader.get_binary_reader()));
+
         let op = reader.read()?;
-        validator.op(pos, &op)?;
-        environ.before_translate_operator(&op, builder, state)?;
-        translate_operator(validator, &op, builder, state, environ)?;
-        environ.after_translate_operator(&op, builder, state)?;
+        let operand_types =
+            validate_op_and_get_operand_types(validator, environ, &mut operand_types, &op, pos)?;
+
+        environ.before_translate_operator(&op, operand_types, builder, state)?;
+        translate_operator(validator, &op, operand_types, builder, state, environ)?;
+        environ.after_translate_operator(&op, operand_types, builder, state)?;
     }
     environ.after_translate_function(builder, state)?;
     reader.finish()?;
@@ -272,6 +278,40 @@ fn parse_function_body(
     state.stack.clear();
 
     Ok(())
+}
+
+fn validate_op_and_get_operand_types<'a>(
+    validator: &mut FuncValidator<impl WasmModuleResources>,
+    environ: &mut FuncEnvironment<'_>,
+    operand_types: &'a mut Vec<wasmtime_environ::WasmValType>,
+    op: &wasmparser::Operator<'_>,
+    pos: usize,
+) -> WasmResult<Option<&'a [wasmtime_environ::WasmValType]>> {
+    // Get the operand types for this operator.
+    //
+    // Note that we don't know if the `op` is valid yet, but only valid ops will
+    // definitely have arity. However, we also must check the arity before
+    // validating the op so that the validator has the right state to correctly
+    // report the arity. Furthermore, even if the op is valid, if it is in
+    // unreachable code, the op might want to pop more values from the stack
+    // than actually exist on the stack (which is allowed in unreachable code)
+    // so even if we can get arity, we are only guaranteed to have operand types
+    // for ops that are not only valid but also reachable.
+    let arity = op.operator_arity(&*validator);
+    operand_types.clear();
+    let operand_types = arity.and_then(|(operand_arity, _result_arity)| {
+        for i in (0..operand_arity).rev() {
+            let i = usize::try_from(i).unwrap();
+            let ty = validator.get_operand_type(i)??;
+            let ty = environ.convert_valtype(ty).ok()?;
+            operand_types.push(ty);
+        }
+        Some(&operand_types[..])
+    });
+
+    validator.op(pos, &op)?;
+
+    Ok(operand_types)
 }
 
 /// Get the current source location from a reader.
