@@ -47,10 +47,6 @@ jobs:
     - run: rustup component add rustfmt
     - run: cargo fmt --all -- --check
 
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
-
   # Quick JS formatting/linting checks for the little bits of JS we have for the
   # `wasmtime explore` UI.
   check_js:
@@ -64,10 +60,6 @@ jobs:
       working-directory: ./crates/explorer
     - run: npm run fmt-check
       working-directory: ./crates/explorer
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   # Check Code style quickly by running `clang-format` over all the C/C++ code
   #
@@ -84,10 +76,6 @@ jobs:
           grep -v wasmtime-platform.h | \
           grep -v wasm.h | \
           xargs clang-format-18 --dry-run --Werror --verbose
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   # Lint dependency graph for security advisories, duplicate versions, and
   # incompatible licences
@@ -107,10 +95,6 @@ jobs:
         mv cargo-deny-*-x86_64-unknown-linux-musl/cargo-deny cargo-deny
         echo `pwd` >> $GITHUB_PATH
     - run: cargo deny check bans licenses
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   # Ensure dependencies are vetted. See https://mozilla.github.io/cargo-vet/
   #
@@ -141,10 +125,6 @@ jobs:
     # This is intended to weed out mistakes such as #9115 from happening again.
     - run: rustc scripts/publish.rs && ./publish bump-patch && cargo vet
       name: Ensure `cargo vet` works if versions are bumped
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   cargo_vet_failure_for_prs:
     name: Cargo vet failed on a Pull Request
@@ -327,10 +307,6 @@ jobs:
         name: gh-pages
         path: gh-pages.tar.gz
 
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
-
   # Checks of various feature combinations and whether things compile. The goal
   # here isn't to run tests, mostly just serve as a double-check that Rust code
   # compiles and is likely to work everywhere else.
@@ -432,10 +408,6 @@ jobs:
         )
         echo "$checks" | xargs -I CHECK sh -c 'echo "=== cargo check CHECK ==="; cargo check CHECK'
 
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
-
   special_tests:
     name: One-off special tests
     runs-on: ubuntu-latest
@@ -448,10 +420,6 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: cargo test -p wasmtime-internal-fiber --no-default-features
     - run: cargo test -p cranelift-tools --test logged-filetests
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   # Check that Clippy lints are passing.
   clippy:
@@ -467,10 +435,6 @@ jobs:
 
     - run: rustup component add clippy
     - run: cargo clippy --workspace --all-targets
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   # Similar to `micro_checks` but where we need to install some more state
   # (e.g. Android NDK) and we haven't factored support for those things out into
@@ -512,10 +476,6 @@ jobs:
     - name: Re-vendor C API
       run: ./ci/vendor-c-api-headers.sh
     - run: git diff --exit-code
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   # Various checks that Wasmtime builds for a variety of platforms. Each
   # platform may not include the entire dependency tree and maybe just a few
@@ -601,10 +561,6 @@ jobs:
       env:
         CARGO_BUILD_TARGET: ${{ matrix.target }}
 
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
-
   # Run tests that require a nightly compiler, such as building fuzz targets.
   test_nightly:
     needs: determine
@@ -647,10 +603,6 @@ jobs:
     - run: cargo fuzz build --dev --fuzz-dir ./crates/environ/fuzz --features component-model
     - run: cargo fuzz build --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
 
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
-
   # Perform all tests of the c-api
   test_capi:
     needs: determine
@@ -679,10 +631,6 @@ jobs:
       if: runner.os == 'Windows'
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
       if: runner.os != 'Windows'
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   # Perform all tests (debug mode) for `wasmtime`.
   #
@@ -825,10 +773,6 @@ jobs:
     - run: python3 ./ci/run-tests.py --locked ${{ matrix.bucket }}
       shell: pwsh
 
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
-
   # Test `wasmtime-wasi-nn` in its own job, as not all of its backends are
   # compatible with all targets, and each must be tested separately anyways.
   test_wasi_nn:
@@ -868,10 +812,6 @@ jobs:
     # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
 
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
-
   # Test the `wasmtime-fuzzing` crate. Split out from the main tests because
   # `--all-features` brings in OCaml, which is a pain to get setup for all
   # targets.
@@ -889,10 +829,6 @@ jobs:
     # Run the tests
     - run: |
         cargo test -p wasmtime-fuzzing -p wasm-spec-interpreter
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   # Test debug (DWARF) related functionality.
   test_debug_dwarf:
@@ -921,10 +857,6 @@ jobs:
       env:
         LLDB: lldb-15 # override default version, 14
         WASI_SDK_PATH: /tmp/wasi-sdk
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   build-preview1-component-adapter:
     name: Build wasi-preview1-component-adapter
@@ -955,11 +887,6 @@ jobs:
         name: bins-wasi-preview1-component-adapter
         path: target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.*.wasm
 
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
-
   build-preview1-component-adapter-provider:
     name: Build wasi-preview1-component-adapter-provider
     needs: build-preview1-component-adapter
@@ -972,10 +899,6 @@ jobs:
     - uses: ./.github/actions/build-adapter-provider
       with:
         run-id: ${{ github.run_id }}
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   # Verify the "min platform" example still works.
   test-min-platform-example:
@@ -1016,10 +939,6 @@ jobs:
         name: wasmtime-platform-header
         path: examples/min-platform/embedding/wasmtime-platform.h
 
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
-
   bench:
     needs: determine
     if: needs.determine.outputs.run-full
@@ -1032,10 +951,6 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: rustup target add wasm32-wasip1
     - run: cargo test --benches --release
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   # Verify that cranelift's code generation is deterministic
   meta_deterministic_check:
@@ -1050,10 +965,6 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: cd cranelift/codegen && cargo build --features all-arch
     - run: ci/ensure_deterministic_build.sh
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   verify-publish:
     needs: determine
@@ -1074,10 +985,6 @@ jobs:
     - run: ./publish verify
     # Make sure we can bump version numbers for the next release
     - run: ./publish bump
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   # Run a subset of tests under MIRI on CI to help check the `unsafe` code in
   # Wasmtime to make sure it's at least not obviously incorrect for basic usage.
@@ -1123,10 +1030,6 @@ jobs:
       if: ${{ matrix.crate }}
     - run: ${{ matrix.script }}
       if: ${{ matrix.script }}
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
   # of platforms and architectures and then uploads the release artifacts to
@@ -1175,10 +1078,6 @@ jobs:
       with:
         name: bins-${{ matrix.build }}
         path: dist
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
 
   # This is a "join node" which depends on all prior workflows. The merge queue,
   # for example, gates on this to ensure that everything has executed
