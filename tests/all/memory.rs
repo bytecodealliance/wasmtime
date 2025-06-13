@@ -114,8 +114,8 @@ fn offsets_static_dynamic_oh_my(config: &mut Config) -> Result<()> {
         }
     }
 
-    engines.par_iter().for_each(|engine| {
-        let module = module(&engine).unwrap();
+    engines.par_iter().try_for_each(|engine| {
+        let module = module(&engine)?;
 
         for (min, max) in [(1, Some(2)), (1, None)].iter() {
             let mut store = Store::new(&engine, ());
@@ -133,7 +133,8 @@ fn offsets_static_dynamic_oh_my(config: &mut Config) -> Result<()> {
             test_traps(&mut store, &funcs, 65536, &mem);
             test_traps(&mut store, &funcs, u32::MAX, &mem);
         }
-    });
+        Ok::<_, wasmtime::Error>(())
+    })?;
 
     Ok(())
 }

@@ -49,6 +49,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wast::TestConfig) {
 
         hogs_memory: _,
         gc_types: _,
+        spec_test: _,
     } = *test_config;
     // Note that all of these proposals/features are currently default-off to
     // ensure that we annotate all tests accurately with what features they

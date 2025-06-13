@@ -151,6 +151,7 @@ impl Config {
             nan_canonicalization: _,
             gc_types: _,
             stack_switching: _,
+            spec_test: _,
         } = test.config;
 
         // Enable/disable some proposals that aren't configurable in wasm-smith
