@@ -249,6 +249,7 @@ macro_rules! foreach_config_option {
             exceptions
             legacy_exceptions
             stack_switching
+        integration
         }
     };
 }
@@ -270,7 +271,6 @@ macro_rules! define_test_config {
                 }
             )*
         }
-
     }
 }
 
@@ -361,8 +361,8 @@ impl Compiler {
                 if cfg!(target_arch = "aarch64") {
                     return unsupported_base
                         || config.wide_arithmetic()
-                        || config.threads()
-                        || config.simd();
+                        || (config.simd() && config.integration())
+                        || config.threads();
                 }
 
                 false
