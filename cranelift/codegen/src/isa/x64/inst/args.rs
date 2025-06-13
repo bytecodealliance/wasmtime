@@ -1524,15 +1524,3 @@ impl OperandSize {
         }
     }
 }
-
-/// An x64 memory fence kind.
-#[derive(Clone)]
-#[allow(dead_code)]
-pub enum FenceKind {
-    /// `mfence` instruction ("Memory Fence")
-    MFence,
-    /// `lfence` instruction ("Load Fence")
-    LFence,
-    /// `sfence` instruction ("Store Fence")
-    SFence,
-}

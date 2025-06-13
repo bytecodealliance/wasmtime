@@ -17,13 +17,10 @@
 ///
 /// These model what the reference manual calls "instruction operand encodings,"
 /// usually defined in a table after an instruction's opcodes.
-pub fn fmt(
-    name: impl Into<String>,
-    operands: impl IntoIterator<Item = impl Into<Operand>>,
-) -> Format {
+pub fn fmt(name: impl Into<String>, operands: impl IntoIterator<Item = Operand>) -> Format {
     Format {
         name: name.into(),
-        operands: operands.into_iter().map(Into::into).collect(),
+        operands: operands.into_iter().collect(),
         eflags: Eflags::default(),
     }
 }
