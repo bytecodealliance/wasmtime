@@ -198,7 +198,6 @@ impl ToTokens for Fn {
 
 pub fn run(attrs: TokenStream, item: TokenStream) -> TokenStream {
     let mut test_config = TestConfig::default();
-    test_config.flags.integration = Some(true);
 
     let config_parser = syn::meta::parser(|meta| {
         if meta.path.is_ident("strategies") {
