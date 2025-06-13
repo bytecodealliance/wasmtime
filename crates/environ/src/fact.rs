@@ -170,7 +170,7 @@ impl LinearMemoryOptions {
 /// The data model for objects passed through an adapter.
 #[derive(PartialEq, Eq, Hash, Copy, Clone)]
 enum DataModel {
-    Gc { core_type: ModuleInternedTypeIndex },
+    Gc {},
     LinearMemory(LinearMemoryOptions),
 }
 
@@ -178,7 +178,7 @@ impl DataModel {
     #[track_caller]
     fn unwrap_memory(&self) -> &LinearMemoryOptions {
         match self {
-            DataModel::Gc { core_type: _ } => panic!("`unwrap_memory` on GC"),
+            DataModel::Gc {} => panic!("`unwrap_memory` on GC"),
             DataModel::LinearMemory(opts) => opts,
         }
     }
@@ -194,6 +194,7 @@ struct Options {
     string_encoding: StringEncoding,
     callback: Option<FuncIndex>,
     async_: bool,
+    core_type: ModuleInternedTypeIndex,
     data_model: DataModel,
 }
 
@@ -238,10 +239,10 @@ enum HelperLocation {
     /// Located in linear memory as configured by `opts`.
     Memory,
     /// Located in a GC struct field.
-    #[allow(dead_code, reason = "CM+GC is still WIP")]
+    #[expect(dead_code, reason = "CM+GC is still WIP")]
     StructField,
     /// Located in a GC array element.
-    #[allow(dead_code, reason = "CM+GC is still WIP")]
+    #[expect(dead_code, reason = "CM+GC is still WIP")]
     ArrayElement,
 }
 
@@ -331,6 +332,7 @@ impl<'a> Module<'a> {
             post_return: _, // handled above
             callback,
             async_,
+            core_type,
             data_model,
         } = options;
 
@@ -346,9 +348,7 @@ impl<'a> Module<'a> {
         );
 
         let data_model = match data_model {
-            crate::component::DataModel::Gc { core_type } => DataModel::Gc {
-                core_type: *core_type,
-            },
+            crate::component::DataModel::Gc {} => DataModel::Gc {},
             crate::component::DataModel::LinearMemory {
                 memory,
                 memory64,
@@ -411,6 +411,7 @@ impl<'a> Module<'a> {
                 string_encoding: *string_encoding,
                 callback,
                 async_: *async_,
+                core_type: *core_type,
                 data_model,
             },
         }
@@ -889,7 +890,7 @@ impl Options {
     ) -> Option<&'a [FlatType]> {
         let flat = types.flat_types(ty)?;
         match self.data_model {
-            DataModel::Gc { core_type: _ } => todo!("CM+GC"),
+            DataModel::Gc {} => todo!("CM+GC"),
             DataModel::LinearMemory(mem_opts) => Some(if mem_opts.memory64 {
                 flat.memory64
             } else {

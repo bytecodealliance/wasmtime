@@ -495,10 +495,7 @@ pub struct LinearMemoryOptions {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum CanonicalOptionsDataModel {
     /// Data is stored in GC objects.
-    Gc {
-        /// The core function type that is being lifted from / lowered to.
-        core_type: ModuleInternedTypeIndex,
-    },
+    Gc {},
 
     /// Data is stored in a linear memory.
     LinearMemory(LinearMemoryOptions),
@@ -521,6 +518,9 @@ pub struct CanonicalOptions {
 
     /// Whether to use the async ABI for lifting or lowering.
     pub async_: bool,
+
+    /// The core function type that is being lifted from / lowered to.
+    pub core_type: ModuleInternedTypeIndex,
 
     /// The data model (GC objects or linear memory) used with these canonical
     /// options.
