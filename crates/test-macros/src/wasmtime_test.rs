@@ -220,7 +220,17 @@ pub fn run(attrs: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
-    let mut tests = vec![quote! { #func }];
+    let mut tests = if test_config.strategies == [Compiler::Winch] {
+        vec![quote! {
+            // This prevents dead code warning when the macro is invoked as:
+            //     #[wasmtime_test(strategies(only(Winch))]
+            // Given that Winch only fully supports x86_64 / aarch64.
+            #[allow(dead_code)]
+            #func
+        }]
+    } else {
+        vec![quote! { #func }]
+    };
     let attrs = &func.attrs;
 
     let test_attr = test_config
