@@ -1004,8 +1004,7 @@ impl FunctionCompiler<'_> {
             let mut output = std::fs::File::create(path).unwrap();
             write!(
                 output,
-                ";;Intermediate Representation of function <{}>:\n",
-                symbol.split("::").last().unwrap()
+                ";; Intermediate Representation of function <{symbol}>:\n",
             )
             .unwrap();
             write!(output, "{}", context.func.display()).unwrap();
