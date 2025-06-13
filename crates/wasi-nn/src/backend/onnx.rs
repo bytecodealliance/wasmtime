@@ -3,7 +3,7 @@
 use super::{
     BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner, NamedTensor,
 };
-use crate::backend::{read, Id};
+use crate::backend::{Id, read};
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
 use anyhow::Context;

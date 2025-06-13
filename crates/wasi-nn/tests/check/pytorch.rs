@@ -1,4 +1,4 @@
-use super::{artifacts_dir, download, DOWNLOAD_LOCK};
+use super::{DOWNLOAD_LOCK, artifacts_dir, download};
 use anyhow::{Context, Result};
 use std::{env, fs};
 

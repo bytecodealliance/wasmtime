@@ -1,8 +1,8 @@
 //! Implements a `wasi-nn` [`BackendInner`] using OpenVINO.
 
 use super::{
-    read, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner, Id,
-    NamedTensor,
+    BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner, Id,
+    NamedTensor, read,
 };
 use crate::wit::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
