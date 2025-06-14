@@ -20,6 +20,7 @@ use crate::runtime::vm::{
 use crate::store::{InstanceId, StoreOpaque};
 use alloc::sync::Arc;
 use core::alloc::Layout;
+use core::marker;
 use core::ops::Range;
 use core::pin::Pin;
 use core::ptr::NonNull;
@@ -241,52 +242,6 @@ pub struct Instance {
     /// If the index is present in the set, the segment has been dropped.
     dropped_data: EntitySet<DataIndex>,
 
-    /// A pointer to the `vmctx` field at the end of the `Instance`.
-    ///
-    /// If you're looking at this a reasonable question would be "why do we need
-    /// a pointer to ourselves?" because after all the pointer's value is
-    /// trivially derivable from any `&Instance` pointer. The rationale for this
-    /// field's existence is subtle, but it's required for correctness. The
-    /// short version is "this makes miri happy".
-    ///
-    /// The long version of why this field exists is that the rules that MIRI
-    /// uses to ensure pointers are used correctly have various conditions on
-    /// them depend on how pointers are used. More specifically if `*mut T` is
-    /// derived from `&mut T`, then that invalidates all prior pointers drived
-    /// from the `&mut T`. This means that while we liberally want to re-acquire
-    /// a `*mut VMContext` throughout the implementation of `Instance` the
-    /// trivial way, a function `fn vmctx(Pin<&mut Instance>) -> *mut VMContext`
-    /// would effectively invalidate all prior `*mut VMContext` pointers
-    /// acquired. The purpose of this field is to serve as a sort of
-    /// source-of-truth for where `*mut VMContext` pointers come from.
-    ///
-    /// This field is initialized when the `Instance` is created with the
-    /// original allocation's pointer. That means that the provenance of this
-    /// pointer contains the entire allocation (both instance and `VMContext`).
-    /// This provenance bit is then "carried through" where `fn vmctx` will base
-    /// all returned pointers on this pointer itself. This provides the means of
-    /// never invalidating this pointer throughout MIRI and additionally being
-    /// able to still temporarily have `Pin<&mut Instance>` methods and such.
-    ///
-    /// It's important to note, though, that this is not here purely for MIRI.
-    /// The careful construction of the `fn vmctx` method has ramifications on
-    /// the LLVM IR generated, for example. A historical CVE on Wasmtime,
-    /// GHSA-ch89-5g45-qwc7, was caused due to relying on undefined behavior. By
-    /// deriving VMContext pointers from this pointer it specifically hints to
-    /// LLVM that trickery is afoot and it properly informs `noalias` and such
-    /// annotations and analysis. More-or-less this pointer is actually loaded
-    /// in LLVM IR which helps defeat otherwise present aliasing optimizations,
-    /// which we want, since writes to this should basically never be optimized
-    /// out.
-    ///
-    /// As a final note it's worth pointing out that the machine code generated
-    /// for accessing `fn vmctx` is still as one would expect. This member isn't
-    /// actually ever loaded at runtime (or at least shouldn't be). Perhaps in
-    /// the future if the memory consumption of this field is a problem we could
-    /// shrink it slightly, but for now one extra pointer per wasm instance
-    /// seems not too bad.
-    vmctx_self_reference: SendSyncPtr<VMContext>,
-
     // TODO: add support for multiple memories; `wmemcheck_state` corresponds to
     // memory 0.
     #[cfg(feature = "wmemcheck")]
@@ -301,7 +256,7 @@ pub struct Instance {
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
-    vmctx: VMContext,
+    vmctx: OwnedVMContext<VMContext>,
 }
 
 impl Instance {
@@ -309,20 +264,12 @@ impl Instance {
     ///
     /// It is assumed the memory was properly aligned and the
     /// allocation was `alloc_size` in bytes.
-    unsafe fn new(
+    fn new(
         req: InstanceAllocationRequest,
         memories: PrimaryMap<DefinedMemoryIndex, (MemoryAllocationIndex, Memory)>,
         tables: PrimaryMap<DefinedTableIndex, (TableAllocationIndex, Table)>,
         memory_tys: &PrimaryMap<MemoryIndex, wasmtime_environ::Memory>,
     ) -> InstanceHandle {
-        // The allocation must be *at least* the size required of `Instance`.
-        let layout = Self::alloc_layout(req.runtime_info.offsets());
-        let ptr = alloc::alloc::alloc(layout);
-        if ptr.is_null() {
-            alloc::alloc::handle_alloc_error(layout);
-        }
-        let ptr = ptr.cast::<Instance>();
-
         let module = req.runtime_info.env_module();
         let dropped_elements = EntitySet::with_capacity(module.passive_elements.len());
         let dropped_data = EntitySet::with_capacity(module.passive_data_map.len());
@@ -330,43 +277,42 @@ impl Instance {
         #[cfg(not(feature = "wmemcheck"))]
         let _ = memory_tys;
 
-        ptr::write(
-            ptr,
-            Instance {
-                id: req.id,
-                runtime_info: req.runtime_info.clone(),
-                memories,
-                tables,
-                dropped_elements,
-                dropped_data,
-                vmctx_self_reference: SendSyncPtr::new(NonNull::new(ptr.add(1).cast()).unwrap()),
-                vmctx: VMContext {
-                    _marker: core::marker::PhantomPinned,
-                },
-                #[cfg(feature = "wmemcheck")]
-                wmemcheck_state: {
-                    if req.wmemcheck {
-                        let size = memory_tys
-                            .iter()
-                            .next()
-                            .map(|memory| memory.1.limits.min)
-                            .unwrap_or(0)
-                            * 64
-                            * 1024;
-                        Some(Wmemcheck::new(size as usize))
-                    } else {
-                        None
-                    }
-                },
-                store: None,
+        let mut ret = OwnedInstance::new(Instance {
+            id: req.id,
+            runtime_info: req.runtime_info.clone(),
+            memories,
+            tables,
+            dropped_elements,
+            dropped_data,
+            #[cfg(feature = "wmemcheck")]
+            wmemcheck_state: {
+                if req.wmemcheck {
+                    let size = memory_tys
+                        .iter()
+                        .next()
+                        .map(|memory| memory.1.limits.min)
+                        .unwrap_or(0)
+                        * 64
+                        * 1024;
+                    Some(Wmemcheck::new(size as usize))
+                } else {
+                    None
+                }
             },
-        );
+            store: None,
+            vmctx: OwnedVMContext::new(),
+        });
 
-        let mut ret = InstanceHandle {
-            instance: SendSyncPtr::new(NonNull::new(ptr).unwrap()),
-        };
-        ret.get_mut()
-            .initialize_vmctx(module, req.runtime_info.offsets(), req.store, req.imports);
+        // SAFETY: this vmctx was allocated with the same layout above, so it
+        // should be safe to initialize with the same values here.
+        unsafe {
+            ret.get_mut().initialize_vmctx(
+                module,
+                req.runtime_info.offsets(),
+                req.store,
+                req.imports,
+            );
+        }
         ret
     }
 
@@ -393,80 +339,6 @@ impl Instance {
             .byte_sub(mem::size_of::<Instance>())
             .cast::<Instance>();
         f(Pin::new_unchecked(ptr.as_mut()))
-    }
-
-    /// Helper function to access various locations offset from our `*mut
-    /// VMContext` object.
-    ///
-    /// Note that this method takes `&self` as an argument but returns
-    /// `NonNull<T>` which is frequently used to mutate said memory. This is an
-    /// intentional design decision where the safety of the modification of
-    /// memory is placed as a burden onto the caller. The implementation of this
-    /// method explicitly does not require `&mut self` to acquire mutable
-    /// provenance to update the `VMContext` region. Instead all pointers into
-    /// the `VMContext` area have provenance/permissions to write.
-    ///
-    /// Also note though that care must be taken to ensure that reads/writes of
-    /// memory must only happen where appropriate, for example a non-atomic
-    /// write (as most are) should never happen concurrently with another read
-    /// or write. It's generally on the burden of the caller to adhere to this.
-    ///
-    /// Also of note is that most of the time the usage of this method falls
-    /// into one of:
-    ///
-    /// * Something in the VMContext is being read or written. In that case use
-    ///   `vmctx_plus_offset` or `vmctx_plus_offset_mut` if possible due to
-    ///   that having a safer lifetime.
-    ///
-    /// * A pointer is being created to pass to other VM* data structures. In
-    ///   that situation the lifetime of all VM data structures are typically
-    ///   tied to the `Store<T>` which is what provides the guarantees around
-    ///   concurrency/etc.
-    ///
-    /// There's quite a lot of unsafety riding on this method, especially
-    /// related to the ascription `T` of the byte `offset`. It's hoped that in
-    /// the future we're able to settle on an in theory safer design.
-    ///
-    /// # Safety
-    ///
-    /// This method is unsafe because the `offset` must be within bounds of the
-    /// `VMContext` object trailing this instance. Additionally `T` must be a
-    /// valid ascription of the value that resides at that location.
-    unsafe fn vmctx_plus_offset_raw<T: VmSafe>(&self, offset: impl Into<u32>) -> NonNull<T> {
-        // SAFETY: the safety requirements of `byte_add` are forwarded to this
-        // method's caller.
-        unsafe {
-            self.vmctx()
-                .byte_add(usize::try_from(offset.into()).unwrap())
-                .cast()
-        }
-    }
-
-    /// Helper above `vmctx_plus_offset_raw` which transfers the lifetime of
-    /// `&self` to the returned reference `&T`.
-    ///
-    /// # Safety
-    ///
-    /// See the safety documentation of `vmctx_plus_offset_raw`.
-    unsafe fn vmctx_plus_offset<T: VmSafe>(&self, offset: impl Into<u32>) -> &T {
-        // SAFETY: this method has the same safety requirements as
-        // `vmctx_plus_offset_raw`.
-        unsafe { self.vmctx_plus_offset_raw(offset).as_ref() }
-    }
-
-    /// Helper above `vmctx_plus_offset_raw` which transfers the lifetime of
-    /// `&mut self` to the returned reference `&mut T`.
-    ///
-    /// # Safety
-    ///
-    /// See the safety documentation of `vmctx_plus_offset_raw`.
-    unsafe fn vmctx_plus_offset_mut<T: VmSafe>(
-        self: Pin<&mut Self>,
-        offset: impl Into<u32>,
-    ) -> &mut T {
-        // SAFETY: this method has the same safety requirements as
-        // `vmctx_plus_offset_raw`.
-        unsafe { self.vmctx_plus_offset_raw(offset).as_mut() }
     }
 
     pub(crate) fn env_module(&self) -> &Arc<wasmtime_environ::Module> {
@@ -706,24 +578,7 @@ impl Instance {
     /// Return a reference to the vmctx used by compiled wasm code.
     #[inline]
     pub fn vmctx(&self) -> NonNull<VMContext> {
-        // The definition of this method is subtle but intentional. The goal
-        // here is that effectively this should return `&mut self.vmctx`, but
-        // it's not quite so simple. Some more documentation is available on the
-        // `vmctx_self_reference` field, but the general idea is that we're
-        // creating a pointer to return with proper provenance. Provenance is
-        // still in the works in Rust at the time of this writing but the load
-        // of the `self.vmctx_self_reference` field is important here as it
-        // affects how LLVM thinks about aliasing with respect to the returned
-        // pointer.
-        //
-        // The intention of this method is to codegen to machine code as `&mut
-        // self.vmctx`, however. While it doesn't show up like this in LLVM IR
-        // (there's an actual load of the field) it does look like that by the
-        // time the backend runs. (that's magic to me, the backend removing
-        // loads...)
-        let addr = &raw const self.vmctx;
-        let ret = self.vmctx_self_reference.as_ptr().with_addr(addr.addr());
-        NonNull::new(ret).unwrap()
+        InstanceLayout::vmctx(self)
     }
 
     /// Lookup a function by index.
@@ -1690,6 +1545,27 @@ impl Instance {
     }
 }
 
+// SAFETY: `layout` should describe this accurately and `OwnedVMContext` is the
+// last field of `ComponentInstance`.
+unsafe impl InstanceLayout for Instance {
+    const INIT_ZEROED: bool = false;
+    type VMContext = VMContext;
+
+    fn layout(&self) -> Layout {
+        Self::alloc_layout(self.runtime_info.offsets())
+    }
+
+    fn owned_vmctx(&self) -> &OwnedVMContext<VMContext> {
+        &self.vmctx
+    }
+
+    fn owned_vmctx_mut(&mut self) -> &mut OwnedVMContext<VMContext> {
+        &mut self.vmctx
+    }
+}
+
+pub type InstanceHandle = OwnedInstance<Instance>;
+
 /// A handle holding an `Instance` of a WebAssembly module.
 ///
 /// This structure is an owning handle of the `instance` contained internally.
@@ -1699,19 +1575,264 @@ impl Instance {
 /// Note that this lives within a `StoreOpaque` on a list of instances that a
 /// store is keeping alive.
 #[derive(Debug)]
-pub struct InstanceHandle {
+#[repr(transparent)] // guarantee this is a zero-cost wrapper
+pub struct OwnedInstance<T: InstanceLayout> {
     /// The raw pointer to the instance that was allocated.
     ///
     /// Note that this is not equivalent to `Box<Instance>` because the
     /// allocation here has a `VMContext` trailing after it. Thus the custom
     /// destructor to invoke the `dealloc` function with the appropriate
     /// layout.
-    instance: SendSyncPtr<Instance>,
+    instance: SendSyncPtr<T>,
+    _marker: marker::PhantomData<Box<(T, OwnedVMContext<T::VMContext>)>>,
 }
 
-impl InstanceHandle {
+/// Structure that must be placed at the end of a type implementing
+/// `InstanceLayout`.
+#[repr(align(16))] // match the alignment of VMContext
+pub struct OwnedVMContext<T> {
+    /// A pointer to the `vmctx` field at the end of the `structure`.
+    ///
+    /// If you're looking at this a reasonable question would be "why do we need
+    /// a pointer to ourselves?" because after all the pointer's value is
+    /// trivially derivable from any `&Instance` pointer. The rationale for this
+    /// field's existence is subtle, but it's required for correctness. The
+    /// short version is "this makes miri happy".
+    ///
+    /// The long version of why this field exists is that the rules that MIRI
+    /// uses to ensure pointers are used correctly have various conditions on
+    /// them depend on how pointers are used. More specifically if `*mut T` is
+    /// derived from `&mut T`, then that invalidates all prior pointers drived
+    /// from the `&mut T`. This means that while we liberally want to re-acquire
+    /// a `*mut VMContext` throughout the implementation of `Instance` the
+    /// trivial way, a function `fn vmctx(Pin<&mut Instance>) -> *mut VMContext`
+    /// would effectively invalidate all prior `*mut VMContext` pointers
+    /// acquired. The purpose of this field is to serve as a sort of
+    /// source-of-truth for where `*mut VMContext` pointers come from.
+    ///
+    /// This field is initialized when the `Instance` is created with the
+    /// original allocation's pointer. That means that the provenance of this
+    /// pointer contains the entire allocation (both instance and `VMContext`).
+    /// This provenance bit is then "carried through" where `fn vmctx` will base
+    /// all returned pointers on this pointer itself. This provides the means of
+    /// never invalidating this pointer throughout MIRI and additionally being
+    /// able to still temporarily have `Pin<&mut Instance>` methods and such.
+    ///
+    /// It's important to note, though, that this is not here purely for MIRI.
+    /// The careful construction of the `fn vmctx` method has ramifications on
+    /// the LLVM IR generated, for example. A historical CVE on Wasmtime,
+    /// GHSA-ch89-5g45-qwc7, was caused due to relying on undefined behavior. By
+    /// deriving VMContext pointers from this pointer it specifically hints to
+    /// LLVM that trickery is afoot and it properly informs `noalias` and such
+    /// annotations and analysis. More-or-less this pointer is actually loaded
+    /// in LLVM IR which helps defeat otherwise present aliasing optimizations,
+    /// which we want, since writes to this should basically never be optimized
+    /// out.
+    ///
+    /// As a final note it's worth pointing out that the machine code generated
+    /// for accessing `fn vmctx` is still as one would expect. This member isn't
+    /// actually ever loaded at runtime (or at least shouldn't be). Perhaps in
+    /// the future if the memory consumption of this field is a problem we could
+    /// shrink it slightly, but for now one extra pointer per wasm instance
+    /// seems not too bad.
+    vmctx_self_reference: SendSyncPtr<T>,
+
+    /// This field ensures that going from `Pin<&mut T>` to `&mut T` is not a
+    /// safe operation.
+    _marker: core::marker::PhantomPinned,
+}
+
+impl<T> OwnedVMContext<T> {
+    /// Creates a new blank vmctx to place at the end of an instance.
+    pub fn new() -> OwnedVMContext<T> {
+        OwnedVMContext {
+            vmctx_self_reference: SendSyncPtr::new(NonNull::dangling()),
+            _marker: core::marker::PhantomPinned,
+        }
+    }
+}
+
+/// Helper trait to plumb both core instances and component instances into
+/// `OwnedInstance` below.
+///
+/// # Safety
+///
+/// This trait requires `layout` to correctly describe `Self` and appropriately
+/// allocate space for `Self::VMContext` afterwards. Additionally the field
+/// returned by `owned_vmctx()` must be the last field in the structure.
+pub unsafe trait InstanceLayout {
+    /// Whether or not to allocate this instance with `alloc_zeroed` or `alloc`.
+    const INIT_ZEROED: bool;
+
+    /// The trailing `VMContext` type at the end of this instance.
+    type VMContext;
+
+    /// The memory layout to use to allocate and deallocate this instance.
+    fn layout(&self) -> Layout;
+
+    fn owned_vmctx(&self) -> &OwnedVMContext<Self::VMContext>;
+    fn owned_vmctx_mut(&mut self) -> &mut OwnedVMContext<Self::VMContext>;
+
+    /// Returns the `vmctx_self_reference` set above.
+    #[inline]
+    fn vmctx(&self) -> NonNull<Self::VMContext> {
+        // The definition of this method is subtle but intentional. The goal
+        // here is that effectively this should return `&mut self.vmctx`, but
+        // it's not quite so simple. Some more documentation is available on the
+        // `vmctx_self_reference` field, but the general idea is that we're
+        // creating a pointer to return with proper provenance. Provenance is
+        // still in the works in Rust at the time of this writing but the load
+        // of the `self.vmctx_self_reference` field is important here as it
+        // affects how LLVM thinks about aliasing with respect to the returned
+        // pointer.
+        //
+        // The intention of this method is to codegen to machine code as `&mut
+        // self.vmctx`, however. While it doesn't show up like this in LLVM IR
+        // (there's an actual load of the field) it does look like that by the
+        // time the backend runs. (that's magic to me, the backend removing
+        // loads...)
+        let owned_vmctx = self.owned_vmctx();
+        let owned_vmctx_raw = NonNull::from(owned_vmctx);
+        // SAFETY: it's part of the contract of `InstanceLayout` and the usage
+        // with `OwnedInstance` that this indeed points to the vmctx.
+        let addr = unsafe { owned_vmctx_raw.add(1) };
+        owned_vmctx
+            .vmctx_self_reference
+            .as_non_null()
+            .with_addr(addr.addr())
+    }
+
+    /// Helper function to access various locations offset from our `*mut
+    /// VMContext` object.
+    ///
+    /// Note that this method takes `&self` as an argument but returns
+    /// `NonNull<T>` which is frequently used to mutate said memory. This is an
+    /// intentional design decision where the safety of the modification of
+    /// memory is placed as a burden onto the caller. The implementation of this
+    /// method explicitly does not require `&mut self` to acquire mutable
+    /// provenance to update the `VMContext` region. Instead all pointers into
+    /// the `VMContext` area have provenance/permissions to write.
+    ///
+    /// Also note though that care must be taken to ensure that reads/writes of
+    /// memory must only happen where appropriate, for example a non-atomic
+    /// write (as most are) should never happen concurrently with another read
+    /// or write. It's generally on the burden of the caller to adhere to this.
+    ///
+    /// Also of note is that most of the time the usage of this method falls
+    /// into one of:
+    ///
+    /// * Something in the VMContext is being read or written. In that case use
+    ///   `vmctx_plus_offset` or `vmctx_plus_offset_mut` if possible due to
+    ///   that having a safer lifetime.
+    ///
+    /// * A pointer is being created to pass to other VM* data structures. In
+    ///   that situation the lifetime of all VM data structures are typically
+    ///   tied to the `Store<T>` which is what provides the guarantees around
+    ///   concurrency/etc.
+    ///
+    /// There's quite a lot of unsafety riding on this method, especially
+    /// related to the ascription `T` of the byte `offset`. It's hoped that in
+    /// the future we're able to settle on an in theory safer design.
+    ///
+    /// # Safety
+    ///
+    /// This method is unsafe because the `offset` must be within bounds of the
+    /// `VMContext` object trailing this instance. Additionally `T` must be a
+    /// valid ascription of the value that resides at that location.
+    unsafe fn vmctx_plus_offset_raw<T: VmSafe>(&self, offset: impl Into<u32>) -> NonNull<T> {
+        // SAFETY: the safety requirements of `byte_add` are forwarded to this
+        // method's caller.
+        unsafe {
+            self.vmctx()
+                .byte_add(usize::try_from(offset.into()).unwrap())
+                .cast()
+        }
+    }
+
+    /// Helper above `vmctx_plus_offset_raw` which transfers the lifetime of
+    /// `&self` to the returned reference `&T`.
+    ///
+    /// # Safety
+    ///
+    /// See the safety documentation of `vmctx_plus_offset_raw`.
+    unsafe fn vmctx_plus_offset<T: VmSafe>(&self, offset: impl Into<u32>) -> &T {
+        // SAFETY: this method has the same safety requirements as
+        // `vmctx_plus_offset_raw`.
+        unsafe { self.vmctx_plus_offset_raw(offset).as_ref() }
+    }
+
+    /// Helper above `vmctx_plus_offset_raw` which transfers the lifetime of
+    /// `&mut self` to the returned reference `&mut T`.
+    ///
+    /// # Safety
+    ///
+    /// See the safety documentation of `vmctx_plus_offset_raw`.
+    unsafe fn vmctx_plus_offset_mut<T: VmSafe>(
+        self: Pin<&mut Self>,
+        offset: impl Into<u32>,
+    ) -> &mut T {
+        // SAFETY: this method has the same safety requirements as
+        // `vmctx_plus_offset_raw`.
+        unsafe { self.vmctx_plus_offset_raw(offset).as_mut() }
+    }
+}
+
+impl<T: InstanceLayout> OwnedInstance<T> {
+    /// Allocates a new `OwnedInstance` and places `instance` inside of it.
+    ///
+    /// This will `instance`
+    pub(super) fn new(mut instance: T) -> OwnedInstance<T> {
+        let layout = instance.layout();
+        debug_assert!(layout.size() >= size_of_val(&instance));
+        debug_assert!(layout.align() >= align_of_val(&instance));
+
+        // SAFETY: it's up to us to assert that `layout` has a non-zero size,
+        // which is asserted here.
+        let ptr = unsafe {
+            assert!(layout.size() > 0);
+            if T::INIT_ZEROED {
+                alloc::alloc::alloc_zeroed(layout)
+            } else {
+                alloc::alloc::alloc(layout)
+            }
+        };
+        if ptr.is_null() {
+            alloc::alloc::handle_alloc_error(layout);
+        }
+        let instance_ptr = NonNull::new(ptr.cast::<T>()).unwrap();
+
+        // SAFETY: it's part of the unsafe contract of `InstanceLayout` that the
+        // `add` here is appropriate for the layout allocated.
+        let vmctx_self_reference = unsafe { instance_ptr.add(1).cast() };
+        instance.owned_vmctx_mut().vmctx_self_reference = vmctx_self_reference.into();
+
+        // SAFETY: we allocated above and it's an unsafe contract of
+        // `InstanceLayout` that the layout is suitable for writing the
+        // instance.
+        unsafe {
+            instance_ptr.write(instance);
+        }
+
+        let ret = OwnedInstance {
+            instance: SendSyncPtr::new(instance_ptr),
+            _marker: marker::PhantomData,
+        };
+
+        // Double-check various vmctx calculations are correct.
+        debug_assert_eq!(
+            vmctx_self_reference.addr(),
+            // SAFETY: `InstanceLayout` should guarantee it's safe to add 1 to
+            // the last field to get a pointer to 1-byte-past-the-end of an
+            // object, which should be valid.
+            unsafe { NonNull::from(ret.get().owned_vmctx()).add(1).addr() }
+        );
+        debug_assert_eq!(vmctx_self_reference.addr(), ret.get().vmctx().addr());
+
+        ret
+    }
+
     /// Gets the raw underlying `&Instance` from this handle.
-    pub fn get(&self) -> &Instance {
+    pub fn get(&self) -> &T {
         // SAFETY: this is an owned instance handle that retains exclusive
         // ownership of the `Instance` inside. With `&self` given we know
         // this pointer is valid valid and the returned lifetime is connected
@@ -1720,7 +1841,7 @@ impl InstanceHandle {
     }
 
     /// Same as [`Self::get`] except for mutability.
-    pub fn get_mut(&mut self) -> Pin<&mut Instance> {
+    pub fn get_mut(&mut self) -> Pin<&mut T> {
         // SAFETY: The lifetime concerns here are the same as `get` above.
         // Otherwise `new_unchecked` is used here to uphold the contract that
         // instances are always pinned in memory.
@@ -1728,10 +1849,10 @@ impl InstanceHandle {
     }
 }
 
-impl Drop for InstanceHandle {
+impl<T: InstanceLayout> Drop for OwnedInstance<T> {
     fn drop(&mut self) {
         unsafe {
-            let layout = Instance::alloc_layout(self.get().offsets());
+            let layout = self.get().layout();
             ptr::drop_in_place(self.instance.as_ptr());
             alloc::alloc::dealloc(self.instance.as_ptr().cast(), layout);
         }
