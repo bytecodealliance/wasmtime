@@ -462,7 +462,7 @@ impl<const N: usize> From<[u8; N]> for Opcodes {
             [0x0f, primary] => (true, *primary, None),
             [0x0f, primary, secondary] => (true, *primary, Some(*secondary)),
             _ => panic!(
-                "invalid opcodes after prefix; expected [opcode], [0x0f, opcode], or [0x0f, opcode, opcode], found {remaining:?}"
+                "invalid opcodes after prefix; expected [opcode], [0x0f, opcode], or [0x0f, opcode, opcode], found {remaining:x?}"
             ),
         };
         Self {

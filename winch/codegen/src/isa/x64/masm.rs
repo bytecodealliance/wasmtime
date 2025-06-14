@@ -40,7 +40,7 @@ use cranelift_codegen::{
         unwind::UnwindInst,
         x64::{
             AtomicRmwSeqOp,
-            args::{Avx512Opcode, AvxOpcode, CC, FenceKind},
+            args::{Avx512Opcode, AvxOpcode, CC},
             settings as x64_settings,
         },
     },
@@ -276,7 +276,7 @@ impl Masm for MacroAssembler {
                 // To stay consistent with cranelift, we emit a normal store followed by a mfence,
                 // although, we could probably just emit a xchg.
                 self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)?;
-                self.asm.fence(FenceKind::MFence);
+                self.asm.mfence();
             }
             StoreKind::VectorLane(LaneSelector { lane, size }) => {
                 self.ensure_has_avx()?;
@@ -1933,7 +1933,7 @@ impl Masm for MacroAssembler {
     }
 
     fn fence(&mut self) -> Result<()> {
-        self.asm.fence(FenceKind::MFence);
+        self.asm.mfence();
         Ok(())
     }
 

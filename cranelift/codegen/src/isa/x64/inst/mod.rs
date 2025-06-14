@@ -88,8 +88,6 @@ impl Inst {
             | Inst::CvtFloatToSintSeq { .. }
             | Inst::CvtFloatToUintSeq { .. }
             | Inst::CvtUint64ToFloatSeq { .. }
-            | Inst::Fence { .. }
-            | Inst::Hlt
             | Inst::Imm { .. }
             | Inst::JmpCond { .. }
             | Inst::JmpCondOr { .. }
@@ -111,7 +109,6 @@ impl Inst {
             | Inst::TrapIf { .. }
             | Inst::TrapIfAnd { .. }
             | Inst::TrapIfOr { .. }
-            | Inst::Ud2 { .. }
             | Inst::XmmCmove { .. }
             | Inst::XmmCmpRmR { .. }
             | Inst::XmmMinMaxSeq { .. }
@@ -336,10 +333,6 @@ impl Inst {
             src2: GprMemImm::unwrap_new(src2),
             opcode: CmpOpcode::Cmp,
         }
-    }
-
-    pub(crate) fn trap(trap_code: TrapCode) -> Inst {
-        Inst::Ud2 { trap_code }
     }
 
     pub(crate) fn trap_if(cc: CC, trap_code: TrapCode) -> Inst {
@@ -1195,16 +1188,6 @@ impl PrettyPrint for Inst {
                 )
             }
 
-            Inst::Fence { kind } => match kind {
-                FenceKind::MFence => "mfence".to_string(),
-                FenceKind::LFence => "lfence".to_string(),
-                FenceKind::SFence => "sfence".to_string(),
-            },
-
-            Inst::Hlt => "hlt".into(),
-
-            Inst::Ud2 { trap_code } => format!("ud2 {trap_code}"),
-
             Inst::ElfTlsGetAddr { symbol, dst } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
                 format!("{dst} = elf_tls_get_addr {symbol:?}")
@@ -1684,10 +1667,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         | Inst::Nop { .. }
         | Inst::TrapIf { .. }
         | Inst::TrapIfAnd { .. }
-        | Inst::TrapIfOr { .. }
-        | Inst::Hlt
-        | Inst::Ud2 { .. }
-        | Inst::Fence { .. } => {
+        | Inst::TrapIfOr { .. } => {
             // No registers are used.
         }
 
@@ -1806,7 +1786,9 @@ impl MachInst for Inst {
 
     fn is_trap(&self) -> bool {
         match self {
-            Self::Ud2 { .. } => true,
+            Self::External {
+                inst: asm::inst::Inst::ud2_zo(..),
+            } => true,
             _ => false,
         }
     }
