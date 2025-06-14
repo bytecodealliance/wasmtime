@@ -9,8 +9,9 @@ use crate::sync::{OnceLock, RwLock};
 use crate::{FrameInfo, Module, code_memory::CodeMemory};
 use alloc::collections::btree_map::{BTreeMap, Entry};
 use alloc::sync::Arc;
+use core::ops::Range;
 use core::ptr::NonNull;
-use wasmtime_environ::VMSharedTypeIndex;
+use wasmtime_environ::{Trap, VMSharedTypeIndex, lookup_trap_code};
 
 /// Used for registering modules with a store.
 ///
@@ -248,65 +249,104 @@ impl LoadedCode {
     }
 }
 
-// This is the global code registry that stores information for all loaded code
-// objects that are currently in use by any `Store` in the current process.
+// This is the global trap data registry that stores trap section pointer
+// for all loaded code objects that are currently in use by any
+// `Store` in the current process.
 //
 // The purpose of this map is to be called from signal handlers to determine
 // whether a program counter is a wasm trap or not. Specifically macOS has
 // no contextual information about the thread available, hence the necessity
 // for global state rather than using thread local state.
 //
-// This is similar to `ModuleRegistry` except that it has less information and
+// This is similar to `ModuleRegistry` except that it stores only trap data and
 // supports removal. Any time anything is registered with a `ModuleRegistry`
 // it is also automatically registered with the singleton global module
 // registry. When a `ModuleRegistry` is destroyed then all of its entries
 // are removed from the global registry.
-fn global_code() -> &'static RwLock<GlobalRegistry> {
-    static GLOBAL_CODE: OnceLock<RwLock<GlobalRegistry>> = OnceLock::new();
-    GLOBAL_CODE.get_or_init(Default::default)
+fn global_trap_registry() -> &'static RwLock<GlobalTrapRegistry> {
+    static GLOBAL_TRAP_REGISTRY: OnceLock<RwLock<GlobalTrapRegistry>> = OnceLock::new();
+    GLOBAL_TRAP_REGISTRY.get_or_init(Default::default)
 }
 
-type GlobalRegistry = BTreeMap<usize, (usize, Arc<CodeMemory>)>;
+type GlobalTrapRegistry = BTreeMap<usize, (usize, i32, Range<usize>)>;
 
 /// Find which registered region of code contains the given program counter, and
-/// what offset that PC is within that module's code.
-pub fn lookup_code(pc: usize) -> Option<(Arc<CodeMemory>, usize)> {
-    let all_modules = global_code().read();
-    let (_end, (start, module)) = all_modules.range(pc..).next()?;
+/// lookup trap for given PC offset within that module code.
+pub fn lookup_trap_for_pc(pc: usize) -> Option<Trap> {
+    let all_modules = global_trap_registry().read();
+    let (_end, (start, _count, trap_range)) = all_modules.range(pc..).next()?;
+    let trap_data: &[u8];
+    unsafe {
+        // GlobalTrapRegistryHandle ensures that CodeMemory is not dropped
+        // before unregistration and we're holding registry RwLock here.
+        trap_data = std::slice::from_raw_parts(
+            trap_range.start as *const u8,
+            trap_range.end - trap_range.start,
+        );
+    }
     let text_offset = pc.checked_sub(*start)?;
-    Some((module.clone(), text_offset))
+    lookup_trap_code(trap_data, text_offset)
 }
 
-/// Registers a new region of code.
-///
-/// Must not have been previously registered and must be `unregister`'d to
-/// prevent leaking memory.
-///
-/// This is required to enable traps to work correctly since the signal handler
-/// will lookup in the `GLOBAL_CODE` list to determine which a particular pc
-/// is a trap or not.
-pub fn register_code(code: &Arc<CodeMemory>) {
-    let text = code.text();
-    if text.is_empty() {
-        return;
-    }
-    let start = text.as_ptr() as usize;
-    let end = start + text.len() - 1;
-    let prev = global_code().write().insert(end, (start, code.clone()));
-    assert!(prev.is_none());
+pub struct GlobalTrapRegistryHandle {
+    code: Arc<CodeMemory>,
 }
 
-/// Unregisters a code mmap from the global map.
-///
-/// Must have been previously registered with `register`.
-pub fn unregister_code(code: &Arc<CodeMemory>) {
-    let text = code.text();
-    if text.is_empty() {
-        return;
+impl GlobalTrapRegistryHandle {
+    /// Registers a new region of code.
+    ///
+    /// Multiple `CodeMemory` pointing to the same code might be registered
+    /// if trap_data pointers are also equal.
+    ///
+    /// Returns handle that automatically unregisters this region when dropped.
+    ///
+    /// This is required to enable traps to work correctly since the signal handler
+    /// will lookup in the `GLOBAL_CODE` list to determine which a particular pc
+    /// is a trap or not.
+    pub fn register_code(code: Arc<CodeMemory>) -> Self {
+        let text = code.text();
+        if !text.is_empty() {
+            let start = text.as_ptr() as usize;
+            let end = start + text.len() - 1;
+            let trap_data = code.trap_data().as_ptr_range();
+            let trap_range = Range {
+                start: trap_data.start as usize,
+                end: trap_data.end as usize,
+            };
+
+            let mut locked = global_trap_registry().write();
+            let prev = locked.get_mut(&end);
+            if let Some(prev) = prev {
+                // Assert that trap_range is equal to previously added entry.
+                assert_eq!(trap_range, prev.2);
+
+                // Increment usage count.
+                prev.1 += 1;
+            } else {
+                locked.insert(end, (start, 1, trap_range));
+            }
+        }
+
+        Self { code }
     }
-    let end = (text.as_ptr() as usize) + text.len() - 1;
-    let code = global_code().write().remove(&end);
-    assert!(code.is_some());
+}
+
+impl Drop for GlobalTrapRegistryHandle {
+    fn drop(&mut self) {
+        let text = self.code.text();
+        if !text.is_empty() {
+            let end = (text.as_ptr() as usize) + text.len() - 1;
+
+            let mut locked = global_trap_registry().write();
+            let prev = locked.get_mut(&end).unwrap();
+
+            // Decrement usage count and remove if needed.
+            prev.1 -= 1;
+            if prev.1 == 0 {
+                locked.remove(&end);
+            }
+        }
+    }
 }
 
 #[test]
