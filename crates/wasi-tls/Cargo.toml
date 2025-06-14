@@ -18,6 +18,7 @@ tokio = { workspace = true, features = [
     "net",
     "rt-multi-thread",
     "time",
+    "io-util"
 ] }
 wasmtime = { workspace = true, features = ["runtime", "component-model"] }
 wasmtime-wasi = { workspace = true }
