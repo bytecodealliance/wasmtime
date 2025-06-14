@@ -1,7 +1,6 @@
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
 use crate::store::{StoreData, StoreId, StoreOpaque};
-use core::ops::{Index, IndexMut};
-use core::ptr::NonNull;
+use core::pin::Pin;
 use wasmtime_environ::PrimaryMap;
 
 #[derive(Default)]
@@ -18,7 +17,7 @@ impl StoreData {
         &mut self,
         data: OwnedComponentInstance,
     ) -> ComponentInstanceId {
-        let expected = data.id();
+        let expected = data.get().id();
         let ret = self.components.instances.push(Some(data));
         assert_eq!(expected, ret);
         ret
@@ -33,47 +32,20 @@ impl ComponentStoreData {
 
 impl StoreData {
     pub(crate) fn component_instance(&self, id: ComponentInstanceId) -> &ComponentInstance {
-        self.components.instances[id].as_ref().unwrap()
+        self.components.instances[id].as_ref().unwrap().get()
     }
 
     pub(crate) fn component_instance_mut(
         &mut self,
         id: ComponentInstanceId,
-    ) -> &mut ComponentInstance {
-        // SAFETY: see below, `instance_ptr` will eventually go away
-        // and `OwnedComponentInstance` will directly implement `DerefMut`.
-        unsafe {
-            self.components.instances[id]
-                .as_mut()
-                .unwrap()
-                .instance_ptr()
-                .as_mut()
-        }
+    ) -> Pin<&mut ComponentInstance> {
+        self.components.instances[id].as_mut().unwrap().get_mut()
     }
 }
 
 impl StoreOpaque {
     pub(crate) fn component_instance(&self, id: ComponentInstanceId) -> &ComponentInstance {
         self.store_data().component_instance(id)
-    }
-
-    // FIXME: this method should not exist, future refactorings should delete it
-    //
-    // Specifically we're in the process of requiring that all APIs, even
-    // libcalls and host functions, work with `&mut StoreThing` plus
-    // `ComponentInstanceId` (or a store-tagged index). When doing so there
-    // should be no need for raw pointers as access to a `ComponentInstance` is
-    // 100% delegated through the store itself. Until that happens though this
-    // will need to stick around as there's a few places that work with raw
-    // pointers instead of safe pointers.
-    pub(crate) fn component_instance_ptr(
-        &self,
-        id: ComponentInstanceId,
-    ) -> NonNull<ComponentInstance> {
-        self.store_data().components.instances[id]
-            .as_ref()
-            .unwrap()
-            .instance_ptr()
     }
 }
 
@@ -107,28 +79,36 @@ impl StoreComponentInstanceId {
     }
 
     #[inline]
-    pub fn store_id(&self) -> StoreId {
-        self.store_id
-    }
-
-    #[inline]
     pub(crate) fn instance(&self) -> ComponentInstanceId {
         self.instance
     }
-}
 
-impl Index<StoreComponentInstanceId> for StoreData {
-    type Output = ComponentInstance;
-
-    fn index(&self, id: StoreComponentInstanceId) -> &Self::Output {
-        id.assert_belongs_to(self.id());
-        self.component_instance(id.instance)
+    /// Looks up the `vm::ComponentInstance` within `store` that this id points
+    /// to.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` does not belong to `store`.
+    pub(crate) fn get<'a>(&self, store: &'a StoreOpaque) -> &'a ComponentInstance {
+        self.assert_belongs_to(store.id());
+        store.component_instance(self.instance)
     }
-}
 
-impl IndexMut<StoreComponentInstanceId> for StoreData {
-    fn index_mut(&mut self, id: StoreComponentInstanceId) -> &mut Self::Output {
-        id.assert_belongs_to(self.id());
-        self.component_instance_mut(id.instance)
+    /// Mutable version of `get` above.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` does not belong to `store`.
+    pub(crate) fn get_mut<'a>(&self, store: &'a mut StoreOpaque) -> Pin<&'a mut ComponentInstance> {
+        self.from_data_get_mut(store.store_data_mut())
+    }
+
+    /// Same as `get_mut`, but borrows less of a store.
+    pub(crate) fn from_data_get_mut<'a>(
+        &self,
+        store: &'a mut StoreData,
+    ) -> Pin<&'a mut ComponentInstance> {
+        self.assert_belongs_to(store.id());
+        store.component_instance_mut(self.instance)
     }
 }

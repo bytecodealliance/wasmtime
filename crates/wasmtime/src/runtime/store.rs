@@ -1915,13 +1915,13 @@ at https://bytecodealliance.org/security.
         &mut vm::component::CallContexts,
         &mut vm::component::ResourceTable,
         &mut crate::component::HostResourceData,
-        &mut vm::component::ComponentInstance,
+        Pin<&mut vm::component::ComponentInstance>,
     ) {
         (
             &mut self.component_calls,
             &mut self.component_host_table,
             &mut self.host_resource_data,
-            &mut self.store_data[instance.id()],
+            instance.id().from_data_get_mut(&mut self.store_data),
         )
     }
 

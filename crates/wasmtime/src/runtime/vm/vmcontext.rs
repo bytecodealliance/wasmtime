@@ -1206,17 +1206,7 @@ mod test_vmstore_context {
 /// allocated at runtime.
 #[derive(Debug)]
 #[repr(C, align(16))] // align 16 since globals are aligned to that and contained inside
-pub struct VMContext {
-    /// There's some more discussion about this within `wasmtime/src/lib.rs` but
-    /// the idea is that we want to tell the compiler that this contains
-    /// pointers which transitively refers to itself, to suppress some
-    /// optimizations that might otherwise assume this doesn't exist.
-    ///
-    /// The self-referential pointer we care about is the `*mut Store` pointer
-    /// early on in this context, which if you follow through enough levels of
-    /// nesting, eventually can refer back to this `VMContext`
-    pub _marker: marker::PhantomPinned,
-}
+pub struct VMContext;
 
 impl VMContext {
     /// Helper function to cast between context types using a debug assertion to
