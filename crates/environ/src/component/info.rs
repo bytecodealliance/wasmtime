@@ -480,6 +480,25 @@ pub enum Export {
     Type(TypeDef),
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+/// Data is stored in a linear memory.
+pub struct LinearMemoryOptions {
+    /// The memory used by these options, if specified.
+    pub memory: Option<RuntimeMemoryIndex>,
+    /// The realloc function used by these options, if specified.
+    pub realloc: Option<RuntimeReallocIndex>,
+}
+
+/// The data model for objects that are not unboxed in locals.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum CanonicalOptionsDataModel {
+    /// Data is stored in GC objects.
+    Gc {},
+
+    /// Data is stored in a linear memory.
+    LinearMemory(LinearMemoryOptions),
+}
+
 /// Canonical ABI options associated with a lifted or lowered function.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CanonicalOptions {
@@ -489,12 +508,6 @@ pub struct CanonicalOptions {
     /// The encoding used for strings.
     pub string_encoding: StringEncoding,
 
-    /// The memory used by these options, if specified.
-    pub memory: Option<RuntimeMemoryIndex>,
-
-    /// The realloc function used by these options, if specified.
-    pub realloc: Option<RuntimeReallocIndex>,
-
     /// The async callback function used by these options, if specified.
     pub callback: Option<RuntimeCallbackIndex>,
 
@@ -503,6 +516,13 @@ pub struct CanonicalOptions {
 
     /// Whether to use the async ABI for lifting or lowering.
     pub async_: bool,
+
+    /// The core function type that is being lifted from / lowered to.
+    pub core_type: ModuleInternedTypeIndex,
+
+    /// The data model (GC objects or linear memory) used with these canonical
+    /// options.
+    pub data_model: CanonicalOptionsDataModel,
 }
 
 /// Possible encodings of strings within the component model.

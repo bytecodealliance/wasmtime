@@ -199,7 +199,7 @@ struct InlinerFrame<'a> {
     args: HashMap<&'a str, ComponentItemDef<'a>>,
 
     // core wasm index spaces
-    funcs: PrimaryMap<FuncIndex, dfg::CoreDef>,
+    funcs: PrimaryMap<FuncIndex, (ModuleInternedTypeIndex, dfg::CoreDef)>,
     memories: PrimaryMap<MemoryIndex, dfg::CoreExport<EntityIndex>>,
     tables: PrimaryMap<TableIndex, dfg::CoreExport<EntityIndex>>,
     globals: PrimaryMap<GlobalIndex, dfg::CoreExport<EntityIndex>>,
@@ -307,8 +307,11 @@ enum ComponentFuncDef<'a> {
 
     /// A core wasm function was lifted into a component function.
     Lifted {
+        /// The component function type.
         ty: TypeFuncIndex,
+        /// The core Wasm function.
         func: dfg::CoreDef,
+        /// Canonical options.
         options: AdapterOptions,
     },
 }
@@ -491,12 +494,12 @@ impl<'a> Inliner<'a> {
             Lower {
                 func,
                 options,
-                canonical_abi,
                 lower_ty,
             } => {
                 let lower_ty =
                     types.convert_component_func_type(frame.translation.types_ref(), *lower_ty)?;
                 let options_lower = self.adapter_options(frame, types, options);
+                let lower_core_type = options_lower.core_type;
                 let func = match &frame.component_funcs[*func] {
                     // If this component function was originally a host import
                     // then this is a lowered host function which needs a
@@ -506,7 +509,7 @@ impl<'a> Inliner<'a> {
                         let import = self.runtime_import(path);
                         let options = self.canonical_options(options_lower);
                         let index = self.result.trampolines.push((
-                            *canonical_abi,
+                            lower_core_type,
                             dfg::Trampoline::LowerImport {
                                 import,
                                 options,
@@ -548,7 +551,7 @@ impl<'a> Inliner<'a> {
                         let index = self
                             .result
                             .trampolines
-                            .push((*canonical_abi, dfg::Trampoline::AlwaysTrap));
+                            .push((lower_core_type, dfg::Trampoline::AlwaysTrap));
                         dfg::CoreDef::Trampoline(index)
                     }
 
@@ -595,7 +598,7 @@ impl<'a> Inliner<'a> {
                         dfg::CoreDef::Adapter(adapter_idx)
                     }
                 };
-                frame.funcs.push(func);
+                frame.funcs.push((lower_core_type, func));
             }
 
             // Lifting a core wasm function is relatively easy for now in that
@@ -604,11 +607,10 @@ impl<'a> Inliner<'a> {
             Lift(ty, func, options) => {
                 let ty = types.convert_component_func_type(frame.translation.types_ref(), *ty)?;
                 let options = self.adapter_options(frame, types, options);
-                frame.component_funcs.push(ComponentFuncDef::Lifted {
-                    ty,
-                    func: frame.funcs[*func].clone(),
-                    options,
-                });
+                let func = frame.funcs[*func].1.clone();
+                frame
+                    .component_funcs
+                    .push(ComponentFuncDef::Lifted { ty, func, options });
             }
 
             // A new resource type is being introduced, so it's recorded as a
@@ -624,7 +626,7 @@ impl<'a> Inliner<'a> {
             Resource(ty, rep, dtor) => {
                 let idx = self.result.resources.push(dfg::Resource {
                     rep: *rep,
-                    dtor: dtor.map(|i| frame.funcs[i].clone()),
+                    dtor: dtor.map(|i| frame.funcs[i].1.clone()),
                     instance: frame.instance,
                 });
                 self.result
@@ -652,7 +654,7 @@ impl<'a> Inliner<'a> {
                     .result
                     .trampolines
                     .push((*ty, dfg::Trampoline::ResourceNew(id)));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*ty, dfg::CoreDef::Trampoline(index)));
             }
             ResourceRep(id, ty) => {
                 let id = types.resource_id(id.resource());
@@ -660,7 +662,7 @@ impl<'a> Inliner<'a> {
                     .result
                     .trampolines
                     .push((*ty, dfg::Trampoline::ResourceRep(id)));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*ty, dfg::CoreDef::Trampoline(index)));
             }
             ResourceDrop(id, ty) => {
                 let id = types.resource_id(id.resource());
@@ -668,7 +670,7 @@ impl<'a> Inliner<'a> {
                     .result
                     .trampolines
                     .push((*ty, dfg::Trampoline::ResourceDrop(id)));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*ty, dfg::CoreDef::Trampoline(index)));
             }
             BackpressureSet { func } => {
                 let index = self.result.trampolines.push((
@@ -677,25 +679,22 @@ impl<'a> Inliner<'a> {
                         instance: frame.instance,
                     },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            TaskReturn {
-                func,
-                result,
-                options,
-            } => {
+            TaskReturn { result, options } => {
                 let results = result
                     .iter()
                     .map(|ty| types.valtype(frame.translation.types_ref(), ty))
                     .collect::<Result<_>>()?;
                 let results = types.new_tuple_type(results);
+                let func = options.core_type;
                 let options = self.adapter_options(frame, types, options);
                 let options = self.canonical_options(options);
                 let index = self
                     .result
                     .trampolines
-                    .push((*func, dfg::Trampoline::TaskReturn { results, options }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                    .push((func, dfg::Trampoline::TaskReturn { results, options }));
+                frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
             }
             TaskCancel { func } => {
                 let index = self.result.trampolines.push((
@@ -704,7 +703,7 @@ impl<'a> Inliner<'a> {
                         instance: frame.instance,
                     },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             WaitableSetNew { func } => {
                 let index = self.result.trampolines.push((
@@ -713,7 +712,7 @@ impl<'a> Inliner<'a> {
                         instance: frame.instance,
                     },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             WaitableSetWait {
                 func,
@@ -730,7 +729,7 @@ impl<'a> Inliner<'a> {
                         memory,
                     },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             WaitableSetPoll {
                 func,
@@ -747,7 +746,7 @@ impl<'a> Inliner<'a> {
                         memory,
                     },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             WaitableSetDrop { func } => {
                 let index = self.result.trampolines.push((
@@ -756,7 +755,7 @@ impl<'a> Inliner<'a> {
                         instance: frame.instance,
                     },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             WaitableJoin { func } => {
                 let index = self.result.trampolines.push((
@@ -765,14 +764,14 @@ impl<'a> Inliner<'a> {
                         instance: frame.instance,
                     },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             Yield { func, async_ } => {
                 let index = self
                     .result
                     .trampolines
                     .push((*func, dfg::Trampoline::Yield { async_: *async_ }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             SubtaskDrop { func } => {
                 let index = self.result.trampolines.push((
@@ -781,7 +780,7 @@ impl<'a> Inliner<'a> {
                         instance: frame.instance,
                     },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             SubtaskCancel { func, async_ } => {
                 let index = self.result.trampolines.push((
@@ -791,7 +790,7 @@ impl<'a> Inliner<'a> {
                         async_: *async_,
                     },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             StreamNew { ty, func } => {
                 let InterfaceType::Stream(ty) =
@@ -803,35 +802,37 @@ impl<'a> Inliner<'a> {
                     .result
                     .trampolines
                     .push((*func, dfg::Trampoline::StreamNew { ty }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            StreamRead { ty, func, options } => {
+            StreamRead { ty, options } => {
                 let InterfaceType::Stream(ty) =
                     types.defined_type(frame.translation.types_ref(), *ty)?
                 else {
                     unreachable!()
                 };
+                let func = options.core_type;
                 let options = self.adapter_options(frame, types, options);
                 let options = self.canonical_options(options);
                 let index = self
                     .result
                     .trampolines
-                    .push((*func, dfg::Trampoline::StreamRead { ty, options }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                    .push((func, dfg::Trampoline::StreamRead { ty, options }));
+                frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
             }
-            StreamWrite { ty, func, options } => {
+            StreamWrite { ty, options } => {
                 let InterfaceType::Stream(ty) =
                     types.defined_type(frame.translation.types_ref(), *ty)?
                 else {
                     unreachable!()
                 };
+                let func = options.core_type;
                 let options = self.adapter_options(frame, types, options);
                 let options = self.canonical_options(options);
                 let index = self
                     .result
                     .trampolines
-                    .push((*func, dfg::Trampoline::StreamWrite { ty, options }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                    .push((func, dfg::Trampoline::StreamWrite { ty, options }));
+                frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
             }
             StreamCancelRead { ty, func, async_ } => {
                 let InterfaceType::Stream(ty) =
@@ -846,7 +847,7 @@ impl<'a> Inliner<'a> {
                         async_: *async_,
                     },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             StreamCancelWrite { ty, func, async_ } => {
                 let InterfaceType::Stream(ty) =
@@ -861,7 +862,7 @@ impl<'a> Inliner<'a> {
                         async_: *async_,
                     },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             StreamDropReadable { ty, func } => {
                 let InterfaceType::Stream(ty) =
@@ -873,7 +874,7 @@ impl<'a> Inliner<'a> {
                     .result
                     .trampolines
                     .push((*func, dfg::Trampoline::StreamDropReadable { ty }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             StreamDropWritable { ty, func } => {
                 let InterfaceType::Stream(ty) =
@@ -885,7 +886,7 @@ impl<'a> Inliner<'a> {
                     .result
                     .trampolines
                     .push((*func, dfg::Trampoline::StreamDropWritable { ty }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             FutureNew { ty, func } => {
                 let InterfaceType::Future(ty) =
@@ -897,35 +898,37 @@ impl<'a> Inliner<'a> {
                     .result
                     .trampolines
                     .push((*func, dfg::Trampoline::FutureNew { ty }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            FutureRead { ty, func, options } => {
+            FutureRead { ty, options } => {
                 let InterfaceType::Future(ty) =
                     types.defined_type(frame.translation.types_ref(), *ty)?
                 else {
                     unreachable!()
                 };
+                let func = options.core_type;
                 let options = self.adapter_options(frame, types, options);
                 let options = self.canonical_options(options);
                 let index = self
                     .result
                     .trampolines
-                    .push((*func, dfg::Trampoline::FutureRead { ty, options }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                    .push((func, dfg::Trampoline::FutureRead { ty, options }));
+                frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
             }
-            FutureWrite { ty, func, options } => {
+            FutureWrite { ty, options } => {
                 let InterfaceType::Future(ty) =
                     types.defined_type(frame.translation.types_ref(), *ty)?
                 else {
                     unreachable!()
                 };
+                let func = options.core_type;
                 let options = self.adapter_options(frame, types, options);
                 let options = self.canonical_options(options);
                 let index = self
                     .result
                     .trampolines
-                    .push((*func, dfg::Trampoline::FutureWrite { ty, options }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                    .push((func, dfg::Trampoline::FutureWrite { ty, options }));
+                frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
             }
             FutureCancelRead { ty, func, async_ } => {
                 let InterfaceType::Future(ty) =
@@ -940,7 +943,7 @@ impl<'a> Inliner<'a> {
                         async_: *async_,
                     },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             FutureCancelWrite { ty, func, async_ } => {
                 let InterfaceType::Future(ty) =
@@ -955,7 +958,7 @@ impl<'a> Inliner<'a> {
                         async_: *async_,
                     },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             FutureDropReadable { ty, func } => {
                 let InterfaceType::Future(ty) =
@@ -967,7 +970,7 @@ impl<'a> Inliner<'a> {
                     .result
                     .trampolines
                     .push((*func, dfg::Trampoline::FutureDropReadable { ty }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             FutureDropWritable { ty, func } => {
                 let InterfaceType::Future(ty) =
@@ -979,27 +982,29 @@ impl<'a> Inliner<'a> {
                     .result
                     .trampolines
                     .push((*func, dfg::Trampoline::FutureDropWritable { ty }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
-            ErrorContextNew { func, options } => {
+            ErrorContextNew { options } => {
                 let ty = types.error_context_table_type()?;
+                let func = options.core_type;
                 let options = self.adapter_options(frame, types, options);
                 let options = self.canonical_options(options);
                 let index = self
                     .result
                     .trampolines
-                    .push((*func, dfg::Trampoline::ErrorContextNew { ty, options }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                    .push((func, dfg::Trampoline::ErrorContextNew { ty, options }));
+                frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
             }
-            ErrorContextDebugMessage { func, options } => {
+            ErrorContextDebugMessage { options } => {
                 let ty = types.error_context_table_type()?;
+                let func = options.core_type;
                 let options = self.adapter_options(frame, types, options);
                 let options = self.canonical_options(options);
                 let index = self.result.trampolines.push((
-                    *func,
+                    func,
                     dfg::Trampoline::ErrorContextDebugMessage { ty, options },
                 ));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((func, dfg::CoreDef::Trampoline(index)));
             }
             ErrorContextDrop { func } => {
                 let ty = types.error_context_table_type()?;
@@ -1007,21 +1012,21 @@ impl<'a> Inliner<'a> {
                     .result
                     .trampolines
                     .push((*func, dfg::Trampoline::ErrorContextDrop { ty }));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             ContextGet { func, i } => {
                 let index = self
                     .result
                     .trampolines
                     .push((*func, dfg::Trampoline::ContextGet(*i)));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
             ContextSet { func, i } => {
                 let index = self
                     .result
                     .trampolines
                     .push((*func, dfg::Trampoline::ContextSet(*i)));
-                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+                frame.funcs.push((*func, dfg::CoreDef::Trampoline(index)));
             }
 
             ModuleStatic(idx, ty) => {
@@ -1153,9 +1158,41 @@ impl<'a> Inliner<'a> {
             // can create a unique identifier pointing to each core wasm export
             // with the instance and relevant index/name as necessary.
             AliasExportFunc(instance, name) => {
-                frame
-                    .funcs
-                    .push(self.core_def_of_module_instance_export(frame, *instance, *name));
+                let (ty, def) = match &frame.module_instances[*instance] {
+                    ModuleInstanceDef::Instantiated(instance, module) => {
+                        let (ty, item) = match &frame.modules[*module] {
+                            ModuleDef::Static(idx, _ty) => {
+                                let entity = self.nested_modules[*idx].module.exports[*name];
+                                let ty = match entity {
+                                    EntityIndex::Function(f) => {
+                                        self.nested_modules[*idx].module.functions[f]
+                                            .signature
+                                            .unwrap_module_type_index()
+                                    }
+                                    _ => unreachable!(),
+                                };
+                                (ty, ExportItem::Index(entity))
+                            }
+                            ModuleDef::Import(_path, module_ty) => {
+                                let module_ty = &types.component_types()[*module_ty];
+                                let entity_ty = &module_ty.exports[&**name];
+                                let ty = entity_ty.unwrap_func().unwrap_module_type_index();
+                                (ty, ExportItem::Name((*name).to_string()))
+                            }
+                        };
+                        let def = dfg::CoreExport {
+                            instance: *instance,
+                            item,
+                        }
+                        .into();
+                        (ty, def)
+                    }
+                    ModuleInstanceDef::Synthetic(instance) => match instance[*name] {
+                        EntityIndex::Function(i) => frame.funcs[i].clone(),
+                        _ => unreachable!(),
+                    },
+                };
+                frame.funcs.push((ty, def));
             }
 
             AliasExportTable(instance, name) => {
@@ -1305,7 +1342,7 @@ impl<'a> Inliner<'a> {
             // This is a synthetic instance so the canonical definition of the
             // original item is returned.
             ModuleInstanceDef::Synthetic(instance) => match instance[name] {
-                EntityIndex::Function(i) => frame.funcs[i].clone(),
+                EntityIndex::Function(i) => frame.funcs[i].1.clone(),
                 EntityIndex::Table(i) => frame.tables[i].clone().into(),
                 EntityIndex::Global(i) => frame.globals[i].clone().into(),
                 EntityIndex::Memory(i) => frame.memories[i].clone().into(),
@@ -1357,25 +1394,33 @@ impl<'a> Inliner<'a> {
         types: &ComponentTypesBuilder,
         options: &LocalCanonicalOptions,
     ) -> AdapterOptions {
-        let (memory, memory64) = options
-            .memory
-            .map(|i| {
-                let (memory, memory64) = self.memory(frame, types, i);
-                (Some(memory), memory64)
-            })
-            .unwrap_or((None, false));
-        let realloc = options.realloc.map(|i| frame.funcs[i].clone());
-        let callback = options.callback.map(|i| frame.funcs[i].clone());
-        let post_return = options.post_return.map(|i| frame.funcs[i].clone());
+        let data_model = match options.data_model {
+            LocalDataModel::Gc {} => DataModel::Gc {},
+            LocalDataModel::LinearMemory { memory, realloc } => {
+                let (memory, memory64) = memory
+                    .map(|i| {
+                        let (memory, memory64) = self.memory(frame, types, i);
+                        (Some(memory), memory64)
+                    })
+                    .unwrap_or((None, false));
+                let realloc = realloc.map(|i| frame.funcs[i].1.clone());
+                DataModel::LinearMemory {
+                    memory,
+                    memory64,
+                    realloc,
+                }
+            }
+        };
+        let callback = options.callback.map(|i| frame.funcs[i].1.clone());
+        let post_return = options.post_return.map(|i| frame.funcs[i].1.clone());
         AdapterOptions {
             instance: frame.instance,
             string_encoding: options.string_encoding,
-            memory,
-            memory64,
-            realloc,
             callback,
             post_return,
             async_: options.async_,
+            core_type: options.core_type,
+            data_model,
         }
     }
 
@@ -1384,10 +1429,17 @@ impl<'a> Inliner<'a> {
     /// use at runtime. This is only used for lowered host functions and lifted
     /// functions exported to the host.
     fn canonical_options(&mut self, options: AdapterOptions) -> dfg::CanonicalOptions {
-        let memory = options
-            .memory
-            .map(|export| self.result.memories.push(export));
-        let realloc = options.realloc.map(|def| self.result.reallocs.push(def));
+        let data_model = match options.data_model {
+            DataModel::Gc {} => dfg::CanonicalOptionsDataModel::Gc {},
+            DataModel::LinearMemory {
+                memory,
+                memory64: _,
+                realloc,
+            } => dfg::CanonicalOptionsDataModel::LinearMemory {
+                memory: memory.map(|export| self.result.memories.push(export)),
+                realloc: realloc.map(|def| self.result.reallocs.push(def)),
+            },
+        };
         let callback = options.callback.map(|def| self.result.callbacks.push(def));
         let post_return = options
             .post_return
@@ -1395,11 +1447,11 @@ impl<'a> Inliner<'a> {
         dfg::CanonicalOptions {
             instance: options.instance,
             string_encoding: options.string_encoding,
-            memory,
-            realloc,
             callback,
             post_return,
             async_: options.async_,
+            core_type: options.core_type,
+            data_model,
         }
     }
 
