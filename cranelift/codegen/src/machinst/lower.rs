@@ -1526,7 +1526,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             //   prior to the sunk instruction) to sink.
             ValueDef::Result(src_inst, result_idx) => {
                 let src_side_effect = has_lowering_side_effect(self.f, src_inst);
-                trace!(" -> src inst {}", src_inst);
+                trace!(" -> src inst {}", self.f.dfg.display_inst(src_inst));
                 trace!(" -> has lowering side effect: {}", src_side_effect);
                 if is_value_use_root(self.f, src_inst) {
                     // If this instruction is a "root instruction" then it's
