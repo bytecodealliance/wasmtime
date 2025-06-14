@@ -5,11 +5,11 @@ use std::any::Any;
 use std::mem;
 use std::sync::Mutex;
 use wasmparser::FuncValidatorAllocations;
-use wasmtime_cranelift::{CompiledFunction, ModuleTextBuilder};
+use wasmtime_cranelift::CompiledFunction;
 use wasmtime_environ::{
-    AddressMapSection, BuiltinFunctionIndex, CompileError, CompiledFunctionBody, DefinedFuncIndex,
-    FunctionBodyData, FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PrimaryMap,
-    RelocationTarget, StaticModuleIndex, TrapEncodingBuilder, Tunables, VMOffsets,
+    BuiltinFunctionIndex, CompileError, CompiledFunctionBody, DefinedFuncIndex, FunctionBodyData,
+    FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, RelocationTarget,
+    StaticModuleIndex, Tunables, VMOffsets,
 };
 use winch_codegen::{BuiltinFunctions, CallingConvention, TargetIsa};
 
@@ -166,33 +166,7 @@ impl wasmtime_environ::Compiler for Compiler {
         funcs: &[(String, Box<dyn Any + Send>)],
         resolve_reloc: &dyn Fn(usize, wasmtime_environ::RelocationTarget) -> usize,
     ) -> Result<Vec<(SymbolId, FunctionLoc)>> {
-        let mut builder =
-            ModuleTextBuilder::new(obj, self, self.isa.text_section_builder(funcs.len()));
-        let mut traps = TrapEncodingBuilder::default();
-        let mut addrs = AddressMapSection::default();
-
-        let mut ret = Vec::with_capacity(funcs.len());
-        for (i, (sym, func)) in funcs.iter().enumerate() {
-            let func = func.downcast_ref::<CompiledFunction>().unwrap();
-
-            let (sym, range) = builder.append_func(&sym, func, |idx| resolve_reloc(i, idx));
-            if self.tunables.generate_address_map {
-                addrs.push(range.clone(), &func.address_map().instructions);
-            }
-            traps.push(range.clone(), &func.traps().collect::<Vec<_>>());
-
-            let info = FunctionLoc {
-                start: u32::try_from(range.start).unwrap(),
-                length: u32::try_from(range.end - range.start).unwrap(),
-            };
-            ret.push((sym, info));
-        }
-        builder.finish();
-        if self.tunables.generate_address_map {
-            addrs.append_to(obj);
-        }
-        traps.append_to(obj);
-        Ok(ret)
+        self.trampolines.append_code(obj, funcs, resolve_reloc)
     }
 
     fn triple(&self) -> &target_lexicon::Triple {
