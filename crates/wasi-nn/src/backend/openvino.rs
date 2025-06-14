@@ -1,7 +1,8 @@
 //! Implements a `wasi-nn` [`BackendInner`] using OpenVINO.
 
 use super::{
-    BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner, Id, read,
+    BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner, Id,
+    NamedTensor, read,
 };
 use crate::wit::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
@@ -80,12 +81,12 @@ impl BackendGraph for OpenvinoGraph {
         let mut compiled_model = self.0.lock().unwrap();
         let infer_request = compiled_model.create_infer_request()?;
         let box_: Box<dyn BackendExecutionContext> =
-            Box::new(OpenvinoExecutionContext(infer_request));
+            Box::new(OpenvinoExecutionContext(infer_request, self.0.clone()));
         Ok(box_.into())
     }
 }
 
-struct OpenvinoExecutionContext(openvino::InferRequest);
+struct OpenvinoExecutionContext(openvino::InferRequest, Arc<Mutex<openvino::CompiledModel>>);
 
 impl BackendExecutionContext for OpenvinoExecutionContext {
     fn set_input(&mut self, id: Id, tensor: &Tensor) -> Result<(), BackendError> {
@@ -108,9 +109,70 @@ impl BackendExecutionContext for OpenvinoExecutionContext {
         Ok(())
     }
 
-    fn compute(&mut self) -> Result<(), BackendError> {
-        self.0.infer()?;
-        Ok(())
+    fn compute(
+        &mut self,
+        inputs: Option<Vec<NamedTensor>>,
+    ) -> Result<Option<Vec<NamedTensor>>, BackendError> {
+        match inputs {
+            // WIT
+            Some(inputs) => {
+                // Process all named inputs
+                for input in &inputs {
+                    let precision = input.tensor.ty.into();
+                    let dimensions = input
+                        .tensor
+                        .dimensions
+                        .iter()
+                        .map(|&d| d as i64)
+                        .collect::<Vec<_>>();
+                    let shape = Shape::new(&dimensions)?;
+                    let mut new_tensor = OvTensor::new(precision, &shape)?;
+                    let buffer = new_tensor.get_raw_data_mut()?;
+                    buffer.copy_from_slice(&input.tensor.data);
+
+                    self.0.set_tensor(&input.name, &new_tensor)?;
+                }
+
+                // Run inference
+                self.0.infer()?;
+
+                // Get all outputs
+                let compiled_model = self.1.lock().unwrap();
+                let output_count = compiled_model.get_output_size()?;
+
+                let mut output_tensors = Vec::new();
+                for i in 0..output_count {
+                    let output_tensor = self.0.get_output_tensor_by_index(i)?;
+
+                    let dimensions = output_tensor
+                        .get_shape()?
+                        .get_dimensions()
+                        .iter()
+                        .map(|&dim| dim as u32)
+                        .collect::<Vec<u32>>();
+
+                    let ty = output_tensor.get_element_type()?.try_into()?;
+                    let data = output_tensor.get_raw_data()?.to_vec();
+
+                    // Currently openvino backend returns output index only, not output tensor name
+                    output_tensors.push(NamedTensor {
+                        name: format!("{i}"),
+                        tensor: Tensor {
+                            dimensions,
+                            ty,
+                            data,
+                        },
+                    });
+                }
+                Ok(Some(output_tensors))
+            }
+
+            // WITX
+            None => {
+                self.0.infer()?;
+                Ok(None)
+            }
+        }
     }
 
     fn get_output(&mut self, id: Id) -> Result<Tensor, BackendError> {

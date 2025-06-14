@@ -2,6 +2,7 @@
 //!
 use super::{
     BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner, Id,
+    NamedTensor,
 };
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
@@ -154,20 +155,84 @@ impl BackendExecutionContext for PytorchExecutionContext {
         }
     }
 
-    fn compute(&mut self) -> Result<(), BackendError> {
-        let inputs: Vec<tch::Tensor> = self
-            .inputs
-            .iter()
-            .enumerate()
-            .map(|(index, opt)| {
-                opt.as_ref()
-                    .expect(&format!("Input tensor at index {} not set up", index))
-                    .shallow_clone()
-            })
-            .collect();
-        // Use forward_ts method on the compiled module/model after locking the mutex, and pass the input tensor to it
-        self.output = self.module.lock().unwrap().forward_ts(&inputs).unwrap();
-        Ok(())
+    fn compute(
+        &mut self,
+        inputs: Option<Vec<NamedTensor>>,
+    ) -> Result<Option<Vec<NamedTensor>>, BackendError> {
+        match inputs {
+            // WIT-style compute with named tensors
+            Some(inputs) => {
+                self.inputs.clear();
+                self.id_type = None;
+                for input in &inputs {
+                    let kind = input.tensor.ty.try_into()?;
+                    let dimensions = input
+                        .tensor
+                        .dimensions
+                        .iter()
+                        .map(|&dim| dim as i64)
+                        .collect::<Vec<_>>();
+
+                    let tensor = TchTensor::from_data_size(&input.tensor.data, &dimensions, kind)
+                        .to_device(map_execution_target_to_string(self.target));
+                    self.inputs.push(Some(tensor));
+
+                    // Set ID type to Name since we're using named tensors
+                    if self.id_type.is_none() {
+                        self.id_type = Some(Id::Name(String::new()));
+                    }
+                }
+                // Run the forward pass
+                let inputs: Vec<tch::Tensor> = self
+                    .inputs
+                    .iter()
+                    .enumerate()
+                    .map(|(index, opt)| {
+                        opt.as_ref()
+                            .expect(&format!("Input tensor at index {} not set up", index))
+                            .shallow_clone()
+                    })
+                    .collect();
+                self.output = self.module.lock().unwrap().forward_ts(&inputs)?;
+                let numel = self.output.numel();
+                let dimensions = self.output.size();
+                let ty = self.output.kind().try_into()?;
+                let mut data = vec![0u8; kind_to_size(self.output.kind())? * numel];
+                self.output.copy_data_u8(&mut data, numel);
+                let output_tensor = Tensor {
+                    dimensions: dimensions.iter().map(|&dim| dim as u32).collect(),
+                    ty,
+                    data,
+                };
+                let output = NamedTensor {
+                    name: "output".to_string(),
+                    tensor: output_tensor,
+                };
+                Ok(Some(vec![output]))
+            }
+
+            // WITX-style compute with previously set inputs
+            None => {
+                if self.inputs.is_empty() {
+                    return Err(BackendError::BackendAccess(anyhow::anyhow!(
+                        "No inputs provided for inference"
+                    )));
+                }
+                let inputs: Vec<tch::Tensor> = self
+                    .inputs
+                    .iter()
+                    .enumerate()
+                    .map(|(index, opt)| {
+                        opt.as_ref()
+                            .expect(&format!("Input tensor at index {} not set up", index))
+                            .shallow_clone()
+                    })
+                    .collect();
+                // Perform forward pass
+                self.output = self.module.lock().unwrap().forward_ts(&inputs)?;
+                Ok(None)
+            }
+        }
     }
 
     fn get_output(&mut self, _index: Id) -> Result<Tensor, BackendError> {

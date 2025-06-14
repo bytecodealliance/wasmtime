@@ -1,4 +1,4 @@
-package wasi:nn@0.2.0-rc-2024-08-19;
+package wasi:nn@0.2.0-rc-2024-10-28;
 
 /// `wasi-nn` is a WASI API for performing machine learning (ML) inference. The API is not (yet)
 /// capable of performing ML training. WebAssembly programs that want to use a host's ML
@@ -110,25 +110,19 @@ interface graph {
 /// `graph` to input tensors before `compute`-ing an inference:
 interface inference {
     use errors.{error};
-    use tensor.{tensor, tensor-data};
+    use tensor.{tensor};
+
+    /// Identify a tensor by name; this is necessary to associate tensors to
+    /// graph inputs and outputs.
+    type named-tensor = tuple<string, tensor>;
 
     /// Bind a `graph` to the input and output tensors for an inference.
     ///
     /// TODO: this may no longer be necessary in WIT
     /// (https://github.com/WebAssembly/wasi-nn/issues/43)
     resource graph-execution-context {
-        /// Define the inputs to use for inference.
-        set-input: func(name: string, tensor: tensor) -> result<_, error>;
-
         /// Compute the inference on the given inputs.
-        ///
-        /// Note the expected sequence of calls: `set-input`, `compute`, `get-output`. TODO: this
-        /// expectation could be removed as a part of
-        /// https://github.com/WebAssembly/wasi-nn/issues/43.
-        compute: func() -> result<_, error>;
-
-        /// Extract the outputs after inference.
-        get-output: func(name: string) -> result<tensor, error>;
+        compute: func(inputs: list<named-tensor>) -> result<list<named-tensor>, error>;
     }
 }
 

@@ -3,6 +3,8 @@ mod registry;
 pub mod wit;
 pub mod witx;
 
+use crate::backend::{BackendError, Id, NamedTensor as BackendNamedTensor};
+use crate::wit::generated_::wasi::nn::tensor::TensorType;
 use anyhow::anyhow;
 use core::fmt;
 pub use registry::{GraphRegistry, InMemoryRegistry};
@@ -71,7 +73,7 @@ impl std::ops::Deref for Graph {
 #[derive(Clone, PartialEq)]
 pub struct Tensor {
     pub dimensions: Vec<u32>,
-    pub ty: wit::TensorType,
+    pub ty: TensorType,
     pub data: Vec<u8>,
 }
 impl fmt::Debug for Tensor {
@@ -122,5 +124,39 @@ where
 {
     fn from(value: T) -> Self {
         Self(Box::new(value))
+    }
+}
+
+impl ExecutionContext {
+    pub fn set_input(&mut self, id: Id, tensor: &Tensor) -> Result<(), BackendError> {
+        self.0.set_input(id, tensor)
+    }
+
+    pub fn compute(&mut self) -> Result<(), BackendError> {
+        self.0.compute(None).map(|_| ())
+    }
+
+    pub fn get_output(&mut self, id: Id) -> Result<Tensor, BackendError> {
+        self.0.get_output(id)
+    }
+
+    pub fn compute_with_io(
+        &mut self,
+        inputs: Vec<BackendNamedTensor>,
+    ) -> Result<Vec<BackendNamedTensor>, BackendError> {
+        match self.0.compute(Some(inputs))? {
+            Some(outputs) => Ok(outputs),
+            None => Ok(Vec::new()),
+        }
+    }
+}
+
+impl Tensor {
+    pub fn new(dimensions: Vec<u32>, ty: TensorType, data: Vec<u8>) -> Self {
+        Self {
+            dimensions,
+            ty,
+            data,
+        }
     }
 }
