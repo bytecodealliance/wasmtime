@@ -24,7 +24,7 @@ block2:
 ;   movq %rdi, %rax
 ;   jmp     label3
 ; block2:
-;   movl    $97, %eax
+;   movl $0x61, %eax
 ;   jmp     label3
 ; block3:
 ;   movq %rbp, %rsp
@@ -74,7 +74,7 @@ block2 cold:
 ;   popq %rbp
 ;   ret
 ; block2:
-;   movl    $97, %eax
+;   movl $0x61, %eax
 ;   jmp     label3
 ;
 ; Disassembled:

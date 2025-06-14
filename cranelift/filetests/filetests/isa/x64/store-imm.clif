@@ -180,7 +180,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movabsq $9223372036854775807, %rax
+;   movabsq $0x7fffffffffffffff, %rax
 ;   movq %rax, (%rdi)
 ;   movq %rdi, %rax
 ;   movq %rbp, %rsp

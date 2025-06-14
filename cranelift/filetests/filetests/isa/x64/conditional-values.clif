@@ -48,12 +48,12 @@ block2:
 ;   testb   %dil, %dil
 ;   jnz     label2; j label1
 ; block1:
-;   movl    $2, %eax
+;   movl $0x2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block2:
-;   movl    $1, %eax
+;   movl $0x1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -94,12 +94,12 @@ block2:
 ;   testb   %dil, %dil
 ;   jnz     label2; j label1
 ; block1:
-;   movl    $1, %eax
+;   movl $0x1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block2:
-;   movl    $2, %eax
+;   movl $0x2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -144,12 +144,12 @@ block2:
 ;   cmpl    $1, %edx
 ;   jz      label2; j label1
 ; block1:
-;   movl    $1, %eax
+;   movl $0x1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block2:
-;   movl    $1, %eax
+;   movl $0x1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
@@ -195,12 +195,12 @@ block2:
 ;   cmpl    $1, %edx
 ;   jz      label2; j label1
 ; block1:
-;   movl    $1, %eax
+;   movl $0x1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret
 ; block2:
-;   movl    $1, %eax
+;   movl $0x1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   ret

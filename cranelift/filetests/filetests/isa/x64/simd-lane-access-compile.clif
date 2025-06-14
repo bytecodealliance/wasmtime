@@ -188,7 +188,7 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movl    $65535, %ecx
+;   movl $0xffff, %ecx
 ;   movd %ecx, %xmm1
 ;   pshuflw $0x0, %xmm1, %xmm3
 ;   pshufd $0x0, %xmm3, %xmm0

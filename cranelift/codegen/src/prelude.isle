@@ -133,6 +133,9 @@
 (decl pure partial u32_try_from_u64 (u64) u32)
 (extern constructor u32_try_from_u64 u32_try_from_u64)
 
+(decl pure partial i32_try_from_i64 (i64) i32)
+(extern constructor i32_try_from_i64 i32_try_from_i64)
+
 (decl pure partial u64_try_from_i64 (i64) u64)
 (extern constructor u64_try_from_i64 u64_try_from_i64)
 

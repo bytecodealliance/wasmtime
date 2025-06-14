@@ -37,7 +37,7 @@ block0():
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   movl    $15360, %esi
+;   movl $0x3c00, %esi
 ;   uninit  %xmm0
 ;   pxor %xmm0, %xmm0
 ;   pinsrw $0x0, %esi, %xmm0

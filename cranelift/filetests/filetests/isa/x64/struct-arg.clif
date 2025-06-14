@@ -76,7 +76,7 @@ block0(v0: i64):
 ; block0:
 ;   movq %rdi, %rsi
 ;   lea     0(%rsp), %rdi
-;   movl    $64, %edx
+;   movl $0x40, %edx
 ;   load_ext_name %Memcpy+0, %r10
 ;   call    *%r10
 ;   call    User(userextname0)
@@ -118,7 +118,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   movq %rdi, %r14
 ;   lea     0(%rsp), %rdi
-;   movl    $64, %edx
+;   movl $0x40, %edx
 ;   load_ext_name %Memcpy+0, %r11
 ;   call    *%r11
 ;   movq %r14, %rdi
@@ -202,11 +202,11 @@ block0(v0: i64, v1: i64, v2: i64):
 ;   movq %rdx, %rbx
 ;   movq %rdi, %r13
 ;   lea     0(%rsp), %rdi
-;   movl    $128, %edx
+;   movl $0x80, %edx
 ;   load_ext_name %Memcpy+0, %rax
 ;   call    *%rax
 ;   lea     128(%rsp), %rdi
-;   movl    $64, %edx
+;   movl $0x40, %edx
 ;   load_ext_name %Memcpy+0, %r10
 ;   movq %rbx, %rsi
 ;   call    *%r10

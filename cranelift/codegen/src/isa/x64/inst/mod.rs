@@ -14,6 +14,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::slice;
 use cranelift_assembler_x64 as asm;
+use cranelift_entity::Signed;
 use smallvec::{SmallVec, smallvec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
@@ -62,11 +63,6 @@ fn inst_size_test() {
     assert_eq!(48, std::mem::size_of::<Inst>());
 }
 
-pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
-    let xs = x as i64;
-    xs == ((xs << 32) >> 32)
-}
-
 impl Inst {
     /// Retrieve a list of ISA feature sets in which the instruction is available. An empty list
     /// indicates that the instruction is available in the baseline feature set (i.e. SSE2 and
@@ -90,7 +86,6 @@ impl Inst {
             | Inst::CvtUint64ToFloatSeq { .. }
             | Inst::Fence { .. }
             | Inst::Hlt
-            | Inst::Imm { .. }
             | Inst::JmpCond { .. }
             | Inst::JmpCondOr { .. }
             | Inst::WinchJmpIf { .. }
@@ -199,20 +194,41 @@ impl Inst {
         Inst::External { inst }
     }
 
-    pub(crate) fn imm(dst_size: OperandSize, simm64: u64, dst: Writable<Reg>) -> Inst {
+    /// Writes the `simm64` immedaite into `dst`.
+    ///
+    /// Note that if `dst_size` is less than 64-bits then the upper bits of
+    /// `simm64` will be converted to zero.
+    pub fn imm(dst_size: OperandSize, simm64: u64, dst: Writable<Reg>) -> Inst {
         debug_assert!(dst_size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
         debug_assert!(dst.to_reg().class() == RegClass::Int);
-        // Try to generate a 32-bit immediate when the upper high bits are zeroed (which matches
-        // the semantics of movl).
-        let dst_size = match dst_size {
-            OperandSize::Size64 if simm64 > u32::max_value() as u64 => OperandSize::Size64,
-            _ => OperandSize::Size32,
+        let dst = WritableGpr::from_writable_reg(dst).unwrap();
+        let inst = match dst_size {
+            OperandSize::Size64 => match u32::try_from(simm64) {
+                // If `simm64` is zero-extended use `movl` which zeros the
+                // upper bits.
+                Ok(imm32) => asm::inst::movl_oi::new(dst, imm32).into(),
+                _ => match i32::try_from(simm64.signed()) {
+                    // If `simm64` is sign-extended use `movq` which sign the
+                    // upper bits.
+                    Ok(simm32) => asm::inst::movq_mi_sxl::new(dst, simm32).into(),
+                    // fall back to embedding the entire immediate.
+                    _ => asm::inst::movabsq_oi::new(dst, simm64).into(),
+                },
+            },
+            // FIXME: the input to this function is a logical `simm64` stored
+            // as `u64`. That means that ideally what we would do here is cast
+            // the `simm64` to an `i64`, perform a `i32::try_from()`, then cast
+            // that back to `u32`. That would ensure that the immediate loses
+            // no meaning and has the same logical value. Currently though
+            // Cranelift relies on discarding the upper bits because literals
+            // like `0x8000_0000_u64` fail to convert to an `i32`. In theory
+            // the input to this function should change to `i64`. In the
+            // meantime this is documented as discarding the upper bits,
+            // although this is an old function so that's unlikely to help
+            // much.
+            _ => asm::inst::movl_oi::new(dst, simm64 as u32).into(),
         };
-        Inst::Imm {
-            dst_size,
-            simm64,
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-        }
+        Inst::External { inst }
     }
 
     /// Convenient helper for unary float operations.
@@ -849,23 +865,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}, {tmp_gpr}, {tmp_xmm}, {tmp_xmm2}")
             }
 
-            Inst::Imm {
-                dst_size,
-                simm64,
-                dst,
-            } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), dst_size.to_bytes());
-                if *dst_size == OperandSize::Size64 {
-                    let op = ljustify("movabsq".to_string());
-                    let imm = *simm64 as i64;
-                    format!("{op} ${imm}, {dst}")
-                } else {
-                    let op = ljustify("movl".to_string());
-                    let imm = (*simm64 as u32) as i32;
-                    format!("{op} ${imm}, {dst}")
-                }
-            }
-
             Inst::MovFromPReg { src, dst } => {
                 let src: Reg = (*src).into();
                 let src = regs::show_ireg_sized(src, 8);
@@ -1394,9 +1393,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::XmmCmpRmRVex { src1, src2, .. } => {
             collector.reg_use(src1);
             src2.get_operands(collector);
-        }
-        Inst::Imm { dst, .. } => {
-            collector.reg_def(dst);
         }
         Inst::MovFromPReg { dst, src } => {
             debug_assert!(dst.to_reg().to_reg().is_virtual());

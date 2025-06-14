@@ -48,7 +48,7 @@ block0:
 ; block0:
 ;   load_ext_name %munge_xmm0+0, %r8
 ;   call    *%r8
-;   movl    $42, %r8d
+;   movl $0x2a, %r8d
 ;   uninit  %xmm0
 ;   pxor %xmm0, %xmm0
 ;   pinsrw $0x0, %r8d, %xmm0

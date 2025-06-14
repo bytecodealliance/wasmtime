@@ -253,40 +253,6 @@ pub(crate) fn emit(
             sink.bind_label(done_label, state.ctrl_plane_mut());
         }
 
-        Inst::Imm {
-            dst_size,
-            simm64,
-            dst,
-        } => {
-            let dst = dst.to_reg().to_reg();
-            let enc_dst = int_reg_enc(dst);
-            if *dst_size == OperandSize::Size64 {
-                if low32_will_sign_extend_to_64(*simm64) {
-                    // Sign-extended move imm32.
-                    emit_std_enc_enc(
-                        sink,
-                        LegacyPrefixes::None,
-                        0xC7,
-                        1,
-                        /* subopcode */ 0,
-                        enc_dst,
-                        RexFlags::set_w(),
-                    );
-                    sink.put4(*simm64 as u32);
-                } else {
-                    sink.put1(0x48 | ((enc_dst >> 3) & 1));
-                    sink.put1(0xB8 | (enc_dst & 7));
-                    sink.put8(*simm64);
-                }
-            } else {
-                if ((enc_dst >> 3) & 1) == 1 {
-                    sink.put1(0x41);
-                }
-                sink.put1(0xB8 | (enc_dst & 7));
-                sink.put4(*simm64 as u32);
-            }
-        }
-
         Inst::MovFromPReg { src, dst } => {
             let src: Reg = (*src).into();
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&src));

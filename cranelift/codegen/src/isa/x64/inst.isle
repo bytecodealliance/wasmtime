@@ -32,13 +32,6 @@
                         (divisor Gpr)
                         (dst WritableGpr))
 
-       ;; Constant materialization: (imm32 imm64) reg.
-       ;;
-       ;; Either: movl $imm32, %reg32 or movabsq $imm64, %reg32.
-       (Imm (dst_size OperandSize) ;; 4 or 8
-            (simm64 u64)
-            (dst WritableGpr))
-
        ;; Like `MovRR` but with a physical register source (for implementing
        ;; CLIF instructions like `get_stack_pointer`).
        (MovFromPReg (src PReg)
@@ -2434,65 +2427,53 @@
 (rule (imm_i64 ty value)
       (imm ty (i64_as_u64 value)))
 
-(decl nonzero_u64_fits_in_u32 (u64) u64)
-(extern extractor nonzero_u64_fits_in_u32 nonzero_u64_fits_in_u32)
-
 ;; Helper for emitting immediates.
 ;;
-;; There are three priorities in use in this rule:
-;; 2 - rules that match on an explicit type
-;; 1 - rules that match on types that fit in 64 bits
-;; 0 - rules that match on vectors
+;; Note that if `Type` is less than 64-bits then the upper bits of the `imm`
+;; argument will be set to zero and lost.
 (decl imm (Type u64) Reg)
 
-;; Integer immediates.
-(rule 1 (imm (fits_in_64 ty) (u64_nonzero simm64))
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (_ Unit (emit (MInst.Imm size simm64 dst))))
-        dst))
+;; Base case: integers of up to at most 32-bits.
+;;
+;; FIXME: the immediate argument to this constructor is `u64` but it's logically
+;; interpreted as the bit pattern for a signed 32-bit immediate. That means
+;; that ideally this would convert the immediate to a 64-bit signed immediate,
+;; fallibly convert that to a signed 32-bit integer, and then convert that to
+;; unsigned to pass to the raw instruction. In doing so there would be a
+;; guarantee that the value in the register is the same logical value as the
+;; immediate passed to this constructor. This is not possible today though
+;; because literals like `0x8000_0000_u64` don't convert to `i32`.
+(rule 0 (imm (fits_in_32 (ty_int ty)) (u64_as_u32 imm)) (x64_movl_oi imm))
 
-;; `f16` immediates.
-(rule 2 (imm $F16 (u64_nonzero bits))
-        (bitcast_gpr_to_xmm 16 (imm $I16 bits)))
+;; Base cases for other types
+(rule 1 (imm $I64 imm) (x64_movabsq_oi imm))
+(rule 1 (imm $F16 (u64_nonzero bits)) (bitcast_gpr_to_xmm 16 (imm $I16 bits)))
+(rule 1 (imm $F32 (u64_nonzero bits)) (x64_movd_to_xmm (imm $I32 bits)))
+(rule 1 (imm $F64 (u64_nonzero bits)) (x64_movq_to_xmm (imm $I64 bits)))
 
-;; `f32` immediates.
-(rule 2 (imm $F32 (u64_nonzero bits))
-        (x64_movd_to_xmm (imm $I32 bits)))
+;; Special case: a 64-bit immediate which sign extends from a 32-bit immediate.
+(rule 2 (imm $I64 imm)
+  (if-let imm32 (i32_try_from_i64 (u64_as_i64 imm)))
+  (x64_movq_mi_sxl imm32))
 
-;; `f64` immediates.
-(rule 2 (imm $F64 (u64_nonzero bits))
-        (x64_movq_to_xmm (imm $I64 bits)))
+;; Special case: a 64-bit immediate which zero extends from a 32-bit immediate.
+;;
+;; Note that `movl` here will zero-extend the destination register in 64-bit
+;; mode which is the zero-extension we want.
+(rule 3 (imm $I64 imm)
+  (if-let imm32 (u32_try_from_u64 imm))
+  (x64_movl_oi imm32))
 
-;; Special case for when a 64-bit immediate fits into 32-bits. We can use a
-;; 32-bit move that zero-extends the value, which has a smaller encoding.
-(rule 2 (imm $I64 (nonzero_u64_fits_in_u32 x))
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.Imm (OperandSize.Size32) x dst))))
-        dst))
-
-;; Special case for integer zero immediates: turn them into an `xor r, r`.
-(rule 1 (imm (fits_in_64 ty) (u64_zero))
+;; Special case the 0 immediate:
+(rule 4 (imm (fits_in_64 (ty_int ty)) 0)
       (let ((tmp Gpr (gpr_uninit_value)))
         (x64_xor ty tmp tmp)))
+(rule 5 (imm ty @ (multi_lane _bits _lanes) 0) (xmm_to_reg (xmm_zero ty)))
+(rule 6 (imm ty @ $F16 0) (xmm_zero ty))
+(rule 6 (imm ty @ $F32 0) (xmm_zero ty))
+(rule 6 (imm ty @ $F64 0) (xmm_zero ty))
 
-;; Special case for zero immediates with vector types, they turn into an xor
-;; specific to the vector type.
-(rule 0 (imm ty @ (multi_lane _bits _lanes) 0)
-      (xmm_to_reg (xmm_zero ty)))
-
-;; Special case for `f16` zero immediates
-(rule 2 (imm ty @ $F16 (u64_zero)) (xmm_zero ty))
-
-;; Special case for `f32` zero immediates
-(rule 2 (imm ty @ $F32 (u64_zero)) (xmm_zero ty))
-
-;; TODO: use cmpeqps for all 1s
-
-;; Special case for `f64` zero immediates to use `xorpd`.
-(rule 2 (imm ty @ $F64 (u64_zero)) (xmm_zero ty))
-
-;; TODO: use cmpeqpd for all 1s
+;; TODO: use cmpeqp{s,d} for all 1s float immediates
 
 (decl xmm_zero (Type) Xmm)
 (rule (xmm_zero ty)
