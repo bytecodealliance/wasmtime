@@ -44,7 +44,7 @@ use wasmtime_environ::{
 /// * `false` if this call failed and a trap was recorded in TLS.
 pub type VMArrayCallNative = unsafe extern "C" fn(
     NonNull<VMOpaqueContext>,
-    NonNull<VMOpaqueContext>,
+    NonNull<VMContext>,
     NonNull<ValRaw>,
     usize,
 ) -> bool;
@@ -871,7 +871,7 @@ impl VMFuncRef {
     pub unsafe fn array_call(
         &self,
         pulley: Option<InterpreterRef<'_>>,
-        caller: NonNull<VMOpaqueContext>,
+        caller: NonNull<VMContext>,
         args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         match pulley {
@@ -883,7 +883,7 @@ impl VMFuncRef {
     unsafe fn array_call_interpreted(
         &self,
         vm: InterpreterRef<'_>,
-        caller: NonNull<VMOpaqueContext>,
+        caller: NonNull<VMContext>,
         args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         // If `caller` is actually a `VMArrayCallHostFuncContext` then skip the
@@ -905,7 +905,7 @@ impl VMFuncRef {
     #[inline]
     unsafe fn array_call_native(
         &self,
-        caller: NonNull<VMOpaqueContext>,
+        caller: NonNull<VMContext>,
         args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         union GetNativePointer {
