@@ -4,9 +4,10 @@ set opt_level=none
 set preserve_frame_pointers=true
 set enable_multi_ret_implicit_sret=true
 target x86_64
-target riscv64
 target s390x
 target aarch64
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
 
 function u1:1(i64) -> i64 fast {
     ss0 = explicit_slot 32
