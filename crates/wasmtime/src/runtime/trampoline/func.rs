@@ -23,7 +23,7 @@ struct TrampolineState<F> {
 /// Also shepherds panics and traps across Wasm.
 unsafe extern "C" fn array_call_shim<F>(
     vmctx: NonNull<VMOpaqueContext>,
-    caller_vmctx: NonNull<VMOpaqueContext>,
+    caller_vmctx: NonNull<VMContext>,
     values_vec: NonNull<ValRaw>,
     values_vec_len: usize,
 ) -> bool
@@ -41,7 +41,7 @@ where
         debug_assert!(state.is::<TrampolineState<F>>());
         let state = &*(state as *const _ as *const TrampolineState<F>);
         let mut values_vec = NonNull::slice_from_raw_parts(values_vec, values_vec_len);
-        (state.func)(VMContext::from_opaque(caller_vmctx), values_vec.as_mut())
+        (state.func)(caller_vmctx, values_vec.as_mut())
     })
 }
 
