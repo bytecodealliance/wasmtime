@@ -74,9 +74,20 @@
 use wasmtime::component::{HasData, ResourceTable};
 
 pub mod bindings;
-mod client;
 mod host;
 mod io;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "native-tls")] {
+        mod client_nativetls;
+        pub(crate) use client_nativetls as client;
+    } else if #[cfg(feature = "rustls")] {
+        mod client_rustls;
+        pub(crate) use client_rustls as client;
+    } else {
+        compile_error!("Either the `rustls` or `native-tls` feature must be enabled.");
+    }
+}
 
 pub use bindings::types::LinkOptions;
 pub use host::{HostClientConnection, HostClientHandshake, HostFutureClientStreams};

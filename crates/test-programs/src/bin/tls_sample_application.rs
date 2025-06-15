@@ -55,7 +55,7 @@ fn test_tls_invalid_certificate(_domain: &str, ip: IpAddress) -> Result<()> {
 
     match ClientHandshake::new(BAD_DOMAIN, tcp_input, tcp_output).blocking_finish() {
         // We're expecting an error regarding the "certificate" is some form or
-        // another. When we add more TLS backends other than rustls, this naive
+        // another. When we add more TLS backends this naive
         // check will likely need to be revisited/expanded:
         Err(e) if e.to_debug_string().contains("certificate") => Ok(()),
 
