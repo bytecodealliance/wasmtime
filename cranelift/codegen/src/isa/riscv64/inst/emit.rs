@@ -64,6 +64,10 @@ impl EmitState {
     fn take_stack_map(&mut self) -> Option<ir::UserStackMap> {
         self.user_stack_map.take()
     }
+
+    fn clobber_vstate(&mut self) {
+        self.vstate = EmitVState::Unknown;
+    }
 }
 
 impl MachInstEmitState<Inst> for EmitState {
@@ -93,7 +97,7 @@ impl MachInstEmitState<Inst> for EmitState {
 
     fn on_new_block(&mut self) {
         // Reset the vector state.
-        self.vstate = EmitVState::Unknown;
+        self.clobber_vstate();
     }
 
     fn frame_layout(&self) -> &FrameLayout {
@@ -395,6 +399,7 @@ impl Inst {
                 if rd.to_reg() == zero_reg() && base != zero_reg() && offset.as_i16() == 0 =>
             {
                 sink.put2(encode_cr2_type(CrOp::CJr, base));
+                state.clobber_vstate();
             }
 
             // c.jalr
@@ -402,6 +407,7 @@ impl Inst {
                 if rd.to_reg() == link_reg() && base != zero_reg() && offset.as_i16() == 0 =>
             {
                 sink.put2(encode_cr2_type(CrOp::CJalr, base));
+                state.clobber_vstate();
             }
 
             // c.ebreak
@@ -1294,6 +1300,7 @@ impl Inst {
                 sink.use_label_at_offset(*start_off, label, LabelUse::Jal20);
                 sink.add_uncond_branch(*start_off, *start_off + 4, label);
                 sink.put4(0b1101111);
+                state.clobber_vstate();
             }
             &Inst::CondBr {
                 taken,
@@ -1683,6 +1690,7 @@ impl Inst {
             }
             &Inst::Jalr { rd, base, offset } => {
                 sink.put4(enc_jalr(rd, base, offset));
+                state.clobber_vstate();
             }
             &Inst::EBreak => {
                 sink.put4(0x00100073);
