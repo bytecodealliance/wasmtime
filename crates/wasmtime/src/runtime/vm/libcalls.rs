@@ -839,7 +839,7 @@ unsafe fn array_init_data(
 #[cfg(feature = "gc")]
 unsafe fn array_new_elem(
     store: &mut dyn VMStore,
-    instance: Pin<&mut Instance>,
+    mut instance: Pin<&mut Instance>,
     array_type_index: u32,
     elem_index: u32,
     src: u32,
@@ -878,7 +878,7 @@ unsafe fn array_new_elem(
                         .ok_or_else(|| Trap::TableOutOfBounds)?
                         .iter()
                         .map(|f| {
-                            let raw_func_ref = instance.get_func_ref(*f);
+                            let raw_func_ref = instance.as_mut().get_func_ref(*f);
                             let func = raw_func_ref.map(|p| Func::from_vm_func_ref(store, p));
                             Val::FuncRef(func)
                         }),
@@ -915,7 +915,7 @@ unsafe fn array_new_elem(
 #[cfg(feature = "gc")]
 unsafe fn array_init_elem(
     store: &mut dyn VMStore,
-    instance: Pin<&mut Instance>,
+    mut instance: Pin<&mut Instance>,
     array_type_index: u32,
     array: u32,
     dst: u32,
@@ -971,7 +971,7 @@ unsafe fn array_init_elem(
             .ok_or_else(|| Trap::TableOutOfBounds)?
             .iter()
             .map(|f| {
-                let raw_func_ref = instance.get_func_ref(*f);
+                let raw_func_ref = instance.as_mut().get_func_ref(*f);
                 let func = raw_func_ref.map(|p| Func::from_vm_func_ref(&store, p));
                 Val::FuncRef(func)
             })

@@ -378,11 +378,13 @@ impl Func {
         LowerReturn: Copy,
     {
         let vminstance = self.instance.id().get(store.0);
-        let (ty, def, options) = vminstance.component().export_lifted_function(self.index);
-        let export = match vminstance.lookup_def(store.0, def) {
+        let component = vminstance.component().clone();
+        let (ty, def, options) = component.export_lifted_function(self.index);
+        let export = match self.instance.lookup_vmdef(store.0, def) {
             Export::Function(f) => f,
             _ => unreachable!(),
         };
+        let vminstance = self.instance.id().get(store.0);
         let component_instance = options.instance;
         let memory = options
             .memory
@@ -408,7 +410,7 @@ impl Func {
         assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
-        let types = vminstance.component().types().clone();
+        let types = component.types();
         let mut flags = vminstance.instance_flags(component_instance);
 
         unsafe {
