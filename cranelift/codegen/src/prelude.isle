@@ -160,9 +160,6 @@
 (decl pure partial i16_try_from_i32 (i16) i32)
 (extern extractor i16_try_from_i32 i16_try_from_i32)
 
-(decl pure partial i32_try_from_i64 (i64) i32)
-(extern constructor i32_try_from_i64 i32_try_from_i64)
-
 (decl pure partial i32_try_from_u64 (u64) i32)
 (extern constructor i32_try_from_u64 i32_try_from_u64)
 
