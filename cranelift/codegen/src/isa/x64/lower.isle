@@ -3231,7 +3231,7 @@
 
 ;; Rules for `load*` + ALU op + `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Add mem, reg
+;; `add mem, {reg,imm}`
 (rule store_x64_add_mem 3 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3245,7 +3245,7 @@
         (side_effect
          (x64_add_mem ty (to_amode flags addr offset) src2))))
 
-;; Add mem, reg with args swapped
+;; `add mem, {reg,imm}` with args swapped
 (rule 2 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3259,7 +3259,7 @@
         (side_effect
          (x64_add_mem ty (to_amode flags addr offset) src2))))
 
-;; Sub mem, reg
+;; `sub mem, {reg,imm}`
 (rule 2 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3273,7 +3273,7 @@
         (side_effect
          (x64_sub_mem ty (to_amode flags addr offset) src2))))
 
-;; And mem, reg
+;; `and mem, {reg,imm}`
 (rule 3 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3287,7 +3287,7 @@
         (side_effect
          (x64_and_mem ty (to_amode flags addr offset) src2))))
 
-;; And mem, reg with args swapped
+;; `and mem, {reg,imm}` with args swapped
 (rule 2 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3301,7 +3301,7 @@
         (side_effect
          (x64_and_mem ty (to_amode flags addr offset) src2))))
 
-;; Or mem, reg
+;; `or mem, {reg,imm}`
 (rule 3 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3315,7 +3315,7 @@
         (side_effect
          (x64_or_mem ty (to_amode flags addr offset) src2))))
 
-;; Or mem, reg with args swapped
+;; `or mem, {reg,imm}` with args swapped
 (rule 2 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3356,91 +3356,6 @@
       (let ((_ RegMemImm sink))
         (side_effect
          (x64_xor_mem ty (to_amode flags addr offset) src2))))
-
-;; or mem, imm
-(rule 5 (lower (store (little_or_native_endian flags)
-                      (has_type (fits_in_64 ty)
-                                (bor (i32_from_iconst k)
-                                     (and
-                                       (sinkable_load sink)
-                                       (load flags addr offset))))
-                      addr
-                      offset))
-      (let ((_ RegMemImm sink))
-        (side_effect
-         (x64_or_mi ty (to_amode flags addr offset) k))))
-(rule 6 (lower (store (little_or_native_endian flags)
-                      (has_type (fits_in_64 ty)
-                                (bor (and
-                                       (sinkable_load sink)
-                                       (load flags addr offset))
-                                     (i32_from_iconst k)))
-                      addr
-                      offset))
-      (let ((_ RegMemImm sink))
-        (side_effect
-         (x64_or_mi ty (to_amode flags addr offset) k))))
-
-;; and mem, imm
-(rule 5 (lower (store (little_or_native_endian flags)
-                      (has_type (fits_in_64 ty)
-                                (band (i32_from_iconst k)
-                                      (and
-                                        (sinkable_load sink)
-                                        (load flags addr offset))))
-                      addr
-                      offset))
-      (let ((_ RegMemImm sink))
-        (side_effect
-         (x64_and_mi ty (to_amode flags addr offset) k))))
-(rule 6 (lower (store (little_or_native_endian flags)
-                      (has_type (fits_in_64 ty)
-                                (band (and
-                                        (sinkable_load sink)
-                                        (load flags addr offset))
-                                      (i32_from_iconst k)))
-                      addr
-                      offset))
-      (let ((_ RegMemImm sink))
-        (side_effect
-         (x64_and_mi ty (to_amode flags addr offset) k))))
-
-;; add mem, imm
-(rule 5 (lower (store (little_or_native_endian flags)
-                      (has_type (fits_in_64 ty)
-                                (iadd (i32_from_iconst k)
-                                      (and
-                                        (sinkable_load sink)
-                                        (load flags addr offset))))
-                      addr
-                      offset))
-      (let ((_ RegMemImm sink))
-        (side_effect
-         (x64_add_mi ty (to_amode flags addr offset) k))))
-(rule 6 (lower (store (little_or_native_endian flags)
-                      (has_type (fits_in_64 ty)
-                                (iadd (and
-                                        (sinkable_load sink)
-                                        (load flags addr offset))
-                                      (i32_from_iconst k)))
-                      addr
-                      offset))
-      (let ((_ RegMemImm sink))
-        (side_effect
-         (x64_add_mi ty (to_amode flags addr offset) k))))
-
-;; sub mem, imm
-(rule 6 (lower (store (little_or_native_endian flags)
-                      (has_type (fits_in_64 ty)
-                                (isub (and
-                                        (sinkable_load sink)
-                                        (load flags addr offset))
-                                      (i32_from_iconst k)))
-                      addr
-                      offset))
-      (let ((_ RegMemImm sink))
-        (side_effect
-         (x64_sub_mi ty (to_amode flags addr offset) k))))
 
 ;; Rules for `fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

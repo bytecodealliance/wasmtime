@@ -935,6 +935,10 @@ macro_rules! isle_common_prelude_methods {
             val as u16
         }
 
+        fn u64_as_u16_extractor(&mut self, val: u64) -> Option<u16> {
+            Some(val as u16)
+        }
+
         fn u8_try_from_u64(&mut self, val: u64) -> Option<u8> {
             u8::try_from(val).ok()
         }
@@ -971,6 +975,10 @@ macro_rules! isle_common_prelude_methods {
             i8::try_from(val).ok()
         }
 
+        fn i8_try_from_i64(&mut self, val: i64) -> Option<i8> {
+            i8::try_from(val).ok()
+        }
+
         fn i8_try_from_u64(&mut self, val: u64) -> Option<i8> {
             i8::try_from(val).ok()
         }
@@ -989,6 +997,10 @@ macro_rules! isle_common_prelude_methods {
 
         fn i16_try_from_u64(&mut self, val: u64) -> Option<i16> {
             i16::try_from(val).ok()
+        }
+
+        fn i32_try_from_i64(&mut self, val: i64) -> Option<i32> {
+            i32::try_from(val).ok()
         }
 
         fn i32_try_from_u64(&mut self, val: u64) -> Option<i32> {
