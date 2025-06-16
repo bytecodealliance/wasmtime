@@ -303,10 +303,13 @@ pub fn add_only_http_to_linker_async<T>(
 where
     T: WasiHttpView + 'static,
 {
+    let options = crate::bindings::LinkOptions::default(); // FIXME: Thread through to the CLI options.
     crate::bindings::http::outgoing_handler::add_to_linker::<_, WasiHttp<T>>(l, |x| {
         WasiHttpImpl(IoImpl(x))
     })?;
-    crate::bindings::http::types::add_to_linker::<_, WasiHttp<T>>(l, |x| WasiHttpImpl(IoImpl(x)))?;
+    crate::bindings::http::types::add_to_linker::<_, WasiHttp<T>>(l, &options.into(), |x| {
+        WasiHttpImpl(IoImpl(x))
+    })?;
 
     Ok(())
 }
@@ -374,10 +377,11 @@ pub fn add_only_http_to_linker_sync<T>(l: &mut Linker<T>) -> anyhow::Result<()>
 where
     T: WasiHttpView + 'static,
 {
+    let options = crate::bindings::LinkOptions::default(); // FIXME: Thread through to the CLI options.
     crate::bindings::sync::http::outgoing_handler::add_to_linker::<_, WasiHttp<T>>(l, |x| {
         WasiHttpImpl(IoImpl(x))
     })?;
-    crate::bindings::sync::http::types::add_to_linker::<_, WasiHttp<T>>(l, |x| {
+    crate::bindings::sync::http::types::add_to_linker::<_, WasiHttp<T>>(l, &options.into(), |x| {
         WasiHttpImpl(IoImpl(x))
     })?;
 

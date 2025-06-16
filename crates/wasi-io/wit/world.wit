@@ -2,5 +2,5 @@
 package wasmtime:wasi-io;
 
 world bindings {
-  include wasi:io/imports@0.2.3;
+  include wasi:io/imports@0.2.6;
 }
