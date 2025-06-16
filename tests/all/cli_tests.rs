@@ -1907,9 +1907,11 @@ stdout [1] :: after empty
 stderr [0] :: this is half a print to stderr
 stderr [0] :: \n\
 stderr [0] :: after empty
+stderr [0] :: start a print 1234
 stderr [1] :: this is half a print to stderr
 stderr [1] :: \n\
 stderr [1] :: after empty
+stderr [1] :: start a print 1234
 "
             ),
             "bad stderr: {err}"
