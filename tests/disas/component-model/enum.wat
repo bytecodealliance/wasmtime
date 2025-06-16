@@ -50,7 +50,7 @@
 ;; @0061                               v3 = iconst.i32 0
 ;; @0068                               v8 = icmp eq v7, v3  ; v3 = 0
 ;; @0068                               v9 = uextend.i32 v8
-;;                                     trapnz v9, user11
+;; @006b                               trapnz v9, user11
 ;; @0069                               jump block3
 ;;
 ;;                                 block3:
@@ -61,7 +61,7 @@
 ;;                                     v80 = iconst.i32 0
 ;;                                     v81 = icmp eq v13, v80  ; v80 = 0
 ;; @0072                               v15 = uextend.i32 v81
-;;                                     trapnz v15, user11
+;; @0075                               trapnz v15, user11
 ;; @0073                               jump block5
 ;;
 ;;                                 block5:
@@ -85,7 +85,7 @@
 ;; @009b                               v40 = iconst.i32 3
 ;; @009d                               v41 = icmp ugt v34, v40  ; v40 = 3
 ;; @009d                               v42 = uextend.i32 v41
-;;                                     trapnz v42, user11
+;; @00a0                               trapnz v42, user11
 ;; @009e                               jump block7
 ;;
 ;;                                 block7:

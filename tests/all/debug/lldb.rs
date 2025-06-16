@@ -15,6 +15,8 @@ macro_rules! assert_test_exists {
 foreach_dwarf!(assert_test_exists);
 
 fn lldb_with_script(args: &[&str], script: &str) -> Result<String> {
+    let _ = env_logger::try_init();
+
     let lldb_path = env::var("LLDB").unwrap_or("lldb".to_string());
     let mut cmd = Command::new(&lldb_path);
 
@@ -40,9 +42,15 @@ fn lldb_with_script(args: &[&str], script: &str) -> Result<String> {
     cmd.arg("--");
     cmd.args(args);
 
+    log::trace!("Running command: {cmd:?}");
     let output = cmd.output().expect("success");
+
     let stdout = String::from_utf8(output.stdout)?;
+    log::trace!("--- sdout ---\n{stdout}");
+
     let stderr = String::from_utf8(output.stderr)?;
+    log::trace!("--- sderr ---\n{stderr}");
+
     if !output.status.success() {
         bail!(
             "failed to execute {cmd:?}:\n\
