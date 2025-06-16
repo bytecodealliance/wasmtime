@@ -264,6 +264,7 @@ where
 enum WriteState<IO> {
     Ready(IO),
     Writing(AbortOnDropJoinHandle<io::Result<IO>>),
+    Flushing(AbortOnDropJoinHandle<io::Result<IO>>),
     Closing(AbortOnDropJoinHandle<io::Result<()>>),
     Closed,
     Error(io::Error),
@@ -306,20 +307,43 @@ where
     }
 
     fn flush(&mut self) -> StreamResult<()> {
-        // `flush` is a no-op here, as we're not managing any internal buffer.
         match self {
-            WriteState::Ready(_)
-            | WriteState::Writing(_)
-            | WriteState::Closing(_)
-            | WriteState::Error(_) => Ok(()),
-            WriteState::Closed => Err(StreamError::Closed),
+            // Immediately flush:
+            WriteState::Ready(_) => {
+                let WriteState::Ready(mut stream) = std::mem::replace(self, WriteState::Closed)
+                else {
+                    unreachable!()
+                };
+                *self = WriteState::Flushing(wasmtime_wasi::runtime::spawn(async move {
+                    stream.flush().await?;
+                    Ok(stream)
+                }));
+            }
+
+            // Schedule the flush after the current write has finished:
+            WriteState::Writing(_) => {
+                let WriteState::Writing(write) = std::mem::replace(self, WriteState::Closed) else {
+                    unreachable!()
+                };
+                *self = WriteState::Flushing(wasmtime_wasi::runtime::spawn(async move {
+                    let mut stream = write.await?;
+                    stream.flush().await?;
+                    Ok(stream)
+                }));
+            }
+
+            WriteState::Flushing(_) | WriteState::Closing(_) | WriteState::Error(_) => {}
+            WriteState::Closed => return Err(StreamError::Closed),
         }
+
+        Ok(())
     }
 
     fn check_write(&mut self) -> StreamResult<usize> {
         match self {
             WriteState::Ready(_) => Ok(READY_SIZE),
             WriteState::Writing(_) => Ok(0),
+            WriteState::Flushing(_) => Ok(0),
             WriteState::Closing(_) => Ok(0),
             WriteState::Closed => Err(StreamError::Closed),
             WriteState::Error(_) => {
@@ -341,10 +365,10 @@ where
                 }));
             }
 
-            // Schedule the shutdown after the current write has finished:
-            WriteState::Writing(write) => {
+            // Schedule the shutdown after the current operation has finished:
+            WriteState::Writing(op) | WriteState::Flushing(op) => {
                 *self = WriteState::Closing(wasmtime_wasi::runtime::spawn(async move {
-                    let mut stream = write.await?;
+                    let mut stream = op.await?;
                     stream.shutdown().await
                 }));
             }
@@ -358,7 +382,7 @@ where
 
     async fn cancel(&mut self) {
         match std::mem::replace(self, WriteState::Closed) {
-            WriteState::Writing(task) => _ = task.cancel().await,
+            WriteState::Writing(task) | WriteState::Flushing(task) => _ = task.cancel().await,
             WriteState::Closing(task) => _ = task.cancel().await,
             _ => {}
         }
@@ -366,7 +390,7 @@ where
 
     async fn ready(&mut self) {
         match self {
-            WriteState::Writing(task) => {
+            WriteState::Writing(task) | WriteState::Flushing(task) => {
                 *self = match task.await {
                     Ok(s) => WriteState::Ready(s),
                     Err(e) => WriteState::Error(e),
