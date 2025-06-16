@@ -43,8 +43,8 @@ block0:
 ;   uninit  %rdi
 ;   xorl %edi, %edi
 ;   movq %rdi, %r14
-;   movl    $1, %r15d
-;   movl    $2, %ebx
+;   movl $0x1, %r15d
+;   movl $0x2, %ebx
 ;   lea     rsp(0 + virtual offset), %rsi
 ;   movl $0x0, (%rsi)
 ;   lea     rsp(4 + virtual offset), %rdi

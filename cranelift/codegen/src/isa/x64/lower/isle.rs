@@ -396,15 +396,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     #[inline]
-    fn nonzero_u64_fits_in_u32(&mut self, x: u64) -> Option<u64> {
-        if x != 0 && x < u64::from(u32::MAX) {
-            Some(x)
-        } else {
-            None
-        }
-    }
-
-    #[inline]
     fn sse_insertps_lane_imm(&mut self, lane: u8) -> u8 {
         // Insert 32-bits from replacement (at index 00, bits 7:8) to vector (lane
         // shifted into bits 5:6).

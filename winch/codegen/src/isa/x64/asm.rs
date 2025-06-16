@@ -450,11 +450,7 @@ impl Assembler {
 
     /// Immediate-to-register move.
     pub fn mov_ir(&mut self, imm: u64, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::Imm {
-            dst_size: size.into(),
-            simm64: imm,
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::imm(size.into(), imm, dst.map(Into::into)));
     }
 
     /// Zero-extend memory-to-register load.
@@ -1375,16 +1371,11 @@ impl Assembler {
     fn setcc_impl(&mut self, cc: CC, dst: WritableReg) {
         // Clear the dst register or bits 1 to 31 may be incorrectly set.
         // Don't use xor since it updates the status register.
-        self.emit(Inst::Imm {
-            dst_size: args::OperandSize::Size32, // Always going to be an i32 result.
-            simm64: 0,
-            dst: dst.map(Into::into),
-        });
+        let dst: WritableGpr = dst.map(Into::into);
+        let inst = asm::inst::movl_oi::new(dst, 0).into();
+        self.emit(Inst::External { inst });
         // Copy correct bit from status register into dst register.
-        self.emit(Inst::Setcc {
-            cc,
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::Setcc { cc, dst });
     }
 
     /// Store the count of leading zeroes in src in dst.
