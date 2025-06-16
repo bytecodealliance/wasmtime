@@ -7,9 +7,6 @@
 
 (type MInst nodebug
       (enum
-       ;; Nops of various sizes, including zero.
-       (Nop (len u8))
-
        ;; =========================================
        ;; Integer instructions.
 

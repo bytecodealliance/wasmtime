@@ -53,8 +53,6 @@ pub(crate) fn check(
     let cmp_flags = state.cmp_flags.take();
 
     match vcode[inst_idx] {
-        Inst::Nop { .. } => Ok(()),
-
         Inst::Args { .. } => {
             // Defs on the args have "axiomatic facts": we trust the
             // ABI code to pass through the values unharmed, so the
