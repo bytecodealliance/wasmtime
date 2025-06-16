@@ -30,7 +30,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
 ;; @0049                               v5 = f64const 0x1.0000000000000p0
-;;                                     trapz v3, user11
+;; @005d                               trapz v3, user11
 ;; @0056                               jump block2
 ;;
 ;;                                 block2:
