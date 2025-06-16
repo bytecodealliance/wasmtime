@@ -4,15 +4,17 @@ use crate::ValRaw;
 use crate::prelude::*;
 use core::fmt;
 use core::mem::{self, MaybeUninit};
+use postcard;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::fs::File;
+use std::io::{BufWriter, Seek, Write};
 
 const VAL_RAW_SIZE: usize = mem::size_of::<ValRaw>();
 
-// Since unions cannot be serialized, we encode them as transmutable byte arrays
-//type ValRawSer = [u8; VAL_RAW_SIZE];
+/// Transmutable byte arrays necessary to serialize unions
 #[derive(Serialize, Deserialize)]
-struct ValRawSer([u8; VAL_RAW_SIZE]);
+pub struct ValRawSer([u8; VAL_RAW_SIZE]);
 
 impl From<ValRaw> for ValRawSer {
     fn from(value: ValRaw) -> Self {
@@ -54,42 +56,62 @@ impl RREvent {
 }
 
 /// Buffer to read/write record/replay data respectively
+#[derive(Debug)]
 pub struct RRBuffer {
     inner: VecDeque<RREvent>,
+    rw: File,
 }
 
 impl RRBuffer {
-    /// Constructs an new (empty) buffer
-    pub fn new() -> Self {
-        RRBuffer {
+    /// Constructs a writer on new, filesystem-backed buffer (record)
+    pub fn write_fs(path: String) -> Result<Self> {
+        Ok(RRBuffer {
             inner: VecDeque::new(),
-        }
+            rw: File::create(path)?,
+        })
     }
 
-    /// Appends a new [`RREvent`] to the buffer
+    /// Constructs a reader on filesystem-backed buffer (replay)
+    pub fn read_fs(path: String) -> Result<Self> {
+        let mut file = File::open(path)?;
+        let mut events = VecDeque::<RREvent>::new();
+        while file.stream_position()? != file.metadata()?.len() {
+            let (event, _): (RREvent, _) = postcard::from_io((&mut file, &mut [0; 0]))?;
+            events.push_back(event);
+        }
+        // Check that file is at EOF
+        //assert_eq!(file.stream_position()?, file.metadata()?.len());
+        println!("Read from file: {:?}", events);
+        Ok(RRBuffer {
+            inner: events,
+            rw: file,
+        })
+    }
+
+    /// Appends a new [`RREvent`] to the buffer (record)
     pub fn append(&mut self, event: RREvent) {
         self.inner.push_back(event)
     }
 
+    /// Retrieve the head of the buffer (replay)
     pub fn pop_front(&mut self) -> RREvent {
         self.inner
             .pop_front()
-            .expect("Replay event buffer is empty")
+            .expect("Incomplete replay trace. Event buffer is empty prior to completion")
     }
 
     /// Flush all the contents of the entire buffer to a writer
     ///
     /// Buffer is emptied during this process
-    fn to_file<W>(writer: W)
-    where
-        W: std::io::Write,
-    {
-    }
-
-    /// Read the
-    fn from_file<R>(reader: R)
-    where
-        R: std::io::Read,
-    {
+    pub fn flush_to_file(&mut self) -> Result<()> {
+        println!("Flushing to file: {:?}", self.inner);
+        // Seralizing each event independently prevents checking for vector sizes
+        // during deserialization
+        for v in &self.inner {
+            postcard::to_io(&v, &mut self.rw)?;
+        }
+        self.rw.flush()?;
+        self.inner.clear();
+        Ok(())
     }
 }

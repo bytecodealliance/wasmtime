@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use crate::runtime::Uninhabited;
-use crate::runtime::rr::{RRBuffer, RREvent};
+use crate::runtime::rr::RREvent;
 use crate::runtime::vm::{
     ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
     VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
@@ -2314,6 +2314,23 @@ impl HostContext {
         R: WasmRet,
         T: 'static,
     {
+        let record_intercept = |caller: &mut Caller<'_, T>, event| {
+            let record_buffer = caller.store.0.record_buffer_mut();
+            if let Some(buf) = record_buffer {
+                println!("Record | {:?}", &event);
+                buf.append(event);
+            }
+        };
+        let replay_intercept = |caller: &mut Caller<'_, T>| -> Option<RREvent> {
+            let replay_buffer = caller.store.0.replay_buffer_mut();
+            if let Some(buf) = replay_buffer {
+                let call_event = buf.pop_front();
+                println!("Replay | {:?}", &call_event);
+                Some(call_event)
+            } else {
+                None
+            }
+        };
         // Note that this function is intentionally scoped into a
         // separate closure. Handling traps and panics will involve
         // longjmp-ing from this function which means we won't run
@@ -2336,21 +2353,13 @@ impl HostContext {
                 if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
                     break 'ret R::fallible_from_error(trap);
                 }
-
-                // Record interception
+                // RR recording/replay interception on call
                 {
-                    let record_buffer = caller.store.0.record_buffer_mut();
-                    if let Some(buf) = record_buffer {
-                        let call_event = RREvent::extern_call_from_valraw_slice(args.as_ref());
-                        println!("Record | {:?}", &call_event);
-                        buf.append(call_event);
-                    }
-                    // Replay interception
-                    let replay_buffer = caller.store.0.replay_buffer_mut();
-                    if let Some(buf) = replay_buffer {
-                        let call_event = buf.pop_front();
-                        println!("Replay | {:?}", &call_event);
-                    }
+                    record_intercept(
+                        &mut caller,
+                        RREvent::extern_call_from_valraw_slice(args.as_ref()),
+                    );
+                    let _event = replay_intercept(&mut caller);
                 }
 
                 let mut store = if P::may_gc() {
@@ -2379,10 +2388,14 @@ impl HostContext {
                     unsafe { AutoAssertNoGc::disabled(caller.store.0) }
                 };
                 let ret = ret.store(&mut store, args.as_mut())?;
+                drop(store);
+                // RR recording/replay interception on return
                 {
-                    // Record the values
-                    let x = RREvent::extern_return_from_valraw_slice(args.as_ref());
-                    println!("{:?}", x);
+                    record_intercept(
+                        &mut caller,
+                        RREvent::extern_return_from_valraw_slice(args.as_ref()),
+                    );
+                    let _event = replay_intercept(&mut caller);
                 }
                 Ok(ret)
             }

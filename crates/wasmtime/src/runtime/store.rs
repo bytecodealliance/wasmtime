@@ -79,7 +79,7 @@
 use crate::RootSet;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
-use crate::runtime::rr::{RRBuffer, RREvent};
+use crate::runtime::rr::RRBuffer;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::GcRootsList;
 #[cfg(feature = "stack-switching")]
@@ -588,12 +588,14 @@ impl<T> Store<T> {
                 debug_assert!(engine.target().is_pulley());
                 Executor::Interpreter(Interpreter::new(engine))
             },
-            record_buffer: engine
-                .rr()
-                .and_then(|x| x.record().and(Some(RRBuffer::new()))),
-            replay_buffer: engine
-                .rr()
-                .and_then(|x| x.replay().and(Some(RRBuffer::new()))),
+            record_buffer: engine.rr().and_then(|rr| {
+                rr.record()
+                    .and_then(|x| Some(RRBuffer::write_fs(x.into()).unwrap()))
+            }),
+            replay_buffer: engine.rr().and_then(|rr| {
+                rr.replay()
+                    .and_then(|x| Some(RRBuffer::read_fs(x.into()).unwrap()))
+            }),
         };
         let mut inner = Box::new(StoreInner {
             inner,
@@ -2042,6 +2044,16 @@ at https://bytecodealliance.org/security.
         let instance_id = vm::Instance::from_vmctx(vmctx, |i| i.id());
         StoreInstanceId::new(self.id(), instance_id)
     }
+
+    /// Flush the record buffer to the disk-backed storage
+    ///
+    /// This operation empties the buffer
+    pub(crate) fn flush_record_buffer(&mut self) -> Result<()> {
+        if let Some(buf) = self.record_buffer_mut() {
+            return Ok(buf.flush_to_file()?);
+        }
+        Ok(())
+    }
 }
 
 /// Helper parameter to [`StoreOpaque::allocate_instance`].
@@ -2371,6 +2383,8 @@ impl Drop for StoreOpaque {
                 }
             }
         }
+
+        let _ = self.flush_record_buffer();
     }
 }
 

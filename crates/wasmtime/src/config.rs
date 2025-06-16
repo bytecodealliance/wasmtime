@@ -2700,14 +2700,14 @@ impl Config {
     ///
     /// This method implicitly enforces determinism (see [`Config::enforce_determinism`]
     /// for details). Panics if both record and replay are set simultaneously
-    pub fn rr(&mut self, record_path: &Option<String>, replay_path: &Option<String>) -> &mut Self {
+    pub fn rr(&mut self, record_path: Option<String>, replay_path: Option<String>) -> &mut Self {
         self.rr = match (record_path, replay_path) {
             // Should be unreachable
             (Some(_), Some(_)) => {
                 panic!("Cannot set both record and replay simultaneously for execution")
             }
-            (Some(p), None) => Some(RRConfig::Record(p.into())),
-            (None, Some(p)) => Some(RRConfig::Replay(p.into())),
+            (Some(p), None) => Some(RRConfig::Record(p)),
+            (None, Some(p)) => Some(RRConfig::Replay(p)),
             _ => None,
         };
         // Set appropriate configurations for determinstic execution
