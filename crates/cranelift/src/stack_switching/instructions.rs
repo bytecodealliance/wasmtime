@@ -36,12 +36,9 @@ pub(crate) mod stack_switching_helpers {
     }
 
     #[derive(Copy, Clone)]
-    pub struct VMHostArray<T> {
-        /// Base address of this object, which must be shifted by `offset` below.
-        base: ir::Value,
-
-        /// Adding this (statically) known offset gets us the overall address.
-        offset: i32,
+    pub struct VMHostArrayRef<T> {
+        /// Address of the VMHostArray we are referencing
+        address: ir::Value,
 
         /// The type parameter T is never used in the fields above. We still
         /// want to have it for consistency with
@@ -50,10 +47,10 @@ pub(crate) mod stack_switching_helpers {
         phantom: PhantomData<T>,
     }
 
-    pub type VMPayloads = VMHostArray<u128>;
+    pub type VMPayloads = VMHostArrayRef<u128>;
 
     // Actually a vector of *mut VMTagDefinition
-    pub type VMHandlerList = VMHostArray<*mut u8>;
+    pub type VMHandlerList = VMHostArrayRef<*mut u8>;
 
     /// Compile-time representation of wasmtime_environ::VMStackChain,
     /// consisting of two `ir::Value`s.
@@ -82,19 +79,21 @@ pub(crate) mod stack_switching_helpers {
         pub fn args<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
-            _builder: &mut FunctionBuilder,
+            builder: &mut FunctionBuilder,
         ) -> VMPayloads {
-            let offset = env.offsets.ptr.vmcontref_args().into();
-            VMPayloads::new(self.address, offset)
+            let offset: i64 = env.offsets.ptr.vmcontref_args().into();
+            let address = builder.ins().iadd_imm(self.address, offset);
+            VMPayloads::new(address)
         }
 
         pub fn values<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
-            _builder: &mut FunctionBuilder,
+            builder: &mut FunctionBuilder,
         ) -> VMPayloads {
-            let offset = env.offsets.ptr.vmcontref_values().into();
-            VMPayloads::new(self.address, offset)
+            let offset: i64 = env.offsets.ptr.vmcontref_values().into();
+            let address = builder.ins().iadd_imm(self.address, offset);
+            VMPayloads::new(address)
         }
 
         pub fn common_stack_information<'a>(
@@ -200,11 +199,10 @@ pub(crate) mod stack_switching_helpers {
         }
     }
 
-    impl<T> VMHostArray<T> {
-        pub(crate) fn new(base: ir::Value, offset: i32) -> Self {
+    impl<T> VMHostArrayRef<T> {
+        pub(crate) fn new(address: ir::Value) -> Self {
             Self {
-                base,
-                offset,
+                address,
                 phantom: PhantomData::default(),
             }
         }
@@ -213,7 +211,7 @@ pub(crate) mod stack_switching_helpers {
             let mem_flags = ir::MemFlags::trusted();
             builder
                 .ins()
-                .load(ty, mem_flags, self.base, self.offset + offset)
+                .load(ty, mem_flags, self.address, offset)
         }
 
         fn set<U>(&self, builder: &mut FunctionBuilder, offset: i32, value: ir::Value) {
@@ -222,9 +220,7 @@ pub(crate) mod stack_switching_helpers {
                 Type::int_with_byte_size(u16::try_from(std::mem::size_of::<U>()).unwrap()).unwrap()
             );
             let mem_flags = ir::MemFlags::trusted();
-            builder
-                .ins()
-                .store(mem_flags, value, self.base, self.offset + offset);
+            builder.ins().store(mem_flags, value, self.address, offset);
         }
 
         pub fn get_data<'a>(
@@ -661,10 +657,11 @@ pub(crate) mod stack_switching_helpers {
         pub fn get_handler_list<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
-            _builder: &mut FunctionBuilder,
+            builder: &mut FunctionBuilder,
         ) -> VMHandlerList {
-            let offset = env.offsets.ptr.vmcommon_stack_information_handlers().into();
-            VMHandlerList::new(self.address, offset)
+            let offset: i64 = env.offsets.ptr.vmcommon_stack_information_handlers().into();
+            let address = builder.ins().iadd_imm(self.address, offset);
+            VMHandlerList::new(address)
         }
 
         pub fn get_first_switch_handler_index<'a>(
