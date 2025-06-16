@@ -1,7 +1,7 @@
 //! Implementation for the `wasi:http/types` interface.
 
 use crate::{
-    HttpResult, WasiHttpImpl, WasiHttpView,
+    HttpError, HttpResult, WasiHttpImpl, WasiHttpView,
     bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers},
     body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext},
     types::{
@@ -10,7 +10,7 @@ use crate::{
         is_forbidden_header, remove_forbidden_headers,
     },
 };
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use std::any::Any;
 use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable, ResourceTableError};
@@ -587,7 +587,7 @@ where
         _status: u16,
         _headers: Resource<Headers>,
     ) -> HttpResult<()> {
-        unimplemented!()
+        Err(HttpError::trap(anyhow!("not implemented")))
     }
 }
 
