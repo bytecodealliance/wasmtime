@@ -8,7 +8,7 @@ const PORT: u16 = 443;
 
 fn test_tls_sample_application(domain: &str, ip: IpAddress) -> Result<()> {
     let request =
-        format!("GET / HTTP/1.1\r\nHost: {domain}\r\nUser-Agent: wasmtime-wasi-rust\r\n\r\n");
+        format!("GET / HTTP/1.1\r\nHost: {domain}\r\nUser-Agent: wasmtime-wasi-rust\r\nConnection: close\r\n\r\n");
 
     let net = Network::default();
 
@@ -25,13 +25,13 @@ fn test_tls_sample_application(domain: &str, ip: IpAddress) -> Result<()> {
     tls_output
         .blocking_write_util(request.as_bytes())
         .context("writing http request failed")?;
-    client_connection
-        .blocking_close_output(&tls_output)
-        .context("closing tls connection failed")?;
-    socket.shutdown(ShutdownType::Send)?;
     let response = tls_input
         .blocking_read_to_end()
         .context("reading http response failed")?;
+    client_connection
+        .blocking_close_output(&tls_output)
+        .context("closing tls connection failed")?;
+    socket.shutdown(ShutdownType::Both)?;
 
     if String::from_utf8(response)?.contains("HTTP/1.1 200 OK") {
         Ok(())
