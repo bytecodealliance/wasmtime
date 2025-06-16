@@ -95,6 +95,26 @@ pub struct WasmtimeStoreData {
 
     /// Limits for the store.
     pub store_limits: StoreLimits,
+
+    #[cfg(feature = "component-model")]
+    pub(crate) resource_table: wasmtime::component::ResourceTable,
+
+    #[cfg(all(feature = "component-model", feature = "wasi"))]
+    pub(crate) wasi_p2: wasmtime_wasi::p2::WasiCtx,
+}
+
+#[cfg(all(feature = "component-model", feature = "wasi"))]
+impl wasmtime_wasi::p2::IoView for WasmtimeStoreData {
+    fn table(&mut self) -> &mut wasmtime_wasi::ResourceTable {
+        &mut self.resource_table
+    }
+}
+
+#[cfg(all(feature = "component-model", feature = "wasi"))]
+impl wasmtime_wasi::p2::WasiView for WasmtimeStoreData {
+    fn ctx(&mut self) -> &mut wasmtime_wasi::p2::WasiCtx {
+        &mut self.wasi_p2
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -113,6 +133,10 @@ pub extern "C" fn wasmtime_store_new(
                 hostcall_val_storage: Vec::new(),
                 wasm_val_storage: Vec::new(),
                 store_limits: StoreLimits::default(),
+                #[cfg(feature = "component-model")]
+                resource_table: wasmtime::component::ResourceTable::default(),
+                #[cfg(all(feature = "component-model", feature = "wasi"))]
+                wasi_p2: wasmtime_wasi::p2::WasiCtx::builder().build(),
             },
         ),
     })
