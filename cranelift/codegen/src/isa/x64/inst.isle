@@ -3786,10 +3786,6 @@
             (_ Unit (emit (MInst.LoadEffectiveAddress addr dst (operand_size_of_type_32_64 ty)))))
         dst))
 
-;; Helper for creating `ud2` instructions.
-(decl x64_ud2 (TrapCode) SideEffectNoResult)
-(rule (x64_ud2 code) (x64_ud2_zo code))
-
 ;; Helper for creating `lzcnt` instructions.
 (decl x64_lzcnt (Type GprMem) Gpr)
 (rule (x64_lzcnt $I16 src) (x64_lzcntw_rm src))
@@ -4686,9 +4682,6 @@
 (extern extractor ty_int_bool_or_ref ty_int_bool_or_ref)
 
 ;;;; Atomics ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl x64_mfence () SideEffectNoResult)
-(rule (x64_mfence) (x64_mfence_zo))
 
 (decl x64_cmpxchg (Type Gpr Gpr SyntheticAmode) Gpr)
 (rule (x64_cmpxchg $I8 expected replacement addr) (x64_lock_cmpxchgb_mr addr replacement expected))
