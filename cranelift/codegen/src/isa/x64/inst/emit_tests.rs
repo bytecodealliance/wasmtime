@@ -745,36 +745,8 @@ fn test_x64_emit() {
         "atomically { %rdx:%rax = 0(%r9); 0(%r9) = %rcx:%rbx }",
     ));
 
-    // Fence
-    insns.push((
-        Inst::Fence {
-            kind: FenceKind::MFence,
-        },
-        "0FAEF0",
-        "mfence",
-    ));
-    insns.push((
-        Inst::Fence {
-            kind: FenceKind::LFence,
-        },
-        "0FAEE8",
-        "lfence",
-    ));
-    insns.push((
-        Inst::Fence {
-            kind: FenceKind::SFence,
-        },
-        "0FAEF8",
-        "sfence",
-    ));
-
     // ========================================================
     // Misc instructions.
-
-    insns.push((Inst::Hlt, "CC", "hlt"));
-
-    let trap_code = TrapCode::INTEGER_OVERFLOW;
-    insns.push((Inst::Ud2 { trap_code }, "0F0B", "ud2 int_ovf"));
 
     insns.push((
         Inst::ElfTlsGetAddr {

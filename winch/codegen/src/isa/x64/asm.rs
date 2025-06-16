@@ -18,9 +18,9 @@ use cranelift_codegen::{
         x64::{
             AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
             args::{
-                self, Amode, Avx512Opcode, AvxOpcode, CC, CmpOpcode, ExtMode, FenceKind,
-                FromWritableReg, Gpr, GprMem, GprMemImm, RegMem, RegMemImm, SyntheticAmode,
-                WritableGpr, WritableXmm, Xmm, XmmMem, XmmMemImm,
+                self, Amode, Avx512Opcode, AvxOpcode, CC, CmpOpcode, ExtMode, FromWritableReg, Gpr,
+                GprMem, GprMemImm, RegMem, RegMemImm, SyntheticAmode, WritableGpr, WritableXmm,
+                Xmm, XmmMem, XmmMemImm,
             },
             encoding::rex::{RexFlags, encode_modrm},
             external::{PairedGpr, PairedXmm},
@@ -1600,7 +1600,8 @@ impl Assembler {
 
     /// Emit a trap instruction.
     pub fn trap(&mut self, code: TrapCode) {
-        self.emit(Inst::Ud2 { trap_code: code })
+        let inst = asm::inst::ud2_zo::new(code).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Conditional trap.
@@ -1766,8 +1767,10 @@ impl Assembler {
         });
     }
 
-    pub fn fence(&mut self, kind: FenceKind) {
-        self.emit(Inst::Fence { kind });
+    pub fn mfence(&mut self) {
+        self.emit(Inst::External {
+            inst: asm::inst::mfence_zo::new().into(),
+        });
     }
 
     /// Extract a value from `src` into `dst` (zero extended) determined by `lane`.

@@ -332,13 +332,6 @@
                  (cc2 CC)
                  (trap_code TrapCode))
 
-       ;; A debug trap.
-       (Hlt)
-
-       ;; An instruction that will always trigger the illegal instruction
-       ;; exception.
-       (Ud2 (trap_code TrapCode))
-
        ;; Loads an external symbol in a register, with a relocation:
        ;;
        ;; movq $name@GOTPCREL(%rip), dst    if PIC is enabled, or
@@ -424,9 +417,6 @@
                          (dst_old_low WritableGpr)
                          (dst_old_high WritableGpr))
 
-       ;; A memory fence (mfence, lfence or sfence).
-       (Fence (kind FenceKind))
-
        ;; =========================================
        ;; Meta-instructions generating no code.
 
@@ -484,11 +474,6 @@
             Size16
             Size32
             Size64))
-
-(type FenceKind extern
-      (enum MFence
-            LFence
-            SFence))
 
 (type BoxCallInfo extern (enum))
 (type BoxCallIndInfo extern (enum))
@@ -3801,16 +3786,6 @@
             (_ Unit (emit (MInst.LoadEffectiveAddress addr dst (operand_size_of_type_32_64 ty)))))
         dst))
 
-;; Helper for creating `ud2` instructions.
-(decl x64_ud2 (TrapCode) SideEffectNoResult)
-(rule (x64_ud2 code)
-      (SideEffectNoResult.Inst (MInst.Ud2 code)))
-
-;; Helper for creating `hlt` instructions.
-(decl x64_hlt () SideEffectNoResult)
-(rule (x64_hlt)
-      (SideEffectNoResult.Inst (MInst.Hlt)))
-
 ;; Helper for creating `lzcnt` instructions.
 (decl x64_lzcnt (Type GprMem) Gpr)
 (rule (x64_lzcnt $I16 src) (x64_lzcntw_rm src))
@@ -4707,10 +4682,6 @@
 (extern extractor ty_int_bool_or_ref ty_int_bool_or_ref)
 
 ;;;; Atomics ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl x64_mfence () SideEffectNoResult)
-(rule (x64_mfence)
-      (SideEffectNoResult.Inst (MInst.Fence (FenceKind.MFence))))
 
 (decl x64_cmpxchg (Type Gpr Gpr SyntheticAmode) Gpr)
 (rule (x64_cmpxchg $I8 expected replacement addr) (x64_lock_cmpxchgb_mr addr replacement expected))
