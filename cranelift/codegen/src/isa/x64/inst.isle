@@ -3790,10 +3790,6 @@
 (decl x64_ud2 (TrapCode) SideEffectNoResult)
 (rule (x64_ud2 code) (x64_ud2_zo code))
 
-;; Helper for creating `hlt` instructions.
-(decl x64_hlt () SideEffectNoResult)
-(rule (x64_hlt) (x64_hlt_zo))
-
 ;; Helper for creating `lzcnt` instructions.
 (decl x64_lzcnt (Type GprMem) Gpr)
 (rule (x64_lzcnt $I16 src) (x64_lzcntw_rm src))

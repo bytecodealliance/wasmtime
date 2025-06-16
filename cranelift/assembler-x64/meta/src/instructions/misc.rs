@@ -10,5 +10,6 @@ pub fn list() -> Vec<Inst> {
 
         inst("hlt", fmt("ZO", []), rex([0xf4]), _64b | compat),
         inst("ud2", fmt("ZO", []), rex([0x0f, 0x0b]), _64b | compat).has_trap(),
+        inst("int3", fmt("ZO", []), rex([0xcc]), _64b | compat),
     ]
 }
