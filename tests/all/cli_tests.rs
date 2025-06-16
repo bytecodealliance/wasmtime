@@ -1957,9 +1957,11 @@ after empty
 this is half a print to stderr
 \n\
 after empty
+start a print 1234
 this is half a print to stderr
 \n\
 after empty
+start a print 1234
 "
             ),
             "bad stderr {err}",
