@@ -100,7 +100,7 @@ pub struct WasmtimeStoreData {
     pub(crate) resource_table: wasmtime::component::ResourceTable,
 
     #[cfg(all(feature = "component-model", feature = "wasi"))]
-    pub(crate) wasi_p2: wasmtime_wasi::p2::WasiCtx,
+    pub(crate) wasip2: Option<wasmtime_wasi::p2::WasiCtx>,
 }
 
 #[cfg(all(feature = "component-model", feature = "wasi"))]
@@ -113,7 +113,7 @@ impl wasmtime_wasi::p2::IoView for WasmtimeStoreData {
 #[cfg(all(feature = "component-model", feature = "wasi"))]
 impl wasmtime_wasi::p2::WasiView for WasmtimeStoreData {
     fn ctx(&mut self) -> &mut wasmtime_wasi::p2::WasiCtx {
-        &mut self.wasi_p2
+        self.wasip2.as_mut().unwrap()
     }
 }
 
@@ -136,7 +136,7 @@ pub extern "C" fn wasmtime_store_new(
                 #[cfg(feature = "component-model")]
                 resource_table: wasmtime::component::ResourceTable::default(),
                 #[cfg(all(feature = "component-model", feature = "wasi"))]
-                wasi_p2: wasmtime_wasi::p2::WasiCtx::builder().build(),
+                wasip2: None,
             },
         ),
     })
@@ -239,6 +239,15 @@ pub extern "C" fn wasmtime_context_set_wasi(
     crate::handle_result(wasi.into_wasi_ctx(), |wasi| {
         context.data_mut().wasi = Some(wasi);
     })
+}
+
+#[cfg(all(feature = "component-model", feature = "wasi"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_context_set_wasip2(
+    mut context: WasmtimeStoreContextMut<'_>,
+    mut config: Box<crate::wasmtime_wasip2_config_t>,
+) {
+    context.data_mut().wasip2 = Some(config.builder.build());
 }
 
 #[unsafe(no_mangle)]
