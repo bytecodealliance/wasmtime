@@ -37,13 +37,6 @@ wildcards = "allow"
 deny = []
 
 skip-tree = [
-    # wit-bindgen and wasmtime both depend on the wasm-tools crates, and
-    # wit-bindgen's latest release may sometimes lag behind when we bump
-    # wasmtime's dependencies on wasm-tools. wit-bindgen is only used for
-    # building component-based test programs, so we are going to ignore
-    # the multiple-versions errors it will introduce.
-    { name = "wit-bindgen", depth = 20 },
-
     # proptest depends on bitflags 1.x.x while other crates depend on 2.x.x so
     # ignore its dependency tree until it updates.
     { name = "proptest", depth = 20 },
