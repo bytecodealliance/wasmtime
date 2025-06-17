@@ -259,9 +259,6 @@
        (Rets
         (rets VecRetPair))
 
-       ;; Return.
-       (Ret (stack_bytes_to_pop u32))
-
        ;; Stack switching
        (StackSwitchBasic (store_context_ptr Gpr)
                          (load_context_ptr Gpr)

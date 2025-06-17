@@ -25,12 +25,12 @@ block2:
 ;   movl $0x2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ; block2:
 ;   movl $0x1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -75,12 +75,12 @@ block2:
 ;   movl $0x2, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ; block2:
 ;   movl $0x1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

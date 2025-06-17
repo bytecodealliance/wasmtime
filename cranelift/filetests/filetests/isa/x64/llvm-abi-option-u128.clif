@@ -20,7 +20,7 @@ block0(v0: i64):
 ;   movl $0x1, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

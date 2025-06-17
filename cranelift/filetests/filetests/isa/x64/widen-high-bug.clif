@@ -18,7 +18,7 @@ block0(v0: i64, v2: i8x16):
 ;   punpckhbw %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

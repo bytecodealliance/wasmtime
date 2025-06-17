@@ -16,7 +16,7 @@ block0(v0: i64, v1: i32):
 ;   addl (%rdi), %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -44,7 +44,7 @@ block0(v0: i64, v1: i32):
 ;   addl (%rdi), %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -72,7 +72,7 @@ block0(v0: i64, v1: i64):
 ;   addq (%rdi), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -100,7 +100,7 @@ block0(v0: i64, v1: i64):
 ;   addq (%rdi), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -128,7 +128,7 @@ block0(v0: i64, v1: i8):
 ;   addl %esi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -160,7 +160,7 @@ block0(v0: i64, v1: i64):
 ;   movq (%r8, %rdi), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -194,7 +194,7 @@ block1:
 ; block1:
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -224,7 +224,7 @@ block0(v0: i64):
 ;   movzbq %dl, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -254,7 +254,7 @@ block0(v0: i64):
 ;   setz    %al
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

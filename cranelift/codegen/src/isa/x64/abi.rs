@@ -591,7 +591,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         } else {
             0
         };
-        smallvec![Inst::ret(stack_bytes_to_pop)]
+        let inst = if stack_bytes_to_pop == 0 {
+            asm::inst::retq_zo::new().into()
+        } else {
+            let stack_bytes_to_pop = u16::try_from(stack_bytes_to_pop).unwrap();
+            asm::inst::retq_i::new(stack_bytes_to_pop).into()
+        };
+        smallvec![Inst::External { inst }]
     }
 
     fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32) {

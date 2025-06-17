@@ -22,7 +22,7 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   cmovzq  %rdi, %rdx, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -59,7 +59,7 @@ block0(v0: f32, v1: i128, v2: i128):
 ;   cmovnzq %rcx, %rdx, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

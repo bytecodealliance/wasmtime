@@ -15,7 +15,7 @@ block0(v0: f32):
 ;   call    *%rcx
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -42,7 +42,7 @@ block0(v0: f64):
 ;   call    *%rcx
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

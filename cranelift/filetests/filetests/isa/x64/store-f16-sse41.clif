@@ -14,7 +14,7 @@ block0(v0: f16, v1: i64):
 ;   pextrw $0x0, %xmm0, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

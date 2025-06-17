@@ -396,9 +396,8 @@ impl Assembler {
 
     /// Return instruction.
     pub fn ret(&mut self) {
-        self.emit(Inst::Ret {
-            stack_bytes_to_pop: 0,
-        });
+        let inst = asm::inst::retq_zo::new().into();
+        self.emit(Inst::External { inst });
     }
 
     /// Register-to-register move.

@@ -14,7 +14,7 @@ block0(v0: f32, v1: f32):
 ;   vaddss  %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -39,7 +39,7 @@ block0(v0: f64, v1: f64):
 ;   vaddsd  %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -64,7 +64,7 @@ block0(v0: f32, v1: f32):
 ;   vsubss  %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -89,7 +89,7 @@ block0(v0: f64, v1: f64):
 ;   vsubsd  %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -114,7 +114,7 @@ block0(v0: f32, v1: f32):
 ;   vmulss  %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -139,7 +139,7 @@ block0(v0: f64, v1: f64):
 ;   vmulsd  %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -164,7 +164,7 @@ block0(v0: f32, v1: f32):
 ;   vdivss  %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -189,7 +189,7 @@ block0(v0: f64, v1: f64):
 ;   vdivsd  %xmm0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -215,7 +215,7 @@ block0(v0: f32, v1: f32):
 ;   vminss  %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -241,7 +241,7 @@ block0(v0: f64, v1: f64):
 ;   vminsd  %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -267,7 +267,7 @@ block0(v0: f32, v1: f32):
 ;   vmaxss  %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -293,7 +293,7 @@ block0(v0: f64, v1: f64):
 ;   vmaxsd  %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -318,7 +318,7 @@ block0(v0: f32x4):
 ;   vsqrtps %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -343,7 +343,7 @@ block0(v0: f64x2):
 ;   vsqrtpd %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -368,7 +368,7 @@ block0(v0: f32x4):
 ;   vroundps $0x1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -393,7 +393,7 @@ block0(v0: f64x2):
 ;   vroundpd $0x1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -419,7 +419,7 @@ block0(v0: i32x4):
 ;   vcvtdq2pd %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -451,7 +451,7 @@ block0(v0: i32x4):
 ;   vaddps %xmm0, %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -483,7 +483,7 @@ block0(v0: f64x2):
 ;   vcvtpd2ps %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -508,7 +508,7 @@ block0(v0: f32x4):
 ;   vcvtps2pd %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -539,7 +539,7 @@ block0(v0: f32x4):
 ;   vpxor   %xmm4, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -575,7 +575,7 @@ block0(v0: f64x2):
 ;   vcvttpd2dq %xmm6, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -608,7 +608,7 @@ block0(v0: i64, v1: i64):
 ;   vmovss  %xmm3, 0(%rsi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -636,7 +636,7 @@ block0(v0: i64, v1: i64):
 ;   vmovsd  %xmm3, 0(%rsi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

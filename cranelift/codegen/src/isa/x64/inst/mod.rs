@@ -97,7 +97,6 @@ impl Inst {
             | Inst::StackProbeLoop { .. }
             | Inst::Args { .. }
             | Inst::Rets { .. }
-            | Inst::Ret { .. }
             | Inst::Setcc { .. }
             | Inst::StackSwitchBasic { .. }
             | Inst::TrapIf { .. }
@@ -389,10 +388,6 @@ impl Inst {
     pub(crate) fn call_unknown(info: Box<CallInfo<RegMem>>) -> Inst {
         info.dest.assert_regclass_is(RegClass::Int);
         Inst::CallUnknown { info }
-    }
-
-    pub(crate) fn ret(stack_bytes_to_pop: u32) -> Inst {
-        Inst::Ret { stack_bytes_to_pop }
     }
 
     pub(crate) fn jmp_known(dst: MachLabel) -> Inst {
@@ -1042,14 +1037,6 @@ impl PrettyPrint for Inst {
                 s
             }
 
-            Inst::Ret { stack_bytes_to_pop } => {
-                let mut s = "ret".to_string();
-                if *stack_bytes_to_pop != 0 {
-                    write!(&mut s, " {stack_bytes_to_pop}").unwrap();
-                }
-                s
-            }
-
             Inst::StackSwitchBasic {
                 store_context_ptr,
                 load_context_ptr,
@@ -1668,7 +1655,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         | Inst::WinchJmpIf { .. }
         | Inst::JmpCond { .. }
         | Inst::JmpCondOr { .. }
-        | Inst::Ret { .. }
         | Inst::TrapIf { .. }
         | Inst::TrapIfAnd { .. }
         | Inst::TrapIfOr { .. } => {

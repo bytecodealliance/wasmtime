@@ -17,7 +17,7 @@ block0(v0: i64):
 ;   lea     10(%rdi), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -93,7 +93,7 @@ block0(v0: f64):
 ;   addsd (%rip), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -161,7 +161,7 @@ block0(v0: i8):
 ;   setz    %al
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -211,7 +211,7 @@ block0(v0: i32, v1: i32, v2: i32, v3: i32, v4: i32, v5: i32, v6: i32):
 ; block0:
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret 16
+;   retq $0x10
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -364,7 +364,7 @@ block0(v0: i64, v1: i64, v2: i64, v3: i64, v4: i64, v5: i64, v6: i64, v7: i64, v
 ;   movq <offset:0>+-8(%rbp), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret 160
+;   retq $0xa0
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

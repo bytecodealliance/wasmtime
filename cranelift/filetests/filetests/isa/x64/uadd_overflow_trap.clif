@@ -17,7 +17,7 @@ block0(v0: i32):
 ;   jb #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -48,7 +48,7 @@ block0(v0: i32):
 ;   jb #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -78,7 +78,7 @@ block0(v0: i32, v1: i32):
 ;   jb #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -109,7 +109,7 @@ block0(v0: i64):
 ;   jb #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -140,7 +140,7 @@ block0(v0: i64):
 ;   jb #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -170,7 +170,7 @@ block0(v0: i64, v1: i64):
 ;   jb #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

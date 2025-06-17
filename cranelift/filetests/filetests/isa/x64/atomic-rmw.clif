@@ -15,7 +15,7 @@ block0(v0: i64, v1: i64):
 ;   lock xaddq %rax, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -42,7 +42,7 @@ block0(v0: i64, v1: i32):
 ;   lock xaddl %eax, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -69,7 +69,7 @@ block0(v0: i64, v1: i16):
 ;   lock xaddw %ax, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -96,7 +96,7 @@ block0(v0: i64, v1: i8):
 ;   lock xaddb %al, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -122,7 +122,7 @@ block0(v0: i64, v1: i64):
 ;   lock addq %rsi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -147,7 +147,7 @@ block0(v0: i64, v1: i32):
 ;   lock addl %esi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -172,7 +172,7 @@ block0(v0: i64, v1: i16):
 ;   lock addw %si, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -197,7 +197,7 @@ block0(v0: i64, v1: i8):
 ;   lock addb %sil, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -224,7 +224,7 @@ block0(v0: i64, v1: i64):
 ;   lock xaddq %rax, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -253,7 +253,7 @@ block0(v0: i64, v1: i32):
 ;   lock xaddl %eax, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -282,7 +282,7 @@ block0(v0: i64, v1: i16):
 ;   lock xaddw %ax, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -311,7 +311,7 @@ block0(v0: i64, v1: i8):
 ;   lock xaddb %al, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -338,7 +338,7 @@ block0(v0: i64, v1: i64):
 ;   lock subq %rsi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -363,7 +363,7 @@ block0(v0: i64, v1: i32):
 ;   lock subl %esi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -388,7 +388,7 @@ block0(v0: i64, v1: i16):
 ;   lock subw %si, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -413,7 +413,7 @@ block0(v0: i64, v1: i8):
 ;   lock subb %sil, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -438,7 +438,7 @@ block0(v0: i64, v1: i64):
 ;   atomically { 64_bits_at_[%r9] And= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -467,7 +467,7 @@ block0(v0: i64, v1: i32):
 ;   atomically { 32_bits_at_[%r9] And= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -496,7 +496,7 @@ block0(v0: i64, v1: i16):
 ;   atomically { 16_bits_at_[%r9] And= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -525,7 +525,7 @@ block0(v0: i64, v1: i8):
 ;   atomically { 8_bits_at_[%r9] And= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -554,7 +554,7 @@ block0(v0: i64, v1: i64):
 ;   lock andq %rsi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -579,7 +579,7 @@ block0(v0: i64, v1: i32):
 ;   lock andl %esi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -604,7 +604,7 @@ block0(v0: i64, v1: i16):
 ;   lock andw %si, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -629,7 +629,7 @@ block0(v0: i64, v1: i8):
 ;   lock andb %sil, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -654,7 +654,7 @@ block0(v0: i64, v1: i64):
 ;   atomically { 64_bits_at_[%r9] Nand= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -684,7 +684,7 @@ block0(v0: i64, v1: i32):
 ;   atomically { 32_bits_at_[%r9] Nand= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -714,7 +714,7 @@ block0(v0: i64, v1: i16):
 ;   atomically { 16_bits_at_[%r9] Nand= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -744,7 +744,7 @@ block0(v0: i64, v1: i8):
 ;   atomically { 8_bits_at_[%r9] Nand= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -774,7 +774,7 @@ block0(v0: i64, v1: i64):
 ;   atomically { 64_bits_at_[%r9] Or= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -803,7 +803,7 @@ block0(v0: i64, v1: i32):
 ;   atomically { 32_bits_at_[%r9] Or= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -832,7 +832,7 @@ block0(v0: i64, v1: i16):
 ;   atomically { 16_bits_at_[%r9] Or= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -861,7 +861,7 @@ block0(v0: i64, v1: i8):
 ;   atomically { 8_bits_at_[%r9] Or= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -890,7 +890,7 @@ block0(v0: i64, v1: i64):
 ;   lock orq %rsi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -915,7 +915,7 @@ block0(v0: i64, v1: i32):
 ;   lock orl %esi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -940,7 +940,7 @@ block0(v0: i64, v1: i16):
 ;   lock orw %si, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -965,7 +965,7 @@ block0(v0: i64, v1: i8):
 ;   lock orb %sil, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -990,7 +990,7 @@ block0(v0: i64, v1: i64):
 ;   atomically { 64_bits_at_[%r9] Xor= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1019,7 +1019,7 @@ block0(v0: i64, v1: i32):
 ;   atomically { 32_bits_at_[%r9] Xor= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1048,7 +1048,7 @@ block0(v0: i64, v1: i16):
 ;   atomically { 16_bits_at_[%r9] Xor= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1077,7 +1077,7 @@ block0(v0: i64, v1: i8):
 ;   atomically { 8_bits_at_[%r9] Xor= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1106,7 +1106,7 @@ block0(v0: i64, v1: i64):
 ;   lock xorq %rsi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1131,7 +1131,7 @@ block0(v0: i64, v1: i32):
 ;   lock xorl %esi, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1156,7 +1156,7 @@ block0(v0: i64, v1: i16):
 ;   lock xorw %si, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1181,7 +1181,7 @@ block0(v0: i64, v1: i8):
 ;   lock xorb %sil, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1207,7 +1207,7 @@ block0(v0: i64, v1: i64):
 ;   xchgq %rax, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1234,7 +1234,7 @@ block0(v0: i64, v1: i32):
 ;   xchgl %eax, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1261,7 +1261,7 @@ block0(v0: i64, v1: i16):
 ;   xchgw %ax, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1288,7 +1288,7 @@ block0(v0: i64, v1: i8):
 ;   xchgb %al, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1314,7 +1314,7 @@ block0(v0: i64, v1: i64):
 ;   atomically { 64_bits_at_[%r9] Umin= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1344,7 +1344,7 @@ block0(v0: i64, v1: i32):
 ;   atomically { 32_bits_at_[%r9] Umin= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1374,7 +1374,7 @@ block0(v0: i64, v1: i16):
 ;   atomically { 16_bits_at_[%r9] Umin= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1404,7 +1404,7 @@ block0(v0: i64, v1: i8):
 ;   atomically { 8_bits_at_[%r9] Umin= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1434,7 +1434,7 @@ block0(v0: i64, v1: i64):
 ;   atomically { 64_bits_at_[%r9] Umax= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1464,7 +1464,7 @@ block0(v0: i64, v1: i32):
 ;   atomically { 32_bits_at_[%r9] Umax= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1494,7 +1494,7 @@ block0(v0: i64, v1: i16):
 ;   atomically { 16_bits_at_[%r9] Umax= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1524,7 +1524,7 @@ block0(v0: i64, v1: i8):
 ;   atomically { 8_bits_at_[%r9] Umax= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1554,7 +1554,7 @@ block0(v0: i64, v1: i64):
 ;   atomically { 64_bits_at_[%r9] Smin= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1584,7 +1584,7 @@ block0(v0: i64, v1: i32):
 ;   atomically { 32_bits_at_[%r9] Smin= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1614,7 +1614,7 @@ block0(v0: i64, v1: i16):
 ;   atomically { 16_bits_at_[%r9] Smin= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1644,7 +1644,7 @@ block0(v0: i64, v1: i8):
 ;   atomically { 8_bits_at_[%r9] Smin= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1674,7 +1674,7 @@ block0(v0: i64, v1: i64):
 ;   atomically { 64_bits_at_[%r9] Smax= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1704,7 +1704,7 @@ block0(v0: i64, v1: i32):
 ;   atomically { 32_bits_at_[%r9] Smax= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1734,7 +1734,7 @@ block0(v0: i64, v1: i16):
 ;   atomically { 16_bits_at_[%r9] Smax= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -1764,7 +1764,7 @@ block0(v0: i64, v1: i8):
 ;   atomically { 8_bits_at_[%r9] Smax= %r10; %rax = old_value_at_[%r9]; %r11, %rflags = trash }
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

@@ -15,7 +15,7 @@ block0(v0: i64):
 ;   bswapq %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -42,7 +42,7 @@ block0(v0: i32):
 ;   bswapl %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -69,7 +69,7 @@ block0(v0: i16):
 ;   rolw $0x8, %ax
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

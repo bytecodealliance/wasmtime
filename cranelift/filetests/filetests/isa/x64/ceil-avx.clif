@@ -16,7 +16,7 @@ block0(v0: f32):
 ;   vroundss $0x2, %xmm0, %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -44,7 +44,7 @@ block0(v0: f64):
 ;   vroundsd $0x2, %xmm0, %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -70,7 +70,7 @@ block0(v0: f32x4):
 ;   vroundps $0x2, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -95,7 +95,7 @@ block0(v0: f64x2):
 ;   vroundpd $0x2, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

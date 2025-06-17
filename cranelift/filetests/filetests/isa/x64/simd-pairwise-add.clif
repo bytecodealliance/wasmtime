@@ -19,7 +19,7 @@ block0(v0: i8x16):
 ;   pmaddubsw %xmm0, %xmm5, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -58,7 +58,7 @@ block0(v0: i16x8):
 ;   pmaddwd %xmm0, const(0), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -100,7 +100,7 @@ block0(v0: i8x16):
 ;   pmaddubsw %xmm0, const(0), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -144,7 +144,7 @@ block0(v0: i16x8):
 ;   paddd (%rip), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
