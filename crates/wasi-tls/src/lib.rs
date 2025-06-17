@@ -13,11 +13,12 @@
 //!     component::{Linker, ResourceTable},
 //!     Store, Engine, Result, Config
 //! };
-//! use wasmtime_wasi_tls::{LinkOptions, WasiTlsCtx};
+//! use wasmtime_wasi_tls::{LinkOptions, WasiTls, WasiTlsCtx, WasiTlsCtxBuilder};
 //!
 //! struct Ctx {
 //!     table: ResourceTable,
 //!     wasi_ctx: WasiCtx,
+//!     wasi_tls_ctx: WasiTlsCtx,
 //! }
 //!
 //! impl IoView for Ctx {
@@ -41,6 +42,11 @@
 //!             .inherit_network()
 //!             .allow_ip_name_lookup(true)
 //!             .build(),
+//!         wasi_tls_ctx: WasiTlsCtxBuilder::new()
+//!             // Optionally, configure a specific TLS provider:
+//!             // .provider(Box::new(wasmtime_wasi_tls::RustlsProvider::default()))
+//!             // .provider(Box::new(wasmtime_wasi_tls::NativeTlsProvider::default()))
+//!             .build(),
 //!     };
 //!
 //!     let mut config = Config::new();
@@ -56,7 +62,7 @@
 //!     let mut opts = LinkOptions::default();
 //!     opts.tls(true);
 //!     wasmtime_wasi_tls::add_to_linker(&mut linker, &mut opts, |h: &mut Ctx| {
-//!         WasiTlsCtx::new(&mut h.table)
+//!         WasiTls::new(&h.wasi_tls_ctx, &mut h.table)
 //!     })?;
 //!
 //!     // ... use `linker` to instantiate within `store` ...
@@ -71,36 +77,28 @@
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
 
+use tokio::io::{AsyncRead, AsyncWrite};
 use wasmtime::component::{HasData, ResourceTable};
 
 pub mod bindings;
 mod host;
 mod io;
-
-cfg_if::cfg_if! {
-    if #[cfg(feature = "native-tls")] {
-        mod client_nativetls;
-        pub(crate) use client_nativetls as client;
-    } else if #[cfg(feature = "rustls")] {
-        mod client_rustls;
-        pub(crate) use client_rustls as client;
-    } else {
-        compile_error!("Either the `rustls` or `native-tls` feature must be enabled.");
-    }
-}
+mod providers;
 
 pub use bindings::types::LinkOptions;
 pub use host::{HostClientConnection, HostClientHandshake, HostFutureClientStreams};
+pub use providers::*;
 
-/// Wasi TLS context needed for internal `wasi-tls` state
-pub struct WasiTlsCtx<'a> {
+/// Capture the state necessary for use in the `wasi-tls` API implementation.
+pub struct WasiTls<'a> {
+    ctx: &'a WasiTlsCtx,
     table: &'a mut ResourceTable,
 }
 
-impl<'a> WasiTlsCtx<'a> {
+impl<'a> WasiTls<'a> {
     /// Create a new Wasi TLS context
-    pub fn new(table: &'a mut ResourceTable) -> Self {
-        Self { table }
+    pub fn new(ctx: &'a WasiTlsCtx, table: &'a mut ResourceTable) -> Self {
+        Self { ctx, table }
     }
 }
 
@@ -108,14 +106,70 @@ impl<'a> WasiTlsCtx<'a> {
 pub fn add_to_linker<T: Send + 'static>(
     l: &mut wasmtime::component::Linker<T>,
     opts: &mut LinkOptions,
-    f: fn(&mut T) -> WasiTlsCtx<'_>,
+    f: fn(&mut T) -> WasiTls<'_>,
 ) -> anyhow::Result<()> {
-    bindings::types::add_to_linker::<_, WasiTls>(l, &opts, f)?;
+    bindings::types::add_to_linker::<_, HasWasiTls>(l, &opts, f)?;
     Ok(())
 }
 
-struct WasiTls;
-
-impl HasData for WasiTls {
-    type Data<'a> = WasiTlsCtx<'a>;
+struct HasWasiTls;
+impl HasData for HasWasiTls {
+    type Data<'a> = WasiTls<'a>;
 }
+
+/// Builder-style structure used to create a [`WasiTlsCtx`].
+pub struct WasiTlsCtxBuilder {
+    provider: Box<dyn TlsProvider>,
+}
+
+impl WasiTlsCtxBuilder {
+    /// Creates a builder for a new context with default parameters set.
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Sets the TLS provider to use for this context.
+    pub fn provider(mut self, provider: Box<dyn TlsProvider>) -> Self {
+        self.provider = provider;
+        self
+    }
+
+    /// Uses the configured context so far to construct the final [`WasiTlsCtx`].
+    pub fn build(self) -> WasiTlsCtx {
+        WasiTlsCtx {
+            provider: self.provider,
+        }
+    }
+}
+impl Default for WasiTlsCtxBuilder {
+    fn default() -> Self {
+        Self {
+            provider: Box::new(DefaultProvider::default()),
+        }
+    }
+}
+
+/// Wasi TLS context needed for internal `wasi-tls` state.
+pub struct WasiTlsCtx {
+    pub(crate) provider: Box<dyn TlsProvider>,
+}
+
+/// The data stream that carries the encrypted TLS data.
+/// Typically this is a TCP stream.
+pub trait TlsTransport: AsyncRead + AsyncWrite + Send + Unpin + 'static {}
+impl<T: AsyncRead + AsyncWrite + Send + Unpin + ?Sized + 'static> TlsTransport for T {}
+
+/// A TLS connection.
+pub trait TlsStream: AsyncRead + AsyncWrite + Send + Unpin + 'static {}
+
+/// A TLS implementation.
+pub trait TlsProvider: Send + Sync + 'static {
+    /// Set up a client TLS connection using the provided `server_name` and `transport`.
+    fn connect(
+        &self,
+        server_name: String,
+        transport: Box<dyn TlsTransport>,
+    ) -> BoxFuture<std::io::Result<Box<dyn TlsStream>>>;
+}
+
+pub(crate) type BoxFuture<T> = std::pin::Pin<Box<dyn Future<Output = T> + Send>>;

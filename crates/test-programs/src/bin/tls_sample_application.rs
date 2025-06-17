@@ -7,8 +7,9 @@ use test_programs::wasi::tls::types::ClientHandshake;
 const PORT: u16 = 443;
 
 fn test_tls_sample_application(domain: &str, ip: IpAddress) -> Result<()> {
-    let request =
-        format!("GET / HTTP/1.1\r\nHost: {domain}\r\nUser-Agent: wasmtime-wasi-rust\r\nConnection: close\r\n\r\n");
+    let request = format!(
+        "GET / HTTP/1.1\r\nHost: {domain}\r\nUser-Agent: wasmtime-wasi-rust\r\nConnection: close\r\n\r\n"
+    );
 
     let net = Network::default();
 

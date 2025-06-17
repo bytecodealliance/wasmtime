@@ -14,7 +14,7 @@ workspace = true
 [features]
 default = ["rustls"]
 rustls = ["dep:rustls", "dep:tokio-rustls", "dep:webpki-roots"]
-native-tls = ["dep:native-tls", "dep:tokio-native-tls"]
+nativetls = ["dep:native-tls", "dep:tokio-native-tls"]
 
 [dependencies]
 anyhow = { workspace = true }

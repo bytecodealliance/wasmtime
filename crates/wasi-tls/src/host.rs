@@ -5,22 +5,22 @@ use wasmtime_wasi::p2::Pollable;
 use wasmtime_wasi::p2::{DynInputStream, DynOutputStream, DynPollable, IoError};
 
 use crate::{
-    WasiTlsCtx, bindings,
+    TlsStream, TlsTransport, WasiTls, bindings,
     io::{
         AsyncReadStream, AsyncWriteStream, FutureOutput, WasiFuture, WasiStreamReader,
         WasiStreamWriter,
     },
 };
 
-impl<'a> bindings::types::Host for WasiTlsCtx<'a> {}
-
-/// The underlying transport. Typically, this is a TCP input+output stream.
-type Transport = tokio::io::Join<WasiStreamReader, WasiStreamWriter>;
+impl<'a> bindings::types::Host for WasiTls<'a> {}
 
 /// Represents the ClientHandshake which will be used to configure the handshake
-pub struct HostClientHandshake(crate::client::Handshake<Transport>);
+pub struct HostClientHandshake {
+    server_name: String,
+    transport: Box<dyn TlsTransport>,
+}
 
-impl<'a> bindings::types::HostClientHandshake for WasiTlsCtx<'a> {
+impl<'a> bindings::types::HostClientHandshake for WasiTls<'a> {
     fn new(
         &mut self,
         server_name: String,
@@ -33,9 +33,11 @@ impl<'a> bindings::types::HostClientHandshake for WasiTlsCtx<'a> {
         let reader = WasiStreamReader::new(input);
         let writer = WasiStreamWriter::new(output);
         let transport = tokio::io::join(reader, writer);
-        let handshake = crate::client::Handshake::new(server_name, transport);
 
-        Ok(self.table.push(HostClientHandshake(handshake))?)
+        Ok(self.table.push(HostClientHandshake {
+            server_name,
+            transport: Box::new(transport) as Box<dyn TlsTransport>,
+        })?)
     }
 
     fn finish(
@@ -44,8 +46,13 @@ impl<'a> bindings::types::HostClientHandshake for WasiTlsCtx<'a> {
     ) -> wasmtime::Result<Resource<HostFutureClientStreams>> {
         let handshake = self.table.delete(this)?;
 
+        let connect = self
+            .ctx
+            .provider
+            .connect(handshake.server_name, handshake.transport);
+
         let future = HostFutureClientStreams(WasiFuture::spawn(async move {
-            let tls_stream = handshake.0.finish().await?;
+            let tls_stream = connect.await?;
 
             let (rx, tx) = tokio::io::split(tls_stream);
             let write_stream = AsyncWriteStream::new(tx);
@@ -78,7 +85,7 @@ impl Pollable for HostFutureClientStreams {
     }
 }
 
-impl<'a> bindings::types::HostFutureClientStreams for WasiTlsCtx<'a> {
+impl<'a> bindings::types::HostFutureClientStreams for WasiTls<'a> {
     fn subscribe(
         &mut self,
         this: Resource<HostFutureClientStreams>,
@@ -134,10 +141,10 @@ impl<'a> bindings::types::HostFutureClientStreams for WasiTlsCtx<'a> {
 
 /// Represents the client connection and used to shut down the tls stream
 pub struct HostClientConnection(
-    crate::io::AsyncWriteStream<tokio::io::WriteHalf<crate::client::Connection<Transport>>>,
+    crate::io::AsyncWriteStream<tokio::io::WriteHalf<Box<dyn TlsStream>>>,
 );
 
-impl<'a> bindings::types::HostClientConnection for WasiTlsCtx<'a> {
+impl<'a> bindings::types::HostClientConnection for WasiTls<'a> {
     fn close_output(&mut self, this: Resource<HostClientConnection>) -> wasmtime::Result<()> {
         self.table.get_mut(&this)?.0.close()
     }

@@ -1,15 +1,15 @@
 use anyhow::{Result, anyhow};
-use test_programs_artifacts::{TLS_SAMPLE_APPLICATION_COMPONENT, foreach_tls};
 use wasmtime::{
     Store,
     component::{Component, Linker, ResourceTable},
 };
 use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView, bindings::Command};
-use wasmtime_wasi_tls::{LinkOptions, WasiTlsCtx};
+use wasmtime_wasi_tls::{LinkOptions, TlsProvider, WasiTls, WasiTlsCtx, WasiTlsCtxBuilder};
 
 struct Ctx {
     table: ResourceTable,
     wasi_ctx: WasiCtx,
+    wasi_tls_ctx: WasiTlsCtx,
 }
 
 impl IoView for Ctx {
@@ -23,7 +23,17 @@ impl WasiView for Ctx {
     }
 }
 
-async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
+async fn run_test(provider: Box<dyn TlsProvider>, path: &str) -> Result<()> {
+    let ctx = Ctx {
+        table: ResourceTable::new(),
+        wasi_ctx: WasiCtxBuilder::new()
+            .inherit_stderr()
+            .inherit_network()
+            .allow_ip_name_lookup(true)
+            .build(),
+        wasi_tls_ctx: WasiTlsCtxBuilder::new().provider(provider).build(),
+    };
+
     let engine = test_programs_artifacts::engine(|config| {
         config.async_support(true);
     });
@@ -35,7 +45,7 @@ async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
     let mut opts = LinkOptions::default();
     opts.tls(true);
     wasmtime_wasi_tls::add_to_linker(&mut linker, &mut opts, |h: &mut Ctx| {
-        WasiTlsCtx::new(&mut h.table)
+        WasiTls::new(&h.wasi_tls_ctx, &mut h.table)
     })?;
 
     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
@@ -46,27 +56,41 @@ async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
         .map_err(|()| anyhow!("command returned with failing exit status"))
 }
 
-macro_rules! assert_test_exists {
-    ($name:ident) => {
-        #[expect(unused_imports, reason = "just here to assert it exists")]
-        use self::$name as _;
+macro_rules! test_case {
+    ($provider:ident, $name:ident) => {
+        #[tokio::test(flavor = "multi_thread")]
+        async fn $name() -> anyhow::Result<()> {
+            super::$name(Box::new(wasmtime_wasi_tls::$provider::default())).await
+        }
     };
 }
 
-foreach_tls!(assert_test_exists);
+#[cfg(feature = "rustls")]
+mod rustls {
+    macro_rules! rustls_test_case {
+        ($name:ident) => {
+            test_case!(RustlsProvider, $name);
+        };
+    }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn tls_sample_application() -> Result<()> {
-    run_wasi(
-        TLS_SAMPLE_APPLICATION_COMPONENT,
-        Ctx {
-            table: ResourceTable::new(),
-            wasi_ctx: WasiCtxBuilder::new()
-                .inherit_stderr()
-                .inherit_network()
-                .allow_ip_name_lookup(true)
-                .build(),
-        },
+    test_programs_artifacts::foreach_tls!(rustls_test_case);
+}
+
+#[cfg(feature = "nativetls")]
+mod native_tls {
+    macro_rules! native_tls_test_case {
+        ($name:ident) => {
+            test_case!(NativeTlsProvider, $name);
+        };
+    }
+
+    test_programs_artifacts::foreach_tls!(native_tls_test_case);
+}
+
+async fn tls_sample_application(provider: Box<dyn TlsProvider>) -> Result<()> {
+    run_test(
+        provider,
+        test_programs_artifacts::TLS_SAMPLE_APPLICATION_COMPONENT,
     )
     .await
 }
