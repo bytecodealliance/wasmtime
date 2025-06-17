@@ -77,6 +77,8 @@
 //! `wasmtime`, must uphold for the public interface to be safe.
 
 use crate::RootSet;
+#[cfg(feature = "async")]
+use crate::fiber::{self, AsyncCx};
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
 #[cfg(feature = "gc")]
@@ -109,11 +111,13 @@ pub use self::data::*;
 mod func_refs;
 use func_refs::FuncRefs;
 #[cfg(feature = "async")]
+mod token;
+#[cfg(feature = "async")]
+pub(crate) use token::StoreToken;
+#[cfg(feature = "async")]
 mod async_;
 #[cfg(all(feature = "async", feature = "call-hook"))]
 pub use self::async_::CallHookHandler;
-#[cfg(feature = "async")]
-use self::async_::*;
 #[cfg(feature = "gc")]
 mod gc;
 
@@ -353,7 +357,7 @@ pub struct StoreOpaque {
     table_count: usize,
     table_limit: usize,
     #[cfg(feature = "async")]
-    async_state: AsyncState,
+    async_state: fiber::AsyncState,
 
     // If fuel_yield_interval is enabled, then we store the remaining fuel (that isn't in
     // runtime_limits) here. The total amount of fuel is the runtime limits and reserve added
@@ -401,7 +405,7 @@ pub struct StoreOpaque {
 ///
 /// Effectively stores Pulley interpreter state and handles conditional support
 /// for Cranelift at compile time.
-enum Executor {
+pub(crate) enum Executor {
     Interpreter(Interpreter),
     #[cfg(has_host_compiler_backend)]
     Native,
@@ -553,7 +557,7 @@ impl<T> Store<T> {
             table_count: 0,
             table_limit: crate::DEFAULT_TABLE_LIMIT,
             #[cfg(feature = "async")]
-            async_state: AsyncState::default(),
+            async_state: Default::default(),
             fuel_reserve: 0,
             fuel_yield_interval: None,
             store_data,
@@ -588,6 +592,11 @@ impl<T> Store<T> {
             epoch_deadline_behavior: None,
             data: ManuallyDrop::new(data),
         });
+
+        #[cfg(feature = "async")]
+        {
+            inner.async_state.current_executor = &raw mut inner.executor;
+        }
 
         inner.traitobj = StorePtr::new(NonNull::from(&mut *inner));
 
@@ -1094,16 +1103,13 @@ impl<T> StoreInner<T> {
             CallHookInner::Sync(hook) => hook((&mut *self).as_context_mut(), s),
 
             #[cfg(all(feature = "async", feature = "call-hook"))]
-            CallHookInner::Async(handler) => unsafe {
-                self.inner
-                    .async_cx()
-                    .ok_or_else(|| anyhow!("couldn't grab async_cx for call hook"))?
-                    .block_on(
-                        handler
-                            .handle_call_event((&mut *self).as_context_mut(), s)
-                            .as_mut(),
-                    )?
-            },
+            CallHookInner::Async(handler) => AsyncCx::try_new(&mut self.inner)
+                .ok_or_else(|| anyhow!("couldn't grab async_cx for call hook"))?
+                .block_on(
+                    handler
+                        .handle_call_event((&mut *self).as_context_mut(), s)
+                        .as_mut(),
+                )?,
 
             CallHookInner::ForceTypeParameterToBeUsed { uninhabited, .. } => {
                 let _ = s;
@@ -1926,13 +1932,28 @@ at https://bytecodealliance.org/security.
         )
     }
 
+    #[cfg(feature = "async")]
+    pub(crate) fn async_state(&mut self) -> *mut fiber::AsyncState {
+        &raw mut self.async_state
+    }
+
+    #[cfg(feature = "async")]
+    pub(crate) fn has_pkey(&self) -> bool {
+        self.pkey.is_some()
+    }
+
     #[cfg(not(feature = "async"))]
     pub(crate) fn async_guard_range(&self) -> core::ops::Range<*mut u8> {
         core::ptr::null_mut()..core::ptr::null_mut()
     }
 
     pub(crate) fn executor(&mut self) -> ExecutorRef<'_> {
-        match &mut self.executor {
+        #[cfg(feature = "async")]
+        let executor = unsafe { &mut *self.async_state.current_executor };
+        #[cfg(not(feature = "async"))]
+        let executor = &mut self.executor;
+
+        match executor {
             Executor::Interpreter(i) => ExecutorRef::Interpreter(i.as_interpreter_ref()),
             #[cfg(has_host_compiler_backend)]
             Executor::Native => ExecutorRef::Native,
@@ -1940,7 +1961,12 @@ at https://bytecodealliance.org/security.
     }
 
     pub(crate) fn unwinder(&self) -> &'static dyn Unwind {
-        match &self.executor {
+        #[cfg(feature = "async")]
+        let executor = unsafe { &*self.async_state.current_executor };
+        #[cfg(not(feature = "async"))]
+        let executor = &self.executor;
+
+        match executor {
             Executor::Interpreter(i) => i.unwinder(),
             #[cfg(has_host_compiler_backend)]
             Executor::Native => &vm::UnwindHost,
@@ -2094,16 +2120,13 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
                 limiter(&mut self.data).memory_growing(current, desired, maximum)
             }
             #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                self.inner
-                    .async_cx()
-                    .expect("ResourceLimiterAsync requires async Store")
-                    .block_on(
-                        limiter(&mut self.data)
-                            .memory_growing(current, desired, maximum)
-                            .as_mut(),
-                    )?
-            },
+            Some(ResourceLimiterInner::Async(ref mut limiter)) => AsyncCx::try_new(&mut self.inner)
+                .expect("ResourceLimiterAsync requires async Store")
+                .block_on(
+                    limiter(&mut self.data)
+                        .memory_growing(current, desired, maximum)
+                        .as_mut(),
+                )?,
             None => Ok(true),
         }
     }
@@ -2137,7 +2160,7 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
         let async_cx = if self.async_support()
             && matches!(self.limiter, Some(ResourceLimiterInner::Async(_)))
         {
-            Some(self.async_cx().unwrap())
+            AsyncCx::try_new(&mut self.inner)
         } else {
             None
         };
@@ -2147,11 +2170,13 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
                 limiter(&mut self.data).table_growing(current, desired, maximum)
             }
             #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                async_cx
-                    .expect("ResourceLimiterAsync requires async Store")
-                    .block_on(limiter(&mut self.data).table_growing(current, desired, maximum))?
-            },
+            Some(ResourceLimiterInner::Async(ref mut limiter)) => async_cx
+                .expect("ResourceLimiterAsync requires async Store")
+                .block_on(
+                    limiter(&mut self.data)
+                        .table_growing(current, desired, maximum)
+                        .as_mut(),
+                )?,
             None => Ok(true),
         }
     }
@@ -2205,7 +2230,7 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
                         delta
                     }
                     #[cfg(feature = "async")]
-                    UpdateDeadline::YieldCustom(delta, future) => {
+                    UpdateDeadline::YieldCustom(delta, mut future) => {
                         assert!(
                             self.async_support(),
                             "cannot use `UpdateDeadline::YieldCustom` without enabling async support in the config"
@@ -2218,11 +2243,9 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
                         // to clean up this fiber. Do so by raising a trap which will
                         // abort all wasm and get caught on the other side to clean
                         // things up.
-                        unsafe {
-                            self.async_cx()
-                                .expect("attempted to pull async context during shutdown")
-                                .block_on(future)?
-                        }
+                        AsyncCx::try_new(self)
+                            .expect("attempted to pull async context during shutdown")
+                            .block_on(future.as_mut())?;
                         delta
                     }
                 };

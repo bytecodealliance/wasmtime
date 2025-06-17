@@ -182,7 +182,7 @@ cfg_if::cfg_if! {
 /// APIs using `Store<T>` are correctly inferring send/sync on the returned
 /// values (e.g. futures) and that internally in the runtime we aren't doing
 /// anything "weird" with threads for example.
-pub unsafe trait VMStore {
+pub unsafe trait VMStore: 'static {
     /// Get a shared borrow of this store's `StoreOpaque`.
     fn store_opaque(&self) -> &StoreOpaque;
 

@@ -547,7 +547,7 @@ impl Func {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
-            "cannot use `call_async` without enabling async support in the config"
+            "cannot use `post_return_async` without enabling async support in the config"
         );
         // Future optimization opportunity: conditionally use a fiber here since
         // some func's post_return will not need the async context (i.e. end up
