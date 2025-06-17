@@ -3,6 +3,7 @@
 #ifndef WASMTIME_WASIP2_H
 #define WASMTIME_WASIP2_H
 
+#include <wasm.h>
 #include <wasmtime/conf.h>
 
 #ifdef WASMTIME_FEATURE_WASI
