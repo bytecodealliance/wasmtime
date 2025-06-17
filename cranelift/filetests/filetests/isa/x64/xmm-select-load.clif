@@ -10,14 +10,14 @@ block0(v0: i32, v1: f64, v2: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movsd (%rsi), %xmm5
 ;   testl   %edi, %edi
 ;   movsd %xmm0, %xmm0; jz $next; movsd %xmm5, %xmm0; $next:
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

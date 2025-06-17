@@ -189,6 +189,10 @@ fn pulley_provenance_test() -> Result<()> {
     let results = func.call(&mut store, funcref)?;
     assert_eq!(results, (1, 2, 3));
 
+    instance
+        .get_typed_func::<(), ()>(&mut store, "ref-func-myself")?
+        .call(&mut store, ())?;
+
     Ok(())
 }
 

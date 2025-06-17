@@ -18,8 +18,8 @@ block0(v0: i64, v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8, v8: i128
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
-;   movq    %rdi, %r10
+;   movq %rsp, %rbp
+;   movq %rdi, %r10
 ;   addq $0x10, %r10
 ;   cmpq    %rsp, %r10
 ;   jnbe #trap=stk_ovf
@@ -28,9 +28,9 @@ block0(v0: i64, v1: i8, v2: i8, v3: i8, v4: i8, v5: i8, v6: i8, v7: i8, v8: i128
 ;   movq <offset:0>+-0x10(%rbp), %rax
 ;   movq <offset:0>+-8(%rbp), %rcx
 ;   addq $0x10, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret 32
+;   retq $0x20
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

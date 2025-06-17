@@ -887,17 +887,18 @@ pub fn translate_array_set(
 pub fn translate_ref_test(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
-    ref_ty: WasmRefType,
+    test_ty: WasmRefType,
     val: ir::Value,
+    val_ty: WasmRefType,
 ) -> WasmResult<ir::Value> {
-    log::trace!("translate_ref_test({ref_ty:?}, {val:?})");
+    log::trace!("translate_ref_test({test_ty:?}, {val:?})");
 
     // First special case: testing for references to bottom types.
-    if ref_ty.heap_type.is_bottom() {
-        let result = if ref_ty.nullable {
+    if test_ty.heap_type.is_bottom() {
+        let result = if test_ty.nullable {
             // All null references (within the same type hierarchy) match null
             // references to the bottom type.
-            func_env.translate_ref_is_null(builder.cursor(), val)?
+            func_env.translate_ref_is_null(builder.cursor(), val, val_ty)?
         } else {
             // `ref.test` is always false for non-nullable bottom types, as the
             // bottom types are uninhabited.
@@ -911,11 +912,11 @@ pub fn translate_ref_test(
     // the same type hierarchy as `heap_ty`, if `heap_ty` is its hierarchy's top
     // type, we only need to worry about whether we are testing for nullability
     // or not.
-    if ref_ty.heap_type.is_top() {
-        let result = if ref_ty.nullable {
+    if test_ty.heap_type.is_top() {
+        let result = if test_ty.nullable {
             builder.ins().iconst(ir::types::I32, 1)
         } else {
-            let is_null = func_env.translate_ref_is_null(builder.cursor(), val)?;
+            let is_null = func_env.translate_ref_is_null(builder.cursor(), val, val_ty)?;
             let zero = builder.ins().iconst(ir::types::I32, 0);
             let one = builder.ins().iconst(ir::types::I32, 1);
             builder.ins().select(is_null, zero, one)
@@ -926,14 +927,14 @@ pub fn translate_ref_test(
 
     // `i31ref`s are a little interesting because they don't point to GC
     // objects; we test the bit pattern of the reference itself.
-    if ref_ty.heap_type == WasmHeapType::I31 {
+    if test_ty.heap_type == WasmHeapType::I31 {
         let i31_mask = builder.ins().iconst(
             ir::types::I32,
             i64::from(wasmtime_environ::I31_DISCRIMINANT),
         );
         let is_i31 = builder.ins().band(val, i31_mask);
-        let result = if ref_ty.nullable {
-            let is_null = func_env.translate_ref_is_null(builder.cursor(), val)?;
+        let result = if test_ty.nullable {
+            let is_null = func_env.translate_ref_is_null(builder.cursor(), val, val_ty)?;
             builder.ins().bor(is_null, is_i31)
         } else {
             is_i31
@@ -945,15 +946,17 @@ pub fn translate_ref_test(
     // Otherwise, in the general case, we need to inspect our given object's
     // actual type, which also requires null-checking and i31-checking it.
 
-    let is_any_hierarchy = ref_ty.heap_type.top() == WasmHeapTopType::Any;
+    let is_any_hierarchy = test_ty.heap_type.top() == WasmHeapTopType::Any;
 
     let non_null_block = builder.create_block();
     let non_null_non_i31_block = builder.create_block();
     let continue_block = builder.create_block();
 
     // Current block: check if the reference is null and branch appropriately.
-    let is_null = func_env.translate_ref_is_null(builder.cursor(), val)?;
-    let result_when_is_null = builder.ins().iconst(ir::types::I32, ref_ty.nullable as i64);
+    let is_null = func_env.translate_ref_is_null(builder.cursor(), val, val_ty)?;
+    let result_when_is_null = builder
+        .ins()
+        .iconst(ir::types::I32, test_ty.nullable as i64);
     builder.ins().brif(
         is_null,
         continue_block,
@@ -977,7 +980,7 @@ pub fn translate_ref_test(
         let result_when_is_i31 = builder.ins().iconst(
             ir::types::I32,
             matches!(
-                ref_ty.heap_type,
+                test_ty.heap_type,
                 WasmHeapType::Any | WasmHeapType::Eq | WasmHeapType::I31
             ) as i64,
         );
@@ -1030,7 +1033,7 @@ pub fn translate_ref_test(
             .icmp(ir::condcodes::IntCC::Equal, and, expected_kind);
         builder.ins().uextend(ir::types::I32, kind_matches)
     };
-    let result = match ref_ty.heap_type {
+    let result = match test_ty.heap_type {
         WasmHeapType::Any
         | WasmHeapType::None
         | WasmHeapType::Extern

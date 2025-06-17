@@ -2,6 +2,7 @@
 
 mod add;
 mod and;
+mod atomic;
 mod avg;
 mod bitmanip;
 mod cmp;
@@ -10,9 +11,11 @@ mod div;
 mod lanes;
 mod max;
 mod min;
+mod misc;
 mod mov;
 mod mul;
 mod neg;
+mod nop;
 mod or;
 mod round;
 mod shift;
@@ -30,6 +33,7 @@ pub fn list() -> Vec<Inst> {
     let mut all = vec![];
     all.extend(add::list());
     all.extend(and::list());
+    all.extend(atomic::list());
     all.extend(avg::list());
     all.extend(bitmanip::list());
     all.extend(cmp::list());
@@ -38,9 +42,11 @@ pub fn list() -> Vec<Inst> {
     all.extend(lanes::list());
     all.extend(max::list());
     all.extend(min::list());
+    all.extend(misc::list());
     all.extend(mov::list());
     all.extend(mul::list());
     all.extend(neg::list());
+    all.extend(nop::list());
     all.extend(or::list());
     all.extend(round::list());
     all.extend(shift::list());
@@ -110,8 +116,12 @@ fn check_sse_matches_avx(sse_inst: &Inst, avx_inst: &Inst) {
         // may have slightly different operand semantics (e.g., `roundss` ->
         // `vroundss`) and we want to be careful about matching too freely.
         (
-            [(ReadWrite, Reg(_)), (Read, RegMem(_))],
-            [(Write, Reg(_)), (Read, Reg(_)), (Read, RegMem(_))],
+            [(ReadWrite, Reg(_)), (Read, Reg(_) | RegMem(_) | Mem(_))],
+            [
+                (Write, Reg(_)),
+                (Read, Reg(_)),
+                (Read, Reg(_) | RegMem(_) | Mem(_)),
+            ],
         ) => {}
         // We panic on other formats for now; feel free to add more patterns to
         // avoid this.

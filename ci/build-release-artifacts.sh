@@ -63,6 +63,12 @@ else
   bin_flags="--features all-arch,component-model"
 fi
 
+if [[ "$target" = "x86_64-pc-windows-msvc" ]]; then
+  # Avoid emitting `/DEFAULTLIB:MSVCRT` into the static library by using clang.
+  export CC=clang
+  export CXX=clang++
+fi
+
 cargo build --release $flags --target $target -p wasmtime-cli $bin_flags --features run
 
 mkdir -p target/c-api-build

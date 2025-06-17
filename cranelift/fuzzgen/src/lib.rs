@@ -171,11 +171,11 @@ where
 
     /// Generate a random set of cranelift flags.
     /// Only semantics preserving flags are considered
-    pub fn generate_flags(&mut self, target_arch: Architecture) -> Result<Flags> {
+    pub fn generate_flags(&mut self, target_arch: Architecture) -> arbitrary::Result<Flags> {
         let mut builder = settings::builder();
 
         let opt = self.u.choose(OptLevel::all())?;
-        builder.set("opt_level", &format!("{opt}")[..])?;
+        builder.set("opt_level", &format!("{opt}")[..]).unwrap();
 
         // Boolean flags
         // TODO: enable_pinned_reg does not work with our current trampolines. See: #4376
@@ -203,7 +203,7 @@ where
                 .unwrap_or_else(|| bool::arbitrary(self.u))?;
 
             let value = format!("{enabled}");
-            builder.set(flag_name, value.as_str())?;
+            builder.set(flag_name, value.as_str()).unwrap();
         }
 
         let supports_inline_probestack = match target_arch {
@@ -216,47 +216,52 @@ where
         // Optionally test inline stackprobes on supported platforms
         // TODO: Test outlined stack probes.
         if supports_inline_probestack && bool::arbitrary(self.u)? {
-            builder.enable("enable_probestack")?;
-            builder.set("probestack_strategy", "inline")?;
+            builder.enable("enable_probestack").unwrap();
+            builder.set("probestack_strategy", "inline").unwrap();
 
             let size = self
                 .u
                 .int_in_range(self.config.stack_probe_size_log2.clone())?;
-            builder.set("probestack_size_log2", &format!("{size}"))?;
+            builder
+                .set("probestack_size_log2", &format!("{size}"))
+                .unwrap();
         }
 
         // Generate random basic block padding
         let bb_padding = self
             .u
-            .int_in_range(self.config.bb_padding_log2_size.clone())?;
-        builder.set("bb_padding_log2_minus_one", &format!("{bb_padding}"))?;
+            .int_in_range(self.config.bb_padding_log2_size.clone())
+            .unwrap();
+        builder
+            .set("bb_padding_log2_minus_one", &format!("{bb_padding}"))
+            .unwrap();
 
         // Fixed settings
 
         // We need llvm ABI extensions for i128 values on x86, so enable it regardless of
         // what we picked above.
         if target_arch == Architecture::X86_64 {
-            builder.enable("enable_llvm_abi_extensions")?;
+            builder.enable("enable_llvm_abi_extensions").unwrap();
         }
 
         // FIXME(#9510) remove once this option is permanently disabled
-        builder.enable("enable_multi_ret_implicit_sret")?;
+        builder.enable("enable_multi_ret_implicit_sret").unwrap();
 
         // This is the default, but we should ensure that it wasn't accidentally turned off anywhere.
-        builder.enable("enable_verifier")?;
+        builder.enable("enable_verifier").unwrap();
 
         // These settings just panic when they're not enabled and we try to use their respective functionality
         // so they aren't very interesting to be automatically generated.
-        builder.enable("enable_atomics")?;
-        builder.enable("enable_float")?;
+        builder.enable("enable_atomics").unwrap();
+        builder.enable("enable_float").unwrap();
 
         // `machine_code_cfg_info` generates additional metadata for the embedder but this doesn't feed back
         // into compilation anywhere, we leave it on unconditionally to make sure the generation doesn't panic.
-        builder.enable("machine_code_cfg_info")?;
+        builder.enable("machine_code_cfg_info").unwrap();
 
         // Differential fuzzing between the interpreter and the host will only
         // really work if NaN payloads are canonicalized, so enable this.
-        builder.enable("cranelift_nan_canonicalization")?;
+        builder.enable("enable_nan_canonicalization").unwrap();
 
         Ok(Flags::new(builder))
     }

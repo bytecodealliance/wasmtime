@@ -79,5 +79,10 @@ pub fn list() -> Vec<Inst> {
         inst("paddusw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDD]).r(), _64b | compat | sse2),
         inst("phaddw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x01]).r(), _64b | compat | ssse3),
         inst("phaddd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x02]).r(), _64b | compat | ssse3),
+        // `LOCK`-prefixed xadd
+        inst("lock_xaddb", fmt("MR", [rw(m8), rw(r8)]), rex([0xf0, 0x0f, 0xc0]).r(), _64b | compat).custom(Mnemonic | Visit),
+        inst("lock_xaddw", fmt("MR", [rw(m16), rw(r16)]), rex([0xf0, 0x66, 0x0f, 0xc1]).r(), _64b | compat).custom(Mnemonic | Visit),
+        inst("lock_xaddl", fmt("MR", [rw(m32), rw(r32)]), rex([0xf0, 0x0f, 0xc1]).r(), _64b | compat).custom(Mnemonic | Visit),
+        inst("lock_xaddq", fmt("MR", [rw(m64), rw(r64)]), rex([0xf0, 0x0f, 0xc1]).w().r(), _64b).custom(Mnemonic | Visit),
     ]
 }

@@ -5,7 +5,7 @@
 //! having these structures plumbed around.
 
 use crate::runtime::Uninhabited;
-use crate::runtime::vm::VMOpaqueContext;
+use crate::runtime::vm::{VMContext, VMOpaqueContext};
 use crate::{Engine, ValRaw};
 use core::marker;
 use core::mem;
@@ -46,7 +46,7 @@ impl InterpreterRef<'_> {
         self,
         _bytecode: NonNull<u8>,
         _callee: NonNull<VMOpaqueContext>,
-        _caller: NonNull<VMOpaqueContext>,
+        _caller: NonNull<VMContext>,
         _args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         match self.empty {}

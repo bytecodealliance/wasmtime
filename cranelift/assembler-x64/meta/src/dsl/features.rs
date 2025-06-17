@@ -86,6 +86,7 @@ pub enum Feature {
     lzcnt,
     popcnt,
     avx,
+    cmpxchg16b,
 }
 
 /// List all CPU features.
@@ -109,6 +110,7 @@ pub const ALL_FEATURES: &[Feature] = &[
     Feature::lzcnt,
     Feature::popcnt,
     Feature::avx,
+    Feature::cmpxchg16b,
 ];
 
 impl fmt::Display for Feature {

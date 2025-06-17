@@ -65,6 +65,12 @@ impl BranchToTrap {
 
         if self.just_trap_blocks.contains(consequent) {
             let mut pos = FuncCursor::new(func);
+            pos.use_srcloc(
+                pos.func
+                    .layout
+                    .first_inst(consequent)
+                    .expect("just-trap blocks have exactly one inst"),
+            );
             pos.goto_inst(inst);
 
             let code = self.just_trap_block_code(pos.func, consequent);
@@ -74,6 +80,12 @@ impl BranchToTrap {
             pos.func.dfg.replace(inst).jump(alternative, &args);
         } else if self.just_trap_blocks.contains(alternative) {
             let mut pos = FuncCursor::new(func);
+            pos.use_srcloc(
+                pos.func
+                    .layout
+                    .first_inst(alternative)
+                    .expect("just-trap blocks have exactly one inst"),
+            );
             pos.goto_inst(inst);
 
             let code = self.just_trap_block_code(pos.func, alternative);

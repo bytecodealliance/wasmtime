@@ -231,24 +231,24 @@ here is:
 
 | Feature                                 | Cranelift | Winch[^c] |
 |-----------------------------------------|-----------|-----------|
-| [`mutable-globals`]                     | ✅        | 🚧        |
-| [`sign-extension-ops`]                  | ✅        | 🚧        |
-| [`nontrapping-float-to-int-conversion`] | ✅        | 🚧        |
-| [`multi-value`]                         | ✅        | 🚧        |
-| [`bulk-memory`]                         | ✅        | 🚧        |
+| [`mutable-globals`]                     | ✅        | ✅        |
+| [`sign-extension-ops`]                  | ✅        | ✅        |
+| [`nontrapping-float-to-int-conversion`] | ✅        | ✅        |
+| [`multi-value`]                         | ✅        | ✅        |
+| [`bulk-memory`]                         | ✅        | ✅        |
 | [`reference-types`]                     | ✅        | ❌[^a]    |
 | [`simd`]                                | ✅        | ❌        |
-| [`component-model`]                     | ✅        | 🚧        |
+| [`component-model`]                     | ✅        | ✅        |
 | [`relaxed-simd`]                        | ✅        | ❌        |
-| [`multi-memory`]                        | ✅        | 🚧        |
+| [`multi-memory`]                        | ✅        | ✅        |
 | [`threads`]                             | ✅        | ❌        |
 | [`tail-call`]                           | ✅        | ❌        |
-| [`extended-const`]                      | ✅        | 🚧        |
-| [`memory64`]                            | ✅        | 🚧        |
+| [`extended-const`]                      | ✅        | ✅        |
+| [`memory64`]                            | ✅        | ✅        |
 | [`function-references`]                 | ✅        | ❌        |
 | [`gc`]                                  | ✅        | ❌        |
 | [`wide-arithmetic`]                     | ✅        | ❌        |
-| [`custom-page-sizes`]                   | ✅        | 🚧        |
+| [`custom-page-sizes`]                   | ✅        | ✅        |
 
 ##### s390x
 
@@ -330,9 +330,7 @@ emitting Pulley bytecode.
   new table opcodes in the [`reference-types`] proposal.
 [^b]: Pulley does not support the [`threads`] proposal because there is no known
   safe way to implement this with Rust's memory model.
-[^c]: Winch's support for aarch64 is a work-in-progress. Most of the
-  implementation is filled out but it is not yet at a feature-complete status
-  or running tests in CI.
+[^c]: Winch's support for aarch64 is complete for Core Wasm.
 
 ## Tier Details
 

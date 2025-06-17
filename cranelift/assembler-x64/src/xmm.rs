@@ -33,6 +33,17 @@ impl<R: AsReg> Xmm<R> {
     pub(crate) fn encode_modrm(&self, sink: &mut impl CodeSink, enc_reg: u8) {
         sink.put1(encode_modrm(0b11, enc_reg & 0b111, self.enc() & 0b111));
     }
+
+    /// Return the registers for encoding the `b` and `x` bits (e.g., in a VEX
+    /// prefix).
+    ///
+    /// This is primarily used for `*Mem` variants (see
+    /// `XmmMem::encode_bx_regs`), but when used on a single `Xmm` register,
+    /// only the `b` bit is set by the topmost bit (the fourth bit) of this
+    /// register. We expect this register to be in the `rm` slot.
+    pub(crate) fn encode_bx_regs(&self) -> (Option<u8>, Option<u8>) {
+        (Some(self.enc()), None)
+    }
 }
 
 impl<R: AsReg> AsRef<R> for Xmm<R> {

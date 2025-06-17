@@ -8,18 +8,18 @@ use crate::component::{
 use crate::instance::OwnedImports;
 use crate::linker::DefinitionType;
 use crate::prelude::*;
-use crate::runtime::vm::VMFuncRef;
 use crate::runtime::vm::component::{
-    CallContexts, ComponentInstance, OwnedComponentInstance, ResourceTables, TypedResource,
-    TypedResourceIndex,
+    CallContexts, ComponentInstance, ResourceTables, TypedResource, TypedResourceIndex,
 };
+use crate::runtime::vm::{self, ExportFunction, ExportGlobal, ExportGlobalKind, VMFuncRef};
 use crate::store::StoreOpaque;
 use crate::{AsContext, AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
+use core::pin::Pin;
 use core::ptr::NonNull;
 use wasmtime_environ::{EngineOrModuleTypeIndex, component::*};
-use wasmtime_environ::{EntityType, PrimaryMap};
+use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
 
 /// An instantiated component.
 ///
@@ -159,7 +159,7 @@ impl Instance {
         name: impl InstanceExportLookup,
     ) -> Option<Func> {
         let store = store.as_context_mut().0;
-        let instance = &store[self.id];
+        let instance = self.id.get(store);
         let component = instance.component();
 
         // Validate that `name` exists within `self.`
@@ -302,7 +302,7 @@ impl Instance {
         instance: Option<&ComponentExportIndex>,
         name: &str,
     ) -> Option<(ComponentItem, ComponentExportIndex)> {
-        let data = &store[self.id()];
+        let data = self.id().get(store);
         let component = data.component();
         let index = component.lookup_export_index(instance, name)?;
         let item = ComponentItem::from_export(
@@ -338,7 +338,7 @@ impl Instance {
         instance: Option<&ComponentExportIndex>,
         name: &str,
     ) -> Option<ComponentExportIndex> {
-        let data = &store.as_context_mut()[self.id()];
+        let data = self.id().get(store.as_context_mut().0);
         let index = data.component().lookup_export_index(instance, name)?;
         Some(ComponentExportIndex {
             id: data.component().id(),
@@ -351,7 +351,7 @@ impl Instance {
         store: &'a StoreOpaque,
         name: impl InstanceExportLookup,
     ) -> Option<(&'a ComponentInstance, &'a Export)> {
-        let data = &store[self.id()];
+        let data = self.id().get(store);
         let index = name.lookup(data.component())?;
         Some((data, &data.component().env_component().export_items[index]))
     }
@@ -360,20 +360,13 @@ impl Instance {
     pub fn instance_pre<T>(&self, store: impl AsContext<Data = T>) -> InstancePre<T> {
         // This indexing operation asserts the Store owns the Instance.
         // Therefore, the InstancePre<T> must match the Store<T>.
-        let data = &store.as_context()[self.id()];
+        let data = self.id().get(store.as_context().0);
 
         // SAFETY: calling this method safely here relies on matching the `T`
         // in `InstancePre<T>` to the store itself, which is happening in the
         // type signature just above by ensuring the store's data is `T` which
         // matches the return value.
         unsafe { data.instance_pre() }
-    }
-
-    /// Returns the VM/runtime state for this instance as belonging to the
-    /// store provided.
-    pub(crate) fn instance_ptr(&self, store: &StoreOpaque) -> NonNull<ComponentInstance> {
-        self.id.assert_belongs_to(store.id());
-        store.component_instance_ptr(self.id.instance())
     }
 
     pub(crate) fn id(&self) -> StoreComponentInstanceId {
@@ -435,7 +428,7 @@ impl Instance {
         src: TypeResourceTableIndex,
         dst: TypeResourceTableIndex,
     ) -> Result<u32> {
-        let dst_owns_resource = store[self.id()].resource_owned_by_own_instance(dst);
+        let dst_owns_resource = self.id().get(store).resource_owned_by_own_instance(dst);
         let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
         let mut tables = resource_tables(calls, instance);
         let rep = tables.resource_lift_borrow(TypedResourceIndex::Component { ty: src, index })?;
@@ -462,11 +455,76 @@ impl Instance {
         let (calls, _, _, instance) = store.component_resource_state_with_instance(self);
         resource_tables(calls, instance).exit_call()
     }
+
+    pub(crate) fn lookup_vmdef(&self, store: &mut StoreOpaque, def: &CoreDef) -> vm::Export {
+        lookup_vmdef(store, self.id.instance(), def)
+    }
+}
+
+/// Translates a `CoreDef`, a definition of a core wasm item, to an
+/// [`Export`] which is the runtime core wasm definition.
+pub(crate) fn lookup_vmdef(
+    store: &mut StoreOpaque,
+    id: ComponentInstanceId,
+    def: &CoreDef,
+) -> vm::Export {
+    match def {
+        CoreDef::Export(e) => lookup_vmexport(store, id, e),
+        CoreDef::Trampoline(idx) => vm::Export::Function(ExportFunction {
+            func_ref: store
+                .store_data_mut()
+                .component_instance_mut(id)
+                .trampoline_func_ref(*idx),
+        }),
+        CoreDef::InstanceFlags(idx) => {
+            let instance = store.store_data_mut().component_instance_mut(id);
+            vm::Export::Global(ExportGlobal {
+                definition: instance.instance_flags(*idx).as_raw(),
+                global: Global {
+                    wasm_ty: WasmValType::I32,
+                    mutability: true,
+                },
+                kind: ExportGlobalKind::ComponentFlags(instance.vmctx(), *idx),
+            })
+        }
+    }
+}
+
+/// Translates a `CoreExport<T>`, an export of some core instance within
+/// this component, to the actual runtime definition of that item.
+pub(crate) fn lookup_vmexport<T>(
+    store: &mut StoreOpaque,
+    id: ComponentInstanceId,
+    item: &CoreExport<T>,
+) -> vm::Export
+where
+    T: Copy + Into<EntityIndex>,
+{
+    let id = store
+        .store_data_mut()
+        .component_instance_mut(id)
+        .instance(item.instance);
+    let instance = store.instance_mut(id);
+    let idx = match &item.item {
+        ExportItem::Index(idx) => (*idx).into(),
+
+        // FIXME: ideally at runtime we don't actually do any name lookups
+        // here. This will only happen when the host supplies an imported
+        // module so while the structure can't be known at compile time we
+        // do know at `InstancePre` time, for example, what all the host
+        // imports are. In theory we should be able to, as part of
+        // `InstancePre` construction, perform all name=>index mappings
+        // during that phase so the actual instantiation of an `InstancePre`
+        // skips all string lookups. This should probably only be
+        // investigated if this becomes a performance issue though.
+        ExportItem::Name(name) => instance.env_module().exports[name],
+    };
+    instance.get_export_by_index_mut(idx)
 }
 
 fn resource_tables<'a>(
     calls: &'a mut CallContexts,
-    instance: &'a mut ComponentInstance,
+    instance: Pin<&'a mut ComponentInstance>,
 ) -> ResourceTables<'a> {
     ResourceTables {
         host_table: None,
@@ -560,7 +618,7 @@ impl<'a> Instantiator<'a> {
         let imported_resources: ImportedResources =
             PrimaryMap::with_capacity(env_component.imported_resources.len());
 
-        let instance = OwnedComponentInstance::new(
+        let instance = ComponentInstance::new(
             store.store_data().components.next_component_instance_id(),
             component,
             Arc::new(imported_resources),
@@ -694,11 +752,10 @@ impl<'a> Instantiator<'a> {
     }
 
     fn resource(&mut self, store: &mut StoreOpaque, resource: &Resource) {
-        let instance = self.instance(store);
         let dtor = resource
             .dtor
             .as_ref()
-            .map(|dtor| instance.lookup_def(store, dtor));
+            .map(|dtor| lookup_vmdef(store, self.id, dtor));
         let dtor = dtor.map(|export| match export {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
@@ -707,6 +764,7 @@ impl<'a> Instantiator<'a> {
             .component
             .env_component()
             .resource_index(resource.index);
+        let instance = self.instance(store);
         let ty = ResourceType::guest(store.id(), instance, resource.index);
         self.instance_mut(store)
             .set_resource_destructor(index, dtor);
@@ -715,7 +773,7 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_memory(&mut self, store: &mut StoreOpaque, memory: &ExtractMemory) {
-        let mem = match self.instance(store).lookup_export(store, &memory.export) {
+        let mem = match lookup_vmexport(store, self.id, &memory.export) {
             crate::runtime::vm::Export::Memory(m) => m,
             _ => unreachable!(),
         };
@@ -724,7 +782,7 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_realloc(&mut self, store: &mut StoreOpaque, realloc: &ExtractRealloc) {
-        let func_ref = match self.instance(store).lookup_def(store, &realloc.def) {
+        let func_ref = match lookup_vmdef(store, self.id, &realloc.def) {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
@@ -733,7 +791,7 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_callback(&mut self, store: &mut StoreOpaque, callback: &ExtractCallback) {
-        let func_ref = match self.instance(store).lookup_def(store, &callback.def) {
+        let func_ref = match lookup_vmdef(store, self.id, &callback.def) {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
@@ -742,7 +800,7 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_post_return(&mut self, store: &mut StoreOpaque, post_return: &ExtractPostReturn) {
-        let func_ref = match self.instance(store).lookup_def(store, &post_return.def) {
+        let func_ref = match lookup_vmdef(store, self.id, &post_return.def) {
             crate::runtime::vm::Export::Function(f) => f.func_ref,
             _ => unreachable!(),
         };
@@ -751,7 +809,7 @@ impl<'a> Instantiator<'a> {
     }
 
     fn extract_table(&mut self, store: &mut StoreOpaque, table: &ExtractTable) {
-        let export = match self.instance(store).lookup_export(store, &table.export) {
+        let export = match lookup_vmexport(store, self.id, &table.export) {
             crate::runtime::vm::Export::Table(t) => t,
             _ => unreachable!(),
         };
@@ -765,7 +823,7 @@ impl<'a> Instantiator<'a> {
 
     fn build_imports<'b>(
         &mut self,
-        store: &StoreOpaque,
+        store: &mut StoreOpaque,
         module: &Module,
         args: impl Iterator<Item = &'b CoreDef>,
     ) -> &OwnedImports {
@@ -787,7 +845,7 @@ impl<'a> Instantiator<'a> {
             // The unsafety here should be ok since the `export` is loaded
             // directly from an instance which should only give us valid export
             // items.
-            let export = self.instance(store).lookup_def(store, arg);
+            let export = lookup_vmdef(store, self.id, arg);
             unsafe {
                 self.core_imports.push_export(&export);
             }
@@ -799,14 +857,14 @@ impl<'a> Instantiator<'a> {
 
     fn assert_type_matches(
         &self,
-        store: &StoreOpaque,
+        store: &mut StoreOpaque,
         module: &Module,
         arg: &CoreDef,
         imp_module: &str,
         imp_name: &str,
         expected: EntityType,
     ) {
-        let export = self.instance(store).lookup_def(store, arg);
+        let export = lookup_vmdef(store, self.id, arg);
 
         // If this value is a core wasm function then the type check is inlined
         // here. This can otherwise fail `Extern::from_wasmtime_export` because
@@ -845,7 +903,7 @@ impl<'a> Instantiator<'a> {
     }
 
     /// Same as [`Self::instance`], but for mutability.
-    fn instance_mut<'b>(&self, store: &'b mut StoreOpaque) -> &'b mut ComponentInstance {
+    fn instance_mut<'b>(&self, store: &'b mut StoreOpaque) -> Pin<&'b mut ComponentInstance> {
         store.store_data_mut().component_instance_mut(self.id)
     }
 

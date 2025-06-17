@@ -9,9 +9,9 @@ block0:
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   ud2 user1
+;   ud2
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -28,13 +28,13 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   addq %rsi, %rdi
 ;   jb #trap=user1
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -56,13 +56,13 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   testq   %rdi, %rdi
 ;   jz #trap=user1
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -84,14 +84,14 @@ block0(v0: i128):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   orq %rdi, %rsi
 ;   testq   %rsi, %rsi
 ;   jz #trap=user1
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -114,13 +114,13 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   testq   %rdi, %rdi
 ;   jnz #trap=user1
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -142,14 +142,14 @@ block0(v0: i128):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   orq %rdi, %rsi
 ;   testq   %rsi, %rsi
 ;   jnz #trap=user1
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -173,13 +173,13 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   cmpq    %rsi, %rdi
 ;   jnz #trap=user1
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -202,13 +202,13 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   cmpq    %rsi, %rdi
 ;   jz #trap=user1
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -231,13 +231,13 @@ block0(v0: f64, v1: f64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   ucomisd %xmm1, %xmm0
 ;   trap_if_or p, z, user1
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -261,13 +261,135 @@ block0(v0: f64, v1: f64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   ucomisd %xmm1, %xmm0
 ;   trap_if_and p, nz, user1
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   ucomisd %xmm1, %xmm0
+;   jp 0x14
+;   je 0x19
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user1
+
+function %trapz_uextend_icmp(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  v3 = uextend.i32 v2
+  trapz v3, user1
+  return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   cmpq    %rsi, %rdi
+;   jnz #trap=user1
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpq %rsi, %rdi
+;   jne 0x12
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user1
+
+function %trapnz_uextend_icmp(i64, i64) {
+block0(v0: i64, v1: i64):
+  v2 = icmp eq v0, v1
+  v3 = uextend.i32 v2
+  trapnz v3, user1
+  return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   cmpq    %rsi, %rdi
+;   jz #trap=user1
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   cmpq %rsi, %rdi
+;   je 0x12
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user1
+
+function %trapz_uextend_fcmp(f64, f64) {
+block0(v0: f64, v1: f64):
+  v2 = fcmp eq v0, v1
+  v3 = uextend.i32 v2
+  trapz v3, user1
+  return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   ucomisd %xmm1, %xmm0
+;   trap_if_or p, z, user1
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   ucomisd %xmm1, %xmm0
+;   jp 0x19
+;   jne 0x19
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+;   ud2 ; trap: user1
+
+function %trapnz_uextend_fcmp(f64, f64) {
+block0(v0: f64, v1: f64):
+  v2 = fcmp eq v0, v1
+  v3 = uextend.i32 v2
+  trapnz v3, user1
+  return
+}
+
+; VCode:
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block0:
+;   ucomisd %xmm1, %xmm0
+;   trap_if_and p, nz, user1
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

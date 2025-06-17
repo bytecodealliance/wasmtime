@@ -1,0 +1,62 @@
+;; This is a test case from #11024
+
+test interpret
+test run
+set opt_level=none
+set preserve_frame_pointers=true
+set enable_multi_ret_implicit_sret=true
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse42
+target x86_64 sse42 has_avx
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function u1:1() -> f64 fast {
+    ss0 = explicit_slot 32
+
+block0():
+    v1 = f64const 0x1.d707d3c2dd690p-1
+
+    v7 = stack_addr.i64 ss0
+    v8 = load.f32x4 little v7+8
+    return v1
+}
+function %main() -> i64x2,f64,f64x2 fast {
+    ss0 = explicit_slot 32
+    ss1 = explicit_slot 32
+    sig0 = () -> f64 fast
+    fn0 = u1:1 sig0
+    const0 = 0x655a67ef3826115b29aeb0d774a11922
+
+block0:
+
+    v1 = iconst.i64 -8142416529737083292
+    v2 = vconst.i64x2 const0
+
+    v3 = stack_addr.i64 ss0
+    v4 = stack_addr.i64 ss1
+
+    store little v1, v3
+    store little v1, v3+8
+    store little v1, v3+16
+    store little v1, v3+24
+
+    store little v1, v4
+    store little v1, v4+8
+    store little v1, v4+16
+    store little v1, v4+24
+
+    v5 = stack_addr.i64 ss1
+    atomic_store little v1, v5
+
+    v6 = fcvt_from_uint.f64 v1
+    v7 = scalar_to_vector.f64x2 v6
+
+    v8 = call fn0()
+    return v2,v6,v7
+}
+
+
+; run: %main() == [0x655a67ef3826115b29aeb0d774a11922, 0x1.1e00a69cf7813p63, 0x000000000000000043e1e00a69cf7813]
