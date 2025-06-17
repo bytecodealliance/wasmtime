@@ -7,12 +7,12 @@
 ;; Push zeroes to the right -- this makes the select `truthy`, as used elsewhere
 ;; if icmp { 0 } else { nonzero } => if !icmp { nonzero } else { 0 }
 (rule (simplify (select sty (icmp cty cc x y)
-                        zero@(iconst_u _ 0)
-                        nonzero@(iconst_u _ (u64_nonzero _))))
+                        zero @ (iconst_u _ 0)
+                        nonzero @ (iconst_u _ (u64_when_non_zero))))
     (select sty (icmp cty (intcc_complement cc) x y) nonzero zero))
 
 ;; if icmp(x, y) { 1 } else { 0 } => uextend(icmp(x, y))
-(rule (simplify (select ty cmp@(icmp _ cc x y)
+(rule (simplify (select ty cmp @ (icmp _ cc x y)
                         (iconst_u _ 1)
                         (iconst_u _ 0)))
     (uextend_maybe ty cmp))

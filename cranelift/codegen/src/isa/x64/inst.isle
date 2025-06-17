@@ -686,22 +686,22 @@
 (rule to_amode_add_base_case 0 (to_amode_add flags x y offset)
         (amode_imm_reg_reg_shift flags x y offset))
 (rule to_amode_add_const_rhs 1 (to_amode_add flags x (i32_from_iconst c) offset)
-        (if-let sum (s32_add_fallible offset c))
+        (if-let sum (i32_checked_add offset c))
         (amode_imm_reg flags x sum))
 (rule to_amode_add_const_lhs 2 (to_amode_add flags (i32_from_iconst c) x offset)
-        (if-let sum (s32_add_fallible offset c))
+        (if-let sum (i32_checked_add offset c))
         (amode_imm_reg flags x sum))
 (rule to_amode_add_const_fold_iadd_lhs_rhs 3 (to_amode_add flags (iadd x (i32_from_iconst c)) y offset)
-        (if-let sum (s32_add_fallible offset c))
+        (if-let sum (i32_checked_add offset c))
         (amode_imm_reg_reg_shift flags x y sum))
 (rule to_amode_add_const_fold_iadd_lhs_lhs 4 (to_amode_add flags (iadd (i32_from_iconst c) x) y offset)
-        (if-let sum (s32_add_fallible offset c))
+        (if-let sum (i32_checked_add offset c))
         (amode_imm_reg_reg_shift flags x y sum))
 (rule to_amode_add_const_fold_iadd_rhs_rhs 5 (to_amode_add flags x (iadd y (i32_from_iconst c)) offset)
-        (if-let sum (s32_add_fallible offset c))
+        (if-let sum (i32_checked_add offset c))
         (amode_imm_reg_reg_shift flags x y sum))
 (rule to_amode_add_const_fold_iadd_rhs_lhs 6 (to_amode_add flags x (iadd (i32_from_iconst c) y) offset)
-        (if-let sum (s32_add_fallible offset c))
+        (if-let sum (i32_checked_add offset c))
         (amode_imm_reg_reg_shift flags x y sum))
 
 ;; Final cases of amode lowering. Does not hunt for constants and only attempts
@@ -729,10 +729,10 @@
 (rule amode_imm_reg_reg_shift_no_shift 0 (amode_imm_reg_reg_shift flags x y offset)
         (Amode.ImmRegRegShift offset x y 0 flags)) ;; 0 == y<<0 == "no shift"
 (rule amode_imm_reg_reg_shift_shl_rhs 1 (amode_imm_reg_reg_shift flags x (ishl y (iconst (uimm8 shift))) offset)
-        (if (u32_lteq (u8_as_u32 shift) 3))
+        (if-let true (u32_lt_eq shift 3))
         (Amode.ImmRegRegShift offset x y shift flags))
 (rule amode_imm_reg_reg_shift_shl_lhs 2 (amode_imm_reg_reg_shift flags (ishl y (iconst (uimm8 shift))) x offset)
-        (if (u32_lteq (u8_as_u32 shift) 3))
+        (if-let true (u32_lt_eq shift 3))
         (Amode.ImmRegRegShift offset x y shift flags))
 
 ;; Offsetting an Amode. Used when we need to do consecutive
@@ -769,7 +769,7 @@
 ;; This is used when lowering various shifts and rotates.
 (decl put_masked_in_imm8_gpr (Value Type) Imm8Gpr)
 (rule 2 (put_masked_in_imm8_gpr (u64_from_iconst amt) ty)
-      (Imm8Gpr.Imm8 (u64_as_u8 (u64_and amt (shift_mask ty)))))
+      (Imm8Gpr.Imm8 (u64_truncate_into_u8 (u64_and amt (shift_mask ty)))))
 (rule 1 (put_masked_in_imm8_gpr amt (fits_in_16 ty))
       (x64_and $I64 (value_regs_get_gpr amt 0) (RegMemImm.Imm (shift_mask ty))))
 (rule (put_masked_in_imm8_gpr amt ty)
@@ -1990,9 +1990,9 @@
 (rule (x64_movrm $I64 addr data) (x64_movq_mr_mem addr data))
 
 (decl x64_movimm_m (Type SyntheticAmode i32) SideEffectNoResult)
-(rule (x64_movimm_m $I8 addr (i8_try_from_i32 imm)) (x64_movb_mi_mem addr (i8_as_u8 imm)))
-(rule (x64_movimm_m $I16 addr (i16_try_from_i32 imm)) (x64_movw_mi_mem addr (i16_as_u16 imm)))
-(rule (x64_movimm_m $I32 addr imm) (x64_movl_mi_mem addr (i32_as_u32 imm)))
+(rule (x64_movimm_m $I8 addr (i8_from_i32 imm)) (x64_movb_mi_mem addr (i8_reinterpret_as_u8 imm)))
+(rule (x64_movimm_m $I16 addr (i16_from_i32 imm)) (x64_movw_mi_mem addr (i16_reinterpret_as_u16 imm)))
+(rule (x64_movimm_m $I32 addr imm) (x64_movl_mi_mem addr (i32_reinterpret_as_u32 imm)))
 (rule (x64_movimm_m $I64 addr imm) (x64_movq_mi_sxl_mem addr imm))
 
 (decl xmm_movrm_vex (AvxOpcode SyntheticAmode Xmm) SideEffectNoResult)
@@ -2276,11 +2276,11 @@
 ;; Helper for creating `imul` instructions with an immediate operand. Match
 ;; 8-bit immediates first to allow a smaller instruction encoding.
 (decl x64_imul_imm (Type GprMem i32) Gpr)
-(rule 2 (x64_imul_imm $I16 src1 (i8_try_from_i32 src2))  (x64_imulw_rmi_sxb src1 src2))
-(rule 2 (x64_imul_imm $I32 src1 (i8_try_from_i32 src2))  (x64_imull_rmi_sxb src1 src2))
-(rule 2 (x64_imul_imm $I64 src1 (i8_try_from_i32 src2))  (x64_imulq_rmi_sxb src1 src2))
-(rule 1 (x64_imul_imm $I16 src1 (i16_try_from_i32 src2)) (x64_imulw_rmi src1 (i16_as_u16 src2)))
-(rule 1 (x64_imul_imm $I32 src1 src2) (x64_imull_rmi src1 (i32_as_u32 src2)))
+(rule 2 (x64_imul_imm $I16 src1 (i8_from_i32 src2))  (x64_imulw_rmi_sxb src1 src2))
+(rule 2 (x64_imul_imm $I32 src1 (i8_from_i32 src2))  (x64_imull_rmi_sxb src1 src2))
+(rule 2 (x64_imul_imm $I64 src1 (i8_from_i32 src2))  (x64_imulq_rmi_sxb src1 src2))
+(rule 1 (x64_imul_imm $I16 src1 (i16_from_i32 src2)) (x64_imulw_rmi src1 (i16_reinterpret_as_u16 src2)))
+(rule 1 (x64_imul_imm $I32 src1 src2) (x64_imull_rmi src1 (i32_reinterpret_as_u32 src2)))
 (rule 1 (x64_imul_imm $I64 src1 src2) (x64_imulq_rmi_sxl src1 src2))
 
 ;; Helper for creating `mul` instructions or `imul` instructions (depending
@@ -2404,7 +2404,7 @@
 ;; negative numbers to be used as immediates.
 (decl imm_i64 (Type i64) Reg)
 (rule (imm_i64 ty value)
-      (imm ty (i64_as_u64 value)))
+      (imm ty (i64_reinterpret_as_u64 value)))
 
 ;; Helper for emitting immediates.
 ;;
@@ -2422,17 +2422,17 @@
 ;; guarantee that the value in the register is the same logical value as the
 ;; immediate passed to this constructor. This is not possible today though
 ;; because literals like `0x8000_0000_u64` don't convert to `i32`.
-(rule 0 (imm (fits_in_32 (ty_int ty)) (u64_as_u32 imm)) (x64_movl_oi imm))
+(rule 0 (imm (fits_in_32 (ty_int ty)) (u32_from_u64 imm)) (x64_movl_oi imm))
 
 ;; Base cases for other types
 (rule 1 (imm $I64 imm) (x64_movabsq_oi imm))
-(rule 1 (imm $F16 (u64_nonzero bits)) (bitcast_gpr_to_xmm 16 (imm $I16 bits)))
-(rule 1 (imm $F32 (u64_nonzero bits)) (x64_movd_to_xmm (imm $I32 bits)))
-(rule 1 (imm $F64 (u64_nonzero bits)) (x64_movq_to_xmm (imm $I64 bits)))
+(rule 1 (imm $F16 (u64_extract_non_zero bits)) (bitcast_gpr_to_xmm 16 (imm $I16 bits)))
+(rule 1 (imm $F32 (u64_extract_non_zero bits)) (x64_movd_to_xmm (imm $I32 bits)))
+(rule 1 (imm $F64 (u64_extract_non_zero bits)) (x64_movq_to_xmm (imm $I64 bits)))
 
 ;; Special case: a 64-bit immediate which sign extends from a 32-bit immediate.
 (rule 2 (imm $I64 imm)
-  (if-let imm32 (i32_try_from_i64 (u64_as_i64 imm)))
+  (if-let imm32 (i64_try_into_i32 (u64_reinterpret_as_i64 imm)))
   (x64_movq_mi_sxl imm32))
 
 ;; Special case: a 64-bit immediate which zero extends from a 32-bit immediate.
@@ -2440,7 +2440,7 @@
 ;; Note that `movl` here will zero-extend the destination register in 64-bit
 ;; mode which is the zero-extension we want.
 (rule 3 (imm $I64 imm)
-  (if-let imm32 (u32_try_from_u64 imm))
+  (if-let imm32 (u64_try_into_u32 imm))
   (x64_movl_oi imm32))
 
 ;; Special case the 0 immediate:
@@ -2471,7 +2471,7 @@
 (rule (x64_rotl $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_rolq_mi src1 src2))
 (rule 1 (x64_rotl (ty_32_or_64 ty) src (Imm8Gpr.Imm8 imm))
         (if-let true (use_bmi2))
-        (x64_rorx ty src (u8_sub (ty_bits ty) imm)))
+        (x64_rorx ty src (u8_wrapping_sub (ty_bits ty) imm)))
 
 ;; Helper for creating `rotr` instructions.
 (decl x64_rotr (Type Gpr Imm8Gpr) Gpr)
@@ -4244,12 +4244,12 @@
 (rule 1 (x64_add_mem $I16 addr (u16_from_iconst val)) (x64_addw_mi_mem addr val))
 (rule 1 (x64_add_mem $I32 addr (u32_from_iconst val)) (x64_addl_mi_mem addr val))
 (rule 1 (x64_add_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i32_try_from_i64 val))
+      (if-let val2 (i64_try_into_i32 val))
       (x64_addq_mi_sxl_mem addr val2))
-(rule 2 (x64_add_mem $I32 addr (i32_from_iconst (i8_try_from_i32 val)))
+(rule 2 (x64_add_mem $I32 addr (i32_from_iconst (i8_from_i32 val)))
       (x64_addl_mi_sxb_mem addr val))
 (rule 2 (x64_add_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i8_try_from_i64 val))
+      (if-let val2 (i64_try_into_i8 val))
       (x64_addq_mi_sxb_mem addr val2))
 
 (decl x64_sub_mem (Type Amode Value) SideEffectNoResult)
@@ -4265,12 +4265,12 @@
 (rule 1 (x64_sub_mem $I16 addr (u16_from_iconst val)) (x64_subw_mi_mem addr val))
 (rule 1 (x64_sub_mem $I32 addr (u32_from_iconst val)) (x64_subl_mi_mem addr val))
 (rule 1 (x64_sub_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i32_try_from_i64 val))
+      (if-let val2 (i64_try_into_i32 val))
       (x64_subq_mi_sxl_mem addr val2))
-(rule 2 (x64_sub_mem $I32 addr (i32_from_iconst (i8_try_from_i32 val)))
+(rule 2 (x64_sub_mem $I32 addr (i32_from_iconst (i8_from_i32 val)))
       (x64_subl_mi_sxb_mem addr val))
 (rule 2 (x64_sub_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i8_try_from_i64 val))
+      (if-let val2 (i64_try_into_i8 val))
       (x64_subq_mi_sxb_mem addr val2))
 
 (decl x64_and_mem (Type Amode Value) SideEffectNoResult)
@@ -4288,12 +4288,12 @@
 (rule 1 (x64_and_mem $I16 addr (u16_from_iconst val)) (x64_andw_mi_mem addr val))
 (rule 1 (x64_and_mem $I32 addr (u32_from_iconst val)) (x64_andl_mi_mem addr val))
 (rule 1 (x64_and_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i32_try_from_i64 val))
+      (if-let val2 (i64_try_into_i32 val))
       (x64_andq_mi_sxl_mem addr val2))
-(rule 2 (x64_and_mem $I32 addr (i32_from_iconst (i8_try_from_i32 val)))
+(rule 2 (x64_and_mem $I32 addr (i32_from_iconst (i8_from_i32 val)))
       (x64_andl_mi_sxb_mem addr val))
 (rule 2 (x64_and_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i8_try_from_i64 val))
+      (if-let val2 (i64_try_into_i8 val))
       (x64_andq_mi_sxb_mem addr val2))
 
 (decl x64_or_mem (Type Amode Value) SideEffectNoResult)
@@ -4311,12 +4311,12 @@
 (rule 1 (x64_or_mem $I16 addr (u16_from_iconst val)) (x64_orw_mi_mem addr val))
 (rule 1 (x64_or_mem $I32 addr (u32_from_iconst val)) (x64_orl_mi_mem addr val))
 (rule 1 (x64_or_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i32_try_from_i64 val))
+      (if-let val2 (i64_try_into_i32 val))
       (x64_orq_mi_sxl_mem addr val2))
-(rule 2 (x64_or_mem $I32 addr (i32_from_iconst (i8_try_from_i32 val)))
+(rule 2 (x64_or_mem $I32 addr (i32_from_iconst (i8_from_i32 val)))
       (x64_orl_mi_sxb_mem addr val))
 (rule 2 (x64_or_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i8_try_from_i64 val))
+      (if-let val2 (i64_try_into_i8 val))
       (x64_orq_mi_sxb_mem addr val2))
 
 (decl x64_xor_mem (Type Amode Value) SideEffectNoResult)
@@ -4334,12 +4334,12 @@
 (rule 1 (x64_xor_mem $I16 addr (u16_from_iconst val)) (x64_xorw_mi_mem addr val))
 (rule 1 (x64_xor_mem $I32 addr (u32_from_iconst val)) (x64_xorl_mi_mem addr val))
 (rule 1 (x64_xor_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i32_try_from_i64 val))
+      (if-let val2 (i64_try_into_i32 val))
       (x64_xorq_mi_sxl_mem addr val2))
-(rule 2 (x64_xor_mem $I32 addr (i32_from_iconst (i8_try_from_i32 val)))
+(rule 2 (x64_xor_mem $I32 addr (i32_from_iconst (i8_from_i32 val)))
       (x64_xorl_mi_sxb_mem addr val))
 (rule 2 (x64_xor_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i8_try_from_i64 val))
+      (if-let val2 (i64_try_into_i8 val))
       (x64_xorq_mi_sxb_mem addr val2))
 
 ;; Trap if the condition code supplied is set.

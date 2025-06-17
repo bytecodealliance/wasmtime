@@ -37,6 +37,9 @@ pub use cranelift_entity as entity;
 #[cfg(feature = "unwind")]
 pub use gimli;
 
+// Pull in generated the `isle_numerics_methods` macro.
+include!(concat!(env!("ISLE_DIR"), "/isle_numerics.rs"));
+
 #[macro_use]
 mod machinst;
 
