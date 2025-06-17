@@ -142,7 +142,7 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instance_add_func(
  * \brief Add all WASI interfaces into the \p linker provided.
  */
 WASM_API_EXTERN wasmtime_error_t *
-wasmtime_component_linker_add_wasi(wasmtime_component_linker_t *linker);
+wasmtime_component_linker_add_wasip2(wasmtime_component_linker_t *linker);
 
 #endif // WASMTIME_FEATURE_WASI
 
