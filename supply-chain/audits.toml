@@ -2695,6 +2695,11 @@ criteria = "safe-to-deploy"
 delta = "0.7.2 -> 0.8.0"
 notes = "No new unsafe functionality, just brings in openvino-sys changes and other minor improvements."
 
+[[audits.openvino]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.9.0"
+
 [[audits.openvino-finder]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
 criteria = "safe-to-deploy"
@@ -2724,6 +2729,11 @@ criteria = "safe-to-deploy"
 delta = "0.7.2 -> 0.8.0"
 notes = "No logic changes in version bump."
 
+[[audits.openvino-finder]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.9.0"
+
 [[audits.openvino-sys]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
 criteria = "safe-to-deploy"
@@ -2752,6 +2762,11 @@ who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 delta = "0.7.2 -> 0.8.0"
 notes = "This diff simply re-generates slightly newer C headers with a slightly newer version of bindgen."
+
+[[audits.openvino-sys]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.9.0"
 
 [[audits.ort]]
 who = "Andrew Brown <andrew.brown@intel.com>"
