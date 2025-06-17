@@ -1,7 +1,16 @@
 //! Wasmtime's Record and Replay support
+//!
+//! This feature is currently experimental and hence not optimized.
+//! In particular, the following opportunities are immediately identifiable:
+//! * Switch [RRFuncArgTypes] to use [Vec<WasmValType>]
+//!
+//! Flexibility can also be improved with:
+//! * Support for generic writers beyond [File] (will require a generic on [Store])
 
 use crate::ValRaw;
 use crate::prelude::*;
+#[allow(unused_imports)]
+use crate::runtime::Store;
 use core::fmt;
 use core::mem::{self, MaybeUninit};
 use postcard;
@@ -9,10 +18,20 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufWriter, Seek, Write};
+use wasmtime_environ::{WasmFuncType, WasmValType};
 
 const VAL_RAW_SIZE: usize = mem::size_of::<ValRaw>();
 
-/// Transmutable byte arrays necessary to serialize unions
+type RRFuncArgVals = Vec<ValRawSer>;
+type RRFuncArgTypes = WasmFuncType;
+
+fn raw_to_func_argvals(args: &[MaybeUninit<ValRaw>]) -> RRFuncArgVals {
+    args.iter()
+        .map(|x| unsafe { ValRawSer::from(x.assume_init()) })
+        .collect::<Vec<_>>()
+}
+
+/// Transmutable byte array used to serialize [`ValRaw`] union
 #[derive(Serialize, Deserialize)]
 pub struct ValRawSer([u8; VAL_RAW_SIZE]);
 
@@ -33,25 +52,44 @@ impl fmt::Debug for ValRawSer {
     }
 }
 
-/// A single recording/replay event
+/// Arguments for function call/return events
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RRFuncArgs {
+    /// Raw values passed across the call/return boundary
+    args: RRFuncArgVals,
+    /// Optional param/return types (required to support replay validation)
+    types: Option<RRFuncArgTypes>,
+}
+
+/// A single, low-level recording/replay event
+///
+/// A high-level event (e.g. import calls consisting of lifts and lowers
+/// of parameter/return types) may consist of multiple of these lower-level
+/// [`RREvent`]s
 #[derive(Debug, Serialize, Deserialize)]
 pub enum RREvent {
-    ExternCall(Vec<ValRawSer>),
-    ExternReturn(Vec<ValRawSer>),
+    /// A function call from Wasm to Host
+    HostFuncEntry(RRFuncArgs),
+    /// A function return from Host to Wasm.
+    ///
+    /// Matches 1:1 with a prior [`RREvent::HostFuncEntry`] event
+    HostFuncReturn(RRFuncArgs),
 }
 
 impl RREvent {
-    fn raw_to_vec(args: &[MaybeUninit<ValRaw>]) -> Vec<ValRawSer> {
-        args.iter()
-            .map(|x| unsafe { ValRawSer::from(x.assume_init()) })
-            .collect::<Vec<_>>()
+    /// Construct a [`RREvent::HostFuncEntry`] event from raw slice
+    pub fn host_func_entry(args: &[MaybeUninit<ValRaw>], types: Option<WasmFuncType>) -> Self {
+        Self::HostFuncEntry(RRFuncArgs {
+            args: raw_to_func_argvals(args),
+            types: types,
+        })
     }
-
-    pub fn extern_call_from_valraw_slice(args: &[MaybeUninit<ValRaw>]) -> Self {
-        Self::ExternCall(Self::raw_to_vec(args))
-    }
-    pub fn extern_return_from_valraw_slice(args: &[MaybeUninit<ValRaw>]) -> Self {
-        Self::ExternReturn(Self::raw_to_vec(args))
+    /// Construct a [`RREvent::HostFuncReturn`] event from raw slice
+    pub fn host_func_return(args: &[MaybeUninit<ValRaw>], types: Option<WasmFuncType>) -> Self {
+        Self::HostFuncReturn(RRFuncArgs {
+            args: raw_to_func_argvals(args),
+            types: types,
+        })
     }
 }
 
@@ -75,13 +113,11 @@ impl RRBuffer {
     pub fn read_fs(path: String) -> Result<Self> {
         let mut file = File::open(path)?;
         let mut events = VecDeque::<RREvent>::new();
+        // Read till EOF
         while file.stream_position()? != file.metadata()?.len() {
             let (event, _): (RREvent, _) = postcard::from_io((&mut file, &mut [0; 0]))?;
             events.push_back(event);
         }
-        // Check that file is at EOF
-        //assert_eq!(file.stream_position()?, file.metadata()?.len());
-        println!("Read from file: {:?}", events);
         Ok(RRBuffer {
             inner: events,
             rw: file,
@@ -104,7 +140,6 @@ impl RRBuffer {
     ///
     /// Buffer is emptied during this process
     pub fn flush_to_file(&mut self) -> Result<()> {
-        println!("Flushing to file: {:?}", self.inner);
         // Seralizing each event independently prevents checking for vector sizes
         // during deserialization
         for v in &self.inner {

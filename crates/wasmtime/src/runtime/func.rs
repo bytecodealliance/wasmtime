@@ -2323,13 +2323,11 @@ impl HostContext {
         };
         let replay_intercept = |caller: &mut Caller<'_, T>| -> Option<RREvent> {
             let replay_buffer = caller.store.0.replay_buffer_mut();
-            if let Some(buf) = replay_buffer {
+            replay_buffer.and_then(|buf| {
                 let call_event = buf.pop_front();
                 println!("Replay | {:?}", &call_event);
                 Some(call_event)
-            } else {
-                None
-            }
+            })
         };
         // Note that this function is intentionally scoped into a
         // separate closure. Handling traps and panics will involve
@@ -2340,14 +2338,24 @@ impl HostContext {
         let run = move |mut caller: Caller<'_, T>| {
             let mut args =
                 NonNull::slice_from_raw_parts(args.cast::<MaybeUninit<ValRaw>>(), args_len);
-            let vmctx = VMArrayCallHostFuncContext::from_opaque(callee_vmctx);
-            let state = vmctx.as_ref().host_state();
+            let vmctx = VMArrayCallHostFuncContext::from_opaque(callee_vmctx).as_ref();
+            let state = vmctx.host_state();
             // Double-check ourselves in debug mode, but we control
             // the `Any` here so an unsafe downcast should also
             // work.
             debug_assert!(state.is::<HostFuncState<F>>());
             let state = &*(state as *const _ as *const HostFuncState<F>);
             let func = &state.func;
+
+            let type_index = vmctx.func_ref().type_index;
+            let wasm_func_type_arc = caller
+                .store
+                .0
+                .engine()
+                .signatures()
+                .borrow(type_index)
+                .unwrap();
+            let wasm_func_type = wasm_func_type_arc.unwrap_func();
 
             let ret = 'ret: {
                 if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
@@ -2357,7 +2365,7 @@ impl HostContext {
                 {
                     record_intercept(
                         &mut caller,
-                        RREvent::extern_call_from_valraw_slice(args.as_ref()),
+                        RREvent::host_func_entry(args.as_ref(), Some(wasm_func_type.clone())),
                     );
                     let _event = replay_intercept(&mut caller);
                 }
@@ -2393,7 +2401,7 @@ impl HostContext {
                 {
                     record_intercept(
                         &mut caller,
-                        RREvent::extern_return_from_valraw_slice(args.as_ref()),
+                        RREvent::host_func_return(args.as_ref(), Some(wasm_func_type.clone())),
                     );
                     let _event = replay_intercept(&mut caller);
                 }

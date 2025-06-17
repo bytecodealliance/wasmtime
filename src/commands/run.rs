@@ -108,8 +108,8 @@ impl RunCommand {
             }
             None => {}
         }
-        let rr = &self.run.rr;
-        config.rr(&rr.record, &rr.replay);
+        let rr = self.run.rr.clone();
+        config.rr(rr.record, rr.replay);
 
         let engine = Engine::new(&config)?;
 

@@ -1250,7 +1250,7 @@ impl fmt::Display for CommonOptions {
     }
 }
 
-#[derive(Args)]
+#[derive(Args, Clone)]
 #[group(multiple = false)]
 pub struct RROptions {
     /// Record the module execution
