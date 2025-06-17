@@ -195,6 +195,14 @@ wasmtime_context_set_wasi(wasmtime_context_t *context, wasi_config_t *wasi);
 
 #ifdef WASMTIME_FEATURE_COMPONENT_MODEL
 
+/**
+ * \brief Set the WASIP2 config for this store.
+ *
+ * This function is required if #wasmtime_component_linker_add_wasip2 is called.
+ *
+ * This function takes ownership of \p config. The caller should no longer use
+ * \p config after calling this function.
+ */
 WASM_API_EXTERN void
 wasmtime_context_set_wasip2(wasmtime_context_t *context,
                             wasmtime_wasip2_config_t *config);
