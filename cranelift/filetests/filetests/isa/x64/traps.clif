@@ -58,7 +58,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   testq   %rdi, %rdi
+;   testq %rdi, %rdi
 ;   jz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -87,7 +87,7 @@ block0(v0: i128):
 ;   movq %rsp, %rbp
 ; block0:
 ;   orq %rdi, %rsi
-;   testq   %rsi, %rsi
+;   testq %rsi, %rsi
 ;   jz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -116,7 +116,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   testq   %rdi, %rdi
+;   testq %rdi, %rdi
 ;   jnz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -145,7 +145,7 @@ block0(v0: i128):
 ;   movq %rsp, %rbp
 ; block0:
 ;   orq %rdi, %rsi
-;   testq   %rsi, %rsi
+;   testq %rsi, %rsi
 ;   jnz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -175,7 +175,7 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpq    %rsi, %rdi
+;   cmpq %rsi, %rdi
 ;   jnz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -204,7 +204,7 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpq    %rsi, %rdi
+;   cmpq %rsi, %rdi
 ;   jz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -294,7 +294,7 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpq    %rsi, %rdi
+;   cmpq %rsi, %rdi
 ;   jnz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -324,7 +324,7 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpq    %rsi, %rdi
+;   cmpq %rsi, %rdi
 ;   jz #trap=user1
 ;   movq %rbp, %rsp
 ;   popq %rbp

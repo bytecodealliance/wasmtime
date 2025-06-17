@@ -1,5 +1,5 @@
 use crate::dsl::{Customization::*, Eflags::*, Feature::*, Inst, Location::*, VexLength::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, vex, w};
+use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, sxw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -28,5 +28,38 @@ pub fn list() -> Vec<Inst> {
         inst("cmpss", fmt("A", [rw(xmm1), r(xmm_m32), r(imm8)]), rex([0xF3, 0x0F, 0xC2]).r().ib(), _64b | compat | sse).custom(Display),
         inst("ucomisd", fmt("A", [r(xmm1), r(xmm_m64)]).flags(W), rex([0x66, 0x0F, 0x2E]).r(), _64b | compat | sse2),
         inst("ucomiss", fmt("A", [r(xmm1), r(xmm_m32)]).flags(W), rex([0x0F, 0x2E]).r(), _64b | compat | sse),
+
+        inst("cmpb", fmt("I", [r(al), r(imm8)]).flags(W), rex([0x3C]).ib(), _64b | compat),
+        inst("cmpw", fmt("I", [r(ax), r(imm16)]).flags(W), rex([0x66, 0x3D]).iw(), _64b | compat),
+        inst("cmpl", fmt("I", [r(eax), r(imm32)]).flags(W), rex([0x3D]).id(), _64b | compat),
+        inst("cmpq", fmt("I", [r(rax), r(sxq(imm32))]).flags(W), rex([0x3D]).w().id(), _64b),
+        inst("cmpb", fmt("MI", [r(rm8), r(imm8)]).flags(W), rex([0x80]).digit(7).ib(), _64b | compat),
+        inst("cmpw", fmt("MI", [r(rm16), r(imm16)]).flags(W), rex([0x66, 0x81]).digit(7).iw(), _64b | compat),
+        inst("cmpl", fmt("MI", [r(rm32), r(imm32)]).flags(W), rex([0x81]).digit(7).id(), _64b | compat),
+        inst("cmpq", fmt("MI", [r(rm64), r(sxq(imm32))]).flags(W), rex([0x81]).w().digit(7).id(), _64b),
+        inst("cmpw", fmt("MI_SXB", [r(rm16), r(sxw(imm8))]).flags(W), rex([0x66, 0x83]).digit(7).ib(), _64b | compat),
+        inst("cmpl", fmt("MI_SXB", [r(rm32), r(sxl(imm8))]).flags(W), rex([0x83]).digit(7).ib(), _64b | compat),
+        inst("cmpq", fmt("MI_SXB", [r(rm64), r(sxq(imm8))]).flags(W), rex([0x83]).w().digit(7).ib(), _64b),
+        inst("cmpb", fmt("MR", [r(rm8), r(r8)]).flags(W), rex([0x38]), _64b | compat),
+        inst("cmpw", fmt("MR", [r(rm16), r(r16)]).flags(W), rex([0x66, 0x39]), _64b | compat),
+        inst("cmpl", fmt("MR", [r(rm32), r(r32)]).flags(W), rex([0x39]), _64b | compat),
+        inst("cmpq", fmt("MR", [r(rm64), r(r64)]).flags(W), rex([0x39]).w(), _64b),
+        inst("cmpb", fmt("RM", [r(r8), r(rm8)]).flags(W), rex([0x3A]), _64b | compat),
+        inst("cmpw", fmt("RM", [r(r16), r(rm16)]).flags(W), rex([0x66, 0x3B]), _64b | compat),
+        inst("cmpl", fmt("RM", [r(r32), r(rm32)]).flags(W), rex([0x3B]), _64b | compat),
+        inst("cmpq", fmt("RM", [r(r64), r(rm64)]).flags(W), rex([0x3B]).w(), _64b),
+
+        inst("testb", fmt("I", [r(al), r(imm8)]).flags(W), rex([0xA8]).ib(), _64b | compat),
+        inst("testw", fmt("I", [r(ax), r(imm16)]).flags(W), rex([0x66, 0xA9]).iw(), _64b | compat),
+        inst("testl", fmt("I", [r(eax), r(imm32)]).flags(W), rex([0xA9]).id(), _64b | compat),
+        inst("testq", fmt("I", [r(rax), r(sxq(imm32))]).flags(W), rex([0xA9]).w().id(), _64b),
+        inst("testb", fmt("MI", [r(rm8), r(imm8)]).flags(W), rex([0xF6]).digit(0).ib(), _64b | compat),
+        inst("testw", fmt("MI", [r(rm16), r(imm16)]).flags(W), rex([0x66, 0xF7]).digit(0).iw(), _64b | compat),
+        inst("testl", fmt("MI", [r(rm32), r(imm32)]).flags(W), rex([0xF7]).digit(0).id(), _64b | compat),
+        inst("testq", fmt("MI", [r(rm64), r(sxq(imm32))]).flags(W), rex([0xF7]).w().digit(0).id(), _64b),
+        inst("testb", fmt("MR", [r(rm8), r(r8)]).flags(W), rex([0x84]), _64b | compat),
+        inst("testw", fmt("MR", [r(rm16), r(r16)]).flags(W), rex([0x66, 0x85]), _64b | compat),
+        inst("testl", fmt("MR", [r(rm32), r(r32)]).flags(W), rex([0x85]), _64b | compat),
+        inst("testq", fmt("MR", [r(rm64), r(r64)]).flags(W), rex([0x85]).w(), _64b | compat),
     ]
 }

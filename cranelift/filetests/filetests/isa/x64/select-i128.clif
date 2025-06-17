@@ -14,7 +14,7 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpl    $42, %edi
+;   cmpl $0x2a, %edi
 ;   movq %rcx, %rax
 ;   cmovzq  %rsi, %rax, %rax
 ;   movq %rdx, %rdi

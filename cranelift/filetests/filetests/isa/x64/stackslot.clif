@@ -23,7 +23,7 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ;   movq %rsi, %r10
 ;   addq $0x30, %r10
-;   cmpq    %rsp, %r10
+;   cmpq %rsp, %r10
 ;   jnbe #trap=stk_ovf
 ;   subq $0x30, %rsp
 ; block0:

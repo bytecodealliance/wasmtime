@@ -18,9 +18,9 @@ use cranelift_codegen::{
         x64::{
             AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
             args::{
-                self, Amode, Avx512Opcode, AvxOpcode, CC, CmpOpcode, ExtMode, FromWritableReg, Gpr,
-                GprMem, GprMemImm, RegMem, RegMemImm, SyntheticAmode, WritableGpr, WritableXmm,
-                Xmm, XmmMem, XmmMemImm,
+                self, Amode, Avx512Opcode, AvxOpcode, CC, ExtMode, FromWritableReg, Gpr, GprMem,
+                GprMemImm, RegMem, RegMemImm, SyntheticAmode, WritableGpr, WritableXmm, Xmm,
+                XmmMem, XmmMemImm,
             },
             encoding::rex::{RexFlags, encode_modrm},
             external::{PairedGpr, PairedXmm},
@@ -1056,12 +1056,7 @@ impl Assembler {
             // divide-by-zero. Check for divide-by-zero explicitly and let the
             // hardware detect overflow.
             DivKind::Signed => {
-                self.emit(Inst::CmpRmiR {
-                    size: size.into(),
-                    src1: divisor.into(),
-                    src2: GprMemImm::unwrap_new(RegMemImm::imm(0)),
-                    opcode: CmpOpcode::Cmp,
-                });
+                self.cmp_ir(divisor, 0, size);
                 self.emit(Inst::TrapIf {
                     cc: CC::Z,
                     trap_code: TrapCode::INTEGER_DIVISION_BY_ZERO,
@@ -1294,23 +1289,41 @@ impl Assembler {
     }
 
     pub fn cmp_ir(&mut self, src1: Reg, imm: i32, size: OperandSize) {
-        let imm = RegMemImm::imm(imm as u32);
+        let inst = match size {
+            OperandSize::S8 => {
+                let imm = i8::try_from(imm).unwrap();
+                asm::inst::cmpb_mi::new(src1, imm.unsigned()).into()
+            }
+            OperandSize::S16 => match i8::try_from(imm) {
+                Ok(imm8) => asm::inst::cmpw_mi_sxb::new(src1, imm8).into(),
+                Err(_) => {
+                    asm::inst::cmpw_mi::new(src1, i16::try_from(imm).unwrap().unsigned()).into()
+                }
+            },
+            OperandSize::S32 => match i8::try_from(imm) {
+                Ok(imm8) => asm::inst::cmpl_mi_sxb::new(src1, imm8).into(),
+                Err(_) => asm::inst::cmpl_mi::new(src1, imm.unsigned()).into(),
+            },
+            OperandSize::S64 => match i8::try_from(imm) {
+                Ok(imm8) => asm::inst::cmpq_mi_sxb::new(src1, imm8).into(),
+                Err(_) => asm::inst::cmpq_mi::new(src1, imm).into(),
+            },
+            OperandSize::S128 => unimplemented!(),
+        };
 
-        self.emit(Inst::CmpRmiR {
-            size: size.into(),
-            opcode: CmpOpcode::Cmp,
-            src1: src1.into(),
-            src2: GprMemImm::unwrap_new(imm),
-        });
+        self.emit(Inst::External { inst });
     }
 
     pub fn cmp_rr(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
-        self.emit(Inst::CmpRmiR {
-            size: size.into(),
-            opcode: CmpOpcode::Cmp,
-            src1: src1.into(),
-            src2: src2.into(),
-        });
+        let inst = match size {
+            OperandSize::S8 => asm::inst::cmpb_rm::new(src1, src2).into(),
+            OperandSize::S16 => asm::inst::cmpw_rm::new(src1, src2).into(),
+            OperandSize::S32 => asm::inst::cmpl_rm::new(src1, src2).into(),
+            OperandSize::S64 => asm::inst::cmpq_rm::new(src1, src2).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+
+        self.emit(Inst::External { inst });
     }
 
     /// Compares values in src1 and src2 and sets ZF, PF, and CF flags in EFLAGS
@@ -1341,12 +1354,15 @@ impl Assembler {
 
     /// Emit a test instruction with two register operands.
     pub fn test_rr(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
-        self.emit(Inst::CmpRmiR {
-            size: size.into(),
-            opcode: CmpOpcode::Test,
-            src1: src1.into(),
-            src2: src2.into(),
-        })
+        let inst = match size {
+            OperandSize::S8 => asm::inst::testb_mr::new(src1, src2).into(),
+            OperandSize::S16 => asm::inst::testw_mr::new(src1, src2).into(),
+            OperandSize::S32 => asm::inst::testl_mr::new(src1, src2).into(),
+            OperandSize::S64 => asm::inst::testq_mr::new(src1, src2).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
+
+        self.emit(Inst::External { inst });
     }
 
     /// Set value in dst to `0` or `1` based on flags in status register and

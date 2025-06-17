@@ -2,8 +2,8 @@ use crate::ir::KnownSymbol;
 use crate::ir::immediates::{Ieee32, Ieee64};
 use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength, RegisterOrAmode};
 use crate::isa::x64::encoding::rex::{
-    LegacyPrefixes, OpcodeMap, RexFlags, emit_simm, emit_std_enc_enc, emit_std_enc_mem,
-    emit_std_reg_mem, emit_std_reg_reg, int_reg_enc, low8_will_sign_extend_to_32, reg_enc,
+    LegacyPrefixes, OpcodeMap, RexFlags, emit_std_enc_enc, emit_std_enc_mem, emit_std_reg_mem,
+    emit_std_reg_reg, int_reg_enc, reg_enc,
 };
 use crate::isa::x64::encoding::vex::{VexInstruction, VexVectorLength};
 use crate::isa::x64::external::{AsmInst, CraneliftRegisters, PairedGpr};
@@ -191,7 +191,7 @@ pub(crate) fn emit(
 
             // Check if the divisor is -1, and if it isn't then immediately
             // go to the `idiv`.
-            let inst = Inst::cmp_rmi_r(size, divisor.to_reg(), RegMemImm::imm(0xffffffff));
+            let inst = Inst::cmp_mi_sxb(size, *divisor, -1);
             inst.emit(sink, info, state);
             one_way_jmp(sink, CC::NZ, do_op);
 
@@ -348,86 +348,6 @@ pub(crate) fn emit(
             };
         }
 
-        Inst::CmpRmiR {
-            size,
-            src1: reg_g,
-            src2: src_e,
-            opcode,
-        } => {
-            let reg_g = reg_g.to_reg();
-
-            let is_cmp = match opcode {
-                CmpOpcode::Cmp => true,
-                CmpOpcode::Test => false,
-            };
-
-            let mut prefix = LegacyPrefixes::None;
-            if *size == OperandSize::Size16 {
-                prefix = LegacyPrefixes::_66;
-            }
-            // A redundant REX prefix can change the meaning of this instruction.
-            let mut rex = RexFlags::from((*size, reg_g));
-
-            match src_e.clone().to_reg_mem_imm() {
-                RegMemImm::Reg { reg: reg_e } => {
-                    if *size == OperandSize::Size8 {
-                        // Check whether the E register forces the use of a redundant REX.
-                        rex.always_emit_if_8bit_needed(reg_e);
-                    }
-
-                    // Use the swapped operands encoding for CMP, to stay consistent with the output of
-                    // gcc/llvm.
-                    let opcode = match (*size, is_cmp) {
-                        (OperandSize::Size8, true) => 0x38,
-                        (_, true) => 0x39,
-                        (OperandSize::Size8, false) => 0x84,
-                        (_, false) => 0x85,
-                    };
-                    emit_std_reg_reg(sink, prefix, opcode, 1, reg_e, reg_g, rex);
-                }
-
-                RegMemImm::Mem { addr } => {
-                    let addr = &addr.finalize(state.frame_layout(), sink).clone();
-                    // Whereas here we revert to the "normal" G-E ordering for CMP.
-                    let opcode = match (*size, is_cmp) {
-                        (OperandSize::Size8, true) => 0x3A,
-                        (_, true) => 0x3B,
-                        (OperandSize::Size8, false) => 0x84,
-                        (_, false) => 0x85,
-                    };
-                    emit_std_reg_mem(sink, prefix, opcode, 1, reg_g, addr, rex, 0);
-                }
-
-                RegMemImm::Imm { simm32 } => {
-                    // FIXME JRS 2020Feb11: there are shorter encodings for
-                    // cmp $imm, rax/eax/ax/al.
-                    let use_imm8 = is_cmp && low8_will_sign_extend_to_32(simm32);
-
-                    // And also here we use the "normal" G-E ordering.
-                    let opcode = if is_cmp {
-                        if *size == OperandSize::Size8 {
-                            0x80
-                        } else if use_imm8 {
-                            0x83
-                        } else {
-                            0x81
-                        }
-                    } else {
-                        if *size == OperandSize::Size8 {
-                            0xF6
-                        } else {
-                            0xF7
-                        }
-                    };
-                    let subopcode = if is_cmp { 7 } else { 0 };
-
-                    let enc_g = int_reg_enc(reg_g);
-                    emit_std_enc_enc(sink, prefix, opcode, 1, subopcode, enc_g, rex);
-                    emit_simm(sink, if use_imm8 { 1 } else { size.to_bytes() }, simm32);
-                }
-            }
-        }
-
         Inst::Setcc { cc, dst } => {
             let dst = dst.to_reg().to_reg();
             let opcode = 0x0f90 + cc.get_enc() as u32;
@@ -562,12 +482,8 @@ pub(crate) fn emit(
 
             // Compare and jump if we are not done yet
             // cmp  rsp, tmp_reg
-            let inst = Inst::cmp_rmi_r(
-                OperandSize::Size64,
-                tmp.to_reg(),
-                RegMemImm::reg(regs::rsp()),
-            );
-            inst.emit(sink, info, state);
+            let tmp = Gpr::unwrap_new(tmp.to_reg());
+            asm::inst::cmpq_rm::new(tmp, Gpr::unwrap_new(regs::rsp())).emit(sink, info, state);
 
             // jne  .loop_start
             // TODO: Encoding the conditional jump as a short jump
@@ -1948,8 +1864,7 @@ pub(crate) fn emit(
             // If x seen as a signed int64 is not negative, a signed-conversion will do the right
             // thing.
             // TODO use tst src, src here.
-            let inst = Inst::cmp_rmi_r(OperandSize::Size64, src, RegMemImm::imm(0));
-            inst.emit(sink, info, state);
+            asm::inst::cmpq_mi_sxb::new(src, 0).emit(sink, info, state);
 
             one_way_jmp(sink, CC::L, handle_negative);
 
@@ -2087,7 +2002,7 @@ pub(crate) fn emit(
             cvtt_op(dst, src).emit(sink, info, state);
 
             // Compare against 1, in case of overflow the dst operand was INT_MIN.
-            let inst = Inst::cmp_rmi_r(*dst_size, dst.to_reg(), RegMemImm::imm(1));
+            let inst = Inst::cmp_mi_sxb(*dst_size, Gpr::unwrap_new(dst.to_reg()), 1);
             inst.emit(sink, info, state);
 
             one_way_jmp(sink, CC::NO, done); // no overflow => done
@@ -2341,7 +2256,7 @@ pub(crate) fn emit(
 
             cvtt_op(dst, src).emit(sink, info, state);
 
-            let inst = Inst::cmp_rmi_r(*dst_size, dst.to_reg(), RegMemImm::imm(0));
+            let inst = Inst::cmp_mi_sxb(*dst_size, Gpr::unwrap_new(dst.to_reg()), 0);
             inst.emit(sink, info, state);
 
             one_way_jmp(sink, CC::NL, done); // if dst >= 0, jump to done
@@ -2374,7 +2289,7 @@ pub(crate) fn emit(
 
             cvtt_op(dst, tmp_xmm2.to_reg()).emit(sink, info, state);
 
-            let inst = Inst::cmp_rmi_r(*dst_size, dst.to_reg(), RegMemImm::imm(0));
+            let inst = Inst::cmp_mi_sxb(*dst_size, Gpr::unwrap_new(dst.to_reg()), 0);
             inst.emit(sink, info, state);
 
             if *is_saturating {
@@ -2516,12 +2431,20 @@ pub(crate) fn emit(
                 }
                 RmwOp::Umin | RmwOp::Umax | RmwOp::Smin | RmwOp::Smax => {
                     // cmp %r_temp, %r_operand
-                    let i3 = Inst::cmp_rmi_r(
-                        OperandSize::from_ty(*ty),
-                        *operand,
-                        RegMemImm::reg(*temp.to_reg()),
-                    );
-                    i3.emit(sink, info, state);
+                    let temp = temp.to_reg();
+                    match *ty {
+                        types::I8 => asm::inst::cmpb_rm::new(operand, temp).emit(sink, info, state),
+                        types::I16 => {
+                            asm::inst::cmpw_rm::new(operand, temp).emit(sink, info, state)
+                        }
+                        types::I32 => {
+                            asm::inst::cmpl_rm::new(operand, temp).emit(sink, info, state)
+                        }
+                        types::I64 => {
+                            asm::inst::cmpq_rm::new(operand, temp).emit(sink, info, state)
+                        }
+                        _ => unreachable!(),
+                    }
 
                     // cmovcc %r_operand, %r_temp
                     let cc = match op {
@@ -2601,7 +2524,6 @@ pub(crate) fn emit(
             asm::inst::movq_mr::new(temp_high, dst_old_high.to_reg()).emit(sink, info, state);
 
             // Perform the operation.
-            let operand_low_rmi = RegMemImm::reg(*operand_low);
             use Atomic128RmwSeqOp as RmwOp;
             match op {
                 RmwOp::Nand => {
@@ -2615,9 +2537,8 @@ pub(crate) fn emit(
                 }
                 RmwOp::Umin | RmwOp::Umax | RmwOp::Smin | RmwOp::Smax => {
                     // Do a comparison with LHS temp and RHS operand.
-                    // `cmp_rmi_r` and `alu_rmi_r` have opposite argument orders.
-                    Inst::cmp_rmi_r(OperandSize::Size64, *temp_low.to_reg(), operand_low_rmi)
-                        .emit(sink, info, state);
+                    // Note the opposite argument orders.
+                    asm::inst::cmpq_rm::new(temp_low.to_reg(), operand_low).emit(sink, info, state);
                     // This will clobber `temp_high`
                     asm::inst::sbbq_rm::new(temp_high, operand_high).emit(sink, info, state);
                     // Restore the clobbered value

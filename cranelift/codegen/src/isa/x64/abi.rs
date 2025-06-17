@@ -474,7 +474,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Self::I> {
         smallvec![
-            Inst::cmp_rmi_r(OperandSize::Size64, limit_reg, RegMemImm::reg(regs::rsp())),
+            Inst::External {
+                inst: asm::inst::cmpq_rm::new(
+                    Gpr::unwrap_new(limit_reg),
+                    Gpr::unwrap_new(regs::rsp())
+                )
+                .into(),
+            },
             Inst::TrapIf {
                 // NBE == "> unsigned"; args above are reversed; this tests limit_reg > rsp.
                 cc: CC::NBE,
