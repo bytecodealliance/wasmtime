@@ -304,13 +304,13 @@ unsafe extern "C" {
 /// This function is responsible for actually running a wasm function inside a
 /// continuation. It is only ever called from `wasmtime_continuation_start`.
 unsafe extern "C" fn fiber_start(
-    func_ref: *const VMFuncRef,
+    func_ref: *mut VMFuncRef,
     caller_vmctx: *mut VMContext,
     args: *mut VMHostArray<ValRaw>,
     return_value_count: u32,
 ) {
     unsafe {
-        let func_ref = func_ref.as_ref().expect("Non-null function reference");
+        let func_ref = NonNull::new(func_ref).unwrap();
         let caller_vmxtx = NonNull::new_unchecked(caller_vmctx);
         let args = &mut *args;
         let params_and_returns: NonNull<[ValRaw]> = if args.capacity == 0 {
@@ -333,7 +333,7 @@ unsafe extern "C" fn fiber_start(
         //
         // TODO(dhil): we are ignoring the boolean return value
         // here... we probably shouldn't.
-        func_ref.array_call(None, caller_vmxtx, params_and_returns);
+        VMFuncRef::array_call(func_ref, None, caller_vmxtx, params_and_returns);
 
         // The array call trampoline should have just written
         // `return_value_count` values to the `args` buffer. Let's reflect that

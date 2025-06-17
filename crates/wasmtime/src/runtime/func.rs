@@ -1019,7 +1019,7 @@ impl Func {
         params_and_returns: NonNull<[ValRaw]>,
     ) -> Result<()> {
         invoke_wasm_and_catch_traps(store, |caller, vm| {
-            func_ref.as_ref().array_call(vm, caller, params_and_returns)
+            VMFuncRef::array_call(func_ref, vm, caller, params_and_returns)
         })
     }
 
