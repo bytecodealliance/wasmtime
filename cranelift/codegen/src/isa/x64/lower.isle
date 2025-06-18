@@ -1890,28 +1890,28 @@
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (trap code))
-      (side_effect (x64_ud2 code)))
+      (side_effect (x64_ud2_zo code)))
 
 ;;;; Rules for `trapz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (trapz val code))
+(rule 0 (lower (trapz (maybe_uextend val) code))
         (side_effect (trap_if_val (ZeroCond.Zero) val code)))
 
-(rule 1 (lower (trapz (icmp cc a b) code))
+(rule 1 (lower (trapz (maybe_uextend (icmp cc a b)) code))
         (side_effect (trap_if_icmp (emit_cmp (intcc_complement cc) a b) code)))
 
-(rule 1 (lower (trapz (fcmp cc a b) code))
+(rule 1 (lower (trapz (maybe_uextend (fcmp cc a b)) code))
         (side_effect (trap_if_fcmp (emit_fcmp (floatcc_complement cc) a b) code)))
 
 ;;;; Rules for `trapnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (trapnz val code))
+(rule 0 (lower (trapnz (maybe_uextend val) code))
         (side_effect (trap_if_val (ZeroCond.NonZero) val code)))
 
-(rule 1 (lower (trapnz (icmp cc a b) code))
+(rule 1 (lower (trapnz (maybe_uextend (icmp cc a b)) code))
         (side_effect (trap_if_icmp (emit_cmp cc a b) code)))
 
-(rule 1 (lower (trapnz (fcmp cc a b) code))
+(rule 1 (lower (trapnz (maybe_uextend (fcmp cc a b)) code))
         (side_effect (trap_if_fcmp (emit_fcmp cc a b) code)))
 
 ;;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2605,7 +2605,7 @@
 ;; Rules for `debugtrap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (debugtrap))
-      (side_effect (x64_hlt)))
+      (side_effect (x64_int3_zo)))
 
 ;; Rules for `x86_pmaddubsw` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3231,7 +3231,7 @@
 
 ;; Rules for `load*` + ALU op + `store*` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Add mem, reg
+;; `add mem, {reg,imm}`
 (rule store_x64_add_mem 3 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3245,7 +3245,7 @@
         (side_effect
          (x64_add_mem ty (to_amode flags addr offset) src2))))
 
-;; Add mem, reg with args swapped
+;; `add mem, {reg,imm}` with args swapped
 (rule 2 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3259,7 +3259,7 @@
         (side_effect
          (x64_add_mem ty (to_amode flags addr offset) src2))))
 
-;; Sub mem, reg
+;; `sub mem, {reg,imm}`
 (rule 2 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3273,7 +3273,7 @@
         (side_effect
          (x64_sub_mem ty (to_amode flags addr offset) src2))))
 
-;; And mem, reg
+;; `and mem, {reg,imm}`
 (rule 3 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3287,7 +3287,7 @@
         (side_effect
          (x64_and_mem ty (to_amode flags addr offset) src2))))
 
-;; And mem, reg with args swapped
+;; `and mem, {reg,imm}` with args swapped
 (rule 2 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3301,7 +3301,7 @@
         (side_effect
          (x64_and_mem ty (to_amode flags addr offset) src2))))
 
-;; Or mem, reg
+;; `or mem, {reg,imm}`
 (rule 3 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3315,7 +3315,7 @@
         (side_effect
          (x64_or_mem ty (to_amode flags addr offset) src2))))
 
-;; Or mem, reg with args swapped
+;; `or mem, {reg,imm}` with args swapped
 (rule 2 (lower
        (store (little_or_native_endian flags)
               (has_type (ty_32_or_64 ty)
@@ -3360,7 +3360,7 @@
 ;; Rules for `fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (fence))
-      (side_effect (x64_mfence)))
+      (side_effect (x64_mfence_zo)))
 
 ;; Rules for `func_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3398,7 +3398,7 @@
                            address))
       (side_effect (side_effect_concat
        (x64_movrm ty (to_amode flags address (zero_offset)) value)
-       (x64_mfence))))
+       (x64_mfence_zo))))
 ;; Lower 128-bit `atomic_store` using `cmpxchg16b`.
 (rule 1 (lower (atomic_store (little_or_native_endian flags) value @ (value_type $I128) address))
       (if-let true (use_cmpxchg16b))
@@ -3424,14 +3424,14 @@
 ;; `Add` and `Sub` can use `lock xadd`
 (rule 1 (lower (has_type (and (fits_in_64 ty) (ty_int _))
                   (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Add) address input)))
-      (x64_xadd (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+      (x64_xadd ty (to_amode flags address (zero_offset)) input))
 (rule 1 (lower (has_type (and (fits_in_64 ty) (ty_int _))
                   (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Sub) address input)))
-      (x64_xadd (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) (x64_neg ty input)))
+      (x64_xadd ty (to_amode flags address (zero_offset)) (x64_neg ty input)))
 ;; `Xchg` can use `xchg`
 (rule 1 (lower (has_type (and (fits_in_64 ty) (ty_int _))
                   (atomic_rmw (little_or_native_endian flags) (AtomicRmwOp.Xchg) address input)))
-      (x64_xchg (raw_operand_size_of_type ty) (to_amode flags address (zero_offset)) input))
+      (x64_xchg ty (to_amode flags address (zero_offset)) input))
 
 ;; `Add`, `Sub`, `And`, `Or` and `Xor` can use `lock`-prefixed instructions if
 ;; the old value is not required.
@@ -4780,12 +4780,14 @@
 
 ;; Rules for `scalar_to_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Case 1: when moving a scalar float, we simply move from one XMM register
-;; to another, expecting the register allocator to elide this. Here we
-;; assume that the upper bits of a scalar float have not been munged with
-;; (the same assumption the old backend makes).
-(rule 1 (lower (scalar_to_vector src @ (value_type (ty_scalar_float _))))
-      src)
+;; Case 1: when moving a scalar float the `movss` and `movsd` variants with
+;; xmm-register-to-xmm-register semantics are used to modify only the low bits
+;; of a guaranteed-zero register. This ensures that the upper bits are cleared
+;; as the upper bits of `src` in a register are otherwise undefined.
+(rule 1 (lower (scalar_to_vector src @ (value_type $F32)))
+  (x64_movss_regmove (xmm_zero $F32X4) src))
+(rule 1 (lower (scalar_to_vector src @ (value_type $F64)))
+  (x64_movsd_regmove (xmm_zero $F64X2) src))
 
 ;; Case 2: when moving a scalar value of any other type, use MOVD to zero
 ;; the upper lanes.

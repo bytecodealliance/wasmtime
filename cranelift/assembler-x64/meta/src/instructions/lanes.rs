@@ -22,12 +22,19 @@ pub fn list() -> Vec<Inst> {
         inst("pinsrd", fmt("A", [rw(xmm1), r(rm32), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x22]).r().ib(), _64b | compat | sse41),
         inst("pinsrq", fmt("A", [rw(xmm1), r(rm64), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x22]).r().ib().w(), _64b | sse41),
 
+        // Extract sign masks from the floating-point lanes.
         inst("movmskps", fmt("RM", [w(r32), r(xmm2)]), rex([0x0F, 0x50]).r(), _64b | compat | sse),
         inst("movmskpd", fmt("RM", [w(r32), r(xmm2)]), rex([0x66, 0x0F, 0x50]).r(), _64b | compat | sse2),
         inst("pmovmskb", fmt("RM", [w(r32), r(xmm2)]), rex([0x66, 0x0F, 0xD7]).r(), _64b | compat | sse2),
         inst("vmovmskps", fmt("RM", [w(r32), r(xmm2)]), vex(L128)._0f().op(0x50).r(), _64b | compat | avx),
         inst("vmovmskpd", fmt("RM", [w(r32), r(xmm2)]), vex(L128)._66()._0f().op(0x50).r(), _64b | compat | avx),
         inst("vpmovmskb", fmt("RM", [w(r32), r(xmm2)]), vex(L128)._66()._0f().op(0xD7).r(), _64b | compat | avx),
+
+        // Move two lower 32-bit floats to the high two lanes.
+        inst("movhps", fmt("A", [rw(xmm1), r(m64)]), rex([0x0F, 0x16]).r(), _64b | compat | sse).alt(avx, "vmovhps_b"),
+        inst("vmovhps", fmt("B", [w(xmm2), r(xmm1), r(m64)]), vex(L128)._0f().op(0x16).r(), _64b | compat | avx),
+        inst("movlhps", fmt("RM", [rw(xmm1), r(xmm2)]), rex([0x0F, 0x16]).r(), _64b | compat | sse).alt(avx, "vmovlhps_rvm"),
+        inst("vmovlhps", fmt("RVM", [w(xmm1), r(xmm2), r(xmm3)]), vex(L128)._0f().op(0x16).r(), _64b | compat | avx),
 
         inst("vpinsrb", fmt("B", [w(xmm1), r(xmm2), r(r32m8), r(imm8)]), vex(L128)._66()._0f3a().w0().op(0x20).r().ib(), _64b | compat | avx),
         inst("vpinsrw", fmt("B", [w(xmm1), r(xmm2), r(r32m16), r(imm8)]), vex(L128)._66()._0f().w0().op(0xC4).r().ib(), _64b | compat | avx),
@@ -43,5 +50,12 @@ pub fn list() -> Vec<Inst> {
         inst("vpblendvb", fmt("RVMR", [w(xmm1), r(xmm2), r(xmm_m128), r(xmm3)]), vex(L128)._66()._0f3a().w0().op(0x4C).r().is4(), _64b | compat | avx),
         inst("vblendvps", fmt("RVMR", [w(xmm1), r(xmm2), r(xmm_m128), r(xmm3)]), vex(L128)._66()._0f3a().w0().op(0x4A).r().is4(), _64b | compat | avx),
         inst("vblendvpd", fmt("RVMR", [w(xmm1), r(xmm2), r(xmm_m128), r(xmm3)]), vex(L128)._66()._0f3a().w0().op(0x4B).r().is4(), _64b | compat | avx),
+
+        inst("pshufd", fmt("A", [w(xmm1), r(align(xmm_m128)), r(imm8)]), rex([0x66, 0x0F, 0x70]).r().ib(), _64b | compat | sse2),
+        inst("pshuflw", fmt("A", [w(xmm1), r(align(xmm_m128)), r(imm8)]), rex([0xF2, 0x0F, 0x70]).r().ib(), _64b | compat | sse2),
+        inst("pshufhw", fmt("A", [w(xmm1), r(align(xmm_m128)), r(imm8)]), rex([0xF3, 0x0F, 0x70]).r().ib(), _64b | compat | sse2),
+        inst("vpshufd", fmt("A", [w(xmm1), r(xmm_m128), r(imm8)]), vex(L128)._66()._0f().op(0x70).r().ib(), _64b | compat | avx),
+        inst("vpshuflw", fmt("A", [w(xmm1), r(xmm_m128), r(imm8)]), vex(L128)._f2()._0f().op(0x70).r().ib(), _64b | compat | avx),
+        inst("vpshufhw", fmt("A", [w(xmm1), r(xmm_m128), r(imm8)]), vex(L128)._f3()._0f().op(0x70).r().ib(), _64b | compat | avx),
     ]
 }

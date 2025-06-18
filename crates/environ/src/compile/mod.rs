@@ -62,7 +62,7 @@ impl From<WasmError> for CompileError {
 }
 
 impl core::error::Error for CompileError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             CompileError::Wasm(e) => Some(e),
             _ => None,

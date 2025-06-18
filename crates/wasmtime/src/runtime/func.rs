@@ -1019,11 +1019,7 @@ impl Func {
         params_and_returns: NonNull<[ValRaw]>,
     ) -> Result<()> {
         invoke_wasm_and_catch_traps(store, |caller, vm| {
-            func_ref.as_ref().array_call(
-                vm,
-                VMOpaqueContext::from_vmcontext(caller),
-                params_and_returns,
-            )
+            VMFuncRef::array_call(func_ref, vm, caller, params_and_returns)
         })
     }
 
@@ -2304,7 +2300,7 @@ impl HostContext {
 
     unsafe extern "C" fn array_call_trampoline<T, F, P, R>(
         callee_vmctx: NonNull<VMOpaqueContext>,
-        caller_vmctx: NonNull<VMOpaqueContext>,
+        caller_vmctx: NonNull<VMContext>,
         args: NonNull<ValRaw>,
         args_len: usize,
     ) -> bool
@@ -2369,10 +2365,7 @@ impl HostContext {
 
         // With nothing else on the stack move `run` into this
         // closure and then run it as part of `Caller::with`.
-        crate::runtime::vm::catch_unwind_and_record_trap(move || {
-            let caller_vmctx = VMContext::from_opaque(caller_vmctx);
-            Caller::with(caller_vmctx, run)
-        })
+        crate::runtime::vm::catch_unwind_and_record_trap(move || Caller::with(caller_vmctx, run))
     }
 }
 
@@ -2580,6 +2573,7 @@ mod tests {
     use crate::{Module, Store};
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn hash_key_is_stable_across_duplicate_store_data_entries() -> Result<()> {
         let mut store = Store::<()>::default();
         let module = Module::new(

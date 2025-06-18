@@ -27,7 +27,7 @@
 ;;                                 block0(v0: i64, v1: i64, v2: f32, v3: i32, v4: i32):
 ;;                                     v45 = stack_addr.i64 ss0
 ;;                                     store notrap v4, v45
-;; @002a                               v11 = load.i64 notrap aligned readonly v0+40
+;; @002a                               v11 = load.i64 notrap aligned readonly v0+32
 ;; @002a                               v12 = load.i32 notrap aligned v11
 ;;                                     v53 = iconst.i32 7
 ;; @002a                               v15 = uadd_overflow_trap v12, v53, user18  ; v53 = 7
@@ -48,7 +48,7 @@
 ;;                                     v69 = uextend.i64 v68
 ;; @002a                               v27 = iadd v25, v69
 ;; @002a                               store notrap aligned v61, v27  ; v61 = -1342177256
-;; @002a                               v31 = load.i64 notrap aligned readonly can_move v0+48
+;; @002a                               v31 = load.i64 notrap aligned readonly can_move v0+40
 ;; @002a                               v32 = load.i32 notrap aligned readonly can_move v31
 ;; @002a                               store notrap aligned v32, v27+4
 ;; @002a                               store.i32 notrap aligned v18, v11

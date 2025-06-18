@@ -300,11 +300,9 @@ impl Assembler {
     pub fn mov_ir(&mut self, rd: WritableReg, imm: Imm, size: OperandSize) {
         match rd.to_reg().class() {
             RegClass::Int => {
-                Inst::load_constant(rd.map(Into::into), imm.unwrap_as_u64(), &mut |_| {
-                    rd.map(Into::into)
-                })
-                .into_iter()
-                .for_each(|i| self.emit(i));
+                Inst::load_constant(rd.map(Into::into), imm.unwrap_as_u64())
+                    .into_iter()
+                    .for_each(|i| self.emit(i));
             }
             RegClass::Float => {
                 match ASIMDFPModImm::maybe_from_u64(imm.unwrap_as_u64(), size.into()) {
@@ -840,6 +838,30 @@ impl Assembler {
             rm: rm.into(),
             cond,
         });
+    }
+
+    /// If the condition is true, `csel` writes rn to rd. If the
+    /// condition is false, it writes rm to rd
+    pub fn fpu_csel(&mut self, rn: Reg, rm: Reg, rd: WritableReg, cond: Cond, size: OperandSize) {
+        match size {
+            OperandSize::S32 => {
+                self.emit(Inst::FpuCSel32 {
+                    rd: rd.map(Into::into),
+                    rn: rn.into(),
+                    rm: rm.into(),
+                    cond,
+                });
+            }
+            OperandSize::S64 => {
+                self.emit(Inst::FpuCSel64 {
+                    rd: rd.map(Into::into),
+                    rn: rn.into(),
+                    rm: rm.into(),
+                    cond,
+                });
+            }
+            _ => todo!(),
+        }
     }
 
     /// Population count per byte.

@@ -44,7 +44,7 @@ use wasmtime_environ::{
 /// * `false` if this call failed and a trap was recorded in TLS.
 pub type VMArrayCallNative = unsafe extern "C" fn(
     NonNull<VMOpaqueContext>,
-    NonNull<VMOpaqueContext>,
+    NonNull<VMContext>,
     NonNull<ValRaw>,
     usize,
 ) -> bool;
@@ -869,34 +869,34 @@ impl VMFuncRef {
     /// exhaustively documented.
     #[inline]
     pub unsafe fn array_call(
-        &self,
+        me: NonNull<VMFuncRef>,
         pulley: Option<InterpreterRef<'_>>,
-        caller: NonNull<VMOpaqueContext>,
+        caller: NonNull<VMContext>,
         args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         match pulley {
-            Some(vm) => self.array_call_interpreted(vm, caller, args_and_results),
-            None => self.array_call_native(caller, args_and_results),
+            Some(vm) => Self::array_call_interpreted(me, vm, caller, args_and_results),
+            None => Self::array_call_native(me, caller, args_and_results),
         }
     }
 
     unsafe fn array_call_interpreted(
-        &self,
+        me: NonNull<VMFuncRef>,
         vm: InterpreterRef<'_>,
-        caller: NonNull<VMOpaqueContext>,
+        caller: NonNull<VMContext>,
         args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         // If `caller` is actually a `VMArrayCallHostFuncContext` then skip the
         // interpreter, even though it's available, as `array_call` will be
         // native code.
-        if self.vmctx.as_non_null().as_ref().magic
+        if me.as_ref().vmctx.as_non_null().as_ref().magic
             == wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC
         {
-            return self.array_call_native(caller, args_and_results);
+            return Self::array_call_native(me, caller, args_and_results);
         }
         vm.call(
-            self.array_call.as_non_null().cast(),
-            self.vmctx.as_non_null(),
+            me.as_ref().array_call.as_non_null().cast(),
+            me.as_ref().vmctx.as_non_null(),
             caller,
             args_and_results,
         )
@@ -904,8 +904,8 @@ impl VMFuncRef {
 
     #[inline]
     unsafe fn array_call_native(
-        &self,
-        caller: NonNull<VMOpaqueContext>,
+        me: NonNull<VMFuncRef>,
+        caller: NonNull<VMContext>,
         args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         union GetNativePointer {
@@ -913,11 +913,11 @@ impl VMFuncRef {
             ptr: NonNull<VMArrayCallFunction>,
         }
         let native = GetNativePointer {
-            ptr: self.array_call.as_non_null(),
+            ptr: me.as_ref().array_call.as_non_null(),
         }
         .native;
         native(
-            self.vmctx.as_non_null(),
+            me.as_ref().vmctx.as_non_null(),
             caller,
             args_and_results.cast(),
             args_and_results.len(),
@@ -1206,17 +1206,7 @@ mod test_vmstore_context {
 /// allocated at runtime.
 #[derive(Debug)]
 #[repr(C, align(16))] // align 16 since globals are aligned to that and contained inside
-pub struct VMContext {
-    /// There's some more discussion about this within `wasmtime/src/lib.rs` but
-    /// the idea is that we want to tell the compiler that this contains
-    /// pointers which transitively refers to itself, to suppress some
-    /// optimizations that might otherwise assume this doesn't exist.
-    ///
-    /// The self-referential pointer we care about is the `*mut Store` pointer
-    /// early on in this context, which if you follow through enough levels of
-    /// nesting, eventually can refer back to this `VMContext`
-    pub _marker: marker::PhantomPinned,
-}
+pub struct VMContext;
 
 impl VMContext {
     /// Helper function to cast between context types using a debug assertion to

@@ -22,13 +22,13 @@
 ;;       movq    %rsi, (%rsp)
 ;;       movl    $0x2a, %eax
 ;;       movl    $0, %ecx
-;;       movq    0x38(%r14), %r11
+;;       movq    0x30(%r14), %r11
 ;;       movq    (%r11), %rdx
 ;;       addq    %rcx, %rdx
 ;;       movl    %eax, (%rdx)
 ;;       mfence
 ;;       movl    $0, %eax
-;;       movq    0x38(%r14), %r11
+;;       movq    0x30(%r14), %r11
 ;;       movq    (%r11), %rcx
 ;;       addq    %rax, %rcx
 ;;       movl    (%rcx), %eax

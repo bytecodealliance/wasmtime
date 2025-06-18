@@ -94,7 +94,8 @@ use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 use wasmtime_environ::{
     DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, Signed, TableIndex, TagIndex,
-    TypeConvert, TypeIndex, Unsigned, WasmHeapType, WasmRefType, WasmResult, wasm_unsupported,
+    TypeConvert, TypeIndex, Unsigned, WasmHeapType, WasmRefType, WasmResult, WasmValType,
+    wasm_unsupported,
 };
 
 /// Given a `Reachability<T>`, unwrap the inner `T` or, when unreachable, set
@@ -119,10 +120,13 @@ macro_rules! unwrap_or_return_unreachable_state {
 pub fn translate_operator(
     validator: &mut FuncValidator<impl WasmModuleResources>,
     op: &Operator,
+    operand_types: Option<&[WasmValType]>,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
     environ: &mut FuncEnvironment<'_>,
 ) -> WasmResult<()> {
+    log::trace!("Translating Wasm opcode: {op:?}");
+
     if !state.reachable {
         translate_unreachable_operator(validator, &op, builder, state, environ)?;
         return Ok(());
@@ -131,8 +135,11 @@ pub fn translate_operator(
     // Given that we believe the current block is reachable, the FunctionBuilder ought to agree.
     debug_assert!(!builder.is_unreachable());
 
+    let operand_types = operand_types.unwrap_or_else(|| {
+        panic!("should always have operand types available for valid, reachable ops; op = {op:?}")
+    });
+
     // This big match treats all Wasm code operators.
-    log::trace!("Translating Wasm opcode: {op:?}");
     match op {
         /********************************** Locals ****************************************
          *  `get_local` and `set_local` are treated as non-SSA variables and will completely
@@ -1258,7 +1265,10 @@ pub fn translate_operator(
         }
         Operator::RefIsNull => {
             let value = state.pop1();
-            state.push1(environ.translate_ref_is_null(builder.cursor(), value)?);
+            let [WasmValType::Ref(ty)] = operand_types else {
+                unreachable!("validation")
+            };
+            state.push1(environ.translate_ref_is_null(builder.cursor(), value, *ty)?);
         }
         Operator::RefFunc { function_index } => {
             let index = FuncIndex::from_u32(*function_index);
@@ -2448,8 +2458,11 @@ pub fn translate_operator(
 
         Operator::BrOnNull { relative_depth } => {
             let r = state.pop1();
+            let [.., WasmValType::Ref(r_ty)] = operand_types else {
+                unreachable!("validation")
+            };
             let (br_destination, inputs) = translate_br_if_args(*relative_depth, state);
-            let is_null = environ.translate_ref_is_null(builder.cursor(), r)?;
+            let is_null = environ.translate_ref_is_null(builder.cursor(), r, *r_ty)?;
             let else_block = builder.create_block();
             canonicalise_brif(builder, is_null, br_destination, inputs, else_block, &[]);
 
@@ -2464,7 +2477,11 @@ pub fn translate_operator(
             // Peek the value val from the stack.
             // If val is ref.null ht, then: pop the value val from the stack.
             // Else: Execute the instruction (br relative_depth).
-            let is_null = environ.translate_ref_is_null(builder.cursor(), state.peek1())?;
+            let r = state.peek1();
+            let [.., WasmValType::Ref(r_ty)] = operand_types else {
+                unreachable!("validation")
+            };
+            let is_null = environ.translate_ref_is_null(builder.cursor(), r, *r_ty)?;
             let (br_destination, inputs) = translate_br_if_args(*relative_depth, state);
             let else_block = builder.create_block();
             canonicalise_brif(builder, is_null, else_block, &[], br_destination, inputs);
@@ -2503,7 +2520,10 @@ pub fn translate_operator(
         }
         Operator::RefAsNonNull => {
             let r = state.pop1();
-            let is_null = environ.translate_ref_is_null(builder.cursor(), r)?;
+            let [.., WasmValType::Ref(r_ty)] = operand_types else {
+                unreachable!("validation")
+            };
+            let is_null = environ.translate_ref_is_null(builder.cursor(), r, *r_ty)?;
             environ.trapnz(builder, is_null, crate::TRAP_NULL_REFERENCE);
             state.push1(r);
         }
@@ -2770,6 +2790,9 @@ pub fn translate_operator(
         }
         Operator::RefTestNonNull { hty } => {
             let r = state.pop1();
+            let [.., WasmValType::Ref(r_ty)] = operand_types else {
+                unreachable!("validation")
+            };
             let heap_type = environ.convert_heap_type(*hty)?;
             let result = environ.translate_ref_test(
                 builder,
@@ -2778,11 +2801,15 @@ pub fn translate_operator(
                     nullable: false,
                 },
                 r,
+                *r_ty,
             )?;
             state.push1(result);
         }
         Operator::RefTestNullable { hty } => {
             let r = state.pop1();
+            let [.., WasmValType::Ref(r_ty)] = operand_types else {
+                unreachable!("validation")
+            };
             let heap_type = environ.convert_heap_type(*hty)?;
             let result = environ.translate_ref_test(
                 builder,
@@ -2791,11 +2818,15 @@ pub fn translate_operator(
                     nullable: true,
                 },
                 r,
+                *r_ty,
             )?;
             state.push1(result);
         }
         Operator::RefCastNonNull { hty } => {
             let r = state.pop1();
+            let [.., WasmValType::Ref(r_ty)] = operand_types else {
+                unreachable!("validation")
+            };
             let heap_type = environ.convert_heap_type(*hty)?;
             let cast_okay = environ.translate_ref_test(
                 builder,
@@ -2804,12 +2835,16 @@ pub fn translate_operator(
                     nullable: false,
                 },
                 r,
+                *r_ty,
             )?;
             environ.trapz(builder, cast_okay, crate::TRAP_CAST_FAILURE);
             state.push1(r);
         }
         Operator::RefCastNullable { hty } => {
             let r = state.pop1();
+            let [.., WasmValType::Ref(r_ty)] = operand_types else {
+                unreachable!("validation")
+            };
             let heap_type = environ.convert_heap_type(*hty)?;
             let cast_okay = environ.translate_ref_test(
                 builder,
@@ -2818,6 +2853,7 @@ pub fn translate_operator(
                     nullable: true,
                 },
                 r,
+                *r_ty,
             )?;
             environ.trapz(builder, cast_okay, crate::TRAP_CAST_FAILURE);
             state.push1(r);
@@ -2825,14 +2861,15 @@ pub fn translate_operator(
         Operator::BrOnCast {
             relative_depth,
             to_ref_type,
-            // TODO: we should take advantage of our knowledge of the type we
-            // are casting from when generating the test.
             from_ref_type: _,
         } => {
             let r = state.peek1();
+            let [.., WasmValType::Ref(r_ty)] = operand_types else {
+                unreachable!("validation")
+            };
 
             let to_ref_type = environ.convert_ref_type(*to_ref_type)?;
-            let cast_is_okay = environ.translate_ref_test(builder, to_ref_type, r)?;
+            let cast_is_okay = environ.translate_ref_test(builder, to_ref_type, r, *r_ty)?;
 
             let (cast_succeeds_block, inputs) = translate_br_if_args(*relative_depth, state);
             let cast_fails_block = builder.create_block();
@@ -2858,14 +2895,15 @@ pub fn translate_operator(
         Operator::BrOnCastFail {
             relative_depth,
             to_ref_type,
-            // TODO: we should take advantage of our knowledge of the type we
-            // are casting from when generating the test.
             from_ref_type: _,
         } => {
             let r = state.peek1();
+            let [.., WasmValType::Ref(r_ty)] = operand_types else {
+                unreachable!("validation")
+            };
 
             let to_ref_type = environ.convert_ref_type(*to_ref_type)?;
-            let cast_is_okay = environ.translate_ref_test(builder, to_ref_type, r)?;
+            let cast_is_okay = environ.translate_ref_test(builder, to_ref_type, r, *r_ty)?;
 
             let (cast_fails_block, inputs) = translate_br_if_args(*relative_depth, state);
             let cast_succeeds_block = builder.create_block();
@@ -2900,8 +2938,11 @@ pub fn translate_operator(
 
         Operator::ContNew { cont_type_index } => {
             let cont_type_index = TypeIndex::from_u32(*cont_type_index);
-            let arg_types: SmallVec<[_; 8]> = environ.continuation_arguments(cont_type_index).to_smallvec();
-            let result_types: SmallVec<[_; 8]> = environ.continuation_returns(cont_type_index).to_smallvec();
+            let arg_types: SmallVec<[_; 8]> = environ
+                .continuation_arguments(cont_type_index)
+                .to_smallvec();
+            let result_types: SmallVec<[_; 8]> =
+                environ.continuation_returns(cont_type_index).to_smallvec();
             let r = state.pop1();
             let contobj =
                 environ.translate_cont_new(builder, state, r, &arg_types, &result_types)?;
@@ -2986,7 +3027,7 @@ pub fn translate_operator(
                 cont_type_index.as_u32(),
                 *contobj,
                 call_args,
-                &clif_resume_table
+                &clif_resume_table,
             )?;
 
             state.popn(arity + 1); // arguments + continuation
@@ -3022,20 +3063,21 @@ pub fn translate_operator(
             // Argument types of current_continuation_type. These will in turn
             // be the types of the arguments we receive when someone switches
             // back to this switch instruction
-            let current_continuation_arg_types: SmallVec<[_; 8]> = match current_continuation_type.heap_type {
-                WasmHeapType::ConcreteCont(index) => {
-                    let mti = index
-                        .as_module_type_index()
-                        .expect("Only supporting module type indices on switch for now");
+            let current_continuation_arg_types: SmallVec<[_; 8]> =
+                match current_continuation_type.heap_type {
+                    WasmHeapType::ConcreteCont(index) => {
+                        let mti = index
+                            .as_module_type_index()
+                            .expect("Only supporting module type indices on switch for now");
 
-                    environ
-                        .continuation_arguments(TypeIndex::from_u32(mti.as_u32()))
-                        .iter()
-                        .map(|ty| crate::value_type(environ.isa(), *ty))
-                        .collect()
-                }
-                _ => panic!("Invalid type on switch"),
-            };
+                        environ
+                            .continuation_arguments(TypeIndex::from_u32(mti.as_u32()))
+                            .iter()
+                            .map(|ty| crate::value_type(environ.isa(), *ty))
+                            .collect()
+                    }
+                    _ => panic!("Invalid type on switch"),
+                };
 
             let switch_return_values = environ.translate_switch(
                 builder,

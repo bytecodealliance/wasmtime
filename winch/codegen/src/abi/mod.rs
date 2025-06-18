@@ -72,18 +72,6 @@ macro_rules! vmctx {
     };
 }
 
-/// Macro to get the designated general purpose scratch register or the
-/// designated scratch register for the given type.
-macro_rules! scratch {
-    ($m:ident) => {
-        <$m::ABI as $crate::abi::ABI>::scratch_for(&wasmtime_environ::WasmValType::I64)
-    };
-    ($m:ident, $wasm_type:expr) => {
-        <$m::ABI as $crate::abi::ABI>::scratch_for($wasm_type)
-    };
-}
-
-pub(crate) use scratch;
 pub(crate) use vmctx;
 
 /// Constructs an [ABISig] using Winch's ABI.
@@ -144,9 +132,6 @@ pub(crate) trait ABI {
     fn word_bytes() -> u8 {
         Self::word_bits() / 8
     }
-
-    /// Returns the designated scratch register for the given [WasmType].
-    fn scratch_for(ty: &WasmValType) -> Reg;
 
     /// Returns the pinned register used to hold
     /// the `VMContext`.

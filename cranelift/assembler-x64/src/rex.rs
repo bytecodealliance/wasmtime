@@ -24,9 +24,21 @@ pub(crate) fn encode_sib(scale: u8, enc_index: u8, enc_base: u8) -> u8 {
     ((scale & 3) << 6) | ((enc_index & 7) << 3) | (enc_base & 7)
 }
 
-/// Force emission of the REX byte if the register is: `rsp`, `rbp`, `rsi`,
-/// `rdi`.
-const fn is_special(enc: u8) -> bool {
+/// Tests whether `enc` is `rsp`, `rbp`, `rsi`, or `rdi`. If 8-bit register
+/// sizes are used then it means a REX prefix is required.
+///
+/// This function is used below in combination with `uses_8bit` booleans to
+/// determine the `RexPrefix::must_emit` flag. Table 3-2 in volume 1 of the
+/// Intel manual details how referencing `dil`, the low 8-bits of `rdi`,
+/// requires the use of the REX prefix as without it it would otherwise
+/// reference the `AH` register.
+///
+/// This is used whenever a register is encoded with a `RexPrefix` and is also
+/// only used if the register is referenced in its 8-bit form. That means for
+/// example that when encoding addressing modes this function is not used.
+/// Addressing modes use 64-bit versions of registers meaning that the 8-bit
+/// special case does not apply.
+const fn is_special_if_8bit(enc: u8) -> bool {
     enc >= 4 && enc <= 7
 }
 
@@ -50,7 +62,7 @@ impl RexPrefix {
     #[inline]
     #[must_use]
     pub const fn one_op(enc: u8, w_bit: bool, uses_8bit: bool) -> Self {
-        let must_emit = uses_8bit && is_special(enc);
+        let must_emit = uses_8bit && is_special_if_8bit(enc);
         let w = if w_bit { 1 } else { 0 };
         let r = 0;
         let x = 0;
@@ -71,7 +83,24 @@ impl RexPrefix {
     #[inline]
     #[must_use]
     pub const fn two_op(enc_reg: u8, enc_rm: u8, w_bit: bool, uses_8bit: bool) -> Self {
-        let must_emit = uses_8bit && (is_special(enc_rm) || is_special(enc_reg));
+        let mut ret = RexPrefix::mem_op(enc_reg, enc_rm, w_bit, uses_8bit);
+        if uses_8bit && is_special_if_8bit(enc_rm) {
+            ret.must_emit = true;
+        }
+        ret
+    }
+
+    /// Construct the [`RexPrefix`] for a binary instruction where one operand
+    /// is a memory address.
+    ///
+    /// This is the same as [`RexPrefix::two_op`] except that `enc_rm` is
+    /// guaranteed to address a 64-bit register. This has a slightly different
+    /// meaning when `uses_8bit` is `true` to omit the REX prefix in more cases
+    /// than `two_op` would emit.
+    #[inline]
+    #[must_use]
+    pub const fn mem_op(enc_reg: u8, enc_rm: u8, w_bit: bool, uses_8bit: bool) -> Self {
+        let must_emit = uses_8bit && is_special_if_8bit(enc_reg);
         let w = if w_bit { 1 } else { 0 };
         let r = (enc_reg >> 3) & 1;
         let x = 0;
@@ -111,8 +140,7 @@ impl RexPrefix {
         w_bit: bool,
         uses_8bit: bool,
     ) -> Self {
-        let must_emit =
-            uses_8bit && (is_special(enc_reg) || is_special(enc_base) || is_special(enc_index));
+        let must_emit = uses_8bit && is_special_if_8bit(enc_reg);
         let w = if w_bit { 1 } else { 0 };
         let r = (enc_reg >> 3) & 1;
         let x = (enc_index >> 3) & 1;

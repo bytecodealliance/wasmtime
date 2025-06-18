@@ -59,6 +59,22 @@ macro_rules! define_builtins {
             pub const INIT: VMComponentBuiltins = VMComponentBuiltins {
                 $($name: trampolines::$name,)*
             };
+
+            /// Helper to call `expose_provenance()` on all contained pointers.
+            ///
+            /// This is required to be called at least once before entering wasm
+            /// to inform the compiler that these function pointers may all be
+            /// loaded/stored and used on the "other end" to reacquire
+            /// provenance in Pulley. Pulley models hostcalls with a host
+            /// pointer as the first parameter that's a function pointer under
+            /// the hood, and this call ensures that the use of the function
+            /// pointer is considered valid.
+            pub fn expose_provenance(&self) -> NonNull<Self>{
+                $(
+                    (self.$name as *mut u8).expose_provenance();
+                )*
+                NonNull::from(self)
+            }
         }
     };
 }
@@ -903,7 +919,7 @@ fn future_cancel_read(
 }
 
 #[cfg(feature = "component-model-async")]
-fn future_close_writable(
+fn future_drop_writable(
     store: &mut dyn VMStore,
     instance: Instance,
     ty: u32,
@@ -913,7 +929,7 @@ fn future_close_writable(
 }
 
 #[cfg(feature = "component-model-async")]
-fn future_close_readable(
+fn future_drop_readable(
     store: &mut dyn VMStore,
     instance: Instance,
     ty: u32,
@@ -982,7 +998,7 @@ fn stream_cancel_read(
 }
 
 #[cfg(feature = "component-model-async")]
-fn stream_close_writable(
+fn stream_drop_writable(
     store: &mut dyn VMStore,
     instance: Instance,
     ty: u32,
@@ -992,7 +1008,7 @@ fn stream_close_writable(
 }
 
 #[cfg(feature = "component-model-async")]
-fn stream_close_readable(
+fn stream_drop_readable(
     store: &mut dyn VMStore,
     instance: Instance,
     ty: u32,

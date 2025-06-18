@@ -35,15 +35,15 @@ block0(v0: i32):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ;   subq $0x130, %rsp
-;   movq    %rbx, 256(%rsp)
-;   movq    %r12, 264(%rsp)
-;   movq    %r13, 272(%rsp)
-;   movq    %r14, 280(%rsp)
-;   movq    %r15, 288(%rsp)
+;   movq %rbx, 0x100(%rsp)
+;   movq %r12, 0x108(%rsp)
+;   movq %r13, 0x110(%rsp)
+;   movq %r14, 0x118(%rsp)
+;   movq %r15, 0x120(%rsp)
 ; block0:
-;   movq    %rdi, %rsi
+;   movq %rdi, %rsi
 ;   lea     0(%rsp), %rdi
 ;   load_ext_name %ext+0, %r10
 ;   call    *%r10
@@ -85,9 +85,9 @@ block0(v0: i32):
 ;   movq 0x118(%rsp), %r14
 ;   movq 0x120(%rsp), %r15
 ;   addq $0x130, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

@@ -53,8 +53,6 @@ pub(crate) fn check(
     let cmp_flags = state.cmp_flags.take();
 
     match vcode[inst_idx] {
-        Inst::Nop { .. } => Ok(()),
-
         Inst::Args { .. } => {
             // Defs on the args have "axiomatic facts": we trust the
             // ABI code to pass through the values unharmed, so the
@@ -74,16 +72,6 @@ pub(crate) fn check(
 
         Inst::CheckedSRemSeq8 { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
 
-        Inst::Imm { simm64, dst, .. } => {
-            check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
-                Ok(Some(Fact::constant(64, simm64)))
-            })
-        }
-
-        Inst::MovRR { size, dst, .. } => {
-            undefined_result(ctx, vcode, dst, 64, size.to_bits().into())
-        }
-
         Inst::MovFromPReg { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
         Inst::MovToPReg { .. } => Ok(()),
 
@@ -102,12 +90,6 @@ pub(crate) fn check(
                 };
                 clamp_range(ctx, 64, bits, fact)
             })
-        }
-
-        Inst::MovImmM { size, ref dst, .. } => check_store(ctx, None, dst, vcode, size.to_type()),
-
-        Inst::MovRM { size, src, ref dst } => {
-            check_store(ctx, Some(src.to_reg()), dst, vcode, size.to_type())
         }
 
         Inst::CmpRmiR {
@@ -200,9 +182,6 @@ pub(crate) fn check(
         Inst::XmmRmR { dst, ref src2, .. }
         | Inst::XmmUnaryRmR {
             dst, src: ref src2, ..
-        }
-        | Inst::XmmUnaryRmRImm {
-            dst, src: ref src2, ..
         } => {
             match <&RegMem>::from(src2) {
                 RegMem::Mem { addr } => {
@@ -248,12 +227,6 @@ pub(crate) fn check(
             ..
         }
         | Inst::XmmUnaryRmRVex {
-            op,
-            dst,
-            src: ref src2,
-            ..
-        }
-        | Inst::XmmUnaryRmRImmVex {
             op,
             dst,
             src: ref src2,
@@ -392,15 +365,12 @@ pub(crate) fn check(
         Inst::CallKnown { .. }
         | Inst::ReturnCallKnown { .. }
         | Inst::JmpKnown { .. }
-        | Inst::Ret { .. }
         | Inst::WinchJmpIf { .. }
         | Inst::JmpCond { .. }
         | Inst::JmpCondOr { .. }
         | Inst::TrapIf { .. }
         | Inst::TrapIfAnd { .. }
-        | Inst::TrapIfOr { .. }
-        | Inst::Hlt {}
-        | Inst::Ud2 { .. } => Ok(()),
+        | Inst::TrapIfOr { .. } => Ok(()),
         Inst::Rets { .. } => Ok(()),
 
         Inst::ReturnCallUnknown { .. } => Ok(()),
@@ -433,56 +403,14 @@ pub(crate) fn check(
             Ok(())
         }
 
-        Inst::LockCmpxchg {
-            ref mem, dst_old, ..
-        } => {
-            ensure_no_fact(vcode, dst_old.to_reg())?;
-            check_store(ctx, None, mem, vcode, I64)?;
-            Ok(())
-        }
-
-        Inst::LockCmpxchg16b {
-            ref mem,
-            dst_old_low,
-            dst_old_high,
-            ..
-        } => {
-            ensure_no_fact(vcode, dst_old_low.to_reg())?;
-            ensure_no_fact(vcode, dst_old_high.to_reg())?;
-            check_store(ctx, None, mem, vcode, I128)?;
-            Ok(())
-        }
-
-        Inst::LockXadd {
-            size,
-            ref mem,
-            dst_old,
-            operand: _,
-        } => {
-            ensure_no_fact(vcode, dst_old.to_reg())?;
-            check_store(ctx, None, mem, vcode, size.to_type())?;
-            Ok(())
-        }
-
-        Inst::Xchg {
-            size,
-            ref mem,
-            dst_old,
-            operand: _,
-        } => {
-            ensure_no_fact(vcode, dst_old.to_reg())?;
-            check_store(ctx, None, mem, vcode, size.to_type())?;
-            Ok(())
-        }
-
         Inst::AtomicRmwSeq {
             ref mem,
             temp,
             dst_old,
             ..
         } => {
-            ensure_no_fact(vcode, dst_old.to_reg())?;
-            ensure_no_fact(vcode, temp.to_reg())?;
+            ensure_no_fact(vcode, *dst_old.to_reg())?;
+            ensure_no_fact(vcode, *temp.to_reg())?;
             check_store(ctx, None, mem, vcode, I64)?;
             Ok(())
         }
@@ -495,10 +423,10 @@ pub(crate) fn check(
             dst_old_high,
             ..
         } => {
-            ensure_no_fact(vcode, dst_old_low.to_reg())?;
-            ensure_no_fact(vcode, dst_old_high.to_reg())?;
-            ensure_no_fact(vcode, temp_low.to_reg())?;
-            ensure_no_fact(vcode, temp_high.to_reg())?;
+            ensure_no_fact(vcode, *dst_old_low.to_reg())?;
+            ensure_no_fact(vcode, *dst_old_high.to_reg())?;
+            ensure_no_fact(vcode, *temp_low.to_reg())?;
+            ensure_no_fact(vcode, *temp_high.to_reg())?;
             check_store(ctx, None, mem, vcode, I128)?;
             Ok(())
         }
@@ -509,13 +437,11 @@ pub(crate) fn check(
             dst_old_high,
             ..
         } => {
-            ensure_no_fact(vcode, dst_old_low.to_reg())?;
-            ensure_no_fact(vcode, dst_old_high.to_reg())?;
+            ensure_no_fact(vcode, *dst_old_low.to_reg())?;
+            ensure_no_fact(vcode, *dst_old_high.to_reg())?;
             check_store(ctx, None, mem, vcode, I128)?;
             Ok(())
         }
-
-        Inst::Fence { .. } => Ok(()),
 
         Inst::XmmUninitializedValue { dst } => {
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())

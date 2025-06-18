@@ -470,9 +470,9 @@ mod test {
         Ok(())
     }
 
+    // Note that this test runs on a platform that is known to use Cranelift
     #[test]
-    #[cfg(target_arch = "x86_64")] // test on a platform that is known to use
-    // Cranelift
+    #[cfg(all(target_arch = "x86_64", not(miri)))]
     fn test_os_mismatch() -> Result<()> {
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine);
@@ -597,9 +597,9 @@ Caused by:
         Ok(())
     }
 
+    /// This test is only run a platform that is known to implement threads
     #[test]
-    #[cfg(target_arch = "x86_64")] // test on a platform that is known to
-    // implement threads
+    #[cfg(all(target_arch = "x86_64", not(miri)))]
     fn test_feature_mismatch() -> Result<()> {
         let mut config = Config::new();
         config.wasm_threads(true);

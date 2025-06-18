@@ -2304,10 +2304,11 @@ impl FuncEnvironment<'_> {
     pub fn translate_ref_test(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
-        ref_ty: WasmRefType,
+        test_ty: WasmRefType,
         gc_ref: ir::Value,
+        gc_ref_ty: WasmRefType,
     ) -> WasmResult<ir::Value> {
-        gc::translate_ref_test(self, builder, ref_ty, gc_ref)
+        gc::translate_ref_test(self, builder, test_ty, gc_ref, gc_ref_ty)
     }
 
     pub fn translate_ref_null(
@@ -2330,10 +2331,16 @@ impl FuncEnvironment<'_> {
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor,
         value: ir::Value,
+        ty: WasmRefType,
     ) -> WasmResult<ir::Value> {
-        let byte_is_null = match pos.func.dfg.value_type(value) {
-            // continuation
-            ty if ty == stack_switching::fatpointer::POINTER_TYPE => {
+        // If we know the type is not nullable, then we don't actually need to
+        // check for null.
+        if !ty.nullable {
+            return Ok(pos.ins().iconst(ir::types::I32, 0));
+        }
+
+        let byte_is_null = match ty.heap_type.top() {
+            WasmHeapTopType::Cont => {
                 let (_revision, contref) =
                     stack_switching::fatpointer::deconstruct(self, &mut pos, value);
                 pos.ins()
@@ -3188,6 +3195,7 @@ impl FuncEnvironment<'_> {
     pub fn before_translate_operator(
         &mut self,
         op: &Operator,
+        _operand_types: Option<&[WasmValType]>,
         builder: &mut FunctionBuilder,
         state: &FuncTranslationState,
     ) -> WasmResult<()> {
@@ -3200,6 +3208,7 @@ impl FuncEnvironment<'_> {
     pub fn after_translate_operator(
         &mut self,
         op: &Operator,
+        _operand_types: Option<&[WasmValType]>,
         builder: &mut FunctionBuilder,
         state: &FuncTranslationState,
     ) -> WasmResult<()> {

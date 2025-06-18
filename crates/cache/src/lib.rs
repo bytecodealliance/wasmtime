@@ -36,7 +36,7 @@ pub struct Cache {
 
 macro_rules! generate_config_setting_getter {
     ($setting:ident: $setting_type:ty) => {
-        /// Returns `$setting`.
+        #[doc = concat!("Returns ", "`", stringify!($setting), "`.")]
         ///
         /// Panics if the cache is disabled.
         pub fn $setting(&self) -> $setting_type {

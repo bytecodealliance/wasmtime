@@ -539,14 +539,14 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _isa_flags: &x64_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
-        let r_rsp = regs::rsp();
-        let r_rbp = regs::rbp();
+        let r_rsp = Gpr::unwrap_new(regs::rsp());
+        let r_rbp = Gpr::unwrap_new(regs::rbp());
         let w_rbp = Writable::from_reg(r_rbp);
         let mut insts = SmallVec::new();
         // `push %rbp`
         // RSP before the call will be 0 % 16.  So here, it is 8 % 16.
         insts.push(Inst::External {
-            inst: asm::inst::pushq_o::new(Gpr::new(r_rbp).unwrap()).into(),
+            inst: asm::inst::pushq_o::new(r_rbp).into(),
         });
 
         if flags.unwind_info() {
@@ -559,7 +559,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         // `mov %rsp, %rbp`
         // RSP is now 0 % 16
-        insts.push(Inst::mov_r_r(OperandSize::Size64, r_rsp, w_rbp));
+        insts.push(Inst::External {
+            inst: asm::inst::movq_mr::new(w_rbp, r_rsp).into(),
+        });
 
         insts
     }
@@ -570,16 +572,17 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _isa_flags: &x64_settings::Flags,
         _frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
+        let rbp = Gpr::unwrap_new(regs::rbp());
+        let rsp = Gpr::unwrap_new(regs::rsp());
+
         let mut insts = SmallVec::new();
         // `mov %rbp, %rsp`
-        insts.push(Inst::mov_r_r(
-            OperandSize::Size64,
-            regs::rbp(),
-            Writable::from_reg(regs::rsp()),
-        ));
+        insts.push(Inst::External {
+            inst: asm::inst::movq_mr::new(Writable::from_reg(rsp), rbp).into(),
+        });
         // `pop %rbp`
         insts.push(Inst::External {
-            inst: asm::inst::popq_o::new(Writable::from_reg(Gpr::new(regs::rbp()).unwrap())).into(),
+            inst: asm::inst::popq_o::new(Writable::from_reg(rbp)).into(),
         });
         insts
     }
@@ -595,7 +598,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         } else {
             0
         };
-        smallvec![Inst::ret(stack_bytes_to_pop)]
+        let inst = if stack_bytes_to_pop == 0 {
+            asm::inst::retq_zo::new().into()
+        } else {
+            let stack_bytes_to_pop = u16::try_from(stack_bytes_to_pop).unwrap();
+            asm::inst::retq_i::new(stack_bytes_to_pop).into()
+        };
+        smallvec![Inst::External { inst }]
     }
 
     fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32) {
@@ -659,35 +668,28 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
             // Make sure to keep the frame pointer and stack pointer in sync at
             // this point.
-            insts.push(Inst::mov_r_r(
-                OperandSize::Size64,
-                regs::rsp(),
-                Writable::from_reg(regs::rbp()),
-            ));
+            let rbp = Gpr::unwrap_new(regs::rbp());
+            let rsp = Gpr::unwrap_new(regs::rsp());
+            insts.push(Inst::External {
+                inst: asm::inst::movq_mr::new(Writable::from_reg(rbp), rsp).into(),
+            });
 
             let incoming_args_diff = i32::try_from(incoming_args_diff).unwrap();
 
             // Move the saved frame pointer down by `incoming_args_diff`.
             let addr = Amode::imm_reg(incoming_args_diff, regs::rsp());
-            let r11 = Writable::from_reg(regs::r11());
+            let r11 = Writable::from_reg(Gpr::unwrap_new(regs::r11()));
             let inst = asm::inst::movq_rm::new(r11, addr).into();
             insts.push(Inst::External { inst });
-            insts.push(Inst::mov_r_m(
-                OperandSize::Size64,
-                regs::r11(),
-                Amode::imm_reg(0, regs::rsp()),
-            ));
+            let inst = asm::inst::movq_mr::new(Amode::imm_reg(0, regs::rsp()), r11.to_reg()).into();
+            insts.push(Inst::External { inst });
 
             // Move the saved return address down by `incoming_args_diff`.
             let addr = Amode::imm_reg(incoming_args_diff + 8, regs::rsp());
-            let r11 = Writable::from_reg(regs::r11());
             let inst = asm::inst::movq_rm::new(r11, addr).into();
             insts.push(Inst::External { inst });
-            insts.push(Inst::mov_r_m(
-                OperandSize::Size64,
-                regs::r11(),
-                Amode::imm_reg(8, regs::rsp()),
-            ));
+            let inst = asm::inst::movq_mr::new(Amode::imm_reg(8, regs::rsp()), r11.to_reg()).into();
+            insts.push(Inst::External { inst });
         }
 
         // We need to factor `incoming_args_diff` into the offset upward here, as we have grown

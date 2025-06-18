@@ -2093,7 +2093,6 @@ impl Config {
                     | WasmFeatures::STACK_SWITCHING;
                 match self.compiler_target().architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
-                        unsupported |= WasmFeatures::SIMD;
                         unsupported |= WasmFeatures::THREADS;
                         unsupported |= WasmFeatures::WIDE_ARITHMETIC;
                     }

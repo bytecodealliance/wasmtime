@@ -13,14 +13,14 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movabsq $1152921504606846976, %rdx
-;   movabsq $2305843009213693952, %rcx
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
+;   movabsq $0x1000000000000000, %rdx
+;   movabsq $0x2000000000000000, %rcx
+;   movl $0x1, %eax
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

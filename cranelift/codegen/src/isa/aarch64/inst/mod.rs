@@ -105,11 +105,7 @@ fn count_zero_half_words(mut value: u64, num_half_words: u8) -> usize {
 impl Inst {
     /// Create an instruction that loads a constant, using one of several options (MOVZ, MOVN,
     /// logical immediate, or constant pool).
-    pub fn load_constant<F: FnMut(Type) -> Writable<Reg>>(
-        rd: Writable<Reg>,
-        value: u64,
-        alloc_tmp: &mut F,
-    ) -> SmallVec<[Inst; 4]> {
+    pub fn load_constant(rd: Writable<Reg>, value: u64) -> SmallVec<[Inst; 4]> {
         // NB: this is duplicated in `lower/isle.rs` and `inst.isle` right now,
         // if modifications are made here before this is deleted after moving to
         // ISLE then those locations should be updated as well.
@@ -170,10 +166,8 @@ impl Inst {
                 .collect();
 
             let mut prev_result = None;
-            let last_index = halfwords.last().unwrap().0;
             for (i, imm16) in halfwords {
                 let shift = i * 16;
-                let rd = if i == last_index { rd } else { alloc_tmp(I16) };
 
                 if let Some(rn) = prev_result {
                     let imm = MoveWideConst::maybe_with_shift(imm16 as u16, shift).unwrap();
@@ -2805,7 +2799,7 @@ impl Inst {
                     ret.push_str(&add.print_with_state(&mut EmitState::default()));
                 } else {
                     let tmp = writable_spilltmp_reg();
-                    for inst in Inst::load_constant(tmp, abs_offset, &mut |_| tmp).into_iter() {
+                    for inst in Inst::load_constant(tmp, abs_offset).into_iter() {
                         ret.push_str(&inst.print_with_state(&mut EmitState::default()));
                     }
                     let add = Inst::AluRRR {

@@ -72,6 +72,7 @@ fn add_tests(tests: &mut Vec<WastTest>, path: &Path, has_config: bool) -> Result
 
 fn spec_test_config(test: &Path) -> TestConfig {
     let mut ret = TestConfig::default();
+    ret.spec_test = Some(true);
     match spec_proposal_from_path(test) {
         Some("multi-memory") => {
             ret.multi_memory = Some(true);
@@ -249,6 +250,7 @@ macro_rules! foreach_config_option {
             exceptions
             legacy_exceptions
             stack_switching
+            spec_test
         }
     };
 }
@@ -270,7 +272,6 @@ macro_rules! define_test_config {
                 }
             )*
         }
-
     }
 }
 
@@ -360,8 +361,8 @@ impl Compiler {
 
                 if cfg!(target_arch = "aarch64") {
                     return unsupported_base
-                        || config.simd()
                         || config.wide_arithmetic()
+                        || (config.simd() && !config.spec_test())
                         || config.threads();
                 }
 
@@ -407,46 +408,6 @@ impl WastTest {
     /// Returns the optional spec proposal that this test is associated with.
     pub fn spec_proposal(&self) -> Option<&str> {
         spec_proposal_from_path(&self.path)
-    }
-
-    /// Returns true for tests that should be ignored (not run) for
-    /// the given config.
-
-    /// The infrastructure for `.wast` tests is designed to enable the
-    /// execution of tests at all times, however, while compiler
-    /// backends are in partial development state, it becomes harder
-    /// to guarantee particular tests will run to completion and
-    /// return a recoverable error, in some cases tests might segfault
-    /// making it challenging to assert a failure status.
-    /// It's recommended to avoid ignoring tests as much as possible, instead
-    /// it's recommended to add tests to `WastTest::should_fail`.
-    pub fn ignore(&self, config: &WastConfig) -> bool {
-        if config.compiler == Compiler::Winch {
-            if cfg!(target_arch = "aarch64") {
-                let unsupported = [
-                    // Fails intermittently
-                    "misc_testsuite/table_copy_on_imported_tables.wast",
-                    // Segfault
-                    "spec_testsuite/conversions.wast",
-                    "spec_testsuite/func.wast",
-                    "spec_testsuite/float_exprs.wast",
-                    "spec_testsuite/int_exprs.wast",
-                    "spec_testsuite/left-to-right.wast",
-                    "spec_testsuite/i32.wast",
-                    "spec_testsuite/traps.wast",
-                    "spec_testsuite/unreachable.wast",
-                    "spec_testsuite/unreached-valid.wast",
-                    "misc_testsuite/component-model/fused.wast",
-                    "misc_testsuite/component-model/strings.wast",
-                    "misc_testsuite/winch/select.wast",
-                    "misc_testsuite/sink-float-but-dont-trap.wast",
-                    "misc_testsuite/winch/use-innermost-frame.wast",
-                ];
-
-                return unsupported.iter().any(|part| self.path.ends_with(part));
-            }
-        }
-        false
     }
 
     /// Returns whether this test should fail under the specified extra
@@ -527,24 +488,89 @@ impl WastTest {
             #[cfg(target_arch = "aarch64")]
             {
                 let unsupported = [
-                    // Externref / GC related.
-                    "misc_testsuite/winch/table_get.wast",
-                    "misc_testsuite/winch/table_set.wast",
-                    "misc_testsuite/winch/table_fill.wast",
-                    // Known bugs that don't cause segfaults.
-                    "spec_testsuite/call_indirect.wast",
-                    "spec_testsuite/f32_cmp.wast",
-                    "spec_testsuite/f64_cmp.wast",
-                    "spec_testsuite/func_ptrs.wast",
-                    "spec_testsuite/if.wast",
-                    "spec_testsuite/imports.wast",
-                    "spec_testsuite/local_set.wast",
-                    "spec_testsuite/local_tee.wast",
-                    "spec_testsuite/loop.wast",
-                    "spec_testsuite/table_copy.wast",
-                    "spec_testsuite/table_init.wast",
-                    "misc_testsuite/winch/table_grow.wast",
-                    "misc_testsuite/call_indirect.wast",
+                    "misc_testsuite/int-to-float-splat.wast",
+                    "misc_testsuite/issue6562.wast",
+                    "misc_testsuite/memory64/simd.wast",
+                    "misc_testsuite/simd/almost-extmul.wast",
+                    "misc_testsuite/simd/canonicalize-nan.wast",
+                    "misc_testsuite/simd/cvt-from-uint.wast",
+                    "misc_testsuite/simd/edge-of-memory.wast",
+                    "misc_testsuite/simd/interesting-float-splat.wast",
+                    "misc_testsuite/simd/issue4807.wast",
+                    "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
+                    "misc_testsuite/simd/issue_3173_select_v128.wast",
+                    "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
+                    "misc_testsuite/simd/load_splat_out_of_bounds.wast",
+                    "misc_testsuite/simd/replace-lane-preserve.wast",
+                    "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
+                    "misc_testsuite/simd/sse-cannot-fold-unaligned-loads.wast",
+                    "misc_testsuite/simd/unaligned-load.wast",
+                    "misc_testsuite/simd/v128-select.wast",
+                    "misc_testsuite/winch/issue-10331.wast",
+                    "misc_testsuite/winch/issue-10357.wast",
+                    "misc_testsuite/winch/issue-10460.wast",
+                    "misc_testsuite/winch/replace_lane.wast",
+                    "misc_testsuite/winch/simd_multivalue.wast",
+                    "misc_testsuite/winch/v128_load_lane_invalid_address.wast",
+                    "spec_testsuite/proposals/annotations/simd_lane.wast",
+                    "spec_testsuite/proposals/multi-memory/simd_memory-multi.wast",
+                    "spec_testsuite/simd_address.wast",
+                    "spec_testsuite/simd_align.wast",
+                    "spec_testsuite/simd_bit_shift.wast",
+                    "spec_testsuite/simd_bitwise.wast",
+                    "spec_testsuite/simd_boolean.wast",
+                    "spec_testsuite/simd_const.wast",
+                    "spec_testsuite/simd_conversions.wast",
+                    "spec_testsuite/simd_f32x4.wast",
+                    "spec_testsuite/simd_f32x4_arith.wast",
+                    "spec_testsuite/simd_f32x4_cmp.wast",
+                    "spec_testsuite/simd_f32x4_pmin_pmax.wast",
+                    "spec_testsuite/simd_f32x4_rounding.wast",
+                    "spec_testsuite/simd_f64x2.wast",
+                    "spec_testsuite/simd_f64x2_arith.wast",
+                    "spec_testsuite/simd_f64x2_cmp.wast",
+                    "spec_testsuite/simd_f64x2_pmin_pmax.wast",
+                    "spec_testsuite/simd_f64x2_rounding.wast",
+                    "spec_testsuite/simd_i16x8_arith.wast",
+                    "spec_testsuite/simd_i16x8_arith2.wast",
+                    "spec_testsuite/simd_i16x8_cmp.wast",
+                    "spec_testsuite/simd_i16x8_extadd_pairwise_i8x16.wast",
+                    "spec_testsuite/simd_i16x8_extmul_i8x16.wast",
+                    "spec_testsuite/simd_i16x8_q15mulr_sat_s.wast",
+                    "spec_testsuite/simd_i16x8_sat_arith.wast",
+                    "spec_testsuite/simd_i32x4_arith.wast",
+                    "spec_testsuite/simd_i32x4_arith2.wast",
+                    "spec_testsuite/simd_i32x4_cmp.wast",
+                    "spec_testsuite/simd_i32x4_dot_i16x8.wast",
+                    "spec_testsuite/simd_i32x4_extadd_pairwise_i16x8.wast",
+                    "spec_testsuite/simd_i32x4_extmul_i16x8.wast",
+                    "spec_testsuite/simd_i32x4_trunc_sat_f32x4.wast",
+                    "spec_testsuite/simd_i32x4_trunc_sat_f64x2.wast",
+                    "spec_testsuite/simd_i64x2_arith.wast",
+                    "spec_testsuite/simd_i64x2_arith2.wast",
+                    "spec_testsuite/simd_i64x2_cmp.wast",
+                    "spec_testsuite/simd_i64x2_extmul_i32x4.wast",
+                    "spec_testsuite/simd_i8x16_arith.wast",
+                    "spec_testsuite/simd_i8x16_arith2.wast",
+                    "spec_testsuite/simd_i8x16_cmp.wast",
+                    "spec_testsuite/simd_i8x16_sat_arith.wast",
+                    "spec_testsuite/simd_int_to_int_extend.wast",
+                    "spec_testsuite/simd_lane.wast",
+                    "spec_testsuite/simd_load.wast",
+                    "spec_testsuite/simd_load16_lane.wast",
+                    "spec_testsuite/simd_load32_lane.wast",
+                    "spec_testsuite/simd_load64_lane.wast",
+                    "spec_testsuite/simd_load8_lane.wast",
+                    "spec_testsuite/simd_load_extend.wast",
+                    "spec_testsuite/simd_load_splat.wast",
+                    "spec_testsuite/simd_load_zero.wast",
+                    "spec_testsuite/simd_select.wast",
+                    "spec_testsuite/simd_splat.wast",
+                    "spec_testsuite/simd_store.wast",
+                    "spec_testsuite/simd_store16_lane.wast",
+                    "spec_testsuite/simd_store32_lane.wast",
+                    "spec_testsuite/simd_store64_lane.wast",
+                    "spec_testsuite/simd_store8_lane.wast",
                 ];
 
                 if unsupported.iter().any(|part| self.path.ends_with(part)) {
@@ -575,6 +601,7 @@ impl WastTest {
                         "misc_testsuite/issue6562.wast",
                         "misc_testsuite/simd/almost-extmul.wast",
                         "misc_testsuite/simd/cvt-from-uint.wast",
+                        "misc_testsuite/simd/edge-of-memory.wast",
                         "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
                         "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
                         "misc_testsuite/simd/replace-lane-preserve.wast",

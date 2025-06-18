@@ -24,7 +24,7 @@
 ;;       movk    x17, #0x24
 ;;       add     x16, x16, x17
 ;;       cmp     sp, x16
-;;       b.lo    #0xf0
+;;       b.lo    #0xf8
 ;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
@@ -66,12 +66,14 @@
 ;;       b       #0xc8
 ;;   c8: add     x28, x28, #4
 ;;       mov     sp, x28
-;;       b       #0xd8
-;;   d4: .byte   0x1f, 0xc1, 0x00, 0x00
+;;       b       #0xe0
+;;   d4: sub     sp, x28, #4
+;;       .byte   0x1f, 0xc1, 0x00, 0x00
+;;       mov     sp, x28
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   f0: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   f8: .byte   0x1f, 0xc1, 0x00, 0x00

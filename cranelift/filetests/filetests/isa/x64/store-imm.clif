@@ -10,13 +10,13 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movb    $18, 0(%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movb $0x12, (%rdi)
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -38,13 +38,13 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movw    $4660, 0(%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movw $0x1234, (%rdi)
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -66,13 +66,13 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movl    $305419896, 0(%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movl $0x12345678, (%rdi)
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -94,13 +94,13 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movq    $305419896, 0(%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movq $0x12345678, (%rdi)
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -122,13 +122,13 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movq    $2147483647, 0(%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movq $0x7fffffff, (%rdi)
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -150,13 +150,13 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movq    $-2147483648, 0(%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movq $0xffffffff80000000, (%rdi)
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -178,14 +178,14 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movabsq $9223372036854775807, %rax
-;   movq    %rax, 0(%rdi)
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
+;   movabsq $0x7fffffffffffffff, %rax
+;   movq %rax, (%rdi)
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

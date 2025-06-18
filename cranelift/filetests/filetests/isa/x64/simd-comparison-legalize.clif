@@ -9,15 +9,15 @@ block0(v0: i32x4, v1: i32x4):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   pcmpeqd %xmm1, %xmm0
 ;   uninit  %xmm6
 ;   pcmpeqd %xmm6, %xmm6
 ;   pxor %xmm6, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -39,16 +39,16 @@ block0(v0: i32x4, v1: i32x4):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   pmaxud %xmm1, %xmm0
 ;   pcmpeqd %xmm1, %xmm0
 ;   uninit  %xmm1
 ;   pcmpeqd %xmm1, %xmm1
 ;   pxor %xmm1, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -71,14 +71,14 @@ block0(v0: i16x8, v1: i16x8):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movdqa %xmm0, %xmm3
 ;   pmaxsw %xmm1, %xmm3
 ;   pcmpeqw %xmm3, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -100,14 +100,14 @@ block0(v0: i8x16, v1: i8x16):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movdqa %xmm0, %xmm3
 ;   pmaxub %xmm1, %xmm3
 ;   pcmpeqb %xmm3, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

@@ -21,6 +21,10 @@ impl asm::Registers for CraneliftRegisters {
     type WriteXmm = WritableXmm;
 }
 
+/// Convenience type alias of `asm::inst::Inst` with `R = CraneliftRegisters`
+/// filled in.
+pub type AsmInst = asm::inst::Inst<CraneliftRegisters>;
+
 /// A pair of registers, one for reading and one for writing.
 ///
 /// Due to how Cranelift's SSA form, we must track the read and write registers

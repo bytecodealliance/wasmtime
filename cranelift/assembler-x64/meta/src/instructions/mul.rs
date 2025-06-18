@@ -1,4 +1,4 @@
-use crate::dsl::{CustomOperation::*, Feature::*, Inst, Location::*, VexLength::*};
+use crate::dsl::{Customization::*, Feature::*, Inst, Location::*, VexLength::*};
 use crate::dsl::{align, fmt, implicit, inst, r, rex, rw, sxl, sxq, sxw, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.

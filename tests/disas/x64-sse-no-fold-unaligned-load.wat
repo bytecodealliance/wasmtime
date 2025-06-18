@@ -20,7 +20,7 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movl    %edx, %r9d
-;;       addq    0x40(%rdi), %r9
+;;       addq    0x38(%rdi), %r9
 ;;       movdqu  1(%r9), %xmm6
 ;;       punpckhbw %xmm6, %xmm0
 ;;       movq    %rbp, %rsp

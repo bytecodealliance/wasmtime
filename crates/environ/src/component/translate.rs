@@ -253,11 +253,11 @@ enum LocalInitializer<'data> {
         func: ModuleInternedTypeIndex,
         async_: bool,
     },
-    StreamCloseReadable {
+    StreamDropReadable {
         ty: ComponentDefinedTypeId,
         func: ModuleInternedTypeIndex,
     },
-    StreamCloseWritable {
+    StreamDropWritable {
         ty: ComponentDefinedTypeId,
         func: ModuleInternedTypeIndex,
     },
@@ -285,11 +285,11 @@ enum LocalInitializer<'data> {
         func: ModuleInternedTypeIndex,
         async_: bool,
     },
-    FutureCloseReadable {
+    FutureDropReadable {
         ty: ComponentDefinedTypeId,
         func: ModuleInternedTypeIndex,
     },
-    FutureCloseWritable {
+    FutureDropWritable {
         ty: ComponentDefinedTypeId,
         func: ModuleInternedTypeIndex,
     },
@@ -767,17 +767,17 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::StreamCancelWrite { ty, func, async_ }
                         }
-                        wasmparser::CanonicalFunction::StreamCloseReadable { ty } => {
+                        wasmparser::CanonicalFunction::StreamDropReadable { ty } => {
                             let ty = types.component_defined_type_at(ty);
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::StreamCloseReadable { ty, func }
+                            LocalInitializer::StreamDropReadable { ty, func }
                         }
-                        wasmparser::CanonicalFunction::StreamCloseWritable { ty } => {
+                        wasmparser::CanonicalFunction::StreamDropWritable { ty } => {
                             let ty = types.component_defined_type_at(ty);
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::StreamCloseWritable { ty, func }
+                            LocalInitializer::StreamDropWritable { ty, func }
                         }
                         wasmparser::CanonicalFunction::FutureNew { ty } => {
                             let ty = types.component_defined_type_at(ty);
@@ -811,17 +811,17 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::FutureCancelWrite { ty, func, async_ }
                         }
-                        wasmparser::CanonicalFunction::FutureCloseReadable { ty } => {
+                        wasmparser::CanonicalFunction::FutureDropReadable { ty } => {
                             let ty = types.component_defined_type_at(ty);
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::FutureCloseReadable { ty, func }
+                            LocalInitializer::FutureDropReadable { ty, func }
                         }
-                        wasmparser::CanonicalFunction::FutureCloseWritable { ty } => {
+                        wasmparser::CanonicalFunction::FutureDropWritable { ty } => {
                             let ty = types.component_defined_type_at(ty);
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::FutureCloseWritable { ty, func }
+                            LocalInitializer::FutureDropWritable { ty, func }
                         }
                         wasmparser::CanonicalFunction::ErrorContextNew { options } => {
                             let options = self.canonical_options(&options);

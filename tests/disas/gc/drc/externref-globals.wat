@@ -26,8 +26,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;;                                     v53 = iconst.i64 64
-;; @0034                               v4 = iadd v0, v53  ; v53 = 64
+;;                                     v53 = iconst.i64 48
+;; @0034                               v4 = iadd v0, v53  ; v53 = 48
 ;; @0034                               v5 = load.i32 notrap aligned v4
 ;;                                     v52 = stack_addr.i64 ss0
 ;;                                     store notrap v5, v52
@@ -40,7 +40,7 @@
 ;; @0034                               brif v9, block5, block2
 ;;
 ;;                                 block2:
-;; @0034                               v11 = load.i64 notrap aligned readonly v0+40
+;; @0034                               v11 = load.i64 notrap aligned readonly v0+32
 ;; @0034                               v12 = load.i64 notrap aligned v11
 ;; @0034                               v13 = load.i64 notrap aligned v11+8
 ;; @0034                               v14 = icmp eq v12, v13
@@ -89,8 +89,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;;                                     v55 = iconst.i64 64
-;; @003b                               v4 = iadd v0, v55  ; v55 = 64
+;;                                     v55 = iconst.i64 48
+;; @003b                               v4 = iadd v0, v55  ; v55 = 48
 ;; @003b                               v5 = load.i32 notrap aligned v4
 ;;                                     v54 = iconst.i32 1
 ;; @003b                               v6 = band v2, v54  ; v54 = 1
@@ -114,7 +114,7 @@
 ;; @003b                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v69 = iadd.i64 v0, v55  ; v55 = 64
+;;                                     v69 = iadd.i64 v0, v55  ; v55 = 48
 ;; @003b                               store.i32 notrap aligned v2, v69
 ;;                                     v70 = iconst.i32 1
 ;;                                     v71 = band.i32 v5, v70  ; v70 = 1

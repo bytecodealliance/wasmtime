@@ -310,7 +310,7 @@ static CACHE_IMPROPER_CONFIG_ERROR_MSG: &str =
 
 macro_rules! generate_setting_getter {
     ($setting:ident: $setting_type:ty) => {
-        /// Returns `$setting`.
+        #[doc = concat!("Returns ", "`", stringify!($setting), "`.")]
         ///
         /// Panics if the cache is disabled.
         pub fn $setting(&self) -> $setting_type {

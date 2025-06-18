@@ -11,14 +11,14 @@ block0(v0: i32, v1: i32, v2: i64, v3: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   cmpl    %esi, %edi
-;   movq    %rcx, %rax
+;   movq %rcx, %rax
 ;   cmovzq  %rdx, %rax, %rax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -42,15 +42,15 @@ block0(v0: f32, v1: f32, v2: i64, v3: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm1, %xmm0
 ;   cmovpq  %rsi, %rdi, %rdi
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   cmovnzq %rsi, %rax, %rax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -73,15 +73,15 @@ block0(v0: i8, v1: f16, v2: f16):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   testb   %dil, %dil
 ;   movdqa %xmm0, %xmm6
 ;   movdqa %xmm1, %xmm0
 ;   movss %xmm0, %xmm0; jz $next; movss %xmm6, %xmm0; $next:
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -105,15 +105,15 @@ block0(v0: i8, v1: f32, v2: f32):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   testb   %dil, %dil
 ;   movdqa %xmm0, %xmm6
 ;   movdqa %xmm1, %xmm0
 ;   movss %xmm0, %xmm0; jz $next; movss %xmm6, %xmm0; $next:
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -137,15 +137,15 @@ block0(v0: i8, v1: f64, v2: f64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   testb   %dil, %dil
 ;   movdqa %xmm0, %xmm6
 ;   movdqa %xmm1, %xmm0
 ;   movsd %xmm0, %xmm0; jz $next; movsd %xmm6, %xmm0; $next:
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -169,15 +169,15 @@ block0(v0: i8, v1: f128, v2: f128):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   testb   %dil, %dil
 ;   movdqa %xmm0, %xmm6
 ;   movdqa %xmm1, %xmm0
 ;   movdqa %xmm0, %xmm0; jz $next; movdqa %xmm6, %xmm0; $next:
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

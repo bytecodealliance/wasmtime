@@ -1,4 +1,4 @@
-use crate::dsl::{CustomOperation::*, Feature::*, Inst, Location::*, VexLength::*};
+use crate::dsl::{Customization::*, Feature::*, Inst, Location::*, VexLength::*};
 use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
@@ -42,26 +42,26 @@ pub fn list() -> Vec<Inst> {
         inst("adcl", fmt("RM", [rw(r32), r(rm32)]), rex(0x13).r(), _64b | compat),
         inst("adcq", fmt("RM", [rw(r64), r(rm64)]), rex(0x13).w().r(), _64b),
         // `LOCK`-prefixed memory-writing instructions.
-        inst("lock_addb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(0).ib(), _64b | compat).custom(Display),
-        inst("lock_addw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(0).iw(), _64b | compat).custom(Display),
-        inst("lock_addl", fmt("MI", [rw(m32), r(imm32)]), rex([0xf0, 0x81]).digit(0).id(), _64b | compat).custom(Display),
-        inst("lock_addq", fmt("MI_SXL", [rw(m64), sxq(imm32)]), rex([0xf0, 0x81]).w().digit(0).id(), _64b).custom(Display),
-        inst("lock_addl", fmt("MI_SXB", [rw(m32), sxl(imm8)]), rex([0xf0, 0x83]).digit(0).ib(), _64b | compat).custom(Display),
-        inst("lock_addq", fmt("MI_SXB", [rw(m64), sxq(imm8)]), rex([0xf0, 0x83]).w().digit(0).ib(), _64b).custom(Display),
-        inst("lock_addb", fmt("MR", [rw(m8), r(r8)]), rex([0xf0, 0x0]).r(), _64b | compat).custom(Display),
-        inst("lock_addw", fmt("MR", [rw(m16), r(r16)]), rex([0xf0, 0x66, 0x1]).r(), _64b | compat).custom(Display),
-        inst("lock_addl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x1]).r(), _64b | compat).custom(Display),
-        inst("lock_addq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x1]).w().r(), _64b).custom(Display),
-        inst("lock_adcb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(2).ib(), _64b | compat).custom(Display),
-        inst("lock_adcw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(2).iw(), _64b | compat).custom(Display),
-        inst("lock_adcl", fmt("MI", [rw(m32), r(imm32)]), rex([0xf0, 0x81]).digit(2).id(), _64b | compat).custom(Display),
-        inst("lock_adcq", fmt("MI_SXL", [rw(m64), sxq(imm32)]), rex([0xf0, 0x81]).w().digit(2).id(), _64b).custom(Display),
-        inst("lock_adcl", fmt("MI_SXB", [rw(m32), sxl(imm8)]), rex([0xf0, 0x83]).digit(2).ib(), _64b | compat).custom(Display),
-        inst("lock_adcq", fmt("MI_SXB", [rw(m64), sxq(imm8)]), rex([0xf0, 0x83]).w().digit(2).ib(), _64b).custom(Display),
-        inst("lock_adcb", fmt("MR", [rw(m8), r(r8)]), rex([0xf0, 0x10]).r(), _64b | compat).custom(Display),
-        inst("lock_adcw", fmt("MR", [rw(m16), r(r16)]), rex([0xf0, 0x66, 0x11]).r(), _64b | compat).custom(Display),
-        inst("lock_adcl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x11]).r(), _64b | compat).custom(Display),
-        inst("lock_adcq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x11]).w().r(), _64b).custom(Display),
+        inst("lock_addb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(0).ib(), _64b | compat).custom(Mnemonic),
+        inst("lock_addw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(0).iw(), _64b | compat).custom(Mnemonic),
+        inst("lock_addl", fmt("MI", [rw(m32), r(imm32)]), rex([0xf0, 0x81]).digit(0).id(), _64b | compat).custom(Mnemonic),
+        inst("lock_addq", fmt("MI_SXL", [rw(m64), sxq(imm32)]), rex([0xf0, 0x81]).w().digit(0).id(), _64b).custom(Mnemonic),
+        inst("lock_addl", fmt("MI_SXB", [rw(m32), sxl(imm8)]), rex([0xf0, 0x83]).digit(0).ib(), _64b | compat).custom(Mnemonic),
+        inst("lock_addq", fmt("MI_SXB", [rw(m64), sxq(imm8)]), rex([0xf0, 0x83]).w().digit(0).ib(), _64b).custom(Mnemonic),
+        inst("lock_addb", fmt("MR", [rw(m8), r(r8)]), rex([0xf0, 0x0]).r(), _64b | compat).custom(Mnemonic),
+        inst("lock_addw", fmt("MR", [rw(m16), r(r16)]), rex([0xf0, 0x66, 0x1]).r(), _64b | compat).custom(Mnemonic),
+        inst("lock_addl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x1]).r(), _64b | compat).custom(Mnemonic),
+        inst("lock_addq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x1]).w().r(), _64b).custom(Mnemonic),
+        inst("lock_adcb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(2).ib(), _64b | compat).custom(Mnemonic),
+        inst("lock_adcw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(2).iw(), _64b | compat).custom(Mnemonic),
+        inst("lock_adcl", fmt("MI", [rw(m32), r(imm32)]), rex([0xf0, 0x81]).digit(2).id(), _64b | compat).custom(Mnemonic),
+        inst("lock_adcq", fmt("MI_SXL", [rw(m64), sxq(imm32)]), rex([0xf0, 0x81]).w().digit(2).id(), _64b).custom(Mnemonic),
+        inst("lock_adcl", fmt("MI_SXB", [rw(m32), sxl(imm8)]), rex([0xf0, 0x83]).digit(2).ib(), _64b | compat).custom(Mnemonic),
+        inst("lock_adcq", fmt("MI_SXB", [rw(m64), sxq(imm8)]), rex([0xf0, 0x83]).w().digit(2).ib(), _64b).custom(Mnemonic),
+        inst("lock_adcb", fmt("MR", [rw(m8), r(r8)]), rex([0xf0, 0x10]).r(), _64b | compat).custom(Mnemonic),
+        inst("lock_adcw", fmt("MR", [rw(m16), r(r16)]), rex([0xf0, 0x66, 0x11]).r(), _64b | compat).custom(Mnemonic),
+        inst("lock_adcl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x11]).r(), _64b | compat).custom(Mnemonic),
+        inst("lock_adcq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x11]).w().r(), _64b).custom(Mnemonic),
         // Vector instructions.
         inst("addss", fmt("A", [rw(xmm1), r(xmm_m32)]), rex([0xF3, 0x0F, 0x58]).r(), _64b | compat | sse),
         inst("addsd", fmt("A", [rw(xmm1), r(xmm_m64)]), rex([0xF2, 0x0F, 0x58]).r(), _64b | compat | sse2),
@@ -79,5 +79,10 @@ pub fn list() -> Vec<Inst> {
         inst("paddusw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDD]).r(), _64b | compat | sse2),
         inst("phaddw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x01]).r(), _64b | compat | ssse3),
         inst("phaddd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x02]).r(), _64b | compat | ssse3),
+        // `LOCK`-prefixed xadd
+        inst("lock_xaddb", fmt("MR", [rw(m8), rw(r8)]), rex([0xf0, 0x0f, 0xc0]).r(), _64b | compat).custom(Mnemonic | Visit),
+        inst("lock_xaddw", fmt("MR", [rw(m16), rw(r16)]), rex([0xf0, 0x66, 0x0f, 0xc1]).r(), _64b | compat).custom(Mnemonic | Visit),
+        inst("lock_xaddl", fmt("MR", [rw(m32), rw(r32)]), rex([0xf0, 0x0f, 0xc1]).r(), _64b | compat).custom(Mnemonic | Visit),
+        inst("lock_xaddq", fmt("MR", [rw(m64), rw(r64)]), rex([0xf0, 0x0f, 0xc1]).w().r(), _64b).custom(Mnemonic | Visit),
     ]
 }

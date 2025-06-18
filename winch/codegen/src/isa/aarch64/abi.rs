@@ -4,7 +4,7 @@ use crate::abi::{ABI, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns
 use crate::codegen::CodeGenError;
 use crate::isa::{CallingConvention, reg::Reg};
 use anyhow::{Result, bail};
-use wasmtime_environ::{WasmHeapType, WasmRefType, WasmValType};
+use wasmtime_environ::{WasmHeapType, WasmValType};
 
 #[derive(Default)]
 pub(crate) struct Aarch64ABI;
@@ -120,21 +120,6 @@ impl ABI for Aarch64ABI {
         })
     }
 
-    fn scratch_for(ty: &WasmValType) -> Reg {
-        match ty {
-            #[expect(deprecated, reason = "Pending migration to Masm::with_scratch")]
-            WasmValType::I32
-            | WasmValType::I64
-            | WasmValType::Ref(WasmRefType {
-                heap_type: WasmHeapType::Func,
-                ..
-            }) => regs::scratch(),
-            #[expect(deprecated, reason = "Pending migration to Masm::with_scratch")]
-            WasmValType::F32 | WasmValType::F64 | WasmValType::V128 => regs::float_scratch(),
-            _ => unimplemented!(),
-        }
-    }
-
     fn vmctx_reg() -> Reg {
         regs::xreg(9)
     }
@@ -151,7 +136,7 @@ impl ABI for Aarch64ABI {
             },
             WasmValType::F64 | WasmValType::I64 => Self::word_bytes(),
             WasmValType::F32 | WasmValType::I32 => Self::word_bytes() / 2,
-            ty => unimplemented!("Support for WasmType: {ty}"),
+            WasmValType::V128 => Self::word_bytes() * 2,
         }
     }
 }
@@ -172,6 +157,13 @@ impl Aarch64ABI {
             ty @ (WasmValType::F32 | WasmValType::F64) => {
                 (index_env.next_fpr().map(regs::vreg), ty)
             }
+
+            ty @ WasmValType::Ref(rt) => match rt.heap_type {
+                WasmHeapType::Func | WasmHeapType::Extern => {
+                    (index_env.next_gpr().map(regs::xreg), ty)
+                }
+                _ => bail!(CodeGenError::unsupported_wasm_type()),
+            },
 
             _ => bail!(CodeGenError::unsupported_wasm_type()),
         };

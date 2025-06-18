@@ -4,13 +4,13 @@
 @since(version = 0.2.0)
 interface types {
   @since(version = 0.2.0)
-  use wasi:clocks/monotonic-clock@0.2.3.{duration};
+  use wasi:clocks/monotonic-clock@0.2.6.{duration};
   @since(version = 0.2.0)
-  use wasi:io/streams@0.2.3.{input-stream, output-stream};
+  use wasi:io/streams@0.2.6.{input-stream, output-stream};
   @since(version = 0.2.0)
-  use wasi:io/error@0.2.3.{error as io-error};
+  use wasi:io/error@0.2.6.{error as io-error};
   @since(version = 0.2.0)
-  use wasi:io/poll@0.2.3.{pollable};
+  use wasi:io/poll@0.2.6.{pollable};
 
   /// This type corresponds to HTTP standard Methods.
   @since(version = 0.2.0)
@@ -170,7 +170,7 @@ interface types {
   /// A `fields` may be mutable or immutable. A `fields` created using the
   /// constructor, `from-list`, or `clone` will be mutable, but a `fields`
   /// resource given by other means (including, but not limited to,
-  /// `incoming-request.headers`, `outgoing-request.headers`) might be be
+  /// `incoming-request.headers`, `outgoing-request.headers`) might be
   /// immutable. In an immutable fields, the `set`, `append`, and `delete`
   /// operations will fail with `header-error.immutable`.
   @since(version = 0.2.0)
@@ -435,6 +435,21 @@ interface types {
   /// other argument to `incoming-handler.handle`.
   @since(version = 0.2.0)
   resource response-outparam {
+    /// Send an HTTP 1xx response.
+    ///
+    /// Unlike `response-outparam.set`, this does not consume the
+    /// `response-outparam`, allowing the guest to send an arbitrary number of
+    /// informational responses before sending the final response using
+    /// `response-outparam.set`.
+    ///
+    /// This will return an `HTTP-protocol-error` if `status` is not in the
+    /// range [100-199], or an `internal-error` if the implementation does not
+    /// support informational responses.
+    @unstable(feature = informational-outbound-responses)
+    send-informational: func(
+      status: u16,
+      headers: headers
+    ) -> result<_, error-code>;
 
     /// Set the value of the `response-outparam` to either send a response,
     /// or indicate an error.

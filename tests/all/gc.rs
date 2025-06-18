@@ -1364,3 +1364,37 @@ fn issue_10772() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn drc_gc_inbetween_host_calls() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    config.collector(Collector::DeferredReferenceCounting);
+
+    let engine = Engine::new(&config)?;
+
+    let mut store = Store::new(&engine, ());
+    let func = Func::wrap(&mut store, |_: Option<Rooted<ExternRef>>| {});
+
+    let mut invoke_func = || {
+        let inner_dropped = Arc::new(AtomicBool::new(false));
+        {
+            let mut scope = RootScope::new(&mut store);
+            let r = ExternRef::new(&mut scope, SetFlagOnDrop(inner_dropped.clone()))?;
+            func.call(&mut scope, &[r.into()], &mut [])?;
+        }
+
+        assert!(!inner_dropped.load(SeqCst));
+        store.gc(None);
+        assert!(inner_dropped.load(SeqCst));
+        anyhow::Ok(())
+    };
+
+    invoke_func()?;
+    invoke_func()?;
+
+    Ok(())
+}

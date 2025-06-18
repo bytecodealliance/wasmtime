@@ -232,3 +232,12 @@
       (fcvt_from_uint ty val))
 (rule (simplify (fcvt_from_sint ty (sextend _ val)))
       (fcvt_from_sint ty val))
+
+
+;; or(x, C) + (-C)  -->  and(x, ~C)
+(rule
+  (simplify (iadd ty
+              (bor ty x (iconst_s ty n))
+              (iconst_s ty m)))
+  (if-let m (i64_neg n))
+  (band ty x (iconst ty (imm64_masked ty (i64_as_u64 (i64_not n))))))

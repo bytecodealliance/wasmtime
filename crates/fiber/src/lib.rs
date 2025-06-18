@@ -22,6 +22,9 @@ cfg_if::cfg_if! {
     if #[cfg(not(feature = "std"))] {
         mod nostd;
         use nostd as imp;
+    } else if #[cfg(miri)] {
+        mod miri;
+        use miri as imp;
     } else if #[cfg(windows)] {
         mod windows;
         use windows as imp;
@@ -139,11 +142,28 @@ pub struct Suspend<Resume, Yield, Return> {
     _phantom: PhantomData<(Resume, Yield, Return)>,
 }
 
+/// A structure that is stored on a stack frame of a call to `Fiber::resume`.
+///
+/// This is used to both transmit data to a fiber (the resume step) as well as
+/// acquire data from a fiber (the suspension step).
 enum RunResult<Resume, Yield, Return> {
+    /// The fiber is currently executing meaning it picked up whatever it was
+    /// resuming with and hasn't yet completed.
     Executing,
+
+    /// Resume with this value. Called for each invocation of
+    /// `Fiber::resume`.
     Resuming(Resume),
+
+    /// The fiber hasn't finished but has provided the following value
+    /// during its suspension.
     Yield(Yield),
+
+    /// The fiber has completed with the provided value and can no
+    /// longer be resumed.
     Returned(Return),
+
+    /// The fiber execution panicked.
     #[cfg(feature = "std")]
     Panicked(Box<dyn core::any::Any + Send>),
 }
@@ -245,31 +265,32 @@ impl<Resume, Yield, Return> Suspend<Resume, Yield, Return> {
         };
 
         #[cfg(feature = "std")]
-        {
+        let result = {
             use std::panic::{self, AssertUnwindSafe};
             let result = panic::catch_unwind(AssertUnwindSafe(|| (func)(initial, &mut suspend)));
-            suspend.inner.switch::<Resume, Yield, Return>(match result {
+            match result {
                 Ok(result) => RunResult::Returned(result),
                 Err(panic) => RunResult::Panicked(panic),
-            });
-        }
+            }
+        };
+
         // Note that it is sound to omit the `catch_unwind` here: it
         // will not result in unwinding going off the top of the fiber
         // stack, because the code on the fiber stack is invoked via
         // an extern "C" boundary which will panic on unwinds.
         #[cfg(not(feature = "std"))]
-        {
-            let result = (func)(initial, &mut suspend);
-            suspend
-                .inner
-                .switch::<Resume, Yield, Return>(RunResult::Returned(result));
-        }
+        let result = RunResult::Returned((func)(initial, &mut suspend));
+
+        suspend.inner.exit::<Resume, Yield, Return>(result);
     }
 }
 
 impl<A, B, C> Drop for Fiber<'_, A, B, C> {
     fn drop(&mut self) {
         debug_assert!(self.done.get(), "fiber dropped without finishing");
+        unsafe {
+            self.inner.drop::<A, B, C>();
+        }
     }
 }
 
@@ -353,6 +374,8 @@ mod tests {
                 || cfg!(target_arch = "arm")
                 // asan does weird things
                 || cfg!(asan)
+                // miri is a bit of a stretch to get working here
+                || cfg!(miri)
             );
         }
 

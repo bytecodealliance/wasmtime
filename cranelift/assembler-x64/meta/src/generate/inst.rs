@@ -1,5 +1,5 @@
 use super::{Formatter, fmtln, generate_derive, generate_derive_arbitrary_bounds};
-use crate::dsl::{self};
+use crate::dsl;
 
 impl dsl::Inst {
     /// `struct <inst> { <op>: Reg, <op>: Reg, ... }`
@@ -98,15 +98,27 @@ impl dsl::Inst {
 
     /// `fn mnemonic(&self) -> &'static str { ... }`
     pub fn generate_mnemonic_function(&self, f: &mut Formatter) {
+        use dsl::Customization::*;
+
         fmtln!(f, "#[must_use]");
-        f.add_block(&format!("pub fn mnemonic(&self) -> &'static str"), |f| {
-            fmtln!(f, "\"{}\"", self.mnemonic);
-        });
+        fmtln!(f, "#[inline]");
+        f.add_block(
+            &format!("pub fn mnemonic(&self) -> std::borrow::Cow<'static, str>"),
+            |f| {
+                if self.custom.contains(Mnemonic) {
+                    fmtln!(f, "crate::custom::mnemonic::{}(self)", self.name());
+                } else {
+                    fmtln!(f, "std::borrow::Cow::Borrowed(\"{}\")", self.mnemonic);
+                }
+            },
+        );
     }
 
     /// `fn encode(&self, ...) { ... }`
     fn generate_encode_function(&self, f: &mut Formatter) {
-        let off = if self.format.uses_memory().is_some() {
+        use dsl::Customization::*;
+
+        let off = if self.format.uses_memory().is_some() || self.custom.contains(Encode) {
             "off"
         } else {
             "_"
@@ -116,55 +128,63 @@ impl dsl::Inst {
                 "pub fn encode(&self, buf: &mut impl CodeSink, {off}: &impl KnownOffsetTable)"
             ),
             |f| {
-                // Emit trap.
-                if let Some(op) = self.format.uses_memory() {
-                    use dsl::OperandKind::*;
-                    f.comment("Emit trap.");
-                    match op.kind() {
-                        Mem(_) => {
-                            f.add_block(
-                                &format!("if let Some(trap_code) = self.{op}.trap_code()"),
-                                |f| {
-                                    fmtln!(f, "buf.add_trap(trap_code);");
-                                },
-                            );
-                        }
-                        RegMem(_) => {
-                            let ty = op.reg_class().unwrap();
-                            f.add_block(&format!("if let {ty}Mem::Mem({op}) = &self.{op}"), |f| {
-                                f.add_block(
-                                    &format!("if let Some(trap_code) = {op}.trap_code()"),
-                                    |f| {
-                                        fmtln!(f, "buf.add_trap(trap_code);");
-                                    },
-                                );
-                            });
-                        }
-                        _ => unreachable!(),
+                if self.custom.contains(Encode) {
+                    fmtln!(f, "crate::custom::encode::{}(self, buf, off);", self.name());
+                } else {
+                    self.generate_possible_trap(f);
+                    match &self.encoding {
+                        dsl::Encoding::Rex(rex) => self.format.generate_rex_encoding(f, rex),
+                        dsl::Encoding::Vex(vex) => self.format.generate_vex_encoding(f, vex),
                     }
-                }
-                if self.has_trap {
-                    f.comment("Emit trap.");
-                    fmtln!(f, "buf.add_trap(self.trap);");
-                }
-
-                match &self.encoding {
-                    dsl::Encoding::Rex(rex) => self.format.generate_rex_encoding(f, rex),
-                    dsl::Encoding::Vex(vex) => self.format.generate_vex_encoding(f, vex),
                 }
             },
         );
     }
 
+    // `buf.add_trap(...)`
+    fn generate_possible_trap(&self, f: &mut Formatter) {
+        if self.has_trap {
+            f.comment("Emit trap.");
+            fmtln!(f, "buf.add_trap(self.trap);");
+        } else if let Some(op) = self.format.uses_memory() {
+            use dsl::OperandKind::*;
+            f.comment("Emit trap.");
+            match op.kind() {
+                Mem(_) => {
+                    f.add_block(
+                        &format!("if let Some(trap_code) = self.{op}.trap_code()"),
+                        |f| {
+                            fmtln!(f, "buf.add_trap(trap_code);");
+                        },
+                    );
+                }
+                RegMem(_) => {
+                    let ty = op.reg_class().unwrap();
+                    f.add_block(&format!("if let {ty}Mem::Mem({op}) = &self.{op}"), |f| {
+                        f.add_block(&format!("if let Some(trap_code) = {op}.trap_code()"), |f| {
+                            fmtln!(f, "buf.add_trap(trap_code);");
+                        });
+                    });
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
     /// `fn visit(&self, ...) { ... }`
     fn generate_visit_function(&self, f: &mut Formatter) {
-        use dsl::{CustomOperation::*, OperandKind::*};
+        use dsl::{Customization::*, OperandKind::*};
         let extra_generic_bound = if self.requires_generic() {
             ""
         } else {
             "<R: Registers>"
         };
-        f.add_block(&format!("pub fn visit{extra_generic_bound}(&mut self, visitor: &mut impl RegisterVisitor<R>)"), |f| {
+        let visitor = if self.format.operands.is_empty() && !self.custom.contains(Visit) {
+            "_"
+        } else {
+            "visitor"
+        };
+        f.add_block(&format!("pub fn visit{extra_generic_bound}(&mut self, {visitor}: &mut impl RegisterVisitor<R>)"), |f| {
             if self.custom.contains(Visit) {
                 fmtln!(f, "crate::custom::visit::{}(self, visitor)", self.name());
                 return;
@@ -223,7 +243,7 @@ impl dsl::Inst {
 
     /// `impl Display for <inst> { ... }`
     pub fn generate_display_impl(&self, f: &mut Formatter) {
-        use crate::dsl::CustomOperation::*;
+        use crate::dsl::Customization::*;
         let impl_block = self.generate_impl_block_start();
         let struct_name = self.struct_name_with_generic();
         f.add_block(
@@ -232,19 +252,20 @@ impl dsl::Inst {
                 f.add_block(
                     "fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result",
                     |f| {
+                        if self.custom.contains(Display) {
+                            fmtln!(f, "crate::custom::display::{}(f, self)", self.name());
+                            return;
+                        }
+
+                        fmtln!(f, "let name = self.mnemonic();");
+                        if self.format.operands.is_empty() {
+                            fmtln!(f, "f.write_str(&name)");
+                            return;
+                        }
                         for op in self.format.operands.iter() {
                             let location = op.location;
                             let to_string = location.generate_to_string(op.extension);
                             fmtln!(f, "let {location} = {to_string};");
-                        }
-                        if self.custom.contains(Display) {
-                            fmtln!(
-                                f,
-                                "let name = crate::custom::display::{}(self);",
-                                self.name()
-                            )
-                        } else {
-                            fmtln!(f, "let name = \"{}\";", self.mnemonic);
                         }
                         let ordered_ops = self.format.generate_att_style_operands();
                         let mut implicit_ops = self.format.generate_implicit_operands();

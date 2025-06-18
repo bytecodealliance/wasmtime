@@ -22,7 +22,7 @@
 ;;       movq    %rsi, (%rsp)
 ;;       movdqu  0x29(%rip), %xmm0
 ;;       movl    $0, %eax
-;;       movq    0x40(%r14), %rcx
+;;       movq    0x38(%r14), %rcx
 ;;       addq    %rax, %rcx
 ;;       vpextrw $1, %xmm0, (%rcx)
 ;;       addq    $0x10, %rsp

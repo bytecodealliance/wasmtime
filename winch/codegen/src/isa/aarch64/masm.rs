@@ -86,9 +86,9 @@ impl MacroAssembler {
     /// during execution. While the compiler doesn't directly use the stack
     /// pointer for memory addressing, maintaining this alignment is crucial
     /// to prevent issues when handling signals.
-    pub fn with_aligned_sp<F, T>(&mut self, mut f: F) -> Result<T>
+    pub fn with_aligned_sp<F, T>(&mut self, f: F) -> Result<T>
     where
-        F: FnMut(&mut Self) -> Result<T>,
+        F: FnOnce(&mut Self) -> Result<T>,
     {
         let mut aligned = false;
         let alignment: u32 = <Aarch64ABI as ABI>::call_stack_align().into();
@@ -409,7 +409,13 @@ impl Masm for MacroAssembler {
     fn wasm_load(&mut self, src: Self::Address, dst: WritableReg, kind: LoadKind) -> Result<()> {
         let size = kind.derive_operand_size();
         self.with_aligned_sp(|masm| match &kind {
-            LoadKind::Operand(_) => Ok(masm.asm.uload(src, dst, size, UNTRUSTED_FLAGS)),
+            LoadKind::Operand(_) => {
+                if size == OperandSize::S128 {
+                    bail!(CodeGenError::UnimplementedWasmLoadKind)
+                } else {
+                    Ok(masm.asm.uload(src, dst, size, UNTRUSTED_FLAGS))
+                }
+            }
             LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
             LoadKind::ScalarExtend(extend_kind) => {
                 if extend_kind.signed() {
@@ -489,9 +495,17 @@ impl Masm for MacroAssembler {
         dst: WritableReg,
         src: Reg,
         cc: IntCmpKind,
-        _size: OperandSize,
+        size: OperandSize,
     ) -> Result<()> {
-        self.asm.csel(src, dst.to_reg(), dst, Cond::from(cc));
+        match (src.class(), dst.to_reg().class()) {
+            (RegClass::Int, RegClass::Int) => self.asm.csel(src, dst.to_reg(), dst, Cond::from(cc)),
+            (RegClass::Float, RegClass::Float) => {
+                self.asm
+                    .fpu_csel(src, dst.to_reg(), dst, Cond::from(cc), size)
+            }
+            _ => return Err(anyhow!(CodeGenError::invalid_operand_combination())),
+        }
+
         Ok(())
     }
 
@@ -784,8 +798,11 @@ impl Masm for MacroAssembler {
         size: OperandSize,
     ) -> Result<()> {
         context.binop(self, size, |this, dividend, divisor, size| {
-            this.asm
-                .div_rrr(divisor, dividend, writable!(dividend), kind, size);
+            this.with_aligned_sp(|this| {
+                this.asm
+                    .div_rrr(divisor, dividend, writable!(dividend), kind, size);
+                Ok(())
+            })?;
             match size {
                 OperandSize::S32 => Ok(TypedReg::new(WasmValType::I32, dividend)),
                 OperandSize::S64 => Ok(TypedReg::new(WasmValType::I64, dividend)),
@@ -801,16 +818,19 @@ impl Masm for MacroAssembler {
         size: OperandSize,
     ) -> Result<()> {
         context.binop(self, size, |this, dividend, divisor, size| {
-            this.with_scratch::<IntScratch, _>(|masm, scratch| {
-                masm.asm.rem_rrr(
-                    divisor,
-                    dividend,
-                    writable!(dividend),
-                    scratch.writable(),
-                    kind,
-                    size,
-                );
-            });
+            this.with_aligned_sp(|this| {
+                this.with_scratch::<IntScratch, _>(|masm, scratch| {
+                    masm.asm.rem_rrr(
+                        divisor,
+                        dividend,
+                        writable!(dividend),
+                        scratch.writable(),
+                        kind,
+                        size,
+                    );
+                });
+                Ok(())
+            })?;
             match size {
                 OperandSize::S32 => Ok(TypedReg::new(WasmValType::I32, dividend)),
                 OperandSize::S64 => Ok(TypedReg::new(WasmValType::I64, dividend)),
@@ -846,12 +866,13 @@ impl Masm for MacroAssembler {
         dst_size: OperandSize,
         kind: TruncKind,
     ) -> Result<()> {
-        self.with_scratch::<FloatScratch, _>(|masm, scratch| {
-            masm.asm
-                .fpu_to_int(dst, src, scratch.writable(), src_size, dst_size, kind, true);
-        });
-
-        Ok(())
+        self.with_aligned_sp(|masm| {
+            masm.with_scratch::<FloatScratch, _>(|masm, scratch| {
+                masm.asm
+                    .fpu_to_int(dst, src, scratch.writable(), src_size, dst_size, kind, true);
+            });
+            Ok(())
+        })
     }
 
     fn unsigned_truncate(
@@ -868,17 +889,19 @@ impl Masm for MacroAssembler {
         };
 
         ctx.convert_op(self, dst_ty, |masm, dst, src, dst_size| {
-            masm.with_scratch::<FloatScratch, _>(|masm, scratch| {
-                masm.asm.fpu_to_int(
-                    writable!(dst),
-                    src,
-                    scratch.writable(),
-                    src_size,
-                    dst_size,
-                    kind,
-                    false,
-                );
-                Ok(())
+            masm.with_aligned_sp(|masm| {
+                masm.with_scratch::<FloatScratch, _>(|masm, scratch| {
+                    masm.asm.fpu_to_int(
+                        writable!(dst),
+                        src,
+                        scratch.writable(),
+                        src_size,
+                        dst_size,
+                        kind,
+                        false,
+                    );
+                    Ok(())
+                })
             })
         })
     }
@@ -1066,8 +1089,10 @@ impl Masm for MacroAssembler {
     }
 
     fn unreachable(&mut self) -> Result<()> {
-        self.asm.udf(wasmtime_cranelift::TRAP_UNREACHABLE);
-        Ok(())
+        self.with_aligned_sp(|masm| {
+            masm.asm.udf(wasmtime_cranelift::TRAP_UNREACHABLE);
+            Ok(())
+        })
     }
 
     fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) -> Result<()> {

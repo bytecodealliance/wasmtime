@@ -175,16 +175,16 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::StreamCancelWrite { ty, async_ } => {
                 self.translate_cancel_call(ty.as_u32(), *async_, host::stream_cancel_write)
             }
-            Trampoline::StreamCloseReadable { ty } => self.translate_future_or_stream_call(
+            Trampoline::StreamDropReadable { ty } => self.translate_future_or_stream_call(
                 &[ty.as_u32()],
                 None,
-                host::stream_close_readable,
+                host::stream_drop_readable,
                 TrapSentinel::Falsy,
             ),
-            Trampoline::StreamCloseWritable { ty } => self.translate_future_or_stream_call(
+            Trampoline::StreamDropWritable { ty } => self.translate_future_or_stream_call(
                 &[ty.as_u32()],
                 None,
-                host::stream_close_writable,
+                host::stream_drop_writable,
                 TrapSentinel::Falsy,
             ),
             Trampoline::FutureNew { ty } => self.translate_future_or_stream_call(
@@ -211,16 +211,16 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::FutureCancelWrite { ty, async_ } => {
                 self.translate_cancel_call(ty.as_u32(), *async_, host::future_cancel_write)
             }
-            Trampoline::FutureCloseReadable { ty } => self.translate_future_or_stream_call(
+            Trampoline::FutureDropReadable { ty } => self.translate_future_or_stream_call(
                 &[ty.as_u32()],
                 None,
-                host::future_close_readable,
+                host::future_drop_readable,
                 TrapSentinel::Falsy,
             ),
-            Trampoline::FutureCloseWritable { ty } => self.translate_future_or_stream_call(
+            Trampoline::FutureDropWritable { ty } => self.translate_future_or_stream_call(
                 &[ty.as_u32()],
                 None,
-                host::future_close_writable,
+                host::future_drop_writable,
                 TrapSentinel::Falsy,
             ),
             Trampoline::ErrorContextNew { ty, options } => self.translate_error_context_call(

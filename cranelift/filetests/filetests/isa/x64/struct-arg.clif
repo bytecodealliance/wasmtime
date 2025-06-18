@@ -9,13 +9,13 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   lea     rbp(stack args max - 64), %rsi
 ;   movzbq (%rsi), %rax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -38,15 +38,15 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   lea     rbp(stack args max - 64), %rcx
 ;   movzbq (%rdi), %rax
 ;   movzbq (%rcx), %r9
 ;   addl %r9d, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -71,19 +71,19 @@ block0(v0: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ;   subq $0x40, %rsp
 ; block0:
-;   movq    %rdi, %rsi
+;   movq %rdi, %rsi
 ;   lea     0(%rsp), %rdi
-;   movl    $64, %edx
+;   movl $0x40, %edx
 ;   load_ext_name %Memcpy+0, %r10
 ;   call    *%r10
 ;   call    User(userextname0)
 ;   addq $0x40, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -112,22 +112,22 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ;   subq $0x50, %rsp
-;   movq    %r14, 64(%rsp)
+;   movq %r14, 0x40(%rsp)
 ; block0:
-;   movq    %rdi, %r14
+;   movq %rdi, %r14
 ;   lea     0(%rsp), %rdi
-;   movl    $64, %edx
+;   movl $0x40, %edx
 ;   load_ext_name %Memcpy+0, %r11
 ;   call    *%r11
-;   movq    %r14, %rdi
+;   movq %r14, %rdi
 ;   call    User(userextname0)
 ;   movq 0x40(%rsp), %r14
 ;   addq $0x50, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -159,16 +159,16 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   lea     rbp(stack args max - 192), %rsi
 ;   lea     rbp(stack args max - 64), %rcx
 ;   movzbq (%rsi), %rax
 ;   movzbq (%rcx), %r9
 ;   addl %r9d, %eax
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -194,30 +194,30 @@ block0(v0: i64, v1: i64, v2: i64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ;   subq $0xd0, %rsp
-;   movq    %rbx, 192(%rsp)
-;   movq    %r13, 200(%rsp)
+;   movq %rbx, 0xc0(%rsp)
+;   movq %r13, 0xc8(%rsp)
 ; block0:
-;   movq    %rdx, %rbx
-;   movq    %rdi, %r13
+;   movq %rdx, %rbx
+;   movq %rdi, %r13
 ;   lea     0(%rsp), %rdi
-;   movl    $128, %edx
+;   movl $0x80, %edx
 ;   load_ext_name %Memcpy+0, %rax
 ;   call    *%rax
 ;   lea     128(%rsp), %rdi
-;   movl    $64, %edx
+;   movl $0x40, %edx
 ;   load_ext_name %Memcpy+0, %r10
-;   movq    %rbx, %rsi
+;   movq %rbx, %rsi
 ;   call    *%r10
-;   movq    %r13, %rdi
+;   movq %r13, %rdi
 ;   call    User(userextname0)
 ;   movq 0xc0(%rsp), %rbx
 ;   movq 0xc8(%rsp), %r13
 ;   addq $0xd0, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
