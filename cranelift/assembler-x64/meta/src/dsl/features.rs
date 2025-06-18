@@ -38,12 +38,10 @@ impl Features {
     }
 
     pub(crate) fn is_sse(&self) -> bool {
-        self.0.iter().any(|f| {
-            matches!(
-                f,
-                Feature::sse | Feature::sse2 | Feature::ssse3 | Feature::sse41
-            )
-        })
+        use Feature::*;
+        self.0
+            .iter()
+            .any(|f| matches!(f, sse | sse2 | sse3 | ssse3 | sse41 | sse42))
     }
 }
 
