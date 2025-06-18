@@ -50,6 +50,7 @@ add_capi_test(tests FILES
   memory.cc
   instance.cc
   linker.cc
+  wasip2.cc
 )
 
 # Create a list of all wasmtime headers with `GLOB_RECURSE`, then emit a file

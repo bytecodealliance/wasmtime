@@ -153,6 +153,15 @@ pub unsafe extern "C" fn wasmtime_component_linker_instance_add_func(
 }
 
 #[unsafe(no_mangle)]
+#[cfg(feature = "wasi")]
+pub unsafe extern "C" fn wasmtime_component_linker_add_wasip2(
+    linker: &mut wasmtime_component_linker_t,
+) -> Option<Box<wasmtime_error_t>> {
+    let result = wasmtime_wasi::p2::add_to_linker_sync(&mut linker.linker);
+    crate::handle_result(result, |_| ())
+}
+
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_component_linker_instance_delete(
     _linker_instance: Box<wasmtime_component_linker_instance_t>,
 ) {
