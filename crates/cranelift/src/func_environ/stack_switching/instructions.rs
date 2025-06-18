@@ -209,9 +209,7 @@ pub(crate) mod stack_switching_helpers {
 
         fn get(&self, builder: &mut FunctionBuilder, ty: ir::Type, offset: i32) -> ir::Value {
             let mem_flags = ir::MemFlags::trusted();
-            builder
-                .ins()
-                .load(ty, mem_flags, self.address, offset)
+            builder.ins().load(ty, mem_flags, self.address, offset)
         }
 
         fn set<U>(&self, builder: &mut FunctionBuilder, offset: i32, value: ir::Value) {
