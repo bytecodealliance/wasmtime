@@ -2439,8 +2439,7 @@
 ;;
 ;; Note that `movl` here will zero-extend the destination register in 64-bit
 ;; mode which is the zero-extension we want.
-(rule 3 (imm $I64 imm)
-  (if-let imm32 (u64_try_into_u32 imm))
+(rule 3 (imm $I64 (u32_from_u64 imm32))
   (x64_movl_oi imm32))
 
 ;; Special case the 0 immediate:
