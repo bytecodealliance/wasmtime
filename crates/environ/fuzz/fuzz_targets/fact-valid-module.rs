@@ -11,28 +11,22 @@
 
 use arbitrary::Unstructured;
 use libfuzzer_sys::fuzz_target;
-use wasmparser::component_types::ComponentAnyTypeId;
-use wasmparser::{Parser, Payload, Validator, WasmFeatures};
-use wasmtime_environ::component::*;
-use wasmtime_environ::fact::Module;
+use wasmtime_environ::{ScopeVec, Tunables, component::*};
 use wasmtime_test_util::component_fuzz::{MAX_TYPE_DEPTH, TestCase, Type};
 
 const TYPE_COUNT: usize = 50;
 const MAX_ARITY: u32 = 5;
-const TEST_CASE_COUNT: usize = 20;
-
-#[derive(Debug)]
-struct GenAdapterModule<'a> {
-    debug: bool,
-    adapters: Vec<GenAdapter<'a>>,
-}
 
 #[derive(Debug)]
 struct GenAdapter<'a> {
-    post_return: bool,
-    lift_memory64: bool,
-    lower_memory64: bool,
     test: TestCase<'a>,
+    // TODO: Add these arbitrary options and thread them into
+    // `Declarations::make_component`, or alternatively pass an `Unstructured`
+    // into that method to make arbitrary choices for these things.
+    //
+    // post_return: bool,
+    // lift_memory64: bool,
+    // lower_memory64: bool,
 }
 
 fuzz_target!(|data: &[u8]| {
@@ -53,181 +47,54 @@ fn target(data: &[u8]) -> arbitrary::Result<()> {
         types.push(Type::generate(&mut u, MAX_TYPE_DEPTH, &mut type_fuel)?);
     }
 
-    // Next generate a set of static API test cases driven by the above
-    // types.
-    let mut ret = GenAdapterModule {
-        debug: u.arbitrary()?,
-        adapters: Vec::new(),
-    };
-    for _ in 0..u.int_in_range(1..=TEST_CASE_COUNT)? {
-        let mut params = Vec::new();
-        let mut result = None;
-        for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
-            params.push(u.choose(&types)?);
-        }
-        if u.arbitrary()? {
-            result = Some(u.choose(&types)?);
-        }
-
-        let test = TestCase {
-            params,
-            result,
-            encoding1: u.arbitrary()?,
-            encoding2: u.arbitrary()?,
-        };
-        ret.adapters.push(GenAdapter {
-            test,
-            post_return: u.arbitrary()?,
-            lift_memory64: u.arbitrary()?,
-            lower_memory64: u.arbitrary()?,
-        });
+    // Next generate a static API test case driven by the above types.
+    let mut params = Vec::new();
+    let mut result = None;
+    for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
+        params.push(u.choose(&types)?);
+    }
+    if u.arbitrary()? {
+        result = Some(u.choose(&types)?);
     }
 
-    // Manufactures a unique `CoreDef` so all function imports get unique
-    // function imports.
-    let mut next_def = 0;
-    let mut dummy_def = || {
-        next_def += 1;
-        dfg::CoreDef::Adapter(dfg::AdapterId::from_u32(next_def))
+    let test = TestCase {
+        params,
+        result,
+        encoding1: u.arbitrary()?,
+        encoding2: u.arbitrary()?,
     };
+    let adapter = GenAdapter { test };
 
-    // Manufactures a `CoreExport` for a memory with the shape specified. Note
-    // that we can't import as many memories as functions so these are
-    // intentionally limited. Once a handful of memories are generated of each
-    // type then they start getting reused.
-    let mut next_memory = 0;
-    let mut memories32 = Vec::new();
-    let mut memories64 = Vec::new();
-    let mut dummy_memory = |memory64: bool| {
-        let dst = if memory64 {
-            &mut memories64
-        } else {
-            &mut memories32
-        };
-        let idx = if dst.len() < 5 {
-            next_memory += 1;
-            dst.push(next_memory - 1);
-            next_memory - 1
-        } else {
-            dst[0]
-        };
-        dfg::CoreExport {
-            instance: dfg::InstanceId::from_u32(idx),
-            item: ExportItem::Name(String::new()),
-        }
-    };
-    let mut validator = Validator::new();
-    let mut types = ComponentTypesBuilder::new(&validator);
+    let wat_decls = adapter.test.declarations();
+    let component = wat_decls.make_component();
+    let component = wat::parse_str(&component).unwrap();
 
-    let mut adapters = Vec::new();
-    for adapter in ret.adapters.iter() {
-        let wat_decls = adapter.test.declarations();
-        let wat = format!(
-            "(component
-                {types}
-                (type (func {params} {results}))
-            )",
-            types = wat_decls.types,
-            params = wat_decls.params,
-            results = wat_decls.results,
-        );
-        let wasm = wat::parse_str(&wat).unwrap();
+    let mut tunables = Tunables::default_host();
+    tunables.debug_adapter_modules = u.arbitrary()?;
 
-        let mut type_index = 0;
-        for payload in Parser::new(0).parse_all(&wasm) {
-            let payload = payload.unwrap();
-            validator.payload(&payload).unwrap();
-            let section = match payload {
-                Payload::ComponentTypeSection(s) => s,
-                _ => continue,
-            };
-            for _ in section {
-                let validator_types = validator.types(0).unwrap();
-                let id = validator_types.component_any_type_at(type_index);
-                type_index += 1;
-                let id = match id {
-                    ComponentAnyTypeId::Func(id) => id,
-                    _ => continue,
-                };
-                let ty = types
-                    .convert_component_func_type(validator_types, id)
-                    .unwrap();
-                adapters.push(Adapter {
-                    lift_ty: ty,
-                    lower_ty: ty,
-                    lower_options: AdapterOptions {
-                        instance: RuntimeComponentInstanceIndex::from_u32(0),
-                        string_encoding: convert_encoding(adapter.test.encoding1),
-                        memory64: adapter.lower_memory64,
-                        // Pessimistically assume that memory/realloc are going to be
-                        // required for this trampoline and provide it. Avoids doing
-                        // calculations to figure out whether they're necessary and
-                        // simplifies the fuzzer here without reducing coverage within FACT
-                        // itself.
-                        memory: Some(dummy_memory(adapter.lower_memory64)),
-                        realloc: Some(dummy_def()),
-                        // Lowering never allows `post-return`
-                        post_return: None,
-                        // Lowering never allows `callback`
-                        callback: None,
-                        // TODO: support async lowers
-                        async_: false,
-                    },
-                    lift_options: AdapterOptions {
-                        instance: RuntimeComponentInstanceIndex::from_u32(1),
-                        string_encoding: convert_encoding(adapter.test.encoding2),
-                        memory64: adapter.lift_memory64,
-                        memory: Some(dummy_memory(adapter.lift_memory64)),
-                        realloc: Some(dummy_def()),
-                        post_return: if adapter.post_return {
-                            Some(dummy_def())
-                        } else {
-                            None
-                        },
-                        // TODO: support async lowers
-                        callback: None,
-                        async_: false,
-                    },
-                    func: dummy_def(),
-                });
-            }
-        }
+    let mut validator = wasmparser::Validator::new_with_features(wasmparser::WasmFeatures::all());
+    let mut component_types = ComponentTypesBuilder::new(&validator);
+    let adapters = ScopeVec::new();
+
+    Translator::new(&tunables, &mut validator, &mut component_types, &adapters)
+        .translate(&component)
+        .expect("should never generate an invalid component");
+
+    let adapters = adapters.into_iter();
+    assert!(adapters.len() >= 1);
+    for wasm in adapters {
         validator.reset();
-    }
-
-    let mut fact_module = Module::new(&types, ret.debug);
-    for (i, adapter) in adapters.iter().enumerate() {
-        fact_module.adapt(&format!("adapter{i}"), adapter);
-    }
-    let wasm = fact_module.encode();
-    let result = Validator::new_with_features(WasmFeatures::default() | WasmFeatures::MEMORY64)
-        .validate_all(&wasm);
-
-    let err = match result {
-        Ok(_) => return Ok(()),
-        Err(e) => e,
-    };
-    eprintln!("invalid wasm module: {err:?}");
-    for adapter in ret.adapters.iter() {
-        eprintln!("adapter: {adapter:?}");
-    }
-    std::fs::write("invalid.wasm", &wasm).unwrap();
-    match wasmprinter::print_bytes(&wasm) {
-        Ok(s) => std::fs::write("invalid.wat", &s).unwrap(),
-        Err(_) => drop(std::fs::remove_file("invalid.wat")),
-    }
-
-    panic!()
-}
-
-fn convert_encoding(
-    encoding: wasmtime_test_util::component_fuzz::StringEncoding,
-) -> StringEncoding {
-    match encoding {
-        wasmtime_test_util::component_fuzz::StringEncoding::Utf8 => StringEncoding::Utf8,
-        wasmtime_test_util::component_fuzz::StringEncoding::Utf16 => StringEncoding::Utf16,
-        wasmtime_test_util::component_fuzz::StringEncoding::Latin1OrUtf16 => {
-            StringEncoding::CompactUtf16
+        if let Err(err) = validator.validate_all(&wasm) {
+            eprintln!("invalid wasm module: {err:?}");
+            eprintln!("adapter: {adapter:?}");
+            std::fs::write("invalid.wasm", &wasm).unwrap();
+            match wasmprinter::print_bytes(&wasm) {
+                Ok(s) => std::fs::write("invalid.wat", &s).unwrap(),
+                Err(_) => drop(std::fs::remove_file("invalid.wat")),
+            }
+            panic!("invalid adapter: {err:?}")
         }
     }
+
+    Ok(())
 }
