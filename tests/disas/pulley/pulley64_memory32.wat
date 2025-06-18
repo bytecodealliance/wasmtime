@@ -59,7 +59,6 @@
 )
 ;; wasm[0]::function[0]::load8:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0x47
 ;;       xload64le_o32 x6, x0, 56
@@ -70,7 +69,6 @@
 ;;
 ;; wasm[0]::function[1]::load16:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0x4f
 ;;       xload64le_o32 x6, x0, 56
@@ -81,7 +79,6 @@
 ;;
 ;; wasm[0]::function[2]::load32:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0x57
 ;;       xload64le_o32 x6, x0, 56
@@ -92,7 +89,6 @@
 ;;
 ;; wasm[0]::function[3]::load64:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0x5f
 ;;       xload64le_o32 x6, x0, 56
@@ -103,7 +99,6 @@
 ;;
 ;; wasm[0]::function[4]::store8:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0x69
 ;;       xload64le_o32 x6, x0, 56
@@ -114,7 +109,6 @@
 ;;
 ;; wasm[0]::function[5]::store16:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0x73
 ;;       xload64le_o32 x6, x0, 56
@@ -125,7 +119,6 @@
 ;;
 ;; wasm[0]::function[6]::store32:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0x7d
 ;;       xload64le_o32 x6, x0, 56
@@ -136,7 +129,6 @@
 ;;
 ;; wasm[0]::function[7]::store64:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0x87
 ;;       xload64le_o32 x6, x0, 56
@@ -147,7 +139,6 @@
 ;;
 ;; wasm[0]::function[8]::load8_offset:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0x8f
 ;;       xload64le_o32 x6, x0, 56
@@ -158,7 +149,6 @@
 ;;
 ;; wasm[0]::function[9]::load16_offset:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0x97
 ;;       xload64le_o32 x6, x0, 56
@@ -169,7 +159,6 @@
 ;;
 ;; wasm[0]::function[10]::load32_offset:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0x9f
 ;;       xload64le_o32 x6, x0, 56
@@ -180,7 +169,6 @@
 ;;
 ;; wasm[0]::function[11]::load64_offset:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0xa7
 ;;       xload64le_o32 x6, x0, 56
@@ -191,7 +179,6 @@
 ;;
 ;; wasm[0]::function[12]::store8_offset:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0xb1
 ;;       xload64le_o32 x6, x0, 56
@@ -202,7 +189,6 @@
 ;;
 ;; wasm[0]::function[13]::store16_offset:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0xbb
 ;;       xload64le_o32 x6, x0, 56
@@ -213,7 +199,6 @@
 ;;
 ;; wasm[0]::function[14]::store32_offset:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0xc5
 ;;       xload64le_o32 x6, x0, 56
@@ -224,7 +209,6 @@
 ;;
 ;; wasm[0]::function[15]::store64_offset:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x5, x0, 64
 ;;       ╰─╼ addrmap: 0xcf
 ;;       xload64le_o32 x6, x0, 56
@@ -235,7 +219,6 @@
 ;;
 ;; wasm[0]::function[16]::load16_two:
 ;;       push_frame
-;;       ╰─╼ trap: StackOverflow
 ;;       xload64le_o32 x7, x0, 64
 ;;       ╰─╼ addrmap: 0xd7
 ;;       xload64le_o32 x8, x0, 56
