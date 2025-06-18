@@ -21,6 +21,11 @@ pub struct WastCommand {
     /// transformations to show line numbers in backtraces.
     #[arg(long, require_equals = true, value_name = "true|false")]
     generate_dwarf: Option<Option<bool>>,
+
+    #[arg(long)]
+    precompile_save: Option<PathBuf>,
+    #[arg(long)]
+    precompile_load: Option<PathBuf>,
 }
 
 impl WastCommand {
@@ -48,10 +53,17 @@ impl WastCommand {
             })
             .expect("error instantiating \"spectest\"");
 
+        if let Some(path) = &self.precompile_save {
+            wast_context.precompile_save(path);
+        }
+        if let Some(path) = &self.precompile_load {
+            wast_context.precompile_load(path);
+        }
+
         for script in self.scripts.iter() {
             wast_context
                 .run_file(script)
-                .with_context(|| format!("failed to run script file '{}'", script.display()))?
+                .with_context(|| format!("failed to run script file '{}'", script.display()))?;
         }
 
         Ok(())

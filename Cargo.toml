@@ -333,6 +333,7 @@ wasm-mutate = "0.235.0"
 wit-parser = "0.235.0"
 wit-component = "0.235.0"
 wasm-wave = "0.235.0"
+json-from-wast = "0.235.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
@@ -611,3 +612,7 @@ debug = "line-tables-only"
 inherits = "release"
 codegen-units = 1
 lto = true
+
+[patch.crates-io]
+json-from-wast = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'json-from-wast-crate' }
+wast = { git = 'https://github.com/alexcrichton/wasm-tools', branch = 'json-from-wast-crate' }
