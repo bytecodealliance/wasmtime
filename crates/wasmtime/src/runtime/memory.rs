@@ -26,8 +26,7 @@ impl fmt::Display for MemoryAccessError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for MemoryAccessError {}
+impl core::error::Error for MemoryAccessError {}
 
 /// A WebAssembly linear memory.
 ///

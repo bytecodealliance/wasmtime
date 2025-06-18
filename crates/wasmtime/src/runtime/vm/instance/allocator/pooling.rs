@@ -253,7 +253,7 @@ pub struct PoolConcurrencyLimitError {
     kind: Cow<'static, str>,
 }
 
-impl std::error::Error for PoolConcurrencyLimitError {}
+impl core::error::Error for PoolConcurrencyLimitError {}
 
 impl Display for PoolConcurrencyLimitError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
