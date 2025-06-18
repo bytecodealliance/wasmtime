@@ -1,120 +1,123 @@
 use crate::core;
 use anyhow::{Context, Result, bail};
+use json_from_wast::{ComponentConst, FloatConst};
 use std::collections::BTreeSet;
 use std::fmt::Debug;
-use wast::component::WastVal;
-use wast::core::NanPattern;
 
 pub use wasmtime::component::*;
 
-pub fn val(v: &WastVal<'_>) -> Result<Val> {
+pub fn val(v: &ComponentConst<'_>) -> Result<Val> {
     Ok(match v {
-        WastVal::Bool(b) => Val::Bool(*b),
-        WastVal::U8(b) => Val::U8(*b),
-        WastVal::S8(b) => Val::S8(*b),
-        WastVal::U16(b) => Val::U16(*b),
-        WastVal::S16(b) => Val::S16(*b),
-        WastVal::U32(b) => Val::U32(*b),
-        WastVal::S32(b) => Val::S32(*b),
-        WastVal::U64(b) => Val::U64(*b),
-        WastVal::S64(b) => Val::S64(*b),
-        WastVal::F32(b) => Val::Float32(f32::from_bits(b.bits)),
-        WastVal::F64(b) => Val::Float64(f64::from_bits(b.bits)),
-        WastVal::Char(b) => Val::Char(*b),
-        WastVal::String(s) => Val::String(s.to_string()),
-        WastVal::List(vals) => {
+        ComponentConst::Bool(b) => Val::Bool(*b),
+        ComponentConst::U8(b) => Val::U8(b.0),
+        ComponentConst::S8(b) => Val::S8(b.0),
+        ComponentConst::U16(b) => Val::U16(b.0),
+        ComponentConst::S16(b) => Val::S16(b.0),
+        ComponentConst::U32(b) => Val::U32(b.0),
+        ComponentConst::S32(b) => Val::S32(b.0),
+        ComponentConst::U64(b) => Val::U64(b.0),
+        ComponentConst::S64(b) => Val::S64(b.0),
+        ComponentConst::F32(b) => Val::Float32(f32::from_bits(b.0)),
+        ComponentConst::F64(b) => Val::Float64(f64::from_bits(b.0)),
+        ComponentConst::Char(b) => Val::Char(*b),
+        ComponentConst::String(s) => Val::String(s.to_string()),
+        ComponentConst::List(vals) => {
             let vals = vals.iter().map(|v| val(v)).collect::<Result<Vec<_>>>()?;
             Val::List(vals)
         }
-        WastVal::Record(vals) => {
+        ComponentConst::Record(vals) => {
             let mut fields = Vec::new();
             for (name, v) in vals {
                 fields.push((name.to_string(), val(v)?));
             }
             Val::Record(fields)
         }
-        WastVal::Tuple(vals) => {
+        ComponentConst::Tuple(vals) => {
             Val::Tuple(vals.iter().map(|v| val(v)).collect::<Result<Vec<_>>>()?)
         }
-        WastVal::Enum(name) => Val::Enum(name.to_string()),
-        WastVal::Variant(name, payload) => {
+        ComponentConst::Enum(name) => Val::Enum(name.to_string()),
+        ComponentConst::Variant { case, payload } => {
             let payload = payload_val(payload.as_deref())?;
-            Val::Variant(name.to_string(), payload)
+            Val::Variant(case.to_string(), payload)
         }
-        WastVal::Option(v) => Val::Option(match v {
+        ComponentConst::Option(v) => Val::Option(match v {
             Some(v) => Some(Box::new(val(v)?)),
             None => None,
         }),
-        WastVal::Result(v) => Val::Result(match v {
+        ComponentConst::Result(v) => Val::Result(match v {
             Ok(v) => Ok(payload_val(v.as_deref())?),
             Err(v) => Err(payload_val(v.as_deref())?),
         }),
-        WastVal::Flags(v) => Val::Flags(v.iter().map(|s| s.to_string()).collect()),
+        ComponentConst::Flags(v) => Val::Flags(v.iter().map(|s| s.to_string()).collect()),
     })
 }
 
-fn payload_val(v: Option<&WastVal<'_>>) -> Result<Option<Box<Val>>> {
+fn payload_val(v: Option<&ComponentConst<'_>>) -> Result<Option<Box<Val>>> {
     match v {
         Some(v) => Ok(Some(Box::new(val(v)?))),
         None => Ok(None),
     }
 }
 
-pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
+pub fn match_val(expected: &ComponentConst<'_>, actual: &Val) -> Result<()> {
     match expected {
-        WastVal::Bool(e) => match actual {
+        ComponentConst::Bool(e) => match actual {
             Val::Bool(a) => match_debug(a, e),
             _ => mismatch(expected, actual),
         },
-        WastVal::U8(e) => match actual {
-            Val::U8(a) => core::match_int(a, e),
+        ComponentConst::U8(e) => match actual {
+            Val::U8(a) => core::match_int(a, &e.0),
             _ => mismatch(expected, actual),
         },
-        WastVal::S8(e) => match actual {
-            Val::S8(a) => core::match_int(a, e),
+        ComponentConst::S8(e) => match actual {
+            Val::S8(a) => core::match_int(a, &e.0),
             _ => mismatch(expected, actual),
         },
-        WastVal::U16(e) => match actual {
-            Val::U16(a) => core::match_int(a, e),
+        ComponentConst::U16(e) => match actual {
+            Val::U16(a) => core::match_int(a, &e.0),
             _ => mismatch(expected, actual),
         },
-        WastVal::S16(e) => match actual {
-            Val::S16(a) => core::match_int(a, e),
+        ComponentConst::S16(e) => match actual {
+            Val::S16(a) => core::match_int(a, &e.0),
             _ => mismatch(expected, actual),
         },
-        WastVal::U32(e) => match actual {
-            Val::U32(a) => core::match_int(a, e),
+        ComponentConst::U32(e) => match actual {
+            Val::U32(a) => core::match_int(a, &e.0),
             _ => mismatch(expected, actual),
         },
-        WastVal::S32(e) => match actual {
-            Val::S32(a) => core::match_int(a, e),
+        ComponentConst::S32(e) => match actual {
+            Val::S32(a) => core::match_int(a, &e.0),
             _ => mismatch(expected, actual),
         },
-        WastVal::U64(e) => match actual {
-            Val::U64(a) => core::match_int(a, e),
+        ComponentConst::U64(e) => match actual {
+            Val::U64(a) => core::match_int(a, &e.0),
             _ => mismatch(expected, actual),
         },
-        WastVal::S64(e) => match actual {
-            Val::S64(a) => core::match_int(a, e),
+        ComponentConst::S64(e) => match actual {
+            Val::S64(a) => core::match_int(a, &e.0),
             _ => mismatch(expected, actual),
         },
-        WastVal::F32(e) => match actual {
-            Val::Float32(a) => core::match_f32(a.to_bits(), &NanPattern::Value(*e)),
+        ComponentConst::F32(e) => match actual {
+            Val::Float32(a) => {
+                core::match_f32(a.to_bits(), &FloatConst::Value(f32::from_bits(e.0)))
+            }
             _ => mismatch(expected, actual),
         },
-        WastVal::F64(e) => match actual {
-            Val::Float64(a) => core::match_f64(a.to_bits(), &NanPattern::Value(*e)),
+        ComponentConst::F64(e) => match actual {
+            Val::Float64(a) => {
+                core::match_f64(a.to_bits(), &FloatConst::Value(f64::from_bits(e.0)))
+            }
             _ => mismatch(expected, actual),
         },
-        WastVal::Char(e) => match actual {
+        ComponentConst::Char(e) => match actual {
             Val::Char(a) => match_debug(a, e),
             _ => mismatch(expected, actual),
         },
-        WastVal::String(e) => match actual {
-            Val::String(a) => match_debug(&a[..], *e),
+        ComponentConst::String(e) => match actual {
+            Val::String(a) => match_debug(&a[..], e),
             _ => mismatch(expected, actual),
         },
-        WastVal::List(e) => match actual {
+        ComponentConst::List(e) => match actual {
             Val::List(a) => {
                 if e.len() != a.len() {
                     bail!("expected {} values got {}", e.len(), a.len());
@@ -127,7 +130,7 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             }
             _ => mismatch(expected, actual),
         },
-        WastVal::Record(e) => match actual {
+        ComponentConst::Record(e) => match actual {
             Val::Record(a) => {
                 if e.len() != e.len() {
                     bail!("mismatched number of record fields");
@@ -143,7 +146,7 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             }
             _ => mismatch(expected, actual),
         },
-        WastVal::Tuple(e) => match actual {
+        ComponentConst::Tuple(e) => match actual {
             Val::Tuple(a) => {
                 if e.len() != a.len() {
                     bail!("expected {}-tuple, found {}-tuple", e.len(), a.len());
@@ -156,7 +159,10 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             }
             _ => mismatch(expected, actual),
         },
-        WastVal::Variant(name, e) => match actual {
+        ComponentConst::Variant {
+            case: name,
+            payload: e,
+        } => match actual {
             Val::Variant(discr, payload) => {
                 if *discr != *name {
                     bail!("expected discriminant `{name}` got `{discr}`");
@@ -165,7 +171,7 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             }
             _ => mismatch(expected, actual),
         },
-        WastVal::Enum(name) => match actual {
+        ComponentConst::Enum(name) => match actual {
             Val::Enum(a) => {
                 if *a != *name {
                     bail!("expected discriminant `{name}` got `{a}`");
@@ -175,7 +181,7 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             }
             _ => mismatch(expected, actual),
         },
-        WastVal::Option(e) => match actual {
+        ComponentConst::Option(e) => match actual {
             Val::Option(a) => match (e, a) {
                 (None, None) => Ok(()),
                 (Some(expected), Some(actual)) => match_val(expected, actual),
@@ -184,7 +190,7 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             },
             _ => mismatch(expected, actual),
         },
-        WastVal::Result(e) => match actual {
+        ComponentConst::Result(e) => match actual {
             Val::Result(a) => match (e, a) {
                 (Ok(_), Err(_)) => bail!("expected `ok`, found `err`"),
                 (Err(_), Ok(_)) => bail!("expected `err`, found `ok`"),
@@ -193,9 +199,9 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
             },
             _ => mismatch(expected, actual),
         },
-        WastVal::Flags(e) => match actual {
+        ComponentConst::Flags(e) => match actual {
             Val::Flags(a) => {
-                let expected = e.iter().copied().collect::<BTreeSet<_>>();
+                let expected = e.iter().map(|s| &s[..]).collect::<BTreeSet<_>>();
                 let actual = a.iter().map(|s| s.as_str()).collect::<BTreeSet<_>>();
                 match_debug(&actual, &expected)
             }
@@ -206,7 +212,7 @@ pub fn match_val(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
 
 fn match_payload_val(
     name: &str,
-    expected: Option<&WastVal<'_>>,
+    expected: Option<&ComponentConst<'_>>,
     actual: Option<&Val>,
 ) -> Result<()> {
     match (expected, actual) {
@@ -234,29 +240,29 @@ where
     }
 }
 
-fn mismatch(expected: &WastVal<'_>, actual: &Val) -> Result<()> {
+fn mismatch(expected: &ComponentConst<'_>, actual: &Val) -> Result<()> {
     let expected = match expected {
-        WastVal::Bool(..) => "bool",
-        WastVal::U8(..) => "u8",
-        WastVal::S8(..) => "s8",
-        WastVal::U16(..) => "u16",
-        WastVal::S16(..) => "s16",
-        WastVal::U32(..) => "u32",
-        WastVal::S32(..) => "s32",
-        WastVal::U64(..) => "u64",
-        WastVal::S64(..) => "s64",
-        WastVal::F32(..) => "f32",
-        WastVal::F64(..) => "f64",
-        WastVal::Char(..) => "char",
-        WastVal::String(..) => "string",
-        WastVal::List(..) => "list",
-        WastVal::Record(..) => "record",
-        WastVal::Tuple(..) => "tuple",
-        WastVal::Enum(..) => "enum",
-        WastVal::Variant(..) => "variant",
-        WastVal::Option(..) => "option",
-        WastVal::Result(..) => "result",
-        WastVal::Flags(..) => "flags",
+        ComponentConst::Bool(..) => "bool",
+        ComponentConst::U8(..) => "u8",
+        ComponentConst::S8(..) => "s8",
+        ComponentConst::U16(..) => "u16",
+        ComponentConst::S16(..) => "s16",
+        ComponentConst::U32(..) => "u32",
+        ComponentConst::S32(..) => "s32",
+        ComponentConst::U64(..) => "u64",
+        ComponentConst::S64(..) => "s64",
+        ComponentConst::F32(..) => "f32",
+        ComponentConst::F64(..) => "f64",
+        ComponentConst::Char(..) => "char",
+        ComponentConst::String(..) => "string",
+        ComponentConst::List(..) => "list",
+        ComponentConst::Record(..) => "record",
+        ComponentConst::Tuple(..) => "tuple",
+        ComponentConst::Enum(..) => "enum",
+        ComponentConst::Variant { .. } => "variant",
+        ComponentConst::Option(..) => "option",
+        ComponentConst::Result(..) => "result",
+        ComponentConst::Flags(..) => "flags",
     };
     let actual = match actual {
         Val::Bool(..) => "bool",

@@ -339,6 +339,7 @@ wit-parser = "0.236.0"
 wit-component = "0.236.0"
 wasm-wave = "0.236.0"
 wasm-compose = "0.236.0"
+json-from-wast = "0.236.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------

@@ -764,7 +764,7 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
         })
         .unwrap();
     wast_context
-        .run_buffer(test.path.to_str().unwrap(), test.contents.as_bytes())
+        .run_wast(test.path.to_str().unwrap(), test.contents.as_bytes())
         .unwrap();
     Ok(())
 }
