@@ -794,7 +794,7 @@ impl NumericOp<'_> {
             },
             NumericOp {
                 name: "trailing_ones",
-                body: "a.trailing_zeros()",
+                body: "a.trailing_ones()",
                 ret: "u32",
                 ..unop.clone()
             },
@@ -806,7 +806,7 @@ impl NumericOp<'_> {
             },
             NumericOp {
                 name: "leading_ones",
-                body: "a.leading_zeros()",
+                body: "a.leading_ones()",
                 ret: "u32",
                 ..unop.clone()
             },
