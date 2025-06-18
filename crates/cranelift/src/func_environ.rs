@@ -1,11 +1,12 @@
 mod gc;
+pub(crate) mod stack_switching;
 
 use crate::compiler::Compiler;
 use crate::translate::{
     FuncTranslationState, GlobalVariable, Heap, HeapData, StructFieldsVec, TableData, TableSize,
     TargetEnvironment,
 };
-use crate::{BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT, stack_switching};
+use crate::{BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::{Imm64, Offset32, V128Imm};
@@ -95,7 +96,7 @@ wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 pub struct FuncEnvironment<'module_environment> {
     compiler: &'module_environment Compiler,
     isa: &'module_environment (dyn TargetIsa + 'module_environment),
-    pub(crate) module: &'module_environment Module,
+    module: &'module_environment Module,
     types: &'module_environment ModuleTypesBuilder,
     wasm_func_ty: &'module_environment WasmFuncType,
     sig_ref_to_ty: SecondaryMap<ir::SigRef, Option<&'module_environment WasmFuncType>>,
