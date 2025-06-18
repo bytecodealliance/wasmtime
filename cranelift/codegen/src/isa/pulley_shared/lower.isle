@@ -267,8 +267,7 @@
 (decl pure partial u8_from_negated_iconst (Value) u8)
 (rule (u8_from_negated_iconst (i32_from_iconst i))
   (if-let neg_i64 (i64_checked_neg i))
-  (if-let neg_u64 (i64_try_into_u64 neg_i64))
-  (if-let neg_u8 (u64_try_into_u8 neg_u64))
+  (if-let neg_u8 (i64_try_into_u8 neg_i64))
   neg_u8)
 
 ;; Helper extract a constant from a `Value`, negate it, and fit it within a
@@ -276,8 +275,7 @@
 (decl pure partial u32_from_negated_iconst (Value) u32)
 (rule (u32_from_negated_iconst (i32_from_iconst i))
   (if-let neg_i64 (i64_checked_neg i))
-  (if-let neg_u64 (i64_try_into_u64 neg_i64))
-  (if-let neg_u32 (u64_try_into_u32 neg_u64))
+  (if-let neg_u32 (i64_try_into_u32 neg_i64))
   neg_u32)
 
 ;; 128-bit addition
