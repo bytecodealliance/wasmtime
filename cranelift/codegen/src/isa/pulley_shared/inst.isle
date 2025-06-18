@@ -640,10 +640,10 @@
       (pulley_xconst32 y))
 
 ;; Base cases for integers.
-(rule 0 (imm $I8 x) (pulley_xconst8 (u8_reinterpret_as_i8 (u64_truncate_into_u8 x))))
-(rule 0 (imm $I16 x) (pulley_xconst16 (u16_reinterpret_as_i16 (u64_truncate_into_u16 x))))
-(rule 0 (imm $I32 x) (pulley_xconst32 (u32_reinterpret_as_i32 (u64_truncate_into_u32 x))))
-(rule 0 (imm $I64 x) (pulley_xconst64 (u64_reinterpret_as_i64 x)))
+(rule 0 (imm $I8 x) (pulley_xconst8 (u8_cast_signed (u64_truncate_into_u8 x))))
+(rule 0 (imm $I16 x) (pulley_xconst16 (u16_cast_signed (u64_truncate_into_u16 x))))
+(rule 0 (imm $I32 x) (pulley_xconst32 (u32_cast_signed (u64_truncate_into_u32 x))))
+(rule 0 (imm $I64 x) (pulley_xconst64 (u64_cast_signed x)))
 
 ;; Base cases for floats.
 (rule 0 (imm $F32 (u32_from_u64 c)) (pulley_fconst32 c))

@@ -1413,7 +1413,7 @@
         ;;
         (high XReg (rv_sra (value_regs_get x 1) shamt))
         ;;
-        (const_neg_1 XReg (imm $I64 (i64_reinterpret_as_u64 -1)))
+        (const_neg_1 XReg (imm $I64 (i64_cast_unsigned -1)))
         ;;
         (high_replacement XReg (gen_select_xreg (cmp_ltz (value_regs_get x 1)) const_neg_1 (zero_reg)))
         (const64 XReg (imm $I64 64))

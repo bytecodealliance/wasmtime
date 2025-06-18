@@ -2870,12 +2870,12 @@
 ;; 16-bit (or smaller) result type, any value
 (rule 7 (imm (fits_in_16 (ty_int ty)) n)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.Mov32SImm16 dst (u16_reinterpret_as_i16 (u64_truncate_into_u16 n))))))
+            (_ Unit (emit (MInst.Mov32SImm16 dst (u16_cast_signed (u64_truncate_into_u16 n))))))
         dst))
 
 ;; 32-bit result type, value fits in i16
 (rule 6 (imm (gpr32_ty ty) (u32_pair _ m))
-      (if-let (i16_from_i32 n) (u32_reinterpret_as_i32 m))
+      (if-let (i16_from_i32 n) (u32_cast_signed m))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov32SImm16 dst n))))
         dst))
@@ -2888,14 +2888,14 @@
 
 ;; 64-bit result type, value fits in i16
 (rule 4 (imm (gpr64_ty ty) m)
-      (if-let (i16_from_i64 n) (u64_reinterpret_as_i64 m))
+      (if-let (i16_from_i64 n) (u64_cast_signed m))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64SImm16 dst n))))
         dst))
 
 ;; 64-bit result type, value fits in i32
 (rule 3 (imm (gpr64_ty ty) m)
-      (if-let (i32_from_i64 n) (u64_reinterpret_as_i64 m))
+      (if-let (i32_from_i64 n) (u64_cast_signed m))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64SImm32 dst n))))
         dst))
@@ -2935,7 +2935,7 @@
 ;; 16-bit floating-point type, any value.
 (rule 8 (imm $F16 n)
       (vec_insert_lane_imm_undef $F16X8
-                                 (u16_reinterpret_as_i16 (u64_truncate_into_u16 n))
+                                 (u16_cast_signed (u64_truncate_into_u16 n))
                                  0))
 
 ;; 32-bit floating-point type, any value.  Loaded from literal pool.
@@ -2971,14 +2971,14 @@
 (rule 1 (vec_imm_splat (ty_vec128 ty) 0)
       (vec_imm_byte_mask ty 0))
 (rule 2 (vec_imm_splat ty @ (multi_lane 8 _) n)
-      (vec_imm_replicate ty (u16_reinterpret_as_i16 (u64_truncate_into_u16 n))))
+      (vec_imm_replicate ty (u16_cast_signed (u64_truncate_into_u16 n))))
 (rule 2 (vec_imm_splat ty @ (multi_lane 16 _) n)
-      (vec_imm_replicate ty (u16_reinterpret_as_i16 (u64_truncate_into_u16 n))))
+      (vec_imm_replicate ty (u16_cast_signed (u64_truncate_into_u16 n))))
 (rule 2 (vec_imm_splat ty @ (multi_lane 32 _) (u32_pair _ m))
-      (if-let (i16_from_i32 n) (u32_reinterpret_as_i32 m))
+      (if-let (i16_from_i32 n) (u32_cast_signed m))
       (vec_imm_replicate ty n))
 (rule 2 (vec_imm_splat ty @ (multi_lane 64 _) m)
-      (if-let (i16_from_i64 n) (u64_reinterpret_as_i64 m))
+      (if-let (i16_from_i64 n) (u64_cast_signed m))
       (vec_imm_replicate ty n))
 (rule 3 (vec_imm_splat (multi_lane 16 _) (u32_pair _ (u16_pair _ (u8_pair n n))))
       (vec_imm_splat $I8X16 n))

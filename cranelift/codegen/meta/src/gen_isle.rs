@@ -982,7 +982,7 @@ fn gen_numerics_isle(isle: &mut Formatter, rust: &mut Formatter) {
     //     panic at runtime if the conversion would be lossy
     //   * "<from>_truncate_into_<to>" for lossy, infallible conversions that
     //     ignore upper bits
-    //   * "<from>_reinterpret_as_<to>" for signed-to-unsigned (and vice versa)
+    //   * "<from>_cast_[un]signed" for signed-to-unsigned (and vice versa)
     //     reinterpretation
     // * Extractors:
     //   * "<to>_from_<from>" for both fallible and infallible extractors
@@ -1099,20 +1099,27 @@ fn gen_numerics_isle(isle: &mut Formatter, rust: &mut Formatter) {
             // Signed-to-unsigned reinterpreting constructor.
             if from.byte_width == to.byte_width {
                 debug_assert_ne!(from.signed, to.signed);
+                let cast_name = if to.signed {
+                    "cast_signed"
+                } else {
+                    "cast_unsigned"
+                };
                 fmtln!(
                     isle,
-                    "(decl pure {from_name}_reinterpret_as_{to_name} ({from_name}) {to_name})"
+                    "(decl pure {from_name}_{cast_name} ({from_name}) {to_name})"
                 );
                 fmtln!(
                     isle,
-                    "(extern constructor {from_name}_reinterpret_as_{to_name} {from_name}_reinterpret_as_{to_name})"
+                    "(extern constructor {from_name}_{cast_name} {from_name}_{cast_name})"
                 );
                 fmtln!(rust, "#[inline]");
                 fmtln!(
                     rust,
-                    "fn {from_name}_reinterpret_as_{to_name}(&mut self, x: {from_name}) -> {to_name} {{"
+                    "fn {from_name}_{cast_name}(&mut self, x: {from_name}) -> {to_name} {{"
                 );
                 rust.indent(|rust| {
+                    // TODO: Once our MSRV is >= 1.87, we should use
+                    // `x.cast_[un]signed()` here.
                     fmtln!(rust, "x as {to_name}");
                 });
                 fmtln!(rust, "}}");

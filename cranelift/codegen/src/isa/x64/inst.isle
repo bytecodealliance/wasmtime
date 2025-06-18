@@ -1990,9 +1990,9 @@
 (rule (x64_movrm $I64 addr data) (x64_movq_mr_mem addr data))
 
 (decl x64_movimm_m (Type SyntheticAmode i32) SideEffectNoResult)
-(rule (x64_movimm_m $I8 addr (i8_from_i32 imm)) (x64_movb_mi_mem addr (i8_reinterpret_as_u8 imm)))
-(rule (x64_movimm_m $I16 addr (i16_from_i32 imm)) (x64_movw_mi_mem addr (i16_reinterpret_as_u16 imm)))
-(rule (x64_movimm_m $I32 addr imm) (x64_movl_mi_mem addr (i32_reinterpret_as_u32 imm)))
+(rule (x64_movimm_m $I8 addr (i8_from_i32 imm)) (x64_movb_mi_mem addr (i8_cast_unsigned imm)))
+(rule (x64_movimm_m $I16 addr (i16_from_i32 imm)) (x64_movw_mi_mem addr (i16_cast_unsigned imm)))
+(rule (x64_movimm_m $I32 addr imm) (x64_movl_mi_mem addr (i32_cast_unsigned imm)))
 (rule (x64_movimm_m $I64 addr imm) (x64_movq_mi_sxl_mem addr imm))
 
 (decl xmm_movrm_vex (AvxOpcode SyntheticAmode Xmm) SideEffectNoResult)
@@ -2279,8 +2279,8 @@
 (rule 2 (x64_imul_imm $I16 src1 (i8_from_i32 src2))  (x64_imulw_rmi_sxb src1 src2))
 (rule 2 (x64_imul_imm $I32 src1 (i8_from_i32 src2))  (x64_imull_rmi_sxb src1 src2))
 (rule 2 (x64_imul_imm $I64 src1 (i8_from_i32 src2))  (x64_imulq_rmi_sxb src1 src2))
-(rule 1 (x64_imul_imm $I16 src1 (i16_from_i32 src2)) (x64_imulw_rmi src1 (i16_reinterpret_as_u16 src2)))
-(rule 1 (x64_imul_imm $I32 src1 src2) (x64_imull_rmi src1 (i32_reinterpret_as_u32 src2)))
+(rule 1 (x64_imul_imm $I16 src1 (i16_from_i32 src2)) (x64_imulw_rmi src1 (i16_cast_unsigned src2)))
+(rule 1 (x64_imul_imm $I32 src1 src2) (x64_imull_rmi src1 (i32_cast_unsigned src2)))
 (rule 1 (x64_imul_imm $I64 src1 src2) (x64_imulq_rmi_sxl src1 src2))
 
 ;; Helper for creating `mul` instructions or `imul` instructions (depending
@@ -2404,7 +2404,7 @@
 ;; negative numbers to be used as immediates.
 (decl imm_i64 (Type i64) Reg)
 (rule (imm_i64 ty value)
-      (imm ty (i64_reinterpret_as_u64 value)))
+      (imm ty (i64_cast_unsigned value)))
 
 ;; Helper for emitting immediates.
 ;;
@@ -2432,7 +2432,7 @@
 
 ;; Special case: a 64-bit immediate which sign extends from a 32-bit immediate.
 (rule 2 (imm $I64 imm)
-  (if-let imm32 (i64_try_into_i32 (u64_reinterpret_as_i64 imm)))
+  (if-let imm32 (i64_try_into_i32 (u64_cast_signed imm)))
   (x64_movq_mi_sxl imm32))
 
 ;; Special case: a 64-bit immediate which zero extends from a 32-bit immediate.

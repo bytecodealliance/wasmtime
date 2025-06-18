@@ -240,4 +240,4 @@
               (bor ty x (iconst_s ty n))
               (iconst_s ty m)))
   (if-let m (i64_checked_neg n))
-  (band ty x (iconst ty (imm64_masked ty (i64_reinterpret_as_u64 (i64_not n))))))
+  (band ty x (iconst ty (imm64_masked ty (i64_cast_unsigned (i64_not n))))))

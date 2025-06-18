@@ -1916,7 +1916,7 @@
 (rule 0 (imm (ty_int ty) c)
   (if-let (i64_shift c_shifted shift) (i64_sextend_u64 ty c))  ;; constant to make
   (if-let (i64_generate_imm _ _) c_shifted)                    ;; can the smaller constant be made?
-  (rv_slli (imm ty (i64_reinterpret_as_u64 c_shifted)) shift))
+  (rv_slli (imm ty (i64_cast_unsigned c_shifted)) shift))
 
 ;; Otherwise we fall back to loading the immediate from the constant pool.
 (rule -1 (imm (ty_int ty) c)
@@ -1966,7 +1966,7 @@
 (decl pure partial imm12_from_negated_value (Value) Imm12)
 (rule
   (imm12_from_negated_value (has_type ty (iconst n)))
-  (if-let (imm12_from_u64 imm) (i64_reinterpret_as_u64 (i64_wrapping_neg (i64_sextend_imm64 ty n))))
+  (if-let (imm12_from_u64 imm) (i64_cast_unsigned (i64_wrapping_neg (i64_sextend_imm64 ty n))))
   imm)
 
 (decl imm12_from_u64 (Imm12) u64)
@@ -2024,7 +2024,7 @@
   (if-let (u64_replicated_u32 n32) n64)
   (if-let (u32_replicated_u16 n16) n32)
   (if-let (u16_replicated_u8 n8) n16)
-  (if-let n (i8_to_imm5 (u8_reinterpret_as_i8 n8)))
+  (if-let n (i8_to_imm5 (u8_cast_signed n8)))
   n)
 
 ;; Like replicated_imm5, but first negates the `Value`.
@@ -2037,7 +2037,7 @@
   (if-let (u64_replicated_u32 n32) n64)
   (if-let (u32_replicated_u16 n16) n32)
   (if-let (u16_replicated_u8 n8) n16)
-  (if-let n (i8_to_imm5 (i8_wrapping_neg (u8_reinterpret_as_i8 n8))))
+  (if-let n (i8_to_imm5 (i8_wrapping_neg (u8_cast_signed n8))))
   n)
 
 ;; UImm5 Helpers
@@ -2353,11 +2353,11 @@
 (rule (gen_bseti val bit)
   (if-let false (has_zbs))
   (if-let true (u64_lt_eq bit 12))
-  (rv_ori val (imm12_const (u32_reinterpret_as_i32 (u32_wrapping_shl 1 (u64_unwrap_into_u32 bit))))))
+  (rv_ori val (imm12_const (u32_cast_signed (u32_wrapping_shl 1 (u64_unwrap_into_u32 bit))))))
 
 (rule (gen_bseti val bit)
   (if-let true (has_zbs))
-  (rv_bseti val (imm12_const (u32_reinterpret_as_i32 (u64_unwrap_into_u32 bit)))))
+  (rv_bseti val (imm12_const (u32_cast_signed (u64_unwrap_into_u32 bit)))))
 
 
 (decl gen_popcnt (XReg) Reg)
