@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::rr::{Recorder, Replayer};
 use crate::runtime::Uninhabited;
 use crate::runtime::rr::RREvent;
 use crate::runtime::vm::{
@@ -2318,13 +2319,13 @@ impl HostContext {
             let record_buffer = caller.store.0.record_buffer_mut();
             if let Some(buf) = record_buffer {
                 println!("Record | {:?}", &event);
-                buf.append(event);
+                buf.push_event(event);
             }
         };
         let replay_intercept = |caller: &mut Caller<'_, T>| -> Option<RREvent> {
             let replay_buffer = caller.store.0.replay_buffer_mut();
             replay_buffer.and_then(|buf| {
-                let call_event = buf.pop_front();
+                let call_event = buf.pop_event().unwrap();
                 println!("Replay | {:?}", &call_event);
                 Some(call_event)
             })

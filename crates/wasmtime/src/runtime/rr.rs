@@ -3,11 +3,9 @@
 //! This feature is currently experimental and hence not optimized.
 //! In particular, the following opportunities are immediately identifiable:
 //! * Switch [RRFuncArgTypes] to use [Vec<WasmValType>]
-//!
-//! Flexibility can also be improved with:
-//! * Support for generic writers beyond [File] (will require a generic on [Store])
 
 use crate::ValRaw;
+use crate::config::{RecordConfig, ReplayConfig};
 use crate::prelude::*;
 #[allow(unused_imports)]
 use crate::runtime::Store;
@@ -29,6 +27,51 @@ fn raw_to_func_argvals(args: &[MaybeUninit<ValRaw>]) -> RRFuncArgVals {
     args.iter()
         .map(|x| unsafe { ValRawSer::from(x.assume_init()) })
         .collect::<Vec<_>>()
+}
+
+#[derive(Debug)]
+pub enum ReplayError {
+    EmptyBuffer,
+    FailedValidation,
+}
+
+impl fmt::Display for ReplayError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyBuffer => {
+                write!(f, "replay buffer is empty!")
+            }
+            Self::FailedValidation => {
+                write!(f, "replay event validation check failed")
+            }
+        }
+    }
+}
+
+impl std::error::Error for ReplayError {}
+
+pub trait Recorder: Sized {
+    /// Constructs a writer on new buffer
+    fn new_recorder(cfg: RecordConfig) -> Result<Self>;
+
+    /// Push a newly record event [`RREvent`] to the buffer
+    fn push_event(&mut self, event: RREvent) -> ();
+
+    /// Flush memory contents to underlying persistent storage
+    ///
+    /// Buffer should be emptied during this process
+    fn flush_to_file(&mut self) -> Result<()>;
+}
+
+pub trait Replayer: Sized {
+    type ReplayError;
+
+    /// Constructs a reader on buffer
+    fn new_replayer(cfg: ReplayConfig) -> Result<Self>;
+
+    /// Pop the next [`RREvent`] from the buffer
+    /// Events should be FIFO
+    fn pop_event(&mut self) -> Result<RREvent>;
 }
 
 /// Transmutable byte array used to serialize [`ValRaw`] union
@@ -93,60 +136,87 @@ impl RREvent {
     }
 }
 
-/// Buffer to read/write record/replay data respectively
+/// The underlying serialized/deserialized type
+type RRBufferData = VecDeque<RREvent>;
+
+/// Common data for recorders and replayers
+///
+/// Flexibility of this struct can also be improved with:
+/// * Support for generic writers beyond [File] (will require a generic on [Store])
 #[derive(Debug)]
-pub struct RRBuffer {
-    inner: VecDeque<RREvent>,
+pub struct RRDataCommon {
+    /// Ordered list of record/replay events
+    buf: RRBufferData,
+    /// Persistent storage-backed handle
     rw: File,
 }
 
-impl RRBuffer {
-    /// Constructs a writer on new, filesystem-backed buffer (record)
-    pub fn write_fs(path: String) -> Result<Self> {
-        Ok(RRBuffer {
-            inner: VecDeque::new(),
-            rw: File::create(path)?,
+#[derive(Debug)]
+/// Buffer to write recording data
+pub struct RecordBuffer {
+    data: RRDataCommon,
+    validation_metadata: bool,
+}
+
+impl Recorder for RecordBuffer {
+    fn new_recorder(cfg: RecordConfig) -> Result<Self> {
+        Ok(RecordBuffer {
+            data: RRDataCommon {
+                buf: VecDeque::new(),
+                rw: File::create(cfg.path)?,
+            },
+            validation_metadata: cfg.validation_metadata,
         })
     }
 
-    /// Constructs a reader on filesystem-backed buffer (replay)
-    pub fn read_fs(path: String) -> Result<Self> {
-        let mut file = File::open(path)?;
+    fn push_event(&mut self, event: RREvent) {
+        self.data.buf.push_back(event)
+    }
+
+    fn flush_to_file(&mut self) -> Result<()> {
+        // Seralizing each event independently prevents checking for vector sizes
+        // during deserialization
+        let data = &mut self.data;
+        for v in &data.buf {
+            postcard::to_io(&v, &mut data.rw)?;
+        }
+        data.rw.flush()?;
+        data.buf.clear();
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+/// Buffer to read replay data
+pub struct ReplayBuffer {
+    data: RRDataCommon,
+    validate: bool,
+}
+
+impl Replayer for ReplayBuffer {
+    type ReplayError = ReplayError;
+
+    fn new_replayer(cfg: ReplayConfig) -> Result<Self> {
+        let mut file = File::open(cfg.path)?;
         let mut events = VecDeque::<RREvent>::new();
         // Read till EOF
         while file.stream_position()? != file.metadata()?.len() {
             let (event, _): (RREvent, _) = postcard::from_io((&mut file, &mut [0; 0]))?;
             events.push_back(event);
         }
-        Ok(RRBuffer {
-            inner: events,
-            rw: file,
+        Ok(ReplayBuffer {
+            data: RRDataCommon {
+                buf: events,
+                rw: file,
+            },
+            validate: cfg.validate,
         })
     }
 
-    /// Appends a new [`RREvent`] to the buffer (record)
-    pub fn append(&mut self, event: RREvent) {
-        self.inner.push_back(event)
-    }
-
-    /// Retrieve the head of the buffer (replay)
-    pub fn pop_front(&mut self) -> RREvent {
-        self.inner
+    fn pop_event(&mut self) -> Result<RREvent> {
+        self.data
+            .buf
             .pop_front()
-            .expect("Incomplete replay trace. Event buffer is empty prior to completion")
-    }
-
-    /// Flush all the contents of the entire buffer to a writer
-    ///
-    /// Buffer is emptied during this process
-    pub fn flush_to_file(&mut self) -> Result<()> {
-        // Seralizing each event independently prevents checking for vector sizes
-        // during deserialization
-        for v in &self.inner {
-            postcard::to_io(&v, &mut self.rw)?;
-        }
-        self.rw.flush()?;
-        self.inner.clear();
-        Ok(())
+            .ok_or(Self::ReplayError::EmptyBuffer.into())
     }
 }

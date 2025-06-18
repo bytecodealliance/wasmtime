@@ -220,42 +220,60 @@ impl Default for CompilerConfig {
     }
 }
 
-/// Configuration for record/replay targets
+/// Configuration for recording execution
+#[derive(Debug, Clone)]
+pub struct RecordConfig {
+    /// Filesystem path to write record trace
+    pub path: String,
+    /// Flag to include additional signatures for replay validation
+    pub validation_metadata: bool,
+}
+
+/// Configuration for replay execution
+#[derive(Debug, Clone)]
+pub struct ReplayConfig {
+    /// Filesystem path to read trace from
+    pub path: String,
+    /// Flag for dynamic validation checks when replaying events
+    pub validate: bool,
+}
+
+/// Configurations for record/replay (RR) executions
 #[derive(Debug, Clone)]
 pub enum RRConfig {
-    /// Recording trace filepath
-    Record(String),
-    /// Replay trace filepath
-    Replay(String),
+    /// Record configuration
+    Record(RecordConfig),
+    /// Replay configuration
+    Replay(ReplayConfig),
 }
 
 impl RRConfig {
     /// Test if execution recording is enabled (i.e, variant [`RRConfig::Record`]), and wrap
-    /// the corresponding path
-    pub fn record(&self) -> Option<&String> {
+    /// the corresponding config
+    pub fn record(&self) -> Option<&RecordConfig> {
         match self {
-            Self::Record(p) => Some(p),
+            Self::Record(r) => Some(r),
             _ => None,
         }
     }
     /// Extract the record path. Panics if not a [`RRConfig::Record`]
-    pub fn record_unwrap(&self) -> &String {
+    pub fn record_unwrap(&self) -> &RecordConfig {
         self.record()
-            .expect("missing path to recording trace (specify `--record` option)")
+            .expect("use of incorrectly initialized record configuration")
     }
 
     /// Test if execution replay is enabled (i.e. variant [`RRConfig::Replay`]), and wrap
-    /// the corresponding path
-    pub fn replay(&self) -> Option<&String> {
+    /// the corresponding config
+    pub fn replay(&self) -> Option<&ReplayConfig> {
         match self {
-            Self::Replay(p) => Some(p),
+            Self::Replay(r) => Some(r),
             _ => None,
         }
     }
-    /// Extract the replay path. Panics if not a [`RRConfig::Replay`]
-    pub fn replay_unwrap(&self) -> &String {
+    /// Extract the replay config. Panics if not a [`RRConfig::Replay`]
+    pub fn replay_unwrap(&self) -> &ReplayConfig {
         self.replay()
-            .expect("missing path to recording trace (specify `--record` option)")
+            .expect("use of incorrectly initialized replay configuration")
     }
 }
 
@@ -2687,6 +2705,15 @@ impl Config {
         self
     }
 
+    /// Repeal determinstic execution configurations (opposite
+    /// effect of [`Config::enforce_determinism`])
+    #[inline]
+    pub fn repeal_determinism(&mut self) -> &mut Self {
+        self.cranelift_nan_canonicalization(false)
+            .relaxed_simd_deterministic(false);
+        self
+    }
+
     /// Evaluates to true if current configuration must respect
     /// deterministic execution in its configuration
     ///
@@ -2699,21 +2726,15 @@ impl Config {
     /// Configure the record/replay options for use by the runtime
     ///
     /// This method implicitly enforces determinism (see [`Config::enforce_determinism`]
-    /// for details). Panics if both record and replay are set simultaneously
-    pub fn rr(&mut self, record_path: Option<String>, replay_path: Option<String>) -> &mut Self {
-        self.rr = match (record_path, replay_path) {
-            // Should be unreachable
-            (Some(_), Some(_)) => {
-                panic!("Cannot set both record and replay simultaneously for execution")
-            }
-            (Some(p), None) => Some(RRConfig::Record(p)),
-            (None, Some(p)) => Some(RRConfig::Replay(p)),
-            _ => None,
-        };
+    /// for details).
+    pub fn rr(&mut self, rr: Option<RRConfig>) -> &mut Self {
         // Set appropriate configurations for determinstic execution
-        if self.rr.is_some() {
+        if rr.is_some() {
             self.enforce_determinism();
-        };
+        } else if self.rr.is_some() {
+            self.repeal_determinism();
+        }
+        self.rr = rr;
         self
     }
 }
