@@ -292,6 +292,16 @@ impl dsl::Format {
                     rm: *rm,
                 }
             }
+            [Reg(reg), Mem(rm)] | [Mem(rm), Reg(reg)] => {
+                assert!(!vex.is4);
+                fmtln!(f, "let reg = self.{reg}.enc();");
+                fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
+                fmtln!(f, "let vex = VexPrefix::two_op(reg, rm, {bits});");
+                ModRmStyle::RegMem {
+                    reg: ModRmReg::Reg(*reg),
+                    rm: *rm,
+                }
+            }
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
         };
 

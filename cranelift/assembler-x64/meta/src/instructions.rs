@@ -123,14 +123,30 @@ fn check_sse_matches_avx(sse_inst: &Inst, avx_inst: &Inst) {
         // may have slightly different operand semantics (e.g., `roundss` ->
         // `vroundss`) and we want to be careful about matching too freely.
         (
-            [(ReadWrite, Reg(_)), (Read, Reg(_) | RegMem(_) | Mem(_))],
+            [
+                (ReadWrite | Write, Reg(_)),
+                (Read, Reg(_) | RegMem(_) | Mem(_)),
+            ],
             [
                 (Write, Reg(_)),
                 (Read, Reg(_)),
                 (Read, Reg(_) | RegMem(_) | Mem(_)),
             ],
         ) => {}
-        ([(Write, Reg(_)), (Read, RegMem(_))], [(Write, Reg(_)), (Read, RegMem(_))]) => {}
+        (
+            [
+                (Write, Reg(_) | RegMem(_) | Mem(_)),
+                (Read, Reg(_) | RegMem(_) | Mem(_)),
+            ],
+            [
+                (Write, Reg(_) | RegMem(_) | Mem(_)),
+                (Read, Reg(_) | RegMem(_) | Mem(_)),
+            ],
+        ) => {}
+        (
+            [(Write, Reg(_)), (Read, Reg(_) | RegMem(_)), (Read, Imm(_))],
+            [(Write, Reg(_)), (Read, Reg(_) | RegMem(_)), (Read, Imm(_))],
+        ) => {}
         // We panic on other formats for now; feel free to add more patterns to
         // avoid this.
         _ => panic!("unmatched formats for SSE-to-AVX alternate:\n{sse_inst}\n{avx_inst}"),

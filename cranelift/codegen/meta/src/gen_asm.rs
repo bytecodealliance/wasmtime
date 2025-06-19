@@ -581,31 +581,32 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
 
         if let Some(alternate) = &inst.alternate {
             // We currently plan to use alternate instructions for SSE/AVX
-            // pairs, so we expect the destination register to be an XMM
+            // pairs, so we expect the one of the registers to be an XMM
             // register. In the future we could relax this, but would need to
             // handle more cases below.
-            assert!(matches!(
-                inst.format.operands.first().unwrap().location.reg_class(),
-                Some(RegClass::Xmm)
-            ));
+            assert!(
+                inst.format
+                    .operands
+                    .iter()
+                    .any(|o| matches!(o.location.reg_class(), Some(RegClass::Xmm)))
+            );
             let param_tys = if alternate.feature == Feature::avx {
                 param_tys.replace("Aligned", "")
             } else {
                 param_tys
             };
-            let name = inst.name();
             let alt_feature = alternate.feature.to_string();
             let alt_name = &alternate.name;
-            let rule_name = format!("x64_{name}_or_{alt_feature}");
-            fmtln!(f, "(decl {rule_name} ({param_tys}) {result_ty})");
-            fmtln!(f, "(rule 1 ({rule_name} {param_names})");
+            let rule_name_or_feat = format!("{rule_name}_or_{alt_feature}");
+            fmtln!(f, "(decl {rule_name_or_feat} ({param_tys}) {result_ty})");
+            fmtln!(f, "(rule 1 ({rule_name_or_feat} {param_names})");
             f.indent(|f| {
                 fmtln!(f, "(if-let true (use_{alt_feature}))");
-                fmtln!(f, "(x64_{alt_name} {param_names}))");
+                fmtln!(f, "(x64_{alt_name}{suffix} {param_names}))");
             });
             fmtln!(
                 f,
-                "(rule 0 ({rule_name} {param_names}) (x64_{name} {param_names}))"
+                "(rule 0 ({rule_name_or_feat} {param_names}) ({rule_name} {param_names}))"
             );
         }
     }
