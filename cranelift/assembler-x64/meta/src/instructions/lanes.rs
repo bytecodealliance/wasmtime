@@ -61,5 +61,13 @@ pub fn list() -> Vec<Inst> {
         inst("vpshufd", fmt("A", [w(xmm1), r(xmm_m128), r(imm8)]), vex(L128)._66()._0f().op(0x70).r().ib(), _64b | compat | avx),
         inst("vpshuflw", fmt("A", [w(xmm1), r(xmm_m128), r(imm8)]), vex(L128)._f2()._0f().op(0x70).r().ib(), _64b | compat | avx),
         inst("vpshufhw", fmt("A", [w(xmm1), r(xmm_m128), r(imm8)]), vex(L128)._f3()._0f().op(0x70).r().ib(), _64b | compat | avx),
+
+        // Broadcast a single lane to all lanes of the destination.
+        inst("vbroadcastss", fmt("A_M", [w(xmm1), r(m32)]), vex(L128)._66()._0f38().w0().op(0x18).r(), _64b | compat | avx),
+        inst("vbroadcastss", fmt("A_R", [w(xmm1), r(xmm2)]), vex(L128)._66()._0f38().w0().op(0x18).r(), _64b | compat | avx2),
+        inst("vpbroadcastb", fmt("A", [w(xmm1), r(xmm_m8)]), vex(L128)._66()._0f38().w0().op(0x78).r(), _64b | compat | avx2),
+        inst("vpbroadcastw", fmt("A", [w(xmm1), r(xmm_m16)]), vex(L128)._66()._0f38().w0().op(0x79).r(), _64b | compat | avx2),
+        inst("vpbroadcastd", fmt("A", [w(xmm1), r(xmm_m32)]), vex(L128)._66()._0f38().w0().op(0x58).r(), _64b | compat | avx2),
+        inst("vpbroadcastq", fmt("A", [w(xmm1), r(xmm_m64)]), vex(L128)._66()._0f38().w0().op(0x59).r(), _64b | compat | avx2),
     ]
 }
