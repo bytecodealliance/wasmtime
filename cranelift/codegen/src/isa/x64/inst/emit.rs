@@ -2433,15 +2433,15 @@ pub(crate) fn emit(
                     // cmp %r_temp, %r_operand
                     let temp = temp.to_reg();
                     match *ty {
-                        types::I8 => asm::inst::cmpb_rm::new(operand, temp).emit(sink, info, state),
+                        types::I8 => asm::inst::cmpb_mr::new(operand, temp).emit(sink, info, state),
                         types::I16 => {
-                            asm::inst::cmpw_rm::new(operand, temp).emit(sink, info, state)
+                            asm::inst::cmpw_mr::new(operand, temp).emit(sink, info, state)
                         }
                         types::I32 => {
-                            asm::inst::cmpl_rm::new(operand, temp).emit(sink, info, state)
+                            asm::inst::cmpl_mr::new(operand, temp).emit(sink, info, state)
                         }
                         types::I64 => {
-                            asm::inst::cmpq_rm::new(operand, temp).emit(sink, info, state)
+                            asm::inst::cmpq_mr::new(operand, temp).emit(sink, info, state)
                         }
                         _ => unreachable!(),
                     }
@@ -2538,7 +2538,7 @@ pub(crate) fn emit(
                 RmwOp::Umin | RmwOp::Umax | RmwOp::Smin | RmwOp::Smax => {
                     // Do a comparison with LHS temp and RHS operand.
                     // Note the opposite argument orders.
-                    asm::inst::cmpq_rm::new(temp_low.to_reg(), operand_low).emit(sink, info, state);
+                    asm::inst::cmpq_mr::new(temp_low.to_reg(), operand_low).emit(sink, info, state);
                     // This will clobber `temp_high`
                     asm::inst::sbbq_rm::new(temp_high, operand_high).emit(sink, info, state);
                     // Restore the clobbered value
