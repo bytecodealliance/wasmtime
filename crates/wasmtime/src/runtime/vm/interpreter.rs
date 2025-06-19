@@ -188,7 +188,7 @@ impl InterpreterRef<'_> {
         mut self,
         mut bytecode: NonNull<u8>,
         callee: NonNull<VMOpaqueContext>,
-        caller: NonNull<VMOpaqueContext>,
+        caller: NonNull<VMContext>,
         args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         // Initialize argument registers with the ABI arguments.

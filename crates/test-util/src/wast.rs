@@ -72,6 +72,7 @@ fn add_tests(tests: &mut Vec<WastTest>, path: &Path, has_config: bool) -> Result
 
 fn spec_test_config(test: &Path) -> TestConfig {
     let mut ret = TestConfig::default();
+    ret.spec_test = Some(true);
     match spec_proposal_from_path(test) {
         Some("multi-memory") => {
             ret.multi_memory = Some(true);
@@ -249,6 +250,7 @@ macro_rules! foreach_config_option {
             exceptions
             legacy_exceptions
             stack_switching
+            spec_test
         }
     };
 }
@@ -270,7 +272,6 @@ macro_rules! define_test_config {
                 }
             )*
         }
-
     }
 }
 
@@ -359,7 +360,10 @@ impl Compiler {
                 }
 
                 if cfg!(target_arch = "aarch64") {
-                    return unsupported_base || config.wide_arithmetic() || config.threads();
+                    return unsupported_base
+                        || config.wide_arithmetic()
+                        || (config.simd() && !config.spec_test())
+                        || config.threads();
                 }
 
                 false
@@ -490,6 +494,7 @@ impl WastTest {
                     "misc_testsuite/simd/almost-extmul.wast",
                     "misc_testsuite/simd/canonicalize-nan.wast",
                     "misc_testsuite/simd/cvt-from-uint.wast",
+                    "misc_testsuite/simd/edge-of-memory.wast",
                     "misc_testsuite/simd/interesting-float-splat.wast",
                     "misc_testsuite/simd/issue4807.wast",
                     "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
@@ -596,6 +601,7 @@ impl WastTest {
                         "misc_testsuite/issue6562.wast",
                         "misc_testsuite/simd/almost-extmul.wast",
                         "misc_testsuite/simd/cvt-from-uint.wast",
+                        "misc_testsuite/simd/edge-of-memory.wast",
                         "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
                         "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
                         "misc_testsuite/simd/replace-lane-preserve.wast",

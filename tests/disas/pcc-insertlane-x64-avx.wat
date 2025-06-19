@@ -138,9 +138,10 @@
 ;; wasm[0]::function[5]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movl    %edx, %r9d
-;;       movq    0x38(%rdi), %r10
-;;       vmovhps (%r10, %r9), %xmm0, %xmm0
+;;       movl    %edx, %r10d
+;;       movq    0x38(%rdi), %r11
+;;       vmovsd  (%r11, %r10), %xmm7
+;;       vmovlhps %xmm7, %xmm0, %xmm0
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq

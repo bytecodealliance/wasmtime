@@ -143,8 +143,8 @@
 ;;       movq    %rsp, %rbp
 ;;       movl    %edx, %r10d
 ;;       movq    0x38(%rdi), %r11
-;;       movdqu  (%r11, %r10), %xmm6
-;;       movlhps %xmm6, %xmm0
+;;       movsd   (%r11, %r10), %xmm7
+;;       movlhps %xmm7, %xmm0
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq

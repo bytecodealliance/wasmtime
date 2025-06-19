@@ -11,7 +11,7 @@ block0(v0: f64x2):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   uninit  %xmm3
 ;   xorpd %xmm3, %xmm3
@@ -20,9 +20,9 @@ block0(v0: f64x2):
 ;   roundpd $0x3, %xmm0, %xmm0
 ;   addpd (%rip), %xmm0
 ;   shufps  $136, %xmm0, %xmm3, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

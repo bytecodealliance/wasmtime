@@ -769,14 +769,7 @@ pub(crate) enum InstructionSet {
 pub enum SseOpcode {
     Blendvpd,
     Blendvps,
-    Comiss,
-    Comisd,
-    Cmpps,
-    Cmppd,
-    Cmpss,
-    Cmpsd,
     Insertps,
-    Movlhps,
     Pabsb,
     Pabsw,
     Pabsd,
@@ -808,8 +801,6 @@ pub enum SseOpcode {
     Roundsd,
     Rsqrtss,
     Shufps,
-    Ucomiss,
-    Ucomisd,
     Pshuflw,
     Pshufhw,
     Pblendw,
@@ -820,19 +811,9 @@ impl SseOpcode {
     pub(crate) fn available_from(&self) -> InstructionSet {
         use InstructionSet::*;
         match self {
-            SseOpcode::Comiss
-            | SseOpcode::Cmpps
-            | SseOpcode::Cmpss
-            | SseOpcode::Movlhps
-            | SseOpcode::Rcpss
-            | SseOpcode::Rsqrtss
-            | SseOpcode::Shufps
-            | SseOpcode::Ucomiss => SSE,
+            SseOpcode::Rcpss | SseOpcode::Rsqrtss | SseOpcode::Shufps => SSE,
 
-            SseOpcode::Cmppd
-            | SseOpcode::Cmpsd
-            | SseOpcode::Comisd
-            | SseOpcode::Packssdw
+            SseOpcode::Packssdw
             | SseOpcode::Packsswb
             | SseOpcode::Packuswb
             | SseOpcode::Pavgb
@@ -845,7 +826,6 @@ impl SseOpcode {
             | SseOpcode::Pcmpgtd
             | SseOpcode::Pmaddwd
             | SseOpcode::Pshufd
-            | SseOpcode::Ucomisd
             | SseOpcode::Pshuflw
             | SseOpcode::Pshufhw => SSE2,
 
@@ -891,14 +871,7 @@ impl fmt::Debug for SseOpcode {
         let name = match self {
             SseOpcode::Blendvpd => "blendvpd",
             SseOpcode::Blendvps => "blendvps",
-            SseOpcode::Cmpps => "cmpps",
-            SseOpcode::Cmppd => "cmppd",
-            SseOpcode::Cmpss => "cmpss",
-            SseOpcode::Cmpsd => "cmpsd",
-            SseOpcode::Comiss => "comiss",
-            SseOpcode::Comisd => "comisd",
             SseOpcode::Insertps => "insertps",
-            SseOpcode::Movlhps => "movlhps",
             SseOpcode::Pabsb => "pabsb",
             SseOpcode::Pabsw => "pabsw",
             SseOpcode::Pabsd => "pabsd",
@@ -930,8 +903,6 @@ impl fmt::Debug for SseOpcode {
             SseOpcode::Roundsd => "roundsd",
             SseOpcode::Rsqrtss => "rsqrtss",
             SseOpcode::Shufps => "shufps",
-            SseOpcode::Ucomiss => "ucomiss",
-            SseOpcode::Ucomisd => "ucomisd",
             SseOpcode::Pshuflw => "pshuflw",
             SseOpcode::Pshufhw => "pshufhw",
             SseOpcode::Pblendw => "pblendw",
@@ -1051,7 +1022,6 @@ impl AvxOpcode {
             | AvxOpcode::Vpcmpgtw
             | AvxOpcode::Vpcmpgtd
             | AvxOpcode::Vpcmpgtq
-            | AvxOpcode::Vmovlhps
             | AvxOpcode::Vpminsb
             | AvxOpcode::Vpminsw
             | AvxOpcode::Vpminsd
@@ -1553,16 +1523,4 @@ impl OperandSize {
             Self::Size64 => I64,
         }
     }
-}
-
-/// An x64 memory fence kind.
-#[derive(Clone)]
-#[allow(dead_code)]
-pub enum FenceKind {
-    /// `mfence` instruction ("Memory Fence")
-    MFence,
-    /// `lfence` instruction ("Load Fence")
-    LFence,
-    /// `sfence` instruction ("Store Fence")
-    SFence,
 }

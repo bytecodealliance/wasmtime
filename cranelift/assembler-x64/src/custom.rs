@@ -1,3 +1,77 @@
+pub mod encode {
+    use crate::{CodeSink, KnownOffsetTable, inst};
+
+    /// `NOP`
+    pub fn nop_1b(_: &inst::nop_1b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x90);
+    }
+
+    /// `66 NOP`
+    pub fn nop_2b(_: &inst::nop_2b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x66);
+        buf.put1(0x90);
+    }
+
+    /// `NOP DWORD ptr [EAX]`
+    pub fn nop_3b(_: &inst::nop_3b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x00);
+    }
+
+    /// `NOP DWORD ptr [EAX + 00H]`
+    pub fn nop_4b(_: &inst::nop_4b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x40);
+        buf.put1(0x00);
+    }
+
+    /// `NOP DWORD ptr [EAX + EAX*1 + 00H]`
+    pub fn nop_5b(_: &inst::nop_5b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x44);
+        buf.put2(0x00_00);
+    }
+
+    /// `66 NOP DWORD ptr [EAX + EAX*1 + 00H]`
+    pub fn nop_6b(_: &inst::nop_6b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x66);
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x44);
+        buf.put2(0x00_00);
+    }
+
+    /// `NOP DWORD ptr [EAX + 00000000H]`
+    pub fn nop_7b(_: &inst::nop_7b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x80);
+        buf.put4(0x00_00_00_00);
+    }
+
+    /// `NOP DWORD ptr [EAX + EAX*1 + 00000000H]`
+    pub fn nop_8b(_: &inst::nop_8b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x84);
+        buf.put1(0x00);
+        buf.put4(0x00_00_00_00);
+    }
+
+    /// `66 NOP DWORD ptr [EAX + EAX*1 + 00000000H]`
+    pub fn nop_9b(_: &inst::nop_9b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+        buf.put1(0x66);
+        buf.put1(0x0F);
+        buf.put1(0x1F);
+        buf.put1(0x84);
+        buf.put1(0x00);
+        buf.put4(0x00_00_00_00);
+    }
+}
+
 pub mod mnemonic {
     use crate::inst;
     use crate::{Registers, XmmMem};
@@ -88,6 +162,17 @@ pub mod mnemonic {
     lock!(lock_xorl_mr => "xorl");
     lock!(lock_xorq_mr => "xorq");
 
+    lock!(lock_xaddb_mr => "xaddb");
+    lock!(lock_xaddw_mr => "xaddw");
+    lock!(lock_xaddl_mr => "xaddl");
+    lock!(lock_xaddq_mr => "xaddq");
+
+    lock!(lock_cmpxchgb_mr => "cmpxchgb");
+    lock!(lock_cmpxchgw_mr => "cmpxchgw");
+    lock!(lock_cmpxchgl_mr => "cmpxchgl");
+    lock!(lock_cmpxchgq_mr => "cmpxchgq");
+    lock!(lock_cmpxchg16b_m => "cmpxchg16b");
+
     pub fn vcvtpd2ps_a<R: Registers>(inst: &inst::vcvtpd2ps_a<R>) -> Cow<'static, str> {
         match inst.xmm_m128 {
             XmmMem::Xmm(_) => "vcvtpd2ps".into(),
@@ -103,9 +188,159 @@ pub mod mnemonic {
     }
 }
 
+pub mod display {
+    use crate::inst;
+    use crate::{Amode, Gpr, Registers, Size};
+    use std::fmt;
+
+    pub fn pseudo_op(imm: u8) -> &'static str {
+        match imm {
+            0 => "eq",
+            1 => "lt",
+            2 => "le",
+            3 => "unord",
+            4 => "neq",
+            5 => "nlt",
+            6 => "nle",
+            7 => "ord",
+            _ => panic!("not a valid immediate for pseudo op"),
+        }
+    }
+
+    pub fn cmpps_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpps_a<R>) -> fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m128 = inst.xmm_m128.to_string();
+        let imm8 = inst.imm8.to_string();
+        if inst.imm8.value() > 7 {
+            return write!(f, "{} {imm8}, {xmm_m128}, {xmm1}", inst.mnemonic());
+        }
+        let name = format!("cmp{}ps", pseudo_op(inst.imm8.value()));
+        write!(f, "{name} {xmm_m128}, {xmm1}")
+    }
+
+    pub fn cmpss_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpss_a<R>) -> fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m32 = inst.xmm_m32.to_string();
+        let imm8 = inst.imm8.to_string();
+        if inst.imm8.value() > 7 {
+            return write!(f, "{} {imm8}, {xmm_m32}, {xmm1}", inst.mnemonic());
+        }
+        let name = format!("cmp{}ss", pseudo_op(inst.imm8.value()));
+        write!(f, "{name} {xmm_m32}, {xmm1}")
+    }
+
+    pub fn cmpsd_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpsd_a<R>) -> fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m64 = inst.xmm_m64.to_string();
+        let imm8 = inst.imm8.to_string();
+        if inst.imm8.value() > 7 {
+            return write!(f, "{} {imm8}, {xmm_m64}, {xmm1}", inst.mnemonic());
+        }
+        let name = format!("cmp{}sd", pseudo_op(inst.imm8.value()));
+        write!(f, "{name} {xmm_m64}, {xmm1}")
+    }
+
+    pub fn cmppd_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmppd_a<R>) -> fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m128 = inst.xmm_m128.to_string();
+        let imm8 = inst.imm8.to_string();
+        if inst.imm8.value() > 7 {
+            return write!(f, "{} {imm8}, {xmm_m128}, {xmm1}", inst.mnemonic());
+        }
+        let name = format!("cmp{}pd", pseudo_op(inst.imm8.value()));
+        write!(f, "{name} {xmm_m128}, {xmm1}")
+    }
+
+    pub fn nop_1b(f: &mut fmt::Formatter, _: &inst::nop_1b) -> fmt::Result {
+        write!(f, "nop")
+    }
+
+    pub fn nop_2b(f: &mut fmt::Formatter, _: &inst::nop_2b) -> fmt::Result {
+        write!(f, "nop")
+    }
+
+    pub fn nop_3b(f: &mut fmt::Formatter, _: &inst::nop_3b) -> fmt::Result {
+        write!(f, "nopl (%rax)")
+    }
+
+    pub fn nop_4b(f: &mut fmt::Formatter, _: &inst::nop_4b) -> fmt::Result {
+        write!(f, "nopl (%rax)")
+    }
+
+    pub fn nop_5b(f: &mut fmt::Formatter, _: &inst::nop_5b) -> fmt::Result {
+        write!(f, "nopl (%rax, %rax)")
+    }
+
+    pub fn nop_6b(f: &mut fmt::Formatter, _: &inst::nop_6b) -> fmt::Result {
+        write!(f, "nopw (%rax, %rax)")
+    }
+
+    pub fn nop_7b(f: &mut fmt::Formatter, _: &inst::nop_7b) -> fmt::Result {
+        write!(f, "nopl (%rax)")
+    }
+
+    pub fn nop_8b(f: &mut fmt::Formatter, _: &inst::nop_8b) -> fmt::Result {
+        write!(f, "nopl (%rax, %rax)")
+    }
+
+    pub fn nop_9b(f: &mut fmt::Formatter, _: &inst::nop_9b) -> fmt::Result {
+        write!(f, "nopw (%rax, %rax)")
+    }
+
+    pub fn xchgb_rm<R: Registers>(
+        f: &mut fmt::Formatter<'_>,
+        inst: &inst::xchgb_rm<R>,
+    ) -> fmt::Result {
+        let inst::xchgb_rm { r8, m8 } = inst;
+        xchg_rm::<R>(f, r8, m8, Size::Byte)
+    }
+
+    pub fn xchgw_rm<R: Registers>(
+        f: &mut fmt::Formatter<'_>,
+        inst: &inst::xchgw_rm<R>,
+    ) -> fmt::Result {
+        let inst::xchgw_rm { r16, m16 } = inst;
+        xchg_rm::<R>(f, r16, m16, Size::Word)
+    }
+
+    pub fn xchgl_rm<R: Registers>(
+        f: &mut fmt::Formatter<'_>,
+        inst: &inst::xchgl_rm<R>,
+    ) -> fmt::Result {
+        let inst::xchgl_rm { r32, m32 } = inst;
+        xchg_rm::<R>(f, r32, m32, Size::Doubleword)
+    }
+
+    pub fn xchgq_rm<R: Registers>(
+        f: &mut fmt::Formatter<'_>,
+        inst: &inst::xchgq_rm<R>,
+    ) -> fmt::Result {
+        let inst::xchgq_rm { r64, m64 } = inst;
+        xchg_rm::<R>(f, r64, m64, Size::Quadword)
+    }
+
+    /// Swap the order of printing (register first) to match Capstone.
+    fn xchg_rm<R: Registers>(
+        f: &mut fmt::Formatter<'_>,
+        reg: &Gpr<R::ReadWriteGpr>,
+        mem: &Amode<R::ReadGpr>,
+        size: Size,
+    ) -> fmt::Result {
+        let reg = reg.to_string(size);
+        let mem = mem.to_string();
+        let suffix = match size {
+            Size::Byte => "b",
+            Size::Word => "w",
+            Size::Doubleword => "l",
+            Size::Quadword => "q",
+        };
+        write!(f, "xchg{suffix} {reg}, {mem}")
+    }
+}
+
 pub mod visit {
-    use crate::inst::{mulxl_rvm, mulxq_rvm};
-    use crate::{Fixed, Gpr, GprMem, RegisterVisitor, Registers, gpr};
+    use crate::inst::*;
+    use crate::{Amode, Fixed, Gpr, GprMem, RegisterVisitor, Registers, gpr};
 
     pub fn mulxl_rvm<R: Registers>(mulx: &mut mulxl_rvm<R>, visitor: &mut impl RegisterVisitor<R>) {
         visit_mulx(
@@ -148,5 +383,49 @@ pub mod visit {
         visitor.read_gpr_mem(src1);
         let enc = src2.expected_enc();
         visitor.fixed_read_gpr(&mut src2.0, enc);
+    }
+
+    pub fn lock_xaddb_mr<R: Registers>(
+        lock_xadd: &mut lock_xaddb_mr<R>,
+        visitor: &mut impl RegisterVisitor<R>,
+    ) {
+        let lock_xaddb_mr { r8, m8 } = lock_xadd;
+        lock_xadd_mr(r8, m8, visitor)
+    }
+
+    pub fn lock_xaddw_mr<R: Registers>(
+        lock_xadd: &mut lock_xaddw_mr<R>,
+        visitor: &mut impl RegisterVisitor<R>,
+    ) {
+        let lock_xaddw_mr { r16, m16 } = lock_xadd;
+        lock_xadd_mr(r16, m16, visitor)
+    }
+
+    pub fn lock_xaddl_mr<R: Registers>(
+        lock_xadd: &mut lock_xaddl_mr<R>,
+        visitor: &mut impl RegisterVisitor<R>,
+    ) {
+        let lock_xaddl_mr { r32, m32 } = lock_xadd;
+        lock_xadd_mr(r32, m32, visitor)
+    }
+
+    pub fn lock_xaddq_mr<R: Registers>(
+        lock_xadd: &mut lock_xaddq_mr<R>,
+        visitor: &mut impl RegisterVisitor<R>,
+    ) {
+        let lock_xaddq_mr { r64, m64 } = lock_xadd;
+        lock_xadd_mr(r64, m64, visitor)
+    }
+
+    /// Intel says the memory operand comes first, but regalloc requires the
+    /// register operand comes first, so the custom visit implementation here
+    /// resolves that.
+    fn lock_xadd_mr<R: Registers>(
+        reg: &mut Gpr<R::ReadWriteGpr>,
+        mem: &mut Amode<R::ReadGpr>,
+        visitor: &mut impl RegisterVisitor<R>,
+    ) {
+        visitor.read_write_gpr(reg.as_mut());
+        visitor.read_amode(mem);
     }
 }

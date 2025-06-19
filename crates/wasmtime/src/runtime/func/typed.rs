@@ -1,6 +1,6 @@
 use super::invoke_wasm_and_catch_traps;
 use crate::prelude::*;
-use crate::runtime::vm::{VMFuncRef, VMOpaqueContext};
+use crate::runtime::vm::VMFuncRef;
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
     AsContext, AsContextMut, Engine, Func, FuncType, HeapType, NoFunc, RefType, StoreContextMut,
@@ -221,9 +221,7 @@ where
             let storage = storage.cast::<ValRaw>();
             let storage = core::ptr::slice_from_raw_parts_mut(storage, storage_len);
             let storage = NonNull::new(storage).unwrap();
-            func_ref
-                .as_ref()
-                .array_call(vm, VMOpaqueContext::from_vmcontext(caller), storage)
+            VMFuncRef::array_call(*func_ref, vm, caller, storage)
         });
 
         let (_, storage) = captures;

@@ -40,7 +40,7 @@ use cranelift_codegen::{
         unwind::UnwindInst,
         x64::{
             AtomicRmwSeqOp,
-            args::{Avx512Opcode, AvxOpcode, CC, FenceKind},
+            args::{Avx512Opcode, AvxOpcode, CC},
             settings as x64_settings,
         },
     },
@@ -276,7 +276,7 @@ impl Masm for MacroAssembler {
                 // To stay consistent with cranelift, we emit a normal store followed by a mfence,
                 // although, we could probably just emit a xchg.
                 self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)?;
-                self.asm.fence(FenceKind::MFence);
+                self.asm.mfence();
             }
             StoreKind::VectorLane(LaneSelector { lane, size }) => {
                 self.ensure_has_avx()?;
@@ -1162,13 +1162,13 @@ impl Masm for MacroAssembler {
             _ => bail!(CodeGenError::unexpected_operand_size()),
         };
 
-        self.with_scratch::<IntScratch, _>(|masm, gpr_scratch| {
-            masm.with_scratch::<FloatScratch, _>(|masm, xmm_scratch| {
-                ctx.convert_op_with_tmp_reg(
-                    masm,
-                    dst_ty,
-                    RegClass::Float,
-                    |masm, dst, src, tmp_fpr, dst_size| {
+        ctx.convert_op_with_tmp_reg(
+            self,
+            dst_ty,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.with_scratch::<IntScratch, _>(|masm, gpr_scratch| {
+                    masm.with_scratch::<FloatScratch, _>(|masm, xmm_scratch| {
                         masm.asm.cvt_float_to_uint_seq(
                             src,
                             writable!(dst),
@@ -1179,12 +1179,11 @@ impl Masm for MacroAssembler {
                             dst_size,
                             kind.is_checked(),
                         );
-
                         Ok(())
-                    },
-                )
-            })
-        })
+                    })
+                })
+            },
+        )
     }
 
     fn signed_convert(
@@ -1511,20 +1510,19 @@ impl Masm for MacroAssembler {
             RmwOp::Add => {
                 let operand = context.pop_to_reg(self, None)?;
                 self.asm
-                    .lock_xadd(addr, operand.reg, writable!(operand.reg), size, flags);
+                    .lock_xadd(addr, writable!(operand.reg), size, flags);
                 operand.reg
             }
             RmwOp::Sub => {
                 let operand = context.pop_to_reg(self, None)?;
                 self.asm.neg(operand.reg, writable!(operand.reg), size);
                 self.asm
-                    .lock_xadd(addr, operand.reg, writable!(operand.reg), size, flags);
+                    .lock_xadd(addr, writable!(operand.reg), size, flags);
                 operand.reg
             }
             RmwOp::Xchg => {
                 let operand = context.pop_to_reg(self, None)?;
-                self.asm
-                    .xchg(addr, operand.reg, writable!(operand.reg), size, flags);
+                self.asm.xchg(addr, writable!(operand.reg), size, flags);
                 operand.reg
             }
             RmwOp::And | RmwOp::Or | RmwOp::Xor => {
@@ -1704,14 +1702,8 @@ impl Masm for MacroAssembler {
         context.free_reg(rax);
         let expected = context.pop_to_reg(self, Some(regs::rax()))?;
 
-        self.asm.cmpxchg(
-            addr,
-            expected.reg,
-            replacement.reg,
-            writable!(expected.reg),
-            size,
-            flags,
-        );
+        self.asm
+            .cmpxchg(addr, replacement.reg, writable!(expected.reg), size, flags);
 
         if let Some(extend) = extend {
             // We don't need to zero-extend from 32 to 64bits.
@@ -1940,7 +1932,7 @@ impl Masm for MacroAssembler {
     }
 
     fn fence(&mut self) -> Result<()> {
-        self.asm.fence(FenceKind::MFence);
+        self.asm.mfence();
         Ok(())
     }
 

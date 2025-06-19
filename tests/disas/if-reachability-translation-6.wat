@@ -22,11 +22,11 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
-;;                                     trapnz v2, user11
+;; @001e                               trapnz v2, user11
 ;; @001c                               jump block4
 ;;
 ;;                                 block4:
-;;                                     trapz.i32 v3, user11
+;; @0024                               trapz.i32 v3, user11
 ;; @0022                               jump block3
 ;;
 ;;                                 block3:

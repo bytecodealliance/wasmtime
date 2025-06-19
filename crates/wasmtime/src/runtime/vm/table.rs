@@ -7,7 +7,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::stack_switching::VMContObj;
 use crate::runtime::vm::vmcontext::{VMFuncRef, VMTableDefinition};
-use crate::runtime::vm::{GcStore, SendSyncPtr, VMGcRef, VMStore};
+use crate::runtime::vm::{GcStore, SendSyncPtr, VMGcRef, VMStore, VmPtr};
 use core::alloc::Layout;
 use core::mem;
 use core::ops::Range;
@@ -132,36 +132,52 @@ impl From<VMContObj> for TableElement {
     }
 }
 
+/// At-rest representation of a function in a funcref table.
+///
+/// Note that whether or not these pointers are tagged is a property of `Engine`
+/// configuration. Also note that this specifically uses `VmPtr<T>` to handle
+/// provenance here when loading/storing values to a table.
+///
+/// The possible values here are:
+///
+/// * `None` for untagged tables - a null function element
+/// * `Some(_)` for untagged tables - a non-null function element
+/// * `None` for tagged tables - an uninitialized element
+/// * `Some(1)` for tagged tables - a null function element
+/// * `Some(addr | 1)` for tagged tables - a non-null function element
 #[derive(Copy, Clone)]
 #[repr(transparent)]
-struct TaggedFuncRef(*mut VMFuncRef);
+struct MaybeTaggedFuncRef(Option<VmPtr<VMFuncRef>>);
 
-impl TaggedFuncRef {
-    const UNINIT: TaggedFuncRef = TaggedFuncRef(ptr::null_mut());
+impl MaybeTaggedFuncRef {
+    const UNINIT: MaybeTaggedFuncRef = MaybeTaggedFuncRef(None);
 
     /// Converts the given `ptr`, a valid funcref pointer, into a tagged pointer
     /// by adding in the `FUNCREF_INIT_BIT`.
     fn from(ptr: Option<NonNull<VMFuncRef>>, lazy_init: bool) -> Self {
-        let ptr = ptr.map(|p| p.as_ptr()).unwrap_or(ptr::null_mut());
-        if lazy_init {
-            let masked = ptr.map_addr(|a| a | FUNCREF_INIT_BIT);
-            TaggedFuncRef(masked)
+        let maybe_tagged = if lazy_init {
+            Some(match ptr {
+                Some(ptr) => ptr.map_addr(|a| a | FUNCREF_INIT_BIT),
+                None => NonNull::new(core::ptr::without_provenance_mut(FUNCREF_INIT_BIT)).unwrap(),
+            })
         } else {
-            TaggedFuncRef(ptr)
-        }
+            ptr
+        };
+        MaybeTaggedFuncRef(maybe_tagged.map(Into::into))
     }
 
     /// Converts a tagged pointer into a `TableElement`, returning `UninitFunc`
     /// for null (not a tagged value) or `FuncRef` for otherwise tagged values.
     fn into_table_element(self, lazy_init: bool) -> TableElement {
         let ptr = self.0;
-        if lazy_init && ptr.is_null() {
+        if lazy_init && ptr.is_none() {
             TableElement::UninitFunc
         } else {
             // Masking off the tag bit is harmless whether the table uses lazy
             // init or not.
-            let unmasked = ptr.map_addr(|a| a & FUNCREF_MASK);
-            TableElement::FuncRef(NonNull::new(unmasked))
+            let unmasked =
+                ptr.and_then(|ptr| NonNull::new(ptr.as_ptr().map_addr(|a| a & FUNCREF_MASK)));
+            TableElement::FuncRef(unmasked)
         }
     }
 }
@@ -623,7 +639,7 @@ impl Table {
             .ok_or(Trap::TableOutOfBounds)?;
 
         for (item, slot) in items.zip(elements) {
-            *slot = TaggedFuncRef::from(item, lazy_init);
+            *slot = MaybeTaggedFuncRef::from(item, lazy_init);
         }
         Ok(())
     }
@@ -678,7 +694,7 @@ impl Table {
         match val {
             TableElement::FuncRef(f) => {
                 let (funcrefs, lazy_init) = self.funcrefs_mut();
-                funcrefs[start..end].fill(TaggedFuncRef::from(f, lazy_init));
+                funcrefs[start..end].fill(MaybeTaggedFuncRef::from(f, lazy_init));
             }
             TableElement::GcRef(r) => {
                 // Clone the init GC reference into each table slot.
@@ -704,7 +720,7 @@ impl Table {
             }
             TableElement::UninitFunc => {
                 let (funcrefs, _lazy_init) = self.funcrefs_mut();
-                funcrefs[start..end].fill(TaggedFuncRef::UNINIT);
+                funcrefs[start..end].fill(MaybeTaggedFuncRef::UNINIT);
             }
             TableElement::ContRef(c) => {
                 let contrefs = self.contrefs_mut();
@@ -872,11 +888,11 @@ impl Table {
         match elem {
             TableElement::FuncRef(f) => {
                 let (funcrefs, lazy_init) = self.funcrefs_mut();
-                *funcrefs.get_mut(index).ok_or(())? = TaggedFuncRef::from(f, lazy_init);
+                *funcrefs.get_mut(index).ok_or(())? = MaybeTaggedFuncRef::from(f, lazy_init);
             }
             TableElement::UninitFunc => {
                 let (funcrefs, _lazy_init) = self.funcrefs_mut();
-                *funcrefs.get_mut(index).ok_or(())? = TaggedFuncRef::UNINIT;
+                *funcrefs.get_mut(index).ok_or(())? = MaybeTaggedFuncRef::UNINIT;
             }
             TableElement::GcRef(e) => {
                 *self.gc_refs_mut().get_mut(index).ok_or(())? = e;
@@ -980,7 +996,7 @@ impl Table {
         self.element_type().matches(val)
     }
 
-    fn funcrefs(&self) -> (&[TaggedFuncRef], bool) {
+    fn funcrefs(&self) -> (&[MaybeTaggedFuncRef], bool) {
         assert_eq!(self.element_type(), TableElementType::Func);
         match self {
             Self::Dynamic(DynamicTable::Func(DynamicFuncTable {
@@ -1003,7 +1019,7 @@ impl Table {
         }
     }
 
-    fn funcrefs_mut(&mut self) -> (&mut [TaggedFuncRef], bool) {
+    fn funcrefs_mut(&mut self) -> (&mut [MaybeTaggedFuncRef], bool) {
         assert_eq!(self.element_type(), TableElementType::Func);
         match self {
             Self::Dynamic(DynamicTable::Func(DynamicFuncTable {

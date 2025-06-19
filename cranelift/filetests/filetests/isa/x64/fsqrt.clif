@@ -9,16 +9,16 @@ block0(v0: f32):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movdqa %xmm0, %xmm5
 ;   uninit  %xmm0
 ;   xorps %xmm0, %xmm0
 ;   movdqa %xmm5, %xmm7
 ;   sqrtss %xmm7, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -41,16 +41,16 @@ block0(v0: f64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   movdqa %xmm0, %xmm5
 ;   uninit  %xmm0
 ;   xorpd %xmm0, %xmm0
 ;   movdqa %xmm5, %xmm7
 ;   sqrtsd %xmm7, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

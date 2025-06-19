@@ -21,7 +21,7 @@ function %f(i32) -> i32 {
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   lea     1(%rdi), %eax
 ;   testl   %edi, %edi
@@ -32,24 +32,24 @@ function %f(i32) -> i32 {
 ; block2:
 ;   jmp     label8
 ; block3:
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   jmp     label7
 ; block4:
 ;   testl   %edi, %edi
 ;   jnz     label5; j label6
 ; block5:
-;   movq    %rdi, %rax
+;   movq %rdi, %rax
 ;   jmp     label8
 ; block6:
 ;   jmp     label7
 ; block7:
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ; block8:
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

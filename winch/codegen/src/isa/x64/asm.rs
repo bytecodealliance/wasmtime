@@ -18,9 +18,9 @@ use cranelift_codegen::{
         x64::{
             AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
             args::{
-                self, Amode, Avx512Opcode, AvxOpcode, CC, CmpOpcode, ExtMode, FenceKind,
-                FromWritableReg, Gpr, GprMem, GprMemImm, RegMem, RegMemImm, SseOpcode,
-                SyntheticAmode, WritableGpr, WritableXmm, Xmm, XmmMem, XmmMemImm,
+                self, Amode, Avx512Opcode, AvxOpcode, CC, CmpOpcode, ExtMode, FromWritableReg, Gpr,
+                GprMem, GprMemImm, RegMem, RegMemImm, SyntheticAmode, WritableGpr, WritableXmm,
+                Xmm, XmmMem, XmmMemImm,
             },
             encoding::rex::{RexFlags, encode_modrm},
             external::{PairedGpr, PairedXmm},
@@ -396,18 +396,21 @@ impl Assembler {
 
     /// Return instruction.
     pub fn ret(&mut self) {
-        self.emit(Inst::Ret {
-            stack_bytes_to_pop: 0,
-        });
+        let inst = asm::inst::retq_zo::new().into();
+        self.emit(Inst::External { inst });
     }
 
     /// Register-to-register move.
     pub fn mov_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::MovRR {
-            src: src.into(),
-            dst: dst.map(Into::into),
-            size: size.into(),
-        });
+        let dst: WritableGpr = dst.map(|r| r.into());
+        let inst = match size {
+            OperandSize::S8 => asm::inst::movb_mr::new(dst, src).into(),
+            OperandSize::S16 => asm::inst::movw_mr::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::movl_mr::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::movq_mr::new(dst, src).into(),
+            _ => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Register-to-memory move.
@@ -446,11 +449,7 @@ impl Assembler {
 
     /// Immediate-to-register move.
     pub fn mov_ir(&mut self, imm: u64, dst: WritableReg, size: OperandSize) {
-        self.emit(Inst::Imm {
-            dst_size: size.into(),
-            simm64: imm,
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::imm(size.into(), imm, dst.map(Into::into)));
     }
 
     /// Zero-extend memory-to-register load.
@@ -1218,20 +1217,22 @@ impl Assembler {
     pub fn lock_xadd(
         &mut self,
         addr: Address,
-        operand: Reg,
         dst: WritableReg,
         size: OperandSize,
         flags: MemFlags,
     ) {
         assert!(addr.is_offset());
         let mem = Self::to_synthetic_amode(&addr, flags);
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::lock_xaddb_mr::new(mem, dst).into(),
+            OperandSize::S16 => asm::inst::lock_xaddw_mr::new(mem, dst).into(),
+            OperandSize::S32 => asm::inst::lock_xaddl_mr::new(mem, dst).into(),
+            OperandSize::S64 => asm::inst::lock_xaddq_mr::new(mem, dst).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
 
-        self.emit(Inst::LockXadd {
-            size: size.into(),
-            operand: operand.into(),
-            mem,
-            dst_old: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
 
     pub fn atomic_rmw_seq(
@@ -1256,28 +1257,23 @@ impl Assembler {
         });
     }
 
-    pub fn xchg(
-        &mut self,
-        addr: Address,
-        operand: Reg,
-        dst: WritableReg,
-        size: OperandSize,
-        flags: MemFlags,
-    ) {
+    pub fn xchg(&mut self, addr: Address, dst: WritableReg, size: OperandSize, flags: MemFlags) {
         assert!(addr.is_offset());
         let mem = Self::to_synthetic_amode(&addr, flags);
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::xchgb_rm::new(dst, mem).into(),
+            OperandSize::S16 => asm::inst::xchgw_rm::new(dst, mem).into(),
+            OperandSize::S32 => asm::inst::xchgl_rm::new(dst, mem).into(),
+            OperandSize::S64 => asm::inst::xchgq_rm::new(dst, mem).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
 
-        self.emit(Inst::Xchg {
-            size: size.into(),
-            operand: operand.into(),
-            mem,
-            dst_old: dst.map(Into::into),
-        });
+        self.emit(Inst::External { inst });
     }
     pub fn cmpxchg(
         &mut self,
         addr: Address,
-        expected: Reg,
         replacement: Reg,
         dst: WritableReg,
         size: OperandSize,
@@ -1285,14 +1281,16 @@ impl Assembler {
     ) {
         assert!(addr.is_offset());
         let mem = Self::to_synthetic_amode(&addr, flags);
+        let dst = pair_gpr(dst);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::lock_cmpxchgb_mr::new(mem, replacement, dst).into(),
+            OperandSize::S16 => asm::inst::lock_cmpxchgw_mr::new(mem, replacement, dst).into(),
+            OperandSize::S32 => asm::inst::lock_cmpxchgl_mr::new(mem, replacement, dst).into(),
+            OperandSize::S64 => asm::inst::lock_cmpxchgq_mr::new(mem, replacement, dst).into(),
+            OperandSize::S128 => unimplemented!(),
+        };
 
-        self.emit(Inst::LockCmpxchg {
-            ty: Type::int_with_byte_size(size.bytes() as _).unwrap(),
-            replacement: replacement.into(),
-            expected: expected.into(),
-            mem,
-            dst_old: dst.map(Into::into),
-        })
+        self.emit(Inst::External { inst });
     }
 
     pub fn cmp_ir(&mut self, src1: Reg, imm: i32, size: OperandSize) {
@@ -1318,17 +1316,12 @@ impl Assembler {
     /// Compares values in src1 and src2 and sets ZF, PF, and CF flags in EFLAGS
     /// register.
     pub fn ucomis(&mut self, src1: Reg, src2: Reg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => SseOpcode::Ucomiss,
-            OperandSize::S64 => SseOpcode::Ucomisd,
+        let inst = match size {
+            OperandSize::S32 => asm::inst::ucomiss_a::new(src1, src2).into(),
+            OperandSize::S64 => asm::inst::ucomisd_a::new(src1, src2).into(),
             OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
         };
-
-        self.emit(Inst::XmmCmpRmR {
-            op,
-            src1: src1.into(),
-            src2: Xmm::from(src2).into(),
-        });
+        self.emit(Inst::External { inst });
     }
 
     pub fn popcnt(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
@@ -1377,16 +1370,11 @@ impl Assembler {
     fn setcc_impl(&mut self, cc: CC, dst: WritableReg) {
         // Clear the dst register or bits 1 to 31 may be incorrectly set.
         // Don't use xor since it updates the status register.
-        self.emit(Inst::Imm {
-            dst_size: args::OperandSize::Size32, // Always going to be an i32 result.
-            simm64: 0,
-            dst: dst.map(Into::into),
-        });
+        let dst: WritableGpr = dst.map(Into::into);
+        let inst = asm::inst::movl_oi::new(dst, 0).into();
+        self.emit(Inst::External { inst });
         // Copy correct bit from status register into dst register.
-        self.emit(Inst::Setcc {
-            cc,
-            dst: dst.map(Into::into),
-        });
+        self.emit(Inst::Setcc { cc, dst });
     }
 
     /// Store the count of leading zeroes in src in dst.
@@ -1611,7 +1599,8 @@ impl Assembler {
 
     /// Emit a trap instruction.
     pub fn trap(&mut self, code: TrapCode) {
-        self.emit(Inst::Ud2 { trap_code: code })
+        let inst = asm::inst::ud2_zo::new(code).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Conditional trap.
@@ -1777,8 +1766,10 @@ impl Assembler {
         });
     }
 
-    pub fn fence(&mut self, kind: FenceKind) {
-        self.emit(Inst::Fence { kind });
+    pub fn mfence(&mut self) {
+        self.emit(Inst::External {
+            inst: asm::inst::mfence_zo::new().into(),
+        });
     }
 
     /// Extract a value from `src` into `dst` (zero extended) determined by `lane`.
@@ -1887,25 +1878,18 @@ impl Assembler {
     /// 64-bits of `dst`.
     pub fn xmm_vmovlhps_rrm(&mut self, dst: WritableReg, src1: Reg, src2: &Address) {
         let src2 = Self::to_synthetic_amode(src2, MemFlags::trusted());
-
-        self.emit(Inst::XmmRmiRVex {
-            op: AvxOpcode::Vmovlhps,
-            src1: src1.into(),
-            src2: XmmMemImm::unwrap_new(RegMemImm::mem(src2)),
-            dst: dst.to_reg().into(),
-        });
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vmovhps_b::new(dst, src1, src2).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Moves two 32-bit floats from the lower 64-bits of `src2` to the upper
     /// 64-bits of `dst`. Copies two 32-bit floats from the lower 64-bits of
     /// `src1` to lower 64-bits of `dst`.
     pub fn xmm_vmovlhps_rrr(&mut self, dst: WritableReg, src1: Reg, src2: Reg) {
-        self.emit(Inst::XmmRmiRVex {
-            op: AvxOpcode::Vmovlhps,
-            src1: src1.into(),
-            src2: XmmMemImm::unwrap_new(src2.into()),
-            dst: dst.to_reg().into(),
-        });
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vmovlhps_rvm::new(dst, src1, src2).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Move unaligned packed integer values from address `src` to `dst`.

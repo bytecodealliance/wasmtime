@@ -10,22 +10,22 @@ block0(v0: f32x4, v1: f32x4):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   addps %xmm1, %xmm0
-;   movl    $2143289344, %r10d
+;   movl $0x7fc00000, %r10d
 ;   movd %r10d, %xmm7
 ;   shufps  $0, %xmm7, const(0), %xmm7
 ;   movdqa %xmm0, %xmm1
-;   cmpps   $3, %xmm1, %xmm0, %xmm1
+;   cmpunordps %xmm0, %xmm1
 ;   movdqa %xmm0, %xmm2
 ;   movdqa %xmm1, %xmm0
 ;   movdqa %xmm2, %xmm1
 ;   pblendvb %xmm0, %xmm7, %xmm1
 ;   movdqa %xmm1, %xmm0
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -64,20 +64,28 @@ block0(v0: f64, v1: f64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   addsd %xmm1, %xmm0
-;   movabsq $9221120237041090560, %r9
-;   movq %r9, %xmm1
 ;   movdqa %xmm0, %xmm7
-;   cmppd   $3, %xmm7, %xmm0, %xmm7
-;   movdqa %xmm0, %xmm5
-;   movdqa %xmm7, %xmm0
-;   pblendvb %xmm0, %xmm1, %xmm5
-;   movdqa %xmm5, %xmm0
-;   movq    %rbp, %rsp
+;   movabsq $0x7ff8000000000000, %rcx
+;   movq %rcx, %xmm6
+;   uninit  %xmm5
+;   xorpd %xmm5, %xmm5
+;   movsd %xmm6, %xmm5
+;   uninit  %xmm0
+;   xorpd %xmm0, %xmm0
+;   movdqa %xmm7, %xmm6
+;   movsd %xmm6, %xmm0
+;   movdqa %xmm0, %xmm6
+;   cmpunordpd %xmm0, %xmm6
+;   movdqa %xmm0, %xmm3
+;   movdqa %xmm6, %xmm0
+;   pblendvb %xmm0, %xmm5, %xmm3
+;   movdqa %xmm3, %xmm0
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -85,14 +93,20 @@ block0(v0: f64, v1: f64):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   addsd %xmm1, %xmm0
-;   movabsq $0x7ff8000000000000, %r9
-;   movq %r9, %xmm1
 ;   movdqa %xmm0, %xmm7
-;   cmpunordpd %xmm0, %xmm7
-;   movdqa %xmm0, %xmm5
-;   movdqa %xmm7, %xmm0
-;   pblendvb %xmm0, %xmm1, %xmm5
-;   movdqa %xmm5, %xmm0
+;   movabsq $0x7ff8000000000000, %rcx
+;   movq %rcx, %xmm6
+;   xorpd %xmm5, %xmm5
+;   movsd %xmm6, %xmm5
+;   xorpd %xmm0, %xmm0
+;   movdqa %xmm7, %xmm6
+;   movsd %xmm6, %xmm0
+;   movdqa %xmm0, %xmm6
+;   cmpunordpd %xmm0, %xmm6
+;   movdqa %xmm0, %xmm3
+;   movdqa %xmm6, %xmm0
+;   pblendvb %xmm0, %xmm5, %xmm3
+;   movdqa %xmm3, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -105,20 +119,28 @@ block0(v0: f32, v1: f32):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   addss %xmm1, %xmm0
-;   movl    $2143289344, %r9d
-;   movd %r9d, %xmm1
 ;   movdqa %xmm0, %xmm7
-;   cmpps   $3, %xmm7, %xmm0, %xmm7
-;   movdqa %xmm0, %xmm5
-;   movdqa %xmm7, %xmm0
-;   pblendvb %xmm0, %xmm1, %xmm5
-;   movdqa %xmm5, %xmm0
-;   movq    %rbp, %rsp
+;   movl $0x7fc00000, %ecx
+;   movd %ecx, %xmm6
+;   uninit  %xmm5
+;   xorps %xmm5, %xmm5
+;   movss %xmm6, %xmm5
+;   uninit  %xmm0
+;   xorps %xmm0, %xmm0
+;   movdqa %xmm7, %xmm6
+;   movss %xmm6, %xmm0
+;   movdqa %xmm0, %xmm6
+;   cmpunordps %xmm0, %xmm6
+;   movdqa %xmm0, %xmm3
+;   movdqa %xmm6, %xmm0
+;   pblendvb %xmm0, %xmm5, %xmm3
+;   movdqa %xmm3, %xmm0
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -126,14 +148,20 @@ block0(v0: f32, v1: f32):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   addss %xmm1, %xmm0
-;   movl $0x7fc00000, %r9d
-;   movd %r9d, %xmm1
 ;   movdqa %xmm0, %xmm7
-;   cmpunordps %xmm0, %xmm7
-;   movdqa %xmm0, %xmm5
-;   movdqa %xmm7, %xmm0
-;   pblendvb %xmm0, %xmm1, %xmm5
-;   movdqa %xmm5, %xmm0
+;   movl $0x7fc00000, %ecx
+;   movd %ecx, %xmm6
+;   xorps %xmm5, %xmm5
+;   movss %xmm6, %xmm5
+;   xorps %xmm0, %xmm0
+;   movdqa %xmm7, %xmm6
+;   movss %xmm6, %xmm0
+;   movdqa %xmm0, %xmm6
+;   cmpunordps %xmm0, %xmm6
+;   movdqa %xmm0, %xmm3
+;   movdqa %xmm6, %xmm0
+;   pblendvb %xmm0, %xmm5, %xmm3
+;   movdqa %xmm3, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

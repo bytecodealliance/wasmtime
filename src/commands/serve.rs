@@ -815,17 +815,23 @@ impl Output {
 
 #[derive(Clone)]
 struct LogStream {
-    prefix: String,
     output: Output,
-    needs_prefix_on_next_write: bool,
+    state: Arc<LogStreamState>,
+}
+
+struct LogStreamState {
+    prefix: String,
+    needs_prefix_on_next_write: AtomicBool,
 }
 
 impl LogStream {
     fn new(prefix: String, output: Output) -> LogStream {
         LogStream {
-            prefix,
             output,
-            needs_prefix_on_next_write: true,
+            state: Arc::new(LogStreamState {
+                prefix,
+                needs_prefix_on_next_write: AtomicBool::new(true),
+            }),
         }
     }
 }
@@ -850,11 +856,17 @@ impl wasmtime_wasi::p2::OutputStream for LogStream {
         let mut bytes = &bytes[..];
 
         while !bytes.is_empty() {
-            if self.needs_prefix_on_next_write {
+            if self
+                .state
+                .needs_prefix_on_next_write
+                .load(Ordering::Relaxed)
+            {
                 self.output
-                    .write_all(self.prefix.as_bytes())
+                    .write_all(self.state.prefix.as_bytes())
                     .map_err(StreamError::LastOperationFailed)?;
-                self.needs_prefix_on_next_write = false;
+                self.state
+                    .needs_prefix_on_next_write
+                    .store(false, Ordering::Relaxed);
             }
             match bytes.iter().position(|b| *b == b'\n') {
                 Some(i) => {
@@ -863,7 +875,9 @@ impl wasmtime_wasi::p2::OutputStream for LogStream {
                     self.output
                         .write_all(a)
                         .map_err(StreamError::LastOperationFailed)?;
-                    self.needs_prefix_on_next_write = true;
+                    self.state
+                        .needs_prefix_on_next_write
+                        .store(true, Ordering::Relaxed);
                 }
                 None => {
                     self.output

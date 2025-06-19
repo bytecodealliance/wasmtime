@@ -116,7 +116,7 @@ impl dsl::Format {
         // If this instruction has only immediates there's no rex/modrm/etc, so
         // skip everything below.
         match self.operands_by_kind().as_slice() {
-            [Imm(_)] => return ModRmStyle::None,
+            [] | [Imm(_)] => return ModRmStyle::None,
             _ => {}
         }
 
@@ -168,7 +168,8 @@ impl dsl::Format {
             | [RegMem(mem), FixedReg(_)]
             | [Mem(mem), Imm(_)]
             | [RegMem(mem), Imm(_)]
-            | [RegMem(mem)] => {
+            | [RegMem(mem)]
+            | [FixedReg(_), FixedReg(_), FixedReg(_), FixedReg(_), Mem(mem)] => {
                 let digit = rex.unwrap_digit().unwrap();
                 fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "let rex = self.{mem}.as_rex_prefix(digit, {bits});");
@@ -180,7 +181,7 @@ impl dsl::Format {
             [Reg(reg), RegMem(mem) | Mem(mem)]
             | [Reg(reg), RegMem(mem), Imm(_) | FixedReg(_)]
             | [RegMem(mem) | Mem(mem), Reg(reg)]
-            | [RegMem(mem), Reg(reg), Imm(_) | FixedReg(_)] => {
+            | [RegMem(mem) | Mem(mem), Reg(reg), Imm(_) | FixedReg(_)] => {
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let rex = self.{mem}.as_rex_prefix(reg, {bits});");
                 ModRmStyle::RegMem {
@@ -197,6 +198,7 @@ impl dsl::Format {
                     rm: *src,
                 }
             }
+
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
         };
 
@@ -205,7 +207,8 @@ impl dsl::Format {
     }
 
     fn generate_vex_prefix(&self, f: &mut Formatter, vex: &dsl::Vex) -> ModRmStyle {
-        use dsl::OperandKind::{FixedReg, Imm, Reg, RegMem};
+        use dsl::OperandKind::{FixedReg, Imm, Mem, Reg, RegMem};
+
         f.empty_line();
         f.comment("Emit VEX prefix.");
         fmtln!(f, "let len = {:#03b};", vex.length.bits());
@@ -215,7 +218,19 @@ impl dsl::Format {
         let bits = "len, pp, mmmmm, w";
 
         let style = match self.operands_by_kind().as_slice() {
+            [Reg(reg), Reg(vvvv), Reg(rm)] => {
+                assert!(!vex.is4);
+                fmtln!(f, "let reg = self.{reg}.enc();");
+                fmtln!(f, "let vvvv = self.{vvvv}.enc();");
+                fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
+                fmtln!(f, "let vex = VexPrefix::three_op(reg, vvvv, rm, {bits});");
+                ModRmStyle::Reg {
+                    reg: ModRmReg::Reg(*reg),
+                    rm: *rm,
+                }
+            }
             [Reg(reg), Reg(vvvv), RegMem(rm)]
+            | [Reg(reg), Reg(vvvv), Mem(rm)]
             | [Reg(reg), Reg(vvvv), RegMem(rm), Imm(_) | FixedReg(_)]
             | [Reg(reg), RegMem(rm), Reg(vvvv)] => {
                 assert!(!vex.is4);

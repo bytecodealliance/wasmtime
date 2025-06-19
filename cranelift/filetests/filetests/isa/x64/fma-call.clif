@@ -9,13 +9,13 @@ block0(v0: f32, v1: f32, v2: f32):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   load_ext_name %FmaF32+0, %r8
 ;   call    *%r8
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -36,13 +36,13 @@ block0(v0: f64, v1: f64, v2: f64):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   load_ext_name %FmaF64+0, %r8
 ;   call    *%r8
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -63,7 +63,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ;   subq $0x60, %rsp
 ; block0:
 ;   movdqu %xmm0, <offset:1>+(%rsp)
@@ -107,9 +107,9 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   movdqa %xmm2, %xmm3
 ;   insertps $48, %xmm0, %xmm3, %xmm0
 ;   addq $0x60, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -170,7 +170,7 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 
 ; VCode:
 ;   pushq %rbp
-;   movq    %rsp, %rbp
+;   movq %rsp, %rbp
 ;   subq $0x40, %rsp
 ; block0:
 ;   movdqu %xmm0, <offset:1>+(%rsp)
@@ -189,11 +189,11 @@ block0(v0: f64x2, v1: f64x2, v2: f64x2):
 ;   call    *%r9
 ;   movdqa %xmm0, %xmm6
 ;   movdqu <offset:1>+0x30(%rsp), %xmm0
-;   movlhps %xmm0, %xmm6, %xmm0
+;   movlhps %xmm6, %xmm0
 ;   addq $0x40, %rsp
-;   movq    %rbp, %rsp
+;   movq %rbp, %rsp
 ;   popq %rbp
-;   ret
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

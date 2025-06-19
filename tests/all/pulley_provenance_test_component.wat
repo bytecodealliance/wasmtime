@@ -158,4 +158,40 @@
   (func (export "resource-intrinsics")
     (canon lift (core func $i "resource-intrinsics") ))
 
+
+  (core module $main
+    (import "wasi" "random_get" (func $random_get))
+    (func (export "start") call $random_get)
+  )
+
+  (core module $adapter
+    (func (export "random_get"))
+  )
+
+  (core module $shim
+    (table (export "table") 1 1 funcref)
+    (func (export "random_get") i32.const 0 call_indirect)
+  )
+
+  (core module $fixup
+    (import "shim" "table" (table $t 1 1 funcref))
+    (import "" "0" (func $random_get))
+    (elem (i32.const 0) func $random_get)
+  )
+
+  (core instance $shim (instantiate $shim))
+  (core instance $main (instantiate $main (with "wasi" (instance $shim))))
+  (core instance $adapter (instantiate $adapter))
+  (core instance $fixup (instantiate $fixup
+    (with "" (instance
+      (export "0" (func $adapter "random_get"))
+    ))
+    (with "shim" (instance $shim))
+  ))
+
+  (core module $run
+    (import "" "start" (func))
+    (start 0)
+  )
+  (core instance $run (instantiate $run (with "" (instance $main))))
 )
