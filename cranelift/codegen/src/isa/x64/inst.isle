@@ -39,11 +39,6 @@
        (MovToPReg (src Gpr)
                   (dst PReg))
 
-       ;; Loads the memory address of addr into dst.
-       (LoadEffectiveAddress (addr SyntheticAmode)
-                             (dst WritableGpr)
-                             (size OperandSize))
-
        ;; Materializes the requested condition code in the destination reg.
        (Setcc (cc CC)
               (dst WritableGpr))
@@ -3686,10 +3681,9 @@
       (provide (= result amode))
       (require (or (= ty 32) (= ty 64))))
 (decl x64_lea (Type SyntheticAmode) Gpr)
-(rule (x64_lea ty addr)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.LoadEffectiveAddress addr dst (operand_size_of_type_32_64 ty)))))
-        dst))
+(rule (x64_lea $I16 addr) (x64_leaw_rm addr))
+(rule (x64_lea $I32 addr) (x64_leal_rm addr))
+(rule (x64_lea $I64 addr) (x64_leaq_rm addr))
 
 ;; Helper for creating `lzcnt` instructions.
 (decl x64_lzcnt (Type GprMem) Gpr)

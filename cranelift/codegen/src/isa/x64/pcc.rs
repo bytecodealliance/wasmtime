@@ -75,23 +75,6 @@ pub(crate) fn check(
         Inst::MovFromPReg { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
         Inst::MovToPReg { .. } => Ok(()),
 
-        Inst::LoadEffectiveAddress {
-            ref addr,
-            dst,
-            size,
-        } => {
-            let addr = addr.clone();
-            let bits: u16 = size.to_bits().into();
-            check_output(ctx, vcode, dst.to_writable_reg(), &[], |vcode| {
-                let fact = if let SyntheticAmode::Real(amode) = &addr {
-                    compute_addr(ctx, vcode, amode, bits)
-                } else {
-                    None
-                };
-                clamp_range(ctx, 64, bits, fact)
-            })
-        }
-
         Inst::Setcc { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
 
         Inst::Cmove {

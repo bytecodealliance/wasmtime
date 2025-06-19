@@ -89,7 +89,6 @@ impl Inst {
             | Inst::JmpKnown { .. }
             | Inst::JmpTableSeq { .. }
             | Inst::JmpUnknown { .. }
-            | Inst::LoadEffectiveAddress { .. }
             | Inst::LoadExtName { .. }
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
@@ -336,15 +335,6 @@ impl Inst {
             ExtMode::LQ => asm::inst::movslq_rm::new(dst, src).into(),
         };
         Inst::External { inst }
-    }
-
-    pub(crate) fn lea(addr: impl Into<SyntheticAmode>, dst: Writable<Reg>) -> Inst {
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Inst::LoadEffectiveAddress {
-            addr: addr.into(),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-            size: OperandSize::Size64,
-        }
     }
 
     /// Compares `src1` against `src2`
@@ -866,13 +856,6 @@ impl PrettyPrint for Inst {
                 let dst = regs::show_ireg_sized(dst, 8);
                 let op = ljustify("movq".to_string());
                 format!("{op} {src}, {dst}")
-            }
-
-            Inst::LoadEffectiveAddress { addr, dst, size } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let addr = addr.pretty_print(8);
-                let op = ljustify("lea".to_string());
-                format!("{op} {addr}, {dst}")
             }
 
             Inst::Setcc { cc, dst } => {
@@ -1398,10 +1381,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(tmp_xmm2);
         }
 
-        Inst::LoadEffectiveAddress { addr: src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
-        }
         Inst::Setcc { dst, .. } => {
             collector.reg_def(dst);
         }

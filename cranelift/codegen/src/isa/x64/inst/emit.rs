@@ -266,88 +266,6 @@ pub(crate) fn emit(
             asm::inst::movq_mr::new(dst, *src).emit(sink, info, state);
         }
 
-        Inst::LoadEffectiveAddress { addr, dst, size } => {
-            let dst = dst.to_reg().to_reg();
-            let amode = addr.finalize(state.frame_layout(), sink).clone();
-
-            // If this `lea` can actually get encoded as an `add` then do that
-            // instead. Currently all candidate `iadd`s become an `lea`
-            // pseudo-instruction here but maximizing the use of `lea` is not
-            // necessarily optimal. The `lea` instruction goes through dedicated
-            // address units on cores which are finite and disjoint from the
-            // general ALU, so if everything uses `lea` then those units can get
-            // saturated while leaving the ALU idle.
-            //
-            // To help make use of more parts of a CPU, this attempts to use
-            // `add` when it's semantically equivalent to `lea`, or otherwise
-            // when the `dst` register is the same as the `base` or `index`
-            // register.
-            //
-            // FIXME: ideally regalloc is informed of this constraint. Register
-            // allocation of `lea` should "attempt" to put the `base` in the
-            // same register as `dst` but not at the expense of generating a
-            // `mov` instruction. Currently that's not possible but perhaps one
-            // day it may be worth it.
-            match amode {
-                // If `base == dst` then this is `add $imm, %dst`, so encode
-                // that instead.
-                Amode::ImmReg {
-                    simm32,
-                    base,
-                    flags: _,
-                } if base == dst => {
-                    let dst = Writable::from_reg(dst);
-                    let inst = match size {
-                        OperandSize::Size32 => Inst::External {
-                            inst: asm::inst::addl_mi::new(dst, simm32 as u32).into(),
-                        },
-                        OperandSize::Size64 => Inst::addq_mi(dst, simm32),
-                        _ => unreachable!(),
-                    };
-                    inst.emit(sink, info, state);
-                }
-                // If the offset is 0 and the shift is 0 (meaning multiplication
-                // by 1) then:
-                //
-                // * If `base == dst`, then this is `add %index, %base`
-                // * If `index == dst`, then this is `add %base, %index`
-                //
-                // Encode the appropriate instruction here in that case.
-                Amode::ImmRegRegShift {
-                    simm32: 0,
-                    base,
-                    index,
-                    shift: 0,
-                    flags: _,
-                } if base == dst || index == dst => {
-                    let (dst, operand) = if base == dst {
-                        (base, index)
-                    } else {
-                        (index, base)
-                    };
-                    let dst = Writable::from_reg(dst);
-                    let inst: AsmInst = match size {
-                        OperandSize::Size32 => asm::inst::addl_rm::new(dst, operand).into(),
-                        OperandSize::Size64 => asm::inst::addq_rm::new(dst, operand).into(),
-                        _ => unreachable!(),
-                    };
-                    inst.emit(sink, info, state);
-                }
-
-                // If `lea`'s 3-operand mode is leveraged by regalloc, or if
-                // it's fancy like imm-plus-shift-plus-base, then `lea` is
-                // actually emitted.
-                _ => {
-                    let flags = match size {
-                        OperandSize::Size32 => RexFlags::clear_w(),
-                        OperandSize::Size64 => RexFlags::set_w(),
-                        _ => unreachable!(),
-                    };
-                    emit_std_reg_mem(sink, LegacyPrefixes::None, 0x8D, 1, dst, &amode, flags, 0);
-                }
-            };
-        }
-
         Inst::Setcc { cc, dst } => {
             let dst = dst.to_reg().to_reg();
             let opcode = 0x0f90 + cc.get_enc() as u32;
@@ -733,8 +651,7 @@ pub(crate) fn emit(
             asm::inst::movq_rm::new(tmp1, addr).emit(sink, info, state);
 
             let amode = Amode::RipRelative { target: resume };
-            let inst = Inst::lea(amode, tmp2.map(Reg::from));
-            inst.emit(sink, info, state);
+            asm::inst::leaq_rm::new(tmp2, amode).emit(sink, info, state);
 
             asm::inst::movq_mr::new(
                 Amode::imm_reg(pc_offset, **store_context_ptr),
@@ -939,8 +856,8 @@ pub(crate) fn emit(
 
             // Load base address of jump table.
             let start_of_jumptable = sink.get_label();
-            let inst = Inst::lea(Amode::rip_relative(start_of_jumptable), tmp1);
-            inst.emit(sink, info, state);
+            asm::inst::leaq_rm::new(tmp1, Amode::rip_relative(start_of_jumptable))
+                .emit(sink, info, state);
 
             // Load value out of the jump table. It's a relative offset to the target block, so it
             // might be negative; use a sign-extension.
@@ -2954,8 +2871,113 @@ fn emit_maybe_shrink(inst: &AsmInst, sink: &mut MachBuffer<Inst>, table: &[i32; 
             imm32,
         }) => testq_i::<R>::new(Gpr::RAX, imm32).encode(sink, table),
 
+        // lea
+        Inst::leal_rm(leal_rm { r32, m32 }) => emit_lea(
+            r32,
+            m32,
+            sink,
+            table,
+            |dst, amode, s, t| leal_rm::<R>::new(dst, amode).encode(s, t),
+            |dst, simm32, s, t| addl_mi::<R>::new(dst, simm32.unsigned()).encode(s, t),
+            |dst, reg, s, t| addl_rm::<R>::new(dst, reg).encode(s, t),
+        ),
+        Inst::leaq_rm(leaq_rm { r64, m64 }) => emit_lea(
+            r64,
+            m64,
+            sink,
+            table,
+            |dst, amode, s, t| leaq_rm::<R>::new(dst, amode).encode(s, t),
+            |dst, simm32, s, t| addq_mi_sxl::<R>::new(dst, simm32).encode(s, t),
+            |dst, reg, s, t| addq_rm::<R>::new(dst, reg).encode(s, t),
+        ),
+
         // All other instructions fall through to here and cannot be shrunk, so
         // return `false` to emit them as usual.
         _ => inst.encode(sink, table),
+    }
+}
+
+/// If `lea` can actually get encoded as an `add` then do that instead.
+/// Currently all candidate `iadd`s become an `lea` pseudo-instruction here but
+/// maximizing the use of `lea` is not necessarily optimal. The `lea`
+/// instruction goes through dedicated address units on cores which are finite
+/// and disjoint from the general ALU, so if everything uses `lea` then those
+/// units can get saturated while leaving the ALU idle.
+///
+/// To help make use of more parts of a CPU, this attempts to use `add` when
+/// it's semantically equivalent to `lea`, or otherwise when the `dst` register
+/// is the same as the `base` or `index` register.
+///
+/// FIXME: ideally regalloc is informed of this constraint. Register allocation
+/// of `lea` should "attempt" to put the `base` in the same register as `dst`
+/// but not at the expense of generating a `mov` instruction. Currently that's
+/// not possible but perhaps one day it may be worth it.
+fn emit_lea(
+    dst: asm::Gpr<WritableGpr>,
+    addr: asm::Amode<Gpr>,
+    sink: &mut MachBuffer<Inst>,
+    table: &[i32; 2],
+    lea: fn(WritableGpr, asm::Amode<Gpr>, &mut MachBuffer<Inst>, &[i32; 2]),
+    add_mi: fn(PairedGpr, i32, &mut MachBuffer<Inst>, &[i32; 2]),
+    add_rm: fn(PairedGpr, Gpr, &mut MachBuffer<Inst>, &[i32; 2]),
+) {
+    match addr {
+        // If `base == dst` then this is `add dst, $imm`, so encode that
+        // instead.
+        asm::Amode::ImmReg {
+            base,
+            simm32:
+                asm::AmodeOffsetPlusKnownOffset {
+                    simm32,
+                    offset: None,
+                },
+            trap: None,
+        } if dst.as_ref().to_reg() == base => add_mi(
+            PairedGpr {
+                read: base,
+                write: *dst.as_ref(),
+            },
+            simm32.value(),
+            sink,
+            table,
+        ),
+
+        // If the offset is 0 and the shift is a scale of 1, then:
+        //
+        // * If `base == dst`, then this is `addq dst, index`
+        // * If `index == dst`, then this is `addq dst, base`
+        asm::Amode::ImmRegRegShift {
+            base,
+            index,
+            scale: asm::Scale::One,
+            simm32: asm::AmodeOffset::ZERO,
+            trap: None,
+        } => {
+            if dst.as_ref().to_reg() == base {
+                add_rm(
+                    PairedGpr {
+                        read: base,
+                        write: *dst.as_ref(),
+                    },
+                    *index.as_ref(),
+                    sink,
+                    table,
+                )
+            } else if dst.as_ref().to_reg() == *index.as_ref() {
+                add_rm(
+                    PairedGpr {
+                        read: *index.as_ref(),
+                        write: *dst.as_ref(),
+                    },
+                    base,
+                    sink,
+                    table,
+                )
+            } else {
+                lea(*dst.as_ref(), addr, sink, table)
+            }
+        }
+
+        _ => lea(*dst.as_ref(), addr, sink, table),
     }
 }

@@ -641,7 +641,7 @@
 (extern constructor ishl_i8x16_mask_table ishl_i8x16_mask_table)
 (rule (ishl_i8x16_mask (RegMemImm.Reg amt))
       (let ((mask_table SyntheticAmode (ishl_i8x16_mask_table))
-            (base_mask_addr Gpr (x64_lea $I64 mask_table))
+            (base_mask_addr Gpr (x64_leaq_rm mask_table))
             (mask_offset Gpr (x64_shlq_mi amt 4)))
         (Amode.ImmRegRegShift 0
                               base_mask_addr
@@ -745,7 +745,7 @@
 (extern constructor ushr_i8x16_mask_table ushr_i8x16_mask_table)
 (rule (ushr_i8x16_mask (RegMemImm.Reg amt))
       (let ((mask_table SyntheticAmode (ushr_i8x16_mask_table))
-            (base_mask_addr Gpr (x64_lea $I64 mask_table))
+            (base_mask_addr Gpr (x64_leaq_rm mask_table))
             (mask_offset Gpr (x64_shlq_mi amt 4)))
         (Amode.ImmRegRegShift 0
                               base_mask_addr

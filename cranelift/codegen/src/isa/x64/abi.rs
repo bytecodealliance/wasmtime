@@ -487,7 +487,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Self::I {
         let mem: SyntheticAmode = mem.into();
-        Inst::lea(mem, into_reg)
+        Inst::External {
+            inst: asm::inst::leaq_rm::new(into_reg, mem).into(),
+        }
     }
 
     fn get_stacklimit_reg(_call_conv: isa::CallConv) -> Reg {

@@ -81,8 +81,10 @@ impl<R: AsReg> Amode<R> {
 pub struct AmodeOffset(i32);
 
 impl AmodeOffset {
+    pub const ZERO: AmodeOffset = AmodeOffset::new(0);
+
     #[must_use]
-    pub fn new(value: i32) -> Self {
+    pub const fn new(value: i32) -> Self {
         Self(value)
     }
 

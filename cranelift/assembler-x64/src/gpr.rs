@@ -96,6 +96,12 @@ impl<R: AsReg> NonRspGpr<R> {
     }
 }
 
+impl<R: AsReg> AsRef<R> for NonRspGpr<R> {
+    fn as_ref(&self) -> &R {
+        &self.0
+    }
+}
+
 impl<R: AsReg> AsMut<R> for NonRspGpr<R> {
     fn as_mut(&mut self) -> &mut R {
         &mut self.0

@@ -1614,11 +1614,14 @@ impl Assembler {
     /// Load effective address.
     pub fn lea(&mut self, addr: &Address, dst: WritableReg, size: OperandSize) {
         let addr = Self::to_synthetic_amode(addr, MemFlags::trusted());
-        self.emit(Inst::LoadEffectiveAddress {
-            addr,
-            dst: dst.map(Into::into),
-            size: size.into(),
-        });
+        let dst: WritableGpr = dst.map(Into::into);
+        let inst = match size {
+            OperandSize::S16 => asm::inst::leaw_rm::new(dst, addr).into(),
+            OperandSize::S32 => asm::inst::leal_rm::new(dst, addr).into(),
+            OperandSize::S64 => asm::inst::leaq_rm::new(dst, addr).into(),
+            OperandSize::S8 | OperandSize::S128 => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     pub fn adc_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {

@@ -1296,7 +1296,7 @@ block0(v0: i128, v1: i128):
 ;   movq %r13, 0x18(%rsp)
 ; block0:
 ;   movq %rdi, %r13
-;   lea     0(%rsp), %rdi
+;   leaq (%rsp), %rdi
 ;   load_ext_name %g+0, %r9
 ;   call    *%r9
 ;   movq %r13, %rdi
