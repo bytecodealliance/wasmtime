@@ -2455,7 +2455,11 @@
 (rule (x64_rotl $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_roll_mi src1 src2))
 (rule (x64_rotl $I64 src1 (Imm8Gpr.Gpr src2)) (x64_rolq_mc src1 src2))
 (rule (x64_rotl $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_rolq_mi src1 src2))
-(rule 1 (x64_rotl (ty_32_or_64 ty) src (Imm8Gpr.Imm8 imm))
+(rule 1 (x64_rotl $I8 src1 (Imm8Gpr.Imm8 1)) (x64_rolb_m1 src1))
+(rule 1 (x64_rotl $I16 src1 (Imm8Gpr.Imm8 1)) (x64_rolw_m1 src1))
+(rule 1 (x64_rotl $I32 src1 (Imm8Gpr.Imm8 1)) (x64_roll_m1 src1))
+(rule 1 (x64_rotl $I64 src1 (Imm8Gpr.Imm8 1)) (x64_rolq_m1 src1))
+(rule 2 (x64_rotl (ty_32_or_64 ty) src (Imm8Gpr.Imm8 imm))
         (if-let true (use_bmi2))
         (x64_rorx ty src (u8_wrapping_sub (ty_bits ty) imm)))
 
@@ -2469,7 +2473,11 @@
 (rule (x64_rotr $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_rorl_mi src1 src2))
 (rule (x64_rotr $I64 src1 (Imm8Gpr.Gpr src2)) (x64_rorq_mc src1 src2))
 (rule (x64_rotr $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_rorq_mi src1 src2))
-(rule 1 (x64_rotr (ty_32_or_64 ty) src (Imm8Gpr.Imm8 imm))
+(rule 1 (x64_rotr $I8 src1 (Imm8Gpr.Imm8 1)) (x64_rorb_m1 src1))
+(rule 1 (x64_rotr $I16 src1 (Imm8Gpr.Imm8 1)) (x64_rorw_m1 src1))
+(rule 1 (x64_rotr $I32 src1 (Imm8Gpr.Imm8 1)) (x64_rorl_m1 src1))
+(rule 1 (x64_rotr $I64 src1 (Imm8Gpr.Imm8 1)) (x64_rorq_m1 src1))
+(rule 2 (x64_rotr (ty_32_or_64 ty) src (Imm8Gpr.Imm8 imm))
         (if-let true (use_bmi2))
         (x64_rorx ty src imm))
 
@@ -2483,6 +2491,10 @@
 (rule (x64_shl $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_shll_mi src1 src2))
 (rule (x64_shl $I64 src1 (Imm8Gpr.Gpr src2)) (x64_shlq_mc src1 src2))
 (rule (x64_shl $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_shlq_mi src1 src2))
+(rule 1 (x64_shl $I8 src1 (Imm8Gpr.Imm8 1)) (x64_shlb_m1 src1))
+(rule 1 (x64_shl $I16 src1 (Imm8Gpr.Imm8 1)) (x64_shlw_m1 src1))
+(rule 1 (x64_shl $I32 src1 (Imm8Gpr.Imm8 1)) (x64_shll_m1 src1))
+(rule 1 (x64_shl $I64 src1 (Imm8Gpr.Imm8 1)) (x64_shlq_m1 src1))
 ;; With BMI2 the `shlx` instruction is also available, and it's unconditionally
 ;; used for registers shifted by registers since it provides more freedom
 ;; in regalloc since nothing is constrained. Note that the `shlx` instruction
@@ -2501,6 +2513,10 @@
 (rule (x64_shr $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_shrl_mi src1 src2))
 (rule (x64_shr $I64 src1 (Imm8Gpr.Gpr src2)) (x64_shrq_mc src1 src2))
 (rule (x64_shr $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_shrq_mi src1 src2))
+(rule 1 (x64_shr $I8 src1 (Imm8Gpr.Imm8 1)) (x64_shrb_m1 src1))
+(rule 1 (x64_shr $I16 src1 (Imm8Gpr.Imm8 1)) (x64_shrw_m1 src1))
+(rule 1 (x64_shr $I32 src1 (Imm8Gpr.Imm8 1)) (x64_shrl_m1 src1))
+(rule 1 (x64_shr $I64 src1 (Imm8Gpr.Imm8 1)) (x64_shrq_m1 src1))
 ;; see `x64_shl` for more info about this rule
 (rule 1 (x64_shr (ty_32_or_64 ty) src1 (Imm8Gpr.Gpr src2))
         (if-let true (use_bmi2))
@@ -2516,6 +2532,10 @@
 (rule (x64_sar $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_sarl_mi src1 src2))
 (rule (x64_sar $I64 src1 (Imm8Gpr.Gpr src2)) (x64_sarq_mc src1 src2))
 (rule (x64_sar $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_sarq_mi src1 src2))
+(rule 1 (x64_sar $I8 src1 (Imm8Gpr.Imm8 1)) (x64_sarb_m1 src1))
+(rule 1 (x64_sar $I16 src1 (Imm8Gpr.Imm8 1)) (x64_sarw_m1 src1))
+(rule 1 (x64_sar $I32 src1 (Imm8Gpr.Imm8 1)) (x64_sarl_m1 src1))
+(rule 1 (x64_sar $I64 src1 (Imm8Gpr.Imm8 1)) (x64_sarq_m1 src1))
 ;; see `x64_shl` for more info about this rule
 (rule 1 (x64_sar (ty_32_or_64 ty) src1 (Imm8Gpr.Gpr src2))
         (if-let true (use_bmi2))

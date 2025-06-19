@@ -190,7 +190,7 @@ pub mod mnemonic {
 
 pub mod display {
     use crate::inst;
-    use crate::{Amode, Gpr, Registers, Size};
+    use crate::{Amode, Gpr, GprMem, Registers, Size};
     use std::fmt;
 
     pub fn pseudo_op(imm: u8) -> &'static str {
@@ -335,6 +335,119 @@ pub mod display {
             Size::Quadword => "q",
         };
         write!(f, "xchg{suffix} {reg}, {mem}")
+    }
+
+    pub fn sarb_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::sarb_m1<R>) -> fmt::Result {
+        let inst::sarb_m1 { rm8 } = inst;
+        shift_m1::<R>(f, "sarb", rm8, Size::Byte)
+    }
+
+    pub fn sarw_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::sarw_m1<R>) -> fmt::Result {
+        let inst::sarw_m1 { rm16 } = inst;
+        shift_m1::<R>(f, "sarw", rm16, Size::Word)
+    }
+
+    pub fn sarl_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::sarl_m1<R>) -> fmt::Result {
+        let inst::sarl_m1 { rm32 } = inst;
+        shift_m1::<R>(f, "sarl", rm32, Size::Doubleword)
+    }
+
+    pub fn sarq_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::sarq_m1<R>) -> fmt::Result {
+        let inst::sarq_m1 { rm64 } = inst;
+        shift_m1::<R>(f, "sarq", rm64, Size::Quadword)
+    }
+
+    pub fn shlb_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::shlb_m1<R>) -> fmt::Result {
+        let inst::shlb_m1 { rm8 } = inst;
+        shift_m1::<R>(f, "shlb", rm8, Size::Byte)
+    }
+
+    pub fn shlw_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::shlw_m1<R>) -> fmt::Result {
+        let inst::shlw_m1 { rm16 } = inst;
+        shift_m1::<R>(f, "shlw", rm16, Size::Word)
+    }
+
+    pub fn shll_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::shll_m1<R>) -> fmt::Result {
+        let inst::shll_m1 { rm32 } = inst;
+        shift_m1::<R>(f, "shll", rm32, Size::Doubleword)
+    }
+
+    pub fn shlq_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::shlq_m1<R>) -> fmt::Result {
+        let inst::shlq_m1 { rm64 } = inst;
+        shift_m1::<R>(f, "shlq", rm64, Size::Quadword)
+    }
+
+    pub fn shrb_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::shrb_m1<R>) -> fmt::Result {
+        let inst::shrb_m1 { rm8 } = inst;
+        shift_m1::<R>(f, "shrb", rm8, Size::Byte)
+    }
+
+    pub fn shrw_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::shrw_m1<R>) -> fmt::Result {
+        let inst::shrw_m1 { rm16 } = inst;
+        shift_m1::<R>(f, "shrw", rm16, Size::Word)
+    }
+
+    pub fn shrl_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::shrl_m1<R>) -> fmt::Result {
+        let inst::shrl_m1 { rm32 } = inst;
+        shift_m1::<R>(f, "shrl", rm32, Size::Doubleword)
+    }
+
+    pub fn shrq_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::shrq_m1<R>) -> fmt::Result {
+        let inst::shrq_m1 { rm64 } = inst;
+        shift_m1::<R>(f, "shrq", rm64, Size::Quadword)
+    }
+
+    pub fn rorb_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::rorb_m1<R>) -> fmt::Result {
+        let inst::rorb_m1 { rm8 } = inst;
+        shift_m1::<R>(f, "rorb", rm8, Size::Byte)
+    }
+
+    pub fn rorw_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::rorw_m1<R>) -> fmt::Result {
+        let inst::rorw_m1 { rm16 } = inst;
+        shift_m1::<R>(f, "rorw", rm16, Size::Word)
+    }
+
+    pub fn rorl_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::rorl_m1<R>) -> fmt::Result {
+        let inst::rorl_m1 { rm32 } = inst;
+        shift_m1::<R>(f, "rorl", rm32, Size::Doubleword)
+    }
+
+    pub fn rorq_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::rorq_m1<R>) -> fmt::Result {
+        let inst::rorq_m1 { rm64 } = inst;
+        shift_m1::<R>(f, "rorq", rm64, Size::Quadword)
+    }
+
+    pub fn rolb_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::rolb_m1<R>) -> fmt::Result {
+        let inst::rolb_m1 { rm8 } = inst;
+        shift_m1::<R>(f, "rolb", rm8, Size::Byte)
+    }
+
+    pub fn rolw_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::rolw_m1<R>) -> fmt::Result {
+        let inst::rolw_m1 { rm16 } = inst;
+        shift_m1::<R>(f, "rolw", rm16, Size::Word)
+    }
+
+    pub fn roll_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::roll_m1<R>) -> fmt::Result {
+        let inst::roll_m1 { rm32 } = inst;
+        shift_m1::<R>(f, "roll", rm32, Size::Doubleword)
+    }
+
+    pub fn rolq_m1<R: Registers>(f: &mut fmt::Formatter, inst: &inst::rolq_m1<R>) -> fmt::Result {
+        let inst::rolq_m1 { rm64 } = inst;
+        shift_m1::<R>(f, "rolq", rm64, Size::Quadword)
+    }
+
+    fn shift_m1<R: Registers>(
+        f: &mut fmt::Formatter<'_>,
+        mnemonic: &str,
+        rm: &GprMem<R::ReadWriteGpr, R::ReadGpr>,
+        size: Size,
+    ) -> fmt::Result {
+        let reg = rm.to_string(size);
+        match rm {
+            GprMem::Gpr(_) => write!(f, "{mnemonic} $1, {reg}"),
+            GprMem::Mem(_) => write!(f, "{mnemonic} {reg}"),
+        }
     }
 }
 
