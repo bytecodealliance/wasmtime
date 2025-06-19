@@ -203,7 +203,7 @@
 
 (decl pure partial intcc_comparable (IntCC IntCC) bool)
 (rule (intcc_comparable x y)
-  (if-let (u64_nonzero class) (u64_and (intcc_class x) (intcc_class y)))
+  (if-let (u64_extract_non_zero class) (u64_and (intcc_class x) (intcc_class y)))
   (u64_eq 2 class))
 
 (decl pure decompose_intcc (IntCC) u64)

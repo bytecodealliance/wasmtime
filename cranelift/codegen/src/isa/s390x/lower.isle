@@ -139,7 +139,7 @@
 
 ;; Lane-wise integer pairwise addition for 8-/16/32-bit vector registers.
 (rule (lower (has_type ty @ (multi_lane bits _) (iadd_pairwise x y)))
-      (let ((size Reg (vec_imm_splat $I8X16 (u32_as_u64 bits))))
+      (let ((size Reg (vec_imm_splat $I8X16 bits)))
         (vec_pack_lane_order (vec_widen_type ty)
                              (vec_add ty x (vec_lshr_by_byte x size))
                              (vec_add ty y (vec_lshr_by_byte y size)))))
@@ -1184,7 +1184,7 @@
 
 (rule (bitrev_bits size bitmask (vr128_ty ty) x)
       (let ((mask Reg (vec_imm_splat $I64X2 bitmask))
-            (size_reg Reg (vec_imm_splat $I8X16 (u8_as_u64 size)))
+            (size_reg Reg (vec_imm_splat $I8X16 size))
             (xh Reg (vec_lshl_by_bit x size_reg))
             (xl Reg (vec_lshr_by_bit x size_reg)))
         (vec_select ty xh xl mask)))

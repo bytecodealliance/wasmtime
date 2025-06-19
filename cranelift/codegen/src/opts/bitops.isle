@@ -108,7 +108,7 @@
 (rule (truthy (popcnt _ x)) x)
 (rule (truthy (rotl _ x _)) x)
 (rule (truthy (rotr _ x _)) x)
-(rule (truthy (select _ x (iconst_u _ (u64_nonzero _)) (iconst_u _ 0))) x)
+(rule (truthy (select _ x (iconst_u _ (u64_when_non_zero)) (iconst_u _ 0))) x)
 ;; (ne ty (iconst 0) v) is also canonicalized into this form via another rule
 (rule (truthy (ne _ x (iconst_u _ 0))) x)
 

@@ -27,12 +27,17 @@
 (model i64 (type (bv 64)))
 
 ;; `cranelift-entity`-based identifiers.
+
 (model Type (type Int))
 (type Type (primitive Type))
+
 (model Value (type (bv)))
 (type Value (primitive Value))
+
 (type ValueList (primitive ValueList))
+
 (type BlockCall (primitive BlockCall))
+
 (type Inst (primitive Inst))
 
 ;; Match the instruction that defines the given value, if any.
@@ -57,218 +62,13 @@
 (decl offset32 (i32) Offset32)
 (extern extractor infallible offset32 offset32)
 
-;; Pure/fallible constructor that tests if one u32 is less than or
-;; equal to another.
-(spec (u32_lteq a b)
-    (provide (= result ()))
-    (require (<= a b)
-             (= (widthof a) 32)
-             (= (widthof b) 32)))
-(decl pure partial u32_lteq (u32 u32) Unit)
-(extern constructor u32_lteq u32_lteq)
-
-;; Pure/fallible constructor that tests if one u8 is less than or
-;; equal to another.
-(decl pure partial u8_lteq (u8 u8) Unit)
-(extern constructor u8_lteq u8_lteq)
-
-;; Pure/fallible constructor that tests if one u8 is strictly less
-;;  than another.
-(decl pure partial u8_lt (u8 u8) Unit)
-(extern constructor u8_lt u8_lt)
-
-;;;; Primitive Type Conversions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl pure u8_as_i8 (u8) i8)
-(extern constructor u8_as_i8 u8_as_i8)
-
-(spec (u8_as_u32 arg)
-    (provide (= result (zero_ext 32 arg)))
-    (require
-      (= (widthof arg) 8)
-      (= (widthof result) 32)))
-(decl pure u8_as_u32 (u8) u32)
-(extern constructor u8_as_u32 u8_as_u32)
-(convert u8 u32 u8_as_u32)
-
-(decl pure u8_as_u64 (u8) u64)
-(extern constructor u8_as_u64 u8_as_u64)
-(convert u8 u64 u8_as_u64)
-
-(decl pure u16_as_i16 (u16) i16)
-(extern constructor u16_as_i16 u16_as_i16)
-
-(decl pure u16_as_u32 (u16) u32)
-(extern constructor u16_as_u32 u16_as_u32)
-(convert u16 u32 u16_as_u32)
-
-(decl pure u16_as_u64 (u16) u64)
-(extern constructor u16_as_u64 u16_as_u64)
-(convert u16 u64 u16_as_u64)
-
-(decl pure u64_as_u8 (u64) u8)
-(extern constructor u64_as_u8 u64_as_u8)
-
-(decl pure u64_as_u16 (u64) u16)
-(extern constructor u64_as_u16 u64_as_u16)
-
-(decl pure u64_as_u16_extractor (u16) u64)
-(extern extractor u64_as_u16_extractor u64_as_u16_extractor)
-
-(decl pure u64_as_i64 (u64) i64)
-(extern constructor u64_as_i64 u64_as_i64)
-
-(decl pure partial u8_try_from_u64 (u64) u8)
-(extern constructor u8_try_from_u64 u8_try_from_u64)
-
-(decl pure partial u8_try_from_u16 (u16) u8)
-(extern constructor u8_try_from_u16 u8_try_from_u16)
-
-(decl pure partial u8_try_from_i32 (i32) u8)
-(extern constructor u8_try_from_i32 u8_try_from_i32)
-
-(decl u16_try_from_i32 (u16) i32)
-(extern extractor u16_try_from_i32 u16_try_from_i32)
-
-(decl pure partial u16_try_from_u64 (u64) u16)
-(extern constructor u16_try_from_u64 u16_try_from_u64)
-
-(decl pure partial u32_try_from_u64 (u64) u32)
-(extern constructor u32_try_from_u64 u32_try_from_u64)
-
-(decl pure partial i32_try_from_i64 (i64) i32)
-(extern constructor i32_try_from_i64 i32_try_from_i64)
-
-(decl pure partial u64_try_from_i64 (i64) u64)
-(extern constructor u64_try_from_i64 u64_try_from_i64)
-
-(decl i8_try_from_i32 (i8) i32)
-(extern extractor i8_try_from_i32 i8_try_from_i32)
-
-(decl pure partial i8_try_from_i64 (i64) i8)
-(extern constructor i8_try_from_i64 i8_try_from_i64)
-
-(decl pure partial i8_try_from_u64 (u64) i8)
-(extern constructor i8_try_from_u64 i8_try_from_u64)
-
-(decl pure i16_as_u16 (i16) u16)
-(extern constructor i16_as_u16 i16_as_u16)
-
-(decl pure partial i16_try_from_u64 (u64) i16)
-(extern constructor i16_try_from_u64 i16_try_from_u64)
-
-(decl pure partial i16_try_from_i32 (i16) i32)
-(extern extractor i16_try_from_i32 i16_try_from_i32)
-
-(decl pure partial i32_try_from_u64 (u64) i32)
-(extern constructor i32_try_from_u64 i32_try_from_u64)
-
-(decl pure u32_as_u64 (u32) u64)
-(extern constructor u32_as_u64 u32_as_u64)
-(convert u32 u64 u32_as_u64)
-
-(decl pure i8_as_u8 (i8) u8)
-(extern constructor i8_as_u8 i8_as_u8)
-
-(decl pure i32_as_u32 (i32) u32)
-(extern constructor i32_as_u32 i32_as_u32)
-
-(decl pure i32_as_i64 (i32) i64)
-(extern constructor i32_as_i64 i32_as_i64)
-(convert i32 i64 i32_as_i64)
-
-(spec (i64_as_u64 arg) (provide (= arg result)))
-(decl pure i64_as_u64 (i64) u64)
-(extern constructor i64_as_u64 i64_as_u64)
-
-(spec (i64_neg x) (provide (= result (bvneg x))))
-(decl pure i64_neg (i64) i64)
-(extern constructor i64_neg i64_neg)
-
-(decl pure i8_neg (i8) i8)
-(extern constructor i8_neg i8_neg)
-
-(decl u128_as_u64 (u64) u128)
-(extern extractor u128_as_u64 u128_as_u64)
-
-(decl u64_as_u32 (u32) u64)
-(extern extractor u64_as_u32 u64_as_u32)
-
-(decl u32_as_u16 (u16) u32)
-(extern extractor u32_as_u16 u32_as_u16)
-
-(decl i32_as_i8 (i8) i32)
-(extern extractor i32_as_i8 i32_as_i8)
-
-(decl pure u64_as_i32 (u64) i32)
-(extern constructor u64_as_i32 u64_as_i32)
-
 ;;;; Primitive Arithmetic ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl pure u8_and (u8 u8) u8)
-(extern constructor u8_and u8_and)
-
-(decl pure u8_shl (u8 u8) u8)
-(extern constructor u8_shl u8_shl)
-
-(decl pure u8_shr (u8 u8) u8)
-(extern constructor u8_shr u8_shr)
-
-(decl pure u8_sub (u8 u8) u8)
-(extern constructor u8_sub u8_sub)
-
-(decl pure u32_add (u32 u32) u32)
-(extern constructor u32_add u32_add)
-
-(spec (u32_sub a b) (provide (= result (bvsub a b))))
-(decl pure u32_sub (u32 u32) u32)
-(extern constructor u32_sub u32_sub)
-
-(decl pure u32_and (u32 u32) u32)
-(extern constructor u32_and u32_and)
-
-(decl pure u32_shl (u32 u32) u32)
-(extern constructor u32_shl u32_shl)
-
-;; Pure/fallible constructor that tries to add two `u32`s, interpreted
-;; as signed values, and fails to match on overflow.
-(spec (s32_add_fallible x y)
-      (provide (= result (bvadd x y)))
-      (require (not (bvsaddo x y))))
-(decl pure partial s32_add_fallible (i32 i32) i32)
-(extern constructor s32_add_fallible s32_add_fallible)
 
 (decl pure partial checked_add_with_type (Type u64 u64) u64)
 (extern constructor checked_add_with_type checked_add_with_type)
 
 (decl pure add_overflows_with_type (Type u64 u64) bool)
 (extern constructor add_overflows_with_type add_overflows_with_type)
-
-(decl pure u64_add (u64 u64) u64)
-(extern constructor u64_add u64_add)
-
-(spec (u64_sub a b)
-      (provide (= result (bvsub a b))))
-(decl pure u64_sub (u64 u64) u64)
-(extern constructor u64_sub u64_sub)
-
-(decl pure u64_mul (u64 u64) u64)
-(extern constructor u64_mul u64_mul)
-
-(decl pure partial u64_udiv (u64 u64) u64)
-(extern constructor u64_udiv u64_udiv)
-
-(decl pure u64_and (u64 u64) u64)
-(extern constructor u64_and u64_and)
-
-(decl pure u64_or (u64 u64) u64)
-(extern constructor u64_or u64_or)
-
-(decl pure u64_xor (u64 u64) u64)
-(extern constructor u64_xor u64_xor)
-
-(decl pure u64_shl (u64 u64) u64)
-(extern constructor u64_shl u64_shl)
 
 (decl pure partial imm64_sdiv (Type Imm64 Imm64) Imm64)
 (extern constructor imm64_sdiv imm64_sdiv)
@@ -281,27 +81,6 @@
 
 (decl pure imm64_sshr (Type Imm64 Imm64) Imm64)
 (extern constructor imm64_sshr imm64_sshr)
-
-(decl pure u64_not (u64) u64)
-(extern constructor u64_not u64_not)
-
-(decl pure i64_not (i64) i64)
-(extern constructor i64_not i64_not)
-
-(decl pure u64_eq (u64 u64) bool)
-(extern constructor u64_eq u64_eq)
-
-(decl pure u64_le (u64 u64) bool)
-(extern constructor u64_le u64_le)
-
-(decl pure u64_lt (u64 u64) bool)
-(extern constructor u64_lt u64_lt)
-
-(decl pure i64_shr (i64 i64) i64)
-(extern constructor i64_shr i64_shr)
-
-(decl pure i64_ctz (i64) i64)
-(extern constructor i64_ctz i64_ctz)
 
 ;; Sign extends a u64 from ty bits up to 64bits
 (decl pure i64_sextend_u64 (Type u64) i64)
@@ -316,26 +95,6 @@
 
 (decl pure imm64_icmp (Type IntCC Imm64 Imm64) Imm64)
 (extern constructor imm64_icmp imm64_icmp)
-
-(decl u64_is_zero (bool) u64)
-(extern extractor infallible u64_is_zero u64_is_zero)
-
-(decl i64_is_zero (bool) i64)
-(extern extractor infallible i64_is_zero i64_is_zero)
-
-(decl u64_zero () u64)
-(extractor (u64_zero) (u64_is_zero true))
-
-(decl u64_nonzero (u64) u64)
-(extractor (u64_nonzero x) (and (u64_is_zero false) x))
-
-(decl i64_nonzero (i64) i64)
-(extractor (i64_nonzero x) (and (i64_is_zero false) x))
-
-;; x & 1 == 1
-(spec (u64_is_odd arg) (provide (= result (= #b1 (extract 0 0 arg)))))
-(decl pure u64_is_odd (u64) bool)
-(extern constructor u64_is_odd u64_is_odd)
 
 ;; Each of these extractors tests whether the upper half of the input equals the
 ;; lower half of the input

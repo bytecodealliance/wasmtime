@@ -4,7 +4,7 @@
 ;; return a `SkeletonInstSimplification` variant rather than a rewritten-value.
 
 ;; Conditional traps that will never trap.
-(rule (simplify_skeleton (trapz (iconst_u _ (u64_nonzero _)) _))
+(rule (simplify_skeleton (trapz (iconst_u _ (u64_when_non_zero)) _))
       (remove_inst))
 (rule (simplify_skeleton (trapnz (iconst_u _ 0) _))
       (remove_inst))
@@ -23,7 +23,7 @@
 ;;
 ;; (rule (simplify_skeleton (trapz (iconst_u _ 0) code))
 ;;       (trap code))
-;; (rule (simplify_skeleton (trapnz (iconst_u _ (u64_nonzero _)) code))
+;; (rule (simplify_skeleton (trapnz (iconst_u _ (u64_when_non_zero)) code))
 ;;       (trap code))
 ;;
 ;; (rule (simplify_skeleton (uadd_overflow_trap (iconst_u ty a) (iconst_u ty b) code))
