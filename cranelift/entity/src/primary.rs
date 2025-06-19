@@ -342,7 +342,7 @@ impl<K: EntityRef + fmt::Debug, V: fmt::Debug> fmt::Debug for PrimaryMap<K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut struct_ = f.debug_struct("PrimaryMap");
         for (k, v) in self.iter() {
-            let name = core::format_args!("{:?}", k).to_string();
+            let name = core::format_args!("{k:?}").to_string();
             struct_.field(&name, v);
         }
         struct_.finish()
