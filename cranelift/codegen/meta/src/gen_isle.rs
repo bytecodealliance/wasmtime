@@ -633,7 +633,7 @@ impl NumericOp<'_> {
             //
             // * partial ctor `checked_add`: no return value on overflow
             // * ctor `wrapping_add`: wraps on overflow
-            // * ctor `unwrapping_add`: non-partial but panics at runtime on overflow
+            // * ctor `add`: non-partial but panics at runtime on overflow
             NumericOp {
                 name: "checked_add",
                 body: "a.checked_add(b)",
@@ -645,7 +645,7 @@ impl NumericOp<'_> {
                 ..binop.clone()
             },
             NumericOp {
-                name: "unwrapping_add",
+                name: "add",
                 body: "a.checked_add(b).unwrap()",
                 ..binop.clone()
             },
@@ -660,7 +660,7 @@ impl NumericOp<'_> {
                 ..binop.clone()
             },
             NumericOp {
-                name: "unwrapping_sub",
+                name: "sub",
                 body: "a.checked_sub(b).unwrap()",
                 ..binop.clone()
             },
@@ -675,7 +675,7 @@ impl NumericOp<'_> {
                 ..binop.clone()
             },
             NumericOp {
-                name: "unwrapping_mul",
+                name: "mul",
                 body: "a.checked_mul(b).unwrap()",
                 ..binop.clone()
             },
@@ -690,7 +690,7 @@ impl NumericOp<'_> {
                 ..binop.clone()
             },
             NumericOp {
-                name: "unwrapping_div",
+                name: "div",
                 body: "a.checked_div(b).unwrap()",
                 ..binop.clone()
             },
@@ -729,7 +729,7 @@ impl NumericOp<'_> {
                 ..shift.clone()
             },
             NumericOp {
-                name: "unwrapping_shl",
+                name: "shl",
                 body: "a.checked_shl(b).unwrap()",
                 ..shift.clone()
             },
@@ -744,7 +744,7 @@ impl NumericOp<'_> {
                 ..shift.clone()
             },
             NumericOp {
-                name: "unwrapping_shr",
+                name: "shr",
                 body: "a.checked_shr(b).unwrap()",
                 ..shift.clone()
             },
@@ -781,7 +781,7 @@ impl NumericOp<'_> {
                 ..partial_unop.clone()
             },
             NumericOp {
-                name: "unwrapping_ilog2",
+                name: "ilog2",
                 body: "a.checked_ilog2().unwrap()",
                 ret: "u32",
                 ..unop.clone()
@@ -825,7 +825,7 @@ impl NumericOp<'_> {
                 ..unop.clone()
             },
             NumericOp {
-                name: "unwrapping_neg",
+                name: "neg",
                 body: "a.checked_neg().unwrap()",
                 ..unop.clone()
             },

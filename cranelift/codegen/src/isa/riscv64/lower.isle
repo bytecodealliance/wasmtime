@@ -330,7 +330,7 @@
   (rv_sub x y))
 
 (rule 2 (lower (has_type $I128 (isub x y)))
-  (i128_sub x y))
+  (sub_i128 x y))
 
 ;; Switch to an `addi` by a negative if we can fit the value in an `imm12`.
 (rule 3 (lower (has_type (ty_int_ref_scalar_64 ty) (isub x y)))

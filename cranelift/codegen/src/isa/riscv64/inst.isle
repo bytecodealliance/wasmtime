@@ -2772,9 +2772,9 @@
     (move_x_to_f tmp ty)))
 
 
-(decl i128_sub (ValueRegs ValueRegs) ValueRegs)
+(decl sub_i128 (ValueRegs ValueRegs) ValueRegs)
 (rule
-  (i128_sub x y )
+  (sub_i128 x y )
   (let (
       ;; low part.
       (low XReg (rv_sub (value_regs_get x 0) (value_regs_get y 0)))
@@ -3005,7 +3005,7 @@
     (rv_neg (value_regs_get val 0))))
 
 (rule 2 (neg $I128 val)
-  (i128_sub (value_regs_zero) val))
+  (sub_i128 (value_regs_zero) val))
 
 
 ;; Builds an instruction sequence that traps if the comparison succeeds.
