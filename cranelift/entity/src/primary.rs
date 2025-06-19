@@ -4,7 +4,6 @@ use crate::boxed_slice::BoxedSlice;
 use crate::iter::{IntoIter, Iter, IterMut};
 use crate::keys::Keys;
 use alloc::boxed::Box;
-use alloc::string::ToString;
 use alloc::vec::Vec;
 use core::fmt;
 use core::marker::PhantomData;
@@ -341,9 +340,8 @@ where
 impl<K: EntityRef + fmt::Debug, V: fmt::Debug> fmt::Debug for PrimaryMap<K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut struct_ = f.debug_struct("PrimaryMap");
-        for (k, v) in self.iter() {
-            let name = core::format_args!("{k:?}").to_string();
-            struct_.field(&name, v);
+        for (k, v) in self {
+            struct_.field(&alloc::format!("{k:?}"), v);
         }
         struct_.finish()
     }
