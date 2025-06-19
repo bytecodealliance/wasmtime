@@ -62,27 +62,27 @@
 ;;       retq
 ;;   e8: movl    $6, %esi
 ;;   ed: movq    %r14, %rdi
-;;   f0: callq   0x284
+;;   f0: callq   0x283
 ;;   f5: movq    %r14, %rdi
-;;   f8: callq   0x2c8
+;;   f8: callq   0x2c6
 ;;   fd: ud2
 ;;   ff: movl    $6, %esi
 ;;  104: movq    %r14, %rdi
-;;  107: callq   0x284
+;;  107: callq   0x283
 ;;  10c: movq    %r14, %rdi
-;;  10f: callq   0x2c8
+;;  10f: callq   0x2c6
 ;;  114: ud2
 ;;  116: movl    $8, %esi
 ;;  11b: movq    %r14, %rdi
-;;  11e: callq   0x284
+;;  11e: callq   0x283
 ;;  123: movq    %r14, %rdi
-;;  126: callq   0x2c8
+;;  126: callq   0x2c6
 ;;  12b: ud2
 ;;  12d: xorl    %esi, %esi
 ;;  12f: movq    %r14, %rdi
-;;  132: callq   0x284
+;;  132: callq   0x283
 ;;  137: movq    %r14, %rdi
-;;  13a: callq   0x2c8
+;;  13a: callq   0x2c6
 ;;  13f: ud2
 ;;  141: ud2
 ;;  143: ud2

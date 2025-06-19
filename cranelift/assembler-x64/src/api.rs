@@ -69,17 +69,17 @@ impl CodeSink for Vec<u8> {
 }
 
 /// Wrap [`CodeSink`]-specific labels.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct Label(pub u32);
 
 /// Wrap [`CodeSink`]-specific constant keys.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct Constant(pub u32);
 
 /// Wrap [`CodeSink`]-specific trap codes.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct TrapCode(pub NonZeroU8);
 

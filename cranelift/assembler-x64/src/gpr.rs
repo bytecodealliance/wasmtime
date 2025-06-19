@@ -69,7 +69,7 @@ pub enum Size {
 ///
 /// This is due to avoid special cases of REX encodings, see Intel SDM Vol. 2A,
 /// table 2-5.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NonRspGpr<R: AsReg>(R);
 
 impl<R: AsReg> NonRspGpr<R> {

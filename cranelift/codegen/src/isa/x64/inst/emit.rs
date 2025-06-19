@@ -212,8 +212,8 @@ pub(crate) fn emit(
             // Here the `idiv` is executed, which is different depending on the
             // size
             sink.bind_label(do_op, state.ctrl_plane_mut());
-            let rax = Gpr::unwrap_new(regs::rax());
-            let rdx = Gpr::unwrap_new(regs::rdx());
+            let rax = Gpr::RAX;
+            let rdx = Gpr::RDX;
             let writable_rax = Writable::from_reg(rax);
             let writable_rdx = Writable::from_reg(rdx);
             let inst: AsmInst = match size {
@@ -477,13 +477,13 @@ pub(crate) fn emit(
             // Probe the stack! We don't use Inst::gen_store_stack here because we need a predictable
             // instruction size.
             // mov  [rsp], rsp
-            asm::inst::movl_mr::new(Amode::imm_reg(0, regs::rsp()), Gpr::unwrap_new(regs::rsp()))
+            asm::inst::movl_mr::new(Amode::imm_reg(0, regs::rsp()), Gpr::RSP)
                 .emit(sink, info, state);
 
             // Compare and jump if we are not done yet
             // cmp  rsp, tmp_reg
             let tmp = Gpr::unwrap_new(tmp.to_reg());
-            asm::inst::cmpq_rm::new(tmp, Gpr::unwrap_new(regs::rsp())).emit(sink, info, state);
+            asm::inst::cmpq_rm::new(tmp, Gpr::RSP).emit(sink, info, state);
 
             // jne  .loop_start
             // TODO: Encoding the conditional jump as a short jump
@@ -2694,7 +2694,7 @@ pub(crate) fn emit(
                 i32::try_from(frame.tail_args_size + frame.setup_area_size).unwrap();
             known_offsets[usize::from(external::offsets::KEY_SLOT_OFFSET)] =
                 i32::try_from(frame.outgoing_args_size).unwrap();
-            inst.encode(sink, &known_offsets);
+            emit_maybe_shrink(inst, sink, &known_offsets);
         }
     }
 
@@ -2772,5 +2772,190 @@ where
 {
     fn emit(self, sink: &mut MachBuffer<Inst>, info: &EmitInfo, state: &mut EmitState) {
         Inst::External { inst: self.into() }.emit(sink, info, state)
+    }
+}
+
+/// Attempt to "shrink" the provided `inst`.
+///
+/// This function will inspect `inst` and attempt to return a new instruction
+/// which is equivalent semantically but will encode to a smaller binary
+/// representation. This is only done for instructions which require register
+/// allocation to have already happened, for example shrinking immediates should
+/// be done during instruction selection not at this point.
+///
+/// An example of this optimization is the `AND` instruction. The Intel manual
+/// has a smaller encoding for `AND AL, imm8` than it does for `AND r/m8, imm8`.
+/// Here the instructions are matched against and if regalloc state indicates
+/// that a smaller variant is available then that's swapped to instead.
+fn emit_maybe_shrink(inst: &AsmInst, sink: &mut MachBuffer<Inst>, table: &[i32; 2]) {
+    use cranelift_assembler_x64::GprMem;
+    use cranelift_assembler_x64::inst::*;
+
+    type R = CraneliftRegisters;
+    const RAX: PairedGpr = PairedGpr {
+        read: Gpr::RAX,
+        write: Writable::from_reg(Gpr::RAX),
+    };
+    const RAX_RM: GprMem<PairedGpr, Gpr> = GprMem::Gpr(RAX);
+
+    match *inst {
+        // and
+        Inst::andb_mi(andb_mi { rm8: RAX_RM, imm8 }) => {
+            andb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::andw_mi(andw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => andw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::andl_mi(andl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => andl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::andq_mi_sxl(andq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => andq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // or
+        Inst::orb_mi(orb_mi { rm8: RAX_RM, imm8 }) => {
+            orb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::orw_mi(orw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => orw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::orl_mi(orl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => orl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::orq_mi_sxl(orq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => orq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // xor
+        Inst::xorb_mi(xorb_mi { rm8: RAX_RM, imm8 }) => {
+            xorb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::xorw_mi(xorw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => xorw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::xorl_mi(xorl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => xorl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::xorq_mi_sxl(xorq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => xorq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // add
+        Inst::addb_mi(addb_mi { rm8: RAX_RM, imm8 }) => {
+            addb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::addw_mi(addw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => addw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::addl_mi(addl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => addl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::addq_mi_sxl(addq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => addq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // adc
+        Inst::adcb_mi(adcb_mi { rm8: RAX_RM, imm8 }) => {
+            adcb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::adcw_mi(adcw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => adcw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::adcl_mi(adcl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => adcl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::adcq_mi_sxl(adcq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => adcq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // sub
+        Inst::subb_mi(subb_mi { rm8: RAX_RM, imm8 }) => {
+            subb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::subw_mi(subw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => subw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::subl_mi(subl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => subl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::subq_mi_sxl(subq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => subq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // sbb
+        Inst::sbbb_mi(sbbb_mi { rm8: RAX_RM, imm8 }) => {
+            sbbb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::sbbw_mi(sbbw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => sbbw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::sbbl_mi(sbbl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => sbbl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::sbbq_mi_sxl(sbbq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => sbbq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // cmp
+        Inst::cmpb_mi(cmpb_mi {
+            rm8: GprMem::Gpr(Gpr::RAX),
+            imm8,
+        }) => cmpb_i::<R>::new(Gpr::RAX, imm8).encode(sink, table),
+        Inst::cmpw_mi(cmpw_mi {
+            rm16: GprMem::Gpr(Gpr::RAX),
+            imm16,
+        }) => cmpw_i::<R>::new(Gpr::RAX, imm16).encode(sink, table),
+        Inst::cmpl_mi(cmpl_mi {
+            rm32: GprMem::Gpr(Gpr::RAX),
+            imm32,
+        }) => cmpl_i::<R>::new(Gpr::RAX, imm32).encode(sink, table),
+        Inst::cmpq_mi(cmpq_mi {
+            rm64: GprMem::Gpr(Gpr::RAX),
+            imm32,
+        }) => cmpq_i::<R>::new(Gpr::RAX, imm32).encode(sink, table),
+
+        // test
+        Inst::testb_mi(testb_mi {
+            rm8: GprMem::Gpr(Gpr::RAX),
+            imm8,
+        }) => testb_i::<R>::new(Gpr::RAX, imm8).encode(sink, table),
+        Inst::testw_mi(testw_mi {
+            rm16: GprMem::Gpr(Gpr::RAX),
+            imm16,
+        }) => testw_i::<R>::new(Gpr::RAX, imm16).encode(sink, table),
+        Inst::testl_mi(testl_mi {
+            rm32: GprMem::Gpr(Gpr::RAX),
+            imm32,
+        }) => testl_i::<R>::new(Gpr::RAX, imm32).encode(sink, table),
+        Inst::testq_mi(testq_mi {
+            rm64: GprMem::Gpr(Gpr::RAX),
+            imm32,
+        }) => testq_i::<R>::new(Gpr::RAX, imm32).encode(sink, table),
+
+        // All other instructions fall through to here and cannot be shrunk, so
+        // return `false` to emit them as usual.
+        _ => inst.encode(sink, table),
     }
 }
