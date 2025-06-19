@@ -78,7 +78,10 @@ fn check_avx_alternates(all: &mut [Inst]) {
         .map(|(index, inst)| (inst.name().clone(), index))
         .collect();
     for inst in all.iter().filter(|inst| inst.alternate.is_some()) {
-        assert!(inst.features.is_sse());
+        assert!(
+            inst.features.is_sse(),
+            "expected an SSE instruction: {inst}"
+        );
         let alternate = inst.alternate.as_ref().unwrap();
         assert_eq!(alternate.feature, Feature::avx);
         let avx_index = name_to_index.get(&alternate.name).expect(&format!(
