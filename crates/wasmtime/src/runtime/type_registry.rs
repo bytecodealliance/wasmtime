@@ -133,7 +133,7 @@ impl Engine {
 
         let engine = self.clone();
         let registry = engine.signatures();
-        let gc_runtime = engine.gc_runtime().ok().map(|rt| &**rt);
+        let gc_runtime = engine.gc_runtime().map(|rt| &**rt);
 
         // First, register these types in this engine's registry.
         let (rec_groups, types) = registry
@@ -336,7 +336,7 @@ impl RegisteredType {
         let (entry, index, ty, layout) = {
             log::trace!("RegisteredType::new({ty:?})");
 
-            let gc_runtime = engine.gc_runtime().ok().map(|rt| &**rt);
+            let gc_runtime = engine.gc_runtime().map(|rt| &**rt);
             let mut inner = engine.signatures().0.write();
 
             // It shouldn't be possible for users to construct non-canonical
