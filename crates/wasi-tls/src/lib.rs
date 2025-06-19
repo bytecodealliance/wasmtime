@@ -129,6 +129,11 @@ impl WasiTlsCtxBuilder {
     }
 
     /// Sets the TLS provider to use for this context.
+    ///
+    /// By default, this is set to the [`DefaultProvider`] which is picked at
+    /// compile time based on feature flags. If this crate is compiled with
+    /// multiple TLS providers, this method can be used to specify the provider
+    /// at runtime.
     pub fn provider(mut self, provider: Box<dyn TlsProvider>) -> Self {
         self.provider = provider;
         self
