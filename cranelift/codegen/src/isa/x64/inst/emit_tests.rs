@@ -129,7 +129,6 @@ fn test_x64_emit() {
     let w_rcx = Writable::<Reg>::from_reg(rcx);
     let w_rdx = Writable::<Reg>::from_reg(rdx);
     let w_rsi = Writable::<Reg>::from_reg(rsi);
-    let w_rdi = Writable::<Reg>::from_reg(rdi);
     let _w_rsp = Writable::<Reg>::from_reg(rsp);
     let _w_rbp = Writable::<Reg>::from_reg(rbp);
     let w_r8 = Writable::<Reg>::from_reg(r8);
@@ -160,35 +159,6 @@ fn test_x64_emit() {
     // General tests for each insn.  Don't forget to follow the
     // guidelines commented just prior to `fn x64_emit`.
     //
-
-    // ========================================================
-    // LoadEffectiveAddress
-    insns.push((
-        Inst::lea(Amode::imm_reg(42, r10), w_r8),
-        "4D8D422A",
-        "lea     42(%r10), %r8",
-    ));
-    insns.push((
-        Inst::lea(Amode::imm_reg(42, r10), w_r15),
-        "4D8D7A2A",
-        "lea     42(%r10), %r15",
-    ));
-    insns.push((
-        Inst::lea(
-            Amode::imm_reg_reg_shift(179, Gpr::unwrap_new(r10), Gpr::unwrap_new(r9), 0),
-            w_r8,
-        ),
-        "4F8D840AB3000000",
-        "lea     179(%r10,%r9,1), %r8",
-    ));
-    insns.push((
-        Inst::lea(
-            Amode::rip_relative(MachLabel::from_block(BlockIndex::new(0))),
-            w_rdi,
-        ),
-        "488D3D00000000",
-        "lea     label0(%rip), %rdi",
-    ));
 
     // ========================================================
     // SetCC
