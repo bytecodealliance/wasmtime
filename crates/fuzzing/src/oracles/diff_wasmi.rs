@@ -25,6 +25,8 @@ impl WasmiEngine {
         // FIXME: requires updating to a wasmi that contains
         // wasmi-labs/wasmi#1531.
         config.memory64_enabled = false;
+        // FIXME: until https://github.com/wasmi-labs/wasmi/issues/1544 is fixed.
+        config.wide_arithmetic_enabled = false;
 
         let mut wasmi_config = wasmi::Config::default();
         wasmi_config
