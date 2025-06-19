@@ -2,6 +2,7 @@
 
 mod abs;
 mod add;
+mod align;
 mod and;
 mod atomic;
 mod avg;
@@ -35,6 +36,7 @@ pub fn list() -> Vec<Inst> {
     let mut all = vec![];
     all.extend(abs::list());
     all.extend(add::list());
+    all.extend(align::list());
     all.extend(and::list());
     all.extend(atomic::list());
     all.extend(avg::list());
@@ -147,9 +149,22 @@ fn check_sse_matches_avx(sse_inst: &Inst, avx_inst: &Inst) {
             [(Write, Reg(_)), (Read, Reg(_) | RegMem(_)), (Read, Imm(_))],
             [(Write, Reg(_)), (Read, Reg(_) | RegMem(_)), (Read, Imm(_))],
         ) => {}
+        (
+            [(ReadWrite, Reg(_)), (Read, RegMem(_)), (Read, Imm(_))],
+            [
+                (Write, Reg(_)),
+                (Read, Reg(_)),
+                (Read, RegMem(_)),
+                (Read, Imm(_)),
+            ],
+        ) => {}
         // We panic on other formats for now; feel free to add more patterns to
         // avoid this.
-        _ => panic!("unmatched formats for SSE-to-AVX alternate:\n{sse_inst}\n{avx_inst}"),
+        _ => panic!(
+            "unmatched formats for SSE-to-AVX alternate:\n{sse_inst}\n{avx_inst}. {:?}, {:?}",
+            list_ops(sse_inst),
+            list_ops(avx_inst)
+        ),
     }
 }
 
