@@ -1,5 +1,6 @@
 //! Defines x64 instructions using the DSL.
 
+mod abs;
 mod add;
 mod and;
 mod atomic;
@@ -31,6 +32,7 @@ use std::collections::HashMap;
 #[must_use]
 pub fn list() -> Vec<Inst> {
     let mut all = vec![];
+    all.extend(abs::list());
     all.extend(add::list());
     all.extend(and::list());
     all.extend(atomic::list());
@@ -123,6 +125,7 @@ fn check_sse_matches_avx(sse_inst: &Inst, avx_inst: &Inst) {
                 (Read, Reg(_) | RegMem(_) | Mem(_)),
             ],
         ) => {}
+        ([(Write, Reg(_)), (Read, RegMem(_))], [(Write, Reg(_)), (Read, RegMem(_))]) => {}
         // We panic on other formats for now; feel free to add more patterns to
         // avoid this.
         _ => panic!("unmatched formats for SSE-to-AVX alternate:\n{sse_inst}\n{avx_inst}"),
