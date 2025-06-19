@@ -493,10 +493,6 @@
 
 (type SseOpcode extern
       (enum Insertps
-            Packssdw
-            Packsswb
-            Packusdw
-            Packuswb
             Palignr
             Pmaddubsw
             Pmaddwd
@@ -3341,35 +3337,35 @@
 
 ;; Helper for creating `packsswb` instructions.
 (decl x64_packsswb (Xmm XmmMem) Xmm)
-(rule 0 (x64_packsswb src1 src2)
-      (xmm_rm_r (SseOpcode.Packsswb) src1 src2))
 (rule 1 (x64_packsswb src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpacksswb) src1 src2))
+(rule 0 (x64_packsswb src1 src2)
+      (x64_packsswb_a src1 src2))
 
 ;; Helper for creating `packssdw` instructions.
 (decl x64_packssdw (Xmm XmmMem) Xmm)
-(rule 0 (x64_packssdw src1 src2)
-      (xmm_rm_r (SseOpcode.Packssdw) src1 src2))
 (rule 1 (x64_packssdw src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpackssdw) src1 src2))
+(rule 0 (x64_packssdw src1 src2)
+      (x64_packssdw_a src1 src2))
 
 ;; Helper for creating `packuswb` instructions.
 (decl x64_packuswb (Xmm XmmMem) Xmm)
-(rule 0 (x64_packuswb src1 src2)
-      (xmm_rm_r (SseOpcode.Packuswb) src1 src2))
 (rule 1 (x64_packuswb src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpackuswb) src1 src2))
+(rule 0 (x64_packuswb src1 src2)
+      (x64_packuswb_a src1 src2))
 
 ;; Helper for creating `packusdw` instructions.
 (decl x64_packusdw (Xmm XmmMem) Xmm)
-(rule 0 (x64_packusdw src1 src2)
-      (xmm_rm_r (SseOpcode.Packusdw) src1 src2))
 (rule 1 (x64_packusdw src1 src2)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpackusdw) src1 src2))
+(rule 0 (x64_packusdw src1 src2)
+      (x64_packusdw_a src1 src2))
 
 ;; Helper for creating `palignr` instructions.
 (decl x64_palignr (Xmm XmmMem u8) Xmm)
