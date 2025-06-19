@@ -583,9 +583,7 @@
                                  amt)))
             (zero Gpr (imm $I64 0))
             ;; Nullify the carry if we are shifting in by a multiple of 128.
-            (carry_ Gpr (with_flags_reg (x64_test (OperandSize.Size64)
-                                              amt
-                                              (RegMemImm.Imm 127))
+            (carry_ Gpr (with_flags_reg (x64_testq_mi amt 127)
                                         (cmove $I64
                                                (CC.Z)
                                                zero
@@ -595,7 +593,7 @@
         ;; Combine the two shifted halves. However, if we are shifting by >= 64
         ;; (modulo 128), then the low bits are zero and the high bits are our
         ;; low bits.
-        (with_flags (x64_test (OperandSize.Size64) amt (RegMemImm.Imm 64))
+        (with_flags (x64_testq_mi amt 64)
                     (consumes_flags_concat
                      (cmove $I64 (CC.Z) lo_shifted zero)
                      (cmove $I64 (CC.Z) hi_shifted_ lo_shifted)))))
@@ -694,14 +692,14 @@
             (zero Gpr (imm $I64 0))
 
             ;; Nullify the carry if we are shifting by a multiple of 128.
-            (carry_ Gpr (with_flags_reg (x64_test (OperandSize.Size64) amt (RegMemImm.Imm 127))
+            (carry_ Gpr (with_flags_reg (x64_testq_mi amt 127)
                                         (cmove $I64 (CC.Z) zero carry)))
             ;; Add the carry bits into the lo.
             (lo_shifted_ Gpr (x64_or $I64 carry_ lo_shifted)))
         ;; Combine the two shifted halves. However, if we are shifting by >= 64
         ;; (modulo 128), then the hi bits are zero and the lo bits are what
         ;; would otherwise be our hi bits.
-        (with_flags (x64_test (OperandSize.Size64) amt (RegMemImm.Imm 64))
+        (with_flags (x64_testq_mi amt 64)
                     (consumes_flags_concat
                      (cmove $I64 (CC.Z) lo_shifted_ hi_shifted)
                      (cmove $I64 (CC.Z) hi_shifted zero)))))
@@ -802,7 +800,7 @@
                                  (imm $I64 64)
                                  amt)))
             ;; Nullify the carry if we are shifting by a multiple of 128.
-            (carry_ Gpr (with_flags_reg (x64_test (OperandSize.Size64) amt (RegMemImm.Imm 127))
+            (carry_ Gpr (with_flags_reg (x64_testq_mi amt 127)
                                         (cmove $I64 (CC.Z) (imm $I64 0) carry)))
             ;; Add the carry into the low half.
             (lo_shifted_ Gpr (x64_or $I64 lo_shifted carry_))
@@ -811,7 +809,7 @@
         ;; Combine the two shifted halves. However, if we are shifting by >= 64
         ;; (modulo 128), then the hi bits are all sign bits and the lo bits are
         ;; what would otherwise be our hi bits.
-        (with_flags (x64_test (OperandSize.Size64) amt (RegMemImm.Imm 64))
+        (with_flags (x64_testq_mi amt 64)
                     (consumes_flags_concat
                      (cmove $I64 (CC.Z) lo_shifted_ hi_shifted)
                      (cmove $I64 (CC.Z) hi_shifted sign_bits)))))
@@ -1745,14 +1743,13 @@
 
 (decl cmp_and_choose (Type CC Value Value) ValueRegs)
 (rule (cmp_and_choose (fits_in_64 ty) cc x y)
-      (let ((size OperandSize (raw_operand_size_of_type ty))
-            ;; We need to put x and y in registers explicitly because
+      (let( ;; We need to put x and y in registers explicitly because
             ;; we use the values more than once. Hence, even if these
             ;; are "unique uses" at the CLIF level and would otherwise
             ;; allow for load-op merging, here we cannot do that.
             (x_reg Reg x)
             (y_reg Reg y))
-        (with_flags_reg (x64_cmp size y_reg x_reg)
+        (with_flags_reg (x64_cmp ty y_reg x_reg)
                         (cmove ty cc y_reg x_reg))))
 
 (rule -1 (lower (has_type (fits_in_64 ty) (umin x y)))
@@ -2211,11 +2208,10 @@
 ;; to be the final, default lowerings if no other patterns matched above.
 
 (rule -1 (lower (has_type ty (select c @ (value_type (fits_in_64 a_ty)) x y)))
-      (let ((size OperandSize (raw_operand_size_of_type a_ty))
-            ;; N.B.: disallow load-op fusion, see above. TODO:
-            ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
+      (let ( ;; N.B.: disallow load-op fusion, see above. TODO:
+             ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
             (gpr_c Gpr (put_in_gpr c)))
-           (with_flags (x64_test size gpr_c gpr_c) (cmove_from_values ty (CC.NZ) x y))))
+           (with_flags (x64_test a_ty gpr_c gpr_c) (cmove_from_values ty (CC.NZ) x y))))
 
 (rule -2 (lower (has_type ty (select c @ (value_type $I128) x y)))
       (let ((cond_result IcmpCondResult (cmp_zero_i128 (CC.Z) c)))
@@ -2257,7 +2253,7 @@
                             (RegMemImm.Imm 64)))
             (result_lo Gpr
               (with_flags_reg
-               (x64_cmp_imm (OperandSize.Size64) upper 64)
+               (x64_cmpq_mi_sxb upper 64)
                (cmove $I64 (CC.NZ) upper lower))))
         (value_regs result_lo (imm $I64 0))))
 
@@ -2296,7 +2292,7 @@
                             (RegMemImm.Imm 64)))
             (result_lo Gpr
               (with_flags_reg
-               (x64_cmp_imm (OperandSize.Size64) lower 64)
+               (x64_cmpq_mi_sxb lower 64)
                (cmove $I64 (CC.Z) upper lower))))
         (value_regs result_lo (imm $I64 0))))
 
@@ -3627,19 +3623,17 @@
 
 (decl cmp_zero_int_bool_ref (Value) ProducesFlags)
 (rule (cmp_zero_int_bool_ref val @ (value_type ty))
-      (let ((size OperandSize (raw_operand_size_of_type ty))
-            (src Gpr val))
-        (x64_test size src src)))
+      (let ((src Gpr val))
+        (x64_test ty src src)))
 
 ;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower_branch (br_table idx @ (value_type ty) _) (jump_table_targets default_target jt_targets))
-      (let ((size OperandSize (raw_operand_size_of_type ty))
-            (jt_size u32 (jump_table_size jt_targets))
+      (let ((jt_size u32 (jump_table_size jt_targets))
             (size_reg Reg (imm ty jt_size))
             (idx_reg Gpr (extend_to_gpr idx $I64 (ExtendKind.Zero)))
             (clamped_idx Reg (with_flags_reg
-              (x64_cmp size idx_reg size_reg)
+              (x64_cmp ty idx_reg size_reg)
               (cmove ty (CC.B) idx_reg size_reg))))
       (emit_side_effect (jmp_table_seq ty clamped_idx default_target jt_targets))))
 
@@ -3649,9 +3643,8 @@
       (select_icmp (emit_cmp cc a b) x y))
 
 (rule -1 (lower (has_type ty (select_spectre_guard c @ (value_type (fits_in_64 a_ty)) x y)))
-      (let ((size OperandSize (raw_operand_size_of_type a_ty))
-            (gpr_c Gpr (put_in_gpr c)))
-        (with_flags (x64_test size gpr_c gpr_c) (cmove_from_values ty (CC.NZ) x y))))
+      (let ((gpr_c Gpr (put_in_gpr c)))
+        (with_flags (x64_test a_ty gpr_c gpr_c) (cmove_from_values ty (CC.NZ) x y))))
 
 (rule -2 (lower (has_type ty (select_spectre_guard c @ (value_type $I128) x y)))
       (let ((cond_result IcmpCondResult (cmp_zero_i128 (CC.Z) c)))
@@ -4438,7 +4431,7 @@
       (let (
           (val Reg val)
           (_ InstOutput (side_effect (with_flags_side_effect
-            (x64_test (raw_operand_size_of_type ty) val val)
+            (x64_test ty val val)
             (trap_if (CC.Z) (TrapCode.INTEGER_DIVISION_BY_ZERO)))))
         )
         val))
@@ -4914,7 +4907,7 @@
           (any_byte_zero Xmm (x64_pcmpeqb val (xmm_zero $I8X16)))
           (mask Gpr (x64_pmovmskb any_byte_zero))
         )
-        (icmp_cond_result (x64_cmp_imm (OperandSize.Size32) mask 0xffff)
+        (icmp_cond_result (x64_cmpl_mi mask 0xffff)
                           (CC.NZ))))
 
 ;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -4936,7 +4929,7 @@
 (rule (emit_vall_true val @ (value_type ty))
       (let ((lanes_with_zero Xmm (x64_pcmpeq (vec_int_type ty) val (xmm_zero ty)))
             (mask Gpr (x64_pmovmskb lanes_with_zero)))
-        (icmp_cond_result (x64_test (OperandSize.Size32) mask mask)
+        (icmp_cond_result (x64_testl_mr mask mask)
                           (CC.Z))))
 
 ;; Rules for `vhigh_bits` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

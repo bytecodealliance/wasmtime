@@ -297,6 +297,10 @@ enum IsleConstructor {
 
     /// This constructor does not return any results, but produces a side effect affecting EFLAGs.
     NoReturnSideEffect,
+
+    /// This constructor produces no results, but the flags register is written,
+    /// so a `ProducesFlags` value is returned with a side effect.
+    ProducesFlagsSideEffect,
 }
 
 impl IsleConstructor {
@@ -309,6 +313,7 @@ impl IsleConstructor {
             IsleConstructor::NoReturnSideEffect | IsleConstructor::RetMemorySideEffect => {
                 "SideEffectNoResult"
             }
+            IsleConstructor::ProducesFlagsSideEffect => "ProducesFlags",
         }
     }
 
@@ -322,6 +327,7 @@ impl IsleConstructor {
             IsleConstructor::RetGpr => "emit_ret_gpr",
             IsleConstructor::RetXmm => "emit_ret_xmm",
             IsleConstructor::RetValueRegs => "emit_ret_value_regs",
+            IsleConstructor::ProducesFlagsSideEffect => "asm_produce_flags_side_effect",
         }
     }
 
@@ -332,7 +338,8 @@ impl IsleConstructor {
             IsleConstructor::RetGpr
             | IsleConstructor::RetXmm
             | IsleConstructor::RetValueRegs
-            | IsleConstructor::NoReturnSideEffect => "",
+            | IsleConstructor::NoReturnSideEffect
+            | IsleConstructor::ProducesFlagsSideEffect => "",
         }
     }
 
@@ -347,7 +354,8 @@ impl IsleConstructor {
             IsleConstructor::RetGpr
             | IsleConstructor::RetXmm
             | IsleConstructor::RetValueRegs
-            | IsleConstructor::NoReturnSideEffect => false,
+            | IsleConstructor::NoReturnSideEffect
+            | IsleConstructor::ProducesFlagsSideEffect => false,
         }
     }
 }
@@ -366,6 +374,7 @@ fn isle_param_for_ctor(op: &Operand, ctor: IsleConstructor) -> String {
             IsleConstructor::RetGpr => "Gpr".to_string(),
             IsleConstructor::RetXmm => "Xmm".to_string(),
             IsleConstructor::RetValueRegs => "ValueRegs".to_string(),
+            IsleConstructor::ProducesFlagsSideEffect => todo!(),
         },
 
         // everything else is the same as the "raw" variant
@@ -388,7 +397,13 @@ fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
         .filter(|o| o.mutability.is_write())
         .collect::<Vec<_>>();
     match &write_operands[..] {
-        [] => vec![IsleConstructor::NoReturnSideEffect],
+        [] => {
+            if format.eflags.is_write() {
+                vec![IsleConstructor::ProducesFlagsSideEffect]
+            } else {
+                vec![IsleConstructor::NoReturnSideEffect]
+            }
+        }
         [one] => match one.mutability {
             Read => unreachable!(),
             ReadWrite | Write => match one.location.kind() {
@@ -550,7 +565,9 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
                     }
                     IsleConstructor::RetGpr => "(temp_writable_gpr)",
                     IsleConstructor::RetXmm => "(temp_writable_xmm)",
-                    IsleConstructor::RetValueRegs => todo!(),
+                    IsleConstructor::RetValueRegs | IsleConstructor::ProducesFlagsSideEffect => {
+                        todo!()
+                    }
                 }
             })
             .collect::<Vec<_>>()

@@ -577,13 +577,3 @@ pub(crate) fn emit_std_reg_reg<BS: ByteSink + ?Sized>(
     let enc_e = reg_enc(reg_e);
     emit_std_enc_enc(sink, prefixes, opcodes, num_opcodes, enc_g, enc_e, rex);
 }
-
-/// Write a suitable number of bits from an imm64 to the sink.
-pub(crate) fn emit_simm<BS: ByteSink + ?Sized>(sink: &mut BS, size: u8, simm32: u32) {
-    match size {
-        8 | 4 => sink.put4(simm32),
-        2 => sink.put2(simm32 as u16),
-        1 => sink.put1(simm32 as u8),
-        _ => unreachable!(),
-    }
-}

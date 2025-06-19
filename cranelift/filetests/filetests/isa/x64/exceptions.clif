@@ -143,7 +143,7 @@ function %f1(i32) -> i32, f32, f64 {
 ;   movq %r14, 0x28(%rsp)
 ;   movq %r15, 0x30(%rsp)
 ; block0:
-;   testl   %edi, %edi
+;   testl %edi, %edi
 ;   jnz     label4; j label1
 ; block1:
 ;   movl $0x2a, %eax
@@ -151,7 +151,7 @@ function %f1(i32) -> i32, f32, f64 {
 ;   movd %ecx, %xmm0
 ;   movabsq $0x40d59e0000000000, %rcx
 ;   movq %rcx, %xmm1
-;   testl   %edi, %edi
+;   testl %edi, %edi
 ;   jnz     label2; j label3
 ; block2:
 ;   movq %rax, %r11

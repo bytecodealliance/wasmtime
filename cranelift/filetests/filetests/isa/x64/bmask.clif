@@ -809,7 +809,7 @@ block0(v0: i32, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpl    %esi, %edi
+;   cmpl %esi, %edi
 ;   setnle  %al
 ;   movq %rax, %r8
 ;   negb %r8b
@@ -843,7 +843,7 @@ block0(v0: i32, v1: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpl    %esi, %edi
+;   cmpl %esi, %edi
 ;   setnle  %al
 ;   negb %al
 ;   movq %rbp, %rsp

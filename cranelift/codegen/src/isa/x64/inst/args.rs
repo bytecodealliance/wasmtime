@@ -624,13 +624,6 @@ impl RegMemImm {
         Self::Imm { simm32 }
     }
 
-    /// Asserts that in register mode, the reg class is the one that's expected.
-    pub(crate) fn assert_regclass_is(&self, expected_reg_class: RegClass) {
-        if let Self::Reg { reg } = self {
-            debug_assert_eq!(reg.class(), expected_reg_class);
-        }
-    }
-
     /// Add the regs mentioned by `self` to `collector`.
     pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
@@ -727,15 +720,6 @@ impl PrettyPrint for RegMem {
             RegMem::Mem { addr, .. } => addr.pretty_print(size),
         }
     }
-}
-
-#[derive(Clone, Copy, PartialEq)]
-/// Comparison operations.
-pub enum CmpOpcode {
-    /// CMP instruction: compute `a - b` and set flags from result.
-    Cmp,
-    /// TEST instruction: compute `a & b` and set flags from result.
-    Test,
 }
 
 #[derive(Debug)]

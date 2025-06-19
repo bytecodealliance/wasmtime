@@ -14,7 +14,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::slice;
 use cranelift_assembler_x64 as asm;
-use cranelift_entity::Signed;
+use cranelift_entity::{Signed, Unsigned};
 use smallvec::{SmallVec, smallvec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
@@ -80,7 +80,6 @@ impl Inst {
             | Inst::CheckedSRemSeq { .. }
             | Inst::CheckedSRemSeq8 { .. }
             | Inst::Cmove { .. }
-            | Inst::CmpRmiR { .. }
             | Inst::CvtFloatToSintSeq { .. }
             | Inst::CvtFloatToUintSeq { .. }
             | Inst::CvtUint64ToFloatSeq { .. }
@@ -348,17 +347,15 @@ impl Inst {
         }
     }
 
-    /// Does a comparison of dst - src for operands of size `size`, as stated by the machine
-    /// instruction semantics. Be careful with the order of parameters!
-    pub(crate) fn cmp_rmi_r(size: OperandSize, src1: Reg, src2: RegMemImm) -> Inst {
-        src2.assert_regclass_is(RegClass::Int);
-        debug_assert_eq!(src1.class(), RegClass::Int);
-        Inst::CmpRmiR {
-            size,
-            src1: Gpr::unwrap_new(src1),
-            src2: GprMemImm::unwrap_new(src2),
-            opcode: CmpOpcode::Cmp,
-        }
+    /// Compares `src1` against `src2`
+    pub(crate) fn cmp_mi_sxb(size: OperandSize, src1: Gpr, src2: i8) -> Inst {
+        let inst = match size {
+            OperandSize::Size8 => asm::inst::cmpb_mi::new(src1, src2.unsigned()).into(),
+            OperandSize::Size16 => asm::inst::cmpw_mi_sxb::new(src1, src2).into(),
+            OperandSize::Size32 => asm::inst::cmpl_mi_sxb::new(src1, src2).into(),
+            OperandSize::Size64 => asm::inst::cmpq_mi_sxb::new(src1, src2).into(),
+        };
+        Inst::External { inst }
     }
 
     pub(crate) fn trap_if(cc: CC, trap_code: TrapCode) -> Inst {
@@ -883,22 +880,6 @@ impl PrettyPrint for Inst {
                 let addr = addr.pretty_print(8);
                 let op = ljustify("lea".to_string());
                 format!("{op} {addr}, {dst}")
-            }
-
-            Inst::CmpRmiR {
-                size,
-                src1,
-                src2,
-                opcode,
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), size.to_bytes());
-                let src2 = src2.pretty_print(size.to_bytes());
-                let op = match opcode {
-                    CmpOpcode::Cmp => "cmp",
-                    CmpOpcode::Test => "test",
-                };
-                let op = ljustify2(op.to_string(), suffix_bwlq(*size));
-                format!("{op} {src2}, {src1}")
             }
 
             Inst::Setcc { cc, dst } => {
@@ -1429,10 +1410,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::LoadEffectiveAddress { addr: src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
-        }
-        Inst::CmpRmiR { src1, src2, .. } => {
-            collector.reg_use(src1);
-            src2.get_operands(collector);
         }
         Inst::Setcc { dst, .. } => {
             collector.reg_def(dst);

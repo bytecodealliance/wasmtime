@@ -29,10 +29,10 @@ block0(v0: i128, v1: i8):
 ;   shrq %cl, %rdi
 ;   uninit  %rax
 ;   xorq %rax, %rax
-;   testq   $127, %r8
+;   testq $0x7f, %r8
 ;   cmovzq  %rax, %rdi, %rdi
 ;   orq %rsi, %rdi
-;   testq   $64, %r8
+;   testq $0x40, %r8
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %rdi, %rdx, %rdx
 ;   movq %rbp, %rsp
@@ -86,10 +86,10 @@ block0(v0: i128, v1: i64):
 ;   shrq %cl, %rdi
 ;   uninit  %rax
 ;   xorq %rax, %rax
-;   testq   $127, %r8
+;   testq $0x7f, %r8
 ;   cmovzq  %rax, %rdi, %rdi
 ;   orq %rsi, %rdi
-;   testq   $64, %r8
+;   testq $0x40, %r8
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %rdi, %rdx, %rdx
 ;   movq %rbp, %rsp
@@ -144,10 +144,10 @@ block0(v0: i128, v1: i32):
 ;   shrq %cl, %rdi
 ;   uninit  %rax
 ;   xorq %rax, %rax
-;   testq   $127, %r8
+;   testq $0x7f, %r8
 ;   cmovzq  %rax, %rdi, %rdi
 ;   orq %rsi, %rdi
-;   testq   $64, %r8
+;   testq $0x40, %r8
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %rdi, %rdx, %rdx
 ;   movq %rbp, %rsp
@@ -202,10 +202,10 @@ block0(v0: i128, v1: i16):
 ;   shrq %cl, %rdi
 ;   uninit  %rax
 ;   xorq %rax, %rax
-;   testq   $127, %r8
+;   testq $0x7f, %r8
 ;   cmovzq  %rax, %rdi, %rdi
 ;   orq %rsi, %rdi
-;   testq   $64, %r8
+;   testq $0x40, %r8
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %rdi, %rdx, %rdx
 ;   movq %rbp, %rsp
@@ -260,10 +260,10 @@ block0(v0: i128, v1: i8):
 ;   shrq %cl, %rdi
 ;   uninit  %rax
 ;   xorq %rax, %rax
-;   testq   $127, %r8
+;   testq $0x7f, %r8
 ;   cmovzq  %rax, %rdi, %rdi
 ;   orq %rsi, %rdi
-;   testq   $64, %r8
+;   testq $0x40, %r8
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %rdi, %rdx, %rdx
 ;   movq %rbp, %rsp

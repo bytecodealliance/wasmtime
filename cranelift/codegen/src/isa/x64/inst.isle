@@ -44,12 +44,6 @@
                              (dst WritableGpr)
                              (size OperandSize))
 
-       ;; Integer comparisons/tests: cmp or test (b w l q) (reg addr imm) reg.
-       (CmpRmiR (size OperandSize) ;; 1, 2, 4, or 8
-                (opcode CmpOpcode)
-                (src1 Gpr)
-                (src2 GprMemImm))
-
        ;; Materializes the requested condition code in the destination reg.
        (Setcc (cc CC)
               (dst WritableGpr))
@@ -513,10 +507,6 @@
             Shufps
             Pblendw
           ))
-
-(type CmpOpcode extern
-      (enum Cmp
-            Test))
 
 (type RegMemImm extern
       (enum
@@ -2550,24 +2540,25 @@
 (rule (x64_bswap $I32 src) (x64_bswapl_o src))
 (rule (x64_bswap $I64 src) (x64_bswapq_o src))
 
-;; Helper for creating `MInst.CmpRmiR` instructions.
-(decl cmp_rmi_r (OperandSize CmpOpcode Gpr GprMemImm) ProducesFlags)
-(rule (cmp_rmi_r size opcode src1 src2)
-      (ProducesFlags.ProducesFlagsSideEffect
-       (MInst.CmpRmiR size
-                      opcode
-                      src1
-                      src2)))
-
 ;; Helper for creating `cmp` instructions.
-(decl x64_cmp (OperandSize Gpr GprMemImm) ProducesFlags)
-(rule (x64_cmp size src1 src2)
-      (cmp_rmi_r size (CmpOpcode.Cmp) src1 src2))
+(decl x64_cmp (Type Gpr GprMemImm) ProducesFlags)
 
-;; Helper for creating `cmp` instructions with an immediate.
-(decl x64_cmp_imm (OperandSize Gpr u32) ProducesFlags)
-(rule (x64_cmp_imm size src1 src2)
-      (x64_cmp size src1 (RegMemImm.Imm src2)))
+;; If the rhs is an immediate try to use the 8-bit form if the immediate fits.
+(rule 2 (x64_cmp $I16 src1 (is_simm8 src2)) (x64_cmpw_mi_sxb src1 src2))
+(rule 2 (x64_cmp $I32 src1 (is_simm8 src2)) (x64_cmpl_mi_sxb src1 src2))
+(rule 2 (x64_cmp $I64 src1 (is_simm8 src2)) (x64_cmpq_mi_sxb src1 src2))
+
+;; Base case: rhs is an immediate
+(rule 1 (x64_cmp $I8 src1 (is_imm8 src2)) (x64_cmpb_mi src1 src2))
+(rule 1 (x64_cmp $I16 src1 (is_imm16 src2)) (x64_cmpw_mi src1 src2))
+(rule 1 (x64_cmp $I32 src1 (is_imm32 src2)) (x64_cmpl_mi src1 src2))
+(rule 1 (x64_cmp $I64 src1 (is_simm32 src2)) (x64_cmpq_mi src1 src2))
+
+;; Base case: rhs is a GprMem operand.
+(rule 0 (x64_cmp $I8 src1 (is_gpr_mem src2)) (x64_cmpb_rm src1 src2))
+(rule 0 (x64_cmp $I16 src1 (is_gpr_mem src2)) (x64_cmpw_rm src1 src2))
+(rule 0 (x64_cmp $I32 src1 (is_gpr_mem src2)) (x64_cmpl_rm src1 src2))
+(rule 0 (x64_cmp $I64 src1 (is_gpr_mem src2)) (x64_cmpq_rm src1 src2))
 
 ;; Helper for creating `MInst.XmmCmpRmR` instructions.
 (decl xmm_cmp_rm_r (SseOpcode Xmm XmmMem) ProducesFlags)
@@ -2583,10 +2574,8 @@
 
 ;; Helper for creating floating-point comparison instructions (`UCOMIS[S|D]`).
 (decl x64_ucomis (Type Xmm XmmMem) ProducesFlags)
-(rule (x64_ucomis $F32 src1 src2)
-      (asm_produce_flags_side_effect (x64_ucomiss_a_raw src1 src2)))
-(rule (x64_ucomis $F64 src1 src2)
-      (asm_produce_flags_side_effect (x64_ucomisd_a_raw src1 src2)))
+(rule (x64_ucomis $F32 src1 src2) (x64_ucomiss_a src1 src2))
+(rule (x64_ucomis $F64 src1 src2) (x64_ucomisd_a src1 src2))
 (rule 1 (x64_ucomis $F32 src1 src2)
         (if-let true (use_avx))
         (xmm_cmp_rm_r_vex (AvxOpcode.Vucomiss) src1 src2))
@@ -2595,9 +2584,17 @@
         (xmm_cmp_rm_r_vex (AvxOpcode.Vucomisd) src1 src2))
 
 ;; Helper for creating `test` instructions.
-(decl x64_test (OperandSize Gpr GprMemImm) ProducesFlags)
-(rule (x64_test size src1 src2)
-      (cmp_rmi_r size (CmpOpcode.Test) src1 src2))
+(decl x64_test (Type Gpr GprMemImm) ProducesFlags)
+
+(rule 1 (x64_test $I8 src1 (is_imm8 src2)) (x64_testb_mi src1 src2))
+(rule 1 (x64_test $I16 src1 (is_imm16 src2)) (x64_testw_mi src1 src2))
+(rule 1 (x64_test $I32 src1 (is_imm32 src2)) (x64_testl_mi src1 src2))
+(rule 1 (x64_test $I64 src1 (is_simm32 src2)) (x64_testq_mi src1 src2))
+
+(rule 0 (x64_test $I8 src1 (is_gpr_mem src2)) (x64_testb_mr src2 src1))
+(rule 0 (x64_test $I16 src1 (is_gpr_mem src2)) (x64_testw_mr src2 src1))
+(rule 0 (x64_test $I32 src1 (is_gpr_mem src2)) (x64_testl_mr src2 src1))
+(rule 0 (x64_test $I64 src1 (is_gpr_mem src2)) (x64_testq_mr src2 src1))
 
 ;; Helper for creating `ptest` instructions.
 (decl x64_ptest (Xmm XmmMem) ProducesFlags)
@@ -4352,16 +4349,15 @@
 
 (decl trap_if_val (ZeroCond Value TrapCode) SideEffectNoResult)
 (rule (trap_if_val zero_cond a @ (value_type (fits_in_64 ty)) tc)
-  (let ((size OperandSize (raw_operand_size_of_type ty))
-        (a Gpr (put_in_reg a))
-        (producer ProducesFlags (x64_test size a a)))
+  (let ((a Gpr (put_in_reg a))
+        (producer ProducesFlags (x64_test ty a a)))
         (with_flags_side_effect producer (trap_if (zero_cond_to_cc zero_cond) tc))))
 
 (rule 1 (trap_if_val zero_cond a @ (value_type $I128) tc)
   (let ((a_lo Gpr (value_regs_get_gpr a 0))
         (a_hi Gpr (value_regs_get_gpr a 1))
         (a_or Gpr (x64_or $I64 a_hi a_lo))
-        (producer ProducesFlags (x64_test (OperandSize.Size64) a_or a_or)))
+        (producer ProducesFlags (x64_testq_mr a_or a_or)))
         (with_flags_side_effect producer (trap_if (zero_cond_to_cc zero_cond) tc))))
 
 ;; Helper for creating `movddup` instructions
@@ -4489,26 +4485,22 @@
 ;; For GPR-held values we only need to emit `CMP + SETCC`. We rely here on
 ;; Cranelift's verification that `a` and `b` are of the same type.
 (rule 0 (emit_cmp cc a @ (value_type ty) b)
-      (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (icmp_cond_result (x64_cmp size a b) cc)))
+        (icmp_cond_result (x64_cmp ty a b) cc))
 
 ;; As a special case, swap the arguments to the comparison when the LHS is a
 ;; constant. This ensures that we avoid moving the constant into a register when
 ;; performing the comparison.
 (rule 1 (emit_cmp cc (and (simm32_from_value a) (value_type ty)) b)
-      (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (icmp_cond_result (x64_cmp size b a) (intcc_swap_args cc))))
+        (icmp_cond_result (x64_cmp ty b a) (intcc_swap_args cc)))
 
 ;; Special case: use the test instruction for comparisons with 0.
 (rule 2 (emit_cmp cc a @ (value_type ty) (u64_from_iconst 0))
-      (let ((size OperandSize (raw_operand_size_of_type ty))
-            (a Gpr (put_in_reg a)))
-        (icmp_cond_result (x64_test size a a) cc)))
+      (let ((a Gpr (put_in_reg a)))
+        (icmp_cond_result (x64_test ty a a) cc)))
 
 (rule 3 (emit_cmp cc (u64_from_iconst 0) b @ (value_type ty))
-      (let ((size OperandSize (raw_operand_size_of_type ty))
-            (b Gpr (put_in_reg b)))
-        (icmp_cond_result (x64_test size b b) (intcc_swap_args cc))))
+      (let ((b Gpr (put_in_reg b)))
+        (icmp_cond_result (x64_test ty b b) (intcc_swap_args cc))))
 
 ;; For I128 values (held in two GPRs), the instruction sequences depend on what
 ;; kind of condition is tested.
@@ -4545,7 +4537,7 @@
 (rule 0 (emit_cmp_i128 cc a_hi a_lo b_hi b_lo)
         (icmp_cond_result
           (produces_flags_concat
-            (x64_cmp (OperandSize.Size64) a_lo b_lo)
+            (x64_cmpq_rm a_lo b_lo)
             (x64_produce_flags_side_effect (ProduceFlagsSideEffectOp.Sbb) $I64 a_hi b_hi))
           cc))
 
