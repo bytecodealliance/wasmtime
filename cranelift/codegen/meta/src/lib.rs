@@ -87,6 +87,8 @@ fn generate_isle_for_shared_defs(
     gen_isle::generate(
         &shared_defs.all_formats,
         &shared_defs.all_instructions,
+        "numerics.isle",
+        "isle_numerics.rs",
         "clif_opt.isle",
         "clif_lower.isle",
         isle_dir,

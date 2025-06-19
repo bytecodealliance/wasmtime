@@ -555,17 +555,7 @@ fn pulley_emit<P>(
             *start_offset = sink.cur_offset();
         }
 
-        Inst::Raw { raw } => {
-            match raw {
-                RawInst::PushFrame
-                | RawInst::StackAlloc32 { .. }
-                | RawInst::PushFrameSave { .. } => {
-                    sink.add_trap(ir::TrapCode::STACK_OVERFLOW);
-                }
-                _ => {}
-            }
-            super::generated::emit(raw, sink)
-        }
+        Inst::Raw { raw } => super::generated::emit(raw, sink),
 
         Inst::EmitIsland { space_needed } => {
             if sink.island_needed(*space_needed) {

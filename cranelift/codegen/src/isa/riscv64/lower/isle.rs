@@ -434,10 +434,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         UImm5::maybe_from_u8(frm.bits()).unwrap()
     }
 
-    fn u8_as_i32(&mut self, x: u8) -> i32 {
-        x as i32
-    }
-
     fn imm12_const(&mut self, val: i32) -> Imm12 {
         if let Some(res) = Imm12::maybe_from_i64(val as i64) {
             res

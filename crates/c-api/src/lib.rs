@@ -66,6 +66,11 @@ mod wasi;
 #[cfg(feature = "wasi")]
 pub use crate::wasi::*;
 
+#[cfg(all(feature = "component-model", feature = "wasi"))]
+mod wasip2;
+#[cfg(all(feature = "component-model", feature = "wasi"))]
+pub use crate::wasip2::*;
+
 #[cfg(feature = "wat")]
 mod wat2wasm;
 #[cfg(feature = "wat")]

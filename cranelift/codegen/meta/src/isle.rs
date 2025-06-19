@@ -59,6 +59,7 @@ pub fn get_isle_compilations(
     gen_dir: &std::path::Path,
 ) -> IsleCompilations {
     // Preludes.
+    let numerics_isle = gen_dir.join("numerics.isle");
     let clif_lower_isle = gen_dir.join("clif_lower.isle");
     let clif_opt_isle = gen_dir.join("clif_opt.isle");
     let prelude_isle = codegen_crate_dir.join("src").join("prelude.isle");
@@ -116,7 +117,7 @@ pub fn get_isle_compilations(
                     src_opts.join("spectre.isle"),
                     src_opts.join("vector.isle"),
                 ],
-                untracked_inputs: vec![clif_opt_isle],
+                untracked_inputs: vec![numerics_isle.clone(), clif_opt_isle],
             },
             // The x86-64 instruction selector.
             IsleCompilation {
@@ -128,7 +129,11 @@ pub fn get_isle_compilations(
                     src_isa_x64.join("inst.isle"),
                     src_isa_x64.join("lower.isle"),
                 ],
-                untracked_inputs: vec![clif_lower_isle.clone(), gen_dir.join("assembler.isle")],
+                untracked_inputs: vec![
+                    numerics_isle.clone(),
+                    clif_lower_isle.clone(),
+                    gen_dir.join("assembler.isle"),
+                ],
             },
             // The aarch64 instruction selector.
             IsleCompilation {
@@ -142,7 +147,7 @@ pub fn get_isle_compilations(
                     src_isa_aarch64.join("lower.isle"),
                     src_isa_aarch64.join("lower_dynamic_neon.isle"),
                 ],
-                untracked_inputs: vec![clif_lower_isle.clone()],
+                untracked_inputs: vec![numerics_isle.clone(), clif_lower_isle.clone()],
             },
             // The s390x instruction selector.
             IsleCompilation {
@@ -154,7 +159,7 @@ pub fn get_isle_compilations(
                     src_isa_s390x.join("inst.isle"),
                     src_isa_s390x.join("lower.isle"),
                 ],
-                untracked_inputs: vec![clif_lower_isle.clone()],
+                untracked_inputs: vec![numerics_isle.clone(), clif_lower_isle.clone()],
             },
             // The risc-v instruction selector.
             IsleCompilation {
@@ -167,7 +172,7 @@ pub fn get_isle_compilations(
                     src_isa_risc_v.join("inst_vector.isle"),
                     src_isa_risc_v.join("lower.isle"),
                 ],
-                untracked_inputs: vec![clif_lower_isle.clone()],
+                untracked_inputs: vec![numerics_isle.clone(), clif_lower_isle.clone()],
             },
             // The Pulley instruction selector.
             #[cfg(feature = "pulley")]
@@ -180,7 +185,11 @@ pub fn get_isle_compilations(
                     src_isa_pulley_shared.join("inst.isle"),
                     src_isa_pulley_shared.join("lower.isle"),
                 ],
-                untracked_inputs: vec![pulley_gen.clone(), clif_lower_isle.clone()],
+                untracked_inputs: vec![
+                    numerics_isle.clone(),
+                    pulley_gen.clone(),
+                    clif_lower_isle.clone(),
+                ],
             },
         ],
     }

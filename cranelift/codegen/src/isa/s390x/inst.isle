@@ -1587,17 +1587,6 @@
       (if (i64_nonequal x -1))
       x)
 
-;; Integer type casts (with the rust `as` semantics).
-
-(decl u8_as_u16 (u8) u16)
-(extern constructor u8_as_u16 u8_as_u16)
-
-(decl u64_truncate_to_u32 (u64) u32)
-(extern constructor u64_truncate_to_u32 u64_truncate_to_u32)
-
-(decl u64_as_i16 (u64) i16)
-(extern constructor u64_as_i16 u64_as_i16)
-
 ;; Construct and extract immediate vector constants.
 
 (decl u64_pair (u64 u64) u128)
@@ -1651,15 +1640,6 @@
 (extern extractor u64_nonzero_lopart u64_nonzero_lopart)
 
 ;; Extract smaller integer type from u64 if it matches.
-
-(decl i32_from_u64 (i32) u64)
-(extern extractor i32_from_u64 i32_from_u64)
-
-(decl i16_from_u64 (i16) u64)
-(extern extractor i16_from_u64 i16_from_u64)
-
-(decl i16_from_u32 (i16) u32)
-(extern extractor i16_from_u32 i16_from_u32)
 
 (decl uimm32shifted_from_u64 (UImm32Shifted) u64)
 (extern extractor uimm32shifted_from_u64 uimm32shifted_from_u64)
@@ -1733,7 +1713,7 @@
 (decl mask_amt_reg (Type Reg) Reg)
 (rule (mask_amt_reg (gpr32_ty ty) reg)
       (let ((mask u8 (mask_amt_imm ty -1)))
-        (and_uimm16shifted ty reg (uimm16shifted (u8_as_u16 mask) 0))))
+        (and_uimm16shifted ty reg (uimm16shifted mask 0))))
 (rule 1 (mask_amt_reg (gpr64_ty ty) reg) reg)
 
 ;; Load a shift amount into a GPR.
@@ -2890,11 +2870,12 @@
 ;; 16-bit (or smaller) result type, any value
 (rule 7 (imm (fits_in_16 (ty_int ty)) n)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.Mov32SImm16 dst (u64_as_i16 n)))))
+            (_ Unit (emit (MInst.Mov32SImm16 dst (u16_cast_signed (u64_truncate_into_u16 n))))))
         dst))
 
 ;; 32-bit result type, value fits in i16
-(rule 6 (imm (gpr32_ty ty) (u32_pair _ (i16_from_u32 n)))
+(rule 6 (imm (gpr32_ty ty) (u32_pair _ m))
+      (if-let (i16_from_i32 n) (u32_cast_signed m))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov32SImm16 dst n))))
         dst))
@@ -2902,17 +2883,19 @@
 ;; 32-bit result type, any value
 (rule 5 (imm (gpr32_ty ty) n)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.Mov32Imm dst (u64_truncate_to_u32 n)))))
+            (_ Unit (emit (MInst.Mov32Imm dst (u64_truncate_into_u32 n)))))
         dst))
 
 ;; 64-bit result type, value fits in i16
-(rule 4 (imm (gpr64_ty ty) (i16_from_u64 n))
+(rule 4 (imm (gpr64_ty ty) m)
+      (if-let (i16_from_i64 n) (u64_cast_signed m))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64SImm16 dst n))))
         dst))
 
 ;; 64-bit result type, value fits in i32
-(rule 3 (imm (gpr64_ty ty) (i32_from_u64 n))
+(rule 3 (imm (gpr64_ty ty) m)
+      (if-let (i32_from_i64 n) (u64_cast_signed m))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64SImm32 dst n))))
         dst))
@@ -2951,14 +2934,16 @@
 
 ;; 16-bit floating-point type, any value.
 (rule 8 (imm $F16 n)
-      (vec_insert_lane_imm_undef $F16X8 (u64_as_i16 n) 0))
+      (vec_insert_lane_imm_undef $F16X8
+                                 (u16_cast_signed (u64_truncate_into_u16 n))
+                                 0))
 
 ;; 32-bit floating-point type, any value.  Loaded from literal pool.
 ;; FIXME: This wastes 4 bytes of constant pool space.
 ;; TODO: use LZER to load 0.0
 (rule 8 (imm $F32 n)
       (vec_load_lane_undef $F32X4
-        (memarg_const (emit_u64_be_const (u32_pair (u64_truncate_to_u32 n) 0))) 0))
+        (memarg_const (emit_u64_be_const (u32_pair (u64_truncate_into_u32 n) 0))) 0))
 
 ;; 64-bit floating-point type, any value.  Loaded from literal pool.
 ;; TODO: use LZDR to load 0.0
@@ -2986,23 +2971,25 @@
 (rule 1 (vec_imm_splat (ty_vec128 ty) 0)
       (vec_imm_byte_mask ty 0))
 (rule 2 (vec_imm_splat ty @ (multi_lane 8 _) n)
-      (vec_imm_replicate ty (u64_as_i16 n)))
+      (vec_imm_replicate ty (u16_cast_signed (u64_truncate_into_u16 n))))
 (rule 2 (vec_imm_splat ty @ (multi_lane 16 _) n)
-      (vec_imm_replicate ty (u64_as_i16 n)))
-(rule 2 (vec_imm_splat ty @ (multi_lane 32 _) (u32_pair _ (i16_from_u32 n)))
+      (vec_imm_replicate ty (u16_cast_signed (u64_truncate_into_u16 n))))
+(rule 2 (vec_imm_splat ty @ (multi_lane 32 _) (u32_pair _ m))
+      (if-let (i16_from_i32 n) (u32_cast_signed m))
       (vec_imm_replicate ty n))
-(rule 2 (vec_imm_splat ty @ (multi_lane 64 _) (i16_from_u64 n))
+(rule 2 (vec_imm_splat ty @ (multi_lane 64 _) m)
+      (if-let (i16_from_i64 n) (u64_cast_signed m))
       (vec_imm_replicate ty n))
 (rule 3 (vec_imm_splat (multi_lane 16 _) (u32_pair _ (u16_pair _ (u8_pair n n))))
-      (vec_imm_splat $I8X16 (u8_as_u64 n)))
+      (vec_imm_splat $I8X16 n))
 (rule 3 (vec_imm_splat (multi_lane 32 _) (u32_pair _ (u16_pair n n)))
-      (vec_imm_splat $I16X8 (u16_as_u64 n)))
+      (vec_imm_splat $I16X8 n))
 (rule 3 (vec_imm_splat (multi_lane 64 _) (u32_pair n n))
-      (vec_imm_splat $I32X4 (u32_as_u64 n)))
+      (vec_imm_splat $I32X4 n))
 ;; FIXME: This wastes 4 bytes of constant pool space.
 (rule 0 (vec_imm_splat ty @ (multi_lane 32 _) n)
       (vec_load_replicate ty
-        (memarg_const (emit_u64_be_const (u32_pair (u64_truncate_to_u32 n) 0)))))
+        (memarg_const (emit_u64_be_const (u32_pair (u64_truncate_into_u32 n) 0)))))
 (rule 0 (vec_imm_splat ty @ (multi_lane 64 _) n)
       (vec_load_replicate ty (memarg_const (emit_u64_be_const n))))
 

@@ -38,7 +38,7 @@ ort = { version = "2.0.0-rc.2", default-features = false, features = [
 tch = { version = "0.17.0", default-features = false, optional = true}
 
 [target.'cfg(target_pointer_width = "64")'.dependencies]
-openvino = { version = "0.8.0", features = [
+openvino = { version = "0.9.0", features = [
     "runtime-linking",
 ], optional = true }
 

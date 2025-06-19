@@ -473,6 +473,7 @@ fn trap(vm: &mut Vm, pc: NonNull<u8>, kind: Option<TrapKind>, setjmp: Setjmp) {
                     TrapKind::BadConversionToInteger => Trap::BadConversionToInteger,
                     TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds,
                     TrapKind::DisabledOpcode => Trap::DisabledOpcode,
+                    TrapKind::StackOverflow => Trap::StackOverflow,
                 };
                 s.set_jit_trap(regs, None, trap);
             }

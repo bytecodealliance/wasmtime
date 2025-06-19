@@ -3,8 +3,8 @@
 // Pull in the ISLE generated code.
 pub mod generated_code;
 
-use crate::ir::ExternalName;
 // Types that the generated ISLE code uses via `use super::*`.
+use crate::ir::ExternalName;
 use crate::isa::s390x::S390xBackend;
 use crate::isa::s390x::abi::REG_SAVE_AREA_SIZE;
 use crate::isa::s390x::inst::{
@@ -337,21 +337,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     }
 
     #[inline]
-    fn u8_as_u16(&mut self, n: u8) -> u16 {
-        n as u16
-    }
-
-    #[inline]
-    fn u64_truncate_to_u32(&mut self, n: u64) -> u32 {
-        n as u32
-    }
-
-    #[inline]
-    fn u64_as_i16(&mut self, n: u64) -> i16 {
-        n as i16
-    }
-
-    #[inline]
     fn u64_nonzero_hipart(&mut self, n: u64) -> Option<u64> {
         let part = n & 0xffff_ffff_0000_0000;
         if part != 0 { Some(part) } else { None }
@@ -361,33 +346,6 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     fn u64_nonzero_lopart(&mut self, n: u64) -> Option<u64> {
         let part = n & 0x0000_0000_ffff_ffff;
         if part != 0 { Some(part) } else { None }
-    }
-
-    #[inline]
-    fn i32_from_u64(&mut self, n: u64) -> Option<i32> {
-        if let Ok(imm) = i32::try_from(n as i64) {
-            Some(imm)
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn i16_from_u64(&mut self, n: u64) -> Option<i16> {
-        if let Ok(imm) = i16::try_from(n as i64) {
-            Some(imm)
-        } else {
-            None
-        }
-    }
-
-    #[inline]
-    fn i16_from_u32(&mut self, n: u32) -> Option<i16> {
-        if let Ok(imm) = i16::try_from(n as i32) {
-            Some(imm)
-        } else {
-            None
-        }
     }
 
     #[inline]

@@ -37,13 +37,6 @@ wildcards = "allow"
 deny = []
 
 skip-tree = [
-    # wit-bindgen and wasmtime both depend on the wasm-tools crates, and
-    # wit-bindgen's latest release may sometimes lag behind when we bump
-    # wasmtime's dependencies on wasm-tools. wit-bindgen is only used for
-    # building component-based test programs, so we are going to ignore
-    # the multiple-versions errors it will introduce.
-    { name = "wit-bindgen", depth = 20 },
-
     # proptest depends on bitflags 1.x.x while other crates depend on 2.x.x so
     # ignore its dependency tree until it updates.
     { name = "proptest", depth = 20 },
@@ -51,10 +44,6 @@ skip-tree = [
     # This is maintained externally and we allow it to have duplicate
     # dependencies relative to Wasmtime's main dependency tree.
     { name = "witx", depth = 20 },
-
-    # The openvino-sys crate uses an older version of `pretty_env_logger` so
-    # ignore its dependency tree for now until it updates.
-    { name = "openvino-sys", depth = 20 },
 
     # They want to publish version 2.0 to upgrade `hashbrown` so in the meantime
     # it is duplicated for us.
@@ -65,4 +54,6 @@ skip-tree = [
 
     # right now terminal_size pulls in an older version of io-lifetimes
     { name = "io-lifetimes" },
+
+    { name = "file-per-thread-logger", reason = "this uses an old version of env-logger; may be unmaintained?" }
 ]

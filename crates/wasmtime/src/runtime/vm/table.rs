@@ -764,9 +764,7 @@ impl Table {
         if delta == 0 {
             return Ok(Some(old_size));
         }
-        // Cannot return `Trap::TableOutOfBounds` here because `impl std::error::Error for Trap` is not available in no-std.
-        let delta =
-            usize::try_from(delta).map_err(|_| format_err!("delta exceeds host pointer size"))?;
+        let delta = usize::try_from(delta).map_err(|_| Trap::TableOutOfBounds)?;
 
         let new_size = match old_size.checked_add(delta) {
             Some(s) => s,
