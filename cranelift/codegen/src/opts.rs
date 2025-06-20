@@ -1,5 +1,7 @@
 //! Optimization driver using ISLE rewrite rules on an egraph.
 
+mod div_const;
+
 use crate::egraph::{NewOrExistingInst, OptimizeCtx};
 pub use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::dfg::ValueDef;
