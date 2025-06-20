@@ -112,11 +112,6 @@
                    (src3 XmmMem)
                    (dst WritableXmm))
 
-       ;; XMM unary op using a VEX encoding (aka AVX).
-       (XmmUnaryRmRVex (op AvxOpcode)
-                       (src XmmMem)
-                       (dst WritableXmm))
-
        ;; XMM (scalar or vector) unary op (from xmm to reg/mem) using the
        ;; VEX prefix
        (XmmMovRMVex (op AvxOpcode)
@@ -876,9 +871,6 @@
             Vmulpd
             Vdivps
             Vdivpd
-            Vpabsb
-            Vpabsw
-            Vpabsd
             Vpcmpeqb
             Vpcmpeqw
             Vpcmpeqd
@@ -920,12 +912,6 @@
             Vpsllq
             Vpsraw
             Vpsrad
-            Vpmovsxbw
-            Vpmovzxbw
-            Vpmovsxwd
-            Vpmovzxwd
-            Vpmovsxdq
-            Vpmovzxdq
             Vaddss
             Vaddsd
             Vmulss
@@ -938,8 +924,6 @@
             Vminsd
             Vmaxss
             Vmaxsd
-            Vsqrtps
-            Vsqrtpd
             Vphaddw
             Vphaddd
             Vpunpckhdq
@@ -956,10 +940,6 @@
             Vpextrd
             Vpextrq
             Vpblendw
-            Vpbroadcastb
-            Vpbroadcastw
-            Vpbroadcastd
-            Vbroadcastss
             Vsqrtss
             Vsqrtsd
             Vucomiss
@@ -1452,13 +1432,6 @@
 (rule (xmm_rm_r_unaligned op src1 src2)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmRUnaligned op src1 src2 dst))))
-        dst))
-
-;; Helper for creating `XmmUnaryRmRVex` instructions
-(decl xmm_unary_rm_r_vex (AvxOpcode XmmMem) Xmm)
-(rule (xmm_unary_rm_r_vex op src)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmRVex op src dst))))
         dst))
 
 ;; Helper for creating `MInst.XmmRmRImm` instructions.

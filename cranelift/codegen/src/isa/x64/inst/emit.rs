@@ -1458,65 +1458,6 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
-        Inst::XmmUnaryRmRVex { op, src, dst } => {
-            let dst = dst.to_reg().to_reg();
-            let src = match src.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let (prefix, map, opcode) = match op {
-                AvxOpcode::Vpmovsxbw => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x20),
-                AvxOpcode::Vpmovzxbw => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x30),
-                AvxOpcode::Vpmovsxwd => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x23),
-                AvxOpcode::Vpmovzxwd => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x33),
-                AvxOpcode::Vpmovsxdq => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x25),
-                AvxOpcode::Vpmovzxdq => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x35),
-                AvxOpcode::Vpabsb => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x1C),
-                AvxOpcode::Vpabsw => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x1D),
-                AvxOpcode::Vpabsd => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x1E),
-                AvxOpcode::Vsqrtps => (LegacyPrefixes::None, OpcodeMap::_0F, 0x51),
-                AvxOpcode::Vsqrtpd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x51),
-                AvxOpcode::Vmovdqu => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x6F),
-                AvxOpcode::Vmovups => (LegacyPrefixes::None, OpcodeMap::_0F, 0x10),
-                AvxOpcode::Vmovupd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x10),
-
-                // Note that for `vmov{s,d}` the `inst.isle` rules should
-                // statically ensure that only `Amode` operands are used here.
-                // Otherwise the other encodings of `vmovss` are more like
-                // 2-operand instructions which this unary encoding does not
-                // have.
-                AvxOpcode::Vmovss => match &src {
-                    RegisterOrAmode::Amode(_) => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x10),
-                    _ => unreachable!(),
-                },
-                AvxOpcode::Vmovsd => match &src {
-                    RegisterOrAmode::Amode(_) => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x10),
-                    _ => unreachable!(),
-                },
-
-                AvxOpcode::Vpbroadcastb => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x78),
-                AvxOpcode::Vpbroadcastw => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x79),
-                AvxOpcode::Vpbroadcastd => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x58),
-                AvxOpcode::Vbroadcastss => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x18),
-
-                _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),
-            };
-
-            VexInstruction::new()
-                .length(VexVectorLength::V128)
-                .prefix(prefix)
-                .map(map)
-                .opcode(opcode)
-                .reg(dst.to_real_reg().unwrap().hw_enc())
-                .rm(src)
-                .encode(sink);
-        }
-
         Inst::XmmMovRMVex { op, src, dst } => {
             let src = src.to_reg();
             let dst = dst.clone().finalize(state.frame_layout(), sink);

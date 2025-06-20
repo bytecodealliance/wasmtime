@@ -1035,12 +1035,6 @@ impl AvxOpcode {
             | AvxOpcode::Vpsllq
             | AvxOpcode::Vpsraw
             | AvxOpcode::Vpsrad
-            | AvxOpcode::Vpmovsxbw
-            | AvxOpcode::Vpmovzxbw
-            | AvxOpcode::Vpmovsxwd
-            | AvxOpcode::Vpmovzxwd
-            | AvxOpcode::Vpmovsxdq
-            | AvxOpcode::Vpmovzxdq
             | AvxOpcode::Vaddss
             | AvxOpcode::Vaddsd
             | AvxOpcode::Vmulss
@@ -1049,15 +1043,10 @@ impl AvxOpcode {
             | AvxOpcode::Vsubsd
             | AvxOpcode::Vdivss
             | AvxOpcode::Vdivsd
-            | AvxOpcode::Vpabsb
-            | AvxOpcode::Vpabsw
-            | AvxOpcode::Vpabsd
             | AvxOpcode::Vminss
             | AvxOpcode::Vminsd
             | AvxOpcode::Vmaxss
             | AvxOpcode::Vmaxsd
-            | AvxOpcode::Vsqrtps
-            | AvxOpcode::Vsqrtpd
             | AvxOpcode::Vphaddw
             | AvxOpcode::Vphaddd
             | AvxOpcode::Vpunpckldq
@@ -1074,7 +1063,6 @@ impl AvxOpcode {
             | AvxOpcode::Vpextrd
             | AvxOpcode::Vpextrq
             | AvxOpcode::Vpblendw
-            | AvxOpcode::Vbroadcastss
             | AvxOpcode::Vsqrtss
             | AvxOpcode::Vsqrtsd
             | AvxOpcode::Vunpcklpd
@@ -1082,10 +1070,6 @@ impl AvxOpcode {
             | AvxOpcode::Vucomiss
             | AvxOpcode::Vucomisd => {
                 smallvec![InstructionSet::AVX]
-            }
-
-            AvxOpcode::Vpbroadcastb | AvxOpcode::Vpbroadcastw | AvxOpcode::Vpbroadcastd => {
-                smallvec![InstructionSet::AVX2]
             }
         }
     }
