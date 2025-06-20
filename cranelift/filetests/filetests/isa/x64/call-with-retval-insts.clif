@@ -44,41 +44,41 @@ block0(v0: i32):
 ;   movq %r15, 0x120(%rsp)
 ; block0:
 ;   movq %rdi, %rsi
-;   lea     0(%rsp), %rdi
+;   leaq (%rsp), %rdi
 ;   load_ext_name %ext+0, %r10
 ;   call    *%r10
-;   lea     0(%rax,%rdx,1), %r8
-;   lea     0(%rbx,%r15,1), %r9
-;   lea     0(%r13,%r12,1), %r10
+;   leaq (%rax, %rdx), %r8
+;   leaq (%rbx, %r15), %r9
+;   leaq (%r13, %r12), %r10
 ;   movq <offset:1>+(%rsp), %rcx
-;   lea     0(%rcx,%r14,1), %r11
+;   leaq (%rcx, %r14), %r11
 ;   movq <offset:1>+8(%rsp), %rcx
 ;   movq <offset:1>+0x10(%rsp), %rdi
-;   lea     0(%rcx,%rdi,1), %rsi
+;   leaq (%rcx, %rdi), %rsi
 ;   movq <offset:1>+0x20(%rsp), %rdx
 ;   movq <offset:1>+0x18(%rsp), %rdi
-;   lea     0(%rdi,%rdx,1), %rdi
+;   leaq (%rdi, %rdx), %rdi
 ;   movq <offset:1>+0x28(%rsp), %rax
 ;   movq <offset:1>+0x30(%rsp), %rcx
-;   lea     0(%rax,%rcx,1), %rax
+;   leaq (%rax, %rcx), %rax
 ;   movq <offset:1>+0x40(%rsp), %rcx
 ;   movq <offset:1>+0x38(%rsp), %rdx
-;   lea     0(%rdx,%rcx,1), %rcx
+;   leaq (%rdx, %rcx), %rcx
 ;   movq <offset:1>+0x50(%rsp), %rdx
 ;   movq <offset:1>+0x48(%rsp), %r14
-;   lea     0(%r14,%rdx,1), %rdx
+;   leaq (%r14, %rdx), %rdx
 ;   movq <offset:1>+0x60(%rsp), %rbx
 ;   movq <offset:1>+0x58(%rsp), %r13
-;   lea     0(%r13,%rbx,1), %r14
-;   lea     0(%r8,%r9,1), %r8
-;   lea     0(%r10,%r11,1), %r9
-;   lea     0(%rsi,%rdi,1), %r10
-;   lea     0(%rax,%rcx,1), %r11
-;   lea     0(%rdx,%r14,1), %rsi
-;   lea     0(%r8,%r9,1), %r8
-;   lea     0(%r10,%r11,1), %r9
-;   lea     0(%rsi,%r8,1), %r8
-;   lea     0(%r9,%r8,1), %rax
+;   leaq (%r13, %rbx), %r14
+;   leaq (%r8, %r9), %r8
+;   leaq (%r10, %r11), %r9
+;   leaq (%rsi, %rdi), %r10
+;   leaq (%rax, %rcx), %r11
+;   leaq (%rdx, %r14), %rsi
+;   leaq (%r8, %r9), %r8
+;   leaq (%r10, %r11), %r9
+;   leaq (%rsi, %r8), %r8
+;   leaq (%r9, %r8), %rax
 ;   movq 0x100(%rsp), %rbx
 ;   movq 0x108(%rsp), %r12
 ;   movq 0x110(%rsp), %r13

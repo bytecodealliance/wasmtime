@@ -212,8 +212,8 @@ pub(crate) fn emit(
             // Here the `idiv` is executed, which is different depending on the
             // size
             sink.bind_label(do_op, state.ctrl_plane_mut());
-            let rax = Gpr::unwrap_new(regs::rax());
-            let rdx = Gpr::unwrap_new(regs::rdx());
+            let rax = Gpr::RAX;
+            let rdx = Gpr::RDX;
             let writable_rax = Writable::from_reg(rax);
             let writable_rdx = Writable::from_reg(rdx);
             let inst: AsmInst = match size {
@@ -264,88 +264,6 @@ pub(crate) fn emit(
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&dst));
             let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
             asm::inst::movq_mr::new(dst, *src).emit(sink, info, state);
-        }
-
-        Inst::LoadEffectiveAddress { addr, dst, size } => {
-            let dst = dst.to_reg().to_reg();
-            let amode = addr.finalize(state.frame_layout(), sink).clone();
-
-            // If this `lea` can actually get encoded as an `add` then do that
-            // instead. Currently all candidate `iadd`s become an `lea`
-            // pseudo-instruction here but maximizing the use of `lea` is not
-            // necessarily optimal. The `lea` instruction goes through dedicated
-            // address units on cores which are finite and disjoint from the
-            // general ALU, so if everything uses `lea` then those units can get
-            // saturated while leaving the ALU idle.
-            //
-            // To help make use of more parts of a CPU, this attempts to use
-            // `add` when it's semantically equivalent to `lea`, or otherwise
-            // when the `dst` register is the same as the `base` or `index`
-            // register.
-            //
-            // FIXME: ideally regalloc is informed of this constraint. Register
-            // allocation of `lea` should "attempt" to put the `base` in the
-            // same register as `dst` but not at the expense of generating a
-            // `mov` instruction. Currently that's not possible but perhaps one
-            // day it may be worth it.
-            match amode {
-                // If `base == dst` then this is `add $imm, %dst`, so encode
-                // that instead.
-                Amode::ImmReg {
-                    simm32,
-                    base,
-                    flags: _,
-                } if base == dst => {
-                    let dst = Writable::from_reg(dst);
-                    let inst = match size {
-                        OperandSize::Size32 => Inst::External {
-                            inst: asm::inst::addl_mi::new(dst, simm32 as u32).into(),
-                        },
-                        OperandSize::Size64 => Inst::addq_mi(dst, simm32),
-                        _ => unreachable!(),
-                    };
-                    inst.emit(sink, info, state);
-                }
-                // If the offset is 0 and the shift is 0 (meaning multiplication
-                // by 1) then:
-                //
-                // * If `base == dst`, then this is `add %index, %base`
-                // * If `index == dst`, then this is `add %base, %index`
-                //
-                // Encode the appropriate instruction here in that case.
-                Amode::ImmRegRegShift {
-                    simm32: 0,
-                    base,
-                    index,
-                    shift: 0,
-                    flags: _,
-                } if base == dst || index == dst => {
-                    let (dst, operand) = if base == dst {
-                        (base, index)
-                    } else {
-                        (index, base)
-                    };
-                    let dst = Writable::from_reg(dst);
-                    let inst: AsmInst = match size {
-                        OperandSize::Size32 => asm::inst::addl_rm::new(dst, operand).into(),
-                        OperandSize::Size64 => asm::inst::addq_rm::new(dst, operand).into(),
-                        _ => unreachable!(),
-                    };
-                    inst.emit(sink, info, state);
-                }
-
-                // If `lea`'s 3-operand mode is leveraged by regalloc, or if
-                // it's fancy like imm-plus-shift-plus-base, then `lea` is
-                // actually emitted.
-                _ => {
-                    let flags = match size {
-                        OperandSize::Size32 => RexFlags::clear_w(),
-                        OperandSize::Size64 => RexFlags::set_w(),
-                        _ => unreachable!(),
-                    };
-                    emit_std_reg_mem(sink, LegacyPrefixes::None, 0x8D, 1, dst, &amode, flags, 0);
-                }
-            };
         }
 
         Inst::Setcc { cc, dst } => {
@@ -477,13 +395,13 @@ pub(crate) fn emit(
             // Probe the stack! We don't use Inst::gen_store_stack here because we need a predictable
             // instruction size.
             // mov  [rsp], rsp
-            asm::inst::movl_mr::new(Amode::imm_reg(0, regs::rsp()), Gpr::unwrap_new(regs::rsp()))
+            asm::inst::movl_mr::new(Amode::imm_reg(0, regs::rsp()), Gpr::RSP)
                 .emit(sink, info, state);
 
             // Compare and jump if we are not done yet
             // cmp  rsp, tmp_reg
             let tmp = Gpr::unwrap_new(tmp.to_reg());
-            asm::inst::cmpq_rm::new(tmp, Gpr::unwrap_new(regs::rsp())).emit(sink, info, state);
+            asm::inst::cmpq_rm::new(tmp, Gpr::RSP).emit(sink, info, state);
 
             // jne  .loop_start
             // TODO: Encoding the conditional jump as a short jump
@@ -733,8 +651,7 @@ pub(crate) fn emit(
             asm::inst::movq_rm::new(tmp1, addr).emit(sink, info, state);
 
             let amode = Amode::RipRelative { target: resume };
-            let inst = Inst::lea(amode, tmp2.map(Reg::from));
-            inst.emit(sink, info, state);
+            asm::inst::leaq_rm::new(tmp2, amode).emit(sink, info, state);
 
             asm::inst::movq_mr::new(
                 Amode::imm_reg(pc_offset, **store_context_ptr),
@@ -939,8 +856,8 @@ pub(crate) fn emit(
 
             // Load base address of jump table.
             let start_of_jumptable = sink.get_label();
-            let inst = Inst::lea(Amode::rip_relative(start_of_jumptable), tmp1);
-            inst.emit(sink, info, state);
+            asm::inst::leaq_rm::new(tmp1, Amode::rip_relative(start_of_jumptable))
+                .emit(sink, info, state);
 
             // Load value out of the jump table. It's a relative offset to the target block, so it
             // might be negative; use a sign-extension.
@@ -2694,7 +2611,7 @@ pub(crate) fn emit(
                 i32::try_from(frame.tail_args_size + frame.setup_area_size).unwrap();
             known_offsets[usize::from(external::offsets::KEY_SLOT_OFFSET)] =
                 i32::try_from(frame.outgoing_args_size).unwrap();
-            inst.encode(sink, &known_offsets);
+            emit_maybe_shrink(inst, sink, &known_offsets);
         }
     }
 
@@ -2772,5 +2689,295 @@ where
 {
     fn emit(self, sink: &mut MachBuffer<Inst>, info: &EmitInfo, state: &mut EmitState) {
         Inst::External { inst: self.into() }.emit(sink, info, state)
+    }
+}
+
+/// Attempt to "shrink" the provided `inst`.
+///
+/// This function will inspect `inst` and attempt to return a new instruction
+/// which is equivalent semantically but will encode to a smaller binary
+/// representation. This is only done for instructions which require register
+/// allocation to have already happened, for example shrinking immediates should
+/// be done during instruction selection not at this point.
+///
+/// An example of this optimization is the `AND` instruction. The Intel manual
+/// has a smaller encoding for `AND AL, imm8` than it does for `AND r/m8, imm8`.
+/// Here the instructions are matched against and if regalloc state indicates
+/// that a smaller variant is available then that's swapped to instead.
+fn emit_maybe_shrink(inst: &AsmInst, sink: &mut MachBuffer<Inst>, table: &[i32; 2]) {
+    use cranelift_assembler_x64::GprMem;
+    use cranelift_assembler_x64::inst::*;
+
+    type R = CraneliftRegisters;
+    const RAX: PairedGpr = PairedGpr {
+        read: Gpr::RAX,
+        write: Writable::from_reg(Gpr::RAX),
+    };
+    const RAX_RM: GprMem<PairedGpr, Gpr> = GprMem::Gpr(RAX);
+
+    match *inst {
+        // and
+        Inst::andb_mi(andb_mi { rm8: RAX_RM, imm8 }) => {
+            andb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::andw_mi(andw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => andw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::andl_mi(andl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => andl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::andq_mi_sxl(andq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => andq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // or
+        Inst::orb_mi(orb_mi { rm8: RAX_RM, imm8 }) => {
+            orb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::orw_mi(orw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => orw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::orl_mi(orl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => orl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::orq_mi_sxl(orq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => orq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // xor
+        Inst::xorb_mi(xorb_mi { rm8: RAX_RM, imm8 }) => {
+            xorb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::xorw_mi(xorw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => xorw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::xorl_mi(xorl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => xorl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::xorq_mi_sxl(xorq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => xorq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // add
+        Inst::addb_mi(addb_mi { rm8: RAX_RM, imm8 }) => {
+            addb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::addw_mi(addw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => addw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::addl_mi(addl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => addl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::addq_mi_sxl(addq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => addq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // adc
+        Inst::adcb_mi(adcb_mi { rm8: RAX_RM, imm8 }) => {
+            adcb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::adcw_mi(adcw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => adcw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::adcl_mi(adcl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => adcl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::adcq_mi_sxl(adcq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => adcq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // sub
+        Inst::subb_mi(subb_mi { rm8: RAX_RM, imm8 }) => {
+            subb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::subw_mi(subw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => subw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::subl_mi(subl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => subl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::subq_mi_sxl(subq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => subq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // sbb
+        Inst::sbbb_mi(sbbb_mi { rm8: RAX_RM, imm8 }) => {
+            sbbb_i::<R>::new(RAX, imm8).encode(sink, table)
+        }
+        Inst::sbbw_mi(sbbw_mi {
+            rm16: RAX_RM,
+            imm16,
+        }) => sbbw_i::<R>::new(RAX, imm16).encode(sink, table),
+        Inst::sbbl_mi(sbbl_mi {
+            rm32: RAX_RM,
+            imm32,
+        }) => sbbl_i::<R>::new(RAX, imm32).encode(sink, table),
+        Inst::sbbq_mi_sxl(sbbq_mi_sxl {
+            rm64: RAX_RM,
+            imm32,
+        }) => sbbq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+
+        // cmp
+        Inst::cmpb_mi(cmpb_mi {
+            rm8: GprMem::Gpr(Gpr::RAX),
+            imm8,
+        }) => cmpb_i::<R>::new(Gpr::RAX, imm8).encode(sink, table),
+        Inst::cmpw_mi(cmpw_mi {
+            rm16: GprMem::Gpr(Gpr::RAX),
+            imm16,
+        }) => cmpw_i::<R>::new(Gpr::RAX, imm16).encode(sink, table),
+        Inst::cmpl_mi(cmpl_mi {
+            rm32: GprMem::Gpr(Gpr::RAX),
+            imm32,
+        }) => cmpl_i::<R>::new(Gpr::RAX, imm32).encode(sink, table),
+        Inst::cmpq_mi(cmpq_mi {
+            rm64: GprMem::Gpr(Gpr::RAX),
+            imm32,
+        }) => cmpq_i::<R>::new(Gpr::RAX, imm32).encode(sink, table),
+
+        // test
+        Inst::testb_mi(testb_mi {
+            rm8: GprMem::Gpr(Gpr::RAX),
+            imm8,
+        }) => testb_i::<R>::new(Gpr::RAX, imm8).encode(sink, table),
+        Inst::testw_mi(testw_mi {
+            rm16: GprMem::Gpr(Gpr::RAX),
+            imm16,
+        }) => testw_i::<R>::new(Gpr::RAX, imm16).encode(sink, table),
+        Inst::testl_mi(testl_mi {
+            rm32: GprMem::Gpr(Gpr::RAX),
+            imm32,
+        }) => testl_i::<R>::new(Gpr::RAX, imm32).encode(sink, table),
+        Inst::testq_mi(testq_mi {
+            rm64: GprMem::Gpr(Gpr::RAX),
+            imm32,
+        }) => testq_i::<R>::new(Gpr::RAX, imm32).encode(sink, table),
+
+        // lea
+        Inst::leal_rm(leal_rm { r32, m32 }) => emit_lea(
+            r32,
+            m32,
+            sink,
+            table,
+            |dst, amode, s, t| leal_rm::<R>::new(dst, amode).encode(s, t),
+            |dst, simm32, s, t| addl_mi::<R>::new(dst, simm32.unsigned()).encode(s, t),
+            |dst, reg, s, t| addl_rm::<R>::new(dst, reg).encode(s, t),
+        ),
+        Inst::leaq_rm(leaq_rm { r64, m64 }) => emit_lea(
+            r64,
+            m64,
+            sink,
+            table,
+            |dst, amode, s, t| leaq_rm::<R>::new(dst, amode).encode(s, t),
+            |dst, simm32, s, t| addq_mi_sxl::<R>::new(dst, simm32).encode(s, t),
+            |dst, reg, s, t| addq_rm::<R>::new(dst, reg).encode(s, t),
+        ),
+
+        // All other instructions fall through to here and cannot be shrunk, so
+        // return `false` to emit them as usual.
+        _ => inst.encode(sink, table),
+    }
+}
+
+/// If `lea` can actually get encoded as an `add` then do that instead.
+/// Currently all candidate `iadd`s become an `lea` pseudo-instruction here but
+/// maximizing the use of `lea` is not necessarily optimal. The `lea`
+/// instruction goes through dedicated address units on cores which are finite
+/// and disjoint from the general ALU, so if everything uses `lea` then those
+/// units can get saturated while leaving the ALU idle.
+///
+/// To help make use of more parts of a CPU, this attempts to use `add` when
+/// it's semantically equivalent to `lea`, or otherwise when the `dst` register
+/// is the same as the `base` or `index` register.
+///
+/// FIXME: ideally regalloc is informed of this constraint. Register allocation
+/// of `lea` should "attempt" to put the `base` in the same register as `dst`
+/// but not at the expense of generating a `mov` instruction. Currently that's
+/// not possible but perhaps one day it may be worth it.
+fn emit_lea(
+    dst: asm::Gpr<WritableGpr>,
+    addr: asm::Amode<Gpr>,
+    sink: &mut MachBuffer<Inst>,
+    table: &[i32; 2],
+    lea: fn(WritableGpr, asm::Amode<Gpr>, &mut MachBuffer<Inst>, &[i32; 2]),
+    add_mi: fn(PairedGpr, i32, &mut MachBuffer<Inst>, &[i32; 2]),
+    add_rm: fn(PairedGpr, Gpr, &mut MachBuffer<Inst>, &[i32; 2]),
+) {
+    match addr {
+        // If `base == dst` then this is `add dst, $imm`, so encode that
+        // instead.
+        asm::Amode::ImmReg {
+            base,
+            simm32:
+                asm::AmodeOffsetPlusKnownOffset {
+                    simm32,
+                    offset: None,
+                },
+            trap: None,
+        } if dst.as_ref().to_reg() == base => add_mi(
+            PairedGpr {
+                read: base,
+                write: *dst.as_ref(),
+            },
+            simm32.value(),
+            sink,
+            table,
+        ),
+
+        // If the offset is 0 and the shift is a scale of 1, then:
+        //
+        // * If `base == dst`, then this is `addq dst, index`
+        // * If `index == dst`, then this is `addq dst, base`
+        asm::Amode::ImmRegRegShift {
+            base,
+            index,
+            scale: asm::Scale::One,
+            simm32: asm::AmodeOffset::ZERO,
+            trap: None,
+        } => {
+            if dst.as_ref().to_reg() == base {
+                add_rm(
+                    PairedGpr {
+                        read: base,
+                        write: *dst.as_ref(),
+                    },
+                    *index.as_ref(),
+                    sink,
+                    table,
+                )
+            } else if dst.as_ref().to_reg() == *index.as_ref() {
+                add_rm(
+                    PairedGpr {
+                        read: *index.as_ref(),
+                        write: *dst.as_ref(),
+                    },
+                    base,
+                    sink,
+                    table,
+                )
+            } else {
+                lea(*dst.as_ref(), addr, sink, table)
+            }
+        }
+
+        _ => lea(*dst.as_ref(), addr, sink, table),
     }
 }

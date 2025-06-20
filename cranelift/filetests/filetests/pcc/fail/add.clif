@@ -1,7 +1,7 @@
 test compile expect-fail
 set enable_pcc=true
 target aarch64
-target x86_64
+;; disabled until PCC is migrated to new assembler: target x86_64
 
 function %f0(i32, i32) -> i32 {
 block0(v0 ! range(32, 0, 0x100): i32, v1 ! range(32, 0, 0x80): i32):

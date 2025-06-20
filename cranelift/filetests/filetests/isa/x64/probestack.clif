@@ -17,7 +17,7 @@ block0:
 ;   call    LibCall(Probestack)
 ;   subq $0x186a0, %rsp
 ; block0:
-;   lea     rsp(0 + virtual offset), %rax
+;   leaq <offset:1>+(%rsp), %rax
 ;   addq $0x186a0, %rsp
 ;   movq %rbp, %rsp
 ;   popq %rbp

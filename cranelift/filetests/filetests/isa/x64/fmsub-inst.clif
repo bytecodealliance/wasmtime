@@ -457,7 +457,7 @@ block0(v0: f64, v1: f64, v2: f64):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
-;   lea     rsp(0 + virtual offset), %r8
+;   leaq <offset:1>+(%rsp), %r8
 ;   vmovsd %xmm2, (%r8)
 ;   vfnmsub213sd %xmm0, %xmm1, 0(%r8), %xmm0
 ;   addq $0x10, %rsp
@@ -495,7 +495,7 @@ block0(v0: f64, v1: f64, v2: f64):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
-;   lea     rsp(0 + virtual offset), %r8
+;   leaq <offset:1>+(%rsp), %r8
 ;   vmovsd %xmm2, (%r8)
 ;   vfmsub213sd %xmm0, %xmm1, 0(%r8), %xmm0
 ;   addq $0x10, %rsp
@@ -533,7 +533,7 @@ block0(v0: f32, v1: f32, v2: f32):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
-;   lea     rsp(0 + virtual offset), %r8
+;   leaq <offset:1>+(%rsp), %r8
 ;   vmovss %xmm1, (%r8)
 ;   vfmsub132ss %xmm0, %xmm2, 0(%r8), %xmm0
 ;   addq $0x10, %rsp
@@ -573,7 +573,7 @@ block0(v0: f32, v1: f32, v2: f32):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
-;   lea     rsp(0 + virtual offset), %r8
+;   leaq <offset:1>+(%rsp), %r8
 ;   vmovss %xmm1, (%r8)
 ;   vfnmsub132ss %xmm0, %xmm2, 0(%r8), %xmm0
 ;   addq $0x10, %rsp
@@ -597,7 +597,7 @@ block0(v0: f32, v1: f32, v2: f32):
 
 ;; negate first, then load
 ;; FIXME (see issue #8953): there is a missed optimization here due to the order
-;; of load and negation. This should really generate a vfmnsub instruction 
+;; of load and negation. This should really generate a vfmnsub instruction
 ;; removing the need to negate the argument explicitly
 function %fmnsub_f32(f32, f32, f32) -> f32 {
     ss0 = explicit_slot 4
@@ -616,7 +616,7 @@ block0(v0: f32, v1: f32, v2: f32):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
-;   lea     rsp(0 + virtual offset), %r11
+;   leaq <offset:1>+(%rsp), %r11
 ;   movl $0x80000000, %r9d
 ;   vmovd %r9d, %xmm3
 ;   vxorps  %xmm1, %xmm3, %xmm3
@@ -660,7 +660,7 @@ block0(v0: f32x4, v1: f32x4, v2: f32x4):
 ;   movq %rsp, %rbp
 ;   subq $0x10, %rsp
 ; block0:
-;   lea     rsp(0 + virtual offset), %r8
+;   leaq <offset:1>+(%rsp), %r8
 ;   vmovups %xmm0, (%r8)
 ;   movdqa %xmm1, %xmm0
 ;   vfmsub132ps %xmm0, %xmm2, 0(%r8), %xmm0

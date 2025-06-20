@@ -304,6 +304,26 @@ newtype_of_reg!(
     |reg| reg.class() == RegClass::Int
 );
 
+#[expect(missing_docs, reason = "self-describing fields")]
+impl Gpr {
+    pub const RAX: Gpr = Gpr(regs::rax());
+    pub const RBX: Gpr = Gpr(regs::rbx());
+    pub const RCX: Gpr = Gpr(regs::rcx());
+    pub const RDX: Gpr = Gpr(regs::rdx());
+    pub const RSI: Gpr = Gpr(regs::rsi());
+    pub const RDI: Gpr = Gpr(regs::rdi());
+    pub const RSP: Gpr = Gpr(regs::rsp());
+    pub const RBP: Gpr = Gpr(regs::rbp());
+    pub const R8: Gpr = Gpr(regs::r8());
+    pub const R9: Gpr = Gpr(regs::r9());
+    pub const R10: Gpr = Gpr(regs::r10());
+    pub const R11: Gpr = Gpr(regs::r11());
+    pub const R12: Gpr = Gpr(regs::r12());
+    pub const R13: Gpr = Gpr(regs::r13());
+    pub const R14: Gpr = Gpr(regs::r14());
+    pub const R15: Gpr = Gpr(regs::r15());
+}
+
 // Define a newtype of `Reg` for XMM registers.
 newtype_of_reg!(
     Xmm,
