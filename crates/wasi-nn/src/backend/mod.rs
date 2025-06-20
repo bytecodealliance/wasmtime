@@ -2,7 +2,7 @@
 //! this crate. The `Box<dyn ...>` types returned by these interfaces allow
 //! implementations to maintain backend-specific state between calls.
 
-#[cfg(any(feature = "onnx", feature = "onnx-local-rt"))]
+#[cfg(feature = "onnx")]
 pub mod onnx;
 #[cfg(all(feature = "openvino", target_pointer_width = "64"))]
 pub mod openvino;
@@ -11,7 +11,7 @@ pub mod pytorch;
 #[cfg(all(feature = "winml", target_os = "windows"))]
 pub mod winml;
 
-#[cfg(any(feature = "onnx", feature = "onnx-local-rt"))]
+#[cfg(feature = "onnx")]
 use self::onnx::OnnxBackend;
 #[cfg(all(feature = "openvino", target_pointer_width = "64"))]
 use self::openvino::OpenvinoBackend;
@@ -40,7 +40,7 @@ pub fn list() -> Vec<Backend> {
     {
         backends.push(Backend::from(WinMLBackend::default()));
     }
-    #[cfg(any(feature = "onnx", feature = "onnx-local-rt"))]
+    #[cfg(feature = "onnx")]
     {
         backends.push(Backend::from(OnnxBackend::default()));
     }

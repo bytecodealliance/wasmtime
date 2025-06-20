@@ -68,9 +68,9 @@ default = ["openvino", "winml"]
 # OpenVINO is available on all platforms; it requires OpenVINO to be installed.
 openvino = ["dep:openvino"]
 # ONNX is available on all platforms.
-onnx = ["ort/download-binaries"]
-# Use locally built ONNX Runtime.
-onnx-local-rt = ["dep:ort"]
+onnx = ["dep:ort"]
+# Use prebuilt ONNX Runtime binaries from ort.
+onnx-download = ["onnx", "ort/download-binaries"]
 # WinML is only available on Windows 10 1809 and later.
 winml = ["dep:windows"]
 # PyTorch is available on all platforms; requires Libtorch to be installed
