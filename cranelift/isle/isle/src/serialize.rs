@@ -402,7 +402,7 @@ impl<'a> Decomposition<'a> {
     }
 
     /// Create a builder for a nested [Block].
-    fn new_block(&mut self) -> Decomposition {
+    fn new_block(&mut self) -> Decomposition<'_> {
         Decomposition {
             rules: self.rules,
             scope: self.scope.clone(),

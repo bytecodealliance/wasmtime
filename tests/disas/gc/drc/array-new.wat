@@ -24,8 +24,8 @@
 ;; @0022                               v6 = uextend.i64 v3
 ;;                                     v35 = iconst.i64 3
 ;;                                     v36 = ishl v6, v35  ; v35 = 3
-;;                                     v31 = iconst.i64 32
-;; @0022                               v8 = ushr v36, v31  ; v31 = 32
+;;                                     v33 = iconst.i64 32
+;; @0022                               v8 = ushr v36, v33  ; v33 = 32
 ;; @0022                               trapnz v8, user18
 ;; @0022                               v5 = iconst.i32 24
 ;;                                     v42 = iconst.i32 3
@@ -35,18 +35,18 @@
 ;; @0022                               v13 = iconst.i32 0
 ;;                                     v40 = iconst.i32 8
 ;; @0022                               v15 = call fn0(v0, v12, v13, v10, v40)  ; v12 = -1476395008, v13 = 0, v40 = 8
-;; @0022                               v32 = load.i64 notrap aligned readonly can_move v0+8
-;; @0022                               v16 = load.i64 notrap aligned readonly can_move v32+24
+;; @0022                               v31 = load.i64 notrap aligned readonly can_move v0+8
+;; @0022                               v16 = load.i64 notrap aligned readonly can_move v31+24
 ;; @0022                               v17 = uextend.i64 v15
 ;; @0022                               v18 = iadd v16, v17
-;;                                     v34 = iconst.i64 16
-;; @0022                               v19 = iadd v18, v34  ; v34 = 16
+;;                                     v30 = iconst.i64 16
+;; @0022                               v19 = iadd v18, v30  ; v30 = 16
 ;; @0022                               store notrap aligned v3, v19
 ;;                                     v47 = iconst.i64 24
 ;;                                     v53 = iadd v18, v47  ; v47 = 24
 ;; @0022                               v25 = uextend.i64 v10
 ;; @0022                               v26 = iadd v18, v25
-;;                                     v30 = iconst.i64 8
+;;                                     v34 = iconst.i64 8
 ;; @0022                               jump block2(v53)
 ;;
 ;;                                 block2(v27: i64):

@@ -7,7 +7,7 @@
 //! Some legalization may be ISA-specific, so this requires an ISA
 //! (for now).
 
-use crate::subtest::{check_precise_output, run_filecheck, Context, SubTest};
+use crate::subtest::{Context, SubTest, check_precise_output, run_filecheck};
 use anyhow::Result;
 use cranelift_codegen::ir;
 use cranelift_control::ControlPlane;

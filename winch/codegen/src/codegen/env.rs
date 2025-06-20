@@ -1,13 +1,13 @@
 use crate::{
-    abi::{wasm_sig, ABISig, ABI},
-    codegen::{control, BlockSig, BuiltinFunction, BuiltinFunctions, OperandSize},
+    abi::{ABI, ABISig, wasm_sig},
+    codegen::{BlockSig, BuiltinFunction, BuiltinFunctions, OperandSize, control},
     isa::TargetIsa,
 };
 use anyhow::Result;
 use cranelift_codegen::ir::{UserExternalName, UserExternalNameRef};
 use std::collections::{
-    hash_map::Entry::{Occupied, Vacant},
     HashMap,
+    hash_map::Entry::{Occupied, Vacant},
 };
 use std::mem;
 use wasmparser::BlockType;

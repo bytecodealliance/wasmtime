@@ -34,7 +34,7 @@
 
 use crate::state::MemoryError;
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::{types, Type};
+use cranelift_codegen::ir::{Type, types};
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum AddressSize {

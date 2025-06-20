@@ -13,7 +13,7 @@ To compile the tests, you'll need the `wasm32-wasip1` and
 [rustup.rs](https://rustup.rs) to manage your Rust versions, can be done as
 follows:
 
-```shell
+```console
 rustup target add wasm32-wasip1 wasm32-unknown-unknown
 ```
 
@@ -37,7 +37,7 @@ At this time not all of the crates in the Wasmtime workspace can be tested, so
 running all tests is a little non-standard. To match what CI does and run all
 tests you'll need to execute
 
-```shell
+```console
 ./ci/run-tests.sh
 ```
 
@@ -47,14 +47,14 @@ You can test a particular Wasmtime crate with `cargo test -p
 wasmtime-whatever`. For example, to test the `wasmtime-environ` crate, execute
 this command:
 
-```shell
+```console
 cargo test -p wasmtime-environ
 ```
 
 Alternatively, you can `cd` into the crate's directory, and run `cargo test`
 there, without needing to supply the `-p` flag:
 
-```shell
+```console
 cd crates/environ/
 cargo test
 ```
@@ -64,7 +64,7 @@ cargo test
 The spec testsuite itself is in a git submodule, so make sure you've
 checked it out and initialized its submodule:
 
-```shell
+```console
 git submodule update --init
 ```
 
@@ -72,7 +72,7 @@ When the submodule is checked out, Wasmtime runs the Wasm spec testsuite as part
 of testing the `wasmtime-cli` crate at the crate root, meaning in the root of
 the repository you can execute:
 
-```shell
+```console
 cargo test --test wast
 ```
 
@@ -80,7 +80,7 @@ You can pass an additional CLI argument to act as a filter on which tests to
 run. For example to only run the spec tests themselves (excluding handwritten
 Wasmtime-specific tests) and only in Cranelift you can run:
 
-```shell
+```console
 cargo test --test wast Cranelift/tests/spec
 ```
 
@@ -95,13 +95,13 @@ WASI integration tests can be run separately from all other tests which
 can be useful when working on the `wasmtime-wasi` crate. This can be done by
 executing this command:
 
-```shell
+```console
 cargo test -p wasmtime-wasi
 ```
 
 Similarly if you're testing HTTP-related functionality you can execute:
 
-```shell
+```console
 cargo test -p wasmtime-wasi-http
 ```
 
@@ -157,7 +157,7 @@ in `tests/misc_testsuite`. Feel free to add new tests to existing
 `tests/misc_testsuite/*.wast` files or create new ones as needed. These tests
 are run from the crate root:
 
-```shell
+```console
 cargo test --test wast
 ```
 

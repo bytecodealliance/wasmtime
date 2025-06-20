@@ -3,7 +3,7 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::memory::RuntimeLinearMemory;
-use crate::runtime::vm::{mmap::AlignedLength, HostAlignedByteCount, Mmap};
+use crate::runtime::vm::{HostAlignedByteCount, Mmap, mmap::AlignedLength};
 use alloc::sync::Arc;
 use wasmtime_environ::Tunables;
 

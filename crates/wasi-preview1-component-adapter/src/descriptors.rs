@@ -7,9 +7,9 @@ use core::num::NonZeroUsize;
 use wasi::{Errno, Fd};
 
 #[cfg(not(feature = "proxy"))]
-use crate::bindings::wasi::filesystem::types as filesystem;
-#[cfg(not(feature = "proxy"))]
 use crate::File;
+#[cfg(not(feature = "proxy"))]
+use crate::bindings::wasi::filesystem::types as filesystem;
 
 pub const MAX_DESCRIPTORS: usize = 128;
 
@@ -149,7 +149,7 @@ pub struct Descriptors {
 }
 
 #[cfg(not(feature = "proxy"))]
-#[link(wasm_import_module = "wasi:filesystem/preopens@0.2.3")]
+#[link(wasm_import_module = "wasi:filesystem/preopens@0.2.6")]
 unsafe extern "C" {
     #[link_name = "get-directories"]
     fn wasi_filesystem_get_directories(rval: *mut PreopenList);

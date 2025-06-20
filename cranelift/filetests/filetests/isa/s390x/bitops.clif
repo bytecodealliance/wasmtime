@@ -26,7 +26,7 @@ block0(v0: i128):
 ;   vsl %v4, %v30, %v2
 ;   vsrl %v6, %v30, %v2
 ;   vsel %v16, %v4, %v6, %v0
-;   bras %r1, 20 ; data.u128 0x0f0e0d0c0b0a09080706050403020100 ; vl %v18, 0(%r1)
+;   larl %r1, [const(0)] ; vl %v18, 0(%r1)
 ;   vperm %v20, %v16, %v16, %v18
 ;   vst %v20, 0(%r2)
 ;   br %r14
@@ -49,7 +49,14 @@ block0(v0: i128):
 ;   vsl %v4, %v30, %v2
 ;   vsrl %v6, %v30, %v2
 ;   vsel %v16, %v4, %v6, %v0
-;   bras %r1, 0x74
+;   larl %r1, 0x80
+;   vl %v18, 0(%r1)
+;   vperm %v20, %v16, %v16, %v18
+;   vst %v20, 0(%r2)
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   clcl %r0, %r14
 ;   basr %r0, %r12
 ;   bsm %r0, %r10
@@ -58,10 +65,6 @@ block0(v0: i128):
 ;   balr %r0, %r4
 ;   .byte 0x03, 0x02
 ;   .byte 0x01, 0x00
-;   vl %v18, 0(%r1)
-;   vperm %v20, %v16, %v16, %v18
-;   vst %v20, 0(%r2)
-;   br %r14
 
 function %bitrev_i64(i64) -> i64 {
 block0(v0: i64):

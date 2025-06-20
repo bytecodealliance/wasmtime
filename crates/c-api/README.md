@@ -72,3 +72,13 @@ fn main() {
         .compile("your_library");
 }
 ```
+
+## Testing
+
+Running tests for the C API can be done using cmake from the root of the repo:
+
+```sh
+$ cmake -S examples -B examples/build -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=ON
+$ cmake --build examples/build --config Debug
+$ CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
+```

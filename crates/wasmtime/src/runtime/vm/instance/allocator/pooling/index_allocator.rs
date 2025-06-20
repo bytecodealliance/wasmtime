@@ -568,12 +568,16 @@ mod test {
             let index2 = state.alloc(Some(MemoryInModule(id, memory_index))).unwrap();
             state.free(index2);
             state.free(index1);
-            assert!(state
-                .alloc_affine_and_clear_affinity(id, memory_index)
-                .is_some());
-            assert!(state
-                .alloc_affine_and_clear_affinity(id, memory_index)
-                .is_some());
+            assert!(
+                state
+                    .alloc_affine_and_clear_affinity(id, memory_index)
+                    .is_some()
+            );
+            assert!(
+                state
+                    .alloc_affine_and_clear_affinity(id, memory_index)
+                    .is_some()
+            );
             assert_eq!(
                 state.alloc_affine_and_clear_affinity(id, memory_index),
                 None

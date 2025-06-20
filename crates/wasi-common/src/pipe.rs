@@ -1,5 +1,3 @@
-// This is mostly stubs
-#![allow(unused_variables, dead_code)]
 //! Virtual pipes.
 //!
 //! These types provide easy implementations of `WasiFile` that mimic much of the behavior of Unix
@@ -9,8 +7,8 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::file::{FdFlags, FileType, WasiFile};
 use crate::Error;
+use crate::file::{FdFlags, FileType, WasiFile};
 use std::any::Any;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, RwLock};
@@ -70,7 +68,7 @@ impl<R: Read> ReadPipe<R> {
             }
         }
     }
-    fn borrow(&self) -> std::sync::RwLockWriteGuard<R> {
+    fn borrow(&self) -> std::sync::RwLockWriteGuard<'_, R> {
         RwLock::write(&self.reader).unwrap()
     }
 }
@@ -171,7 +169,7 @@ impl<W: Write> WritePipe<W> {
         }
     }
 
-    fn borrow(&self) -> std::sync::RwLockWriteGuard<W> {
+    fn borrow(&self) -> std::sync::RwLockWriteGuard<'_, W> {
         RwLock::write(&self.writer).unwrap()
     }
 }

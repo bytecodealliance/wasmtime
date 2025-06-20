@@ -8,15 +8,16 @@ use crate::translate::{
 use crate::{BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
-use cranelift_codegen::ir::immediates::{Imm64, Offset32};
+use cranelift_codegen::ir::immediates::{Imm64, Offset32, V128Imm};
 use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, types};
-use cranelift_codegen::ir::{ArgumentPurpose, Function, InstBuilder, MemFlags};
+use cranelift_codegen::ir::{ArgumentPurpose, ConstantData, Function, InstBuilder, MemFlags};
 use cranelift_codegen::isa::{TargetFrontendConfig, TargetIsa};
+use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::{EntityRef, PrimaryMap, SecondaryMap};
-use cranelift_frontend::FunctionBuilder;
 use cranelift_frontend::Variable;
+use cranelift_frontend::{FuncInstBuilder, FunctionBuilder};
 use smallvec::SmallVec;
 use std::mem;
 use wasmparser::{Operator, WasmFeatures};
@@ -28,6 +29,7 @@ use wasmtime_environ::{
     WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
+use wasmtime_math::f64_cvt_to_int_bounds;
 
 #[derive(Debug)]
 pub(crate) enum Extension {
@@ -214,9 +216,9 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             builtin_functions,
             offsets: VMOffsets::new(compiler.isa().pointer_bytes(), &translation.module),
             tunables,
-            fuel_var: Variable::new(0),
-            epoch_deadline_var: Variable::new(0),
-            epoch_ptr_var: Variable::new(0),
+            fuel_var: Variable::reserved_value(),
+            epoch_deadline_var: Variable::reserved_value(),
+            epoch_ptr_var: Variable::reserved_value(),
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
@@ -351,7 +353,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // `self.fuel_var` to make fuel modifications fast locally. This cache
         // is then periodically flushed to the Store-defined location in
         // `VMStoreContext` later.
-        builder.declare_var(self.fuel_var, ir::types::I64);
+        debug_assert!(self.fuel_var.is_reserved_value());
+        self.fuel_var = builder.declare_var(ir::types::I64);
         self.fuel_load_into_var(builder);
         self.fuel_check(builder);
     }
@@ -564,10 +567,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     fn epoch_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
-        builder.declare_var(self.epoch_deadline_var, ir::types::I64);
+        debug_assert!(self.epoch_deadline_var.is_reserved_value());
+        self.epoch_deadline_var = builder.declare_var(ir::types::I64);
         // Let epoch_check_full load the current deadline and call def_var
 
-        builder.declare_var(self.epoch_ptr_var, self.pointer_type());
+        debug_assert!(self.epoch_ptr_var.is_reserved_value());
+        self.epoch_ptr_var = builder.declare_var(self.pointer_type());
         let epoch_ptr = self.epoch_ptr(builder);
         builder.def_var(self.epoch_ptr_var, epoch_ptr);
 
@@ -1157,8 +1162,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder: &mut FunctionBuilder,
         ty: ir::Type,
         val: ir::Value,
-        range32: (f64, f64),
-        range64: (f64, f64),
+        signed: bool,
     ) {
         assert!(!self.clif_instruction_traps_enabled());
         let val_ty = builder.func.dfg.value_type(val);
@@ -1169,12 +1173,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         };
         let isnan = builder.ins().fcmp(FloatCC::NotEqual, val, val);
         self.trapnz(builder, isnan, ir::TrapCode::BAD_CONVERSION_TO_INTEGER);
-        let val = builder.ins().trunc(val);
-        let (lower_bound, upper_bound) = match ty {
-            I32 => range32,
-            I64 => range64,
-            _ => unreachable!(),
-        };
+        let val = self.trunc_f64(builder, val);
+        let (lower_bound, upper_bound) = f64_cvt_to_int_bounds(signed, ty.bits());
         let lower_bound = builder.ins().f64const(lower_bound);
         let too_small = builder
             .ins()
@@ -1808,12 +1808,6 @@ impl FuncEnvironment<'_> {
         wasm_func_ty.returns()[index].is_vmgcref_type_and_not_i31()
     }
 
-    pub fn after_locals(&mut self, num_locals: usize) {
-        self.fuel_var = Variable::new(num_locals);
-        self.epoch_deadline_var = Variable::new(num_locals + 1);
-        self.epoch_ptr_var = Variable::new(num_locals + 2);
-    }
-
     pub fn translate_table_grow(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
@@ -2256,10 +2250,11 @@ impl FuncEnvironment<'_> {
     pub fn translate_ref_test(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
-        ref_ty: WasmRefType,
+        test_ty: WasmRefType,
         gc_ref: ir::Value,
+        gc_ref_ty: WasmRefType,
     ) -> WasmResult<ir::Value> {
-        gc::translate_ref_test(self, builder, ref_ty, gc_ref)
+        gc::translate_ref_test(self, builder, test_ty, gc_ref, gc_ref_ty)
     }
 
     pub fn translate_ref_null(
@@ -2279,7 +2274,14 @@ impl FuncEnvironment<'_> {
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor,
         value: ir::Value,
+        ty: WasmRefType,
     ) -> WasmResult<ir::Value> {
+        // If we know the type is not nullable, then we don't actually need to
+        // check for null.
+        if !ty.nullable {
+            return Ok(pos.ins().iconst(ir::types::I32, 0));
+        }
+
         let byte_is_null =
             pos.ins()
                 .icmp_imm(cranelift_codegen::ir::condcodes::IntCC::Equal, value, 0);
@@ -3127,6 +3129,7 @@ impl FuncEnvironment<'_> {
     pub fn before_translate_operator(
         &mut self,
         op: &Operator,
+        _operand_types: Option<&[WasmValType]>,
         builder: &mut FunctionBuilder,
         state: &FuncTranslationState,
     ) -> WasmResult<()> {
@@ -3139,6 +3142,7 @@ impl FuncEnvironment<'_> {
     pub fn after_translate_operator(
         &mut self,
         op: &Operator,
+        _operand_types: Option<&[WasmValType]>,
         builder: &mut FunctionBuilder,
         state: &FuncTranslationState,
     ) -> WasmResult<()> {
@@ -3217,10 +3221,6 @@ impl FuncEnvironment<'_> {
 
     pub fn use_x86_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
         self.isa.has_x86_blendv_lowering(ty)
-    }
-
-    pub fn use_x86_pshufb_for_relaxed_swizzle(&self) -> bool {
-        self.isa.has_x86_pshufb_lowering()
     }
 
     pub fn use_x86_pmulhrsw_for_relaxed_q15mul(&self) -> bool {
@@ -3321,6 +3321,304 @@ impl FuncEnvironment<'_> {
         }
         #[cfg(not(feature = "wmemcheck"))]
         let _ = (builder, num_pages, mem_index);
+    }
+
+    /// If the ISA has rounding instructions, let Cranelift use them. But if
+    /// not, lower to a libcall here, rather than having Cranelift do it. We
+    /// can pass our libcall the vmctx pointer, which we use for stack
+    /// overflow checking.
+    ///
+    /// This helper is generic for all rounding instructions below, both for
+    /// scalar and simd types. The `clif_round` argument is the CLIF-level
+    /// rounding instruction to use if the ISA has the instruction, and the
+    /// `round_builtin` helper is used to determine which element-level
+    /// rounding operation builtin is used. Note that this handles the case
+    /// when `value` is a vector by doing an element-wise libcall invocation.
+    fn isa_round(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        value: ir::Value,
+        clif_round: fn(FuncInstBuilder<'_, '_>, ir::Value) -> ir::Value,
+        round_builtin: fn(&mut BuiltinFunctions, &mut Function) -> ir::FuncRef,
+    ) -> ir::Value {
+        if self.isa.has_round() {
+            return clif_round(builder.ins(), value);
+        }
+
+        let vmctx = self.vmctx_val(&mut builder.cursor());
+        let round = round_builtin(&mut self.builtin_functions, builder.func);
+        let round_one = |builder: &mut FunctionBuilder, value: ir::Value| {
+            let call = builder.ins().call(round, &[vmctx, value]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        };
+
+        let ty = builder.func.dfg.value_type(value);
+        if !ty.is_vector() {
+            return round_one(builder, value);
+        }
+
+        assert_eq!(ty.bits(), 128);
+        let zero = builder.func.dfg.constants.insert(V128Imm([0; 16]).into());
+        let mut result = builder.ins().vconst(ty, zero);
+        for i in 0..u8::try_from(ty.lane_count()).unwrap() {
+            let element = builder.ins().extractlane(value, i);
+            let element_rounded = round_one(builder, element);
+            result = builder.ins().insertlane(result, element_rounded, i);
+        }
+        result
+    }
+
+    pub fn ceil_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.ceil(val),
+            BuiltinFunctions::ceil_f32,
+        )
+    }
+
+    pub fn ceil_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.ceil(val),
+            BuiltinFunctions::ceil_f64,
+        )
+    }
+
+    pub fn ceil_f32x4(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.ceil(val),
+            BuiltinFunctions::ceil_f32,
+        )
+    }
+
+    pub fn ceil_f64x2(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.ceil(val),
+            BuiltinFunctions::ceil_f64,
+        )
+    }
+
+    pub fn floor_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.floor(val),
+            BuiltinFunctions::floor_f32,
+        )
+    }
+
+    pub fn floor_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.floor(val),
+            BuiltinFunctions::floor_f64,
+        )
+    }
+
+    pub fn floor_f32x4(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.floor(val),
+            BuiltinFunctions::floor_f32,
+        )
+    }
+
+    pub fn floor_f64x2(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.floor(val),
+            BuiltinFunctions::floor_f64,
+        )
+    }
+
+    pub fn trunc_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.trunc(val),
+            BuiltinFunctions::trunc_f32,
+        )
+    }
+
+    pub fn trunc_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.trunc(val),
+            BuiltinFunctions::trunc_f64,
+        )
+    }
+
+    pub fn trunc_f32x4(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.trunc(val),
+            BuiltinFunctions::trunc_f32,
+        )
+    }
+
+    pub fn trunc_f64x2(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.trunc(val),
+            BuiltinFunctions::trunc_f64,
+        )
+    }
+
+    pub fn nearest_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.nearest(val),
+            BuiltinFunctions::nearest_f32,
+        )
+    }
+
+    pub fn nearest_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.nearest(val),
+            BuiltinFunctions::nearest_f64,
+        )
+    }
+
+    pub fn nearest_f32x4(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.nearest(val),
+            BuiltinFunctions::nearest_f32,
+        )
+    }
+
+    pub fn nearest_f64x2(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        self.isa_round(
+            builder,
+            value,
+            |ins, val| ins.nearest(val),
+            BuiltinFunctions::nearest_f64,
+        )
+    }
+
+    pub fn swizzle(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        a: ir::Value,
+        b: ir::Value,
+    ) -> ir::Value {
+        // On x86, swizzle would typically be compiled to `pshufb`, except
+        // that that's not available on CPUs that lack SSSE3. In that case,
+        // fall back to a builtin function.
+        if !self.is_x86() || self.isa.has_x86_pshufb_lowering() {
+            builder.ins().swizzle(a, b)
+        } else {
+            let swizzle = self.builtin_functions.i8x16_swizzle(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(swizzle, &[vmctx, a, b]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn relaxed_swizzle(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        a: ir::Value,
+        b: ir::Value,
+    ) -> ir::Value {
+        // As above, fall back to a builtin if we lack SSSE3.
+        if !self.is_x86() || self.isa.has_x86_pshufb_lowering() {
+            if !self.is_x86() || self.relaxed_simd_deterministic() {
+                builder.ins().swizzle(a, b)
+            } else {
+                builder.ins().x86_pshufb(a, b)
+            }
+        } else {
+            let swizzle = self.builtin_functions.i8x16_swizzle(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(swizzle, &[vmctx, a, b]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn i8x16_shuffle(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        a: ir::Value,
+        b: ir::Value,
+        lanes: &[u8; 16],
+    ) -> ir::Value {
+        // As with swizzle, i8x16.shuffle would also commonly be implemented
+        // with pshufb, so if we lack SSSE3, fall back to a builtin.
+        if !self.is_x86() || self.isa.has_x86_pshufb_lowering() {
+            let lanes = ConstantData::from(&lanes[..]);
+            let mask = builder.func.dfg.immediates.push(lanes);
+            builder.ins().shuffle(a, b, mask)
+        } else {
+            let lanes = builder
+                .func
+                .dfg
+                .constants
+                .insert(ConstantData::from(&lanes[..]));
+            let lanes = builder.ins().vconst(I8X16, lanes);
+            let i8x16_shuffle = self.builtin_functions.i8x16_shuffle(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(i8x16_shuffle, &[vmctx, a, b, lanes]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        }
+    }
+
+    pub fn fma_f32x4(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        a: ir::Value,
+        b: ir::Value,
+        c: ir::Value,
+    ) -> ir::Value {
+        if self.has_native_fma() {
+            builder.ins().fma(a, b, c)
+        } else if self.relaxed_simd_deterministic() {
+            // Deterministic semantics are "fused multiply and add".
+            let fma = self.builtin_functions.fma_f32x4(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(fma, &[vmctx, a, b, c]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        } else {
+            let mul = builder.ins().fmul(a, b);
+            builder.ins().fadd(mul, c)
+        }
+    }
+
+    pub fn fma_f64x2(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        a: ir::Value,
+        b: ir::Value,
+        c: ir::Value,
+    ) -> ir::Value {
+        if self.has_native_fma() {
+            builder.ins().fma(a, b, c)
+        } else if self.relaxed_simd_deterministic() {
+            // Deterministic semantics are "fused multiply and add".
+            let fma = self.builtin_functions.fma_f64x2(builder.func);
+            let vmctx = self.vmctx_val(&mut builder.cursor());
+            let call = builder.ins().call(fma, &[vmctx, a, b, c]);
+            *builder.func.dfg.inst_results(call).first().unwrap()
+        } else {
+            let mul = builder.ins().fmul(a, b);
+            builder.ins().fadd(mul, c)
+        }
     }
 
     pub fn isa(&self) -> &dyn TargetIsa {
@@ -3440,13 +3738,7 @@ impl FuncEnvironment<'_> {
         // NB: for now avoid translating this entire instruction to CLIF and
         // just do it in a libcall.
         if !self.clif_instruction_traps_enabled() {
-            self.guard_fcvt_to_int(
-                builder,
-                ty,
-                val,
-                (-2147483649.0, 2147483648.0),
-                (-9223372036854777856.0, 9223372036854775808.0),
-            );
+            self.guard_fcvt_to_int(builder, ty, val, true);
         }
         builder.ins().fcvt_to_sint(ty, val)
     }
@@ -3458,13 +3750,7 @@ impl FuncEnvironment<'_> {
         val: ir::Value,
     ) -> ir::Value {
         if !self.clif_instruction_traps_enabled() {
-            self.guard_fcvt_to_int(
-                builder,
-                ty,
-                val,
-                (-1.0, 4294967296.0),
-                (-1.0, 18446744073709551616.0),
-            );
+            self.guard_fcvt_to_int(builder, ty, val, false);
         }
         builder.ins().fcvt_to_uint(ty, val)
     }
@@ -3514,4 +3800,18 @@ fn index_type_to_ir_type(index_type: IndexType) -> ir::Type {
         IndexType::I32 => I32,
         IndexType::I64 => I64,
     }
+}
+
+/// TODO(10248) This is removed in the next stack switching PR. It stops the
+/// compiler from complaining about the stack switching libcalls being dead
+/// code.
+#[cfg(feature = "stack-switching")]
+#[allow(
+    dead_code,
+    reason = "Dummy function to supress more dead code warnings"
+)]
+pub fn use_stack_switching_libcalls() {
+    let _ = BuiltinFunctions::cont_new;
+    let _ = BuiltinFunctions::table_grow_cont_obj;
+    let _ = BuiltinFunctions::table_fill_cont_obj;
 }

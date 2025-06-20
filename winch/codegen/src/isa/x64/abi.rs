@@ -1,12 +1,12 @@
 use super::regs;
 use crate::{
-    abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, ABI},
-    codegen::CodeGenError,
-    isa::{reg::Reg, CallingConvention},
     RegIndexEnv,
+    abi::{ABI, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, align_to},
+    codegen::CodeGenError,
+    isa::{CallingConvention, reg::Reg},
 };
-use anyhow::{bail, Result};
-use wasmtime_environ::{WasmHeapType, WasmRefType, WasmValType};
+use anyhow::{Result, bail};
+use wasmtime_environ::{WasmHeapType, WasmValType};
 
 #[derive(Default)]
 pub(crate) struct X64ABI;
@@ -96,19 +96,6 @@ impl ABI for X64ABI {
                 ParamsOrReturns::Returns,
             )
         })
-    }
-
-    fn scratch_for(ty: &WasmValType) -> Reg {
-        match ty {
-            WasmValType::I32
-            | WasmValType::I64
-            | WasmValType::Ref(WasmRefType {
-                heap_type: WasmHeapType::Func,
-                ..
-            }) => regs::scratch(),
-            WasmValType::F32 | WasmValType::F64 | WasmValType::V128 => regs::scratch_xmm(),
-            _ => unimplemented!(),
-        }
     }
 
     fn vmctx_reg() -> Reg {
@@ -286,8 +273,8 @@ impl X64ABI {
 mod tests {
     use super::X64ABI;
     use crate::{
-        abi::{ABIOperand, ABI},
-        isa::{reg::Reg, x64::regs, CallingConvention},
+        abi::{ABI, ABIOperand},
+        isa::{CallingConvention, reg::Reg, x64::regs},
     };
 
     use anyhow::Result;

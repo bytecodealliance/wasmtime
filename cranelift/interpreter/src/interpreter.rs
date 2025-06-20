@@ -7,7 +7,7 @@ use crate::environment::{FuncIndex, FunctionStore};
 use crate::frame::Frame;
 use crate::instruction::DfgInstructionContext;
 use crate::state::{InterpreterFunctionRef, MemoryError, State};
-use crate::step::{step, ControlFlow, CraneliftTrap, StepError};
+use crate::step::{ControlFlow, CraneliftTrap, StepError, step};
 use crate::value::{DataValueExt, ValueError};
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
@@ -562,8 +562,8 @@ impl<'a> State<'a> for InterpreterState<'a> {
 mod tests {
     use super::*;
     use crate::step::CraneliftTrap;
-    use cranelift_codegen::ir::immediates::Ieee32;
     use cranelift_codegen::ir::TrapCode;
+    use cranelift_codegen::ir::immediates::Ieee32;
     use cranelift_reader::parse_functions;
     use smallvec::smallvec;
 

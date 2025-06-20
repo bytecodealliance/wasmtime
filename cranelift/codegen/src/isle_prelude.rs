@@ -7,6 +7,8 @@
 #[doc(hidden)]
 macro_rules! isle_common_prelude_methods {
     () => {
+        isle_numerics_methods!();
+
         /// We don't have a way of making a `()` value in isle directly.
         #[inline]
         fn unit(&mut self) -> Unit {
@@ -14,94 +16,15 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn u8_as_u32(&mut self, x: u8) -> u32 {
-            x.into()
-        }
-
-        #[inline]
-        fn u8_as_u64(&mut self, x: u8) -> u64 {
-            x.into()
-        }
-
-        #[inline]
-        fn u16_as_i16(&mut self, x: u16) -> i16 {
-            x as i16
-        }
-
-        #[inline]
-        fn u16_as_u32(&mut self, x: u16) -> u32 {
-            x.into()
-        }
-
-        #[inline]
-        fn u16_as_u64(&mut self, x: u16) -> u64 {
-            x.into()
-        }
-
-        #[inline]
-        fn u32_as_u64(&mut self, x: u32) -> u64 {
-            x.into()
-        }
-
-        #[inline]
-        fn i64_as_u64(&mut self, x: i64) -> u64 {
-            x as u64
-        }
-
-        #[inline]
-        fn u64_as_i32(&mut self, x: u64) -> i32 {
-            x as i32
-        }
-
-        #[inline]
-        fn u64_as_i64(&mut self, x: u64) -> i64 {
-            x as i64
-        }
-
-        #[inline]
-        fn i32_as_i64(&mut self, x: i32) -> i64 {
-            x.into()
-        }
-
-        #[inline]
-        fn i64_neg(&mut self, x: i64) -> i64 {
-            x.wrapping_neg()
-        }
-
-        #[inline]
-        fn i8_neg(&mut self, x: i8) -> i8 {
-            x.wrapping_neg()
-        }
-
-        #[inline]
         fn checked_add_with_type(&mut self, ty: Type, a: u64, b: u64) -> Option<u64> {
             let c = a.checked_add(b)?;
             let ty_mask = self.ty_mask(ty);
-            if (c & !ty_mask) == 0 {
-                Some(c)
-            } else {
-                None
-            }
+            if (c & !ty_mask) == 0 { Some(c) } else { None }
         }
 
         #[inline]
         fn add_overflows_with_type(&mut self, ty: Type, a: u64, b: u64) -> bool {
             self.checked_add_with_type(ty, a, b).is_none()
-        }
-
-        #[inline]
-        fn u64_add(&mut self, x: u64, y: u64) -> u64 {
-            x.wrapping_add(y)
-        }
-
-        #[inline]
-        fn u64_sub(&mut self, x: u64, y: u64) -> u64 {
-            x.wrapping_sub(y)
-        }
-
-        #[inline]
-        fn u64_mul(&mut self, x: u64, y: u64) -> u64 {
-            x.wrapping_mul(y)
         }
 
         #[inline]
@@ -124,31 +47,6 @@ macro_rules! isle_common_prelude_methods {
             let ty_mask = self.ty_mask(ty) as i64;
             let result = x.checked_div(y)? & ty_mask;
             Some(Imm64::new(result))
-        }
-
-        #[inline]
-        fn u64_udiv(&mut self, x: u64, y: u64) -> Option<u64> {
-            x.checked_div(y)
-        }
-
-        #[inline]
-        fn u64_and(&mut self, x: u64, y: u64) -> u64 {
-            x & y
-        }
-
-        #[inline]
-        fn u64_or(&mut self, x: u64, y: u64) -> u64 {
-            x | y
-        }
-
-        #[inline]
-        fn u64_xor(&mut self, x: u64, y: u64) -> u64 {
-            x ^ y
-        }
-
-        #[inline]
-        fn u64_shl(&mut self, x: u64, y: u64) -> u64 {
-            x << y
         }
 
         #[inline]
@@ -188,48 +86,6 @@ macro_rules! isle_common_prelude_methods {
             // Mask off sign bits that aren't part of `ty`.
             let ty_mask = self.ty_mask(ty) as i64;
             Imm64::new((x >> y) & ty_mask)
-        }
-
-        #[inline]
-        fn u64_not(&mut self, x: u64) -> u64 {
-            !x
-        }
-
-        #[inline]
-        fn u64_eq(&mut self, x: u64, y: u64) -> bool {
-            x == y
-        }
-
-        #[inline]
-        fn u64_le(&mut self, x: u64, y: u64) -> bool {
-            x <= y
-        }
-
-        #[inline]
-        fn u64_lt(&mut self, x: u64, y: u64) -> bool {
-            x < y
-        }
-
-        #[inline]
-        fn u64_is_zero(&mut self, value: u64) -> bool {
-            0 == value
-        }
-
-        fn i64_is_zero(&mut self, value: i64) -> bool {
-            0 == value
-        }
-
-        #[inline]
-        fn u64_is_odd(&mut self, x: u64) -> bool {
-            x & 1 == 1
-        }
-
-        fn i64_shr(&mut self, a: i64, b: i64) -> i64 {
-            a >> b
-        }
-
-        fn i64_ctz(&mut self, a: i64) -> i64 {
-            a.trailing_zeros().into()
         }
 
         #[inline]
@@ -397,21 +253,23 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
+        fn ty_16(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 16 { Some(ty) } else { None }
+        }
+
+        #[inline]
         fn ty_32(&mut self, ty: Type) -> Option<Type> {
-            if ty.bits() == 32 {
-                Some(ty)
-            } else {
-                None
-            }
+            if ty.bits() == 32 { Some(ty) } else { None }
         }
 
         #[inline]
         fn ty_64(&mut self, ty: Type) -> Option<Type> {
-            if ty.bits() == 64 {
-                Some(ty)
-            } else {
-                None
-            }
+            if ty.bits() == 64 { Some(ty) } else { None }
+        }
+
+        #[inline]
+        fn ty_128(&mut self, ty: Type) -> Option<Type> {
+            if ty.bits() == 128 { Some(ty) } else { None }
         }
 
         #[inline]
@@ -472,20 +330,12 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn ty_scalar(&mut self, ty: Type) -> Option<Type> {
-            if ty.lane_count() == 1 {
-                Some(ty)
-            } else {
-                None
-            }
+            if ty.lane_count() == 1 { Some(ty) } else { None }
         }
 
         #[inline]
         fn ty_scalar_float(&mut self, ty: Type) -> Option<Type> {
-            if ty.is_float() {
-                Some(ty)
-            } else {
-                None
-            }
+            if ty.is_float() { Some(ty) } else { None }
         }
 
         #[inline]
@@ -603,11 +453,7 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn u64_from_bool(&mut self, b: bool) -> u64 {
-            if b {
-                u64::MAX
-            } else {
-                0
-            }
+            if b { u64::MAX } else { 0 }
         }
 
         #[inline]
@@ -671,11 +517,7 @@ macro_rules! isle_common_prelude_methods {
         }
 
         fn not_i64x2(&mut self, ty: Type) -> Option<()> {
-            if ty == I64X2 {
-                None
-            } else {
-                Some(())
-            }
+            if ty == I64X2 { None } else { Some(()) }
         }
 
         fn trap_code_division_by_zero(&mut self) -> TrapCode {
@@ -698,64 +540,8 @@ macro_rules! isle_common_prelude_methods {
         }
 
         #[inline]
-        fn u32_add(&mut self, a: u32, b: u32) -> u32 {
-            a.wrapping_add(b)
-        }
-
-        #[inline]
-        fn u32_sub(&mut self, a: u32, b: u32) -> u32 {
-            a.wrapping_sub(b)
-        }
-
-        #[inline]
-        fn u32_and(&mut self, a: u32, b: u32) -> u32 {
-            a & b
-        }
-
-        #[inline]
-        fn u32_shl(&mut self, x: u32, y: u32) -> u32 {
-            x << y
-        }
-
-        #[inline]
-        fn s32_add_fallible(&mut self, a: i32, b: i32) -> Option<i32> {
-            a.checked_add(b)
-        }
-
-        #[inline]
         fn u32_nonnegative(&mut self, x: u32) -> Option<u32> {
-            if (x as i32) >= 0 {
-                Some(x)
-            } else {
-                None
-            }
-        }
-
-        #[inline]
-        fn u32_lteq(&mut self, a: u32, b: u32) -> Option<()> {
-            if a <= b {
-                Some(())
-            } else {
-                None
-            }
-        }
-
-        #[inline]
-        fn u8_lteq(&mut self, a: u8, b: u8) -> Option<()> {
-            if a <= b {
-                Some(())
-            } else {
-                None
-            }
-        }
-
-        #[inline]
-        fn u8_lt(&mut self, a: u8, b: u8) -> Option<()> {
-            if a < b {
-                Some(())
-            } else {
-                None
-            }
+            if (x as i32) >= 0 { Some(x) } else { None }
         }
 
         #[inline]
@@ -771,26 +557,6 @@ macro_rules! isle_common_prelude_methods {
         #[inline]
         fn offset32(&mut self, x: Offset32) -> i32 {
             x.into()
-        }
-
-        #[inline]
-        fn u8_and(&mut self, a: u8, b: u8) -> u8 {
-            a & b
-        }
-
-        #[inline]
-        fn u8_shl(&mut self, a: u8, b: u8) -> u8 {
-            a << b
-        }
-
-        #[inline]
-        fn u8_shr(&mut self, a: u8, b: u8) -> u8 {
-            a >> b
-        }
-
-        #[inline]
-        fn u8_sub(&mut self, a: u8, b: u8) -> u8 {
-            a.wrapping_sub(b)
         }
 
         #[inline]
@@ -827,24 +593,17 @@ macro_rules! isle_common_prelude_methods {
             Offset32::new(offset)
         }
 
-        fn range(&mut self, start: usize, end: usize) -> Range {
-            (start, end)
-        }
-
-        fn range_view(&mut self, (start, end): Range) -> RangeView {
-            if start >= end {
-                RangeView::Empty
-            } else {
-                RangeView::NonEmpty {
-                    index: start,
-                    rest: (start + 1, end),
-                }
-            }
-        }
-
         #[inline]
         fn mem_flags_trusted(&mut self) -> MemFlags {
             MemFlags::trusted()
+        }
+
+        #[inline]
+        fn little_or_native_endian(&mut self, flags: MemFlags) -> Option<MemFlags> {
+            match flags.explicit_endianness() {
+                Some(crate::ir::Endianness::Little) | None => Some(flags),
+                Some(crate::ir::Endianness::Big) => None,
+            }
         }
 
         #[inline]
@@ -938,70 +697,6 @@ macro_rules! isle_common_prelude_methods {
             [a, b]
         }
 
-        fn u128_as_u64(&mut self, val: u128) -> Option<u64> {
-            u64::try_from(val).ok()
-        }
-
-        fn u64_as_u32(&mut self, val: u64) -> Option<u32> {
-            u32::try_from(val).ok()
-        }
-
-        fn u32_as_u16(&mut self, val: u32) -> Option<u16> {
-            val.try_into().ok()
-        }
-
-        fn i32_as_i8(&mut self, val: i32) -> Option<i8> {
-            val.try_into().ok()
-        }
-
-        fn u8_as_i8(&mut self, val: u8) -> i8 {
-            val as i8
-        }
-
-        fn u64_as_u8(&mut self, val: u64) -> u8 {
-            val as u8
-        }
-
-        fn u64_as_u16(&mut self, val: u64) -> u16 {
-            val as u16
-        }
-
-        fn u8_try_from_u64(&mut self, val: u64) -> Option<u8> {
-            u8::try_from(val).ok()
-        }
-
-        fn u8_try_from_u16(&mut self, val: u16) -> Option<u8> {
-            u8::try_from(val).ok()
-        }
-
-        fn u8_try_from_i32(&mut self, val: i32) -> Option<u8> {
-            u8::try_from(val).ok()
-        }
-
-        fn u64_try_from_i64(&mut self, val: i64) -> Option<u64> {
-            u64::try_from(val).ok()
-        }
-
-        fn u16_try_from_u64(&mut self, val: u64) -> Option<u16> {
-            u16::try_from(val).ok()
-        }
-
-        fn u32_try_from_u64(&mut self, val: u64) -> Option<u32> {
-            u32::try_from(val).ok()
-        }
-
-        fn i8_try_from_u64(&mut self, val: u64) -> Option<i8> {
-            i8::try_from(val).ok()
-        }
-
-        fn i16_try_from_u64(&mut self, val: u64) -> Option<i16> {
-            i16::try_from(val).ok()
-        }
-
-        fn i32_try_from_u64(&mut self, val: u64) -> Option<i32> {
-            i32::try_from(val).ok()
-        }
-
         fn u128_replicated_u64(&mut self, val: u128) -> Option<u64> {
             let low64 = val as u64 as u128;
             if (low64 | (low64 << 64)) == val {
@@ -1038,6 +733,14 @@ macro_rules! isle_common_prelude_methods {
             } else {
                 None
             }
+        }
+
+        fn u128_low_bits(&mut self, val: u128) -> u64 {
+            val as u64
+        }
+
+        fn u128_high_bits(&mut self, val: u128) -> u64 {
+            (val >> 64) as u64
         }
 
         fn f16_min(&mut self, a: Ieee16, b: Ieee16) -> Option<Ieee16> {

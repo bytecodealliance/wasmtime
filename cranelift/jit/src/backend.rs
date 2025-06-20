@@ -176,6 +176,7 @@ pub struct JITModule {
     declarations: ModuleDeclarations,
     compiled_functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
     compiled_data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
+    code_ranges: Vec<(usize, usize, FuncId)>,
     functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
 }
@@ -328,6 +329,9 @@ impl JITModule {
             data.perform_relocations(|name| self.get_address(name));
         }
 
+        self.code_ranges
+            .sort_unstable_by_key(|(start, _end, _)| *start);
+
         // Now that we're done patching, prepare the memory for execution!
         let branch_protection = if cfg!(target_arch = "aarch64") && use_bti(&self.isa.isa_flags()) {
             BranchProtection::BTI
@@ -358,9 +362,49 @@ impl JITModule {
             declarations: ModuleDeclarations::default(),
             compiled_functions: SecondaryMap::new(),
             compiled_data_objects: SecondaryMap::new(),
+            code_ranges: Vec::new(),
             functions_to_finalize: Vec::new(),
             data_objects_to_finalize: Vec::new(),
         }
+    }
+
+    /// Look up the Wasmtime unwind ExceptionTable and corresponding
+    /// base PC, if any, for a given PC that may be within one of the
+    /// CompiledBlobs in this module.
+    #[cfg(feature = "wasmtime-unwinder")]
+    pub fn lookup_wasmtime_exception_data<'a>(
+        &'a self,
+        pc: usize,
+    ) -> Option<(usize, wasmtime_unwinder::ExceptionTable<'a>)> {
+        // Search the sorted code-ranges for the PC.
+        let idx = match self
+            .code_ranges
+            .binary_search_by_key(&pc, |(start, _end, _func)| *start)
+        {
+            Ok(exact_start_match) => Some(exact_start_match),
+            Err(least_upper_bound) if least_upper_bound > 0 => {
+                let last_range_before_pc = &self.code_ranges[least_upper_bound - 1];
+                if last_range_before_pc.0 <= pc && pc < last_range_before_pc.1 {
+                    Some(least_upper_bound - 1)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }?;
+
+        let (start, _, func) = self.code_ranges[idx];
+
+        // Get the ExceptionTable. The "parse" here simply reads two
+        // u32s for lengths and constructs borrowed slices, so it's
+        // cheap.
+        let data = self.compiled_functions[func]
+            .as_ref()
+            .unwrap()
+            .exception_data
+            .as_ref()?;
+        let exception_table = wasmtime_unwinder::ExceptionTable::parse(data).ok()?;
+        Some((start, exception_table))
     }
 }
 
@@ -460,7 +504,32 @@ impl Module for JITModule {
             .collect();
 
         self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
-        self.compiled_functions[id] = Some(CompiledBlob { ptr, size, relocs });
+        self.compiled_functions[id] = Some(CompiledBlob {
+            ptr,
+            size,
+            relocs,
+            #[cfg(feature = "wasmtime-unwinder")]
+            exception_data: None,
+        });
+
+        let range_start = ptr as usize;
+        let range_end = range_start + size;
+        // These will be sorted when we finalize.
+        self.code_ranges.push((range_start, range_end, id));
+
+        #[cfg(feature = "wasmtime-unwinder")]
+        {
+            let mut exception_builder = wasmtime_unwinder::ExceptionTableBuilder::default();
+            exception_builder
+                .add_func(0, compiled_code.buffer.call_sites())
+                .map_err(|_| {
+                    ModuleError::Compilation(cranelift_codegen::CodegenError::Unsupported(
+                        "Invalid exception data".into(),
+                    ))
+                })?;
+            self.compiled_functions[id].as_mut().unwrap().exception_data =
+                Some(exception_builder.to_vec());
+        }
 
         self.functions_to_finalize.push(id);
 
@@ -509,6 +578,8 @@ impl Module for JITModule {
             ptr,
             size,
             relocs: relocs.to_owned(),
+            #[cfg(feature = "wasmtime-unwinder")]
+            exception_data: None,
         });
 
         self.functions_to_finalize.push(id);
@@ -599,6 +670,8 @@ impl Module for JITModule {
             ptr,
             size: init.size(),
             relocs,
+            #[cfg(feature = "wasmtime-unwinder")]
+            exception_data: None,
         });
         self.data_objects_to_finalize.push(id);
 

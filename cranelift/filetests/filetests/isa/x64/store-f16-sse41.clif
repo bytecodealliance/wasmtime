@@ -8,13 +8,13 @@ block0(v0: f16, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   pushq %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   pextrw  $0, %xmm0, 0(%rdi)
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   pextrw $0x0, %xmm0, (%rdi)
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

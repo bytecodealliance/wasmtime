@@ -1,7 +1,7 @@
 use crate::p2::{
+    IoImpl, IoView, StreamError, StreamResult,
     bindings::sync::io::poll::Pollable,
     bindings::sync::io::streams::{self, InputStream, OutputStream},
-    IoImpl, IoView, StreamError, StreamResult,
 };
 use crate::runtime::in_tokio;
 use wasmtime::component::Resource;

@@ -13,19 +13,19 @@ block0:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
-;   subq    %rsp, $16, %rsp
-;   movq    %rbx, 0(%rsp)
+;   pushq %rbp
+;   movq %rsp, %rbp
+;   subq $0x10, %rsp
+;   movq %rbx, (%rsp)
 ; block0:
 ;   load_ext_name userextname0+0, %rbx
 ;   call    *%rbx
 ;   call    *%rbx
-;   movq    0(%rsp), %rbx
-;   addq    %rsp, $16, %rsp
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   movq (%rsp), %rbx
+;   addq $0x10, %rsp
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

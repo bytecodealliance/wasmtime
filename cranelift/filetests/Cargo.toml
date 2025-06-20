@@ -19,9 +19,10 @@ cranelift-frontend = { workspace = true }
 cranelift-interpreter = { workspace = true }
 cranelift-native = { workspace = true }
 cranelift-reader = { workspace = true }
-cranelift-jit = { workspace = true, features = ["selinux-fix"] }
+cranelift-jit = { workspace = true, features = ["selinux-fix", "wasmtime-unwinder"] }
 cranelift-module = { workspace = true }
 cranelift-control = { workspace = true }
+wasmtime-unwinder = { workspace = true, features = ["cranelift"] }
 file-per-thread-logger = { workspace = true }
 filecheck = { workspace = true }
 gimli = { workspace = true, features = ['std'] }

@@ -6,7 +6,7 @@
     (select (local.get 0) (local.get 1) (local.get 2))
   )
 )
- 
+
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
@@ -14,7 +14,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x20, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x60
+;;       ja      0x65
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x20, %rsp
 ;;       movq    %rdi, 0x18(%rsp)
@@ -26,9 +26,9 @@
 ;;       movss   8(%rsp), %xmm0
 ;;       movss   0xc(%rsp), %xmm1
 ;;       cmpl    $0, %eax
-;;       je      0x5a
-;;   56: movsd   %xmm1, %xmm0
+;;       je      0x5c
+;;   59: movaps  %xmm1, %xmm0
 ;;       addq    $0x20, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   60: ud2
+;;   65: ud2

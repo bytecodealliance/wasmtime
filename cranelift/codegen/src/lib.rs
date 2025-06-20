@@ -21,9 +21,9 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(not(feature = "std"))]
-use hashbrown::{hash_map, HashMap};
+use hashbrown::{HashMap, hash_map};
 #[cfg(feature = "std")]
-use std::collections::{hash_map, HashMap};
+use std::collections::{HashMap, hash_map};
 
 pub use crate::context::Context;
 pub use crate::value_label::{LabelValueLoc, ValueLabelsRanges, ValueLocRange};
@@ -36,6 +36,9 @@ pub use cranelift_control as control;
 pub use cranelift_entity as entity;
 #[cfg(feature = "unwind")]
 pub use gimli;
+
+// Pull in generated the `isle_numerics_methods` macro.
+include!(concat!(env!("ISLE_DIR"), "/isle_numerics.rs"));
 
 #[macro_use]
 mod machinst;
@@ -59,13 +62,13 @@ pub mod write;
 
 pub use crate::entity::packed_option;
 pub use crate::machinst::buffer::{
-    FinalizedMachReloc, FinalizedRelocTarget, MachCallSite, MachSrcLoc, MachTextSectionBuilder,
-    MachTrap, OpenPatchRegion, PatchRegion,
+    FinalizedMachCallSite, FinalizedMachReloc, FinalizedRelocTarget, MachCallSite, MachSrcLoc,
+    MachTextSectionBuilder, MachTrap, OpenPatchRegion, PatchRegion,
 };
 pub use crate::machinst::{
     CallInfo, CompiledCode, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit,
-    MachInstEmitState, MachLabel, RealReg, Reg, RelocDistance, TextSectionBuilder,
-    VCodeConstantData, VCodeConstants, Writable,
+    MachInstEmitState, MachLabel, RealReg, Reg, RelocDistance, TextSectionBuilder, VCodeConstant,
+    VCodeConstantData, VCodeConstants, VCodeInst, Writable,
 };
 
 mod alias_analysis;

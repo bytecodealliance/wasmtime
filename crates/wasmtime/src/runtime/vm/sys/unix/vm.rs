@@ -1,6 +1,6 @@
 use crate::runtime::vm::sys::DecommitBehavior;
 use rustix::fd::AsRawFd;
-use rustix::mm::{mmap_anonymous, mprotect, MapFlags, MprotectFlags, ProtFlags};
+use rustix::mm::{MapFlags, MprotectFlags, ProtFlags, mmap_anonymous, mprotect};
 use std::fs::File;
 use std::io;
 #[cfg(feature = "std")]
@@ -66,6 +66,8 @@ pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
     Ok(())
 }
 
+// NB: this function is duplicated in `crates/fiber/src/unix.rs` so if this
+// changes that should probably get updated as well.
 pub fn get_page_size() -> usize {
     unsafe { libc::sysconf(libc::_SC_PAGESIZE).try_into().unwrap() }
 }
@@ -116,7 +118,7 @@ impl MemoryImageSource {
             // gracefully handle that and fall back to skipping the memfd
             // optimization.
             Err(memfd::Error::Create(err)) if err.kind() == ErrorKind::Unsupported => {
-                return Ok(None)
+                return Ok(None);
             }
             Err(e) => return Err(e.into()),
         };

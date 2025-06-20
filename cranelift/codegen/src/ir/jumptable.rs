@@ -3,8 +3,8 @@
 //! Jump tables are declared in the preamble and assigned an `ir::entities::JumpTable` reference.
 //! The actual table of destinations is stored in a `JumpTableData` struct defined in this module.
 
-use crate::ir::instructions::ValueListPool;
 use crate::ir::BlockCall;
+use crate::ir::instructions::ValueListPool;
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use core::slice::{Iter, IterMut};
@@ -68,13 +68,13 @@ impl JumpTableData {
 
     /// Returns an iterator to the jump table, excluding the default block.
     #[deprecated(since = "7.0.0", note = "please use `.as_slice()` instead")]
-    pub fn iter(&self) -> Iter<BlockCall> {
+    pub fn iter(&self) -> Iter<'_, BlockCall> {
         self.as_slice().iter()
     }
 
     /// Returns an iterator that allows modifying each value, excluding the default block.
     #[deprecated(since = "7.0.0", note = "please use `.as_mut_slice()` instead")]
-    pub fn iter_mut(&mut self) -> IterMut<BlockCall> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, BlockCall> {
         self.as_mut_slice().iter_mut()
     }
 

@@ -1,7 +1,7 @@
 //! Densely numbered entity references as set keys.
 
-use crate::keys::Keys;
 use crate::EntityRef;
+use crate::keys::Keys;
 use core::fmt;
 use core::marker::PhantomData;
 use cranelift_bitset::CompoundBitSet;
@@ -132,7 +132,7 @@ where
     /// assert_eq!(iter.next(), Some(Entity::new(3)));
     /// assert!(iter.next().is_none());
     /// ```
-    pub fn iter(&self) -> SetIter<K> {
+    pub fn iter(&self) -> SetIter<'_, K> {
         SetIter {
             inner: self.bitset.iter(),
             _phantom: PhantomData,

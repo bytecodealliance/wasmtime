@@ -289,11 +289,7 @@ impl Imm12 {
 
     /// Bits for 2-bit "shift" field in e.g. AddI.
     pub fn shift_bits(&self) -> u32 {
-        if self.shift12 {
-            0b01
-        } else {
-            0b00
-        }
+        if self.shift12 { 0b01 } else { 0b00 }
     }
 
     /// Bits for 12-bit "imm" field in e.g. AddI.
@@ -304,11 +300,7 @@ impl Imm12 {
     /// Get the actual value that this immediate corresponds to.
     pub fn value(&self) -> u32 {
         let base = self.bits as u32;
-        if self.shift12 {
-            base << 12
-        } else {
-            base
-        }
+        if self.shift12 { base << 12 } else { base }
     }
 }
 

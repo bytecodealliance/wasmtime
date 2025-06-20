@@ -113,6 +113,11 @@ impl TestcaseName {
     pub(crate) fn new<T: AsRef<[u8]>>(v: T) -> Self {
         Self(v.as_ref().into())
     }
+
+    /// Get the raw test case name as bytes.
+    pub fn raw(&self) -> &[u8] {
+        &self.0
+    }
 }
 
 /// The name of an external is either a reference to a user-defined symbol
@@ -233,7 +238,7 @@ impl FromStr for ExternalName {
 mod tests {
     use super::ExternalName;
     use crate::ir::{
-        entities::UserExternalNameRef, function::FunctionParameters, LibCall, UserExternalName,
+        LibCall, UserExternalName, entities::UserExternalNameRef, function::FunctionParameters,
     };
     use alloc::string::ToString;
     use core::u32;

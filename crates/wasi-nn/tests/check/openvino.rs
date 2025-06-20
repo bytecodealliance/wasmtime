@@ -1,5 +1,5 @@
-use super::{artifacts_dir, download, DOWNLOAD_LOCK};
-use anyhow::{bail, Context, Result};
+use super::{DOWNLOAD_LOCK, artifacts_dir, download};
+use anyhow::{Context, Result, bail};
 use std::fs;
 
 /// Return `Ok` if we find a working OpenVINO installation.

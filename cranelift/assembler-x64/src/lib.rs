@@ -6,21 +6,24 @@
 //! trait, allowing users of this assembler to plug in their own register types.
 //!
 //! ```
-//! # use cranelift_assembler_x64::{Feature, Imm8, inst, Inst, Registers};
+//! # use cranelift_assembler_x64::{Feature, Fixed, Imm8, inst, Inst, Registers};
 //! // Tell the assembler the type of registers we're using; we can always
 //! // encode a HW register as a `u8` (e.g., `eax = 0`).
 //! pub struct Regs;
 //! impl Registers for Regs {
 //!     type ReadGpr = u8;
 //!     type ReadWriteGpr = u8;
+//!     type WriteGpr = u8;
 //!     type ReadXmm = u8;
 //!     type ReadWriteXmm = u8;
+//!     type WriteXmm = u8;
 //! }
 //!
 //! // Then, build one of the `AND` instructions; this one operates on an
 //! // implicit `AL` register with an immediate. We can collect a sequence of
 //! // instructions by converting to the `Inst` type.
-//! let and = inst::andb_i::new(Imm8::new(0b10101010));
+//! let rax: u8 = 0;
+//! let and = inst::andb_i::new(Fixed(rax), Imm8::new(0b10101010));
 //! let seq: Vec<Inst<Regs>> = vec![and.into()];
 //!
 //! // Now we can encode this sequence into a code buffer, checking that each
@@ -44,11 +47,14 @@
 )]
 
 mod api;
+mod custom;
+mod fixed;
 pub mod gpr;
 mod imm;
 pub mod inst;
 mod mem;
 mod rex;
+mod vex;
 pub mod xmm;
 
 #[cfg(any(test, feature = "fuzz"))]
@@ -76,15 +82,11 @@ pub use api::{
     AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, RegisterVisitor, Registers,
     TrapCode,
 };
+pub use fixed::Fixed;
 pub use gpr::{Gpr, NonRspGpr, Size};
-pub use imm::{Extension, Imm16, Imm32, Imm8, Simm16, Simm32, Simm8};
+pub use imm::{Extension, Imm8, Imm16, Imm32, Imm64, Simm8, Simm16, Simm32};
 pub use mem::{
     Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, DeferredTarget, GprMem, Scale, XmmMem,
 };
-pub use rex::RexFlags;
+pub use rex::RexPrefix;
 pub use xmm::Xmm;
-
-/// List the files generated to create this assembler.
-pub fn generated_files() -> Vec<std::path::PathBuf> {
-    include!(concat!(env!("OUT_DIR"), "/generated-files.rs"))
-}

@@ -1,5 +1,12 @@
 //! This crate provides utilities for instruction cache maintenance for JIT authors.
 //!
+//! > **⚠️ Warning ⚠️**: this crate is an internal-only crate for the Wasmtime
+//! > project and is not intended for general use. APIs are not strictly
+//! > reviewed for safety and usage outside of Wasmtime may have bugs. If
+//! > you're interested in using this feel free to file an issue on the
+//! > Wasmtime repository to start a discussion about doing so, but otherwise
+//! > be aware that your usage of this crate is not supported.
+//!
 //! In self modifying codes such as when writing a JIT, special care must be taken when marking the
 //! code as ready for execution. On fully coherent architectures (X86, S390X) the data cache (D-Cache)
 //! and the instruction cache (I-Cache) are always in sync. However this is not guaranteed for all
@@ -27,7 +34,7 @@
 //! ```
 //! # use std::ffi::c_void;
 //! # use std::io;
-//! # use wasmtime_jit_icache_coherence::*;
+//! # use wasmtime_internal_jit_icache_coherence::*;
 //! #
 //! # struct Page {
 //! #   addr: *const c_void,

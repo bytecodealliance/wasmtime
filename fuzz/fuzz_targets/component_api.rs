@@ -1,12 +1,10 @@
 #![no_main]
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 use libfuzzer_sys::{arbitrary, fuzz_target};
 use wasmtime_fuzzing::oracles;
 
 include!(concat!(env!("OUT_DIR"), "/static_component_api.rs"));
 
-#[allow(unused_imports)]
 fn target(input: &mut arbitrary::Unstructured) -> arbitrary::Result<()> {
     if input.arbitrary()? {
         static_component_api_target(input)

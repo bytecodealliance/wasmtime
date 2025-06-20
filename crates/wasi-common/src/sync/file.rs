@@ -1,6 +1,6 @@
 use crate::{
-    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error, ErrorExt,
+    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
 };
 use cap_fs_ext::MetadataExt;
 use fs_set_times::{SetTimes, SystemTimeSpec};
@@ -26,7 +26,7 @@ impl WasiFile for File {
         self
     }
     #[cfg(unix)]
-    fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+    fn pollable(&self) -> Option<rustix::fd::BorrowedFd<'_>> {
         Some(self.0.as_fd())
     }
     #[cfg(windows)]

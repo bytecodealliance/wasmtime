@@ -1,3 +1,4 @@
+use crate::Config;
 use crate::prelude::*;
 #[cfg(feature = "runtime")]
 pub use crate::runtime::code_memory::CustomCodeMemory;
@@ -5,7 +6,6 @@ pub use crate::runtime::code_memory::CustomCodeMemory;
 use crate::runtime::type_registry::TypeRegistry;
 #[cfg(feature = "runtime")]
 use crate::runtime::vm::GcRuntime;
-use crate::Config;
 use alloc::sync::Arc;
 use core::ptr::NonNull;
 #[cfg(target_has_atomic = "64")]
@@ -353,10 +353,10 @@ impl Engine {
             // These settings must all have be enabled, since their value
             // can affect the way the generated code performs or behaves at
             // runtime.
-            "libcall_call_conv" => *value == FlagValue::Enum("isa_default".into()),
+            "libcall_call_conv" => *value == FlagValue::Enum("isa_default"),
             "preserve_frame_pointers" => *value == FlagValue::Bool(true),
             "enable_probestack" => *value == FlagValue::Bool(true),
-            "probestack_strategy" => *value == FlagValue::Enum("inline".into()),
+            "probestack_strategy" => *value == FlagValue::Enum("inline"),
             "enable_multi_ret_implicit_sret" => *value == FlagValue::Bool(true),
 
             // Features wasmtime doesn't use should all be disabled, since
@@ -387,6 +387,24 @@ impl Engine {
                 }
             }
 
+            // stack switch model must match the current OS
+            "stack_switch_model" => {
+                if self.features().contains(WasmFeatures::STACK_SWITCHING) {
+                    use target_lexicon::OperatingSystem;
+                    let expected =
+                    match target.operating_system  {
+                        OperatingSystem::Windows => "update_windows_tib",
+                        OperatingSystem::Linux
+                        | OperatingSystem::MacOSX(_)
+                        | OperatingSystem::Darwin(_)  => "basic",
+                        _ => { return Err(String::from("stack-switching feature not supported on this platform")); }
+                    };
+                    *value == FlagValue::Enum(expected)
+                } else {
+                    return Ok(())
+                }
+            }
+
             // These settings don't affect the interface or functionality of
             // the module itself, so their configuration values shouldn't
             // matter.
@@ -405,7 +423,6 @@ impl Engine {
             | "log2_min_function_alignment"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
-            | "stack_switch_model" // wasmtime doesn't use stack switching right now
             | "opt_level" // opt level doesn't change semantics
             | "enable_alias_analysis" // alias analysis-based opts don't change semantics
             | "probestack_size_log2" // probestack above asserted disabled
@@ -451,14 +468,14 @@ impl Engine {
                     Ok(())
                 } else {
                     Err("wrong host pointer width".to_string())
-                }
+                };
             }
             FlagValue::Enum("pointer64") => {
                 return if cfg!(target_pointer_width = "64") {
                     Ok(())
                 } else {
                     Err("wrong host pointer width".to_string())
-                }
+                };
             }
 
             // Only `bool` values are supported right now, other settings would
@@ -466,7 +483,7 @@ impl Engine {
             _ => {
                 return Err(format!(
                     "isa-specific feature {flag:?} configured to unknown value {value:?}"
-                ))
+                ));
             }
         }
 
@@ -515,7 +532,7 @@ impl Engine {
             // pulley features
             "big_endian" if cfg!(target_endian = "big") => return Ok(()),
             "big_endian" if cfg!(target_endian = "little") => {
-                return Err("wrong host endianness".to_string())
+                return Err("wrong host endianness".to_string());
             }
 
             _ => {
@@ -537,7 +554,7 @@ impl Engine {
                     "cannot determine if host feature {host_feature:?} is \
                      available at runtime, configure a probing function with \
                      `Config::detect_host_feature`"
-                ))
+                ));
             }
         };
 
@@ -671,12 +688,8 @@ impl Engine {
         self.inner.allocator.as_ref()
     }
 
-    pub(crate) fn gc_runtime(&self) -> Result<&Arc<dyn GcRuntime>> {
-        if let Some(rt) = &self.inner.gc_runtime {
-            Ok(rt)
-        } else {
-            bail!("no GC runtime: GC disabled at compile time or configuration time")
-        }
+    pub(crate) fn gc_runtime(&self) -> Option<&Arc<dyn GcRuntime>> {
+        self.inner.gc_runtime.as_ref()
     }
 
     pub(crate) fn profiler(&self) -> &dyn crate::profiling_agent::ProfilingAgent {
@@ -684,8 +697,8 @@ impl Engine {
     }
 
     #[cfg(all(feature = "cache", any(feature = "cranelift", feature = "winch")))]
-    pub(crate) fn cache_config(&self) -> &wasmtime_cache::CacheConfig {
-        &self.config().cache_config
+    pub(crate) fn cache(&self) -> Option<&wasmtime_cache::Cache> {
+        self.config().cache.as_ref()
     }
 
     pub(crate) fn signatures(&self) -> &TypeRegistry {

@@ -6,11 +6,11 @@
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
 /// For more information see [`Host_`] as well.
-pub struct Host_Pre<T> {
+pub struct Host_Pre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
     indices: Host_Indices,
 }
-impl<T> Clone for Host_Pre<T> {
+impl<T: 'static> Clone for Host_Pre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,7 +18,7 @@ impl<T> Clone for Host_Pre<T> {
         }
     }
 }
-impl<_T> Host_Pre<_T> {
+impl<_T: 'static> Host_Pre<_T> {
     /// Creates a new copy of `Host_Pre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -27,7 +27,7 @@ impl<_T> Host_Pre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = Host_Indices::new(instance_pre.component())?;
+        let indices = Host_Indices::new(&instance_pre)?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -83,11 +83,6 @@ pub struct Host_Indices {}
 /// * If you've instantiated the instance yourself already
 ///   then you can use [`Host_::new`].
 ///
-/// * You can also access the guts of instantiation through
-///   [`Host_Indices::new_instance`] followed
-///   by [`Host_Indices::load`] to crate an instance of this
-///   type.
-///
 /// These methods are all equivalent to one another and move
 /// around the tradeoff of what work is performed when.
 ///
@@ -98,19 +93,6 @@ pub struct Host_ {}
 #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
 pub trait Host_Imports: Send {
     async fn foo(&mut self) -> ();
-}
-pub trait Host_ImportsGetHost<
-    T,
-    D,
->: Fn(T) -> <Self as Host_ImportsGetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-    type Host: Host_Imports;
-}
-impl<F, T, D, O> Host_ImportsGetHost<T, D> for F
-where
-    F: Fn(T) -> O + Send + Sync + Copy + 'static,
-    O: Host_Imports,
-{
-    type Host = O;
 }
 impl<_T: Host_Imports + ?Sized + Send> Host_Imports for &mut _T {
     async fn foo(&mut self) -> () {
@@ -126,24 +108,11 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new(
-            component: &wasmtime::component::Component,
+        pub fn new<_T>(
+            _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
-            let _component = component;
-            Ok(Host_Indices {})
-        }
-        /// Creates a new instance of [`Host_Indices`] from an
-        /// instantiated component.
-        ///
-        /// This method of creating a [`Host_`] will perform string
-        /// lookups for all exports when this method is called. This
-        /// will only succeed if the provided instance matches the
-        /// requirements of [`Host_`].
-        pub fn new_instance(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let _instance = instance;
+            let _component = _instance_pre.component();
+            let _instance_type = _instance_pre.instance_type();
             Ok(Host_Indices {})
         }
         /// Uses the indices stored in `self` to load an instance
@@ -156,6 +125,7 @@ const _: () = {
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Host_> {
+            let _ = &mut store;
             let _instance = instance;
             Ok(Host_ {})
         }
@@ -164,7 +134,7 @@ const _: () = {
         /// Convenience wrapper around [`Host_Pre::new`] and
         /// [`Host_Pre::instantiate_async`].
         pub async fn instantiate_async<_T>(
-            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<Host_>
@@ -174,24 +144,23 @@ const _: () = {
             let pre = linker.instantiate_pre(component)?;
             Host_Pre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`Host_Indices::new_instance`] and
+        /// Convenience wrapper around [`Host_Indices::new`] and
         /// [`Host_Indices::load`].
         pub fn new(
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Host_> {
-            let indices = Host_Indices::new_instance(&mut store, instance)?;
-            indices.load(store, instance)
+            let indices = Host_Indices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
         }
-        pub fn add_to_linker_imports_get_host<
-            T,
-            G: for<'a> Host_ImportsGetHost<&'a mut T, T, Host: Host_Imports>,
-        >(
+        pub fn add_to_linker_imports<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            host_getter: G,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            T: Send,
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<'a>: Host_Imports,
+            T: 'static + Send,
         {
             let mut linker = linker.root();
             linker
@@ -207,15 +176,16 @@ const _: () = {
                 )?;
             Ok(())
         }
-        pub fn add_to_linker<T, U>(
+        pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            T: Send,
-            U: Host_Imports + Send,
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<'a>: Host_Imports + Send,
+            T: 'static + Send,
         {
-            Self::add_to_linker_imports_get_host(linker, get)?;
+            Self::add_to_linker_imports::<T, D>(linker, host_getter)?;
             Ok(())
         }
     }

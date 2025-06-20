@@ -42,7 +42,7 @@ fn main() -> Result<(), Errors> {
 
     output
         .write_all(code.as_bytes())
-        .map_err(|e| Errors::from_io(e, format!("failed to write to '{}'", output_name)))?;
+        .map_err(|e| Errors::from_io(e, format!("failed to write to '{output_name}'")))?;
 
     Ok(())
 }

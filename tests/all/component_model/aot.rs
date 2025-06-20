@@ -101,6 +101,7 @@ fn cannot_serialize_exported_module() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn usable_exported_modules() -> Result<()> {
     let engine = super::engine();
     let component = Component::new(

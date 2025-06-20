@@ -7,7 +7,7 @@
 )
 ;; wasm[0]::function[0]:
 ;;       push_frame
-;;       xload64le_o32 x6, x0, 32
+;;       xload64le_o32 x6, x0, 24
 ;;       xload64le_o32 x6, x6, 0
 ;;       xload64le_o32 x7, x0, 8
 ;;       xload64le_o32 x7, x7, 8

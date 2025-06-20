@@ -1,10 +1,10 @@
 use crate::linker::{Definition, DefinitionType};
 use crate::prelude::*;
 use crate::runtime::vm::{
-    Imports, InstanceAllocationRequest, ModuleRuntimeInfo, StorePtr, VMFuncRef, VMFunctionImport,
-    VMGlobalImport, VMMemoryImport, VMOpaqueContext, VMTable, VMTagImport,
+    self, Imports, ModuleRuntimeInfo, VMFuncRef, VMFunctionImport, VMGlobalImport, VMMemoryImport,
+    VMTableImport, VMTagImport,
 };
-use crate::store::{InstanceId, StoreOpaque, Stored};
+use crate::store::{AllocateInstanceKind, InstanceId, StoreInstanceId, StoreOpaque};
 use crate::types::matching;
 use crate::{
     AsContextMut, Engine, Export, Extern, Func, Global, Memory, Module, ModuleExport, SharedMemory,
@@ -32,27 +32,20 @@ use wasmtime_environ::{
 /// [`Linker`](crate::Linker) methods, but a more low-level constructor is also
 /// available as [`Instance::new`].
 #[derive(Copy, Clone, Debug)]
-#[repr(transparent)]
-pub struct Instance(Stored<InstanceData>);
-
-pub(crate) struct InstanceData {
-    /// The id of the instance within the store, used to find the original
-    /// `InstanceHandle`.
-    id: InstanceId,
-    /// A lazily-populated list of exports of this instance. The order of
-    /// exports here matches the order of the exports in the original
-    /// module.
-    exports: Vec<Option<Extern>>,
+#[repr(C)]
+pub struct Instance {
+    id: StoreInstanceId,
 }
 
-impl InstanceData {
-    pub fn from_id(id: InstanceId) -> InstanceData {
-        InstanceData {
-            id,
-            exports: vec![],
-        }
-    }
-}
+// Double-check that the C representation in `instance.h` matches our in-Rust
+// representation here in terms of size/alignment/etc.
+const _: () = {
+    #[repr(C)]
+    struct C(u64, usize);
+    assert!(core::mem::size_of::<C>() == core::mem::size_of::<Instance>());
+    assert!(core::mem::align_of::<C>() == core::mem::align_of::<Instance>());
+    assert!(core::mem::offset_of!(Instance, id) == 0);
+};
 
 impl Instance {
     /// Creates a new [`Instance`] from the previously compiled [`Module`] and
@@ -145,14 +138,11 @@ impl Instance {
     /// This function will also panic, like [`Instance::new`], if any [`Extern`]
     /// specified does not belong to `store`.
     #[cfg(feature = "async")]
-    pub async fn new_async<T>(
-        mut store: impl AsContextMut<Data = T>,
+    pub async fn new_async(
+        mut store: impl AsContextMut<Data: Send>,
         module: &Module,
         imports: &[Extern],
-    ) -> Result<Instance>
-    where
-        T: Send,
-    {
+    ) -> Result<Instance> {
         let mut store = store.as_context_mut();
         let imports = Instance::typecheck_externs(store.0, module, imports)?;
         // See `new` for notes on this unsafety
@@ -169,13 +159,28 @@ impl Instance {
                 bail!("cross-`Store` instantiation is not currently supported");
             }
         }
+
         typecheck(module, imports, |cx, ty, item| {
             let item = DefinitionType::from(store, item);
             cx.definition(ty, &item)
         })?;
+
+        // When pushing functions into `OwnedImports` it's required that their
+        // `wasm_call` fields are all filled out. This `module` is guaranteed
+        // to have any trampolines necessary for functions so register the
+        // module with the store and then attempt to fill out any outstanding
+        // holes.
+        //
+        // Note that under normal operation this shouldn't do much as the list
+        // of funcs-with-holes should generally be empty. As a result the
+        // process of filling this out is not super optimized at this point.
+        store.modules_mut().register_module(module);
+        let (funcrefs, modules) = store.func_refs_and_modules();
+        funcrefs.fill(modules);
+
         let mut owned_imports = OwnedImports::new(module);
         for import in imports {
-            owned_imports.push(import, store, module);
+            owned_imports.push(import, store);
         }
         Ok(owned_imports)
     }
@@ -221,7 +226,7 @@ impl Instance {
         imports: Imports<'_>,
     ) -> Result<Instance>
     where
-        T: Send,
+        T: Send + 'static,
     {
         assert!(
             store.0.async_support(),
@@ -268,46 +273,15 @@ impl Instance {
         // Register the module just before instantiation to ensure we keep the module
         // properly referenced while in use by the store.
         let module_id = store.modules_mut().register_module(module);
-        store.fill_func_refs();
 
         // The first thing we do is issue an instance allocation request
         // to the instance allocator. This, on success, will give us an
         // instance handle.
-        //
-        // Note that the `host_state` here is a pointer back to the
-        // `Instance` we'll be returning from this function. This is a
-        // circular reference so we can't construct it before we construct
-        // this instance, so we determine what the ID is and then assert
-        // it's the same later when we do actually insert it.
-        let instance_to_be = store.store_data().next_id::<InstanceData>();
-
-        let mut instance_handle =
-            store
-                .engine()
-                .allocator()
-                .allocate_module(InstanceAllocationRequest {
-                    runtime_info: &ModuleRuntimeInfo::Module(module.clone()),
-                    imports,
-                    host_state: Box::new(Instance(instance_to_be)),
-                    store: StorePtr::new(store.traitobj()),
-                    wmemcheck: store.engine().config().wmemcheck,
-                    pkey: store.get_pkey(),
-                    tunables: store.engine().tunables(),
-                })?;
-
-        // The instance still has lots of setup, for example
-        // data/elements/start/etc. This can all fail, but even on failure
-        // the instance may persist some state via previous successful
-        // initialization. For this reason once we have an instance handle
-        // we immediately insert it into the store to keep it alive.
-        //
-        // Note that we `clone` the instance handle just to make easier
-        // working the borrow checker here easier. Technically the `&mut
-        // instance` has somewhat of a borrow on `store` (which
-        // conflicts with the borrow on `store.engine`) but this doesn't
-        // matter in practice since initialization isn't even running any
-        // code here anyway.
-        let id = store.add_instance(instance_handle.clone(), module_id);
+        let id = store.allocate_instance(
+            AllocateInstanceKind::Module(module_id),
+            &ModuleRuntimeInfo::Module(module.clone()),
+            imports,
+        )?;
 
         // Additionally, before we start doing fallible instantiation, we
         // do one more step which is to insert an `InstanceData`
@@ -321,15 +295,7 @@ impl Instance {
         // For module/instance exports, though, those aren't actually
         // stored in the instance handle so we need to immediately handle
         // those here.
-        let instance = {
-            let exports = vec![None; compiled_module.module().exports.len()];
-            let data = InstanceData { id, exports };
-            Instance::from_wasmtime(data, store)
-        };
-
-        // double-check our guess of what the new instance's ID would be
-        // was actually correct.
-        assert_eq!(instance.0, instance_to_be);
+        let instance = Instance::from_wasmtime(id, store);
 
         // Now that we've recorded all information we need to about this
         // instance within a `Store` we can start performing fallible
@@ -345,42 +311,39 @@ impl Instance {
             .engine()
             .features()
             .contains(WasmFeatures::BULK_MEMORY);
-        instance_handle.initialize(store, compiled_module.module(), bulk_memory)?;
+
+        vm::initialize_instance(store, id, compiled_module.module(), bulk_memory)?;
 
         Ok((instance, compiled_module.module().start_func))
     }
 
-    pub(crate) fn from_wasmtime(handle: InstanceData, store: &mut StoreOpaque) -> Instance {
-        Instance(store.store_data_mut().insert(handle))
+    pub(crate) fn from_wasmtime(id: InstanceId, store: &mut StoreOpaque) -> Instance {
+        Instance {
+            id: StoreInstanceId::new(store.id(), id),
+        }
     }
 
     fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>, start: FuncIndex) -> Result<()> {
-        let id = store.0.store_data()[self.0].id;
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
-        let instance = store.0.instance_mut(id);
-        let f = instance.get_exported_func(start);
+        let mut instance = self.id.get_mut(store.0);
+        let f = instance.as_mut().get_exported_func(start);
         let caller_vmctx = instance.vmctx();
         unsafe {
             super::func::invoke_wasm_and_catch_traps(store, |_default_caller, vm| {
-                f.func_ref.as_ref().array_call(
-                    vm,
-                    VMOpaqueContext::from_vmcontext(caller_vmctx),
-                    NonNull::from(&mut []),
-                )
+                VMFuncRef::array_call(f.func_ref, vm, caller_vmctx, NonNull::from(&mut []))
             })?;
         }
         Ok(())
     }
 
     /// Get this instance's module.
-    pub fn module<'a, T: 'a>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a Module {
+    pub fn module<'a, T: 'static>(&self, store: impl Into<StoreContext<'a, T>>) -> &'a Module {
         self._module(store.into().0)
     }
 
     fn _module<'a>(&self, store: &'a StoreOpaque) -> &'a Module {
-        let InstanceData { id, .. } = store[self.0];
-        store.module_for_instance(id).unwrap()
+        store.module_for_instance(self.id).unwrap()
     }
 
     /// Returns the list of exported items from this [`Instance`].
@@ -388,7 +351,7 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `store` does not own this instance.
-    pub fn exports<'a, T: 'a>(
+    pub fn exports<'a, T: 'static>(
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
@@ -399,31 +362,17 @@ impl Instance {
         &'a self,
         store: &'a mut StoreOpaque,
     ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
-        // If this is an `Instantiated` instance then all the `exports` may not
-        // be filled in. Fill them all in now if that's the case.
-        let InstanceData { exports, id, .. } = &store[self.0];
-        if exports.iter().any(|e| e.is_none()) {
-            let module = Arc::clone(store.instance(*id).module());
-            let data = &store[self.0];
-            let id = data.id;
-
-            for name in module.exports.keys() {
-                let instance = store.instance(id);
-                if let Some((export_name_index, _, &entity)) =
-                    instance.module().exports.get_full(name)
-                {
-                    self._get_export(store, entity, export_name_index);
-                }
-            }
+        let module = store[self.id].env_module().clone();
+        let mut items = Vec::new();
+        for (_name, entity) in module.exports.iter() {
+            items.push(self._get_export(store, *entity));
         }
-
-        let data = &store.store_data()[self.0];
-        let module = store.instance(data.id).module();
-        module
+        store[self.id]
+            .env_module()
             .exports
             .iter()
-            .zip(&data.exports)
-            .map(|((name, _), export)| Export::new(name, export.clone().unwrap()))
+            .zip(items)
+            .map(|((name, _), item)| Export::new(name, item))
     }
 
     /// Looks up an exported [`Extern`] value by name.
@@ -445,10 +394,8 @@ impl Instance {
     /// mutable context.
     pub fn get_export(&self, mut store: impl AsContextMut, name: &str) -> Option<Extern> {
         let store = store.as_context_mut().0;
-        let data = &store[self.0];
-        let instance = store.instance(data.id);
-        let (export_name_index, _, &entity) = instance.module().exports.get_full(name)?;
-        self._get_export(store, entity, export_name_index)
+        let entity = *store[self.id].env_module().exports.get(name)?;
+        Some(self._get_export(store, entity))
     }
 
     /// Looks up an exported [`Extern`] value by a [`ModuleExport`] value.
@@ -476,29 +423,12 @@ impl Instance {
             return None;
         }
 
-        self._get_export(store, export.entity, export.export_name_index)
+        Some(self._get_export(store, export.entity))
     }
 
-    fn _get_export(
-        &self,
-        store: &mut StoreOpaque,
-        entity: EntityIndex,
-        export_name_index: usize,
-    ) -> Option<Extern> {
-        // Instantiated instances will lazily fill in exports, so we process
-        // all that lazy logic here.
-        let data = &store[self.0];
-
-        if let Some(export) = &data.exports[export_name_index] {
-            return Some(export.clone());
-        }
-
-        let instance = store.instance_mut(data.id); // Reborrow the &mut InstanceHandle
-        let item =
-            unsafe { Extern::from_wasmtime_export(instance.get_export_by_index(entity), store) };
-        let data = &mut store[self.0];
-        data.exports[export_name_index] = Some(item.clone());
-        Some(item)
+    fn _get_export(&self, store: &mut StoreOpaque, entity: EntityIndex) -> Extern {
+        let export = self.id.get_mut(store).get_export_by_index_mut(entity);
+        unsafe { Extern::from_wasmtime_export(export, store) }
     }
 
     /// Looks up an exported [`Func`] value by name.
@@ -607,8 +537,8 @@ impl Instance {
     }
 
     #[cfg(feature = "component-model")]
-    pub(crate) fn id(&self, store: &StoreOpaque) -> InstanceId {
-        store[self.0].id
+    pub(crate) fn id(&self) -> InstanceId {
+        self.id.instance()
     }
 
     /// Get all globals within this instance.
@@ -623,9 +553,7 @@ impl Instance {
         &'a self,
         store: &'a mut StoreOpaque,
     ) -> impl ExactSizeIterator<Item = (GlobalIndex, Global)> + 'a {
-        let data = &store[self.0];
-        let instance = store.instance_mut(data.id);
-        instance
+        store[self.id]
             .all_globals()
             .collect::<Vec<_>>()
             .into_iter()
@@ -644,9 +572,7 @@ impl Instance {
         &'a self,
         store: &'a mut StoreOpaque,
     ) -> impl ExactSizeIterator<Item = (MemoryIndex, Memory)> + 'a {
-        let data = &store[self.0];
-        let instance = store.instance_mut(data.id);
-        instance
+        store[self.id]
             .all_memories()
             .collect::<Vec<_>>()
             .into_iter()
@@ -656,7 +582,7 @@ impl Instance {
 
 pub(crate) struct OwnedImports {
     functions: PrimaryMap<FuncIndex, VMFunctionImport>,
-    tables: PrimaryMap<TableIndex, VMTable>,
+    tables: PrimaryMap<TableIndex, VMTableImport>,
     memories: PrimaryMap<MemoryIndex, VMMemoryImport>,
     globals: PrimaryMap<GlobalIndex, VMGlobalImport>,
     tags: PrimaryMap<TagIndex, VMTagImport>,
@@ -697,10 +623,10 @@ impl OwnedImports {
         self.tags.clear();
     }
 
-    fn push(&mut self, item: &Extern, store: &mut StoreOpaque, module: &Module) {
+    fn push(&mut self, item: &Extern, store: &mut StoreOpaque) {
         match item {
             Extern::Func(i) => {
-                self.functions.push(i.vmimport(store, module));
+                self.functions.push(i.vmimport(store));
             }
             Extern::Global(i) => {
                 self.globals.push(i.vmimport(store));
@@ -734,14 +660,13 @@ impl OwnedImports {
                 });
             }
             crate::runtime::vm::Export::Global(g) => {
-                self.globals.push(VMGlobalImport {
-                    from: g.definition.into(),
-                });
+                self.globals.push(g.vmimport());
             }
             crate::runtime::vm::Export::Table(t) => {
-                self.tables.push(VMTable {
+                self.tables.push(VMTableImport {
                     from: t.definition.into(),
                     vmctx: t.vmctx.into(),
+                    index: t.index,
                 });
             }
             crate::runtime::vm::Export::Memory(m) => {
@@ -754,6 +679,8 @@ impl OwnedImports {
             crate::runtime::vm::Export::Tag(t) => {
                 self.tags.push(VMTagImport {
                     from: t.definition.into(),
+                    vmctx: t.vmctx.into(),
+                    index: t.index,
                 });
             }
         }
@@ -824,7 +751,7 @@ impl<T> Clone for InstancePre<T> {
     }
 }
 
-impl<T> InstancePre<T> {
+impl<T: 'static> InstancePre<T> {
     /// Creates a new `InstancePre` which type-checks the `items` provided and
     /// on success is ready to instantiate a new instance.
     ///
@@ -917,11 +844,8 @@ impl<T> InstancePre<T> {
     #[cfg(feature = "async")]
     pub async fn instantiate_async(
         &self,
-        mut store: impl AsContextMut<Data = T>,
-    ) -> Result<Instance>
-    where
-        T: Send,
-    {
+        mut store: impl AsContextMut<Data: Send>,
+    ) -> Result<Instance> {
         let mut store = store.as_context_mut();
         let imports = pre_instantiate_raw(
             &mut store.0,
@@ -951,19 +875,25 @@ fn pre_instantiate_raw(
     host_funcs: usize,
     func_refs: &Arc<[VMFuncRef]>,
 ) -> Result<OwnedImports> {
+    // Register this module and use it to fill out any funcref wasm_call holes
+    // we can. For more comments on this see `typecheck_externs`.
+    store.modules_mut().register_module(module);
+    let (funcrefs, modules) = store.func_refs_and_modules();
+    funcrefs.fill(modules);
+
     if host_funcs > 0 {
         // Any linker-defined function of the `Definition::HostFunc` variant
         // will insert a function into the store automatically as part of
         // instantiation, so reserve space here to make insertion more efficient
         // as it won't have to realloc during the instantiation.
-        store.store_data_mut().reserve_funcs(host_funcs);
+        funcrefs.reserve_storage(host_funcs);
 
         // The usage of `to_extern_store_rooted` requires that the items are
         // rooted via another means, which happens here by cloning the list of
         // items into the store once. This avoids cloning each individual item
         // below.
-        store.push_rooted_funcs(items.clone());
-        store.push_instance_pre_func_refs(func_refs.clone());
+        funcrefs.push_instance_pre_definitions(items.clone());
+        funcrefs.push_instance_pre_func_refs(func_refs.clone());
     }
 
     let mut func_refs = func_refs.iter().map(|f| NonNull::from(f));
@@ -990,7 +920,7 @@ fn pre_instantiate_raw(
                 .into()
             },
         };
-        imports.push(&item, store, module);
+        imports.push(&item, store);
     }
 
     Ok(imports)

@@ -7,7 +7,7 @@ use crate::cdsl::operands::Operand;
 use crate::cdsl::typevar::{TypeSet, TypeVar};
 use crate::unique_table::{UniqueSeqTable, UniqueTable};
 use cranelift_codegen_shared::constant_hash;
-use cranelift_srcgen::{error, fmtln, Formatter, Language, Match};
+use cranelift_srcgen::{Formatter, Language, Match, error, fmtln};
 use std::fmt;
 use std::rc::Rc;
 

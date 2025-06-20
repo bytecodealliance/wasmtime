@@ -170,7 +170,6 @@ impl GuestProfiler {
     ) -> Self {
         let modules = component
             .static_modules()
-            .into_iter()
             .map(|m| (m.name().unwrap_or("<unknown>").to_string(), m.clone()))
             .chain(extra_modules);
         Self::new(component_name, interval, modules)

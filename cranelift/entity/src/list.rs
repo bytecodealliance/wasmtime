@@ -1,6 +1,6 @@
 //! Small lists of entity references.
-use crate::packed_option::ReservedValue;
 use crate::EntityRef;
+use crate::packed_option::ReservedValue;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use core::mem;
@@ -948,7 +948,9 @@ mod tests {
         list.copy_from(&list_again, .., 7, pool);
         assert_eq!(
             list.as_slice(pool),
-            &[i4, i3, i2, i1, i1, i2, i4, i3, i2, i1, i1, i2, i3, i4, i4, i3, i3, i4, i4, i3]
+            &[
+                i4, i3, i2, i1, i1, i2, i4, i3, i2, i1, i1, i2, i3, i4, i4, i3, i3, i4, i4, i3
+            ]
         )
     }
 }

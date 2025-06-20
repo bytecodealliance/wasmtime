@@ -32,11 +32,32 @@ impl Features {
     pub fn iter(&self) -> impl Iterator<Item = &Feature> {
         self.0.iter()
     }
+
+    pub fn contains(&self, feature: Feature) -> bool {
+        self.0.contains(&feature)
+    }
+
+    pub(crate) fn is_sse(&self) -> bool {
+        self.0.iter().any(|f| {
+            matches!(
+                f,
+                Feature::sse | Feature::sse2 | Feature::ssse3 | Feature::sse41
+            )
+        })
+    }
 }
 
 impl fmt::Display for Features {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.0.iter().map(ToString::to_string).collect::<Vec<_>>().join(" | "))
+        write!(
+            f,
+            "{}",
+            self.0
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(" | ")
+        )
     }
 }
 
@@ -55,6 +76,17 @@ pub enum Feature {
     _64b,
     compat,
     sse,
+    sse2,
+    sse3,
+    ssse3,
+    sse41,
+    sse42,
+    bmi1,
+    bmi2,
+    lzcnt,
+    popcnt,
+    avx,
+    cmpxchg16b,
 }
 
 /// List all CPU features.
@@ -64,15 +96,26 @@ pub enum Feature {
 /// transcribe each variant to an `enum` available in the generated layer above.
 /// If this list is incomplete, we will (fortunately) see compile errors for
 /// generated functions that use the missing variants.
-pub const ALL_FEATURES: &[Feature] = &[Feature::_64b, Feature::compat, Feature::sse];
+pub const ALL_FEATURES: &[Feature] = &[
+    Feature::_64b,
+    Feature::compat,
+    Feature::sse,
+    Feature::sse2,
+    Feature::sse3,
+    Feature::ssse3,
+    Feature::sse41,
+    Feature::sse42,
+    Feature::bmi1,
+    Feature::bmi2,
+    Feature::lzcnt,
+    Feature::popcnt,
+    Feature::avx,
+    Feature::cmpxchg16b,
+];
 
 impl fmt::Display for Feature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Feature::_64b => write!(f, "_64b"),
-            Feature::compat => write!(f, "compat"),
-            Feature::sse => write!(f, "sse"),
-        }
+        fmt::Debug::fmt(self, f)
     }
 }
 

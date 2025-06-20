@@ -4,7 +4,7 @@ use super::GcCompiler;
 use crate::func_environ::{Extension, FuncEnvironment};
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::{wasm_unsupported, TypeIndex, WasmRefType, WasmResult};
+use wasmtime_environ::{TypeIndex, WasmRefType, WasmResult, wasm_unsupported};
 
 fn disabled<T>() -> WasmResult<T> {
     Err(wasm_unsupported!(
@@ -130,8 +130,9 @@ pub fn translate_array_set(
 pub fn translate_ref_test(
     _func_env: &mut FuncEnvironment<'_>,
     _builder: &mut FunctionBuilder<'_>,
-    _ref_ty: WasmRefType,
-    _gc_ref: ir::Value,
+    _test_ty: WasmRefType,
+    _val: ir::Value,
+    _val_ty: WasmRefType,
 ) -> WasmResult<ir::Value> {
     disabled()
 }

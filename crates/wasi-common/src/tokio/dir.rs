@@ -1,8 +1,8 @@
 use crate::tokio::{block_on_dummy_executor, file::File};
 use crate::{
+    Error, ErrorExt,
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
     file::{FdFlags, Filestat, OFlags},
-    Error, ErrorExt,
 };
 use std::any::Any;
 use std::path::PathBuf;

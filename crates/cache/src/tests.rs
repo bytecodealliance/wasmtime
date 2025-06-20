@@ -13,7 +13,6 @@ fn test_cache_init() {
     let baseline_compression_level = 4;
     let config_content = format!(
         "[cache]\n\
-         enabled = true\n\
          directory = '{}'\n\
          baseline-compression-level = {}\n",
         cache_dir.display(),
@@ -23,8 +22,6 @@ fn test_cache_init() {
 
     let cache_config = CacheConfig::from_file(Some(&config_path)).unwrap();
 
-    // test if we can use config
-    assert!(cache_config.enabled());
     // assumption: config init creates cache directory and returns canonicalized path
     assert_eq!(
         *cache_config.directory(),
@@ -36,7 +33,10 @@ fn test_cache_init() {
     );
 
     // test if we can use worker
-    cache_config.worker().on_cache_update_async(config_path);
+    Cache::new(cache_config)
+        .unwrap()
+        .worker()
+        .on_cache_update_async(config_path);
 }
 
 #[test]
@@ -45,12 +45,11 @@ fn test_write_read_cache() {
     let cache_config = load_config!(
         config_path,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          baseline-compression-level = 3\n",
         cache_dir
     );
-    assert!(cache_config.enabled());
+    let cache = Cache::new(cache_config.clone()).unwrap();
 
     // assumption: config load creates cache directory and returns canonicalized path
     assert_eq!(
@@ -61,8 +60,8 @@ fn test_write_read_cache() {
     let compiler1 = "test-1";
     let compiler2 = "test-2";
 
-    let entry1 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(compiler1, &cache_config));
-    let entry2 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(compiler2, &cache_config));
+    let entry1 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(compiler1, &cache));
+    let entry2 = ModuleCacheEntry::from_inner(ModuleCacheEntryInner::new(compiler2, &cache));
 
     entry1.get_data::<_, i32, i32>(1, |_| Ok(100)).unwrap();
     entry1.get_data::<_, i32, i32>(1, |_| panic!()).unwrap();

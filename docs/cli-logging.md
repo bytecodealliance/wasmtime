@@ -9,7 +9,7 @@ To enable logging of WASI system calls, similar to the `strace` command on Linux
 set `WASMTIME_LOG=wasmtime_wasi=trace`. For more information on specifying
 filters, see [tracing-subscriber's EnvFilter docs].
 
-```sh
+```shell-session
 $ WASMTIME_LOG=wasmtime_wasi=trace wasmtime hello.wasm
 [...]
 TRACE wiggle abi{module="wasi_snapshot_preview1" function="fd_write"} wasmtime_wasi::preview1::wasi_snapshot_preview1                     > fd=Fd(1) iovs=*guest 0x14/1

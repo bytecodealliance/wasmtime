@@ -3,8 +3,8 @@
 use core::ptr::NonNull;
 
 use alloc::vec::Vec;
-use cranelift_bitset::scalar::ScalarBitSetStorage;
 use cranelift_bitset::ScalarBitSet;
+use cranelift_bitset::scalar::ScalarBitSetStorage;
 
 use crate::imms::*;
 use crate::opcode::*;

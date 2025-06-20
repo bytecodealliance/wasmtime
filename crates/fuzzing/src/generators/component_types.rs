@@ -46,7 +46,7 @@ pub fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrar
                 Ok(ControlFlow::Continue(()))
             })?;
 
-            Val::List(values.into())
+            Val::List(values)
         }
         Type::Record(record) => Val::Record(
             record

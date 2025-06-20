@@ -104,11 +104,11 @@
 
 use crate::runtime::vm::{GcRootsList, GcStore, VMGcRef};
 use crate::vm::VMStore;
-use crate::{prelude::*, ValRaw};
 use crate::{
-    store::{AutoAssertNoGc, StoreId, StoreOpaque},
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
+    store::{AutoAssertNoGc, StoreId, StoreOpaque},
 };
+use crate::{ValRaw, prelude::*};
 use core::any;
 use core::marker;
 use core::mem::{self, MaybeUninit};

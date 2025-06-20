@@ -239,7 +239,7 @@ pub(crate) fn create_unwind_info_from_insts(
                         })
                     }
                     LARGE_STACK_ALLOC_MIN..=LARGE_STACK_ALLOC_MAX => {
-                        unwind_codes.push(UnwindCode::AllocL { size: size })
+                        unwind_codes.push(UnwindCode::AllocL { size })
                     }
                     _ => panic!("Stack allocation size too large"),
                 }

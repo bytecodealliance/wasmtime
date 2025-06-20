@@ -16,7 +16,7 @@
 ;;       movq    %r13, (%rsp)
 ;;       movq    %r14, 8(%rsp)
 ;;       movq    %r15, 0x10(%rsp)
-;;       movq    0x20(%rdi), %r14
+;;       movq    0x18(%rdi), %r14
 ;;       movq    (%r14), %rcx
 ;;       movq    8(%rdi), %r13
 ;;       movq    %rdi, %r15
@@ -28,12 +28,12 @@
 ;;       jae     0x64
 ;;       jmp     0x46
 ;;   57: movq    %r15, %rdi
-;;       callq   0xf5
+;;       callq   0xf6
 ;;       jmp     0x46
 ;;   64: movq    8(%r13), %rax
 ;;       cmpq    %rax, %r11
 ;;       jb      0x46
 ;;   71: movq    %r15, %rdi
-;;       callq   0xf5
+;;       callq   0xf6
 ;;       jmp     0x46
 ;;   7e: ud2

@@ -225,6 +225,21 @@ impl<T> Writable<T> {
     }
 }
 
+// Proxy on assembler trait to the underlying register type.
+impl<R: cranelift_assembler_x64::AsReg> cranelift_assembler_x64::AsReg for Writable<R> {
+    fn enc(&self) -> u8 {
+        self.reg.enc()
+    }
+
+    fn to_string(&self, size: Option<cranelift_assembler_x64::gpr::Size>) -> String {
+        self.reg.to_string(size)
+    }
+
+    fn new(_: u8) -> Self {
+        panic!("disallow creation of new assembler registers")
+    }
+}
+
 // Conversions between regalloc2 types (VReg, PReg) and our types
 // (VirtualReg, RealReg, Reg).
 

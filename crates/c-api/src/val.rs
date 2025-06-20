@@ -1,7 +1,7 @@
 use crate::r#ref::ref_to_val;
 use crate::{
-    from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t, wasmtime_anyref_t,
-    wasmtime_externref_t, wasmtime_valkind_t, WasmtimeStoreContextMut, WASM_I32,
+    WASM_I32, WasmtimeStoreContextMut, from_valtype, into_valtype, wasm_ref_t, wasm_valkind_t,
+    wasmtime_anyref_t, wasmtime_externref_t, wasmtime_valkind_t,
 };
 use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr;

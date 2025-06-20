@@ -18,7 +18,7 @@ Wasmtime C API `libwasmtime.so`, but to start out let's take a look at
 minimizing the dynamic library as a case study. By default the C API is
 relatively large:
 
-```shell
+```shell-session
 $ cargo build -p wasmtime-c-api
 $ ls -lh ./target/debug/libwasmtime.so
 -rwxrwxr-x 2 alex alex 260M Dec 12 07:46 target/debug/libwasmtime.so
@@ -28,7 +28,7 @@ The easiest size optimization is to compile with optimizations. This will strip
 lots of dead code and additionally generate much less debug information by
 default
 
-```shell
+```shell-session
 $ cargo build -p wasmtime-c-api --release
 $ ls -lh ./target/release/libwasmtime.so
 -rwxrwxr-x 2 alex alex 19M Dec 12 07:46 target/release/libwasmtime.so
@@ -39,7 +39,7 @@ disable the default features of the C API. This will remove all
 optional functionality from the crate and strip it down to the bare bones
 functionality.
 
-```shell
+```shell-session
 $ cargo build -p wasmtime-c-api --release --no-default-features
 $ ls -lh ./target/release/libwasmtime.so
 -rwxrwxr-x 2 alex alex 2.1M Dec 12 07:47 target/release/libwasmtime.so
@@ -60,7 +60,7 @@ Note that for custom embeddings you'd need to replicate the `disable-logging`
 feature which sets the `max_level_off` feature for the `log` and `tracing`
 crate.
 
-```shell
+```shell-session
 $ cargo build -p wasmtime-c-api --release --no-default-features --features disable-logging
 $ ls -lh ./target/release/libwasmtime.so
 -rwxrwxr-x 2 alex alex 2.1M Dec 12 07:49 target/release/libwasmtime.so
@@ -77,7 +77,7 @@ this.
 
 [cargo-env-config]: https://doc.rust-lang.org/cargo/reference/config.html#profile
 
-```shell
+```shell-session
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ cargo build -p wasmtime-c-api --release --no-default-features --features disable-logging
 $ ls -lh ./target/release/libwasmtime.so
@@ -96,7 +96,7 @@ Rust's "panic=abort" mode where panics translate to process aborts rather than
 unwinding. This removes landing pads from code as well as unwind tables from the
 executable.
 
-```shell
+```shell-session
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ cargo build -p wasmtime-c-api --release --no-default-features --features disable-logging
@@ -110,7 +110,7 @@ deduplicate. Do note that this will take a significantly longer amount of time
 to compile than previously. Here LTO is configured with
 `CARGO_PROFILE_RELEASE_LTO=true`.
 
-```shell
+```shell-session
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
@@ -124,7 +124,7 @@ their own single object file instead of multiple by default. This again
 increases compile times. Here that's done with
 `CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1`.
 
-```shell
+```shell-session
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
@@ -144,7 +144,7 @@ debug information for local crates, but the Rust standard library may have debug
 information still included with it. This is configured via
 `CARGO_PROFILE_RELEASE_STRIP=debuginfo`
 
-```shell
+```shell-session
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
@@ -165,7 +165,7 @@ these commands don't work and we'll update the documentation.
 The first nightly feature we can leverage is to remove filename and line number
 information in panics with `-Zlocation-detail=none`
 
-```shell
+```shell-session
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
@@ -183,7 +183,7 @@ the standard library. This uses the `-Zbuild-std` flag to Cargo. Note that this
 additionally requires `--target` as well which will need to be configured for
 your particular platform.
 
-```shell
+```shell-session
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
@@ -202,7 +202,7 @@ environments so the features of the standard library can be disabled with the
 `-Zbuild-std-features=` flag which configures the set of enabled features to be
 empty.
 
-```shell
+```shell-session
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true
@@ -220,7 +220,7 @@ And finally, if you can enable the `panic_immediate_abort` feature of the Rust
 standard library to shrink panics even further. Note that this comes at a cost
 of making bugs/panics very difficult to debug.
 
-```shell
+```shell-session
 $ export CARGO_PROFILE_RELEASE_OPT_LEVEL=s
 $ export CARGO_PROFILE_RELEASE_PANIC=abort
 $ export CARGO_PROFILE_RELEASE_LTO=true

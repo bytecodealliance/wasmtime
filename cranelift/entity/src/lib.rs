@@ -190,7 +190,7 @@ macro_rules! entity_impl {
     // Include basic `Display` impl using the given display prefix.
     // Display a `Block` reference as "block12".
     ($entity:ident, $display_prefix:expr) => {
-        entity_impl!($entity);
+        $crate::entity_impl!($entity);
 
         impl $crate::__core::fmt::Display for $entity {
             fn fmt(&self, f: &mut $crate::__core::fmt::Formatter) -> $crate::__core::fmt::Result {

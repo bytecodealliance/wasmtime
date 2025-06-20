@@ -1,0 +1,31 @@
+;; When CLIF's `scalar_to_vector` operates on an `i16x8` vector, we need to be
+;; sure to zero out the upper bits before inserting the `i16` into the lowest
+;; lane. This test uses some ABI knowledge (both functions return their result
+;; in `xmm0`) to fill in all of the bits (`%munge_xmm0`) and see if they "show
+;; through" in the actual test, `%scalar_to_vector`. See
+;; https://github.com/bytecodealliance/wasmtime/issues/10906.
+
+test interpret
+test run
+set opt_level=none
+set preserve_frame_pointers=true
+set enable_multi_ret_implicit_sret=true
+target x86_64
+
+function %munge_xmm0() -> i16x8 fast {
+block0:
+    v0 = vconst.i16x8 [0xffff 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff]
+    return v0
+}
+
+function %scalar_to_vector() -> i16x8 fast {
+    fn0 = %munge_xmm0() -> i16x8 fast
+block0:
+    v0 = call fn0()
+    v1 = iconst.i16 42
+    v2 = scalar_to_vector.i16x8 v1
+    return v2
+}
+
+; run: %scalar_to_vector() == [42 0 0 0 0 0 0 0]
+

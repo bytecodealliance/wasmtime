@@ -9,13 +9,13 @@ block0(v0: i8, v1: i8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   pushq %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   andn    %edi, %esi, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   andnl %edi, %esi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -35,13 +35,13 @@ block0(v0: i8, v1: i8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   pushq %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   andn    %esi, %edi, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   andnl %esi, %edi, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

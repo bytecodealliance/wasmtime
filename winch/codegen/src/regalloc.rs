@@ -4,7 +4,7 @@ use crate::{
     regset::{RegBitSet, RegSet},
 };
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 
 /// The register allocator.
 ///

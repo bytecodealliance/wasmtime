@@ -1,13 +1,12 @@
-use super::{artifacts_dir, download, DOWNLOAD_LOCK};
-use anyhow::{bail, Context, Result};
+use super::{DOWNLOAD_LOCK, artifacts_dir, download};
+use anyhow::{Context, Result, bail};
 use std::{env, fs};
 
 /// Return `Ok` if we find the cached MobileNet test artifacts; this will
 /// download the artifacts if necessary.
 pub fn are_artifacts_available() -> Result<()> {
     let _exclusively_retrieve_artifacts = DOWNLOAD_LOCK.lock().unwrap();
-    const PYTORCH_BASE_URL: &str =
-        "https://github.com/rahulchaphalkar/libtorch-models/releases/download/v0.1/squeezenet1_1.pt";
+    const PYTORCH_BASE_URL: &str = "https://github.com/rahulchaphalkar/libtorch-models/releases/download/v0.1/squeezenet1_1.pt";
     let artifacts_dir = artifacts_dir();
     if !artifacts_dir.is_dir() {
         fs::create_dir(&artifacts_dir)?;

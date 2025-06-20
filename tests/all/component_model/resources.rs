@@ -233,7 +233,8 @@ fn mismatch_intrinsics() -> Result<()> {
     let ctor = i.get_typed_func::<(u32,), (ResourceAny,)>(&mut store, "ctor")?;
     assert_eq!(
         ctor.call(&mut store, (100,)).unwrap_err().to_string(),
-        "unknown handle index 1"
+        "handle index 1 used with the wrong type, expected guest-defined \
+         resource but found a different guest-defined resource",
     );
 
     Ok(())
@@ -1070,26 +1071,32 @@ fn type_mismatch() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let i = Linker::new(&engine).instantiate(&mut store, &c)?;
 
-    assert!(i
-        .get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f1")
-        .is_err());
-    assert!(i
-        .get_typed_func::<(&ResourceAny,), ()>(&mut store, "f1")
-        .is_ok());
+    assert!(
+        i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f1")
+            .is_err()
+    );
+    assert!(
+        i.get_typed_func::<(&ResourceAny,), ()>(&mut store, "f1")
+            .is_ok()
+    );
 
-    assert!(i
-        .get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f2")
-        .is_err());
-    assert!(i
-        .get_typed_func::<(&ResourceAny,), ()>(&mut store, "f2")
-        .is_ok());
+    assert!(
+        i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f2")
+            .is_err()
+    );
+    assert!(
+        i.get_typed_func::<(&ResourceAny,), ()>(&mut store, "f2")
+            .is_ok()
+    );
 
-    assert!(i
-        .get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f3")
-        .is_err());
-    assert!(i
-        .get_typed_func::<(&ResourceAny,), ()>(&mut store, "f3")
-        .is_err());
+    assert!(
+        i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f3")
+            .is_err()
+    );
+    assert!(
+        i.get_typed_func::<(&ResourceAny,), ()>(&mut store, "f3")
+            .is_err()
+    );
     assert!(i.get_typed_func::<(u32,), ()>(&mut store, "f3").is_ok());
 
     Ok(())
@@ -1415,16 +1422,17 @@ fn guest_different_host_same() -> Result<()> {
                     (import "" "drop2" (func $drop2 (param i32)))
 
                     (func (export "f") (param i32 i32)
-                        ;; separate tables both have initial index of 1
+                        ;; different types, but everything goes into the same
+                        ;; handle index namespace
                         (if (i32.ne (local.get 0) (i32.const 1)) (then (unreachable)))
-                        (if (i32.ne (local.get 1) (i32.const 1)) (then (unreachable)))
+                        (if (i32.ne (local.get 1) (i32.const 2)) (then (unreachable)))
 
                         ;; host should end up getting the same resource
                         (call $f (local.get 0) (local.get 1))
 
                         ;; drop our borrows
                         (call $drop1 (local.get 0))
-                        (call $drop2 (local.get 0))
+                        (call $drop2 (local.get 1))
                     )
                 )
                 (core instance $i (instantiate $m

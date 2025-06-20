@@ -1,3 +1,10 @@
+//! > **⚠️ Warning ⚠️**: this crate is an internal-only crate for the Wasmtime
+//! > project and is not intended for general use. APIs are not strictly
+//! > reviewed for safety and usage outside of Wasmtime may have bugs. If
+//! > you're interested in using this feel free to file an issue on the
+//! > Wasmtime repository to start a discussion about doing so, but otherwise
+//! > be aware that your usage of this crate is not supported.
+
 use std::cmp::*;
 use std::collections::HashMap;
 
@@ -53,24 +60,15 @@ impl Wmemcheck {
     /// Updates memory checker memory state metadata when malloc is called.
     pub fn malloc(&mut self, addr: usize, len: usize) -> Result<(), AccessError> {
         if !self.is_in_bounds_heap(addr, len) {
-            return Err(AccessError::OutOfBounds {
-                addr: addr,
-                len: len,
-            });
+            return Err(AccessError::OutOfBounds { addr, len });
         }
         for i in addr..addr + len {
             match self.metadata[i] {
                 MemState::ValidToWrite => {
-                    return Err(AccessError::DoubleMalloc {
-                        addr: addr,
-                        len: len,
-                    });
+                    return Err(AccessError::DoubleMalloc { addr, len });
                 }
                 MemState::ValidToReadWrite => {
-                    return Err(AccessError::DoubleMalloc {
-                        addr: addr,
-                        len: len,
-                    });
+                    return Err(AccessError::DoubleMalloc { addr, len });
                 }
                 _ => {}
             }
@@ -88,24 +86,15 @@ impl Wmemcheck {
             return Ok(());
         }
         if !(self.is_in_bounds_stack(addr, len) || self.is_in_bounds_heap(addr, len)) {
-            return Err(AccessError::OutOfBounds {
-                addr: addr,
-                len: len,
-            });
+            return Err(AccessError::OutOfBounds { addr, len });
         }
         for i in addr..addr + len {
             match self.metadata[i] {
                 MemState::Unallocated => {
-                    return Err(AccessError::InvalidRead {
-                        addr: addr,
-                        len: len,
-                    });
+                    return Err(AccessError::InvalidRead { addr, len });
                 }
                 MemState::ValidToWrite => {
-                    return Err(AccessError::InvalidRead {
-                        addr: addr,
-                        len: len,
-                    });
+                    return Err(AccessError::InvalidRead { addr, len });
                 }
                 _ => {}
             }
@@ -119,17 +108,11 @@ impl Wmemcheck {
             return Ok(());
         }
         if !(self.is_in_bounds_stack(addr, len) || self.is_in_bounds_heap(addr, len)) {
-            return Err(AccessError::OutOfBounds {
-                addr: addr,
-                len: len,
-            });
+            return Err(AccessError::OutOfBounds { addr, len });
         }
         for i in addr..addr + len {
             if let MemState::Unallocated = self.metadata[i] {
-                return Err(AccessError::InvalidWrite {
-                    addr: addr,
-                    len: len,
-                });
+                return Err(AccessError::InvalidWrite { addr, len });
             }
         }
         for i in addr..addr + len {
@@ -141,12 +124,12 @@ impl Wmemcheck {
     /// Updates memory checker memory state metadata when free is called.
     pub fn free(&mut self, addr: usize) -> Result<(), AccessError> {
         if !self.mallocs.contains_key(&addr) {
-            return Err(AccessError::InvalidFree { addr: addr });
+            return Err(AccessError::InvalidFree { addr });
         }
         let len = self.mallocs[&addr];
         for i in addr..addr + len {
             if let MemState::Unallocated = self.metadata[i] {
-                return Err(AccessError::InvalidFree { addr: addr });
+                return Err(AccessError::InvalidFree { addr });
             }
         }
         self.mallocs.remove(&addr);

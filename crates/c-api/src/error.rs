@@ -1,5 +1,5 @@
 use crate::{wasm_frame_vec_t, wasm_name_t};
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result, anyhow};
 
 #[repr(C)]
 pub struct wasmtime_error_t {
@@ -14,9 +14,9 @@ impl From<Error> for wasmtime_error_t {
     }
 }
 
-impl Into<Error> for wasmtime_error_t {
-    fn into(self) -> Error {
-        self.error
+impl From<wasmtime_error_t> for Error {
+    fn from(cerr: wasmtime_error_t) -> Error {
+        cerr.error
     }
 }
 

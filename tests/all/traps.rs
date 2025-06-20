@@ -209,7 +209,6 @@ fn test_trap_through_host() -> Result<()> {
 }
 
 #[test]
-#[allow(deprecated)]
 fn test_trap_backtrace_disabled() -> Result<()> {
     let mut config = Config::default();
     config.wasm_backtrace(false);
@@ -827,17 +826,21 @@ fn multithreaded_traps() -> Result<()> {
     )?;
     let instance = Instance::new(&mut store, &module, &[])?;
 
-    assert!(instance
-        .get_typed_func::<(), ()>(&mut store, "run")?
-        .call(&mut store, ())
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(), ()>(&mut store, "run")?
+            .call(&mut store, ())
+            .is_err()
+    );
 
     let handle = std::thread::spawn(move || {
-        assert!(instance
-            .get_typed_func::<(), ()>(&mut store, "run")
-            .unwrap()
-            .call(&mut store, ())
-            .is_err());
+        assert!(
+            instance
+                .get_typed_func::<(), ()>(&mut store, "run")
+                .unwrap()
+                .call(&mut store, ())
+                .is_err()
+        );
     });
 
     handle.join().expect("couldn't join thread");
@@ -1147,7 +1150,6 @@ fn standalone_backtrace() -> Result<()> {
 }
 
 #[test]
-#[allow(deprecated)]
 fn standalone_backtrace_disabled() -> Result<()> {
     let mut config = Config::new();
     config.wasm_backtrace(false);

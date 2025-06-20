@@ -107,8 +107,8 @@ pub fn export(instance: &SpecInstance, name: &str) -> Result<SpecExport, String>
 mod ocaml_bindings {
     use super::*;
     use ocaml_interop::{
-        impl_conv_ocaml_variant, ocaml, FromOCaml, OCaml, OCamlBytes, OCamlInt32, OCamlInt64,
-        OCamlList,
+        FromOCaml, OCaml, OCamlBytes, OCamlInt32, OCamlInt64, OCamlList, impl_conv_ocaml_variant,
+        ocaml,
     };
 
     // Using this macro converts the enum both ways: Rust to OCaml and OCaml to

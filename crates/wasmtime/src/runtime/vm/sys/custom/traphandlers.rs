@@ -39,7 +39,7 @@ impl TrapHandler {
 
 #[cfg(has_native_signals)]
 extern "C" fn handle_trap(pc: usize, fp: usize, has_faulting_addr: bool, faulting_addr: usize) {
-    use crate::runtime::vm::traphandlers::{tls, TrapRegisters, TrapTest};
+    use crate::runtime::vm::traphandlers::{TrapRegisters, TrapTest, tls};
 
     tls::with(|info| {
         let info = match info {

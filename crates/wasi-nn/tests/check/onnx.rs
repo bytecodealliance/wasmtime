@@ -1,4 +1,4 @@
-use super::{artifacts_dir, download, DOWNLOAD_LOCK};
+use super::{DOWNLOAD_LOCK, artifacts_dir, download};
 use anyhow::{Context, Result};
 use std::{env, fs};
 
@@ -7,8 +7,7 @@ use std::{env, fs};
 pub fn are_artifacts_available() -> Result<()> {
     let _exclusively_retrieve_artifacts = DOWNLOAD_LOCK.lock().unwrap();
 
-    const ONNX_BASE_URL: &str =
-        "https://github.com/onnx/models/raw/bec48b6a70e5e9042c0badbaafefe4454e072d08/validated/vision/classification/mobilenet/model/mobilenetv2-10.onnx?download=";
+    const ONNX_BASE_URL: &str = "https://github.com/onnx/models/raw/bec48b6a70e5e9042c0badbaafefe4454e072d08/validated/vision/classification/mobilenet/model/mobilenetv2-10.onnx?download=";
 
     let artifacts_dir = artifacts_dir();
     if !artifacts_dir.is_dir() {

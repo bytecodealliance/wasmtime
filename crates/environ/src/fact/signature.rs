@@ -1,9 +1,13 @@
 //! Size, align, and flattening information about component model types.
 
-use crate::component::{ComponentTypesBuilder, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
-use crate::fact::{AdapterOptions, Context, Options};
-use crate::prelude::*;
+use crate::component::{
+    ComponentTypesBuilder, InterfaceType, MAX_FLAT_ASYNC_PARAMS, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+};
+use crate::fact::{AdapterOptions, Options};
+use crate::{WasmValType, prelude::*};
 use wasm_encoder::ValType;
+
+use super::LinearMemoryOptions;
 
 /// Metadata about a core wasm signature which is created for a component model
 /// signature.
@@ -22,82 +26,26 @@ impl ComponentTypesBuilder {
     /// This is used to generate the core wasm signatures for functions that are
     /// imported (matching whatever was `canon lift`'d) and functions that are
     /// exported (matching the generated function from `canon lower`).
-    pub(super) fn signature(&self, options: &AdapterOptions, context: Context) -> Signature {
-        let ty = &self[options.ty];
-        let ptr_ty = options.options.ptr();
-
-        // The async lower ABI is always `(param i32 i32) (result i32)` (for
-        // wasm32, anyway), regardless of the component-level signature.
-        //
-        // The first param is a pointer to linear memory where the parameters have
-        // been stored by the caller, the second param is a pointer to linear
-        // memory where the results should be stored by the callee, and the
-        // result is a status code optionally ORed with a subtask ID.
-        if let (Context::Lower, true) = (&context, options.options.async_) {
-            return Signature {
-                params: vec![ptr_ty; 2],
-                results: vec![ValType::I32],
-            };
+    pub(super) fn signature(&self, options: &AdapterOptions) -> Signature {
+        let f = &self.module_types_builder()[options.options.core_type]
+            .composite_type
+            .inner
+            .unwrap_func();
+        Signature {
+            params: f.params().iter().map(|ty| self.val_type(ty)).collect(),
+            results: f.returns().iter().map(|ty| self.val_type(ty)).collect(),
         }
+    }
 
-        // If we're lifting async or sync, or if we're lowering sync, we can
-        // pass up to `MAX_FLAT_PARAMS` via the stack.
-        let mut params = match self.flatten_types(
-            &options.options,
-            MAX_FLAT_PARAMS,
-            self[ty.params].types.iter().copied(),
-        ) {
-            Some(list) => list,
-            None => {
-                vec![ptr_ty]
-            }
-        };
-
-        // If we're lifting async with a callback, the result is an `i32` status
-        // code, optionally ORed with a guest task identifier, and the result
-        // will be returned via `task.return`.
-        //
-        // If we're lifting async without a callback, then there's no need to return
-        // anything here since the result will be returned via `task.return` and the
-        // guest will use `task.wait` rather than return a status code in order to suspend
-        // itself, if necessary.
-        if options.options.async_ {
-            return Signature {
-                params,
-                results: if options.options.callback.is_some() {
-                    vec![ptr_ty]
-                } else {
-                    Vec::new()
-                },
-            };
+    fn val_type(&self, ty: &WasmValType) -> ValType {
+        match ty {
+            WasmValType::I32 => ValType::I32,
+            WasmValType::I64 => ValType::I64,
+            WasmValType::F32 => ValType::F32,
+            WasmValType::F64 => ValType::F64,
+            WasmValType::V128 => ValType::V128,
+            WasmValType::Ref(_) => todo!("CM+GC"),
         }
-
-        // If we've reached this point, we're either lifting or lowering sync,
-        // in which case the guest will return up to `MAX_FLAT_RESULTS` via the
-        // stack or spill to linear memory otherwise.
-        let results = match self.flatten_types(
-            &options.options,
-            MAX_FLAT_RESULTS,
-            self[ty.results].types.iter().copied(),
-        ) {
-            Some(list) => list,
-            None => {
-                match context {
-                    // For a lifted function too-many-results gets translated to a
-                    // returned pointer where results are read from. The callee
-                    // allocates space here.
-                    Context::Lift => vec![ptr_ty],
-                    // For a lowered function too-many-results becomes a return
-                    // pointer which is passed as the last argument. The caller
-                    // allocates space here.
-                    Context::Lower => {
-                        params.push(ptr_ty);
-                        Vec::new()
-                    }
-                }
-            }
-        };
-        Signature { params, results }
     }
 
     /// Generates the signature for a function to be exported by the adapter
@@ -116,24 +64,23 @@ impl ComponentTypesBuilder {
         lift: &AdapterOptions,
     ) -> Signature {
         let lower_ty = &self[lower.ty];
-        let lower_ptr_ty = lower.options.ptr();
-        let params = if lower.options.async_ {
-            vec![lower_ptr_ty]
+        let lower_ptr_ty = lower.options.data_model.unwrap_memory().ptr();
+        let max_flat_params = if lower.options.async_ {
+            MAX_FLAT_ASYNC_PARAMS
         } else {
-            match self.flatten_types(
-                &lower.options,
-                MAX_FLAT_PARAMS,
-                self[lower_ty.params].types.iter().copied(),
-            ) {
-                Some(list) => list,
-                None => {
-                    vec![lower_ptr_ty]
-                }
-            }
+            MAX_FLAT_PARAMS
+        };
+        let params = match self.flatten_types(
+            &lower.options,
+            max_flat_params,
+            self[lower_ty.params].types.iter().copied(),
+        ) {
+            Some(list) => list,
+            None => vec![lower_ptr_ty],
         };
 
         let lift_ty = &self[lift.ty];
-        let lift_ptr_ty = lift.options.ptr();
+        let lift_ptr_ty = lift.options.data_model.unwrap_memory().ptr();
         let results = match self.flatten_types(
             &lift.options,
             // Both sync- and async-lifted functions accept up to this many core
@@ -158,13 +105,11 @@ impl ComponentTypesBuilder {
         options: &Options,
         tys: impl IntoIterator<Item = InterfaceType>,
     ) -> Option<Vec<ValType>> {
-        if options.async_ {
-            // When lowering an async function, we always spill parameters to
-            // linear memory.
-            None
-        } else {
-            self.flatten_types(options, MAX_FLAT_RESULTS, tys)
-        }
+        // Async functions "use the stack" for zero return values, meaning
+        // nothing is actually passed, but otherwise if anything is returned
+        // it's always through memory.
+        let max = if options.async_ { 0 } else { MAX_FLAT_RESULTS };
+        self.flatten_types(options, max, tys)
     }
 
     pub(super) fn flatten_lifting_types(
@@ -203,7 +148,7 @@ impl ComponentTypesBuilder {
         lift: &AdapterOptions,
     ) -> Signature {
         let lift_ty = &self[lift.ty];
-        let lift_ptr_ty = lift.options.ptr();
+        let lift_ptr_ty = lift.options.data_model.unwrap_memory().ptr();
         let mut params = match self
             .flatten_lifting_types(&lift.options, self[lift_ty.results].types.iter().copied())
         {
@@ -214,15 +159,18 @@ impl ComponentTypesBuilder {
         };
 
         let lower_ty = &self[lower.ty];
+        let lower_result_tys = &self[lower_ty.results];
         let results = if lower.options.async_ {
             // Add return pointer
-            params.push(lift_ptr_ty);
+            if !lower_result_tys.types.is_empty() {
+                params.push(lift_ptr_ty);
+            }
             Vec::new()
         } else {
             match self.flatten_types(
                 &lower.options,
                 MAX_FLAT_RESULTS,
-                self[lower_ty.results].types.iter().copied(),
+                lower_result_tys.types.iter().copied(),
             ) {
                 Some(list) => list,
                 None => {
@@ -256,7 +204,7 @@ impl ComponentTypesBuilder {
         Some(dst)
     }
 
-    pub(super) fn align(&self, opts: &Options, ty: &InterfaceType) -> u32 {
+    pub(super) fn align(&self, opts: &LinearMemoryOptions, ty: &InterfaceType) -> u32 {
         self.size_align(opts, ty).1
     }
 
@@ -265,7 +213,7 @@ impl ComponentTypesBuilder {
     //
     // TODO: this is probably inefficient to entire recalculate at all phases,
     // seems like it would be best to intern this in some sort of map somewhere.
-    pub(super) fn size_align(&self, opts: &Options, ty: &InterfaceType) -> (u32, u32) {
+    pub(super) fn size_align(&self, opts: &LinearMemoryOptions, ty: &InterfaceType) -> (u32, u32) {
         let abi = self.canonical_abi(ty);
         if opts.memory64 {
             (abi.size64, abi.align64)
@@ -281,10 +229,12 @@ impl ComponentTypesBuilder {
 
         // Only parameters need to be checked since results should never have
         // borrowed resources.
-        debug_assert!(!self[ty.results]
-            .types
-            .iter()
-            .any(|t| self.ty_contains_borrow_resource(t)));
+        debug_assert!(
+            !self[ty.results]
+                .types
+                .iter()
+                .any(|t| self.ty_contains_borrow_resource(t))
+        );
         self[ty.params]
             .types
             .iter()

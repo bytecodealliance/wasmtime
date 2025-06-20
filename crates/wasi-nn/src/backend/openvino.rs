@@ -1,7 +1,7 @@
 //! Implements a `wasi-nn` [`BackendInner`] using OpenVINO.
 
 use super::{
-    read, BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner, Id,
+    BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner, Id, read,
 };
 use crate::wit::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
@@ -21,7 +21,7 @@ impl BackendInner for OpenvinoBackend {
 
     fn load(&mut self, builders: &[&[u8]], target: ExecutionTarget) -> Result<Graph, BackendError> {
         if builders.len() != 2 {
-            return Err(BackendError::InvalidNumberOfBuilders(2, builders.len()).into());
+            return Err(BackendError::InvalidNumberOfBuilders(2, builders.len()));
         }
         // Construct the context if none is present; this is done lazily (i.e.
         // upon actually loading a model) because it may fail to find and load

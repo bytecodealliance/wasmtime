@@ -4,8 +4,8 @@
 //! value and control stacks during the translation of a single function.
 
 use crate::func_environ::FuncEnvironment;
-use crate::translate::environ::GlobalVariable;
 use crate::translate::Heap;
+use crate::translate::environ::GlobalVariable;
 use cranelift_codegen::ir::{self, Block, Inst, Value};
 use std::collections::hash_map::{Entry::Occupied, Entry::Vacant, HashMap};
 use std::vec::Vec;

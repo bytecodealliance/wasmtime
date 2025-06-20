@@ -820,10 +820,12 @@ mod tests {
 
         // Attempt to allocate something that is 20 times the size of our
         // min-sized block.
-        assert!(free_list
-            .alloc(Layout::from_size_align(ALIGN_USIZE * 20, ALIGN_USIZE).unwrap())
-            .unwrap()
-            .is_none());
+        assert!(
+            free_list
+                .alloc(Layout::from_size_align(ALIGN_USIZE * 20, ALIGN_USIZE).unwrap())
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
@@ -834,9 +836,11 @@ mod tests {
 
         // Attempt to allocate something that requires larger alignment than
         // `FreeList` supports.
-        assert!(free_list
-            .alloc(Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE * 2).unwrap(),)
-            .is_err());
+        assert!(
+            free_list
+                .alloc(Layout::from_size_align(ALIGN_USIZE, ALIGN_USIZE * 2).unwrap(),)
+                .is_err()
+        );
     }
 
     #[test]

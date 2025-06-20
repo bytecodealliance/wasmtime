@@ -42,7 +42,7 @@ pub fn subs(s: &mut SolverCtx, ty: usize, x: SExpr, y: SExpr, id: u32) -> SExpr 
 
     // (define-const ynot (bvnot y))
     let ynot = s.declare(
-        format!("ynot_{id}", id = id),
+        format!("ynot_{id}"),
         s.smt
             .list(vec![s.smt.atoms().und, s.smt.atom("BitVec"), size]),
     );
@@ -52,7 +52,7 @@ pub fn subs(s: &mut SolverCtx, ty: usize, x: SExpr, y: SExpr, id: u32) -> SExpr 
     //   subs_wide
     //   (bvadd (bvadd ((_ zero_extend 64) x) ((_ zero_extend 64) ynot)) #x00000000000000000000000000000001))
     let subs_wide = s.declare(
-        format!("subs_wide_{id}", id = id),
+        format!("subs_wide_{id}"),
         s.smt
             .list(vec![s.smt.atoms().und, s.smt.atom("BitVec"), wide_size]),
     );
@@ -66,7 +66,7 @@ pub fn subs(s: &mut SolverCtx, ty: usize, x: SExpr, y: SExpr, id: u32) -> SExpr 
 
     // (define-const subs ((_ extract 63 0) subs_wide))
     let subs = s.declare(
-        format!("subs_{id}", id = id),
+        format!("subs_{id}"),
         s.smt
             .list(vec![s.smt.atoms().und, s.smt.atom("BitVec"), size]),
     );
@@ -82,7 +82,7 @@ pub fn subs(s: &mut SolverCtx, ty: usize, x: SExpr, y: SExpr, id: u32) -> SExpr 
     //    (ite (= ((_ zero_extend 64) subs) subs_wide) #b0 #b1))
     //    (ite (= ((_ sign_extend 64) subs) (bvadd (bvadd ((_ sign_extend 64) x) ((_ sign_extend 64) ynot)) #x00000000000000000000000000000001)) #b0 #b1)))
     let flags = s.declare(
-        format!("flags_{id}", id = id),
+        format!("flags_{id}"),
         s.smt.list(vec![
             s.smt.atoms().und,
             s.smt.atom("BitVec"),
@@ -126,7 +126,7 @@ pub fn subs(s: &mut SolverCtx, ty: usize, x: SExpr, y: SExpr, id: u32) -> SExpr 
     );
 
     let ret = s.declare(
-        format!("subs_ret_{id}", id = id),
+        format!("subs_ret_{id}"),
         s.smt.list(vec![
             s.smt.atoms().und,
             s.smt.atom("BitVec"),

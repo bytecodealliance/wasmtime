@@ -10,7 +10,7 @@ use arbitrary::{Arbitrary, Unstructured};
 use std::sync::Arc;
 use std::time::Duration;
 use wasmtime::{Engine, Module, MpkEnabled, Store};
-use wasmtime_test_util::wast::{limits, WastConfig, WastTest};
+use wasmtime_test_util::wast::{WastConfig, WastTest, limits};
 
 /// Configuration for `wasmtime::Config` and generated modules for a session of
 /// fuzzing.
@@ -142,6 +142,8 @@ impl Config {
             component_model_async,
             component_model_async_builtins,
             component_model_async_stackful,
+            component_model_error_context,
+            component_model_gc,
             simd,
             exceptions,
             legacy_exceptions,
@@ -149,6 +151,8 @@ impl Config {
             hogs_memory: _,
             nan_canonicalization: _,
             gc_types: _,
+            stack_switching: _,
+            spec_test: _,
         } = test.config;
 
         // Enable/disable some proposals that aren't configurable in wasm-smith
@@ -160,7 +164,10 @@ impl Config {
             component_model_async_builtins.unwrap_or(false);
         self.module_config.component_model_async_stackful =
             component_model_async_stackful.unwrap_or(false);
+        self.module_config.component_model_error_context =
+            component_model_error_context.unwrap_or(false);
         self.module_config.legacy_exceptions = legacy_exceptions.unwrap_or(false);
+        self.module_config.component_model_gc = component_model_gc.unwrap_or(false);
 
         // Enable/disable proposals that wasm-smith has knobs for which will be
         // read when creating `wasmtime::Config`.
@@ -285,6 +292,8 @@ impl Config {
             Some(self.module_config.component_model_async_builtins);
         cfg.wasm.component_model_async_stackful =
             Some(self.module_config.component_model_async_stackful);
+        cfg.wasm.component_model_error_context =
+            Some(self.module_config.component_model_error_context);
         cfg.wasm.custom_page_sizes = Some(self.module_config.config.custom_page_sizes_enabled);
         cfg.wasm.epoch_interruption = Some(self.wasmtime.epoch_interruption);
         cfg.wasm.extended_const = Some(self.module_config.config.extended_const_enabled);

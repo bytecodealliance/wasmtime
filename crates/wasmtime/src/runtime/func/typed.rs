@@ -1,6 +1,6 @@
 use super::invoke_wasm_and_catch_traps;
 use crate::prelude::*;
-use crate::runtime::vm::{VMFuncRef, VMOpaqueContext};
+use crate::runtime::vm::VMFuncRef;
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
     AsContext, AsContextMut, Engine, Func, FuncType, HeapType, NoFunc, RefType, StoreContextMut,
@@ -93,6 +93,7 @@ where
     /// connected to an asynchronous store.
     ///
     /// [`Trap`]: crate::Trap
+    #[inline]
     pub fn call(&self, mut store: impl AsContextMut, params: Params) -> Result<Results> {
         let mut store = store.as_context_mut();
         assert!(
@@ -127,14 +128,11 @@ where
     ///
     /// [`Trap`]: crate::Trap
     #[cfg(feature = "async")]
-    pub async fn call_async<T>(
+    pub async fn call_async(
         &self,
-        mut store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data: Send>,
         params: Params,
-    ) -> Result<Results>
-    where
-        T: Send,
-    {
+    ) -> Result<Results> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
@@ -223,9 +221,7 @@ where
             let storage = storage.cast::<ValRaw>();
             let storage = core::ptr::slice_from_raw_parts_mut(storage, storage_len);
             let storage = NonNull::new(storage).unwrap();
-            func_ref
-                .as_ref()
-                .array_call(vm, VMOpaqueContext::from_vmcontext(caller), storage)
+            VMFuncRef::array_call(*func_ref, vm, caller, storage)
         });
 
         let (_, storage) = captures;
@@ -548,7 +544,7 @@ unsafe impl WasmTy for Func {
 
     #[inline]
     fn compatible_with_store(&self, store: &StoreOpaque) -> bool {
-        store.store_data().contains(self.0)
+        self.store == store.id()
     }
 
     #[inline]
@@ -586,7 +582,7 @@ unsafe impl WasmTy for Option<Func> {
     #[inline]
     fn compatible_with_store(&self, store: &StoreOpaque) -> bool {
         if let Some(f) = self {
-            store.store_data().contains(f.0)
+            f.compatible_with_store(store)
         } else {
             true
         }
@@ -605,7 +601,9 @@ unsafe impl WasmTy for Option<Func> {
         } else if nullable {
             Ok(())
         } else {
-            bail!("argument type mismatch: expected non-nullable (ref {expected}), found null reference")
+            bail!(
+                "argument type mismatch: expected non-nullable (ref {expected}), found null reference"
+            )
         }
     }
 

@@ -15,13 +15,13 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x5c
+;;       ja      0x62
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
-;;       movsd   0x2c(%rip), %xmm0
-;;       movsd   0x2c(%rip), %xmm1
+;;       movsd   0x31(%rip), %xmm0
+;;       movsd   0x31(%rip), %xmm1
 ;;       ucomisd %xmm0, %xmm1
 ;;       movl    $0, %eax
 ;;       setae   %al
@@ -31,5 +31,6 @@
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   5c: ud2
-;;   5e: addb    %al, (%rax)
+;;   62: ud2
+;;   64: addb    %al, (%rax)
+;;   66: addb    %al, (%rax)

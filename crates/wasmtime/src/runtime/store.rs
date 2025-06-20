@@ -76,21 +76,21 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
-use crate::instance::InstanceData;
-use crate::linker::Definition;
+use crate::RootSet;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
-use crate::runtime::vm::mpk::ProtectionKey;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::GcRootsList;
+#[cfg(feature = "stack-switching")]
+use crate::runtime::vm::VMContRef;
+use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
-    ExportGlobal, GcStore, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
-    Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SignalHandler,
-    StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
+    self, GcStore, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SendSyncPtr,
+    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
-use crate::RootSet;
-use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
+use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
 use crate::{Global, Instance, Memory, Table, Uninhabited};
 use alloc::sync::Arc;
 use core::fmt;
@@ -98,8 +98,9 @@ use core::marker;
 use core::mem::{self, ManuallyDrop};
 use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut};
+use core::pin::Pin;
 use core::ptr::NonNull;
-use wasmtime_environ::TripleExt;
+use wasmtime_environ::{DefinedGlobalIndex, DefinedTableIndex, EntityRef, PrimaryMap, TripleExt};
 
 mod context;
 pub use self::context::*;
@@ -178,7 +179,7 @@ mod gc;
 /// operations is incorrect. In other words it's considered a programmer error
 /// rather than a recoverable error for the wrong [`Store`] to be used when
 /// calling APIs.
-pub struct Store<T> {
+pub struct Store<T: 'static> {
     // for comments about `ManuallyDrop`, see `Store::into_data`
     inner: ManuallyDrop<Box<StoreInner<T>>>,
 }
@@ -219,7 +220,7 @@ impl CallHook {
 /// The members of this struct are those that need to be generic over `T`, the
 /// store's internal type storage. Otherwise all things that don't rely on `T`
 /// should go into `StoreOpaque`.
-pub struct StoreInner<T> {
+pub struct StoreInner<T: 'static> {
     /// Generic metadata about the store that doesn't need access to `T`.
     inner: StoreOpaque,
 
@@ -238,7 +239,7 @@ enum ResourceLimiterInner<T> {
     Async(Box<dyn FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync) + Send + Sync>),
 }
 
-enum CallHookInner<T> {
+enum CallHookInner<T: 'static> {
     #[cfg(feature = "call-hook")]
     Sync(Box<dyn FnMut(StoreContextMut<'_, T>, CallHook) -> Result<()> + Send + Sync>),
     #[cfg(all(feature = "async", feature = "call-hook"))]
@@ -252,6 +253,7 @@ enum CallHookInner<T> {
 
 /// What to do after returning from a callback when the engine epoch reaches
 /// the deadline for a Store during execution of a function using that store.
+#[non_exhaustive]
 pub enum UpdateDeadline {
     /// Extend the deadline by the specified number of ticks.
     Continue(u64),
@@ -260,6 +262,18 @@ pub enum UpdateDeadline {
     /// configured via [`Config::async_support`](crate::Config::async_support).
     #[cfg(feature = "async")]
     Yield(u64),
+    /// Extend the deadline by the specified number of ticks after yielding to
+    /// the async executor loop. This can only be used with an async [`Store`]
+    /// configured via [`Config::async_support`](crate::Config::async_support).
+    ///
+    /// The yield will be performed by the future provided; when using `tokio`
+    /// it is recommended to provide [`tokio::task::yield_now`](https://docs.rs/tokio/latest/tokio/task/fn.yield_now.html)
+    /// here.
+    #[cfg(feature = "async")]
+    YieldCustom(
+        u64,
+        ::core::pin::Pin<Box<dyn ::core::future::Future<Output = ()> + Send>>,
+    ),
 }
 
 // Forward methods on `StoreOpaque` to also being on `StoreInner<T>`
@@ -308,14 +322,20 @@ pub struct StoreOpaque {
 
     engine: Engine,
     vm_store_context: VMStoreContext,
-    instances: Vec<StoreInstance>,
+
+    // Contains all continuations ever allocated throughout the lifetime of this
+    // store.
+    #[cfg(feature = "stack-switching")]
+    continuations: Vec<Box<VMContRef>>,
+
+    instances: PrimaryMap<InstanceId, StoreInstance>,
+
     #[cfg(feature = "component-model")]
     num_component_instances: usize,
     signal_handler: Option<SignalHandler>,
     modules: ModuleRegistry,
     func_refs: FuncRefs,
-    host_globals: Vec<StoreBox<VMHostGlobalContext>>,
-
+    host_globals: PrimaryMap<DefinedGlobalIndex, StoreBox<VMHostGlobalContext>>,
     // GC-related fields.
     gc_store: Option<GcStore>,
     gc_roots: RootSet,
@@ -343,13 +363,9 @@ pub struct StoreOpaque {
     fuel_yield_interval: Option<NonZeroU64>,
     /// Indexed data within this `Store`, used to store information about
     /// globals, functions, memories, etc.
-    ///
-    /// Note that this is `ManuallyDrop` because it needs to be dropped before
-    /// `rooted_host_funcs` below. This structure contains pointers which are
-    /// otherwise kept alive by the `Arc` references in `rooted_host_funcs`.
-    store_data: ManuallyDrop<StoreData>,
+    store_data: StoreData,
     traitobj: StorePtr,
-    default_caller: InstanceHandle,
+    default_caller_vmctx: SendSyncPtr<VMContext>,
 
     /// Used to optimized wasm->host calls when the host function is defined with
     /// `Func::new` to avoid allocating a new vector each time a function is
@@ -358,20 +374,6 @@ pub struct StoreOpaque {
     /// Same as `hostcall_val_storage`, but for the direction of the host
     /// calling wasm.
     wasm_val_raw_storage: Vec<ValRaw>,
-
-    /// A list of lists of definitions which have been used to instantiate
-    /// within this `Store`.
-    ///
-    /// Note that not all instantiations end up pushing to this list. At the
-    /// time of this writing only the `InstancePre<T>` type will push to this
-    /// list. Pushes to this list are typically accompanied with
-    /// `HostFunc::to_func_store_rooted` to clone an `Arc` here once which
-    /// preserves a strong reference to the `Arc` for each `HostFunc` stored
-    /// within the list of `Definition`s.
-    ///
-    /// Note that this is `ManuallyDrop` as it must be dropped after
-    /// `store_data` above, where the function pointers are stored.
-    rooted_host_funcs: ManuallyDrop<Vec<Arc<[Definition]>>>,
 
     /// Keep track of what protection key is being used during allocation so
     /// that the right memory pages can be enabled when entering WebAssembly
@@ -382,9 +384,9 @@ pub struct StoreOpaque {
     /// and calls. These also interact with the `ResourceAny` type and its
     /// internal representation.
     #[cfg(feature = "component-model")]
-    component_host_table: crate::runtime::vm::component::ResourceTable,
+    component_host_table: vm::component::ResourceTable,
     #[cfg(feature = "component-model")]
-    component_calls: crate::runtime::vm::component::CallContexts,
+    component_calls: vm::component::CallContexts,
     #[cfg(feature = "component-model")]
     host_resource_data: crate::component::HostResourceData,
 
@@ -529,7 +531,9 @@ impl<T> Store<T> {
             _marker: marker::PhantomPinned,
             engine: engine.clone(),
             vm_store_context: Default::default(),
-            instances: Vec::new(),
+            #[cfg(feature = "stack-switching")]
+            continuations: Vec::new(),
+            instances: PrimaryMap::new(),
             #[cfg(feature = "component-model")]
             num_component_instances: 0,
             signal_handler: None,
@@ -541,7 +545,7 @@ impl<T> Store<T> {
             gc_host_alloc_types: Default::default(),
             modules: ModuleRegistry::default(),
             func_refs: FuncRefs::default(),
-            host_globals: Vec::new(),
+            host_globals: PrimaryMap::new(),
             instance_count: 0,
             instance_limit: crate::DEFAULT_INSTANCE_LIMIT,
             memory_count: 0,
@@ -552,12 +556,11 @@ impl<T> Store<T> {
             async_state: AsyncState::default(),
             fuel_reserve: 0,
             fuel_yield_interval: None,
-            store_data: ManuallyDrop::new(store_data),
+            store_data,
             traitobj: StorePtr::empty(),
-            default_caller: InstanceHandle::null(),
+            default_caller_vmctx: SendSyncPtr::new(NonNull::dangling()),
             hostcall_val_storage: Vec::new(),
             wasm_val_raw_storage: Vec::new(),
-            rooted_host_funcs: ManuallyDrop::new(Vec::new()),
             pkey,
             #[cfg(feature = "component-model")]
             component_host_table: Default::default(),
@@ -586,16 +589,7 @@ impl<T> Store<T> {
             data: ManuallyDrop::new(data),
         });
 
-        // Note the erasure of the lifetime here into `'static`, so in general
-        // usage of this trait object must be strictly bounded to the `Store`
-        // itself, and this is an invariant that we have to maintain throughout
-        // Wasmtime.
-        inner.traitobj = StorePtr::new(unsafe {
-            mem::transmute::<
-                NonNull<dyn crate::runtime::vm::VMStore + '_>,
-                NonNull<dyn crate::runtime::vm::VMStore + 'static>,
-            >(NonNull::from(&mut *inner))
-        });
+        inner.traitobj = StorePtr::new(NonNull::from(&mut *inner));
 
         // Wasmtime uses the callee argument to host functions to learn about
         // the original pointer to the `Store` itself, allowing it to
@@ -604,33 +598,27 @@ impl<T> Store<T> {
         // single "default callee" for the entire `Store`. This is then used as
         // part of `Func::call` to guarantee that the `callee: *mut VMContext`
         // is never null.
-        inner.default_caller = {
-            let module = Arc::new(wasmtime_environ::Module::default());
-            let shim = ModuleRuntimeInfo::bare(module);
-            let allocator = OnDemandInstanceAllocator::default();
+        let module = Arc::new(wasmtime_environ::Module::default());
+        let shim = ModuleRuntimeInfo::bare(module);
+        let allocator = OnDemandInstanceAllocator::default();
 
-            allocator
-                .validate_module(shim.env_module(), shim.offsets())
-                .unwrap();
+        allocator
+            .validate_module(shim.env_module(), shim.offsets())
+            .unwrap();
 
-            let mut instance = unsafe {
-                allocator
-                    .allocate_module(InstanceAllocationRequest {
-                        host_state: Box::new(()),
-                        imports: Default::default(),
-                        store: StorePtr::empty(),
-                        runtime_info: &shim,
-                        wmemcheck: engine.config().wmemcheck,
-                        pkey: None,
-                        tunables: engine.tunables(),
-                    })
-                    .expect("failed to allocate default callee")
-            };
-            unsafe {
-                instance.set_store(Some(inner.traitobj()));
-            }
-            instance
-        };
+        unsafe {
+            let id = inner
+                .allocate_instance(
+                    AllocateInstanceKind::Dummy {
+                        allocator: &allocator,
+                    },
+                    &shim,
+                    Default::default(),
+                )
+                .expect("failed to allocate default callee");
+            let default_caller_vmctx = inner.instance(id).vmctx();
+            inner.default_caller_vmctx = default_caller_vmctx.into();
+        }
 
         Self {
             inner: ManuallyDrop::new(inner),
@@ -942,10 +930,10 @@ impl<T> Store<T> {
     /// add to the epoch deadline, as well as indicating what
     /// to do after the callback returns. If the [`Store`] is
     /// configured with async support, then the callback may return
-    /// [`UpdateDeadline::Yield`] to yield to the async executor before
-    /// updating the epoch deadline. Alternatively, the callback may
-    /// return [`UpdateDeadline::Continue`] to update the epoch deadline
-    /// immediately.
+    /// [`UpdateDeadline::Yield`] or [`UpdateDeadline::YieldCustom`]
+    /// to yield to the async executor before updating the epoch deadline.
+    /// Alternatively, the callback may return [`UpdateDeadline::Continue`] to
+    /// update the epoch deadline immediately.
     ///
     /// This setting is intended to allow for coarse-grained
     /// interruption, but not a deterministic deadline of a fixed,
@@ -1235,24 +1223,25 @@ impl StoreOpaque {
         &mut self.modules
     }
 
-    pub(crate) fn func_refs(&mut self) -> &mut FuncRefs {
-        &mut self.func_refs
+    pub(crate) fn func_refs_and_modules(&mut self) -> (&mut FuncRefs, &ModuleRegistry) {
+        (&mut self.func_refs, &self.modules)
     }
 
-    pub(crate) fn fill_func_refs(&mut self) {
-        self.func_refs.fill(&self.modules);
+    pub(crate) fn host_globals(
+        &self,
+    ) -> &PrimaryMap<DefinedGlobalIndex, StoreBox<VMHostGlobalContext>> {
+        &self.host_globals
     }
 
-    pub(crate) fn push_instance_pre_func_refs(&mut self, func_refs: Arc<[VMFuncRef]>) {
-        self.func_refs.push_instance_pre_func_refs(func_refs);
-    }
-
-    pub(crate) fn host_globals(&mut self) -> &mut Vec<StoreBox<VMHostGlobalContext>> {
+    pub(crate) fn host_globals_mut(
+        &mut self,
+    ) -> &mut PrimaryMap<DefinedGlobalIndex, StoreBox<VMHostGlobalContext>> {
         &mut self.host_globals
     }
 
-    pub fn module_for_instance(&self, instance: InstanceId) -> Option<&'_ Module> {
-        match self.instances[instance.0].kind {
+    pub fn module_for_instance(&self, instance: StoreInstanceId) -> Option<&'_ Module> {
+        instance.store_id().assert_belongs_to(self.id());
+        match self.instances[instance.instance()].kind {
             StoreInstanceKind::Dummy => None,
             StoreInstanceKind::Real { module_id } => {
                 let module = self
@@ -1264,47 +1253,22 @@ impl StoreOpaque {
         }
     }
 
-    pub unsafe fn add_instance(
-        &mut self,
-        handle: InstanceHandle,
-        module_id: RegisteredModuleId,
-    ) -> InstanceId {
-        let id = InstanceId(self.instances.len());
-        log::trace!(
-            "Adding instance to store: store={:?}, module={module_id:?}, instance={id:?}",
-            self.id()
-        );
-        self.instances.push(StoreInstance {
-            handle: handle.clone(),
-            kind: StoreInstanceKind::Real { module_id },
-        });
-        id
-    }
-
-    /// Add a dummy instance that to the store.
+    /// Accessor from `InstanceId` to `&vm::Instance`.
     ///
-    /// These are instances that are just implementation details of something
-    /// else (e.g. host-created memories that are not actually defined in any
-    /// Wasm module) and therefore shouldn't show up in things like core dumps.
-    pub unsafe fn add_dummy_instance(&mut self, handle: InstanceHandle) -> InstanceId {
-        let id = InstanceId(self.instances.len());
-        log::trace!(
-            "Adding dummy instance to store: store={:?}, instance={id:?}",
-            self.id()
-        );
-        self.instances.push(StoreInstance {
-            handle: handle.clone(),
-            kind: StoreInstanceKind::Dummy,
-        });
-        id
+    /// Note that if you have a `StoreInstanceId` you should use
+    /// `StoreInstanceId::get` instead. This assumes that `id` has been
+    /// validated to already belong to this store.
+    pub fn instance(&self, id: InstanceId) -> &vm::Instance {
+        self.instances[id].handle.get()
     }
 
-    pub fn instance(&self, id: InstanceId) -> &InstanceHandle {
-        &self.instances[id.0].handle
-    }
-
-    pub fn instance_mut(&mut self, id: InstanceId) -> &mut InstanceHandle {
-        &mut self.instances[id.0].handle
+    /// Accessor from `InstanceId` to `Pin<&mut vm::Instance>`.
+    ///
+    /// Note that if you have a `StoreInstanceId` you should use
+    /// `StoreInstanceId::get_mut` instead. This assumes that `id` has been
+    /// validated to already belong to this store.
+    pub fn instance_mut(&mut self, id: InstanceId) -> Pin<&mut vm::Instance> {
+        self.instances[id].handle.get_mut()
     }
 
     /// Get all instances (ignoring dummy instances) within this store.
@@ -1312,13 +1276,11 @@ impl StoreOpaque {
         let instances = self
             .instances
             .iter()
-            .enumerate()
-            .filter_map(|(idx, inst)| {
-                let id = InstanceId::from_index(idx);
+            .filter_map(|(id, inst)| {
                 if let StoreInstanceKind::Dummy = inst.kind {
                     None
                 } else {
-                    Some(InstanceData::from_id(id))
+                    Some(id)
                 }
             })
             .collect::<Vec<_>>();
@@ -1335,7 +1297,7 @@ impl StoreOpaque {
         let mems = self
             .instances
             .iter_mut()
-            .flat_map(|instance| instance.handle.defined_memories())
+            .flat_map(|(_, instance)| instance.handle.get().defined_memories())
             .collect::<Vec<_>>();
         mems.into_iter()
             .map(|memory| unsafe { Memory::from_wasmtime_memory(memory, self) })
@@ -1344,85 +1306,31 @@ impl StoreOpaque {
     /// Iterate over all tables (host- or Wasm-defined) within this store.
     pub fn for_each_table(&mut self, mut f: impl FnMut(&mut Self, Table)) {
         // NB: Host-created tables have dummy instances. Therefore, we can get
-        // all memories in the store by iterating over all instances (including
+        // all tables in the store by iterating over all instances (including
         // dummy instances) and getting each of their defined memories.
-
-        struct TempTakeInstances<'a> {
-            instances: Vec<StoreInstance>,
-            store: &'a mut StoreOpaque,
-        }
-
-        impl<'a> TempTakeInstances<'a> {
-            fn new(store: &'a mut StoreOpaque) -> Self {
-                let instances = mem::take(&mut store.instances);
-                Self { instances, store }
-            }
-        }
-
-        impl Drop for TempTakeInstances<'_> {
-            fn drop(&mut self) {
-                assert!(self.store.instances.is_empty());
-                self.store.instances = mem::take(&mut self.instances);
-            }
-        }
-
-        let mut temp = TempTakeInstances::new(self);
-        for instance in temp.instances.iter_mut() {
-            for table in instance.handle.defined_tables() {
-                let table = unsafe { Table::from_wasmtime_table(table, temp.store) };
-                f(temp.store, table);
+        for id in self.instances.keys() {
+            let instance = StoreInstanceId::new(self.id(), id);
+            for table in 0..self.instance(id).env_module().num_defined_tables() {
+                let table = DefinedTableIndex::new(table);
+                f(self, Table::from_raw(instance, table));
             }
         }
     }
 
     /// Iterate over all globals (host- or Wasm-defined) within this store.
     pub fn for_each_global(&mut self, mut f: impl FnMut(&mut Self, Global)) {
-        struct TempTakeHostGlobalsAndInstances<'a> {
-            host_globals: Vec<StoreBox<VMHostGlobalContext>>,
-            instances: Vec<StoreInstance>,
-            store: &'a mut StoreOpaque,
+        // First enumerate all the host-created globals.
+        for global in self.host_globals.keys() {
+            let global = Global::new_host(self, global);
+            f(self, global);
         }
 
-        impl<'a> TempTakeHostGlobalsAndInstances<'a> {
-            fn new(store: &'a mut StoreOpaque) -> Self {
-                let host_globals = mem::take(&mut store.host_globals);
-                let instances = mem::take(&mut store.instances);
-                Self {
-                    host_globals,
-                    instances,
-                    store,
-                }
-            }
-        }
-
-        impl Drop for TempTakeHostGlobalsAndInstances<'_> {
-            fn drop(&mut self) {
-                assert!(self.store.host_globals.is_empty());
-                self.store.host_globals = mem::take(&mut self.host_globals);
-                assert!(self.store.instances.is_empty());
-                self.store.instances = mem::take(&mut self.instances);
-            }
-        }
-
-        let mut temp = TempTakeHostGlobalsAndInstances::new(self);
-        unsafe {
-            // First enumerate all the host-created globals.
-            for global in temp.host_globals.iter() {
-                let export = ExportGlobal {
-                    definition: NonNull::from(&mut global.get().as_mut().global),
-                    vmctx: None,
-                    global: global.get().as_ref().ty.to_wasm_type(),
-                };
-                let global = Global::from_wasmtime_global(export, temp.store);
-                f(temp.store, global);
-            }
-
-            // Then enumerate all instances' defined globals.
-            for instance in temp.instances.iter_mut() {
-                for (_, export) in instance.handle.defined_globals() {
-                    let global = Global::from_wasmtime_global(export, temp.store);
-                    f(temp.store, global);
-                }
+        // Then enumerate all instances' defined globals.
+        for id in self.instances.keys() {
+            for index in 0..self.instance(id).env_module().num_defined_globals() {
+                let index = DefinedGlobalIndex::new(index);
+                let global = Global::new_instance(self, id, index);
+                f(self, global);
             }
         }
     }
@@ -1457,9 +1365,11 @@ impl StoreOpaque {
         #[cfg(feature = "gc")]
         fn allocate_gc_store(
             engine: &Engine,
-            vmstore: NonNull<dyn crate::vm::VMStore>,
+            vmstore: NonNull<dyn vm::VMStore>,
             pkey: Option<ProtectionKey>,
         ) -> Result<GcStore> {
+            use wasmtime_environ::packed_option::ReservedValue;
+
             ensure!(
                 engine.features().gc_types(),
                 "cannot allocate a GC store when GC is disabled at configuration time"
@@ -1467,11 +1377,11 @@ impl StoreOpaque {
 
             // First, allocate the memory that will be our GC heap's storage.
             let mut request = InstanceAllocationRequest {
+                id: InstanceId::reserved_value(),
                 runtime_info: &ModuleRuntimeInfo::bare(Arc::new(
                     wasmtime_environ::Module::default(),
                 )),
-                imports: crate::vm::Imports::default(),
-                host_state: Box::new(()),
+                imports: vm::Imports::default(),
                 store: StorePtr::new(vmstore),
                 wmemcheck: false,
                 pkey,
@@ -1489,12 +1399,13 @@ impl StoreOpaque {
 
             // Then, allocate the actual GC heap, passing in that memory
             // storage.
-            let (index, heap) = engine.allocator().allocate_gc_heap(
-                engine,
-                &**engine.gc_runtime()?,
-                mem_alloc_index,
-                mem,
-            )?;
+            let gc_runtime = engine
+                .gc_runtime()
+                .context("no GC runtime: GC disabled at compile time or configuration time")?;
+            let (index, heap) =
+                engine
+                    .allocator()
+                    .allocate_gc_heap(engine, &**gc_runtime, mem_alloc_index, mem)?;
 
             Ok(GcStore::new(index, heap))
         }
@@ -1502,7 +1413,7 @@ impl StoreOpaque {
         #[cfg(not(feature = "gc"))]
         fn allocate_gc_store(
             _engine: &Engine,
-            _vmstore: NonNull<dyn crate::vm::VMStore>,
+            _vmstore: NonNull<dyn vm::VMStore>,
             _pkey: Option<ProtectionKey>,
         ) -> Result<GcStore> {
             bail!("cannot allocate a GC store: the `gc` feature was disabled at compile time")
@@ -1619,6 +1530,8 @@ impl StoreOpaque {
         assert!(gc_roots_list.is_empty());
 
         self.trace_wasm_stack_roots(gc_roots_list);
+        #[cfg(feature = "stack-switching")]
+        self.trace_wasm_continuation_roots(gc_roots_list);
         self.trace_vmctx_roots(gc_roots_list);
         self.trace_user_roots(gc_roots_list);
 
@@ -1626,58 +1539,105 @@ impl StoreOpaque {
     }
 
     #[cfg(feature = "gc")]
-    fn trace_wasm_stack_roots(&mut self, gc_roots_list: &mut GcRootsList) {
-        use crate::runtime::vm::{Backtrace, SendSyncPtr};
+    fn trace_wasm_stack_frame(
+        &self,
+        gc_roots_list: &mut GcRootsList,
+        frame: crate::runtime::vm::Frame,
+    ) {
+        use crate::runtime::vm::SendSyncPtr;
         use core::ptr::NonNull;
 
+        let pc = frame.pc();
+        debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
+
+        let fp = frame.fp() as *mut usize;
+        debug_assert!(
+            !fp.is_null(),
+            "we should always get a valid frame pointer for Wasm frames"
+        );
+
+        let module_info = self
+            .modules()
+            .lookup_module_by_pc(pc)
+            .expect("should have module info for Wasm frame");
+
+        let stack_map = match module_info.lookup_stack_map(pc) {
+            Some(sm) => sm,
+            None => {
+                log::trace!("No stack map for this Wasm frame");
+                return;
+            }
+        };
+        log::trace!(
+            "We have a stack map that maps {} bytes in this Wasm frame",
+            stack_map.frame_size()
+        );
+
+        let sp = unsafe { stack_map.sp(fp) };
+        for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
+            let raw: u32 = unsafe { core::ptr::read(stack_slot) };
+            log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
+
+            let gc_ref = VMGcRef::from_raw_u32(raw);
+            if gc_ref.is_some() {
+                unsafe {
+                    gc_roots_list
+                        .add_wasm_stack_root(SendSyncPtr::new(NonNull::new(stack_slot).unwrap()));
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "gc")]
+    fn trace_wasm_stack_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        use crate::runtime::vm::Backtrace;
         log::trace!("Begin trace GC roots :: Wasm stack");
 
         Backtrace::trace(self, |frame| {
-            let pc = frame.pc();
-            debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
-
-            let fp = frame.fp() as *mut usize;
-            debug_assert!(
-                !fp.is_null(),
-                "we should always get a valid frame pointer for Wasm frames"
-            );
-
-            let module_info = self
-                .modules()
-                .lookup_module_by_pc(pc)
-                .expect("should have module info for Wasm frame");
-
-            let stack_map = match module_info.lookup_stack_map(pc) {
-                Some(sm) => sm,
-                None => {
-                    log::trace!("No stack map for this Wasm frame");
-                    return core::ops::ControlFlow::Continue(());
-                }
-            };
-            log::trace!(
-                "We have a stack map that maps {} bytes in this Wasm frame",
-                stack_map.frame_size()
-            );
-
-            let sp = unsafe { stack_map.sp(fp) };
-            for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
-                let raw: u32 = unsafe { core::ptr::read(stack_slot) };
-                log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
-
-                let gc_ref = VMGcRef::from_raw_u32(raw);
-                if gc_ref.is_some() {
-                    unsafe {
-                        gc_roots_list.add_wasm_stack_root(SendSyncPtr::new(
-                            NonNull::new(stack_slot).unwrap(),
-                        ));
-                    }
-                }
-            }
-
+            self.trace_wasm_stack_frame(gc_roots_list, frame);
             core::ops::ControlFlow::Continue(())
         });
 
         log::trace!("End trace GC roots :: Wasm stack");
+    }
+
+    #[cfg(all(feature = "gc", feature = "stack-switching"))]
+    fn trace_wasm_continuation_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        use crate::{runtime::vm::Backtrace, vm::VMStackState};
+        log::trace!("Begin trace GC roots :: continuations");
+
+        for continuation in &self.continuations {
+            let state = continuation.common_stack_information.state;
+
+            // FIXME(frank-emrich) In general, it is not enough to just trace
+            // through the stacks of continuations; we also need to look through
+            // their `cont.bind` arguments. However, we don't currently have
+            // enough RTTI information to check if any of the values in the
+            // buffers used by `cont.bind` are GC values. As a workaround, note
+            // that we currently disallow cont.bind-ing GC values altogether.
+            // This way, it is okay not to check them here.
+            match state {
+                VMStackState::Suspended => {
+                    Backtrace::trace_suspended_continuation(self, continuation.deref(), |frame| {
+                        self.trace_wasm_stack_frame(gc_roots_list, frame);
+                        core::ops::ControlFlow::Continue(())
+                    });
+                }
+                VMStackState::Running => {
+                    // Handled by `trace_wasm_stack_roots`.
+                }
+                VMStackState::Parent => {
+                    // We don't know whether our child is suspended or running, but in
+                    // either case things should be hanlded correctly when traversing
+                    // further along in the chain, nothing required at this point.
+                }
+                VMStackState::Fresh | VMStackState::Returned => {
+                    // Fresh/Returned continuations have no gc values on their stack.
+                }
+            }
+        }
+
+        log::trace!("End trace GC roots :: continuations");
     }
 
     #[cfg(feature = "gc")]
@@ -1770,16 +1730,16 @@ impl StoreOpaque {
 
     #[inline]
     pub fn default_caller(&self) -> NonNull<VMContext> {
-        self.default_caller.vmctx()
+        self.default_caller_vmctx.as_non_null()
     }
 
     #[inline]
-    pub fn traitobj(&self) -> NonNull<dyn crate::runtime::vm::VMStore> {
+    pub fn traitobj(&self) -> NonNull<dyn vm::VMStore> {
         self.traitobj.as_raw().unwrap()
     }
 
     #[inline]
-    pub fn traitobj_mut(&mut self) -> &mut dyn crate::runtime::vm::VMStore {
+    pub fn traitobj_mut(&mut self) -> &mut dyn vm::VMStore {
         unsafe { self.traitobj().as_mut() }
     }
 
@@ -1816,10 +1776,6 @@ impl StoreOpaque {
         }
     }
 
-    pub(crate) fn push_rooted_funcs(&mut self, funcs: Arc<[Definition]>) {
-        self.rooted_host_funcs.push(funcs);
-    }
-
     /// Translates a WebAssembly fault at the native `pc` and native `addr` to a
     /// WebAssembly-relative fault.
     ///
@@ -1832,11 +1788,7 @@ impl StoreOpaque {
     /// with spectre mitigations enabled since the hardware fault address is
     /// always zero in these situations which means that the trapping context
     /// doesn't have enough information to report the fault address.
-    pub(crate) fn wasm_fault(
-        &self,
-        pc: usize,
-        addr: usize,
-    ) -> Option<crate::runtime::vm::WasmFault> {
+    pub(crate) fn wasm_fault(&self, pc: usize, addr: usize) -> Option<vm::WasmFault> {
         // There are a few instances where a "close to zero" pointer is loaded
         // and we expect that to happen:
         //
@@ -1869,8 +1821,8 @@ impl StoreOpaque {
         // possible to precompute maps about linear memories in a store and have
         // a quicker lookup.
         let mut fault = None;
-        for instance in self.instances.iter() {
-            if let Some(f) = instance.handle.wasm_fault(addr) {
+        for (_, instance) in self.instances.iter() {
+            if let Some(f) = instance.handle.get().wasm_fault(addr) {
                 assert!(fault.is_none());
                 fault = Some(f);
             }
@@ -1935,8 +1887,8 @@ at https://bytecodealliance.org/security.
     pub(crate) fn component_resource_state(
         &mut self,
     ) -> (
-        &mut crate::runtime::vm::component::CallContexts,
-        &mut crate::runtime::vm::component::ResourceTable,
+        &mut vm::component::CallContexts,
+        &mut vm::component::ResourceTable,
         &mut crate::component::HostResourceData,
     ) {
         (
@@ -1956,6 +1908,24 @@ at https://bytecodealliance.org/security.
         self.num_component_instances += 1;
     }
 
+    #[cfg(feature = "component-model")]
+    pub(crate) fn component_resource_state_with_instance(
+        &mut self,
+        instance: crate::component::Instance,
+    ) -> (
+        &mut vm::component::CallContexts,
+        &mut vm::component::ResourceTable,
+        &mut crate::component::HostResourceData,
+        Pin<&mut vm::component::ComponentInstance>,
+    ) {
+        (
+            &mut self.component_calls,
+            &mut self.component_host_table,
+            &mut self.host_resource_data,
+            instance.id().from_data_get_mut(&mut self.store_data),
+        )
+    }
+
     #[cfg(not(feature = "async"))]
     pub(crate) fn async_guard_range(&self) -> core::ops::Range<*mut u8> {
         core::ptr::null_mut()..core::ptr::null_mut()
@@ -1971,14 +1941,133 @@ at https://bytecodealliance.org/security.
 
     pub(crate) fn unwinder(&self) -> &'static dyn Unwind {
         match &self.executor {
-            Executor::Interpreter(_) => &crate::runtime::vm::UnwindPulley,
+            Executor::Interpreter(i) => i.unwinder(),
             #[cfg(has_host_compiler_backend)]
-            Executor::Native => &crate::runtime::vm::UnwindHost,
+            Executor::Native => &vm::UnwindHost,
         }
+    }
+
+    /// Allocates a new continuation. Note that we currently don't support
+    /// deallocating them. Instead, all continuations remain allocated
+    /// throughout the store's lifetime.
+    #[cfg(feature = "stack-switching")]
+    pub fn allocate_continuation(&mut self) -> Result<*mut VMContRef> {
+        // FIXME(frank-emrich) Do we need to pin this?
+        let mut continuation = Box::new(VMContRef::empty());
+        let stack_size = self.engine.config().async_stack_size;
+        let stack = crate::vm::VMContinuationStack::new(stack_size)?;
+        continuation.stack = stack;
+        let ptr = continuation.deref_mut() as *mut VMContRef;
+        self.continuations.push(continuation);
+        Ok(ptr)
+    }
+
+    /// Constructs and executes an `InstanceAllocationRequest` and pushes the
+    /// returned instance into the store.
+    ///
+    /// This is a helper method for invoking
+    /// `InstanceAllocator::allocate_module` with the appropriate parameters
+    /// from this store's own configuration. The `kind` provided is used to
+    /// distinguish between "real" modules and dummy ones that are synthesized
+    /// for embedder-created memories, globals, tables, etc. The `kind` will
+    /// also use a different instance allocator by default, the one passed in,
+    /// rather than the engine's default allocator.
+    ///
+    /// This method will push the instance within `StoreOpaque` onto the
+    /// `instances` array and return the `InstanceId` which can be use to look
+    /// it up within the store.
+    ///
+    /// # Safety
+    ///
+    /// The request's associated module, memories, tables, and vmctx must have
+    /// already have been validated by `validate_module` for the allocator
+    /// configured. This is typically done during module construction for
+    /// example.
+    pub(crate) unsafe fn allocate_instance(
+        &mut self,
+        kind: AllocateInstanceKind<'_>,
+        runtime_info: &ModuleRuntimeInfo,
+        imports: Imports<'_>,
+    ) -> Result<InstanceId> {
+        let id = self.instances.next_key();
+
+        let allocator = match kind {
+            AllocateInstanceKind::Module(_) => self.engine().allocator(),
+            AllocateInstanceKind::Dummy { allocator } => allocator,
+        };
+        let handle = allocator.allocate_module(InstanceAllocationRequest {
+            id,
+            runtime_info,
+            imports,
+            store: StorePtr::new(self.traitobj()),
+            wmemcheck: self.engine().config().wmemcheck,
+            pkey: self.get_pkey(),
+            tunables: self.engine().tunables(),
+        })?;
+
+        let actual = match kind {
+            AllocateInstanceKind::Module(module_id) => {
+                log::trace!(
+                    "Adding instance to store: store={:?}, module={module_id:?}, instance={id:?}",
+                    self.id()
+                );
+                self.instances.push(StoreInstance {
+                    handle,
+                    kind: StoreInstanceKind::Real { module_id },
+                })
+            }
+            AllocateInstanceKind::Dummy { .. } => {
+                log::trace!(
+                    "Adding dummy instance to store: store={:?}, instance={id:?}",
+                    self.id()
+                );
+                self.instances.push(StoreInstance {
+                    handle,
+                    kind: StoreInstanceKind::Dummy,
+                })
+            }
+        };
+
+        // double-check we didn't accidentally allocate two instances and our
+        // prediction of what the id would be is indeed the id it should be.
+        assert_eq!(id, actual);
+
+        Ok(id)
+    }
+
+    /// Returns the `StoreInstanceId` that can be used to re-acquire access to
+    /// `vmctx` from a store later on.
+    ///
+    /// # Safety
+    ///
+    /// This method is unsafe as it cannot validate that `vmctx` is a valid
+    /// allocation that lives within this store.
+    pub(crate) unsafe fn vmctx_id(&self, vmctx: NonNull<VMContext>) -> StoreInstanceId {
+        let instance_id = vm::Instance::from_vmctx(vmctx, |i| i.id());
+        StoreInstanceId::new(self.id(), instance_id)
     }
 }
 
-unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
+/// Helper parameter to [`StoreOpaque::allocate_instance`].
+pub(crate) enum AllocateInstanceKind<'a> {
+    /// An embedder-provided module is being allocated meaning that the default
+    /// engine's allocator will be used.
+    Module(RegisteredModuleId),
+
+    /// Add a dummy instance that to the store.
+    ///
+    /// These are instances that are just implementation details of something
+    /// else (e.g. host-created memories that are not actually defined in any
+    /// Wasm module) and therefore shouldn't show up in things like core dumps.
+    ///
+    /// A custom, typically OnDemand-flavored, allocator is provided to execute
+    /// the allocation.
+    Dummy {
+        allocator: &'a dyn InstanceAllocator,
+    },
+}
+
+unsafe impl<T> vm::VMStore for StoreInner<T> {
     #[cfg(feature = "component-model-async")]
     fn component_async_store(
         &mut self,
@@ -2104,7 +2193,6 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
             Some(callback) => callback((&mut *self).as_context_mut()).and_then(|update| {
                 let delta = match update {
                     UpdateDeadline::Continue(delta) => delta,
-
                     #[cfg(feature = "async")]
                     UpdateDeadline::Yield(delta) => {
                         assert!(
@@ -2114,6 +2202,27 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
                         // Do the async yield. May return a trap if future was
                         // canceled while we're yielded.
                         self.async_yield_impl()?;
+                        delta
+                    }
+                    #[cfg(feature = "async")]
+                    UpdateDeadline::YieldCustom(delta, future) => {
+                        assert!(
+                            self.async_support(),
+                            "cannot use `UpdateDeadline::YieldCustom` without enabling async support in the config"
+                        );
+
+                        // When control returns, we have a `Result<()>` passed
+                        // in from the host fiber. If this finished successfully then
+                        // we were resumed normally via a `poll`, so keep going.  If
+                        // the future was dropped while we were yielded, then we need
+                        // to clean up this fiber. Do so by raising a trap which will
+                        // abort all wasm and get caught on the other side to clean
+                        // things up.
+                        unsafe {
+                            self.async_cx()
+                                .expect("attempted to pull async context during shutdown")
+                                .block_on(future)?
+                        }
                         delta
                     }
                 };
@@ -2149,7 +2258,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
     }
 
     #[cfg(feature = "component-model")]
-    fn component_calls(&mut self) -> &mut crate::runtime::vm::component::CallContexts {
+    fn component_calls(&mut self) -> &mut vm::component::CallContexts {
         &mut self.component_calls
     }
 }
@@ -2159,20 +2268,12 @@ impl<T> StoreInner<T> {
     pub(crate) fn set_epoch_deadline(&mut self, delta: u64) {
         // Set a new deadline based on the "epoch deadline delta".
         //
-        // Safety: this is safe because the epoch deadline in the
-        // `VMStoreContext` is accessed only here and by Wasm guest code
-        // running in this store, and we have a `&mut self` here.
-        //
         // Also, note that when this update is performed while Wasm is
         // on the stack, the Wasm will reload the new value once we
         // return into it.
-        let epoch_deadline = unsafe {
-            self.vm_store_context_ptr()
-                .as_mut()
-                .epoch_deadline
-                .get_mut()
-        };
-        *epoch_deadline = self.engine().current_epoch() + delta;
+        let current_epoch = self.engine().current_epoch();
+        let epoch_deadline = self.vm_store_context.epoch_deadline.get_mut();
+        *epoch_deadline = current_epoch + delta;
     }
 
     #[cfg(target_has_atomic = "64")]
@@ -2188,17 +2289,8 @@ impl<T> StoreInner<T> {
         self.epoch_deadline_behavior = Some(callback);
     }
 
-    fn get_epoch_deadline(&self) -> u64 {
-        // Safety: this is safe because, as above, it is only invoked
-        // from within `new_epoch` which is called from guest Wasm
-        // code, which will have an exclusive borrow on the Store.
-        let epoch_deadline = unsafe {
-            self.vm_store_context_ptr()
-                .as_mut()
-                .epoch_deadline
-                .get_mut()
-        };
-        *epoch_deadline
+    fn get_epoch_deadline(&mut self) -> u64 {
+        *self.vm_store_context.epoch_deadline.get_mut()
     }
 }
 
@@ -2250,8 +2342,7 @@ impl Drop for StoreOpaque {
                 allocator.deallocate_memory(None, mem_alloc_index, mem);
             }
 
-            for (idx, instance) in self.instances.iter_mut().enumerate() {
-                let id = InstanceId::from_index(idx);
+            for (id, instance) in self.instances.iter_mut() {
                 log::trace!("store {store_id:?} is deallocating {id:?}");
                 if let StoreInstanceKind::Dummy = instance.kind {
                     ondemand.deallocate_module(&mut instance.handle);
@@ -2260,20 +2351,12 @@ impl Drop for StoreOpaque {
                 }
             }
 
-            log::trace!("store {store_id:?} is deallocating its default caller instance");
-            ondemand.deallocate_module(&mut self.default_caller);
-
             #[cfg(feature = "component-model")]
             {
                 for _ in 0..self.num_component_instances {
                     allocator.decrement_component_instance_count();
                 }
             }
-
-            // See documentation for these fields on `StoreOpaque` for why they
-            // must be dropped in this order.
-            ManuallyDrop::drop(&mut self.store_data);
-            ManuallyDrop::drop(&mut self.rooted_host_funcs);
         }
     }
 }

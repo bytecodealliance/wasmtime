@@ -9,7 +9,7 @@ pub trait WasiFile: Send + Sync {
     async fn get_filetype(&self) -> Result<FileType, Error>;
 
     #[cfg(unix)]
-    fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+    fn pollable(&self) -> Option<rustix::fd::BorrowedFd<'_>> {
         None
     }
 

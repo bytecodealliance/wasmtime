@@ -5,8 +5,8 @@ use std::io::{self, IsTerminal, Read, Write};
 use system_interface::io::ReadReady;
 
 use crate::{
-    file::{FdFlags, FileType, WasiFile},
     Error, ErrorExt,
+    file::{FdFlags, FileType, WasiFile},
 };
 #[cfg(windows)]
 use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
@@ -28,7 +28,7 @@ impl WasiFile for Stdin {
     }
 
     #[cfg(unix)]
-    fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+    fn pollable(&self) -> Option<rustix::fd::BorrowedFd<'_>> {
         Some(self.0.as_fd())
     }
 
@@ -108,7 +108,7 @@ macro_rules! wasi_file_write_impl {
                 self
             }
             #[cfg(unix)]
-            fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+            fn pollable(&self) -> Option<rustix::fd::BorrowedFd<'_>> {
                 Some(self.0.as_fd())
             }
             #[cfg(windows)]

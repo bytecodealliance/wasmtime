@@ -2,7 +2,7 @@
 
 use libfuzzer_sys::arbitrary::{Arbitrary, Result, Unstructured};
 use wasmtime_fuzzing::generators::Config;
-use wasmtime_fuzzing::oracles::{instantiate, Timeout};
+use wasmtime_fuzzing::oracles::{Timeout, instantiate};
 use wasmtime_fuzzing::single_module_fuzzer::KnownValid;
 
 wasmtime_fuzzing::single_module_fuzzer!(execute gen_module);

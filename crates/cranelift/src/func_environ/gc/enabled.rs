@@ -6,15 +6,15 @@ use crate::{Reachability, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::{
     cursor::FuncCursor,
-    ir::{self, condcodes::IntCC, InstBuilder},
+    ir::{self, InstBuilder, condcodes::IntCC},
 };
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::{
-    wasm_unsupported, Collector, GcArrayLayout, GcLayout, GcStructLayout, ModuleInternedTypeIndex,
+    Collector, GcArrayLayout, GcLayout, GcStructLayout, I31_DISCRIMINANT, ModuleInternedTypeIndex,
     PtrSize, TypeIndex, VMGcKind, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
-    WasmStorageType, WasmValType, I31_DISCRIMINANT,
+    WasmStorageType, WasmValType, wasm_unsupported,
 };
 
 #[cfg(feature = "gc-drc")]
@@ -153,7 +153,12 @@ fn read_field_at_addr(
                         .call(get_interned_func_ref, &[vmctx, func_ref_id, expected_ty]);
                     builder.func.dfg.first_result(call_inst)
                 }
-                WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+                WasmHeapTopType::Cont => {
+                    // TODO(#10248) GC integration for stack switching
+                    return Err(wasmtime_environ::WasmError::Unsupported(
+                        "Stack switching feature not compatbile with GC, yet".to_string(),
+                    ));
+                }
             },
         },
     };
@@ -307,7 +312,9 @@ pub fn translate_struct_get(
     struct_ref: ir::Value,
     extension: Option<Extension>,
 ) -> WasmResult<ir::Value> {
-    log::trace!("translate_struct_get({struct_type_index:?}, {field_index:?}, {struct_ref:?}, {extension:?})");
+    log::trace!(
+        "translate_struct_get({struct_type_index:?}, {field_index:?}, {struct_ref:?}, {extension:?})"
+    );
 
     // TODO: If we know we have a `(ref $my_struct)` here, instead of maybe a
     // `(ref null $my_struct)`, we could omit the `trapz`. But plumbing that
@@ -538,7 +545,9 @@ fn emit_array_fill_impl(
         ir::Value,
     ) -> WasmResult<()>,
 ) -> WasmResult<()> {
-    log::trace!("emit_array_fill_impl(elem_addr: {elem_addr:?}, elem_size: {elem_size:?}, fill_end: {fill_end:?})");
+    log::trace!(
+        "emit_array_fill_impl(elem_addr: {elem_addr:?}, elem_size: {elem_size:?}, fill_end: {fill_end:?})"
+    );
 
     let pointer_ty = func_env.pointer_type();
 
@@ -878,17 +887,18 @@ pub fn translate_array_set(
 pub fn translate_ref_test(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
-    ref_ty: WasmRefType,
+    test_ty: WasmRefType,
     val: ir::Value,
+    val_ty: WasmRefType,
 ) -> WasmResult<ir::Value> {
-    log::trace!("translate_ref_test({ref_ty:?}, {val:?})");
+    log::trace!("translate_ref_test({test_ty:?}, {val:?})");
 
     // First special case: testing for references to bottom types.
-    if ref_ty.heap_type.is_bottom() {
-        let result = if ref_ty.nullable {
+    if test_ty.heap_type.is_bottom() {
+        let result = if test_ty.nullable {
             // All null references (within the same type hierarchy) match null
             // references to the bottom type.
-            func_env.translate_ref_is_null(builder.cursor(), val)?
+            func_env.translate_ref_is_null(builder.cursor(), val, val_ty)?
         } else {
             // `ref.test` is always false for non-nullable bottom types, as the
             // bottom types are uninhabited.
@@ -902,11 +912,11 @@ pub fn translate_ref_test(
     // the same type hierarchy as `heap_ty`, if `heap_ty` is its hierarchy's top
     // type, we only need to worry about whether we are testing for nullability
     // or not.
-    if ref_ty.heap_type.is_top() {
-        let result = if ref_ty.nullable {
+    if test_ty.heap_type.is_top() {
+        let result = if test_ty.nullable {
             builder.ins().iconst(ir::types::I32, 1)
         } else {
-            let is_null = func_env.translate_ref_is_null(builder.cursor(), val)?;
+            let is_null = func_env.translate_ref_is_null(builder.cursor(), val, val_ty)?;
             let zero = builder.ins().iconst(ir::types::I32, 0);
             let one = builder.ins().iconst(ir::types::I32, 1);
             builder.ins().select(is_null, zero, one)
@@ -917,14 +927,14 @@ pub fn translate_ref_test(
 
     // `i31ref`s are a little interesting because they don't point to GC
     // objects; we test the bit pattern of the reference itself.
-    if ref_ty.heap_type == WasmHeapType::I31 {
+    if test_ty.heap_type == WasmHeapType::I31 {
         let i31_mask = builder.ins().iconst(
             ir::types::I32,
             i64::from(wasmtime_environ::I31_DISCRIMINANT),
         );
         let is_i31 = builder.ins().band(val, i31_mask);
-        let result = if ref_ty.nullable {
-            let is_null = func_env.translate_ref_is_null(builder.cursor(), val)?;
+        let result = if test_ty.nullable {
+            let is_null = func_env.translate_ref_is_null(builder.cursor(), val, val_ty)?;
             builder.ins().bor(is_null, is_i31)
         } else {
             is_i31
@@ -936,15 +946,17 @@ pub fn translate_ref_test(
     // Otherwise, in the general case, we need to inspect our given object's
     // actual type, which also requires null-checking and i31-checking it.
 
-    let is_any_hierarchy = ref_ty.heap_type.top() == WasmHeapTopType::Any;
+    let is_any_hierarchy = test_ty.heap_type.top() == WasmHeapTopType::Any;
 
     let non_null_block = builder.create_block();
     let non_null_non_i31_block = builder.create_block();
     let continue_block = builder.create_block();
 
     // Current block: check if the reference is null and branch appropriately.
-    let is_null = func_env.translate_ref_is_null(builder.cursor(), val)?;
-    let result_when_is_null = builder.ins().iconst(ir::types::I32, ref_ty.nullable as i64);
+    let is_null = func_env.translate_ref_is_null(builder.cursor(), val, val_ty)?;
+    let result_when_is_null = builder
+        .ins()
+        .iconst(ir::types::I32, test_ty.nullable as i64);
     builder.ins().brif(
         is_null,
         continue_block,
@@ -968,7 +980,7 @@ pub fn translate_ref_test(
         let result_when_is_i31 = builder.ins().iconst(
             ir::types::I32,
             matches!(
-                ref_ty.heap_type,
+                test_ty.heap_type,
                 WasmHeapType::Any | WasmHeapType::Eq | WasmHeapType::I31
             ) as i64,
         );
@@ -1021,13 +1033,15 @@ pub fn translate_ref_test(
             .icmp(ir::condcodes::IntCC::Equal, and, expected_kind);
         builder.ins().uextend(ir::types::I32, kind_matches)
     };
-    let result = match ref_ty.heap_type {
+    let result = match test_ty.heap_type {
         WasmHeapType::Any
         | WasmHeapType::None
         | WasmHeapType::Extern
         | WasmHeapType::NoExtern
         | WasmHeapType::Func
         | WasmHeapType::NoFunc
+        | WasmHeapType::Cont
+        | WasmHeapType::NoCont
         | WasmHeapType::I31 => unreachable!("handled top, bottom, and i31 types above"),
 
         // For these abstract but non-top and non-bottom types, we check the
@@ -1082,8 +1096,12 @@ pub fn translate_ref_test(
 
             func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
         }
-
-        WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => todo!(), // FIXME: #10248 stack switching support.
+        WasmHeapType::ConcreteCont(_) => {
+            // TODO(#10248) GC integration for stack switching
+            return Err(wasmtime_environ::WasmError::Unsupported(
+                "Stack switching feature not compatbile with GC, yet".to_string(),
+            ));
+        }
     };
     builder.ins().jump(continue_block, &[result.into()]);
 
@@ -1405,8 +1423,9 @@ impl FuncEnvironment<'_> {
             WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
                 unreachable!()
             }
-
-            WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => todo!(), // FIXME: #10248 stack switching support.
+            WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => {
+                unreachable!()
+            }
         };
 
         match (ty.nullable, might_be_i31) {

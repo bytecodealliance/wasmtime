@@ -18,11 +18,11 @@ use serde_derive::{Deserialize, Serialize};
 use crate::bitset::ScalarBitSet;
 use crate::entity;
 use crate::ir::{
-    self,
+    self, Block, ExceptionTable, ExceptionTables, FuncRef, MemFlags, SigRef, StackSlot, Type,
+    Value,
     condcodes::{FloatCC, IntCC},
     trapcode::TrapCode,
-    types, Block, ExceptionTable, ExceptionTables, FuncRef, MemFlags, SigRef, StackSlot, Type,
-    Value,
+    types,
 };
 
 /// Some instructions use an external list of argument values because there is not enough space in
@@ -974,7 +974,9 @@ impl OperandConstraint {
                     // control type to construct the interval of [F16, ctrl_type).
                     tys.floats = BitSet8::from_range(4, ctrl_type_bits as u8);
                 } else {
-                    panic!("The Narrower constraint only operates on floats or ints, got {ctrl_type:?}");
+                    panic!(
+                        "The Narrower constraint only operates on floats or ints, got {ctrl_type:?}"
+                    );
                 }
                 ResolvedConstraint::Free(tys)
             }

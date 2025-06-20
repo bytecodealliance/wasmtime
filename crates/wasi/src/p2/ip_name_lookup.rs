@@ -2,7 +2,7 @@ use crate::p2::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStrea
 use crate::p2::bindings::sockets::network::{ErrorCode, IpAddress, Network};
 use crate::p2::host::network::util;
 use crate::p2::{IoView, SocketError, WasiImpl, WasiView};
-use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
+use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
 use anyhow::Result;
 use std::mem;
 use std::net::{Ipv6Addr, ToSocketAddrs};
@@ -10,7 +10,7 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::vec;
 use wasmtime::component::Resource;
-use wasmtime_wasi_io::poll::{subscribe, DynPollable, Pollable};
+use wasmtime_wasi_io::poll::{DynPollable, Pollable, subscribe};
 
 use super::network::{from_ipv4_addr, from_ipv6_addr};
 

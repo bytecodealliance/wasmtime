@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::send_sync_ptr::SendSyncPtr;
 #[cfg(has_virtual_memory)]
-use crate::runtime::vm::{mmap::UnalignedLength, Mmap};
+use crate::runtime::vm::{Mmap, mmap::UnalignedLength};
 #[cfg(not(has_virtual_memory))]
 use alloc::alloc::Layout;
 use alloc::sync::Arc;

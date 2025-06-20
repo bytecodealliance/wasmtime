@@ -1,6 +1,6 @@
 [package]
-name = "wasmtime-winch"
-description = "Integration between Wasmtime and Winch"
+name = "wasmtime-internal-winch"
+description = "INTERNAL: Integration between Wasmtime and Winch"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -31,5 +31,6 @@ all-arch = ["winch-codegen/all-arch"]
 gc = ['winch-codegen/gc']
 gc-drc = ['winch-codegen/gc-drc']
 gc-null = ['winch-codegen/gc-null']
+stack-switching = ['winch-codegen/stack-switching']
 threads = ['winch-codegen/threads']
 wmemcheck = ['winch-codegen/wmemcheck']

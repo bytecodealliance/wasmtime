@@ -1,6 +1,6 @@
 use crate::p2::bindings::filesystem::types;
 use crate::p2::{InputStream, OutputStream, Pollable, StreamError, StreamResult};
-use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
+use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
 use crate::{DirPerms, FilePerms, OpenMode, TrappableError};
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};

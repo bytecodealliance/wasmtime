@@ -51,7 +51,7 @@ impl ExploreCommand {
         let clif_dir = if let Some(Strategy::Cranelift) | None = self.common.codegen.compiler {
             let clif_dir = tempdir()?;
             config.emit_clif(clif_dir.path());
-            config.disable_cache(); // cache does not emit clif
+            config.cache(None); // cache does not emit clif
             Some(clif_dir)
         } else {
             None

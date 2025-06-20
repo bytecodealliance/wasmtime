@@ -50,7 +50,7 @@ fn cache_store() -> Arc<dyn CacheStore> {
     static CACHE: Mutex<Option<HashMap<Vec<u8>, Vec<u8>>>> = Mutex::new(None);
 
     impl CacheStore for MyCache {
-        fn get(&self, key: &[u8]) -> Option<Cow<[u8]>> {
+        fn get(&self, key: &[u8]) -> Option<Cow<'_, [u8]>> {
             let mut cache = CACHE.lock().unwrap();
             let cache = cache.get_or_insert_with(HashMap::new);
             cache.get(key).map(|s| s.to_vec().into())

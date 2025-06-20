@@ -83,17 +83,17 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
 ;; @004a                               trapz v2, user16
-;; @004a                               v44 = load.i64 notrap aligned readonly can_move v0+8
-;; @004a                               v5 = load.i64 notrap aligned readonly can_move v44+24
+;; @004a                               v59 = load.i64 notrap aligned readonly can_move v0+8
+;; @004a                               v5 = load.i64 notrap aligned readonly can_move v59+24
 ;; @004a                               v4 = uextend.i64 v2
 ;; @004a                               v6 = iadd v5, v4
 ;; @004a                               v7 = iconst.i64 24
 ;; @004a                               v8 = iadd v6, v7  ; v7 = 24
 ;; @004a                               v9 = load.i32 notrap aligned little v8
-;;                                     v46 = iconst.i32 1
-;; @004a                               v10 = band v3, v46  ; v46 = 1
-;;                                     v47 = iconst.i32 0
-;; @004a                               v11 = icmp eq v3, v47  ; v47 = 0
+;;                                     v58 = iconst.i32 1
+;; @004a                               v10 = band v3, v58  ; v58 = 1
+;;                                     v57 = iconst.i32 0
+;; @004a                               v11 = icmp eq v3, v57  ; v57 = 0
 ;; @004a                               v12 = uextend.i32 v11
 ;; @004a                               v13 = bor v10, v12
 ;; @004a                               brif v13, block3, block2
@@ -135,8 +135,8 @@
 ;; @004a                               jump block7
 ;;
 ;;                                 block6:
-;;                                     v57 = iconst.i64 -1
-;; @004a                               v36 = iadd.i64 v35, v57  ; v57 = -1
+;;                                     v47 = iconst.i64 -1
+;; @004a                               v36 = iadd.i64 v35, v47  ; v47 = -1
 ;;                                     v81 = iadd.i64 v32, v79  ; v79 = 8
 ;; @004a                               store notrap aligned v36, v81
 ;; @004a                               jump block7

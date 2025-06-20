@@ -6,11 +6,11 @@
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
 /// For more information see [`TheLists`] as well.
-pub struct TheListsPre<T> {
+pub struct TheListsPre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
     indices: TheListsIndices,
 }
-impl<T> Clone for TheListsPre<T> {
+impl<T: 'static> Clone for TheListsPre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,7 +18,7 @@ impl<T> Clone for TheListsPre<T> {
         }
     }
 }
-impl<_T> TheListsPre<_T> {
+impl<_T: 'static> TheListsPre<_T> {
     /// Creates a new copy of `TheListsPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -27,7 +27,7 @@ impl<_T> TheListsPre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = TheListsIndices::new(instance_pre.component())?;
+        let indices = TheListsIndices::new(&instance_pre)?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -82,11 +82,6 @@ pub struct TheListsIndices {
 /// * If you've instantiated the instance yourself already
 ///   then you can use [`TheLists::new`].
 ///
-/// * You can also access the guts of instantiation through
-///   [`TheListsIndices::new_instance`] followed
-///   by [`TheListsIndices::load`] to crate an instance of this
-///   type.
-///
 /// These methods are all equivalent to one another and move
 /// around the tradeoff of what work is performed when.
 ///
@@ -105,29 +100,12 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new(
-            component: &wasmtime::component::Component,
+        pub fn new<_T>(
+            _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
-            let _component = component;
-            let interface0 = exports::foo::foo::lists::GuestIndices::new(_component)?;
-            Ok(TheListsIndices { interface0 })
-        }
-        /// Creates a new instance of [`TheListsIndices`] from an
-        /// instantiated component.
-        ///
-        /// This method of creating a [`TheLists`] will perform string
-        /// lookups for all exports when this method is called. This
-        /// will only succeed if the provided instance matches the
-        /// requirements of [`TheLists`].
-        pub fn new_instance(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let _instance = instance;
-            let interface0 = exports::foo::foo::lists::GuestIndices::new_instance(
-                &mut store,
-                _instance,
-            )?;
+            let _component = _instance_pre.component();
+            let _instance_type = _instance_pre.instance_type();
+            let interface0 = exports::foo::foo::lists::GuestIndices::new(_instance_pre)?;
             Ok(TheListsIndices { interface0 })
         }
         /// Uses the indices stored in `self` to load an instance
@@ -140,6 +118,7 @@ const _: () = {
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<TheLists> {
+            let _ = &mut store;
             let _instance = instance;
             let interface0 = self.interface0.load(&mut store, &_instance)?;
             Ok(TheLists { interface0 })
@@ -149,30 +128,32 @@ const _: () = {
         /// Convenience wrapper around [`TheListsPre::new`] and
         /// [`TheListsPre::instantiate`].
         pub fn instantiate<_T>(
-            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<TheLists> {
             let pre = linker.instantiate_pre(component)?;
             TheListsPre::new(pre)?.instantiate(store)
         }
-        /// Convenience wrapper around [`TheListsIndices::new_instance`] and
+        /// Convenience wrapper around [`TheListsIndices::new`] and
         /// [`TheListsIndices::load`].
         pub fn new(
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<TheLists> {
-            let indices = TheListsIndices::new_instance(&mut store, instance)?;
-            indices.load(store, instance)
+            let indices = TheListsIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
         }
-        pub fn add_to_linker<T, U>(
+        pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            U: foo::foo::lists::Host,
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<'a>: foo::foo::lists::Host,
+            T: 'static,
         {
-            foo::foo::lists::add_to_linker(linker, get)?;
+            foo::foo::lists::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
         pub fn foo_foo_lists(&self) -> &exports::foo::foo::lists::Guest {
@@ -465,26 +446,172 @@ pub mod foo {
                     a: LoadStoreAllSizes,
                 ) -> LoadStoreAllSizes;
             }
-            pub trait GetHost<
-                T,
-                D,
-            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host;
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn list_u8_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<u8>,
+                ) -> () {
+                    Host::list_u8_param(*self, x)
+                }
+                fn list_u16_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<u16>,
+                ) -> () {
+                    Host::list_u16_param(*self, x)
+                }
+                fn list_u32_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<u32>,
+                ) -> () {
+                    Host::list_u32_param(*self, x)
+                }
+                fn list_u64_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<u64>,
+                ) -> () {
+                    Host::list_u64_param(*self, x)
+                }
+                fn list_s8_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<i8>,
+                ) -> () {
+                    Host::list_s8_param(*self, x)
+                }
+                fn list_s16_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<i16>,
+                ) -> () {
+                    Host::list_s16_param(*self, x)
+                }
+                fn list_s32_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<i32>,
+                ) -> () {
+                    Host::list_s32_param(*self, x)
+                }
+                fn list_s64_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<i64>,
+                ) -> () {
+                    Host::list_s64_param(*self, x)
+                }
+                fn list_f32_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<f32>,
+                ) -> () {
+                    Host::list_f32_param(*self, x)
+                }
+                fn list_f64_param(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<f64>,
+                ) -> () {
+                    Host::list_f64_param(*self, x)
+                }
+                fn list_u8_ret(&mut self) -> wasmtime::component::__internal::Vec<u8> {
+                    Host::list_u8_ret(*self)
+                }
+                fn list_u16_ret(&mut self) -> wasmtime::component::__internal::Vec<u16> {
+                    Host::list_u16_ret(*self)
+                }
+                fn list_u32_ret(&mut self) -> wasmtime::component::__internal::Vec<u32> {
+                    Host::list_u32_ret(*self)
+                }
+                fn list_u64_ret(&mut self) -> wasmtime::component::__internal::Vec<u64> {
+                    Host::list_u64_ret(*self)
+                }
+                fn list_s8_ret(&mut self) -> wasmtime::component::__internal::Vec<i8> {
+                    Host::list_s8_ret(*self)
+                }
+                fn list_s16_ret(&mut self) -> wasmtime::component::__internal::Vec<i16> {
+                    Host::list_s16_ret(*self)
+                }
+                fn list_s32_ret(&mut self) -> wasmtime::component::__internal::Vec<i32> {
+                    Host::list_s32_ret(*self)
+                }
+                fn list_s64_ret(&mut self) -> wasmtime::component::__internal::Vec<i64> {
+                    Host::list_s64_ret(*self)
+                }
+                fn list_f32_ret(&mut self) -> wasmtime::component::__internal::Vec<f32> {
+                    Host::list_f32_ret(*self)
+                }
+                fn list_f64_ret(&mut self) -> wasmtime::component::__internal::Vec<f64> {
+                    Host::list_f64_ret(*self)
+                }
+                fn tuple_list(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<(u8, i8)>,
+                ) -> wasmtime::component::__internal::Vec<(i64, u32)> {
+                    Host::tuple_list(*self, x)
+                }
+                fn string_list_arg(
+                    &mut self,
+                    a: wasmtime::component::__internal::Vec<
+                        wasmtime::component::__internal::String,
+                    >,
+                ) -> () {
+                    Host::string_list_arg(*self, a)
+                }
+                fn string_list_ret(
+                    &mut self,
+                ) -> wasmtime::component::__internal::Vec<
+                    wasmtime::component::__internal::String,
+                > {
+                    Host::string_list_ret(*self)
+                }
+                fn tuple_string_list(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<
+                        (u8, wasmtime::component::__internal::String),
+                    >,
+                ) -> wasmtime::component::__internal::Vec<
+                    (wasmtime::component::__internal::String, u8),
+                > {
+                    Host::tuple_string_list(*self, x)
+                }
+                fn string_list(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<
+                        wasmtime::component::__internal::String,
+                    >,
+                ) -> wasmtime::component::__internal::Vec<
+                    wasmtime::component::__internal::String,
+                > {
+                    Host::string_list(*self, x)
+                }
+                fn record_list(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<SomeRecord>,
+                ) -> wasmtime::component::__internal::Vec<OtherRecord> {
+                    Host::record_list(*self, x)
+                }
+                fn record_list_reverse(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<OtherRecord>,
+                ) -> wasmtime::component::__internal::Vec<SomeRecord> {
+                    Host::record_list_reverse(*self, x)
+                }
+                fn variant_list(
+                    &mut self,
+                    x: wasmtime::component::__internal::Vec<SomeVariant>,
+                ) -> wasmtime::component::__internal::Vec<OtherVariant> {
+                    Host::variant_list(*self, x)
+                }
+                fn load_store_everything(
+                    &mut self,
+                    a: LoadStoreAllSizes,
+                ) -> LoadStoreAllSizes {
+                    Host::load_store_everything(*self, a)
+                }
             }
-            impl<F, T, D, O> GetHost<T, D> for F
-            where
-                F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host,
-            {
-                type Host = O;
-            }
-            pub fn add_to_linker_get_host<
-                T,
-                G: for<'a> GetHost<&'a mut T, T, Host: Host>,
-            >(
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
-            ) -> wasmtime::Result<()> {
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
                 let mut inst = linker.instance("foo:foo/lists")?;
                 inst.func_wrap(
                     "list-u8-param",
@@ -792,172 +919,6 @@ pub mod foo {
                 )?;
                 Ok(())
             }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                U: Host,
-            {
-                add_to_linker_get_host(linker, get)
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn list_u8_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<u8>,
-                ) -> () {
-                    Host::list_u8_param(*self, x)
-                }
-                fn list_u16_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<u16>,
-                ) -> () {
-                    Host::list_u16_param(*self, x)
-                }
-                fn list_u32_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<u32>,
-                ) -> () {
-                    Host::list_u32_param(*self, x)
-                }
-                fn list_u64_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<u64>,
-                ) -> () {
-                    Host::list_u64_param(*self, x)
-                }
-                fn list_s8_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<i8>,
-                ) -> () {
-                    Host::list_s8_param(*self, x)
-                }
-                fn list_s16_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<i16>,
-                ) -> () {
-                    Host::list_s16_param(*self, x)
-                }
-                fn list_s32_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<i32>,
-                ) -> () {
-                    Host::list_s32_param(*self, x)
-                }
-                fn list_s64_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<i64>,
-                ) -> () {
-                    Host::list_s64_param(*self, x)
-                }
-                fn list_f32_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<f32>,
-                ) -> () {
-                    Host::list_f32_param(*self, x)
-                }
-                fn list_f64_param(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<f64>,
-                ) -> () {
-                    Host::list_f64_param(*self, x)
-                }
-                fn list_u8_ret(&mut self) -> wasmtime::component::__internal::Vec<u8> {
-                    Host::list_u8_ret(*self)
-                }
-                fn list_u16_ret(&mut self) -> wasmtime::component::__internal::Vec<u16> {
-                    Host::list_u16_ret(*self)
-                }
-                fn list_u32_ret(&mut self) -> wasmtime::component::__internal::Vec<u32> {
-                    Host::list_u32_ret(*self)
-                }
-                fn list_u64_ret(&mut self) -> wasmtime::component::__internal::Vec<u64> {
-                    Host::list_u64_ret(*self)
-                }
-                fn list_s8_ret(&mut self) -> wasmtime::component::__internal::Vec<i8> {
-                    Host::list_s8_ret(*self)
-                }
-                fn list_s16_ret(&mut self) -> wasmtime::component::__internal::Vec<i16> {
-                    Host::list_s16_ret(*self)
-                }
-                fn list_s32_ret(&mut self) -> wasmtime::component::__internal::Vec<i32> {
-                    Host::list_s32_ret(*self)
-                }
-                fn list_s64_ret(&mut self) -> wasmtime::component::__internal::Vec<i64> {
-                    Host::list_s64_ret(*self)
-                }
-                fn list_f32_ret(&mut self) -> wasmtime::component::__internal::Vec<f32> {
-                    Host::list_f32_ret(*self)
-                }
-                fn list_f64_ret(&mut self) -> wasmtime::component::__internal::Vec<f64> {
-                    Host::list_f64_ret(*self)
-                }
-                fn tuple_list(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<(u8, i8)>,
-                ) -> wasmtime::component::__internal::Vec<(i64, u32)> {
-                    Host::tuple_list(*self, x)
-                }
-                fn string_list_arg(
-                    &mut self,
-                    a: wasmtime::component::__internal::Vec<
-                        wasmtime::component::__internal::String,
-                    >,
-                ) -> () {
-                    Host::string_list_arg(*self, a)
-                }
-                fn string_list_ret(
-                    &mut self,
-                ) -> wasmtime::component::__internal::Vec<
-                    wasmtime::component::__internal::String,
-                > {
-                    Host::string_list_ret(*self)
-                }
-                fn tuple_string_list(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<
-                        (u8, wasmtime::component::__internal::String),
-                    >,
-                ) -> wasmtime::component::__internal::Vec<
-                    (wasmtime::component::__internal::String, u8),
-                > {
-                    Host::tuple_string_list(*self, x)
-                }
-                fn string_list(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<
-                        wasmtime::component::__internal::String,
-                    >,
-                ) -> wasmtime::component::__internal::Vec<
-                    wasmtime::component::__internal::String,
-                > {
-                    Host::string_list(*self, x)
-                }
-                fn record_list(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<SomeRecord>,
-                ) -> wasmtime::component::__internal::Vec<OtherRecord> {
-                    Host::record_list(*self, x)
-                }
-                fn record_list_reverse(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<OtherRecord>,
-                ) -> wasmtime::component::__internal::Vec<SomeRecord> {
-                    Host::record_list_reverse(*self, x)
-                }
-                fn variant_list(
-                    &mut self,
-                    x: wasmtime::component::__internal::Vec<SomeVariant>,
-                ) -> wasmtime::component::__internal::Vec<OtherVariant> {
-                    Host::variant_list(*self, x)
-                }
-                fn load_store_everything(
-                    &mut self,
-                    a: LoadStoreAllSizes,
-                ) -> LoadStoreAllSizes {
-                    Host::load_store_everything(*self, a)
-                }
-            }
         }
     }
 }
@@ -1238,45 +1199,21 @@ pub mod exports {
                     ///
                     /// This constructor can be used to front-load string lookups to find exports
                     /// within a component.
-                    pub fn new(
-                        component: &wasmtime::component::Component,
+                    pub fn new<_T>(
+                        _instance_pre: &wasmtime::component::InstancePre<_T>,
                     ) -> wasmtime::Result<GuestIndices> {
-                        let instance = component
+                        let instance = _instance_pre
+                            .component()
                             .get_export_index(None, "foo:foo/lists")
                             .ok_or_else(|| {
                                 anyhow::anyhow!(
                                     "no exported instance named `foo:foo/lists`"
                                 )
                             })?;
-                        Self::_new(|name| {
-                            component.get_export_index(Some(&instance), name)
-                        })
-                    }
-                    /// This constructor is similar to [`GuestIndices::new`] except that it
-                    /// performs string lookups after instantiation time.
-                    pub fn new_instance(
-                        mut store: impl wasmtime::AsContextMut,
-                        instance: &wasmtime::component::Instance,
-                    ) -> wasmtime::Result<GuestIndices> {
-                        let instance_export = instance
-                            .get_export_index(&mut store, None, "foo:foo/lists")
-                            .ok_or_else(|| {
-                                anyhow::anyhow!(
-                                    "no exported instance named `foo:foo/lists`"
-                                )
-                            })?;
-                        Self::_new(|name| {
-                            instance
-                                .get_export_index(&mut store, Some(&instance_export), name)
-                        })
-                    }
-                    fn _new(
-                        mut lookup: impl FnMut(
-                            &str,
-                        ) -> Option<wasmtime::component::ComponentExportIndex>,
-                    ) -> wasmtime::Result<GuestIndices> {
                         let mut lookup = move |name| {
-                            lookup(name)
+                            _instance_pre
+                                .component()
+                                .get_export_index(Some(&instance), name)
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/lists` does \
@@ -1351,9 +1288,11 @@ pub mod exports {
                         mut store: impl wasmtime::AsContextMut,
                         instance: &wasmtime::component::Instance,
                     ) -> wasmtime::Result<Guest> {
+                        let _instance = instance;
+                        let _instance_pre = _instance.instance_pre(&store);
+                        let _instance_type = _instance_pre.instance_type();
                         let mut store = store.as_context_mut();
                         let _ = &mut store;
-                        let _instance = instance;
                         let list_u8_param = *_instance
                             .get_typed_func::<
                                 (&[u8],),
@@ -1578,10 +1517,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[u8],
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[u8],),
@@ -1596,10 +1532,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[u16],
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[u16],),
@@ -1614,10 +1547,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[u32],
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[u32],),
@@ -1632,10 +1562,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[u64],
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[u64],),
@@ -1650,10 +1577,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[i8],
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[i8],),
@@ -1668,10 +1592,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[i16],
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[i16],),
@@ -1686,10 +1607,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[i32],
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[i32],),
@@ -1704,10 +1622,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[i64],
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[i64],),
@@ -1722,10 +1637,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[f32],
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[f32],),
@@ -1740,10 +1652,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[f64],
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[f64],),
@@ -1757,10 +1666,7 @@ pub mod exports {
                     pub fn call_list_u8_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u8>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u8>> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1774,10 +1680,7 @@ pub mod exports {
                     pub fn call_list_u16_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u16>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u16>> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1791,10 +1694,7 @@ pub mod exports {
                     pub fn call_list_u32_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u32>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u32>> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1808,10 +1708,7 @@ pub mod exports {
                     pub fn call_list_u64_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u64>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<u64>> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1825,10 +1722,7 @@ pub mod exports {
                     pub fn call_list_s8_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i8>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i8>> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1842,10 +1736,7 @@ pub mod exports {
                     pub fn call_list_s16_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i16>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i16>> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1859,10 +1750,7 @@ pub mod exports {
                     pub fn call_list_s32_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i32>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i32>> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1876,10 +1764,7 @@ pub mod exports {
                     pub fn call_list_s64_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i64>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<i64>> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1893,10 +1778,7 @@ pub mod exports {
                     pub fn call_list_f32_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<f32>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<f32>> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1910,10 +1792,7 @@ pub mod exports {
                     pub fn call_list_f64_ret<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<f64>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::__internal::Vec<f64>> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1930,10 +1809,7 @@ pub mod exports {
                         arg0: &[(u8, i8)],
                     ) -> wasmtime::Result<
                         wasmtime::component::__internal::Vec<(i64, u32)>,
-                    >
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    > {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[(u8, i8)],),
@@ -1948,10 +1824,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &[wasmtime::component::__internal::String],
-                    ) -> wasmtime::Result<()>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<()> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[wasmtime::component::__internal::String],),
@@ -1969,10 +1842,7 @@ pub mod exports {
                         wasmtime::component::__internal::Vec<
                             wasmtime::component::__internal::String,
                         >,
-                    >
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    > {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -1995,10 +1865,7 @@ pub mod exports {
                         wasmtime::component::__internal::Vec<
                             (wasmtime::component::__internal::String, u8),
                         >,
-                    >
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    > {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[(u8, wasmtime::component::__internal::String)],),
@@ -2021,10 +1888,7 @@ pub mod exports {
                         wasmtime::component::__internal::Vec<
                             wasmtime::component::__internal::String,
                         >,
-                    >
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    > {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[wasmtime::component::__internal::String],),
@@ -2045,10 +1909,7 @@ pub mod exports {
                         arg0: &[SomeRecord],
                     ) -> wasmtime::Result<
                         wasmtime::component::__internal::Vec<OtherRecord>,
-                    >
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    > {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[SomeRecord],),
@@ -2065,10 +1926,7 @@ pub mod exports {
                         arg0: &[OtherRecord],
                     ) -> wasmtime::Result<
                         wasmtime::component::__internal::Vec<SomeRecord>,
-                    >
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    > {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[OtherRecord],),
@@ -2085,10 +1943,7 @@ pub mod exports {
                         arg0: &[SomeVariant],
                     ) -> wasmtime::Result<
                         wasmtime::component::__internal::Vec<OtherVariant>,
-                    >
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    > {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&[SomeVariant],),
@@ -2103,10 +1958,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &LoadStoreAllSizes,
-                    ) -> wasmtime::Result<LoadStoreAllSizes>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send,
-                    {
+                    ) -> wasmtime::Result<LoadStoreAllSizes> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&LoadStoreAllSizes,),

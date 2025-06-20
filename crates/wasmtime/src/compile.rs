@@ -22,20 +22,20 @@
 //!   functions. It is up to the caller to serialize the relevant parts of the
 //!   `Artifacts` into the ELF file.
 
+use crate::Engine;
 use crate::hash_map::HashMap;
 use crate::hash_set::HashSet;
 use crate::prelude::*;
-use crate::Engine;
 use std::{
     any::Any,
     borrow::Cow,
-    collections::{btree_map, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map},
     mem,
 };
 
+use wasmtime_environ::CompiledFunctionBody;
 #[cfg(feature = "component-model")]
 use wasmtime_environ::component::Translator;
-use wasmtime_environ::CompiledFunctionBody;
 use wasmtime_environ::{
     BuiltinFunctionIndex, CompiledFunctionInfo, CompiledModuleInfo, Compiler, DefinedFuncIndex,
     FilePos, FinishedObject, FunctionBodyData, ModuleEnvironment, ModuleInternedTypeIndex,
@@ -137,10 +137,10 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     _dwarf_package: Option<&[u8]>,
     obj_state: &T::State,
 ) -> Result<(T, Option<wasmtime_environ::component::ComponentArtifacts>)> {
+    use wasmtime_environ::ScopeVec;
     use wasmtime_environ::component::{
         CompiledComponentInfo, ComponentArtifacts, ComponentTypesBuilder,
     };
-    use wasmtime_environ::ScopeVec;
 
     let tunables = engine.tunables();
     let compiler = engine.compiler();
@@ -381,14 +381,15 @@ impl<'a> CompileInputs<'a> {
 
         for (idx, trampoline) in component.trampolines.iter() {
             ret.push_input(move |compiler| {
+                let symbol = trampoline.symbol_name();
                 Ok(CompileOutput {
                     key: CompileKey::trampoline(idx),
-                    symbol: trampoline.symbol_name(),
                     function: compiler
                         .component_compiler()
-                        .compile_trampoline(component, types, idx, tunables)
-                        .with_context(|| format!("failed to compile {}", trampoline.symbol_name()))?
+                        .compile_trampoline(component, types, idx, tunables, &symbol)
+                        .with_context(|| format!("failed to compile {symbol}"))?
                         .into(),
+                    symbol,
                     start_srcloc: FilePos::default(),
                 })
             });
@@ -405,7 +406,7 @@ impl<'a> CompileInputs<'a> {
                 ret.push_input(move |compiler| {
                     let symbol = "resource_drop_trampoline".to_string();
                     let function = compiler
-                        .compile_wasm_to_array_trampoline(types[sig].unwrap_func())
+                        .compile_wasm_to_array_trampoline(types[sig].unwrap_func(), &symbol)
                         .with_context(|| format!("failed to compile `{symbol}`"))?;
                     Ok(CompileOutput {
                         key: CompileKey::resource_drop_wasm_to_array_trampoline(),
@@ -420,7 +421,7 @@ impl<'a> CompileInputs<'a> {
         ret
     }
 
-    fn clean_symbol(name: &str) -> Cow<str> {
+    fn clean_symbol(name: &str) -> Cow<'_, str> {
         /// Maximum length of symbols generated in objects.
         const MAX_SYMBOL_LEN: usize = 96;
 
@@ -487,7 +488,7 @@ impl<'a> CompileInputs<'a> {
                     let offset = data.original_position();
                     let start_srcloc = FilePos::new(u32::try_from(offset).unwrap());
                     let function = compiler
-                        .compile_function(translation, def_func_index, func_body, types)
+                        .compile_function(translation, def_func_index, func_body, types, &symbol)
                         .with_context(|| format!("failed to compile: {symbol}"))?;
 
                     Ok(CompileOutput {
@@ -508,7 +509,12 @@ impl<'a> CompileInputs<'a> {
                             func_index.as_u32()
                         );
                         let trampoline = compiler
-                            .compile_array_to_wasm_trampoline(translation, types, def_func_index)
+                            .compile_array_to_wasm_trampoline(
+                                translation,
+                                types,
+                                def_func_index,
+                                &symbol,
+                            )
                             .with_context(|| format!("failed to compile: {symbol}"))?;
                         Ok(CompileOutput {
                             key: CompileKey::array_to_wasm_trampoline(module, def_func_index),
@@ -534,7 +540,7 @@ impl<'a> CompileInputs<'a> {
                     trampoline_type_index.as_u32()
                 );
                 let trampoline = compiler
-                    .compile_wasm_to_array_trampoline(trampoline_func_ty)
+                    .compile_wasm_to_array_trampoline(trampoline_func_ty, &symbol)
                     .with_context(|| format!("failed to compile: {symbol}"))?;
                 Ok(CompileOutput {
                     key: CompileKey::wasm_to_array_trampoline(trampoline_type_index),
@@ -550,6 +556,24 @@ impl<'a> CompileInputs<'a> {
     /// resulting `UnlinkedCompileOutput`s.
     fn compile(self, engine: &Engine) -> Result<UnlinkedCompileOutputs> {
         let compiler = engine.compiler();
+
+        if self.inputs.len() > 0 && cfg!(miri) {
+            bail!(
+                "\
+You are attempting to compile a WebAssembly module or component that contains
+functions in Miri. Running Cranelift through Miri is known to take quite a long
+time and isn't what we want in CI at least. If this is a mistake then you should
+ignore this test in Miri with:
+
+    #[cfg_attr(miri, ignore)]
+
+If this is not a mistake then try to edit the `pulley_provenance_test` test
+which runs Cranelift outside of Miri. If you still feel this is a mistake then
+please open an issue or a topic on Zulip to talk about how best to accomodate
+the use case.
+"
+            );
+        }
 
         // Compile each individual input in parallel.
         let mut raw_outputs = engine.run_maybe_parallel(self.inputs, |f| f(compiler))?;
@@ -579,7 +603,7 @@ fn compile_required_builtins(engine: &Engine, raw_outputs: &mut Vec<CompileOutpu
         Box::new(move |compiler: &dyn Compiler| {
             let symbol = format!("wasmtime_builtin_{}", builtin.name());
             let trampoline = compiler
-                .compile_wasm_to_builtin(builtin)
+                .compile_wasm_to_builtin(builtin, &symbol)
                 .with_context(|| format!("failed to compile `{symbol}`"))?;
             Ok(CompileOutput {
                 key: CompileKey::wasm_to_builtin_trampoline(builtin),
@@ -750,7 +774,7 @@ impl FunctionIndices {
                     [&CompileKey::WASM_TO_BUILTIN_TRAMPOLINE_KIND]
                     [&CompileKey::wasm_to_builtin_trampoline(builtin)]
                     .unwrap_function(),
-                RelocationTarget::HostLibcall(_) | RelocationTarget::PulleyHostcall(_) => {
+                RelocationTarget::PulleyHostcall(_) => {
                     unreachable!("relocation is resolved at runtime, not compile time");
                 }
             },

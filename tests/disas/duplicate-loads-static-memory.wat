@@ -22,12 +22,12 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+72
-;;     gv5 = load.i64 notrap aligned readonly can_move checked gv3+64
+;;     gv4 = load.i64 notrap aligned gv3+64
+;;     gv5 = load.i64 notrap aligned readonly can_move checked gv3+56
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0057                               v6 = load.i64 notrap aligned readonly can_move checked v0+64
+;; @0057                               v6 = load.i64 notrap aligned readonly can_move checked v0+56
 ;; @0057                               v5 = uextend.i64 v2
 ;; @0057                               v7 = iadd v6, v5
 ;; @0057                               v8 = load.i32 little heap v7
@@ -42,12 +42,12 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+72
-;;     gv5 = load.i64 notrap aligned readonly can_move checked gv3+64
+;;     gv4 = load.i64 notrap aligned gv3+64
+;;     gv5 = load.i64 notrap aligned readonly can_move checked gv3+56
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @0064                               v6 = load.i64 notrap aligned readonly can_move checked v0+64
+;; @0064                               v6 = load.i64 notrap aligned readonly can_move checked v0+56
 ;; @0064                               v5 = uextend.i64 v2
 ;; @0064                               v7 = iadd v6, v5
 ;; @0064                               v8 = iconst.i64 1234

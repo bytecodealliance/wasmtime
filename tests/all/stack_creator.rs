@@ -1,5 +1,5 @@
 #![cfg(all(not(target_os = "windows"), not(miri)))]
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use std::{
     alloc::{GlobalAlloc, Layout, System},
     ops::Range,

@@ -87,7 +87,10 @@ impl From<&Errno> for ErrorCode {
     fn from(value: &Errno) -> Self {
         match *value {
             Errno::WOULDBLOCK => ErrorCode::WouldBlock,
-            #[allow(unreachable_patterns)] // EWOULDBLOCK and EAGAIN can have the same value.
+            #[allow(
+                unreachable_patterns,
+                reason = "EWOULDBLOCK and EAGAIN can have the same value"
+            )]
             Errno::AGAIN => ErrorCode::WouldBlock,
             Errno::INTR => ErrorCode::WouldBlock,
             #[cfg(not(windows))]
@@ -391,7 +394,6 @@ pub(crate) mod util {
 
     // Even though SO_REUSEADDR is a SOL_* level option, this function contain a
     // compatibility fix specific to TCP. That's why it contains the `_tcp_` infix instead of `_socket_`.
-    #[allow(unused_variables)] // Parameters are not used on Windows
     pub fn set_tcp_reuseaddr<Fd: AsFd>(sockfd: Fd, value: bool) -> rustix::io::Result<()> {
         // When a TCP socket is closed, the system may
         // temporarily reserve that specific address+port pair in a so called
@@ -413,6 +415,8 @@ pub(crate) mod util {
 
         #[cfg(not(windows))]
         sockopt::set_socket_reuseaddr(sockfd, value)?;
+        #[cfg(windows)]
+        let _ = (sockfd, value);
 
         Ok(())
     }

@@ -38,12 +38,12 @@
 //! If the wasm feature is not supported by any of the compiler strategies, no
 //! tests will be generated for such strategy.
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::{
-    braced,
+    Attribute, Ident, Result, ReturnType, Signature, Visibility, braced,
     meta::ParseNestedMeta,
     parse::{Parse, ParseStream},
-    parse_macro_input, token, Attribute, Ident, Result, ReturnType, Signature, Visibility,
+    parse_macro_input, token,
 };
 use wasmtime_test_util::wast::Compiler;
 
@@ -224,7 +224,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
         vec![quote! {
             // This prevents dead code warning when the macro is invoked as:
             //     #[wasmtime_test(strategies(only(Winch))]
-            // Given that Winch only fully supports x86_64.
+            // Given that Winch only fully supports x86_64 / aarch64.
             #[allow(dead_code)]
             #func
         }]
@@ -243,7 +243,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
         // Winch currently only offers support for x64, and it requires
         // signals-based-traps which MIRI disables so disable winch tests on MIRI
         let target = if *strategy == Compiler::Winch {
-            quote! { #[cfg(all(target_arch = "x86_64", not(miri)))] }
+            quote! { #[cfg(all(any(target_arch = "x86_64", target_arch = "aarch64"), not(miri)))] }
         } else {
             quote! {}
         };
@@ -253,20 +253,16 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
             (quote! {}, quote! {})
         };
         let func_name = &func.sig.ident;
-        let expect = match &func.sig.output {
-            ReturnType::Default => quote! {},
-            ReturnType::Type(..) => quote! { .expect("test is expected to pass") },
+        match &func.sig.output {
+            ReturnType::Default => {
+                return Err(syn::Error::new(func_name.span(), "Expected `Restult<()>`"));
+            }
+            ReturnType::Type(..) => {}
         };
         let test_name = Ident::new(
             &format!("{}_{}", strategy_name.to_lowercase(), func_name),
             func_name.span(),
         );
-
-        let should_panic = if strategy.should_fail(&test_config.flags) {
-            quote!(#[should_panic])
-        } else {
-            quote!()
-        };
 
         let test_config = format!("wasmtime_test_util::wast::{:?}", test_config.flags)
             .parse::<proc_macro2::TokenStream>()
@@ -276,7 +272,6 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
         let tok = quote! {
             #test_attr
             #target
-            #should_panic
             #(#attrs)*
             #asyncness fn #test_name() {
                 let _ = env_logger::try_init();
@@ -293,7 +288,12 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
                         collector: wasmtime_test_util::wast::Collector::Auto,
                     },
                 );
-                #func_name(&mut config) #await_ #expect
+                let result = #func_name(&mut config) #await_;
+        if wasmtime_test_util::wast::Compiler::#strategy_ident.should_fail(&#test_config) {
+            assert!(result.is_err());
+        } else {
+            result.unwrap();
+        }
             }
         };
 

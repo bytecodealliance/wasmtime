@@ -16,21 +16,21 @@ block2:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   pushq %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   vucomiss %xmm1, %xmm0
 ;   jp,nz   label1; j label2
 ; block1:
-;   movl    $2, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   movl $0x2, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ; block2:
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   movl $0x1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -66,21 +66,21 @@ block2:
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   pushq %rbp
+;   movq %rsp, %rbp
 ; block0:
 ;   vucomisd %xmm1, %xmm0
 ;   jp,nz   label1; j label2
 ; block1:
-;   movl    $2, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   movl $0x2, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ; block2:
-;   movl    $1, %eax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   movl $0x1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

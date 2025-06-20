@@ -8,17 +8,17 @@ block0(v0: i8, v1: i8):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   pushq %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
-;   cbw %al, %al
-;   testb   %sil, %sil
+;   movq %rdi, %rax
+;   cbtw  ;; implicit: %ax
+;   testb %sil, %sil
 ;   jz #trap=int_divz
-;   idiv    %al, %sil, %al ; trap=int_ovf
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   idivb %sil ;; implicit: %ax, trap=252
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -42,17 +42,17 @@ block0(v0: i16, v1: i16):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   pushq %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
-;   cwd %ax, %dx
-;   testw   %si, %si
+;   movq %rdi, %rax
+;   cwtd  ;; implicit: %dx, %ax
+;   testw %si, %si
 ;   jz #trap=int_divz
-;   idiv    %ax, %dx, %si, %ax, %dx ; trap=int_ovf
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   idivw %si ;; implicit: %ax, %dx, trap=252
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -76,17 +76,17 @@ block0(v0: i32, v1: i32):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   pushq %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
-;   cdq %eax, %edx
-;   testl   %esi, %esi
+;   movq %rdi, %rax
+;   cltd  ;; implicit: %edx, %eax
+;   testl %esi, %esi
 ;   jz #trap=int_divz
-;   idiv    %eax, %edx, %esi, %eax, %edx ; trap=int_ovf
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   idivl %esi ;; implicit: %eax, %edx, trap=252
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
@@ -110,17 +110,17 @@ block0(v0: i64, v1: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   pushq %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
-;   cqo %rax, %rdx
-;   testq   %rsi, %rsi
+;   movq %rdi, %rax
+;   cqto  ;; implicit: %rdx, %rax
+;   testq %rsi, %rsi
 ;   jz #trap=int_divz
-;   idiv    %rax, %rdx, %rsi, %rax, %rdx ; trap=int_ovf
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   idivq %rsi ;; implicit: %rax, %rdx, trap=252
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

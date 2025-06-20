@@ -7,26 +7,25 @@ use generated_code::MInst;
 
 // Types that the generated ISLE code uses via `use super::*`.
 use self::generated_code::{FpuOPWidth, VecAluOpRR, VecLmul};
-use crate::isa;
-use crate::isa::riscv64::abi::Riscv64ABICallSite;
+use crate::isa::riscv64::Riscv64Backend;
 use crate::isa::riscv64::lower::args::{
     FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
 };
-use crate::isa::riscv64::Riscv64Backend;
 use crate::machinst::Reg;
-use crate::machinst::{isle::*, CallInfo, MachInst};
+use crate::machinst::{CallInfo, MachInst, isle::*};
 use crate::machinst::{VCodeConstant, VCodeConstantData};
 use crate::{
     ir::{
-        immediates::*, types::*, AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData,
-        MemFlags, Opcode, TrapCode, Value, ValueList,
+        AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData, MemFlags, Opcode, TrapCode,
+        Value, ValueList, immediates::*, types::*,
     },
     isa::riscv64::inst::*,
-    machinst::{ArgPair, InstOutput, IsTailCall},
+    machinst::{ArgPair, CallArgList, CallRetList, InstOutput},
 };
 use regalloc2::PReg;
 use std::boxed::Box;
 use std::vec::Vec;
+use wasmtime_math::{f32_cvt_to_int_bounds, f64_cvt_to_int_bounds};
 
 type BoxCallInfo = Box<CallInfo<ExternalName>>;
 type BoxCallIndInfo = Box<CallInfo<Reg>>;
@@ -64,7 +63,82 @@ impl<'a, 'b> RV64IsleContext<'a, 'b, MInst, Riscv64Backend> {
 
 impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> {
     isle_lower_prelude_methods!();
-    isle_prelude_caller_methods!(Riscv64ABICallSite);
+
+    fn gen_call_info(
+        &mut self,
+        sig: Sig,
+        dest: ExternalName,
+        uses: CallArgList,
+        defs: CallRetList,
+        try_call_info: Option<TryCallInfo>,
+    ) -> BoxCallInfo {
+        let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
+        let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
+
+        Box::new(
+            self.lower_ctx
+                .gen_call_info(sig, dest, uses, defs, try_call_info),
+        )
+    }
+
+    fn gen_call_ind_info(
+        &mut self,
+        sig: Sig,
+        dest: Reg,
+        uses: CallArgList,
+        defs: CallRetList,
+        try_call_info: Option<TryCallInfo>,
+    ) -> BoxCallIndInfo {
+        let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
+        let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
+
+        Box::new(
+            self.lower_ctx
+                .gen_call_info(sig, dest, uses, defs, try_call_info),
+        )
+    }
+
+    fn gen_return_call_info(
+        &mut self,
+        sig: Sig,
+        dest: ExternalName,
+        uses: CallArgList,
+    ) -> BoxReturnCallInfo {
+        let new_stack_arg_size = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_tail_args_size(new_stack_arg_size);
+
+        Box::new(ReturnCallInfo {
+            dest,
+            uses,
+            new_stack_arg_size,
+        })
+    }
+
+    fn gen_return_call_ind_info(
+        &mut self,
+        sig: Sig,
+        dest: Reg,
+        uses: CallArgList,
+    ) -> BoxReturnCallIndInfo {
+        let new_stack_arg_size = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_tail_args_size(new_stack_arg_size);
+
+        Box::new(ReturnCallInfo {
+            dest,
+            uses,
+            new_stack_arg_size,
+        })
+    }
 
     fn fpu_op_width_from_ty(&mut self, ty: Type) -> FpuOPWidth {
         match ty {
@@ -141,11 +215,13 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             // Scalar integers are always supported
             ty if ty.is_int() => true,
             // Floating point types depend on certain extensions
-            F16 => self.backend.isa_flags.has_zfh(),
             // F32 depends on the F extension
-            F32 => self.backend.isa_flags.has_f(),
+            // If F32 is supported, then the registers are also large enough for F16
+            F16 | F32 => self.backend.isa_flags.has_f(),
             // F64 depends on the D extension
             F64 => self.backend.isa_flags.has_d(),
+            // F128 is currently stored in a pair of integer registers
+            F128 => true,
 
             // The base vector extension supports all integer types, up to 64 bits
             // as long as they fit in a register
@@ -166,7 +242,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
                 && lane_type.is_float()
                 && self.ty_supported(lane_type).is_some()
                 // Additionally the base V spec only supports 32 and 64 bit floating point types.
-                && (lane_type.bits() == 32 || lane_type.bits() == 64) =>
+                && (lane_type.bits() == 32 || lane_type.bits() == 64 || (lane_type.bits() == 16 && self.backend.isa_flags.has_zvfh())) =>
             {
                 true
             }
@@ -175,19 +251,33 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             _ => false,
         };
 
-        if supported {
-            Some(ty)
-        } else {
-            None
-        }
+        if supported { Some(ty) } else { None }
     }
 
-    fn ty_supported_float(&mut self, ty: Type) -> Option<Type> {
-        self.ty_supported(ty).filter(|ty| ty.is_float())
+    fn ty_supported_float_size(&mut self, ty: Type) -> Option<Type> {
+        self.ty_supported(ty)
+            .filter(|&ty| ty.is_float() && ty != F128)
+    }
+
+    fn ty_supported_float_min(&mut self, ty: Type) -> Option<Type> {
+        self.ty_supported_float_size(ty)
+            .filter(|&ty| ty != F16 || self.backend.isa_flags.has_zfhmin())
+    }
+
+    fn ty_supported_float_full(&mut self, ty: Type) -> Option<Type> {
+        self.ty_supported_float_min(ty)
+            .filter(|&ty| ty != F16 || self.backend.isa_flags.has_zfh())
     }
 
     fn ty_supported_vec(&mut self, ty: Type) -> Option<Type> {
         self.ty_supported(ty).filter(|ty| ty.is_vector())
+    }
+
+    fn ty_reg_pair(&mut self, ty: Type) -> Option<Type> {
+        match ty {
+            I128 | F128 => Some(ty),
+            _ => None,
+        }
     }
 
     fn load_ra(&mut self) -> Reg {
@@ -219,8 +309,9 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
 
     fn fli_constant_from_negated_u64(&mut self, ty: Type, imm: u64) -> Option<FliConstant> {
         let negated_imm = match ty {
-            F64 => imm ^ 0x8000000000000000,
-            F32 => imm ^ 0x80000000,
+            F64 => imm ^ 0x8000_0000_0000_0000,
+            F32 => imm ^ 0x8000_0000,
+            F16 => imm ^ 0x8000,
             _ => unimplemented!(),
         };
 
@@ -268,11 +359,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
     #[inline]
     fn imm12_is_zero(&mut self, imm: Imm12) -> Option<()> {
-        if imm.as_i16() == 0 {
-            Some(())
-        } else {
-            None
-        }
+        if imm.as_i16() == 0 { Some(()) } else { None }
     }
 
     #[inline]
@@ -285,11 +372,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
     #[inline]
     fn imm20_is_zero(&mut self, imm: Imm20) -> Option<()> {
-        if imm.as_i32() == 0 {
-            Some(())
-        } else {
-            None
-        }
+        if imm.as_i32() == 0 { Some(()) } else { None }
     }
 
     #[inline]
@@ -351,10 +434,6 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         UImm5::maybe_from_u8(frm.bits()).unwrap()
     }
 
-    fn u8_as_i32(&mut self, x: u8) -> i32 {
-        x as i32
-    }
-
     fn imm12_const(&mut self, val: i32) -> Imm12 {
         if let Some(res) = Imm12::maybe_from_i64(val as i64) {
             res
@@ -410,8 +489,16 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
         self.backend.isa_flags.has_zfa()
     }
 
+    fn has_zfhmin(&mut self) -> bool {
+        self.backend.isa_flags.has_zfhmin()
+    }
+
     fn has_zfh(&mut self) -> bool {
         self.backend.isa_flags.has_zfh()
+    }
+
+    fn has_zvfh(&mut self) -> bool {
+        self.backend.isa_flags.has_zvfh()
     }
 
     fn has_zbkb(&mut self) -> bool {

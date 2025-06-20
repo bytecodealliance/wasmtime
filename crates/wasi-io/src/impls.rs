@@ -1,11 +1,11 @@
 use crate::bindings::wasi::io::{error, poll, streams};
-use crate::poll::{subscribe, DynFuture, DynPollable, MakeFuture};
+use crate::poll::{DynFuture, DynPollable, MakeFuture, subscribe};
 use crate::streams::{DynInputStream, DynOutputStream, StreamError, StreamResult};
 use crate::{IoImpl, IoView};
 use alloc::collections::BTreeMap;
 use alloc::string::String;
 use alloc::vec::Vec;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use core::future::Future;
 use core::pin::Pin;
 use core::task::{Context, Poll};

@@ -552,15 +552,24 @@
       (rn Reg)
       (rm Reg))
 
-    ;; Load floating-point constant, single-precision (32 bit).
-    (LoadFpuConst32
-      (rd WritableReg)
-      (const_data u32))
+    ;; FPU comparison, extended-precision (128 bit).
+    (FpuCmp128
+      (rn Reg)
+      (rm Reg))
 
-    ;; Load floating-point constant, double-precision (64 bit).
-    (LoadFpuConst64
+    ;; FPU integer to extended-precision conversion using FP reg pair.
+    (FpuConv128FromInt
+      (op FpuConv128Op)
+      (mode FpuRoundMode)
+      (rd WritableRegPair)
+      (rn Reg))
+
+    ;; FPU extended-precision to integer conversion using FP reg pair.
+    (FpuConv128ToInt
+      (op FpuConv128Op)
+      (mode FpuRoundMode)
       (rd WritableReg)
-      (const_data u64))
+      (rn RegPair))
 
     ;; A binary vector operation with two vector register sources.
     (VecRRR
@@ -760,17 +769,6 @@
       (rn Reg)
       (rm Reg))
 
-    ;; Load 128-bit (big-endian) vector constant.
-    (VecLoadConst
-      (rd WritableReg)
-      (const_data u128))
-
-    ;; Load 128-bit (big-endian) replicated vector constant.
-    (VecLoadConstReplicate
-      (size u32)
-      (rd WritableReg)
-      (const_data u64))
-
     ;; Load vector immediate generated via byte mask.
     (VecImmByteMask
       (rd WritableReg)
@@ -873,6 +871,13 @@
       (imm i16)
       (lane_imm u8))
 
+    ;; Same as VecInsertLaneImm, but allow undefined input VR.
+    (VecInsertLaneImmUndef
+      (size u32)
+      (rd WritableReg)
+      (imm i16)
+      (lane_imm u8))
+
     ;; Vector lane replication with a VR source, a VR destination,
     ;; and an immediate as lane index.
     (VecReplicateLane
@@ -880,6 +885,12 @@
       (rd WritableReg)
       (rn Reg)
       (lane_imm u8))
+
+    ;; Synthetic instruction to reverse vector elements in-register.
+    (VecEltRev
+      (lane_count u32)
+      (rd WritableReg)
+      (rn Reg))
 
     ;; Allocate stack space for outgoing tail-call arguments.
     (AllocateArgs
@@ -1008,25 +1019,19 @@
 
 ;; Primitive types used in instruction formats.
 
+(type CallInstDest (primitive CallInstDest))
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
 (type BoxJTSequenceInfo (primitive BoxJTSequenceInfo))
 (type VecMachLabel extern (enum))
 
-;; Information about a call site.
-(type CallSiteInfo (primitive CallSiteInfo))
-(decl call_site_info (BoxCallInfo InstOutput) CallSiteInfo)
-(extern extractor infallible call_site_info call_site_info_split)
+(decl call_inst_dest_direct (ExternalName) CallInstDest)
+(extern constructor call_inst_dest_direct call_inst_dest_direct)
+(convert ExternalName CallInstDest call_inst_dest_direct)
 
-;; The destination of a call instruction.
-(type CallInstDest
-  (enum
-    ;; Direct call.
-    (Direct
-      (name ExternalName))
-    ;; Indirect call.
-    (Indirect
-      (reg Reg))))
+(decl call_inst_dest_indirect (Reg) CallInstDest)
+(extern constructor call_inst_dest_indirect call_inst_dest_indirect)
+(convert Reg CallInstDest call_inst_dest_indirect)
 
 ;; A symbol reference carrying relocation information.
 (type SymbolReloc
@@ -1341,22 +1346,27 @@
   (enum
     (Abs32)
     (Abs64)
+    (Abs128)
     (Abs32x4)
     (Abs64x2)
     (Neg32)
     (Neg64)
+    (Neg128)
     (Neg32x4)
     (Neg64x2)
     (NegAbs32)
     (NegAbs64)
+    (NegAbs128)
     (NegAbs32x4)
     (NegAbs64x2)
     (Sqrt32)
     (Sqrt64)
+    (Sqrt128)
     (Sqrt32x4)
     (Sqrt64x2)
     (Cvt32To64)
     (Cvt32x4To64x2)
+    (Cvt64To128)
 ))
 
 ;; A floating-point unit (FPU) operation with two args.
@@ -1364,34 +1374,42 @@
   (enum
     (Add32)
     (Add64)
+    (Add128)
     (Add32x4)
     (Add64x2)
     (Sub32)
     (Sub64)
+    (Sub128)
     (Sub32x4)
     (Sub64x2)
     (Mul32)
     (Mul64)
+    (Mul128)
     (Mul32x4)
     (Mul64x2)
     (Div32)
     (Div64)
+    (Div128)
     (Div32x4)
     (Div64x2)
     (Max32)
     (Max64)
+    (Max128)
     (Max32x4)
     (Max64x2)
     (Min32)
     (Min64)
+    (Min128)
     (Min32x4)
     (Min64x2)
     (MaxPseudo32)
     (MaxPseudo64)
+    (MaxPseudo128)
     (MaxPseudo32x4)
     (MaxPseudo64x2)
     (MinPseudo32)
     (MinPseudo64)
+    (MinPseudo128)
     (MinPseudo32x4)
     (MinPseudo64x2)
 ))
@@ -1401,10 +1419,12 @@
   (enum
     (MAdd32)
     (MAdd64)
+    (MAdd128)
     (MAdd32x4)
     (MAdd64x2)
     (MSub32)
     (MSub64)
+    (MSub128)
     (MSub32x4)
     (MSub64x2)
 ))
@@ -1414,8 +1434,10 @@
   (enum
     (Cvt64To32)
     (Cvt64x2To32x4)
+    (Cvt128To64)
     (Round32)
     (Round64)
+    (Round128)
     (Round32x4)
     (Round64x2)
     (ToSInt32)
@@ -1434,6 +1456,15 @@
     (FromSInt64x2)
     (FromUInt32x4)
     (FromUInt64x2)
+))
+
+;; An extended-precision vs. integer conversion operation.
+(type FpuConv128Op
+  (enum
+    (SInt32)
+    (UInt32)
+    (SInt64)
+    (UInt64)
 ))
 
 ;; Rounding modes for floating-point ops.
@@ -1556,17 +1587,6 @@
       (if (i64_nonequal x -1))
       x)
 
-;; Integer type casts (with the rust `as` semantics).
-
-(decl u8_as_u16 (u8) u16)
-(extern constructor u8_as_u16 u8_as_u16)
-
-(decl u64_truncate_to_u32 (u64) u32)
-(extern constructor u64_truncate_to_u32 u64_truncate_to_u32)
-
-(decl u64_as_i16 (u64) i16)
-(extern constructor u64_as_i16 u64_as_i16)
-
 ;; Construct and extract immediate vector constants.
 
 (decl u64_pair (u64 u64) u128)
@@ -1620,15 +1640,6 @@
 (extern extractor u64_nonzero_lopart u64_nonzero_lopart)
 
 ;; Extract smaller integer type from u64 if it matches.
-
-(decl i32_from_u64 (i32) u64)
-(extern extractor i32_from_u64 i32_from_u64)
-
-(decl i16_from_u64 (i16) u64)
-(extern extractor i16_from_u64 i16_from_u64)
-
-(decl i16_from_u32 (i16) u32)
-(extern extractor i16_from_u32 i16_from_u32)
 
 (decl uimm32shifted_from_u64 (UImm32Shifted) u64)
 (extern extractor uimm32shifted_from_u64 uimm32shifted_from_u64)
@@ -1702,7 +1713,7 @@
 (decl mask_amt_reg (Type Reg) Reg)
 (rule (mask_amt_reg (gpr32_ty ty) reg)
       (let ((mask u8 (mask_amt_imm ty -1)))
-        (and_uimm16shifted ty reg (uimm16shifted (u8_as_u16 mask) 0))))
+        (and_uimm16shifted ty reg (uimm16shifted mask 0))))
 (rule 1 (mask_amt_reg (gpr64_ty ty) reg) reg)
 
 ;; Load a shift amount into a GPR.
@@ -1770,9 +1781,6 @@
 
 (type MemArg extern (enum))
 
-(decl memarg_flags (MemArg) MemFlags)
-(extern constructor memarg_flags memarg_flags)
-
 (decl memarg_reg_plus_reg (Reg Reg u8 MemFlags) MemArg)
 (extern constructor memarg_reg_plus_reg memarg_reg_plus_reg)
 
@@ -1785,9 +1793,8 @@
 (decl memarg_got () MemArg)
 (extern constructor memarg_got memarg_got)
 
-;; Add an offset to a virtual MemArg.
-(decl memarg_offset (MemArg i64) MemArg)
-(extern constructor memarg_offset memarg_offset)
+(decl memarg_const (VCodeConstant) MemArg)
+(extern constructor memarg_const memarg_const)
 
 ;; Form the sum of two offset values, and check that the result is
 ;; a valid `MemArg::Symbol` offset (i.e. is even and fits into i32).
@@ -1966,9 +1973,9 @@
 (extern constructor writable_regpair writable_regpair)
 
 ;; Allocate a writable register pair.
-(decl temp_writable_regpair () WritableRegPair)
-(rule (temp_writable_regpair)
-      (writable_regpair (temp_writable_reg $I64) (temp_writable_reg $I64)))
+(decl temp_writable_regpair (Type) WritableRegPair)
+(rule (temp_writable_regpair ty)
+      (writable_regpair (temp_writable_reg ty) (temp_writable_reg ty)))
 
 ;; Retrieve the high word of the writable register pair.
 (decl writable_regpair_hi (WritableRegPair) WritableReg)
@@ -1997,6 +2004,12 @@
 ;; Retrieve the low word of the register pair.
 (decl regpair_lo (RegPair) Reg)
 (extern constructor regpair_lo regpair_lo)
+
+;; Move a $F128 value between a single VR and a pair of FPRs.
+(decl fp_reg_to_regpair (Reg) RegPair)
+(rule (fp_reg_to_regpair x) (regpair x (vec_replicate_lane $I64X2 x 1)))
+(decl fp_regpair_to_reg (RegPair) Reg)
+(rule (fp_regpair_to_reg x) (vec_merge_high $I64X2 (regpair_hi x) (regpair_lo x)))
 
 
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2095,42 +2108,42 @@
 ;; Helper for emitting `MInst.SMulWide` instructions.
 (decl smul_wide (Reg Reg) RegPair)
 (rule (smul_wide src1 src2)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.SMulWide dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.UMulWide` instructions.
 (decl umul_wide (Reg Reg) RegPair)
 (rule (umul_wide src1 src2)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.UMulWide dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.SDivMod32` instructions.
 (decl sdivmod32 (Reg Reg) RegPair)
 (rule (sdivmod32 src1 src2)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.SDivMod32 dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.SDivMod64` instructions.
 (decl sdivmod64 (Reg Reg) RegPair)
 (rule (sdivmod64 src1 src2)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.SDivMod64 dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.UDivMod32` instructions.
 (decl udivmod32 (RegPair Reg) RegPair)
 (rule (udivmod32 src1 src2)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.UDivMod32 dst src1 src2))))
         dst))
 
 ;; Helper for emitting `MInst.UDivMod64` instructions.
 (decl udivmod64 (RegPair Reg) RegPair)
 (rule (udivmod64 src1 src2)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.UDivMod64 dst src1 src2))))
         dst))
 
@@ -2340,11 +2353,30 @@
 (rule (fpu_cmp64 src1 src2)
       (ProducesFlags.ProducesFlagsSideEffect (MInst.FpuCmp64 src1 src2)))
 
+;; Helper for emitting `MInst.FpuCmp128` instructions.
+(decl fpu_cmp128 (Reg Reg) ProducesFlags)
+(rule (fpu_cmp128 src1 src2)
+      (ProducesFlags.ProducesFlagsSideEffect (MInst.FpuCmp128 src1 src2)))
+
 ;; Helper for emitting `MInst.FpuRound` instructions.
 (decl fpu_round (Type FpuRoundOp FpuRoundMode Reg) Reg)
 (rule (fpu_round ty op mode src)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.FpuRound op mode dst src))))
+        dst))
+
+;; Helper for emitting `MInst.FpuConv128FromInt` instructions.
+(decl fpu_conv128_from_int (FpuConv128Op FpuRoundMode Reg) RegPair)
+(rule (fpu_conv128_from_int op mode src)
+      (let ((dst WritableRegPair (temp_writable_regpair $F64))
+            (_ Unit (emit (MInst.FpuConv128FromInt op mode dst src))))
+        dst))
+
+;; Helper for emitting `MInst.FpuConv128ToInt` instructions.
+(decl fpu_conv128_to_int (Type FpuConv128Op FpuRoundMode RegPair) Reg)
+(rule (fpu_conv128_to_int ty op mode src)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.FpuConv128ToInt op mode dst src))))
         dst))
 
 ;; Helper for emitting `MInst.VecRRR` instructions.
@@ -2546,20 +2578,6 @@
             (_ Unit (emit (MInst.MovToVec128 dst src1 src2))))
         dst))
 
-;; Helper for emitting `MInst.VecLoadConst` instructions.
-(decl vec_load_const (Type u128) Reg)
-(rule (vec_load_const (vr128_ty ty) n)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.VecLoadConst dst n))))
-        dst))
-
-;; Helper for emitting `MInst.VecLoadConstReplicate` instructions.
-(decl vec_load_const_replicate (Type u64) Reg)
-(rule (vec_load_const_replicate ty @ (multi_lane size _) n)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.VecLoadConstReplicate size dst n))))
-        dst))
-
 ;; Helper for emitting `MInst.VecImmByteMask` instructions.
 (decl vec_imm_byte_mask (Type u16) Reg)
 (rule (vec_imm_byte_mask (vr128_ty ty) n)
@@ -2647,11 +2665,25 @@
             (_ Unit (emit (MInst.VecInsertLaneImm size dst src imm lane_imm))))
         dst))
 
+;; Helper for emitting `MInst.VecInsertLaneImmUndef` instructions.
+(decl vec_insert_lane_imm_undef (Type i16 u8) Reg)
+(rule (vec_insert_lane_imm_undef ty @ (multi_lane size _) imm lane_imm)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecInsertLaneImmUndef size dst imm lane_imm))))
+        dst))
+
 ;; Helper for emitting `MInst.VecReplicateLane` instructions.
 (decl vec_replicate_lane (Type Reg u8) Reg)
 (rule (vec_replicate_lane ty @ (multi_lane size _) src lane_imm)
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.VecReplicateLane size dst src lane_imm))))
+        dst))
+
+;; Helper for emitting `MInst.VecEltRev` instructions.
+(decl vec_elt_rev (Type Reg) Reg)
+(rule (vec_elt_rev ty @ (multi_lane _ lanes) src)
+      (let ((dst WritableReg (temp_writable_reg ty))
+            (_ Unit (emit (MInst.VecEltRev lanes dst src))))
         dst))
 
 ;; Helper for emitting `MInst.LoadSymbolReloc` instructions.
@@ -2829,95 +2861,6 @@
 (rule (sp)
       (mov_preg (preg_stack)))
 
-;; Helpers for accessing argument / return value slots ;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl arg_store (Type Reg MemArg) SideEffectNoResult)
-(rule (arg_store $I8 reg mem) (store8 reg mem))
-(rule (arg_store $I16 reg mem) (store16 reg mem))
-(rule (arg_store $I32 reg mem) (store32 reg mem))
-(rule (arg_store $I64 reg mem) (store64 reg mem))
-(rule (arg_store $F32 reg mem) (vec_store_lane $F32X4 reg mem 0))
-(rule (arg_store $F64 reg mem) (vec_store_lane $F64X2 reg mem 0))
-(rule -1 (arg_store (vr128_ty ty) reg mem) (vec_store reg mem))
-
-;; Helper to perform a lane swap in register.
-(decl vec_elt_rev (Type Reg) Reg)
-(rule (vec_elt_rev (multi_lane 64 2) reg)
-      (vec_permute_dw_imm $I64X2 reg 1 reg 0))
-(rule (vec_elt_rev (multi_lane 32 4) reg)
-      (let ((rev Reg (vec_permute_dw_imm $I64X2 reg 1 reg 0)))
-        (vec_rot_imm $I64X2 rev 32)))
-(rule (vec_elt_rev (multi_lane 16 8) reg)
-      (let ((rev Reg (vec_permute_dw_imm $I64X2 reg 1 reg 0)))
-        (vec_rot_imm $I32X4 (vec_rot_imm $I64X2 rev 32) 16)))
-(rule (vec_elt_rev (multi_lane 8 16) reg)
-      (let ((rev Reg (vec_permute_dw_imm $I64X2 reg 1 reg 0)))
-        (vec_rot_imm $I16X8 (vec_rot_imm $I32X4 (vec_rot_imm $I64X2 rev 32) 16) 8)))
-
-;; When passing a vector value to a function whose ABI uses a different
-;; lane order than the current function, we need to swap lanes.
-;; The first operand is the lane order used by the callee.
-(decl abi_vec_elt_rev (LaneOrder Type Reg) Reg)
-(rule 5 (abi_vec_elt_rev _ (gpr32_ty ty) reg) reg)
-(rule 4 (abi_vec_elt_rev _ (gpr64_ty ty) reg) reg)
-(rule 3 (abi_vec_elt_rev _ $I128 reg) reg)
-(rule 2 (abi_vec_elt_rev _ (ty_scalar_float ty) reg) reg)
-(rule 0 (abi_vec_elt_rev callee_lane_order _ reg)
-      (if-let true (lane_order_equal callee_lane_order (lane_order)))
-      reg)
-(rule 1 (abi_vec_elt_rev callee_lane_order (ty_vec128 ty) reg)
-      (if-let false (lane_order_equal callee_lane_order (lane_order)))
-      (vec_elt_rev ty reg))
-
-;; Prepare a stack copy of a single (oversized) argument.
-(decl copy_to_buffer (MemArg ABIArg Value) InstOutput)
-(rule 2 (copy_to_buffer base (abi_arg_only_slot slot) _) (output_none))
-(rule 0 (copy_to_buffer base (abi_arg_implicit_pointer _ offset ty)
-                      val @ (value_type ty))
-      (side_effect (arg_store ty val (memarg_offset base offset))))
-
-;; Copy a single argument/return value to its slots.
-;; For oversized arguments, set the slot to the buffer address.
-(decl copy_to_arg (CallArgListBuilder LaneOrder MemArg ABIArg Value) InstOutput)
-(rule 2 (copy_to_arg uses lo base (abi_arg_only_slot slot) val)
-      (copy_reg_to_arg_slot uses lo base slot (prepare_arg_val slot val)))
-(rule 0 (copy_to_arg uses lo base (abi_arg_implicit_pointer slot offset _) _)
-      (let ((ptr Reg (load_addr (memarg_offset base offset))))
-        (copy_reg_to_arg_slot uses lo base slot ptr)))
-
-;; Place one component of an argument/return value into a register.
-;; Copy reference values into registers of integer type.
-;; Zero- or sign-extend as required by the ABI.
-(decl prepare_arg_val (ABIArgSlot Value) Reg)
-(rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.None)) val)
-      val)
-(rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.Uext)) val)
-      (put_in_reg_zext64 val))
-(rule (prepare_arg_val (ABIArgSlot.Reg _ _ (ArgumentExtension.Sext)) val)
-      (put_in_reg_sext64 val))
-(rule (prepare_arg_val (ABIArgSlot.Stack _ _ (ArgumentExtension.None)) val)
-      val)
-(rule (prepare_arg_val (ABIArgSlot.Stack _ _ (ArgumentExtension.Uext)) val)
-      (put_in_reg_zext64 val))
-(rule (prepare_arg_val (ABIArgSlot.Stack _ _ (ArgumentExtension.Sext)) val)
-      (put_in_reg_sext64 val))
-
-;; Copy one component of an argument/return value to its slot, where the
-;; value is already extended and present in a register.
-(decl copy_reg_to_arg_slot (CallArgListBuilder LaneOrder MemArg ABIArgSlot Reg) InstOutput)
-(rule (copy_reg_to_arg_slot uses lo _ (ABIArgSlot.Reg reg ty ext) src)
-      (let ((_ Unit (args_builder_push uses (abi_vec_elt_rev lo ty src) reg)))
-        (output_none)))
-(rule (copy_reg_to_arg_slot _ lo base (ABIArgSlot.Stack offset ty ext) src)
-      (side_effect (arg_store (abi_ext_ty ext ty) (abi_vec_elt_rev lo ty src)
-                              (memarg_offset base offset))))
-
-;; Helper to compute the type of an implicitly extended argument/return value.
-(decl abi_ext_ty (ArgumentExtension Type) Type)
-(rule 0 (abi_ext_ty _ ty) ty)
-(rule 1 (abi_ext_ty (ArgumentExtension.Uext) (gpr32_ty _)) $I64)
-(rule 1 (abi_ext_ty (ArgumentExtension.Sext) (gpr32_ty _)) $I64)
-
 
 ;; Helpers for generating immediate values ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2925,13 +2868,14 @@
 (decl imm (Type u64) Reg)
 
 ;; 16-bit (or smaller) result type, any value
-(rule 7 (imm (fits_in_16 ty) n)
+(rule 7 (imm (fits_in_16 (ty_int ty)) n)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.Mov32SImm16 dst (u64_as_i16 n)))))
+            (_ Unit (emit (MInst.Mov32SImm16 dst (u16_cast_signed (u64_truncate_into_u16 n))))))
         dst))
 
 ;; 32-bit result type, value fits in i16
-(rule 6 (imm (gpr32_ty ty) (u32_pair _ (i16_from_u32 n)))
+(rule 6 (imm (gpr32_ty ty) (u32_pair _ m))
+      (if-let (i16_from_i32 n) (u32_cast_signed m))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov32SImm16 dst n))))
         dst))
@@ -2939,17 +2883,19 @@
 ;; 32-bit result type, any value
 (rule 5 (imm (gpr32_ty ty) n)
       (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.Mov32Imm dst (u64_truncate_to_u32 n)))))
+            (_ Unit (emit (MInst.Mov32Imm dst (u64_truncate_into_u32 n)))))
         dst))
 
 ;; 64-bit result type, value fits in i16
-(rule 4 (imm (gpr64_ty ty) (i16_from_u64 n))
+(rule 4 (imm (gpr64_ty ty) m)
+      (if-let (i16_from_i64 n) (u64_cast_signed m))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64SImm16 dst n))))
         dst))
 
 ;; 64-bit result type, value fits in i32
-(rule 3 (imm (gpr64_ty ty) (i32_from_u64 n))
+(rule 3 (imm (gpr64_ty ty) m)
+      (if-let (i32_from_i64 n) (u64_cast_signed m))
       (let ((dst WritableReg (temp_writable_reg ty))
             (_ Unit (emit (MInst.Mov64SImm32 dst n))))
         dst))
@@ -2986,19 +2932,23 @@
             (_ Unit (emit (MInst.Insert64UImm32Shifted dst src n))))
         dst))
 
+;; 16-bit floating-point type, any value.
+(rule 8 (imm $F16 n)
+      (vec_insert_lane_imm_undef $F16X8
+                                 (u16_cast_signed (u64_truncate_into_u16 n))
+                                 0))
+
 ;; 32-bit floating-point type, any value.  Loaded from literal pool.
+;; FIXME: This wastes 4 bytes of constant pool space.
 ;; TODO: use LZER to load 0.0
 (rule 8 (imm $F32 n)
-      (let ((dst WritableReg (temp_writable_reg $F32))
-            (_ Unit (emit (MInst.LoadFpuConst32 dst (u64_truncate_to_u32 n)))))
-        dst))
+      (vec_load_lane_undef $F32X4
+        (memarg_const (emit_u64_be_const (u32_pair (u64_truncate_into_u32 n) 0))) 0))
 
 ;; 64-bit floating-point type, any value.  Loaded from literal pool.
 ;; TODO: use LZDR to load 0.0
 (rule 8 (imm $F64 n)
-      (let ((dst WritableReg (temp_writable_reg $F64))
-            (_ Unit (emit (MInst.LoadFpuConst64 dst n))))
-        dst))
+      (vec_load_lane_undef $F64X2 (memarg_const (emit_u64_be_const n)) 0))
 
 ;; Variant used for negative constants.
 (decl imm32 (Type i32) Reg)
@@ -3014,29 +2964,34 @@
 (rule 1 (vec_imm (vr128_ty ty) (u64_pair n n))
       (vec_imm_splat $I64X2 n))
 (rule (vec_imm (vr128_ty ty) n)
-      (vec_load_const ty n))
+      (vec_load ty (memarg_const (emit_u128_be_const n))))
 
 ;; Variant with replicated immediate.
 (decl vec_imm_splat (Type u64) Reg)
 (rule 1 (vec_imm_splat (ty_vec128 ty) 0)
       (vec_imm_byte_mask ty 0))
 (rule 2 (vec_imm_splat ty @ (multi_lane 8 _) n)
-      (vec_imm_replicate ty (u64_as_i16 n)))
+      (vec_imm_replicate ty (u16_cast_signed (u64_truncate_into_u16 n))))
 (rule 2 (vec_imm_splat ty @ (multi_lane 16 _) n)
-      (vec_imm_replicate ty (u64_as_i16 n)))
-(rule 2 (vec_imm_splat ty @ (multi_lane 32 _) (u32_pair _ (i16_from_u32 n)))
+      (vec_imm_replicate ty (u16_cast_signed (u64_truncate_into_u16 n))))
+(rule 2 (vec_imm_splat ty @ (multi_lane 32 _) (u32_pair _ m))
+      (if-let (i16_from_i32 n) (u32_cast_signed m))
       (vec_imm_replicate ty n))
-(rule 2 (vec_imm_splat ty @ (multi_lane 64 _) (i16_from_u64 n))
+(rule 2 (vec_imm_splat ty @ (multi_lane 64 _) m)
+      (if-let (i16_from_i64 n) (u64_cast_signed m))
       (vec_imm_replicate ty n))
 (rule 3 (vec_imm_splat (multi_lane 16 _) (u32_pair _ (u16_pair _ (u8_pair n n))))
-      (vec_imm_splat $I8X16 (u8_as_u64 n)))
+      (vec_imm_splat $I8X16 n))
 (rule 3 (vec_imm_splat (multi_lane 32 _) (u32_pair _ (u16_pair n n)))
-      (vec_imm_splat $I16X8 (u16_as_u64 n)))
+      (vec_imm_splat $I16X8 n))
 (rule 3 (vec_imm_splat (multi_lane 64 _) (u32_pair n n))
-      (vec_imm_splat $I32X4 (u32_as_u64 n)))
-(rule 0 (vec_imm_splat (ty_vec128 ty) n)
-      (vec_load_const_replicate ty n))
-
+      (vec_imm_splat $I32X4 n))
+;; FIXME: This wastes 4 bytes of constant pool space.
+(rule 0 (vec_imm_splat ty @ (multi_lane 32 _) n)
+      (vec_load_replicate ty
+        (memarg_const (emit_u64_be_const (u32_pair (u64_truncate_into_u32 n) 0)))))
+(rule 0 (vec_imm_splat ty @ (multi_lane 64 _) n)
+      (vec_load_replicate ty (memarg_const (emit_u64_be_const n))))
 
 ;; Helpers for generating extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3221,6 +3176,10 @@
 (rule 2 (cmov_reg_reg (gpr64_ty ty) cond reg_true reg_false)
       (let ((dst WritableReg (temp_writable_reg ty))
             (inst MInst (MInst.CMov64 dst cond reg_false reg_true)))
+        (ConsumesFlags.ConsumesFlagsReturnsReg inst dst)))
+(rule 3 (cmov_reg_reg $F16 cond reg_true reg_false)
+      (let ((dst WritableReg (temp_writable_reg $F16))
+            (inst MInst (MInst.FpuCMov32 dst cond reg_false reg_true)))
         (ConsumesFlags.ConsumesFlagsReturnsReg inst dst)))
 (rule 3 (cmov_reg_reg $F32 cond reg_true reg_false)
       (let ((dst WritableReg (temp_writable_reg $F32))
@@ -3456,63 +3415,23 @@
 
 ;; Helpers for generating `call` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Partial (mutable) argument list in the process of being created.
-(type CallArgListBuilder extern (enum))
+(decl gen_call_info (Sig CallInstDest CallArgList CallRetList OptionTryCallInfo) BoxCallInfo)
+(extern constructor gen_call_info gen_call_info)
 
-;; Create a new empty instruction sequence builder.
-(decl args_builder_new () CallArgListBuilder)
-(extern constructor args_builder_new args_builder_new)
+(decl gen_return_call_info (Sig CallInstDest CallArgList) BoxReturnCallInfo)
+(extern constructor gen_return_call_info gen_return_call_info)
 
-;; Push an instruction to a sequence under construction.
-(decl args_builder_push (CallArgListBuilder Reg RealReg) Unit)
-(extern constructor args_builder_push args_builder_push)
+(decl abi_emit_call_adjust_stack (Sig) Unit)
+(extern constructor abi_emit_call_adjust_stack abi_emit_call_adjust_stack)
 
-;; Complete the sequence under construction.
-(decl args_builder_finish (CallArgListBuilder) CallArgList)
-(extern constructor args_builder_finish args_builder_finish)
+(decl abi_emit_return_call_adjust_stack (Sig) Unit)
+(extern constructor abi_emit_return_call_adjust_stack abi_emit_return_call_adjust_stack)
 
-(decl abi_sig (SigRef) Sig)
-(extern constructor abi_sig abi_sig)
-
-(decl abi_call_site_info (Sig CallInstDest CallArgList) CallSiteInfo)
-(extern constructor abi_call_site_info abi_call_site_info)
-
-(decl abi_try_call_info (Sig CallInstDest CallArgList ExceptionTable MachLabelSlice) BoxCallInfo)
-(extern constructor abi_try_call_info abi_try_call_info)
-
-(decl abi_return_call_info (Sig CallInstDest CallArgList) BoxReturnCallInfo)
-(extern constructor abi_return_call_info abi_return_call_info)
-
-(decl abi_call_stack_args (Sig) MemArg)
-(extern constructor abi_call_stack_args abi_call_stack_args)
-
-(decl abi_call_stack_rets (Sig) MemArg)
-(extern constructor abi_call_stack_rets abi_call_stack_rets)
-
-(decl abi_return_call_stack_args (Sig) MemArg)
-(extern constructor abi_return_call_stack_args abi_return_call_stack_args)
+(decl abi_prepare_args (Sig ValueSlice) ValueRegsVec)
+(extern constructor abi_prepare_args abi_prepare_args)
 
 (decl writable_link_reg () WritableReg)
 (rule (writable_link_reg) (writable_gpr 14))
-
-(decl abi_call (Sig CallInstDest CallArgList) InstOutput)
-(rule (abi_call abi dest uses)
-      (abi_call_impl (abi_call_site_info abi dest uses)))
-(decl abi_call_impl (CallSiteInfo) InstOutput)
-(rule (abi_call_impl (call_site_info info output))
-      (let ((_ Unit (emit_side_effect (call_impl (writable_link_reg) info))))
-        output))
-
-(decl abi_return_call (Sig CallInstDest CallArgList) SideEffectNoResult)
-(rule (abi_return_call abi dest uses)
-      (return_call_impl (abi_return_call_info abi dest uses)))
-
-(decl abi_try_call (Sig CallInstDest CallArgList ExceptionTable MachLabelSlice) SideEffectNoResult)
-(rule (abi_try_call abi dest uses et targets)
-      (call_impl (writable_link_reg) (abi_try_call_info abi dest uses et targets)))
-
-(decl abi_lane_order (Sig) LaneOrder)
-(extern constructor abi_lane_order abi_lane_order)
 
 
 ;; Helpers for generating vector pack and unpack instructions ;;;;;;;;;;;;;;;;;;
@@ -3697,13 +3616,13 @@
 
 ;; The flogr instruction returns 64 for zero input by default.
 (rule (clz_reg 64 x)
-      (let ((dst WritableRegPair (temp_writable_regpair))
+      (let ((dst WritableRegPair (temp_writable_regpair $I64))
             (_ Unit (emit (MInst.Flogr dst x))))
         (regpair_hi dst)))
 
 ;; If another zero return value was requested, we need to override the flogr result.
 (rule -1 (clz_reg zeroval x)
-      (let ((tmp WritableRegPair (temp_writable_regpair)))
+      (let ((tmp WritableRegPair (temp_writable_regpair $I64)))
         (with_flags_reg
           (ProducesFlags.ProducesFlagsSideEffect (MInst.Flogr tmp x))
           (cmov_imm $I64 (intcc_as_cond (IntCC.Equal)) zeroval (regpair_hi tmp)))))
@@ -4529,6 +4448,7 @@
 (decl fpuop2_add (Type) FPUOp2)
 (rule (fpuop2_add $F32) (FPUOp2.Add32))
 (rule (fpuop2_add $F64) (FPUOp2.Add64))
+(rule (fpuop2_add $F128) (FPUOp2.Add128))
 (rule (fpuop2_add $F32X4) (FPUOp2.Add32x4))
 (rule (fpuop2_add $F64X2) (FPUOp2.Add64x2))
 
@@ -4541,6 +4461,7 @@
 (decl fpuop2_sub (Type) FPUOp2)
 (rule (fpuop2_sub $F32) (FPUOp2.Sub32))
 (rule (fpuop2_sub $F64) (FPUOp2.Sub64))
+(rule (fpuop2_sub $F128) (FPUOp2.Sub128))
 (rule (fpuop2_sub $F32X4) (FPUOp2.Sub32x4))
 (rule (fpuop2_sub $F64X2) (FPUOp2.Sub64x2))
 
@@ -4553,6 +4474,7 @@
 (decl fpuop2_mul (Type) FPUOp2)
 (rule (fpuop2_mul $F32) (FPUOp2.Mul32))
 (rule (fpuop2_mul $F64) (FPUOp2.Mul64))
+(rule (fpuop2_mul $F128) (FPUOp2.Mul128))
 (rule (fpuop2_mul $F32X4) (FPUOp2.Mul32x4))
 (rule (fpuop2_mul $F64X2) (FPUOp2.Mul64x2))
 
@@ -4565,6 +4487,7 @@
 (decl fpuop2_div (Type) FPUOp2)
 (rule (fpuop2_div $F32) (FPUOp2.Div32))
 (rule (fpuop2_div $F64) (FPUOp2.Div64))
+(rule (fpuop2_div $F128) (FPUOp2.Div128))
 (rule (fpuop2_div $F32X4) (FPUOp2.Div32x4))
 (rule (fpuop2_div $F64X2) (FPUOp2.Div64x2))
 
@@ -4577,6 +4500,7 @@
 (decl fpuop2_min (Type) FPUOp2)
 (rule (fpuop2_min $F32) (FPUOp2.Min32))
 (rule (fpuop2_min $F64) (FPUOp2.Min64))
+(rule (fpuop2_min $F128) (FPUOp2.Min128))
 (rule (fpuop2_min $F32X4) (FPUOp2.Min32x4))
 (rule (fpuop2_min $F64X2) (FPUOp2.Min64x2))
 
@@ -4589,6 +4513,7 @@
 (decl fpuop2_max (Type) FPUOp2)
 (rule (fpuop2_max $F32) (FPUOp2.Max32))
 (rule (fpuop2_max $F64) (FPUOp2.Max64))
+(rule (fpuop2_max $F128) (FPUOp2.Max128))
 (rule (fpuop2_max $F32X4) (FPUOp2.Max32x4))
 (rule (fpuop2_max $F64X2) (FPUOp2.Max64x2))
 
@@ -4601,6 +4526,7 @@
 (decl fpuop2_min_pseudo (Type) FPUOp2)
 (rule (fpuop2_min_pseudo $F32) (FPUOp2.MinPseudo32))
 (rule (fpuop2_min_pseudo $F64) (FPUOp2.MinPseudo64))
+(rule (fpuop2_min_pseudo $F128) (FPUOp2.MinPseudo128))
 (rule (fpuop2_min_pseudo $F32X4) (FPUOp2.MinPseudo32x4))
 (rule (fpuop2_min_pseudo $F64X2) (FPUOp2.MinPseudo64x2))
 
@@ -4613,6 +4539,7 @@
 (decl fpuop2_max_pseudo (Type) FPUOp2)
 (rule (fpuop2_max_pseudo $F32) (FPUOp2.MaxPseudo32))
 (rule (fpuop2_max_pseudo $F64) (FPUOp2.MaxPseudo64))
+(rule (fpuop2_max_pseudo $F128) (FPUOp2.MaxPseudo128))
 (rule (fpuop2_max_pseudo $F32X4) (FPUOp2.MaxPseudo32x4))
 (rule (fpuop2_max_pseudo $F64X2) (FPUOp2.MaxPseudo64x2))
 
@@ -4625,6 +4552,7 @@
 (decl fpuop3_fma (Type) FPUOp3)
 (rule (fpuop3_fma $F32) (FPUOp3.MAdd32))
 (rule (fpuop3_fma $F64) (FPUOp3.MAdd64))
+(rule (fpuop3_fma $F128) (FPUOp3.MAdd128))
 (rule (fpuop3_fma $F32X4) (FPUOp3.MAdd32x4))
 (rule (fpuop3_fma $F64X2) (FPUOp3.MAdd64x2))
 
@@ -4637,6 +4565,7 @@
 (decl fpuop1_sqrt (Type) FPUOp1)
 (rule (fpuop1_sqrt $F32) (FPUOp1.Sqrt32))
 (rule (fpuop1_sqrt $F64) (FPUOp1.Sqrt64))
+(rule (fpuop1_sqrt $F128) (FPUOp1.Sqrt128))
 (rule (fpuop1_sqrt $F32X4) (FPUOp1.Sqrt32x4))
 (rule (fpuop1_sqrt $F64X2) (FPUOp1.Sqrt64x2))
 
@@ -4649,6 +4578,7 @@
 (decl fpuop1_neg (Type) FPUOp1)
 (rule (fpuop1_neg $F32) (FPUOp1.Neg32))
 (rule (fpuop1_neg $F64) (FPUOp1.Neg64))
+(rule (fpuop1_neg $F128) (FPUOp1.Neg128))
 (rule (fpuop1_neg $F32X4) (FPUOp1.Neg32x4))
 (rule (fpuop1_neg $F64X2) (FPUOp1.Neg64x2))
 
@@ -4661,6 +4591,7 @@
 (decl fpuop1_abs (Type) FPUOp1)
 (rule (fpuop1_abs $F32) (FPUOp1.Abs32))
 (rule (fpuop1_abs $F64) (FPUOp1.Abs64))
+(rule (fpuop1_abs $F128) (FPUOp1.Abs128))
 (rule (fpuop1_abs $F32X4) (FPUOp1.Abs32x4))
 (rule (fpuop1_abs $F64X2) (FPUOp1.Abs64x2))
 
@@ -4673,6 +4604,7 @@
 (decl fpuroundop_round (Type) FpuRoundOp)
 (rule (fpuroundop_round $F32) (FpuRoundOp.Round32))
 (rule (fpuroundop_round $F64) (FpuRoundOp.Round64))
+(rule (fpuroundop_round $F128) (FpuRoundOp.Round128))
 (rule (fpuroundop_round $F32X4) (FpuRoundOp.Round32x4))
 (rule (fpuroundop_round $F64X2) (FpuRoundOp.Round64x2))
 
@@ -4701,6 +4633,8 @@
       (fpu_rr $F64 (FPUOp1.Cvt32To64) x))
 (rule (fpromote_reg $F64X2 $F32X4 x)
       (fpu_rr $F64 (FPUOp1.Cvt32x4To64x2) x))
+(rule (fpromote_reg $F128 $F64 x)
+      (fpu_rr $F128 (FPUOp1.Cvt64To128) x))
 
 
 ;; Helpers for generating `fdemote` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -4711,32 +4645,42 @@
       (fpu_round $F32 (FpuRoundOp.Cvt64To32) mode x))
 (rule (fdemote_reg $F32X4 $F64X2 mode x)
       (fpu_round $F32X4 (FpuRoundOp.Cvt64x2To32x4) mode x))
+(rule (fdemote_reg $F64 $F128 mode x)
+      (fpu_round $F64 (FpuRoundOp.Cvt128To64) mode x))
 
 
 ;; Helpers for generating `fcvt_from_uint` instructions ;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl fcvt_from_uint_reg (Type FpuRoundMode Reg) Reg)
-(rule (fcvt_from_uint_reg $F32 mode x)
+(decl fcvt_from_uint_reg (Type Type FpuRoundMode Reg) Reg)
+(rule (fcvt_from_uint_reg $F32 $I32 mode x)
       (fpu_round $F32 (FpuRoundOp.FromUInt32) mode (vec_insert_lane_undef $I32X4 x 0 (zero_reg))))
-(rule (fcvt_from_uint_reg $F64 mode x)
+(rule (fcvt_from_uint_reg $F64 $I64 mode x)
       (fpu_round $F64 (FpuRoundOp.FromUInt64) mode (vec_insert_lane_undef $I64X2 x 0 (zero_reg))))
-(rule (fcvt_from_uint_reg $F32X4 mode x)
+(rule (fcvt_from_uint_reg $F32X4 $I32X4 mode x)
       (fpu_round $F32X4 (FpuRoundOp.FromUInt32x4) mode x))
-(rule (fcvt_from_uint_reg $F64X2 mode x)
+(rule (fcvt_from_uint_reg $F64X2 $I64X2 mode x)
       (fpu_round $F64X2 (FpuRoundOp.FromUInt64x2) mode x))
+(rule (fcvt_from_uint_reg $F128 $I32 mode x)
+      (fp_regpair_to_reg (fpu_conv128_from_int (FpuConv128Op.UInt32) mode x)))
+(rule (fcvt_from_uint_reg $F128 $I64 mode x)
+      (fp_regpair_to_reg (fpu_conv128_from_int (FpuConv128Op.UInt64) mode x)))
 
 
 ;; Helpers for generating `fcvt_from_sint` instructions ;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl fcvt_from_sint_reg (Type FpuRoundMode Reg) Reg)
-(rule (fcvt_from_sint_reg $F32 mode x)
+(decl fcvt_from_sint_reg (Type Type FpuRoundMode Reg) Reg)
+(rule (fcvt_from_sint_reg $F32 $I32 mode x)
       (fpu_round $F32 (FpuRoundOp.FromSInt32) mode (vec_insert_lane_undef $I32X4 x 0 (zero_reg))))
-(rule (fcvt_from_sint_reg $F64 mode x)
+(rule (fcvt_from_sint_reg $F64 $I64 mode x)
       (fpu_round $F64 (FpuRoundOp.FromSInt64) mode (vec_insert_lane_undef $I64X2 x 0 (zero_reg))))
-(rule (fcvt_from_sint_reg $F32X4 mode x)
+(rule (fcvt_from_sint_reg $F32X4 $I32X4 mode x)
       (fpu_round $F32X4 (FpuRoundOp.FromSInt32x4) mode x))
-(rule (fcvt_from_sint_reg $F64X2 mode x)
+(rule (fcvt_from_sint_reg $F64X2 $I64X2 mode x)
       (fpu_round $F64X2 (FpuRoundOp.FromSInt64x2) mode x))
+(rule (fcvt_from_sint_reg $F128 $I32 mode x)
+      (fp_regpair_to_reg (fpu_conv128_from_int (FpuConv128Op.SInt32) mode x)))
+(rule (fcvt_from_sint_reg $F128 $I64 mode x)
+      (fp_regpair_to_reg (fpu_conv128_from_int (FpuConv128Op.SInt64) mode x)))
 
 
 ;; Helpers for generating `fcvt_to_[us]int` instructions ;;;;;;;;;;;;;;;;;;;;;;;
@@ -4745,34 +4689,44 @@
 (rule 1 (fcvt_flt_ty (fits_in_32 ty) (and (vxrs_ext2_enabled) $F32)) $F32)
 (rule (fcvt_flt_ty (fits_in_64 ty) $F32) $F64)
 (rule (fcvt_flt_ty (fits_in_64 ty) $F64) $F64)
+(rule (fcvt_flt_ty (fits_in_64 ty) $F128) $F128)
 
 (decl fcvt_int_ty (Type Type) Type)
 (rule 1 (fcvt_int_ty (fits_in_32 ty) (and (vxrs_ext2_enabled) $F32)) $I32)
 (rule (fcvt_int_ty (fits_in_64 ty) $F32) $I64)
 (rule (fcvt_int_ty (fits_in_64 ty) $F64) $I64)
+(rule 1 (fcvt_int_ty (fits_in_32 ty) $F128) $I32)
+(rule (fcvt_int_ty (fits_in_64 ty) $F128) $I64)
 
 
 ;; Helpers for generating `fcvt_to_uint` instructions ;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl fcvt_to_uint_reg (Type FpuRoundMode Reg) Reg)
-(rule (fcvt_to_uint_reg $F32 mode x)
+(decl fcvt_to_uint_reg (Type Type FpuRoundMode Reg) Reg)
+(rule (fcvt_to_uint_reg $I32 $F32 mode x)
       (vec_extract_lane $I32X4 (fpu_round $F32 (FpuRoundOp.ToUInt32) mode x) 0 (zero_reg)))
-(rule (fcvt_to_uint_reg $F64 mode x)
+(rule (fcvt_to_uint_reg $I64 $F64 mode x)
       (vec_extract_lane $I64X2 (fpu_round $F64 (FpuRoundOp.ToUInt64) mode x) 0 (zero_reg)))
-(rule (fcvt_to_uint_reg $F32X4 mode x)
+(rule (fcvt_to_uint_reg $I32X4 $F32X4 mode x)
       (fpu_round $F32X4 (FpuRoundOp.ToUInt32x4) mode x))
-(rule (fcvt_to_uint_reg $F64X2 mode x)
+(rule (fcvt_to_uint_reg $I64X2 $F64X2 mode x)
       (fpu_round $F64X2 (FpuRoundOp.ToUInt64x2) mode x))
+(rule (fcvt_to_uint_reg $I32 $F128 mode x)
+      (fpu_conv128_to_int $I32 (FpuConv128Op.UInt32) mode (fp_reg_to_regpair x)))
+(rule (fcvt_to_uint_reg $I64 $F128 mode x)
+      (fpu_conv128_to_int $I64 (FpuConv128Op.UInt64) mode (fp_reg_to_regpair x)))
 
 (decl fcvt_to_uint_ub (Type Type) Reg)
 (rule (fcvt_to_uint_ub $F32 dst_ty)
       (imm $F32 (fcvt_to_uint_ub32 (ty_bits dst_ty))))
 (rule (fcvt_to_uint_ub $F64 dst_ty)
       (imm $F64 (fcvt_to_uint_ub64 (ty_bits dst_ty))))
+(rule (fcvt_to_uint_ub $F128 dst_ty)
+      (vec_imm $F128 (fcvt_to_uint_ub128 (ty_bits dst_ty))))
 
 (decl fcvt_to_uint_lb (Type) Reg)
 (rule (fcvt_to_uint_lb $F32) (imm $F32 (fcvt_to_uint_lb32)))
 (rule (fcvt_to_uint_lb $F64) (imm $F64 (fcvt_to_uint_lb64)))
+(rule (fcvt_to_uint_lb $F128) (vec_imm $F128 (fcvt_to_uint_lb128)))
 
 (decl fcvt_to_uint_ub32 (u8) u64)
 (extern constructor fcvt_to_uint_ub32 fcvt_to_uint_ub32)
@@ -4782,31 +4736,43 @@
 (extern constructor fcvt_to_uint_ub64 fcvt_to_uint_ub64)
 (decl fcvt_to_uint_lb64 () u64)
 (extern constructor fcvt_to_uint_lb64 fcvt_to_uint_lb64)
+(decl fcvt_to_uint_ub128 (u8) u128)
+(extern constructor fcvt_to_uint_ub128 fcvt_to_uint_ub128)
+(decl fcvt_to_uint_lb128 () u128)
+(extern constructor fcvt_to_uint_lb128 fcvt_to_uint_lb128)
 
 
 ;; Helpers for generating `fcvt_to_sint` instructions ;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl fcvt_to_sint_reg (Type FpuRoundMode Reg) Reg)
-(rule (fcvt_to_sint_reg $F32 mode x)
+(decl fcvt_to_sint_reg (Type Type FpuRoundMode Reg) Reg)
+(rule (fcvt_to_sint_reg $I32 $F32 mode x)
       (vec_extract_lane $F32X4 (fpu_round $F32 (FpuRoundOp.ToSInt32) mode x) 0 (zero_reg)))
-(rule (fcvt_to_sint_reg $F64 mode x)
+(rule (fcvt_to_sint_reg $I64 $F64 mode x)
       (vec_extract_lane $F64X2 (fpu_round $F64 (FpuRoundOp.ToSInt64) mode x) 0 (zero_reg)))
-(rule (fcvt_to_sint_reg $F32X4 mode x)
+(rule (fcvt_to_sint_reg $I32X4 $F32X4 mode x)
       (fpu_round $F32X4 (FpuRoundOp.ToSInt32x4) mode x))
-(rule (fcvt_to_sint_reg $F64X2 mode x)
+(rule (fcvt_to_sint_reg $I64X2 $F64X2 mode x)
       (fpu_round $F64X2 (FpuRoundOp.ToSInt64x2) mode x))
+(rule (fcvt_to_sint_reg $I32 $F128 mode x)
+      (fpu_conv128_to_int $I32 (FpuConv128Op.SInt32) mode (fp_reg_to_regpair x)))
+(rule (fcvt_to_sint_reg $I64 $F128 mode x)
+      (fpu_conv128_to_int $I64 (FpuConv128Op.SInt64) mode (fp_reg_to_regpair x)))
 
 (decl fcvt_to_sint_ub (Type Type) Reg)
 (rule (fcvt_to_sint_ub $F32 dst_ty)
       (imm $F32 (fcvt_to_sint_ub32 (ty_bits dst_ty))))
 (rule (fcvt_to_sint_ub $F64 dst_ty)
       (imm $F64 (fcvt_to_sint_ub64 (ty_bits dst_ty))))
+(rule (fcvt_to_sint_ub $F128 dst_ty)
+      (vec_imm $F128 (fcvt_to_sint_ub128 (ty_bits dst_ty))))
 
 (decl fcvt_to_sint_lb (Type Type) Reg)
 (rule (fcvt_to_sint_lb $F32 dst_ty)
       (imm $F32 (fcvt_to_sint_lb32 (ty_bits dst_ty))))
 (rule (fcvt_to_sint_lb $F64 dst_ty)
       (imm $F64 (fcvt_to_sint_lb64 (ty_bits dst_ty))))
+(rule (fcvt_to_sint_lb $F128 dst_ty)
+      (vec_imm $F128 (fcvt_to_sint_lb128 (ty_bits dst_ty))))
 
 (decl fcvt_to_sint_ub32 (u8) u64)
 (extern constructor fcvt_to_sint_ub32 fcvt_to_sint_ub32)
@@ -4816,6 +4782,10 @@
 (extern constructor fcvt_to_sint_ub64 fcvt_to_sint_ub64)
 (decl fcvt_to_sint_lb64 (u8) u64)
 (extern constructor fcvt_to_sint_lb64 fcvt_to_sint_lb64)
+(decl fcvt_to_sint_ub128 (u8) u128)
+(extern constructor fcvt_to_sint_ub128 fcvt_to_sint_ub128)
+(decl fcvt_to_sint_lb128 (u8) u128)
+(extern constructor fcvt_to_sint_lb128 fcvt_to_sint_lb128)
 
 
 ;; Helpers for generating signed `icmp` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -4926,6 +4896,7 @@
 (decl fcmp_reg (Type Reg Reg) ProducesFlags)
 (rule (fcmp_reg $F32 src1 src2) (fpu_cmp32 src1 src2))
 (rule (fcmp_reg $F64 src1 src2) (fpu_cmp64 src1 src2))
+(rule (fcmp_reg $F128 src1 src2) (fpu_cmp128 src1 src2))
 
 
 ;; Helpers for generating vector `fcmp` instructions ;;;;;;;;;;;;;;;;;;;;;;;;;;;

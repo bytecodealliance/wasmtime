@@ -1,3 +1,5 @@
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent::Accessor;
 use crate::component::func::HostFunc;
 use crate::component::instance::RuntimeImport;
 use crate::component::matching::{InstanceType, TypeChecker};
@@ -12,8 +14,8 @@ use alloc::sync::Arc;
 use core::marker;
 #[cfg(feature = "async")]
 use core::{future::Future, pin::Pin};
-use wasmtime_environ::component::{NameMap, NameMapIntern};
 use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::component::{NameMap, NameMapIntern};
 
 /// A type used to instantiate [`Component`]s.
 ///
@@ -56,7 +58,7 @@ use wasmtime_environ::PrimaryMap;
 /// for guests to upgrade WASI. So long as the actual "meat" of the
 /// functionality is defined then it should align correctly and components can
 /// be instantiated.
-pub struct Linker<T> {
+pub struct Linker<T: 'static> {
     engine: Engine,
     strings: Strings,
     map: NameMap<usize, Definition>,
@@ -65,7 +67,7 @@ pub struct Linker<T> {
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-impl<T> Clone for Linker<T> {
+impl<T: 'static> Clone for Linker<T> {
     fn clone(&self) -> Linker<T> {
         Linker {
             engine: self.engine.clone(),
@@ -89,7 +91,7 @@ pub struct Strings {
 /// Instances do not need to be actual [`Instance`]s and instead are defined by
 /// a "bag of named items", so each [`LinkerInstance`] can further define items
 /// internally.
-pub struct LinkerInstance<'a, T> {
+pub struct LinkerInstance<'a, T: 'static> {
     engine: &'a Engine,
     path: &'a mut Vec<usize>,
     path_len: usize,
@@ -107,7 +109,7 @@ pub(crate) enum Definition {
     Resource(ResourceType, Arc<crate::func::HostFunc>),
 }
 
-impl<T> Linker<T> {
+impl<T: 'static> Linker<T> {
     /// Creates a new linker for the [`Engine`] specified with no items defined
     /// within it.
     pub fn new(engine: &Engine) -> Linker<T> {
@@ -210,7 +212,12 @@ impl<T> Linker<T> {
     /// `component` imports or if a name defined doesn't match the type of the
     /// item imported by the `component` provided.
     pub fn instantiate_pre(&self, component: &Component) -> Result<InstancePre<T>> {
-        self.typecheck(&component)?;
+        let cx = self.typecheck(&component)?;
+
+        // A successful typecheck resolves all of the imported resources used by
+        // this InstancePre. We keep a clone of this table in the InstancePre
+        // so that we can construct an InstanceType for typechecking.
+        let imported_resources = cx.imported_resources.clone();
 
         // Now that all imports are known to be defined and satisfied by this
         // linker a list of "flat" import items (aka no instances) is created
@@ -247,7 +254,9 @@ impl<T> Linker<T> {
             let i = imports.push(import);
             assert_eq!(i, idx);
         }
-        Ok(unsafe { InstancePre::new_unchecked(component.clone(), imports) })
+        Ok(unsafe {
+            InstancePre::new_unchecked(component.clone(), Arc::new(imports), imported_resources)
+        })
     }
 
     /// Instantiates the [`Component`] provided into the `store` specified.
@@ -370,7 +379,7 @@ impl<T> Linker<T> {
     }
 }
 
-impl<T> LinkerInstance<'_, T> {
+impl<T: 'static> LinkerInstance<'_, T> {
     fn as_mut(&mut self) -> LinkerInstance<'_, T> {
         LinkerInstance {
             engine: self.engine,
@@ -448,30 +457,21 @@ impl<T> LinkerInstance<'_, T> {
     /// method because it takes a function which returns a future that owns a
     /// unique reference to the Store, meaning the Store can't be used for
     /// anything else until the future resolves.
-    ///
-    /// Ideally, we'd have a way to thread a `StoreContextMut<T>` through an
-    /// arbitrary `Future` such that it has access to the `Store` only while
-    /// being polled (i.e. between, but not across, await points). However,
-    /// there's currently no way to express that in async Rust, so we make do
-    /// with a more awkward scheme: each function registered using
-    /// `func_wrap_concurrent` gets access to the `Store` twice: once before
-    /// doing any concurrent operations (i.e. before awaiting) and once
-    /// afterward. This allows multiple calls to proceed concurrently without
-    /// any one of them monopolizing the store.
     #[cfg(feature = "component-model-async")]
-    pub fn func_wrap_concurrent<Params, Return, F, N, FN>(&mut self, name: &str, f: F) -> Result<()>
+    pub fn func_wrap_concurrent<Params, Return, F>(&mut self, name: &str, f: F) -> Result<()>
     where
-        N: FnOnce(StoreContextMut<T>) -> Result<Return> + Send + Sync + 'static,
-        FN: Future<Output = N> + Send + Sync + 'static,
-        F: Fn(StoreContextMut<T>, Params) -> FN + Send + Sync + 'static,
-        Params: ComponentNamedList + Lift + 'static,
+        T: 'static,
+        F: for<'a> Fn(
+                &'a mut Accessor<T>,
+                Params,
+            ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send + 'a>>
+            + Send
+            + Sync
+            + 'static,
+        Params: ComponentNamedList + Lift + Send + Sync + 'static,
         Return: ComponentNamedList + Lower + Send + Sync + 'static,
     {
-        assert!(
-            self.engine.config().async_support,
-            "cannot use `func_wrap_concurrent` without enabling async support in the config"
-        );
-        _ = (name, f);
+        let _ = (name, f);
         todo!()
     }
 

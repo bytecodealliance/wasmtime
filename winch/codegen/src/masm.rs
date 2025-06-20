@@ -1,17 +1,17 @@
-use crate::abi::{self, align_to, scratch, LocalSlot};
+use crate::abi::{self, LocalSlot, align_to};
 use crate::codegen::{CodeGenContext, Emission, FuncEnv};
 use crate::isa::{
-    reg::{writable, Reg, WritableReg},
     CallingConvention,
+    reg::{Reg, RegClass, WritableReg, writable},
 };
 use anyhow::Result;
 use cranelift_codegen::{
-    binemit::CodeOffset,
-    ir::{Endianness, LibCall, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
     Final, MachBufferFinalized, MachLabel,
+    binemit::CodeOffset,
+    ir::{Endianness, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
 };
 use std::{fmt::Debug, ops::Range};
-use wasmtime_environ::PtrSize;
+use wasmtime_environ::{PtrSize, WasmHeapType, WasmRefType, WasmValType};
 
 pub(crate) use cranelift_codegen::ir::TrapCode;
 
@@ -21,6 +21,13 @@ pub(crate) enum DivKind {
     Signed,
     /// Unsigned division.
     Unsigned,
+}
+
+/// Represents the `memory.atomic.wait*` kind.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum AtomicWaitKind {
+    Wait32,
+    Wait64,
 }
 
 /// Remainder kind.
@@ -184,6 +191,47 @@ pub struct StackSlot {
 impl StackSlot {
     pub fn new(offs: SPOffset, size: u32) -> Self {
         Self { offset: offs, size }
+    }
+}
+
+pub trait ScratchType {
+    /// Derive the register class from the scratch register type.
+    fn reg_class() -> RegClass;
+}
+
+/// A scratch register type of integer class.
+pub struct IntScratch;
+/// A scratch register type of floating point class.
+pub struct FloatScratch;
+
+impl ScratchType for IntScratch {
+    fn reg_class() -> RegClass {
+        RegClass::Int
+    }
+}
+
+impl ScratchType for FloatScratch {
+    fn reg_class() -> RegClass {
+        RegClass::Float
+    }
+}
+
+/// A scratch register scope.
+pub struct Scratch(Reg);
+
+impl Scratch {
+    pub fn new(r: Reg) -> Self {
+        Self(r)
+    }
+
+    #[inline]
+    pub fn inner(&self) -> Reg {
+        self.0
+    }
+
+    #[inline]
+    pub fn writable(&self) -> WritableReg {
+        writable!(self.0)
     }
 }
 
@@ -876,6 +924,7 @@ pub(crate) enum V128MulKind {
 }
 
 /// Kinds of vector negation supported by WebAssembly.
+#[derive(Copy, Clone)]
 pub(crate) enum V128NegKind {
     /// 4 lanes of 32-bit floats.
     F32x4,
@@ -1118,11 +1167,17 @@ impl Imm {
         }
     }
 
-    /// Returns true if the [`Imm`] is float.
-    pub fn is_float(&self) -> bool {
+    /// Unwraps the underlying integer value as u64.
+    /// # Panics
+    /// This function panics if the underlying value can't be represented
+    /// as u64.
+    pub fn unwrap_as_u64(&self) -> u64 {
         match self {
-            Self::F32(_) | Self::F64(_) => true,
-            _ => false,
+            Self::I32(v) => *v as u64,
+            Self::I64(v) => *v,
+            Self::F32(v) => *v as u64,
+            Self::F64(v) => *v,
+            _ => unreachable!(),
         }
     }
 
@@ -1175,10 +1230,6 @@ pub(crate) const MAX_CONTEXT_ARGS: usize = 2;
 /// [FnCall::emit].
 #[derive(Clone, Debug)]
 pub(crate) enum ContextArgs {
-    /// No context arguments required. This is used for libcalls that don't
-    /// require any special context arguments. For example builtin functions
-    /// that perform float calculations.
-    None,
     /// A single context argument is required; the current pinned [VMcontext]
     /// register must be passed as the first argument of the function call.
     VMContext([VMContextLoc; 1]),
@@ -1189,11 +1240,6 @@ pub(crate) enum ContextArgs {
 }
 
 impl ContextArgs {
-    /// Construct an empty [ContextArgs].
-    pub fn none() -> Self {
-        Self::None
-    }
-
     /// Construct a [ContextArgs] declaring the usage of the pinned [VMContext]
     /// register as both the caller and callee context arguments.
     pub fn pinned_callee_and_caller_vmctx() -> Self {
@@ -1220,7 +1266,6 @@ impl ContextArgs {
     /// Get a slice of the context arguments.
     pub fn as_slice(&self) -> &[VMContextLoc] {
         match self {
-            Self::None => &[],
             Self::VMContext(a) => a.as_slice(),
             Self::CalleeAndCallerVMContext(a) => a.as_slice(),
         }
@@ -1233,8 +1278,6 @@ pub(crate) enum CalleeKind {
     Indirect(Reg),
     /// A function call to a local function.
     Direct(UserExternalNameRef),
-    /// Call to a well known LibCall.
-    LibCall(LibCall),
 }
 
 impl CalleeKind {
@@ -1246,11 +1289,6 @@ impl CalleeKind {
     /// Creates a direct callee kind from a function name.
     pub fn direct(name: UserExternalNameRef) -> Self {
         Self::Direct(name)
-    }
-
-    /// Creates a known callee kind from a libcall.
-    pub fn libcall(call: LibCall) -> Self {
-        Self::LibCall(call)
     }
 }
 
@@ -1396,6 +1434,30 @@ pub(crate) trait MacroAssembler {
         f: impl FnMut(&mut Self) -> Result<(CalleeKind, CallingConvention)>,
     ) -> Result<u32>;
 
+    /// Acquire a scratch register and execute the given callback.
+    fn with_scratch<T: ScratchType, R>(&mut self, f: impl FnOnce(&mut Self, Scratch) -> R) -> R;
+
+    /// Convenience wrapper over [`Self::with_scratch`], derives the register class
+    /// for a particular Wasm value type.
+    fn with_scratch_for<R>(
+        &mut self,
+        ty: WasmValType,
+        f: impl FnOnce(&mut Self, Scratch) -> R,
+    ) -> R {
+        match ty {
+            WasmValType::I32
+            | WasmValType::I64
+            | WasmValType::Ref(WasmRefType {
+                heap_type: WasmHeapType::Func,
+                ..
+            }) => self.with_scratch::<IntScratch, _>(f),
+            WasmValType::F32 | WasmValType::F64 | WasmValType::V128 => {
+                self.with_scratch::<FloatScratch, _>(f)
+            }
+            _ => unimplemented!(),
+        }
+    }
+
     /// Get stack pointer offset.
     fn sp_offset(&self) -> Result<SPOffset>;
 
@@ -1450,7 +1512,7 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a conditional move.
     fn cmov(&mut self, dst: WritableReg, src: Reg, cc: IntCmpKind, size: OperandSize)
-        -> Result<()>;
+    -> Result<()>;
 
     /// Performs a memory move of bytes from src to dest.
     /// Bytes are moved in blocks of 8 bytes, where possible.
@@ -1469,7 +1531,6 @@ pub(crate) trait MacroAssembler {
         debug_assert!(bytes % 4 == 0);
         let mut remaining = bytes;
         let word_bytes = <Self::ABI as abi::ABI>::word_bytes();
-        let scratch = scratch!(Self);
 
         let word_bytes = word_bytes as u32;
 
@@ -1479,39 +1540,45 @@ pub(crate) trait MacroAssembler {
             MemMoveDirection::LowToHigh => {
                 dst_offs = dst.as_u32() - bytes;
                 src_offs = src.as_u32() - bytes;
-                while remaining >= word_bytes {
-                    remaining -= word_bytes;
-                    dst_offs += word_bytes;
-                    src_offs += word_bytes;
+                self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                    while remaining >= word_bytes {
+                        remaining -= word_bytes;
+                        dst_offs += word_bytes;
+                        src_offs += word_bytes;
 
-                    self.load_ptr(
-                        self.address_from_sp(SPOffset::from_u32(src_offs))?,
-                        writable!(scratch),
-                    )?;
-                    self.store_ptr(
-                        scratch.into(),
-                        self.address_from_sp(SPOffset::from_u32(dst_offs))?,
-                    )?;
-                }
+                        masm.load_ptr(
+                            masm.address_from_sp(SPOffset::from_u32(src_offs))?,
+                            scratch.writable(),
+                        )?;
+                        masm.store_ptr(
+                            scratch.inner(),
+                            masm.address_from_sp(SPOffset::from_u32(dst_offs))?,
+                        )?;
+                    }
+                    anyhow::Ok(())
+                })?;
             }
             MemMoveDirection::HighToLow => {
                 // Go from the end to the beginning to handle overlapping addresses.
                 src_offs = src.as_u32();
                 dst_offs = dst.as_u32();
-                while remaining >= word_bytes {
-                    self.load_ptr(
-                        self.address_from_sp(SPOffset::from_u32(src_offs))?,
-                        writable!(scratch),
-                    )?;
-                    self.store_ptr(
-                        scratch.into(),
-                        self.address_from_sp(SPOffset::from_u32(dst_offs))?,
-                    )?;
+                self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                    while remaining >= word_bytes {
+                        masm.load_ptr(
+                            masm.address_from_sp(SPOffset::from_u32(src_offs))?,
+                            scratch.writable(),
+                        )?;
+                        masm.store_ptr(
+                            scratch.inner(),
+                            masm.address_from_sp(SPOffset::from_u32(dst_offs))?,
+                        )?;
 
-                    remaining -= word_bytes;
-                    src_offs -= word_bytes;
-                    dst_offs -= word_bytes;
-                }
+                        remaining -= word_bytes;
+                        src_offs -= word_bytes;
+                        dst_offs -= word_bytes;
+                    }
+                    anyhow::Ok(())
+                })?;
             }
         }
 
@@ -1526,16 +1593,19 @@ pub(crate) trait MacroAssembler {
                 src_offs += half_word;
             }
 
-            self.load(
-                self.address_from_sp(SPOffset::from_u32(src_offs))?,
-                writable!(scratch),
-                ptr_size,
-            )?;
-            self.store(
-                scratch.into(),
-                self.address_from_sp(SPOffset::from_u32(dst_offs))?,
-                ptr_size,
-            )?;
+            self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                masm.load(
+                    masm.address_from_sp(SPOffset::from_u32(src_offs))?,
+                    scratch.writable(),
+                    ptr_size,
+                )?;
+                masm.store(
+                    scratch.inner().into(),
+                    masm.address_from_sp(SPOffset::from_u32(dst_offs))?,
+                    ptr_size,
+                )?;
+                anyhow::Ok(())
+            })?;
         }
         Ok(())
     }
@@ -1624,7 +1694,7 @@ pub(crate) trait MacroAssembler {
     fn shift_ir(
         &mut self,
         dst: WritableReg,
-        imm: u64,
+        imm: Imm,
         lhs: Reg,
         kind: ShiftKind,
         size: OperandSize,
@@ -1836,15 +1906,17 @@ pub(crate) trait MacroAssembler {
             // Add an upper bound to this generation;
             // given a considerably large amount of slots
             // this will be inefficient.
-            let zero = scratch!(Self);
-            self.zero(writable!(zero))?;
-            let zero = RegImm::reg(zero);
+            self.with_scratch::<IntScratch, _>(|masm, scratch| {
+                masm.zero(scratch.writable())?;
+                let zero = RegImm::reg(scratch.inner());
 
-            for step in (start..end).into_iter().step_by(word_size as usize) {
-                let slot = LocalSlot::i64(step + word_size);
-                let addr: Self::Address = self.local_address(&slot)?;
-                self.store(zero, addr, OperandSize::S64)?;
-            }
+                for step in (start..end).step_by(word_size as usize) {
+                    let slot = LocalSlot::i64(step + word_size);
+                    let addr: Self::Address = masm.local_address(&slot)?;
+                    masm.store(zero, addr, OperandSize::S64)?;
+                }
+                anyhow::Ok(())
+            })?;
         }
 
         Ok(())
@@ -1943,7 +2015,7 @@ pub(crate) trait MacroAssembler {
     /// Note that some platforms require special handling of registers in this
     /// instruction (e.g. x64) so full access to `CodeGenContext` is provided.
     fn mul_wide(&mut self, context: &mut CodeGenContext<Emission>, kind: MulWideKind)
-        -> Result<()>;
+    -> Result<()>;
 
     /// Takes the value in a src operand and replicates it across lanes of
     /// `size` in a destination result.
@@ -2130,7 +2202,7 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a vector lane-wise mul between `lhs` and `rhs`, placing the result in `dst`.
     fn v128_mul(&mut self, context: &mut CodeGenContext<Emission>, kind: V128MulKind)
-        -> Result<()>;
+    -> Result<()>;
 
     /// Perform an absolute operation on a vector.
     fn v128_abs(&mut self, src: Reg, dst: WritableReg, kind: V128AbsKind) -> Result<()>;
@@ -2183,11 +2255,11 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a lane-wise `min` operation between `src1` and `src2`.
     fn v128_min(&mut self, src1: Reg, src2: Reg, dst: WritableReg, kind: V128MinKind)
-        -> Result<()>;
+    -> Result<()>;
 
     /// Perform a lane-wise `max` operation between `src1` and `src2`.
     fn v128_max(&mut self, src1: Reg, src2: Reg, dst: WritableReg, kind: V128MaxKind)
-        -> Result<()>;
+    -> Result<()>;
 
     /// Perform the lane-wise integer extended multiplication producing twice wider result than the
     /// inputs. This is equivalent to an extend followed by a multiply.

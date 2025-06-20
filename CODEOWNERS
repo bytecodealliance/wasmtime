@@ -34,9 +34,14 @@
 /src/      @bytecodealliance/wasmtime-core-reviewers
 /tests/    @bytecodealliance/wasmtime-core-reviewers
 
+# WASI
+/crates/wasi* @bytecodealliance/wasmtime-wasi-reviewers
+
 # Cranelift/Winch compilers
-/cranelift/ @bytecodealliance/wasmtime-compiler-reviewers
-/winch/     @bytecodealliance/wasmtime-compiler-reviewers
+/cranelift/       @bytecodealliance/wasmtime-compiler-reviewers
+/winch/           @bytecodealliance/wasmtime-compiler-reviewers
+/crates/cranelift @bytecodealliance/wasmtime-compiler-reviewers
+/crates/winch     @bytecodealliance/wasmtime-compiler-reviewers
 
 # Fuzz testing
 /fuzz/          @bytecodealliance/wasmtime-fuzz-reviewers

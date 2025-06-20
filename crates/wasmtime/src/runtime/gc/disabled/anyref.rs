@@ -1,8 +1,8 @@
 use crate::runtime::vm::VMGcRef;
 use crate::{
+    ArrayRef, AsContext, AsContextMut, EqRef, GcRefImpl, HeapType, I31, ManuallyRooted, Result,
+    Rooted, StructRef,
     store::{AutoAssertNoGc, StoreOpaque},
-    ArrayRef, AsContext, AsContextMut, EqRef, GcRefImpl, HeapType, ManuallyRooted, Result, Rooted,
-    StructRef, I31,
 };
 
 /// Support for `anyref` disabled at compile time because the `gc` cargo feature

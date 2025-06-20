@@ -10,10 +10,10 @@
 //! available on Unix.
 
 #[cfg(has_native_signals)]
-use crate::prelude::*;
-#[cfg(has_native_signals)]
 use crate::AsContextMut;
 use crate::Store;
+#[cfg(has_native_signals)]
+use crate::prelude::*;
 
 /// Extensions for the [`Store`] type only available on Unix.
 pub trait StoreExt {

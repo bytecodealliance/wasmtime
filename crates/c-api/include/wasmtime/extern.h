@@ -30,7 +30,7 @@ typedef struct wasmtime_func {
   /// this field is otherwise never zero.
   uint64_t store_id;
   /// Private field for Wasmtime, undefined if `store_id` is zero.
-  size_t __private;
+  void *__private;
 } wasmtime_func_t;
 
 /// \brief Representation of a table in Wasmtime.
@@ -41,10 +41,14 @@ typedef struct wasmtime_func {
 /// wrong table is passed to the wrong store then it may trigger an assertion
 /// to abort the process.
 typedef struct wasmtime_table {
-  /// Internal identifier of what store this belongs to, never zero.
-  uint64_t store_id;
+  struct {
+    /// Internal identifier of what store this belongs to, never zero.
+    uint64_t store_id;
+    /// Private field for Wasmtime.
+    uint32_t __private1;
+  };
   /// Private field for Wasmtime.
-  size_t __private;
+  uint32_t __private2;
 } wasmtime_table_t;
 
 /// \brief Representation of a memory in Wasmtime.
@@ -55,10 +59,14 @@ typedef struct wasmtime_table {
 /// wrong memory is passed to the wrong store then it may trigger an assertion
 /// to abort the process.
 typedef struct wasmtime_memory {
-  /// Internal identifier of what store this belongs to, never zero.
-  uint64_t store_id;
+  struct {
+    /// Internal identifier of what store this belongs to, never zero.
+    uint64_t store_id;
+    /// Private field for Wasmtime.
+    uint32_t __private1;
+  };
   /// Private field for Wasmtime.
-  size_t __private;
+  uint32_t __private2;
 } wasmtime_memory_t;
 
 /// \brief Representation of a global in Wasmtime.
@@ -72,7 +80,11 @@ typedef struct wasmtime_global {
   /// Internal identifier of what store this belongs to, never zero.
   uint64_t store_id;
   /// Private field for Wasmtime.
-  size_t __private;
+  uint32_t __private1;
+  /// Private field for Wasmtime.
+  uint32_t __private2;
+  /// Private field for Wasmtime.
+  uint32_t __private3;
 } wasmtime_global_t;
 
 /// \brief Discriminant of #wasmtime_extern_t

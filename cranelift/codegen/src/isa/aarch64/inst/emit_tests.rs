@@ -6082,7 +6082,7 @@ fn test_aarch64_binemit() {
         "br x3",
     ));
 
-    insns.push((Inst::Brk, "000020D4", "brk #0"));
+    insns.push((Inst::Brk, "00003ED4", "brk #0xf000"));
 
     insns.push((
         Inst::Adr {

@@ -2,7 +2,7 @@ use crate::{GuestError, GuestMemory, GuestPtr};
 use std::cell::UnsafeCell;
 use std::mem;
 use std::sync::atomic::{
-    AtomicI16, AtomicI32, AtomicI64, AtomicI8, AtomicU16, AtomicU32, AtomicU64, AtomicU8, Ordering,
+    AtomicI8, AtomicI16, AtomicI32, AtomicI64, AtomicU8, AtomicU16, AtomicU32, AtomicU64, Ordering,
 };
 
 /// A trait for types which are used to report errors. Each type used in the

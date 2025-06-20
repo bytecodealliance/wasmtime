@@ -1,26 +1,24 @@
 //! Implementation of a standard Pulley ABI.
 
-use super::{inst::*, PulleyFlags, PulleyTargetKind};
-use crate::isa::pulley_shared::{PointerWidth, PulleyBackend};
+use super::{PulleyFlags, PulleyTargetKind, inst::*};
+use crate::isa::pulley_shared::PointerWidth;
 use crate::{
-    ir::{self, types::*, MemFlags, Signature},
+    CodegenResult,
+    ir::{self, MemFlags, Signature, types::*},
     isa,
     machinst::*,
-    settings, CodegenResult,
+    settings,
 };
-use alloc::{boxed::Box, vec::Vec};
+use alloc::vec::Vec;
 use core::marker::PhantomData;
 use cranelift_bitset::ScalarBitSet;
 use regalloc2::{MachineEnv, PReg, PRegSet};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 /// Support for the Pulley ABI from the callee side (within a function body).
 pub(crate) type PulleyCallee<P> = Callee<PulleyMachineDeps<P>>;
-
-/// Support for the Pulley ABI from the caller side (at a callsite).
-pub(crate) type PulleyABICallSite<P> = CallSite<PulleyMachineDeps<P>>;
 
 /// Pulley-specific ABI behavior. This struct just serves as an implementation
 /// point for the trait; it is never actually instantiated.
@@ -446,57 +444,6 @@ where
         SmallVec::new()
     }
 
-    fn gen_call(
-        dest: &CallDest,
-        _tmp: Writable<Reg>,
-        mut info: CallInfo<()>,
-    ) -> SmallVec<[Self::I; 2]> {
-        match dest {
-            // "near" calls are pulley->pulley calls so they use a normal "call"
-            // opcode
-            CallDest::ExtName(name, RelocDistance::Near) => {
-                // The first four integer arguments to a call can be handled via
-                // special pulley call instructions. Assert here that
-                // `info.uses` is sorted in order and then take out x0-x3 if
-                // they're present and move them from `info.uses` to
-                // `info.dest.args` to be handled differently during register
-                // allocation.
-                let mut args = SmallVec::new();
-                info.uses.sort_by_key(|arg| arg.preg);
-                info.uses.retain(|arg| {
-                    if arg.preg != x0() && arg.preg != x1() && arg.preg != x2() && arg.preg != x3()
-                    {
-                        return true;
-                    }
-                    args.push(XReg::new(arg.vreg).unwrap());
-                    false
-                });
-                smallvec![Inst::Call {
-                    info: Box::new(info.map(|()| PulleyCall {
-                        name: name.clone(),
-                        args,
-                    }))
-                }
-                .into()]
-            }
-            // "far" calls are pulley->host calls so they use a different opcode
-            // which is lowered with a special relocation in the backend.
-            CallDest::ExtName(name, RelocDistance::Far) => {
-                smallvec![Inst::IndirectCallHost {
-                    info: Box::new(info.map(|()| name.clone()))
-                }
-                .into()]
-            }
-            // Indirect calls are all assumed to be pulley->pulley calls
-            CallDest::Reg(reg) => {
-                smallvec![Inst::IndirectCall {
-                    info: Box::new(info.map(|()| XReg::new(*reg).unwrap()))
-                }
-                .into()]
-            }
-        }
-    }
-
     fn gen_memcpy<F: FnMut(Type) -> Writable<Reg>>(
         _call_conv: isa::CallConv,
         _dst: Reg,
@@ -776,53 +723,6 @@ impl FrameLayout {
             let offset = i32::try_from(offset).unwrap();
             Some((offset, ty, Reg::from(reg.to_reg())))
         })
-    }
-}
-
-impl<P> PulleyABICallSite<P>
-where
-    P: PulleyTargetKind,
-{
-    pub fn emit_return_call(
-        mut self,
-        ctx: &mut Lower<InstAndKind<P>>,
-        args: isle::ValueSlice,
-        _backend: &PulleyBackend<P>,
-    ) {
-        let new_stack_arg_size =
-            u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
-
-        ctx.abi_mut().accumulate_tail_args_size(new_stack_arg_size);
-
-        // Put all arguments in registers and stack slots (within that newly
-        // allocated stack space).
-        self.emit_args(ctx, args);
-        self.emit_stack_ret_arg_for_tail_call(ctx);
-
-        let dest = self.dest().clone();
-        let uses = self.take_uses();
-
-        match dest {
-            CallDest::ExtName(name, RelocDistance::Near) => {
-                let info = Box::new(ReturnCallInfo {
-                    dest: name,
-                    uses,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnCall { info }.into());
-            }
-            CallDest::ExtName(_name, RelocDistance::Far) => {
-                unimplemented!("return-call of a host function")
-            }
-            CallDest::Reg(callee) => {
-                let info = Box::new(ReturnCallInfo {
-                    dest: XReg::new(callee).unwrap(),
-                    uses,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnIndirectCall { info }.into());
-            }
-        }
     }
 }
 

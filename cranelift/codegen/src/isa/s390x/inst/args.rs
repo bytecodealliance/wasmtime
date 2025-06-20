@@ -1,7 +1,7 @@
 //! S390x ISA definitions: instruction arguments.
 
-use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::MemFlags;
+use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::isa::s390x::inst::*;
 
 //=============================================================================
@@ -32,6 +32,9 @@ pub enum MemArg {
     /// PC-relative Reference to a label.
     Label { target: MachLabel },
 
+    /// PC-relative Reference to a constant pool entry.
+    Constant { constant: VCodeConstant },
+
     /// PC-relative Reference to a near symbol.
     Symbol {
         name: Box<ExternalName>,
@@ -49,8 +52,11 @@ pub enum MemArg {
     /// Offset from the stack pointer at function entry.
     InitialSPOffset { off: i64 },
 
-    /// Offset from the (nominal) stack pointer during this function.
-    NominalSPOffset { off: i64 },
+    /// Offset from the top of the incoming argument area.
+    IncomingArgOffset { off: i64 },
+
+    /// Offset from the bottom of the outgoing argument area.
+    OutgoingArgOffset { off: i64 },
 
     /// Offset into the slot area of the stack, which lies just above the
     /// outgoing argument area that's setup by the function prologue.
@@ -94,35 +100,17 @@ impl MemArg {
         MemArg::RegOffset { reg, off, flags }
     }
 
-    /// Add an offset to a virtual addressing mode.
-    pub fn offset(base: &MemArg, offset: i64) -> MemArg {
-        match base {
-            &MemArg::RegOffset { reg, off, flags } => MemArg::RegOffset {
-                reg,
-                off: off + offset,
-                flags,
-            },
-            &MemArg::InitialSPOffset { off } => MemArg::InitialSPOffset { off: off + offset },
-            &MemArg::NominalSPOffset { off } => MemArg::NominalSPOffset { off: off + offset },
-            &MemArg::SlotOffset { off } => MemArg::SlotOffset { off: off + offset },
-            &MemArg::SpillOffset { off } => MemArg::SpillOffset { off: off + offset },
-            // This routine is only defined for virtual addressing modes.
-            &MemArg::BXD12 { .. }
-            | &MemArg::BXD20 { .. }
-            | &MemArg::Label { .. }
-            | &MemArg::Symbol { .. } => unreachable!(),
-        }
-    }
-
     pub(crate) fn get_flags(&self) -> MemFlags {
         match self {
             MemArg::BXD12 { flags, .. } => *flags,
             MemArg::BXD20 { flags, .. } => *flags,
             MemArg::RegOffset { flags, .. } => *flags,
             MemArg::Label { .. } => MemFlags::trusted(),
+            MemArg::Constant { .. } => MemFlags::trusted(),
             MemArg::Symbol { flags, .. } => *flags,
             MemArg::InitialSPOffset { .. } => MemFlags::trusted(),
-            MemArg::NominalSPOffset { .. } => MemFlags::trusted(),
+            MemArg::IncomingArgOffset { .. } => MemFlags::trusted(),
+            MemArg::OutgoingArgOffset { .. } => MemFlags::trusted(),
             MemArg::SlotOffset { .. } => MemFlags::trusted(),
             MemArg::SpillOffset { .. } => MemFlags::trusted(),
         }
@@ -242,12 +230,14 @@ impl PrettyPrint for MemArg {
                 }
             }
             &MemArg::Label { target } => target.to_string(),
+            &MemArg::Constant { constant } => format!("[const({})]", constant.as_u32()),
             &MemArg::Symbol {
                 ref name, offset, ..
             } => format!("{} + {}", name.display(None), offset),
             // Eliminated by `mem_finalize()`.
             &MemArg::InitialSPOffset { .. }
-            | &MemArg::NominalSPOffset { .. }
+            | &MemArg::IncomingArgOffset { .. }
+            | &MemArg::OutgoingArgOffset { .. }
             | &MemArg::SlotOffset { .. }
             | &MemArg::SpillOffset { .. }
             | &MemArg::RegOffset { .. } => {

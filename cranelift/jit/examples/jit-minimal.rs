@@ -1,7 +1,7 @@
 use codegen::ir::UserFuncName;
 use cranelift::prelude::*;
 use cranelift_jit::{JITBuilder, JITModule};
-use cranelift_module::{default_libcall_names, Linkage, Module};
+use cranelift_module::{Linkage, Module, default_libcall_names};
 use std::mem;
 
 fn main() {

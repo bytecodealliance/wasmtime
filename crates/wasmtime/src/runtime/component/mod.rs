@@ -104,6 +104,7 @@ mod component;
 #[cfg(feature = "component-model-async")]
 pub(crate) mod concurrent;
 mod func;
+mod has_data;
 mod instance;
 mod linker;
 mod matching;
@@ -116,11 +117,13 @@ mod values;
 pub use self::component::{Component, ComponentExportIndex};
 #[cfg(feature = "component-model-async")]
 pub use self::concurrent::{
-    ErrorContext, FutureReader, Promise, PromisesUnordered, StreamReader, VMComponentAsyncStore,
+    Accessor, ErrorContext, FutureReader, Promise, PromisesUnordered, StreamReader,
+    VMComponentAsyncStore,
 };
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
+pub use self::has_data::*;
 pub use self::instance::{Instance, InstanceExportLookup, InstancePre};
 pub use self::linker::{Linker, LinkerInstance};
 pub use self::resource_table::{ResourceTable, ResourceTableError};
@@ -128,7 +131,9 @@ pub use self::resources::{Resource, ResourceAny};
 pub use self::types::{ResourceType, Type};
 pub use self::values::Val;
 
+pub(crate) use self::instance::RuntimeImport;
 pub(crate) use self::resources::HostResourceData;
+pub(crate) use self::store::ComponentInstanceId;
 
 // Re-export wasm_wave crate so the compatible version of this dep doesn't have to be
 // tracked separately from wasmtime.
@@ -140,19 +145,22 @@ pub use wasm_wave;
 #[doc(hidden)]
 pub mod __internal {
     pub use super::func::{
-        bad_type_info, format_flags, lower_payload, typecheck_enum, typecheck_flags,
-        typecheck_record, typecheck_variant, ComponentVariant, LiftContext, LowerContext, Options,
+        ComponentVariant, LiftContext, LowerContext, Options, bad_type_info, format_flags,
+        lower_payload, typecheck_enum, typecheck_flags, typecheck_record, typecheck_variant,
     };
     pub use super::matching::InstanceType;
+    pub use crate::MaybeUninitExt;
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
-    pub use crate::MaybeUninitExt;
     pub use alloc::boxed::Box;
     pub use alloc::string::String;
     pub use alloc::vec::Vec;
     pub use anyhow;
     pub use core::cell::RefCell;
+    pub use core::future::Future;
     pub use core::mem::transmute;
+    #[cfg(feature = "component-model-async")]
+    pub use futures::future::FutureExt;
     #[cfg(feature = "async")]
     pub use trait_variant::make as trait_variant_make;
     pub use wasmtime_environ;

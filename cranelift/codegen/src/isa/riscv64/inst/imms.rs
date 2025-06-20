@@ -49,9 +49,9 @@ impl Imm12 {
     }
 }
 
-impl Into<i64> for Imm12 {
-    fn into(self) -> i64 {
-        self.as_i16().into()
+impl From<Imm12> for i64 {
+    fn from(imm12: Imm12) -> i64 {
+        imm12.as_i16().into()
     }
 }
 

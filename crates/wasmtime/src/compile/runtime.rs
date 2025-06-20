@@ -39,7 +39,7 @@ impl<'a> CodeBuilder<'a> {
                 NotHashed(state),
             );
             let (code, info_and_types) =
-                wasmtime_cache::ModuleCacheEntry::new("wasmtime", self.engine.cache_config())
+                wasmtime_cache::ModuleCacheEntry::new("wasmtime", self.engine.cache())
                     .get_data_raw(
                         &state,
                         // Cache miss, compute the actual artifacts
@@ -147,7 +147,7 @@ impl FinishedObject for MmapVecWrapper {
             }
             Err(e) => match result.err.take() {
                 Some(original) => Err(original.context(e)),
-                None => Err(e.into()),
+                None => Err(e),
             },
         };
 

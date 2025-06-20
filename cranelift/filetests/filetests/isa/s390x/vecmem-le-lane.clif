@@ -154,17 +154,15 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   vl %v2, 0(%r2)
-;   vpdi %v4, %v2, %v2, 4
-;   verllg %v6, %v4, 32
-;   verllf %v24, %v6, 16
+;   vpdi %v24, %v2, %v2, 4 ; verllg %v2, %v2, 32 ; verllf %v2, %v2, 16
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v2, 0(%r2) ; trap: heap_oob
-;   vpdi %v4, %v2, %v2, 4
-;   verllg %v6, %v4, 0x20
-;   verllf %v24, %v6, 0x10
+;   vpdi %v24, %v2, %v2, 4
+;   verllg %v24, %v24, 0x20
+;   verllf %v24, %v24, 0x10
 ;   br %r14
 
 function %load_i32x4_big(i64) -> i32x4 tail {
@@ -176,15 +174,14 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   vl %v2, 0(%r2)
-;   vpdi %v4, %v2, %v2, 4
-;   verllg %v24, %v4, 32
+;   vpdi %v24, %v2, %v2, 4 ; verllg %v2, %v2, 32
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v2, 0(%r2) ; trap: heap_oob
-;   vpdi %v4, %v2, %v2, 4
-;   verllg %v24, %v4, 0x20
+;   vpdi %v24, %v2, %v2, 4
+;   verllg %v24, %v24, 0x20
 ;   br %r14
 
 function %load_i64x2_big(i64) -> i64x2 tail {
@@ -214,15 +211,14 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   vl %v2, 0(%r2)
-;   vpdi %v4, %v2, %v2, 4
-;   verllg %v24, %v4, 32
+;   vpdi %v24, %v2, %v2, 4 ; verllg %v2, %v2, 32
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vl %v2, 0(%r2) ; trap: heap_oob
-;   vpdi %v4, %v2, %v2, 4
-;   verllg %v24, %v4, 0x20
+;   vpdi %v24, %v2, %v2, 4
+;   verllg %v24, %v24, 0x20
 ;   br %r14
 
 function %load_f64x2_big(i64) -> f64x2 tail {
@@ -273,18 +269,16 @@ block0(v0: i16x8, v1: i64):
 
 ; VCode:
 ; block0:
-;   vpdi %v3, %v24, %v24, 4
-;   verllg %v5, %v3, 32
-;   verllf %v7, %v5, 16
-;   vst %v7, 0(%r2)
+;   vpdi %v3, %v24, %v24, 4 ; verllg %v24, %v24, 32 ; verllf %v24, %v24, 16
+;   vst %v3, 0(%r2)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vpdi %v3, %v24, %v24, 4
-;   verllg %v5, %v3, 0x20
-;   verllf %v7, %v5, 0x10
-;   vst %v7, 0(%r2) ; trap: heap_oob
+;   verllg %v3, %v3, 0x20
+;   verllf %v3, %v3, 0x10
+;   vst %v3, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_i32x4_big(i32x4, i64) tail {
@@ -295,16 +289,15 @@ block0(v0: i32x4, v1: i64):
 
 ; VCode:
 ; block0:
-;   vpdi %v3, %v24, %v24, 4
-;   verllg %v5, %v3, 32
-;   vst %v5, 0(%r2)
+;   vpdi %v3, %v24, %v24, 4 ; verllg %v24, %v24, 32
+;   vst %v3, 0(%r2)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vpdi %v3, %v24, %v24, 4
-;   verllg %v5, %v3, 0x20
-;   vst %v5, 0(%r2) ; trap: heap_oob
+;   verllg %v3, %v3, 0x20
+;   vst %v3, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_i64x2_big(i64x2, i64) tail {
@@ -333,16 +326,15 @@ block0(v0: f32x4, v1: i64):
 
 ; VCode:
 ; block0:
-;   vpdi %v3, %v24, %v24, 4
-;   verllg %v5, %v3, 32
-;   vst %v5, 0(%r2)
+;   vpdi %v3, %v24, %v24, 4 ; verllg %v24, %v24, 32
+;   vst %v3, 0(%r2)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vpdi %v3, %v24, %v24, 4
-;   verllg %v5, %v3, 0x20
-;   vst %v5, 0(%r2) ; trap: heap_oob
+;   verllg %v3, %v3, 0x20
+;   vst %v3, 0(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_f64x2_big(f64x2, i64) tail {

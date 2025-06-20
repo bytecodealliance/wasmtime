@@ -1,8 +1,8 @@
 [package]
-name = "wasmtime-fiber"
+name = "wasmtime-internal-fiber"
 version.workspace = true
 authors.workspace = true
-description = "Fiber support for Wasmtime"
+description = "INTERNAL: Fiber support for Wasmtime"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
 edition.workspace = true
@@ -18,7 +18,8 @@ wasmtime-versioned-export-macros = { workspace = true }
 wasmtime-asm-macros = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
-rustix = { workspace = true, features = ["mm", "param"] }
+rustix = { workspace = true, features = ["mm"] }
+libc = { workspace = true }
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 workspace = true

@@ -10,7 +10,6 @@
 //      _padding: u32, // (On 64-bit systems)
 //      vm_store_context: *const VMStoreContext,
 //      builtin_functions: *mut VMBuiltinFunctionsArray,
-//      callee: *mut VMFunctionBody,
 //      epoch_ptr: *mut AtomicU64,
 //      gc_heap_data: *mut T, // Collector-specific pointer
 //      type_ids: *const VMSharedTypeIndex,
@@ -25,7 +24,7 @@
 //      memories: [*mut VMMemoryDefinition; module.num_defined_memories],
 //      owned_memories: [VMMemoryDefinition; module.num_owned_memories],
 //      imported_functions: [VMFunctionImport; module.num_imported_functions],
-//      imported_tables: [VMTable; module.num_imported_tables],
+//      imported_tables: [VMTableImport; module.num_imported_tables],
 //      imported_globals: [VMGlobalImport; module.num_imported_globals],
 //      imported_tags: [VMTagImport; module.num_imported_tags],
 //      tables: [VMTableDefinition; module.num_defined_tables],
@@ -217,6 +216,11 @@ pub trait PtrSize {
         self.vmstore_context_last_wasm_exit_pc() + self.size()
     }
 
+    /// Return the offset of the `stack_chain` field of `VMStoreContext`.
+    fn vmstore_context_stack_chain(&self) -> u8 {
+        self.vmstore_context_last_wasm_entry_fp() + self.size()
+    }
+
     // Offsets within `VMMemoryDefinition`
 
     /// The offset of the `base` field.
@@ -254,6 +258,122 @@ pub trait PtrSize {
         .unwrap()
     }
 
+    /// Return the size of `VMStackChain`.
+    fn size_of_vmstack_chain(&self) -> u8 {
+        2 * self.size()
+    }
+
+    // Offsets within `VMStackLimits`
+
+    /// Return the offset of `VMStackLimits::stack_limit`.
+    fn vmstack_limits_stack_limit(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of `VMStackLimits::last_wasm_entry_fp`.
+    fn vmstack_limits_last_wasm_entry_fp(&self) -> u8 {
+        self.size()
+    }
+
+    // Offsets within `VMHostArray`
+
+    /// Return the offset of `VMHostArray::length`.
+    fn vmhostarray_length(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of `VMHostArray::capacity`.
+    fn vmhostarray_capacity(&self) -> u8 {
+        4
+    }
+
+    /// Return the offset of `VMHostArray::data`.
+    fn vmhostarray_data(&self) -> u8 {
+        8
+    }
+
+    /// Return the size of `VMHostArray`.
+    fn size_of_vmhostarray(&self) -> u8 {
+        8 + self.size()
+    }
+
+    // Offsets within `VMCommonStackInformation`
+
+    /// Return the offset of `VMCommonStackInformation::limits`.
+    fn vmcommon_stack_information_limits(&self) -> u8 {
+        0 * self.size()
+    }
+
+    /// Return the offset of `VMCommonStackInformation::state`.
+    fn vmcommon_stack_information_state(&self) -> u8 {
+        2 * self.size()
+    }
+
+    /// Return the offset of `VMCommonStackInformation::handlers`.
+    fn vmcommon_stack_information_handlers(&self) -> u8 {
+        u8::try_from(align(
+            self.vmcommon_stack_information_state() as u32 + 4,
+            u32::from(self.size()),
+        ))
+        .unwrap()
+    }
+
+    /// Return the offset of `VMCommonStackInformation::first_switch_handler_index`.
+    fn vmcommon_stack_information_first_switch_handler_index(&self) -> u8 {
+        self.vmcommon_stack_information_handlers() + self.size_of_vmhostarray()
+    }
+
+    /// Return the size of `VMCommonStackInformation`.
+    fn size_of_vmcommon_stack_information(&self) -> u8 {
+        u8::try_from(align(
+            self.vmcommon_stack_information_first_switch_handler_index() as u32 + 4,
+            u32::from(self.size()),
+        ))
+        .unwrap()
+    }
+
+    // Offsets within `VMContRef`
+
+    /// Return the offset of `VMContRef::common_stack_information`.
+    fn vmcontref_common_stack_information(&self) -> u8 {
+        0 * self.size()
+    }
+
+    /// Return the offset of `VMContRef::parent_chain`.
+    fn vmcontref_parent_chain(&self) -> u8 {
+        u8::try_from(align(
+            (self.vmcontref_common_stack_information() + self.size_of_vmcommon_stack_information())
+                as u32,
+            u32::from(self.size()),
+        ))
+        .unwrap()
+    }
+
+    /// Return the offset of `VMContRef::last_ancestor`.
+    fn vmcontref_last_ancestor(&self) -> u8 {
+        self.vmcontref_parent_chain() + 2 * self.size()
+    }
+
+    /// Return the offset of `VMContRef::revision`.
+    fn vmcontref_revision(&self) -> u8 {
+        self.vmcontref_last_ancestor() + self.size()
+    }
+
+    /// Return the offset of `VMContRef::stack`.
+    fn vmcontref_stack(&self) -> u8 {
+        self.vmcontref_revision() + 8
+    }
+
+    /// Return the offset of `VMContRef::args`.
+    fn vmcontref_args(&self) -> u8 {
+        self.vmcontref_stack() + 3 * self.size()
+    }
+
+    /// Return the offset of `VMContRef::values`.
+    fn vmcontref_values(&self) -> u8 {
+        self.vmcontref_args() + self.size_of_vmhostarray()
+    }
+
     /// Return the offset to the `magic` value in this `VMContext`.
     #[inline]
     fn vmctx_magic(&self) -> u8 {
@@ -275,17 +395,11 @@ pub trait PtrSize {
         self.vmctx_store_context() + self.size()
     }
 
-    /// Return the offset to the `callee` member in this `VMContext`.
-    #[inline]
-    fn vmctx_callee(&self) -> u8 {
-        self.vmctx_builtin_functions() + self.size()
-    }
-
     /// Return the offset to the `*const AtomicU64` epoch-counter
     /// pointer.
     #[inline]
     fn vmctx_epoch_ptr(&self) -> u8 {
-        self.vmctx_callee() + self.size()
+        self.vmctx_builtin_functions() + self.size()
     }
 
     /// Return the offset to the `*mut T` collector-specific data.
@@ -526,7 +640,7 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
             size(imported_functions)
                 = cmul(ret.num_imported_functions, ret.size_of_vmfunction_import()),
             size(imported_tables)
-                = cmul(ret.num_imported_tables, ret.size_of_vmtable()),
+                = cmul(ret.num_imported_tables, ret.size_of_vmtable_import()),
             size(imported_globals)
                 = cmul(ret.num_imported_globals, ret.size_of_vmglobal_import()),
             size(imported_tags)
@@ -584,24 +698,18 @@ impl<P: PtrSize> VMOffsets<P> {
     }
 }
 
-/// Offsets for `VMTable`.
+/// Offsets for `VMTableImport`.
 impl<P: PtrSize> VMOffsets<P> {
     /// The offset of the `from` field.
     #[inline]
-    pub fn vmtable_from(&self) -> u8 {
+    pub fn vmtable_import_from(&self) -> u8 {
         0 * self.pointer_size()
     }
 
-    /// The offset of the `vmctx` field.
+    /// Return the size of `VMTableImport`.
     #[inline]
-    pub fn vmtable_vmctx(&self) -> u8 {
-        1 * self.pointer_size()
-    }
-
-    /// Return the size of `VMTable`.
-    #[inline]
-    pub fn size_of_vmtable(&self) -> u8 {
-        2 * self.pointer_size()
+    pub fn size_of_vmtable_import(&self) -> u8 {
+        3 * self.pointer_size()
     }
 }
 
@@ -639,12 +747,6 @@ impl<P: PtrSize> VMOffsets<P> {
         0 * self.pointer_size()
     }
 
-    /// The offset of the `vmctx` field.
-    #[inline]
-    pub fn vmmemory_import_vmctx(&self) -> u8 {
-        1 * self.pointer_size()
-    }
-
     /// Return the size of `VMMemoryImport`.
     #[inline]
     pub fn size_of_vmmemory_import(&self) -> u8 {
@@ -663,7 +765,8 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the size of `VMGlobalImport`.
     #[inline]
     pub fn size_of_vmglobal_import(&self) -> u8 {
-        1 * self.pointer_size()
+        // `VMGlobalImport` has two pointers plus 8 bytes for `VMGlobalKind`
+        2 * self.pointer_size() + 8
     }
 }
 
@@ -687,7 +790,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// Return the size of `VMTagImport`.
     #[inline]
     pub fn size_of_vmtag_import(&self) -> u8 {
-        1 * self.pointer_size()
+        3 * self.pointer_size()
     }
 }
 
@@ -777,7 +880,8 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_vmtable_import(&self, index: TableIndex) -> u32 {
         assert!(index.as_u32() < self.num_imported_tables);
-        self.vmctx_imported_tables_begin() + index.as_u32() * u32::from(self.size_of_vmtable())
+        self.vmctx_imported_tables_begin()
+            + index.as_u32() * u32::from(self.size_of_vmtable_import())
     }
 
     /// Return the offset to `VMMemoryImport` index `index`.
@@ -872,7 +976,7 @@ impl<P: PtrSize> VMOffsets<P> {
     /// `index`.
     #[inline]
     pub fn vmctx_vmtable_from(&self, index: TableIndex) -> u32 {
-        self.vmctx_vmtable_import(index) + u32::from(self.vmtable_from())
+        self.vmctx_vmtable_import(index) + u32::from(self.vmtable_import_from())
     }
 
     /// Return the offset to the `base` field in `VMTableDefinition` index `index`.
@@ -891,12 +995,6 @@ impl<P: PtrSize> VMOffsets<P> {
     #[inline]
     pub fn vmctx_vmmemory_import_from(&self, index: MemoryIndex) -> u32 {
         self.vmctx_vmmemory_import(index) + u32::from(self.vmmemory_import_from())
-    }
-
-    /// Return the offset to the `vmctx` field in `VMMemoryImport` index `index`.
-    #[inline]
-    pub fn vmctx_vmmemory_import_vmctx(&self, index: MemoryIndex) -> u32 {
-        self.vmctx_vmmemory_import(index) + u32::from(self.vmmemory_import_vmctx())
     }
 
     /// Return the offset to the `base` field in `VMMemoryDefinition` index `index`.

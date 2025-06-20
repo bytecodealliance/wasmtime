@@ -18,10 +18,10 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;;                                     v21 = iconst.i32 0
-;; @001b                               v4 = icmp eq v2, v21  ; v21 = 0
+;;                                     v23 = iconst.i32 0
+;; @001b                               v4 = icmp eq v2, v23  ; v23 = 0
 ;; @001b                               v5 = uextend.i32 v4
-;; @001b                               brif v5, block4(v21), block2  ; v21 = 0
+;; @001b                               brif v5, block4(v23), block2  ; v23 = 0
 ;;
 ;;                                 block2:
 ;; @001b                               v7 = iconst.i32 1
@@ -30,8 +30,8 @@
 ;; @001b                               brif v8, block4(v24), block3  ; v24 = 0
 ;;
 ;;                                 block3:
-;; @001b                               v22 = load.i64 notrap aligned readonly can_move v0+8
-;; @001b                               v11 = load.i64 notrap aligned readonly can_move v22+24
+;; @001b                               v21 = load.i64 notrap aligned readonly can_move v0+8
+;; @001b                               v11 = load.i64 notrap aligned readonly can_move v21+24
 ;; @001b                               v10 = uextend.i64 v2
 ;; @001b                               v12 = iadd v11, v10
 ;; @001b                               v15 = load.i32 notrap aligned readonly v12

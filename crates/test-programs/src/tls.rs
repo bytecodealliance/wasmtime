@@ -37,7 +37,9 @@ impl ClientConnection {
         loop {
             match output.check_write() {
                 Ok(0) => pollable.block_until(&timeout).expect("timed out"),
-                Ok(_) => unreachable!("After calling close_output, the output stream should never accept new writes again."),
+                Ok(_) => unreachable!(
+                    "After calling close_output, the output stream should never accept new writes again."
+                ),
                 Err(StreamError::Closed) => return Ok(()),
                 Err(StreamError::LastOperationFailed(e)) => return Err(e),
             }

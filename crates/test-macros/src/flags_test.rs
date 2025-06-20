@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::parse::{Parse, ParseStream};
-use syn::{parse_macro_input, Error, Result, Token};
+use syn::{Error, Result, Token, parse_macro_input};
 
 #[derive(Debug)]
 struct FlagsTest {

@@ -1,11 +1,12 @@
 //! Interface with the external assembler crate.
 
 use super::{
-    regs, Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor, OperandVisitorImpl,
-    SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm,
+    Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor, OperandVisitorImpl,
+    SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm, args::FromWritableReg, regs,
 };
-use crate::ir::TrapCode;
+use crate::{Reg, Writable, ir::TrapCode};
 use cranelift_assembler_x64 as asm;
+use regalloc2::{PReg, RegClass};
 use std::string::String;
 
 /// Define the types of registers Cranelift will use.
@@ -14,9 +15,15 @@ pub struct CraneliftRegisters;
 impl asm::Registers for CraneliftRegisters {
     type ReadGpr = Gpr;
     type ReadWriteGpr = PairedGpr;
+    type WriteGpr = WritableGpr;
     type ReadXmm = Xmm;
     type ReadWriteXmm = PairedXmm;
+    type WriteXmm = WritableXmm;
 }
+
+/// Convenience type alias of `asm::inst::Inst` with `R = CraneliftRegisters`
+/// filled in.
+pub type AsmInst = asm::inst::Inst<CraneliftRegisters>;
 
 /// A pair of registers, one for reading and one for writing.
 ///
@@ -24,10 +31,68 @@ impl asm::Registers for CraneliftRegisters {
 /// separately prior to register allocation. Once register allocation is
 /// complete, we expect the hardware encoding for both `read` and `write` to be
 /// the same.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub struct PairedGpr {
-    pub(crate) read: Gpr,
-    pub(crate) write: WritableGpr,
+    pub read: Gpr,
+    pub write: WritableGpr,
+}
+
+impl From<WritableGpr> for PairedGpr {
+    fn from(wgpr: WritableGpr) -> Self {
+        let read = wgpr.to_reg();
+        let write = wgpr;
+        Self { read, write }
+    }
+}
+
+/// For ABI ergonomics.
+impl From<WritableGpr> for asm::Gpr<PairedGpr> {
+    fn from(wgpr: WritableGpr) -> Self {
+        asm::Gpr::new(wgpr.into())
+    }
+}
+
+// For ABI ergonomics.
+impl From<Writable<Reg>> for asm::GprMem<PairedGpr, Gpr> {
+    fn from(wgpr: Writable<Reg>) -> Self {
+        assert!(wgpr.to_reg().class() == RegClass::Int);
+        let wgpr = WritableGpr::from_writable_reg(wgpr).unwrap();
+        Self::Gpr(wgpr.into())
+    }
+}
+
+// For ABI ergonomics.
+impl From<Reg> for asm::GprMem<Gpr, Gpr> {
+    fn from(gpr: Reg) -> Self {
+        assert!(gpr.class() == RegClass::Int);
+        let gpr = Gpr::unwrap_new(gpr);
+        Self::Gpr(gpr)
+    }
+}
+
+// For ABI ergonomics.
+impl From<Writable<Reg>> for asm::GprMem<Gpr, Gpr> {
+    fn from(wgpr: Writable<Reg>) -> Self {
+        wgpr.to_reg().into()
+    }
+}
+
+// For ABI ergonomics.
+impl From<Writable<Reg>> for asm::Gpr<PairedGpr> {
+    fn from(wgpr: Writable<Reg>) -> Self {
+        assert!(wgpr.to_reg().class() == RegClass::Int);
+        let wgpr = WritableGpr::from_writable_reg(wgpr).unwrap();
+        Self::new(wgpr.into())
+    }
+}
+
+impl From<Writable<Reg>> for asm::Gpr<WritableGpr> {
+    fn from(wgpr: Writable<Reg>) -> Self {
+        assert!(wgpr.to_reg().class() == RegClass::Int);
+        let wgpr = WritableGpr::from_writable_reg(wgpr).unwrap();
+        Self::new(wgpr)
+    }
 }
 
 impl asm::AsReg for PairedGpr {
@@ -55,10 +120,53 @@ impl asm::AsReg for PairedGpr {
 }
 
 /// A pair of XMM registers, one for reading and one for writing.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub struct PairedXmm {
-    pub(crate) read: Xmm,
-    pub(crate) write: WritableXmm,
+    pub read: Xmm,
+    pub write: WritableXmm,
+}
+
+impl From<WritableXmm> for PairedXmm {
+    fn from(wxmm: WritableXmm) -> Self {
+        let read = wxmm.to_reg();
+        let write = wxmm;
+        Self { read, write }
+    }
+}
+
+/// For ABI ergonomics.
+impl From<WritableXmm> for asm::Xmm<PairedXmm> {
+    fn from(wgpr: WritableXmm) -> Self {
+        asm::Xmm::new(wgpr.into())
+    }
+}
+
+// For emission ergonomics.
+impl From<Writable<Reg>> for asm::Xmm<PairedXmm> {
+    fn from(wxmm: Writable<Reg>) -> Self {
+        assert!(wxmm.to_reg().class() == RegClass::Float);
+        let wxmm = WritableXmm::from_writable_reg(wxmm).unwrap();
+        Self::new(wxmm.into())
+    }
+}
+
+// For emission ergonomics.
+impl From<Reg> for asm::Xmm<Xmm> {
+    fn from(xmm: Reg) -> Self {
+        assert!(xmm.class() == RegClass::Float);
+        let xmm = Xmm::unwrap_new(xmm);
+        Self::new(xmm)
+    }
+}
+
+// For emission ergonomics.
+impl From<Reg> for asm::XmmMem<Xmm, Gpr> {
+    fn from(xmm: Reg) -> Self {
+        assert!(xmm.class() == RegClass::Float);
+        let xmm = Xmm::unwrap_new(xmm);
+        Self::Xmm(xmm)
+    }
 }
 
 impl asm::AsReg for PairedXmm {
@@ -156,22 +264,36 @@ where
 }
 
 impl<'a, T: OperandVisitor> asm::RegisterVisitor<CraneliftRegisters> for RegallocVisitor<'a, T> {
-    fn read(&mut self, reg: &mut Gpr) {
+    fn read_gpr(&mut self, reg: &mut Gpr) {
         self.collector.reg_use(reg);
     }
 
-    fn read_write(&mut self, reg: &mut PairedGpr) {
+    fn read_write_gpr(&mut self, reg: &mut PairedGpr) {
         let PairedGpr { read, write } = reg;
         self.collector.reg_use(read);
         self.collector.reg_reuse_def(write, 0);
     }
 
-    fn fixed_read(&mut self, _reg: &Gpr) {
-        todo!()
+    fn write_gpr(&mut self, reg: &mut WritableGpr) {
+        self.collector.reg_def(reg);
     }
 
-    fn fixed_read_write(&mut self, _reg: &PairedGpr) {
-        todo!()
+    fn fixed_read_gpr(&mut self, reg: &mut Gpr, enc: u8) {
+        self.collector
+            .reg_fixed_use(reg, fixed_reg(enc, RegClass::Int));
+    }
+
+    fn fixed_read_write_gpr(&mut self, reg: &mut PairedGpr, enc: u8) {
+        let PairedGpr { read, write } = reg;
+        self.collector
+            .reg_fixed_use(read, fixed_reg(enc, RegClass::Int));
+        self.collector
+            .reg_fixed_def(write, fixed_reg(enc, RegClass::Int));
+    }
+
+    fn fixed_write_gpr(&mut self, reg: &mut WritableGpr, enc: u8) {
+        self.collector
+            .reg_fixed_def(reg, fixed_reg(enc, RegClass::Int));
     }
 
     fn read_xmm(&mut self, reg: &mut Xmm) {
@@ -184,18 +306,38 @@ impl<'a, T: OperandVisitor> asm::RegisterVisitor<CraneliftRegisters> for Regallo
         self.collector.reg_reuse_def(write, 0);
     }
 
-    fn fixed_read_xmm(&mut self, _reg: &Xmm) {
-        todo!()
+    fn write_xmm(&mut self, reg: &mut WritableXmm) {
+        self.collector.reg_def(reg);
     }
 
-    fn fixed_read_write_xmm(&mut self, _reg: &PairedXmm) {
-        todo!()
+    fn fixed_read_xmm(&mut self, reg: &mut Xmm, enc: u8) {
+        self.collector
+            .reg_fixed_use(reg, fixed_reg(enc, RegClass::Float));
+    }
+
+    fn fixed_read_write_xmm(&mut self, reg: &mut PairedXmm, enc: u8) {
+        let PairedXmm { read, write } = reg;
+        self.collector
+            .reg_fixed_use(read, fixed_reg(enc, RegClass::Float));
+        self.collector
+            .reg_fixed_def(write, fixed_reg(enc, RegClass::Float));
+    }
+
+    fn fixed_write_xmm(&mut self, reg: &mut WritableXmm, enc: u8) {
+        self.collector
+            .reg_fixed_def(reg, fixed_reg(enc, RegClass::Float));
     }
 }
 
-impl Into<asm::Amode<Gpr>> for SyntheticAmode {
-    fn into(self) -> asm::Amode<Gpr> {
-        match self {
+/// A helper for building a fixed register from its hardware encoding.
+fn fixed_reg(enc: u8, class: RegClass) -> Reg {
+    let preg = PReg::new(usize::from(enc), class);
+    Reg::from_real_reg(preg)
+}
+
+impl From<SyntheticAmode> for asm::Amode<Gpr> {
+    fn from(amode: SyntheticAmode) -> asm::Amode<Gpr> {
+        match amode {
             SyntheticAmode::Real(amode) => amode.into(),
             SyntheticAmode::IncomingArg { offset } => asm::Amode::ImmReg {
                 base: Gpr::unwrap_new(regs::rbp()),
@@ -206,7 +348,7 @@ impl Into<asm::Amode<Gpr>> for SyntheticAmode {
                 trap: None,
             },
             SyntheticAmode::SlotOffset { simm32 } => asm::Amode::ImmReg {
-                base: Gpr::unwrap_new(regs::rbp()),
+                base: Gpr::unwrap_new(regs::rsp()),
                 simm32: asm::AmodeOffsetPlusKnownOffset {
                     simm32: simm32.into(),
                     offset: Some(offsets::KEY_SLOT_OFFSET),
@@ -220,9 +362,9 @@ impl Into<asm::Amode<Gpr>> for SyntheticAmode {
     }
 }
 
-impl Into<asm::Amode<Gpr>> for Amode {
-    fn into(self) -> asm::Amode<Gpr> {
-        match self {
+impl From<Amode> for asm::Amode<Gpr> {
+    fn from(amode: Amode) -> asm::Amode<Gpr> {
+        match amode {
             Amode::ImmReg {
                 simm32,
                 base,
@@ -255,11 +397,36 @@ impl Into<asm::Amode<Gpr>> for Amode {
     }
 }
 
+impl<R: asm::AsReg> From<SyntheticAmode> for asm::XmmMem<R, Gpr> {
+    fn from(amode: SyntheticAmode) -> Self {
+        asm::XmmMem::Mem(amode.into())
+    }
+}
+
+impl<R: asm::AsReg> From<SyntheticAmode> for asm::GprMem<R, Gpr> {
+    fn from(amode: SyntheticAmode) -> Self {
+        asm::GprMem::Mem(amode.into())
+    }
+}
+
+impl<R: asm::AsReg> From<Amode> for asm::XmmMem<R, Gpr> {
+    fn from(amode: Amode) -> Self {
+        asm::XmmMem::Mem(amode.into())
+    }
+}
+
+impl<R: asm::AsReg> From<Amode> for asm::GprMem<R, Gpr> {
+    fn from(amode: Amode) -> Self {
+        asm::GprMem::Mem(amode.into())
+    }
+}
+
 /// Keep track of the offset slots to fill in during emission; see
 /// `KnownOffsetTable`.
+#[expect(missing_docs, reason = "self-describing keys")]
 pub mod offsets {
-    pub const KEY_INCOMING_ARG: usize = 0;
-    pub const KEY_SLOT_OFFSET: usize = 1;
+    pub const KEY_INCOMING_ARG: u8 = 0;
+    pub const KEY_SLOT_OFFSET: u8 = 1;
 }
 
 impl asm::CodeSink for MachBuffer<Inst> {
@@ -334,8 +501,8 @@ pub(crate) use isle_assembler_methods;
 
 #[cfg(test)]
 mod tests {
-    use super::asm::{AsReg, Size};
     use super::PairedGpr;
+    use super::asm::{AsReg, Size};
     use crate::isa::x64::args::{FromWritableReg, Gpr, WritableGpr, WritableXmm, Xmm};
     use crate::isa::x64::inst::external::PairedXmm;
     use crate::{Reg, Writable};
@@ -353,7 +520,7 @@ mod tests {
         assert_eq!(gpr200.to_string(Some(Size::Quadword)), "%v200");
 
         let v300: Reg = VReg::new(300, RegClass::Int).into();
-        let wgpr300 = WritableGpr::from_writable_reg(Writable::from_reg(v300).into()).unwrap();
+        let wgpr300 = WritableGpr::from_writable_reg(Writable::from_reg(v300)).unwrap();
         let pair = PairedGpr {
             read: gpr200,
             write: wgpr300,
@@ -365,7 +532,7 @@ mod tests {
         assert_eq!(xmm400.to_string(None), "%v400");
 
         let v500: Reg = VReg::new(500, RegClass::Float).into();
-        let wxmm500 = WritableXmm::from_writable_reg(Writable::from_reg(v500).into()).unwrap();
+        let wxmm500 = WritableXmm::from_writable_reg(Writable::from_reg(v500)).unwrap();
         let pair = PairedXmm {
             read: xmm400,
             write: wxmm500,

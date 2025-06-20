@@ -1560,12 +1560,12 @@
 
 ;; If the lane count can fit in a 5-bit immediate, we can use `vslidedown.vi`.
 (rule 1 (gen_slidedown_half (ty_vec_fits_in_register ty) src)
-  (if-let (uimm5_from_u64 amt) (u64_udiv (ty_lane_count ty) 2))
+  (if-let (uimm5_from_u64 amt) (u64_checked_div (ty_lane_count ty) 2))
   (rv_vslidedown_vi src amt (unmasked) ty))
 
 ;; Otherwise lower it into an X register.
 (rule 0 (gen_slidedown_half (ty_vec_fits_in_register ty) src)
-  (if-let amt (u64_udiv (ty_lane_count ty) 2))
+  (if-let amt (u64_checked_div (ty_lane_count ty) 2))
   (rv_vslidedown_vx src (imm $I64 amt) (unmasked) ty))
 
 

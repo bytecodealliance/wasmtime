@@ -1,7 +1,7 @@
+use crate::TableType;
 use crate::prelude::*;
 use crate::store::{InstanceId, StoreOpaque};
 use crate::trampoline::create_handle;
-use crate::TableType;
 use wasmtime_environ::{EntityIndex, Module, TypeTrace};
 
 pub fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<InstanceId> {
@@ -22,5 +22,5 @@ pub fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<Instan
         .exports
         .insert(String::new(), EntityIndex::Table(table_id));
 
-    create_handle(module, store, Box::new(()), &[], None)
+    create_handle(module, store, &[], None)
 }

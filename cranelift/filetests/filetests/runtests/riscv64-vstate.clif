@@ -1,0 +1,43 @@
+test interpret
+test run
+set opt_level=none
+set preserve_frame_pointers=true
+set enable_multi_ret_implicit_sret=true
+target x86_64
+target s390x
+target aarch64
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+
+function u1:1(i64) -> i64 fast {
+    ss0 = explicit_slot 32
+    ss1 = explicit_slot 32
+    const0 = 0xbdea39e5631c0104d92f26de921e6dbf
+
+block0(v2: i64):
+    v1 = iconst.i64 -5608073308517523622
+    v3 = vconst.f32x4 const0
+    stack_store v1, ss0
+    stack_store v1, ss0+8
+    stack_store v1, ss0+16
+    stack_store v1, ss0+24
+    stack_store v3, ss1
+    stack_store v3, ss1+16
+    return v2
+}
+
+function %main() -> i16x8, f64x2 fast {
+    sig0 = (i64) -> i64 fast
+    fn0 = u1:1 sig0
+    const0 = 0x00110022003300440055006600770088
+
+block0:
+    v1 = iconst.i64 0x1f96_3ea8_4eb6_5f81
+    v11 = vconst.i16x8 const0
+    v13 = vconst.f32x4 const0
+    v26 = fvpromote_low v13
+    v45 = call fn0(v1)
+    return  v11, v26
+}
+
+; run: %main() == [0x00110022003300440055006600770088, 0x3805401980000000380dc02200000000]

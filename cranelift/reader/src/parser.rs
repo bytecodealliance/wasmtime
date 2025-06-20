@@ -11,7 +11,7 @@ use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::entity::{EntityRef, PrimaryMap};
 use cranelift_codegen::ir::entities::{AnyEntity, DynamicType, MemoryType};
 use cranelift_codegen::ir::immediates::{
-    Ieee128, Ieee16, Ieee32, Ieee64, Imm64, Offset32, Uimm32, Uimm64,
+    Ieee16, Ieee32, Ieee64, Ieee128, Imm64, Offset32, Uimm32, Uimm64,
 };
 use cranelift_codegen::ir::instructions::{InstructionData, InstructionFormat, VariableArgs};
 use cranelift_codegen::ir::pcc::{BaseExpr, Expr, Fact};
@@ -19,11 +19,11 @@ use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{self, UserExternalNameRef};
 
 use cranelift_codegen::ir::{
-    types, AbiParam, ArgumentExtension, ArgumentPurpose, Block, BlockArg, Constant, ConstantData,
+    AbiParam, ArgumentExtension, ArgumentPurpose, Block, BlockArg, Constant, ConstantData,
     DynamicStackSlot, DynamicStackSlotData, DynamicTypeData, ExtFuncData, ExternalName, FuncRef,
     Function, GlobalValue, GlobalValueData, JumpTableData, MemFlags, MemoryTypeData,
     MemoryTypeField, Opcode, SigRef, Signature, StackSlot, StackSlotData, StackSlotKind,
-    UserFuncName, Value,
+    UserFuncName, Value, types,
 };
 use cranelift_codegen::isa::{self, CallConv};
 use cranelift_codegen::packed_option::ReservedValue;
@@ -1066,11 +1066,7 @@ impl<'a> Parser<'a> {
         let mut flag_builder = settings::builder();
 
         let bool_to_str = |val: bool| {
-            if val {
-                "true"
-            } else {
-                "false"
-            }
+            if val { "true" } else { "false" }
         };
 
         // default to enabling cfg info
@@ -1165,7 +1161,7 @@ impl<'a> Parser<'a> {
                     return err!(
                         self.loc,
                         format!("Expected feature flag string, got {:?}", tok)
-                    )
+                    );
                 }
             }
             self.consume();
@@ -1786,7 +1782,7 @@ impl<'a> Parser<'a> {
                     self.loc,
                     "Unknown memory type declaration kind '{:?}'",
                     other
-                )
+                );
             }
         };
 
@@ -2249,8 +2245,8 @@ impl<'a> Parser<'a> {
                 }
                 Ok(Fact::Range {
                     bit_width: u16::try_from(bit_width).unwrap(),
-                    min: min.into(),
-                    max: max.into(),
+                    min,
+                    max,
                 })
             }
             Some(Token::Identifier("dynamic_range")) => {
@@ -2917,16 +2913,17 @@ impl<'a> Parser<'a> {
             F128 => DataValue::from(self.match_ieee128("expected an f128")?),
             _ if (ty.is_vector() || ty.is_dynamic_vector()) => {
                 let as_vec = self.match_uimm128(ty)?.into_vec();
-                if as_vec.len() == 16 {
-                    let mut as_array = [0; 16];
-                    as_array.copy_from_slice(&as_vec[..]);
-                    DataValue::from(as_array)
-                } else if as_vec.len() == 8 {
-                    let mut as_array = [0; 8];
-                    as_array.copy_from_slice(&as_vec[..]);
-                    DataValue::from(as_array)
-                } else {
-                    return Err(self.error("only 128-bit vectors are currently supported"));
+                let slice = as_vec.as_slice();
+                match slice.len() {
+                    16 => DataValue::V128(slice.try_into().unwrap()),
+                    8 => DataValue::V64(slice.try_into().unwrap()),
+                    4 => DataValue::V32(slice.try_into().unwrap()),
+                    2 => DataValue::V16(slice.try_into().unwrap()),
+                    _ => {
+                        return Err(
+                            self.error("vectors larger than 128 bits are not currently supported")
+                        );
+                    }
                 }
             }
             _ => return Err(self.error(&format!("don't know how to parse data values of: {ty}"))),
@@ -2958,7 +2955,7 @@ impl<'a> Parser<'a> {
                         return err!(
                             self.loc,
                             "expected one of the following type: i8, i16, i32 or i64"
-                        )
+                        );
                     }
                 };
                 InstructionData::UnaryImm {
@@ -3710,20 +3707,24 @@ mod tests {
 
     #[test]
     fn isa_spec() {
-        assert!(parse_test(
-            "target
+        assert!(
+            parse_test(
+                "target
                             function %foo() system_v {}",
-            ParseOptions::default()
-        )
-        .is_err());
+                ParseOptions::default()
+            )
+            .is_err()
+        );
 
-        assert!(parse_test(
-            "target x86_64
+        assert!(
+            parse_test(
+                "target x86_64
                             set enable_float=false
                             function %foo() system_v {}",
-            ParseOptions::default()
-        )
-        .is_err());
+                ParseOptions::default()
+            )
+            .is_err()
+        );
 
         match parse_test(
             "set enable_float=false
@@ -3900,19 +3901,13 @@ mod tests {
     #[test]
     fn uimm128() {
         macro_rules! parse_as_constant_data {
-            ($text:expr, $type:expr) => {{
-                Parser::new($text).parse_literals_to_constant_data($type)
-            }};
+            ($text:expr, $type:expr) => {{ Parser::new($text).parse_literals_to_constant_data($type) }};
         }
         macro_rules! can_parse_as_constant_data {
-            ($text:expr, $type:expr) => {{
-                assert!(parse_as_constant_data!($text, $type).is_ok())
-            }};
+            ($text:expr, $type:expr) => {{ assert!(parse_as_constant_data!($text, $type).is_ok()) }};
         }
         macro_rules! cannot_parse_as_constant_data {
-            ($text:expr, $type:expr) => {{
-                assert!(parse_as_constant_data!($text, $type).is_err())
-            }};
+            ($text:expr, $type:expr) => {{ assert!(parse_as_constant_data!($text, $type).is_err()) }};
         }
 
         can_parse_as_constant_data!("1 2 3 4", I32X4);
@@ -3935,7 +3930,9 @@ mod tests {
             .unwrap();
         assert_eq!(
             c.into_vec(),
-            [0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0]
+            [
+                0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0, 0, 0, 0
+            ]
         )
     }
 
@@ -3950,9 +3947,11 @@ mod tests {
         );
 
         // Only parse hexadecimal constants:
-        assert!(Parser::new("228")
-            .match_hexadecimal_constant("err message")
-            .is_err());
+        assert!(
+            Parser::new("228")
+                .match_hexadecimal_constant("err message")
+                .is_err()
+        );
     }
 
     #[test]
@@ -4032,6 +4031,9 @@ mod tests {
             parse("[0 1 2 3]", I32X4).to_string(),
             "0x00000003000000020000000100000000"
         );
+        assert_eq!(parse("[1 2]", I32X2).to_string(), "0x0000000200000001");
+        assert_eq!(parse("[1 2 3 4]", I8X4).to_string(), "0x04030201");
+        assert_eq!(parse("[1 2]", I8X2).to_string(), "0x0201");
     }
 
     #[test]

@@ -7,8 +7,8 @@
 //! > Briggs, Torczon, *An efficient representation for sparse sets*,
 //! > ACM Letters on Programming Languages and Systems, Volume 2, Issue 1-4, March-Dec. 1993.
 
-use crate::map::SecondaryMap;
 use crate::EntityRef;
+use crate::map::SecondaryMap;
 use alloc::vec::Vec;
 use core::fmt;
 use core::mem;
@@ -194,7 +194,7 @@ where
     /// The iteration order is entirely determined by the preceding sequence of `insert` and
     /// `remove` operations. In particular, if no elements were removed, this is the insertion
     /// order.
-    pub fn values(&self) -> slice::Iter<V> {
+    pub fn values(&self) -> slice::Iter<'_, V> {
         self.dense.iter()
     }
 

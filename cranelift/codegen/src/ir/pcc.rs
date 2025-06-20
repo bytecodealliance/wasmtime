@@ -1183,9 +1183,7 @@ impl<'a> FactContext<'a> {
 
         trace!(
             "truncate: fact {:?} from {} to {}",
-            fact,
-            from_width,
-            to_width
+            fact, from_width, to_width
         );
 
         match fact {

@@ -4,7 +4,7 @@ use crate::{
     EngineOrModuleTypeIndex, EntityType, ModuleInternedTypeIndex, ModuleTypes, ModuleTypesBuilder,
     PrimaryMap, TypeConvert, WasmHeapType, WasmValType,
 };
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use cranelift_entity::EntityRef;
 use std::collections::HashMap;
 use std::hash::Hash;

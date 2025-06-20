@@ -4,12 +4,13 @@
 //! `Option<Thing>` is also zero-sized so there should be no runtime cost for
 //! having these structures plumbed around.
 
-use crate::runtime::vm::VMOpaqueContext;
 use crate::runtime::Uninhabited;
+use crate::runtime::vm::{VMContext, VMOpaqueContext};
 use crate::{Engine, ValRaw};
 use core::marker;
 use core::mem;
 use core::ptr::NonNull;
+use wasmtime_unwinder::Unwind;
 
 pub struct Interpreter {
     empty: Uninhabited,
@@ -24,6 +25,10 @@ impl Interpreter {
     }
 
     pub fn as_interpreter_ref(&mut self) -> InterpreterRef<'_> {
+        match self.empty {}
+    }
+
+    pub fn unwinder(&self) -> &'static dyn Unwind {
         match self.empty {}
     }
 }
@@ -41,7 +46,7 @@ impl InterpreterRef<'_> {
         self,
         _bytecode: NonNull<u8>,
         _callee: NonNull<VMOpaqueContext>,
-        _caller: NonNull<VMOpaqueContext>,
+        _caller: NonNull<VMContext>,
         _args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         match self.empty {}

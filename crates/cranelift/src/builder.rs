@@ -6,8 +6,8 @@
 use crate::isa_builder::IsaBuilder;
 use anyhow::Result;
 use cranelift_codegen::{
-    isa::{self, OwnedTargetIsa},
     CodegenResult,
+    isa::{self, OwnedTargetIsa},
 };
 use std::fmt;
 use std::path;

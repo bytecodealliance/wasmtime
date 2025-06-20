@@ -8,6 +8,7 @@
 #define WASMTIME_MODULE_H
 
 #include <wasm.h>
+#include <wasmtime/conf.h>
 #include <wasmtime/error.h>
 
 #ifdef __cplusplus

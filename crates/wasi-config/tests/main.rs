@@ -1,11 +1,11 @@
-use anyhow::{anyhow, Result};
-use test_programs_artifacts::{foreach_config, CONFIG_GET_COMPONENT};
+use anyhow::{Result, anyhow};
+use test_programs_artifacts::{CONFIG_GET_COMPONENT, foreach_config};
 use wasmtime::{
-    component::{Component, Linker, ResourceTable},
     Store,
+    component::{Component, Linker, ResourceTable},
 };
 use wasmtime_wasi::p2::{
-    add_to_linker_async, bindings::Command, IoView, WasiCtx, WasiCtxBuilder, WasiView,
+    IoView, WasiCtx, WasiCtxBuilder, WasiView, add_to_linker_async, bindings::Command,
 };
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 

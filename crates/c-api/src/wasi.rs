@@ -2,7 +2,7 @@
 
 use crate::wasm_byte_vec_t;
 use anyhow::Result;
-use std::ffi::{c_char, CStr};
+use std::ffi::{CStr, c_char};
 use std::fs::File;
 use std::path::Path;
 use std::slice;

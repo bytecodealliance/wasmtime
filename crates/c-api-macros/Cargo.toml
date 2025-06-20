@@ -1,11 +1,11 @@
 [package]
-name = "wasmtime-c-api-macros"
+name = "wasmtime-internal-c-api-macros"
 version.workspace = true
 authors = ["The Wasmtime Project Developers"]
 license = "Apache-2.0 WITH LLVM-exception"
 edition.workspace = true
 rust-version.workspace = true
-description = "Support macros for `wasmtime-c-api`"
+description = "INTERNAL: Support macros for `wasmtime-c-api`"
 repository = "https://github.com/bytecodealliance/wasmtime"
 
 [lints]

@@ -1,7 +1,7 @@
 //! Lowering rules for Riscv64.
 use crate::ir::Inst as IRInst;
-use crate::isa::riscv64::inst::*;
 use crate::isa::riscv64::Riscv64Backend;
+use crate::isa::riscv64::inst::*;
 use crate::machinst::lower::*;
 use crate::machinst::*;
 pub mod isle;

@@ -250,7 +250,7 @@
 
 (component
   (type (instance
-    (export $x "x" (instance
+    (export "x" (instance $x
       (type $t u32)
       (export "y" (type (eq $t)))
     ))
@@ -331,7 +331,7 @@
 (component
   (import "a" (instance
     (type $t1 u64)
-    (export $t2 "a" (type (eq $t1)))
+    (export "a" (type $t2 (eq $t1)))
     (export "b" (type (eq $t2)))
   ))
 )

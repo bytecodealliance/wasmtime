@@ -43,11 +43,7 @@ impl<T: ReservedValue> PackedOption<T> {
 
     /// Expand the packed option into a normal `Option`.
     pub fn expand(self) -> Option<T> {
-        if self.is_none() {
-            None
-        } else {
-            Some(self.0)
-        }
+        if self.is_none() { None } else { Some(self.0) }
     }
 
     /// Maps a `PackedOption<T>` to `Option<U>` by applying a function to a contained value.
@@ -104,9 +100,9 @@ impl<T: ReservedValue> From<Option<T>> for PackedOption<T> {
     }
 }
 
-impl<T: ReservedValue> Into<Option<T>> for PackedOption<T> {
-    fn into(self) -> Option<T> {
-        self.expand()
+impl<T: ReservedValue> From<PackedOption<T>> for Option<T> {
+    fn from(packed: PackedOption<T>) -> Option<T> {
+        packed.expand()
     }
 }
 

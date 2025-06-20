@@ -1,12 +1,14 @@
 use super::{super::REALLOC_AND_FREE, engine};
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use wasmtime::{
-    component::{Component, Linker},
     Store,
+    component::{Component, Linker},
 };
 
 mod empty_error {
     use super::*;
+    use wasmtime::component::HasSelf;
+
     wasmtime::component::bindgen!({
         inline: "
         package inline:inline;
@@ -75,7 +77,7 @@ mod empty_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -109,6 +111,8 @@ mod empty_error {
 
 mod string_error {
     use super::*;
+    use wasmtime::component::HasSelf;
+
     wasmtime::component::bindgen!({
         inline: "
         package inline:inline;
@@ -188,7 +192,7 @@ mod string_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -225,6 +229,7 @@ mod enum_error {
     use super::*;
     use exports::foo;
     use inline::inline::imports;
+    use wasmtime::component::HasSelf;
 
     wasmtime::component::bindgen!({
         inline: "
@@ -287,7 +292,7 @@ mod enum_error {
             (component
                 (type $err' (enum "a" "b" "c"))
                 (import (interface "inline:inline/imports") (instance $i
-                    (export $err "err" (type (eq $err')))
+                    (export "err" (type $err (eq $err')))
                     (export "enum-error" (func (param "a" f64) (result (result f64 (error $err)))))
                 ))
                 (core module $libc
@@ -364,7 +369,7 @@ mod enum_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -406,6 +411,7 @@ mod record_error {
     use super::*;
     use exports::foo;
     use inline::inline::imports;
+    use wasmtime::component::HasSelf;
 
     wasmtime::component::bindgen!({
         inline: "
@@ -449,7 +455,7 @@ mod record_error {
                     (field "col" u32)
                 ))
                 (import (interface "inline:inline/imports") (instance $i
-                    (export $e2 "e2" (type (eq $e2')))
+                    (export "e2" (type $e2 (eq $e2')))
                     (type $result (result f64 (error $e2)))
                     (export "record-error" (func (param "a" f64) (result $result)))
                 ))
@@ -510,7 +516,7 @@ mod record_error {
             fn convert_e2(&mut self, err: TrappableE2) -> anyhow::Result<imports::E2> {
                 match err {
                     TrappableE2::Normal(e) => Ok(e),
-                    TrappableE2::Trap(e) => Err(e.into()),
+                    TrappableE2::Trap(e) => Err(e),
                 }
             }
             fn record_error(&mut self, a: f64) -> Result<f64, TrappableE2> {
@@ -528,7 +534,7 @@ mod record_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -574,6 +580,7 @@ mod variant_error {
     use super::*;
     use exports::foo;
     use inline::inline::imports;
+    use wasmtime::component::HasSelf;
 
     wasmtime::component::bindgen!({
         inline: "
@@ -623,13 +630,13 @@ mod variant_error {
                     (case "E2" $e2')
                 ))
                 (import (interface "inline:inline/imports") (instance $i
-                    (export $e1 "e1" (type (eq $e1')))
-                    (export $e2 "e2" (type (eq $e2')))
+                    (export "e1" (type $e1 (eq $e1')))
+                    (export "e2" (type $e2 (eq $e2')))
                     (type $e3' (variant
                         (case "E1" $e1)
                         (case "E2" $e2)
                     ))
-                    (export $e3 "e3" (type (eq $e3')))
+                    (export "e3" (type $e3 (eq $e3')))
                     (type $result (result f64 (error $e3)))
                     (export "variant-error" (func (param "a" f64) (result $result)))
                 ))
@@ -705,7 +712,7 @@ mod variant_error {
             fn convert_e3(&mut self, err: TrappableE3) -> anyhow::Result<imports::E3> {
                 match err {
                     TrappableE3::Normal(e) => Ok(e),
-                    TrappableE3::Trap(e) => Err(e.into()),
+                    TrappableE3::Trap(e) => Err(e),
                 }
             }
             fn variant_error(&mut self, a: f64) -> Result<f64, TrappableE3> {
@@ -723,7 +730,7 @@ mod variant_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -770,6 +777,7 @@ mod multiple_interfaces_error {
     use exports::foo;
     use inline::inline::imports;
     use inline::inline::types;
+    use wasmtime::component::HasSelf;
 
     wasmtime::component::bindgen!({
         inline: "
@@ -816,7 +824,7 @@ mod multiple_interfaces_error {
             (component
                 (type $err' (enum "a" "b" "c"))
                 (import (interface "inline:inline/imports") (instance $i
-                    (export $e1 "e1" (type (eq $err')))
+                    (export "e1" (type $e1 (eq $err')))
                     (export "enum-error" (func (param "a" f64) (result (result f64 (error $e1)))))
                 ))
                 (core module $libc
@@ -899,7 +907,7 @@ mod multiple_interfaces_error {
             fn convert_e1(&mut self, err: TrappableE1) -> anyhow::Result<imports::E1> {
                 match err {
                     TrappableE1::Normal(e) => Ok(e),
-                    TrappableE1::Trap(e) => Err(e.into()),
+                    TrappableE1::Trap(e) => Err(e),
                 }
             }
             fn enum_error(&mut self, a: f64) -> Result<f64, TrappableE1> {
@@ -926,7 +934,7 @@ mod multiple_interfaces_error {
         }
 
         let mut linker = Linker::new(&engine);
-        imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;
@@ -966,6 +974,7 @@ mod multiple_interfaces_error {
 
 mod with_remapping {
     use super::*;
+    use wasmtime::component::HasSelf;
 
     mod interfaces {
         wasmtime::component::bindgen!({
@@ -1048,7 +1057,7 @@ mod with_remapping {
         }
 
         let mut linker = Linker::new(&engine);
-        interfaces::imports::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        interfaces::imports::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
 
         let mut store = Store::new(&engine, MyImports::default());
         let results = ResultPlayground::instantiate(&mut store, &component, &linker)?;

@@ -1767,8 +1767,7 @@ block0:
         //                          call $foo(x)
         //                          return x
 
-        let x = Variable::from_u32(0);
-        builder.declare_var(x, ir::types::I32);
+        let x = builder.declare_var(ir::types::I32);
         builder.declare_var_needs_stack_map(x);
 
         let block0 = builder.create_block();
@@ -1884,8 +1883,7 @@ block3(v6: i32):
         let mut func = Function::with_name_signature(ir::UserFuncName::testcase("sample"), sig);
         let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
 
-        let var = Variable::from_u32(0);
-        builder.declare_var(var, cranelift_codegen::ir::types::I32);
+        let var = builder.declare_var(cranelift_codegen::ir::types::I32);
         builder.declare_var_needs_stack_map(var);
 
         let name = builder
@@ -2540,12 +2538,10 @@ block3:
         //     block_return:
         //       return
 
-        let var_struct = Variable::from_u32(0);
-        builder.declare_var(var_struct, cranelift_codegen::ir::types::I32);
+        let var_struct = builder.declare_var(cranelift_codegen::ir::types::I32);
         builder.declare_var_needs_stack_map(var_struct);
 
-        let var_array = Variable::from_u32(1);
-        builder.declare_var(var_array, cranelift_codegen::ir::types::I32);
+        let var_array = builder.declare_var(cranelift_codegen::ir::types::I32);
         builder.declare_var_needs_stack_map(var_array);
 
         let block_entry = builder.create_block();

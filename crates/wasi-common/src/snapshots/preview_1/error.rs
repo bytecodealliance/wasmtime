@@ -124,9 +124,9 @@ fn from_raw_os_error(err: Option<i32>) -> Option<Error> {
         RustixErrno::TIMEDOUT => Errno::Timedout.into(),
 
         // On some platforms.into(), these have the same value as other errno values.
-        #[allow(unreachable_patterns)]
+        #[allow(unreachable_patterns, reason = "see comment")]
         RustixErrno::WOULDBLOCK => Errno::Again.into(),
-        #[allow(unreachable_patterns)]
+        #[allow(unreachable_patterns, reason = "see comment")]
         RustixErrno::OPNOTSUPP => Errno::Notsup.into(),
 
         _ => return None,

@@ -485,9 +485,7 @@ block0(v0: i64):
 ;   lrvg %r4, 0(%r2)
 ;   lrvg %r2, 8(%r2)
 ;   vlvgp %v6, %r2, %r4
-;   vpdi %v16, %v6, %v6, 4
-;   verllg %v18, %v16, 32
-;   verllf %v24, %v18, 16
+;   vpdi %v24, %v6, %v6, 4 ; verllg %v6, %v6, 32 ; verllf %v6, %v6, 16
 ;   br %r14
 ;
 ; Disassembled:
@@ -495,9 +493,9 @@ block0(v0: i64):
 ;   lrvg %r4, 0(%r2) ; trap: heap_oob
 ;   lrvg %r2, 8(%r2) ; trap: heap_oob
 ;   vlvgp %v6, %r2, %r4
-;   vpdi %v16, %v6, %v6, 4
-;   verllg %v18, %v16, 0x20
-;   verllf %v24, %v18, 0x10
+;   vpdi %v24, %v6, %v6, 4
+;   verllg %v24, %v24, 0x20
+;   verllf %v24, %v24, 0x10
 ;   br %r14
 
 function %load_i32x4_little(i64) -> i32x4 {
@@ -511,8 +509,7 @@ block0(v0: i64):
 ;   lrvg %r4, 0(%r2)
 ;   lrvg %r2, 8(%r2)
 ;   vlvgp %v6, %r2, %r4
-;   vpdi %v16, %v6, %v6, 4
-;   verllg %v24, %v16, 32
+;   vpdi %v24, %v6, %v6, 4 ; verllg %v6, %v6, 32
 ;   br %r14
 ;
 ; Disassembled:
@@ -520,8 +517,8 @@ block0(v0: i64):
 ;   lrvg %r4, 0(%r2) ; trap: heap_oob
 ;   lrvg %r2, 8(%r2) ; trap: heap_oob
 ;   vlvgp %v6, %r2, %r4
-;   vpdi %v16, %v6, %v6, 4
-;   verllg %v24, %v16, 0x20
+;   vpdi %v24, %v6, %v6, 4
+;   verllg %v24, %v24, 0x20
 ;   br %r14
 
 function %load_i64x2_little(i64) -> i64x2 {
@@ -579,8 +576,7 @@ block0(v0: i64):
 ;   lrvg %r4, 0(%r2)
 ;   lrvg %r2, 8(%r2)
 ;   vlvgp %v6, %r2, %r4
-;   vpdi %v16, %v6, %v6, 4
-;   verllg %v24, %v16, 32
+;   vpdi %v24, %v6, %v6, 4 ; verllg %v6, %v6, 32
 ;   br %r14
 ;
 ; Disassembled:
@@ -588,8 +584,8 @@ block0(v0: i64):
 ;   lrvg %r4, 0(%r2) ; trap: heap_oob
 ;   lrvg %r2, 8(%r2) ; trap: heap_oob
 ;   vlvgp %v6, %r2, %r4
-;   vpdi %v16, %v6, %v6, 4
-;   verllg %v24, %v16, 0x20
+;   vpdi %v24, %v6, %v6, 4
+;   verllg %v24, %v24, 0x20
 ;   br %r14
 
 function %load_f64x2_little(i64) -> f64x2 {
@@ -683,11 +679,9 @@ block0(v0: i16x8, v1: i64):
 
 ; VCode:
 ; block0:
-;   vpdi %v3, %v24, %v24, 4
-;   verllg %v5, %v3, 32
-;   verllf %v7, %v5, 16
-;   vlgvg %r3, %v7, 1
-;   lgdr %r5, %f7
+;   vpdi %v3, %v24, %v24, 4 ; verllg %v24, %v24, 32 ; verllf %v24, %v24, 16
+;   vlgvg %r3, %v3, 1
+;   lgdr %r5, %f3
 ;   strvg %r3, 0(%r2)
 ;   strvg %r5, 8(%r2)
 ;   br %r14
@@ -695,10 +689,10 @@ block0(v0: i16x8, v1: i64):
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vpdi %v3, %v24, %v24, 4
-;   verllg %v5, %v3, 0x20
-;   verllf %v7, %v5, 0x10
-;   vlgvg %r3, %v7, 1
-;   lgdr %r5, %f7
+;   verllg %v3, %v3, 0x20
+;   verllf %v3, %v3, 0x10
+;   vlgvg %r3, %v3, 1
+;   lgdr %r5, %f3
 ;   strvg %r3, 0(%r2) ; trap: heap_oob
 ;   strvg %r5, 8(%r2) ; trap: heap_oob
 ;   br %r14
@@ -711,22 +705,21 @@ block0(v0: i32x4, v1: i64):
 
 ; VCode:
 ; block0:
-;   vpdi %v3, %v24, %v24, 4
-;   verllg %v5, %v3, 32
-;   vlgvg %r5, %v5, 1
-;   lgdr %r3, %f5
-;   strvg %r5, 0(%r2)
-;   strvg %r3, 8(%r2)
+;   vpdi %v3, %v24, %v24, 4 ; verllg %v24, %v24, 32
+;   vlgvg %r3, %v3, 1
+;   lgdr %r5, %f3
+;   strvg %r3, 0(%r2)
+;   strvg %r5, 8(%r2)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vpdi %v3, %v24, %v24, 4
-;   verllg %v5, %v3, 0x20
-;   vlgvg %r5, %v5, 1
-;   lgdr %r3, %f5
-;   strvg %r5, 0(%r2) ; trap: heap_oob
-;   strvg %r3, 8(%r2) ; trap: heap_oob
+;   verllg %v3, %v3, 0x20
+;   vlgvg %r3, %v3, 1
+;   lgdr %r5, %f3
+;   strvg %r3, 0(%r2) ; trap: heap_oob
+;   strvg %r5, 8(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_i64x2_little(i64x2, i64) {
@@ -785,22 +778,21 @@ block0(v0: f32x4, v1: i64):
 
 ; VCode:
 ; block0:
-;   vpdi %v3, %v24, %v24, 4
-;   verllg %v5, %v3, 32
-;   vlgvg %r5, %v5, 1
-;   lgdr %r3, %f5
-;   strvg %r5, 0(%r2)
-;   strvg %r3, 8(%r2)
+;   vpdi %v3, %v24, %v24, 4 ; verllg %v24, %v24, 32
+;   vlgvg %r3, %v3, 1
+;   lgdr %r5, %f3
+;   strvg %r3, 0(%r2)
+;   strvg %r5, 8(%r2)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   vpdi %v3, %v24, %v24, 4
-;   verllg %v5, %v3, 0x20
-;   vlgvg %r5, %v5, 1
-;   lgdr %r3, %f5
-;   strvg %r5, 0(%r2) ; trap: heap_oob
-;   strvg %r3, 8(%r2) ; trap: heap_oob
+;   verllg %v3, %v3, 0x20
+;   vlgvg %r3, %v3, 1
+;   lgdr %r5, %f3
+;   strvg %r3, 0(%r2) ; trap: heap_oob
+;   strvg %r5, 8(%r2) ; trap: heap_oob
 ;   br %r14
 
 function %store_f64x2_little(f64x2, i64) {

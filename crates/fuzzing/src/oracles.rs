@@ -29,7 +29,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, Condvar, Mutex};
-use std::task::{Context, Poll};
+use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 use wasmtime::*;
 use wasmtime_wast::WastContext;
@@ -1043,7 +1043,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
     use wasmtime::component::{Component, Linker, Val};
     use wasmtime_test_util::component::FuncExt;
     use wasmtime_test_util::component_fuzz::{
-        TestCase, Type, EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH,
+        EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH, TestCase, Type,
     };
 
     crate::init_fuzzing();
@@ -1320,7 +1320,7 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
 
     fn run<F: Future>(future: F) -> F::Output {
         let mut f = Box::pin(future);
-        let mut cx = Context::from_waker(futures::task::noop_waker_ref());
+        let mut cx = Context::from_waker(Waker::noop());
         loop {
             match f.as_mut().poll(&mut cx) {
                 Poll::Ready(val) => break val,

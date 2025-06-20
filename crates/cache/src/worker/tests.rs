@@ -14,11 +14,9 @@ fn test_on_get_create_stats_file() {
     let cache_config = load_config!(
         config_path,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'",
         cache_dir
     );
-    assert!(cache_config.enabled());
     let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");
@@ -41,12 +39,10 @@ fn test_on_get_update_usage_counter() {
     let cache_config = load_config!(
         config_path,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'",
         cache_dir
     );
-    assert!(cache_config.enabled());
     let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");
@@ -75,7 +71,6 @@ fn test_on_get_recompress_no_mod_file() {
     let cache_config = load_config!(
         config_path,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          baseline-compression-level = 3\n\
@@ -83,7 +78,6 @@ fn test_on_get_recompress_no_mod_file() {
          optimized-compression-usage-counter-threshold = '256'",
         cache_dir
     );
-    assert!(cache_config.enabled());
     let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");
@@ -117,7 +111,6 @@ fn test_on_get_recompress_with_mod_file() {
     let cache_config = load_config!(
         config_path,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          baseline-compression-level = 3\n\
@@ -125,7 +118,6 @@ fn test_on_get_recompress_with_mod_file() {
          optimized-compression-usage-counter-threshold = '256'",
         cache_dir
     );
-    assert!(cache_config.enabled());
     let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");
@@ -192,7 +184,6 @@ fn test_on_get_recompress_lock() {
     let cache_config = load_config!(
         config_path,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          baseline-compression-level = 3\n\
@@ -202,7 +193,6 @@ fn test_on_get_recompress_lock() {
          allowed-clock-drift-for-files-from-future = '1d'",
         cache_dir
     );
-    assert!(cache_config.enabled());
     let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");
@@ -262,7 +252,6 @@ fn test_on_update_fresh_stats_file() {
     let cache_config = load_config!(
         config_path,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          baseline-compression-level = 3\n\
@@ -270,7 +259,6 @@ fn test_on_update_fresh_stats_file() {
          cleanup-interval = '1h'",
         cache_dir
     );
-    assert!(cache_config.enabled());
     let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");
@@ -311,7 +299,6 @@ fn test_on_update_cleanup_limits_trash_locks() {
     let cache_config = load_config!(
         config_path,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          cleanup-interval = '30m'\n\
@@ -324,7 +311,6 @@ fn test_on_update_cleanup_limits_trash_locks() {
          ",
         cache_dir
     );
-    assert!(cache_config.enabled());
     let worker = Worker::start_new(&cache_config);
     let content_1k = "a".repeat(1_000);
     let content_10k = "a".repeat(10_000);
@@ -452,7 +438,6 @@ fn test_on_update_cleanup_lru_policy() {
     let cache_config = load_config!(
         config_path,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          file-count-soft-limit = '5'\n\
@@ -461,7 +446,6 @@ fn test_on_update_cleanup_lru_policy() {
          files-total-size-limit-percent-if-deleting = '70%'",
         cache_dir
     );
-    assert!(cache_config.enabled());
     let worker = Worker::start_new(&cache_config);
     let content_1k = "a".repeat(1_000);
     let content_5k = "a".repeat(5_000);
@@ -584,7 +568,6 @@ fn test_on_update_cleanup_future_files() {
     let cache_config = load_config!(
         config_path,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          allowed-clock-drift-for-files-from-future = '1d'\n\
@@ -594,7 +577,6 @@ fn test_on_update_cleanup_future_files() {
          files-total-size-limit-percent-if-deleting = '70%'",
         cache_dir
     );
-    assert!(cache_config.enabled());
     let worker = Worker::start_new(&cache_config);
     let content_1k = "a".repeat(1_000);
 
@@ -692,14 +674,12 @@ fn test_on_update_cleanup_self_lock() {
     let cache_config = load_config!(
         config_path,
         "[cache]\n\
-         enabled = true\n\
          directory = '{cache_dir}'\n\
          worker-event-queue-size = '16'\n\
          cleanup-interval = '30m'\n\
          allowed-clock-drift-for-files-from-future = '1d'",
         cache_dir
     );
-    assert!(cache_config.enabled());
     let worker = Worker::start_new(&cache_config);
 
     let mod_file = cache_dir.join("some-mod");

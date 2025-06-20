@@ -20,18 +20,18 @@
 //! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 use crate::{
+    Reachability,
     func_environ::FuncEnvironment,
     translate::{HeapData, TargetEnvironment},
-    Reachability,
 };
+use Reachability::*;
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
-    ir::{self, condcodes::IntCC, InstBuilder, RelSourceLoc},
+    ir::{self, InstBuilder, RelSourceLoc, condcodes::IntCC},
     ir::{Expr, Fact},
 };
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::Unsigned;
-use Reachability::*;
 
 /// The kind of bounds check to perform when accessing a Wasm linear memory or
 /// GC heap.

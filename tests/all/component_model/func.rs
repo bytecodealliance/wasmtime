@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use super::{TypedFuncExt, REALLOC_AND_FREE};
+use super::{REALLOC_AND_FREE, TypedFuncExt};
 use anyhow::Result;
 use std::rc::Rc;
 use std::sync::Arc;

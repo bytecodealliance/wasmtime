@@ -2,17 +2,24 @@
 //!
 //! This crate provides an implementation of the `wasmtime_environ::Compiler`
 //! and `wasmtime_environ::CompilerBuilder` traits.
+//!
+//! > **⚠️ Warning ⚠️**: this crate is an internal-only crate for the Wasmtime
+//! > project and is not intended for general use. APIs are not strictly
+//! > reviewed for safety and usage outside of Wasmtime may have bugs. If
+//! > you're interested in using this feel free to file an issue on the
+//! > Wasmtime repository to start a discussion about doing so, but otherwise
+//! > be aware that your usage of this crate is not supported.
 
 // See documentation in crates/wasmtime/src/runtime.rs for why this is
 // selectively enabled here.
 #![warn(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 use cranelift_codegen::{
-    binemit,
+    FinalizedMachReloc, FinalizedRelocTarget, MachTrap, binemit,
     cursor::FuncCursor,
     ir::{self, AbiParam, ArgumentPurpose, ExternalName, InstBuilder, Signature, TrapCode},
     isa::{CallConv, TargetIsa},
-    settings, FinalizedMachReloc, FinalizedRelocTarget, MachTrap,
+    settings,
 };
 use cranelift_entity::PrimaryMap;
 
@@ -61,6 +68,10 @@ pub const TRAP_HEAP_MISALIGNED: TrapCode =
     TrapCode::unwrap_user(Trap::HeapMisaligned as u8 + TRAP_OFFSET);
 pub const TRAP_TABLE_OUT_OF_BOUNDS: TrapCode =
     TrapCode::unwrap_user(Trap::TableOutOfBounds as u8 + TRAP_OFFSET);
+pub const TRAP_UNHANDLED_TAG: TrapCode =
+    TrapCode::unwrap_user(Trap::UnhandledTag as u8 + TRAP_OFFSET);
+pub const TRAP_CONTINUATION_ALREADY_CONSUMED: TrapCode =
+    TrapCode::unwrap_user(Trap::ContinuationAlreadyConsumed as u8 + TRAP_OFFSET);
 pub const TRAP_CAST_FAILURE: TrapCode =
     TrapCode::unwrap_user(Trap::CastFailure as u8 + TRAP_OFFSET);
 
@@ -202,7 +213,11 @@ fn reference_type(wasm_ht: WasmHeapType, pointer_type: ir::Type) -> ir::Type {
     match wasm_ht.top() {
         WasmHeapTopType::Func => pointer_type,
         WasmHeapTopType::Any | WasmHeapTopType::Extern => ir::types::I32,
-        WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+        WasmHeapTopType::Cont =>
+        // TODO(10248) This is added in a follow-up PR
+        {
+            unimplemented!("codegen for stack switching types not implemented, yet")
+        }
     }
 }
 
@@ -307,8 +322,9 @@ fn mach_reloc_to_reloc(
             }
         }
         FinalizedRelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
-            let libcall = libcall_cranelift_to_wasmtime(libcall);
-            RelocationTarget::HostLibcall(libcall)
+            // We should have avoided any code that needs this style of libcalls
+            // in the Wasm-to-Cranelift translator.
+            panic!("unexpected libcall {libcall:?}");
         }
         _ => panic!("unrecognized external name"),
     };
@@ -317,24 +333,6 @@ fn mach_reloc_to_reloc(
         reloc_target,
         offset,
         addend,
-    }
-}
-
-fn libcall_cranelift_to_wasmtime(call: ir::LibCall) -> wasmtime_environ::obj::LibCall {
-    use wasmtime_environ::obj::LibCall as LC;
-    match call {
-        ir::LibCall::FloorF32 => LC::FloorF32,
-        ir::LibCall::FloorF64 => LC::FloorF64,
-        ir::LibCall::NearestF32 => LC::NearestF32,
-        ir::LibCall::NearestF64 => LC::NearestF64,
-        ir::LibCall::CeilF32 => LC::CeilF32,
-        ir::LibCall::CeilF64 => LC::CeilF64,
-        ir::LibCall::TruncF32 => LC::TruncF32,
-        ir::LibCall::TruncF64 => LC::TruncF64,
-        ir::LibCall::FmaF32 => LC::FmaF32,
-        ir::LibCall::FmaF64 => LC::FmaF64,
-        ir::LibCall::X86Pshufb => LC::X86Pshufb,
-        _ => panic!("cranelift emitted a libcall wasmtime does not support: {call:?}"),
     }
 }
 
@@ -373,8 +371,28 @@ impl BuiltinFunctionSignatures {
         AbiParam::new(ir::types::I64)
     }
 
+    fn f32(&self) -> AbiParam {
+        AbiParam::new(ir::types::F32)
+    }
+
+    fn f64(&self) -> AbiParam {
+        AbiParam::new(ir::types::F64)
+    }
+
     fn u8(&self) -> AbiParam {
         AbiParam::new(ir::types::I8)
+    }
+
+    fn i8x16(&self) -> AbiParam {
+        AbiParam::new(ir::types::I8X16)
+    }
+
+    fn f32x4(&self) -> AbiParam {
+        AbiParam::new(ir::types::F32X4)
+    }
+
+    fn f64x2(&self) -> AbiParam {
+        AbiParam::new(ir::types::F64X2)
     }
 
     fn bool(&self) -> AbiParam {

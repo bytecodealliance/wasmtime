@@ -1,6 +1,6 @@
 #[cfg(all(not(target_os = "windows"), not(miri)))]
 mod not_for_windows {
-    use rustix::mm::{mprotect, MprotectFlags};
+    use rustix::mm::{MprotectFlags, mprotect};
     use rustix::param::page_size;
     use std::sync::Arc;
     use wasmtime::*;

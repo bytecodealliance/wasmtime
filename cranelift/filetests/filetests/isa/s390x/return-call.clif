@@ -112,9 +112,9 @@ block0(v0: i64):
 ;   stg %r1, 0(%r15)
 ; block0:
 ;   lgr %r9, %r2
-;   bras %r1, 12 ; data %callee_i64 + 0 ; lg %r6, 0(%r1)
+;   bras %r1, 12 ; data %callee_i64 + 0 ; lg %r7, 0(%r1)
 ;   lgr %r2, %r3
-;   basr %r14, %r6
+;   basr %r14, %r7
 ;   bras %r1, 12 ; data %callee_i64_multiret + 0 ; lg %r7, 0(%r1)
 ;   lgr %r3, %r2
 ;   lgr %r2, %r9
@@ -133,9 +133,9 @@ block0(v0: i64):
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r6, 0(%r1)
+;   lg %r7, 0(%r1)
 ;   lgr %r2, %r3
-;   basr %r14, %r6
+;   basr %r14, %r7
 ;   bras %r1, 0x3c
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_i64_multiret 0
 ;   .byte 0x00, 0x00
@@ -189,7 +189,7 @@ block0(v0: f64):
 ;   aghi %r15, -160
 ;   stg %r1, 0(%r15)
 ; block0:
-;   bras %r1, 12 ; data.f64 16 ; ld %f3, 0(%r1)
+;   larl %r1, [const(0)] ; ld %f3, 0(%r1)
 ;   adbr %f0, %f3
 ;   lmg %r14, %r15, 272(%r15)
 ;   br %r14
@@ -201,14 +201,17 @@ block0(v0: f64):
 ;   aghi %r15, -0xa0
 ;   stg %r1, 0(%r15)
 ; block1: ; offset 0x14
-;   bras %r1, 0x20
-;   sth %r3, 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x30
 ;   ld %f3, 0(%r1)
 ;   adbr %f0, %f3
 ;   lmg %r14, %r15, 0x110(%r15)
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sth %r3, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 
 function %call_f64(f64) -> f64 tail {
     fn0 = %callee_f64(f64) -> f64 tail

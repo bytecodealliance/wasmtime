@@ -1,10 +1,10 @@
-use anyhow::{anyhow, Result};
-use test_programs_artifacts::{foreach_tls, TLS_SAMPLE_APPLICATION_COMPONENT};
+use anyhow::{Result, anyhow};
+use test_programs_artifacts::{TLS_SAMPLE_APPLICATION_COMPONENT, foreach_tls};
 use wasmtime::{
-    component::{Component, Linker, ResourceTable},
     Store,
+    component::{Component, Linker, ResourceTable},
 };
-use wasmtime_wasi::p2::{bindings::Command, IoView, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView, bindings::Command};
 use wasmtime_wasi_tls::{LinkOptions, WasiTlsCtx};
 
 struct Ctx {

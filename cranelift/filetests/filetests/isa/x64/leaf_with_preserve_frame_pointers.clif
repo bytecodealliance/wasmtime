@@ -11,13 +11,13 @@ block0(v0: i64):
 }
 
 ; VCode:
-;   pushq   %rbp
-;   movq    %rsp, %rbp
+;   pushq %rbp
+;   movq %rsp, %rbp
 ; block0:
-;   movq    %rdi, %rax
-;   movq    %rbp, %rsp
-;   popq    %rbp
-;   ret
+;   movq %rdi, %rax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 ;
 ; Disassembled:
 ; block0: ; offset 0x0

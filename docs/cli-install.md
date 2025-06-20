@@ -7,8 +7,8 @@ you'll want to consult the [embedding documentation](lang.md).
 The easiest way to install the `wasmtime` CLI tool is through our installation
 script. Linux and macOS users can execute the following:
 
-```sh
-$ curl https://wasmtime.dev/install.sh -sSf | bash
+```console
+curl https://wasmtime.dev/install.sh -sSf | bash
 ```
 
 This will download a precompiled version of `wasmtime`, place it in
@@ -23,7 +23,7 @@ to install.
 
 You can confirm your installation works by executing:
 
-```sh
+```shell-session
 $ wasmtime -V
 wasmtime 30.0.0 (ede663c2a 2025-02-19)
 ```

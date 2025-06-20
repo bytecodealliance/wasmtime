@@ -11,10 +11,10 @@ block0(v0: i8):
     return
 }
 
-; check:  pushq   %rbp
-; nextln: movq    %rsp, %rbp
+; check:  pushq %rbp
+; nextln: movq %rsp, %rbp
 ; nextln: block0:
-; nextln: movzbq  %dil, %rdi
+; nextln: movzbq %dil, %rdi
 ; nextln: load_ext_name userextname0+0, %rdx
 ; nextln: call    *%rdx
 
@@ -28,10 +28,10 @@ block0(v0: i8):
     return
 }
 
-; check: pushq   %rbp
-; nextln: movq    %rsp, %rbp
-; nextln: subq    %rsp, $$32, %rsp
+; check: pushq %rbp
+; nextln: movq %rsp, %rbp
+; nextln: subq $$0x20, %rsp
 ; nextln: block0:
-; nextln: movzbq  %cl, %rcx
+; nextln: movzbq %cl, %rcx
 ; nextln: load_ext_name userextname0+0, %rdx
 ; nextln: call    *%rdx

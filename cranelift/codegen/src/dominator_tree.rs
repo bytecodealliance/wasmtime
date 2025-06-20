@@ -84,7 +84,7 @@ impl SpanningTree {
 
         self.nodes.push(SpanningTreeNode {
             block: block.into(),
-            ancestor: ancestor,
+            ancestor,
             label: pre_number,
             semi: pre_number,
             idom: ancestor,
@@ -563,7 +563,7 @@ impl DominatorTreePreorder {
     ///
     /// These are the block's whose immediate dominator is an instruction in `block`, ordered according
     /// to the CFG reverse post-order.
-    pub fn children(&self, block: Block) -> ChildIter {
+    pub fn children(&self, block: Block) -> ChildIter<'_> {
         ChildIter {
             dtpo: self,
             next: self.nodes[block].child,

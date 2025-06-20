@@ -10,7 +10,7 @@ use crate::{
     TableIndex, TableInitialValue, Tag, TagIndex, Tunables, TypeConvert, TypeIndex, Unsigned,
     WasmError, WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
 };
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -18,9 +18,9 @@ use std::mem;
 use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::{
-    types::Types, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding, ExternalKind,
+    CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding, ExternalKind,
     FuncToValidate, FunctionBody, KnownCustom, NameSectionReader, Naming, Parser, Payload, TypeRef,
-    Validator, ValidatorResources,
+    Validator, ValidatorResources, types::Types,
 };
 
 /// Object containing the standalone environment information.
@@ -505,14 +505,14 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                                 .push(TableSegment {
                                     table_index,
                                     offset,
-                                    elements: elements.into(),
+                                    elements,
                                 });
                         }
 
                         ElementKind::Passive => {
                             let elem_index = ElemIndex::from_u32(index as u32);
                             let index = self.result.module.passive_elements.len();
-                            self.result.module.passive_elements.push(elements.into());
+                            self.result.module.passive_elements.push(elements);
                             self.result
                                 .module
                                 .passive_elements_map

@@ -70,22 +70,22 @@
   (core instance $i (instantiate $m (with "" (instance (export "future.cancel-write" (func $future-cancel-write))))))
 )
 
-;; future.close-readable
+;; future.drop-readable
 (component
   (core module $m
-    (import "" "future.close-readable" (func $future-close-readable (param i32)))
+    (import "" "future.drop-readable" (func $future.drop-readable (param i32)))
   )
   (type $future-type (future u8))
-  (core func $future-close-readable (canon future.close-readable $future-type))
-  (core instance $i (instantiate $m (with "" (instance (export "future.close-readable" (func $future-close-readable))))))
+  (core func $future.drop-readable (canon future.drop-readable $future-type))
+  (core instance $i (instantiate $m (with "" (instance (export "future.drop-readable" (func $future.drop-readable))))))
 )
 
-;; future.close-writable
+;; future.drop-writable
 (component
   (core module $m
-    (import "" "future.close-writable" (func $future-close-writable (param i32)))
+    (import "" "future.drop-writable" (func $future.drop-writable (param i32)))
   )
   (type $future-type (future u8))
-  (core func $future-close-writable (canon future.close-writable $future-type))
-  (core instance $i (instantiate $m (with "" (instance (export "future.close-writable" (func $future-close-writable))))))
+  (core func $future.drop-writable (canon future.drop-writable $future-type))
+  (core instance $i (instantiate $m (with "" (instance (export "future.drop-writable" (func $future.drop-writable))))))
 )

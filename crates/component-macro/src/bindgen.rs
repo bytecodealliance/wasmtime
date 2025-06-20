@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use syn::parse::{Error, Parse, ParseStream, Result};
 use syn::punctuated::Punctuated;
-use syn::{braced, token, Token};
+use syn::{Token, braced, token};
 use wasmtime_wit_bindgen::{
     AsyncConfig, CallStyle, Opts, Ownership, TrappableError, TrappableImports,
 };
@@ -346,7 +346,7 @@ impl Parse for Opt {
                 syn::bracketed!(contents in input);
                 let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
 
-                paths.extend(list.into_iter());
+                paths.extend(list);
             } else {
                 return Err(l.error());
             };

@@ -1,10 +1,10 @@
 [package]
 authors = ["The Wasmtime Project Developers"]
-description = "Macros for defining asm functions in Wasmtime"
+description = "INTERNAL: Macros for defining asm functions in Wasmtime"
 edition.workspace = true
 rust-version.workspace = true
 license = "Apache-2.0 WITH LLVM-exception"
-name = "wasmtime-asm-macros"
+name = "wasmtime-internal-asm-macros"
 repository = "https://github.com/bytecodealliance/wasmtime"
 version.workspace = true
 

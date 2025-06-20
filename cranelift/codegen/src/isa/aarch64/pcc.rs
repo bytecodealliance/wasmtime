@@ -1,15 +1,15 @@
 //! Proof-carrying code checking for AArch64 VCode.
 
+use crate::ir::MemFlags;
 use crate::ir::pcc::*;
 use crate::ir::types::*;
-use crate::ir::MemFlags;
+use crate::isa::aarch64::inst::Inst;
 use crate::isa::aarch64::inst::args::{Cond, PairAMode, ShiftOp};
 use crate::isa::aarch64::inst::regs::zero_reg;
-use crate::isa::aarch64::inst::Inst;
 use crate::isa::aarch64::inst::{ALUOp, MoveWideOp};
 use crate::isa::aarch64::inst::{AMode, ExtendOp};
-use crate::machinst::pcc::*;
 use crate::machinst::Reg;
+use crate::machinst::pcc::*;
 use crate::machinst::{InsnIndex, VCode};
 use crate::trace;
 

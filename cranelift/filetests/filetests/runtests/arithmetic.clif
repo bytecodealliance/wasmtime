@@ -556,3 +556,21 @@ block0(v0: i8):
 ; run: %udiv_i8_const(0) == 0
 ; run: %udiv_i8_const(-1) == 1
 ; run: %udiv_i8_const(0xFE) == 1
+
+function %imul_small_constant() -> i32 {
+block0:
+    v0 = iconst.i32 7
+    v1 = iconst.i32 0x22222222
+    v2 = imul v0, v1
+    return v2
+}
+; run: %imul_small_constant() == -286331154
+
+function %imul_big_constant() -> i32 {
+block0:
+    v0 = iconst.i32 0x11111111
+    v1 = iconst.i32 0x22222222
+    v2 = imul v0, v1
+    return v2
+}
+; run: %imul_big_constant() == 248153666

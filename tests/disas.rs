@@ -39,7 +39,7 @@
 //! at the start of the file. These comments are then parsed as TOML and
 //! deserialized into `TestConfig` in this crate.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use cranelift_codegen::ir::{Function, UserExternalName, UserFuncName};
 use libtest_mimic::{Arguments, Trial};
@@ -55,6 +55,17 @@ use wasmtime_cli_flags::CommonOptions;
 
 fn main() -> Result<()> {
     if cfg!(miri) {
+        return Ok(());
+    }
+
+    // There's not a ton of use in emulating these tests on other architectures
+    // since they only exercise architecture-independent code of compiling to
+    // multiple architectures. Additionally CI seems to occasionally deadlock or
+    // get stuck in these tests when using QEMU, and it's not entirely clear
+    // why. Finally QEMU-emulating these tests is relatively slow and without
+    // much benefit from emulation it's hard to justify this. In the end disable
+    // this test suite when QEMU is enabled.
+    if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
         return Ok(());
     }
 
@@ -159,13 +170,14 @@ impl Test {
     fn new(path: &Path) -> Result<Test> {
         let contents =
             std::fs::read_to_string(path).with_context(|| format!("failed to read {path:?}"))?;
-        let config: TestConfig = wasmtime_test_util::wast::parse_test_config(&contents)
+        let config: TestConfig = wasmtime_test_util::wast::parse_test_config(&contents, ";;!")
             .context("failed to parse test configuration as TOML")?;
         let mut flags = vec!["wasmtime"];
         if let Some(config) = &config.flags {
             flags.extend(config.to_vec());
         }
-        let opts = wasmtime_cli_flags::CommonOptions::try_parse_from(&flags)?;
+        let mut opts = wasmtime_cli_flags::CommonOptions::try_parse_from(&flags)?;
+        opts.codegen.cranelift_debug_verifier = Some(true);
 
         Ok(Test {
             path: path.to_path_buf(),
@@ -220,7 +232,7 @@ impl Test {
                     let entry = entry.context("failed to iterate over tempdir")?;
                     let path = entry.path();
                     if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
-                        let filter = self.config.filter.as_deref().unwrap_or("wasm_func_");
+                        let filter = self.config.filter.as_deref().unwrap_or("wasm[0]--function");
                         if !name.contains(filter) {
                             continue;
                         }

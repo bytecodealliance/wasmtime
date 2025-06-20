@@ -1,0 +1,44 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+
+;; Case 1: i32 type, different powers of two
+function %udiv_select_pow2_to_ushr_select_exp_i32(i32, i8) -> i32 {
+block0(v0: i32, v1: i8):
+    v2 = iconst.i32 8          ;; 2^3 (n=3)
+    v3 = iconst.i32 32         ;; 2^5 (m=5)
+    v4 = select v1, v2, v3     ;; divisor = v1 ? 8 : 32
+    v5 = udiv v0, v4
+    return v5
+}
+
+; function %udiv_select_pow2_to_ushr_select_exp_i32(i32, i8) -> i32 fast {
+; block0(v0: i32, v1: i8):
+;     v6 = iconst.i32 3
+;     v7 = iconst.i32 5
+;     v8 = select v1, v6, v7  ; v6 = 3, v7 = 5
+;     v9 = ushr v0, v8
+;     v5 -> v9
+;     return v9
+; }
+
+function %udiv_select_pow2_to_ushr_select_exp_i64(i64, i8) -> i64 {
+block0(v0: i64, v1: i8):
+    v2 = iconst.i64 1          ;; 2^0 (n=0)
+    v3 = iconst.i64 16         ;; 2^4 (m=4)
+    v4 = select v1, v2, v3   ;; divisor = x ? 1 : 16
+    v5 = udiv v0, v4
+    return v5
+}
+
+; function %udiv_select_pow2_to_ushr_select_exp_i64(i64, i8) -> i64 fast {
+; block0(v0: i64, v1: i8):
+;     v6 = iconst.i64 0
+;     v7 = iconst.i64 4
+;     v8 = select v1, v6, v7  ; v6 = 0, v7 = 4
+;     v9 = ushr v0, v8
+;     v5 -> v9
+;     return v9
+; }
+

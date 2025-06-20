@@ -3,8 +3,8 @@
 use super::*;
 use crate::ir::{self, Endianness};
 use crate::isa;
-use crate::isa::pulley_shared::abi::PulleyMachineDeps;
 use crate::isa::pulley_shared::PointerWidth;
+use crate::isa::pulley_shared::abi::PulleyMachineDeps;
 use core::marker::PhantomData;
 use cranelift_control::ControlPlane;
 use pulley_interpreter::encode as enc;
@@ -191,7 +191,7 @@ fn pulley_emit<P>(
 
             let adjust = -i32::try_from(info.callee_pop_size).unwrap();
             for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
-                <InstAndKind<P>>::from(i).emit(sink, emit_info, state);
+                i.emit(sink, emit_info, state);
             }
 
             // Load any stack-carried return values.
@@ -231,7 +231,7 @@ fn pulley_emit<P>(
 
             let adjust = -i32::try_from(info.callee_pop_size).unwrap();
             for i in PulleyMachineDeps::<P>::gen_sp_reg_adjust(adjust) {
-                <InstAndKind<P>>::from(i).emit(sink, emit_info, state);
+                i.emit(sink, emit_info, state);
             }
 
             // Load any stack-carried return values.
@@ -555,17 +555,7 @@ fn pulley_emit<P>(
             *start_offset = sink.cur_offset();
         }
 
-        Inst::Raw { raw } => {
-            match raw {
-                RawInst::PushFrame
-                | RawInst::StackAlloc32 { .. }
-                | RawInst::PushFrameSave { .. } => {
-                    sink.add_trap(ir::TrapCode::STACK_OVERFLOW);
-                }
-                _ => {}
-            }
-            super::generated::emit(raw, sink)
-        }
+        Inst::Raw { raw } => super::generated::emit(raw, sink),
 
         Inst::EmitIsland { space_needed } => {
             if sink.island_needed(*space_needed) {
@@ -648,7 +638,7 @@ fn return_call_emit_impl<T, P>(
     if incoming_args_diff != 0 {
         let amt = i32::try_from(incoming_args_diff).unwrap();
         for inst in PulleyMachineDeps::<P>::gen_sp_reg_adjust(amt) {
-            <InstAndKind<P>>::from(inst).emit(sink, emit_info, state);
+            inst.emit(sink, emit_info, state);
         }
     }
 }

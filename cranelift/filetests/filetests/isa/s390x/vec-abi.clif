@@ -21,8 +21,8 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   vst %v19, 176(%r15)
 ;   vst %v21, 192(%r15)
 ;   vst %v23, 208(%r15)
-;   bras %r1, 12 ; data %callee_be + 0 ; lg %r3, 0(%r1)
-;   basr %r14, %r3
+;   bras %r1, 12 ; data %callee_be + 0 ; lg %r4, 0(%r1)
+;   basr %r14, %r4
 ;   lmg %r14, %r15, 336(%r15)
 ;   br %r14
 ;
@@ -44,8 +44,8 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r3, 0(%r1)
-;   basr %r14, %r3
+;   lg %r4, 0(%r1)
+;   basr %r14, %r4
 ;   lmg %r14, %r15, 0x150(%r15)
 ;   br %r14
 
@@ -75,41 +75,23 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   vl %v23, 432(%r15)
 ;   aghi %r15, -224
 ;   vpdi %v24, %v24, %v24, 4
-;   vpdi %v0, %v25, %v25, 4
-;   verllg %v25, %v0, 32
-;   vpdi %v0, %v26, %v26, 4
-;   verllg %v2, %v0, 32
-;   verllf %v26, %v2, 16
-;   vpdi %v6, %v27, %v27, 4
-;   verllg %v16, %v6, 32
-;   verllf %v18, %v16, 16
-;   verllh %v27, %v18, 8
+;   vpdi %v25, %v25, %v25, 4 ; verllg %v25, %v25, 32
+;   vpdi %v26, %v26, %v26, 4 ; verllg %v26, %v26, 32 ; verllf %v26, %v26, 16
+;   vpdi %v27, %v27, %v27, 4 ; verllg %v27, %v27, 32 ; verllf %v27, %v27, 16 ; verllh %v27, %v27, 8
 ;   vpdi %v28, %v28, %v28, 4
-;   vpdi %v29, %v29, %v29, 4
-;   verllg %v29, %v29, 32
-;   vpdi %v30, %v30, %v30, 4
-;   verllg %v30, %v30, 32
-;   verllf %v30, %v30, 16
-;   vpdi %v2, %v31, %v31, 4
-;   verllg %v4, %v2, 32
-;   verllf %v6, %v4, 16
-;   verllh %v31, %v6, 8
-;   vpdi %v18, %v17, %v17, 4
-;   vst %v18, 160(%r15)
-;   vpdi %v22, %v19, %v19, 4
-;   verllg %v0, %v22, 32
-;   vst %v0, 176(%r15)
-;   vpdi %v0, %v21, %v21, 4
-;   verllg %v0, %v0, 32
-;   verllf %v0, %v0, 16
-;   vst %v0, 192(%r15)
-;   vpdi %v1, %v23, %v23, 4
-;   verllg %v3, %v1, 32
-;   verllf %v5, %v3, 16
-;   verllh %v7, %v5, 8
-;   vst %v7, 208(%r15)
-;   bras %r1, 12 ; data %callee_le + 0 ; lg %r4, 0(%r1)
-;   basr %r14, %r4 ; callee_pop_size 224 ; vpdi %v24, %v24, %v24, 4 ; verllg %v24, %v24, 32
+;   vpdi %v29, %v29, %v29, 4 ; verllg %v29, %v29, 32
+;   vpdi %v30, %v30, %v30, 4 ; verllg %v30, %v30, 32 ; verllf %v30, %v30, 16
+;   vpdi %v31, %v31, %v31, 4 ; verllg %v31, %v31, 32 ; verllf %v31, %v31, 16 ; verllh %v31, %v31, 8
+;   vpdi %v20, %v17, %v17, 4
+;   vpdi %v22, %v19, %v19, 4 ; verllg %v19, %v19, 32
+;   vpdi %v1, %v21, %v21, 4 ; verllg %v21, %v21, 32 ; verllf %v21, %v21, 16
+;   vpdi %v0, %v23, %v23, 4 ; verllg %v23, %v23, 32 ; verllf %v23, %v23, 16 ; verllh %v23, %v23, 8
+;   vst %v20, 160(%r15)
+;   vst %v22, 176(%r15)
+;   vst %v1, 192(%r15)
+;   vst %v0, 208(%r15)
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r5, 0(%r1)
+;   basr %r14, %r5 ; callee_pop_size 224 ; vpdi %v24, %v24, %v24, 4 ; verllg %v24, %v24, 32
 ;   ld %f8, 160(%r15)
 ;   ld %f9, 168(%r15)
 ;   ld %f10, 176(%r15)
@@ -140,46 +122,46 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   vl %v23, 0x1b0(%r15)
 ;   aghi %r15, -0xe0
 ;   vpdi %v24, %v24, %v24, 4
-;   vpdi %v0, %v25, %v25, 4
-;   verllg %v25, %v0, 0x20
-;   vpdi %v0, %v26, %v26, 4
-;   verllg %v2, %v0, 0x20
-;   verllf %v26, %v2, 0x10
-;   vpdi %v6, %v27, %v27, 4
-;   verllg %v16, %v6, 0x20
-;   verllf %v18, %v16, 0x10
-;   verllh %v27, %v18, 8
+;   vpdi %v25, %v25, %v25, 4
+;   verllg %v25, %v25, 0x20
+;   vpdi %v26, %v26, %v26, 4
+;   verllg %v26, %v26, 0x20
+;   verllf %v26, %v26, 0x10
+;   vpdi %v27, %v27, %v27, 4
+;   verllg %v27, %v27, 0x20
+;   verllf %v27, %v27, 0x10
+;   verllh %v27, %v27, 8
 ;   vpdi %v28, %v28, %v28, 4
 ;   vpdi %v29, %v29, %v29, 4
 ;   verllg %v29, %v29, 0x20
 ;   vpdi %v30, %v30, %v30, 4
 ;   verllg %v30, %v30, 0x20
 ;   verllf %v30, %v30, 0x10
-;   vpdi %v2, %v31, %v31, 4
-;   verllg %v4, %v2, 0x20
-;   verllf %v6, %v4, 0x10
-;   verllh %v31, %v6, 8
-;   vpdi %v18, %v17, %v17, 4
-;   vst %v18, 0xa0(%r15)
+;   vpdi %v31, %v31, %v31, 4
+;   verllg %v31, %v31, 0x20
+;   verllf %v31, %v31, 0x10
+;   verllh %v31, %v31, 8
+;   vpdi %v20, %v17, %v17, 4
 ;   vpdi %v22, %v19, %v19, 4
-;   verllg %v0, %v22, 0x20
-;   vst %v0, 0xb0(%r15)
-;   vpdi %v0, %v21, %v21, 4
+;   verllg %v22, %v22, 0x20
+;   vpdi %v1, %v21, %v21, 4
+;   verllg %v1, %v1, 0x20
+;   verllf %v1, %v1, 0x10
+;   vpdi %v0, %v23, %v23, 4
 ;   verllg %v0, %v0, 0x20
 ;   verllf %v0, %v0, 0x10
-;   vst %v0, 0xc0(%r15)
-;   vpdi %v1, %v23, %v23, 4
-;   verllg %v3, %v1, 0x20
-;   verllf %v5, %v3, 0x10
-;   verllh %v7, %v5, 8
-;   vst %v7, 0xd0(%r15)
+;   verllh %v0, %v0, 8
+;   vst %v20, 0xa0(%r15)
+;   vst %v22, 0xb0(%r15)
+;   vst %v1, 0xc0(%r15)
+;   vst %v0, 0xd0(%r15)
 ;   bras %r1, 0x11e
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_le 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r4, 0(%r1)
-;   basr %r14, %r4
+;   lg %r5, 0(%r1)
+;   basr %r14, %r5
 ;   vpdi %v24, %v24, %v24, 4
 ;   verllg %v24, %v24, 0x20
 ;   ld %f8, 0xa0(%r15)
@@ -218,41 +200,23 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   vl %v21, 480(%r15)
 ;   vl %v23, 496(%r15)
 ;   vpdi %v24, %v24, %v24, 4
-;   vpdi %v0, %v25, %v25, 4
-;   verllg %v25, %v0, 32
-;   vpdi %v0, %v26, %v26, 4
-;   verllg %v1, %v0, 32
-;   verllf %v26, %v1, 16
-;   vpdi %v5, %v27, %v27, 4
-;   verllg %v7, %v5, 32
-;   verllf %v18, %v7, 16
-;   verllh %v27, %v18, 8
+;   vpdi %v25, %v25, %v25, 4 ; verllg %v25, %v25, 32
+;   vpdi %v26, %v26, %v26, 4 ; verllg %v26, %v26, 32 ; verllf %v26, %v26, 16
+;   vpdi %v27, %v27, %v27, 4 ; verllg %v27, %v27, 32 ; verllf %v27, %v27, 16 ; verllh %v27, %v27, 8
 ;   vpdi %v28, %v28, %v28, 4
-;   vpdi %v29, %v29, %v29, 4
-;   verllg %v29, %v29, 32
-;   vpdi %v30, %v30, %v30, 4
-;   verllg %v30, %v30, 32
-;   verllf %v30, %v30, 16
-;   vpdi %v1, %v31, %v31, 4
-;   verllg %v3, %v1, 32
-;   verllf %v5, %v3, 16
-;   verllh %v31, %v5, 8
-;   vpdi %v17, %v17, %v17, 4
-;   vst %v17, 160(%r15)
-;   vpdi %v20, %v19, %v19, 4
-;   verllg %v22, %v20, 32
-;   vst %v22, 176(%r15)
-;   vpdi %v0, %v21, %v21, 4
-;   verllg %v0, %v0, 32
-;   verllf %v0, %v0, 16
-;   vst %v0, 192(%r15)
-;   vpdi %v0, %v23, %v23, 4
-;   verllg %v2, %v0, 32
-;   verllf %v4, %v2, 16
-;   verllh %v6, %v4, 8
-;   vst %v6, 208(%r15)
-;   bras %r1, 12 ; data %callee_be + 0 ; lg %r5, 0(%r1)
-;   basr %r14, %r5 ; vpdi %v24, %v24, %v24, 4 ; verllg %v24, %v24, 32
+;   vpdi %v29, %v29, %v29, 4 ; verllg %v29, %v29, 32
+;   vpdi %v30, %v30, %v30, 4 ; verllg %v30, %v30, 32 ; verllf %v30, %v30, 16
+;   vpdi %v31, %v31, %v31, 4 ; verllg %v31, %v31, 32 ; verllf %v31, %v31, 16 ; verllh %v31, %v31, 8
+;   vpdi %v18, %v17, %v17, 4
+;   vpdi %v20, %v19, %v19, 4 ; verllg %v19, %v19, 32
+;   vpdi %v22, %v21, %v21, 4 ; verllg %v21, %v21, 32 ; verllf %v21, %v21, 16
+;   vpdi %v0, %v23, %v23, 4 ; verllg %v23, %v23, 32 ; verllf %v23, %v23, 16 ; verllh %v23, %v23, 8
+;   vst %v18, 160(%r15)
+;   vst %v20, 176(%r15)
+;   vst %v22, 192(%r15)
+;   vst %v0, 208(%r15)
+;   bras %r1, 12 ; data %callee_be + 0 ; lg %r6, 0(%r1)
+;   basr %r14, %r6 ; vpdi %v24, %v24, %v24, 4 ; verllg %v24, %v24, 32
 ;   ld %f8, 224(%r15)
 ;   ld %f9, 232(%r15)
 ;   ld %f10, 240(%r15)
@@ -283,46 +247,46 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   vl %v21, 0x1e0(%r15)
 ;   vl %v23, 0x1f0(%r15)
 ;   vpdi %v24, %v24, %v24, 4
-;   vpdi %v0, %v25, %v25, 4
-;   verllg %v25, %v0, 0x20
-;   vpdi %v0, %v26, %v26, 4
-;   verllg %v1, %v0, 0x20
-;   verllf %v26, %v1, 0x10
-;   vpdi %v5, %v27, %v27, 4
-;   verllg %v7, %v5, 0x20
-;   verllf %v18, %v7, 0x10
-;   verllh %v27, %v18, 8
+;   vpdi %v25, %v25, %v25, 4
+;   verllg %v25, %v25, 0x20
+;   vpdi %v26, %v26, %v26, 4
+;   verllg %v26, %v26, 0x20
+;   verllf %v26, %v26, 0x10
+;   vpdi %v27, %v27, %v27, 4
+;   verllg %v27, %v27, 0x20
+;   verllf %v27, %v27, 0x10
+;   verllh %v27, %v27, 8
 ;   vpdi %v28, %v28, %v28, 4
 ;   vpdi %v29, %v29, %v29, 4
 ;   verllg %v29, %v29, 0x20
 ;   vpdi %v30, %v30, %v30, 4
 ;   verllg %v30, %v30, 0x20
 ;   verllf %v30, %v30, 0x10
-;   vpdi %v1, %v31, %v31, 4
-;   verllg %v3, %v1, 0x20
-;   verllf %v5, %v3, 0x10
-;   verllh %v31, %v5, 8
-;   vpdi %v17, %v17, %v17, 4
-;   vst %v17, 0xa0(%r15)
+;   vpdi %v31, %v31, %v31, 4
+;   verllg %v31, %v31, 0x20
+;   verllf %v31, %v31, 0x10
+;   verllh %v31, %v31, 8
+;   vpdi %v18, %v17, %v17, 4
 ;   vpdi %v20, %v19, %v19, 4
-;   verllg %v22, %v20, 0x20
-;   vst %v22, 0xb0(%r15)
-;   vpdi %v0, %v21, %v21, 4
+;   verllg %v20, %v20, 0x20
+;   vpdi %v22, %v21, %v21, 4
+;   verllg %v22, %v22, 0x20
+;   verllf %v22, %v22, 0x10
+;   vpdi %v0, %v23, %v23, 4
 ;   verllg %v0, %v0, 0x20
 ;   verllf %v0, %v0, 0x10
-;   vst %v0, 0xc0(%r15)
-;   vpdi %v0, %v23, %v23, 4
-;   verllg %v2, %v0, 0x20
-;   verllf %v4, %v2, 0x10
-;   verllh %v6, %v4, 8
-;   vst %v6, 0xd0(%r15)
+;   verllh %v0, %v0, 8
+;   vst %v18, 0xa0(%r15)
+;   vst %v20, 0xb0(%r15)
+;   vst %v22, 0xc0(%r15)
+;   vst %v0, 0xd0(%r15)
 ;   bras %r1, 0x11a
 ;   .byte 0x00, 0x00 ; reloc_external Abs8 %callee_be 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r5, 0(%r1)
-;   basr %r14, %r5
+;   lg %r6, 0(%r1)
+;   basr %r14, %r6
 ;   vpdi %v24, %v24, %v24, 4
 ;   verllg %v24, %v24, 0x20
 ;   ld %f8, 0xe0(%r15)
@@ -358,8 +322,8 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   vst %v19, 176(%r15)
 ;   vst %v21, 192(%r15)
 ;   vst %v23, 208(%r15)
-;   bras %r1, 12 ; data %callee_le + 0 ; lg %r6, 0(%r1)
-;   basr %r14, %r6 ; callee_pop_size 224
+;   bras %r1, 12 ; data %callee_le + 0 ; lg %r7, 0(%r1)
+;   basr %r14, %r7 ; callee_pop_size 224
 ;   aghi %r15, 384
 ;   lmg %r14, %r14, 112(%r15)
 ;   br %r14
@@ -383,8 +347,8 @@ block0(v0: i64x2, v1: i32x4, v2: i16x8, v3: i8x16, v4: i64x2, v5: i32x4, v6: i16
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   lg %r6, 0(%r1)
-;   basr %r14, %r6
+;   lg %r7, 0(%r1)
+;   basr %r14, %r7
 ;   aghi %r15, 0x180
 ;   lmg %r14, %r14, 0x70(%r15)
 ;   br %r14

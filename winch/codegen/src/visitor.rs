@@ -6,30 +6,30 @@
 
 use crate::abi::RetArea;
 use crate::codegen::{
-    control_index, AtomicWaitKind, Callee, CodeGen, CodeGenError, ControlStackFrame, Emission,
-    FnCall,
+    Callee, CodeGen, CodeGenError, ConditionalBranch, ControlStackFrame, Emission, FnCall,
+    UnconditionalBranch, control_index,
 };
 use crate::masm::{
-    DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
-    MemMoveDirection, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp,
+    AtomicWaitKind, DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind,
+    MacroAssembler, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp,
     RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind,
     V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind,
     V128LoadExtendKind, V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind, V128NegKind,
     V128SubKind, V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
 };
 
-use crate::reg::{writable, Reg};
+use crate::reg::{Reg, writable};
 use crate::stack::{TypedReg, Val};
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{Result, anyhow, bail, ensure};
 use regalloc2::RegClass;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use wasmparser::{
-    BlockType, BrTable, Ieee32, Ieee64, MemArg, VisitOperator, VisitSimdOperator, V128,
+    BlockType, BrTable, Ieee32, Ieee64, MemArg, V128, VisitOperator, VisitSimdOperator,
 };
 use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
-    FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType, WasmValType,
-    FUNCREF_INIT_BIT,
+    FUNCREF_INIT_BIT, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType,
+    WasmValType,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -778,7 +778,7 @@ where
             &mut self.context,
             OperandSize::S32,
             |env, cx, masm| {
-                let builtin = env.builtins.floor_f32::<M::ABI>()?;
+                let builtin = env.builtins.floor_f32::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -791,7 +791,7 @@ where
             &mut self.context,
             OperandSize::S64,
             |env, cx, masm| {
-                let builtin = env.builtins.floor_f64::<M::ABI>()?;
+                let builtin = env.builtins.floor_f64::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -804,7 +804,7 @@ where
             &mut self.context,
             OperandSize::S32,
             |env, cx, masm| {
-                let builtin = env.builtins.ceil_f32::<M::ABI>()?;
+                let builtin = env.builtins.ceil_f32::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -817,7 +817,7 @@ where
             &mut self.context,
             OperandSize::S64,
             |env, cx, masm| {
-                let builtin = env.builtins.ceil_f64::<M::ABI>()?;
+                let builtin = env.builtins.ceil_f64::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -830,7 +830,7 @@ where
             &mut self.context,
             OperandSize::S32,
             |env, cx, masm| {
-                let builtin = env.builtins.nearest_f32::<M::ABI>()?;
+                let builtin = env.builtins.nearest_f32::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -843,7 +843,7 @@ where
             &mut self.context,
             OperandSize::S64,
             |env, cx, masm| {
-                let builtin = env.builtins.nearest_f64::<M::ABI>()?;
+                let builtin = env.builtins.nearest_f64::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -856,7 +856,7 @@ where
             &mut self.context,
             OperandSize::S32,
             |env, cx, masm| {
-                let builtin = env.builtins.trunc_f32::<M::ABI>()?;
+                let builtin = env.builtins.trunc_f32::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -869,7 +869,7 @@ where
             &mut self.context,
             OperandSize::S64,
             |env, cx, masm| {
-                let builtin = env.builtins.trunc_f64::<M::ABI>()?;
+                let builtin = env.builtins.trunc_f64::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -1084,14 +1084,14 @@ where
     fn visit_f32_reinterpret_i32(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F32, |masm, dst, src, size| {
-                masm.reinterpret_int_as_float(writable!(dst), src.into(), size)
+                masm.reinterpret_int_as_float(writable!(dst), src, size)
             })
     }
 
     fn visit_f64_reinterpret_i64(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F64, |masm, dst, src, size| {
-                masm.reinterpret_int_as_float(writable!(dst), src.into(), size)
+                masm.reinterpret_int_as_float(writable!(dst), src, size)
             })
     }
 
@@ -1291,7 +1291,7 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, |masm, reg| {
-            masm.cmp_with_set(writable!(reg.into()), RegImm::i32(0), IntCmpKind::Eq, S32)?;
+            masm.cmp_with_set(writable!(reg), RegImm::i32(0), IntCmpKind::Eq, S32)?;
             Ok(TypedReg::i32(reg))
         })
     }
@@ -1300,7 +1300,7 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, |masm, reg| {
-            masm.cmp_with_set(writable!(reg.into()), RegImm::i64(0), IntCmpKind::Eq, S64)?;
+            masm.cmp_with_set(writable!(reg), RegImm::i64(0), IntCmpKind::Eq, S64)?;
             Ok(TypedReg::i32(reg)) // Return value for `i64.eqz` is an `i32`.
         })
     }
@@ -1585,14 +1585,14 @@ where
     fn visit_i32_reinterpret_f32(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::I32, |masm, dst, src, size| {
-                masm.reinterpret_float_as_int(writable!(dst), src.into(), size)
+                masm.reinterpret_float_as_int(writable!(dst), src, size)
             })
     }
 
     fn visit_i64_reinterpret_f64(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::I64, |masm, dst, src, size| {
-                masm.reinterpret_float_as_int(writable!(dst), src.into(), size)
+                masm.reinterpret_float_as_int(writable!(dst), src, size)
             })
     }
 
@@ -1891,7 +1891,7 @@ where
             // the result of the memory32_grow builtin.
             (WasmValType::I64, WasmValType::I32) => {
                 let top: Reg = self.context.pop_to_reg(self.masm, None)?.into();
-                self.masm.wrap(writable!(top.into()), top.into())?;
+                self.masm.wrap(writable!(top), top)?;
                 self.context.stack.push(TypedReg::i32(top).into());
                 Ok(())
             }
@@ -1962,7 +1962,7 @@ where
         let index = control_index(depth, self.control_frames.len())?;
         let frame = &mut self.control_frames[index];
         self.context
-            .unconditional_jump(frame, self.masm, |masm, cx, frame| {
+            .br::<_, _, UnconditionalBranch>(frame, self.masm, |masm, cx, frame| {
                 frame.pop_abi_results::<M, _>(cx, masm, |results, _, _| {
                     Ok(results.ret_area().copied())
                 })
@@ -2008,32 +2008,22 @@ where
             top
         };
 
-        // Emit instructions to balance the machine stack if the frame has
-        // a different offset.
+        // Emit instructions to balance the machine stack.
         let current_sp_offset = self.masm.sp_offset()?;
-        let results_size = frame.results::<M>()?.size();
-        let state = frame.stack_state();
-        let (label, cmp, needs_cleanup) = if current_sp_offset > state.target_offset {
-            (self.masm.get_label()?, IntCmpKind::Eq, true)
+        let unbalanced = frame.unbalanced(self.masm)?;
+        let (label, cmp) = if unbalanced {
+            (self.masm.get_label()?, IntCmpKind::Eq)
         } else {
-            (*frame.label(), IntCmpKind::Ne, false)
+            (*frame.label(), IntCmpKind::Ne)
         };
 
         self.masm
-            .branch(cmp, top.reg.into(), top.reg.into(), label, OperandSize::S32)?;
+            .branch(cmp, top.reg, top.reg.into(), label, OperandSize::S32)?;
         self.context.free_reg(top);
 
-        if needs_cleanup {
-            // Emit instructions to balance the stack and jump if not falling
-            // through.
-            self.masm.memmove(
-                current_sp_offset,
-                state.target_offset,
-                results_size,
-                MemMoveDirection::LowToHigh,
-            )?;
-            self.masm.ensure_sp_for_jump(state.target_offset)?;
-            self.masm.jmp(*frame.label())?;
+        if unbalanced {
+            self.context
+                .br::<_, _, ConditionalBranch>(frame, self.masm, |_, _, _| Ok(()))?;
 
             // Restore sp_offset to what it was for falling through and emit
             // fallthrough label.
@@ -2055,20 +2045,47 @@ where
             labels.push(self.masm.get_label()?);
         }
 
-        let default_index = control_index(targets.default(), self.control_frames.len())?;
-        let default_frame = &mut self.control_frames[default_index];
-        let default_result = default_frame.results::<M>()?;
+        // Find the innermost target and use it as the relative frame
+        // for result handling below.
+        //
+        // This approach ensures that
+        // 1. The stack pointer offset is correctly positioned
+        //    according to the expectations of the innermost block end
+        //    sequence.
+        // 2. We meet the jump site invariants introduced by
+        //    `CodegenContext::br`, which take advantage of Wasm
+        //    semantics given that all jumps are "outward".
+        let mut innermost = targets.default();
+        for target in targets.targets() {
+            let target = target?;
+            if target < innermost {
+                innermost = target;
+            }
+        }
+
+        let innermost_index = control_index(innermost, self.control_frames.len())?;
+        let innermost_frame = &mut self.control_frames[innermost_index];
+        let innermost_result = innermost_frame.results::<M>()?;
 
         let (index, tmp) = {
             let index_and_tmp = self.context.without::<Result<(TypedReg, _)>, M, _>(
-                default_result.regs(),
+                innermost_result.regs(),
                 self.masm,
                 |cx, masm| Ok((cx.pop_to_reg(masm, None)?, cx.any_gpr(masm)?)),
             )??;
 
-            // Materialize any constants or locals into their result representation,
-            // so that when reachability is restored, they are correctly located.
-            default_frame.top_abi_results::<M, _>(
+            // Materialize any constants or locals into their result
+            // representation, so that when reachability is restored,
+            // they are correctly located.  NB: the results are popped
+            // in function of the innermost branch specified for
+            // `br_table`, which implies that the machine stack will
+            // be correctly balanced, by virtue of calling
+            // `pop_abi_results`.
+
+            // It's possible that we need to balance the stack for the
+            // rest of the targets, which will be done before emitting
+            // the unconditional jump below.
+            innermost_frame.pop_abi_results::<M, _>(
                 &mut self.context,
                 self.masm,
                 |results, _, _| Ok(results.ret_area().copied()),
@@ -2085,7 +2102,6 @@ where
 
         for (t, l) in targets
             .targets()
-            .into_iter()
             .chain(std::iter::once(Ok(targets.default())))
             .zip(labels.iter())
         {
@@ -2102,10 +2118,8 @@ where
             self.masm.bind(*l)?;
             // Ensure that the stack pointer is correctly positioned before
             // jumping to the jump table code.
-            let state = frame.stack_state();
-            self.masm.ensure_sp_for_jump(state.target_offset)?;
-            self.masm.jmp(*frame.label())?;
-            frame.set_as_target();
+            self.context
+                .br::<_, _, UnconditionalBranch>(frame, self.masm, |_, _, _| Ok(()))?;
         }
         // Finally reset the stack pointer to the original location.
         // The reachability analysis, will ensure it's correctly located
@@ -2125,7 +2139,7 @@ where
         // index 0.
         let outermost = &mut self.control_frames[0];
         self.context
-            .unconditional_jump(outermost, self.masm, |masm, cx, frame| {
+            .br::<_, _, UnconditionalBranch>(outermost, self.masm, |masm, cx, frame| {
                 frame.pop_abi_results::<M, _>(cx, masm, |results, _, _| {
                     Ok(results.ret_area().copied())
                 })
@@ -2179,7 +2193,7 @@ where
 
     fn visit_drop(&mut self) -> Self::Output {
         self.context.drop_last(1, |regalloc, val| match val {
-            Val::Reg(tr) => Ok(regalloc.free(tr.reg.into())),
+            Val::Reg(tr) => Ok(regalloc.free(tr.reg)),
             Val::Memory(m) => self.masm.free_stack(m.slot.size),
             _ => Ok(()),
         })
@@ -2189,8 +2203,7 @@ where
         let cond = self.context.pop_to_reg(self.masm, None)?;
         let val2 = self.context.pop_to_reg(self.masm, None)?;
         let val1 = self.context.pop_to_reg(self.masm, None)?;
-        self.masm
-            .cmp(cond.reg.into(), RegImm::i32(0), OperandSize::S32)?;
+        self.masm.cmp(cond.reg, RegImm::i32(0), OperandSize::S32)?;
         // Conditionally move val1 to val2 if the comparison is
         // not zero.
         self.masm.cmov(

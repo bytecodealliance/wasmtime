@@ -42,7 +42,14 @@
 ;;       mov     x29, sp
 ;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
-;;       mov     x9, x0
+;;       ldur    x16, [x0, #8]
+;;       ldur    x16, [x16, #0x10]
+;;       mov     x17, #0
+;;       movk    x17, #0x40
+;;       add     x16, x16, x17
+;;       cmp     sp, x16
+;;       b.lo    #0x14c
+;;   2c: mov     x9, x0
 ;;       sub     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       stur    x0, [x28, #0x10]
@@ -60,27 +67,19 @@
 ;;       mov     x0, x9
 ;;       mov     x1, x9
 ;;       ldur    w2, [x28, #0x24]
-;;       mov     x16, #1
-;;       mov     w3, w16
-;;       mov     x16, #2
-;;       mov     w4, w16
-;;       mov     x16, #3
-;;       mov     w5, w16
-;;       mov     x16, #4
-;;       mov     w6, w16
-;;       mov     x16, #5
-;;       mov     w7, w16
+;;       mov     x3, #1
+;;       mov     x4, #2
+;;       mov     x5, #3
+;;       mov     x6, #4
+;;       mov     x7, #5
 ;;       mov     x16, #6
-;;       mov     w16, w16
 ;;       stur    w16, [x28]
 ;;       mov     x16, #7
-;;       mov     w16, w16
 ;;       stur    w16, [x28, #8]
 ;;       mov     x16, #8
-;;       mov     w16, w16
 ;;       stur    w16, [x28, #0x10]
-;;       bl      #0x180
-;;   a8: add     x28, x28, #0x24
+;;       bl      #0x160
+;;   a4: add     x28, x28, #0x24
 ;;       mov     sp, x28
 ;;       add     x28, x28, #4
 ;;       mov     sp, x28
@@ -100,25 +99,18 @@
 ;;       mov     x1, x9
 ;;       ldur    w2, [x28, #0x24]
 ;;       ldur    w3, [x28, #0x20]
-;;       mov     x16, #2
-;;       mov     w4, w16
-;;       mov     x16, #3
-;;       mov     w5, w16
-;;       mov     x16, #4
-;;       mov     w6, w16
-;;       mov     x16, #5
-;;       mov     w7, w16
+;;       mov     x4, #2
+;;       mov     x5, #3
+;;       mov     x6, #4
+;;       mov     x7, #5
 ;;       mov     x16, #6
-;;       mov     w16, w16
 ;;       stur    w16, [x28]
 ;;       mov     x16, #7
-;;       mov     w16, w16
 ;;       stur    w16, [x28, #8]
 ;;       mov     x16, #8
-;;       mov     w16, w16
 ;;       stur    w16, [x28, #0x10]
-;;       bl      #0x180
-;;  140: add     x28, x28, #0x20
+;;       bl      #0x160
+;;  120: add     x28, x28, #0x20
 ;;       mov     sp, x28
 ;;       add     x28, x28, #8
 ;;       mov     sp, x28
@@ -129,13 +121,21 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
+;;  14c: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;
 ;; wasm[0]::function[1]::add:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
-;;       mov     x9, x0
+;;       ldur    x16, [x0, #8]
+;;       ldur    x16, [x16, #0x10]
+;;       mov     x17, #0
+;;       movk    x17, #0x28
+;;       add     x16, x16, x17
+;;       cmp     sp, x16
+;;       b.lo    #0x218
+;;  18c: mov     x9, x0
 ;;       sub     x28, x28, #0x28
 ;;       mov     sp, x28
 ;;       stur    x0, [x28, #0x20]
@@ -170,3 +170,4 @@
 ;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
+;;  218: .byte   0x1f, 0xc1, 0x00, 0x00

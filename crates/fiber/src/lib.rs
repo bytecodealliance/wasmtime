@@ -1,4 +1,10 @@
-#![expect(clippy::allow_attributes, reason = "crate not migrated yet")]
+//! > **⚠️ Warning ⚠️**: this crate is an internal-only crate for the Wasmtime
+//! > project and is not intended for general use. APIs are not strictly
+//! > reviewed for safety and usage outside of Wasmtime may have bugs. If
+//! > you're interested in using this feel free to file an issue on the
+//! > Wasmtime repository to start a discussion about doing so, but otherwise
+//! > be aware that your usage of this crate is not supported.
+
 #![no_std]
 
 #[cfg(any(feature = "std", unix, windows))]
@@ -16,6 +22,9 @@ cfg_if::cfg_if! {
     if #[cfg(not(feature = "std"))] {
         mod nostd;
         use nostd as imp;
+    } else if #[cfg(miri)] {
+        mod miri;
+        use miri as imp;
     } else if #[cfg(windows)] {
         mod windows;
         use windows as imp;
@@ -133,11 +142,28 @@ pub struct Suspend<Resume, Yield, Return> {
     _phantom: PhantomData<(Resume, Yield, Return)>,
 }
 
+/// A structure that is stored on a stack frame of a call to `Fiber::resume`.
+///
+/// This is used to both transmit data to a fiber (the resume step) as well as
+/// acquire data from a fiber (the suspension step).
 enum RunResult<Resume, Yield, Return> {
+    /// The fiber is currently executing meaning it picked up whatever it was
+    /// resuming with and hasn't yet completed.
     Executing,
+
+    /// Resume with this value. Called for each invocation of
+    /// `Fiber::resume`.
     Resuming(Resume),
+
+    /// The fiber hasn't finished but has provided the following value
+    /// during its suspension.
     Yield(Yield),
+
+    /// The fiber has completed with the provided value and can no
+    /// longer be resumed.
     Returned(Return),
+
+    /// The fiber execution panicked.
     #[cfg(feature = "std")]
     Panicked(Box<dyn core::any::Any + Send>),
 }
@@ -239,31 +265,32 @@ impl<Resume, Yield, Return> Suspend<Resume, Yield, Return> {
         };
 
         #[cfg(feature = "std")]
-        {
+        let result = {
             use std::panic::{self, AssertUnwindSafe};
             let result = panic::catch_unwind(AssertUnwindSafe(|| (func)(initial, &mut suspend)));
-            suspend.inner.switch::<Resume, Yield, Return>(match result {
+            match result {
                 Ok(result) => RunResult::Returned(result),
                 Err(panic) => RunResult::Panicked(panic),
-            });
-        }
+            }
+        };
+
         // Note that it is sound to omit the `catch_unwind` here: it
         // will not result in unwinding going off the top of the fiber
         // stack, because the code on the fiber stack is invoked via
         // an extern "C" boundary which will panic on unwinds.
         #[cfg(not(feature = "std"))]
-        {
-            let result = (func)(initial, &mut suspend);
-            suspend
-                .inner
-                .switch::<Resume, Yield, Return>(RunResult::Returned(result));
-        }
+        let result = RunResult::Returned((func)(initial, &mut suspend));
+
+        suspend.inner.exit::<Resume, Yield, Return>(result);
     }
 }
 
 impl<A, B, C> Drop for Fiber<'_, A, B, C> {
     fn drop(&mut self) {
         debug_assert!(self.done.get(), "fiber dropped without finishing");
+        unsafe {
+            self.inner.drop::<A, B, C>();
+        }
     }
 }
 
@@ -274,13 +301,17 @@ mod tests {
     use std::cell::Cell;
     use std::rc::Rc;
 
+    fn fiber_stack(size: usize) -> FiberStack {
+        FiberStack::new(size, false).unwrap()
+    }
+
     #[test]
     fn small_stacks() {
-        Fiber::<(), (), ()>::new(FiberStack::new(0, false).unwrap(), |_, _| {})
+        Fiber::<(), (), ()>::new(fiber_stack(0), |_, _| {})
             .unwrap()
             .resume(())
             .unwrap();
-        Fiber::<(), (), ()>::new(FiberStack::new(1, false).unwrap(), |_, _| {})
+        Fiber::<(), (), ()>::new(fiber_stack(1), |_, _| {})
             .unwrap()
             .resume(())
             .unwrap();
@@ -290,11 +321,10 @@ mod tests {
     fn smoke() {
         let hit = Rc::new(Cell::new(false));
         let hit2 = hit.clone();
-        let fiber =
-            Fiber::<(), (), ()>::new(FiberStack::new(1024 * 1024, false).unwrap(), move |_, _| {
-                hit2.set(true);
-            })
-            .unwrap();
+        let fiber = Fiber::<(), (), ()>::new(fiber_stack(1024 * 1024), move |_, _| {
+            hit2.set(true);
+        })
+        .unwrap();
         assert!(!hit.get());
         fiber.resume(()).unwrap();
         assert!(hit.get());
@@ -304,13 +334,12 @@ mod tests {
     fn suspend_and_resume() {
         let hit = Rc::new(Cell::new(false));
         let hit2 = hit.clone();
-        let fiber =
-            Fiber::<(), (), ()>::new(FiberStack::new(1024 * 1024, false).unwrap(), move |_, s| {
-                s.suspend(());
-                hit2.set(true);
-                s.suspend(());
-            })
-            .unwrap();
+        let fiber = Fiber::<(), (), ()>::new(fiber_stack(1024 * 1024), move |_, s| {
+            s.suspend(());
+            hit2.set(true);
+            s.suspend(());
+        })
+        .unwrap();
         assert!(!hit.get());
         assert!(fiber.resume(()).is_err());
         assert!(!hit.get());
@@ -345,20 +374,19 @@ mod tests {
                 || cfg!(target_arch = "arm")
                 // asan does weird things
                 || cfg!(asan)
+                // miri is a bit of a stretch to get working here
+                || cfg!(miri)
             );
         }
 
         fn run_test() {
-            let fiber = Fiber::<(), (), ()>::new(
-                FiberStack::new(1024 * 1024, false).unwrap(),
-                move |(), s| {
-                    assert_contains_host();
-                    s.suspend(());
-                    assert_contains_host();
-                    s.suspend(());
-                    assert_contains_host();
-                },
-            )
+            let fiber = Fiber::<(), (), ()>::new(fiber_stack(1024 * 1024), move |(), s| {
+                assert_contains_host();
+                s.suspend(());
+                assert_contains_host();
+                s.suspend(());
+                assert_contains_host();
+            })
             .unwrap();
             assert!(fiber.resume(()).is_err());
             assert!(fiber.resume(()).is_err());
@@ -375,13 +403,10 @@ mod tests {
 
         let a = Rc::new(Cell::new(false));
         let b = SetOnDrop(a.clone());
-        let fiber = Fiber::<(), (), ()>::new(
-            FiberStack::new(1024 * 1024, false).unwrap(),
-            move |(), _s| {
-                let _ = &b;
-                panic!();
-            },
-        )
+        let fiber = Fiber::<(), (), ()>::new(fiber_stack(1024 * 1024), move |(), _s| {
+            let _ = &b;
+            panic!();
+        })
         .unwrap();
         assert!(panic::catch_unwind(AssertUnwindSafe(|| fiber.resume(()))).is_err());
         assert!(a.get());
@@ -397,14 +422,11 @@ mod tests {
 
     #[test]
     fn suspend_and_resume_values() {
-        let fiber = Fiber::new(
-            FiberStack::new(1024 * 1024, false).unwrap(),
-            move |first, s| {
-                assert_eq!(first, 2.0);
-                assert_eq!(s.suspend(4), 3.0);
-                "hello".to_string()
-            },
-        )
+        let fiber = Fiber::new(fiber_stack(1024 * 1024), move |first, s| {
+            assert_eq!(first, 2.0);
+            assert_eq!(s.suspend(4), 3.0);
+            "hello".to_string()
+        })
         .unwrap();
         assert_eq!(fiber.resume(2.0), Err(4));
         assert_eq!(fiber.resume(3.0), Ok("hello".to_string()));

@@ -1,6 +1,6 @@
 use crate::sync::sched::windows::poll_oneoff_;
 use crate::tokio::block_on_dummy_executor;
-use crate::{file::WasiFile, sched::Poll, Error};
+use crate::{Error, file::WasiFile, sched::Poll};
 
 pub async fn poll_oneoff<'a>(poll: &mut Poll<'a>) -> Result<(), Error> {
     // Tokio doesn't provide us the AsyncFd primitive on Windows, so instead

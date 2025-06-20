@@ -1,16 +1,16 @@
+use crate::Module;
+use crate::component::ResourceType;
 use crate::component::func::HostFunc;
 use crate::component::linker::{Definition, Strings};
-use crate::component::ResourceType;
 use crate::runtime::vm::component::ComponentInstance;
 use crate::types::matching;
-use crate::Module;
-use crate::{prelude::*, Engine};
+use crate::{Engine, prelude::*};
 use alloc::sync::Arc;
+use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::{
     ComponentTypes, NameMap, ResourceIndex, TypeComponentInstance, TypeDef, TypeFuncIndex,
     TypeModule, TypeResourceTableIndex,
 };
-use wasmtime_environ::PrimaryMap;
 
 pub struct TypeChecker<'a> {
     pub engine: &'a Engine,
@@ -186,7 +186,7 @@ impl Definition {
 impl<'a> InstanceType<'a> {
     pub fn new(instance: &'a ComponentInstance) -> InstanceType<'a> {
         InstanceType {
-            types: instance.component_types(),
+            types: instance.component().types(),
             resources: instance.resource_types(),
         }
     }

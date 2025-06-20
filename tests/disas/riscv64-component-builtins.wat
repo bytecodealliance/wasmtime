@@ -1,6 +1,6 @@
 ;;! target = "riscv64"
 ;;! test = 'optimize'
-;;! filter = 'component_trampoline_0_Wasm'
+;;! filter = 'component-resource-drop[0]_wasm_call'
 
 (component
   (type $a (resource (rep i32)))
@@ -35,7 +35,7 @@
 ;;
 ;; block1 cold:
 ;;     v15 = load.i64 notrap aligned readonly v1+16
-;;     v16 = load.i64 notrap aligned readonly v15+320
+;;     v16 = load.i64 notrap aligned readonly v15+416
 ;;     call_indirect sig1, v16(v1)
 ;;     trap user1
 ;;

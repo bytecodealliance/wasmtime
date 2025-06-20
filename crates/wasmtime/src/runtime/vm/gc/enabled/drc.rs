@@ -50,7 +50,7 @@ use crate::runtime::vm::{
     GcProgress, GcRootsIter, GcRuntime, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
 };
 use crate::vm::{SendSyncPtr, VMMemoryDefinition};
-use crate::{prelude::*, Engine, EngineWeak};
+use crate::{Engine, EngineWeak, prelude::*};
 use core::{
     alloc::Layout,
     any::Any,
@@ -59,7 +59,7 @@ use core::{
     ops::{Deref, DerefMut},
     ptr::NonNull,
 };
-use wasmtime_environ::drc::{DrcTypeLayouts, ARRAY_LENGTH_OFFSET};
+use wasmtime_environ::drc::{ARRAY_LENGTH_OFFSET, DrcTypeLayouts};
 use wasmtime_environ::{
     GcArrayLayout, GcLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
 };
@@ -276,10 +276,7 @@ impl DrcHeap {
         let info = match gc_layout {
             GcLayout::Array(l) => {
                 if l.elems_are_gc_refs {
-                    debug_assert_eq!(
-                        l.elem_offset(0),
-                        u32::try_from(GC_REF_ARRAY_ELEMS_OFFSET).unwrap()
-                    );
+                    debug_assert_eq!(l.elem_offset(0), GC_REF_ARRAY_ELEMS_OFFSET,);
                 }
                 TraceInfo::Array {
                     gc_ref_elems: l.elems_are_gc_refs,
@@ -964,10 +961,11 @@ impl VMGcRefTableAlloc {
     /// Reset this bump region, retaining any underlying allocation, but moving
     /// the bump pointer and limit to their default positions.
     fn reset(&mut self) {
-        self.next = SendSyncPtr::new(NonNull::new(self.chunk.as_mut_ptr()).unwrap());
-        self.end = SendSyncPtr::new(
-            NonNull::new(unsafe { self.chunk.as_mut_ptr().add(self.chunk.len()) }).unwrap(),
-        );
+        let len = self.chunk.len();
+        let next = NonNull::new(self.chunk.as_mut_ptr()).unwrap();
+        let end = unsafe { next.add(len) };
+        self.next = SendSyncPtr::new(next);
+        self.end = SendSyncPtr::new(end);
     }
 }
 

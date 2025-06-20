@@ -352,7 +352,7 @@ impl<'a> fmt::Display for DisplayableExtFuncData<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ir::types::{F32, I32, I8};
+    use crate::ir::types::{F32, I8, I32};
     use alloc::string::ToString;
 
     #[test]

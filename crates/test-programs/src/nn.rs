@@ -10,7 +10,7 @@
 /// Call `wasi-nn` functions from WebAssembly using the canonical ABI of the
 /// component model via WIT-based tooling. Used by `bin/nn_wit_*.rs` tests.
 pub mod wit {
-    use anyhow::{anyhow, Result};
+    use anyhow::{Result, anyhow};
     use std::time::Instant;
 
     // Generate the wasi-nn bindings based on the `*.wit` files.

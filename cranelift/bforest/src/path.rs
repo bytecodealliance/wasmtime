@@ -1,7 +1,7 @@
 //! A path from the root of a B+-tree to a leaf node.
 
 use super::node::Removed;
-use super::{slice_insert, slice_shift, Comparator, Forest, Node, NodeData, NodePool, MAX_PATH};
+use super::{Comparator, Forest, MAX_PATH, Node, NodeData, NodePool, slice_insert, slice_shift};
 use core::borrow::Borrow;
 use core::marker::PhantomData;
 

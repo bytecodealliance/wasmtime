@@ -12,13 +12,8 @@
 
 use super::ByteSink;
 use crate::isa::x64::inst::args::{Amode, OperandSize};
-use crate::isa::x64::inst::{regs, Inst, LabelUse};
+use crate::isa::x64::inst::{Inst, LabelUse, regs};
 use crate::machinst::{MachBuffer, Reg, RegClass};
-
-pub(crate) fn low8_will_sign_extend_to_64(x: u32) -> bool {
-    let xs = (x as i32) as i64;
-    xs == ((xs << 56) >> 56)
-}
 
 pub(crate) fn low8_will_sign_extend_to_32(x: u32) -> bool {
     let xs = x as i32;
@@ -581,14 +576,4 @@ pub(crate) fn emit_std_reg_reg<BS: ByteSink + ?Sized>(
     let enc_g = reg_enc(reg_g);
     let enc_e = reg_enc(reg_e);
     emit_std_enc_enc(sink, prefixes, opcodes, num_opcodes, enc_g, enc_e, rex);
-}
-
-/// Write a suitable number of bits from an imm64 to the sink.
-pub(crate) fn emit_simm<BS: ByteSink + ?Sized>(sink: &mut BS, size: u8, simm32: u32) {
-    match size {
-        8 | 4 => sink.put4(simm32),
-        2 => sink.put2(simm32 as u16),
-        1 => sink.put1(simm32 as u8),
-        _ => unreachable!(),
-    }
 }

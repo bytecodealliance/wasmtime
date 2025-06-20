@@ -17,7 +17,7 @@
 //! ```rust
 //! use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
 //! use wasmtime::{Result, Engine, Config};
-//! use wasmtime::component::{Linker, ResourceTable};
+//! use wasmtime::component::{Linker, ResourceTable, HasSelf};
 //!
 //! wasmtime::component::bindgen!({
 //!     inline: "
@@ -26,7 +26,7 @@
 //!         // An example of extending the `wasi:cli/command` world with a
 //!         // custom host interface.
 //!         world my-world {
-//!             include wasi:cli/command@0.2.3;
+//!             include wasi:cli/command@0.2.6;
 //!
 //!             import custom-host;
 //!         }
@@ -66,7 +66,7 @@
 //!     let engine = Engine::new(&config)?;
 //!     let mut linker: Linker<MyState> = Linker::new(&engine);
 //!     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
-//!     example::wasi::custom_host::add_to_linker(&mut linker, |state| state)?;
+//!     example::wasi::custom_host::add_to_linker::<_, HasSelf<_>>(&mut linker, |state| state)?;
 //!
 //!     // .. use `Linker` to instantiate component ...
 //!
@@ -88,7 +88,7 @@
 /// ```rust
 /// use wasmtime_wasi::p2::{IoView, WasiCtx, WasiView};
 /// use wasmtime::{Result, Engine};
-/// use wasmtime::component::{Linker, ResourceTable};
+/// use wasmtime::component::{Linker, ResourceTable, HasSelf};
 ///
 /// wasmtime::component::bindgen!({
 ///     inline: "
@@ -97,7 +97,7 @@
 ///         // An example of extending the `wasi:cli/command` world with a
 ///         // custom host interface.
 ///         world my-world {
-///             include wasi:cli/command@0.2.3;
+///             include wasi:cli/command@0.2.6;
 ///
 ///             import custom-host;
 ///         }
@@ -137,7 +137,7 @@
 ///     let engine = Engine::default();
 ///     let mut linker: Linker<MyState> = Linker::new(&engine);
 ///     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
-///     example::wasi::custom_host::add_to_linker(&mut linker, |state| state)?;
+///     example::wasi::custom_host::add_to_linker::<_, HasSelf<_>>(&mut linker, |state| state)?;
 ///
 ///     // .. use `Linker` to instantiate component ...
 ///
@@ -433,9 +433,9 @@ mod async_io {
     });
 }
 
+pub use self::async_io::LinkOptions;
 pub use self::async_io::exports;
 pub use self::async_io::wasi::*;
-pub use self::async_io::LinkOptions;
 
 /// Asynchronous bindings to execute and run a `wasi:cli/command`.
 ///

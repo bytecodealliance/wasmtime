@@ -1,16 +1,16 @@
-use crate::debug::transform::utils::resolve_die_ref;
 use crate::debug::Reader;
+use crate::debug::transform::utils::resolve_die_ref;
 
 use super::address_transform::AddressTransform;
-use super::expression::{compile_expression, CompiledExpression, FunctionFrameInfo};
+use super::expression::{CompiledExpression, FunctionFrameInfo, compile_expression};
 use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::unit::InheritedAttr;
-use super::{dbi_log, TransformError};
-use anyhow::{bail, Error};
+use super::{TransformError, dbi_log};
+use anyhow::{Error, bail};
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{
-    write, AttributeValue, DebugLineOffset, DebuggingInformationEntry, Dwarf, Unit, UnitOffset,
+    AttributeValue, DebugLineOffset, DebuggingInformationEntry, Dwarf, Unit, UnitOffset, write,
 };
 
 #[derive(Debug)]
@@ -244,11 +244,7 @@ pub(crate) fn clone_die_attributes<'a>(
                             .expressions
                             .filter(|i| {
                                 // Ignore empty range
-                                if let Ok((_, 0, _)) = i {
-                                    false
-                                } else {
-                                    true
-                                }
+                                if let Ok((_, 0, _)) = i { false } else { true }
                             })
                             .map(|i| {
                                 i.map(|(start, len, expr)| write::Location::StartLength {

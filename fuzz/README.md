@@ -39,7 +39,7 @@ run them in a sandbox with sufficient isolation for your threat model.
 To start fuzzing run the following command, where `$MY_FUZZ_TARGET` is one of
 the [available fuzz targets](#available-fuzz-targets):
 
-```shell
+```console
 cargo fuzz run $MY_FUZZ_TARGET
 ```
 
@@ -76,7 +76,7 @@ At the time of writing, we have the following fuzz targets:
 The canonical list of fuzz targets is the `.rs` files in the `fuzz_targets`
 directory:
 
-```shell
+```console
 ls wasmtime/fuzz/fuzz_targets/
 ```
 
@@ -90,7 +90,7 @@ github](https://github.com/bytecodealliance/wasmtime-libfuzzer-corpus).
 
 You can use our corpora by cloning it and placing it at `wasmtime/fuzz/corpus`:
 
-```shell
+```console
 git clone \
     https://github.com/bytecodealliance/wasmtime-libfuzzer-corpus.git \
     wasmtime/fuzz/corpus
@@ -104,8 +104,8 @@ following steps to reproduce it locally:
 1. Download the test case (either the "Minimized Testcase" or "Unminimized
    Testcase" from OSS-Fuzz will do).
 2. Run the test case in the correct fuzz target:
-    ```shell
-    cargo +nightly fuzz run <target> <test case>
+    ```console
+    cargo +nightly fuzz run $MY_FUZZ_TARGET $MY_TEST_CASE
     ```
     If all goes well, the bug should reproduce and libFuzzer will dump the
     failure stack trace to stdout

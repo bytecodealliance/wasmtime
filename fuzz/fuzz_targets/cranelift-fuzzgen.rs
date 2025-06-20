@@ -1,10 +1,10 @@
 #![no_main]
 
+use cranelift_codegen::Context;
 use cranelift_codegen::ir::Function;
 use cranelift_codegen::ir::Signature;
 use cranelift_codegen::ir::UserExternalName;
 use cranelift_codegen::ir::UserFuncName;
-use cranelift_codegen::Context;
 use cranelift_control::ControlPlane;
 use libfuzzer_sys::arbitrary;
 use libfuzzer_sys::arbitrary::Arbitrary;
@@ -12,14 +12,14 @@ use libfuzzer_sys::arbitrary::Unstructured;
 use libfuzzer_sys::fuzz_target;
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::LazyLock;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
-use std::sync::LazyLock;
 
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{LibCall, TrapCode};
 use cranelift_codegen::isa;
-use cranelift_filetests::function_runner::{TestFileCompiler, Trampoline};
+use cranelift_filetests::function_runner::{CompiledTestFile, TestFileCompiler, Trampoline};
 use cranelift_fuzzgen::*;
 use cranelift_interpreter::environment::FuncIndex;
 use cranelift_interpreter::environment::FunctionStore;
@@ -286,8 +286,12 @@ fn run_in_interpreter(interpreter: &mut Interpreter, args: &[DataValue]) -> RunR
     }
 }
 
-fn run_in_host(trampoline: &Trampoline, args: &[DataValue]) -> RunResult {
-    let res = trampoline.call(args);
+fn run_in_host(
+    compiled: &CompiledTestFile,
+    trampoline: &Trampoline,
+    args: &[DataValue],
+) -> RunResult {
+    let res = trampoline.call(compiled, args);
     RunResult::Success(res)
 }
 
@@ -301,7 +305,7 @@ const ALLOWED_LIBCALLS: &'static [LibCall] = &[
     LibCall::TruncF64,
 ];
 
-fn build_interpreter(testcase: &TestCase) -> Interpreter {
+fn build_interpreter(testcase: &TestCase) -> Interpreter<'_> {
     let mut env = FunctionStore::default();
     for func in testcase.functions.iter() {
         env.add(func.name.to_string(), &func);
@@ -413,6 +417,6 @@ fuzz_target!(|testcase: TestCase| {
         let compiled = compiler.compile().unwrap();
         let trampoline = compiled.get_trampoline(testcase.main()).unwrap();
 
-        run_test_inputs(&testcase, |args| run_in_host(&trampoline, args));
+        run_test_inputs(&testcase, |args| run_in_host(&compiled, &trampoline, args));
     }
 });

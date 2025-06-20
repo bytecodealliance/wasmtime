@@ -1,13 +1,20 @@
 //! A very simple, uniformly-typed slab arena that supports deallocation and
 //! reusing deallocated entries' space.
 //!
+//! > **⚠️ Warning ⚠️**: this crate is an internal-only crate for the Wasmtime
+//! > project and is not intended for general use. APIs are not strictly
+//! > reviewed for safety and usage outside of Wasmtime may have bugs. If
+//! > you're interested in using this feel free to file an issue on the
+//! > Wasmtime repository to start a discussion about doing so, but otherwise
+//! > be aware that your usage of this crate is not supported.
+//!
 //! The free list of vacant entries in the slab are stored inline in the slab's
 //! existing storage.
 //!
 //! # Example
 //!
 //! ```
-//! use wasmtime_slab::{Id, Slab};
+//! use wasmtime_internal_slab::{Id, Slab};
 //!
 //! let mut slab = Slab::new();
 //!
@@ -72,7 +79,7 @@
 //!
 //! ```rust
 //! pub struct GenerationalId {
-//!     id: wasmtime_slab::Id,
+//!     id: wasmtime_internal_slab::Id,
 //!     generation: u32,
 //! }
 //!
@@ -82,7 +89,7 @@
 //! }
 //!
 //! pub struct GenerationalSlab<T> {
-//!     slab: wasmtime_slab::Slab<GenerationalEntry<T>>,
+//!     slab: wasmtime_internal_slab::Slab<GenerationalEntry<T>>,
 //!     generation: u32,
 //! }
 //!

@@ -1,5 +1,5 @@
-use crate::p2::{bindings::cli::exit, WasiImpl, WasiView};
 use crate::I32Exit;
+use crate::p2::{WasiImpl, WasiView, bindings::cli::exit};
 
 impl<T> exit::Host for WasiImpl<T>
 where

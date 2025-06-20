@@ -69,6 +69,14 @@ impl ModuleSyntheticUnit {
             gimli::DW_AT_name,
             AttributeValue::StringRef(out_strings.add("WasmtimeModuleSyntheticUnit")),
         );
+        unit_die.set(
+            gimli::DW_AT_producer,
+            AttributeValue::StringRef(out_strings.add("wasmtime")),
+        );
+        unit_die.set(
+            gimli::DW_AT_language,
+            AttributeValue::Language(gimli::DW_LANG_C11),
+        );
         unit_id
     }
 

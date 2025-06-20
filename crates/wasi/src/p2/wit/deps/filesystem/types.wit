@@ -1,4 +1,4 @@
-package wasi:filesystem@0.2.3;
+package wasi:filesystem@0.2.6;
 /// WASI filesystem is a filesystem API primarily intended to let users run WASI
 /// programs that access their files on their existing filesystems, without
 /// significant overhead.
@@ -26,9 +26,9 @@ package wasi:filesystem@0.2.3;
 @since(version = 0.2.0)
 interface types {
     @since(version = 0.2.0)
-    use wasi:io/streams@0.2.3.{input-stream, output-stream, error};
+    use wasi:io/streams@0.2.6.{input-stream, output-stream, error};
     @since(version = 0.2.0)
-    use wasi:clocks/wall-clock@0.2.3.{datetime};
+    use wasi:clocks/wall-clock@0.2.6.{datetime};
 
     /// File size or length of a region within a file.
     @since(version = 0.2.0)
@@ -507,6 +507,10 @@ interface types {
         ) -> result<_, error-code>;
 
         /// Create a hard link.
+        ///
+        /// Fails with `error-code::no-entry` if the old path does not exist,
+        /// with `error-code::exist` if the new path already exists, and
+        /// `error-code::not-permitted` if the old path is not a file.
         ///
         /// Note: This is similar to `linkat` in POSIX.
         @since(version = 0.2.0)

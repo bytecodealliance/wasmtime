@@ -1,6 +1,6 @@
 use crate::generators::{Config, DiffValue, DiffValueType};
 use crate::oracles::engine::{DiffEngine, DiffInstance};
-use anyhow::{bail, Error, Result};
+use anyhow::{Error, Result, bail};
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Once;
@@ -92,7 +92,7 @@ impl DiffEngine for V8Engine {
         };
         match wasmtime {
             Trap::MemoryOutOfBounds => {
-                return verify_v8(&["memory access out of bounds", "is out of bounds"])
+                return verify_v8(&["memory access out of bounds", "is out of bounds"]);
             }
             Trap::UnreachableCodeReached => {
                 return verify_v8(&[
@@ -110,7 +110,7 @@ impl DiffEngine for V8Engine {
                 ]);
             }
             Trap::IntegerDivisionByZero => {
-                return verify_v8(&["divide by zero", "remainder by zero"])
+                return verify_v8(&["divide by zero", "remainder by zero"]);
             }
             Trap::StackOverflow => {
                 return verify_v8(&[
@@ -130,14 +130,14 @@ impl DiffEngine for V8Engine {
                     "table initializer is out of bounds",
                     "table index is out of bounds",
                     "element segment out of bounds",
-                ])
+                ]);
             }
             Trap::BadSignature => return verify_v8(&["function signature mismatch"]),
             Trap::IntegerOverflow | Trap::BadConversionToInteger => {
                 return verify_v8(&[
                     "float unrepresentable in integer range",
                     "divide result unrepresentable",
-                ])
+                ]);
             }
             other => log::debug!("unknown code {:?}", other),
         }

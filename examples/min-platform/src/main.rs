@@ -8,8 +8,8 @@ fn main() -> Result<()> {
 
 #[cfg(target_os = "linux")]
 fn main() -> Result<()> {
-    use anyhow::{anyhow, Context};
-    use libloading::os::unix::{Library, Symbol, RTLD_GLOBAL, RTLD_NOW};
+    use anyhow::{Context, anyhow};
+    use libloading::os::unix::{Library, RTLD_GLOBAL, RTLD_NOW, Symbol};
     use object::{Object, ObjectSymbol};
     use std::io::Write;
     use wasmtime::{Config, Engine};

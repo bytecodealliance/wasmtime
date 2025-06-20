@@ -1,10 +1,11 @@
 //! Densely numbered entity references as mapping keys.
+use crate::EntityRef;
 use crate::boxed_slice::BoxedSlice;
 use crate::iter::{IntoIter, Iter, IterMut};
 use crate::keys::Keys;
-use crate::EntityRef;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::fmt;
 use core::marker::PhantomData;
 use core::mem;
 use core::ops::{Index, IndexMut};
@@ -27,7 +28,7 @@ use serde_derive::{Deserialize, Serialize};
 /// that it only allows indexing with the distinct `EntityRef` key type, so converting to a
 /// plain slice would make it easier to use incorrectly. To make a slice of a `PrimaryMap`, use
 /// `into_boxed_slice`.
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Clone, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct PrimaryMap<K, V>
 where
@@ -88,22 +89,22 @@ where
     }
 
     /// Iterate over all the values in this map.
-    pub fn values(&self) -> slice::Iter<V> {
+    pub fn values(&self) -> slice::Iter<'_, V> {
         self.elems.iter()
     }
 
     /// Iterate over all the values in this map, mutable edition.
-    pub fn values_mut(&mut self) -> slice::IterMut<V> {
+    pub fn values_mut(&mut self) -> slice::IterMut<'_, V> {
         self.elems.iter_mut()
     }
 
     /// Iterate over all the keys and values in this map.
-    pub fn iter(&self) -> Iter<K, V> {
+    pub fn iter(&self) -> Iter<'_, K, V> {
         Iter::new(self.elems.iter())
     }
 
     /// Iterate over all the keys and values in this map, mutable edition.
-    pub fn iter_mut(&mut self) -> IterMut<K, V> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         IterMut::new(self.elems.iter_mut())
     }
 
@@ -333,6 +334,16 @@ where
             elems,
             unused: PhantomData,
         }
+    }
+}
+
+impl<K: EntityRef + fmt::Debug, V: fmt::Debug> fmt::Debug for PrimaryMap<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut struct_ = f.debug_struct("PrimaryMap");
+        for (k, v) in self {
+            struct_.field(&alloc::format!("{k:?}"), v);
+        }
+        struct_.finish()
     }
 }
 

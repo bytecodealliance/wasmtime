@@ -1,4 +1,4 @@
-use crate::{types::TypeInfo, Ownership};
+use crate::{Ownership, types::TypeInfo};
 use heck::*;
 use wit_parser::*;
 
@@ -132,7 +132,7 @@ pub trait RustGenerator<'a> {
                     TypeDefKind::Type(Type::String) => true,
                     TypeDefKind::Type(_) => false,
                     TypeDefKind::Unknown => unreachable!(),
-                    TypeDefKind::FixedSizeList(_, _) => todo!(),
+                    TypeDefKind::FixedSizeList(..) => todo!(),
                 }
             }
         }
@@ -176,19 +176,19 @@ pub trait RustGenerator<'a> {
             TypeDefKind::Future(ty) => {
                 let wt = self.wasmtime_path();
                 let t = self.optional_ty(ty.as_ref(), TypeMode::Owned);
-                format!("{wt}::component::FutureReader<{t}>")
+                format!("{wt}::component::HostFuture<{t}>")
             }
             TypeDefKind::Stream(ty) => {
                 let wt = self.wasmtime_path();
                 let t = self.optional_ty(ty.as_ref(), TypeMode::Owned);
-                format!("{wt}::component::StreamReader<{t}>")
+                format!("{wt}::component::HostStream<{t}>")
             }
             TypeDefKind::Handle(handle) => self.handle(handle),
             TypeDefKind::Resource => unreachable!(),
 
             TypeDefKind::Type(t) => self.ty(t, mode),
             TypeDefKind::Unknown => unreachable!(),
-            TypeDefKind::FixedSizeList(_, _) => todo!(),
+            TypeDefKind::FixedSizeList(..) => todo!(),
         }
     }
 
@@ -234,7 +234,7 @@ pub trait RustGenerator<'a> {
     }
     fn stream(&self, ty: Option<&Type>) -> String {
         let wt = self.wasmtime_path();
-        let mut out = format!("{wt}::component::StreamReader<");
+        let mut out = format!("{wt}::component::HostStream<");
         out.push_str(&self.optional_ty(ty, TypeMode::Owned));
         out.push_str(">");
         out
@@ -245,7 +245,7 @@ pub trait RustGenerator<'a> {
     }
     fn future(&self, ty: Option<&Type>) -> String {
         let wt = self.wasmtime_path();
-        let mut out = format!("{wt}::component::FutureReader<");
+        let mut out = format!("{wt}::component::HostFuture<");
         out.push_str(&self.optional_ty(ty, TypeMode::Owned));
         out.push_str(">");
         out

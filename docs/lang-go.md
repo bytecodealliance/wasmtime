@@ -11,11 +11,11 @@ Make sure you're using Go 1.12 or later with modules support.
 
 First up you'll want to start a new module:
 
-```sh
-$ mkdir hello-wasm
-$ cd hello-wasm
-$ go mod init hello-wasm
-$ go get github.com/bytecodealliance/wasmtime-go
+```console
+mkdir hello-wasm
+cd hello-wasm
+go mod init hello-wasm
+go get github.com/bytecodealliance/wasmtime-go
 ```
 
 Next, copy this example WebAssembly text module into your project. It exports a
@@ -58,7 +58,7 @@ func check(err error) {
 
 And finally we can build and run it:
 
-```sh
+```console
 $ go run main.go
 gcd(6, 27) = 3
 ```

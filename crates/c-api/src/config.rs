@@ -141,6 +141,11 @@ pub extern "C" fn wasmtime_config_wasm_memory64_set(c: &mut wasm_config_t, enabl
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_config_wasm_stack_switching_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.wasm_stack_switching(enable);
+}
+
+#[unsafe(no_mangle)]
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 pub extern "C" fn wasmtime_config_strategy_set(
     c: &mut wasm_config_t,
@@ -211,12 +216,18 @@ pub unsafe extern "C" fn wasmtime_config_cache_config_load(
     c: &mut wasm_config_t,
     filename: *const c_char,
 ) -> Option<Box<wasmtime_error_t>> {
+    use std::path::Path;
+
+    use wasmtime::Cache;
+
     handle_result(
         if filename.is_null() {
-            c.config.cache_config_load_default()
+            Cache::from_file(None).map(|cache| c.config.cache(Some(cache)))
         } else {
             match CStr::from_ptr(filename).to_str() {
-                Ok(s) => c.config.cache_config_load(s),
+                Ok(s) => {
+                    Cache::from_file(Some(&Path::new(s))).map(|cache| c.config.cache(Some(cache)))
+                }
                 Err(e) => Err(e.into()),
             }
         },
@@ -458,8 +469,8 @@ pub struct wasmtime_pooling_allocation_config_t {
 
 #[unsafe(no_mangle)]
 #[cfg(feature = "pooling-allocator")]
-pub extern "C" fn wasmtime_pooling_allocation_config_new(
-) -> Box<wasmtime_pooling_allocation_config_t> {
+pub extern "C" fn wasmtime_pooling_allocation_config_new()
+-> Box<wasmtime_pooling_allocation_config_t> {
     Box::new(wasmtime_pooling_allocation_config_t {
         config: PoolingAllocationConfig::default(),
     })

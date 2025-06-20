@@ -35,9 +35,9 @@ where
     }
 }
 
-impl Into<Vec<MemArea>> for MemAreas {
-    fn into(self) -> Vec<MemArea> {
-        self.0.clone()
+impl From<MemAreas> for Vec<MemArea> {
+    fn from(areas: MemAreas) -> Vec<MemArea> {
+        areas.0.clone()
     }
 }
 
@@ -177,7 +177,7 @@ impl MemArea {
     fn inside(&self, len: u32) -> impl Iterator<Item = MemArea> + use<> {
         let end: i64 = self.len as i64 - len as i64;
         let start = self.ptr;
-        (0..end).into_iter().map(move |v| MemArea {
+        (0..end).map(move |v| MemArea {
             ptr: start + v as u32,
             len,
         })

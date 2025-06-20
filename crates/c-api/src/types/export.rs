@@ -1,4 +1,4 @@
-use crate::{wasm_externtype_t, wasm_name_t, CExternType};
+use crate::{CExternType, wasm_externtype_t, wasm_name_t};
 use std::cell::OnceCell;
 
 #[repr(C)]

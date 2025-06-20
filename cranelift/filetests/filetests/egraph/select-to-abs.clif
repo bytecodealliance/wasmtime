@@ -1,0 +1,254 @@
+test optimize precise-output
+set opt_level=speed
+target x86_64
+
+;; (x > 0) ? x : neg(x)  => abs(x)
+
+function %abs_sgt_x_negx_i64(i64) -> i64 {
+block0(v0: i64):              ;; x
+    v1 = iconst.i64 0         ;; 0 for icmp
+    v2 = icmp sgt v0, v1      ;; x > 0
+    v3 = iconst.i64 0         ;; 0 for isub (ineg)
+    v4 = isub v3, v0          ;; 0 - x (represents ineg x)
+    v5 = select v2, v0, v4    ;; (x > 0) ? x : (0-x)
+    return v5
+}
+; function %abs_sgt_x_negx_i64(i64) -> i64 fast {
+; block0(v0: i64):
+;     v9 = iabs v0
+;     return v9
+; }
+
+function %abs_sgt_x_negx_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp sgt v0, v1
+    v3 = iconst.i32 0
+    v4 = isub v3, v0
+    v5 = select v2, v0, v4
+    return v5
+}
+; function %abs_sgt_x_negx_i32(i32) -> i32 fast {
+; block0(v0: i32):
+;     v9 = iabs v0
+;     return v9
+; }
+
+function %abs_sgt_x_negx_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 0
+    v2 = icmp sgt v0, v1
+    v3 = iconst.i16 0
+    v4 = isub v3, v0
+    v5 = select v2, v0, v4
+    return v5
+}
+; function %abs_sgt_x_negx_i16(i16) -> i16 fast {
+; block0(v0: i16):
+;     v9 = iabs v0
+;     return v9
+; }
+
+function %abs_sgt_x_negx_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = icmp sgt v0, v1
+    v3 = iconst.i8 0
+    v4 = isub v3, v0
+    v5 = select v2, v0, v4
+    return v5
+}
+; function %abs_sgt_x_negx_i8(i8) -> i8 fast {
+; block0(v0: i8):
+;     v9 = iabs v0
+;     return v9
+; }
+
+;; (x >= 0) ? x : neg(x) => abs(x)
+
+function %abs_sge_x_negx_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = icmp sge v0, v1      ;; x >= 0
+    v3 = iconst.i64 0
+    v4 = isub v3, v0
+    v5 = select v2, v0, v4
+    return v5
+}
+; function %abs_sge_x_negx_i64(i64) -> i64 fast {
+; block0(v0: i64):
+;     v9 = iabs v0
+;     return v9
+; }
+
+function %abs_sge_x_negx_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp sge v0, v1
+    v3 = iconst.i32 0
+    v4 = isub v3, v0
+    v5 = select v2, v0, v4
+    return v5
+}
+; function %abs_sge_x_negx_i32(i32) -> i32 fast {
+; block0(v0: i32):
+;     v9 = iabs v0
+;     return v9
+; }
+
+function %abs_sge_x_negx_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 0
+    v2 = icmp sge v0, v1
+    v3 = iconst.i16 0
+    v4 = isub v3, v0
+    v5 = select v2, v0, v4
+    return v5
+}
+; function %abs_sge_x_negx_i16(i16) -> i16 fast {
+; block0(v0: i16):
+;     v9 = iabs v0
+;     return v9
+; }
+
+function %abs_sge_x_negx_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = icmp sge v0, v1
+    v3 = iconst.i8 0
+    v4 = isub v3, v0
+    v5 = select v2, v0, v4
+    return v5
+}
+; function %abs_sge_x_negx_i8(i8) -> i8 fast {
+; block0(v0: i8):
+;     v9 = iabs v0
+;     return v9
+; }
+
+
+;; (x <= 0) ? neg(x) : x => abs(x)
+
+function %abs_sle_negx_x_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = icmp sle v0, v1      ;; x <= 0
+    v3 = iconst.i64 0
+    v4 = isub v3, v0          ;; 0 - x
+    v5 = select v2, v4, v0    ;; (x <= 0) ? (0-x) : x
+    return v5
+}
+; function %abs_sle_negx_x_i64(i64) -> i64 fast {
+; block0(v0: i64):
+;     v9 = iabs v0
+;     return v9
+; }
+
+function %abs_sle_negx_x_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp sle v0, v1
+    v3 = iconst.i32 0
+    v4 = isub v3, v0
+    v5 = select v2, v4, v0
+    return v5
+}
+; function %abs_sle_negx_x_i32(i32) -> i32 fast {
+; block0(v0: i32):
+;     v9 = iabs v0
+;     return v9
+; }
+
+function %abs_sle_negx_x_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 0
+    v2 = icmp sle v0, v1
+    v3 = iconst.i16 0
+    v4 = isub v3, v0
+    v5 = select v2, v4, v0
+    return v5
+}
+; function %abs_sle_negx_x_i16(i16) -> i16 fast {
+; block0(v0: i16):
+;     v9 = iabs v0
+;     return v9
+; }
+
+function %abs_sle_negx_x_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = icmp sle v0, v1
+    v3 = iconst.i8 0
+    v4 = isub v3, v0
+    v5 = select v2, v4, v0
+    return v5
+}
+; function %abs_sle_negx_x_i8(i8) -> i8 fast {
+; block0(v0: i8):
+;     v9 = iabs v0
+;     return v9
+; }
+
+;; (x < 0) ? neg(x) : x => abs(x)
+function %abs_slt_negx_x_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 0
+    v2 = icmp slt v0, v1      ;; x < 0
+    v3 = iconst.i64 0
+    v4 = isub v3, v0
+    v5 = select v2, v4, v0
+    return v5
+}
+; function %abs_slt_negx_x_i64(i64) -> i64 fast {
+; block0(v0: i64):
+;     v9 = iabs v0
+;     return v9
+; }
+
+function %abs_slt_negx_x_i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 0
+    v2 = icmp slt v0, v1
+    v3 = iconst.i32 0
+    v4 = isub v3, v0
+    v5 = select v2, v4, v0
+    return v5
+}
+
+; function %abs_slt_negx_x_i32(i32) -> i32 fast {
+; block0(v0: i32):
+;     v9 = iabs v0
+;     return v9
+; }
+
+function %abs_slt_negx_x_i16(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 0
+    v2 = icmp slt v0, v1
+    v3 = iconst.i16 0
+    v4 = isub v3, v0
+    v5 = select v2, v4, v0
+    return v5
+}
+
+; function %abs_slt_negx_x_i16(i16) -> i16 fast {
+; block0(v0: i16):
+;     v9 = iabs v0
+;     return v9
+; }
+
+function %abs_slt_negx_x_i8(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 0
+    v2 = icmp slt v0, v1
+    v3 = iconst.i8 0
+    v4 = isub v3, v0
+    v5 = select v2, v4, v0
+    return v5
+}
+
+; function %abs_slt_negx_x_i8(i8) -> i8 fast {
+; block0(v0: i8):
+;     v9 = iabs v0
+;     return v9
+; }

@@ -1,10 +1,10 @@
-use super::{truncate_i32_to_i16, truncate_i32_to_i8};
+use super::{truncate_i32_to_i8, truncate_i32_to_i16};
 use crate::{
+    AnyRef, ExternRef, Func, HeapType, RootedGcRefImpl, StorageType, Val, ValType,
     prelude::*,
     runtime::vm::{GcHeap, GcStore, VMGcRef},
     store::AutoAssertNoGc,
     vm::{FuncRefTableId, SendSyncPtr},
-    AnyRef, ExternRef, Func, HeapType, RootedGcRefImpl, StorageType, Val, ValType,
 };
 use core::fmt;
 use wasmtime_environ::{GcStructLayout, VMGcKind};

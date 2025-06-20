@@ -7,13 +7,18 @@
 
 set -ex
 
-cargo run --no-default-features --features compile,pulley,wat,gc-drc,component-model \
-  compile --target pulley64 ./tests/all/pulley_provenance_test.wat \
-  -o tests/all/pulley_provenance_test.cwasm \
-  -O memory-reservation=$((1 << 20)) \
-  -O memory-guard-size=0 \
-  -O signals-based-traps=n \
-  -W function-references
+compile() {
+  cargo run --no-default-features --features compile,pulley,wat,gc-drc,component-model \
+    compile --target pulley64 $1 \
+    -o ${1%.wat}.cwasm \
+    -O memory-reservation=$((1 << 20)) \
+    -O memory-guard-size=0 \
+    -O signals-based-traps=n \
+    -W function-references
+}
+
+compile ./tests/all/pulley_provenance_test.wat
+compile ./tests/all/pulley_provenance_test_component.wat
 
 MIRIFLAGS="$MIRIFLAGS -Zmiri-disable-isolation -Zmiri-permissive-provenance" \
   cargo miri test --test all -- \

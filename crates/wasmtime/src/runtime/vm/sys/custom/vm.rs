@@ -1,7 +1,7 @@
 use super::cvt;
 use crate::prelude::*;
-use crate::runtime::vm::sys::capi;
 use crate::runtime::vm::SendSyncPtr;
+use crate::runtime::vm::sys::capi;
 use crate::vm::sys::DecommitBehavior;
 use core::ptr::{self, NonNull};
 #[cfg(feature = "std")]

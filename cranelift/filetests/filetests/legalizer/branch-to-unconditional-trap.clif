@@ -1,0 +1,41 @@
+test legalizer
+target aarch64
+
+function %trapnz(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    brif v0, block1, block2(v1)
+block1:
+    trap user42
+block2(v2: i64):
+    return v2
+}
+
+; check:  block0(v0: i64, v1: i64):
+; nextln:     trapnz v0, user42
+; nextln:     jump block2(v1)
+
+function %trapz(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    brif v0, block1(v1), block2
+block1(v2: i64):
+    return v2
+block2:
+    trap user42
+}
+
+; check:  block0(v0: i64, v1: i64):
+; nextln:     trapz v0, user42
+; nextln:     jump block1(v1)
+
+function %could_be_either_doesnt_matter(i64) -> i64 {
+block0(v0: i64):
+    brif v0, block1, block2
+block1:
+    trap user36
+block2:
+    trap user42
+}
+
+; check:  block0(v0: i64):
+; nextln:     trapnz v0, user36
+; nextln:     jump block2

@@ -1,5 +1,5 @@
 use crate::BuiltinFunctions;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use core::fmt::Formatter;
 use cranelift_codegen::isa::unwind::{UnwindInfo, UnwindInfoKind};
 use cranelift_codegen::isa::{CallConv, IsaBuilder};
@@ -68,7 +68,7 @@ pub(crate) enum LookupError {
     // enables the `all-arch` feature; in such case, this variant
     // will never be used. This is most likely going to change
     // in the future; this is one of the simplest options for now.
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "see comment")]
     SupportDisabled,
 }
 

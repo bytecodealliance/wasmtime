@@ -1,5 +1,5 @@
 use crate::runtime::in_tokio;
-use wasmtime_wasi_io::{bindings::wasi::io::poll as async_poll, poll::DynPollable, IoImpl, IoView};
+use wasmtime_wasi_io::{IoImpl, IoView, bindings::wasi::io::poll as async_poll, poll::DynPollable};
 
 use anyhow::Result;
 use wasmtime::component::Resource;

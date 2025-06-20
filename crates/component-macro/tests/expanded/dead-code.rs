@@ -6,11 +6,11 @@
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
 /// For more information see [`Imports`] as well.
-pub struct ImportsPre<T> {
+pub struct ImportsPre<T: 'static> {
     instance_pre: wasmtime::component::InstancePre<T>,
     indices: ImportsIndices,
 }
-impl<T> Clone for ImportsPre<T> {
+impl<T: 'static> Clone for ImportsPre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,7 +18,7 @@ impl<T> Clone for ImportsPre<T> {
         }
     }
 }
-impl<_T> ImportsPre<_T> {
+impl<_T: 'static> ImportsPre<_T> {
     /// Creates a new copy of `ImportsPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -27,7 +27,7 @@ impl<_T> ImportsPre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = ImportsIndices::new(instance_pre.component())?;
+        let indices = ImportsIndices::new(&instance_pre)?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -80,11 +80,6 @@ pub struct ImportsIndices {}
 /// * If you've instantiated the instance yourself already
 ///   then you can use [`Imports::new`].
 ///
-/// * You can also access the guts of instantiation through
-///   [`ImportsIndices::new_instance`] followed
-///   by [`ImportsIndices::load`] to crate an instance of this
-///   type.
-///
 /// These methods are all equivalent to one another and move
 /// around the tradeoff of what work is performed when.
 ///
@@ -101,24 +96,11 @@ const _: () = {
         ///
         /// This method may fail if the component does not have the
         /// required exports.
-        pub fn new(
-            component: &wasmtime::component::Component,
+        pub fn new<_T>(
+            _instance_pre: &wasmtime::component::InstancePre<_T>,
         ) -> wasmtime::Result<Self> {
-            let _component = component;
-            Ok(ImportsIndices {})
-        }
-        /// Creates a new instance of [`ImportsIndices`] from an
-        /// instantiated component.
-        ///
-        /// This method of creating a [`Imports`] will perform string
-        /// lookups for all exports when this method is called. This
-        /// will only succeed if the provided instance matches the
-        /// requirements of [`Imports`].
-        pub fn new_instance(
-            mut store: impl wasmtime::AsContextMut,
-            instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Self> {
-            let _instance = instance;
+            let _component = _instance_pre.component();
+            let _instance_type = _instance_pre.instance_type();
             Ok(ImportsIndices {})
         }
         /// Uses the indices stored in `self` to load an instance
@@ -131,6 +113,7 @@ const _: () = {
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Imports> {
+            let _ = &mut store;
             let _instance = instance;
             Ok(Imports {})
         }
@@ -139,32 +122,36 @@ const _: () = {
         /// Convenience wrapper around [`ImportsPre::new`] and
         /// [`ImportsPre::instantiate`].
         pub fn instantiate<_T>(
-            mut store: impl wasmtime::AsContextMut<Data = _T>,
+            store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<Imports> {
             let pre = linker.instantiate_pre(component)?;
             ImportsPre::new(pre)?.instantiate(store)
         }
-        /// Convenience wrapper around [`ImportsIndices::new_instance`] and
+        /// Convenience wrapper around [`ImportsIndices::new`] and
         /// [`ImportsIndices::load`].
         pub fn new(
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Imports> {
-            let indices = ImportsIndices::new_instance(&mut store, instance)?;
-            indices.load(store, instance)
+            let indices = ImportsIndices::new(&instance.instance_pre(&store))?;
+            indices.load(&mut store, instance)
         }
-        pub fn add_to_linker<T, U>(
+        pub fn add_to_linker<T, D>(
             linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            host_getter: fn(&mut T) -> D::Data<'_>,
         ) -> wasmtime::Result<()>
         where
-            U: a::b::interface_with_live_type::Host
+            D: wasmtime::component::HasData,
+            for<'a> D::Data<
+                'a,
+            >: a::b::interface_with_live_type::Host
                 + a::b::interface_with_dead_type::Host,
+            T: 'static,
         {
-            a::b::interface_with_live_type::add_to_linker(linker, get)?;
-            a::b::interface_with_dead_type::add_to_linker(linker, get)?;
+            a::b::interface_with_live_type::add_to_linker::<T, D>(linker, host_getter)?;
+            a::b::interface_with_dead_type::add_to_linker::<T, D>(linker, host_getter)?;
             Ok(())
         }
     }
@@ -198,26 +185,20 @@ pub mod a {
             pub trait Host {
                 fn f(&mut self) -> LiveType;
             }
-            pub trait GetHost<
-                T,
-                D,
-            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host;
+            impl<_T: Host + ?Sized> Host for &mut _T {
+                fn f(&mut self) -> LiveType {
+                    Host::f(*self)
+                }
             }
-            impl<F, T, D, O> GetHost<T, D> for F
-            where
-                F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host,
-            {
-                type Host = O;
-            }
-            pub fn add_to_linker_get_host<
-                T,
-                G: for<'a> GetHost<&'a mut T, T, Host: Host>,
-            >(
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
-            ) -> wasmtime::Result<()> {
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
                 let mut inst = linker.instance("a:b/interface-with-live-type")?;
                 inst.func_wrap(
                     "f",
@@ -228,20 +209,6 @@ pub mod a {
                     },
                 )?;
                 Ok(())
-            }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                U: Host,
-            {
-                add_to_linker_get_host(linker, get)
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn f(&mut self) -> LiveType {
-                    Host::f(*self)
-                }
             }
         }
         #[allow(clippy::all)]
@@ -299,39 +266,19 @@ pub mod a {
                 assert!(4 == < V as wasmtime::component::ComponentType >::ALIGN32);
             };
             pub trait Host {}
-            pub trait GetHost<
-                T,
-                D,
-            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host;
-            }
-            impl<F, T, D, O> GetHost<T, D> for F
-            where
-                F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host,
-            {
-                type Host = O;
-            }
-            pub fn add_to_linker_get_host<
-                T,
-                G: for<'a> GetHost<&'a mut T, T, Host: Host>,
-            >(
+            impl<_T: Host + ?Sized> Host for &mut _T {}
+            pub fn add_to_linker<T, D>(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: G,
-            ) -> wasmtime::Result<()> {
+                host_getter: fn(&mut T) -> D::Data<'_>,
+            ) -> wasmtime::Result<()>
+            where
+                D: wasmtime::component::HasData,
+                for<'a> D::Data<'a>: Host,
+                T: 'static,
+            {
                 let mut inst = linker.instance("a:b/interface-with-dead-type")?;
                 Ok(())
             }
-            pub fn add_to_linker<T, U>(
-                linker: &mut wasmtime::component::Linker<T>,
-                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-            ) -> wasmtime::Result<()>
-            where
-                U: Host,
-            {
-                add_to_linker_get_host(linker, get)
-            }
-            impl<_T: Host + ?Sized> Host for &mut _T {}
         }
     }
 }

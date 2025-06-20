@@ -57,7 +57,7 @@ impl RunCommand {
         let are_equal = actual.len() == expected.len()
             && actual
                 .into_iter()
-                .zip(expected.into_iter())
+                .zip(expected)
                 .all(|(a, b)| a.bitwise_eq(b));
 
         match compare {
@@ -125,7 +125,7 @@ impl Display for Comparison {
 mod test {
     use super::*;
     use crate::parse_run_command;
-    use cranelift_codegen::ir::{types, AbiParam, Signature};
+    use cranelift_codegen::ir::{AbiParam, Signature, types};
     use cranelift_codegen::isa::CallConv;
 
     #[test]

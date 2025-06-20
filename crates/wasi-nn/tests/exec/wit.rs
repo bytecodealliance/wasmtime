@@ -1,6 +1,6 @@
 use super::PREOPENED_DIR_NAME;
 use crate::check::artifacts_dir;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::path::Path;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
@@ -8,7 +8,7 @@ use wasmtime_wasi::p2::bindings::sync::Command;
 use wasmtime_wasi::p2::{WasiCtx, WasiCtxBuilder};
 use wasmtime_wasi::{DirPerms, FilePerms};
 use wasmtime_wasi_nn::wit::WasiNnView;
-use wasmtime_wasi_nn::{wit::WasiNnCtx, Backend, InMemoryRegistry};
+use wasmtime_wasi_nn::{Backend, InMemoryRegistry, wit::WasiNnCtx};
 
 /// Run a wasi-nn test program. This is modeled after
 /// `crates/wasi/tests/all/main.rs` but still uses the older preview1 API for
@@ -51,7 +51,7 @@ impl Ctx {
         if preload_model {
             registry.load((backend).as_dir_loadable().unwrap(), &mobilenet_dir)?;
         }
-        let wasi_nn = WasiNnCtx::new([backend.into()], registry.into());
+        let wasi_nn = WasiNnCtx::new([backend], registry.into());
 
         let table = ResourceTable::new();
 

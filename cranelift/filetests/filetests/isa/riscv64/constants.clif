@@ -342,6 +342,26 @@ block0:
 ;   addi a0, zero, -9
 ;   ret
 
+function %f() -> f128 {
+block0:
+  v0 = f128const 0x1.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,0
+;   lui a2,16383
+;   slli a1,a2,36
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a0, zero
+;   lui a2, 0x3fff
+;   slli a1, a2, 0x24
+;   ret
+
 function %f() -> f64 {
 block0:
   v0 = f64const 0x1.0
@@ -378,6 +398,46 @@ block0:
 ; block0: ; offset 0x0
 ;   lui a0, 0x40a00
 ;   fmv.w.x fa0, a0
+;   ret
+
+function %f() -> f16 {
+block0:
+  v0 = f16const 0x1.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,-12
+;   addi a2,a0,-1024
+;   fmv.w.x fa0,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0xffff4
+;   addi a2, a0, -0x400
+;   fmv.w.x fa0, a2
+;   ret
+
+function %f() -> f128 {
+block0:
+  v0 = f128const 0x32.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,0
+;   lui a2,262217
+;   slli a1,a2,32
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a0, zero
+;   lui a2, 0x40049
+;   slli a1, a2, 0x20
 ;   ret
 
 function %f() -> f64 {
@@ -418,6 +478,44 @@ block0:
 ;   fmv.w.x fa0, a0
 ;   ret
 
+function %f() -> f16 {
+block0:
+  v0 = f16const 0x32.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,-11
+;   addi a2,a0,576
+;   fmv.w.x fa0,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0xffff5
+;   addi a2, a0, 0x240
+;   fmv.w.x fa0, a2
+;   ret
+
+function %f() -> f128 {
+block0:
+  v0 = f128const 0x0.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a1,0
+;   mv a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a1, zero
+;   mv a0, a1
+;   ret
+
 function %f() -> f64 {
 block0:
   v0 = f64const 0x0.0
@@ -448,6 +546,44 @@ block0:
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   fmv.w.x fa0, zero
+;   ret
+
+function %f() -> f16 {
+block0:
+  v0 = f16const 0x0.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,-16
+;   fmv.w.x fa0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0xffff0
+;   fmv.w.x fa0, a0
+;   ret
+
+function %f() -> f128 {
+block0:
+  v0 = f128const -0x10.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   li a0,0
+;   lui a2,49155
+;   slli a1,a2,36
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   mv a0, zero
+;   lui a2, 0xc003
+;   slli a1, a2, 0x24
 ;   ret
 
 function %f() -> f64 {
@@ -486,6 +622,46 @@ block0:
 ; block0: ; offset 0x0
 ;   lui a0, 0xc1800
 ;   fmv.w.x fa0, a0
+;   ret
+
+function %f() -> f16 {
+block0:
+  v0 = f16const -0x10.0
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,-3
+;   addi a2,a0,-1024
+;   fmv.w.x fa0,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0xffffd
+;   addi a2, a0, -0x400
+;   fmv.w.x fa0, a2
+;   ret
+
+function %f() -> f128 {
+block0:
+  v0 = f128const 0x0.000000abcdef0000000000abcdefp-16382
+  return v0
+}
+
+; VCode:
+; block0:
+;   lui a0,2749
+;   addi a1,a0,-529
+;   mv a0,a1
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lui a0, 0xabd
+;   addi a1, a0, -0x211
+;   mv a0, a1
 ;   ret
 
 function %addi_1() -> i64 {

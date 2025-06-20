@@ -1,6 +1,6 @@
 use crate::wasi::http::{outgoing_handler, types as http_types};
 use crate::wasi::io::streams;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::fmt;
 
 pub struct Response {

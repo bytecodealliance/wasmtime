@@ -64,6 +64,13 @@ pub(crate) fn define() -> TargetIsa {
         false,
     );
 
+    let _has_zfhmin = setting.add_bool(
+        "has_zfhmin",
+        "has extension Zfhmin?",
+        "Zfhmin: Minimal Half-Precision Floating-Point",
+        false,
+    );
+
     let _has_zfh = setting.add_bool(
         "has_zfh",
         "has extension Zfh?",
@@ -75,6 +82,13 @@ pub(crate) fn define() -> TargetIsa {
         "has_v",
         "has extension V?",
         "Vector instruction support",
+        false,
+    );
+
+    let _has_zvfh = setting.add_bool(
+        "has_zvfh",
+        "has extension Zvfh?",
+        "Zvfh: Vector Extension for Half-Precision Floating-Point",
         false,
     );
 

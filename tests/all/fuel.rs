@@ -127,7 +127,7 @@ fn iloop(config: &mut Config) -> Result<()> {
 }
 
 #[wasmtime_test]
-fn manual_fuel(config: &mut Config) {
+fn manual_fuel(config: &mut Config) -> Result<()> {
     config.consume_fuel(true);
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, ());
@@ -135,11 +135,12 @@ fn manual_fuel(config: &mut Config) {
     assert_eq!(store.get_fuel().ok(), Some(10_000));
     assert_eq!(store.set_fuel(1).ok(), Some(()));
     assert_eq!(store.get_fuel().ok(), Some(1));
+    Ok(())
 }
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn host_function_consumes_all(config: &mut Config) {
+fn host_function_consumes_all(config: &mut Config) -> Result<()> {
     const FUEL: u64 = 10_000;
     config.consume_fuel(true);
     let engine = Engine::new(&config).unwrap();
@@ -167,20 +168,24 @@ fn host_function_consumes_all(config: &mut Config) {
     let export = instance.get_typed_func::<(), ()>(&mut store, "").unwrap();
     let trap = export.call(&mut store, ()).unwrap_err();
     assert_eq!(trap.downcast::<Trap>().unwrap(), Trap::OutOfFuel);
+    Ok(())
 }
 
 #[wasmtime_test]
-fn manual_edge_cases(config: &mut Config) {
+fn manual_edge_cases(config: &mut Config) -> Result<()> {
     config.consume_fuel(true);
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, ());
     store.set_fuel(u64::MAX).unwrap();
     assert_eq!(store.get_fuel().unwrap(), u64::MAX);
+    Ok(())
 }
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
-fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping(config: &mut Config) {
+fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping(
+    config: &mut Config,
+) -> Result<()> {
     config.consume_fuel(true);
     config.memory_reservation(0x1_0000);
 
@@ -219,6 +224,7 @@ fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping(config: &m
     // memory access.
     let consumed_fuel = init_fuel - store.get_fuel().unwrap();
     assert!(consumed_fuel > 0);
+    Ok(())
 }
 
 #[wasmtime_test]

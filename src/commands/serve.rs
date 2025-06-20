@@ -1,13 +1,15 @@
 use crate::common::{Profile, RunCommon, RunTarget};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use clap::Parser;
+use http::{Response, StatusCode};
+use std::convert::Infallible;
 use std::net::SocketAddr;
 use std::time::Instant;
 use std::{
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Duration,
 };
@@ -15,12 +17,12 @@ use tokio::sync::Notify;
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Engine, Store, StoreLimits, UpdateDeadline};
 use wasmtime_wasi::p2::{IoView, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
-use wasmtime_wasi_http::bindings::http::types::Scheme;
 use wasmtime_wasi_http::bindings::ProxyPre;
+use wasmtime_wasi_http::bindings::http::types::{ErrorCode, Scheme};
 use wasmtime_wasi_http::io::TokioIo;
 use wasmtime_wasi_http::{
-    body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView, DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS,
-    DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
+    DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
+    WasiHttpView, body::HyperOutgoingBody,
 };
 
 #[cfg(feature = "wasi-config")]
@@ -432,7 +434,43 @@ impl ServeCommand {
                     .serve_connection(
                         stream,
                         hyper::service::service_fn(move |req| {
-                            handle_request(h.clone(), req, comp.clone())
+                            let comp = comp.clone();
+                            let h = h.clone();
+                            async move {
+                                use http_body_util::{BodyExt, Full};
+                                fn to_errorcode(_: Infallible) -> ErrorCode {
+                                    unreachable!()
+                                }
+                                match handle_request(h, req, comp).await {
+                                    Ok(r) => Ok::<_, Infallible>(r),
+                                    Err(e) => {
+                                        eprintln!("error: {e:?}");
+                                        let error_html = "\
+<!doctype html>
+<html>
+<head>
+    <title>500 Internal Server Error</title>
+</head>
+<body>
+    <center>
+        <h1>500 Internal Server Error</h1>
+        <hr>
+        wasmtime
+    </center>
+</body>
+</html>";
+                                        Ok(Response::builder()
+                                            .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                            .header("Content-Type", "text/html; charset=UTF-8")
+                                            .body(
+                                                Full::new(bytes::Bytes::from(error_html))
+                                                    .map_err(to_errorcode)
+                                                    .boxed(),
+                                            )
+                                            .unwrap())
+                                    }
+                                }
+                            }
                         }),
                     )
                     .await
@@ -777,17 +815,23 @@ impl Output {
 
 #[derive(Clone)]
 struct LogStream {
-    prefix: String,
     output: Output,
-    needs_prefix_on_next_write: bool,
+    state: Arc<LogStreamState>,
+}
+
+struct LogStreamState {
+    prefix: String,
+    needs_prefix_on_next_write: AtomicBool,
 }
 
 impl LogStream {
     fn new(prefix: String, output: Output) -> LogStream {
         LogStream {
-            prefix,
             output,
-            needs_prefix_on_next_write: true,
+            state: Arc::new(LogStreamState {
+                prefix,
+                needs_prefix_on_next_write: AtomicBool::new(true),
+            }),
         }
     }
 }
@@ -812,11 +856,17 @@ impl wasmtime_wasi::p2::OutputStream for LogStream {
         let mut bytes = &bytes[..];
 
         while !bytes.is_empty() {
-            if self.needs_prefix_on_next_write {
+            if self
+                .state
+                .needs_prefix_on_next_write
+                .load(Ordering::Relaxed)
+            {
                 self.output
-                    .write_all(self.prefix.as_bytes())
+                    .write_all(self.state.prefix.as_bytes())
                     .map_err(StreamError::LastOperationFailed)?;
-                self.needs_prefix_on_next_write = false;
+                self.state
+                    .needs_prefix_on_next_write
+                    .store(false, Ordering::Relaxed);
             }
             match bytes.iter().position(|b| *b == b'\n') {
                 Some(i) => {
@@ -825,7 +875,9 @@ impl wasmtime_wasi::p2::OutputStream for LogStream {
                     self.output
                         .write_all(a)
                         .map_err(StreamError::LastOperationFailed)?;
-                    self.needs_prefix_on_next_write = true;
+                    self.state
+                        .needs_prefix_on_next_write
+                        .store(true, Ordering::Relaxed);
                 }
                 None => {
                     self.output

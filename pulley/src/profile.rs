@@ -3,11 +3,11 @@
 //! This is used in conjunction with the `profiler-html.rs` example with Pulley
 //! and the `pulley.rs` ProfilingAgent in Wasmtime.
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
 use std::vec::Vec;
 
 // Header markers for sections in the binary `*.data` file.

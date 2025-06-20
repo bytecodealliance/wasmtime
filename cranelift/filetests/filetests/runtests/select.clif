@@ -81,7 +81,7 @@ block0(v0: f32, v1: f32):
     v5 = select v2, v3, v4
     return v5
 }
-; runx: %select_le_f32(0x42.42, 0.0) == 0x0.0
+; run: %select_le_f32(0x42.42, 0.0) == 0x0.0
 ; run: %select_le_f32(0.0, 0.0) == 0x1.0
 ; run: %select_le_f32(0x0.0, 0x42.42) == 0x1.0
 ; run: %select_le_f32(0x0.0, NaN) == 0x0.0

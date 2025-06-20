@@ -1,6 +1,5 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 macro_rules! declare_id {
     (
@@ -29,6 +28,7 @@ pub mod lexer;
 mod log;
 pub mod overlap;
 pub mod parser;
+pub mod printer;
 pub mod sema;
 pub mod serialize;
 pub mod stablemapset;

@@ -113,6 +113,7 @@ pub(crate) fn define() -> TargetIsa {
     );
 
     settings.add_predicate("use_cmpxchg16b", predicate!(has_cmpxchg16b));
+    settings.add_predicate("use_sse3", predicate!(has_sse3));
     settings.add_predicate("use_ssse3", predicate!(has_ssse3));
     settings.add_predicate("use_sse41", predicate!(has_sse41));
     settings.add_predicate("use_sse42", predicate!(has_sse41 && has_sse42));

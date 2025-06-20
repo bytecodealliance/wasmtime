@@ -41,13 +41,13 @@ mod vec;
 pub use crate::config::*;
 pub use crate::engine::*;
 pub use crate::error::*;
+pub use crate::r#extern::*;
 pub use crate::func::*;
 pub use crate::global::*;
 pub use crate::instance::*;
 pub use crate::linker::*;
 pub use crate::memory::*;
 pub use crate::module::*;
-pub use crate::r#extern::*;
 pub use crate::r#ref::*;
 pub use crate::store::*;
 pub use crate::table::*;
@@ -65,6 +65,11 @@ pub use crate::r#async::*;
 mod wasi;
 #[cfg(feature = "wasi")]
 pub use crate::wasi::*;
+
+#[cfg(all(feature = "component-model", feature = "wasi"))]
+mod wasip2;
+#[cfg(all(feature = "component-model", feature = "wasi"))]
+pub use crate::wasip2::*;
 
 #[cfg(feature = "wat")]
 mod wat2wasm;

@@ -1,6 +1,6 @@
 use anyhow::Context;
-use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use target_lexicon::Triple;
 use wasmtime::*;
 use wasmtime_environ::TripleExt;

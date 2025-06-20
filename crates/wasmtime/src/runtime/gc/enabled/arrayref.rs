@@ -3,13 +3,13 @@
 use crate::runtime::vm::VMGcRef;
 use crate::store::StoreId;
 use crate::vm::{VMArrayRef, VMGcHeader};
+use crate::{AnyRef, FieldType};
 use crate::{
-    prelude::*,
-    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
     ArrayType, AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
     ManuallyRooted, RefType, Rooted, Val, ValRaw, ValType, WasmTy,
+    prelude::*,
+    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
 };
-use crate::{AnyRef, FieldType};
 use core::mem::{self, MaybeUninit};
 use wasmtime_environ::{GcArrayLayout, GcLayout, VMGcKind, VMSharedTypeIndex};
 
@@ -653,7 +653,7 @@ impl ArrayRef {
     /// # Panics
     ///
     /// Panics if this reference is associated with a different store.
-    pub fn elems<'a, T: 'a>(
+    pub fn elems<'a, T: 'static>(
         &'a self,
         store: impl Into<StoreContextMut<'a, T>>,
     ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
@@ -892,6 +892,9 @@ unsafe impl WasmTy for Rooted<ArrayRef> {
             | HeapType::I31
             | HeapType::Struct
             | HeapType::ConcreteStruct(_)
+            | HeapType::Cont
+            | HeapType::NoCont
+            | HeapType::ConcreteCont(_)
             | HeapType::None => bail!(
                 "type mismatch: expected `(ref {ty})`, got `(ref {})`",
                 self._ty(store)?,
@@ -986,6 +989,9 @@ unsafe impl WasmTy for ManuallyRooted<ArrayRef> {
             | HeapType::I31
             | HeapType::Struct
             | HeapType::ConcreteStruct(_)
+            | HeapType::Cont
+            | HeapType::NoCont
+            | HeapType::ConcreteCont(_)
             | HeapType::None => bail!(
                 "type mismatch: expected `(ref {ty})`, got `(ref {})`",
                 self._ty(store)?,

@@ -5,9 +5,9 @@
 #![cfg(not(miri))]
 #![cfg(has_native_signals)]
 
-use rustix::mm::{mprotect, MprotectFlags};
-use std::sync::atomic::{AtomicBool, Ordering};
+use rustix::mm::{MprotectFlags, mprotect};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use wasmtime::unix::StoreExt;
 use wasmtime::*;
 

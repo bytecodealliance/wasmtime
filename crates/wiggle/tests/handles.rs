@@ -1,6 +1,6 @@
 use proptest::prelude::*;
 use wiggle::{GuestMemory, GuestPtr, GuestType};
-use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
+use wiggle_test::{HostMemory, MemArea, WasiCtx, impl_errno};
 
 const FD_VAL: u32 = 123;
 

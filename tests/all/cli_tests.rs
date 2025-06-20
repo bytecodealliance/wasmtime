@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::fs::File;
 use std::io::Write;
 use std::path::Path;
@@ -552,8 +552,12 @@ fn run_cwasm_from_stdin() -> Result<()> {
 #[cfg(feature = "wasi-threads")]
 #[test]
 fn run_threads() -> Result<()> {
-    // Skip this test on platforms that don't support threads.
-    if crate::threads::engine().is_none() {
+    // Only run threaded tests on platforms that support threads. Also skip
+    // these tests with ASAN as it, rightfully, complains about a memory leak.
+    // The memory leak at this time is that child threads aren't joined with the
+    // main thread, meaning that allocations done on child threads are indeed
+    // leaked.
+    if crate::threads::engine().is_none() || cfg!(asan) {
         return Ok(());
     }
     let wasm = build_wasm("tests/all/cli_tests/threads.wat")?;
@@ -1100,7 +1104,7 @@ fn increase_stack_size() -> Result<()> {
 
 mod test_programs {
     use super::{get_wasmtime_command, run_wasmtime};
-    use anyhow::{bail, Context, Result};
+    use anyhow::{Context, Result, bail};
     use http_body_util::BodyExt;
     use hyper::header::HeaderValue;
     use std::io::{BufRead, BufReader, Read, Write};
@@ -1111,7 +1115,7 @@ mod test_programs {
 
     macro_rules! assert_test_exists {
         ($name:ident) => {
-            #[allow(unused_imports)]
+            #[expect(unused_imports, reason = "just here to assert the test is here")]
             use self::$name as _;
         };
     }
@@ -1742,9 +1746,9 @@ mod test_programs {
 
     #[tokio::test]
     #[ignore] // TODO: printing stderr in the child and killing the child at the
-              // end of this test race so the stderr may be present or not. Need
-              // to implement a more graceful shutdown routine for `wasmtime
-              // serve`.
+    // end of this test race so the stderr may be present or not. Need
+    // to implement a more graceful shutdown routine for `wasmtime
+    // serve`.
     async fn cli_serve_respect_pooling_options() -> Result<()> {
         let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
             cmd.arg("-Opooling-total-memories=0").arg("-Scli");
@@ -1903,9 +1907,11 @@ stdout [1] :: after empty
 stderr [0] :: this is half a print to stderr
 stderr [0] :: \n\
 stderr [0] :: after empty
+stderr [0] :: start a print 1234
 stderr [1] :: this is half a print to stderr
 stderr [1] :: \n\
 stderr [1] :: after empty
+stderr [1] :: start a print 1234
 "
             ),
             "bad stderr: {err}"
@@ -1951,9 +1957,11 @@ after empty
 this is half a print to stderr
 \n\
 after empty
+start a print 1234
 this is half a print to stderr
 \n\
 after empty
+start a print 1234
 "
             ),
             "bad stderr {err}",
@@ -2092,8 +2100,9 @@ after empty
                         .body(String::new())
                         .context("failed to make request")?,
                 )
-                .await;
-            assert!(res.is_err());
+                .await
+                .expect("got response from wasmtime");
+            assert_eq!(res.status(), http::StatusCode::INTERNAL_SERVER_ERROR);
         }
 
         let (stdout, stderr) = server.finish()?;

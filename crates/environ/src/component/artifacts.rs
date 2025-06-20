@@ -2,8 +2,8 @@
 //! which are serialized with `bincode` into output ELF files.
 
 use crate::{
-    component::{Component, ComponentTypes, TrampolineIndex, TypeComponentIndex},
     CompiledModuleInfo, FunctionLoc, PrimaryMap, StaticModuleIndex,
+    component::{Component, ComponentTypes, TrampolineIndex, TypeComponentIndex},
 };
 use serde_derive::{Deserialize, Serialize};
 

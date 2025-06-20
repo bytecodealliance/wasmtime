@@ -44,7 +44,7 @@ execute the same WASIp2 component from the example above. This example requires 
 
 This does not require any change to the WASIp2 component, it's just the WASIp2 API host functions which are implemented to be async. See [wasmtime async support](https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_support).
 
-[code2]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/wasi-async/main.rs
+[code2]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/wasip2-async/main.rs
 [`wasmtime-wasi`]: https://docs.rs/wasmtime-wasi/*/wasmtime_wasi/preview2/index.html
 
 ```rust,ignore

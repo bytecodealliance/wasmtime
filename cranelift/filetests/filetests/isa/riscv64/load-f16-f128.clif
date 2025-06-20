@@ -1,0 +1,46 @@
+test compile precise-output
+set unwind_info=false
+target riscv64
+
+function %load_f16(i64) -> f16 {
+block0(v0: i64):
+    v1 = load.f16 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   lh a2,0(a0)
+;   lui a4,-16
+;   or a0,a2,a4
+;   fmv.w.x fa0,a0
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   lh a2, 0(a0) ; trap: heap_oob
+;   lui a4, 0xffff0
+;   or a0, a2, a4
+;   fmv.w.x fa0, a0
+;   ret
+
+function %load_f128(i64) -> f128 {
+block0(v0: i64):
+    v1 = load.f128 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ld a2,0(a0)
+;   ld a1,8(a0)
+;   mv a0,a2
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ld a2, 0(a0) ; trap: heap_oob
+;   ld a1, 8(a0) ; trap: heap_oob
+;   mv a0, a2
+;   ret
+

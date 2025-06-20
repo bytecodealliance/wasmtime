@@ -8,7 +8,7 @@ use std::sync::{Mutex, Once};
 use wasmtime_fuzzing::generators::{Config, DiffValue, DiffValueType, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
 use wasmtime_fuzzing::oracles::engine::{build_allowed_env_list, parse_env_list};
-use wasmtime_fuzzing::oracles::{differential, engine, log_wasm, DiffEqResult};
+use wasmtime_fuzzing::oracles::{DiffEqResult, differential, engine, log_wasm};
 
 // Upper limit on the number of invocations for each WebAssembly function
 // executed by this fuzz target.
@@ -163,9 +163,6 @@ fn execute_one(data: &[u8]) -> Result<()> {
             let result_tys = match signature
                 .results()
                 .map(|ty| {
-                    let ty: wasmtime::ValType = ty
-                        .try_into()
-                        .map_err(|_| arbitrary::Error::IncorrectFormat)?;
                     DiffValueType::try_from(ty).map_err(|_| arbitrary::Error::IncorrectFormat)
                 })
                 .collect::<Result<Vec<_>>>()

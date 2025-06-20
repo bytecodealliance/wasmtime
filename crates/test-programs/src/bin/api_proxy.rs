@@ -1,5 +1,5 @@
 use test_programs::wasi::http::types::{
-    Headers, IncomingRequest, OutgoingBody, OutgoingResponse, ResponseOutparam,
+    Headers, IncomingRequest, Method, OutgoingBody, OutgoingResponse, ResponseOutparam,
 };
 
 struct T;
@@ -13,6 +13,25 @@ impl test_programs::proxy::exports::wasi::http::incoming_handler::Guest for T {
         assert!(request.path_with_query().is_some());
 
         test_filesystem();
+
+        match (request.method(), request.path_with_query().as_deref()) {
+            (Method::Get, Some("/early_drop")) => {
+                // Ignore all the errors for this endpoint.
+                let resp = OutgoingResponse::new(Headers::new());
+                let body = resp.body().expect("outgoing response");
+                ResponseOutparam::set(outparam, Ok(resp));
+                let _ = body.write().and_then(|out| {
+                    let _ = out.blocking_write_and_flush(b"hello, world!");
+                    drop(out);
+                    Ok(())
+                });
+                let _ = OutgoingBody::finish(body, None);
+
+                return;
+            }
+
+            _ => {}
+        }
 
         let header = String::from("custom-forbidden-header");
         let req_hdrs = request.headers();

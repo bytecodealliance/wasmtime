@@ -2,13 +2,13 @@
 
 The configuration file uses the [toml] format.
 You can create a configuration file at the default location with:
-```sh
-$ wasmtime config new
+```console
+wasmtime config new
 ```
 It will print the location regardless of the success.
 Please refer to the  `--help` message for using a custom location.
 
-All settings, except `enabled`, are **optional**.
+All settings are **optional**.
 If the setting is not specified, the **default** value is used.
 ***Thus, if you don't know what values to use, don't specify them.***
 The default values might be tuned in the future.
@@ -18,7 +18,6 @@ Wasmtime assumes all the options are in the `cache` section.
 Example config:
 ```toml
 [cache]
-enabled = true
 directory = "/nfs-share/wasmtime-cache/"
 cleanup-interval = "30m"
 files-total-size-soft-limit = "1Gi"
@@ -31,20 +30,6 @@ should be introduced or some behavior should be changed, you are
 welcome to discuss it and contribute to [the Wasmtime repository].
 
 [the Wasmtime repository]: https://github.com/bytecodealliance/wasmtime
-
-Setting `enabled`
------------------
-- **type**: boolean
-- **format**: `true | false`
-- **default**: `true`
-
-Specifies whether the cache system is used or not.
-
-This field is *mandatory*.
-The default value is used when configuration file is not specified
-and none exists at the default location.
-
-[`enabled`]: #setting-enabled
 
 Setting `directory`
 -----------------

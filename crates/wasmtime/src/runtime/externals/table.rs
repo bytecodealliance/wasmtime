@@ -1,11 +1,10 @@
 use crate::prelude::*;
 use crate::runtime::vm::{self as runtime};
-use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
+use crate::store::{AutoAssertNoGc, StoreInstanceId, StoreOpaque};
 use crate::trampoline::generate_table_export;
-use crate::vm::ExportTable;
 use crate::{AnyRef, AsContext, AsContextMut, ExternRef, Func, HeapType, Ref, TableType};
 use core::iter;
-use wasmtime_environ::TypeTrace;
+use wasmtime_environ::{DefinedTableIndex, TypeTrace};
 
 /// A WebAssembly `table`, or an array of values.
 ///
@@ -21,8 +20,23 @@ use wasmtime_environ::TypeTrace;
 /// store it belongs to, and if another store is passed in by accident then
 /// methods will panic.
 #[derive(Copy, Clone, Debug)]
-#[repr(transparent)] // here for the C API
-pub struct Table(pub(super) Stored<crate::runtime::vm::ExportTable>);
+#[repr(C)] // here for the C API
+pub struct Table {
+    instance: StoreInstanceId,
+    index: DefinedTableIndex,
+}
+
+// Double-check that the C representation in `extern.h` matches our in-Rust
+// representation here in terms of size/alignment/etc.
+const _: () = {
+    #[repr(C)]
+    struct Tmp(u64, u32);
+    #[repr(C)]
+    struct C(Tmp, u32);
+    assert!(core::mem::size_of::<C>() == core::mem::size_of::<Table>());
+    assert!(core::mem::align_of::<C>() == core::mem::align_of::<Table>());
+    assert!(core::mem::offset_of!(Table, instance) == 0);
+};
 
 impl Table {
     /// Creates a new [`Table`] with the given parameters.
@@ -85,14 +99,11 @@ impl Table {
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`)
     #[cfg(feature = "async")]
-    pub async fn new_async<T>(
-        mut store: impl AsContextMut<Data = T>,
+    pub async fn new_async(
+        mut store: impl AsContextMut<Data: Send>,
         ty: TableType,
         init: Ref,
-    ) -> Result<Table>
-    where
-        T: Send,
-    {
+    ) -> Result<Table> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
@@ -125,8 +136,7 @@ impl Table {
     }
 
     fn _ty(&self, store: &StoreOpaque) -> TableType {
-        let ty = &store[self.0].table;
-        TableType::from_wasmtime_table(store.engine(), ty)
+        TableType::from_wasmtime_table(store.engine(), self.wasmtime_ty(store))
     }
 
     fn wasmtime_table(
@@ -135,12 +145,10 @@ impl Table {
         lazy_init_range: impl Iterator<Item = u64>,
     ) -> *mut runtime::Table {
         unsafe {
-            let ExportTable {
-                vmctx, definition, ..
-            } = store[self.0];
+            let instance = &store[self.instance];
+            let vmctx = instance.vmctx();
             crate::runtime::vm::Instance::from_vmctx(vmctx, |handle| {
-                let idx = handle.table_index(definition.as_ref());
-                handle.get_defined_table_with_lazy_init(idx, lazy_init_range)
+                handle.get_defined_table_with_lazy_init(self.index, lazy_init_range)
             })
         }
     }
@@ -159,7 +167,7 @@ impl Table {
         unsafe {
             match (*table).get(gc_store, index)? {
                 runtime::TableElement::FuncRef(f) => {
-                    let func = f.map(|f| Func::from_vm_func_ref(&mut store, f));
+                    let func = f.map(|f| Func::from_vm_func_ref(&store, f));
                     Some(func.into())
                 }
 
@@ -187,6 +195,11 @@ impl Table {
                         }
                         ty => unreachable!("not a top type: {ty:?}"),
                     }
+                }
+
+                runtime::TableElement::ContRef(_c) => {
+                    // TODO(#10248) Required to support stack switching in the embedder API.
+                    unimplemented!()
                 }
             }
         }
@@ -227,7 +240,7 @@ impl Table {
     pub(crate) fn internal_size(&self, store: &StoreOpaque) -> u64 {
         // unwrap here should be ok because the runtime should always guarantee
         // that we can fit the number of elements in a 64-bit integer.
-        unsafe { u64::try_from(store[self.0].definition.as_ref().current_elements).unwrap() }
+        u64::try_from(store[self.instance].table(self.index).current_elements).unwrap()
     }
 
     /// Grows the size of this table by `delta` more elements, initialization
@@ -260,7 +273,7 @@ impl Table {
             match (*table).grow(delta, init, store)? {
                 Some(size) => {
                     let vm = (*table).vmtable();
-                    store[self.0].definition.write(vm);
+                    store[self.instance].table_ptr(self.index).write(vm);
                     // unwrap here should be ok because the runtime should always guarantee
                     // that we can fit the table size in a 64-bit integer.
                     Ok(u64::try_from(size).unwrap())
@@ -278,15 +291,12 @@ impl Table {
     /// This function will panic when used with a non-async
     /// [`Store`](`crate::Store`).
     #[cfg(feature = "async")]
-    pub async fn grow_async<T>(
+    pub async fn grow_async(
         &self,
-        mut store: impl AsContextMut<Data = T>,
+        mut store: impl AsContextMut<Data: Send>,
         delta: u64,
         init: Ref,
-    ) -> Result<u64>
-    where
-        T: Send,
-    {
+    ) -> Result<u64> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
@@ -398,28 +408,43 @@ impl Table {
         }
     }
 
+    pub(crate) fn from_raw(instance: StoreInstanceId, index: DefinedTableIndex) -> Table {
+        Table { instance, index }
+    }
+
     pub(crate) unsafe fn from_wasmtime_table(
         wasmtime_export: crate::runtime::vm::ExportTable,
-        store: &mut StoreOpaque,
+        store: &StoreOpaque,
     ) -> Table {
-        debug_assert!(wasmtime_export
-            .table
-            .ref_type
-            .is_canonicalized_for_runtime_usage());
-
-        Table(store.store_data_mut().insert(wasmtime_export))
-    }
-
-    pub(crate) fn wasmtime_ty<'a>(&self, data: &'a StoreData) -> &'a wasmtime_environ::Table {
-        &data[self.0].table
-    }
-
-    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMTable {
-        let export = &store[self.0];
-        crate::runtime::vm::VMTable {
-            from: export.definition.into(),
-            vmctx: export.vmctx.into(),
+        debug_assert!(
+            wasmtime_export
+                .table
+                .ref_type
+                .is_canonicalized_for_runtime_usage()
+        );
+        Table {
+            instance: store.vmctx_id(wasmtime_export.vmctx),
+            index: wasmtime_export.index,
         }
+    }
+
+    pub(crate) fn wasmtime_ty<'a>(&self, store: &'a StoreOpaque) -> &'a wasmtime_environ::Table {
+        let module = store[self.instance].env_module();
+        let index = module.table_index(self.index);
+        &module.tables[index]
+    }
+
+    pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMTableImport {
+        let instance = &store[self.instance];
+        crate::runtime::vm::VMTableImport {
+            from: instance.table_ptr(self.index).into(),
+            vmctx: instance.vmctx().into(),
+            index: self.index,
+        }
+    }
+
+    pub(crate) fn comes_from_same_store(&self, store: &StoreOpaque) -> bool {
+        store.id() == self.instance.store_id()
     }
 
     /// Get a stable hash key for this table.
@@ -429,7 +454,7 @@ impl Table {
     /// this hash key will be consistent across all of these tables.
     #[allow(dead_code)] // Not used yet, but added for consistency.
     pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<'_> {
-        store[self.0].definition.as_ptr() as usize
+        store[self.instance].table_ptr(self.index).as_ptr().addr()
     }
 }
 

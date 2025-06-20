@@ -1,28 +1,25 @@
 //! Implementation of the standard x64 ABI.
 
-use crate::ir::{self, types, LibCall, MemFlags, Signature, TrapCode};
-use crate::ir::{types::*, ExternalName};
+use crate::CodegenResult;
+use crate::ir::{self, LibCall, MemFlags, Signature, TrapCode, types};
+use crate::ir::{ExternalName, types::*};
 use crate::isa;
 use crate::isa::winch;
-use crate::isa::x64::X64Backend;
-use crate::isa::{unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings, CallConv};
+use crate::isa::{CallConv, unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings};
 use crate::machinst::abi::*;
 use crate::machinst::*;
 use crate::settings;
-use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
+use cranelift_assembler_x64 as asm;
 use regalloc2::{MachineEnv, PReg, PRegSet};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
 /// Support for the x64 ABI from the callee side (within a function body).
 pub(crate) type X64Callee = Callee<X64ABIMachineSpec>;
-
-/// Support for the x64 ABI from the caller side (at a callsite).
-pub(crate) type X64CallSite = CallSite<X64ABIMachineSpec>;
 
 /// Implementation of ABI primitives for x64.
 pub struct X64ABIMachineSpec;
@@ -148,9 +145,11 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // The results are also not packed if any of the types are `f16`. This is to simplify the
         // implementation of `Inst::load`/`Inst::store` (which would otherwise require multiple
         // instructions), and doesn't affect Winch itself as Winch doesn't support `f16` at all.
-        let uses_extension = params
-            .iter()
-            .any(|p| p.extension != ir::ArgumentExtension::None || p.value_type == types::F16);
+        let uses_extension = params.iter().any(|p| {
+            p.extension != ir::ArgumentExtension::None
+                || p.value_type == types::F16
+                || p.value_type == types::I8X2
+        });
 
         for (ix, param) in params.iter().enumerate() {
             let last_param = ix == params.len() - 1;
@@ -211,10 +210,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
                 );
             }
 
-            // Windows fastcall dictates that `__m128i` parameters to a function
-            // are passed indirectly as pointers, so handle that as a special
-            // case before the loop below.
-            if param.value_type.is_vector()
+            // Windows fastcall dictates that `__m128i` and `f128` parameters to
+            // a function are passed indirectly as pointers, so handle that as a
+            // special case before the loop below.
+            if (param.value_type.is_vector() || param.value_type.is_float())
                 && param.value_type.bits() >= 128
                 && args_or_rets == ArgsOrRets::Args
                 && is_fastcall
@@ -414,7 +413,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             types::I8 | types::I16 | types::I32 => types::I64,
             // Stack slots are always at least 8 bytes, so it's fine to load 4 bytes instead of only
             // two.
-            types::F16 => types::F32,
+            types::F16 | types::I8X2 => types::F32,
             _ => ty,
         };
         Inst::load(ty, mem, into_reg, ExtKind::None)
@@ -423,7 +422,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Self::I {
         let ty = match ty {
             // See `gen_load_stack`.
-            types::F16 => types::F32,
+            types::F16 | types::I8X2 => types::F32,
             _ => ty,
         };
         Inst::store(ty, from_reg, mem)
@@ -468,18 +467,20 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         if from_reg != into_reg.to_reg() {
             ret.push(Inst::gen_move(into_reg, from_reg, I64));
         }
-        ret.push(Inst::alu_rmi_r(
-            OperandSize::Size64,
-            AluRmiROpcode::Add,
-            RegMemImm::imm(imm),
-            into_reg,
-        ));
+        let imm = i32::try_from(imm).expect("`imm` is too large to fit in a 32-bit immediate");
+        ret.push(Inst::addq_mi(into_reg, imm));
         ret
     }
 
     fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Self::I> {
         smallvec![
-            Inst::cmp_rmi_r(OperandSize::Size64, limit_reg, RegMemImm::reg(regs::rsp())),
+            Inst::External {
+                inst: asm::inst::cmpq_rm::new(
+                    Gpr::unwrap_new(limit_reg),
+                    Gpr::unwrap_new(regs::rsp())
+                )
+                .into(),
+            },
             Inst::TrapIf {
                 // NBE == "> unsigned"; args above are reversed; this tests limit_reg > rsp.
                 cc: CC::NBE,
@@ -504,9 +505,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I {
-        // Only ever used for I64s and vectors; if that changes, see if the
-        // ExtKind below needs to be changed.
-        assert!(ty == I64 || ty.is_vector());
+        // Only ever used for I64s, F128s and vectors; if that changes, see if
+        // the ExtKind below needs to be changed.
+        assert!(ty == I64 || ty.is_vector() || ty == F128);
         let mem = Amode::imm_reg(offset, base);
         Inst::load(ty, mem, into_reg, ExtKind::None)
     }
@@ -514,7 +515,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Self::I {
         let ty = match ty {
             // See `gen_load_stack`.
-            types::F16 => types::F32,
+            types::F16 | types::I8X2 => types::F32,
             _ => ty,
         };
         let mem = Amode::imm_reg(offset, base);
@@ -522,20 +523,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
     }
 
     fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Self::I> {
-        let (alu_op, amount) = if amount >= 0 {
-            (AluRmiROpcode::Add, amount)
+        let rsp = Writable::from_reg(regs::rsp());
+        let inst = if amount >= 0 {
+            Inst::addq_mi(rsp, amount)
         } else {
-            (AluRmiROpcode::Sub, -amount)
+            Inst::subq_mi(rsp, -amount)
         };
-
-        let amount = amount as u32;
-
-        smallvec![Inst::alu_rmi_r(
-            OperandSize::Size64,
-            alu_op,
-            RegMemImm::imm(amount),
-            Writable::from_reg(regs::rsp()),
-        )]
+        smallvec![inst]
     }
 
     fn gen_prologue_frame_setup(
@@ -544,13 +538,15 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _isa_flags: &x64_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
-        let r_rsp = regs::rsp();
-        let r_rbp = regs::rbp();
+        let r_rsp = Gpr::unwrap_new(regs::rsp());
+        let r_rbp = Gpr::unwrap_new(regs::rbp());
         let w_rbp = Writable::from_reg(r_rbp);
         let mut insts = SmallVec::new();
         // `push %rbp`
         // RSP before the call will be 0 % 16.  So here, it is 8 % 16.
-        insts.push(Inst::push64(RegMemImm::reg(r_rbp)));
+        insts.push(Inst::External {
+            inst: asm::inst::pushq_o::new(r_rbp).into(),
+        });
 
         if flags.unwind_info() {
             insts.push(Inst::Unwind {
@@ -562,7 +558,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         // `mov %rsp, %rbp`
         // RSP is now 0 % 16
-        insts.push(Inst::mov_r_r(OperandSize::Size64, r_rsp, w_rbp));
+        insts.push(Inst::External {
+            inst: asm::inst::movq_mr::new(w_rbp, r_rsp).into(),
+        });
 
         insts
     }
@@ -573,15 +571,18 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _isa_flags: &x64_settings::Flags,
         _frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
+        let rbp = Gpr::unwrap_new(regs::rbp());
+        let rsp = Gpr::unwrap_new(regs::rsp());
+
         let mut insts = SmallVec::new();
         // `mov %rbp, %rsp`
-        insts.push(Inst::mov_r_r(
-            OperandSize::Size64,
-            regs::rbp(),
-            Writable::from_reg(regs::rsp()),
-        ));
+        insts.push(Inst::External {
+            inst: asm::inst::movq_mr::new(Writable::from_reg(rsp), rbp).into(),
+        });
         // `pop %rbp`
-        insts.push(Inst::pop64(Writable::from_reg(regs::rbp())));
+        insts.push(Inst::External {
+            inst: asm::inst::popq_o::new(Writable::from_reg(rbp)).into(),
+        });
         insts
     }
 
@@ -596,7 +597,13 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         } else {
             0
         };
-        smallvec![Inst::ret(stack_bytes_to_pop)]
+        let inst = if stack_bytes_to_pop == 0 {
+            asm::inst::retq_zo::new().into()
+        } else {
+            let stack_bytes_to_pop = u16::try_from(stack_bytes_to_pop).unwrap();
+            asm::inst::retq_i::new(stack_bytes_to_pop).into()
+        };
+        smallvec![Inst::External { inst }]
     }
 
     fn gen_probestack(insts: &mut SmallInstVec<Self::I>, frame_size: u32) {
@@ -650,44 +657,38 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // present, resize the incoming argument area of the frame to accommodate those arguments.
         let incoming_args_diff = frame_layout.tail_args_size - frame_layout.incoming_args_size;
         if incoming_args_diff > 0 {
-            // Decrement the stack pointer to make space for the new arguments
-            insts.push(Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Sub,
-                RegMemImm::imm(incoming_args_diff),
-                Writable::from_reg(regs::rsp()),
+            // Decrement the stack pointer to make space for the new arguments.
+            let rsp = Writable::from_reg(regs::rsp());
+            insts.push(Inst::subq_mi(
+                rsp,
+                i32::try_from(incoming_args_diff)
+                    .expect("`incoming_args_diff` is too large to fit in a 32-bit immediate"),
             ));
 
-            // Make sure to keep the frame pointer and stack pointer in sync at this point
-            insts.push(Inst::mov_r_r(
-                OperandSize::Size64,
-                regs::rsp(),
-                Writable::from_reg(regs::rbp()),
-            ));
+            // Make sure to keep the frame pointer and stack pointer in sync at
+            // this point.
+            let rbp = Gpr::unwrap_new(regs::rbp());
+            let rsp = Gpr::unwrap_new(regs::rsp());
+            insts.push(Inst::External {
+                inst: asm::inst::movq_mr::new(Writable::from_reg(rbp), rsp).into(),
+            });
 
             let incoming_args_diff = i32::try_from(incoming_args_diff).unwrap();
 
-            // Move the saved frame pointer down by `incoming_args_diff`
-            insts.push(Inst::mov64_m_r(
-                Amode::imm_reg(incoming_args_diff, regs::rsp()),
-                Writable::from_reg(regs::r11()),
-            ));
-            insts.push(Inst::mov_r_m(
-                OperandSize::Size64,
-                regs::r11(),
-                Amode::imm_reg(0, regs::rsp()),
-            ));
+            // Move the saved frame pointer down by `incoming_args_diff`.
+            let addr = Amode::imm_reg(incoming_args_diff, regs::rsp());
+            let r11 = Writable::from_reg(Gpr::unwrap_new(regs::r11()));
+            let inst = asm::inst::movq_rm::new(r11, addr).into();
+            insts.push(Inst::External { inst });
+            let inst = asm::inst::movq_mr::new(Amode::imm_reg(0, regs::rsp()), r11.to_reg()).into();
+            insts.push(Inst::External { inst });
 
-            // Move the saved return address down by `incoming_args_diff`
-            insts.push(Inst::mov64_m_r(
-                Amode::imm_reg(incoming_args_diff + 8, regs::rsp()),
-                Writable::from_reg(regs::r11()),
-            ));
-            insts.push(Inst::mov_r_m(
-                OperandSize::Size64,
-                regs::r11(),
-                Amode::imm_reg(8, regs::rsp()),
-            ));
+            // Move the saved return address down by `incoming_args_diff`.
+            let addr = Amode::imm_reg(incoming_args_diff + 8, regs::rsp());
+            let inst = asm::inst::movq_rm::new(r11, addr).into();
+            insts.push(Inst::External { inst });
+            let inst = asm::inst::movq_mr::new(Amode::imm_reg(8, regs::rsp()), r11.to_reg()).into();
+            insts.push(Inst::External { inst });
         }
 
         // We need to factor `incoming_args_diff` into the offset upward here, as we have grown
@@ -713,12 +714,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             + frame_layout.clobber_size
             + frame_layout.outgoing_args_size;
         if stack_size > 0 {
-            insts.push(Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Sub,
-                RegMemImm::imm(stack_size),
-                Writable::from_reg(regs::rsp()),
-            ));
+            let rsp = Writable::from_reg(regs::rsp());
+            let stack_size = i32::try_from(stack_size)
+                .expect("`stack_size` is too large to fit in a 32-bit immediate");
+            insts.push(Inst::subq_mi(rsp, stack_size));
         }
 
         // Store each clobbered register in order at offsets from RSP,
@@ -797,40 +796,12 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
         // Adjust RSP back upward.
         if stack_size > 0 {
-            insts.push(Inst::alu_rmi_r(
-                OperandSize::Size64,
-                AluRmiROpcode::Add,
-                RegMemImm::imm(stack_size),
-                Writable::from_reg(regs::rsp()),
-            ));
+            let rsp = Writable::from_reg(regs::rsp());
+            let stack_size = i32::try_from(stack_size)
+                .expect("`stack_size` is too large to fit in a 32-bit immediate");
+            insts.push(Inst::addq_mi(rsp, stack_size));
         }
 
-        insts
-    }
-
-    /// Generate a call instruction/sequence.
-    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Self::I; 2]> {
-        let mut insts = SmallVec::new();
-        match dest {
-            &CallDest::ExtName(ref name, RelocDistance::Near) => {
-                let info = Box::new(info.map(|()| name.clone()));
-                insts.push(Inst::call_known(info));
-            }
-            &CallDest::ExtName(ref name, RelocDistance::Far) => {
-                insts.push(Inst::LoadExtName {
-                    dst: tmp,
-                    name: Box::new(name.clone()),
-                    offset: 0,
-                    distance: RelocDistance::Far,
-                });
-                let info = Box::new(info.map(|()| RegMem::reg(tmp.to_reg())));
-                insts.push(Inst::call_unknown(info));
-            }
-            &CallDest::Reg(reg) => {
-                let info = Box::new(info.map(|()| RegMem::reg(reg)));
-                insts.push(Inst::call_unknown(info));
-            }
-        }
         insts
     }
 
@@ -992,66 +963,6 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         match call_conv {
             isa::CallConv::SystemV | isa::CallConv::Tail => PAYLOAD_REGS,
             _ => &[],
-        }
-    }
-}
-
-impl X64CallSite {
-    pub fn emit_return_call(
-        mut self,
-        ctx: &mut Lower<Inst>,
-        args: isle::ValueSlice,
-        _backend: &X64Backend,
-    ) {
-        let new_stack_arg_size =
-            u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
-
-        ctx.abi_mut().accumulate_tail_args_size(new_stack_arg_size);
-
-        // Put all arguments in registers and stack slots (within that newly
-        // allocated stack space).
-        self.emit_args(ctx, args);
-        self.emit_stack_ret_arg_for_tail_call(ctx);
-
-        // Finally, do the actual tail call!
-        let dest = self.dest().clone();
-        let uses = self.take_uses();
-        let tmp = ctx.temp_writable_gpr();
-        match dest {
-            CallDest::ExtName(callee, RelocDistance::Near) => {
-                let info = Box::new(ReturnCallInfo {
-                    dest: callee,
-                    uses,
-                    tmp,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnCallKnown { info });
-            }
-            CallDest::ExtName(callee, RelocDistance::Far) => {
-                let tmp2 = ctx.temp_writable_gpr();
-                ctx.emit(Inst::LoadExtName {
-                    dst: tmp2.to_writable_reg(),
-                    name: Box::new(callee),
-                    offset: 0,
-                    distance: RelocDistance::Far,
-                });
-                let info = Box::new(ReturnCallInfo {
-                    dest: tmp2.to_reg().to_reg().into(),
-                    uses,
-                    tmp,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnCallUnknown { info });
-            }
-            CallDest::Reg(callee) => {
-                let info = Box::new(ReturnCallInfo {
-                    dest: callee.into(),
-                    uses,
-                    tmp,
-                    new_stack_arg_size,
-                });
-                ctx.emit(Inst::ReturnCallUnknown { info });
-            }
         }
     }
 }

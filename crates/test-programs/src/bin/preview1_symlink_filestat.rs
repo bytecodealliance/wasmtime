@@ -1,7 +1,7 @@
 #![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
 
 use std::{env, process, time::Duration};
-use test_programs::preview1::{assert_fs_time_eq, open_scratch_directory, TestConfig};
+use test_programs::preview1::{TestConfig, assert_fs_time_eq, open_scratch_directory};
 
 unsafe fn test_path_filestat(dir_fd: wasip1::Fd) {
     let cfg = TestConfig::from_env();

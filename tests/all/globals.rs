@@ -352,6 +352,7 @@ fn i31ref_as_anyref_global_ty() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn instantiate_global_with_subtype() -> Result<()> {
     let mut config = Config::new();
     config.wasm_function_references(true);
@@ -382,15 +383,17 @@ fn instantiate_global_with_subtype() -> Result<()> {
             RefType::new(true, HeapType::ConcreteFunc(sub_func_ty.clone())).into(),
             Mutability::Const,
         );
-        assert!(global_ty.content().matches(
-            module
-                .imports()
-                .nth(0)
-                .unwrap()
-                .ty()
-                .unwrap_global()
-                .content()
-        ));
+        assert!(
+            global_ty.content().matches(
+                module
+                    .imports()
+                    .nth(0)
+                    .unwrap()
+                    .ty()
+                    .unwrap_global()
+                    .content()
+            )
+        );
 
         let mut store = Store::new(&engine, ());
         let func = Func::new(&mut store, sub_func_ty, |_caller, _args, _rets| Ok(()));
@@ -407,15 +410,17 @@ fn instantiate_global_with_subtype() -> Result<()> {
             RefType::new(true, HeapType::ConcreteFunc(func_ty.clone())).into(),
             Mutability::Const,
         );
-        assert!(!global_ty.content().matches(
-            module
-                .imports()
-                .nth(0)
-                .unwrap()
-                .ty()
-                .unwrap_global()
-                .content()
-        ));
+        assert!(
+            !global_ty.content().matches(
+                module
+                    .imports()
+                    .nth(0)
+                    .unwrap()
+                    .ty()
+                    .unwrap_global()
+                    .content()
+            )
+        );
 
         let mut store = Store::new(&engine, ());
         let func = Func::new(&mut store, func_ty, |_caller, _args, _rets| Ok(()));

@@ -3,7 +3,7 @@
 use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType, WasmtimeConfig};
 use crate::oracles::dummy;
 use crate::oracles::engine::DiffInstance;
-use crate::oracles::{compile_module, engine::DiffEngine, StoreLimits};
+use crate::oracles::{StoreLimits, compile_module, engine::DiffEngine};
 use crate::single_module_fuzzer::KnownValid;
 use anyhow::{Context, Error, Result};
 use arbitrary::Unstructured;
@@ -227,9 +227,9 @@ impl From<&DiffValue> for Val {
     }
 }
 
-impl Into<DiffValue> for Val {
-    fn into(self) -> DiffValue {
-        match self {
+impl From<Val> for DiffValue {
+    fn from(val: Val) -> DiffValue {
+        match val {
             Val::I32(n) => DiffValue::I32(n),
             Val::I64(n) => DiffValue::I64(n),
             Val::F32(n) => DiffValue::F32(n),

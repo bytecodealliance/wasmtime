@@ -1,6 +1,7 @@
+use crate::dsl::{Customization::*, Feature::*, Inst, Location::*};
 use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq};
-use crate::dsl::{Feature::*, Inst, Location::*};
 
+#[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
     vec![
         inst("orb", fmt("I", [rw(al), r(imm8)]), rex(0x0C).ib(), _64b | compat),
@@ -22,18 +23,19 @@ pub fn list() -> Vec<Inst> {
         inst("orl", fmt("RM", [rw(r32), r(rm32)]), rex(0x0B).r(), _64b | compat),
         inst("orq", fmt("RM", [rw(r64), r(rm64)]), rex(0x0B).w().r(), _64b),
         // `LOCK`-prefixed memory-writing instructions.
-        inst("lock_orb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(1).ib(), _64b | compat),
-        inst("lock_orw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(1).iw(), _64b | compat),
-        inst("lock_orl", fmt("MI", [rw(m32), r(imm32)]), rex([0xf0, 0x81]).digit(1).id(), _64b | compat),
-        inst("lock_orq", fmt("MI_SXL", [rw(m64), sxq(imm32)]), rex([0xf0, 0x81]).w().digit(1).id(), _64b),
-        inst("lock_orl", fmt("MI_SXB", [rw(m32), sxl(imm8)]), rex([0xf0, 0x83]).digit(1).ib(), _64b | compat),
-        inst("lock_orq", fmt("MI_SXB", [rw(m64), sxq(imm8)]), rex([0xf0, 0x83]).w().digit(1).ib(), _64b),
-        inst("lock_orb", fmt("MR", [rw(m8), r(r8)]), rex([0xf0, 0x08]).r(), _64b | compat),
-        inst("lock_orw", fmt("MR", [rw(m16), r(r16)]), rex([0xf0, 0x66, 0x09]).r(), _64b | compat),
-        inst("lock_orl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x09]).r(), _64b | compat),
-        inst("lock_orq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x09]).w().r(), _64b),
+        inst("lock_orb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(1).ib(), _64b | compat).custom(Mnemonic),
+        inst("lock_orw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(1).iw(), _64b | compat).custom(Mnemonic),
+        inst("lock_orl", fmt("MI", [rw(m32), r(imm32)]), rex([0xf0, 0x81]).digit(1).id(), _64b | compat).custom(Mnemonic),
+        inst("lock_orq", fmt("MI_SXL", [rw(m64), sxq(imm32)]), rex([0xf0, 0x81]).w().digit(1).id(), _64b).custom(Mnemonic),
+        inst("lock_orl", fmt("MI_SXB", [rw(m32), sxl(imm8)]), rex([0xf0, 0x83]).digit(1).ib(), _64b | compat).custom(Mnemonic),
+        inst("lock_orq", fmt("MI_SXB", [rw(m64), sxq(imm8)]), rex([0xf0, 0x83]).w().digit(1).ib(), _64b).custom(Mnemonic),
+        inst("lock_orb", fmt("MR", [rw(m8), r(r8)]), rex([0xf0, 0x08]).r(), _64b | compat).custom(Mnemonic),
+        inst("lock_orw", fmt("MR", [rw(m16), r(r16)]), rex([0xf0, 0x66, 0x09]).r(), _64b | compat).custom(Mnemonic),
+        inst("lock_orl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x09]).r(), _64b | compat).custom(Mnemonic),
+        inst("lock_orq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x09]).w().r(), _64b).custom(Mnemonic),
         // Vector instructions.
-        inst("orps", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x0F, 0x56]).r(), _64b | compat | sse),
-        inst("orpd", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x66, 0x0F, 0x56]).r(), _64b | compat | sse),
+        inst("orps", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x0F, 0x56]).r(), _64b | compat | sse),
+        inst("orpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x56]).r(), _64b | compat | sse2),
+        inst("por", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xEB]).r(), _64b | compat | sse2),
     ]
 }

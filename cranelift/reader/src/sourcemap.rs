@@ -208,7 +208,7 @@ impl SourceMap {
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse_test, ParseOptions};
+    use crate::{ParseOptions, parse_test};
 
     #[test]
     fn details() {

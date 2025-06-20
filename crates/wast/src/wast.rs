@@ -2,19 +2,20 @@
 use crate::component;
 use crate::core;
 use crate::spectest::*;
-use anyhow::{anyhow, bail, Context as _};
+use anyhow::{Context as _, anyhow, bail};
 use std::collections::HashMap;
 use std::path::Path;
 use std::str;
 use std::thread;
 use wasmtime::*;
+use wast::core::{EncodeOptions, GenerateDwarf};
 use wast::lexer::Lexer;
 use wast::parser::{self, ParseBuffer};
 use wast::{QuoteWat, Wast, WastArg, WastDirective, WastExecute, WastInvoke, WastRet, Wat};
 
 /// The wast test script language allows modules to be defined and actions
 /// to be performed on them.
-pub struct WastContext<T> {
+pub struct WastContext<T: 'static> {
     /// Wast files have a concept of a "current" module, which is the most
     /// recently defined.
     current: Option<InstanceKind>,
@@ -24,6 +25,7 @@ pub struct WastContext<T> {
     component_linker: component::Linker<T>,
     pub(crate) store: Store<T>,
     pub(crate) async_runtime: Option<tokio::runtime::Runtime>,
+    generate_dwarf: bool,
 }
 
 enum Outcome<T = Results> {
@@ -118,6 +120,7 @@ where
             } else {
                 None
             },
+            generate_dwarf: true,
         }
     }
 
@@ -187,11 +190,16 @@ where
     }
 
     /// Perform the action portion of a command.
-    fn perform_execute(&mut self, exec: WastExecute<'_>) -> Result<Outcome> {
+    fn perform_execute(
+        &mut self,
+        exec: WastExecute<'_>,
+        filename: &str,
+        wast: &str,
+    ) -> Result<Outcome> {
         match exec {
             WastExecute::Invoke(invoke) => self.perform_invoke(invoke),
-            WastExecute::Wat(module) => {
-                Ok(match self.module_definition(QuoteWat::Wat(module))? {
+            WastExecute::Wat(module) => Ok(
+                match self.module_definition(QuoteWat::Wat(module), filename, wast)? {
                     (_, ModuleKind::Core(module)) => self
                         .instantiate_module(&module)?
                         .map(|_| Results::Core(Vec::new())),
@@ -199,8 +207,8 @@ where
                     (_, ModuleKind::Component(component)) => self
                         .instantiate_component(&component)?
                         .map(|_| Results::Component(Vec::new())),
-                })
-            }
+                },
+            ),
             WastExecute::Get { module, global, .. } => self.get(module.map(|s| s.name()), global),
         }
     }
@@ -229,7 +237,7 @@ where
                 };
 
                 Ok(match result {
-                    Ok(()) => Outcome::Ok(Results::Core(results.into())),
+                    Ok(()) => Outcome::Ok(Results::Core(results)),
                     Err(e) => Outcome::Trap(e),
                 })
             }
@@ -259,7 +267,7 @@ where
                             None => func.post_return(&mut self.store)?,
                         }
 
-                        Outcome::Ok(Results::Component(results.into()))
+                        Outcome::Ok(Results::Component(results))
                     }
                     Err(e) => Outcome::Trap(e),
                 })
@@ -325,6 +333,8 @@ where
     fn module_definition<'a>(
         &mut self,
         mut wat: QuoteWat<'a>,
+        filename: &str,
+        wast: &str,
     ) -> Result<(Option<&'a str>, ModuleKind)> {
         let (is_module, name) = match &wat {
             QuoteWat::Wat(Wat::Module(m)) => (true, m.id),
@@ -332,7 +342,16 @@ where
             QuoteWat::Wat(Wat::Component(m)) => (false, m.id),
             QuoteWat::QuoteComponent(..) => (false, None),
         };
-        let bytes = wat.encode()?;
+        let bytes = match &mut wat {
+            QuoteWat::Wat(wat) => {
+                let mut opts = EncodeOptions::new();
+                if self.generate_dwarf {
+                    opts.dwarf(filename.as_ref(), wast, GenerateDwarf::Lines);
+                }
+                opts.encode_wat(wat)?
+            }
+            _ => wat.encode()?,
+        };
         if is_module {
             let module = Module::new(self.store.engine(), &bytes)?;
             Ok((name.map(|n| n.name()), ModuleKind::Core(module)))
@@ -380,9 +399,9 @@ where
             #[cfg(feature = "component-model")]
             Export::Component(_) => bail!("no global named `{field}`"),
         };
-        Ok(Outcome::Ok(Results::Core(
-            vec![global.get(&mut self.store)],
-        )))
+        Ok(Outcome::Ok(Results::Core(vec![
+            global.get(&mut self.store),
+        ])))
     }
 
     fn assert_return(&mut self, result: Outcome, results: &[WastRet<'_>]) -> Result<()> {
@@ -451,7 +470,8 @@ where
 
         let mut lexer = Lexer::new(wast);
         lexer.allow_confusing_unicode(filename.ends_with("names.wast"));
-        let buf = ParseBuffer::new_with_lexer(lexer).map_err(adjust_wast)?;
+        let mut buf = ParseBuffer::new_with_lexer(lexer).map_err(adjust_wast)?;
+        buf.track_instr_spans(self.generate_dwarf);
         let ast = parser::parse::<Wast>(&buf).map_err(adjust_wast)?;
 
         self.run_directives(ast.directives, filename, wast)
@@ -506,11 +526,11 @@ where
 
         match directive {
             Module(module) => {
-                let (name, module) = self.module_definition(module)?;
+                let (name, module) = self.module_definition(module, filename, wast)?;
                 self.module(name, &module)?;
             }
             ModuleDefinition(module) => {
-                let (name, module) = self.module_definition(module)?;
+                let (name, module) = self.module_definition(module, filename, wast)?;
                 if let Some(name) = name {
                     self.modules.insert(name.to_string(), module.clone());
                 }
@@ -541,7 +561,7 @@ where
                 exec,
                 results,
             } => {
-                let result = self.perform_execute(exec)?;
+                let result = self.perform_execute(exec, filename, wast)?;
                 self.assert_return(result, &results)?;
             }
             AssertTrap {
@@ -549,7 +569,7 @@ where
                 exec,
                 message,
             } => {
-                let result = self.perform_execute(exec)?;
+                let result = self.perform_execute(exec, filename, wast)?;
                 self.assert_trap(result, message)?;
             }
             AssertExhaustion {
@@ -565,7 +585,7 @@ where
                 module,
                 message,
             } => {
-                let err = match self.module_definition(module) {
+                let err = match self.module_definition(module, filename, wast) {
                     Ok(_) => bail!("expected module to fail to build"),
                     Err(e) => e,
                 };
@@ -583,7 +603,7 @@ where
                 span: _,
                 message: _,
             } => {
-                if let Ok(_) = self.module_definition(module) {
+                if let Ok(_) = self.module_definition(module, filename, wast) {
                     bail!("expected malformed module to fail to instantiate");
                 }
             }
@@ -592,7 +612,8 @@ where
                 module,
                 message,
             } => {
-                let (name, module) = self.module_definition(QuoteWat::Wat(module))?;
+                let (name, module) =
+                    self.module_definition(QuoteWat::Wat(module), filename, wast)?;
                 let err = match self.module(name, &module) {
                     Ok(_) => bail!("expected module to fail to link"),
                     Err(e) => e,
@@ -632,6 +653,7 @@ where
                             .build()
                             .unwrap()
                     }),
+                    generate_dwarf: self.generate_dwarf,
                 };
                 let name = thread.name.name();
                 let child =
@@ -661,6 +683,13 @@ where
         let bytes =
             std::fs::read(path).with_context(|| format!("failed to read `{}`", path.display()))?;
         self.run_buffer(path.to_str().unwrap(), &bytes)
+    }
+
+    /// Whether or not to generate DWARF debugging information in custom
+    /// sections in modules being tested.
+    pub fn generate_dwarf(&mut self, enable: bool) -> &mut Self {
+        self.generate_dwarf = enable;
+        self
     }
 }
 

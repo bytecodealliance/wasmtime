@@ -1,3 +1,5 @@
+#include "utils.h"
+
 #include <gtest/gtest.h>
 #include <wasmtime.h>
 
@@ -24,8 +26,7 @@ TEST(component, instantiate) {
       engine, reinterpret_cast<const uint8_t *>(bytes.data()), bytes.size(),
       &component);
 
-  EXPECT_EQ(error, nullptr);
-  EXPECT_NE(component, nullptr);
+  CHECK_ERR(error);
 
   const auto linker = wasmtime_component_linker_new(engine);
   EXPECT_NE(linker, nullptr);
@@ -33,7 +34,8 @@ TEST(component, instantiate) {
   wasmtime_component_instance_t instance = {};
   error = wasmtime_component_linker_instantiate(linker, context, component,
                                                 &instance);
-  EXPECT_EQ(error, nullptr);
+
+  CHECK_ERR(error);
 
   wasmtime_component_linker_delete(linker);
 

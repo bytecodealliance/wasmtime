@@ -166,6 +166,7 @@ target_include_directories(
 
 if (BUILD_TESTS)
   message(STATUS "Building tests")
+  set(CMAKE_CXX_STANDARD 20)
 
   enable_language(CXX)
   set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)

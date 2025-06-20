@@ -16,6 +16,12 @@
       (imm ty n))
 
 
+;;;; Rules for `f16const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (f16const (u16_from_ieee16 x)))
+      (imm $F16 x))
+
+
 ;;;; Rules for `f32const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (f32const (u32_from_ieee32 x)))
@@ -26,6 +32,12 @@
 
 (rule (lower (f64const (u64_from_ieee64 x)))
       (imm $F64 x))
+
+
+;;;; Rules for `f128const` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (f128const (u128_from_constant x)))
+      (vec_imm $F128 (be_vec_const $F128 x)))
 
 
 ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -127,7 +139,7 @@
 
 ;; Lane-wise integer pairwise addition for 8-/16/32-bit vector registers.
 (rule (lower (has_type ty @ (multi_lane bits _) (iadd_pairwise x y)))
-      (let ((size Reg (vec_imm_splat $I8X16 (u32_as_u64 bits))))
+      (let ((size Reg (vec_imm_splat $I8X16 bits)))
         (vec_pack_lane_order (vec_widen_type ty)
                              (vec_add ty x (vec_lshr_by_byte x size))
                              (vec_add ty y (vec_lshr_by_byte y size)))))
@@ -1172,7 +1184,7 @@
 
 (rule (bitrev_bits size bitmask (vr128_ty ty) x)
       (let ((mask Reg (vec_imm_splat $I64X2 bitmask))
-            (size_reg Reg (vec_imm_splat $I8X16 (u8_as_u64 size)))
+            (size_reg Reg (vec_imm_splat $I8X16 size))
             (xh Reg (vec_lshl_by_bit x size_reg))
             (xl Reg (vec_lshr_by_bit x size_reg)))
         (vec_select ty xh xl mask)))
@@ -1408,6 +1420,9 @@
       (vec_select $F32 x y (imm $F32 2147483647)))
 (rule (lower (has_type $F64 (fcopysign x y)))
       (vec_select $F64 x y (imm $F64 9223372036854775807)))
+(rule (lower (has_type $F128 (fcopysign x y)))
+      (vec_select $F128 x y (vec_imm $F128 (imm8x16 127 255 255 255 255 255 255 255
+                                                    255 255 255 255 255 255 255 255))))
 (rule (lower (has_type $F32X4 (fcopysign x y)))
       (vec_select $F32X4 x y (vec_imm_bit_mask $F32X4 1 31)))
 (rule (lower (has_type $F64X2 (fcopysign x y)))
@@ -1473,8 +1488,11 @@
 ;;;; Rules for `fpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Promote a register.
-(rule (lower (has_type (fits_in_64 dst_ty) (fpromote x @ (value_type src_ty))))
+(rule (lower (has_type dst_ty (fpromote x @ (value_type src_ty))))
       (fpromote_reg dst_ty src_ty x))
+
+(rule 1 (lower (has_type $F128 (fpromote x @ (value_type $F32))))
+      (fpromote_reg $F128 $F64 (fpromote_reg $F64 $F32 x)))
 
 
 ;;;; Rules for `fvpromote_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1487,8 +1505,12 @@
 ;;;; Rules for `fdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Demote a register.
-(rule (lower (has_type (fits_in_64 dst_ty) (fdemote x @ (value_type src_ty))))
+(rule (lower (has_type dst_ty (fdemote x @ (value_type src_ty))))
       (fdemote_reg dst_ty src_ty (FpuRoundMode.Current) x))
+
+(rule 1 (lower (has_type $F32 (fdemote x @ (value_type $F128))))
+      (fdemote_reg $F32 $F64 (FpuRoundMode.Current)
+                   (fdemote_reg $F64 $F128 (FpuRoundMode.ShorterPrecision) x)))
 
 
 ;;;; Rules for `fvdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1505,40 +1527,50 @@
 ;; Convert a 32-bit or smaller unsigned integer to $F32 (z15 instruction).
 (rule 1 (lower (has_type $F32
         (fcvt_from_uint x @ (value_type (and (vxrs_ext2_enabled) (fits_in_32 ty))))))
-      (fcvt_from_uint_reg $F32 (FpuRoundMode.ToNearestTiesToEven)
+      (fcvt_from_uint_reg $F32 $I32 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_zext32 x)))
 
 ;; Convert a 64-bit or smaller unsigned integer to $F32, via an intermediate $F64.
 (rule (lower (has_type $F32 (fcvt_from_uint x @ (value_type (fits_in_64 ty)))))
       (fdemote_reg $F32 $F64 (FpuRoundMode.ToNearestTiesToEven)
-                   (fcvt_from_uint_reg $F64 (FpuRoundMode.ShorterPrecision)
+                   (fcvt_from_uint_reg $F64 $I64 (FpuRoundMode.ShorterPrecision)
                                        (put_in_reg_zext64 x))))
 
 ;; Convert a 64-bit or smaller unsigned integer to $F64.
 (rule (lower (has_type $F64 (fcvt_from_uint x @ (value_type (fits_in_64 ty)))))
-      (fcvt_from_uint_reg $F64 (FpuRoundMode.ToNearestTiesToEven)
+      (fcvt_from_uint_reg $F64 $I64 (FpuRoundMode.ToNearestTiesToEven)
+                          (put_in_reg_zext64 x)))
+
+;; Convert a 32-bit or smaller unsigned integer to $F128.
+(rule 1 (lower (has_type $F128 (fcvt_from_uint x @ (value_type (fits_in_32 ty)))))
+      (fcvt_from_uint_reg $F128 $I32 (FpuRoundMode.ToNearestTiesToEven)
+                          (put_in_reg_zext32 x)))
+
+;; Convert a 64-bit or smaller unsigned integer to $F128.
+(rule (lower (has_type $F128 (fcvt_from_uint x @ (value_type (fits_in_64 ty)))))
+      (fcvt_from_uint_reg $F128 $I64 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_zext64 x)))
 
 ;; Convert $I32X4 to $F32X4 (z15 instruction).
 (rule 1 (lower (has_type (and (vxrs_ext2_enabled) $F32X4)
                        (fcvt_from_uint x @ (value_type $I32X4))))
-      (fcvt_from_uint_reg $F32X4 (FpuRoundMode.ToNearestTiesToEven) x))
+      (fcvt_from_uint_reg $F32X4 $I32X4 (FpuRoundMode.ToNearestTiesToEven) x))
 
 ;; Convert $I32X4 to $F32X4 (via two $F64X2 on z14).
 (rule (lower (has_type (and (vxrs_ext2_disabled) $F32X4)
                        (fcvt_from_uint x @ (value_type $I32X4))))
       (vec_permute $F32X4
         (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.ToNearestTiesToEven)
-          (fcvt_from_uint_reg $F64X2 (FpuRoundMode.ShorterPrecision)
+          (fcvt_from_uint_reg $F64X2 $I64X2 (FpuRoundMode.ShorterPrecision)
                               (vec_unpacku_high $I32X4 x)))
         (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.ToNearestTiesToEven)
-          (fcvt_from_uint_reg $F64X2 (FpuRoundMode.ShorterPrecision)
+          (fcvt_from_uint_reg $F64X2 $I64X2 (FpuRoundMode.ShorterPrecision)
                               (vec_unpacku_low $I32X4 x)))
         (vec_imm $I8X16 (imm8x16 0 1 2 3 8 9 10 11 16 17 18 19 24 25 26 27))))
 
 ;; Convert $I64X2 to $F64X2.
 (rule (lower (has_type $F64X2 (fcvt_from_uint x @ (value_type $I64X2))))
-      (fcvt_from_uint_reg $F64X2 (FpuRoundMode.ToNearestTiesToEven) x))
+      (fcvt_from_uint_reg $F64X2 $I64X2 (FpuRoundMode.ToNearestTiesToEven) x))
 
 
 ;;;; Rules for `fcvt_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1546,40 +1578,50 @@
 ;; Convert a 32-bit or smaller signed integer to $F32 (z15 instruction).
 (rule 1 (lower (has_type $F32
         (fcvt_from_sint x @ (value_type (and (vxrs_ext2_enabled) (fits_in_32 ty))))))
-      (fcvt_from_sint_reg $F32 (FpuRoundMode.ToNearestTiesToEven)
+      (fcvt_from_sint_reg $F32 $I32 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_sext32 x)))
 
 ;; Convert a 64-bit or smaller signed integer to $F32, via an intermediate $F64.
 (rule (lower (has_type $F32 (fcvt_from_sint x @ (value_type (fits_in_64 ty)))))
       (fdemote_reg $F32 $F64 (FpuRoundMode.ToNearestTiesToEven)
-                   (fcvt_from_sint_reg $F64 (FpuRoundMode.ShorterPrecision)
+                   (fcvt_from_sint_reg $F64 $I64 (FpuRoundMode.ShorterPrecision)
                                        (put_in_reg_sext64 x))))
 
 ;; Convert a 64-bit or smaller signed integer to $F64.
 (rule (lower (has_type $F64 (fcvt_from_sint x @ (value_type (fits_in_64 ty)))))
-      (fcvt_from_sint_reg $F64 (FpuRoundMode.ToNearestTiesToEven)
+      (fcvt_from_sint_reg $F64 $I64 (FpuRoundMode.ToNearestTiesToEven)
+                          (put_in_reg_sext64 x)))
+
+;; Convert a 32-bit or smaller signed integer to $F128.
+(rule 1 (lower (has_type $F128 (fcvt_from_sint x @ (value_type (fits_in_32 ty)))))
+      (fcvt_from_sint_reg $F128 $I32 (FpuRoundMode.ToNearestTiesToEven)
+                          (put_in_reg_sext32 x)))
+
+;; Convert a 64-bit or smaller signed integer to $F128.
+(rule (lower (has_type $F128 (fcvt_from_sint x @ (value_type (fits_in_64 ty)))))
+      (fcvt_from_sint_reg $F128 $I64 (FpuRoundMode.ToNearestTiesToEven)
                           (put_in_reg_sext64 x)))
 
 ;; Convert $I32X4 to $F32X4 (z15 instruction).
 (rule 1 (lower (has_type (and (vxrs_ext2_enabled) $F32X4)
                        (fcvt_from_sint x @ (value_type $I32X4))))
-      (fcvt_from_sint_reg $F32X4 (FpuRoundMode.ToNearestTiesToEven) x))
+      (fcvt_from_sint_reg $F32X4 $I32X4 (FpuRoundMode.ToNearestTiesToEven) x))
 
 ;; Convert $I32X4 to $F32X4 (via two $F64X2 on z14).
 (rule (lower (has_type (and (vxrs_ext2_disabled) $F32X4)
                        (fcvt_from_sint x @ (value_type $I32X4))))
       (vec_permute $F32X4
         (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.ToNearestTiesToEven)
-          (fcvt_from_sint_reg $F64X2 (FpuRoundMode.ShorterPrecision)
+          (fcvt_from_sint_reg $F64X2 $I64X2 (FpuRoundMode.ShorterPrecision)
                               (vec_unpacks_high $I32X4 x)))
         (fdemote_reg $F32X4 $F64X2 (FpuRoundMode.ToNearestTiesToEven)
-          (fcvt_from_sint_reg $F64X2 (FpuRoundMode.ShorterPrecision)
+          (fcvt_from_sint_reg $F64X2 $I64X2 (FpuRoundMode.ShorterPrecision)
                               (vec_unpacks_low $I32X4 x)))
         (vec_imm $I8X16 (imm8x16 0 1 2 3 8 9 10 11 16 17 18 19 24 25 26 27))))
 
 ;; Convert $I64X2 to $F64X2.
 (rule (lower (has_type $F64X2 (fcvt_from_sint x @ (value_type $I64X2))))
-      (fcvt_from_sint_reg $F64X2 (FpuRoundMode.ToNearestTiesToEven) x))
+      (fcvt_from_sint_reg $F64X2 $I64X2 (FpuRoundMode.ToNearestTiesToEven) x))
 
 
 ;;;; Rules for `fcvt_to_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1602,8 +1644,9 @@
                             (trap_code_integer_overflow)))
             ;; Perform the conversion using the larger type size.
             (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
+            (int_ty Type (fcvt_int_ty dst_ty src_ty))
             (src_ext Reg (fpromote_reg flt_ty src_ty src)))
-        (fcvt_to_uint_reg flt_ty (FpuRoundMode.ToZero) src_ext)))
+        (fcvt_to_uint_reg int_ty flt_ty (FpuRoundMode.ToZero) src_ext)))
 
 
 ;;;; Rules for `fcvt_to_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1626,9 +1669,10 @@
                             (trap_code_integer_overflow)))
             ;; Perform the conversion using the larger type size.
             (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
+            (int_ty Type (fcvt_int_ty dst_ty src_ty))
             (src_ext Reg (fpromote_reg flt_ty src_ty src)))
         ;; Perform the conversion.
-        (fcvt_to_sint_reg flt_ty (FpuRoundMode.ToZero) src_ext)))
+        (fcvt_to_sint_reg int_ty flt_ty (FpuRoundMode.ToZero) src_ext)))
 
 
 ;;;; Rules for `fcvt_to_uint_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1641,27 +1685,27 @@
             (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
             (int_ty Type (fcvt_int_ty dst_ty src_ty))
             (src_ext Reg (fpromote_reg flt_ty src_ty src))
-            (dst Reg (fcvt_to_uint_reg flt_ty (FpuRoundMode.ToZero) src_ext)))
+            (dst Reg (fcvt_to_uint_reg int_ty flt_ty (FpuRoundMode.ToZero) src_ext)))
         ;; Clamp the output to the destination type bounds.
         (uint_sat_reg dst_ty int_ty dst)))
 
 ;; Convert $F32X4 to $I32X4 (z15 instruction).
 (rule 1 (lower (has_type (and (vxrs_ext2_enabled) $I32X4)
                        (fcvt_to_uint_sat x @ (value_type $F32X4))))
-      (fcvt_to_uint_reg $F32X4 (FpuRoundMode.ToZero) x))
+      (fcvt_to_uint_reg $I32X4 $F32X4 (FpuRoundMode.ToZero) x))
 
 ;; Convert $F32X4 to $I32X4 (via two $F64X2 on z14).
 (rule (lower (has_type (and (vxrs_ext2_disabled) $I32X4)
                        (fcvt_to_uint_sat x @ (value_type $F32X4))))
       (vec_pack_usat $I64X2
-        (fcvt_to_uint_reg $F64X2 (FpuRoundMode.ToZero)
+        (fcvt_to_uint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero)
           (fpromote_reg $F64X2 $F32X4 (vec_merge_high $I32X4 x x)))
-        (fcvt_to_uint_reg $F64X2 (FpuRoundMode.ToZero)
+        (fcvt_to_uint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero)
           (fpromote_reg $F64X2 $F32X4 (vec_merge_low $I32X4 x x)))))
 
 ;; Convert $F64X2 to $I64X2.
 (rule (lower (has_type $I64X2 (fcvt_to_uint_sat x @ (value_type $F64X2))))
-      (fcvt_to_uint_reg $F64X2 (FpuRoundMode.ToZero) x))
+      (fcvt_to_uint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero) x))
 
 
 ;;;; Rules for `fcvt_to_sint_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1674,7 +1718,7 @@
             (flt_ty Type (fcvt_flt_ty dst_ty src_ty))
             (int_ty Type (fcvt_int_ty dst_ty src_ty))
             (src_ext Reg (fpromote_reg flt_ty src_ty src))
-            (dst Reg (fcvt_to_sint_reg flt_ty (FpuRoundMode.ToZero) src_ext))
+            (dst Reg (fcvt_to_sint_reg int_ty flt_ty (FpuRoundMode.ToZero) src_ext))
             ;; In most special cases, the Z instruction already yields the
             ;; result expected by Cranelift semantics.  The only exception
             ;; it the case where the input was a NaN.  We explicitly check
@@ -1690,7 +1734,7 @@
                        (fcvt_to_sint_sat src @ (value_type $F32X4))))
       ;; See above for why we need to handle NaNs specially.
       (vec_select $I32X4
-        (fcvt_to_sint_reg $F32X4 (FpuRoundMode.ToZero) src)
+        (fcvt_to_sint_reg $I32X4 $F32X4 (FpuRoundMode.ToZero) src)
         (vec_imm $I32X4 0) (vec_fcmpeq $F32X4 src src)))
 
 ;; Convert $F32X4 to $I32X4 (via two $F64X2 on z14).
@@ -1699,9 +1743,9 @@
       ;; See above for why we need to handle NaNs specially.
       (vec_select $I32X4
         (vec_pack_ssat $I64X2
-          (fcvt_to_sint_reg $F64X2 (FpuRoundMode.ToZero)
+          (fcvt_to_sint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero)
             (fpromote_reg $F64X2 $F32X4 (vec_merge_high $I32X4 src src)))
-          (fcvt_to_sint_reg $F64X2 (FpuRoundMode.ToZero)
+          (fcvt_to_sint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero)
             (fpromote_reg $F64X2 $F32X4 (vec_merge_low $I32X4 src src))))
         (vec_imm $I32X4 0) (vec_fcmpeq $F32X4 src src)))
 
@@ -1709,7 +1753,7 @@
 (rule (lower (has_type $I64X2 (fcvt_to_sint_sat src @ (value_type $F64X2))))
       ;; See above for why we need to handle NaNs specially.
       (vec_select $I64X2
-        (fcvt_to_sint_reg $F64X2 (FpuRoundMode.ToZero) src)
+        (fcvt_to_sint_reg $I64X2 $F64X2 (FpuRoundMode.ToZero) src)
         (vec_imm $I64X2 0) (vec_fcmpeq $F64X2 src src)))
 
 
@@ -1730,6 +1774,14 @@
 ;; Reinterpret a 32-bit floating-point value as integer.
 (rule (lower (has_type $I32 (bitcast _ x @ (value_type $F32))))
       (vec_extract_lane $F32X4 x 0 (zero_reg)))
+
+;; Reinterpret a 16-bit integer value as floating-point.
+(rule (lower (has_type $F16 (bitcast _ x @ (value_type $I16))))
+      (vec_insert_lane_undef $F16X8 x 0 (zero_reg)))
+
+;; Reinterpret a 16-bit floating-point value as integer.
+(rule (lower (has_type $I16 (bitcast _ x @ (value_type $F16))))
+      (vec_extract_lane $F16X8 x 0 (zero_reg)))
 
 ;; Bitcast between types residing in GPRs is a no-op.
 (rule 1 (lower (has_type (gpr32_ty _)
@@ -1760,6 +1812,12 @@
                          (bitcast flags x @ (value_type (vr128_ty in_ty)))))
       (abi_vec_elt_rev (lane_order_from_memflags flags) out_ty
         (abi_vec_elt_rev (lane_order_from_memflags flags) in_ty x)))
+
+(decl abi_vec_elt_rev (LaneOrder Type Reg) Reg)
+(rule 1 (abi_vec_elt_rev callee_lane_order (ty_vec128 ty) reg)
+      (if-let false (lane_order_equal callee_lane_order (lane_order)))
+      (vec_elt_rev ty reg))
+(rule 0 (abi_vec_elt_rev _ _ reg) reg)
 
 
 ;;;; Rules for `insertlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2323,6 +2381,14 @@
 (rule -1 (lower (has_type $I64 (load flags @ (littleendian) addr offset)))
       (loadrev64 (lower_address flags addr offset)))
 
+;; Load 16-bit big-endian floating-point values (as vector lane).
+(rule (lower (has_type $F16 (load flags @ (bigendian) addr offset)))
+      (vec_load_lane_undef $F16X8 (lower_address flags addr offset) 0))
+
+;; Load 16-bit little-endian floating-point values (as vector lane).
+(rule -1 (lower (has_type $F16 (load flags @ (littleendian) addr offset)))
+      (vec_load_lane_little_undef $F16X8 (lower_address flags addr offset) 0))
+
 ;; Load 32-bit big-endian floating-point values (as vector lane).
 (rule (lower (has_type $F32 (load flags @ (bigendian) addr offset)))
       (vec_load_lane_undef $F32X4 (lower_address flags addr offset) 0))
@@ -2383,6 +2449,10 @@
 (rule -1 (vec_load_byte_rev $I128 flags addr offset)
       (vec_load_full_rev $I128 flags addr offset))
 
+;; Same for `f128`.
+(rule -1 (vec_load_byte_rev $F128 flags addr offset)
+      (vec_load_full_rev $F128 flags addr offset))
+
 ;; Element-wise byte-reversed 16x8-bit load is a direct load.
 (rule (vec_load_byte_rev ty @ (multi_lane 8 16) flags addr offset)
       (vec_load ty (lower_address flags addr offset)))
@@ -2417,6 +2487,10 @@
 ;; For 1x128-bit types, this is a direct load.
 (rule -1 (vec_load_elt_rev $I128 flags addr offset)
       (vec_load $I128 (lower_address flags addr offset)))
+
+;; Same for `f128`.
+(rule -1 (vec_load_elt_rev $F128 flags addr offset)
+      (vec_load $F128 (lower_address flags addr offset)))
 
 ;; Element-reversed 16x8-bit load is a full byte-reversed load.
 (rule (vec_load_elt_rev ty @ (multi_lane 8 16) flags addr offset)
@@ -2641,6 +2715,18 @@
 (rule (lower (store flags val @ (value_type $I64) addr offset))
       (side_effect (istore64_impl flags val addr offset)))
 
+;; Store 16-bit big-endian floating-point type (as vector lane).
+(rule -1 (lower (store flags @ (bigendian)
+                    val @ (value_type $F16) addr offset))
+      (side_effect (vec_store_lane $F16X8 val
+                                   (lower_address flags addr offset) 0)))
+
+;; Store 16-bit little-endian floating-point type (as vector lane).
+(rule (lower (store flags @ (littleendian)
+                    val @ (value_type $F16) addr offset))
+      (side_effect (vec_store_lane_little $F16X8 val
+                                          (lower_address flags addr offset) 0)))
+
 ;; Store 32-bit big-endian floating-point type (as vector lane).
 (rule -1 (lower (store flags @ (bigendian)
                     val @ (value_type $F32) addr offset))
@@ -2714,6 +2800,10 @@
 (rule -1 (vec_store_byte_rev $I128 val flags addr offset)
       (vec_store_full_rev $I128 val flags addr offset))
 
+;; Same for `f128`.
+(rule -1 (vec_store_byte_rev $F128 val flags addr offset)
+      (vec_store_full_rev $F128 val flags addr offset))
+
 ;; Element-wise byte-reversed 16x8-bit store is a direct store.
 (rule (vec_store_byte_rev (multi_lane 8 16) val flags addr offset)
       (vec_store val (lower_address flags addr offset)))
@@ -2746,6 +2836,10 @@
 
 ;; Element-reversed 1x128-bit store is a direct store.
 (rule -1 (vec_store_elt_rev $I128 val flags addr offset)
+      (vec_store val (lower_address flags addr offset)))
+
+;; Same for `f128`.
+(rule -1 (vec_store_elt_rev $F128 val flags addr offset)
       (vec_store val (lower_address flags addr offset)))
 
 ;; Element-reversed 16x8-bit store is a full byte-reversed store.
@@ -3864,33 +3958,38 @@
 
 ;; Direct call to an in-range function.
 (rule 1 (lower (call (func_ref_data sig_ref name (reloc_distance_near)) args))
-      (let ((abi Sig (abi_sig sig_ref))
-            (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args)))
-        (abi_call abi (CallInstDest.Direct name) uses)))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
+            (_ Unit (abi_emit_call_adjust_stack abi))
+            (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
+            (defs CallRetList (gen_call_rets abi output))
+            (info BoxCallInfo (gen_call_info abi name uses defs (try_call_none)))
+            (_ Unit (emit_side_effect (call_impl (writable_link_reg) info))))
+        output))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
 (rule (lower (call (func_ref_data sig_ref name _) args))
-      (let ((abi Sig (abi_sig sig_ref))
-            (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
-            (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0))))
-        (abi_call abi (CallInstDest.Indirect target) uses)))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
+            (_ Unit (abi_emit_call_adjust_stack abi))
+            (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
+            (defs CallRetList (gen_call_rets abi output))
+            (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0)))
+            (info BoxCallInfo (gen_call_info abi target uses defs (try_call_none)))
+            (_ Unit (emit_side_effect (call_impl (writable_link_reg) info))))
+        output))
 
 ;; Indirect call.
 (rule (lower (call_indirect sig_ref ptr args))
-      (let ((abi Sig (abi_sig sig_ref))
+      (let ((output ValueRegsVec (gen_call_output sig_ref))
+            (abi Sig (abi_sig sig_ref))
             (target Reg (put_in_reg ptr))
-            (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args)))
-        (abi_call abi (CallInstDest.Indirect target) uses)))
-
-;; Lower function arguments.
-(decl lower_call_args (Sig Range ValueSlice) CallArgList)
-(rule (lower_call_args abi range args)
-      (let ((uses CallArgListBuilder (args_builder_new))
-            (stack MemArg (abi_call_stack_args abi))
-            (_ InstOutput (lower_call_args_buffer abi stack range args))
-            (_ InstOutput (lower_call_args_slots abi uses stack range args))
-            (_ InstOutput (lower_call_ret_arg abi uses stack)))
-        (args_builder_finish uses)))
+            (_ Unit (abi_emit_call_adjust_stack abi))
+            (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
+            (defs CallRetList (gen_call_rets abi output))
+            (info BoxCallInfo (gen_call_info abi target uses defs (try_call_none)))
+            (_ Unit (emit_side_effect (call_impl (writable_link_reg) info))))
+        output))
 
 
 ;;;; Rules for `return_call` and `return_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3898,32 +3997,28 @@
 ;; Direct tail call to an in-range function.
 (rule 1 (lower (return_call (func_ref_data sig_ref name (reloc_distance_near)) args))
       (let ((abi Sig (abi_sig sig_ref))
-            (uses CallArgList (lower_return_call_args abi (range 0 (abi_num_args abi)) args)))
-        (side_effect (abi_return_call abi (CallInstDest.Direct name) uses))))
+            (_ Unit (abi_emit_return_call_adjust_stack abi))
+            (uses CallArgList (gen_return_call_args abi (abi_prepare_args abi args)))
+            (info BoxReturnCallInfo (gen_return_call_info abi name uses)))
+        (side_effect (return_call_impl info))))
 
 ;; Direct tail call to an out-of-range function (implicitly via pointer).
 (rule (lower (return_call (func_ref_data sig_ref name _) args))
       (let ((abi Sig (abi_sig sig_ref))
-            (uses CallArgList (lower_return_call_args abi (range 0 (abi_num_args abi)) args))
-            (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0))))
-        (side_effect (abi_return_call abi (CallInstDest.Indirect target) uses))))
+            (_ Unit (abi_emit_return_call_adjust_stack abi))
+            (uses CallArgList (gen_return_call_args abi (abi_prepare_args abi args)))
+            (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0)))
+            (info BoxReturnCallInfo (gen_return_call_info abi target uses)))
+        (side_effect (return_call_impl info))))
 
 ;; Indirect tail call.
 (rule (lower (return_call_indirect sig_ref ptr args))
       (let ((abi Sig (abi_sig sig_ref))
             (target Reg (put_in_reg ptr))
-            (uses CallArgList (lower_return_call_args abi (range 0 (abi_num_args abi)) args)))
-        (side_effect (abi_return_call abi (CallInstDest.Indirect target) uses))))
-
-;; Lower tail call function arguments.
-(decl lower_return_call_args (Sig Range ValueSlice) CallArgList)
-(rule (lower_return_call_args abi range args)
-      (let ((uses CallArgListBuilder (args_builder_new))
-            (stack MemArg (abi_return_call_stack_args abi))
-            (_ InstOutput (lower_call_args_buffer abi stack range args))
-            (_ InstOutput (lower_call_args_slots abi uses stack range args))
-            (_ InstOutput (lower_return_call_ret_arg abi uses stack)))
-        (args_builder_finish uses)))
+            (_ Unit (abi_emit_return_call_adjust_stack abi))
+            (uses CallArgList (gen_return_call_args abi (abi_prepare_args abi args)))
+            (info BoxReturnCallInfo (gen_return_call_info abi target uses)))
+        (side_effect (return_call_impl info))))
 
 
 ;;;; Rules for `try_call` and `try_call_indirect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3931,57 +4026,35 @@
 ;; Direct call to an in-range function.
 (rule 1 (lower_branch (try_call (func_ref_data sig_ref name (reloc_distance_near)) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
-            (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args)))
-        (emit_side_effect (abi_try_call abi (CallInstDest.Direct name) uses et targets))))
+            (trycall OptionTryCallInfo (try_call_info et targets))
+            (_ Unit (abi_emit_call_adjust_stack abi))
+            (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
+            (defs CallRetList (gen_try_call_rets abi))
+            (info BoxCallInfo (gen_call_info abi name uses defs trycall)))
+        (emit_side_effect (call_impl (writable_link_reg) info))))
 
 ;; Direct call to an out-of-range function (implicitly via pointer).
 (rule (lower_branch (try_call (func_ref_data sig_ref name _) args et) targets)
       (let ((abi Sig (abi_sig sig_ref))
-            (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args))
-            (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0))))
-        (emit_side_effect (abi_try_call abi (CallInstDest.Indirect target) uses et targets))))
+            (trycall OptionTryCallInfo (try_call_info et targets))
+            (_ Unit (abi_emit_call_adjust_stack abi))
+            (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
+            (defs CallRetList (gen_try_call_rets abi))
+            (target Reg (load_symbol_reloc (SymbolReloc.Absolute name 0)))
+            (info BoxCallInfo (gen_call_info abi target uses defs trycall)))
+        (emit_side_effect (call_impl (writable_link_reg) info))))
 
 ;; Indirect call.
 (rule (lower_branch (try_call_indirect ptr args et) targets)
       (if-let (exception_sig sig_ref) et)
       (let ((abi Sig (abi_sig sig_ref))
+            (trycall OptionTryCallInfo (try_call_info et targets))
             (target Reg (put_in_reg ptr))
-            (uses CallArgList (lower_call_args abi (range 0 (abi_num_args abi)) args)))
-        (emit_side_effect (abi_try_call abi (CallInstDest.Indirect target) uses et targets))))
-
-
-;;;; Common helpers for argument lowering ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Lower function arguments (part 1): prepare buffer copies.
-(decl lower_call_args_buffer (Sig MemArg Range ValueSlice) InstOutput)
-(rule (lower_call_args_buffer abi _ (range_empty) _) (output_none))
-(rule (lower_call_args_buffer abi stack (range_unwrap head tail) args)
-      (let ((_ InstOutput (copy_to_buffer stack (abi_get_arg abi head)
-                                          (value_slice_get args head))))
-        (lower_call_args_buffer abi stack tail args)))
-
-;; Lower function arguments (part 2): set up registers / stack slots.
-(decl lower_call_args_slots (Sig CallArgListBuilder MemArg Range ValueSlice) InstOutput)
-(rule (lower_call_args_slots abi _ _ (range_empty) _) (output_none))
-(rule (lower_call_args_slots abi uses stack (range_unwrap head tail) args)
-      (let ((_ InstOutput (copy_to_arg uses (abi_lane_order abi)
-                                       stack (abi_get_arg abi head)
-                                       (value_slice_get args head))))
-        (lower_call_args_slots abi uses stack tail args)))
-
-;; Lower function arguments (part 3): implicit return-area pointer (call).
-(decl lower_call_ret_arg (Sig CallArgListBuilder MemArg) InstOutput)
-(rule (lower_call_ret_arg (abi_no_ret_arg) _ _) (output_none))
-(rule 1 (lower_call_ret_arg abi @ (abi_ret_arg (abi_arg_only_slot slot)) uses stack)
-      (copy_reg_to_arg_slot uses (abi_lane_order abi)
-                            stack slot (load_addr (abi_call_stack_rets abi))))
-
-;; Lower function arguments (part 3): implicit return-area pointer (return call).
-(decl lower_return_call_ret_arg (Sig CallArgListBuilder MemArg) InstOutput)
-(rule (lower_return_call_ret_arg (abi_no_ret_arg) _ _) (output_none))
-(rule 1 (lower_return_call_ret_arg abi @ (abi_ret_arg (abi_arg_only_slot slot)) uses stack)
-      (copy_reg_to_arg_slot uses (abi_lane_order abi)
-                            stack slot (abi_unwrap_ret_area_ptr)))
+            (_ Unit (abi_emit_call_adjust_stack abi))
+            (uses CallArgList (gen_call_args abi (abi_prepare_args abi args)))
+            (defs CallRetList (gen_try_call_rets abi))
+            (info BoxCallInfo (gen_call_info abi target uses defs trycall)))
+        (emit_side_effect (call_impl (writable_link_reg) info))))
 
 
 ;;;; Rules for `get_{frame,stack}_pointer` and `get_return_address` ;;;;;;;;;;;;

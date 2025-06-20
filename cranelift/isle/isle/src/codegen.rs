@@ -17,6 +17,20 @@ pub struct CodegenOptions {
     /// Do not include the `#![allow(...)]` pragmas in the generated
     /// source. Useful if it must be include!()'d elsewhere.
     pub exclude_global_allow_pragmas: bool,
+
+    /// Prefixes to remove when printing file names in generaed files. This
+    /// helps keep codegen deterministic.
+    pub prefixes: Vec<Prefix>,
+}
+
+/// A path prefix which should be replaced when printing file names.
+#[derive(Clone, Debug)]
+pub struct Prefix {
+    /// Prefix to strip
+    pub prefix: String,
+
+    /// Name replacing the stripped prefix.
+    pub name: String,
 }
 
 /// Emit Rust source code for the given type and term environments.
@@ -455,9 +469,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                     ReturnKind::Plain => format!(
                         "unreachable!(\"no rule matched for term {{}} at {{}}; should it be partial?\", {:?}, {:?})",
                         term_name,
-                        termdata
-                            .decl_pos
-                            .pretty_print_line(&self.files)
+                        termdata.decl_pos.pretty_print_line(&self.files)
                     ),
                 }
             };
@@ -478,13 +490,15 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
         (is_ref, String::from(name))
     }
 
-    fn validate_block(ret_kind: ReturnKind, block: &Block) -> Nested {
+    fn validate_block(ret_kind: ReturnKind, block: &Block) -> Nested<'_> {
         if !matches!(ret_kind, ReturnKind::Iterator) {
             // Loops are only allowed if we're returning an iterator.
-            assert!(!block
-                .steps
-                .iter()
-                .any(|c| matches!(c.check, ControlFlow::Loop { .. })));
+            assert!(
+                !block
+                    .steps
+                    .iter()
+                    .any(|c| matches!(c.check, ControlFlow::Loop { .. }))
+            );
 
             // Unless we're returning an iterator, a case which returns a result must be the last
             // case in a block.

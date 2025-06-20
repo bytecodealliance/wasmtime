@@ -1,11 +1,11 @@
 @unstable(feature = tls)
 interface types {
     @unstable(feature = tls)
-    use wasi:io/streams@0.2.3.{input-stream, output-stream};
+    use wasi:io/streams@0.2.6.{input-stream, output-stream};
     @unstable(feature = tls)
-    use wasi:io/poll@0.2.3.{pollable};
+    use wasi:io/poll@0.2.6.{pollable};
     @unstable(feature = tls)
-    use wasi:io/error@0.2.3.{error as io-error};
+    use wasi:io/error@0.2.6.{error as io-error};
 
     @unstable(feature = tls)
     resource client-handshake {

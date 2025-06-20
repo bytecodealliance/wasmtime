@@ -1,6 +1,6 @@
+use crate::Error;
 use crate::clocks::WasiMonotonicClock;
 use crate::file::WasiFile;
-use crate::Error;
 use bitflags::bitflags;
 use cap_std::time::{Duration, Instant};
 

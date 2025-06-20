@@ -2,7 +2,7 @@
 
 pub mod isle;
 
-use super::{inst::*, PulleyBackend, PulleyTargetKind};
+use super::{PulleyBackend, PulleyTargetKind, inst::*};
 use crate::{
     ir,
     machinst::{lower::*, *},

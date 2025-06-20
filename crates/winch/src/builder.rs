@@ -1,10 +1,10 @@
 use crate::compiler::Compiler;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::sync::Arc;
 use target_lexicon::Triple;
 use wasmtime_cranelift::isa_builder::IsaBuilder;
 use wasmtime_environ::{CompilerBuilder, Setting, Tunables};
-use winch_codegen::{isa, TargetIsa};
+use winch_codegen::{TargetIsa, isa};
 
 /// Compiler builder.
 struct Builder {
@@ -14,9 +14,7 @@ struct Builder {
 }
 
 pub fn builder(triple: Option<Triple>) -> Result<Box<dyn CompilerBuilder>> {
-    let inner = IsaBuilder::new(triple.clone(), |triple| {
-        isa::lookup(triple).map_err(|e| e.into())
-    })?;
+    let inner = IsaBuilder::new(triple.clone(), |triple| isa::lookup(triple))?;
     let cranelift = wasmtime_cranelift::builder(triple)?;
     Ok(Box::new(Builder {
         inner,

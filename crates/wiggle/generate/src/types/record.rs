@@ -1,4 +1,4 @@
-use crate::lifetimes::{anon_lifetime, LifetimeExt};
+use crate::lifetimes::{LifetimeExt, anon_lifetime};
 use crate::names;
 
 use proc_macro2::TokenStream;

@@ -7,7 +7,7 @@ the same time:
 1. Compile your WebAssembly with debug info enabled, usually `-g`; for
    example:
 
-    ```sh
+    ```console
     clang foo.c -g -o foo.wasm
     ```
 
@@ -18,10 +18,10 @@ the same time:
 
 3. Use a supported debugger:
 
-    ```sh
+    ```console
     lldb -- wasmtime run -D debug-info foo.wasm
     ```
-    ```sh
+    ```console
     gdb --args wasmtime run -D debug-info -O opt-level=0 foo.wasm
     ```
 
@@ -34,7 +34,7 @@ If you run into trouble, the following discussions might help:
 - With LLDB, call `__vmctx.set()` to set the current context before calling any
   dereference operators
   ([#1482](https://github.com/bytecodealliance/wasmtime/issues/1482)):
-  ```sh
+  ```text
   (lldb) p __vmctx->set()
   (lldb) p *foo
   ```

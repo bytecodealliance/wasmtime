@@ -1,13 +1,14 @@
 #![no_main]
 
 use cranelift_codegen::{
+    Context,
     cursor::{Cursor, FuncCursor},
     incremental_cache as icache,
     ir::{
-        self, immediates::Imm64, ExternalName, Function, LibCall, Signature, UserExternalName,
-        UserFuncName,
+        self, ExternalName, Function, LibCall, Signature, UserExternalName, UserFuncName,
+        immediates::Imm64,
     },
-    isa, Context,
+    isa,
 };
 use libfuzzer_sys::{
     arbitrary::{self, Arbitrary, Unstructured},

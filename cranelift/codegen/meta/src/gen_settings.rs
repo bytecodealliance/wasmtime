@@ -7,7 +7,7 @@ use crate::cdsl::settings::{
 use crate::constant_hash::generate_table;
 use crate::unique_table::UniqueSeqTable;
 use cranelift_codegen_shared::constant_hash::simple_hash;
-use cranelift_srcgen::{error, fmtln, Formatter, Language, Match};
+use cranelift_srcgen::{Formatter, Language, Match, error, fmtln};
 use std::collections::HashMap;
 
 pub(crate) enum ParentGroup {
@@ -207,7 +207,7 @@ fn gen_getters(group: &SettingGroup, fmt: &mut Formatter) {
     fmt.add_block("impl Flags", |fmt| {
         fmt.doc_comment("Get a view of the boolean predicates.");
         fmt.add_block(
-            "pub fn predicate_view(&self) -> crate::settings::PredicateView",
+            "pub fn predicate_view(&self) -> crate::settings::PredicateView<'_>",
             |fmt| {
                 fmtln!(
                     fmt,

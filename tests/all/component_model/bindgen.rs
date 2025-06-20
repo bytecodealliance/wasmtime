@@ -1,11 +1,10 @@
 #![cfg(not(miri))]
-#![allow(dead_code)]
 
 use super::engine;
 use anyhow::Result;
 use wasmtime::{
-    component::{Component, Linker},
     Store,
+    component::{Component, Linker},
 };
 
 mod ownership;
@@ -13,6 +12,7 @@ mod results;
 
 mod no_imports {
     use super::*;
+    use std::rc::Rc;
 
     wasmtime::component::bindgen!({
         inline: "
@@ -54,12 +54,19 @@ mod no_imports {
         let no_imports = NoImports::instantiate(&mut store, &component, &linker)?;
         no_imports.call_bar(&mut store)?;
         no_imports.foo().call_foo(&mut store)?;
+
+        let linker = Linker::new(&engine);
+        let mut non_send_store = Store::new(&engine, Rc::new(()));
+        let no_imports = NoImports::instantiate(&mut non_send_store, &component, &linker)?;
+        no_imports.call_bar(&mut non_send_store)?;
+        no_imports.foo().call_foo(&mut non_send_store)?;
         Ok(())
     }
 }
 
 mod one_import {
     use super::*;
+    use wasmtime::component::HasSelf;
 
     wasmtime::component::bindgen!({
         inline: "
@@ -112,7 +119,7 @@ mod one_import {
         }
 
         let mut linker = Linker::new(&engine);
-        foo::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        foo::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
         let mut store = Store::new(&engine, MyImports::default());
         let one_import = OneImport::instantiate(&mut store, &component, &linker)?;
         one_import.call_bar(&mut store)?;
@@ -123,7 +130,7 @@ mod one_import {
 
 mod resources_at_world_level {
     use super::*;
-    use wasmtime::component::Resource;
+    use wasmtime::component::{HasSelf, Resource};
 
     wasmtime::component::bindgen!({
         inline: "
@@ -200,7 +207,7 @@ mod resources_at_world_level {
         impl ResourcesImports for MyImports {}
 
         let mut linker = Linker::new(&engine);
-        Resources::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        Resources::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
         let mut store = Store::new(&engine, MyImports::default());
         let one_import = Resources::instantiate(&mut store, &component, &linker)?;
         one_import.call_y(&mut store, Resource::new_own(40))?;
@@ -212,7 +219,7 @@ mod resources_at_world_level {
 
 mod resources_at_interface_level {
     use super::*;
-    use wasmtime::component::Resource;
+    use wasmtime::component::{HasSelf, Resource};
 
     wasmtime::component::bindgen!({
         inline: "
@@ -245,7 +252,7 @@ mod resources_at_interface_level {
             r#"
                 (component
                     (import (interface "foo:foo/def") (instance $i
-                        (export $x "x" (type (sub resource)))
+                        (export "x" (type $x (sub resource)))
                         (export "[constructor]x" (func (result (own $x))))
                     ))
                     (alias export $i "x" (type $x))
@@ -305,7 +312,7 @@ mod resources_at_interface_level {
         impl foo::foo::def::Host for MyImports {}
 
         let mut linker = Linker::new(&engine);
-        Resources::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        Resources::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
         let mut store = Store::new(&engine, MyImports::default());
         let one_import = Resources::instantiate(&mut store, &component, &linker)?;
         one_import
@@ -336,6 +343,7 @@ mod async_config {
         async: true,
     });
 
+    #[expect(dead_code, reason = "just here for bindings")]
     struct T;
 
     impl T1Imports for T {
@@ -402,7 +410,7 @@ mod async_config {
 mod exported_resources {
     use super::*;
     use std::mem;
-    use wasmtime::component::Resource;
+    use wasmtime::component::{HasSelf, Resource};
 
     wasmtime::component::bindgen!({
         inline: "
@@ -481,7 +489,7 @@ mod exported_resources {
 (component
   ;; setup the `foo:foo/a` import
   (import (interface "foo:foo/a") (instance $a
-    (export $x "x" (type (sub resource)))
+    (export "x" (type $x (sub resource)))
     (export "[constructor]x" (func (result (own $x))))
   ))
   (alias export $a "x" (type $a-x))
@@ -591,7 +599,7 @@ mod exported_resources {
         )?;
 
         let mut linker = Linker::new(&engine);
-        Resources::add_to_linker(&mut linker, |f: &mut MyImports| f)?;
+        Resources::add_to_linker::<_, HasSelf<_>>(&mut linker, |f| f)?;
         let mut store = Store::new(&engine, MyImports::default());
         let i = Resources::instantiate(&mut store, &component, &linker)?;
 
@@ -629,6 +637,7 @@ mod exported_resources {
 
 mod unstable_import {
     use super::*;
+    use wasmtime::component::HasSelf;
 
     wasmtime::component::bindgen!({
         inline: "
@@ -688,7 +697,10 @@ mod unstable_import {
     }
     fn assert_failure(link_options: &LinkOptions) {
         let err = run_with_options(link_options).unwrap_err().to_string();
-        assert_eq!(err, "component imports instance `foo:foo/my-interface`, but a matching implementation was not found in the linker");
+        assert_eq!(
+            err,
+            "component imports instance `foo:foo/my-interface`, but a matching implementation was not found in the linker"
+        );
     }
 
     fn run_with_options(link_options: &LinkOptions) -> Result<()> {
@@ -723,7 +735,7 @@ mod unstable_import {
         }
 
         let mut linker = Linker::new(&engine);
-        MyWorld::add_to_linker(&mut linker, link_options, |h: &mut MyHost| h)?;
+        MyWorld::add_to_linker::<_, HasSelf<_>>(&mut linker, link_options, |h| h)?;
         let mut store = Store::new(&engine, MyHost::default());
         let one_import = MyWorld::instantiate(&mut store, &component, &linker)?;
         one_import.call_bar(&mut store)?;

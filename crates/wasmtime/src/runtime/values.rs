@@ -1,8 +1,8 @@
 use crate::runtime::vm::TableElement;
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
-    prelude::*, AnyRef, ArrayRef, AsContext, AsContextMut, ExternRef, Func, HeapType, RefType,
-    Rooted, RootedGcRefImpl, StructRef, ValType, V128,
+    AnyRef, ArrayRef, AsContext, AsContextMut, ExternRef, Func, HeapType, RefType, Rooted,
+    RootedGcRefImpl, StructRef, V128, ValType, prelude::*,
 };
 use core::ptr;
 
@@ -279,6 +279,11 @@ impl Val {
                     }
 
                     HeapType::NoFunc => Ref::Func(None),
+
+                    HeapType::NoCont | HeapType::ConcreteCont(_) | HeapType::Cont => {
+                        // TODO(#10248): Required to support stack switching in the embedder API.
+                        unimplemented!()
+                    }
 
                     HeapType::Extern => ExternRef::_from_raw(store, raw.get_externref()).into(),
 
@@ -983,7 +988,7 @@ impl Ref {
                     f.comes_from_same_store(&store),
                     "checked in `ensure_matches_ty`"
                 );
-                Ok(TableElement::FuncRef(Some(f.vm_func_ref(&mut store))))
+                Ok(TableElement::FuncRef(Some(f.vm_func_ref(&store))))
             }
 
             (Ref::Extern(e), HeapType::Extern) => match e {

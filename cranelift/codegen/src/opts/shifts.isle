@@ -52,7 +52,7 @@
                   (uextend wide x @ (value_type narrow))
                   (iconst_u _ shift_u64))
                  (iconst_u _ shift_u64)))
-      (if-let true (u64_eq shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
+      (if-let true (u64_eq shift_u64 (u64_wrapping_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
       (sextend wide x))
 
 ;; If `k` is smaller than the difference in bit widths of the two types, then
@@ -63,7 +63,7 @@
                   x @ (uextend wide (value_type narrow))
                   (iconst_u _ shift_u64))
                  (iconst_u _ shift_u64)))
-      (if-let true (u64_lt shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
+      (if-let true (u64_lt shift_u64 (u64_wrapping_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
       x)
 
 ;; If the original extend op was `sextend`, then both of the above cases say
@@ -73,7 +73,7 @@
                   x @ (sextend wide (value_type narrow))
                   (iconst_u _ shift_u64))
                  (iconst_u _ shift_u64)))
-      (if-let true (u64_le shift_u64 (u64_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
+      (if-let true (u64_lt_eq shift_u64 (u64_wrapping_sub (ty_bits_u64 wide) (ty_bits_u64 narrow))))
       x)
 
 ;; (x << N) >> N == x as T_SMALL as T_LARGE
@@ -82,12 +82,12 @@
 ;; Note that the shift is required to be >0 to ensure this doesn't accidentally
 ;; try to `ireduce` a type to itself, which isn't a valid use of `ireduce`.
 (rule (simplify (sshr (ty_int ty) (ishl ty x (iconst _ shift)) (iconst _ shift)))
-      (if-let (u64_from_imm64 (u64_nonzero shift_u64)) shift)
-      (if-let ty_small (shift_amt_to_type (u64_sub (ty_bits ty) shift_u64)))
+      (if-let (u64_from_imm64 (u64_extract_non_zero shift_u64)) shift)
+      (if-let ty_small (shift_amt_to_type (u64_wrapping_sub (ty_bits ty) shift_u64)))
       (sextend ty (ireduce ty_small x)))
 (rule (simplify (ushr (ty_int ty) (ishl ty x (iconst _ shift)) (iconst _ shift)))
-      (if-let (u64_from_imm64 (u64_nonzero shift_u64)) shift)
-      (if-let ty_small (shift_amt_to_type (u64_sub (ty_bits ty) shift_u64)))
+      (if-let (u64_from_imm64 (u64_extract_non_zero shift_u64)) shift)
+      (if-let ty_small (shift_amt_to_type (u64_wrapping_sub (ty_bits ty) shift_u64)))
       (uextend ty (ireduce ty_small x)))
 
 (decl pure partial shift_amt_to_type (u64) Type)
@@ -152,7 +152,7 @@
 (rule (simplify (ishl ty
                       (ishl ty x (iconst_u kty k1))
                       (iconst_u _ k2)))
-      (if-let shift_amt (u64_add
+      (if-let shift_amt (u64_wrapping_add
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
       (if-let true (u64_lt shift_amt (ty_bits_u64 (lane_type ty))))
@@ -161,7 +161,7 @@
 (rule (simplify (ushr ty
                       (ushr ty x (iconst_u kty k1))
                       (iconst_u _ k2)))
-      (if-let shift_amt (u64_add
+      (if-let shift_amt (u64_wrapping_add
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
       (if-let true (u64_lt shift_amt (ty_bits_u64 (lane_type ty))))
@@ -170,7 +170,7 @@
 (rule (simplify (sshr ty
                       (sshr ty x (iconst_u kty k1))
                       (iconst_u _ k2)))
-      (if-let shift_amt (u64_add
+      (if-let shift_amt (u64_wrapping_add
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
       (if-let true (u64_lt shift_amt (ty_bits_u64 (lane_type ty))))
@@ -184,19 +184,19 @@
 (rule (simplify (ishl ty
                       (ishl ty x (iconst_u _ k1))
                       (iconst_u _ k2)))
-      (if-let shift_amt (u64_add
+      (if-let shift_amt (u64_wrapping_add
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
-      (if-let true (u64_le (ty_bits_u64 ty) shift_amt))
+      (if-let true (u64_lt_eq (ty_bits_u64 ty) shift_amt))
       (subsume (iconst_u ty 0)))
 
 (rule (simplify (ushr ty
                       (ushr ty x (iconst_u _ k1))
                       (iconst_u _ k2)))
-      (if-let shift_amt (u64_add
+      (if-let shift_amt (u64_wrapping_add
                               (u64_and k1 (ty_shift_mask ty))
                               (u64_and k2 (ty_shift_mask ty))))
-      (if-let true (u64_le (ty_bits_u64 ty) shift_amt))
+      (if-let true (u64_lt_eq (ty_bits_u64 ty) shift_amt))
       (subsume (iconst_u ty 0)))
 
 ;; (rotl (rotr x y) y) == x
@@ -276,12 +276,12 @@
 (rule (simplify (bor (ty_int ty)
                       (ishl ty x k @ (iconst _ (u64_from_imm64 k1)))
                       (ushr ty x (iconst _ (u64_from_imm64 k2)))))
-      (if-let true (u64_eq k2 (u64_sub (ty_bits_u64 (lane_type ty)) k1)))
+      (if-let true (u64_eq k2 (u64_wrapping_sub (ty_bits_u64 (lane_type ty)) k1)))
       (rotl ty x k))
 (rule (simplify (bor (ty_int ty)
                       (ushr ty x (iconst _ (u64_from_imm64 k2)))
                       (ishl ty x k @ (iconst _ (u64_from_imm64 k1)))))
-      (if-let true (u64_eq k2 (u64_sub (ty_bits_u64 (lane_type ty)) k1)))
+      (if-let true (u64_eq k2 (u64_wrapping_sub (ty_bits_u64 (lane_type ty)) k1)))
       (rotl ty x k))
 
 ;; Normalize the shift amount. Some rules can't fire unless the shift amount

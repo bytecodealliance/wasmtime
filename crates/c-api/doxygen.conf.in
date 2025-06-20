@@ -949,7 +949,8 @@ EXCLUDE_SYMBOLS        = assertions \
                          wasmtime::detail \
                          CASE_KIND_PRINT_NAME \
                          CASE_KIND_TO_C \
-                         CASE_C_TO_KIND
+                         CASE_C_TO_KIND \
+                         DECLARE_VEC
 
 # The EXAMPLE_PATH tag can be used to specify one or more files or directories
 # that contain example code fragments that are included (see the \include

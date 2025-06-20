@@ -1,18 +1,19 @@
 //! Densely numbered entity references as mapping keys.
 
+use crate::EntityRef;
 use crate::iter::{Iter, IterMut};
 use crate::keys::Keys;
-use crate::EntityRef;
 use alloc::vec::Vec;
 use core::cmp::min;
+use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 use core::slice;
 #[cfg(feature = "enable-serde")]
 use serde::{
+    Deserialize, Serialize,
     de::{Deserializer, SeqAccess, Visitor},
     ser::{SerializeSeq, Serializer},
-    Deserialize, Serialize,
 };
 
 /// A mapping `K -> V` for densely indexed entity references.
@@ -23,7 +24,7 @@ use serde::{
 ///
 /// The map does not track if an entry for a key has been inserted or not. Instead it behaves as if
 /// all keys have a default entry from the beginning.
-#[derive(Debug, Clone, Hash)]
+#[derive(Clone, Hash)]
 pub struct SecondaryMap<K, V>
 where
     K: EntityRef,
@@ -101,12 +102,12 @@ where
     }
 
     /// Iterate over all the keys and values in this map.
-    pub fn iter(&self) -> Iter<K, V> {
+    pub fn iter(&self) -> Iter<'_, K, V> {
         Iter::new(self.elems.iter())
     }
 
     /// Iterate over all the keys and values in this map, mutable edition.
-    pub fn iter_mut(&mut self) -> IterMut<K, V> {
+    pub fn iter_mut(&mut self) -> IterMut<'_, K, V> {
         IterMut::new(self.elems.iter_mut())
     }
 
@@ -116,12 +117,12 @@ where
     }
 
     /// Iterate over all the values in this map.
-    pub fn values(&self) -> slice::Iter<V> {
+    pub fn values(&self) -> slice::Iter<'_, V> {
         self.elems.iter()
     }
 
     /// Iterate over all the values in this map, mutable edition.
-    pub fn values_mut(&mut self) -> slice::IterMut<V> {
+    pub fn values_mut(&mut self) -> slice::IterMut<'_, V> {
         self.elems.iter_mut()
     }
 
@@ -279,6 +280,15 @@ where
         deserializer.deserialize_seq(SecondaryMapVisitor {
             unused: PhantomData {},
         })
+    }
+}
+
+impl<K: EntityRef + fmt::Debug, V: fmt::Debug + Clone> fmt::Debug for SecondaryMap<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SecondaryMap")
+            .field("elems", &self.elems)
+            .field("default", &self.default)
+            .finish()
     }
 }
 

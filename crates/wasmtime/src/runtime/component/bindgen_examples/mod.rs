@@ -102,12 +102,18 @@ macro_rules! bindgen {
 ///     // Configuration of the linker is done through a generated `add_to_linker`
 ///     // method on the bindings structure.
 ///     //
-///     // Note that the closure provided here is a projection from `T` in
+///     // Note that the function provided here is a projection from `T` in
 ///     // `Store<T>` to `&mut U` where `U` implements the `HelloWorldImports`
 ///     // trait. In this case the `T`, `MyState`, is stored directly in the
 ///     // structure so no projection is necessary here.
+///     //
+///     // Note that the second type parameter of `add_to_linker` is chosen here
+///     // as the built-in `HasSelf` type in Wasmtime. This effectively says
+///     // that our function isn't actually projecting, it's returning the
+///     // input, so `HasSelf<_>` is a convenience to avoid writing a custom
+///     // `HasData` implementation.
 ///     let mut linker = Linker::new(&engine);
-///     HelloWorld::add_to_linker(&mut linker, |state: &mut MyState| state)?;
+///     HelloWorld::add_to_linker::<_, HasSelf<_>>(&mut linker, |state| state)?;
 ///
 ///     // As with the core wasm API of Wasmtime instantiation occurs within a
 ///     // `Store`. The bindings structure contains an `instantiate` method which
@@ -167,7 +173,7 @@ pub mod _0_hello_world;
 ///     let component = Component::from_file(&engine, "./your-component.wasm")?;
 ///
 ///     let mut linker = Linker::new(&engine);
-///     MyWorld::add_to_linker(&mut linker, |state: &mut MyState| state)?;
+///     MyWorld::add_to_linker::<_, HasSelf<_>>(&mut linker, |state| state)?;
 ///
 ///     let mut store = Store::new(
 ///         &engine,
@@ -224,7 +230,7 @@ pub mod _1_world_imports;
 ///     let component = Component::from_file(&engine, "./your-component.wasm")?;
 ///
 ///     let mut linker = Linker::new(&engine);
-///     HelloWorld::add_to_linker(&mut linker, |state: &mut MyState| state)?;
+///     HelloWorld::add_to_linker::<_, HasSelf<_>>(&mut linker, |state| state)?;
 ///
 ///     let mut store = Store::new(
 ///         &engine,
@@ -384,7 +390,7 @@ pub mod _4_imported_resources;
 ///
 /// ```rust
 /// use wasmtime::{Result, Engine, Store};
-/// use wasmtime::component::{bindgen, Component, Linker};
+/// use wasmtime::component::{bindgen, Component, Linker, HasSelf};
 ///
 #[doc = include_str!("./_5_all_world_export_kinds.rs")]
 ///
@@ -402,7 +408,7 @@ pub mod _4_imported_resources;
 ///     let component = Component::from_file(&engine, "./your-component.wasm")?;
 ///
 ///     let mut linker = Linker::new(&engine);
-///     WithExports::add_to_linker(&mut linker, |state: &mut MyState| state)?;
+///     WithExports::add_to_linker::<_, HasSelf<_>>(&mut linker, |state| state)?;
 ///
 ///     let mut store = Store::new(&engine, MyState);
 ///     let bindings = WithExports::instantiate(&mut store, &component, &linker)?;

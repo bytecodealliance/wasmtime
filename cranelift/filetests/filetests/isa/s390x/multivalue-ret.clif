@@ -80,37 +80,40 @@ block1:
 
 ; VCode:
 ; block0:
-;   bras %r1, 12 ; data.f64 0 ; ld %f0, 0(%r1)
-;   bras %r1, 12 ; data.f64 1 ; ld %f2, 0(%r1)
-;   bras %r1, 12 ; data.f64 2 ; ld %f4, 0(%r1)
-;   bras %r1, 12 ; data.f64 3 ; ld %f6, 0(%r1)
+;   larl %r1, [const(3)] ; ld %f0, 0(%r1)
+;   larl %r1, [const(2)] ; ld %f2, 0(%r1)
+;   larl %r1, [const(1)] ; ld %f4, 0(%r1)
+;   larl %r1, [const(0)] ; ld %f6, 0(%r1)
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0xc
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x30
 ;   ld %f0, 0(%r1)
-;   bras %r1, 0x1c
+;   larl %r1, 0x38
+;   ld %f2, 0(%r1)
+;   larl %r1, 0x40
+;   ld %f4, 0(%r1)
+;   larl %r1, 0x48
+;   ld %f6, 0(%r1)
+;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 ;   sur %f15, %f0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   ld %f2, 0(%r1)
-;   bras %r1, 0x2c
 ;   sth %r0, 0
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   ld %f4, 0(%r1)
-;   bras %r1, 0x3c
 ;   sth %r0, 0(%r8)
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x00
-;   ld %f6, 0(%r1)
-;   br %r14
 
 function %f4() -> f64, f64, f64, f64, f64, f64 {
 block1:
@@ -125,51 +128,54 @@ block1:
 
 ; VCode:
 ; block0:
-;   bras %r1, 12 ; data.f64 0 ; ld %f0, 0(%r1)
-;   bras %r1, 12 ; data.f64 1 ; ld %f2, 0(%r1)
-;   bras %r1, 12 ; data.f64 2 ; ld %f4, 0(%r1)
-;   bras %r1, 12 ; data.f64 3 ; ld %f6, 0(%r1)
-;   bras %r1, 12 ; data.f64 4 ; ld %f7, 0(%r1)
-;   bras %r1, 12 ; data.f64 5 ; vleg %v16, 0(%r1), 0
+;   larl %r1, [const(5)] ; ld %f0, 0(%r1)
+;   larl %r1, [const(4)] ; ld %f2, 0(%r1)
+;   larl %r1, [const(3)] ; ld %f4, 0(%r1)
+;   larl %r1, [const(2)] ; ld %f6, 0(%r1)
+;   larl %r1, [const(1)] ; ld %f7, 0(%r1)
+;   larl %r1, [const(0)] ; vleg %v16, 0(%r1), 0
 ;   std %f7, 0(%r2)
 ;   vsteg %v16, 8(%r2), 0
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   bras %r1, 0xc
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x50
 ;   ld %f0, 0(%r1)
-;   bras %r1, 0x1c
-;   sur %f15, %f0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x58
 ;   ld %f2, 0(%r1)
-;   bras %r1, 0x2c
-;   sth %r0, 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x60
 ;   ld %f4, 0(%r1)
-;   bras %r1, 0x3c
-;   sth %r0, 0(%r8)
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x68
 ;   ld %f6, 0(%r1)
-;   bras %r1, 0x4c
-;   sth %r1, 0
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x70
 ;   ld %f7, 0(%r1)
-;   bras %r1, 0x5c
-;   sth %r1, 0(%r4)
-;   .byte 0x00, 0x00
-;   .byte 0x00, 0x00
+;   larl %r1, 0x78
 ;   vleg %v16, 0(%r1), 0
 ;   std %f7, 0(%r2)
 ;   vsteg %v16, 8(%r2), 0
 ;   br %r14
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sur %f15, %f0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sth %r0, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sth %r0, 0(%r8)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sth %r1, 0
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
+;   sth %r1, 0(%r4)
+;   .byte 0x00, 0x00
+;   .byte 0x00, 0x00
 

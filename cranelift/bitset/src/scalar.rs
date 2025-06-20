@@ -54,7 +54,6 @@ where
         let mut s = f.debug_struct(core::any::type_name::<Self>());
         for i in 0..Self::capacity() {
             use alloc::string::ToString;
-            let i = u8::try_from(i).unwrap();
             s.field(&i.to_string(), &self.contains(i));
         }
         s.finish()

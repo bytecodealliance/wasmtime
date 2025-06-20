@@ -231,12 +231,12 @@ pub struct WasiHttpImpl<T>(pub IoImpl<T>);
 
 impl<T: IoView> IoView for WasiHttpImpl<T> {
     fn table(&mut self) -> &mut ResourceTable {
-        T::table(&mut self.0 .0)
+        T::table(&mut self.0.0)
     }
 }
 impl<T: WasiHttpView> WasiHttpView for WasiHttpImpl<T> {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
-        self.0 .0.ctx()
+        self.0.0.ctx()
     }
 
     fn new_response_outparam(
@@ -245,7 +245,7 @@ impl<T: WasiHttpView> WasiHttpView for WasiHttpImpl<T> {
             Result<hyper::Response<HyperOutgoingBody>, types::ErrorCode>,
         >,
     ) -> wasmtime::Result<Resource<HostResponseOutparam>> {
-        self.0 .0.new_response_outparam(result)
+        self.0.0.new_response_outparam(result)
     }
 
     fn send_request(
@@ -253,31 +253,30 @@ impl<T: WasiHttpView> WasiHttpView for WasiHttpImpl<T> {
         request: hyper::Request<HyperOutgoingBody>,
         config: OutgoingRequestConfig,
     ) -> crate::HttpResult<HostFutureIncomingResponse> {
-        self.0 .0.send_request(request, config)
+        self.0.0.send_request(request, config)
     }
 
     fn is_forbidden_header(&mut self, name: &HeaderName) -> bool {
-        self.0 .0.is_forbidden_header(name)
+        self.0.0.is_forbidden_header(name)
     }
 
     fn outgoing_body_buffer_chunks(&mut self) -> usize {
-        self.0 .0.outgoing_body_buffer_chunks()
+        self.0.0.outgoing_body_buffer_chunks()
     }
 
     fn outgoing_body_chunk_size(&mut self) -> usize {
-        self.0 .0.outgoing_body_chunk_size()
+        self.0.0.outgoing_body_chunk_size()
     }
 }
 
 /// Returns `true` when the header is forbidden according to this [`WasiHttpView`] implementation.
 pub(crate) fn is_forbidden_header(view: &mut dyn WasiHttpView, name: &HeaderName) -> bool {
-    static FORBIDDEN_HEADERS: [HeaderName; 10] = [
+    static FORBIDDEN_HEADERS: [HeaderName; 9] = [
         hyper::header::CONNECTION,
         HeaderName::from_static("keep-alive"),
         hyper::header::PROXY_AUTHENTICATE,
         hyper::header::PROXY_AUTHORIZATION,
         HeaderName::from_static("proxy-connection"),
-        hyper::header::TE,
         hyper::header::TRANSFER_ENCODING,
         hyper::header::UPGRADE,
         hyper::header::HOST,

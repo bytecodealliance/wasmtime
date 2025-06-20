@@ -9,7 +9,7 @@
 // taken the time to improve it. See bug #2880.
 
 use crate::sched::subscription::{RwEventFlags, Subscription};
-use crate::{file::WasiFile, sched::Poll, Error, ErrorExt};
+use crate::{Error, ErrorExt, file::WasiFile, sched::Poll};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender, TryRecvError};
 use std::sync::{LazyLock, Mutex};
 use std::thread;
@@ -166,7 +166,7 @@ impl StdinPoll {
             Err(TryRecvError::Disconnected) => {
                 return Err(Error::trap(anyhow::Error::msg(
                     "StdinPoll notify_rx channel closed",
-                )))
+                )));
             }
         }
 

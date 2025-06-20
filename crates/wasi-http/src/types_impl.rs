@@ -1,16 +1,16 @@
 //! Implementation for the `wasi:http/types` interface.
 
 use crate::{
+    HttpError, HttpResult, WasiHttpImpl, WasiHttpView,
     bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers},
     body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext},
     types::{
-        is_forbidden_header, remove_forbidden_headers, FieldMap, HostFields,
-        HostFutureIncomingResponse, HostIncomingRequest, HostIncomingResponse, HostOutgoingRequest,
-        HostOutgoingResponse, HostResponseOutparam,
+        FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
+        HostIncomingResponse, HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam,
+        is_forbidden_header, remove_forbidden_headers,
     },
-    WasiHttpImpl, WasiHttpView,
 };
-use anyhow::Context;
+use anyhow::{Context, anyhow};
 use std::any::Any;
 use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable, ResourceTableError};
@@ -425,7 +425,7 @@ where
         &mut self,
         request: wasmtime::component::Resource<types::OutgoingRequest>,
     ) -> wasmtime::Result<Method> {
-        Ok(self.table().get(&request)?.method.clone().try_into()?)
+        Ok(self.table().get(&request)?.method.clone())
     }
 
     fn set_method(
@@ -572,11 +572,22 @@ where
             Err(e) => Err(e),
         };
 
-        self.table()
-            .delete(id)?
-            .result
-            .send(val)
-            .map_err(|_| anyhow::anyhow!("failed to initialize response"))
+        let resp = self.table().delete(id)?;
+        // Giving the API doesn't return any error, it's probably
+        // better to ignore the error than trap the guest, in case of
+        // host timeout and dropped the receiver side of the channel.
+        // See also: #10784
+        let _ = resp.result.send(val);
+        Ok(())
+    }
+
+    fn send_informational(
+        &mut self,
+        _id: Resource<HostResponseOutparam>,
+        _status: u16,
+        _headers: Resource<Headers>,
+    ) -> HttpResult<()> {
+        Err(HttpError::trap(anyhow!("not implemented")))
     }
 }
 

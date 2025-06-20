@@ -8,22 +8,23 @@ use inst::InstAndKind;
 // Types that the generated ISLE code uses via `use super::*`.
 use crate::ir::{condcodes::*, immediates::*, types::*, *};
 use crate::isa::pulley_shared::{
-    abi::*,
     inst::{
         FReg, OperandSize, PulleyCall, ReturnCallInfo, VReg, WritableFReg, WritableVReg,
         WritableXReg, XReg,
     },
-    lower::{regs, Cond},
+    lower::{Cond, regs},
     *,
 };
 use crate::machinst::{
+    CallArgList, CallInfo, CallRetList, MachInst, Reg, VCodeConstant, VCodeConstantData,
     abi::{ArgPair, RetPair, StackAMode},
     isle::*,
-    CallInfo, IsTailCall, MachInst, Reg, VCodeConstant, VCodeConstantData,
 };
 use alloc::boxed::Box;
 use pulley_interpreter::U6;
 use regalloc2::PReg;
+use smallvec::SmallVec;
+
 type Unit = ();
 type VecArgPair = Vec<ArgPair>;
 type VecRetPair = Vec<RetPair>;
@@ -68,7 +69,123 @@ where
     P: PulleyTargetKind,
 {
     crate::isle_lower_prelude_methods!(InstAndKind<P>);
-    crate::isle_prelude_caller_methods!(PulleyABICallSite<P>);
+
+    fn gen_call_info(
+        &mut self,
+        sig: Sig,
+        name: ExternalName,
+        mut uses: CallArgList,
+        defs: CallRetList,
+        try_call_info: Option<TryCallInfo>,
+    ) -> BoxCallInfo {
+        let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
+        let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
+
+        // The first four integer arguments to a call can be handled via
+        // special pulley call instructions. Assert here that
+        // `uses` is sorted in order and then take out x0-x3 if
+        // they're present and move them from `uses` to
+        // `dest.args` to be handled differently during register
+        // allocation.
+        let mut args = SmallVec::new();
+        uses.sort_by_key(|arg| arg.preg);
+        uses.retain(|arg| {
+            if arg.preg != regs::x0()
+                && arg.preg != regs::x1()
+                && arg.preg != regs::x2()
+                && arg.preg != regs::x3()
+            {
+                return true;
+            }
+            args.push(XReg::new(arg.vreg).unwrap());
+            false
+        });
+        let dest = PulleyCall { name, args };
+        Box::new(
+            self.lower_ctx
+                .gen_call_info(sig, dest, uses, defs, try_call_info),
+        )
+    }
+
+    fn gen_call_ind_info(
+        &mut self,
+        sig: Sig,
+        dest: Reg,
+        uses: CallArgList,
+        defs: CallRetList,
+        try_call_info: Option<TryCallInfo>,
+    ) -> BoxCallIndInfo {
+        let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
+        let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
+
+        let dest = XReg::new(dest).unwrap();
+        Box::new(
+            self.lower_ctx
+                .gen_call_info(sig, dest, uses, defs, try_call_info),
+        )
+    }
+
+    fn gen_call_host_info(
+        &mut self,
+        sig: Sig,
+        dest: ExternalName,
+        uses: CallArgList,
+        defs: CallRetList,
+        try_call_info: Option<TryCallInfo>,
+    ) -> BoxCallIndirectHostInfo {
+        let stack_ret_space = self.lower_ctx.sigs()[sig].sized_stack_ret_space();
+        let stack_arg_space = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_outgoing_args_size(stack_ret_space + stack_arg_space);
+
+        Box::new(
+            self.lower_ctx
+                .gen_call_info(sig, dest, uses, defs, try_call_info),
+        )
+    }
+
+    fn gen_return_call_info(
+        &mut self,
+        sig: Sig,
+        dest: ExternalName,
+        uses: CallArgList,
+    ) -> BoxReturnCallInfo {
+        let new_stack_arg_size = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_tail_args_size(new_stack_arg_size);
+
+        Box::new(ReturnCallInfo {
+            dest,
+            uses,
+            new_stack_arg_size,
+        })
+    }
+
+    fn gen_return_call_ind_info(
+        &mut self,
+        sig: Sig,
+        dest: Reg,
+        uses: CallArgList,
+    ) -> BoxReturnCallIndInfo {
+        let new_stack_arg_size = self.lower_ctx.sigs()[sig].sized_stack_arg_space();
+        self.lower_ctx
+            .abi_mut()
+            .accumulate_tail_args_size(new_stack_arg_size);
+
+        Box::new(ReturnCallInfo {
+            dest: XReg::new(dest).unwrap(),
+            uses,
+            new_stack_arg_size,
+        })
+    }
 
     fn vreg_new(&mut self, r: Reg) -> VReg {
         VReg::new(r).unwrap()

@@ -159,7 +159,7 @@ impl Amode {
 
     pub(crate) fn get_base_register(&self) -> Option<XReg> {
         match self {
-            Amode::RegOffset { base, offset: _ } => Some((*base).into()),
+            Amode::RegOffset { base, offset: _ } => Some(*base),
             Amode::SpOffset { .. } | Amode::Stack { .. } => Some(XReg::new(stack_reg()).unwrap()),
         }
     }

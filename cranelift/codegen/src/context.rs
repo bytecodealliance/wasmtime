@@ -24,8 +24,8 @@ use crate::result::{CodegenResult, CompileResult};
 use crate::settings::{FlagsOrIsa, OptLevel};
 use crate::trace;
 use crate::unreachable_code::eliminate_unreachable_code;
-use crate::verifier::{verify_context, VerifierErrors, VerifierResult};
-use crate::{timing, CompileError};
+use crate::verifier::{VerifierErrors, VerifierResult, verify_context};
+use crate::{CompileError, timing};
 #[cfg(feature = "souper-harvest")]
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -115,7 +115,7 @@ impl Context {
         isa: &dyn TargetIsa,
         mem: &mut Vec<u8>,
         ctrl_plane: &mut ControlPlane,
-    ) -> CompileResult<&CompiledCode> {
+    ) -> CompileResult<'_, &CompiledCode> {
         let compiled_code = self.compile(isa, ctrl_plane)?;
         mem.extend_from_slice(compiled_code.code_buffer());
         Ok(compiled_code)
@@ -168,13 +168,13 @@ impl Context {
             self.func.display()
         );
 
-        self.compute_cfg();
         if isa.flags().enable_nan_canonicalization() {
             self.canonicalize_nans(isa)?;
         }
 
         self.legalize(isa)?;
 
+        self.compute_cfg();
         self.compute_domtree();
         self.eliminate_unreachable_code(isa)?;
         self.remove_constant_phis(isa)?;
@@ -204,7 +204,7 @@ impl Context {
         &mut self,
         isa: &dyn TargetIsa,
         ctrl_plane: &mut ControlPlane,
-    ) -> CompileResult<&CompiledCode> {
+    ) -> CompileResult<'_, &CompiledCode> {
         let stencil = self
             .compile_stencil(isa, ctrl_plane)
             .map_err(|error| CompileError {
@@ -291,6 +291,7 @@ impl Context {
         // TODO: Avoid doing this when legalization doesn't actually mutate the CFG.
         self.domtree.clear();
         self.loop_analysis.clear();
+        self.cfg.clear();
 
         // Run some specific legalizations only.
         simple_legalize(&mut self.func, isa);

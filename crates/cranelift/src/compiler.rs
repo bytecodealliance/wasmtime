@@ -1,16 +1,16 @@
+use crate::TRAP_INTERNAL_ASSERT;
 use crate::debug::DwarfSectionRelocTarget;
 use crate::func_environ::FuncEnvironment;
 use crate::translate::FuncTranslator;
-use crate::TRAP_INTERNAL_ASSERT;
-use crate::{array_call_signature, CompiledFunction, ModuleTextBuilder};
-use crate::{builder::LinkOptions, wasm_call_signature, BuiltinFunctionSignatures};
+use crate::{BuiltinFunctionSignatures, builder::LinkOptions, wasm_call_signature};
+use crate::{CompiledFunction, ModuleTextBuilder, array_call_signature};
 use anyhow::{Context as _, Result};
 use cranelift_codegen::binemit::CodeOffset;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value};
 use cranelift_codegen::isa::{
-    unwind::{UnwindInfo, UnwindInfoKind},
     OwnedTargetIsa, TargetIsa,
+    unwind::{UnwindInfo, UnwindInfoKind},
 };
 use cranelift_codegen::print_errors::pretty_error;
 use cranelift_codegen::{CompiledCode, Context};
@@ -187,6 +187,7 @@ impl wasmtime_environ::Compiler for Compiler {
         func_index: DefinedFuncIndex,
         input: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let module = &translation.module;
@@ -225,7 +226,7 @@ impl wasmtime_environ::Compiler for Compiler {
         // check to all functions for how much native stack is remaining. The
         // `VMContext` pointer is the first argument to all functions, and the
         // first field of this structure is `*const VMStoreContext` and the
-        // first field of that is the stack limit. Note that the stack limit in
+        // third field of that is the stack limit. Note that the stack limit in
         // this case means "if the stack pointer goes below this, trap". Each
         // function which consumes stack space or isn't a leaf function starts
         // off by loading the stack limit, checking it against the stack
@@ -275,10 +276,7 @@ impl wasmtime_environ::Compiler for Compiler {
             &mut func_env,
         )?;
 
-        let func = compiler.finish_with_info(
-            Some((&body, &self.tunables)),
-            &format!("wasm_func_{}", func_index.as_u32()),
-        )?;
+        let func = compiler.finish_with_info(Some((&body, &self.tunables)), symbol)?;
 
         let timing = cranelift_codegen::timing::take_current();
         log::debug!("{:?} translated in {:?}", func_index, timing.total());
@@ -295,6 +293,7 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
         def_func_index: DefinedFuncIndex,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let func_index = translation.module.func_index(def_func_index);
         let sig = translation.module.functions[func_index]
@@ -363,7 +362,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(compiler.finish(&format!("array_to_wasm_{}", func_index.as_u32(),))?),
+            code: Box::new(compiler.finish(symbol)?),
             needs_gc_heap: false,
         })
     }
@@ -371,6 +370,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &WasmFuncType,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
@@ -436,7 +436,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(compiler.finish(&format!("wasm_to_array_trampoline_{wasm_func_ty}"))?),
+            code: Box::new(compiler.finish(&symbol)?),
             needs_gc_heap: false,
         })
     }
@@ -586,6 +586,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_builtin(
         &self,
         index: BuiltinFunctionIndex,
+        symbol: &str,
     ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let ptr_size = isa.pointer_bytes();
@@ -656,7 +657,7 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.finalize();
 
         Ok(CompiledFunctionBody {
-            code: Box::new(compiler.finish(&format!("wasm_to_builtin_{}", index.name()))?),
+            code: Box::new(compiler.finish(&symbol)?),
             needs_gc_heap: false,
         })
     }
@@ -677,7 +678,7 @@ mod incremental_cache {
     struct CraneliftCacheStore(Arc<dyn CacheStore>);
 
     impl cranelift_codegen::incremental_cache::CacheKvStore for CraneliftCacheStore {
-        fn get(&self, key: &[u8]) -> Option<std::borrow::Cow<[u8]>> {
+        fn get(&self, key: &[u8]) -> Option<std::borrow::Cow<'_, [u8]>> {
             self.0.get(key)
         }
         fn insert(&mut self, key: &[u8], val: Vec<u8>) {
@@ -974,14 +975,14 @@ impl FunctionCompiler<'_> {
         (builder, block0)
     }
 
-    fn finish(self, clif_filename: &str) -> Result<CompiledFunction, CompileError> {
-        self.finish_with_info(None, clif_filename)
+    fn finish(self, symbol: &str) -> Result<CompiledFunction, CompileError> {
+        self.finish_with_info(None, symbol)
     }
 
     fn finish_with_info(
         mut self,
         body_and_tunables: Option<(&FunctionBody<'_>, &Tunables)>,
-        clif_filename: &str,
+        symbol: &str,
     ) -> Result<CompiledFunction, CompileError> {
         let context = &mut self.cx.codegen_context;
         let isa = &*self.compiler.isa;
@@ -997,10 +998,15 @@ impl FunctionCompiler<'_> {
         if let Some(path) = &self.compiler.clif_dir {
             use std::io::Write;
 
-            let mut path = path.join(clif_filename);
+            let mut path = path.join(symbol.replace(":", "-"));
             path.set_extension("clif");
 
             let mut output = std::fs::File::create(path).unwrap();
+            write!(
+                output,
+                ";; Intermediate Representation of function <{symbol}>:\n",
+            )
+            .unwrap();
             write!(output, "{}", context.func.display()).unwrap();
         }
 

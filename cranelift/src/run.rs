@@ -6,9 +6,9 @@ use clap::Parser;
 use cranelift_codegen::isa::{CallConv, OwnedTargetIsa};
 use cranelift_filetests::TestFileCompiler;
 use cranelift_native::builder as host_isa_builder;
-use cranelift_reader::{parse_run_command, parse_test, Details, IsaSpec, ParseOptions};
+use cranelift_reader::{Details, IsaSpec, ParseOptions, parse_run_command, parse_test};
 use std::path::{Path, PathBuf};
-use target_lexicon::{Triple, HOST};
+use target_lexicon::{HOST, Triple};
 
 /// Execute clif code and verify with test expressions
 #[derive(Parser)]
@@ -96,7 +96,7 @@ fn run_file_contents(file_contents: String) -> Result<()> {
                 let trampoline = compiled.get_trampoline(&func).unwrap();
 
                 command
-                    .run(|_, args| Ok(trampoline.call(args)))
+                    .run(|_, args| Ok(trampoline.call(&compiled, args)))
                     .map_err(|s| anyhow::anyhow!("{}", s))?;
             }
         }

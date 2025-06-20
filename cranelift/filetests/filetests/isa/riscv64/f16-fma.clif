@@ -1,6 +1,6 @@
 test compile precise-output
 set unwind_info=false
-target riscv64 has_zfh
+target riscv64 has_zfhmin has_zfh
 
 
 function %fmadd(f16, f16, f16) -> f16 {

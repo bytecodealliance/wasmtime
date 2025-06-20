@@ -24,12 +24,12 @@ use core::fmt;
 
 use crate::alloc::string::String;
 use crate::alloc::vec::Vec;
-use crate::ir::function::{FunctionStencil, VersionMarker};
 use crate::ir::Function;
+use crate::ir::function::{FunctionStencil, VersionMarker};
 use crate::machinst::{CompiledCode, CompiledCodeStencil};
 use crate::result::CompileResult;
+use crate::{CompileError, Context, trace};
 use crate::{isa::TargetIsa, timing};
-use crate::{trace, CompileError, Context};
 use alloc::borrow::{Cow, ToOwned as _};
 use alloc::string::ToString as _;
 use cranelift_control::ControlPlane;
@@ -42,7 +42,7 @@ impl Context {
         isa: &dyn TargetIsa,
         cache_store: &mut dyn CacheKvStore,
         ctrl_plane: &mut ControlPlane,
-    ) -> CompileResult<(&CompiledCode, bool)> {
+    ) -> CompileResult<'_, (&CompiledCode, bool)> {
         let cache_key_hash = {
             let _tt = timing::try_incremental_cache();
 

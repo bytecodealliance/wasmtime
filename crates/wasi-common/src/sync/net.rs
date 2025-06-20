@@ -1,6 +1,6 @@
 use crate::{
-    file::{FdFlags, FileType, RiFlags, RoFlags, SdFlags, SiFlags, WasiFile},
     Error, ErrorExt,
+    file::{FdFlags, FileType, RiFlags, RoFlags, SdFlags, SiFlags, WasiFile},
 };
 #[cfg(windows)]
 use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
@@ -82,7 +82,7 @@ macro_rules! wasi_listen_write_impl {
                 self
             }
             #[cfg(unix)]
-            fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+            fn pollable(&self) -> Option<rustix::fd::BorrowedFd<'_>> {
                 Some(self.0.as_fd())
             }
             #[cfg(windows)]
@@ -175,7 +175,7 @@ macro_rules! wasi_stream_write_impl {
                 self
             }
             #[cfg(unix)]
-            fn pollable(&self) -> Option<rustix::fd::BorrowedFd> {
+            fn pollable(&self) -> Option<rustix::fd::BorrowedFd<'_>> {
                 Some(self.0.as_fd())
             }
             #[cfg(windows)]
@@ -225,19 +225,11 @@ macro_rules! wasi_stream_write_impl {
             }
             async fn readable(&self) -> Result<(), Error> {
                 let (readable, _writeable) = is_read_write(&self.0)?;
-                if readable {
-                    Ok(())
-                } else {
-                    Err(Error::io())
-                }
+                if readable { Ok(()) } else { Err(Error::io()) }
             }
             async fn writable(&self) -> Result<(), Error> {
                 let (_readable, writeable) = is_read_write(&self.0)?;
-                if writeable {
-                    Ok(())
-                } else {
-                    Err(Error::io())
-                }
+                if writeable { Ok(()) } else { Err(Error::io()) }
             }
 
             async fn sock_recv<'a>(

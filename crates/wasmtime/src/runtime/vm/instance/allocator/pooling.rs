@@ -46,13 +46,13 @@ use self::table_pool::TablePool;
 use super::{
     InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex, TableAllocationIndex,
 };
+use crate::MpkEnabled;
 use crate::prelude::*;
 use crate::runtime::vm::{
+    CompiledModuleId, Memory, Table,
     instance::Instance,
     mpk::{self, ProtectionKey, ProtectionMask},
-    CompiledModuleId, Memory, Table,
 };
-use crate::MpkEnabled;
 use std::borrow::Cow;
 use std::fmt::Display;
 use std::sync::{Mutex, MutexGuard};
@@ -76,8 +76,8 @@ use stack_pool::StackPool;
 
 #[cfg(feature = "component-model")]
 use wasmtime_environ::{
-    component::{Component, VMComponentOffsets},
     StaticModuleIndex,
+    component::{Component, VMComponentOffsets},
 };
 
 fn round_up_to_pow2(n: usize, to: usize) -> usize {
@@ -130,7 +130,11 @@ pub struct InstanceLimits {
     /// Maximum number of tables per instance.
     pub max_tables_per_module: u32,
 
-    /// Maximum number of table elements per table.
+    /// Maximum number of word-size elements per table.
+    ///
+    /// Note that tables for element types such as continuations
+    /// that use more than one word of storage may store fewer
+    /// elements.
     pub table_elements: usize,
 
     /// Maximum number of linear memories per instance.
@@ -249,7 +253,7 @@ pub struct PoolConcurrencyLimitError {
     kind: Cow<'static, str>,
 }
 
-impl std::error::Error for PoolConcurrencyLimitError {}
+impl core::error::Error for PoolConcurrencyLimitError {}
 
 impl Display for PoolConcurrencyLimitError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -579,6 +583,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         self.memories.validate_memory(memory)
     }
 
+    #[cfg(feature = "component-model")]
     fn increment_component_instance_count(&self) -> Result<()> {
         let old_count = self.live_component_instances.fetch_add(1, Ordering::AcqRel);
         if old_count >= u64::from(self.limits.total_component_instances) {
@@ -592,6 +597,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
         Ok(())
     }
 
+    #[cfg(feature = "component-model")]
     fn decrement_component_instance_count(&self) {
         self.live_component_instances.fetch_sub(1, Ordering::AcqRel);
     }

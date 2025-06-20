@@ -12,7 +12,6 @@
         reason = "stripped down in proxy build",
     )
 )]
-#![expect(clippy::allow_attributes, reason = "crate not migrated yet")]
 
 use crate::bindings::wasi::clocks::{monotonic_clock, wall_clock};
 use crate::bindings::wasi::io::poll;
@@ -23,7 +22,7 @@ use core::cell::{Cell, RefCell, RefMut, UnsafeCell};
 use core::cmp::min;
 use core::ffi::c_void;
 use core::hint::black_box;
-use core::mem::{self, align_of, forget, size_of, ManuallyDrop, MaybeUninit};
+use core::mem::{self, ManuallyDrop, MaybeUninit, align_of, forget, size_of};
 use core::num::NonZeroUsize;
 use core::ops::{Deref, DerefMut};
 use core::ptr::{self, null_mut};
@@ -62,7 +61,12 @@ pub mod bindings {
         // can't support in these special core-wasm adapters.
         // Instead, we manually define the bindings for these functions in
         // terms of raw pointers.
-        skip: ["run", "get-environment", "poll"],
+        skip: [
+            "run",
+            "get-environment",
+            "poll",
+            "[method]outgoing-datagram-stream.send",
+        ],
         generate_all,
         disable_custom_section_link_helpers: true,
     });
@@ -79,7 +83,11 @@ pub mod bindings {
         // can't support in these special core-wasm adapters.
         // Instead, we manually define the bindings for these functions in
         // terms of raw pointers.
-        skip: ["get-environment", "poll"],
+        skip: [
+            "get-environment",
+            "poll",
+            "[method]outgoing-datagram-stream.send",
+        ],
         generate_all,
         disable_custom_section_link_helpers: true,
     });
@@ -91,18 +99,18 @@ pub mod bindings {
             package wasmtime:adapter;
 
             world adapter {
-                import wasi:clocks/wall-clock@0.2.3;
-                import wasi:clocks/monotonic-clock@0.2.3;
-                import wasi:random/random@0.2.3;
-                import wasi:cli/stdout@0.2.3;
-                import wasi:cli/stderr@0.2.3;
-                import wasi:cli/stdin@0.2.3;
+                import wasi:clocks/wall-clock@0.2.6;
+                import wasi:clocks/monotonic-clock@0.2.6;
+                import wasi:random/random@0.2.6;
+                import wasi:cli/stdout@0.2.6;
+                import wasi:cli/stderr@0.2.6;
+                import wasi:cli/stdin@0.2.6;
             }
         "#,
         world: "wasmtime:adapter/adapter",
         raw_strings,
         runtime_path: "crate::bindings::wit_bindgen_rt_shim",
-        skip: ["poll"],
+        skip: ["poll", "[method]outgoing-datagram-stream.send"],
         generate_all,
         disable_custom_section_link_helpers: true,
     });
@@ -114,7 +122,7 @@ pub mod bindings {
     }
 }
 
-#[unsafe(export_name = "wasi:cli/run@0.2.3#run")]
+#[unsafe(export_name = "wasi:cli/run@0.2.6#run")]
 #[cfg(feature = "command")]
 pub extern "C" fn run() -> u32 {
     #[link(wasm_import_module = "__main_module__")]
@@ -461,7 +469,7 @@ impl BumpAlloc {
 }
 
 #[cfg(not(feature = "proxy"))]
-#[link(wasm_import_module = "wasi:cli/environment@0.2.3")]
+#[link(wasm_import_module = "wasi:cli/environment@0.2.6")]
 unsafe extern "C" {
     #[link_name = "get-arguments"]
     fn wasi_cli_get_arguments(rval: *mut WasmStrList);
@@ -2196,7 +2204,7 @@ pub unsafe extern "C" fn poll_oneoff(
             }
         }
 
-        #[link(wasm_import_module = "wasi:io/poll@0.2.3")]
+        #[link(wasm_import_module = "wasi:io/poll@0.2.6")]
         unsafe extern "C" {
             #[link_name = "poll"]
             fn poll_import(pollables: *const Pollable, len: usize, rval: *mut ReadyList);
@@ -2572,7 +2580,7 @@ impl BlockingMode {
                         Ok(()) => {}
                         Err(streams::StreamError::Closed) => return Err(ERRNO_IO),
                         Err(streams::StreamError::LastOperationFailed(e)) => {
-                            return Err(stream_error_to_errno(e))
+                            return Err(stream_error_to_errno(e));
                         }
                     }
                 }
@@ -2584,7 +2592,7 @@ impl BlockingMode {
                     Ok(n) => n,
                     Err(streams::StreamError::Closed) => 0,
                     Err(streams::StreamError::LastOperationFailed(e)) => {
-                        return Err(stream_error_to_errno(e))
+                        return Err(stream_error_to_errno(e));
                     }
                 };
 
@@ -2594,7 +2602,7 @@ impl BlockingMode {
                     Ok(_) => {}
                     Err(streams::StreamError::Closed) => return Ok(0),
                     Err(streams::StreamError::LastOperationFailed(e)) => {
-                        return Err(stream_error_to_errno(e))
+                        return Err(stream_error_to_errno(e));
                     }
                 }
 
@@ -2602,7 +2610,7 @@ impl BlockingMode {
                     Ok(_) => {}
                     Err(streams::StreamError::Closed) => return Ok(0),
                     Err(streams::StreamError::LastOperationFailed(e)) => {
-                        return Err(stream_error_to_errno(e))
+                        return Err(stream_error_to_errno(e));
                     }
                 }
 

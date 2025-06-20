@@ -8,13 +8,13 @@
 //! a conditional jump inline when emitting the control flow instruction.
 use super::{CodeGenContext, CodeGenError, Emission, OperandSize, Reg, TypedReg};
 use crate::{
-    abi::{ABIOperand, ABIResults, ABISig, RetArea, ABI},
+    CallingConvention,
+    abi::{ABI, ABIOperand, ABIResults, ABISig, RetArea},
     masm::{IntCmpKind, MacroAssembler, MemMoveDirection, RegImm, SPOffset},
     reg::writable,
     stack::Val,
-    CallingConvention,
 };
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{Result, anyhow, bail, ensure};
 use cranelift_codegen::MachLabel;
 use wasmtime_environ::{WasmFuncType, WasmValType};
 
@@ -452,7 +452,7 @@ impl ControlStackFrame {
                 self.init(masm, context)?;
                 masm.branch(
                     IntCmpKind::Eq,
-                    top.reg.into(),
+                    top.reg,
                     top.reg.into(),
                     cont,
                     OperandSize::S32,
@@ -689,7 +689,7 @@ impl ControlStackFrame {
         Self::pop_abi_results_impl(self.results::<M>()?, context, masm, calculate_ret_area)
     }
 
-    /// Shared implementation for poppping the ABI results.
+    /// Shared implementation for popping the ABI results.
     /// This is needed because, in some cases, params must be interpreted and
     /// used as the results of the block. When emitting code at control flow
     /// joins, the block params are interpreted as results, to ensure that they
@@ -1051,5 +1051,14 @@ impl ControlStackFrame {
             Self::Loop { .. } => true,
             _ => false,
         }
+    }
+
+    /// Returns true if the current stack pointer is unbalanced
+    /// relative to the the expected control frame stack pointer
+    /// offset. The stack pointer is considered unbalanced relative
+    /// to the control frame if the stack pointer is greater than the
+    /// the target stack pointer offset expected by the control frame.
+    pub fn unbalanced<M: MacroAssembler>(&self, masm: &mut M) -> Result<bool> {
+        Ok(masm.sp_offset()? > self.stack_state().target_offset)
     }
 }

@@ -1,10 +1,10 @@
 use anyhow::Result;
 use tempfile::TempDir;
 use wasmtime::{
-    component::{Component, Linker, ResourceTable},
     Engine, Store,
+    component::{Component, Linker, ResourceTable},
 };
-use wasmtime_wasi::p2::{pipe::MemoryOutputPipe, IoView, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView, pipe::MemoryOutputPipe};
 use wasmtime_wasi::preview1::WasiP1Ctx;
 use wasmtime_wasi::{DirPerms, FilePerms};
 

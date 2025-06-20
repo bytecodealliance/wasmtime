@@ -1,4 +1,4 @@
-use crate::{wasm_unsupported, Tunables, WasmResult};
+use crate::{Tunables, WasmResult, wasm_unsupported};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::{fmt, ops::Range};
@@ -230,6 +230,16 @@ impl WasmValType {
             32 => Self::I32,
             64 => Self::I64,
             size => panic!("invalid int bits for WasmValType: {size}"),
+        }
+    }
+
+    /// Returns the contained reference type.
+    ///
+    /// Panics if the value type is not a vmgcref
+    pub fn unwrap_ref_type(&self) -> WasmRefType {
+        match self {
+            WasmValType::Ref(ref_type) => *ref_type,
+            _ => panic!("Called WasmValType::unwrap_ref_type on non-reference type"),
         }
     }
 }
@@ -800,6 +810,15 @@ impl WasmContType {
     /// Constructs a new continuation type.
     pub fn new(idx: EngineOrModuleTypeIndex) -> Self {
         WasmContType(idx)
+    }
+
+    /// Returns the (module interned) index to the underlying function type.
+    pub fn unwrap_module_type_index(self) -> ModuleInternedTypeIndex {
+        match self.0 {
+            EngineOrModuleTypeIndex::Engine(_) => panic!("not module interned"),
+            EngineOrModuleTypeIndex::Module(idx) => idx,
+            EngineOrModuleTypeIndex::RecGroup(_) => todo!(),
+        }
     }
 }
 
@@ -1996,14 +2015,10 @@ impl Memory {
     pub fn static_heap_size(&self) -> Option<u64> {
         let min = self.minimum_byte_size().ok()?;
         let max = self.maximum_byte_size().ok()?;
-        if min == max {
-            Some(min)
-        } else {
-            None
-        }
+        if min == max { Some(min) } else { None }
     }
 
-    /// Returs whether or not the base pointer of this memory is allowed to be
+    /// Returns whether or not the base pointer of this memory is allowed to be
     /// relocated at runtime.
     ///
     /// When this function returns `false` then it means that after the initial
@@ -2113,8 +2128,8 @@ pub trait TypeConvert {
             true => IndexType::I64,
         };
         let limits = Limits {
-            min: ty.initial.try_into().unwrap(),
-            max: ty.maximum.map(|i| i.try_into().unwrap()),
+            min: ty.initial,
+            max: ty.maximum,
         };
         Ok(Table {
             idx_type,
@@ -2243,12 +2258,10 @@ pub trait TypeConvert {
                 wasmparser::AbstractHeapType::Array => WasmHeapType::Array,
                 wasmparser::AbstractHeapType::Struct => WasmHeapType::Struct,
                 wasmparser::AbstractHeapType::None => WasmHeapType::None,
-
-                wasmparser::AbstractHeapType::Exn
-                | wasmparser::AbstractHeapType::NoExn
-                | wasmparser::AbstractHeapType::Cont
-                | wasmparser::AbstractHeapType::NoCont => {
-                    return Err(wasm_unsupported!("unsupported heap type {ty:?}"))
+                wasmparser::AbstractHeapType::Cont => WasmHeapType::Cont,
+                wasmparser::AbstractHeapType::NoCont => WasmHeapType::NoCont,
+                wasmparser::AbstractHeapType::Exn | wasmparser::AbstractHeapType::NoExn => {
+                    return Err(wasm_unsupported!("unsupported heap type {ty:?}"));
                 }
             },
             _ => return Err(wasm_unsupported!("unsupported heap type {ty:?}")),

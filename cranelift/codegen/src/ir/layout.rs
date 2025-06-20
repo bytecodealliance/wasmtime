@@ -92,11 +92,7 @@ fn midpoint(a: SequenceNumber, b: SequenceNumber) -> Option<SequenceNumber> {
     debug_assert!(a < b);
     // Avoid integer overflow.
     let m = a + (b - a) / 2;
-    if m > a {
-        Some(m)
-    } else {
-        None
-    }
+    if m > a { Some(m) } else { None }
 }
 
 impl Layout {
@@ -319,7 +315,7 @@ impl Layout {
     }
 
     /// Return an iterator over all blocks in layout order.
-    pub fn blocks(&self) -> Blocks {
+    pub fn blocks(&self) -> Blocks<'_> {
         Blocks {
             layout: self,
             next: self.first_block,
@@ -512,12 +508,18 @@ impl Layout {
     }
 
     /// Iterate over the instructions in `block` in layout order.
-    pub fn block_insts(&self, block: Block) -> Insts {
+    pub fn block_insts(&self, block: Block) -> Insts<'_> {
         Insts {
             layout: self,
             head: self.blocks[block].first_inst.into(),
             tail: self.blocks[block].last_inst.into(),
         }
+    }
+
+    /// Does the given block contain exactly one instruction?
+    pub fn block_contains_exactly_one_inst(&self, block: Block) -> bool {
+        let block = &self.blocks[block];
+        block.first_inst.is_some() && block.first_inst == block.last_inst
     }
 
     /// Split the block containing `before` in two.

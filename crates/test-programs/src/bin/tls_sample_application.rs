@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use core::str;
 use test_programs::wasi::sockets::network::{IpAddress, IpSocketAddress, Network};
 use test_programs::wasi::sockets::tcp::{ShutdownType, TcpSocket};
@@ -72,14 +72,16 @@ fn try_live_endpoints(test: impl Fn(&str, IpAddress) -> Result<()>) {
     let net = Network::default();
 
     for &domain in DOMAINS {
-        let lookup = net
-            .permissive_blocking_resolve_addresses(domain)
-            .unwrap()
-            .first()
-            .map(|a| a.to_owned())
-            .ok_or_else(|| anyhow!("DNS lookup failed."));
+        let result = (|| {
+            let ip = net
+                .permissive_blocking_resolve_addresses(domain)?
+                .first()
+                .map(|a| a.to_owned())
+                .ok_or_else(|| anyhow!("DNS lookup failed."))?;
+            test(&domain, ip)
+        })();
 
-        match lookup.and_then(|ip| test(&domain, ip)) {
+        match result {
             Ok(()) => return,
             Err(e) => {
                 eprintln!("test for {domain} failed: {e:#}");

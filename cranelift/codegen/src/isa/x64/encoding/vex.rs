@@ -1,9 +1,9 @@
 //! Encodes VEX instructions. These instructions are those added by the Advanced Vector Extensions
 //! (AVX).
 
+use super::ByteSink;
 use super::evex::{Register, RegisterOrAmode};
 use super::rex::{LegacyPrefixes, OpcodeMap};
-use super::ByteSink;
 use crate::isa::x64::args::Amode;
 use crate::isa::x64::encoding::rex;
 use crate::isa::x64::inst::Inst;

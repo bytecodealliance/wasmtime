@@ -22,10 +22,12 @@ target-lexicon = { workspace = true, features = ["std"] }
 # by Cranelift and Winch.
 cranelift-codegen = { workspace = true, features = ["unwind"] }
 regalloc2 = { workspace = true }
+cranelift-assembler-x64 = { workspace = true }
 gimli = { workspace = true }
 wasmtime-environ = { workspace = true }
 wasmtime-cranelift = { workspace = true }
 thiserror = { workspace = true }
+wasmtime-math = { workspace = true }
 
 [features]
 x64 = ["cranelift-codegen/x86"]
@@ -37,5 +39,6 @@ all-arch = [
 gc = ['wasmtime-environ/gc']
 gc-drc = ['wasmtime-environ/gc-drc']
 gc-null = ['wasmtime-environ/gc-null']
+stack-switching = ['wasmtime-environ/stack-switching']
 threads = ['wasmtime-environ/threads']
 wmemcheck = ['wasmtime-environ/wmemcheck']

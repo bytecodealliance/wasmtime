@@ -1,5 +1,5 @@
 use crate::WastContext;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use std::fmt::{Display, LowerHex};
 use wasmtime::{AnyRef, ExternRef, Store, Val};
 use wast::core::{AbstractHeapType, HeapType, NanPattern, V128Pattern, WastArgCore, WastRetCore};

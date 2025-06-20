@@ -23,15 +23,15 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+72
-;;     gv5 = load.i64 notrap aligned can_move checked gv3+64
+;;     gv4 = load.i64 notrap aligned gv3+64
+;;     gv5 = load.i64 notrap aligned can_move checked gv3+56
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i32):
-;; @0040                               v4 = load.i64 notrap aligned v0+72
+;; @0040                               v4 = load.i64 notrap aligned v0+64
 ;; @0040                               v5 = icmp ugt v2, v4
 ;; @0040                               trapnz v5, heap_oob
-;; @0040                               v6 = load.i64 notrap aligned can_move checked v0+64
+;; @0040                               v6 = load.i64 notrap aligned can_move checked v0+56
 ;; @0040                               v7 = iadd v6, v2
 ;; @0040                               v8 = iconst.i64 0xffff_0000
 ;; @0040                               v9 = iadd v7, v8  ; v8 = 0xffff_0000
@@ -47,15 +47,15 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+72
-;;     gv5 = load.i64 notrap aligned can_move checked gv3+64
+;;     gv4 = load.i64 notrap aligned gv3+64
+;;     gv5 = load.i64 notrap aligned can_move checked gv3+56
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
-;; @004c                               v4 = load.i64 notrap aligned v0+72
+;; @004c                               v4 = load.i64 notrap aligned v0+64
 ;; @004c                               v5 = icmp ugt v2, v4
 ;; @004c                               trapnz v5, heap_oob
-;; @004c                               v6 = load.i64 notrap aligned can_move checked v0+64
+;; @004c                               v6 = load.i64 notrap aligned can_move checked v0+56
 ;; @004c                               v7 = iadd v6, v2
 ;; @004c                               v8 = iconst.i64 0xffff_0000
 ;; @004c                               v9 = iadd v7, v8  ; v8 = 0xffff_0000

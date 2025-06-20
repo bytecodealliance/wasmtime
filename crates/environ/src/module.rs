@@ -4,7 +4,7 @@ use crate::prelude::*;
 use crate::*;
 use alloc::collections::BTreeMap;
 use core::ops::Range;
-use cranelift_entity::{packed_option::ReservedValue, EntityRef};
+use cranelift_entity::{EntityRef, packed_option::ReservedValue};
 use serde_derive::{Deserialize, Serialize};
 
 /// A WebAssembly linear memory initializer.
@@ -586,6 +586,12 @@ impl Module {
     /// memories minus imported memories.
     pub fn num_defined_memories(&self) -> usize {
         self.memories.len() - self.num_imported_memories
+    }
+
+    /// Returns the number of globals defined by this module itself: all
+    /// globals minus imported globals.
+    pub fn num_defined_globals(&self) -> usize {
+        self.globals.len() - self.num_imported_globals
     }
 
     /// Returns the number of tags defined by this module itself: all tags

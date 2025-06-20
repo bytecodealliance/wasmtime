@@ -29,10 +29,12 @@ fn main() -> Result<()> {
             Err(e) => return Err(e),
         },
     };
-    assert!(externref
-        .data(&store)?
-        .expect("should have host data")
-        .is::<&'static str>());
+    assert!(
+        externref
+            .data(&store)?
+            .expect("should have host data")
+            .is::<&'static str>()
+    );
     assert_eq!(
         *externref
             .data(&store)?

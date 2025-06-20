@@ -8,9 +8,9 @@ use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::{
+    IoView,
     poll::DynPollable,
     streams::{DynInputStream, DynOutputStream},
-    IoView,
 };
 
 impl<T> tcp::Host for WasiImpl<T> where T: WasiView {}
@@ -320,6 +320,7 @@ pub mod sync {
     use wasmtime::component::Resource;
 
     use crate::p2::{
+        SocketError, WasiImpl, WasiView,
         bindings::{
             sockets::{
                 network::Network,
@@ -330,7 +331,6 @@ pub mod sync {
                 OutputStream, Pollable, ShutdownType, TcpSocket,
             },
         },
-        SocketError, WasiImpl, WasiView,
     };
     use crate::runtime::in_tokio;
 

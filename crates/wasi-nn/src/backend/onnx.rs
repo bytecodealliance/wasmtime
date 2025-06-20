@@ -1,11 +1,11 @@
 //! Implements a `wasi-nn` [`BackendInner`] using ONNX via the `ort` crate.
 
 use super::{BackendError, BackendExecutionContext, BackendFromDir, BackendGraph, BackendInner};
-use crate::backend::{read, Id};
+use crate::backend::{Id, read};
 use crate::wit::types::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
 use anyhow::Context;
-use ort::{inputs, GraphOptimizationLevel, Session};
+use ort::{GraphOptimizationLevel, Session, inputs};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 

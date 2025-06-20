@@ -33,8 +33,8 @@ your application's performance.
 
 For example if you're using the CLI, you'll execute:
 
-```sh
-$ perf record -k mono wasmtime --profile=perfmap foo.wasm
+```console
+perf record -k mono wasmtime --profile=perfmap foo.wasm
 ```
 
 This will create a `perf.data` file as per usual, but it will *also* create a
@@ -43,8 +43,8 @@ specified by `perf` and Wasmtime generates at runtime.
 
 After that you can explore the `perf.data` profile as you usually would, for example with:
 
-```sh
-$ perf report --input perf.data
+```console
+perf report --input perf.data
 ```
 
 You should be able to see time spent in wasm functions, generate flamegraphs based on that, etc..
@@ -81,8 +81,8 @@ your application's performance. You'll need to also be sure to pass the
 
 For example if you're using the CLI, you'll execute:
 
-```sh
-$ perf record -k mono wasmtime --profile=jitdump foo.wasm
+```console
+perf record -k mono wasmtime --profile=jitdump foo.wasm
 ```
 
 This will create a `perf.data` file as per usual, but it will *also* create a
@@ -92,8 +92,8 @@ specified by `perf` and Wasmtime generates at runtime.
 The next thing you need to do is to merge the `*.dump` file into the
 `perf.data` file, which you can do with the `perf inject` command:
 
-```sh
-$ perf inject --jit --input perf.data --output perf.jit.data
+```console
+perf inject --jit --input perf.data --output perf.jit.data
 ```
 
 This will read `perf.data`, automatically pick up the `*.dump` file that's
@@ -105,8 +105,8 @@ created by Wasmtime.
 After that you can explore the `perf.jit.data` profile as you usually would,
 for example with:
 
-```sh
-$ perf report --input perf.jit.data
+```console
+perf report --input perf.jit.data
 ```
 
 You should be able to annotate wasm functions and see their raw assembly. You
@@ -161,7 +161,7 @@ fn fib(n: u32) -> u32 {
 
 To collect perf information for this wasm module we'll execute:
 
-```sh
+```console
 $ rustc --target wasm32-wasip1 fib.rs -O
 $ perf record -k mono wasmtime --profile=jitdump fib.wasm
 fib(42) = 267914296
@@ -175,8 +175,8 @@ example to see that 99% of our runtime (as expected) is spent in our `fib`
 function. Note that the symbol has been demangled to `fib::fib` which is what
 the Rust symbol is:
 
-```sh
-$ perf report --input perf.jit.data
+```console
+perf report --input perf.jit.data
 ```
 
 ![perf report output](assets/perf-report-fib.png)
@@ -184,8 +184,8 @@ $ perf report --input perf.jit.data
 Alternatively we could also use `perf annotate` to take a look at the
 disassembly of the `fib` function, seeing what the JIT generated:
 
-```sh
-$ perf annotate --input perf.jit.data
+```console
+perf annotate --input perf.jit.data
 ```
 
 ![perf annotate output](assets/perf-annotate-fib.png)

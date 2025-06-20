@@ -1,4 +1,3 @@
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 #![cfg_attr(miri, allow(dead_code, unused_imports))]
 
 use wasmtime::Result;
@@ -44,6 +43,7 @@ mod stack_overflow;
 mod store;
 mod structs;
 mod table;
+#[cfg(all(feature = "stack-switching", unix, target_arch = "x86_64"))]
 mod tags;
 mod threads;
 mod traps;

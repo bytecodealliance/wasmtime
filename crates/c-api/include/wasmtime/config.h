@@ -251,6 +251,14 @@ WASMTIME_CONFIG_PROP(void, wasm_wide_arithmetic, bool)
 #ifdef WASMTIME_FEATURE_COMPILER
 
 /**
+ * \brief Configures whether the WebAssembly stack switching
+ * proposal is enabled.
+ *
+ * This setting is `false` by default.
+ */
+WASMTIME_CONFIG_PROP(void, wasm_stack_switching, bool)
+
+/**
  * \brief Configures how JIT code will be compiled.
  *
  * This setting is #WASMTIME_STRATEGY_AUTO by default.
@@ -773,7 +781,7 @@ WASM_API_EXTERN void wasmtime_pooling_allocation_strategy_set(
  * For more information see the Rust documentation at
  * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.wasm_component_model.
  */
-WASMTIME_CONFIG_PROP(void, component_model, bool)
+WASMTIME_CONFIG_PROP(void, wasm_component_model, bool)
 
 #endif // WASMTIME_FEATURE_COMPONENT_MODEL
 

@@ -103,7 +103,7 @@ impl SolverCtx {
         }
         self.smt.list(vec![
             self.smt.atoms().und,
-            self.smt.atom(format!("bv{}", value)),
+            self.smt.atom(format!("bv{value}")),
             self.smt.numeral(width),
         ])
     }
@@ -164,10 +164,8 @@ impl SolverCtx {
     ) -> SExpr {
         if dest_width < source_width {
             log::warn!(
-                "Unexpected extend widths for {}: dest {} source {} ",
+                "Unexpected extend widths for {}: dest {dest_width} source {source_width} ",
                 self.smt.display(source),
-                dest_width,
-                source_width,
             );
             self.assert(self.smt.false_());
             return self.bv(
@@ -473,11 +471,11 @@ impl SolverCtx {
     ) -> SExpr {
         let width = self.bitwidth.checked_sub(narrow_width).unwrap();
         if width > 0 {
-            let mut narrow_name = format!("narrow__{}", tyvar);
-            let mut wide_name = format!("wide__{}", tyvar);
+            let mut narrow_name = format!("narrow__{tyvar}");
+            let mut wide_name = format!("wide__{tyvar}");
             if let Some(s) = name {
-                narrow_name = format!("{}_{}", s, narrow_name);
-                wide_name = format!("{}_{}", s, wide_name);
+                narrow_name = format!("{s}_{narrow_name}");
+                wide_name = format!("{s}_{wide_name}");
             }
             self.assume(self.smt.eq(self.smt.atom(&narrow_name), narrow_decl));
             self.additional_decls.push((
@@ -553,12 +551,12 @@ impl SolverCtx {
 
     pub fn assume_comparable_types(&mut self, x: &Expr, y: &Expr) {
         match (self.get_type(x), self.get_type(y)) {
-            (None, _) | (_, None) => panic!("Missing type(s) {:?} {:?}", x, y),
+            (None, _) | (_, None) => panic!("Missing type(s) {x:?} {y:?}"),
             (Some(Type::Bool), Some(Type::Bool))
             | (Some(Type::Int), Some(Type::Int))
             | (Some(Type::Unit), Some(Type::Unit)) => (),
             (Some(Type::BitVector(Some(xw))), Some(Type::BitVector(Some(yw)))) => {
-                assert_eq!(xw, yw, "incompatible {:?} {:?}", x, y)
+                assert_eq!(xw, yw, "incompatible {x:?} {y:?}")
             }
             (_, _) => self.assume_same_width(x, y),
         }
@@ -1250,7 +1248,9 @@ impl SolverCtx {
                         VerificationResult::Success
                     }
                     Ok(Response::Unsat) => {
-                        log::debug!("Assertion list is only feasible for one input with distinct BV values!");
+                        log::debug!(
+                            "Assertion list is only feasible for one input with distinct BV values!"
+                        );
                         VerificationResult::NoDistinctModels
                     }
                     Ok(Response::Unknown) => {
@@ -1362,7 +1362,7 @@ impl SolverCtx {
                 self.smt.list(vec![self.smt.atom(format!("{val}"))])
             }
             isle::sema::Pattern::ConstInt(_, num) => {
-                let _smt_name_prefix = format!("{}__", num);
+                let _smt_name_prefix = format!("{num}__");
                 self.smt.list(vec![self.smt.atom(num.to_string())])
             }
             isle::sema::Pattern::And(_, subpats) => {
@@ -1383,7 +1383,7 @@ impl SolverCtx {
         let matches: Vec<&(String, String)> =
             vars.iter().filter(|(v, _)| v.starts_with(prefix)).collect();
         if matches.is_empty() {
-            panic!("Can't find match for: {}\n{:?}", prefix, vars);
+            panic!("Can't find match for: {prefix}\n{vars:?}");
         } else if matches.len() == 3 {
             assert!(
                 self.find_widths,
@@ -1439,7 +1439,7 @@ impl SolverCtx {
                 self.smt.list(vec![self.smt.atom(format!("{val}"))])
             }
             isle::sema::Expr::ConstInt(_, num) => {
-                let _smt_name_prefix = format!("{}__", num);
+                let _smt_name_prefix = format!("{num}__");
                 self.smt.list(vec![self.smt.atom(num.to_string())])
             }
             isle::sema::Expr::Let { bindings, body, .. } => {
@@ -1670,7 +1670,7 @@ pub fn run_solver(
     for (_e, t) in &ctx.tyctx.tyvars {
         let ty = &ctx.tyctx.tymap[t];
         if let Type::BitVector(w) = ty {
-            let width_name = format!("width__{}", t);
+            let width_name = format!("width__{t}");
             ctx.additional_decls
                 .push((width_name.clone(), ctx.smt.int_sort()));
             match *w {
@@ -1749,7 +1749,7 @@ fn resolve_dynamic_widths(
             for (e, t) in &ctx.tyctx.tyvars {
                 let ty = &ctx.tyctx.tymap[t];
                 if let Type::BitVector(w) = ty {
-                    let width_name = format!("width__{}", t);
+                    let width_name = format!("width__{t}");
                     let atom = ctx.smt.atom(&width_name);
                     let width = ctx.smt.get_value(vec![atom]).unwrap().first().unwrap().1;
                     let width_int = u8::try_from(ctx.smt.get(width)).unwrap();
@@ -1761,7 +1761,7 @@ fn resolve_dynamic_widths(
 
                     // Check that the width is nonzero
                     if width_int == 0 {
-                        panic!("Unexpected, zero width! {} {:?}", t, e);
+                        panic!("Unexpected, zero width! {t} {e:?}");
                     }
 
                     if unresolved_widths.contains(&width_name) {
@@ -1864,7 +1864,7 @@ pub fn run_solver_with_static_widths(
     let unit = "()".to_string();
     let widthname = ctx
         .static_width(&rulectx.rule_sem.lhs)
-        .map_or(unit, |s| format!("width {}", s));
+        .map_or(unit, |s| format!("width {s}"));
 
     // Check whether the assumptions are possible
     let feasibility = ctx.check_assumptions_feasibility(
@@ -1990,7 +1990,7 @@ pub fn run_solver_with_static_widths(
 
     match ctx.smt.check() {
         Ok(Response::Sat) => {
-            println!("Verification failed for {}, {}", rulename, widthname);
+            println!("Verification failed for {rulename}, {widthname}");
             ctx.display_model(rulectx.termenv, rulectx.typeenv, rulectx.rule, lhs, rhs);
             let vals = ctx.smt.get_value(vec![condition]).unwrap();
             for (variable, value) in vals {
@@ -2021,7 +2021,7 @@ pub fn run_solver_with_static_widths(
             VerificationResult::Failure(Counterexample {})
         }
         Ok(Response::Unsat) => {
-            println!("Verification succeeded for {}, {}", rulename, widthname);
+            println!("Verification succeeded for {rulename}, {widthname}");
             VerificationResult::Success
         }
         Ok(Response::Unknown) => {

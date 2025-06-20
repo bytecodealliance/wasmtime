@@ -1,7 +1,7 @@
 #![expect(unsafe_op_in_unsafe_fn, reason = "old code, not worth updating yet")]
 
 use std::{env, process};
-use test_programs::preview1::{assert_errno, create_file, open_scratch_directory, TestConfig};
+use test_programs::preview1::{TestConfig, assert_errno, create_file, open_scratch_directory};
 
 unsafe fn test_path_rename(dir_fd: wasip1::Fd) {
     // First, try renaming a dir to nonexistent path

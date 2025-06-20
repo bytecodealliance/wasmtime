@@ -27,6 +27,11 @@ For an example of how to use Cranelift to run WebAssembly code, see
 
 [Wasmtime]: https://github.com/bytecodealliance/wasmtime
 
+For various examples of how to use Cranelift to accomplish common compiler
+tasks, see the [Cranelift Examples] repository maintained by @simvux.
+
+[Cranelift Examples]: https://github.com/simvux/cranelift-examples
+
 Status
 ------
 

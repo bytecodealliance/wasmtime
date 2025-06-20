@@ -1,4 +1,4 @@
-use crate::{wasm_engine_t, wasmtime_error_t, wasmtime_val_t, ForeignData};
+use crate::{ForeignData, wasm_engine_t, wasmtime_error_t, wasmtime_val_t};
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
 use std::sync::Arc;
@@ -95,6 +95,26 @@ pub struct WasmtimeStoreData {
 
     /// Limits for the store.
     pub store_limits: StoreLimits,
+
+    #[cfg(feature = "component-model")]
+    pub(crate) resource_table: wasmtime::component::ResourceTable,
+
+    #[cfg(all(feature = "component-model", feature = "wasi"))]
+    pub(crate) wasip2: Option<wasmtime_wasi::p2::WasiCtx>,
+}
+
+#[cfg(all(feature = "component-model", feature = "wasi"))]
+impl wasmtime_wasi::p2::IoView for WasmtimeStoreData {
+    fn table(&mut self) -> &mut wasmtime_wasi::ResourceTable {
+        &mut self.resource_table
+    }
+}
+
+#[cfg(all(feature = "component-model", feature = "wasi"))]
+impl wasmtime_wasi::p2::WasiView for WasmtimeStoreData {
+    fn ctx(&mut self) -> &mut wasmtime_wasi::p2::WasiCtx {
+        self.wasip2.as_mut().unwrap()
+    }
 }
 
 #[unsafe(no_mangle)]
@@ -113,6 +133,10 @@ pub extern "C" fn wasmtime_store_new(
                 hostcall_val_storage: Vec::new(),
                 wasm_val_storage: Vec::new(),
                 store_limits: StoreLimits::default(),
+                #[cfg(feature = "component-model")]
+                resource_table: wasmtime::component::ResourceTable::default(),
+                #[cfg(all(feature = "component-model", feature = "wasi"))]
+                wasip2: None,
             },
         ),
     })
@@ -146,9 +170,7 @@ pub extern "C" fn wasmtime_store_epoch_deadline_callback(
             &mut kind as *mut wasmtime_update_deadline_kind_t,
         );
         match result {
-            Some(err) => Err(wasmtime::Error::from(<wasmtime_error_t as Into<
-                anyhow::Error,
-            >>::into(*err))),
+            Some(err) => Err((*err).into()),
             None if kind == WASMTIME_UPDATE_DEADLINE_CONTINUE => {
                 Ok(UpdateDeadline::Continue(delta))
             }
@@ -217,6 +239,15 @@ pub extern "C" fn wasmtime_context_set_wasi(
     crate::handle_result(wasi.into_wasi_ctx(), |wasi| {
         context.data_mut().wasi = Some(wasi);
     })
+}
+
+#[cfg(all(feature = "component-model", feature = "wasi"))]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn wasmtime_context_set_wasip2(
+    mut context: WasmtimeStoreContextMut<'_>,
+    mut config: Box<crate::wasmtime_wasip2_config_t>,
+) {
+    context.data_mut().wasip2 = Some(config.builder.build());
 }
 
 #[unsafe(no_mangle)]

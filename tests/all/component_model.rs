@@ -3,7 +3,7 @@ use std::fmt::Write;
 use std::iter;
 use wasmtime::component::Component;
 use wasmtime_component_util::REALLOC_AND_FREE;
-use wasmtime_test_util::component::{async_engine, engine, TypedFuncExt};
+use wasmtime_test_util::component::{TypedFuncExt, async_engine, engine};
 
 mod aot;
 mod r#async;

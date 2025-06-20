@@ -1,12 +1,12 @@
 use anyhow::Result;
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use std::cell::LazyCell;
 use std::path::Path;
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::thread;
-use wasi_common::{sync::WasiCtxBuilder, WasiCtx};
+use wasi_common::{WasiCtx, sync::WasiCtxBuilder};
 use wasmtime::*;
 
 fn store(engine: &Engine) -> Store<WasiCtx> {

@@ -16,5 +16,6 @@ pub trait ComponentCompiler: Send + Sync {
         types: &ComponentTypesBuilder,
         trampoline: TrampolineIndex,
         tunables: &Tunables,
+        symbol: &str,
     ) -> Result<AllCallFunc<CompiledFunctionBody>>;
 }

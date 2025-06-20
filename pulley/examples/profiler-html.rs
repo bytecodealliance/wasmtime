@@ -28,11 +28,11 @@
 //! CLI threshold and instructions are un-annotated if they're below the
 //! threshold.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use pulley_interpreter::decode::{Decoder, OpVisitor};
 use pulley_interpreter::disas::Disassembler;
-use pulley_interpreter::profile::{decode, Event};
+use pulley_interpreter::profile::{Event, decode};
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::PathBuf;

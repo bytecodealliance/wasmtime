@@ -1,0 +1,51 @@
+test compile precise-output
+target aarch64
+
+function %load_i8x2(i64) -> i8x2 {
+block0(v0: i64):
+    v1 = load.i8x2 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ldr h0, [x0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr h0, [x0] ; trap: heap_oob
+;   ret
+
+function %load_i16x2(i64) -> i16x2 {
+block0(v0: i64):
+    v1 = load.i16x2 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ldr s0, [x0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr s0, [x0] ; trap: heap_oob
+;   ret
+
+function %load_i32x2(i64) -> i32x2 {
+block0(v0: i64):
+    v1 = load.i32x2 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   ldr d0, [x0]
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   ldr d0, [x0] ; trap: heap_oob
+;   ret
+

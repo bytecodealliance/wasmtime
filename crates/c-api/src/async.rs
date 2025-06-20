@@ -5,17 +5,17 @@ use std::num::NonZeroU64;
 use std::ops::Range;
 use std::pin::Pin;
 use std::sync::Arc;
-use std::task::{Context, Poll};
+use std::task::{Context, Poll, Waker};
 use std::{ptr, str};
 use wasmtime::{
     AsContextMut, Func, Instance, Result, RootScope, StackCreator, StackMemory, Trap, Val,
 };
 
 use crate::{
-    bad_utf8, handle_result, to_str, translate_args, wasm_config_t, wasm_functype_t, wasm_trap_t,
-    wasmtime_caller_t, wasmtime_error_t, wasmtime_instance_pre_t, wasmtime_linker_t,
-    wasmtime_module_t, wasmtime_val_t, wasmtime_val_union, WasmtimeCaller, WasmtimeStoreContextMut,
-    WASMTIME_I32,
+    WASMTIME_I32, WasmtimeCaller, WasmtimeStoreContextMut, bad_utf8, handle_result, to_str,
+    translate_args, wasm_config_t, wasm_functype_t, wasm_trap_t, wasmtime_caller_t,
+    wasmtime_error_t, wasmtime_instance_pre_t, wasmtime_linker_t, wasmtime_module_t,
+    wasmtime_val_t, wasmtime_val_union,
 };
 
 #[unsafe(no_mangle)]
@@ -176,9 +176,9 @@ unsafe fn c_async_callback_to_rust_fn(
     &'a [Val],
     &'a mut [Val],
 ) -> Box<dyn Future<Output = Result<()>> + Send + 'a>
-       + Send
-       + Sync
-       + 'static {
++ Send
++ Sync
++ 'static {
     let foreign = crate::ForeignData { data, finalizer };
     move |caller, params, results| {
         let _ = &foreign; // move entire foreign into this closure
@@ -199,8 +199,11 @@ pub extern "C" fn wasmtime_call_future_delete(_future: Box<wasmtime_call_future_
 
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_call_future_poll(future: &mut wasmtime_call_future_t) -> bool {
-    let w = futures::task::noop_waker_ref();
-    match future.underlying.as_mut().poll(&mut Context::from_waker(w)) {
+    match future
+        .underlying
+        .as_mut()
+        .poll(&mut Context::from_waker(Waker::noop()))
+    {
         Poll::Ready(()) => true,
         Poll::Pending => false,
     }

@@ -4,12 +4,12 @@ use crate::runtime::vm::open_file_for_mmap;
 use crate::runtime::vm::{CompiledModuleId, ModuleMemoryImages, VMWasmCallFunction};
 use crate::sync::OnceLock;
 use crate::{
+    Engine,
     code::CodeObject,
     code_memory::CodeMemory,
     instantiate::CompiledModule,
     resources::ResourcesRequired,
     types::{ExportType, ExternType, ImportType},
-    Engine,
 };
 use alloc::sync::Arc;
 use core::fmt;
@@ -862,14 +862,11 @@ impl Module {
     pub fn get_export_index(&self, name: &str) -> Option<ModuleExport> {
         let compiled_module = self.compiled_module();
         let module = compiled_module.module();
-        module
-            .exports
-            .get_full(name)
-            .map(|(export_name_index, _, &entity)| ModuleExport {
-                module: self.id(),
-                entity,
-                export_name_index,
-            })
+        let entity = *module.exports.get(name)?;
+        Some(ModuleExport {
+            module: self.id(),
+            entity,
+        })
     }
 
     /// Returns the [`Engine`] that this [`Module`] was compiled by.
@@ -1082,20 +1079,21 @@ impl Module {
             .code
             .signatures()
             .trampoline_type(trampoline_shared_ty)?;
-        debug_assert!(self
-            .inner
-            .engine
-            .signatures()
-            .borrow(
-                self.inner
-                    .code
-                    .signatures()
-                    .shared_type(trampoline_module_ty)
-                    .unwrap()
-            )
-            .unwrap()
-            .unwrap_func()
-            .is_trampoline_type());
+        debug_assert!(
+            self.inner
+                .engine
+                .signatures()
+                .borrow(
+                    self.inner
+                        .code
+                        .signatures()
+                        .shared_type(trampoline_module_ty)
+                        .unwrap()
+                )
+                .unwrap()
+                .unwrap_func()
+                .is_trampoline_type()
+        );
 
         let ptr = self
             .compiled_module()
@@ -1151,8 +1149,6 @@ pub struct ModuleExport {
     pub(crate) module: CompiledModuleId,
     /// A raw index into the wasm module.
     pub(crate) entity: EntityIndex,
-    /// The index of the export name.
-    pub(crate) export_name_index: usize,
 }
 
 fn _assert_send_sync() {

@@ -2,8 +2,8 @@
 //! fixed allocation that cannot move.
 
 use crate::prelude::*;
-use crate::runtime::vm::memory::RuntimeLinearMemory;
 use crate::runtime::vm::MemoryBase;
+use crate::runtime::vm::memory::RuntimeLinearMemory;
 
 /// A "static" memory where the lifetime of the backing memory is managed
 /// elsewhere. Currently used with the pooling allocator.

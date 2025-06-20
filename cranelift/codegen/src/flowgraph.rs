@@ -157,12 +157,12 @@ impl ControlFlowGraph {
     }
 
     /// Get an iterator over the CFG predecessors to `block`.
-    pub fn pred_iter(&self, block: Block) -> PredIter {
+    pub fn pred_iter(&self, block: Block) -> PredIter<'_> {
         PredIter(self.data[block].predecessors.iter(&self.pred_forest))
     }
 
     /// Get an iterator over the CFG successors to `block`.
-    pub fn succ_iter(&self, block: Block) -> SuccIter {
+    pub fn succ_iter(&self, block: Block) -> SuccIter<'_> {
         debug_assert!(self.is_valid());
         self.data[block].successors.iter(&self.succ_forest)
     }
@@ -197,7 +197,7 @@ pub type SuccIter<'a> = bforest::SetIter<'a, Block>;
 mod tests {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::{types, InstBuilder};
+    use crate::ir::{InstBuilder, types};
     use alloc::vec::Vec;
 
     #[test]

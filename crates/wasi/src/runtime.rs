@@ -22,7 +22,7 @@
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::LazyLock;
-use std::task::{Context, Poll};
+use std::task::{Context, Poll, Waker};
 
 pub(crate) static RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread()
@@ -181,7 +181,7 @@ pub fn poll_noop<F>(future: Pin<&mut F>) -> Option<F::Output>
 where
     F: Future,
 {
-    let mut task = Context::from_waker(futures::task::noop_waker_ref());
+    let mut task = Context::from_waker(Waker::noop());
     match future.poll(&mut task) {
         Poll::Ready(result) => Some(result),
         Poll::Pending => None,
