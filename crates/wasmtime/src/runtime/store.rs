@@ -76,10 +76,9 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
-use crate::RootSet;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
-use crate::runtime::rr::{RecordBuffer, Recorder, ReplayBuffer, Replayer};
+use crate::runtime::rr::{RREvent, RecordBuffer, Recorder, ReplayBuffer, Replayer};
 #[cfg(feature = "gc")]
 use crate::runtime::vm::GcRootsList;
 #[cfg(feature = "stack-switching")]
@@ -93,6 +92,7 @@ use crate::runtime::vm::{
 use crate::trampoline::VMHostGlobalContext;
 use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
 use crate::{Global, Instance, Memory, Table, Uninhabited};
+use crate::{RecordMetadata, RootSet};
 use alloc::sync::Arc;
 use core::fmt;
 use core::marker;
@@ -1355,6 +1355,17 @@ impl StoreOpaque {
     #[inline]
     pub(crate) fn record_buffer_mut(&mut self) -> Option<&mut RecordBuffer> {
         self.record_buffer.as_mut()
+    }
+
+    pub(crate) fn record_event<F>(&mut self, f: F)
+    where
+        F: FnOnce(&RecordMetadata) -> RREvent,
+    {
+        if let Some(buf) = self.record_buffer_mut() {
+            let event = f(buf.metadata());
+            println!("Record | {:?}", &event);
+            buf.push_event(event);
+        }
     }
 
     #[inline]

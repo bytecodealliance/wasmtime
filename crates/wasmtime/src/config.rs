@@ -220,13 +220,41 @@ impl Default for CompilerConfig {
     }
 }
 
+/// Metadata for specifying recording strategy
+#[derive(Debug, Clone)]
+pub struct RecordMetadata {
+    /// Flag to include additional signatures for replay validation
+    pub add_validation: bool,
+}
+
+impl Default for RecordMetadata {
+    fn default() -> Self {
+        Self {
+            add_validation: true,
+        }
+    }
+}
+
 /// Configuration for recording execution
 #[derive(Debug, Clone)]
 pub struct RecordConfig {
     /// Filesystem path to write record trace
-    pub path: String,
+    pub(crate) path: String,
+    /// Associated metadata for configuring the recording strategy
+    pub(crate) metadata: RecordMetadata,
+}
+
+/// Metadata for specifying replay strategy
+#[derive(Debug, Clone)]
+pub struct ReplayMetadata {
     /// Flag to include additional signatures for replay validation
-    pub validation_metadata: bool,
+    pub validate: bool,
+}
+
+impl Default for ReplayMetadata {
+    fn default() -> Self {
+        Self { validate: true }
+    }
 }
 
 /// Configuration for replay execution
@@ -235,7 +263,7 @@ pub struct ReplayConfig {
     /// Filesystem path to read trace from
     pub path: String,
     /// Flag for dynamic validation checks when replaying events
-    pub validate: bool,
+    pub metadata: ReplayMetadata,
 }
 
 /// Configurations for record/replay (RR) executions
@@ -248,22 +276,38 @@ pub enum RRConfig {
 }
 
 impl RRConfig {
-    /// Test if execution recording is enabled (i.e, variant [`RRConfig::Record`]), and wrap
-    /// the corresponding config
+    /// Construct a record ([`RRConfig::Record`]) configuration.
+    /// If `metadata` is None, uses [`RecordMetadata::default()`]
+    pub fn record_cfg(path: String, metadata: Option<RecordMetadata>) -> Self {
+        Self::Record(RecordConfig {
+            path,
+            metadata: metadata.unwrap_or(RecordMetadata::default()),
+        })
+    }
+
+    /// Construct a replay ([`RRConfig::Replay`]) configuration.
+    /// If `metadata` is None, uses [`ReplayMetadata::default()`]
+    pub fn replay_cfg(path: String, metadata: Option<ReplayMetadata>) -> Self {
+        Self::Replay(ReplayConfig {
+            path,
+            metadata: metadata.unwrap_or(ReplayMetadata::default()),
+        })
+    }
+
+    /// Wrap the record config in [`RRConfig::Record`]
     pub fn record(&self) -> Option<&RecordConfig> {
         match self {
             Self::Record(r) => Some(r),
             _ => None,
         }
     }
-    /// Extract the record path. Panics if not a [`RRConfig::Record`]
+    /// Extract the record config. Panics if not a [`RRConfig::Record`]
     pub fn record_unwrap(&self) -> &RecordConfig {
         self.record()
             .expect("use of incorrectly initialized record configuration")
     }
 
-    /// Test if execution replay is enabled (i.e. variant [`RRConfig::Replay`]), and wrap
-    /// the corresponding config
+    /// Wrap the replay config in [`RRConfig::Replay`]
     pub fn replay(&self) -> Option<&ReplayConfig> {
         match self {
             Self::Replay(r) => Some(r),

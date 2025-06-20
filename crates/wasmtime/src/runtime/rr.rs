@@ -5,7 +5,7 @@
 //! * Switch [RRFuncArgTypes] to use [Vec<WasmValType>]
 
 use crate::ValRaw;
-use crate::config::{RecordConfig, ReplayConfig};
+use crate::config::{RecordConfig, RecordMetadata, ReplayConfig, ReplayMetadata};
 use crate::prelude::*;
 #[allow(unused_imports)]
 use crate::runtime::Store;
@@ -50,9 +50,11 @@ impl fmt::Display for ReplayError {
 
 impl std::error::Error for ReplayError {}
 
-pub trait Recorder: Sized {
+pub trait Recorder {
     /// Constructs a writer on new buffer
-    fn new_recorder(cfg: RecordConfig) -> Result<Self>;
+    fn new_recorder(cfg: RecordConfig) -> Result<Self>
+    where
+        Self: Sized;
 
     /// Push a newly record event [`RREvent`] to the buffer
     fn push_event(&mut self, event: RREvent) -> ();
@@ -61,13 +63,18 @@ pub trait Recorder: Sized {
     ///
     /// Buffer should be emptied during this process
     fn flush_to_file(&mut self) -> Result<()>;
+
+    /// Get metadata associated with the recording process
+    fn metadata(&self) -> &RecordMetadata;
 }
 
-pub trait Replayer: Sized {
+pub trait Replayer {
     type ReplayError;
 
     /// Constructs a reader on buffer
-    fn new_replayer(cfg: ReplayConfig) -> Result<Self>;
+    fn new_replayer(cfg: ReplayConfig) -> Result<Self>
+    where
+        Self: Sized;
 
     /// Pop the next [`RREvent`] from the buffer
     /// Events should be FIFO
@@ -155,7 +162,7 @@ pub struct RRDataCommon {
 /// Buffer to write recording data
 pub struct RecordBuffer {
     data: RRDataCommon,
-    validation_metadata: bool,
+    metadata: RecordMetadata,
 }
 
 impl Recorder for RecordBuffer {
@@ -165,7 +172,7 @@ impl Recorder for RecordBuffer {
                 buf: VecDeque::new(),
                 rw: File::create(cfg.path)?,
             },
-            validation_metadata: cfg.validation_metadata,
+            metadata: cfg.metadata,
         })
     }
 
@@ -182,7 +189,12 @@ impl Recorder for RecordBuffer {
         }
         data.rw.flush()?;
         data.buf.clear();
+        println!("Record flush: {:?} bytes", data.rw.metadata()?.len());
         Ok(())
+    }
+
+    fn metadata(&self) -> &RecordMetadata {
+        &self.metadata
     }
 }
 
@@ -190,7 +202,7 @@ impl Recorder for RecordBuffer {
 /// Buffer to read replay data
 pub struct ReplayBuffer {
     data: RRDataCommon,
-    validate: bool,
+    metadata: ReplayMetadata,
 }
 
 impl Replayer for ReplayBuffer {
@@ -209,7 +221,7 @@ impl Replayer for ReplayBuffer {
                 buf: events,
                 rw: file,
             },
-            validate: cfg.validate,
+            metadata: cfg.metadata,
         })
     }
 

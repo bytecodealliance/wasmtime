@@ -8,7 +8,7 @@ use std::{
     path::{Path, PathBuf},
     time::Duration,
 };
-use wasmtime::{Config, RRConfig, RecordConfig, ReplayConfig};
+use wasmtime::{Config, RRConfig, RecordMetadata, ReplayMetadata};
 
 pub mod opt;
 
@@ -1044,15 +1044,19 @@ impl CommonOptions {
         let record = &self.record;
         let replay = &self.replay;
         let rr_cfg = if let Some(path) = &record.path {
-            Some(RRConfig::Record(RecordConfig {
-                path: path.clone(),
-                validation_metadata: record.validation_metadata.unwrap_or(true),
-            }))
+            Some(RRConfig::record_cfg(
+                path.clone(),
+                Some(RecordMetadata {
+                    add_validation: record.validation_metadata.unwrap_or(true),
+                }),
+            ))
         } else if let Some(path) = &replay.path {
-            Some(RRConfig::Replay(ReplayConfig {
-                path: path.clone(),
-                validate: replay.validate.unwrap_or(true),
-            }))
+            Some(RRConfig::replay_cfg(
+                path.clone(),
+                Some(ReplayMetadata {
+                    validate: replay.validate.unwrap_or(true),
+                }),
+            ))
         } else {
             None
         };

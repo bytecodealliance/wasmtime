@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::rr::{Recorder, Replayer};
+use crate::rr::Replayer;
 use crate::runtime::Uninhabited;
 use crate::runtime::rr::RREvent;
 use crate::runtime::vm::{
@@ -2315,13 +2315,6 @@ impl HostContext {
         R: WasmRet,
         T: 'static,
     {
-        let record_intercept = |caller: &mut Caller<'_, T>, event| {
-            let record_buffer = caller.store.0.record_buffer_mut();
-            if let Some(buf) = record_buffer {
-                println!("Record | {:?}", &event);
-                buf.push_event(event);
-            }
-        };
         let replay_intercept = |caller: &mut Caller<'_, T>| -> Option<RREvent> {
             let replay_buffer = caller.store.0.replay_buffer_mut();
             replay_buffer.and_then(|buf| {
@@ -2349,13 +2342,7 @@ impl HostContext {
             let func = &state.func;
 
             let type_index = vmctx.func_ref().type_index;
-            let wasm_func_type_arc = caller
-                .store
-                .0
-                .engine()
-                .signatures()
-                .borrow(type_index)
-                .unwrap();
+            let wasm_func_type_arc = caller.engine().signatures().borrow(type_index).unwrap();
             let wasm_func_type = wasm_func_type_arc.unwrap_func();
 
             let ret = 'ret: {
@@ -2363,13 +2350,14 @@ impl HostContext {
                     break 'ret R::fallible_from_error(trap);
                 }
                 // RR recording/replay interception on call
-                {
-                    record_intercept(
-                        &mut caller,
-                        RREvent::host_func_entry(args.as_ref(), Some(wasm_func_type.clone())),
-                    );
-                    let _event = replay_intercept(&mut caller);
-                }
+                caller.as_context_mut().0.record_event(|r| {
+                    let num_params = wasm_func_type.params().len();
+                    RREvent::host_func_entry(
+                        unsafe { &args.as_ref()[..num_params] },
+                        r.add_validation.then_some(wasm_func_type.clone()),
+                    )
+                });
+                let _event = replay_intercept(&mut caller);
 
                 let mut store = if P::may_gc() {
                     AutoAssertNoGc::new(caller.store.0)
@@ -2398,14 +2386,17 @@ impl HostContext {
                 };
                 let ret = ret.store(&mut store, args.as_mut())?;
                 drop(store);
+
                 // RR recording/replay interception on return
-                {
-                    record_intercept(
-                        &mut caller,
-                        RREvent::host_func_return(args.as_ref(), Some(wasm_func_type.clone())),
-                    );
-                    let _event = replay_intercept(&mut caller);
-                }
+                caller.as_context_mut().0.record_event(|r| {
+                    let num_results = wasm_func_type.params().len();
+                    RREvent::host_func_return(
+                        unsafe { &args.as_ref()[..num_results] },
+                        r.add_validation.then_some(wasm_func_type.clone()),
+                    )
+                });
+                let _event = replay_intercept(&mut caller);
+
                 Ok(ret)
             }
         };
