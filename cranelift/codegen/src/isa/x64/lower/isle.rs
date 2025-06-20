@@ -1052,6 +1052,13 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
+    fn is_mem(&mut self, src: &XmmMem) -> Option<SyntheticAmode> {
+        match src.clone().to_reg_mem() {
+            RegMem::Reg { .. } => None,
+            RegMem::Mem { addr } => Some(addr),
+        }
+    }
+
     // Custom constructors for `mulx` which only calculates the high half of the
     // result meaning that the same output operand is used in both destination
     // registers. This is in contrast to the assembler-generated version of this

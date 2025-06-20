@@ -1292,6 +1292,8 @@
 (extern extractor is_xmm_mem is_xmm_mem)
 (decl is_xmm (Xmm) XmmMem)
 (extern extractor is_xmm is_xmm)
+(decl is_mem (SyntheticAmode) XmmMem)
+(extern extractor is_mem is_mem)
 
 ;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
