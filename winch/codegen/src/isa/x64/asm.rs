@@ -210,19 +210,6 @@ pub(super) enum VpmovKind {
     E32x2U,
 }
 
-impl From<VpmovKind> for AvxOpcode {
-    fn from(value: VpmovKind) -> Self {
-        match value {
-            VpmovKind::E8x8S => AvxOpcode::Vpmovsxbw,
-            VpmovKind::E8x8U => AvxOpcode::Vpmovzxbw,
-            VpmovKind::E16x4S => AvxOpcode::Vpmovsxwd,
-            VpmovKind::E16x4U => AvxOpcode::Vpmovzxwd,
-            VpmovKind::E32x2S => AvxOpcode::Vpmovsxdq,
-            VpmovKind::E32x2U => AvxOpcode::Vpmovzxdq,
-        }
-    }
-}
-
 impl From<V128LoadExtendKind> for VpmovKind {
     fn from(value: V128LoadExtendKind) -> Self {
         match value {
@@ -598,23 +585,31 @@ impl Assembler {
         flags: MemFlags,
     ) {
         assert!(dst.to_reg().is_float());
-
         let src = Self::to_synthetic_amode(src, flags);
-
-        self.emit(Inst::XmmUnaryRmRVex {
-            op: kind.into(),
-            src: XmmMem::unwrap_new(RegMem::mem(src)),
-            dst: dst.to_reg().into(),
-        });
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = match kind {
+            VpmovKind::E8x8S => asm::inst::vpmovsxbw_a::new(dst, src).into(),
+            VpmovKind::E8x8U => asm::inst::vpmovzxbw_a::new(dst, src).into(),
+            VpmovKind::E16x4S => asm::inst::vpmovsxwd_a::new(dst, src).into(),
+            VpmovKind::E16x4U => asm::inst::vpmovzxwd_a::new(dst, src).into(),
+            VpmovKind::E32x2S => asm::inst::vpmovsxdq_a::new(dst, src).into(),
+            VpmovKind::E32x2U => asm::inst::vpmovzxdq_a::new(dst, src).into(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Extends vector of integers in `src` and puts results in `dst`.
     pub fn xmm_vpmov_rr(&mut self, src: Reg, dst: WritableReg, kind: VpmovKind) {
-        self.emit(Inst::XmmUnaryRmRVex {
-            op: kind.into(),
-            src: src.into(),
-            dst: dst.to_reg().into(),
-        });
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = match kind {
+            VpmovKind::E8x8S => asm::inst::vpmovsxbw_a::new(dst, src).into(),
+            VpmovKind::E8x8U => asm::inst::vpmovzxbw_a::new(dst, src).into(),
+            VpmovKind::E16x4S => asm::inst::vpmovsxwd_a::new(dst, src).into(),
+            VpmovKind::E16x4U => asm::inst::vpmovzxwd_a::new(dst, src).into(),
+            VpmovKind::E32x2S => asm::inst::vpmovsxdq_a::new(dst, src).into(),
+            VpmovKind::E32x2U => asm::inst::vpmovzxdq_a::new(dst, src).into(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Vector load and broadcast.
@@ -626,39 +621,28 @@ impl Assembler {
         flags: MemFlags,
     ) {
         assert!(dst.to_reg().is_float());
-
         let src = Self::to_synthetic_amode(src, flags);
-
-        let op = match size {
-            OperandSize::S8 => AvxOpcode::Vpbroadcastb,
-            OperandSize::S16 => AvxOpcode::Vpbroadcastw,
-            OperandSize::S32 => AvxOpcode::Vpbroadcastd,
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = match size {
+            OperandSize::S8 => asm::inst::vpbroadcastb_a::new(dst, src).into(),
+            OperandSize::S16 => asm::inst::vpbroadcastw_a::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::vpbroadcastd_a::new(dst, src).into(),
             _ => unimplemented!(),
         };
-
-        self.emit(Inst::XmmUnaryRmRVex {
-            op,
-            src: XmmMem::unwrap_new(RegMem::mem(src)),
-            dst: dst.to_reg().into(),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Value in `src` is broadcast into lanes of `size` in `dst`.
     pub fn xmm_vpbroadcast_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
         assert!(src.is_float() && dst.to_reg().is_float());
-
-        let op = match size {
-            OperandSize::S8 => AvxOpcode::Vpbroadcastb,
-            OperandSize::S16 => AvxOpcode::Vpbroadcastw,
-            OperandSize::S32 => AvxOpcode::Vpbroadcastd,
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = match size {
+            OperandSize::S8 => asm::inst::vpbroadcastb_a::new(dst, src).into(),
+            OperandSize::S16 => asm::inst::vpbroadcastw_a::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::vpbroadcastd_a::new(dst, src).into(),
             _ => unimplemented!(),
         };
-
-        self.emit(Inst::XmmUnaryRmRVex {
-            op,
-            src: XmmMem::unwrap_new(src.into()),
-            dst: dst.to_reg().into(),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Memory to register shuffle of bytes in vector.
@@ -1881,12 +1865,9 @@ impl Assembler {
     /// Zeroes out the upper 64 bits of `dst`.
     pub fn xmm_vmovsd_rm(&mut self, dst: WritableReg, src: &Address) {
         let src = Self::to_synthetic_amode(src, MemFlags::trusted());
-
-        self.emit(Inst::XmmUnaryRmRVex {
-            op: AvxOpcode::Vmovsd,
-            src: XmmMem::unwrap_new(RegMem::mem(src)),
-            dst: dst.to_reg().into(),
-        })
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vmovsd_d::new(dst, src).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Moves two 32-bit floats from `src2` to the upper 64-bits of `dst`.
@@ -1911,11 +1892,9 @@ impl Assembler {
     /// Move unaligned packed integer values from address `src` to `dst`.
     pub fn xmm_vmovdqu_mr(&mut self, src: &Address, dst: WritableReg, flags: MemFlags) {
         let src = Self::to_synthetic_amode(src, flags);
-        self.emit(Inst::XmmUnaryRmRVex {
-            op: AvxOpcode::Vmovdqu,
-            src: XmmMem::unwrap_new(RegMem::mem(src)),
-            dst: dst.map(Into::into),
-        });
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vmovdqu_a::new(dst, src).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Move integer from `src` to xmm register `dst` using an AVX instruction.
@@ -2470,18 +2449,14 @@ impl Assembler {
     /// Compute the absolute value of elements in vector `src` and put the
     /// results in `dst`.
     pub fn xmm_vpabs_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S8 => AvxOpcode::Vpabsb,
-            OperandSize::S16 => AvxOpcode::Vpabsw,
-            OperandSize::S32 => AvxOpcode::Vpabsd,
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = match size {
+            OperandSize::S8 => asm::inst::vpabsb_a::new(dst, src).into(),
+            OperandSize::S16 => asm::inst::vpabsw_a::new(dst, src).into(),
+            OperandSize::S32 => asm::inst::vpabsd_a::new(dst, src).into(),
             _ => unimplemented!(),
         };
-
-        self.emit(Inst::XmmUnaryRmRVex {
-            op,
-            src: src.into(),
-            dst: dst.to_reg().into(),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Arithmetically (sign preserving) right shift on vector in `src` by
@@ -2745,17 +2720,13 @@ impl Assembler {
     /// Compute square roots of vector of floats in `src` and put the results
     /// in `dst`.
     pub fn xmm_vsqrtp_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
-            OperandSize::S32 => AvxOpcode::Vsqrtps,
-            OperandSize::S64 => AvxOpcode::Vsqrtpd,
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = match size {
+            OperandSize::S32 => asm::inst::vsqrtps_b::new(dst, src).into(),
+            OperandSize::S64 => asm::inst::vsqrtpd_b::new(dst, src).into(),
             _ => unimplemented!(),
         };
-
-        self.emit(Inst::XmmUnaryRmRVex {
-            op,
-            src: src.into(),
-            dst: dst.to_reg().into(),
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Multiply and add packed signed and unsigned bytes.
