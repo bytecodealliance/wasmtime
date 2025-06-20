@@ -1843,52 +1843,28 @@
 (rule (x64_movsx (ExtMode.LQ) src) (x64_movslq_rm src))
 
 (decl x64_movss_load (SyntheticAmode) Xmm)
-(rule (x64_movss_load from) (x64_movss_a_m from))
-(rule 1 (x64_movss_load from)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vmovss) from))
+(rule (x64_movss_load from) (x64_movss_a_m_or_avx from))
 
 (decl x64_movss_store (SyntheticAmode Xmm) SideEffectNoResult)
-(rule (x64_movss_store addr data) (x64_movss_c_m_mem addr data))
-(rule 1 (x64_movss_store addr data)
-        (if-let true (use_avx))
-        (xmm_movrm_vex (AvxOpcode.Vmovss) addr data))
+(rule (x64_movss_store addr data) (x64_movss_c_m_mem_or_avx addr data))
 
 (decl x64_movsd_load (SyntheticAmode) Xmm)
-(rule (x64_movsd_load from) (x64_movsd_a_m from))
-(rule 1 (x64_movsd_load from)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vmovsd) from))
+(rule (x64_movsd_load from) (x64_movsd_a_m_or_avx from))
 
 (decl x64_movsd_store (SyntheticAmode Xmm) SideEffectNoResult)
-(rule (x64_movsd_store addr data) (x64_movsd_c_m_mem addr data))
-(rule 1 (x64_movsd_store addr data)
-        (if-let true (use_avx))
-        (xmm_movrm_vex (AvxOpcode.Vmovsd) addr data))
+(rule (x64_movsd_store addr data) (x64_movsd_c_m_mem_or_avx addr data))
 
 (decl x64_movups_load (SyntheticAmode) Xmm)
-(rule (x64_movups_load from) (x64_movups_a from))
-(rule 1 (x64_movups_load from)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vmovups) from))
+(rule (x64_movups_load from) (x64_movups_a_or_avx from))
 
 (decl x64_movups_store (SyntheticAmode Xmm) SideEffectNoResult)
-(rule (x64_movups_store addr data) (x64_movups_b_mem addr data))
-(rule 1 (x64_movups_store addr data)
-        (if-let true (use_avx))
-        (xmm_movrm_vex (AvxOpcode.Vmovups) addr data))
+(rule (x64_movups_store addr data) (x64_movups_b_mem_or_avx addr data))
 
 (decl x64_movupd_load (SyntheticAmode) Xmm)
-(rule (x64_movupd_load from) (x64_movupd_a from))
-(rule 1 (x64_movupd_load from)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vmovupd) from))
+(rule (x64_movupd_load from) (x64_movupd_a_or_avx from))
 
 (decl x64_movupd_store (SyntheticAmode Xmm) SideEffectNoResult)
-(rule (x64_movupd_store addr data) (x64_movupd_b_mem addr data))
-(rule 1 (x64_movupd_store addr data)
-        (if-let true (use_avx))
-        (xmm_movrm_vex (AvxOpcode.Vmovupd) addr data))
+(rule (x64_movupd_store addr data) (x64_movupd_b_mem_or_avx addr data))
 
 ;; Helper for creating `movd` instructions.
 (decl x64_movd_to_gpr (Xmm) Gpr)
@@ -1919,52 +1895,28 @@
         (x64_vmovq_b from))
 
 (decl x64_movdqu_load (XmmMem) Xmm)
-(rule (x64_movdqu_load from) (x64_movdqu_a from))
-(rule 1 (x64_movdqu_load from)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vmovdqu) from))
+(rule (x64_movdqu_load from) (x64_movdqu_a_or_avx from))
 
 (decl x64_movdqu_store (SyntheticAmode Xmm) SideEffectNoResult)
-(rule (x64_movdqu_store addr data) (x64_movdqu_b_mem addr data))
-(rule 1 (x64_movdqu_store addr data)
-        (if-let true (use_avx))
-        (xmm_movrm_vex (AvxOpcode.Vmovdqu) addr data))
+(rule (x64_movdqu_store addr data) (x64_movdqu_b_mem_or_avx addr data))
 
 (decl x64_pmovsxbw (XmmMem) Xmm)
-(rule 1 (x64_pmovsxbw from)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpmovsxbw) from))
-(rule 0 (x64_pmovsxbw from) (x64_pmovsxbw_a from))
+(rule (x64_pmovsxbw from) (x64_pmovsxbw_a_or_avx from))
 
 (decl x64_pmovzxbw (XmmMem) Xmm)
-(rule 1 (x64_pmovzxbw from)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpmovzxbw) from))
-(rule 0 (x64_pmovzxbw from) (x64_pmovzxbw_a from))
+(rule (x64_pmovzxbw from) (x64_pmovzxbw_a_or_avx from))
 
 (decl x64_pmovsxwd (XmmMem) Xmm)
-(rule 1 (x64_pmovsxwd from)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpmovsxwd) from))
-(rule 0 (x64_pmovsxwd from) (x64_pmovsxwd_a from))
+(rule (x64_pmovsxwd from) (x64_pmovsxwd_a_or_avx from))
 
 (decl x64_pmovzxwd (XmmMem) Xmm)
-(rule 1 (x64_pmovzxwd from)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpmovzxwd) from))
-(rule 0 (x64_pmovzxwd from) (x64_pmovzxwd_a from))
+(rule (x64_pmovzxwd from) (x64_pmovzxwd_a_or_avx from))
 
 (decl x64_pmovsxdq (XmmMem) Xmm)
-(rule 1 (x64_pmovsxdq from)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpmovsxdq) from))
-(rule 0 (x64_pmovsxdq from) (x64_pmovsxdq_a from))
+(rule (x64_pmovsxdq from) (x64_pmovsxdq_a_or_avx from))
 
 (decl x64_pmovzxdq (XmmMem) Xmm)
-(rule 1 (x64_pmovzxdq from)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpmovzxdq) from))
-(rule 0 (x64_pmovzxdq from) (x64_pmovzxdq_a from))
+(rule (x64_pmovzxdq from) (x64_pmovzxdq_a_or_avx from))
 
 (decl x64_movrm (Type SyntheticAmode Gpr) SideEffectNoResult)
 (spec (x64_movrm ty addr data)
@@ -4008,19 +3960,11 @@
 
 ;; Helper for creating `sqrtps` instructions.
 (decl x64_sqrtps (XmmMem) Xmm)
-(rule 1 (x64_sqrtps x)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtps) x))
-(rule 0 (x64_sqrtps x)
-      (x64_sqrtps_a x))
+(rule (x64_sqrtps x) (x64_sqrtps_a_or_avx x))
 
 ;; Helper for creating `sqrtpd` instructions.
 (decl x64_sqrtpd (XmmMem) Xmm)
-(rule 1 (x64_sqrtpd x)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtpd) x))
-(rule 0 (x64_sqrtpd x)
-      (x64_sqrtpd_a x))
+(rule (x64_sqrtpd x) (x64_sqrtpd_a_or_avx x))
 
 ;; Helper for creating `cvtss2sd` instructions.
 ;;
@@ -4369,25 +4313,19 @@
         (if-let true (use_avx))
         (x64_vmovddup_a src))
 
-;; Helper for creating `vpbroadcastb` instructions
+;; Helpers for creating `vpbroadcast*` instructions.
 (decl x64_vpbroadcastb (XmmMem) Xmm)
-(rule (x64_vpbroadcastb src)
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpbroadcastb) src))
+(rule (x64_vpbroadcastb src) (x64_vpbroadcastb_a src))
 
-;; Helper for creating `vpbroadcastw` instructions
 (decl x64_vpbroadcastw (XmmMem) Xmm)
-(rule (x64_vpbroadcastw src)
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpbroadcastw) src))
+(rule (x64_vpbroadcastw src) (x64_vpbroadcastw_a src))
 
-;; Helper for creating `vpbroadcastd` instructions
 (decl x64_vpbroadcastd (XmmMem) Xmm)
-(rule (x64_vpbroadcastd src)
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpbroadcastd) src))
+(rule (x64_vpbroadcastd src) (x64_vpbroadcastd_a src))
 
-;; Helper for creating `vbroadcastss` instructions
 (decl x64_vbroadcastss (XmmMem) Xmm)
-(rule (x64_vbroadcastss src)
-      (xmm_unary_rm_r_vex (AvxOpcode.Vbroadcastss) src))
+(rule 1 (x64_vbroadcastss (is_xmm src)) (x64_vbroadcastss_a_r src))
+(rule 0 (x64_vbroadcastss (is_mem src)) (x64_vbroadcastss_a_m src))
 
 ;;;; Jumps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
