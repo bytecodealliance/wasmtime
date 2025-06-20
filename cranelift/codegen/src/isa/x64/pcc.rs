@@ -195,11 +195,7 @@ pub(crate) fn check(
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
 
-        Inst::XmmMovRMVex { ref dst, .. } | Inst::XmmMovRMImmVex { ref dst, .. } => {
-            check_store(ctx, None, dst, vcode, I8X16)
-        }
-
-        Inst::XmmToGprImmVex { dst, .. } => ensure_no_fact(vcode, dst.to_writable_reg().to_reg()),
+        Inst::XmmMovRMVex { ref dst, .. } => check_store(ctx, None, dst, vcode, I8X16),
 
         Inst::CvtUint64ToFloatSeq {
             dst,

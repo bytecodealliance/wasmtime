@@ -282,7 +282,7 @@ impl dsl::Format {
                     }
                 }
             },
-            [Reg(reg), Reg(rm)] => {
+            [Reg(reg), Reg(rm)] | [Reg(reg), Reg(rm), Imm(_)] => {
                 assert!(!vex.is4);
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
@@ -292,7 +292,7 @@ impl dsl::Format {
                     rm: *rm,
                 }
             }
-            [Reg(reg), Mem(rm)] | [Mem(rm), Reg(reg)] => {
+            [Reg(reg), Mem(rm)] | [Mem(rm), Reg(reg)] | [RegMem(rm), Reg(reg), Imm(_)] => {
                 assert!(!vex.is4);
                 fmtln!(f, "let reg = self.{reg}.enc();");
                 fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");

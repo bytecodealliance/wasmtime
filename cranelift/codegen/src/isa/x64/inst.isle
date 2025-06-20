@@ -112,16 +112,6 @@
        (XmmMovRMVex (op AvxOpcode)
                     (src Xmm)
                     (dst SyntheticAmode))
-       (XmmMovRMImmVex (op AvxOpcode)
-                       (src Xmm)
-                       (dst SyntheticAmode)
-                       (imm u8))
-
-       ;; XMM (scalar) unary op (from xmm to integer reg): vpextr{w,b,d,q}
-       (XmmToGprImmVex (op AvxOpcode)
-                       (src Xmm)
-                       (dst WritableGpr)
-                       (imm u8))
 
        ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
        (XmmCmpRmRVex (op AvxOpcode)
@@ -929,10 +919,6 @@
             Vmovups
             Vmovupd
             Vmovdqu
-            Vpextrb
-            Vpextrw
-            Vpextrd
-            Vpextrq
             Vpblendw
             Vsqrtss
             Vsqrtsd
@@ -1471,13 +1457,6 @@
             (_ Unit (emit (MInst.XmmUnaryRmRImmEvex op src dst imm))))
         dst))
 
-;; Helper for creating `MInst.XmmToGprImmVex` instructions.
-(decl xmm_to_gpr_imm_vex (AvxOpcode Xmm u8) Gpr)
-(rule (xmm_to_gpr_imm_vex op src imm)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.XmmToGprImmVex op src dst imm))))
-        dst))
-
 ;; Helper for creating `xmm_min_max_seq` pseudo-instructions.
 (decl xmm_min_max_seq (Type bool Xmm Xmm) Xmm)
 (rule (xmm_min_max_seq ty is_min lhs rhs)
@@ -1902,10 +1881,6 @@
 (decl xmm_movrm_vex (AvxOpcode SyntheticAmode Xmm) SideEffectNoResult)
 (rule (xmm_movrm_vex op addr data)
       (SideEffectNoResult.Inst (MInst.XmmMovRMVex op data addr)))
-
-(decl xmm_movrm_imm_vex (AvxOpcode SyntheticAmode Xmm u8) SideEffectNoResult)
-(rule (xmm_movrm_imm_vex op addr data imm)
-      (SideEffectNoResult.Inst (MInst.XmmMovRMImmVex op data addr imm)))
 
 ;; Load a constant into an XMM register.
 (decl x64_xmm_load_const (Type VCodeConstant) Xmm)
@@ -3573,57 +3548,30 @@
 (rule (x64_vpsraq_imm src imm)
       (xmm_unary_rm_r_imm_evex (Avx512Opcode.VpsraqImm) src imm))
 
-;; Helper for creating `pextrb` instructions.
+;; Helper for creating `pextr*` instructions.
 (decl x64_pextrb (Xmm u8) Gpr)
-(rule (x64_pextrb src lane) (x64_pextrb_a src lane))
-(rule 1 (x64_pextrb src lane)
-        (if-let true (use_avx))
-        (xmm_to_gpr_imm_vex (AvxOpcode.Vpextrb) src lane))
+(rule (x64_pextrb src lane) (x64_pextrb_a_or_avx src lane))
 
 (decl x64_pextrb_store (Amode Xmm u8) SideEffectNoResult)
-(rule (x64_pextrb_store addr src lane) (x64_pextrb_a_mem addr src lane))
-(rule 1 (x64_pextrb_store addr src lane)
-        (if-let true (use_avx))
-        (xmm_movrm_imm_vex (AvxOpcode.Vpextrb) addr src lane))
+(rule (x64_pextrb_store addr src lane) (x64_pextrb_a_mem_or_avx addr src lane))
 
-;; Helper for creating `pextrw` instructions.
 (decl x64_pextrw (Xmm u8) Gpr)
-(rule (x64_pextrw src lane) (x64_pextrw_a src lane))
-(rule 1 (x64_pextrw src lane)
-        (if-let true (use_avx))
-        (xmm_to_gpr_imm_vex (AvxOpcode.Vpextrw) src lane))
+(rule (x64_pextrw src lane) (x64_pextrw_a_or_avx src lane))
 
 (decl x64_pextrw_store (Amode Xmm u8) SideEffectNoResult)
-(rule (x64_pextrw_store addr src lane) (x64_pextrw_b_mem addr src lane))
-(rule 1 (x64_pextrw_store addr src lane)
-        (if-let true (use_avx))
-        (xmm_movrm_imm_vex (AvxOpcode.Vpextrw) addr src lane))
+(rule (x64_pextrw_store addr src lane) (x64_pextrw_b_mem_or_avx addr src lane))
 
-;; Helper for creating `pextrd` instructions.
 (decl x64_pextrd (Xmm u8) Gpr)
-(rule (x64_pextrd src lane) (x64_pextrd_a src lane))
-(rule 1 (x64_pextrd src lane)
-        (if-let true (use_avx))
-        (xmm_to_gpr_imm_vex (AvxOpcode.Vpextrd) src lane))
+(rule (x64_pextrd src lane) (x64_pextrd_a_or_avx src lane))
 
 (decl x64_pextrd_store (Amode Xmm u8) SideEffectNoResult)
-(rule (x64_pextrd_store addr src lane) (x64_pextrd_a_mem addr src lane))
-(rule 1 (x64_pextrd_store addr src lane)
-        (if-let true (use_avx))
-        (xmm_movrm_imm_vex (AvxOpcode.Vpextrd) addr src lane))
+(rule (x64_pextrd_store addr src lane) (x64_pextrd_a_mem_or_avx addr src lane))
 
-;; Helper for creating `pextrq` instructions.
 (decl x64_pextrq (Xmm u8) Gpr)
-(rule (x64_pextrq src lane) (x64_pextrq_a src lane))
-(rule 1 (x64_pextrq src lane)
-        (if-let true (use_avx))
-        (xmm_to_gpr_imm_vex (AvxOpcode.Vpextrq) src lane))
+(rule (x64_pextrq src lane) (x64_pextrq_a_or_avx src lane))
 
 (decl x64_pextrq_store (Amode Xmm u8) SideEffectNoResult)
-(rule (x64_pextrq_store addr src lane) (x64_pextrq_a_mem addr src lane))
-(rule 1 (x64_pextrq_store addr src lane)
-        (if-let true (use_avx))
-        (xmm_movrm_imm_vex (AvxOpcode.Vpextrq) addr src lane))
+(rule (x64_pextrq_store addr src lane) (x64_pextrq_a_mem_or_avx addr src lane))
 
 ;; Helper for creating `pmovmskb` instructions.
 (decl x64_pmovmskb (Xmm) Gpr)
