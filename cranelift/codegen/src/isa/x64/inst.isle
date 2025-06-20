@@ -483,7 +483,6 @@
 
 (type SseOpcode extern
       (enum Insertps
-            Palignr
             Pmaddubsw
             Pmaddwd
             Pshufb
@@ -3295,15 +3294,7 @@
 
 ;; Helper for creating `palignr` instructions.
 (decl x64_palignr (Xmm XmmMem u8) Xmm)
-(rule 0 (x64_palignr src1 src2 imm)
-      (xmm_rm_r_imm (SseOpcode.Palignr)
-                    src1
-                    src2
-                    imm
-                    (OperandSize.Size32)))
-(rule 1 (x64_palignr src1 src2 imm)
-      (if-let true (use_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vpalignr) src1 src2 imm))
+(rule (x64_palignr src1 src2 imm) (x64_palignr_a_or_avx src1 src2 imm))
 
 ;; Helpers for creating `cmpp*` instructions.
 (decl x64_cmpp (Type Xmm XmmMem FcmpImm) Xmm)

@@ -680,7 +680,7 @@ block0(v0: i8x16, v1: i8x16):
 ; block0:
 ;   movdqa %xmm0, %xmm4
 ;   movdqa %xmm1, %xmm0
-;   palignr $1, %xmm0, %xmm4, %xmm0
+;   palignr $0x1, %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -709,7 +709,7 @@ block0(v0: i8x16, v1: i8x16):
 ; block0:
 ;   movdqa %xmm0, %xmm4
 ;   movdqa %xmm1, %xmm0
-;   palignr $5, %xmm0, %xmm4, %xmm0
+;   palignr $0x5, %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -738,7 +738,7 @@ block0(v0: i8x16, v1: i8x16):
 ; block0:
 ;   movdqa %xmm0, %xmm4
 ;   movdqa %xmm1, %xmm0
-;   palignr $11, %xmm0, %xmm4, %xmm0
+;   palignr $0xb, %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
