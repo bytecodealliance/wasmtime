@@ -184,12 +184,6 @@ pub(crate) fn check(
             dst,
             src3: ref src2,
             ..
-        }
-        | Inst::XmmUnaryRmRVex {
-            op,
-            dst,
-            src: ref src2,
-            ..
         } => {
             let (ty, size) = match op {
                 AvxOpcode::Vmovss => (F32, 32),

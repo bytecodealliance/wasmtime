@@ -78,7 +78,10 @@ fn check_avx_alternates(all: &mut [Inst]) {
         .map(|(index, inst)| (inst.name().clone(), index))
         .collect();
     for inst in all.iter().filter(|inst| inst.alternate.is_some()) {
-        assert!(inst.features.is_sse());
+        assert!(
+            inst.features.is_sse(),
+            "expected an SSE instruction: {inst}"
+        );
         let alternate = inst.alternate.as_ref().unwrap();
         assert_eq!(alternate.feature, Feature::avx);
         let avx_index = name_to_index.get(&alternate.name).expect(&format!(
@@ -120,14 +123,30 @@ fn check_sse_matches_avx(sse_inst: &Inst, avx_inst: &Inst) {
         // may have slightly different operand semantics (e.g., `roundss` ->
         // `vroundss`) and we want to be careful about matching too freely.
         (
-            [(ReadWrite, Reg(_)), (Read, Reg(_) | RegMem(_) | Mem(_))],
+            [
+                (ReadWrite | Write, Reg(_)),
+                (Read, Reg(_) | RegMem(_) | Mem(_)),
+            ],
             [
                 (Write, Reg(_)),
                 (Read, Reg(_)),
                 (Read, Reg(_) | RegMem(_) | Mem(_)),
             ],
         ) => {}
-        ([(Write, Reg(_)), (Read, RegMem(_))], [(Write, Reg(_)), (Read, RegMem(_))]) => {}
+        (
+            [
+                (Write, Reg(_) | RegMem(_) | Mem(_)),
+                (Read, Reg(_) | RegMem(_) | Mem(_)),
+            ],
+            [
+                (Write, Reg(_) | RegMem(_) | Mem(_)),
+                (Read, Reg(_) | RegMem(_) | Mem(_)),
+            ],
+        ) => {}
+        (
+            [(Write, Reg(_)), (Read, Reg(_) | RegMem(_)), (Read, Imm(_))],
+            [(Write, Reg(_)), (Read, Reg(_) | RegMem(_)), (Read, Imm(_))],
+        ) => {}
         // We panic on other formats for now; feel free to add more patterns to
         // avoid this.
         _ => panic!("unmatched formats for SSE-to-AVX alternate:\n{sse_inst}\n{avx_inst}"),
