@@ -444,14 +444,13 @@ fn publish(krate: &Crate) -> bool {
 
     // First make sure the crate isn't already published at this version. This
     // script may be re-run and there's no need to re-attempt previous work.
-    let output = cmd_output(Command::new("curl").arg(&format!(
+    let Some(output) = curl(&format!(
         "https://crates.io/api/v1/crates/{}/versions",
         krate.name
-    )));
-    if output.status.success()
-        && String::from_utf8_lossy(&output.stdout)
-            .contains(&format!("\"num\":\"{}\"", krate.version))
-    {
+    )) else {
+        return false;
+    };
+    if output.contains(&format!("\"num\":\"{}\"", krate.version)) {
         println!(
             "skip publish {} because {} is already published",
             krate.name, krate.version,
@@ -473,13 +472,13 @@ fn publish(krate: &Crate) -> bool {
     // After we've published then make sure that the `wasmtime-publish` group is
     // added to this crate for future publications. If it's already present
     // though we can skip the `cargo owner` modification.
-    let output = cmd_output(Command::new("curl").arg(&format!(
+    let Some(output) = curl(&format!(
         "https://crates.io/api/v1/crates/{}/owners",
         krate.name
-    )));
-    if output.status.success()
-        && String::from_utf8_lossy(&output.stdout).contains("wasmtime-publish")
-    {
+    )) else {
+        return false;
+    };
+    if output.contains("wasmtime-publish") {
         println!(
             "wasmtime-publish already listed as an owner of {}",
             krate.name
@@ -499,6 +498,21 @@ fn publish(krate: &Crate) -> bool {
     );
 
     true
+}
+
+fn curl(url: &str) -> Option<String> {
+    let output = cmd_output(
+        Command::new("curl")
+            .arg("--user-agent")
+            .arg("bytecodealliance/wasmtime auto-publish script")
+            .arg(url),
+    );
+    if !output.status.success() {
+        println!("failed to curl: {}", output.status);
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        return None;
+    }
+    Some(String::from_utf8_lossy(&output.stdout).into())
 }
 
 // Verify the current tree is publish-able to crates.io. The intention here is
