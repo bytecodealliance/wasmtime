@@ -193,6 +193,17 @@ pub mod display {
     use crate::{Amode, Gpr, GprMem, Registers, Size};
     use std::fmt;
 
+    pub fn callq_d(f: &mut fmt::Formatter, inst: &inst::callq_d) -> fmt::Result {
+        let inst::callq_d { imm32 } = inst;
+        write!(f, "callq {:#x}", i64::from(imm32.value()) + 5)
+    }
+
+    pub fn callq_m<R: Registers>(f: &mut fmt::Formatter, inst: &inst::callq_m<R>) -> fmt::Result {
+        let inst::callq_m { rm64 } = inst;
+        let op = rm64.to_string(Size::Quadword);
+        write!(f, "callq *{op}")
+    }
+
     pub fn pseudo_op(imm: u8) -> &'static str {
         match imm {
             0 => "eq",
