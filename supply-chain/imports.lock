@@ -735,6 +735,12 @@ when = "2025-05-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.pulley-macros]]
+version = "34.0.0"
+when = "2025-06-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.quote]]
 version = "1.0.36"
 when = "2024-04-10"

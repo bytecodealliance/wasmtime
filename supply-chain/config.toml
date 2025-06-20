@@ -97,6 +97,9 @@ audit-as-crates-io = true
 [policy.pulley-interpreter-fuzz]
 criteria = []
 
+[policy.pulley-macros]
+audit-as-crates-io = true
+
 [policy.wasi-common]
 audit-as-crates-io = true
 
