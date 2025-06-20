@@ -3493,27 +3493,15 @@
 
 ;; Helper for creating `pabsb` instructions.
 (decl x64_pabsb (XmmMem) Xmm)
-(rule 1 (x64_pabsb src)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpabsb) src))
-(rule 0 (x64_pabsb src)
-      (x64_pabsb_a src))
+(rule (x64_pabsb src) (x64_pabsb_a_or_avx src))
 
 ;; Helper for creating `pabsw` instructions.
 (decl x64_pabsw (XmmMem) Xmm)
-(rule 1 (x64_pabsw src)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpabsw) src))
-(rule 0 (x64_pabsw src)
-      (x64_pabsw_a src))
+(rule (x64_pabsw src) (x64_pabsw_a_or_avx src))
 
 ;; Helper for creating `pabsd` instructions.
 (decl x64_pabsd (XmmMem) Xmm)
-(rule 1 (x64_pabsd src)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpabsd) src))
-(rule 0 (x64_pabsd src)
-      (x64_pabsd_a src))
+(rule (x64_pabsd src) (x64_pabsd_a_or_avx src))
 
 ;; Helper for creating `vcvtudq2ps` instructions.
 (decl x64_vcvtudq2ps (XmmMem) Xmm)
