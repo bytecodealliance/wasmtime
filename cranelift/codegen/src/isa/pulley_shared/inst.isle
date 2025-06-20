@@ -619,50 +619,18 @@
 ;;;; Materializing Constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Lower a constant into a register.
-(decl imm (Type u64) Reg)
+(decl imm (i64) Reg)
 
-(rule 8 (imm (ty_int _) 0) (pulley_xzero))
-(rule 7 (imm (ty_int _) 1) (pulley_xone))
+;; Special case some instructions with no immediates
+(rule 6 (imm 0) (pulley_xzero))
+(rule 5 (imm 1) (pulley_xone))
 
-;; If a value is 8 bits, we always use `xconst8`
-(rule 6 (imm $I8 x) (pulley_xconst8 (u8_cast_signed (u64_truncate_into_u8 x))))
-
-;; If a value can fit into 8 bits, then prioritize that.
-(rule 5 (imm (ty_int ty) x)
-      (if-let y (i64_truncate_into_i8 (u64_cast_signed x)))
-      (if-let true (u64_eq (u64_and (i64_cast_unsigned (i8_into_i64 y)) (ty_mask ty))
-                           (u64_and x (ty_mask ty))))
-      (pulley_xconst8 y))
-
-;; If a value is 16 bits, and we couldn't fit it into 8 bits, then use
-;; `xconst16`.
-(rule 4 (imm $I16 x) (pulley_xconst16 (u16_cast_signed (u64_truncate_into_u16 x))))
-
-;; If a value can fit into 16 bits, then prioritize that.
-(rule 3 (imm (ty_int ty) x)
-      (if-let y (i64_truncate_into_i16 (u64_cast_signed x)))
-      (if-let true (u64_eq (u64_and (i64_cast_unsigned (i16_into_i64 y)) (ty_mask ty))
-                           (u64_and x (ty_mask ty))))
-      (pulley_xconst16 y))
-
-;; If a value is 32 bits, and we couldn't fit it into 8 or 16 bits, then use
-;; `xconst32`.
-(rule 2 (imm $I32 x) (pulley_xconst32 (u32_cast_signed (u64_truncate_into_u32 x))))
-
-;; If a value can fit into 32 bits, then prioritize that.
-(rule 1 (imm (ty_int ty) x)
-      (if-let y (i64_truncate_into_i32 (u64_cast_signed x)))
-      (if-let true (u64_eq (u64_and (i64_cast_unsigned (i32_into_i64 y)) (ty_mask ty))
-                           (u64_and x (ty_mask ty))))
-      (pulley_xconst32 y))
-
-;; If a value is 64 bits, and we couldn't fit it into 8, 16, or 32 bits, then
-;; use `xconst64`.
-(rule 0 (imm $I64 x) (pulley_xconst64 (u64_cast_signed x)))
-
-;; Base cases for floats.
-(rule 0 (imm $F32 (u32_from_u64 c)) (pulley_fconst32 c))
-(rule 0 (imm $F64 c) (pulley_fconst64 c))
+;; For integer constants use the smallest instructions we can that fits the
+;; desired value
+(rule 4 (imm (i8_from_i64 imm)) (pulley_xconst8 imm))
+(rule 3 (imm (i16_from_i64 imm)) (pulley_xconst16 imm))
+(rule 2 (imm (i32_from_i64 imm)) (pulley_xconst32 imm))
+(rule 1 (imm imm) (pulley_xconst64 imm))
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
