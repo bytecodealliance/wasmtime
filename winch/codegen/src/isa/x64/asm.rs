@@ -531,14 +531,38 @@ impl Assembler {
 
     /// Integer register conditional move.
     pub fn cmov(&mut self, src: Reg, dst: WritableReg, cc: IntCmpKind, size: OperandSize) {
+        use IntCmpKind::*;
+        use OperandSize::*;
+
         let dst: WritableGpr = dst.map(Into::into);
-        self.emit(Inst::Cmove {
-            size: size.into(),
-            cc: cc.into(),
-            consequent: src.into(),
-            alternative: dst.to_reg(),
-            dst,
-        })
+        let inst = match size {
+            S8 | S16 | S32 => match cc {
+                Eq => asm::inst::cmovel_rm::new(dst, src).into(),
+                Ne => asm::inst::cmovnel_rm::new(dst, src).into(),
+                LtS => asm::inst::cmovll_rm::new(dst, src).into(),
+                LtU => asm::inst::cmovbl_rm::new(dst, src).into(),
+                GtS => asm::inst::cmovgl_rm::new(dst, src).into(),
+                GtU => asm::inst::cmoval_rm::new(dst, src).into(),
+                LeS => asm::inst::cmovlel_rm::new(dst, src).into(),
+                LeU => asm::inst::cmovbel_rm::new(dst, src).into(),
+                GeS => asm::inst::cmovgel_rm::new(dst, src).into(),
+                GeU => asm::inst::cmovael_rm::new(dst, src).into(),
+            },
+            S64 => match cc {
+                Eq => asm::inst::cmoveq_rm::new(dst, src).into(),
+                Ne => asm::inst::cmovneq_rm::new(dst, src).into(),
+                LtS => asm::inst::cmovlq_rm::new(dst, src).into(),
+                LtU => asm::inst::cmovbq_rm::new(dst, src).into(),
+                GtS => asm::inst::cmovgq_rm::new(dst, src).into(),
+                GtU => asm::inst::cmovaq_rm::new(dst, src).into(),
+                LeS => asm::inst::cmovleq_rm::new(dst, src).into(),
+                LeU => asm::inst::cmovbeq_rm::new(dst, src).into(),
+                GeS => asm::inst::cmovgeq_rm::new(dst, src).into(),
+                GeU => asm::inst::cmovaeq_rm::new(dst, src).into(),
+            },
+            _ => unreachable!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Single and double precision floating point

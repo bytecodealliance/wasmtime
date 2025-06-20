@@ -13,7 +13,7 @@ block0(v0: i8, v1: i32, v2: i32):
 ; block0:
 ;   testb %dil, %dil
 ;   movq %rdx, %rax
-;   cmovnzl %esi, %eax, %eax
+;   cmovnel %esi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

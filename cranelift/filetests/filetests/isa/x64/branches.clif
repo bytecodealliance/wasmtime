@@ -316,7 +316,7 @@ block2:
 ;   movl $0x2, %r10d
 ;   movl %edi, %r11d
 ;   cmpl %r10d, %r11d
-;   cmovbl  %r11d, %r10d, %r10d
+;   cmovbl %r11d, %r10d
 ;   br_table %r10, %rcx, %rdx
 ; block1:
 ;   jmp     label4
@@ -963,7 +963,7 @@ block5(v5: i32):
 ;   movl $0x4, %eax
 ;   movl %edi, %ecx
 ;   cmpl %eax, %ecx
-;   cmovbl  %ecx, %eax, %eax
+;   cmovbl %ecx, %eax
 ;   br_table %rax, %r9, %r10
 ; block1:
 ;   jmp     label4
@@ -1050,7 +1050,7 @@ block1(v5: i32):
 ;   movl $0x4, %esi
 ;   movl %edi, %edi
 ;   cmpl %esi, %edi
-;   cmovbl  %edi, %esi, %esi
+;   cmovbl %edi, %esi
 ;   br_table %rsi, %r10, %r9
 ; block1:
 ;   jmp     label6

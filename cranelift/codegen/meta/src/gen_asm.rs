@@ -301,6 +301,10 @@ enum IsleConstructor {
     /// This constructor produces no results, but the flags register is written,
     /// so a `ProducesFlags` value is returned with a side effect.
     ProducesFlagsSideEffect,
+
+    /// This instructions reads EFLAGS, and returns a single gpr, so this
+    /// creates `ConsumesFlags.ConsumesFlagsReturnsReg`.
+    ConsumesFlagsReturnsGpr,
 }
 
 impl IsleConstructor {
@@ -314,6 +318,7 @@ impl IsleConstructor {
                 "SideEffectNoResult"
             }
             IsleConstructor::ProducesFlagsSideEffect => "ProducesFlags",
+            IsleConstructor::ConsumesFlagsReturnsGpr => "ConsumesFlags",
         }
     }
 
@@ -328,6 +333,7 @@ impl IsleConstructor {
             IsleConstructor::RetXmm => "emit_ret_xmm",
             IsleConstructor::RetValueRegs => "emit_ret_value_regs",
             IsleConstructor::ProducesFlagsSideEffect => "asm_produce_flags_side_effect",
+            IsleConstructor::ConsumesFlagsReturnsGpr => "asm_consumes_flags_returns_gpr",
         }
     }
 
@@ -339,7 +345,8 @@ impl IsleConstructor {
             | IsleConstructor::RetXmm
             | IsleConstructor::RetValueRegs
             | IsleConstructor::NoReturnSideEffect
-            | IsleConstructor::ProducesFlagsSideEffect => "",
+            | IsleConstructor::ProducesFlagsSideEffect
+            | IsleConstructor::ConsumesFlagsReturnsGpr => "",
         }
     }
 
@@ -355,7 +362,8 @@ impl IsleConstructor {
             | IsleConstructor::RetXmm
             | IsleConstructor::RetValueRegs
             | IsleConstructor::NoReturnSideEffect
-            | IsleConstructor::ProducesFlagsSideEffect => false,
+            | IsleConstructor::ProducesFlagsSideEffect
+            | IsleConstructor::ConsumesFlagsReturnsGpr => false,
         }
     }
 }
@@ -371,7 +379,7 @@ fn isle_param_for_ctor(op: &Operand, ctor: IsleConstructor) -> String {
         OperandKind::RegMem(_) if op.mutability.is_write() => match ctor {
             IsleConstructor::RetMemorySideEffect => "SyntheticAmode".to_string(),
             IsleConstructor::NoReturnSideEffect => "".to_string(),
-            IsleConstructor::RetGpr => "Gpr".to_string(),
+            IsleConstructor::RetGpr | IsleConstructor::ConsumesFlagsReturnsGpr => "Gpr".to_string(),
             IsleConstructor::RetXmm => "Xmm".to_string(),
             IsleConstructor::RetValueRegs => "ValueRegs".to_string(),
             IsleConstructor::ProducesFlagsSideEffect => todo!(),
@@ -411,45 +419,66 @@ fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
                 // One read/write register output? Output the instruction
                 // and that register.
                 Reg(r) | FixedReg(r) => match r.reg_class().unwrap() {
-                    RegClass::Xmm => vec![IsleConstructor::RetXmm],
-                    RegClass::Gpr => vec![IsleConstructor::RetGpr],
+                    RegClass::Xmm => {
+                        assert!(!format.eflags.is_read());
+                        vec![IsleConstructor::RetXmm]
+                    }
+                    RegClass::Gpr => {
+                        if format.eflags.is_read() {
+                            vec![IsleConstructor::ConsumesFlagsReturnsGpr]
+                        } else {
+                            vec![IsleConstructor::RetGpr]
+                        }
+                    }
                 },
                 // One read/write memory operand? Output a side effect.
-                Mem(_) => vec![IsleConstructor::RetMemorySideEffect],
+                Mem(_) => {
+                    assert!(!format.eflags.is_read());
+                    vec![IsleConstructor::RetMemorySideEffect]
+                }
                 // One read/write reg-mem output? We need constructors for
                 // both variants.
-                RegMem(rm) => match rm.reg_class().unwrap() {
-                    RegClass::Xmm => vec![
-                        IsleConstructor::RetXmm,
-                        IsleConstructor::RetMemorySideEffect,
-                    ],
-                    RegClass::Gpr => vec![
-                        IsleConstructor::RetGpr,
-                        IsleConstructor::RetMemorySideEffect,
-                    ],
-                },
+                RegMem(rm) => {
+                    assert!(!format.eflags.is_read());
+                    match rm.reg_class().unwrap() {
+                        RegClass::Xmm => vec![
+                            IsleConstructor::RetXmm,
+                            IsleConstructor::RetMemorySideEffect,
+                        ],
+                        RegClass::Gpr => vec![
+                            IsleConstructor::RetGpr,
+                            IsleConstructor::RetMemorySideEffect,
+                        ],
+                    }
+                }
             },
         },
-        [one, two] => match (one.location.kind(), two.location.kind()) {
-            (FixedReg(_) | Reg(_), FixedReg(_) | Reg(_)) => {
-                vec![IsleConstructor::RetValueRegs]
+        [one, two] => {
+            assert!(!format.eflags.is_read());
+            match (one.location.kind(), two.location.kind()) {
+                (FixedReg(_) | Reg(_), FixedReg(_) | Reg(_)) => {
+                    vec![IsleConstructor::RetValueRegs]
+                }
+                (Reg(r), Mem(_)) | (Mem(_) | RegMem(_), Reg(r) | FixedReg(r)) => {
+                    assert!(matches!(r.reg_class().unwrap(), RegClass::Gpr));
+                    vec![IsleConstructor::RetGpr]
+                }
+                other => panic!("unsupported number of write operands {other:?}"),
             }
-            (Reg(r), Mem(_)) | (Mem(_) | RegMem(_), Reg(r) | FixedReg(r)) => {
-                assert!(matches!(r.reg_class().unwrap(), RegClass::Gpr));
-                vec![IsleConstructor::RetGpr]
+        }
+        [one, two, three] => {
+            assert!(!format.eflags.is_read());
+            match (
+                one.location.kind(),
+                two.location.kind(),
+                three.location.kind(),
+            ) {
+                (FixedReg(_), FixedReg(_), Mem(_)) => {
+                    vec![IsleConstructor::RetValueRegs]
+                }
+                other => panic!("unsupported number of write operands {other:?}"),
             }
-            other => panic!("unsupported number of write operands {other:?}"),
-        },
-        [one, two, three] => match (
-            one.location.kind(),
-            two.location.kind(),
-            three.location.kind(),
-        ) {
-            (FixedReg(_), FixedReg(_), Mem(_)) => {
-                vec![IsleConstructor::RetValueRegs]
-            }
-            other => panic!("unsupported number of write operands {other:?}"),
-        },
+        }
 
         other => panic!("unsupported number of write operands {other:?}"),
     }
@@ -563,7 +592,9 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
                     IsleConstructor::RetMemorySideEffect | IsleConstructor::NoReturnSideEffect => {
                         unreachable!()
                     }
-                    IsleConstructor::RetGpr => "(temp_writable_gpr)",
+                    IsleConstructor::RetGpr | IsleConstructor::ConsumesFlagsReturnsGpr => {
+                        "(temp_writable_gpr)"
+                    }
                     IsleConstructor::RetXmm => "(temp_writable_xmm)",
                     IsleConstructor::RetValueRegs | IsleConstructor::ProducesFlagsSideEffect => {
                         todo!()
