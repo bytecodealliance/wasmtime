@@ -864,9 +864,9 @@ block0(v0: i128):
 ;   movabsq $0x5555555555555555, %rcx
 ;   movq %rsi, %rdx
 ;   andq %rcx, %rdx
-;   shrq $0x1, %rsi
+;   shrq $1, %rsi
 ;   andq %rcx, %rsi
-;   shlq $0x1, %rdx
+;   shlq $1, %rdx
 ;   orq %rsi, %rdx
 ;   movabsq $0x3333333333333333, %r9
 ;   movq %rdx, %r10
@@ -905,9 +905,9 @@ block0(v0: i128):
 ;   movabsq $0x5555555555555555, %rdx
 ;   movq %rdi, %rcx
 ;   andq %rdx, %rcx
-;   shrq $0x1, %rdi
+;   shrq $1, %rdi
 ;   andq %rdx, %rdi
-;   shlq $0x1, %rcx
+;   shlq $1, %rcx
 ;   orq %rdi, %rcx
 ;   movabsq $0x3333333333333333, %rdx
 ;   movq %rcx, %r8
