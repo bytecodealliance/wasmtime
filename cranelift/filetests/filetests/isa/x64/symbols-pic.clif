@@ -134,7 +134,7 @@ block0:
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq (%rip), %rax ; reloc_external GOTPCRel4 %global0 -4
-;   subq $0x7b, %rax
+;   addq $-0x7b, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -217,7 +217,7 @@ block0:
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   movq (%rip), %rax ; reloc_external GOTPCRel4 %global0 -4
-;   subq $0x7b, %rax
+;   addq $-0x7b, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

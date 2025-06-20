@@ -2085,49 +2085,37 @@ pub(crate) fn emit(
             offset,
             distance,
         } => {
-            let dst = dst.to_reg();
-
+            let name = &**name;
+            let riprel = asm::Amode::RipRelative {
+                target: asm::DeferredTarget::None,
+            };
             if info.flags.is_pic() {
                 // Generates: movq symbol@GOTPCREL(%rip), %dst
-                let enc_dst = int_reg_enc(dst);
-                sink.put1(0x48 | ((enc_dst >> 3) & 1) << 2);
-                sink.put1(0x8B);
-                sink.put1(0x05 | ((enc_dst & 7) << 3));
-                emit_reloc(sink, Reloc::X86GOTPCRel4, name, -4);
-                sink.put4(0);
-                // Offset in the relocation above applies to the address of the *GOT entry*, not
-                // the loaded address; so we emit a separate add or sub instruction if needed.
-                if *offset < 0 {
-                    assert!(*offset >= -i32::MAX as i64);
-                    sink.put1(0x48 | ((enc_dst >> 3) & 1));
-                    sink.put1(0x81);
-                    sink.put1(0xe8 | (enc_dst & 7));
-                    sink.put4((-*offset) as u32);
-                } else if *offset > 0 {
-                    assert!(*offset <= i32::MAX as i64);
-                    sink.put1(0x48 | ((enc_dst >> 3) & 1));
-                    sink.put1(0x81);
-                    sink.put1(0xc0 | (enc_dst & 7));
-                    sink.put4(*offset as u32);
+                asm::inst::movq_rm::new(*dst, riprel).emit(sink, info, state);
+                let cur = sink.cur_offset();
+                sink.add_reloc_at_offset(cur - 4, Reloc::X86GOTPCRel4, name, -4);
+
+                // Offset in the relocation above applies to the address of the
+                // *GOT entry*, not the loaded address; so we emit a separate
+                // add instruction if needed.
+                let offset = i32::try_from(*offset).unwrap();
+                if offset != 0 {
+                    asm::inst::addq_mi_sxl::new(PairedGpr::from(*dst), offset)
+                        .emit(sink, info, state);
                 }
             } else if distance == &RelocDistance::Near {
-                // If we know the distance to the name is within 2GB (e.g., a module-local function),
-                // we can generate a RIP-relative address, with a relocation.
-                // Generates: lea $name(%rip), $dst
-                let enc_dst = int_reg_enc(dst);
-                sink.put1(0x48 | ((enc_dst >> 3) & 1) << 2);
-                sink.put1(0x8D);
-                sink.put1(0x05 | ((enc_dst & 7) << 3));
-                emit_reloc(sink, Reloc::X86CallPCRel4, name, -4);
-                sink.put4(0);
+                // If we know the distance to the name is within 2GB (e.g., a
+                // module-local function), we can generate a RIP-relative
+                // address, with a relocation.
+                asm::inst::leaq_rm::new(*dst, riprel).emit(sink, info, state);
+                let cur = sink.cur_offset();
+                sink.add_reloc_at_offset(cur - 4, Reloc::X86CallPCRel4, name, *offset - 4);
             } else {
-                // The full address can be encoded in the register, with a relocation.
-                // Generates: movabsq $name, %dst
-                let enc_dst = int_reg_enc(dst);
-                sink.put1(0x48 | ((enc_dst >> 3) & 1));
-                sink.put1(0xB8 | (enc_dst & 7));
-                emit_reloc(sink, Reloc::Abs8, name, *offset);
-                sink.put8(0);
+                // The full address can be encoded in the register, with a
+                // relocation.
+                asm::inst::movabsq_oi::new(*dst, 0).emit(sink, info, state);
+                let cur = sink.cur_offset();
+                sink.add_reloc_at_offset(cur - 8, Reloc::Abs8, name, *offset);
             }
         }
 

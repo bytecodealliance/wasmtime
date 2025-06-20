@@ -287,7 +287,7 @@ pub(crate) fn check(
         }
 
         Inst::LoadExtName { dst, .. } => {
-            ensure_no_fact(vcode, dst.to_reg())?;
+            ensure_no_fact(vcode, *dst.to_reg())?;
             Ok(())
         }
 

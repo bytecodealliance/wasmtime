@@ -185,7 +185,7 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   leaq (%rip), %rax ; reloc_external CallPCRel4 %global0 -4
+;   leaq (%rip), %rax ; reloc_external CallPCRel4 %global0 119
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -212,7 +212,7 @@ block0:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   leaq (%rip), %rax ; reloc_external CallPCRel4 %global0 -4
+;   leaq (%rip), %rax ; reloc_external CallPCRel4 %global0 -127
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

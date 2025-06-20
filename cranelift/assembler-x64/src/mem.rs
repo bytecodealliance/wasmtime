@@ -170,6 +170,7 @@ impl std::fmt::LowerHex for AmodeOffsetPlusKnownOffset {
 pub enum DeferredTarget {
     Label(Label),
     Constant(Constant),
+    None,
 }
 
 impl<R: AsReg> std::fmt::Display for Amode<R> {
@@ -469,11 +470,14 @@ pub fn emit_modrm_sib_disp<R: AsReg>(
             sink.put1(encode_modrm(0b00, enc_g & 7, 0b101));
 
             let offset = sink.current_offset();
-            let target = match target {
-                DeferredTarget::Label(label) => label,
-                DeferredTarget::Constant(constant) => sink.get_label_for_constant(constant),
-            };
-            sink.use_label_at_offset(offset, target);
+            match target {
+                DeferredTarget::Label(label) => sink.use_label_at_offset(offset, label),
+                DeferredTarget::Constant(constant) => {
+                    let label = sink.get_label_for_constant(constant);
+                    sink.use_label_at_offset(offset, label);
+                }
+                DeferredTarget::None => {}
+            }
 
             // N.B.: some instructions (XmmRmRImm format for example)
             // have bytes *after* the RIP-relative offset. The
