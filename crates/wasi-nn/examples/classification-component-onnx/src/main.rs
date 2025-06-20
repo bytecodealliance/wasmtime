@@ -42,16 +42,19 @@ fn main() {
         TensorType::Fp32,
         &data,
     );
-    exec_context.set_input("data", tensor).unwrap();
-    println!("Set input tensor");
-
+    let input_tensor = vec!(("data".to_string(), tensor));
     // Execute the inferencing
-    exec_context.compute().unwrap();
+    let output_tensor_vec = exec_context.compute(input_tensor).unwrap();
     println!("Executed graph inference");
 
-    // Get the inferencing result (bytes) and convert it to f32
-    println!("Getting inferencing output");
-    let output_data = exec_context.get_output("squeezenet0_flatten0_reshape0").unwrap().data();
+    let output_tensor = output_tensor_vec.iter().find_map(|(tensor_name, tensor)| {
+        if tensor_name == "squeezenet0_flatten0_reshape0" {
+            Some(tensor)
+        } else {
+            None
+        }
+    });
+    let output_data = output_tensor.expect("No output tensor").data();
 
     println!("Retrieved output data with length: {}", output_data.len());
     let output_f32 = bytes_to_f32_vec(output_data);

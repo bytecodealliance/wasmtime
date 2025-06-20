@@ -12,7 +12,7 @@ pub fn main() -> Result<()> {
     )?;
     let tensor = fs::read("fixture/kitten.tensor")
         .context("the tensor file to be mapped to the fixture directory")?;
-    let output_buffer = wit::classify(graph, ("input", tensor), "output")?;
+    let output_buffer = wit::classify(graph, ("input", tensor))?;
     let result = softmax(output_buffer);
     let top_five = &sort_results(&result)[..5];
     assert_eq!(top_five[0].class_id(), 281);

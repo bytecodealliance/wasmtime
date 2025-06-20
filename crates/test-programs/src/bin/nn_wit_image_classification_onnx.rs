@@ -12,7 +12,7 @@ pub fn main() -> Result<()> {
     )?;
     let tensor = fs::read("fixture/000000062808.rgb")
         .context("the tensor file to be mapped to the fixture directory")?;
-    let results = wit::classify(graph, ("input", tensor), "output")?;
+    let results = wit::classify(graph, ("input", tensor))?;
     let top_five = &sort_results(&results)[..5];
     // 963 is "meat loaf, meatloaf."
     // https://github.com/onnx/models/blob/bec48b6a70e5e9042c0badbaafefe4454e072d08/validated/vision/classification/synset.txt#L963
