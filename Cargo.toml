@@ -234,7 +234,7 @@ wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "35.0.0" }
 wasmtime-wasi-config = { path = "crates/wasi-config", version = "35.0.0" }
 wasmtime-wasi-keyvalue = { path = "crates/wasi-keyvalue", version = "35.0.0" }
 wasmtime-wasi-threads = { path = "crates/wasi-threads", version = "35.0.0" }
-wasmtime-wasi-tls = { path = "crates/wasi-tls", version = "35.0.0" }
+wasmtime-wasi-tls = { path = "crates/wasi-tls", version = "35.0.0", default-features = false }
 wasmtime-wast = { path = "crates/wast", version = "=35.0.0" }
 
 # Internal Wasmtime-specific crates.
@@ -399,6 +399,8 @@ ittapi = "0.4.0"
 libm = "0.2.7"
 tokio-rustls = "0.25.0"
 rustls = "0.22.0"
+tokio-native-tls = "0.3.1"
+native-tls = "0.2.11"
 webpki-roots = "0.26.0"
 itertools = "0.14.0"
 base64 = "0.22.1"
@@ -437,6 +439,7 @@ default = [
   "wasi-config",
   "wasi-keyvalue",
   "wasi-tls",
+  "wasi-tls-rustls",
 
   # Most features of Wasmtime are enabled by default.
   "wat",
@@ -477,6 +480,7 @@ trace-log = ["wasmtime/trace-log"]
 memory-protection-keys = ["wasmtime-cli-flags/memory-protection-keys"]
 profile-pulley = ["wasmtime/profile-pulley"]
 component-model-async = ["wasmtime-cli-flags/component-model-async", "component-model"]
+wasi-tls-nativetls = ["wasi-tls", "wasmtime-wasi-tls/nativetls"]
 
 # This feature, when enabled, will statically compile out all logging statements
 # throughout Wasmtime and its dependencies.
@@ -489,6 +493,7 @@ disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 # the internal mapping for what they enable in Wasmtime itself.
 wasi-nn = ["dep:wasmtime-wasi-nn"]
 wasi-tls = ["dep:wasmtime-wasi-tls"]
+wasi-tls-rustls = ["wasi-tls", "wasmtime-wasi-tls/rustls"]
 wasi-threads = ["dep:wasmtime-wasi-threads", "threads"]
 wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper"]
 wasi-config = ["dep:wasmtime-wasi-config"]

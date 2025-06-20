@@ -33,7 +33,7 @@ use wasmtime_wasi_http::{
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 
 #[cfg(feature = "wasi-tls")]
-use wasmtime_wasi_tls::WasiTlsCtx;
+use wasmtime_wasi_tls::{WasiTls, WasiTlsCtx};
 
 fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
@@ -993,11 +993,17 @@ impl RunCommand {
                                 h.preview2_ctx.as_mut().expect("wasip2 is not configured");
                             let preview2_ctx =
                                 Arc::get_mut(preview2_ctx).unwrap().get_mut().unwrap();
-                            WasiTlsCtx::new(preview2_ctx.table())
+                            WasiTls::new(
+                                Arc::get_mut(h.wasi_tls.as_mut().unwrap()).unwrap(),
+                                preview2_ctx.table(),
+                            )
                         })?;
+                        self.set_wasi_tls_ctx(store)?;
                     }
                 }
             }
+        } else if self.run.common.wasi.tls_provider.is_some() {
+            bail!("`tls-provider` option requires `tls` to be enabled.");
         }
 
         Ok(())
@@ -1059,6 +1065,30 @@ impl RunCommand {
         Ok(())
     }
 
+    #[cfg(all(feature = "wasi-tls", feature = "component-model",))]
+    fn set_wasi_tls_ctx(&self, store: &mut Store<Host>) -> Result<()> {
+        use wasmtime_wasi_tls::*;
+
+        let provider_name = self.run.common.wasi.tls_provider.as_deref();
+        let provider: Box<dyn TlsProvider> = match provider_name {
+            None => Box::new(DefaultProvider::default()),
+            #[cfg(feature = "wasi-tls-rustls")]
+            Some("rustls") => Box::new(RustlsProvider::default()),
+            #[cfg(feature = "wasi-tls-nativetls")]
+            Some("nativetls") => Box::new(NativeTlsProvider::default()),
+            Some(p) => {
+                bail!(
+                    "Unknown TLS provider: {p}. Either the option does not exist or the binary is not compiled with this feature.",
+                );
+            }
+        };
+
+        let ctx = WasiTlsCtxBuilder::new().provider(provider).build();
+
+        store.data_mut().wasi_tls = Some(Arc::new(ctx));
+        Ok(())
+    }
+
     #[cfg(feature = "wasi-nn")]
     fn collect_preloaded_nn_graphs(
         &self,
@@ -1105,6 +1135,8 @@ struct Host {
     wasi_config: Option<Arc<WasiConfigVariables>>,
     #[cfg(feature = "wasi-keyvalue")]
     wasi_keyvalue: Option<Arc<WasiKeyValueCtx>>,
+    #[cfg(feature = "wasi-tls")]
+    wasi_tls: Option<Arc<WasiTlsCtx>>,
 }
 
 impl Host {
