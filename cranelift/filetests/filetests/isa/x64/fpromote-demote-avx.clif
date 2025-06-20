@@ -46,7 +46,7 @@ block0(v1: i64, v2: f32):
 ;   subq $0x10, %rsp
 ; block0:
 ;   lea     rsp(0 + virtual offset), %r8
-;   vmovss  %xmm0, 0(%r8)
+;   vmovss %xmm0, (%r8)
 ;   uninit  %xmm4
 ;   vxorpd  %xmm4, %xmm4, %xmm6
 ;   vcvtss2sd (%r8), %xmm6, %xmm0
@@ -115,7 +115,7 @@ block0(v1: i64, v2: f64):
 ;   subq $0x10, %rsp
 ; block0:
 ;   lea     rsp(0 + virtual offset), %r8
-;   vmovsd  %xmm0, 0(%r8)
+;   vmovsd %xmm0, (%r8)
 ;   uninit  %xmm4
 ;   vxorps  %xmm4, %xmm4, %xmm6
 ;   vcvtsd2ss (%r8), %xmm6, %xmm0

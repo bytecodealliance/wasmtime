@@ -240,7 +240,7 @@ block0(v0: f32x4, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vmovss  %xmm0, 0(%rdi)
+;   vmovss %xmm0, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -292,7 +292,7 @@ block0(v0: f64x2, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vmovsd  %xmm0, 0(%rdi)
+;   vmovsd %xmm0, (%rdi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
