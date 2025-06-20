@@ -444,18 +444,18 @@ fn publish(krate: &Crate) -> bool {
 
     // First make sure the crate isn't already published at this version. This
     // script may be re-run and there's no need to re-attempt previous work.
-    let output = curl(&format!(
+    let Some(output) = curl(&format!(
         "https://crates.io/api/v1/crates/{}/versions",
         krate.name
-    ));
-    if let Some(output) = output {
-        if output.contains(&format!("\"num\":\"{}\"", krate.version)) {
-            println!(
-                "skip publish {} because {} is already published",
-                krate.name, krate.version,
-            );
-            return true;
-        }
+    )) else {
+        return false;
+    };
+    if output.contains(&format!("\"num\":\"{}\"", krate.version)) {
+        println!(
+            "skip publish {} because {} is already published",
+            krate.name, krate.version,
+        );
+        return true;
     }
 
     let status = cmd_status(
@@ -472,18 +472,18 @@ fn publish(krate: &Crate) -> bool {
     // After we've published then make sure that the `wasmtime-publish` group is
     // added to this crate for future publications. If it's already present
     // though we can skip the `cargo owner` modification.
-    let output = curl(&format!(
+    let Some(output) = curl(&format!(
         "https://crates.io/api/v1/crates/{}/owners",
         krate.name
-    ));
-    if let Some(output) = output {
-        if output.contains("wasmtime-publish") {
-            println!(
-                "wasmtime-publish already listed as an owner of {}",
-                krate.name
-            );
-            return true;
-        }
+    )) else {
+        return false;
+    };
+    if output.contains("wasmtime-publish") {
+        println!(
+            "wasmtime-publish already listed as an owner of {}",
+            krate.name
+        );
+        return true;
     }
 
     // Note that the status is ignored here. This fails most of the time because
