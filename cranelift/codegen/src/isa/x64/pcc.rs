@@ -4,9 +4,7 @@ use crate::ir::pcc::*;
 use crate::ir::types::*;
 use crate::isa::x64::args::AvxOpcode;
 use crate::isa::x64::inst::Inst;
-use crate::isa::x64::inst::args::{
-    Amode, CC, Gpr, RegMem, RegMemImm, SyntheticAmode, ToWritableReg,
-};
+use crate::isa::x64::inst::args::{Amode, Gpr, RegMem, RegMemImm, SyntheticAmode, ToWritableReg};
 use crate::machinst::pcc::*;
 use crate::machinst::{InsnIndex, VCode};
 use crate::machinst::{Reg, Writable};
@@ -50,7 +48,7 @@ pub(crate) fn check(
     // can't exhaustively enumerate all flags-effecting ops; so take
     // the `cmp_state` here and perhaps use it below but don't let it
     // remain.
-    let cmp_flags = state.cmp_flags.take();
+    let _cmp_flags = state.cmp_flags.take();
 
     match vcode[inst_idx] {
         Inst::Args { .. } => {
@@ -76,46 +74,6 @@ pub(crate) fn check(
         Inst::MovToPReg { .. } => Ok(()),
 
         Inst::Setcc { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
-
-        Inst::Cmove {
-            size,
-            dst,
-            ref consequent,
-            alternative,
-            cc,
-            ..
-        } => match <&RegMem>::from(consequent) {
-            RegMem::Mem { addr } => {
-                check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
-                Ok(())
-            }
-            RegMem::Reg { reg } if (cc == CC::NB || cc == CC::NBE) && cmp_flags.is_some() => {
-                let (cmp_lhs, cmp_rhs) = cmp_flags.unwrap();
-                trace!("lhs = {:?} rhs = {:?}", cmp_lhs, cmp_rhs);
-                let reg = *reg;
-                check_output(ctx, vcode, dst.to_writable_reg(), &[], |vcode| {
-                    // See comments in aarch64::pcc CSel for more details on this.
-                    let in_true = get_fact_or_default(vcode, reg, 64);
-                    let in_true_kind = match cc {
-                        CC::NB => InequalityKind::Loose,
-                        CC::NBE => InequalityKind::Strict,
-                        _ => unreachable!(),
-                    };
-                    let in_true = ctx.apply_inequality(&in_true, &cmp_lhs, &cmp_rhs, in_true_kind);
-                    let in_false = get_fact_or_default(vcode, alternative.to_reg(), 64);
-                    let in_false_kind = match cc {
-                        CC::NB => InequalityKind::Strict,
-                        CC::NBE => InequalityKind::Loose,
-                        _ => unreachable!(),
-                    };
-                    let in_false =
-                        ctx.apply_inequality(&in_false, &cmp_rhs, &cmp_lhs, in_false_kind);
-                    let union = ctx.union(&in_true, &in_false);
-                    clamp_range(ctx, 64, 64, union)
-                })
-            }
-            _ => undefined_result(ctx, vcode, dst, 64, 64),
-        },
 
         Inst::XmmCmove { dst, .. } => ensure_no_fact(vcode, dst.to_writable_reg().to_reg()),
 

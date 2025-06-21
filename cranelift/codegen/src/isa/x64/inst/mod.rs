@@ -79,7 +79,6 @@ impl Inst {
             | Inst::ReturnCallUnknown { .. }
             | Inst::CheckedSRemSeq { .. }
             | Inst::CheckedSRemSeq8 { .. }
-            | Inst::Cmove { .. }
             | Inst::CvtFloatToSintSeq { .. }
             | Inst::CvtFloatToUintSeq { .. }
             | Inst::CvtUint64ToFloatSeq { .. }
@@ -350,22 +349,6 @@ impl Inst {
         Inst::TrapIf { cc, trap_code }
     }
 
-    pub(crate) fn cmove(size: OperandSize, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
-        debug_assert!(size.is_one_of(&[
-            OperandSize::Size16,
-            OperandSize::Size32,
-            OperandSize::Size64
-        ]));
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Inst::Cmove {
-            size,
-            cc,
-            consequent: GprMem::unwrap_new(src),
-            alternative: Gpr::unwrap_new(dst.to_reg()),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-        }
-    }
-
     pub(crate) fn call_known(info: Box<CallInfo<ExternalName>>) -> Inst {
         Inst::CallKnown { info }
     }
@@ -508,15 +491,6 @@ impl PrettyPrint for Inst {
 
         fn ljustify2(s1: String, s2: String) -> String {
             ljustify(s1 + &s2)
-        }
-
-        fn suffix_bwlq(size: OperandSize) -> String {
-            match size {
-                OperandSize::Size8 => "b".to_string(),
-                OperandSize::Size16 => "w".to_string(),
-                OperandSize::Size32 => "l".to_string(),
-                OperandSize::Size64 => "q".to_string(),
-            }
         }
 
         match self {
@@ -844,20 +818,6 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 1);
                 let op = ljustify2("set".to_string(), cc.to_string());
                 format!("{op} {dst}")
-            }
-
-            Inst::Cmove {
-                size,
-                cc,
-                consequent,
-                alternative,
-                dst,
-            } => {
-                let alternative = pretty_print_reg(alternative.to_reg(), size.to_bytes());
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let consequent = consequent.pretty_print(size.to_bytes());
-                let op = ljustify(format!("cmov{}{}", cc.to_string(), suffix_bwlq(*size)));
-                format!("{op} {consequent}, {alternative}, {dst}")
             }
 
             Inst::XmmCmove {
@@ -1361,16 +1321,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
 
         Inst::Setcc { dst, .. } => {
             collector.reg_def(dst);
-        }
-        Inst::Cmove {
-            consequent,
-            alternative,
-            dst,
-            ..
-        } => {
-            collector.reg_use(alternative);
-            collector.reg_reuse_def(dst, 0);
-            consequent.get_operands(collector);
         }
         Inst::XmmCmove {
             consequent,

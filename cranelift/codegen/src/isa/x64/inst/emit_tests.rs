@@ -96,7 +96,7 @@ fn test_x64_emit() {
     let rcx = regs::rcx();
     let rdx = regs::rdx();
     let rsi = regs::rsi();
-    let rdi = regs::rdi();
+    let _rdi = regs::rdi();
     let rsp = regs::rsp();
     let rbp = regs::rbp();
     let r8 = regs::r8();
@@ -135,7 +135,7 @@ fn test_x64_emit() {
     let w_r9 = Writable::<Reg>::from_reg(r9);
     let w_r11 = Writable::<Reg>::from_reg(r11);
     let w_r14 = Writable::<Reg>::from_reg(r14);
-    let w_r15 = Writable::<Reg>::from_reg(r15);
+    let _w_r15 = Writable::<Reg>::from_reg(r15);
 
     let w_xmm0 = Writable::<Reg>::from_reg(xmm0);
     let w_xmm1 = Writable::<Reg>::from_reg(xmm1);
@@ -168,59 +168,6 @@ fn test_x64_emit() {
     insns.push((Inst::setcc(CC::LE, w_r14), "410F9EC6", "setle   %r14b"));
     insns.push((Inst::setcc(CC::P, w_r9), "410F9AC1", "setp    %r9b"));
     insns.push((Inst::setcc(CC::NP, w_r8), "410F9BC0", "setnp   %r8b"));
-
-    // ========================================================
-    // Cmove
-    insns.push((
-        Inst::cmove(OperandSize::Size16, CC::O, RegMem::reg(rdi), w_rsi),
-        "660F40F7",
-        "cmovow  %di, %si, %si",
-    ));
-    insns.push((
-        Inst::cmove(
-            OperandSize::Size16,
-            CC::NO,
-            RegMem::mem(Amode::imm_reg_reg_shift(
-                37,
-                Gpr::unwrap_new(rdi),
-                Gpr::unwrap_new(rsi),
-                2,
-            )),
-            w_r15,
-        ),
-        "66440F417CB725",
-        "cmovnow 37(%rdi,%rsi,4), %r15w, %r15w",
-    ));
-    insns.push((
-        Inst::cmove(OperandSize::Size32, CC::LE, RegMem::reg(rdi), w_rsi),
-        "0F4EF7",
-        "cmovlel %edi, %esi, %esi",
-    ));
-    insns.push((
-        Inst::cmove(
-            OperandSize::Size32,
-            CC::NLE,
-            RegMem::mem(Amode::imm_reg(0, r15)),
-            w_rsi,
-        ),
-        "410F4F37",
-        "cmovnlel 0(%r15), %esi, %esi",
-    ));
-    insns.push((
-        Inst::cmove(OperandSize::Size64, CC::Z, RegMem::reg(rdi), w_r14),
-        "4C0F44F7",
-        "cmovzq  %rdi, %r14, %r14",
-    ));
-    insns.push((
-        Inst::cmove(
-            OperandSize::Size64,
-            CC::NZ,
-            RegMem::mem(Amode::imm_reg(13, rdi)),
-            w_r14,
-        ),
-        "4C0F45770D",
-        "cmovnzq 13(%rdi), %r14, %r14",
-    ));
 
     // ========================================================
     // CallKnown

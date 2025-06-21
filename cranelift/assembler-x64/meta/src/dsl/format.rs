@@ -601,6 +601,15 @@ pub enum Eflags {
 }
 
 impl Eflags {
+    /// Returns whether this represents a read of any bit in the EFLAGS
+    /// register.
+    pub fn is_read(&self) -> bool {
+        match self {
+            Eflags::None | Eflags::W => false,
+            Eflags::R | Eflags::RW => true,
+        }
+    }
+
     /// Returns whether this represents a writes to any bit in the EFLAGS
     /// register.
     pub fn is_write(&self) -> bool {

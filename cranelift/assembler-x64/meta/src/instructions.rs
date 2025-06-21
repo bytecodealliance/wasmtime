@@ -7,6 +7,7 @@ mod and;
 mod atomic;
 mod avg;
 mod bitmanip;
+mod cmov;
 mod cmp;
 mod cvt;
 mod div;
@@ -41,6 +42,7 @@ pub fn list() -> Vec<Inst> {
     all.extend(atomic::list());
     all.extend(avg::list());
     all.extend(bitmanip::list());
+    all.extend(cmov::list());
     all.extend(cmp::list());
     all.extend(cvt::list());
     all.extend(div::list());

@@ -46,13 +46,6 @@
        ;; =========================================
        ;; Conditional moves.
 
-       ;; GPR conditional move; overwrites the destination register.
-       (Cmove (size OperandSize)
-              (cc CC)
-              (consequent GprMem)
-              (alternative Gpr)
-              (dst WritableGpr))
-
        ;; XMM conditional move; overwrites the destination register.
        (XmmCmove (ty Type)
                  (cc CC)
@@ -1946,6 +1939,10 @@
 (rule (asm_consume_flags (AssemblerOutputs.RetGpr inst gpr))
       (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer inst gpr))
 
+(decl asm_consumes_flags_returns_gpr (AssemblerOutputs) ConsumesFlags)
+(rule (asm_consumes_flags_returns_gpr (AssemblerOutputs.RetGpr inst gpr))
+      (ConsumesFlags.ConsumesFlagsReturnsReg inst gpr))
+
 
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -2519,13 +2516,55 @@
 ;; Helper for creating `cmove` instructions. Note that these instructions do not
 ;; always result in a single emitted x86 instruction; e.g., XmmCmove uses jumps
 ;; to conditionally move the selected value into an XMM register.
+;;
+;; Also note that 8/16-bit conditional moves use the 32-bit instruction variant
+;; since that is semantically equivalent and helps break data dependencies by
+;; defining the entire register.
+;;
+;; Also note that the mnemonics used in `CC` don't always match those used in
+;; the instruction variants and that is intentiona. This is due to the fact
+;; that the Intel manual (and assemblers) support multiple mnemonics for the
+;; same instruction but disassemblers only print one mnemonic and that's the
+;; name used here.
 (decl cmove (Type CC GprMem Gpr) ConsumesFlags)
-(rule (cmove ty cc consequent alternative)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty)))
-        (ConsumesFlags.ConsumesFlagsReturnsReg
-         (MInst.Cmove size cc consequent alternative dst)
-         dst)))
+(rule 0 (cmove (fits_in_32 _) (CC.O) c a) (x64_cmovol_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NO) c a) (x64_cmovnol_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.B) c a) (x64_cmovbl_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NB) c a) (x64_cmovael_rm a c)) ;;  nb == ae
+(rule 0 (cmove (fits_in_32 _) (CC.Z) c a) (x64_cmovel_rm a c))   ;;   z ==  e
+(rule 0 (cmove (fits_in_32 _) (CC.NZ) c a) (x64_cmovnel_rm a c)) ;;  nz == ne
+(rule 0 (cmove (fits_in_32 _) (CC.BE) c a) (x64_cmovbel_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NBE) c a) (x64_cmoval_rm a c)) ;; nbe ==  a
+(rule 0 (cmove (fits_in_32 _) (CC.S) c a) (x64_cmovsl_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NS) c a) (x64_cmovnsl_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.L) c a) (x64_cmovll_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NL) c a) (x64_cmovgel_rm a c)) ;;  nl == ge
+(rule 0 (cmove (fits_in_32 _) (CC.LE) c a) (x64_cmovlel_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NLE) c a) (x64_cmovgl_rm a c)) ;; nle ==  g
+(rule 0 (cmove (fits_in_32 _) (CC.P) c a) (x64_cmovpl_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NP) c a) (x64_cmovnpl_rm a c))
+(rule 1 (cmove $I64 (CC.O) c a) (x64_cmovoq_rm a c))
+(rule 1 (cmove $I64 (CC.NO) c a) (x64_cmovnoq_rm a c))
+(rule 1 (cmove $I64 (CC.B) c a) (x64_cmovbq_rm a c))
+(rule 1 (cmove $I64 (CC.NB) c a) (x64_cmovaeq_rm a c)) ;;  nb == ae
+(rule 1 (cmove $I64 (CC.Z) c a) (x64_cmoveq_rm a c))   ;;   z ==  e
+(rule 1 (cmove $I64 (CC.NZ) c a) (x64_cmovneq_rm a c)) ;;  nz == ne
+(rule 1 (cmove $I64 (CC.BE) c a) (x64_cmovbeq_rm a c))
+(rule 1 (cmove $I64 (CC.NBE) c a) (x64_cmovaq_rm a c)) ;; nbe ==  a
+(rule 1 (cmove $I64 (CC.S) c a) (x64_cmovsq_rm a c))
+(rule 1 (cmove $I64 (CC.NS) c a) (x64_cmovnsq_rm a c))
+(rule 1 (cmove $I64 (CC.L) c a) (x64_cmovlq_rm a c))
+(rule 1 (cmove $I64 (CC.NL) c a) (x64_cmovgeq_rm a c)) ;;  nl == ge
+(rule 1 (cmove $I64 (CC.LE) c a) (x64_cmovleq_rm a c))
+(rule 1 (cmove $I64 (CC.NLE) c a) (x64_cmovgq_rm a c)) ;; nle ==  g
+(rule 1 (cmove $I64 (CC.P) c a) (x64_cmovpq_rm a c))
+(rule 1 (cmove $I64 (CC.NP) c a) (x64_cmovnpq_rm a c))
+
+(decl cmove128 (CC ValueRegs ValueRegs) ConsumesFlags)
+(rule (cmove128 cc cons alt)
+  (consumes_flags_concat
+    (cmove $I64 cc (value_regs_get_gpr cons 0) (value_regs_get_gpr alt 0))
+    (cmove $I64 cc (value_regs_get_gpr cons 1) (value_regs_get_gpr alt 1))))
 
 (decl cmove_xmm (Type CC Xmm Xmm) ConsumesFlags)
 (rule (cmove_xmm ty cc consequent alternative)
@@ -2539,25 +2578,7 @@
 ;; It also eliminates some `put_in_reg*` boilerplate in the lowering ISLE code.
 (decl cmove_from_values (Type CC Value Value) ConsumesFlags)
 (rule (cmove_from_values (is_multi_register_gpr_type $I128) cc consequent alternative)
-      (let ((cons ValueRegs consequent)
-            (alt ValueRegs alternative)
-            (dst1 WritableGpr (temp_writable_gpr))
-            (dst2 WritableGpr (temp_writable_gpr))
-            (size OperandSize (OperandSize.Size64))
-            (lower_cmove MInst (MInst.Cmove
-                                size cc
-                                (value_regs_get_gpr cons 0)
-                                (value_regs_get_gpr alt 0)
-                                dst1))
-            (upper_cmove MInst (MInst.Cmove
-                                size cc
-                                (value_regs_get_gpr cons 1)
-                                (value_regs_get_gpr alt 1)
-                                dst2)))
-        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
-         lower_cmove
-         upper_cmove
-         (value_regs dst1 dst2))))
+  (cmove128 cc consequent alternative))
 
 (rule (cmove_from_values (is_single_register_gpr_type ty) cc consequent alternative)
       (cmove ty cc consequent alternative))
@@ -2570,49 +2591,37 @@
 ;; emitted x86 instruction.
 (decl cmove_or (Type CC CC GprMem Gpr) ConsumesFlags)
 (rule (cmove_or ty cc1 cc2 consequent alternative)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (tmp WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (cmove1 MInst (MInst.Cmove size cc1 consequent alternative tmp))
-            (cmove2 MInst (MInst.Cmove size cc2 consequent tmp dst)))
-        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
-         cmove1
-         cmove2
-         dst)))
+  (let ((c1 ConsumesFlags (cmove ty cc1 consequent alternative))
+        (tmp Gpr (consumes_flags_get_reg c1))
+        (c2 ConsumesFlags (cmove ty cc2 consequent tmp)))
+    (consumes_flags_return_last c1 c2)))
 
 (decl cmove_or_xmm (Type CC CC Xmm Xmm) ConsumesFlags)
 (rule (cmove_or_xmm ty cc1 cc2 consequent alternative)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (tmp WritableXmm (temp_writable_xmm))
-            (cmove1 MInst (MInst.XmmCmove ty cc1 consequent alternative tmp))
-            (cmove2 MInst (MInst.XmmCmove ty cc2 consequent tmp dst)))
-        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
-         cmove1
-         cmove2
-         dst)))
+  (let ((c1 ConsumesFlags (cmove_xmm ty cc1 consequent alternative))
+        (tmp Xmm (consumes_flags_get_reg c1))
+        (c2 ConsumesFlags (cmove_xmm ty cc2 consequent tmp)))
+    (consumes_flags_return_last c1 c2)))
+
+(decl consumes_flags_return_last (ConsumesFlags ConsumesFlags) ConsumesFlags)
+(rule (consumes_flags_return_last
+        (ConsumesFlags.ConsumesFlagsReturnsReg inst1 _)
+        (ConsumesFlags.ConsumesFlagsReturnsReg inst2 dst))
+  (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs inst1 inst2 dst))
+(rule (consumes_flags_return_last
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs i1 i2 _)
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs i3 i4 dst))
+  (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs i1 i2 i3 i4 dst))
 
 ;; Helper for creating `cmove_or` instructions directly from values. This allows
 ;; us to special-case the `I128` types and default to the `cmove_or` helper
 ;; otherwise.
 (decl cmove_or_from_values (Type CC CC Value Value) ConsumesFlags)
 (rule (cmove_or_from_values (is_multi_register_gpr_type $I128) cc1 cc2 consequent alternative)
-      (let ((cons ValueRegs consequent)
-            (alt ValueRegs alternative)
-            (dst1 WritableGpr (temp_writable_gpr))
-            (dst2 WritableGpr (temp_writable_gpr))
-            (tmp1 WritableGpr (temp_writable_gpr))
-            (tmp2 WritableGpr (temp_writable_gpr))
-            (size OperandSize (OperandSize.Size64))
-            (cmove1 MInst (MInst.Cmove size cc1 (value_regs_get_gpr cons 0) (value_regs_get_gpr alt 0) tmp1))
-            (cmove2 MInst (MInst.Cmove size cc2 (value_regs_get_gpr cons 0) tmp1 dst1))
-            (cmove3 MInst (MInst.Cmove size cc1 (value_regs_get_gpr cons 1) (value_regs_get_gpr alt 1) tmp2))
-            (cmove4 MInst (MInst.Cmove size cc2 (value_regs_get_gpr cons 1) tmp2 dst2)))
-        (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs
-         cmove1
-         cmove2
-         cmove3
-         cmove4
-         (value_regs dst1 dst2))))
+  (let ((c1 ConsumesFlags (cmove128 cc1 consequent alternative))
+        (tmp ValueRegs (consumes_flags_get_regs c1))
+        (c2 ConsumesFlags (cmove128 cc2 consequent tmp)))
+    (consumes_flags_return_last c1 c2)))
 
 (rule (cmove_or_from_values (is_single_register_gpr_type ty) cc1 cc2 consequent alternative)
       (cmove_or ty cc1 cc2 consequent alternative))

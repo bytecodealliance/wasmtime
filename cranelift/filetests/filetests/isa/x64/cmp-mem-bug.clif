@@ -20,7 +20,7 @@ block0(v0: i64, v1: i64):
 ;   movzbq %r10b, %rax
 ;   cmpq %r9, %rdi
 ;   movq %rsi, %rdx
-;   cmovzq  %rdi, %rdx, %rdx
+;   cmoveq %rdi, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

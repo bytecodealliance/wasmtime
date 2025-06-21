@@ -282,35 +282,6 @@ pub(crate) fn emit(
             );
         }
 
-        Inst::Cmove {
-            size,
-            cc,
-            consequent,
-            alternative,
-            dst,
-        } => {
-            let alternative = alternative.to_reg();
-            let dst = dst.to_reg().to_reg();
-            debug_assert_eq!(alternative, dst);
-            let rex_flags = RexFlags::from(*size);
-            let prefix = match size {
-                OperandSize::Size16 => LegacyPrefixes::_66,
-                OperandSize::Size32 => LegacyPrefixes::None,
-                OperandSize::Size64 => LegacyPrefixes::None,
-                _ => unreachable!("invalid size spec for cmove"),
-            };
-            let opcode = 0x0F40 + cc.get_enc() as u32;
-            match consequent.clone().to_reg_mem() {
-                RegMem::Reg { reg } => {
-                    emit_std_reg_reg(sink, prefix, opcode, 2, dst, reg, rex_flags);
-                }
-                RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state.frame_layout(), sink).clone();
-                    emit_std_reg_mem(sink, prefix, opcode, 2, dst, addr, rex_flags, 0);
-                }
-            }
-        }
-
         Inst::XmmCmove {
             ty,
             cc,
@@ -2259,15 +2230,21 @@ pub(crate) fn emit(
                     }
 
                     // cmovcc %r_operand, %r_temp
-                    let cc = match op {
-                        RmwOp::Umin => CC::BE,
-                        RmwOp::Umax => CC::NB,
-                        RmwOp::Smin => CC::LE,
-                        RmwOp::Smax => CC::NL,
+                    match op {
+                        RmwOp::Umin => {
+                            asm::inst::cmovbeq_rm::new(temp_r, *operand).emit(sink, info, state)
+                        }
+                        RmwOp::Umax => {
+                            asm::inst::cmovaeq_rm::new(temp_r, *operand).emit(sink, info, state)
+                        }
+                        RmwOp::Smin => {
+                            asm::inst::cmovleq_rm::new(temp_r, *operand).emit(sink, info, state)
+                        }
+                        RmwOp::Smax => {
+                            asm::inst::cmovgeq_rm::new(temp_r, *operand).emit(sink, info, state)
+                        }
                         _ => unreachable!(),
-                    };
-                    let i4 = Inst::cmove(OperandSize::Size64, cc, RegMem::reg(*operand), temp_r);
-                    i4.emit(sink, info, state);
+                    }
                 }
                 RmwOp::And => {
                     // andq %r_operand, %r_temp
@@ -2356,19 +2333,33 @@ pub(crate) fn emit(
                     // Restore the clobbered value
                     asm::inst::movq_mr::new(temp_high, dst_old_high.to_reg())
                         .emit(sink, info, state);
-                    let cc = match op {
-                        RmwOp::Umin => CC::NB,
-                        RmwOp::Umax => CC::B,
-                        RmwOp::Smin => CC::NL,
-                        RmwOp::Smax => CC::L,
+                    match op {
+                        RmwOp::Umin => {
+                            asm::inst::cmovaeq_rm::new(temp_low, operand_low)
+                                .emit(sink, info, state);
+                            asm::inst::cmovaeq_rm::new(temp_high, operand_high)
+                                .emit(sink, info, state);
+                        }
+                        RmwOp::Umax => {
+                            asm::inst::cmovbq_rm::new(temp_low, operand_low)
+                                .emit(sink, info, state);
+                            asm::inst::cmovbq_rm::new(temp_high, operand_high)
+                                .emit(sink, info, state);
+                        }
+                        RmwOp::Smin => {
+                            asm::inst::cmovgeq_rm::new(temp_low, operand_low)
+                                .emit(sink, info, state);
+                            asm::inst::cmovgeq_rm::new(temp_high, operand_high)
+                                .emit(sink, info, state);
+                        }
+                        RmwOp::Smax => {
+                            asm::inst::cmovlq_rm::new(temp_low, operand_low)
+                                .emit(sink, info, state);
+                            asm::inst::cmovlq_rm::new(temp_high, operand_high)
+                                .emit(sink, info, state);
+                        }
                         _ => unreachable!(),
-                    };
-                    let temp_low = temp_low.map(|r| *r);
-                    let temp_high = temp_high.map(|r| *r);
-                    Inst::cmove(OperandSize::Size64, cc, (*operand_low).into(), temp_low)
-                        .emit(sink, info, state);
-                    Inst::cmove(OperandSize::Size64, cc, (*operand_high).into(), temp_high)
-                        .emit(sink, info, state);
+                    }
                 }
                 RmwOp::Add => {
                     asm::inst::addq_rm::new(temp_low, operand_low).emit(sink, info, state);
