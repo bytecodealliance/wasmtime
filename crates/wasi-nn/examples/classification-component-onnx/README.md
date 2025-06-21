@@ -12,7 +12,7 @@ cargo component build
 In the Wasmtime root directory, run the following command to build the Wasmtime CLI and run the WebAssembly component:
 ```sh
 # build wasmtime with component-model and WASI-NN with ONNX runtime support
-cargo build --features component-model,wasi-nn,wasmtime-wasi-nn/onnx
+cargo build --features component-model,wasi-nn,wasmtime-wasi-nn/onnx-download
 
 # run the component with wasmtime
 ./target/debug/wasmtime run \
