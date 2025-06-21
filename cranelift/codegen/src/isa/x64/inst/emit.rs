@@ -419,10 +419,7 @@ pub(crate) fn emit(
         }
 
         Inst::CallKnown { info: call_info } => {
-            if let Some(s) = state.take_stack_map() {
-                let offset = sink.cur_offset() + 5;
-                sink.push_user_stack_map(state, offset, s);
-            }
+            let stack_map = state.take_stack_map();
 
             asm::inst::callq_d::new(0).emit(sink, info, state);
 
@@ -433,6 +430,10 @@ pub(crate) fn emit(
             // instruction and the beginning of the immediate field.
             let len = sink.cur_offset();
             sink.add_reloc_at_offset(len - 4, Reloc::X86CallPCRel4, &call_info.dest, -4);
+
+            if let Some(s) = stack_map {
+                sink.push_user_stack_map(state, len, s);
+            }
 
             if let Some(try_call) = call_info.try_call_info.as_ref() {
                 sink.add_call_site(&try_call.exception_dests);
@@ -498,6 +499,8 @@ pub(crate) fn emit(
         Inst::CallUnknown {
             info: call_info, ..
         } => {
+            let stack_map = state.take_stack_map();
+
             let dest = match call_info.dest.clone() {
                 RegMem::Reg { reg } => asm::GprMem::Gpr(Gpr::unwrap_new(reg)),
                 RegMem::Mem { addr } => asm::GprMem::Mem(addr.into()),
@@ -505,7 +508,7 @@ pub(crate) fn emit(
 
             asm::inst::callq_m::new(dest).emit(sink, info, state);
 
-            if let Some(s) = state.take_stack_map() {
+            if let Some(s) = stack_map {
                 let offset = sink.cur_offset();
                 sink.push_user_stack_map(state, offset, s);
             }
