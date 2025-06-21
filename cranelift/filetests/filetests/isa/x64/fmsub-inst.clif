@@ -619,7 +619,7 @@ block0(v0: f32, v1: f32, v2: f32):
 ;   leaq <offset:1>+(%rsp), %r11
 ;   movl $0x80000000, %r9d
 ;   vmovd %r9d, %xmm3
-;   vxorps  %xmm1, %xmm3, %xmm3
+;   vxorps %xmm3, %xmm1, %xmm3
 ;   vmovss %xmm3, (%r11)
 ;   vfmsub132ss %xmm0, %xmm2, 0(%r11), %xmm0
 ;   addq $0x10, %rsp

@@ -11,7 +11,7 @@ block0(v0: f64x2, v1: f64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vmovsd  %xmm0, %xmm1, %xmm0
+;   vmovsd %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -63,7 +63,7 @@ block0(v0: f64x2, v1: i64):
 ;   movq %rsp, %rbp
 ; block0:
 ;   vmovsd (%rdi), %xmm4
-;   vmovsd  %xmm0, %xmm4, %xmm0
+;   vmovsd %xmm4, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
