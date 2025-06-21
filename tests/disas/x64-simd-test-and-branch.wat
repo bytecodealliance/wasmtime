@@ -112,14 +112,11 @@
 ;; wasm[0]::function[4]::v128.any_true:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       pxor    %xmm7, %xmm7
-;;       pcmpeqb %xmm7, %xmm0
-;;       pmovmskb %xmm0, %ecx
-;;       cmpl    $0xffff, %ecx
-;;       jne     0x126
-;;  11c: movl    $0xc8, %eax
-;;       jmp     0x12b
-;;  126: movl    $0x64, %eax
+;;       ptest   %xmm0, %xmm0
+;;       jne     0x119
+;;  10f: movl    $0xc8, %eax
+;;       jmp     0x11e
+;;  119: movl    $0x64, %eax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
