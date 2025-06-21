@@ -6,17 +6,22 @@ pub fn list() -> Vec<Inst> {
     // Note that `p{extr,ins}r{w,b}` below operate on 32-bit registers but a
     // smaller-width memory location. This means that disassembly in Capstone
     // doesn't match `rm8`, for example. For now pretend both of these are
-    // `rm32` to get diassembly matching Capstone.
+    // `rm32` to get disassembly matching Capstone.
     let r32m8 = rm32;
     let r32m16 = rm32;
 
     vec![
         // Extract from a single XMM lane.
-        inst("pextrb", fmt("A", [w(r32m8), r(xmm2), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x14]).r().ib(), _64b | compat | sse41),
-        inst("pextrw", fmt("A", [w(r32), r(xmm2), r(imm8)]), rex([0x66, 0x0F, 0xC5]).r().ib(), _64b | compat | sse2),
-        inst("pextrw", fmt("B", [w(r32m16), r(xmm2), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x15]).r().ib(), _64b | compat | sse41),
-        inst("pextrd", fmt("A", [w(rm32), r(xmm2), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x16]).r().ib(), _64b | compat | sse41),
-        inst("pextrq", fmt("A", [w(rm64), r(xmm2), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x16]).w().r().ib(), _64b | sse41),
+        inst("pextrb", fmt("A", [w(r32m8), r(xmm2), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x14]).r().ib(), _64b | compat | sse41).alt(avx, "vpextrb_a"),
+        inst("pextrw", fmt("A", [w(r32), r(xmm2), r(imm8)]), rex([0x66, 0x0F, 0xC5]).r().ib(), _64b | compat | sse2).alt(avx, "vpextrw_a"),
+        inst("pextrw", fmt("B", [w(r32m16), r(xmm2), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x15]).r().ib(), _64b | compat | sse41).alt(avx, "vpextrw_b"),
+        inst("pextrd", fmt("A", [w(rm32), r(xmm2), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x16]).r().ib(), _64b | compat | sse41).alt(avx, "vpextrd_a"),
+        inst("pextrq", fmt("A", [w(rm64), r(xmm2), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x16]).w().r().ib(), _64b | sse41).alt(avx, "vpextrq_a"),
+        inst("vpextrb", fmt("A", [w(r32m8), r(xmm2), r(imm8)]), vex(L128)._66()._0f3a().w0().op(0x14).r().ib(), _64b | compat | avx),
+        inst("vpextrw", fmt("A", [w(r32), r(xmm2), r(imm8)]), vex(L128)._66()._0f().w0().op(0xC5).r().ib(), _64b | compat | avx),
+        inst("vpextrw", fmt("B", [w(r32m16), r(xmm2), r(imm8)]), vex(L128)._66()._0f3a().w0().op(0x15).r().ib(), _64b | compat | avx),
+        inst("vpextrd", fmt("A", [w(rm32), r(xmm2), r(imm8)]), vex(L128)._66()._0f3a().w0().op(0x16).r().ib(), _64b | compat | avx),
+        inst("vpextrq", fmt("A", [w(rm64), r(xmm2), r(imm8)]), vex(L128)._66()._0f3a().w1().op(0x16).r().ib(), _64b | compat | avx),
 
         // Insert into a single XMM lane.
         inst("pinsrb", fmt("A", [rw(xmm1), r(r32m8), r(imm8)]), rex([0x66, 0x0F, 0x3A, 0x20]).r().ib(), _64b | compat | sse41),

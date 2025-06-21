@@ -146,8 +146,16 @@ fn check_sse_matches_avx(sse_inst: &Inst, avx_inst: &Inst) {
             ],
         ) => {}
         (
-            [(Write, Reg(_)), (Read, Reg(_) | RegMem(_)), (Read, Imm(_))],
-            [(Write, Reg(_)), (Read, Reg(_) | RegMem(_)), (Read, Imm(_))],
+            [
+                (Write, Reg(_) | RegMem(_)),
+                (Read, Reg(_) | RegMem(_)),
+                (Read, Imm(_)),
+            ],
+            [
+                (Write, Reg(_) | RegMem(_)),
+                (Read, Reg(_) | RegMem(_)),
+                (Read, Imm(_)),
+            ],
         ) => {}
         (
             [(ReadWrite, Reg(_)), (Read, RegMem(_)), (Read, Imm(_))],

@@ -1397,52 +1397,6 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
-        Inst::XmmMovRMImmVex { op, src, dst, imm } => {
-            let src = src.to_reg();
-            let dst = dst.clone().finalize(state.frame_layout(), sink);
-
-            let (w, prefix, map, opcode) = match op {
-                AvxOpcode::Vpextrb => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x14),
-                AvxOpcode::Vpextrw => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x15),
-                AvxOpcode::Vpextrd => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x16),
-                AvxOpcode::Vpextrq => (true, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x16),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            VexInstruction::new()
-                .length(VexVectorLength::V128)
-                .w(w)
-                .prefix(prefix)
-                .map(map)
-                .opcode(opcode)
-                .rm(dst)
-                .reg(src.to_real_reg().unwrap().hw_enc())
-                .imm(*imm)
-                .encode(sink);
-        }
-
-        Inst::XmmToGprImmVex { op, src, dst, imm } => {
-            let src = src.to_reg();
-            let dst = dst.to_reg().to_reg();
-
-            let (w, prefix, map, opcode) = match op {
-                AvxOpcode::Vpextrb => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x14),
-                AvxOpcode::Vpextrw => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x15),
-                AvxOpcode::Vpextrd => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x16),
-                AvxOpcode::Vpextrq => (true, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x16),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            VexInstruction::new()
-                .length(VexVectorLength::V128)
-                .w(w)
-                .prefix(prefix)
-                .map(map)
-                .opcode(opcode)
-                .rm(dst.to_real_reg().unwrap().hw_enc())
-                .reg(src.to_real_reg().unwrap().hw_enc())
-                .imm(*imm)
-                .encode(sink);
-        }
-
         Inst::XmmCmpRmRVex { op, src1, src2 } => {
             let src1 = src1.to_reg();
             let src2 = match src2.clone().to_reg_mem().clone() {

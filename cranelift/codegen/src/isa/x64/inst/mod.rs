@@ -130,8 +130,6 @@ impl Inst {
             | Inst::XmmRmRVex3 { op, .. }
             | Inst::XmmRmRImmVex { op, .. }
             | Inst::XmmMovRMVex { op, .. }
-            | Inst::XmmMovRMImmVex { op, .. }
-            | Inst::XmmToGprImmVex { op, .. }
             | Inst::XmmCmpRmRVex { op, .. } => op.available_from(),
 
             Inst::External { inst } => {
@@ -584,15 +582,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}")
             }
 
-            Inst::XmmMovRMImmVex {
-                op, src, dst, imm, ..
-            } => {
-                let src = pretty_print_reg(src.to_reg(), 8);
-                let dst = dst.pretty_print(8);
-                let op = ljustify(op.to_string());
-                format!("{op} ${imm}, {src}, {dst}")
-            }
-
             Inst::XmmRmR {
                 op,
                 src1,
@@ -751,13 +740,6 @@ impl PrettyPrint for Inst {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
                 let op = ljustify("uninit".into());
                 format!("{op} {dst}")
-            }
-
-            Inst::XmmToGprImmVex { op, src, dst, imm } => {
-                let src = pretty_print_reg(src.to_reg(), 8);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let op = ljustify(op.to_string());
-                format!("{op} ${imm}, {src}, {dst}")
             }
 
             Inst::XmmCmpRmR { op, src1, src2 } => {
@@ -1316,7 +1298,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(lhs);
             collector.reg_reuse_def(dst, 0); // Reuse RHS.
         }
-        Inst::XmmMovRMVex { src, dst, .. } | Inst::XmmMovRMImmVex { src, dst, .. } => {
+        Inst::XmmMovRMVex { src, dst, .. } => {
             collector.reg_use(src);
             dst.get_operands(collector);
         }
@@ -1337,10 +1319,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             debug_assert!(src.to_reg().is_virtual());
             collector.reg_use(src);
             collector.reg_fixed_nonallocatable(*dst);
-        }
-        Inst::XmmToGprImmVex { src, dst, .. } => {
-            collector.reg_use(src);
-            collector.reg_def(dst);
         }
         Inst::CvtUint64ToFloatSeq {
             src,

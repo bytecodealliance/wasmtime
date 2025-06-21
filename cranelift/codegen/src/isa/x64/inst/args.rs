@@ -1078,10 +1078,6 @@ impl AvxOpcode {
             | AvxOpcode::Vmovups
             | AvxOpcode::Vmovupd
             | AvxOpcode::Vmovdqu
-            | AvxOpcode::Vpextrb
-            | AvxOpcode::Vpextrw
-            | AvxOpcode::Vpextrd
-            | AvxOpcode::Vpextrq
             | AvxOpcode::Vpblendw
             | AvxOpcode::Vsqrtss
             | AvxOpcode::Vsqrtsd

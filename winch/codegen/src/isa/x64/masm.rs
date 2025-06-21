@@ -281,7 +281,7 @@ impl Masm for MacroAssembler {
             StoreKind::VectorLane(LaneSelector { lane, size }) => {
                 self.ensure_has_avx()?;
                 self.asm
-                    .xmm_vpextr_rm(&dst, src, lane, size, UNTRUSTED_FLAGS)?;
+                    .xmm_vpextr_rm(&dst, src, lane, size, UNTRUSTED_FLAGS);
             }
         }
 

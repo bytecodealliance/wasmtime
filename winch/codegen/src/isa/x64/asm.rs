@@ -1775,14 +1775,38 @@ impl Assembler {
         });
     }
 
+    /// Extract a value from `src` into `addr` determined by `lane`.
+    pub(crate) fn xmm_vpextr_rm(
+        &mut self,
+        addr: &Address,
+        src: Reg,
+        lane: u8,
+        size: OperandSize,
+        flags: MemFlags,
+    ) {
+        assert!(addr.is_offset());
+        let dst = Self::to_synthetic_amode(addr, flags);
+        let inst = match size {
+            OperandSize::S8 => asm::inst::vpextrb_a::new(dst, src, lane).into(),
+            OperandSize::S16 => asm::inst::vpextrw_b::new(dst, src, lane).into(),
+            OperandSize::S32 => asm::inst::vpextrd_a::new(dst, src, lane).into(),
+            OperandSize::S64 => asm::inst::vpextrq_a::new(dst, src, lane).into(),
+            _ => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
+    }
+
     /// Extract a value from `src` into `dst` (zero extended) determined by `lane`.
     pub fn xmm_vpextr_rr(&mut self, dst: WritableReg, src: Reg, lane: u8, size: OperandSize) {
-        self.emit(Inst::XmmToGprImmVex {
-            op: Self::vpextr_opcode(size),
-            src: src.into(),
-            dst: dst.to_reg().into(),
-            imm: lane,
-        });
+        let dst: WritableGpr = dst.map(|r| r.into());
+        let inst = match size {
+            OperandSize::S8 => asm::inst::vpextrb_a::new(dst, src, lane).into(),
+            OperandSize::S16 => asm::inst::vpextrw_a::new(dst, src, lane).into(),
+            OperandSize::S32 => asm::inst::vpextrd_a::new(dst, src, lane).into(),
+            OperandSize::S64 => asm::inst::vpextrq_a::new(dst, src, lane).into(),
+            _ => unimplemented!(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Copy value from `src2`, merge into `src1`, and put result in `dst` at
@@ -1940,39 +1964,6 @@ impl Assembler {
             src1: src1.into(),
             src2: src2.into(),
         })
-    }
-
-    /// The `vpextr` opcode to use.
-    fn vpextr_opcode(size: OperandSize) -> AvxOpcode {
-        match size {
-            OperandSize::S8 => AvxOpcode::Vpextrb,
-            OperandSize::S16 => AvxOpcode::Vpextrw,
-            OperandSize::S32 => AvxOpcode::Vpextrd,
-            OperandSize::S64 => AvxOpcode::Vpextrq,
-            _ => unimplemented!(),
-        }
-    }
-
-    /// Extract a value from `src` into `addr` determined by `lane`.
-    pub(crate) fn xmm_vpextr_rm(
-        &mut self,
-        addr: &Address,
-        src: Reg,
-        lane: u8,
-        size: OperandSize,
-        flags: MemFlags,
-    ) -> anyhow::Result<()> {
-        assert!(addr.is_offset());
-        let dst = Self::to_synthetic_amode(addr, flags);
-
-        self.emit(Inst::XmmMovRMImmVex {
-            op: Self::vpextr_opcode(size),
-            src: src.into(),
-            dst,
-            imm: lane,
-        });
-
-        Ok(())
     }
 
     /// Converts vector of integers into vector of floating values.
