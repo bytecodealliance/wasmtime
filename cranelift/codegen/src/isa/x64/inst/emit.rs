@@ -1060,30 +1060,8 @@ pub(crate) fn emit(
                 // For opcodes where one of the operands is an immediate the
                 // encoding is a bit different, notably the usage of
                 // `opcode_ext`, so handle that specially here.
-                RegMemImm::Imm { simm32 } => {
-                    let (opcode, opcode_ext, prefix) = match op {
-                        AvxOpcode::Vpsrlw => (0x71, 2, LegacyPrefixes::_66),
-                        AvxOpcode::Vpsrld => (0x72, 2, LegacyPrefixes::_66),
-                        AvxOpcode::Vpsrlq => (0x73, 2, LegacyPrefixes::_66),
-                        AvxOpcode::Vpsllw => (0x71, 6, LegacyPrefixes::_66),
-                        AvxOpcode::Vpslld => (0x72, 6, LegacyPrefixes::_66),
-                        AvxOpcode::Vpsllq => (0x73, 6, LegacyPrefixes::_66),
-                        AvxOpcode::Vpsraw => (0x71, 4, LegacyPrefixes::_66),
-                        AvxOpcode::Vpsrad => (0x72, 4, LegacyPrefixes::_66),
-                        _ => panic!("unexpected rmi_r_vex opcode with immediate {op:?}"),
-                    };
-                    VexInstruction::new()
-                        .length(VexVectorLength::V128)
-                        .prefix(prefix)
-                        .map(OpcodeMap::_0F)
-                        .opcode(opcode)
-                        .opcode_ext(opcode_ext)
-                        .vvvv(dst.to_real_reg().unwrap().hw_enc())
-                        .prefix(LegacyPrefixes::_66)
-                        .rm(src1.to_real_reg().unwrap().hw_enc())
-                        .imm(simm32.try_into().unwrap())
-                        .encode(sink);
-                    return;
+                RegMemImm::Imm { .. } => {
+                    unreachable!()
                 }
                 RegMemImm::Reg { reg } => {
                     RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
@@ -1094,84 +1072,6 @@ pub(crate) fn emit(
             };
 
             let (prefix, map, opcode) = match op {
-                AvxOpcode::Vminps => (LP::None, OM::_0F, 0x5D),
-                AvxOpcode::Vminpd => (LP::_66, OM::_0F, 0x5D),
-                AvxOpcode::Vmaxps => (LP::None, OM::_0F, 0x5F),
-                AvxOpcode::Vmaxpd => (LP::_66, OM::_0F, 0x5F),
-                AvxOpcode::Vandnps => (LP::None, OM::_0F, 0x55),
-                AvxOpcode::Vandnpd => (LP::_66, OM::_0F, 0x55),
-                AvxOpcode::Vpandn => (LP::_66, OM::_0F, 0xDF),
-                AvxOpcode::Vpsrlw => (LP::_66, OM::_0F, 0xD1),
-                AvxOpcode::Vpsrld => (LP::_66, OM::_0F, 0xD2),
-                AvxOpcode::Vpsrlq => (LP::_66, OM::_0F, 0xD3),
-                AvxOpcode::Vpaddb => (LP::_66, OM::_0F, 0xFC),
-                AvxOpcode::Vpaddw => (LP::_66, OM::_0F, 0xFD),
-                AvxOpcode::Vpaddd => (LP::_66, OM::_0F, 0xFE),
-                AvxOpcode::Vpaddq => (LP::_66, OM::_0F, 0xD4),
-                AvxOpcode::Vpaddsb => (LP::_66, OM::_0F, 0xEC),
-                AvxOpcode::Vpaddsw => (LP::_66, OM::_0F, 0xED),
-                AvxOpcode::Vpaddusb => (LP::_66, OM::_0F, 0xDC),
-                AvxOpcode::Vpaddusw => (LP::_66, OM::_0F, 0xDD),
-                AvxOpcode::Vpsubb => (LP::_66, OM::_0F, 0xF8),
-                AvxOpcode::Vpsubw => (LP::_66, OM::_0F, 0xF9),
-                AvxOpcode::Vpsubd => (LP::_66, OM::_0F, 0xFA),
-                AvxOpcode::Vpsubq => (LP::_66, OM::_0F, 0xFB),
-                AvxOpcode::Vpsubsb => (LP::_66, OM::_0F, 0xE8),
-                AvxOpcode::Vpsubsw => (LP::_66, OM::_0F, 0xE9),
-                AvxOpcode::Vpsubusb => (LP::_66, OM::_0F, 0xD8),
-                AvxOpcode::Vpsubusw => (LP::_66, OM::_0F, 0xD9),
-                AvxOpcode::Vpavgb => (LP::_66, OM::_0F, 0xE0),
-                AvxOpcode::Vpavgw => (LP::_66, OM::_0F, 0xE3),
-                AvxOpcode::Vpand => (LP::_66, OM::_0F, 0xDB),
-                AvxOpcode::Vandps => (LP::None, OM::_0F, 0x54),
-                AvxOpcode::Vandpd => (LP::_66, OM::_0F, 0x54),
-                AvxOpcode::Vpor => (LP::_66, OM::_0F, 0xEB),
-                AvxOpcode::Vorps => (LP::None, OM::_0F, 0x56),
-                AvxOpcode::Vorpd => (LP::_66, OM::_0F, 0x56),
-                AvxOpcode::Vpxor => (LP::_66, OM::_0F, 0xEF),
-                AvxOpcode::Vxorps => (LP::None, OM::_0F, 0x57),
-                AvxOpcode::Vxorpd => (LP::_66, OM::_0F, 0x57),
-                AvxOpcode::Vpmullw => (LP::_66, OM::_0F, 0xD5),
-                AvxOpcode::Vpmulld => (LP::_66, OM::_0F38, 0x40),
-                AvxOpcode::Vpmulhw => (LP::_66, OM::_0F, 0xE5),
-                AvxOpcode::Vpmulhrsw => (LP::_66, OM::_0F38, 0x0B),
-                AvxOpcode::Vpmulhuw => (LP::_66, OM::_0F, 0xE4),
-                AvxOpcode::Vpmuldq => (LP::_66, OM::_0F38, 0x28),
-                AvxOpcode::Vpmuludq => (LP::_66, OM::_0F, 0xF4),
-                AvxOpcode::Vpunpckhwd => (LP::_66, OM::_0F, 0x69),
-                AvxOpcode::Vpunpcklwd => (LP::_66, OM::_0F, 0x61),
-                AvxOpcode::Vunpcklps => (LP::None, OM::_0F, 0x14),
-                AvxOpcode::Vunpckhps => (LP::None, OM::_0F, 0x15),
-                AvxOpcode::Vaddps => (LP::None, OM::_0F, 0x58),
-                AvxOpcode::Vaddpd => (LP::_66, OM::_0F, 0x58),
-                AvxOpcode::Vsubps => (LP::None, OM::_0F, 0x5C),
-                AvxOpcode::Vsubpd => (LP::_66, OM::_0F, 0x5C),
-                AvxOpcode::Vmulps => (LP::None, OM::_0F, 0x59),
-                AvxOpcode::Vmulpd => (LP::_66, OM::_0F, 0x59),
-                AvxOpcode::Vdivps => (LP::None, OM::_0F, 0x5E),
-                AvxOpcode::Vdivpd => (LP::_66, OM::_0F, 0x5E),
-                AvxOpcode::Vpcmpeqb => (LP::_66, OM::_0F, 0x74),
-                AvxOpcode::Vpcmpeqw => (LP::_66, OM::_0F, 0x75),
-                AvxOpcode::Vpcmpeqd => (LP::_66, OM::_0F, 0x76),
-                AvxOpcode::Vpcmpeqq => (LP::_66, OM::_0F38, 0x29),
-                AvxOpcode::Vpcmpgtb => (LP::_66, OM::_0F, 0x64),
-                AvxOpcode::Vpcmpgtw => (LP::_66, OM::_0F, 0x65),
-                AvxOpcode::Vpcmpgtd => (LP::_66, OM::_0F, 0x66),
-                AvxOpcode::Vpcmpgtq => (LP::_66, OM::_0F38, 0x37),
-                AvxOpcode::Vpminsb => (LP::_66, OM::_0F38, 0x38),
-                AvxOpcode::Vpminsw => (LP::_66, OM::_0F, 0xEA),
-                AvxOpcode::Vpminsd => (LP::_66, OM::_0F38, 0x39),
-                AvxOpcode::Vpmaxsb => (LP::_66, OM::_0F38, 0x3C),
-                AvxOpcode::Vpmaxsw => (LP::_66, OM::_0F, 0xEE),
-                AvxOpcode::Vpmaxsd => (LP::_66, OM::_0F38, 0x3D),
-                AvxOpcode::Vpminub => (LP::_66, OM::_0F, 0xDA),
-                AvxOpcode::Vpminuw => (LP::_66, OM::_0F38, 0x3A),
-                AvxOpcode::Vpminud => (LP::_66, OM::_0F38, 0x3B),
-                AvxOpcode::Vpmaxub => (LP::_66, OM::_0F, 0xDE),
-                AvxOpcode::Vpmaxuw => (LP::_66, OM::_0F38, 0x3E),
-                AvxOpcode::Vpmaxud => (LP::_66, OM::_0F38, 0x3F),
-                AvxOpcode::Vpunpcklbw => (LP::_66, OM::_0F, 0x60),
-                AvxOpcode::Vpunpckhbw => (LP::_66, OM::_0F, 0x68),
                 AvxOpcode::Vpacksswb => (LP::_66, OM::_0F, 0x63),
                 AvxOpcode::Vpackssdw => (LP::_66, OM::_0F, 0x6B),
                 AvxOpcode::Vpackuswb => (LP::_66, OM::_0F, 0x67),
@@ -1179,34 +1079,10 @@ pub(crate) fn emit(
                 AvxOpcode::Vpmaddwd => (LP::_66, OM::_0F, 0xF5),
                 AvxOpcode::Vpmaddubsw => (LP::_66, OM::_0F38, 0x04),
                 AvxOpcode::Vpshufb => (LP::_66, OM::_0F38, 0x00),
-                AvxOpcode::Vpsllw => (LP::_66, OM::_0F, 0xF1),
-                AvxOpcode::Vpslld => (LP::_66, OM::_0F, 0xF2),
-                AvxOpcode::Vpsllq => (LP::_66, OM::_0F, 0xF3),
-                AvxOpcode::Vpsraw => (LP::_66, OM::_0F, 0xE1),
-                AvxOpcode::Vpsrad => (LP::_66, OM::_0F, 0xE2),
-                AvxOpcode::Vaddss => (LP::_F3, OM::_0F, 0x58),
-                AvxOpcode::Vaddsd => (LP::_F2, OM::_0F, 0x58),
-                AvxOpcode::Vmulss => (LP::_F3, OM::_0F, 0x59),
-                AvxOpcode::Vmulsd => (LP::_F2, OM::_0F, 0x59),
-                AvxOpcode::Vsubss => (LP::_F3, OM::_0F, 0x5C),
-                AvxOpcode::Vsubsd => (LP::_F2, OM::_0F, 0x5C),
-                AvxOpcode::Vdivss => (LP::_F3, OM::_0F, 0x5E),
-                AvxOpcode::Vdivsd => (LP::_F2, OM::_0F, 0x5E),
-                AvxOpcode::Vminss => (LP::_F3, OM::_0F, 0x5D),
-                AvxOpcode::Vminsd => (LP::_F2, OM::_0F, 0x5D),
-                AvxOpcode::Vmaxss => (LP::_F3, OM::_0F, 0x5F),
-                AvxOpcode::Vmaxsd => (LP::_F2, OM::_0F, 0x5F),
                 AvxOpcode::Vphaddw => (LP::_66, OM::_0F38, 0x01),
                 AvxOpcode::Vphaddd => (LP::_66, OM::_0F38, 0x02),
-                AvxOpcode::Vpunpckldq => (LP::_66, OM::_0F, 0x62),
-                AvxOpcode::Vpunpckhdq => (LP::_66, OM::_0F, 0x6A),
-                AvxOpcode::Vpunpcklqdq => (LP::_66, OM::_0F, 0x6C),
-                AvxOpcode::Vpunpckhqdq => (LP::_66, OM::_0F, 0x6D),
                 AvxOpcode::Vmovsd => (LP::_F2, OM::_0F, 0x10),
                 AvxOpcode::Vmovss => (LP::_F3, OM::_0F, 0x10),
-                AvxOpcode::Vsqrtss => (LP::_F3, OM::_0F, 0x51),
-                AvxOpcode::Vsqrtsd => (LP::_F2, OM::_0F, 0x51),
-                AvxOpcode::Vunpcklpd => (LP::_66, OM::_0F, 0x14),
                 _ => panic!("unexpected rmir vex opcode {op:?}"),
             };
             VexInstruction::new()
@@ -1239,8 +1115,6 @@ pub(crate) fn emit(
             };
 
             let (w, prefix, map, opcode) = match op {
-                AvxOpcode::Vcmpps => (false, LegacyPrefixes::None, OpcodeMap::_0F, 0xC2),
-                AvxOpcode::Vcmppd => (false, LegacyPrefixes::_66, OpcodeMap::_0F, 0xC2),
                 AvxOpcode::Vpalignr => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x0F),
                 AvxOpcode::Vinsertps => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x21),
                 AvxOpcode::Vshufps => (false, LegacyPrefixes::None, OpcodeMap::_0F, 0xC6),
@@ -1363,8 +1237,6 @@ pub(crate) fn emit(
             };
 
             let (prefix, map, opcode) = match op {
-                AvxOpcode::Vucomiss => (LegacyPrefixes::None, OpcodeMap::_0F, 0x2E),
-                AvxOpcode::Vucomisd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x2E),
                 AvxOpcode::Vptest => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x17),
                 _ => unimplemented!("Opcode {:?} not implemented", op),
             };
