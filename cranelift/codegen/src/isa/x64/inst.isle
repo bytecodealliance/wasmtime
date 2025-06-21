@@ -3647,6 +3647,18 @@
 (rule (x64_blsr $I32 src) (x64_blsrl_vm src))
 (rule (x64_blsr $I64 src) (x64_blsrq_vm src))
 
+;; Helper for creating `bt` instructions.
+(decl x64_bt (Type GprMem Gpr) ProducesFlags)
+(rule (x64_bt $I16 src1 src2) (x64_btw_mr src1 src2))
+(rule (x64_bt $I32 src1 src2) (x64_btl_mr src1 src2))
+(rule (x64_bt $I64 src1 src2) (x64_btq_mr src1 src2))
+
+;; Helper for creating `bt` instructions.
+(decl x64_bt_imm (Type GprMem u8) ProducesFlags)
+(rule (x64_bt_imm $I16 src imm) (x64_btw_mi src imm))
+(rule (x64_bt_imm $I32 src imm) (x64_btl_mi src imm))
+(rule (x64_bt_imm $I64 src imm) (x64_btq_mi src imm))
+
 ;; Helper for creating `sarx` instructions.
 (decl x64_sarx (Type GprMem Gpr) Gpr)
 (rule (x64_sarx $I32 val amt) (x64_sarxl_rmv val amt))
@@ -4262,7 +4274,35 @@
 (rule 2 (is_nonzero_cmp (vany_true vec)) (is_vany_true vec))
 (rule 2 (is_nonzero_cmp (uextend val)) (is_nonzero_cmp val))
 (rule 2 (is_nonzero_cmp (band a @ (value_type (ty_int (fits_in_64 ty))) b))
+  (is_nonzero_band ty a b))
+
+(decl is_nonzero_band (Type Value Value) CondResult)
+(rule 0 (is_nonzero_band ty a b) (CondResult.CC (x64_test ty a b) (CC.NZ)))
+
+;; If a value is and'd with an immediate that has exactly one bit set then this
+;; can pattern-match to the native `bt` instruction. Note that to have the
+;; same semantics this requires that `a` is in a register which forces `bt` to
+;; use modulo semantics for the second operand `b`, thus `put_in_gpr` is
+;; manually used.
+(rule 1 (is_nonzero_band (ty_32_or_64 ty) a (ishl (u64_from_iconst 1) b))
+  (CondResult.CC (x64_bt ty (put_in_gpr a) b) (CC.B)))
+
+;; If a value is and'd one shifted by a variable value that matches `bt` as
+;; well.
+(rule 1 (is_nonzero_band $I64 a (u64_from_iconst (bt_imm n)))
+  (CondResult.CC (x64_bt_imm $I64 a n) (CC.B)))
+
+;; LLVM looks to favor `test` over `bt`, so if the right-hand-side is a 32-bit
+;; constant always use `test` for this to get prioritized over the `bt` rule
+;; above.
+(rule 2 (is_nonzero_band ty a b @ (i32_from_iconst _))
   (CondResult.CC (x64_test ty a b) (CC.NZ)))
+
+;; Helper to test whether the `u64` input has a single bit set, and if so
+;; yields the bit position of where that bit is set. Used in the lowering of
+;; `x64_bt_imm` above.
+(decl bt_imm (u8) u64)
+(extern extractor bt_imm bt_imm)
 
 ;; Lower a CondResult to a boolean value in a register.
 (decl lower_cond_bool (CondResult) Gpr)
@@ -4329,10 +4369,10 @@
 
 ;; For direct equality comparisons to zero transform the other operand into a
 ;; nonzero comparison and then invert the whole conditional to test for zero.
-(rule 5 (emit_cmp (IntCC.Equal) a (u64_from_iconst 0))
-  (cond_invert (is_nonzero_cmp a)))
-(rule 6 (emit_cmp (IntCC.Equal) (u64_from_iconst 0) a)
-  (cond_invert (is_nonzero_cmp a)))
+(rule 5 (emit_cmp (IntCC.Equal) a (u64_from_iconst 0)) (cond_invert (is_nonzero_cmp a)))
+(rule 6 (emit_cmp (IntCC.Equal) (u64_from_iconst 0) a) (cond_invert (is_nonzero_cmp a)))
+(rule 5 (emit_cmp (IntCC.NotEqual) a (u64_from_iconst 0)) (is_nonzero_cmp a))
+(rule 6 (emit_cmp (IntCC.NotEqual) (u64_from_iconst 0) a) (is_nonzero_cmp a))
 
 ;; 128-bit strict equality/inequality can't be easily tested using subtraction
 ;; but we can quickly determine whether any bits are different instead.

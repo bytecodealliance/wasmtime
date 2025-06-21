@@ -1080,6 +1080,15 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         self.emit(&MInst::External { inst: inst.into() });
         ret.to_reg()
     }
+
+    fn bt_imm(&mut self, val: u64) -> Option<u8> {
+        let trailing_zeros = u8::try_from(val.trailing_zeros()).unwrap();
+        if val == 1 << trailing_zeros {
+            Some(trailing_zeros)
+        } else {
+            None
+        }
+    }
 }
 
 impl IsleContext<'_, '_, MInst, X64Backend> {
