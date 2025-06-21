@@ -1079,6 +1079,41 @@ jobs:
         name: bins-${{ matrix.build }}
         path: dist
 
+  # Independent job to verify that static builds still work.
+  # This catches issues like duplicate symbols or bad linkage
+  # when building Wasmtime with -DWASMEDGE_BUILD_STATIC_LIB=ON.
+  #
+  # This job is intentionally NOT part of the main matrix build.
+  # It runs with hardcoded values and doesn't interfere with
+  # release artifacts or build cache.
+  build-static-lib:
+    name: Static Library Build
+    runs-on: ubuntu-latest
+    needs: determine
+    if: needs.determine.outputs.run-full
+    steps:
+      # Checkout source code with submodules
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      # Install Ninja (required by some CMake builds)
+      - uses: ./.github/actions/install-ninja
+
+      # Install the Rust toolchain
+      - uses: ./.github/actions/install-rust
+        with:
+          toolchain: stable
+
+      # Add required Rust components and targets
+      - run: |
+          rustup component add rust-src
+          rustup target add x86_64-unknown-linux-gnu
+
+      # Build the project with the static lib flag enabled
+      - name: Build Wasmtime as a static library
+        run: static=true ./ci/build-release-artifacts.sh release x86_64-unknown-linux-gnu
+
   # This is a "join node" which depends on all prior workflows. The merge queue,
   # for example, gates on this to ensure that everything has executed
   # successfully.
