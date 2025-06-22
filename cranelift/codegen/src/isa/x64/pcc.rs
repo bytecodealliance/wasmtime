@@ -73,8 +73,6 @@ pub(crate) fn check(
         Inst::MovFromPReg { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
         Inst::MovToPReg { .. } => Ok(()),
 
-        Inst::Setcc { dst, .. } => undefined_result(ctx, vcode, dst, 64, 64),
-
         Inst::XmmCmove { dst, .. } => ensure_no_fact(vcode, dst.to_writable_reg().to_reg()),
 
         Inst::StackProbeLoop { tmp, .. } => ensure_no_fact(vcode, tmp.to_reg()),

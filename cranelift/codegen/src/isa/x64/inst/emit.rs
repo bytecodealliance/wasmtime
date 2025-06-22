@@ -3,7 +3,7 @@ use crate::ir::immediates::{Ieee32, Ieee64};
 use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength, RegisterOrAmode};
 use crate::isa::x64::encoding::rex::{
     LegacyPrefixes, OpcodeMap, RexFlags, emit_std_enc_enc, emit_std_enc_mem, emit_std_reg_mem,
-    emit_std_reg_reg, int_reg_enc, reg_enc,
+    emit_std_reg_reg, int_reg_enc,
 };
 use crate::isa::x64::encoding::vex::{VexInstruction, VexVectorLength};
 use crate::isa::x64::external::{AsmInst, CraneliftRegisters, PairedGpr};
@@ -264,22 +264,6 @@ pub(crate) fn emit(
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&dst));
             let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
             asm::inst::movq_mr::new(dst, *src).emit(sink, info, state);
-        }
-
-        Inst::Setcc { cc, dst } => {
-            let dst = dst.to_reg().to_reg();
-            let opcode = 0x0f90 + cc.get_enc() as u32;
-            let mut rex_flags = RexFlags::clear_w();
-            rex_flags.always_emit();
-            emit_std_enc_enc(
-                sink,
-                LegacyPrefixes::None,
-                opcode,
-                2,
-                0,
-                reg_enc(dst),
-                rex_flags,
-            );
         }
 
         Inst::XmmCmove {

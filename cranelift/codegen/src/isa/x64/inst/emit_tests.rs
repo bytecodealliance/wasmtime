@@ -64,12 +64,6 @@ impl Inst {
         }
     }
 
-    fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let dst = WritableGpr::from_writable_reg(dst).unwrap();
-        Inst::Setcc { cc, dst }
-    }
-
     fn xmm_rm_r_imm(
         op: SseOpcode,
         src: RegMem,
@@ -128,13 +122,13 @@ fn test_x64_emit() {
     let w_rbx = Writable::<Reg>::from_reg(rbx);
     let w_rcx = Writable::<Reg>::from_reg(rcx);
     let w_rdx = Writable::<Reg>::from_reg(rdx);
-    let w_rsi = Writable::<Reg>::from_reg(rsi);
+    let _w_rsi = Writable::<Reg>::from_reg(rsi);
     let _w_rsp = Writable::<Reg>::from_reg(rsp);
     let _w_rbp = Writable::<Reg>::from_reg(rbp);
-    let w_r8 = Writable::<Reg>::from_reg(r8);
-    let w_r9 = Writable::<Reg>::from_reg(r9);
+    let _w_r8 = Writable::<Reg>::from_reg(r8);
+    let _w_r9 = Writable::<Reg>::from_reg(r9);
     let w_r11 = Writable::<Reg>::from_reg(r11);
-    let w_r14 = Writable::<Reg>::from_reg(r14);
+    let _w_r14 = Writable::<Reg>::from_reg(r14);
     let _w_r15 = Writable::<Reg>::from_reg(r15);
 
     let w_xmm0 = Writable::<Reg>::from_reg(xmm0);
@@ -159,15 +153,6 @@ fn test_x64_emit() {
     // General tests for each insn.  Don't forget to follow the
     // guidelines commented just prior to `fn x64_emit`.
     //
-
-    // ========================================================
-    // SetCC
-    insns.push((Inst::setcc(CC::O, w_rsi), "400F90C6", "seto    %sil"));
-    insns.push((Inst::setcc(CC::NLE, w_rsi), "400F9FC6", "setnle  %sil"));
-    insns.push((Inst::setcc(CC::Z, w_r14), "410F94C6", "setz    %r14b"));
-    insns.push((Inst::setcc(CC::LE, w_r14), "410F9EC6", "setle   %r14b"));
-    insns.push((Inst::setcc(CC::P, w_r9), "410F9AC1", "setp    %r9b"));
-    insns.push((Inst::setcc(CC::NP, w_r8), "410F9BC0", "setnp   %r8b"));
 
     // ========================================================
     // CallKnown
