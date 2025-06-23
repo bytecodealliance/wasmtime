@@ -13,7 +13,7 @@
 //!   -- isa::x64::inst::emit_tests::test_x64_emit
 
 use super::*;
-use crate::ir::{MemFlags, UserExternalNameRef};
+use crate::ir::UserExternalNameRef;
 use crate::isa::x64;
 use crate::isa::x64::lower::isle::generated_code::{Atomic128RmwSeqOp, AtomicRmwSeqOp};
 use alloc::vec::Vec;
@@ -449,76 +449,6 @@ fn test_x64_emit() {
         ),
         "440FC6D188",
         "shufps  $136, %xmm10, %xmm1, %xmm10",
-    ));
-
-    // ========================================================
-    // XmmRmiRVex
-
-    // Standard instruction w/ XmmMemImm::Reg operand.
-    insns.push((
-        Inst::XmmRmiRVex {
-            op: AvxOpcode::Vpmaxub,
-            dst: Writable::from_reg(Xmm::unwrap_new(xmm13)),
-            src1: Xmm::unwrap_new(xmm1),
-            src2: XmmMemImm::unwrap_new(xmm12.into()),
-        },
-        "C44171DEEC",
-        "vpmaxub %xmm1, %xmm12, %xmm13",
-    ));
-
-    // Standard instruction w/ XmmMemImm::Mem operand.
-    insns.push((
-        Inst::XmmRmiRVex {
-            op: AvxOpcode::Vpmaxub,
-            dst: Writable::from_reg(Xmm::unwrap_new(xmm13)),
-            src1: Xmm::unwrap_new(xmm1),
-            src2: XmmMemImm::unwrap_new(RegMemImm::Mem {
-                addr: Amode::ImmReg {
-                    simm32: 10,
-                    base: rax,
-                    flags: MemFlags::trusted(),
-                }
-                .into(),
-            }),
-        },
-        "C571DE680A",
-        "vpmaxub %xmm1, 10(%rax), %xmm13",
-    ));
-
-    // When there's an immediate.
-    insns.push((
-        Inst::XmmRmiRVex {
-            op: AvxOpcode::Vpsrlw,
-            dst: Writable::from_reg(Xmm::unwrap_new(xmm13)),
-            src1: Xmm::unwrap_new(xmm1),
-            src2: XmmMemImm::unwrap_new(RegMemImm::Imm { simm32: 36 }),
-        },
-        "C59171D124",
-        "vpsrlw  %xmm1, $36, %xmm13",
-    ));
-
-    // Certain commutative ops get their operands swapped to avoid relying on an
-    // extra prefix byte, when possible. Note that these two instructions encode
-    // to the same bytes, and are 4-byte encodings rather than 5-byte encodings.
-    insns.push((
-        Inst::XmmRmiRVex {
-            op: AvxOpcode::Vmulsd,
-            dst: Writable::from_reg(Xmm::unwrap_new(xmm13)),
-            src1: Xmm::unwrap_new(xmm1),
-            src2: XmmMemImm::unwrap_new(xmm12.into()),
-        },
-        "C51B59E9",
-        "vmulsd  %xmm1, %xmm12, %xmm13",
-    ));
-    insns.push((
-        Inst::XmmRmiRVex {
-            op: AvxOpcode::Vmulsd,
-            dst: Writable::from_reg(Xmm::unwrap_new(xmm13)),
-            src1: Xmm::unwrap_new(xmm12),
-            src2: XmmMemImm::unwrap_new(xmm1.into()),
-        },
-        "C51B59E9",
-        "vmulsd  %xmm12, %xmm1, %xmm13",
     ));
 
     // ========================================================
