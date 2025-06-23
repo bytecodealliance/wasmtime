@@ -96,7 +96,7 @@ fn test_x64_emit() {
     let rcx = regs::rcx();
     let rdx = regs::rdx();
     let rsi = regs::rsi();
-    let rdi = regs::rdi();
+    let _rdi = regs::rdi();
     let rsp = regs::rsp();
     let rbp = regs::rbp();
     let r8 = regs::r8();
@@ -129,14 +129,13 @@ fn test_x64_emit() {
     let w_rcx = Writable::<Reg>::from_reg(rcx);
     let w_rdx = Writable::<Reg>::from_reg(rdx);
     let w_rsi = Writable::<Reg>::from_reg(rsi);
-    let w_rdi = Writable::<Reg>::from_reg(rdi);
     let _w_rsp = Writable::<Reg>::from_reg(rsp);
     let _w_rbp = Writable::<Reg>::from_reg(rbp);
     let w_r8 = Writable::<Reg>::from_reg(r8);
     let w_r9 = Writable::<Reg>::from_reg(r9);
     let w_r11 = Writable::<Reg>::from_reg(r11);
     let w_r14 = Writable::<Reg>::from_reg(r14);
-    let w_r15 = Writable::<Reg>::from_reg(r15);
+    let _w_r15 = Writable::<Reg>::from_reg(r15);
 
     let w_xmm0 = Writable::<Reg>::from_reg(xmm0);
     let w_xmm1 = Writable::<Reg>::from_reg(xmm1);
@@ -162,35 +161,6 @@ fn test_x64_emit() {
     //
 
     // ========================================================
-    // LoadEffectiveAddress
-    insns.push((
-        Inst::lea(Amode::imm_reg(42, r10), w_r8),
-        "4D8D422A",
-        "lea     42(%r10), %r8",
-    ));
-    insns.push((
-        Inst::lea(Amode::imm_reg(42, r10), w_r15),
-        "4D8D7A2A",
-        "lea     42(%r10), %r15",
-    ));
-    insns.push((
-        Inst::lea(
-            Amode::imm_reg_reg_shift(179, Gpr::unwrap_new(r10), Gpr::unwrap_new(r9), 0),
-            w_r8,
-        ),
-        "4F8D840AB3000000",
-        "lea     179(%r10,%r9,1), %r8",
-    ));
-    insns.push((
-        Inst::lea(
-            Amode::rip_relative(MachLabel::from_block(BlockIndex::new(0))),
-            w_rdi,
-        ),
-        "488D3D00000000",
-        "lea     label0(%rip), %rdi",
-    ));
-
-    // ========================================================
     // SetCC
     insns.push((Inst::setcc(CC::O, w_rsi), "400F90C6", "seto    %sil"));
     insns.push((Inst::setcc(CC::NLE, w_rsi), "400F9FC6", "setnle  %sil"));
@@ -198,59 +168,6 @@ fn test_x64_emit() {
     insns.push((Inst::setcc(CC::LE, w_r14), "410F9EC6", "setle   %r14b"));
     insns.push((Inst::setcc(CC::P, w_r9), "410F9AC1", "setp    %r9b"));
     insns.push((Inst::setcc(CC::NP, w_r8), "410F9BC0", "setnp   %r8b"));
-
-    // ========================================================
-    // Cmove
-    insns.push((
-        Inst::cmove(OperandSize::Size16, CC::O, RegMem::reg(rdi), w_rsi),
-        "660F40F7",
-        "cmovow  %di, %si, %si",
-    ));
-    insns.push((
-        Inst::cmove(
-            OperandSize::Size16,
-            CC::NO,
-            RegMem::mem(Amode::imm_reg_reg_shift(
-                37,
-                Gpr::unwrap_new(rdi),
-                Gpr::unwrap_new(rsi),
-                2,
-            )),
-            w_r15,
-        ),
-        "66440F417CB725",
-        "cmovnow 37(%rdi,%rsi,4), %r15w, %r15w",
-    ));
-    insns.push((
-        Inst::cmove(OperandSize::Size32, CC::LE, RegMem::reg(rdi), w_rsi),
-        "0F4EF7",
-        "cmovlel %edi, %esi, %esi",
-    ));
-    insns.push((
-        Inst::cmove(
-            OperandSize::Size32,
-            CC::NLE,
-            RegMem::mem(Amode::imm_reg(0, r15)),
-            w_rsi,
-        ),
-        "410F4F37",
-        "cmovnlel 0(%r15), %esi, %esi",
-    ));
-    insns.push((
-        Inst::cmove(OperandSize::Size64, CC::Z, RegMem::reg(rdi), w_r14),
-        "4C0F44F7",
-        "cmovzq  %rdi, %r14, %r14",
-    ));
-    insns.push((
-        Inst::cmove(
-            OperandSize::Size64,
-            CC::NZ,
-            RegMem::mem(Amode::imm_reg(13, rdi)),
-            w_r14,
-        ),
-        "4C0F45770D",
-        "cmovnzq 13(%rdi), %r14, %r14",
-    ));
 
     // ========================================================
     // CallKnown

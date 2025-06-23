@@ -958,6 +958,7 @@ mod done {
         BadConversionToInteger,
         MemoryOutOfBounds,
         DisabledOpcode,
+        StackOverflow,
     }
 
     impl MachineState {
@@ -1075,7 +1076,7 @@ impl Interpreter<'_> {
         let sp_raw = sp as usize;
         let base_raw = self.state.stack.base() as usize;
         if sp_raw < base_raw {
-            return self.done_trap::<I>();
+            return self.done_trap_kind::<I>(Some(TrapKind::StackOverflow));
         }
         self.set_sp_unchecked(sp);
         ControlFlow::Continue(())

@@ -155,7 +155,7 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movq (%rdi), %r8
-;   lea     0(%r8,%rdi,1), %r9
+;   leaq (%r8, %rdi), %r9
 ;   movq %r9, (%rsi)
 ;   movq (%r8, %rdi), %rax
 ;   movq %rbp, %rsp
@@ -219,7 +219,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpq    0(%rdi), %rdi
+;   cmpq (%rdi), %rdi
 ;   setz    %dl
 ;   movzbq %dl, %rax
 ;   movq %rbp, %rsp
@@ -250,7 +250,7 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movq (%rdi), %rcx
-;   testq   %rcx, %rcx
+;   testq %rcx, %rcx
 ;   setz    %al
 ;   movq %rbp, %rsp
 ;   popq %rbp

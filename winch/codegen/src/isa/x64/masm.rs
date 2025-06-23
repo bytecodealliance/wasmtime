@@ -281,7 +281,7 @@ impl Masm for MacroAssembler {
             StoreKind::VectorLane(LaneSelector { lane, size }) => {
                 self.ensure_has_avx()?;
                 self.asm
-                    .xmm_vpextr_rm(&dst, src, lane, size, UNTRUSTED_FLAGS)?;
+                    .xmm_vpextr_rm(&dst, src, lane, size, UNTRUSTED_FLAGS);
             }
         }
 
@@ -1162,13 +1162,13 @@ impl Masm for MacroAssembler {
             _ => bail!(CodeGenError::unexpected_operand_size()),
         };
 
-        self.with_scratch::<IntScratch, _>(|masm, gpr_scratch| {
-            masm.with_scratch::<FloatScratch, _>(|masm, xmm_scratch| {
-                ctx.convert_op_with_tmp_reg(
-                    masm,
-                    dst_ty,
-                    RegClass::Float,
-                    |masm, dst, src, tmp_fpr, dst_size| {
+        ctx.convert_op_with_tmp_reg(
+            self,
+            dst_ty,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.with_scratch::<IntScratch, _>(|masm, gpr_scratch| {
+                    masm.with_scratch::<FloatScratch, _>(|masm, xmm_scratch| {
                         masm.asm.cvt_float_to_uint_seq(
                             src,
                             writable!(dst),
@@ -1179,12 +1179,11 @@ impl Masm for MacroAssembler {
                             dst_size,
                             kind.is_checked(),
                         );
-
                         Ok(())
-                    },
-                )
-            })
-        })
+                    })
+                })
+            },
+        )
     }
 
     fn signed_convert(

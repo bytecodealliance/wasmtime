@@ -15,12 +15,12 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movq (%rsi), %r9
-;   cmpq    %r9, %rdi
+;   cmpq %r9, %rdi
 ;   setz    %r10b
 ;   movzbq %r10b, %rax
-;   cmpq    %r9, %rdi
+;   cmpq %r9, %rdi
 ;   movq %rsi, %rdx
-;   cmovzq  %rdi, %rdx, %rdx
+;   cmoveq %rdi, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

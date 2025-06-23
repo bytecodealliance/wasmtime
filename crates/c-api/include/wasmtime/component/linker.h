@@ -136,6 +136,16 @@ WASM_API_EXTERN wasmtime_error_t *wasmtime_component_linker_instance_add_func(
     size_t name_len, wasmtime_component_func_callback_t callback, void *data,
     void (*finalizer)());
 
+#ifdef WASMTIME_FEATURE_WASI
+
+/**
+ * \brief Add all WASI interfaces into the \p linker provided.
+ */
+WASM_API_EXTERN wasmtime_error_t *
+wasmtime_component_linker_add_wasip2(wasmtime_component_linker_t *linker);
+
+#endif // WASMTIME_FEATURE_WASI
+
 /**
  * \brief Deletes a #wasmtime_component_linker_instance_t
  *

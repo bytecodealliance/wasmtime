@@ -97,6 +97,9 @@ audit-as-crates-io = true
 [policy.pulley-interpreter-fuzz]
 criteria = []
 
+[policy.pulley-macros]
+audit-as-crates-io = true
+
 [policy.wasi-common]
 audit-as-crates-io = true
 
@@ -374,6 +377,14 @@ criteria = "safe-to-deploy"
 version = "1.12.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.openssl]]
+version = "0.10.73"
+criteria = "safe-to-deploy"
+
+[[exemptions.openssl-sys]]
+version = "0.9.109"
+criteria = "safe-to-deploy"
+
 [[exemptions.openvino-finder]]
 version = "0.4.1"
 criteria = "safe-to-deploy"
@@ -452,6 +463,18 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rusty-fork]]
 version = "0.3.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.schannel]]
+version = "0.1.27"
+criteria = "safe-to-deploy"
+
+[[exemptions.security-framework]]
+version = "2.11.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.security-framework-sys]]
+version = "2.14.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.shuffling-allocator]]

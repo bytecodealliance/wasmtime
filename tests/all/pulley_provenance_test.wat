@@ -90,4 +90,8 @@
     (drop (table.get $t2 (i32.const 1)))
     (drop (table.get $t2 (i32.const 0)))
   )
+
+  (func $me (export "ref-func-myself")
+    (drop (ref.func $me))
+  )
 )

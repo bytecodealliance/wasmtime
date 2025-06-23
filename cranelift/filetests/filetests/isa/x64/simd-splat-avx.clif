@@ -238,7 +238,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vbroadcastss 0(%rdi), %xmm0
+;   vbroadcastss (%rdi), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -290,7 +290,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vbroadcastss 0(%rdi), %xmm0
+;   vbroadcastss (%rdi), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

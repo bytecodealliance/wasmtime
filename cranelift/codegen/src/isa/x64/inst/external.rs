@@ -2,7 +2,7 @@
 
 use super::{
     Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor, OperandVisitorImpl,
-    SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm, args::FromWritableReg, regs,
+    SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm, args::FromWritableReg,
 };
 use crate::{Reg, Writable, ir::TrapCode};
 use cranelift_assembler_x64 as asm;
@@ -340,7 +340,7 @@ impl From<SyntheticAmode> for asm::Amode<Gpr> {
         match amode {
             SyntheticAmode::Real(amode) => amode.into(),
             SyntheticAmode::IncomingArg { offset } => asm::Amode::ImmReg {
-                base: Gpr::unwrap_new(regs::rbp()),
+                base: Gpr::RBP,
                 simm32: asm::AmodeOffsetPlusKnownOffset {
                     simm32: (-i32::try_from(offset).unwrap()).into(),
                     offset: Some(offsets::KEY_INCOMING_ARG),
@@ -348,7 +348,7 @@ impl From<SyntheticAmode> for asm::Amode<Gpr> {
                 trap: None,
             },
             SyntheticAmode::SlotOffset { simm32 } => asm::Amode::ImmReg {
-                base: Gpr::unwrap_new(regs::rsp()),
+                base: Gpr::RSP,
                 simm32: asm::AmodeOffsetPlusKnownOffset {
                     simm32: simm32.into(),
                     offset: Some(offsets::KEY_SLOT_OFFSET),

@@ -292,15 +292,15 @@
 
 (decl u8_from_iconst (u8) Value)
 (extractor (u8_from_iconst x)
-           (def_inst (iconst (uimm8 x))))
+           (u64_from_iconst (u8_from_u64 x)))
 
 (decl u16_from_iconst (u16) Value)
 (extractor (u16_from_iconst x)
-           (u64_from_iconst (u64_as_u16_extractor x)))
+           (u64_from_iconst (u16_from_u64 x)))
 
 (decl u32_from_iconst (u32) Value)
 (extractor (u32_from_iconst x)
-           (u64_from_iconst (u64_as_u32 x)))
+           (u64_from_iconst (u32_from_u64 x)))
 
 ;; Extract a constant `u64` from a value defined by an `iconst`.
 (spec (u64_from_iconst arg) (provide (= arg (zero_ext 64 result))))
@@ -310,7 +310,11 @@
 
 (decl i8_from_iconst (i8) Value)
 (extractor (i8_from_iconst x)
-           (i32_from_iconst (i32_as_i8 x)))
+           (i64_from_iconst (i8_from_i64 x)))
+
+(decl i16_from_iconst (i16) Value)
+(extractor (i16_from_iconst x)
+           (i64_from_iconst (i16_from_i64 x)))
 
 ;; Extract a constant `i32` from a value defined by an `iconst`.
 ;; The value is sign extended to 32 bits.
@@ -318,7 +322,8 @@
       (provide (= arg (extract 31 0 (sign_ext 64 result))))
       (require (= result (sign_ext (widthof result) arg))))
 (decl i32_from_iconst (i32) Value)
-(extern extractor i32_from_iconst i32_from_iconst)
+(extractor (i32_from_iconst x)
+           (i64_from_iconst (i32_from_i64 x)))
 
 ;; Extract a constant `i64` from a value defined by an `iconst`.
 ;; The value is sign extended to 64 bits.
@@ -551,6 +556,12 @@
         (ConsumesFlags.ConsumesFlagsSideEffect inst1)
         (ConsumesFlags.ConsumesFlagsSideEffect inst2))
       (ConsumesFlags.ConsumesFlagsSideEffect2 inst1 inst2))
+
+;; Get the produced register out of a ConsumesFlags.
+(decl consumes_flags_get_reg (ConsumesFlags) Reg)
+(rule (consumes_flags_get_reg (ConsumesFlags.ConsumesFlagsReturnsReg _ reg)) reg)
+(decl consumes_flags_get_regs (ConsumesFlags) ValueRegs)
+(rule (consumes_flags_get_regs (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs _ _ regs)) regs)
 
 ;; Combine flags-producing and -consuming instructions together, ensuring that
 ;; they are emitted back-to-back and no other instructions can be emitted

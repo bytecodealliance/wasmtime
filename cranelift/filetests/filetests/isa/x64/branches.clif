@@ -19,7 +19,7 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpl    %esi, %edi
+;   cmpl %esi, %edi
 ;   jz      label2; j label1
 ; block1:
 ;   movl $0x2, %eax
@@ -68,7 +68,7 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpl    %esi, %edi
+;   cmpl %esi, %edi
 ;   jz      label2; j label1
 ; block1:
 ;   movl $0x1, %eax
@@ -117,7 +117,7 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpl    %esi, %edi
+;   cmpl %esi, %edi
 ;   jz      label2; j label1
 ; block1:
 ;   movl $0x2, %eax
@@ -315,8 +315,8 @@ block2:
 ; block0:
 ;   movl $0x2, %r10d
 ;   movl %edi, %r11d
-;   cmpl    %r10d, %r11d
-;   cmovbl  %r11d, %r10d, %r10d
+;   cmpl %r10d, %r11d
+;   cmovbl %r11d, %r10d
 ;   br_table %r10, %rcx, %rdx
 ; block1:
 ;   jmp     label4
@@ -383,7 +383,7 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   testq   %rdi, %rdi
+;   testq %rdi, %rdi
 ;   jl      label2; j label1
 ; block1:
 ;   uninit  %rax
@@ -432,7 +432,7 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   testl   %edi, %edi
+;   testl %edi, %edi
 ;   jl      label2; j label1
 ; block1:
 ;   uninit  %rax
@@ -481,7 +481,7 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   testq   %rdi, %rdi
+;   testq %rdi, %rdi
 ;   jz      label2; j label1
 ; block1:
 ;   uninit  %rax
@@ -530,7 +530,7 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   testl   %edi, %edi
+;   testl %edi, %edi
 ;   jz      label2; j label1
 ; block1:
 ;   uninit  %rax
@@ -579,7 +579,7 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   testq   %rdi, %rdi
+;   testq %rdi, %rdi
 ;   jnle    label2; j label1
 ; block1:
 ;   uninit  %rax
@@ -702,7 +702,7 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpl    %esi, %edi
+;   cmpl %esi, %edi
 ;   jz      label2; j label1
 ; block1:
 ;   movl $0x2, %eax
@@ -803,7 +803,7 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpl    %esi, %edi
+;   cmpl %esi, %edi
 ;   jz      label2; j label1
 ; block1:
 ;   movl $0x2, %eax
@@ -962,8 +962,8 @@ block5(v5: i32):
 ; block0:
 ;   movl $0x4, %eax
 ;   movl %edi, %ecx
-;   cmpl    %eax, %ecx
-;   cmovbl  %ecx, %eax, %eax
+;   cmpl %eax, %ecx
+;   cmovbl %ecx, %eax
 ;   br_table %rax, %r9, %r10
 ; block1:
 ;   jmp     label4
@@ -982,7 +982,7 @@ block5(v5: i32):
 ;   movl $0x4, %esi
 ;   jmp     label7
 ; block7:
-;   lea     0(%rdi,%rsi,1), %eax
+;   leal (%rdi, %rsi), %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1049,8 +1049,8 @@ block1(v5: i32):
 ;   movl $0x4, %eax
 ;   movl $0x4, %esi
 ;   movl %edi, %edi
-;   cmpl    %esi, %edi
-;   cmovbl  %edi, %esi, %esi
+;   cmpl %esi, %edi
+;   cmovbl %edi, %esi
 ;   br_table %rsi, %r10, %r9
 ; block1:
 ;   jmp     label6

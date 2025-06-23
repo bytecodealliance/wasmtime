@@ -169,6 +169,10 @@ audited_as = "33.0.0"
 version = "35.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.pulley-macros]]
+version = "35.0.0"
+audited_as = "34.0.0"
+
 [[unpublished.wasi-common]]
 version = "34.0.0"
 audited_as = "33.0.0"
@@ -947,6 +951,12 @@ when = "2025-05-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.pulley-macros]]
+version = "34.0.0"
+when = "2025-06-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.quote]]
 version = "1.0.36"
 when = "2024-04-10"
@@ -1710,6 +1720,12 @@ criteria = "safe-to-run"
 delta = "0.6.0 -> 0.6.1"
 aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
 
+[[audits.google.audits.openssl-macros]]
+who = "George Burgess IV <gbiv@google.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.0 -> 0.1.1"
+aggregated-from = "https://chromium.googlesource.com/chromiumos/third_party/rust_crates/+/main/cargo-vet/audits.toml?format=TEXT"
+
 [[audits.google.audits.pin-project-lite]]
 who = "David Koloski <dkoloski@google.com>"
 criteria = "safe-to-deploy"
@@ -1866,6 +1882,16 @@ who = "David Cook <dcook@divviup.org>"
 criteria = "safe-to-deploy"
 version = "0.10.2"
 
+[[audits.mozilla.wildcard-audits.core-foundation]]
+who = "Bobby Holley <bobbyholley@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 5946 # Jeff Muizelaar (jrmuizel)
+start = "2019-03-29"
+end = "2023-05-04"
+renew = false
+notes = "I've reviewed every source contribution that was neither authored nor reviewed by Mozilla."
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
 [[audits.mozilla.wildcard-audits.core-foundation-sys]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"
@@ -2006,6 +2032,13 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 who = "Erich Gubler <erichdongubler@gmail.com>"
 criteria = "safe-to-deploy"
 delta = "1.2.11 -> 1.2.12"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.core-foundation]]
+who = "Teodor Tanasoaia <ttanasoaia@mozilla.com>"
+criteria = "safe-to-deploy"
+delta = "0.9.3 -> 0.9.4"
+notes = "I've reviewed every source contribution that was neither authored nor reviewed by Mozilla."
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.crossbeam-utils]]

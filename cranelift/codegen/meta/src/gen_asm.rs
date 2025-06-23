@@ -297,6 +297,14 @@ enum IsleConstructor {
 
     /// This constructor does not return any results, but produces a side effect affecting EFLAGs.
     NoReturnSideEffect,
+
+    /// This constructor produces no results, but the flags register is written,
+    /// so a `ProducesFlags` value is returned with a side effect.
+    ProducesFlagsSideEffect,
+
+    /// This instructions reads EFLAGS, and returns a single gpr, so this
+    /// creates `ConsumesFlags.ConsumesFlagsReturnsReg`.
+    ConsumesFlagsReturnsGpr,
 }
 
 impl IsleConstructor {
@@ -309,6 +317,8 @@ impl IsleConstructor {
             IsleConstructor::NoReturnSideEffect | IsleConstructor::RetMemorySideEffect => {
                 "SideEffectNoResult"
             }
+            IsleConstructor::ProducesFlagsSideEffect => "ProducesFlags",
+            IsleConstructor::ConsumesFlagsReturnsGpr => "ConsumesFlags",
         }
     }
 
@@ -322,6 +332,8 @@ impl IsleConstructor {
             IsleConstructor::RetGpr => "emit_ret_gpr",
             IsleConstructor::RetXmm => "emit_ret_xmm",
             IsleConstructor::RetValueRegs => "emit_ret_value_regs",
+            IsleConstructor::ProducesFlagsSideEffect => "asm_produce_flags_side_effect",
+            IsleConstructor::ConsumesFlagsReturnsGpr => "asm_consumes_flags_returns_gpr",
         }
     }
 
@@ -332,7 +344,9 @@ impl IsleConstructor {
             IsleConstructor::RetGpr
             | IsleConstructor::RetXmm
             | IsleConstructor::RetValueRegs
-            | IsleConstructor::NoReturnSideEffect => "",
+            | IsleConstructor::NoReturnSideEffect
+            | IsleConstructor::ProducesFlagsSideEffect
+            | IsleConstructor::ConsumesFlagsReturnsGpr => "",
         }
     }
 
@@ -347,7 +361,9 @@ impl IsleConstructor {
             IsleConstructor::RetGpr
             | IsleConstructor::RetXmm
             | IsleConstructor::RetValueRegs
-            | IsleConstructor::NoReturnSideEffect => false,
+            | IsleConstructor::NoReturnSideEffect
+            | IsleConstructor::ProducesFlagsSideEffect
+            | IsleConstructor::ConsumesFlagsReturnsGpr => false,
         }
     }
 }
@@ -363,9 +379,10 @@ fn isle_param_for_ctor(op: &Operand, ctor: IsleConstructor) -> String {
         OperandKind::RegMem(_) if op.mutability.is_write() => match ctor {
             IsleConstructor::RetMemorySideEffect => "SyntheticAmode".to_string(),
             IsleConstructor::NoReturnSideEffect => "".to_string(),
-            IsleConstructor::RetGpr => "Gpr".to_string(),
+            IsleConstructor::RetGpr | IsleConstructor::ConsumesFlagsReturnsGpr => "Gpr".to_string(),
             IsleConstructor::RetXmm => "Xmm".to_string(),
             IsleConstructor::RetValueRegs => "ValueRegs".to_string(),
+            IsleConstructor::ProducesFlagsSideEffect => todo!(),
         },
 
         // everything else is the same as the "raw" variant
@@ -388,7 +405,13 @@ fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
         .filter(|o| o.mutability.is_write())
         .collect::<Vec<_>>();
     match &write_operands[..] {
-        [] => vec![IsleConstructor::NoReturnSideEffect],
+        [] => {
+            if format.eflags.is_write() {
+                vec![IsleConstructor::ProducesFlagsSideEffect]
+            } else {
+                vec![IsleConstructor::NoReturnSideEffect]
+            }
+        }
         [one] => match one.mutability {
             Read => unreachable!(),
             ReadWrite | Write => match one.location.kind() {
@@ -396,45 +419,66 @@ fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
                 // One read/write register output? Output the instruction
                 // and that register.
                 Reg(r) | FixedReg(r) => match r.reg_class().unwrap() {
-                    RegClass::Xmm => vec![IsleConstructor::RetXmm],
-                    RegClass::Gpr => vec![IsleConstructor::RetGpr],
+                    RegClass::Xmm => {
+                        assert!(!format.eflags.is_read());
+                        vec![IsleConstructor::RetXmm]
+                    }
+                    RegClass::Gpr => {
+                        if format.eflags.is_read() {
+                            vec![IsleConstructor::ConsumesFlagsReturnsGpr]
+                        } else {
+                            vec![IsleConstructor::RetGpr]
+                        }
+                    }
                 },
                 // One read/write memory operand? Output a side effect.
-                Mem(_) => vec![IsleConstructor::RetMemorySideEffect],
+                Mem(_) => {
+                    assert!(!format.eflags.is_read());
+                    vec![IsleConstructor::RetMemorySideEffect]
+                }
                 // One read/write reg-mem output? We need constructors for
                 // both variants.
-                RegMem(rm) => match rm.reg_class().unwrap() {
-                    RegClass::Xmm => vec![
-                        IsleConstructor::RetXmm,
-                        IsleConstructor::RetMemorySideEffect,
-                    ],
-                    RegClass::Gpr => vec![
-                        IsleConstructor::RetGpr,
-                        IsleConstructor::RetMemorySideEffect,
-                    ],
-                },
+                RegMem(rm) => {
+                    assert!(!format.eflags.is_read());
+                    match rm.reg_class().unwrap() {
+                        RegClass::Xmm => vec![
+                            IsleConstructor::RetXmm,
+                            IsleConstructor::RetMemorySideEffect,
+                        ],
+                        RegClass::Gpr => vec![
+                            IsleConstructor::RetGpr,
+                            IsleConstructor::RetMemorySideEffect,
+                        ],
+                    }
+                }
             },
         },
-        [one, two] => match (one.location.kind(), two.location.kind()) {
-            (FixedReg(_) | Reg(_), FixedReg(_) | Reg(_)) => {
-                vec![IsleConstructor::RetValueRegs]
+        [one, two] => {
+            assert!(!format.eflags.is_read());
+            match (one.location.kind(), two.location.kind()) {
+                (FixedReg(_) | Reg(_), FixedReg(_) | Reg(_)) => {
+                    vec![IsleConstructor::RetValueRegs]
+                }
+                (Reg(r), Mem(_)) | (Mem(_) | RegMem(_), Reg(r) | FixedReg(r)) => {
+                    assert!(matches!(r.reg_class().unwrap(), RegClass::Gpr));
+                    vec![IsleConstructor::RetGpr]
+                }
+                other => panic!("unsupported number of write operands {other:?}"),
             }
-            (Reg(r), Mem(_)) | (Mem(_) | RegMem(_), Reg(r) | FixedReg(r)) => {
-                assert!(matches!(r.reg_class().unwrap(), RegClass::Gpr));
-                vec![IsleConstructor::RetGpr]
+        }
+        [one, two, three] => {
+            assert!(!format.eflags.is_read());
+            match (
+                one.location.kind(),
+                two.location.kind(),
+                three.location.kind(),
+            ) {
+                (FixedReg(_), FixedReg(_), Mem(_)) => {
+                    vec![IsleConstructor::RetValueRegs]
+                }
+                other => panic!("unsupported number of write operands {other:?}"),
             }
-            other => panic!("unsupported number of write operands {other:?}"),
-        },
-        [one, two, three] => match (
-            one.location.kind(),
-            two.location.kind(),
-            three.location.kind(),
-        ) {
-            (FixedReg(_), FixedReg(_), Mem(_)) => {
-                vec![IsleConstructor::RetValueRegs]
-            }
-            other => panic!("unsupported number of write operands {other:?}"),
-        },
+        }
 
         other => panic!("unsupported number of write operands {other:?}"),
     }
@@ -548,9 +592,13 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
                     IsleConstructor::RetMemorySideEffect | IsleConstructor::NoReturnSideEffect => {
                         unreachable!()
                     }
-                    IsleConstructor::RetGpr => "(temp_writable_gpr)",
+                    IsleConstructor::RetGpr | IsleConstructor::ConsumesFlagsReturnsGpr => {
+                        "(temp_writable_gpr)"
+                    }
                     IsleConstructor::RetXmm => "(temp_writable_xmm)",
-                    IsleConstructor::RetValueRegs => todo!(),
+                    IsleConstructor::RetValueRegs | IsleConstructor::ProducesFlagsSideEffect => {
+                        todo!()
+                    }
                 }
             })
             .collect::<Vec<_>>()
@@ -564,31 +612,32 @@ fn generate_isle_inst_decls(f: &mut Formatter, inst: &Inst) {
 
         if let Some(alternate) = &inst.alternate {
             // We currently plan to use alternate instructions for SSE/AVX
-            // pairs, so we expect the destination register to be an XMM
+            // pairs, so we expect the one of the registers to be an XMM
             // register. In the future we could relax this, but would need to
             // handle more cases below.
-            assert!(matches!(
-                inst.format.operands.first().unwrap().location.reg_class(),
-                Some(RegClass::Xmm)
-            ));
+            assert!(
+                inst.format
+                    .operands
+                    .iter()
+                    .any(|o| matches!(o.location.reg_class(), Some(RegClass::Xmm)))
+            );
             let param_tys = if alternate.feature == Feature::avx {
                 param_tys.replace("Aligned", "")
             } else {
                 param_tys
             };
-            let name = inst.name();
             let alt_feature = alternate.feature.to_string();
             let alt_name = &alternate.name;
-            let rule_name = format!("x64_{name}_or_{alt_feature}");
-            fmtln!(f, "(decl {rule_name} ({param_tys}) {result_ty})");
-            fmtln!(f, "(rule 1 ({rule_name} {param_names})");
+            let rule_name_or_feat = format!("{rule_name}_or_{alt_feature}");
+            fmtln!(f, "(decl {rule_name_or_feat} ({param_tys}) {result_ty})");
+            fmtln!(f, "(rule 1 ({rule_name_or_feat} {param_names})");
             f.indent(|f| {
                 fmtln!(f, "(if-let true (use_{alt_feature}))");
-                fmtln!(f, "(x64_{alt_name} {param_names}))");
+                fmtln!(f, "(x64_{alt_name}{suffix} {param_names}))");
             });
             fmtln!(
                 f,
-                "(rule 0 ({rule_name} {param_names}) (x64_{name} {param_names}))"
+                "(rule 0 ({rule_name_or_feat} {param_names}) ({rule_name} {param_names}))"
             );
         }
     }

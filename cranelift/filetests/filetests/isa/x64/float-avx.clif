@@ -604,8 +604,8 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vmovss  0(%rdi), %xmm3
-;   vmovss  %xmm3, 0(%rsi)
+;   vmovss (%rdi), %xmm3
+;   vmovss %xmm3, (%rsi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -632,8 +632,8 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vmovsd  0(%rdi), %xmm3
-;   vmovsd  %xmm3, 0(%rsi)
+;   vmovsd (%rdi), %xmm3
+;   vmovsd %xmm3, (%rsi)
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

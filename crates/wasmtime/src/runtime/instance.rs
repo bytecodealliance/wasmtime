@@ -326,14 +326,12 @@ impl Instance {
     fn start_raw<T>(&self, store: &mut StoreContextMut<'_, T>, start: FuncIndex) -> Result<()> {
         // If a start function is present, invoke it. Make sure we use all the
         // trap-handling configuration in `store` as well.
-        let instance = self.id.get_mut(store.0);
-        let f = instance.get_exported_func(start);
+        let mut instance = self.id.get_mut(store.0);
+        let f = instance.as_mut().get_exported_func(start);
         let caller_vmctx = instance.vmctx();
         unsafe {
             super::func::invoke_wasm_and_catch_traps(store, |_default_caller, vm| {
-                f.func_ref
-                    .as_ref()
-                    .array_call(vm, caller_vmctx, NonNull::from(&mut []))
+                VMFuncRef::array_call(f.func_ref, vm, caller_vmctx, NonNull::from(&mut []))
             })?;
         }
         Ok(())
@@ -364,11 +362,17 @@ impl Instance {
         &'a self,
         store: &'a mut StoreOpaque,
     ) -> impl ExactSizeIterator<Item = Export<'a>> + 'a {
+        let module = store[self.id].env_module().clone();
+        let mut items = Vec::new();
+        for (_name, entity) in module.exports.iter() {
+            items.push(self._get_export(store, *entity));
+        }
         store[self.id]
             .env_module()
             .exports
             .iter()
-            .map(|(name, entity)| Export::new(name, self._get_export(store, *entity)))
+            .zip(items)
+            .map(|((name, _), item)| Export::new(name, item))
     }
 
     /// Looks up an exported [`Extern`] value by name.
@@ -422,8 +426,8 @@ impl Instance {
         Some(self._get_export(store, export.entity))
     }
 
-    fn _get_export(&self, store: &StoreOpaque, entity: EntityIndex) -> Extern {
-        let export = store[self.id].get_export_by_index(entity);
+    fn _get_export(&self, store: &mut StoreOpaque, entity: EntityIndex) -> Extern {
+        let export = self.id.get_mut(store).get_export_by_index_mut(entity);
         unsafe { Extern::from_wasmtime_export(export, store) }
     }
 

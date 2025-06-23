@@ -24,8 +24,8 @@ use crate::component::{
     RuntimeComponentInstanceIndex, StringEncoding, Transcode, TypeFuncIndex,
 };
 use crate::fact::transcode::Transcoder;
-use crate::prelude::*;
 use crate::{EntityRef, FuncIndex, GlobalIndex, MemoryIndex, PrimaryMap};
+use crate::{ModuleInternedTypeIndex, prelude::*};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use wasm_encoder::*;
@@ -140,14 +140,9 @@ struct AdapterOptions {
     options: Options,
 }
 
-/// This type is split out of `AdapterOptions` and is specifically used to
-/// deduplicate translation functions within a module. Consequently this has
-/// as few fields as possible to minimize the number of functions generated
-/// within an adapter module.
 #[derive(PartialEq, Eq, Hash, Copy, Clone)]
-struct Options {
-    /// The encoding that strings use from this adapter.
-    string_encoding: StringEncoding,
+/// Linear memory.
+struct LinearMemoryOptions {
     /// Whether or not the `memory` field, if present, is a 64-bit memory.
     memory64: bool,
     /// An optionally-specified memory where values may travel through for
@@ -156,13 +151,51 @@ struct Options {
     /// An optionally-specified function to be used to allocate space for
     /// types such as strings as they go into a module.
     realloc: Option<FuncIndex>,
-    callback: Option<FuncIndex>,
-    async_: bool,
 }
 
-enum Context {
-    Lift,
-    Lower,
+impl LinearMemoryOptions {
+    fn ptr(&self) -> ValType {
+        if self.memory64 {
+            ValType::I64
+        } else {
+            ValType::I32
+        }
+    }
+
+    fn ptr_size(&self) -> u8 {
+        if self.memory64 { 8 } else { 4 }
+    }
+}
+
+/// The data model for objects passed through an adapter.
+#[derive(PartialEq, Eq, Hash, Copy, Clone)]
+enum DataModel {
+    Gc {},
+    LinearMemory(LinearMemoryOptions),
+}
+
+impl DataModel {
+    #[track_caller]
+    fn unwrap_memory(&self) -> &LinearMemoryOptions {
+        match self {
+            DataModel::Gc {} => panic!("`unwrap_memory` on GC"),
+            DataModel::LinearMemory(opts) => opts,
+        }
+    }
+}
+
+/// This type is split out of `AdapterOptions` and is specifically used to
+/// deduplicate translation functions within a module. Consequently this has
+/// as few fields as possible to minimize the number of functions generated
+/// within an adapter module.
+#[derive(PartialEq, Eq, Hash, Copy, Clone)]
+struct Options {
+    /// The encoding that strings use from this adapter.
+    string_encoding: StringEncoding,
+    callback: Option<FuncIndex>,
+    async_: bool,
+    core_type: ModuleInternedTypeIndex,
+    data_model: DataModel,
 }
 
 /// Representation of a "helper function" which may be generated as part of
@@ -200,6 +233,12 @@ enum HelperLocation {
     Stack,
     /// Located in linear memory as configured by `opts`.
     Memory,
+    /// Located in a GC struct field.
+    #[expect(dead_code, reason = "CM+GC is still WIP")]
+    StructField,
+    /// Located in a GC array element.
+    #[expect(dead_code, reason = "CM+GC is still WIP")]
+    ArrayElement,
 }
 
 impl<'a> Module<'a> {
@@ -248,7 +287,7 @@ impl<'a> Module<'a> {
         // Import the core wasm function which was lifted using its appropriate
         // signature since the exported function this adapter generates will
         // call the lifted function.
-        let signature = self.types.signature(&lift, Context::Lift);
+        let signature = self.types.signature(&lift);
         let ty = self
             .core_types
             .function(&signature.params, &signature.results);
@@ -285,12 +324,11 @@ impl<'a> Module<'a> {
         let AdapterOptionsDfg {
             instance,
             string_encoding,
-            memory,
-            memory64,
-            realloc,
             post_return: _, // handled above
             callback,
             async_,
+            core_type,
+            data_model,
         } = options;
 
         let flags = self.import_global(
@@ -303,34 +341,50 @@ impl<'a> Module<'a> {
             },
             CoreDef::InstanceFlags(*instance),
         );
-        let memory = memory.as_ref().map(|memory| {
-            self.import_memory(
-                "memory",
-                &format!("m{}", self.imported_memories.len()),
-                MemoryType {
-                    minimum: 0,
-                    maximum: None,
-                    shared: false,
+
+        let data_model = match data_model {
+            crate::component::DataModel::Gc {} => DataModel::Gc {},
+            crate::component::DataModel::LinearMemory {
+                memory,
+                memory64,
+                realloc,
+            } => {
+                let memory = memory.as_ref().map(|memory| {
+                    self.import_memory(
+                        "memory",
+                        &format!("m{}", self.imported_memories.len()),
+                        MemoryType {
+                            minimum: 0,
+                            maximum: None,
+                            shared: false,
+                            memory64: *memory64,
+                            page_size_log2: None,
+                        },
+                        memory.clone().into(),
+                    )
+                });
+                let realloc = realloc.as_ref().map(|func| {
+                    let ptr = if *memory64 {
+                        ValType::I64
+                    } else {
+                        ValType::I32
+                    };
+                    let ty = self.core_types.function(&[ptr, ptr, ptr, ptr], &[ptr]);
+                    self.import_func(
+                        "realloc",
+                        &format!("f{}", self.imported_funcs.len()),
+                        ty,
+                        func.clone(),
+                    )
+                });
+                DataModel::LinearMemory(LinearMemoryOptions {
                     memory64: *memory64,
-                    page_size_log2: None,
-                },
-                memory.clone().into(),
-            )
-        });
-        let realloc = realloc.as_ref().map(|func| {
-            let ptr = if *memory64 {
-                ValType::I64
-            } else {
-                ValType::I32
-            };
-            let ty = self.core_types.function(&[ptr, ptr, ptr, ptr], &[ptr]);
-            self.import_func(
-                "realloc",
-                &format!("f{}", self.imported_funcs.len()),
-                ty,
-                func.clone(),
-            )
-        });
+                    memory,
+                    realloc,
+                })
+            }
+        };
+
         let callback = callback.as_ref().map(|func| {
             let ty = self
                 .core_types
@@ -350,11 +404,10 @@ impl<'a> Module<'a> {
             post_return: None,
             options: Options {
                 string_encoding: *string_encoding,
-                memory64: *memory64,
-                memory,
-                realloc,
                 callback,
                 async_: *async_,
+                core_type: *core_type,
+                data_model,
             },
         }
     }
@@ -825,29 +878,20 @@ pub enum Import {
 }
 
 impl Options {
-    fn ptr(&self) -> ValType {
-        if self.memory64 {
-            ValType::I64
-        } else {
-            ValType::I32
-        }
-    }
-
-    fn ptr_size(&self) -> u8 {
-        if self.memory64 { 8 } else { 4 }
-    }
-
     fn flat_types<'a>(
         &self,
         ty: &InterfaceType,
         types: &'a ComponentTypesBuilder,
     ) -> Option<&'a [FlatType]> {
         let flat = types.flat_types(ty)?;
-        Some(if self.memory64 {
-            flat.memory64
-        } else {
-            flat.memory32
-        })
+        match self.data_model {
+            DataModel::Gc {} => todo!("CM+GC"),
+            DataModel::LinearMemory(mem_opts) => Some(if mem_opts.memory64 {
+                flat.memory64
+            } else {
+                flat.memory32
+            }),
+        }
     }
 }
 
@@ -949,7 +993,8 @@ impl Helper {
         // stack-based representation.
         match self.dst.loc {
             HelperLocation::Stack => self.dst.push_flat(&mut results, types),
-            HelperLocation::Memory => params.push(self.dst.opts.ptr()),
+            HelperLocation::Memory => params.push(self.dst.opts.data_model.unwrap_memory().ptr()),
+            HelperLocation::StructField | HelperLocation::ArrayElement => todo!("CM+GC"),
         }
 
         core_types.function(&params, &results)
@@ -965,8 +1010,9 @@ impl HelperType {
                 }
             }
             HelperLocation::Memory => {
-                dst.push(self.opts.ptr());
+                dst.push(self.opts.data_model.unwrap_memory().ptr());
             }
+            HelperLocation::StructField | HelperLocation::ArrayElement => todo!("CM+GC"),
         }
     }
 }

@@ -245,6 +245,7 @@ macro_rules! foreach_config_option {
             component_model_async_builtins
             component_model_async_stackful
             component_model_error_context
+            component_model_gc
             simd
             gc_types
             exceptions

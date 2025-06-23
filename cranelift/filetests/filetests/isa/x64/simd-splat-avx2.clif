@@ -170,7 +170,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpbroadcastb 0(%rdi), %xmm0
+;   vpbroadcastb (%rdi), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -196,7 +196,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpbroadcastw 0(%rdi), %xmm0
+;   vpbroadcastw (%rdi), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -222,7 +222,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vbroadcastss 0(%rdi), %xmm0
+;   vbroadcastss (%rdi), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -274,7 +274,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vbroadcastss 0(%rdi), %xmm0
+;   vbroadcastss (%rdi), %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

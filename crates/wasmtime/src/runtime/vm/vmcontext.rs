@@ -869,19 +869,19 @@ impl VMFuncRef {
     /// exhaustively documented.
     #[inline]
     pub unsafe fn array_call(
-        &self,
+        me: NonNull<VMFuncRef>,
         pulley: Option<InterpreterRef<'_>>,
         caller: NonNull<VMContext>,
         args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         match pulley {
-            Some(vm) => self.array_call_interpreted(vm, caller, args_and_results),
-            None => self.array_call_native(caller, args_and_results),
+            Some(vm) => Self::array_call_interpreted(me, vm, caller, args_and_results),
+            None => Self::array_call_native(me, caller, args_and_results),
         }
     }
 
     unsafe fn array_call_interpreted(
-        &self,
+        me: NonNull<VMFuncRef>,
         vm: InterpreterRef<'_>,
         caller: NonNull<VMContext>,
         args_and_results: NonNull<[ValRaw]>,
@@ -889,14 +889,14 @@ impl VMFuncRef {
         // If `caller` is actually a `VMArrayCallHostFuncContext` then skip the
         // interpreter, even though it's available, as `array_call` will be
         // native code.
-        if self.vmctx.as_non_null().as_ref().magic
+        if me.as_ref().vmctx.as_non_null().as_ref().magic
             == wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC
         {
-            return self.array_call_native(caller, args_and_results);
+            return Self::array_call_native(me, caller, args_and_results);
         }
         vm.call(
-            self.array_call.as_non_null().cast(),
-            self.vmctx.as_non_null(),
+            me.as_ref().array_call.as_non_null().cast(),
+            me.as_ref().vmctx.as_non_null(),
             caller,
             args_and_results,
         )
@@ -904,7 +904,7 @@ impl VMFuncRef {
 
     #[inline]
     unsafe fn array_call_native(
-        &self,
+        me: NonNull<VMFuncRef>,
         caller: NonNull<VMContext>,
         args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
@@ -913,11 +913,11 @@ impl VMFuncRef {
             ptr: NonNull<VMArrayCallFunction>,
         }
         let native = GetNativePointer {
-            ptr: self.array_call.as_non_null(),
+            ptr: me.as_ref().array_call.as_non_null(),
         }
         .native;
         native(
-            self.vmctx.as_non_null(),
+            me.as_ref().vmctx.as_non_null(),
             caller,
             args_and_results.cast(),
             args_and_results.len(),

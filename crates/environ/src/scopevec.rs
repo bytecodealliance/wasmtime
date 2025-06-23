@@ -57,6 +57,11 @@ impl<T> ScopeVec<T> {
         // all of `data` after the data has been pushed onto our internal list.
         unsafe { core::slice::from_raw_parts_mut(ptr, len) }
     }
+
+    /// Iterate over items in this `ScopeVec`, consuming ownership.
+    pub fn into_iter(self) -> impl ExactSizeIterator<Item = Box<[T]>> {
+        self.data.into_inner().into_iter()
+    }
 }
 
 #[cfg(test)]

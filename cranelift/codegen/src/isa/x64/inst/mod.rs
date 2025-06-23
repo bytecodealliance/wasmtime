@@ -14,7 +14,7 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::slice;
 use cranelift_assembler_x64 as asm;
-use cranelift_entity::Signed;
+use cranelift_entity::{Signed, Unsigned};
 use smallvec::{SmallVec, smallvec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
@@ -79,8 +79,6 @@ impl Inst {
             | Inst::ReturnCallUnknown { .. }
             | Inst::CheckedSRemSeq { .. }
             | Inst::CheckedSRemSeq8 { .. }
-            | Inst::Cmove { .. }
-            | Inst::CmpRmiR { .. }
             | Inst::CvtFloatToSintSeq { .. }
             | Inst::CvtFloatToUintSeq { .. }
             | Inst::CvtUint64ToFloatSeq { .. }
@@ -90,7 +88,6 @@ impl Inst {
             | Inst::JmpKnown { .. }
             | Inst::JmpTableSeq { .. }
             | Inst::JmpUnknown { .. }
-            | Inst::LoadEffectiveAddress { .. }
             | Inst::LoadExtName { .. }
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
@@ -131,10 +128,7 @@ impl Inst {
             Inst::XmmRmiRVex { op, .. }
             | Inst::XmmRmRVex3 { op, .. }
             | Inst::XmmRmRImmVex { op, .. }
-            | Inst::XmmUnaryRmRVex { op, .. }
             | Inst::XmmMovRMVex { op, .. }
-            | Inst::XmmMovRMImmVex { op, .. }
-            | Inst::XmmToGprImmVex { op, .. }
             | Inst::XmmCmpRmRVex { op, .. } => op.available_from(),
 
             Inst::External { inst } => {
@@ -154,6 +148,7 @@ impl Inst {
                         lzcnt => features.push(InstructionSet::Lzcnt),
                         popcnt => features.push(InstructionSet::Popcnt),
                         avx => features.push(InstructionSet::AVX),
+                        avx2 => features.push(InstructionSet::AVX2),
                         cmpxchg16b => features.push(InstructionSet::CMPXCHG16b),
                     }
                 }
@@ -339,46 +334,19 @@ impl Inst {
         Inst::External { inst }
     }
 
-    pub(crate) fn lea(addr: impl Into<SyntheticAmode>, dst: Writable<Reg>) -> Inst {
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Inst::LoadEffectiveAddress {
-            addr: addr.into(),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-            size: OperandSize::Size64,
-        }
-    }
-
-    /// Does a comparison of dst - src for operands of size `size`, as stated by the machine
-    /// instruction semantics. Be careful with the order of parameters!
-    pub(crate) fn cmp_rmi_r(size: OperandSize, src1: Reg, src2: RegMemImm) -> Inst {
-        src2.assert_regclass_is(RegClass::Int);
-        debug_assert_eq!(src1.class(), RegClass::Int);
-        Inst::CmpRmiR {
-            size,
-            src1: Gpr::unwrap_new(src1),
-            src2: GprMemImm::unwrap_new(src2),
-            opcode: CmpOpcode::Cmp,
-        }
+    /// Compares `src1` against `src2`
+    pub(crate) fn cmp_mi_sxb(size: OperandSize, src1: Gpr, src2: i8) -> Inst {
+        let inst = match size {
+            OperandSize::Size8 => asm::inst::cmpb_mi::new(src1, src2.unsigned()).into(),
+            OperandSize::Size16 => asm::inst::cmpw_mi_sxb::new(src1, src2).into(),
+            OperandSize::Size32 => asm::inst::cmpl_mi_sxb::new(src1, src2).into(),
+            OperandSize::Size64 => asm::inst::cmpq_mi_sxb::new(src1, src2).into(),
+        };
+        Inst::External { inst }
     }
 
     pub(crate) fn trap_if(cc: CC, trap_code: TrapCode) -> Inst {
         Inst::TrapIf { cc, trap_code }
-    }
-
-    pub(crate) fn cmove(size: OperandSize, cc: CC, src: RegMem, dst: Writable<Reg>) -> Inst {
-        debug_assert!(size.is_one_of(&[
-            OperandSize::Size16,
-            OperandSize::Size32,
-            OperandSize::Size64
-        ]));
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        Inst::Cmove {
-            size,
-            cc,
-            consequent: GprMem::unwrap_new(src),
-            alternative: Gpr::unwrap_new(dst.to_reg()),
-            dst: WritableGpr::from_writable_reg(dst).unwrap(),
-        }
     }
 
     pub(crate) fn call_known(info: Box<CallInfo<ExternalName>>) -> Inst {
@@ -525,15 +493,6 @@ impl PrettyPrint for Inst {
             ljustify(s1 + &s2)
         }
 
-        fn suffix_bwlq(size: OperandSize) -> String {
-            match size {
-                OperandSize::Size8 => "b".to_string(),
-                OperandSize::Size16 => "w".to_string(),
-                OperandSize::Size32 => "l".to_string(),
-                OperandSize::Size64 => "q".to_string(),
-            }
-        }
-
         match self {
             Inst::CheckedSRemSeq {
                 size,
@@ -574,13 +533,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}")
             }
 
-            Inst::XmmUnaryRmRVex { op, src, dst, .. } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let src = src.pretty_print(8);
-                let op = ljustify(op.to_string());
-                format!("{op} {src}, {dst}")
-            }
-
             Inst::XmmUnaryRmREvex { op, src, dst, .. } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
                 let src = src.pretty_print(8);
@@ -602,15 +554,6 @@ impl PrettyPrint for Inst {
                 let dst = dst.pretty_print(8);
                 let op = ljustify(op.to_string());
                 format!("{op} {src}, {dst}")
-            }
-
-            Inst::XmmMovRMImmVex {
-                op, src, dst, imm, ..
-            } => {
-                let src = pretty_print_reg(src.to_reg(), 8);
-                let dst = dst.pretty_print(8);
-                let op = ljustify(op.to_string());
-                format!("{op} ${imm}, {src}, {dst}")
             }
 
             Inst::XmmRmR {
@@ -773,13 +716,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {dst}")
             }
 
-            Inst::XmmToGprImmVex { op, src, dst, imm } => {
-                let src = pretty_print_reg(src.to_reg(), 8);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let op = ljustify(op.to_string());
-                format!("{op} ${imm}, {src}, {dst}")
-            }
-
             Inst::XmmCmpRmR { op, src1, src2 } => {
                 let src1 = pretty_print_reg(src1.to_reg(), 8);
                 let src2 = src2.pretty_print(8);
@@ -878,47 +814,10 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}")
             }
 
-            Inst::LoadEffectiveAddress { addr, dst, size } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let addr = addr.pretty_print(8);
-                let op = ljustify("lea".to_string());
-                format!("{op} {addr}, {dst}")
-            }
-
-            Inst::CmpRmiR {
-                size,
-                src1,
-                src2,
-                opcode,
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), size.to_bytes());
-                let src2 = src2.pretty_print(size.to_bytes());
-                let op = match opcode {
-                    CmpOpcode::Cmp => "cmp",
-                    CmpOpcode::Test => "test",
-                };
-                let op = ljustify2(op.to_string(), suffix_bwlq(*size));
-                format!("{op} {src2}, {src1}")
-            }
-
             Inst::Setcc { cc, dst } => {
                 let dst = pretty_print_reg(dst.to_reg().to_reg(), 1);
                 let op = ljustify2("set".to_string(), cc.to_string());
                 format!("{op} {dst}")
-            }
-
-            Inst::Cmove {
-                size,
-                cc,
-                consequent,
-                alternative,
-                dst,
-            } => {
-                let alternative = pretty_print_reg(alternative.to_reg(), size.to_bytes());
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), size.to_bytes());
-                let consequent = consequent.pretty_print(size.to_bytes());
-                let op = ljustify(format!("cmov{}{}", cc.to_string(), suffix_bwlq(*size)));
-                format!("{op} {consequent}, {alternative}, {dst}")
             }
 
             Inst::XmmCmove {
@@ -1275,9 +1174,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_def(dst);
             src.get_operands(collector);
         }
-        Inst::XmmUnaryRmREvex { src, dst, .. }
-        | Inst::XmmUnaryRmRImmEvex { src, dst, .. }
-        | Inst::XmmUnaryRmRVex { src, dst, .. } => {
+        Inst::XmmUnaryRmREvex { src, dst, .. } | Inst::XmmUnaryRmRImmEvex { src, dst, .. } => {
             collector.reg_def(dst);
             src.get_operands(collector);
         }
@@ -1361,7 +1258,7 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(lhs);
             collector.reg_reuse_def(dst, 0); // Reuse RHS.
         }
-        Inst::XmmMovRMVex { src, dst, .. } | Inst::XmmMovRMImmVex { src, dst, .. } => {
+        Inst::XmmMovRMVex { src, dst, .. } => {
             collector.reg_use(src);
             dst.get_operands(collector);
         }
@@ -1382,10 +1279,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             debug_assert!(src.to_reg().is_virtual());
             collector.reg_use(src);
             collector.reg_fixed_nonallocatable(*dst);
-        }
-        Inst::XmmToGprImmVex { src, dst, .. } => {
-            collector.reg_use(src);
-            collector.reg_def(dst);
         }
         Inst::CvtUint64ToFloatSeq {
             src,
@@ -1426,26 +1319,8 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(tmp_xmm2);
         }
 
-        Inst::LoadEffectiveAddress { addr: src, dst, .. } => {
-            collector.reg_def(dst);
-            src.get_operands(collector);
-        }
-        Inst::CmpRmiR { src1, src2, .. } => {
-            collector.reg_use(src1);
-            src2.get_operands(collector);
-        }
         Inst::Setcc { dst, .. } => {
             collector.reg_def(dst);
-        }
-        Inst::Cmove {
-            consequent,
-            alternative,
-            dst,
-            ..
-        } => {
-            collector.reg_use(alternative);
-            collector.reg_reuse_def(dst, 0);
-            consequent.get_operands(collector);
         }
         Inst::XmmCmove {
             consequent,

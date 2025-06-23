@@ -304,6 +304,26 @@ newtype_of_reg!(
     |reg| reg.class() == RegClass::Int
 );
 
+#[expect(missing_docs, reason = "self-describing fields")]
+impl Gpr {
+    pub const RAX: Gpr = Gpr(regs::rax());
+    pub const RBX: Gpr = Gpr(regs::rbx());
+    pub const RCX: Gpr = Gpr(regs::rcx());
+    pub const RDX: Gpr = Gpr(regs::rdx());
+    pub const RSI: Gpr = Gpr(regs::rsi());
+    pub const RDI: Gpr = Gpr(regs::rdi());
+    pub const RSP: Gpr = Gpr(regs::rsp());
+    pub const RBP: Gpr = Gpr(regs::rbp());
+    pub const R8: Gpr = Gpr(regs::r8());
+    pub const R9: Gpr = Gpr(regs::r9());
+    pub const R10: Gpr = Gpr(regs::r10());
+    pub const R11: Gpr = Gpr(regs::r11());
+    pub const R12: Gpr = Gpr(regs::r12());
+    pub const R13: Gpr = Gpr(regs::r13());
+    pub const R14: Gpr = Gpr(regs::r14());
+    pub const R15: Gpr = Gpr(regs::r15());
+}
+
 // Define a newtype of `Reg` for XMM registers.
 newtype_of_reg!(
     Xmm,
@@ -624,13 +644,6 @@ impl RegMemImm {
         Self::Imm { simm32 }
     }
 
-    /// Asserts that in register mode, the reg class is the one that's expected.
-    pub(crate) fn assert_regclass_is(&self, expected_reg_class: RegClass) {
-        if let Self::Reg { reg } = self {
-            debug_assert_eq!(reg.class(), expected_reg_class);
-        }
-    }
-
     /// Add the regs mentioned by `self` to `collector`.
     pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
@@ -727,15 +740,6 @@ impl PrettyPrint for RegMem {
             RegMem::Mem { addr, .. } => addr.pretty_print(size),
         }
     }
-}
-
-#[derive(Clone, Copy, PartialEq)]
-/// Comparison operations.
-pub enum CmpOpcode {
-    /// CMP instruction: compute `a - b` and set flags from result.
-    Cmp,
-    /// TEST instruction: compute `a & b` and set flags from result.
-    Test,
 }
 
 #[derive(Debug)]
@@ -1051,12 +1055,6 @@ impl AvxOpcode {
             | AvxOpcode::Vpsllq
             | AvxOpcode::Vpsraw
             | AvxOpcode::Vpsrad
-            | AvxOpcode::Vpmovsxbw
-            | AvxOpcode::Vpmovzxbw
-            | AvxOpcode::Vpmovsxwd
-            | AvxOpcode::Vpmovzxwd
-            | AvxOpcode::Vpmovsxdq
-            | AvxOpcode::Vpmovzxdq
             | AvxOpcode::Vaddss
             | AvxOpcode::Vaddsd
             | AvxOpcode::Vmulss
@@ -1065,15 +1063,10 @@ impl AvxOpcode {
             | AvxOpcode::Vsubsd
             | AvxOpcode::Vdivss
             | AvxOpcode::Vdivsd
-            | AvxOpcode::Vpabsb
-            | AvxOpcode::Vpabsw
-            | AvxOpcode::Vpabsd
             | AvxOpcode::Vminss
             | AvxOpcode::Vminsd
             | AvxOpcode::Vmaxss
             | AvxOpcode::Vmaxsd
-            | AvxOpcode::Vsqrtps
-            | AvxOpcode::Vsqrtpd
             | AvxOpcode::Vphaddw
             | AvxOpcode::Vphaddd
             | AvxOpcode::Vpunpckldq
@@ -1085,12 +1078,7 @@ impl AvxOpcode {
             | AvxOpcode::Vmovups
             | AvxOpcode::Vmovupd
             | AvxOpcode::Vmovdqu
-            | AvxOpcode::Vpextrb
-            | AvxOpcode::Vpextrw
-            | AvxOpcode::Vpextrd
-            | AvxOpcode::Vpextrq
             | AvxOpcode::Vpblendw
-            | AvxOpcode::Vbroadcastss
             | AvxOpcode::Vsqrtss
             | AvxOpcode::Vsqrtsd
             | AvxOpcode::Vunpcklpd
@@ -1098,10 +1086,6 @@ impl AvxOpcode {
             | AvxOpcode::Vucomiss
             | AvxOpcode::Vucomisd => {
                 smallvec![InstructionSet::AVX]
-            }
-
-            AvxOpcode::Vpbroadcastb | AvxOpcode::Vpbroadcastw | AvxOpcode::Vpbroadcastd => {
-                smallvec![InstructionSet::AVX2]
             }
         }
     }

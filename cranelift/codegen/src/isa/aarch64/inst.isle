@@ -1959,7 +1959,7 @@
 (decl pure partial imm12_from_negated_value (Value) Imm12)
 (rule imm12_from_negated_value
   (imm12_from_negated_value (has_type ty (iconst n)))
-  (if-let (imm12_from_u64 imm) (i64_as_u64 (i64_neg (i64_sextend_imm64 ty n))))
+  (if-let (imm12_from_u64 imm) (i64_cast_unsigned (i64_checked_neg (i64_sextend_imm64 ty n))))
   imm)
 
 ;; Helper type to represent a value and an extend operation fused together.
@@ -3837,17 +3837,17 @@
 (rule 0 (amode ty val offset)
         (amode_no_more_iconst ty val offset))
 (rule 1 (amode ty (iadd x (i32_from_iconst y)) offset)
-        (if-let new_offset (s32_add_fallible y offset))
+        (if-let new_offset (i32_checked_add y offset))
         (amode_no_more_iconst ty x new_offset))
 (rule 2 (amode ty (iadd (i32_from_iconst x) y) offset)
-        (if-let new_offset (s32_add_fallible x offset))
+        (if-let new_offset (i32_checked_add x offset))
         (amode_no_more_iconst ty y new_offset))
 
 (decl amode_no_more_iconst (Type Value i32) AMode)
 ;; Base case: move the `offset` into a register and add it to `val` via the
 ;; amode
 (rule 0 (amode_no_more_iconst ty val offset)
-        (AMode.RegReg val (imm $I64 (ImmExtend.Zero) (i64_as_u64 offset))))
+        (AMode.RegReg val (imm $I64 (ImmExtend.Zero) (i64_cast_unsigned offset))))
 
 ;; Optimize cases where the `offset` provided fits into a immediates of
 ;; various kinds of addressing modes.
@@ -3884,10 +3884,10 @@
 ;; extension must happen before the shift. This will pattern-match the shift
 ;; first and then if that succeeds afterwards try to find an extend.
 (rule 6 (amode_no_more_iconst ty (iadd x (ishl y (iconst (u64_from_imm64 n)))) offset)
-        (if-let true (u64_eq (ty_bytes ty) (u64_shl 1 (shift_masked_imm ty n))))
+        (if-let true (u64_eq (ty_bytes ty) (u64_wrapping_shl 1 (shift_masked_imm ty n))))
         (amode_reg_scaled (amode_add x offset) y))
 (rule 7 (amode_no_more_iconst ty (iadd (ishl y (iconst (u64_from_imm64 n))) x) offset)
-        (if-let true (u64_eq (ty_bytes ty) (u64_shl 1 (shift_masked_imm ty n))))
+        (if-let true (u64_eq (ty_bytes ty) (u64_wrapping_shl 1 (shift_masked_imm ty n))))
         (amode_reg_scaled (amode_add x offset) y))
 
 (decl amode_reg_scaled (Reg Value) AMode)
@@ -3902,9 +3902,9 @@
 ;; select an appropriate `add` instruction to use.
 (decl amode_add (Reg i32) Reg)
 (rule 0 (amode_add x y)
-        (add $I64 x (imm $I64 (ImmExtend.Zero) (i64_as_u64 y))))
+        (add $I64 x (imm $I64 (ImmExtend.Zero) (i64_cast_unsigned y))))
 (rule 1 (amode_add x y)
-        (if-let (imm12_from_u64 imm12) (i64_as_u64 y))
+        (if-let (imm12_from_u64 imm12) (i64_cast_unsigned y))
         (add_imm $I64 x imm12))
 (rule 2 (amode_add x 0) x)
 
@@ -3935,7 +3935,7 @@
 (decl sink_load_into_addr (Type Inst) Reg)
 (rule (sink_load_into_addr ty x @ (load _ addr (offset32 offset)))
       (let ((_ Unit (sink_inst x)))
-        (add_imm_to_addr addr (i64_as_u64 offset))))
+        (add_imm_to_addr addr (i64_cast_unsigned offset))))
 
 (decl add_imm_to_addr (Reg u64) Reg)
 (rule 2 (add_imm_to_addr val 0) val)
@@ -3974,7 +3974,7 @@
 (rule 2 (constant_f32 n)
         (if-let imm (asimd_fp_mod_imm_from_u64 n (ScalarSize.Size32)))
         (fpu_move_fp_imm imm (ScalarSize.Size32)))
-(rule 1 (constant_f32 (u32_as_u16 n))
+(rule 1 (constant_f32 (u16_from_u32 n))
         (if-let true (use_fp16))
         (constant_f16 n))
 (rule (constant_f32 n)
@@ -3995,7 +3995,7 @@
 (rule 3 (constant_f64 n)
         (if-let imm (asimd_fp_mod_imm_from_u64 n (ScalarSize.Size64)))
         (fpu_move_fp_imm imm (ScalarSize.Size64)))
-(rule 2 (constant_f64 (u64_as_u32 n))
+(rule 2 (constant_f64 (u32_from_u64 n))
         (constant_f32 n))
 (rule 1 (constant_f64 (u64_low32_bits_unset n))
         (mov_to_fpu (imm $I64 (ImmExtend.Zero) n) (ScalarSize.Size64)))
@@ -4014,7 +4014,7 @@
                      (VectorSize.Size8x16)))
 
 ;; If the upper 64-bits are all zero then defer to `constant_f64`.
-(rule 2 (constant_f128 (u128_as_u64 n)) (constant_f64 n))
+(rule 2 (constant_f128 (u64_from_u128 n)) (constant_f64 n))
 
 ;; If the low half of the u128 equals the high half then delegate to the splat
 ;; logic as a splat of a 64-bit value.
@@ -4056,10 +4056,10 @@
 ;; Special case a 32-bit splat where an immediate can be created by
 ;; concatenating the 32-bit constant into a 64-bit value
 (rule 2 (splat_const n (VectorSize.Size32x4))
-        (if-let imm (asimd_mov_mod_imm_from_u64 (u64_or n (u64_shl n 32)) (ScalarSize.Size64)))
+        (if-let imm (asimd_mov_mod_imm_from_u64 (u64_or n (u64_wrapping_shl n 32)) (ScalarSize.Size64)))
         (vec_dup_imm imm false (VectorSize.Size64x2)))
 (rule 2 (splat_const n (VectorSize.Size32x2))
-        (if-let imm (asimd_mov_mod_imm_from_u64 (u64_or n (u64_shl n 32)) (ScalarSize.Size64)))
+        (if-let imm (asimd_mov_mod_imm_from_u64 (u64_or n (u64_wrapping_shl n 32)) (ScalarSize.Size64)))
         (fpu_extend (vec_dup_imm imm false (VectorSize.Size64x2)) (ScalarSize.Size64)))
 
 (rule 1 (splat_const n size)
@@ -4812,13 +4812,13 @@
 (rule lower_icmp_const_32_64_ugte (lower_icmp_const (IntCC.UnsignedGreaterThanOrEqual) a b ty)
       (if (ty_int_ref_scalar_64 ty))
       (if-let true (u64_is_odd b))
-      (if-let (imm12_from_u64 imm) (u64_sub b 1))
+      (if-let (imm12_from_u64 imm) (u64_wrapping_sub b 1))
   (flags_and_cc (cmp_imm (operand_size ty) a imm) (IntCC.UnsignedGreaterThan)))
 
 (rule lower_icmp_const_32_64_sgte (lower_icmp_const (IntCC.SignedGreaterThanOrEqual) a b ty)
       (if (ty_int_ref_scalar_64 ty))
       (if-let true (u64_is_odd b))
-      (if-let (imm12_from_u64 imm) (u64_sub b 1))
+      (if-let (imm12_from_u64 imm) (u64_wrapping_sub b 1))
   (flags_and_cc (cmp_imm (operand_size ty) a imm) (IntCC.SignedGreaterThan)))
 
 (rule lower_icmp_const_32_64_imm -1 (lower_icmp_const cond rn (imm12_from_u64 c) ty)

@@ -2591,6 +2591,12 @@ criteria = "safe-to-deploy"
 version = "0.2.11"
 notes = "build is only looking for environment variables to set cfg. only two minor uses of unsafe,on macos, with ffi bindings to digest primitives and libc atexit. otherwise, this is an abstraction over three very complex systems (schannel, security-framework, and openssl) which may end up having subtle differences, but none of those are apparent from the implementation of this crate"
 
+[[audits.native-tls]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.11 -> 0.2.14"
+notes = "Minor changes, mostly around updating some dependencies, directives, etc."
+
 [[audits.nu-ansi-term]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -2695,6 +2701,11 @@ criteria = "safe-to-deploy"
 delta = "0.7.2 -> 0.8.0"
 notes = "No new unsafe functionality, just brings in openvino-sys changes and other minor improvements."
 
+[[audits.openvino]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.9.0"
+
 [[audits.openvino-finder]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
 criteria = "safe-to-deploy"
@@ -2724,6 +2735,11 @@ criteria = "safe-to-deploy"
 delta = "0.7.2 -> 0.8.0"
 notes = "No logic changes in version bump."
 
+[[audits.openvino-finder]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.9.0"
+
 [[audits.openvino-sys]]
 who = "Matthew Tamayo-Rios <matthew@geekbeast.com>"
 criteria = "safe-to-deploy"
@@ -2752,6 +2768,11 @@ who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 delta = "0.7.2 -> 0.8.0"
 notes = "This diff simply re-generates slightly newer C headers with a slightly newer version of bindgen."
+
+[[audits.openvino-sys]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.9.0"
 
 [[audits.ort]]
 who = "Andrew Brown <andrew.brown@intel.com>"
@@ -4612,6 +4633,12 @@ user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2019-07-07"
 end = "2024-07-15"
 
+[[trusted.openssl-probe]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-08-04"
+end = "2026-06-18"
+
 [[trusted.parking_lot]]
 criteria = "safe-to-deploy"
 user-id = 2915 # Amanieu d'Antras (Amanieu)
@@ -4647,6 +4674,12 @@ criteria = "safe-to-deploy"
 user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2024-07-30"
 end = "2025-08-08"
+
+[[trusted.pulley-macros]]
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2025-06-20"
+end = "2026-06-20"
 
 [[trusted.quote]]
 criteria = "safe-to-deploy"

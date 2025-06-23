@@ -20,7 +20,7 @@ block0(v0: i64, v1: i64):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movabsq $0xffffeeeeddddcccc, %r10
-;   lea     0(%rdi,%r10,1), %r10
+;   leaq (%rdi, %r10), %r10
 ;   movq %r10, (%rsi)
 ;   movq %rdi, %r11
 ;   subq (%rip), %r11

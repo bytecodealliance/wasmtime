@@ -18,7 +18,7 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   testl   %edi, %edi
+;   testl %edi, %edi
 ;   jnz     label1; j label2
 ; block1:
 ;   movq %rdi, %rax
@@ -64,7 +64,7 @@ block2 cold:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   testl   %edi, %edi
+;   testl %edi, %edi
 ;   jnz     label1; j label2
 ; block1:
 ;   movq %rdi, %rax

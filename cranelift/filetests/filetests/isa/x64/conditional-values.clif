@@ -11,9 +11,9 @@ block0(v0: i8, v1: i32, v2: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   testb   %dil, %dil
+;   testb %dil, %dil
 ;   movq %rdx, %rax
-;   cmovnzl %esi, %eax, %eax
+;   cmovnel %esi, %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -45,7 +45,7 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   testb   %dil, %dil
+;   testb %dil, %dil
 ;   jnz     label2; j label1
 ; block1:
 ;   movl $0x2, %eax
@@ -91,7 +91,7 @@ block2:
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   testb   %dil, %dil
+;   testb %dil, %dil
 ;   jnz     label2; j label1
 ; block1:
 ;   movl $0x1, %eax
@@ -141,7 +141,7 @@ block2:
 ;   movq %rsp, %rbp
 ; block0:
 ;   movl (%rdi), %edx
-;   cmpl    $1, %edx
+;   cmpl $0x1, %edx
 ;   jz      label2; j label1
 ; block1:
 ;   movl $0x1, %eax
@@ -192,7 +192,7 @@ block2:
 ;   movq %rsp, %rbp
 ; block0:
 ;   movl (%rdi), %edx
-;   cmpl    $1, %edx
+;   cmpl $0x1, %edx
 ;   jz      label2; j label1
 ; block1:
 ;   movl $0x1, %eax

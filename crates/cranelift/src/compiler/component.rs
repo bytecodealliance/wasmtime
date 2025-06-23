@@ -388,6 +388,11 @@ impl<'a> TrampolineCompiler<'a> {
     }
 
     fn translate_task_return_call(&mut self, results: TypeTupleIndex, options: &CanonicalOptions) {
+        let mem_opts = match &options.data_model {
+            CanonicalOptionsDataModel::Gc {} => todo!("CM+GC"),
+            CanonicalOptionsDataModel::LinearMemory(opts) => opts,
+        };
+
         let args = self.builder.func.dfg.block_params(self.block0).to_vec();
         let vmctx = args[0];
 
@@ -398,7 +403,7 @@ impl<'a> TrampolineCompiler<'a> {
             .ins()
             .iconst(ir::types::I32, i64::from(results.as_u32()));
 
-        let memory = self.load_optional_memory(vmctx, options.memory);
+        let memory = self.load_optional_memory(vmctx, mem_opts.memory);
         let string_encoding = self.string_encoding(options.string_encoding);
 
         self.translate_intrinsic_libcall(
@@ -739,15 +744,20 @@ impl<'a> TrampolineCompiler<'a> {
 
         let CanonicalOptions {
             instance,
-            memory,
-            realloc,
             callback,
             post_return,
             string_encoding,
             async_,
+            core_type: _,
+            data_model,
         } = *options;
 
         assert!(callback.is_none());
+
+        let LinearMemoryOptions { memory, realloc } = match data_model {
+            CanonicalOptionsDataModel::Gc {} => todo!("CM+GC"),
+            CanonicalOptionsDataModel::LinearMemory(opts) => opts,
+        };
 
         // vmctx: *mut VMComponentContext
         host_sig.params.push(ir::AbiParam::new(pointer_type));
@@ -1298,10 +1308,15 @@ impl<'a> TrampolineCompiler<'a> {
         let mut callee_args = vec![vmctx];
 
         if let Some(options) = options {
+            let mem_opts = match options.data_model {
+                CanonicalOptionsDataModel::Gc {} => todo!("CM+GC"),
+                CanonicalOptionsDataModel::LinearMemory(opts) => opts,
+            };
+
             // memory: *mut VMMemoryDefinition
-            callee_args.push(self.load_memory(vmctx, options.memory.unwrap()));
+            callee_args.push(self.load_memory(vmctx, mem_opts.memory.unwrap()));
             // realloc: *mut VMFuncRef
-            callee_args.push(self.load_realloc(vmctx, options.realloc));
+            callee_args.push(self.load_realloc(vmctx, mem_opts.realloc));
             // string_encoding: StringEncoding
             callee_args.push(self.string_encoding(options.string_encoding));
             // async: bool
@@ -1328,12 +1343,17 @@ impl<'a> TrampolineCompiler<'a> {
         get_libcall: GetLibcallFn,
         info: &CanonicalAbiInfo,
     ) {
+        let mem_opts = match &options.data_model {
+            CanonicalOptionsDataModel::Gc {} => todo!("CM+GC"),
+            CanonicalOptionsDataModel::LinearMemory(opts) => opts,
+        };
+
         let args = self.builder.func.dfg.block_params(self.block0).to_vec();
         let vmctx = args[0];
         let mut callee_args = vec![
             vmctx,
-            self.load_memory(vmctx, options.memory.unwrap()),
-            self.load_realloc(vmctx, options.realloc),
+            self.load_memory(vmctx, mem_opts.memory.unwrap()),
+            self.load_realloc(vmctx, mem_opts.realloc),
             self.builder
                 .ins()
                 .iconst(ir::types::I8, if options.async_ { 1 } else { 0 }),
@@ -1368,12 +1388,17 @@ impl<'a> TrampolineCompiler<'a> {
         get_libcall: GetLibcallFn,
         sentinel: TrapSentinel,
     ) {
+        let mem_opts = match &options.data_model {
+            CanonicalOptionsDataModel::Gc {} => todo!("CM+GC"),
+            CanonicalOptionsDataModel::LinearMemory(opts) => opts,
+        };
+
         let args = self.builder.func.dfg.block_params(self.block0).to_vec();
         let vmctx = args[0];
         let mut callee_args = vec![
             vmctx,
-            self.load_memory(vmctx, options.memory.unwrap()),
-            self.load_realloc(vmctx, options.realloc),
+            self.load_memory(vmctx, mem_opts.memory.unwrap()),
+            self.load_realloc(vmctx, mem_opts.realloc),
             self.string_encoding(options.string_encoding),
             self.builder
                 .ins()

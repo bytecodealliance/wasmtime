@@ -266,18 +266,16 @@
 ;; `u8`.
 (decl pure partial u8_from_negated_iconst (Value) u8)
 (rule (u8_from_negated_iconst (i32_from_iconst i))
-  (if-let neg_i64 (i64_neg (i32_as_i64 i)))
-  (if-let neg_u64 (u64_try_from_i64 neg_i64))
-  (if-let neg_u8 (u8_try_from_u64 neg_u64))
+  (if-let neg_i64 (i64_checked_neg i))
+  (if-let neg_u8 (i64_try_into_u8 neg_i64))
   neg_u8)
 
 ;; Helper extract a constant from a `Value`, negate it, and fit it within a
 ;; `u32`.
 (decl pure partial u32_from_negated_iconst (Value) u32)
 (rule (u32_from_negated_iconst (i32_from_iconst i))
-  (if-let neg_i64 (i64_neg (i32_as_i64 i)))
-  (if-let neg_u64 (u64_try_from_i64 neg_i64))
-  (if-let neg_u32 (u32_try_from_u64 neg_u64))
+  (if-let neg_i64 (i64_checked_neg i))
+  (if-let neg_u32 (i64_try_into_u32 neg_i64))
   neg_u32)
 
 ;; 128-bit addition
@@ -420,15 +418,15 @@
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8 (umulhi a b)))
-  (if-let (u6_from_u8 shift) (u64_as_u8 8))
+  (if-let (u6_from_u8 shift) (u64_try_into_u8 8))
   (pulley_xshr32_u_u6 (pulley_xmul32 (zext32 a) (zext32 b)) shift))
 
 (rule (lower (has_type $I16 (umulhi a b)))
-  (if-let (u6_from_u8 shift) (u64_as_u8 16))
+  (if-let (u6_from_u8 shift) (u64_try_into_u8 16))
   (pulley_xshr32_u_u6 (pulley_xmul32 (zext32 a) (zext32 b)) shift))
 
 (rule (lower (has_type $I32 (umulhi a b)))
-  (if-let (u6_from_u8 shift) (u64_as_u8 32))
+  (if-let (u6_from_u8 shift) (u64_try_into_u8 32))
   (pulley_xshr64_u_u6 (pulley_xmul64 (zext64 a) (zext64 b)) shift))
 
 (rule (lower (has_type $I64 (umulhi a b)))
@@ -437,15 +435,15 @@
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8 (smulhi a b)))
-  (if-let (u6_from_u8 shift) (u64_as_u8 8))
+  (if-let (u6_from_u8 shift) (u64_try_into_u8 8))
   (pulley_xshr32_s_u6 (pulley_xmul32 (sext32 a) (sext32 b)) shift))
 
 (rule (lower (has_type $I16 (smulhi a b)))
-  (if-let (u6_from_u8 shift) (u64_as_u8 16))
+  (if-let (u6_from_u8 shift) (u64_try_into_u8 16))
   (pulley_xshr32_s_u6 (pulley_xmul32 (sext32 a) (sext32 b)) shift))
 
 (rule (lower (has_type $I32 (smulhi a b)))
-  (if-let (u6_from_u8 shift) (u64_as_u8 32))
+  (if-let (u6_from_u8 shift) (u64_try_into_u8 32))
   (pulley_xshr64_s_u6 (pulley_xmul64 (sext64 a) (sext64 b)) shift))
 
 (rule (lower (has_type $I64 (smulhi a b)))
@@ -517,7 +515,7 @@
 ;; `U6`.
 (decl pure partial u6_shift_from_iconst (Value) U6)
 (rule (u6_shift_from_iconst (u64_from_iconst val))
-  (if-let (u6_from_u8 x) (u64_as_u8 (u64_and val 0x3f)))
+  (if-let (u6_from_u8 x) (u64_try_into_u8 (u64_and val 0x3f)))
   x)
 
 (decl u6_from_u8 (U6) u8)
@@ -951,7 +949,7 @@
   (gen_fload addr offset flags ty))
 
 (rule 3 (lower (has_type $I128 (load flags addr offset)))
-  (if-let offsetp8 (s32_add_fallible offset 8))
+  (if-let offsetp8 (i32_checked_add offset 8))
   (let ((lo XReg (pulley_xload (amode addr offset) $I64 flags))
         (hi XReg (pulley_xload (amode addr offsetp8) $I64 flags)))
     (value_regs lo hi)))
@@ -1306,7 +1304,7 @@
   (sext64 val))
 
 (rule 1 (lower (has_type $I128 (sextend val)))
-  (if-let (u6_from_u8 shift) (u64_as_u8 63))
+  (if-let (u6_from_u8 shift) (u64_try_into_u8 63))
   (let ((lo XReg (sext64 val))
         (hi XReg (pulley_xshr64_s_u6 lo shift)))
     (value_regs lo hi)))
@@ -1371,50 +1369,50 @@
 (rule (emit_cond (Cond.IfXulteq64 src1 src2)) (pulley_xulteq64 src1 src2))
 
 (rule (emit_cond (Cond.IfXeq32I32 src1 src2))
-  (pulley_xeq32 src1 (imm $I32 (i64_as_u64 (i32_as_i64 src2)))))
+  (pulley_xeq32 src1 (imm $I32 (i64_cast_unsigned src2))))
 (rule (emit_cond (Cond.IfXneq32I32 src1 src2))
-  (pulley_xneq32 src1 (imm $I32 (i64_as_u64 (i32_as_i64 src2)))))
+  (pulley_xneq32 src1 (imm $I32 (i64_cast_unsigned src2))))
 (rule (emit_cond (Cond.IfXslt32I32 src1 src2))
-  (pulley_xslt32 src1 (imm $I32 (i64_as_u64 (i32_as_i64 src2)))))
+  (pulley_xslt32 src1 (imm $I32 (i64_cast_unsigned src2))))
 (rule (emit_cond (Cond.IfXslteq32I32 src1 src2))
-  (pulley_xslteq32 src1 (imm $I32 (i64_as_u64 (i32_as_i64 src2)))))
+  (pulley_xslteq32 src1 (imm $I32 (i64_cast_unsigned src2))))
 (rule (emit_cond (Cond.IfXult32I32 src1 src2))
-  (pulley_xult32 src1 (imm $I32 (u32_as_u64 src2))))
+  (pulley_xult32 src1 (imm $I32 src2)))
 (rule (emit_cond (Cond.IfXulteq32I32 src1 src2))
-  (pulley_xulteq32 src1 (imm $I32 (u32_as_u64 src2))))
+  (pulley_xulteq32 src1 (imm $I32 src2)))
 
 ;; Note the operand swaps here
 (rule (emit_cond (Cond.IfXsgt32I32 src1 src2))
-  (pulley_xslt32 (imm $I32 (i64_as_u64 (i32_as_i64 src2))) src1))
+  (pulley_xslt32 (imm $I32 (i64_cast_unsigned src2)) src1))
 (rule (emit_cond (Cond.IfXsgteq32I32 src1 src2))
-  (pulley_xslteq32 (imm $I32 (i64_as_u64 (i32_as_i64 src2))) src1))
+  (pulley_xslteq32 (imm $I32 (i64_cast_unsigned src2)) src1))
 (rule (emit_cond (Cond.IfXugt32I32 src1 src2))
-  (pulley_xult32 (imm $I32 (u32_as_u64 src2)) src1))
+  (pulley_xult32 (imm $I32 src2) src1))
 (rule (emit_cond (Cond.IfXugteq32I32 src1 src2))
-  (pulley_xulteq32 (imm $I32 (u32_as_u64 src2)) src1))
+  (pulley_xulteq32 (imm $I32 src2) src1))
 
 (rule (emit_cond (Cond.IfXeq64I32 src1 src2))
-  (pulley_xeq64 src1 (imm $I64 (i64_as_u64 (i32_as_i64 src2)))))
+  (pulley_xeq64 src1 (imm $I64 (i64_cast_unsigned src2))))
 (rule (emit_cond (Cond.IfXneq64I32 src1 src2))
-  (pulley_xneq64 src1 (imm $I64 (i64_as_u64 (i32_as_i64 src2)))))
+  (pulley_xneq64 src1 (imm $I64 (i64_cast_unsigned src2))))
 (rule (emit_cond (Cond.IfXslt64I32 src1 src2))
-  (pulley_xslt64 src1 (imm $I64 (i64_as_u64 (i32_as_i64 src2)))))
+  (pulley_xslt64 src1 (imm $I64 (i64_cast_unsigned src2))))
 (rule (emit_cond (Cond.IfXslteq64I32 src1 src2))
-  (pulley_xslteq64 src1 (imm $I64 (i64_as_u64 (i32_as_i64 src2)))))
+  (pulley_xslteq64 src1 (imm $I64 (i64_cast_unsigned src2))))
 (rule (emit_cond (Cond.IfXult64I32 src1 src2))
-  (pulley_xult64 src1 (imm $I64 (u32_as_u64 src2))))
+  (pulley_xult64 src1 (imm $I64 src2)))
 (rule (emit_cond (Cond.IfXulteq64I32 src1 src2))
-  (pulley_xulteq64 src1 (imm $I64 (u32_as_u64 src2))))
+  (pulley_xulteq64 src1 (imm $I64 src2)))
 
 ;; Note the operand swaps here
 (rule (emit_cond (Cond.IfXsgt64I32 src1 src2))
-  (pulley_xslt64 (imm $I64 (i64_as_u64 (i32_as_i64 src2))) src1))
+  (pulley_xslt64 (imm $I64 (i64_cast_unsigned src2)) src1))
 (rule (emit_cond (Cond.IfXsgteq64I32 src1 src2))
-  (pulley_xslteq64 (imm $I64 (i64_as_u64 (i32_as_i64 src2))) src1))
+  (pulley_xslteq64 (imm $I64 (i64_cast_unsigned src2)) src1))
 (rule (emit_cond (Cond.IfXugt64I32 src1 src2))
-  (pulley_xult64 (imm $I64 (u32_as_u64 src2)) src1))
+  (pulley_xult64 (imm $I64 src2) src1))
 (rule (emit_cond (Cond.IfXugteq64I32 src1 src2))
-  (pulley_xulteq64 (imm $I64 (u32_as_u64 src2)) src1))
+  (pulley_xulteq64 (imm $I64 src2) src1))
 
 ;;;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1673,7 +1671,7 @@
 ;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I16 (bswap a)))
-  (if-let (u6_from_u8 shift) (u64_as_u8 16))
+  (if-let (u6_from_u8 shift) (u64_try_into_u8 16))
   (pulley_xshr32_u_u6 (pulley_bswap32 a) shift))
 (rule (lower (has_type $I32 (bswap a))) (pulley_bswap32 a))
 (rule (lower (has_type $I64 (bswap a))) (pulley_bswap64 a))

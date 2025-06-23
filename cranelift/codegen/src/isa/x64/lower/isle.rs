@@ -24,6 +24,7 @@ use crate::machinst::{
 };
 use alloc::vec::Vec;
 use cranelift_assembler_x64 as asm;
+use cranelift_entity::{Signed, Unsigned};
 use regalloc2::PReg;
 use std::boxed::Box;
 
@@ -169,12 +170,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     fn put_in_reg_mem_imm(&mut self, val: Value) -> RegMemImm {
-        let inputs = self.lower_ctx.get_value_as_source_or_const(val);
-
-        if let Some(c) = inputs.constant {
-            let ty = self.lower_ctx.dfg().value_type(val);
-            if let Some(imm) = to_simm32(c as i64, ty) {
-                return imm.to_reg_mem_imm();
+        if let Some(imm) = self.i64_from_iconst(val) {
+            if let Ok(imm) = i32::try_from(imm) {
+                return RegMemImm::Imm {
+                    simm32: imm.unsigned(),
+                };
             }
         }
 
@@ -182,12 +182,11 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     fn put_in_xmm_mem_imm(&mut self, val: Value) -> XmmMemImm {
-        let inputs = self.lower_ctx.get_value_as_source_or_const(val);
-
-        if let Some(c) = inputs.constant {
-            let ty = self.lower_ctx.dfg().value_type(val);
-            if let Some(imm) = to_simm32(c as i64, ty) {
-                return XmmMemImm::unwrap_new(imm.to_reg_mem_imm());
+        if let Some(imm) = self.i64_from_iconst(val) {
+            if let Ok(imm) = i32::try_from(imm) {
+                return XmmMemImm::unwrap_new(RegMemImm::Imm {
+                    simm32: imm.unsigned(),
+                });
             }
         }
 
@@ -343,11 +342,10 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     #[inline]
     fn simm32_from_value(&mut self, val: Value) -> Option<GprMemImm> {
-        let inst = self.lower_ctx.dfg().value_def(val).inst()?;
-        let constant: u64 = self.lower_ctx.get_constant(inst)?;
-        let ty = self.lower_ctx.dfg().value_type(val);
-        let constant = constant as i64;
-        to_simm32(constant, ty)
+        let imm = self.i64_from_iconst(val)?;
+        Some(GprMemImm::unwrap_new(RegMemImm::Imm {
+            simm32: i32::try_from(imm).ok()?.unsigned(),
+        }))
     }
 
     fn sinkable_load(&mut self, val: Value) -> Option<SinkableLoad> {
@@ -977,35 +975,35 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     fn is_imm8(&mut self, src: &GprMemImm) -> Option<u8> {
         match src.clone().to_reg_mem_imm() {
-            RegMemImm::Imm { simm32 } => Some(u8::try_from(simm32).ok()?),
+            RegMemImm::Imm { simm32 } => Some(i8::try_from(simm32.signed()).ok()?.unsigned()),
             _ => None,
         }
     }
 
     fn is_imm8_xmm(&mut self, src: &XmmMemImm) -> Option<u8> {
         match src.clone().to_reg_mem_imm() {
-            RegMemImm::Imm { simm32 } => Some(u8::try_from(simm32).ok()?),
+            RegMemImm::Imm { simm32 } => Some(i8::try_from(simm32.signed()).ok()?.unsigned()),
             _ => None,
         }
     }
 
     fn is_simm8(&mut self, src: &GprMemImm) -> Option<i8> {
         match src.clone().to_reg_mem_imm() {
-            RegMemImm::Imm { simm32 } => Some(i8::try_from(simm32).ok()?),
+            RegMemImm::Imm { simm32 } => Some(i8::try_from(simm32.signed()).ok()?),
             _ => None,
         }
     }
 
     fn is_imm16(&mut self, src: &GprMemImm) -> Option<u16> {
         match src.clone().to_reg_mem_imm() {
-            RegMemImm::Imm { simm32 } => Some(u16::try_from(simm32).ok()?),
+            RegMemImm::Imm { simm32 } => Some(i16::try_from(simm32.signed()).ok()?.unsigned()),
             _ => None,
         }
     }
 
     fn is_simm16(&mut self, src: &GprMemImm) -> Option<i16> {
         match src.clone().to_reg_mem_imm() {
-            RegMemImm::Imm { simm32 } => Some(i16::try_from(simm32).ok()?),
+            RegMemImm::Imm { simm32 } => Some(i16::try_from(simm32.signed()).ok()?),
             _ => None,
         }
     }
@@ -1051,6 +1049,13 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             RegMemImm::Reg { reg } => XmmMem::new(RegMem::Reg { reg }),
             RegMemImm::Mem { addr } => XmmMem::new(RegMem::Mem { addr }),
             _ => None,
+        }
+    }
+
+    fn is_mem(&mut self, src: &XmmMem) -> Option<SyntheticAmode> {
+        match src.clone().to_reg_mem() {
+            RegMem::Reg { .. } => None,
+            RegMem::Mem { addr } => Some(addr),
         }
     }
 
@@ -1225,14 +1230,3 @@ const I8X16_USHR_MASKS: [u8; 128] = [
     0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
     0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
 ];
-
-#[inline]
-fn to_simm32(constant: i64, ty: Type) -> Option<GprMemImm> {
-    if ty.bits() <= 32 || constant == ((constant << 32) >> 32) {
-        Some(GprMemImm::unwrap_new(RegMemImm::Imm {
-            simm32: constant as u32,
-        }))
-    } else {
-        None
-    }
-}

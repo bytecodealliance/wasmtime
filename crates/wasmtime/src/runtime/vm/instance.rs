@@ -586,7 +586,7 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `index` is out of bounds for this instance.
-    pub fn get_exported_func(&self, index: FuncIndex) -> ExportFunction {
+    pub fn get_exported_func(self: Pin<&mut Self>, index: FuncIndex) -> ExportFunction {
         let func_ref = self.get_func_ref(index).unwrap();
         ExportFunction { func_ref }
     }
@@ -816,8 +816,12 @@ impl Instance {
     /// than tracking state related to whether it's been initialized
     /// before, because resetting that state on (re)instantiation is
     /// very expensive if there are many funcrefs.
-    fn construct_func_ref(
-        &self,
+    ///
+    /// # Safety
+    ///
+    /// This functions requires that `into` is a valid pointer.
+    unsafe fn construct_func_ref(
+        self: Pin<&mut Self>,
         index: FuncIndex,
         type_index: VMSharedTypeIndex,
         into: *mut VMFuncRef,
@@ -843,8 +847,8 @@ impl Instance {
             }
         };
 
-        // Safety: we have a `&mut self`, so we have exclusive access
-        // to this Instance.
+        // SAFETY: the unsafe contract here is forwarded to callers of this
+        // function.
         unsafe {
             ptr::write(into, func_ref);
         }
@@ -856,46 +860,54 @@ impl Instance {
     ///
     /// The returned reference is a stable reference that won't be moved and can
     /// be passed into JIT code.
-    pub(crate) fn get_func_ref(&self, index: FuncIndex) -> Option<NonNull<VMFuncRef>> {
+    pub(crate) fn get_func_ref(
+        self: Pin<&mut Self>,
+        index: FuncIndex,
+    ) -> Option<NonNull<VMFuncRef>> {
         if index == FuncIndex::reserved_value() {
             return None;
         }
 
-        // Safety: we have a `&mut self`, so we have exclusive access
-        // to this Instance.
-        unsafe {
-            // For now, we eagerly initialize an funcref struct in-place
-            // whenever asked for a reference to it. This is mostly
-            // fine, because in practice each funcref is unlikely to be
-            // requested more than a few times: once-ish for funcref
-            // tables used for call_indirect (the usual compilation
-            // strategy places each function in the table at most once),
-            // and once or a few times when fetching exports via API.
-            // Note that for any case driven by table accesses, the lazy
-            // table init behaves like a higher-level cache layer that
-            // protects this initialization from happening multiple
-            // times, via that particular table at least.
-            //
-            // When `ref.func` becomes more commonly used or if we
-            // otherwise see a use-case where this becomes a hotpath,
-            // we can reconsider by using some state to track
-            // "uninitialized" explicitly, for example by zeroing the
-            // funcrefs (perhaps together with other
-            // zeroed-at-instantiate-time state) or using a separate
-            // is-initialized bitmap.
-            //
-            // We arrived at this design because zeroing memory is
-            // expensive, so it's better for instantiation performance
-            // if we don't have to track "is-initialized" state at
-            // all!
-            let func = &self.env_module().functions[index];
-            let sig = func.signature.unwrap_engine_type_index();
-            let func_ref = self
-                .vmctx_plus_offset_raw::<VMFuncRef>(self.offsets().vmctx_func_ref(func.func_ref));
-            self.construct_func_ref(index, sig, func_ref.as_ptr());
+        // For now, we eagerly initialize an funcref struct in-place
+        // whenever asked for a reference to it. This is mostly
+        // fine, because in practice each funcref is unlikely to be
+        // requested more than a few times: once-ish for funcref
+        // tables used for call_indirect (the usual compilation
+        // strategy places each function in the table at most once),
+        // and once or a few times when fetching exports via API.
+        // Note that for any case driven by table accesses, the lazy
+        // table init behaves like a higher-level cache layer that
+        // protects this initialization from happening multiple
+        // times, via that particular table at least.
+        //
+        // When `ref.func` becomes more commonly used or if we
+        // otherwise see a use-case where this becomes a hotpath,
+        // we can reconsider by using some state to track
+        // "uninitialized" explicitly, for example by zeroing the
+        // funcrefs (perhaps together with other
+        // zeroed-at-instantiate-time state) or using a separate
+        // is-initialized bitmap.
+        //
+        // We arrived at this design because zeroing memory is
+        // expensive, so it's better for instantiation performance
+        // if we don't have to track "is-initialized" state at
+        // all!
+        let func = &self.env_module().functions[index];
+        let sig = func.signature.unwrap_engine_type_index();
 
-            Some(func_ref)
+        // SAFETY: the offset calculated here should be correct with
+        // `self.offsets`
+        let func_ref = unsafe {
+            self.vmctx_plus_offset_raw::<VMFuncRef>(self.offsets().vmctx_func_ref(func.func_ref))
+        };
+
+        // SAFETY: the `func_ref` ptr should be valid as it's within our
+        // `VMContext` area.
+        unsafe {
+            self.construct_func_ref(index, sig, func_ref.as_ptr());
         }
+
+        Some(func_ref)
     }
 
     /// Get the passive elements segment at the given index.
@@ -988,7 +1000,12 @@ impl Instance {
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
-                table.init_func(dst, elements.iter().map(|idx| instance.get_func_ref(*idx)))?;
+                table.init_func(
+                    dst,
+                    elements
+                        .iter()
+                        .map(|idx| instance.as_mut().get_func_ref(*idx)),
+                )?;
             }
             TableSegmentElements::Expressions(exprs) => {
                 let exprs = exprs
@@ -1262,7 +1279,8 @@ impl Instance {
                 };
                 // Panicking here helps catch bugs rather than silently truncating by accident.
                 let func_index = precomputed.get(usize::try_from(i).unwrap()).cloned();
-                let func_ref = func_index.and_then(|func_index| self.get_func_ref(func_index));
+                let func_ref =
+                    func_index.and_then(|func_index| self.as_mut().get_func_ref(func_index));
                 self.as_mut().tables_mut()[idx]
                     .1
                     .set(i, TableElement::FuncRef(func_ref))
@@ -1497,7 +1515,7 @@ impl Instance {
     /// # Panics
     ///
     /// Panics if `export` is not valid for this instance.
-    pub fn get_export_by_index(&self, export: EntityIndex) -> Export {
+    pub fn get_export_by_index_mut(self: Pin<&mut Self>, export: EntityIndex) -> Export {
         match export {
             EntityIndex::Function(i) => Export::Function(self.get_exported_func(i)),
             EntityIndex::Global(i) => Export::Global(self.get_exported_global(i)),

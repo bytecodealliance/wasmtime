@@ -5,7 +5,7 @@ use crate::gpr::{self, NonRspGpr, Size};
 use crate::rex::{Disp, RexPrefix, encode_modrm, encode_sib};
 
 /// x64 memory addressing modes.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub enum Amode<R: AsReg> {
     ImmReg {
@@ -76,13 +76,15 @@ impl<R: AsReg> Amode<R> {
 }
 
 /// A 32-bit immediate for address offsets.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct AmodeOffset(i32);
 
 impl AmodeOffset {
+    pub const ZERO: AmodeOffset = AmodeOffset::new(0);
+
     #[must_use]
-    pub fn new(value: i32) -> Self {
+    pub const fn new(value: i32) -> Self {
         Self(value)
     }
 
@@ -126,7 +128,7 @@ impl std::fmt::LowerHex for AmodeOffset {
 /// happens immediately before emission:
 /// - the [`KnownOffset`] is looked up, mapping it to an offset value
 /// - the [`Simm32`] value is added to the offset value
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct AmodeOffsetPlusKnownOffset {
     pub simm32: AmodeOffset,
     pub offset: Option<KnownOffset>,
@@ -158,7 +160,7 @@ impl std::fmt::LowerHex for AmodeOffsetPlusKnownOffset {
 }
 
 /// For RIP-relative addressing, keep track of the [`CodeSink`]-specific target.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub enum DeferredTarget {
     Label(Label),
@@ -197,7 +199,7 @@ impl<R: AsReg> std::fmt::Display for Amode<R> {
 }
 
 /// The scaling factor for the index register in certain [`Amode`]s.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub enum Scale {
     One,
@@ -244,7 +246,7 @@ impl Scale {
 }
 
 /// A general-purpose register or memory operand.
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 #[allow(
     clippy::module_name_repetitions,

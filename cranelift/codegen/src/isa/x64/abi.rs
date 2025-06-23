@@ -474,7 +474,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Self::I> {
         smallvec![
-            Inst::cmp_rmi_r(OperandSize::Size64, limit_reg, RegMemImm::reg(regs::rsp())),
+            Inst::External {
+                inst: asm::inst::cmpq_rm::new(Gpr::unwrap_new(limit_reg), Gpr::RSP,).into(),
+            },
             Inst::TrapIf {
                 // NBE == "> unsigned"; args above are reversed; this tests limit_reg > rsp.
                 cc: CC::NBE,
@@ -485,7 +487,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn gen_get_stack_addr(mem: StackAMode, into_reg: Writable<Reg>) -> Self::I {
         let mem: SyntheticAmode = mem.into();
-        Inst::lea(mem, into_reg)
+        Inst::External {
+            inst: asm::inst::leaq_rm::new(into_reg, mem).into(),
+        }
     }
 
     fn get_stacklimit_reg(_call_conv: isa::CallConv) -> Reg {
@@ -532,8 +536,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _isa_flags: &x64_settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
-        let r_rsp = Gpr::unwrap_new(regs::rsp());
-        let r_rbp = Gpr::unwrap_new(regs::rbp());
+        let r_rsp = Gpr::RSP;
+        let r_rbp = Gpr::RBP;
         let w_rbp = Writable::from_reg(r_rbp);
         let mut insts = SmallVec::new();
         // `push %rbp`
@@ -565,8 +569,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         _isa_flags: &x64_settings::Flags,
         _frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
-        let rbp = Gpr::unwrap_new(regs::rbp());
-        let rsp = Gpr::unwrap_new(regs::rsp());
+        let rbp = Gpr::RBP;
+        let rsp = Gpr::RSP;
 
         let mut insts = SmallVec::new();
         // `mov %rbp, %rsp`
@@ -661,8 +665,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
             // Make sure to keep the frame pointer and stack pointer in sync at
             // this point.
-            let rbp = Gpr::unwrap_new(regs::rbp());
-            let rsp = Gpr::unwrap_new(regs::rsp());
+            let rbp = Gpr::RBP;
+            let rsp = Gpr::RSP;
             insts.push(Inst::External {
                 inst: asm::inst::movq_mr::new(Writable::from_reg(rbp), rsp).into(),
             });
@@ -671,7 +675,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
             // Move the saved frame pointer down by `incoming_args_diff`.
             let addr = Amode::imm_reg(incoming_args_diff, regs::rsp());
-            let r11 = Writable::from_reg(Gpr::unwrap_new(regs::r11()));
+            let r11 = Writable::from_reg(Gpr::R11);
             let inst = asm::inst::movq_rm::new(r11, addr).into();
             insts.push(Inst::External { inst });
             let inst = asm::inst::movq_mr::new(Amode::imm_reg(0, regs::rsp()), r11.to_reg()).into();
