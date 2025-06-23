@@ -778,7 +778,7 @@ jobs:
   test_wasi_nn:
     strategy:
       matrix:
-        feature: ["openvino", "onnx"]
+        feature: ["openvino", "onnx-download"]
         os: ["ubuntu-24.04", "windows-2025"]
         include:
           - os: windows-2025
