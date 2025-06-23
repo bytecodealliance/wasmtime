@@ -1178,9 +1178,9 @@ impl HeapType {
             ConcreteFunc(ty) => Some(ty.registered_type),
             ConcreteArray(ty) => Some(ty.registered_type),
             ConcreteStruct(ty) => Some(ty.registered_type),
-            ConcreteCont(ty) => Some(ty.registered_type),
-            Extern | NoExtern | Func | NoFunc | Any | Eq | I31 | Array | Struct | Cont | NoCont
-            | None => Option::None,
+            Extern | NoExtern | Func | NoFunc | Any | Eq | I31 | Array | Struct | None => {
+                Option::None
+            }
         }
     }
 }
