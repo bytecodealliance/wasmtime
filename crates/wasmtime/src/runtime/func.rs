@@ -2342,16 +2342,22 @@ impl HostContext {
                 .rr_enabled()
                 .then(|| wasm_func_type_arc.unwrap_func());
 
-            let ret = 'ret: {
-                if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
-                    break 'ret R::fallible_from_error(trap);
-                }
+            // Setup call parameters
+            let params = {
+                let mut store = if P::may_gc() {
+                    AutoAssertNoGc::new(caller.store.0)
+                } else {
+                    unsafe { AutoAssertNoGc::disabled(caller.store.0) }
+                };
 
-                let store = caller.as_context_mut().0;
-                // Record/replay interceptions of function parameters only
-                // when validation is enabled.
+                // Record/replay interceptions of raw parameters args
+                // (only when validation is enabled).
                 // Function type unwraps should never panic since they are
                 // lazily evaluated
+                store.replay_event(
+                    |r| r.validate,
+                    |event, _| event.func_typecheck(wasm_func_type.unwrap()),
+                )?;
                 store.record_event(
                     |r| r.add_validation,
                     |_| {
@@ -2365,68 +2371,63 @@ impl HostContext {
                         )
                     },
                 );
-                store
-                    .replay_event(
-                        |r| r.validate,
-                        |event, _| event.func_typecheck(wasm_func_type.unwrap()),
-                    )
-                    .unwrap();
 
-                let mut store = if P::may_gc() {
-                    AutoAssertNoGc::new(caller.store.0)
-                } else {
-                    unsafe { AutoAssertNoGc::disabled(caller.store.0) }
-                };
-                let params = P::load(&mut store, args.as_mut());
-
-                let _ = &mut store;
-                drop(store);
-
-                let r = func(caller.sub_caller(), params);
-                if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
-                    break 'ret R::fallible_from_error(trap);
-                }
-                r.into_fallible()
+                P::load(&mut store, args.as_mut())
+                // Drop on store is necessary here; scope closure makes this implicit
             };
 
-            if !ret.compatible_with_store(caller.store.0) {
-                bail!("host function attempted to return cross-`Store` value to Wasm")
+            let returns = if caller.store.0.replay_enabled() {
+                None
             } else {
-                let store = caller.as_context_mut().0;
-                // Always intercept return for record/replay
-                store.record_event(
+                Some('ret: {
+                    if let Err(trap) = caller.store.0.call_hook(CallHook::CallingHost) {
+                        break 'ret R::fallible_from_error(trap);
+                    }
+                    let r = func(caller.sub_caller(), params);
+                    if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
+                        break 'ret R::fallible_from_error(trap);
+                    }
+                    let fallible = r.into_fallible();
+                    if !fallible.compatible_with_store(caller.store.0) {
+                        bail!("host function attempted to return cross-`Store` value to Wasm")
+                    }
+                    fallible
+                })
+            };
+
+            let mut store = if R::may_gc() {
+                AutoAssertNoGc::new(caller.store.0)
+            } else {
+                unsafe { AutoAssertNoGc::disabled(caller.store.0) }
+            };
+
+            // Record/replay interceptions of raw return args
+            let ret = if store.replay_enabled() {
+                store.replay_event(
                     |_| true,
-                    |rmeta| {
-                        let wasm_func_type = wasm_func_type.unwrap();
-                        let num_results = wasm_func_type.params().len();
-                        RREvent::host_func_return(
-                            unsafe { &args.as_ref()[..num_results] },
-                            rmeta.add_validation.then_some(wasm_func_type.clone()),
+                    |event, rmeta| {
+                        event.move_into_slice(
+                            args.as_mut(),
+                            rmeta.validate.then_some(wasm_func_type.unwrap()),
                         )
                     },
-                );
-                store
-                    .replay_event(
-                        |_| true,
-                        |event, rmeta| {
-                            event.move_into_slice(
-                                args.as_mut(),
-                                rmeta.validate.then_some(wasm_func_type.unwrap()),
-                            )
-                        },
+                )
+            } else {
+                returns.unwrap().store(&mut store, args.as_mut())
+            }?;
+            store.record_event(
+                |_| true,
+                |rmeta| {
+                    let wasm_func_type = wasm_func_type.unwrap();
+                    let num_results = wasm_func_type.params().len();
+                    RREvent::host_func_return(
+                        unsafe { &args.as_ref()[..num_results] },
+                        rmeta.add_validation.then_some(wasm_func_type.clone()),
                     )
-                    .unwrap();
+                },
+            );
 
-                let mut store = if R::may_gc() {
-                    AutoAssertNoGc::new(caller.store.0)
-                } else {
-                    unsafe { AutoAssertNoGc::disabled(caller.store.0) }
-                };
-                let ret = ret.store(&mut store, args.as_mut())?;
-                drop(store);
-
-                Ok(ret)
-            }
+            Ok(ret)
         };
 
         // With nothing else on the stack move `run` into this
