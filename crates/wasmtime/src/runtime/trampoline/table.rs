@@ -1,7 +1,8 @@
 use crate::TableType;
 use crate::prelude::*;
-use crate::store::{InstanceId, StoreOpaque};
-use crate::trampoline::create_handle;
+use crate::runtime::vm::{Imports, ModuleRuntimeInfo, OnDemandInstanceAllocator};
+use crate::store::{AllocateInstanceKind, InstanceId, StoreOpaque};
+use alloc::sync::Arc;
 use wasmtime_environ::{EntityIndex, Module, TypeTrace};
 
 pub fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<InstanceId> {
@@ -22,5 +23,21 @@ pub fn create_table(store: &mut StoreOpaque, table: &TableType) -> Result<Instan
         .exports
         .insert(String::new(), EntityIndex::Table(table_id));
 
-    create_handle(module, store, &[], None)
+    let imports = Imports::default();
+
+    unsafe {
+        let allocator =
+            OnDemandInstanceAllocator::new(store.engine().config().mem_creator.clone(), 0, false);
+        let module = Arc::new(module);
+        store.allocate_instance(
+            AllocateInstanceKind::Dummy {
+                allocator: &allocator,
+            },
+            &ModuleRuntimeInfo::bare_with_registered_type(
+                module,
+                table.element().clone().into_registered_type(),
+            ),
+            imports,
+        )
+    }
 }
