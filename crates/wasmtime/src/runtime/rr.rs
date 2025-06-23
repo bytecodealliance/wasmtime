@@ -23,16 +23,54 @@ const VAL_RAW_SIZE: usize = mem::size_of::<ValRaw>();
 type RRFuncArgVals = Vec<ValRawSer>;
 type RRFuncArgTypes = WasmFuncType;
 
+/// Transmutable byte array used to serialize [`ValRaw`] union
+///
+/// Maintaining the exact layout is crucial for zero-copy transmutations
+/// between [`ValRawSer`] and [`ValRaw`]
+#[derive(Serialize, Deserialize)]
+#[repr(C)]
+pub struct ValRawSer([u8; VAL_RAW_SIZE]);
+
+impl From<ValRaw> for ValRawSer {
+    fn from(value: ValRaw) -> Self {
+        unsafe { Self(mem::transmute(value)) }
+    }
+}
+
+impl From<ValRawSer> for ValRaw {
+    fn from(value: ValRawSer) -> Self {
+        unsafe { mem::transmute(value.0) }
+    }
+}
+
+impl fmt::Debug for ValRawSer {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let hex_digits_per_byte = 2;
+        let _ = write!(f, "0x..");
+        for b in self.0.iter().rev() {
+            let _ = write!(f, "{:0width$x}", b, width = hex_digits_per_byte);
+        }
+        Ok(())
+    }
+}
+
 fn raw_to_func_argvals(args: &[MaybeUninit<ValRaw>]) -> RRFuncArgVals {
     args.iter()
         .map(|x| unsafe { ValRawSer::from(x.assume_init()) })
         .collect::<Vec<_>>()
 }
 
+fn func_argvals_into_raw(rr_args: RRFuncArgVals, raw_args: &mut [MaybeUninit<ValRaw>]) {
+    for (src, dst) in rr_args.into_iter().zip(raw_args.iter_mut()) {
+        *dst = MaybeUninit::new(src.into());
+    }
+}
+
 #[derive(Debug)]
 pub enum ReplayError {
     EmptyBuffer,
-    FailedValidation,
+    FailedFuncValidation,
+    IncorrectEventVariant,
 }
 
 impl fmt::Display for ReplayError {
@@ -41,8 +79,11 @@ impl fmt::Display for ReplayError {
             Self::EmptyBuffer => {
                 write!(f, "replay buffer is empty!")
             }
-            Self::FailedValidation => {
-                write!(f, "replay event validation check failed")
+            Self::FailedFuncValidation => {
+                write!(f, "func replay event typecheck validation failed")
+            }
+            Self::IncorrectEventVariant => {
+                write!(f, "event methods invoked on incorrect variant")
             }
         }
     }
@@ -79,27 +120,9 @@ pub trait Replayer {
     /// Pop the next [`RREvent`] from the buffer
     /// Events should be FIFO
     fn pop_event(&mut self) -> Result<RREvent>;
-}
 
-/// Transmutable byte array used to serialize [`ValRaw`] union
-#[derive(Serialize, Deserialize)]
-pub struct ValRawSer([u8; VAL_RAW_SIZE]);
-
-impl From<ValRaw> for ValRawSer {
-    fn from(value: ValRaw) -> Self {
-        unsafe { Self(mem::transmute(value)) }
-    }
-}
-
-impl fmt::Debug for ValRawSer {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let hex_digits_per_byte = 2;
-        let _ = write!(f, "0x..");
-        for b in self.0.iter().rev() {
-            let _ = write!(f, "{:0width$x}", b, width = hex_digits_per_byte);
-        }
-        Ok(())
-    }
+    /// Get metadata associated with the replay process
+    fn metadata(&self) -> &ReplayMetadata;
 }
 
 /// Arguments for function call/return events
@@ -109,6 +132,27 @@ pub struct RRFuncArgs {
     args: RRFuncArgVals,
     /// Optional param/return types (required to support replay validation)
     types: Option<RRFuncArgTypes>,
+}
+
+impl RRFuncArgs {
+    /// Typecheck the types field, if it exists
+    ///
+    /// Errors with a [`ReplayError::FailedFuncValidation`] if typechecking fails
+    pub fn typecheck(&self, expect_types: &WasmFuncType) -> Result<(), ReplayError> {
+        if let Some(types) = &self.types {
+            if types == expect_types {
+                Ok(())
+            } else {
+                Err(ReplayError::FailedFuncValidation)
+            }
+        } else {
+            println!(
+                "Warning: Replay typechecking cannot be performed 
+                            since recorded trace is missing validation data"
+            );
+            Ok(())
+        }
+    }
 }
 
 /// A single, low-level recording/replay event
@@ -140,6 +184,37 @@ impl RREvent {
             args: raw_to_func_argvals(args),
             types: types,
         })
+    }
+
+    /// Typecheck the function signature for validation
+    ///
+    /// Errors with a [`ReplayError::IncorrectEventVariant`] if not
+    /// a func variant or a [`ReplayError::FailedFuncValidation`] if typechecking fails
+    pub fn func_typecheck(&self, expect_types: &WasmFuncType) -> Result<(), ReplayError> {
+        match self {
+            Self::HostFuncEntry(func_args) | Self::HostFuncReturn(func_args) => {
+                func_args.typecheck(expect_types)
+            }
+            _ => Err(ReplayError::IncorrectEventVariant),
+        }
+    }
+
+    /// Consume the caller event and encode it back into the slice with an optional
+    /// typechecking validation of the event.
+    pub fn move_into_slice(
+        self,
+        args: &mut [MaybeUninit<ValRaw>],
+        expect_types: Option<&WasmFuncType>,
+    ) -> Result<(), ReplayError> {
+        match self {
+            Self::HostFuncEntry(func_args) | Self::HostFuncReturn(func_args) => {
+                if let Some(e) = expect_types {
+                    func_args.typecheck(e)?;
+                }
+                func_argvals_into_raw(func_args.args, args);
+            }
+        };
+        Ok(())
     }
 }
 
@@ -189,10 +264,14 @@ impl Recorder for RecordBuffer {
         }
         data.rw.flush()?;
         data.buf.clear();
-        println!("Record flush: {:?} bytes", data.rw.metadata()?.len());
+        println!(
+            "Record flush | File size: {:?} bytes",
+            data.rw.metadata()?.len()
+        );
         Ok(())
     }
 
+    #[inline]
     fn metadata(&self) -> &RecordMetadata {
         &self.metadata
     }
@@ -230,5 +309,10 @@ impl Replayer for ReplayBuffer {
             .buf
             .pop_front()
             .ok_or(Self::ReplayError::EmptyBuffer.into())
+    }
+
+    #[inline]
+    fn metadata(&self) -> &ReplayMetadata {
+        &self.metadata
     }
 }
