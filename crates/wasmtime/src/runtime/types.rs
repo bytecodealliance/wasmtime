@@ -497,6 +497,10 @@ impl RefType {
     pub(crate) fn is_vmgcref_type_and_points_to_object(&self) -> bool {
         self.heap_type().is_vmgcref_type_and_points_to_object()
     }
+
+    pub(crate) fn into_registered_type(self) -> Option<RegisteredType> {
+        self.heap_type.into_registered_type()
+    }
 }
 
 /// The heap types that can Wasm can have references to.
@@ -1118,6 +1122,18 @@ impl HeapType {
                 self,
                 HeapType::I31 | HeapType::NoExtern | HeapType::NoFunc | HeapType::None
             )
+    }
+
+    pub(crate) fn into_registered_type(self) -> Option<RegisteredType> {
+        use HeapType::*;
+        match self {
+            ConcreteFunc(ty) => Some(ty.registered_type),
+            ConcreteArray(ty) => Some(ty.registered_type),
+            ConcreteStruct(ty) => Some(ty.registered_type),
+            Extern | NoExtern | Func | NoFunc | Any | Eq | I31 | Array | Struct | None => {
+                Option::None
+            }
+        }
     }
 }
 
