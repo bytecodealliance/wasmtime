@@ -390,16 +390,21 @@ pub(crate) fn emit(
         }
 
         Inst::CallKnown { info: call_info } => {
-            if let Some(s) = state.take_stack_map() {
-                let offset = sink.cur_offset() + 5;
-                sink.push_user_stack_map(state, offset, s);
-            }
+            let stack_map = state.take_stack_map();
 
-            sink.put1(0xE8);
+            asm::inst::callq_d::new(0).emit(sink, info, state);
+
+            // The last 4 bytes of `callq` is the relative displacement to where
+            // we're calling, so that's where the reloc is registered.
+            //
             // The addend adjusts for the difference between the end of the
             // instruction and the beginning of the immediate field.
-            emit_reloc(sink, Reloc::X86CallPCRel4, &call_info.dest, -4);
-            sink.put4(0);
+            let len = sink.cur_offset();
+            sink.add_reloc_at_offset(len - 4, Reloc::X86CallPCRel4, &call_info.dest, -4);
+
+            if let Some(s) = stack_map {
+                sink.push_user_stack_map(state, len, s);
+            }
 
             if let Some(try_call) = call_info.try_call_info.as_ref() {
                 sink.add_call_site(&try_call.exception_dests);
@@ -465,38 +470,16 @@ pub(crate) fn emit(
         Inst::CallUnknown {
             info: call_info, ..
         } => {
-            let dest = call_info.dest.clone();
+            let stack_map = state.take_stack_map();
 
-            match dest {
-                RegMem::Reg { reg } => {
-                    let reg_enc = int_reg_enc(reg);
-                    emit_std_enc_enc(
-                        sink,
-                        LegacyPrefixes::None,
-                        0xFF,
-                        1,
-                        2, /*subopcode*/
-                        reg_enc,
-                        RexFlags::clear_w(),
-                    );
-                }
+            let dest = match call_info.dest.clone() {
+                RegMem::Reg { reg } => asm::GprMem::Gpr(Gpr::unwrap_new(reg)),
+                RegMem::Mem { addr } => asm::GprMem::Mem(addr.into()),
+            };
 
-                RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state.frame_layout(), sink);
-                    emit_std_enc_mem(
-                        sink,
-                        LegacyPrefixes::None,
-                        0xFF,
-                        1,
-                        2, /*subopcode*/
-                        addr,
-                        RexFlags::clear_w(),
-                        0,
-                    );
-                }
-            }
+            asm::inst::callq_m::new(dest).emit(sink, info, state);
 
-            if let Some(s) = state.take_stack_map() {
+            if let Some(s) = stack_map {
                 let offset = sink.cur_offset();
                 sink.push_user_stack_map(state, offset, s);
             }
@@ -2477,9 +2460,12 @@ pub(crate) fn emit(
             emit_reloc(sink, Reloc::MachOX86_64Tlv, symbol, -4);
             sink.put4(0); // offset
 
-            // callq *(%rdi)
-            sink.put1(0xff);
-            sink.put1(0x17);
+            asm::inst::callq_m::new(asm::Amode::ImmReg {
+                base: Gpr::RDI,
+                simm32: asm::AmodeOffsetPlusKnownOffset::ZERO,
+                trap: None,
+            })
+            .emit(sink, info, state);
         }
 
         Inst::CoffTlsGetAddr { symbol, dst, tmp } => {

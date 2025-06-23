@@ -135,6 +135,11 @@ pub struct AmodeOffsetPlusKnownOffset {
 }
 
 impl AmodeOffsetPlusKnownOffset {
+    pub const ZERO: AmodeOffsetPlusKnownOffset = AmodeOffsetPlusKnownOffset {
+        simm32: AmodeOffset::ZERO,
+        offset: None,
+    };
+
     /// # Panics
     ///
     /// Panics if the sum of the immediate and the known offset value overflows.
