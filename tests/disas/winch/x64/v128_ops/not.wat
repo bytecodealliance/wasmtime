@@ -18,7 +18,7 @@
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
 ;;       movdqu  0x19(%rip), %xmm0
-;;       vpcmpeqd %xmm15, %xmm15, %xmm15
+;;       vpcmpeqb %xmm15, %xmm15, %xmm15
 ;;       vpxor   %xmm0, %xmm15, %xmm0
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
