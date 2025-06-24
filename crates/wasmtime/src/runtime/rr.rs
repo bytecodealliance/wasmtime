@@ -27,7 +27,7 @@ type RRFuncArgTypes = WasmFuncType;
 ///
 /// Maintaining the exact layout is crucial for zero-copy transmutations
 /// between [`ValRawSer`] and [`ValRaw`]
-#[derive(Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[repr(C)]
 pub struct ValRawSer([u8; VAL_RAW_SIZE]);
 
@@ -119,14 +119,14 @@ pub trait Replayer {
 
     /// Pop the next [`RREvent`] from the buffer
     /// Events should be FIFO
-    fn pop_event(&mut self) -> Result<RREvent>;
+    fn pop_event(&mut self) -> Result<RREvent, ReplayError>;
 
     /// Get metadata associated with the replay process
     fn metadata(&self) -> &ReplayMetadata;
 }
 
 /// Arguments for function call/return events
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RRFuncArgs {
     /// Raw values passed across the call/return boundary
     args: RRFuncArgVals,
@@ -160,7 +160,7 @@ impl RRFuncArgs {
 /// A high-level event (e.g. import calls consisting of lifts and lowers
 /// of parameter/return types) may consist of multiple of these lower-level
 /// [`RREvent`]s
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RREvent {
     /// A function call from Wasm to Host
     HostFuncEntry(RRFuncArgs),
@@ -304,7 +304,7 @@ impl Replayer for ReplayBuffer {
         })
     }
 
-    fn pop_event(&mut self) -> Result<RREvent> {
+    fn pop_event(&mut self) -> Result<RREvent, ReplayError> {
         self.data
             .buf
             .pop_front()
@@ -314,5 +314,61 @@ impl Replayer for ReplayBuffer {
     #[inline]
     fn metadata(&self) -> &ReplayMetadata {
         &self.metadata
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+    use tempfile::{NamedTempFile, TempPath};
+
+    #[test]
+    fn rr_buffers() -> Result<()> {
+        let tmp = NamedTempFile::new()?;
+
+        let tmppath = tmp.path().to_str().expect("Filename should be UTF-8");
+        let record_cfg = RecordConfig {
+            path: String::from(tmppath),
+            metadata: RecordMetadata {
+                add_validation: true,
+            },
+        };
+
+        let values = vec![ValRaw::i32(1), ValRaw::f32(2), ValRaw::i64(3)]
+            .into_iter()
+            .map(|x| ValRawSer::from(x))
+            .collect::<Vec<_>>();
+
+        let event = RREvent::HostFuncEntry(RRFuncArgs {
+            args: values,
+            types: None,
+        });
+
+        // Record values
+        let mut recorder = RecordBuffer::new_recorder(record_cfg)?;
+        recorder.push_event(event.clone());
+        recorder.flush_to_file()?;
+
+        let tmp = tmp.into_temp_path();
+        let tmppath = <TempPath as AsRef<Path>>::as_ref(&tmp)
+            .to_str()
+            .expect("Filename should be UTF-8");
+
+        // Assert that replayed values are identical
+        let replay_cfg = ReplayConfig {
+            path: String::from(tmppath),
+            metadata: ReplayMetadata { validate: true },
+        };
+        let mut replayer = ReplayBuffer::new_replayer(replay_cfg)?;
+        let event_pop = replayer.pop_event()?;
+        // Replay matches record
+        assert!(event == event_pop);
+
+        // Queue is empty
+        let event = replayer.pop_event();
+        assert!(event.is_err() && matches!(event.unwrap_err(), ReplayError::EmptyBuffer));
+
+        Ok(())
     }
 }
