@@ -362,6 +362,13 @@ impl ValType {
             }
         }
     }
+
+    pub(crate) fn into_registered_type(self) -> Option<RegisteredType> {
+        match self {
+            ValType::Ref(ty) => ty.into_registered_type(),
+            _ => None,
+        }
+    }
 }
 
 /// Opaque references to data in the Wasm heap or to host data.
@@ -535,6 +542,10 @@ impl RefType {
 
     pub(crate) fn is_vmgcref_type_and_points_to_object(&self) -> bool {
         self.heap_type().is_vmgcref_type_and_points_to_object()
+    }
+
+    pub(crate) fn into_registered_type(self) -> Option<RegisteredType> {
+        self.heap_type.into_registered_type()
     }
 }
 
@@ -1159,6 +1170,18 @@ impl HeapType {
                 self,
                 HeapType::I31 | HeapType::NoExtern | HeapType::NoFunc | HeapType::None
             )
+    }
+
+    pub(crate) fn into_registered_type(self) -> Option<RegisteredType> {
+        use HeapType::*;
+        match self {
+            ConcreteFunc(ty) => Some(ty.registered_type),
+            ConcreteArray(ty) => Some(ty.registered_type),
+            ConcreteStruct(ty) => Some(ty.registered_type),
+            Extern | NoExtern | Func | NoFunc | Any | Eq | I31 | Array | Struct | None => {
+                Option::None
+            }
+        }
     }
 }
 
@@ -2501,6 +2524,10 @@ impl GlobalType {
             .default_value()
             .ok_or_else(|| anyhow!("global type has no default value"))?;
         RuntimeGlobal::new(store, self.clone(), val)
+    }
+
+    pub(crate) fn into_registered_type(self) -> Option<RegisteredType> {
+        self.content.into_registered_type()
     }
 }
 

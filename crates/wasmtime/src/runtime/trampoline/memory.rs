@@ -56,7 +56,7 @@ pub fn create_memory(
             AllocateInstanceKind::Dummy {
                 allocator: &allocator,
             },
-            &ModuleRuntimeInfo::bare_maybe_imported_func(Arc::new(module), None),
+            &ModuleRuntimeInfo::bare(Arc::new(module)),
             Default::default(),
         )
     }
