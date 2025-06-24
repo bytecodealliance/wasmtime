@@ -15,13 +15,13 @@ workspace = true
 wasmtime-test-util = { workspace = true, features = ['wast'] }
 
 [dependencies]
-mutatis = "0.3.1"
 anyhow = { workspace = true }
 arbitrary = { workspace = true, features = ["derive"] }
 env_logger = { workspace = true }
 log = { workspace = true }
 mutatis = { workspace = true }
 rayon = "1.2.1"
+smallvec = { workspace = true }
 target-lexicon = { workspace = true }
 tempfile = "3.3.0"
 wasmparser = { workspace = true }

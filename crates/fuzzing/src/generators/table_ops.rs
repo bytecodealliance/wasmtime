@@ -1,15 +1,17 @@
 //! Generating series of `table.get` and `table.set` operations.
 use mutatis::mutators as m;
 use mutatis::{Candidates, Context, DefaultMutate, Generate, Mutate, Result as MutResult};
+use smallvec::SmallVec;
 use std::ops::RangeInclusive;
 use wasm_encoder::{
     CodeSection, ConstExpr, EntityType, ExportKind, ExportSection, Function, FunctionSection,
     GlobalSection, ImportSection, Instruction, Module, RefType, TableSection, TableType,
     TypeSection, ValType,
 };
+
 /// A description of a Wasm module that makes a series of `externref` table
 /// operations.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct TableOps {
     pub(crate) num_params: u32,
     pub(crate) num_globals: u32,
@@ -134,10 +136,12 @@ impl TableOps {
 
         module.finish()
     }
+
     /// Computes the abstract stack depth after executing all operations
-    pub fn abstract_stack_depth(&self) -> usize {
+    pub fn abstract_stack_depth(&self, index: usize) -> usize {
+        debug_assert!(index <= self.ops.len());
         let mut stack: usize = 0;
-        for op in &self.ops {
+        for op in self.ops.iter().take(index) {
             let pop = op.operands_len();
             let push = op.results_len();
             stack = stack.saturating_sub(pop);
@@ -145,73 +149,38 @@ impl TableOps {
         }
         stack
     }
-    /// Fixes the stack after mutation
-    fn fixup(
-        &mut self,
-        op: &TableOp,
-        pre: Option<TableOp>,
-        post: Option<TableOp>,
-        idx: usize,
-        op_present: bool,
-    ) {
-        let num_pops = op.operands_len();
-        let num_pushes = op.results_len();
 
-        if let Some(pre_op) = pre {
-            for _ in 0..num_pops {
-                self.ops.insert(idx, pre_op.clone());
-                eprintln!(
-                    "Patched with {} at idx {} to satisfy {} operand(s) for {:?}",
-                    pre_op.name(),
-                    idx,
-                    num_pops,
-                    op.name()
-                );
+    /// Fixes the stack after mutating the `idx`th op.
+    ///
+    /// The abstract stack depth starting at the `idx`th opcode must be `stack`.
+    fn fixup(&mut self, idx: usize, mut stack: usize) {
+        let mut new_ops = Vec::with_capacity(self.ops.len());
+        new_ops.extend_from_slice(&self.ops[..idx]);
+
+        // Iterate through all ops including and after `idx`, inserting a null
+        // ref for any missing operands when they want to pop more operands than
+        // exist on the stack.
+        new_ops.extend(self.ops[idx..].iter().copied().flat_map(|op| {
+            let mut temp = SmallVec::<[_; 4]>::new();
+
+            while stack < op.operands_len() {
+                temp.push(TableOp::Null());
+                stack += 1;
             }
+
+            temp.push(op);
+            stack = stack - op.operands_len() + op.results_len();
+
+            temp
+        }));
+
+        // Now make sure that the stack is empty at the end of the ops by
+        // inserting drops as necessary.
+        for _ in 0..stack {
+            new_ops.push(TableOp::Drop());
         }
-        if let Some(post_op) = post {
-            let post_idx = if op_present {
-                idx + num_pops + 1
-            } else {
-                idx + num_pops
-            };
-            for _ in 0..num_pushes {
-                self.ops.insert(post_idx, post_op.clone());
-                eprintln!(
-                    "Patched with {} at idx {} to discard {} result(s) from {:?}",
-                    post_op.name(),
-                    post_idx,
-                    num_pushes,
-                    op.name()
-                );
-            }
-        }
-    }
-    /// Creates TableOps with all default opcodes
-    pub fn new(num_params: u32, num_globals: u32, table_size: i32) -> Self {
-        Self {
-            num_params,
-            num_globals,
-            table_size,
-            ops: vec![
-                TableOp::Null(),
-                TableOp::Drop(),
-                TableOp::Gc(),
-                TableOp::LocalSet(0),
-                TableOp::LocalGet(0),
-                TableOp::GlobalSet(0),
-                TableOp::GlobalGet(0),
-            ],
-        }
-    }
-    /// Creates empty TableOps
-    pub fn empty(num_params: u32, num_globals: u32, table_size: i32) -> Self {
-        Self {
-            num_params,
-            num_globals,
-            table_size,
-            ops: vec![],
-        }
+
+        self.ops = new_ops;
     }
 }
 
@@ -222,28 +191,32 @@ pub struct TableOpsMutator;
 impl Mutate<TableOps> for TableOpsMutator {
     fn mutate(&mut self, c: &mut Candidates<'_>, ops: &mut TableOps) -> mutatis::Result<()> {
         // Insert
-        c.mutation(|ctx| {
-            if let Some(idx) = ctx.rng().gen_index(ops.ops.len().saturating_add(1)) {
-                let mut stack = ops.abstract_stack_depth();
-                let op = gen_table_op_mutatis(ops, ctx, &mut stack)?;
-                ops.fixup(&op, Some(TableOp::Null()), None, idx, true);
-                ops.ops.insert(idx + op.operands_len(), op);
-                ops.fixup(&op, None, Some(TableOp::Drop()), idx, true);
-            }
-            Ok(())
-        })?;
-        // Remove
-        c.mutation(|ctx| {
-            if ops.ops.is_empty() {
-                return Ok(());
-            }
-            if let Some(idx) = ctx.rng().gen_index(ops.ops.len()) {
-                let removed = ops.ops.remove(idx);
-                ops.fixup(&removed, None, Some(TableOp::Null()), idx, false);
-            }
+        if !c.shrink() {
+            c.mutation(|ctx| {
+                if let Some(idx) = ctx.rng().gen_index(ops.ops.len() + 1) {
+                    let stack = ops.abstract_stack_depth(idx);
+                    let (op, _new_stack_size) = TableOp::generate(ctx, &ops, stack)?;
+                    ops.ops.insert(idx, op);
+                    ops.fixup(idx, stack);
+                }
+                Ok(())
+            })?;
+        }
 
-            Ok(())
-        })?;
+        // Remove
+        if !ops.ops.is_empty() {
+            c.mutation(|ctx| {
+                let idx = ctx
+                    .rng()
+                    .gen_index(ops.ops.len())
+                    .expect("ops is not empty");
+                let stack = ops.abstract_stack_depth(idx);
+                ops.ops.remove(idx);
+                ops.fixup(idx, stack);
+                Ok(())
+            })?;
+        }
+
         Ok(())
     }
 }
@@ -258,15 +231,22 @@ impl Default for TableOpsMutator {
     }
 }
 
+impl<'a> arbitrary::Arbitrary<'a> for TableOps {
+    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
+        let mut session = mutatis::Session::new().seed(u.arbitrary()?);
+        session
+            .generate()
+            .map_err(|_| arbitrary::Error::IncorrectFormat)
+    }
+}
+
 impl Generate<TableOps> for TableOpsMutator {
     fn generate(&mut self, ctx: &mut Context) -> MutResult<TableOps> {
         let num_params = m::range(NUM_PARAMS_RANGE).generate(ctx)?;
         let num_globals = m::range(NUM_GLOBALS_RANGE).generate(ctx)?;
         let table_size = m::range(TABLE_SIZE_RANGE).generate(ctx)?;
-        let mut ops = Vec::new();
-        let stack = 0u32;
 
-        let mut temp_ops = TableOps {
+        let mut ops = TableOps {
             num_params,
             num_globals,
             table_size,
@@ -280,28 +260,20 @@ impl Generate<TableOps> for TableOpsMutator {
                 TableOp::GlobalGet(0),
             ],
         };
-        while ops.len() < MAX_OPS {
-            temp_ops.ops = ops.clone();
-            let mut stack = temp_ops.abstract_stack_depth();
-            let add_result = gen_table_op_mutatis(&mut temp_ops, ctx, &mut stack);
 
-            if add_result.is_ok() {
-                if let Some(last) = temp_ops.ops.last() {
-                    ops.push(*last);
-                }
-            } else {
-                break;
-            }
+        let mut stack: usize = 0;
+        while ops.ops.len() < MAX_OPS {
+            let (op, new_stack_len) = TableOp::generate(ctx, &ops, stack)?;
+            ops.ops.push(op);
+            stack = new_stack_len;
         }
+
+        // Drop any leftover refs on the stack.
         for _ in 0..stack {
-            ops.push(TableOp::Drop());
+            ops.ops.push(TableOp::Drop());
         }
-        Ok(TableOps {
-            num_params,
-            num_globals,
-            table_size,
-            ops,
-        })
+
+        Ok(ops)
     }
 }
 
@@ -325,6 +297,7 @@ macro_rules! define_table_ops {
         ];
 
         impl TableOp {
+            #[cfg(test)]
             fn name(&self) -> &'static str  {
                 match self {
                     $(
@@ -350,56 +323,60 @@ macro_rules! define_table_ops {
             }
         }
 
-        type TableOpConstructor = fn(
-                    &mut TableOps,
-                    &mut mutatis::Context,
-                    &mut usize
-                ) -> Option<TableOp>;
-
         $(
-            #[allow(unused_variables, unused_comparisons, non_snake_case)]
+            #[allow(non_snake_case)]
             fn $op(
-                ops: &mut TableOps,
-                ctx: &mut mutatis::Context,
-                stack: &mut usize
-            ) -> Option<TableOp> {
-                if $( $(($limit as fn(&TableOps) -> $ty)(ops) > 0 &&)* )? *stack >= $params {
-                    let result = TableOp::$op(
-                        $($(
-                            m::range(0..=($limit as fn(&TableOps) -> $ty)(ops) - 1)
-                                .generate(ctx)
-                                .ok()?,
-                        )*)?
-                    );
-                    *stack = *stack - $params + $results;
-                    Some(result)
-                } else {
-                    None
+                _ctx: &mut mutatis::Context,
+                _ops: &TableOps,
+                stack: usize,
+            ) -> mutatis::Result<(TableOp, usize)> {
+                #[allow(unused_comparisons)]
+                {
+                    debug_assert!(stack >= $params);
                 }
+
+                let op = TableOp::$op(
+                    $($({
+                        let limit_fn = $limit as fn(&TableOps) -> $ty;
+                        let limit = (limit_fn)(_ops);
+                        debug_assert!(limit > 0);
+                        m::range(0..=limit - 1).generate(_ctx)?
+                    })*)?
+                );
+                let new_stack = stack - $params + $results;
+                Ok((op, new_stack))
             }
         )*
-        const TABLE_OP_GENERATORS: &[TableOpConstructor] = &[
-            $(
-                $op,
-            )*
-        ];
-        fn gen_table_op_mutatis(
-            ops: &mut TableOps,
-            ctx: &mut mutatis::Context,
-            stack: &mut usize,
-        ) -> mutatis::Result<TableOp> {
-            let mut valid_choices = vec![];
-            for f in TABLE_OP_GENERATORS {
-                let mut temp_stack = *stack;
-                if let Some(op) = f(ops, ctx, &mut temp_stack) {
-                    valid_choices.push((f, op, temp_stack));
-                }
+
+        impl TableOp {
+            fn generate(
+                ctx: &mut mutatis::Context,
+                ops: &TableOps,
+                stack: usize,
+            ) -> mutatis::Result<(TableOp, usize)> {
+                let mut valid_choices: Vec<
+                    fn (&mut mutatis::Context, &TableOps, usize) -> mutatis::Result<(TableOp, usize)>
+                > = vec![];
+
+                $(
+                    #[allow(unused_comparisons)]
+                    if stack >= $params $($(
+                        && {
+                            let limit_fn: fn(&TableOps) -> $ty = $limit;
+                            let limit = (limit_fn)(ops);
+                            limit > 0
+                        }
+                    )*)? {
+                        valid_choices.push($op);
+                    }
+                )*
+
+                let f = *ctx.rng()
+                    .choose(&valid_choices)
+                    .expect("should always have a valid op choice");
+
+                (f)(ctx, ops, stack)
             }
-            let (_, op, new_stack) = *ctx.rng()
-                .choose(&valid_choices)
-                .expect("[-] .choose(&valid_choices) failed.");
-            *stack = new_stack;
-            Ok(op)
         }
     };
 }
@@ -476,12 +453,41 @@ impl TableOp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Creates empty TableOps
+    fn empty_test_ops(num_params: u32, num_globals: u32, table_size: i32) -> TableOps {
+        TableOps {
+            num_params,
+            num_globals,
+            table_size,
+            ops: vec![],
+        }
+    }
+
+    /// Creates TableOps with all default opcodes
+    fn test_ops(num_params: u32, num_globals: u32, table_size: i32) -> TableOps {
+        TableOps {
+            num_params,
+            num_globals,
+            table_size,
+            ops: vec![
+                TableOp::Null(),
+                TableOp::Drop(),
+                TableOp::Gc(),
+                TableOp::LocalSet(0),
+                TableOp::LocalGet(0),
+                TableOp::GlobalSet(0),
+                TableOp::GlobalGet(0),
+            ],
+        }
+    }
+
     #[test]
     fn mutate_table_ops_with_default_mutator() -> mutatis::Result<()> {
         let _ = env_logger::try_init();
         use mutatis::Session;
         use wasmparser::Validator;
-        let mut res = TableOps::new(5, 5, 5);
+        let mut res = test_ops(5, 5, 5);
         let mut session = Session::new();
 
         for _ in 0..1024 {
@@ -506,7 +512,7 @@ mod tests {
         let _ = env_logger::try_init();
         let mut unseen_ops: std::collections::HashSet<_> = OP_NAMES.iter().copied().collect();
 
-        let mut res = TableOps::empty(5, 5, 5);
+        let mut res = empty_test_ops(5, 5, 5);
         let mut generator = TableOpsMutator;
         let mut session = mutatis::Session::new();
 
@@ -527,7 +533,7 @@ mod tests {
     fn test_wat_string() -> mutatis::Result<()> {
         let _ = env_logger::try_init();
 
-        let mut table_ops = TableOps::new(2, 2, 5);
+        let mut table_ops = test_ops(2, 2, 5);
         table_ops.ops.extend([
             TableOp::Null(),
             TableOp::Drop(),
