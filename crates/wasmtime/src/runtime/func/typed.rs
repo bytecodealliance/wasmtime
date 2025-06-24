@@ -132,10 +132,7 @@ where
         &self,
         mut store: impl AsContextMut<Data: Send>,
         params: Params,
-    ) -> Result<Results>
-    where
-        Results: 'static,
-    {
+    ) -> Result<Results> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),

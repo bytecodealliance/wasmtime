@@ -1,5 +1,3 @@
-#[cfg(feature = "async")]
-use crate::fiber::AsyncCx;
 use crate::func::HostFunc;
 use crate::hash_map::{Entry, HashMap};
 use crate::instance::InstancePre;
@@ -473,7 +471,7 @@ impl<T> Linker<T> {
         );
         assert!(ty.comes_from_same_engine(self.engine()));
         self.func_new(module, name, ty, move |mut caller, params, results| {
-            let async_cx = AsyncCx::new(&mut caller.store.0);
+            let async_cx = crate::fiber::AsyncCx::new(&mut caller.store.0);
             let mut future = Pin::from(func(caller, params, results));
             match async_cx.block_on(future.as_mut()) {
                 Ok(Ok(())) => Ok(()),
@@ -575,7 +573,7 @@ impl<T> Linker<T> {
         let func = HostFunc::wrap_inner(
             &self.engine,
             move |mut caller: Caller<'_, T>, args: Params| {
-                let async_cx = AsyncCx::new(&mut caller.store.0);
+                let async_cx = crate::fiber::AsyncCx::new(&mut caller.store.0);
                 let mut future = Pin::from(func(caller, args));
 
                 match async_cx.block_on(future.as_mut()) {

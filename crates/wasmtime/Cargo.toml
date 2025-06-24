@@ -197,7 +197,6 @@ async = [
   "dep:futures",
   "wasmtime-component-macro?/async",
   "runtime",
-  "futures/std",
 ]
 
 # Enables support for the pooling instance allocation strategy

@@ -1,26 +1,19 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use {
-    crate::{
-        Engine,
-        store::{Executor, StoreOpaque},
-        vm::{
-            AsyncWasmCallState, Interpreter, SendSyncPtr, VMStore,
-            mpk::{self, ProtectionMask},
-        },
-    },
-    anyhow::{Result, anyhow},
-    futures::channel::oneshot,
-    std::{
-        future, mem,
-        ops::Range,
-        pin::Pin,
-        ptr::{self, NonNull},
-        task::{Context, Poll},
-    },
-    wasmtime_environ::TripleExt,
-    wasmtime_fiber::{Fiber, Suspend},
-};
+use crate::Engine;
+use crate::store::{Executor, StoreOpaque};
+use crate::vm::mpk::{self, ProtectionMask};
+use crate::vm::{AsyncWasmCallState, Interpreter, SendSyncPtr, VMStore};
+use anyhow::{Result, anyhow};
+use core::future;
+use core::mem;
+use core::ops::Range;
+use core::pin::Pin;
+use core::ptr::{self, NonNull};
+use core::task::{Context, Poll};
+use futures::channel::oneshot;
+use wasmtime_environ::TripleExt;
+use wasmtime_fiber::{Fiber, Suspend};
 
 /// Helper struct for reseting a raw pointer to its original value on drop.
 struct Reset<T: Copy>(*mut T, T);
@@ -585,7 +578,7 @@ unsafe fn suspend_fiber(
 
 /// Run the specified function on a newly-created fiber and `.await` its
 /// completion.
-pub(crate) async fn on_fiber<R: Send + 'static>(
+pub(crate) async fn on_fiber<R: Send>(
     store: &mut StoreOpaque,
     func: impl FnOnce(&mut StoreOpaque) -> R + Send,
 ) -> Result<R> {
@@ -596,7 +589,7 @@ pub(crate) async fn on_fiber<R: Send + 'static>(
 }
 
 /// Wrap the specified function in a fiber and return it.
-fn prepare_fiber<'a, R: Send + 'static>(
+fn prepare_fiber<'a, R: Send + 'a>(
     store: &mut dyn VMStore,
     func: impl FnOnce(&mut dyn VMStore) -> R + Send + 'a,
 ) -> Result<(StoreFiber<'a>, oneshot::Receiver<R>)> {
@@ -612,7 +605,7 @@ fn prepare_fiber<'a, R: Send + 'static>(
 
 /// Run the specified function on a newly-created fiber and `.await` its
 /// completion.
-async fn on_fiber_raw<R: Send + 'static>(
+async fn on_fiber_raw<R: Send>(
     store: &mut StoreOpaque,
     func: impl FnOnce(&mut dyn VMStore) -> R + Send,
 ) -> Result<R> {
