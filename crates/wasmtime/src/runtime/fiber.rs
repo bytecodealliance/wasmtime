@@ -423,15 +423,15 @@ unsafe fn resume_fiber_raw<'a>(
     fiber: &mut StoreFiber<'a>,
     result: Result<()>,
 ) -> Result<Result<()>, StoreFiberYield> {
-    struct Restore<'a, 'b> {
-        fiber: &'b mut StoreFiber<'a>,
+    struct Restore<'a> {
+        fiber: *mut StoreFiber<'a>,
         state: Option<PriorFiberResumeState>,
     }
 
-    impl Drop for Restore<'_, '_> {
+    impl Drop for Restore<'_> {
         fn drop(&mut self) {
             unsafe {
-                self.fiber.state = Some(self.state.take().unwrap().replace());
+                (*self.fiber).state = Some(self.state.take().unwrap().replace());
             }
         }
     }
@@ -441,10 +441,10 @@ unsafe fn resume_fiber_raw<'a>(
         let _reset_suspend = Reset(fiber.suspend, *fiber.suspend);
         let prev = fiber.state.take().unwrap().replace();
         let restore = Restore {
-            fiber,
+            fiber: &raw mut *fiber,
             state: Some(prev),
         };
-        restore.fiber.fiber.as_ref().unwrap().resume(result)
+        (*restore.fiber).fiber.as_ref().unwrap().resume(result)
     }
 }
 
