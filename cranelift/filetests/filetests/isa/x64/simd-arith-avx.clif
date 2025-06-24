@@ -1228,7 +1228,7 @@ block0(v0: i8x16):
 ;   movq %rsp, %rbp
 ; block0:
 ;   vmovdqu (%rip), %xmm2
-;   vpmaddubsw %xmm2, %xmm0, %xmm0
+;   vpmaddubsw %xmm0, %xmm2, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1269,7 +1269,7 @@ block0(v0: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpmaddwd %xmm0, const(0), %xmm0
+;   vpmaddwd (%rip), %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

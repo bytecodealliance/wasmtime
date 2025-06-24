@@ -466,8 +466,6 @@
 
 (type SseOpcode extern
       (enum Insertps
-            Pmaddubsw
-            Pmaddwd
             Pshufb
             Ptest
             Rcpss
@@ -3368,18 +3366,10 @@
 
 ;; Helper for creating `pmaddwd` instructions.
 (decl x64_pmaddwd (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmaddwd src1 src2)
-      (xmm_rm_r (SseOpcode.Pmaddwd) src1 src2))
-(rule 1 (x64_pmaddwd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpmaddwd) src1 src2))
+(rule 0 (x64_pmaddwd src1 src2) (x64_pmaddwd_a_or_avx src1 src2))
 
 (decl x64_pmaddubsw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmaddubsw src1 src2)
-      (xmm_rm_r (SseOpcode.Pmaddubsw) src1 src2))
-(rule 1 (x64_pmaddubsw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpmaddubsw) src1 src2))
+(rule (x64_pmaddubsw src1 src2) (x64_pmaddubsw_a_or_avx src1 src2))
 
 ;; Helper for creating `insertps` instructions.
 (decl x64_insertps (Xmm XmmMem u8) Xmm)
