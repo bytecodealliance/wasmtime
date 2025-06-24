@@ -518,7 +518,9 @@ impl Func {
         Func::new(store, ty, move |mut caller, params, results| {
             let async_cx = AsyncCx::new(&mut caller.store.0);
             let mut future = Pin::from(func(caller, params, results));
-            match async_cx.block_on(future.as_mut()) {
+            // SAFETY: The `Store` we used to create the `AsyncCx` above remains
+            // valid.
+            match unsafe { async_cx.block_on(future.as_mut()) } {
                 Ok(Ok(())) => Ok(()),
                 Ok(Err(trap)) | Err(trap) => Err(trap),
             }
@@ -839,8 +841,9 @@ impl Func {
         Func::wrap_inner(store, move |mut caller: Caller<'_, T>, args| {
             let async_cx = AsyncCx::new(&mut caller.store.0);
             let mut future = Pin::from(func(caller, args));
-
-            match async_cx.block_on(future.as_mut()) {
+            // SAFETY: The `Store` we used to create the `AsyncCx` above remains
+            // valid.
+            match unsafe { async_cx.block_on(future.as_mut()) } {
                 Ok(ret) => ret.into_fallible(),
                 Err(e) => R::fallible_from_error(e),
             }

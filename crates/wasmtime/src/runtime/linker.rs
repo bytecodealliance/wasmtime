@@ -473,7 +473,9 @@ impl<T> Linker<T> {
         self.func_new(module, name, ty, move |mut caller, params, results| {
             let async_cx = crate::fiber::AsyncCx::new(&mut caller.store.0);
             let mut future = Pin::from(func(caller, params, results));
-            match async_cx.block_on(future.as_mut()) {
+            // SAFETY: The `Store` we used to create the `AsyncCx` above remains
+            // valid.
+            match unsafe { async_cx.block_on(future.as_mut()) } {
                 Ok(Ok(())) => Ok(()),
                 Ok(Err(trap)) | Err(trap) => Err(trap),
             }
@@ -575,8 +577,9 @@ impl<T> Linker<T> {
             move |mut caller: Caller<'_, T>, args: Params| {
                 let async_cx = crate::fiber::AsyncCx::new(&mut caller.store.0);
                 let mut future = Pin::from(func(caller, args));
-
-                match async_cx.block_on(future.as_mut()) {
+                // SAFETY: The `Store` we used to create the `AsyncCx` above
+                // remains valid.
+                match unsafe { async_cx.block_on(future.as_mut()) } {
                     Ok(ret) => ret.into_fallible(),
                     Err(e) => Args::fallible_from_error(e),
                 }

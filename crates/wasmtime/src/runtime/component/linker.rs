@@ -446,7 +446,9 @@ impl<T: 'static> LinkerInstance<'_, T> {
         let ff = move |mut store: StoreContextMut<'_, T>, params: Params| -> Result<Return> {
             let async_cx = AsyncCx::new(&mut store.0);
             let mut future = Pin::from(f(store.as_context_mut(), params));
-            async_cx.block_on(future.as_mut())?
+            // SAFETY: The `Store` we used to create the `AsyncCx` above remains
+            // valid.
+            unsafe { async_cx.block_on(future.as_mut())? }
         };
         self.func_wrap(name, ff)
     }
@@ -608,7 +610,9 @@ impl<T: 'static> LinkerInstance<'_, T> {
         let ff = move |mut store: StoreContextMut<'_, T>, params: &[Val], results: &mut [Val]| {
             let async_cx = AsyncCx::new(&mut store.0);
             let mut future = Pin::from(f(store.as_context_mut(), params, results));
-            async_cx.block_on(future.as_mut())?
+            // SAFETY: The `Store` we used to create the `AsyncCx` above remains
+            // valid.
+            unsafe { async_cx.block_on(future.as_mut())? }
         };
         self.func_new(name, ff)
     }
@@ -680,7 +684,9 @@ impl<T: 'static> LinkerInstance<'_, T> {
             move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| {
                 let async_cx = AsyncCx::new(&mut cx.as_context_mut().0);
                 let mut future = Pin::from(dtor(cx.as_context_mut(), param));
-                match async_cx.block_on(future.as_mut()) {
+                // SAFETY: The `Store` we used to create the `AsyncCx` above
+                // remains valid.
+                match unsafe { async_cx.block_on(future.as_mut()) } {
                     Ok(Ok(())) => Ok(()),
                     Ok(Err(trap)) | Err(trap) => Err(trap),
                 }

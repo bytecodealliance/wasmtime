@@ -252,9 +252,11 @@ impl StoreOpaque {
         // to clean up this fiber. Do so by raising a trap which will
         // abort all wasm and get caught on the other side to clean
         // things up.
-        AsyncCx::try_new(self)
-            .expect("attempted to pull async context during shutdown")
-            .block_on(unsafe { Pin::new_unchecked(&mut future) })
+        unsafe {
+            AsyncCx::try_new(self)
+                .expect("attempted to pull async context during shutdown")
+                .block_on(Pin::new_unchecked(&mut future))
+        }
     }
 
     pub(crate) fn async_guard_range(&mut self) -> Range<*mut u8> {
@@ -262,7 +264,7 @@ impl StoreOpaque {
     }
 
     pub(crate) fn allocate_fiber_stack(&mut self) -> Result<wasmtime_fiber::FiberStack> {
-        if let Some(stack) = self.async_state.last_fiber_stack.take() {
+        if let Some(stack) = self.async_state.last_fiber_stack().take() {
             return Ok(stack);
         }
         self.engine().allocator().allocate_fiber_stack()
@@ -270,13 +272,13 @@ impl StoreOpaque {
 
     pub(crate) fn deallocate_fiber_stack(&mut self, stack: wasmtime_fiber::FiberStack) {
         self.flush_fiber_stack();
-        self.async_state.last_fiber_stack = Some(stack);
+        *self.async_state.last_fiber_stack() = Some(stack);
     }
 
     /// Releases the last fiber stack to the underlying instance allocator, if
     /// present.
     pub fn flush_fiber_stack(&mut self) {
-        if let Some(stack) = self.async_state.last_fiber_stack.take() {
+        if let Some(stack) = self.async_state.last_fiber_stack().take() {
             unsafe {
                 self.engine.allocator().deallocate_fiber_stack(stack);
             }
