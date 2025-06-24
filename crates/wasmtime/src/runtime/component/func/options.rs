@@ -46,6 +46,9 @@ pub struct Options {
     string_encoding: StringEncoding,
 
     async_: bool,
+
+    #[cfg_attr(not(feature = "component-model-async"), allow(unused))]
+    callback: Option<NonNull<VMFuncRef>>,
 }
 
 // The `Options` structure stores raw pointers but they're never used unless a
@@ -70,7 +73,7 @@ impl Options {
         realloc: Option<NonNull<VMFuncRef>>,
         string_encoding: StringEncoding,
         async_: bool,
-        _callback: Option<NonNull<VMFuncRef>>,
+        callback: Option<NonNull<VMFuncRef>>,
     ) -> Options {
         Options {
             store_id,
@@ -78,6 +81,7 @@ impl Options {
             realloc,
             string_encoding,
             async_,
+            callback,
         }
     }
 
@@ -174,6 +178,16 @@ impl Options {
     /// Returns whether this lifting or lowering uses the async ABI.
     pub fn async_(&self) -> bool {
         self.async_
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn callback(&self) -> Option<NonNull<VMFuncRef>> {
+        self.callback
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn memory_raw(&self) -> Option<NonNull<VMMemoryDefinition>> {
+        self.memory
     }
 }
 
