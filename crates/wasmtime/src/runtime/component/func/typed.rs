@@ -179,7 +179,7 @@ where
     ) -> Result<Return>
     where
         Params: Send + Sync,
-        Return: Sync,
+        Return: Send + Sync,
     {
         let mut store = store.as_context_mut();
         assert!(

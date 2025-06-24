@@ -3,7 +3,7 @@
 use crate::Engine;
 use crate::store::{Executor, StoreId, StoreOpaque};
 use crate::vm::mpk::{self, ProtectionMask};
-use crate::vm::{AsyncWasmCallState, Interpreter, VMStore};
+use crate::vm::{AsyncWasmCallState, VMStore};
 use anyhow::{Result, anyhow};
 use core::mem;
 use core::ops::Range;
@@ -11,7 +11,6 @@ use core::pin::Pin;
 use core::ptr;
 use core::task::{Context, Poll};
 use futures::channel::oneshot;
-use wasmtime_environ::TripleExt;
 use wasmtime_fiber::{Fiber, Suspend};
 
 /// Helper struct for reseting a raw pointer to its original value on drop.
@@ -435,20 +434,10 @@ fn resume_fiber_raw<'a>(
 /// Create a new `StoreFiber` which runs the specified closure.
 pub(crate) fn make_fiber<'a>(
     store: &mut dyn VMStore,
-    fun: impl FnOnce(&mut dyn VMStore) -> Result<()> + 'a,
+    fun: impl FnOnce(&mut dyn VMStore) -> Result<()> + Send + Sync + 'a,
 ) -> Result<StoreFiber<'a>> {
     let engine = store.engine().clone();
-    #[cfg(has_host_compiler_backend)]
-    let executor = if cfg!(feature = "pulley") && engine.target().is_pulley() {
-        Executor::Interpreter(Interpreter::new(&engine))
-    } else {
-        Executor::Native
-    };
-    #[cfg(not(has_host_compiler_backend))]
-    let executor = {
-        debug_assert!(engine.target().is_pulley());
-        Executor::Interpreter(Interpreter::new(&engine))
-    };
+    let executor = Executor::new(&engine);
     let id = store.store_opaque().id();
     let stack = store.store_opaque_mut().allocate_fiber_stack()?;
     let suspend = unsafe { &raw mut (*store.store_opaque_mut().async_state()).current_suspend };
@@ -562,9 +551,9 @@ unsafe fn suspend_fiber(
 
 /// Run the specified function on a newly-created fiber and `.await` its
 /// completion.
-pub(crate) async fn on_fiber<R>(
+pub(crate) async fn on_fiber<R: Send>(
     store: &mut StoreOpaque,
-    func: impl FnOnce(&mut StoreOpaque) -> R + Send,
+    func: impl FnOnce(&mut StoreOpaque) -> R + Send + Sync,
 ) -> Result<R> {
     on_fiber_raw(store.traitobj_mut(), move |store| {
         func((*store).store_opaque_mut())
@@ -573,9 +562,9 @@ pub(crate) async fn on_fiber<R>(
 }
 
 /// Wrap the specified function in a fiber and return it.
-fn prepare_fiber<'a, R: 'a>(
+fn prepare_fiber<'a, R: Send + 'a>(
     store: &mut dyn VMStore,
-    func: impl FnOnce(&mut dyn VMStore) -> R + Send + 'a,
+    func: impl FnOnce(&mut dyn VMStore) -> R + Send + Sync + 'a,
 ) -> Result<(StoreFiber<'a>, oneshot::Receiver<R>)> {
     let (tx, rx) = oneshot::channel();
     let fiber = make_fiber(store, {
@@ -658,9 +647,9 @@ impl Drop for FiberFuture<'_, '_> {
 
 /// Run the specified function on a newly-created fiber and `.await` its
 /// completion.
-async fn on_fiber_raw<R>(
+async fn on_fiber_raw<R: Send>(
     store: &mut StoreOpaque,
-    func: impl FnOnce(&mut dyn VMStore) -> R + Send,
+    func: impl FnOnce(&mut dyn VMStore) -> R + Send + Sync,
 ) -> Result<R> {
     let config = store.engine().config();
     debug_assert!(store.async_support());

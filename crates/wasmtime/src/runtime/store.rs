@@ -411,6 +411,22 @@ pub(crate) enum Executor {
     Native,
 }
 
+impl Executor {
+    pub(crate) fn new(engine: &Engine) -> Self {
+        #[cfg(has_host_compiler_backend)]
+        if cfg!(feature = "pulley") && engine.target().is_pulley() {
+            Executor::Interpreter(Interpreter::new(engine))
+        } else {
+            Executor::Native
+        }
+        #[cfg(not(has_host_compiler_backend))]
+        {
+            debug_assert!(engine.target().is_pulley());
+            Executor::Interpreter(Interpreter::new(engine))
+        }
+    }
+}
+
 /// A borrowed reference to `Executor` above.
 pub(crate) enum ExecutorRef<'a> {
     Interpreter(InterpreterRef<'a>),
@@ -572,17 +588,7 @@ impl<T> Store<T> {
             component_calls: Default::default(),
             #[cfg(feature = "component-model")]
             host_resource_data: Default::default(),
-            #[cfg(has_host_compiler_backend)]
-            executor: if cfg!(feature = "pulley") && engine.target().is_pulley() {
-                Executor::Interpreter(Interpreter::new(engine))
-            } else {
-                Executor::Native
-            },
-            #[cfg(not(has_host_compiler_backend))]
-            executor: {
-                debug_assert!(engine.target().is_pulley());
-                Executor::Interpreter(Interpreter::new(engine))
-            },
+            executor: Executor::new(engine),
         };
         let mut inner = Box::new(StoreInner {
             inner,
@@ -1952,6 +1958,7 @@ at https://bytecodealliance.org/security.
         }
     }
 
+    #[cfg(feature = "async")]
     pub(crate) fn swap_executor(&mut self, executor: &mut Executor) {
         mem::swap(&mut self.executor, executor);
     }
