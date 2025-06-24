@@ -32,6 +32,8 @@ const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 mod libcalls;
 mod resources;
 
+#[cfg(feature = "component-model-async")]
+pub use self::resources::CallContext;
 pub use self::resources::{
     CallContexts, ResourceTable, ResourceTables, TypedResource, TypedResourceIndex,
 };
