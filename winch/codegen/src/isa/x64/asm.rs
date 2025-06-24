@@ -1397,8 +1397,32 @@ impl Assembler {
         let dst: WritableGpr = dst.map(Into::into);
         let inst = asm::inst::movl_oi::new(dst, 0).into();
         self.emit(Inst::External { inst });
+
         // Copy correct bit from status register into dst register.
-        self.emit(Inst::Setcc { cc, dst });
+        //
+        // Note that some of these mnemonics don't match exactly and that's
+        // intentional as there are multiple mnemonics for the same encoding in
+        // some cases and the assembler picked ones that match Capstone rather
+        // than Cranelift.
+        let inst = match cc {
+            CC::O => asm::inst::seto_m::new(dst).into(),
+            CC::NO => asm::inst::setno_m::new(dst).into(),
+            CC::B => asm::inst::setb_m::new(dst).into(),
+            CC::NB => asm::inst::setae_m::new(dst).into(), //  nb == ae
+            CC::Z => asm::inst::sete_m::new(dst).into(),   //   z ==  e
+            CC::NZ => asm::inst::setne_m::new(dst).into(), //  nz == ne
+            CC::BE => asm::inst::setbe_m::new(dst).into(),
+            CC::NBE => asm::inst::seta_m::new(dst).into(), // nbe ==  a
+            CC::S => asm::inst::sets_m::new(dst).into(),
+            CC::NS => asm::inst::setns_m::new(dst).into(),
+            CC::L => asm::inst::setl_m::new(dst).into(),
+            CC::NL => asm::inst::setge_m::new(dst).into(), //  nl == ge
+            CC::LE => asm::inst::setle_m::new(dst).into(),
+            CC::NLE => asm::inst::setg_m::new(dst).into(), // nle ==  g
+            CC::P => asm::inst::setp_m::new(dst).into(),
+            CC::NP => asm::inst::setnp_m::new(dst).into(),
+        };
+        self.emit(Inst::External { inst });
     }
 
     /// Store the count of leading zeroes in src in dst.

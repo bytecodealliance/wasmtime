@@ -329,44 +329,44 @@ block0(v0: i128, v1: i128):
 ;   movq %rsi, %r8
 ;   xorq %rcx, %r8
 ;   orq %r8, %rax
-;   setz    %al
+;   sete %al
 ;   movq %rdi, %r8
 ;   xorq %rdx, %r8
 ;   movq %rsi, %r9
 ;   xorq %rcx, %r9
 ;   orq %r9, %r8
-;   setnz   %r9b
+;   setne %r9b
 ;   cmpq %rdx, %rdi
 ;   movq %rsi, %r8
 ;   sbbq %rcx, %r8
-;   setl    %r8b
+;   setl %r8b
 ;   cmpq %rdi, %rdx
 ;   movq %rcx, %r10
 ;   sbbq %rsi, %r10
-;   setnl   %r11b
+;   setge %r11b
 ;   cmpq %rdi, %rdx
 ;   movq %rcx, %r10
 ;   sbbq %rsi, %r10
-;   setl    %r10b
+;   setl %r10b
 ;   cmpq %rdx, %rdi
 ;   movq %rsi, %rbx
 ;   sbbq %rcx, %rbx
-;   setnl   %r14b
+;   setge %r14b
 ;   cmpq %rdx, %rdi
 ;   movq %rsi, %r12
 ;   sbbq %rcx, %r12
-;   setb    %r13b
+;   setb %r13b
 ;   cmpq %rdi, %rdx
 ;   movq %rcx, %r15
 ;   sbbq %rsi, %r15
-;   setnb   %bl
+;   setae %bl
 ;   cmpq %rdi, %rdx
 ;   movq %rcx, %r15
 ;   sbbq %rsi, %r15
-;   setb    %r15b
+;   setb %r15b
 ;   cmpq %rdx, %rdi
 ;   sbbq %rcx, %rsi
-;   setnb   %dil
+;   setae %dil
 ;   andl %r9d, %eax
 ;   andl %r11d, %r8d
 ;   andl %r14d, %r10d
@@ -1121,14 +1121,14 @@ block2(v8: i128):
 ;   jnz     label2; j label1
 ; block1:
 ;   addq $0x2, %rax
-;   setb    %cl
+;   setb %cl
 ;   movzbq %cl, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
 ; block2:
 ;   addq $0x1, %rax
-;   setb    %cl
+;   setb %cl
 ;   movzbq %cl, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -1141,7 +1141,7 @@ block2(v8: i128):
 ; block1: ; offset 0x4
 ;   xorq %rax, %rax
 ;   testb %dl, %dl
-;   jne 0x20
+;   jne 0x1f
 ; block2: ; offset 0xf
 ;   addq $2, %rax
 ;   setb %cl
@@ -1149,7 +1149,7 @@ block2(v8: i128):
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block3: ; offset 0x20
+; block3: ; offset 0x1f
 ;   addq $1, %rax
 ;   setb %cl
 ;   movzbq %cl, %rdx
@@ -2063,7 +2063,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   movq %rsi, %rax
 ;   addq (%rdi), %rax
-;   setb    %r8b
+;   setb %r8b
 ;   movzbq %r8b, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -2212,7 +2212,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   movq %rdi, %rax
 ;   addq %rsi, %rax
-;   setb    %r8b
+;   setb %r8b
 ;   movzbq %r8b, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp

@@ -39,10 +39,6 @@
        (MovToPReg (src Gpr)
                   (dst PReg))
 
-       ;; Materializes the requested condition code in the destination reg.
-       (Setcc (cc CC)
-              (dst WritableGpr))
-
        ;; =========================================
        ;; Conditional moves.
 
@@ -2567,22 +2563,39 @@
          (MInst.XmmCmove ty cc consequent alternative dst)
          dst)))
 
-;; Helper for creating `MInst.Setcc` instructions.
+;; Helper for creating `setcc` instructions.
+;;
+;; Note that the mnemonics here don't always match exactly with the raw
+;; instruction and that's intentional. The Intel manual documents multiple
+;; mnemonics for the same opcode and the ones in Cranelift (CC.*) don't
+;; match the ones that Capstone disassembles to (which the assembler matches).
 (decl x64_setcc (CC) ConsumesFlags)
-(rule (x64_setcc cc)
-      (let ((dst WritableGpr (temp_writable_gpr)))
-        (ConsumesFlags.ConsumesFlagsReturnsReg
-         (MInst.Setcc cc dst)
-         dst)))
+(rule (x64_setcc (CC.O)) (x64_seto_m))
+(rule (x64_setcc (CC.NO)) (x64_setno_m))
+(rule (x64_setcc (CC.B)) (x64_setb_m))
+(rule (x64_setcc (CC.NB)) (x64_setae_m)) ;;  nb == ae
+(rule (x64_setcc (CC.Z)) (x64_sete_m))   ;;   z ==  e
+(rule (x64_setcc (CC.NZ)) (x64_setne_m)) ;;  nz == ne
+(rule (x64_setcc (CC.BE)) (x64_setbe_m))
+(rule (x64_setcc (CC.NBE)) (x64_seta_m)) ;; nbe ==  a
+(rule (x64_setcc (CC.S)) (x64_sets_m))
+(rule (x64_setcc (CC.NS)) (x64_setns_m))
+(rule (x64_setcc (CC.L)) (x64_setl_m))
+(rule (x64_setcc (CC.NL)) (x64_setge_m)) ;;  nl == ge
+(rule (x64_setcc (CC.LE)) (x64_setle_m))
+(rule (x64_setcc (CC.NLE)) (x64_setg_m)) ;; nle ==  g
+(rule (x64_setcc (CC.P)) (x64_setp_m))
+(rule (x64_setcc (CC.NP)) (x64_setnp_m))
 
-;; Helper for creating `MInst.Setcc` instructions, when the flags producer will
+;; Helper for creating `setcc` instructions, when the flags producer will
 ;; also return a value.
 (decl x64_setcc_paired (CC) ConsumesFlags)
-(rule (x64_setcc_paired cc)
-      (let ((dst WritableGpr (temp_writable_gpr)))
-        (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer
-         (MInst.Setcc cc dst)
-         dst)))
+(rule (x64_setcc_paired cc) (consumes_flags_with_producer (x64_setcc cc)))
+
+(decl consumes_flags_with_producer (ConsumesFlags) ConsumesFlags)
+(rule (consumes_flags_with_producer (ConsumesFlags.ConsumesFlagsReturnsReg flags reg))
+  (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer flags reg))
+
 
 ;; Helper for creating `paddb` instructions.
 (decl x64_paddb (Xmm XmmMem) Xmm)

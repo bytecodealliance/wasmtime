@@ -438,19 +438,30 @@ fn isle_constructors(format: &Format) -> Vec<IsleConstructor> {
                 }
                 // One read/write reg-mem output? We need constructors for
                 // both variants.
-                RegMem(rm) => {
-                    assert!(!format.eflags.is_read());
-                    match rm.reg_class().unwrap() {
-                        RegClass::Xmm => vec![
+                RegMem(rm) => match rm.reg_class().unwrap() {
+                    RegClass::Xmm => {
+                        assert!(!format.eflags.is_read());
+                        vec![
                             IsleConstructor::RetXmm,
                             IsleConstructor::RetMemorySideEffect,
-                        ],
-                        RegClass::Gpr => vec![
-                            IsleConstructor::RetGpr,
-                            IsleConstructor::RetMemorySideEffect,
-                        ],
+                        ]
                     }
-                }
+                    RegClass::Gpr => {
+                        if format.eflags.is_read() {
+                            // FIXME: should expand this to include "consumes
+                            // flags plus side effect" to model the
+                            // memory-writing variant too. For example this
+                            // means there's no memory-writing variant of
+                            // `setcc` instructions generated.
+                            vec![IsleConstructor::ConsumesFlagsReturnsGpr]
+                        } else {
+                            vec![
+                                IsleConstructor::RetGpr,
+                                IsleConstructor::RetMemorySideEffect,
+                            ]
+                        }
+                    }
+                },
             },
         },
         [one, two] => {
