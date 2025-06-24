@@ -1082,9 +1082,8 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     fn bt_imm(&mut self, val: u64) -> Option<u8> {
-        let trailing_zeros = u8::try_from(val.trailing_zeros()).unwrap();
-        if val == 1 << trailing_zeros {
-            Some(trailing_zeros)
+        if val.count_ones() == 1 {
+            Some(u8::try_from(val.trailing_zeros()).unwrap())
         } else {
             None
         }
