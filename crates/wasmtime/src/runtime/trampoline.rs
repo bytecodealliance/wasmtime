@@ -12,47 +12,10 @@ pub(crate) use memory::MemoryCreatorProxy;
 use self::memory::create_memory;
 use self::table::create_table;
 use crate::prelude::*;
-use crate::runtime::vm::{
-    Imports, InstanceAllocationRequest, InstanceAllocator, ModuleRuntimeInfo,
-    OnDemandInstanceAllocator, SharedMemory, StorePtr, VMFunctionImport,
-};
-use crate::store::{InstanceId, StoreOpaque};
+use crate::runtime::vm::SharedMemory;
+use crate::store::StoreOpaque;
 use crate::{MemoryType, TableType};
-use alloc::sync::Arc;
-use core::any::Any;
-use wasmtime_environ::{MemoryIndex, Module, TableIndex, VMSharedTypeIndex};
-
-fn create_handle(
-    module: Module,
-    store: &mut StoreOpaque,
-    host_state: Box<dyn Any + Send + Sync>,
-    func_imports: &[VMFunctionImport],
-    one_signature: Option<VMSharedTypeIndex>,
-) -> Result<InstanceId> {
-    let mut imports = Imports::default();
-    imports.functions = func_imports;
-
-    unsafe {
-        let config = store.engine().config();
-        // Use the on-demand allocator when creating handles associated with host objects
-        // The configured instance allocator should only be used when creating module instances
-        // as we don't want host objects to count towards instance limits.
-        let module = Arc::new(module);
-        let runtime_info = &ModuleRuntimeInfo::bare_maybe_imported_func(module, one_signature);
-        let allocator = OnDemandInstanceAllocator::new(config.mem_creator.clone(), 0, false);
-        let handle = allocator.allocate_module(InstanceAllocationRequest {
-            imports,
-            host_state,
-            store: StorePtr::new(store.traitobj()),
-            runtime_info,
-            wmemcheck: false,
-            pkey: None,
-            tunables: store.engine().tunables(),
-        })?;
-
-        Ok(store.add_dummy_instance(handle))
-    }
-}
+use wasmtime_environ::{MemoryIndex, TableIndex};
 
 pub fn generate_memory_export(
     store: &mut StoreOpaque,
