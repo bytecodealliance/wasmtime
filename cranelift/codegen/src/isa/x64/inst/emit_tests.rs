@@ -199,7 +199,7 @@ fn test_x64_emit() {
     // N.B.: test harness below sets is_pic.
     insns.push((
         Inst::LoadExtName {
-            dst: Writable::from_reg(r11),
+            dst: Writable::from_reg(Gpr::R11),
             name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: 0,
             distance: RelocDistance::Far,
@@ -209,7 +209,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::LoadExtName {
-            dst: Writable::from_reg(r11),
+            dst: Writable::from_reg(Gpr::R11),
             name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: 0x12345678,
             distance: RelocDistance::Far,
@@ -219,7 +219,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::LoadExtName {
-            dst: Writable::from_reg(r11),
+            dst: Writable::from_reg(Gpr::R11),
             name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: -0x12345678,
             distance: RelocDistance::Far,
