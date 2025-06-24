@@ -224,7 +224,7 @@ fn test_x64_emit() {
             offset: -0x12345678,
             distance: RelocDistance::Far,
         },
-        "4C8B1D000000004981EB78563412",
+        "4C8B1D000000004981C388A9CBED",
         "load_ext_name userextname0+-305419896, %r11",
     ));
 
