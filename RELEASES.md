@@ -1,3 +1,15 @@
+## 24.0.3
+
+Released 2025-06-24.
+
+### Fixed
+
+* Fix a panic with host-defined tables/globals and concrete reference
+  types.
+  [#11103](https://github.com/bytecodealliance/wasmtime/pull/11103)
+
+--------------------------------------------------------------------------------
+
 ## 24.0.2
 
 Released 2024-11-05.
