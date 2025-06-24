@@ -270,11 +270,11 @@ impl Drop for StoreFiber<'_> {
 }
 
 // This is surely the most dangerous `unsafe impl Send` in the entire
-// crate. There are two members in `FiberFuture` which cause it to not be
-// `Send`. One is `current_poll_cx` and is entirely uninteresting.  This is just
-// used to manage `Context` pointers across `await` points in the future, and
-// requires raw pointers to get it to happen easily.  Nothing too weird about
-// the `Send`-ness, values aren't actually crossing threads.
+// crate. There are two members in `StoreFiber` which cause it to not be
+// `Send`. One is `suspend` and is entirely uninteresting.  This is just used to
+// manage `Suspend` when resuming, and requires raw pointers to get it to happen
+// easily.  Nothing too weird about the `Send`-ness, values aren't actually
+// crossing threads.
 //
 // The really interesting piece is `fiber`. Now the "fiber" here is actual
 // honest-to-god Rust code which we're moving around. What we're doing is the
