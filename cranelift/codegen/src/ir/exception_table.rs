@@ -106,6 +106,15 @@ impl ExceptionTableData {
         DisplayExceptionTable { table: self, pool }
     }
 
+    /// Deep-clone this exception table.
+    pub fn deep_clone(&self, pool: &mut ValueListPool) -> Self {
+        Self {
+            targets: self.targets.iter().map(|b| b.deep_clone(pool)).collect(),
+            tags: self.tags.clone(),
+            sig: self.sig,
+        }
+    }
+
     /// Get the default target for the non-exceptional return case.
     pub fn normal_return(&self) -> &BlockCall {
         self.targets.last().unwrap()
@@ -140,6 +149,18 @@ impl ExceptionTableData {
             .zip(self.targets.iter_mut())
     }
 
+    /// The number of catch edges in this exception table.
+    pub fn len_catches(&self) -> usize {
+        self.tags.len()
+    }
+
+    /// Get the `index`th catch edge from this table.
+    pub fn get_catch(&self, index: usize) -> Option<(Option<ExceptionTag>, &BlockCall)> {
+        let tag = self.tags.get(index)?.expand();
+        let target = &self.targets[index];
+        Some((tag, target))
+    }
+
     /// Get all branch targets.
     pub fn all_branches(&self) -> &[BlockCall] {
         &self.targets[..]
@@ -156,10 +177,31 @@ impl ExceptionTableData {
         self.sig
     }
 
+    /// Get a mutable handle to this exception table's signature.
+    pub(crate) fn signature_mut(&mut self) -> &mut SigRef {
+        &mut self.sig
+    }
+
     /// Clears all entries in this exception table, but leaves the function signature.
     pub fn clear(&mut self) {
         self.tags.clear();
         self.targets.clear();
+    }
+
+    /// Push a catch target onto this exception table.
+    pub fn push_catch(&mut self, tag: Option<ExceptionTag>, block_call: BlockCall) {
+        self.tags.push(tag.into());
+
+        // We don't want to push the target, because the normal return is always
+        // last. Instead we want to insert it in the second to last spot.
+        //
+        // It is always true that `self.tags.len() == self.targets.len() + 1`
+        // because of the presence of the normal return which does not have an
+        // associated tag *except* for the case where we have cleared the
+        // exception table, in which case both vecs will be empty. We handle the
+        // cleared case by using saturating subtraction here.
+        let target_index = self.targets.len().saturating_sub(1);
+        self.targets.insert(target_index, block_call);
     }
 }
 
