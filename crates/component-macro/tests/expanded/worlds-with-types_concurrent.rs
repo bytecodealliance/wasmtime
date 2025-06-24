@@ -210,7 +210,7 @@ const _: () = {
             Output = wasmtime::Result<(T, U, R)>,
         > + Send + 'static + use<S>
         where
-            <S as wasmtime::AsContext>::Data: Send + 'static,
+            <S as wasmtime::AsContext>::Data: Send,
         {
             let callee = unsafe {
                 wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)

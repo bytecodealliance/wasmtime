@@ -61,7 +61,8 @@ semver = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true }
 hashbrown = { workspace = true, features = ["default-hasher"] }
 bitflags = { workspace = true }
-futures = { workspace = true, features = ["alloc"], optional = true }
+futures = { workspace = true, default_features = false, features = ["alloc"], optional = true }
+bytes = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
@@ -390,6 +391,9 @@ component-model-async = [
   "async",
   "component-model",
   "std",
+  "futures/std",
+  "wasmtime-environ/compile",
   "wasmtime-component-macro?/component-model-async",
-  "dep:futures"
+  "dep:futures",
+  "dep:bytes",
 ]

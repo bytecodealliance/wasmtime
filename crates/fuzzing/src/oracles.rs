@@ -702,11 +702,12 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
 
     let mut fuzz_config: generators::Config = u.arbitrary()?;
     let test: generators::WastTest = u.arbitrary()?;
-    if u.arbitrary()? {
-        fuzz_config.enable_async(u)?;
-    }
 
     let test = &test.test;
+
+    if test.config.component_model_async() {
+        fuzz_config.enable_async(u)?;
+    }
 
     // Discard tests that allocate a lot of memory as we don't want to OOM the
     // fuzzer and we also limit memory growth which would cause the test to

@@ -178,7 +178,7 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
-            T: Send,
+            T: Send + 'static,
             U: foo::foo::multi_return::Host + Send,
         {
             foo::foo::multi_return::add_to_linker(linker, get)?;
@@ -197,11 +197,122 @@ pub mod foo {
             use wasmtime::component::__internal::{anyhow, Box};
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
-                async fn mra(&mut self) -> ();
-                async fn mrb(&mut self) -> ();
-                async fn mrc(&mut self) -> u32;
-                async fn mrd(&mut self) -> u32;
-                async fn mre(&mut self) -> (u32, f32);
+                fn mra<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                ) -> impl ::core::future::Future<Output = ()> + Send + Sync
+                where
+                    Self: Sized;
+                fn mrb<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                ) -> impl ::core::future::Future<Output = ()> + Send + Sync
+                where
+                    Self: Sized;
+                fn mrc<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                ) -> impl ::core::future::Future<Output = u32> + Send + Sync
+                where
+                    Self: Sized;
+                fn mrd<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                ) -> impl ::core::future::Future<Output = u32> + Send + Sync
+                where
+                    Self: Sized;
+                fn mre<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                ) -> impl ::core::future::Future<Output = (u32, f32)> + Send + Sync
+                where
+                    Self: Sized;
+            }
+            struct State {
+                host: *mut u8,
+                store: *mut u8,
+                spawned: Vec<wasmtime::component::__internal::Spawned>,
+            }
+            thread_local! {
+                static STATE : wasmtime::component::__internal::RefCell < Option < State
+                >> = wasmtime::component::__internal::RefCell::new(None);
+            }
+            struct ResetState(Option<State>);
+            impl Drop for ResetState {
+                fn drop(&mut self) {
+                    STATE
+                        .with(|v| {
+                            *v.borrow_mut() = self.0.take();
+                        })
+                }
+            }
+            fn get_host_and_store() -> (*mut u8, *mut u8) {
+                STATE
+                    .with(|v| {
+                        v
+                            .borrow()
+                            .as_ref()
+                            .map(|State { host, store, .. }| (*host, *store))
+                    })
+                    .unwrap()
+            }
+            fn spawn_task(task: wasmtime::component::__internal::Spawned) {
+                STATE.with(|v| v.borrow_mut().as_mut().unwrap().spawned.push(task));
+            }
+            fn poll_with_state<
+                T,
+                G: for<'a> GetHost<&'a mut T>,
+                F: wasmtime::component::__internal::Future + ?Sized,
+            >(
+                getter: G,
+                store: wasmtime::VMStoreRawPtr,
+                cx: &mut wasmtime::component::__internal::Context,
+                future: wasmtime::component::__internal::Pin<&mut F>,
+            ) -> wasmtime::component::__internal::Poll<F::Output> {
+                use wasmtime::component::__internal::{SpawnedInner, mem, DerefMut, Poll};
+                let mut store_cx = unsafe {
+                    wasmtime::StoreContextMut::new(&mut *store.0.as_ptr().cast())
+                };
+                let (result, spawned) = {
+                    let host = &mut getter(store_cx.data_mut());
+                    let old = STATE
+                        .with(|v| {
+                            v
+                                .replace(
+                                    Some(State {
+                                        host: (host as *mut G::Host).cast(),
+                                        store: store.0.as_ptr().cast(),
+                                        spawned: Vec::new(),
+                                    }),
+                                )
+                        });
+                    let _reset = ResetState(old);
+                    (future.poll(cx), STATE.with(|v| v.take()).unwrap().spawned)
+                };
+                for spawned in spawned {
+                    store_cx
+                        .spawn(
+                            wasmtime::component::__internal::poll_fn(move |cx| {
+                                let mut spawned = spawned.try_lock().unwrap();
+                                let inner = mem::replace(
+                                    DerefMut::deref_mut(&mut spawned),
+                                    SpawnedInner::Aborted,
+                                );
+                                if let SpawnedInner::Unpolled(mut future)
+                                | SpawnedInner::Polled { mut future, .. } = inner {
+                                    let result = poll_with_state(
+                                        getter,
+                                        store,
+                                        cx,
+                                        future.as_mut(),
+                                    );
+                                    *DerefMut::deref_mut(&mut spawned) = SpawnedInner::Polled {
+                                        future,
+                                        waker: cx.waker().clone(),
+                                    };
+                                    result
+                                } else {
+                                    Poll::Ready(Ok(()))
+                                }
+                            }),
+                        )
+                }
+                result
             }
             pub trait GetHost<
                 T,
@@ -223,121 +334,126 @@ pub mod foo {
                 host_getter: G,
             ) -> wasmtime::Result<()>
             where
-                T: Send,
+                T: Send + 'static,
             {
                 let mut inst = linker.instance("foo:foo/multi-return")?;
-                inst.func_wrap_async(
+                inst.func_wrap_concurrent(
                     "mra",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        use tracing::Instrument;
-                        let span = tracing::span!(
-                            tracing::Level::TRACE, "wit-bindgen import", module =
-                            "multi-return", function = "mra",
-                        );
-                        wasmtime::component::__internal::Box::new(
-                            async move {
-                                tracing::event!(tracing::Level::TRACE, "call");
-                                let host = &mut host_getter(caller.data_mut());
-                                let r = Host::mra(host).await;
-                                tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
-                                );
-                                Ok(r)
-                            }
-                                .instrument(span),
+                    move |caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let mut accessor = unsafe {
+                            wasmtime::component::Accessor::<
+                                T,
+                                _,
+                            >::new(get_host_and_store, spawn_task)
+                        };
+                        let mut future = wasmtime::component::__internal::Box::pin(async move {
+                            let r = <G::Host as Host>::mra(&mut accessor).await;
+                            Ok(r)
+                        });
+                        let store = wasmtime::VMStoreRawPtr(caller.traitobj());
+                        wasmtime::component::__internal::Box::pin(
+                            wasmtime::component::__internal::poll_fn(move |cx| poll_with_state(
+                                host_getter,
+                                store,
+                                cx,
+                                future.as_mut(),
+                            )),
                         )
                     },
                 )?;
-                inst.func_wrap_async(
+                inst.func_wrap_concurrent(
                     "mrb",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        use tracing::Instrument;
-                        let span = tracing::span!(
-                            tracing::Level::TRACE, "wit-bindgen import", module =
-                            "multi-return", function = "mrb",
-                        );
-                        wasmtime::component::__internal::Box::new(
-                            async move {
-                                tracing::event!(tracing::Level::TRACE, "call");
-                                let host = &mut host_getter(caller.data_mut());
-                                let r = Host::mrb(host).await;
-                                tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
-                                );
-                                Ok(r)
-                            }
-                                .instrument(span),
+                    move |caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let mut accessor = unsafe {
+                            wasmtime::component::Accessor::<
+                                T,
+                                _,
+                            >::new(get_host_and_store, spawn_task)
+                        };
+                        let mut future = wasmtime::component::__internal::Box::pin(async move {
+                            let r = <G::Host as Host>::mrb(&mut accessor).await;
+                            Ok(r)
+                        });
+                        let store = wasmtime::VMStoreRawPtr(caller.traitobj());
+                        wasmtime::component::__internal::Box::pin(
+                            wasmtime::component::__internal::poll_fn(move |cx| poll_with_state(
+                                host_getter,
+                                store,
+                                cx,
+                                future.as_mut(),
+                            )),
                         )
                     },
                 )?;
-                inst.func_wrap_async(
+                inst.func_wrap_concurrent(
                     "mrc",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        use tracing::Instrument;
-                        let span = tracing::span!(
-                            tracing::Level::TRACE, "wit-bindgen import", module =
-                            "multi-return", function = "mrc",
-                        );
-                        wasmtime::component::__internal::Box::new(
-                            async move {
-                                tracing::event!(tracing::Level::TRACE, "call");
-                                let host = &mut host_getter(caller.data_mut());
-                                let r = Host::mrc(host).await;
-                                tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
-                                );
-                                Ok((r,))
-                            }
-                                .instrument(span),
+                    move |caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let mut accessor = unsafe {
+                            wasmtime::component::Accessor::<
+                                T,
+                                _,
+                            >::new(get_host_and_store, spawn_task)
+                        };
+                        let mut future = wasmtime::component::__internal::Box::pin(async move {
+                            let r = <G::Host as Host>::mrc(&mut accessor).await;
+                            Ok((r,))
+                        });
+                        let store = wasmtime::VMStoreRawPtr(caller.traitobj());
+                        wasmtime::component::__internal::Box::pin(
+                            wasmtime::component::__internal::poll_fn(move |cx| poll_with_state(
+                                host_getter,
+                                store,
+                                cx,
+                                future.as_mut(),
+                            )),
                         )
                     },
                 )?;
-                inst.func_wrap_async(
+                inst.func_wrap_concurrent(
                     "mrd",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        use tracing::Instrument;
-                        let span = tracing::span!(
-                            tracing::Level::TRACE, "wit-bindgen import", module =
-                            "multi-return", function = "mrd",
-                        );
-                        wasmtime::component::__internal::Box::new(
-                            async move {
-                                tracing::event!(tracing::Level::TRACE, "call");
-                                let host = &mut host_getter(caller.data_mut());
-                                let r = Host::mrd(host).await;
-                                tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
-                                );
-                                Ok((r,))
-                            }
-                                .instrument(span),
+                    move |caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let mut accessor = unsafe {
+                            wasmtime::component::Accessor::<
+                                T,
+                                _,
+                            >::new(get_host_and_store, spawn_task)
+                        };
+                        let mut future = wasmtime::component::__internal::Box::pin(async move {
+                            let r = <G::Host as Host>::mrd(&mut accessor).await;
+                            Ok((r,))
+                        });
+                        let store = wasmtime::VMStoreRawPtr(caller.traitobj());
+                        wasmtime::component::__internal::Box::pin(
+                            wasmtime::component::__internal::poll_fn(move |cx| poll_with_state(
+                                host_getter,
+                                store,
+                                cx,
+                                future.as_mut(),
+                            )),
                         )
                     },
                 )?;
-                inst.func_wrap_async(
+                inst.func_wrap_concurrent(
                     "mre",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        use tracing::Instrument;
-                        let span = tracing::span!(
-                            tracing::Level::TRACE, "wit-bindgen import", module =
-                            "multi-return", function = "mre",
-                        );
-                        wasmtime::component::__internal::Box::new(
-                            async move {
-                                tracing::event!(tracing::Level::TRACE, "call");
-                                let host = &mut host_getter(caller.data_mut());
-                                let r = Host::mre(host).await;
-                                tracing::event!(
-                                    tracing::Level::TRACE, result = tracing::field::debug(& r),
-                                    "return"
-                                );
-                                Ok(r)
-                            }
-                                .instrument(span),
+                    move |caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
+                        let mut accessor = unsafe {
+                            wasmtime::component::Accessor::<
+                                T,
+                                _,
+                            >::new(get_host_and_store, spawn_task)
+                        };
+                        let mut future = wasmtime::component::__internal::Box::pin(async move {
+                            let r = <G::Host as Host>::mre(&mut accessor).await;
+                            Ok(r)
+                        });
+                        let store = wasmtime::VMStoreRawPtr(caller.traitobj());
+                        wasmtime::component::__internal::Box::pin(
+                            wasmtime::component::__internal::poll_fn(move |cx| poll_with_state(
+                                host_getter,
+                                store,
+                                cx,
+                                future.as_mut(),
+                            )),
                         )
                     },
                 )?;
@@ -349,25 +465,91 @@ pub mod foo {
             ) -> wasmtime::Result<()>
             where
                 U: Host + Send,
-                T: Send,
+                T: Send + 'static,
             {
                 add_to_linker_get_host(linker, get)
             }
-            impl<_T: Host + ?Sized + Send> Host for &mut _T {
-                async fn mra(&mut self) -> () {
-                    Host::mra(*self).await
+            impl<_T: Host + Send> Host for &mut _T {
+                async fn mra<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                ) -> () {
+                    struct Task {}
+                    impl<T: 'static, U: Host> wasmtime::component::AccessorTask<T, U, ()>
+                    for Task {
+                        async fn run(
+                            self,
+                            accessor: &mut wasmtime::component::Accessor<T, U>,
+                        ) -> () {
+                            <U as Host>::mra(accessor).await
+                        }
+                    }
+                    accessor.forward(|v| *v, Task {}).await
                 }
-                async fn mrb(&mut self) -> () {
-                    Host::mrb(*self).await
+                async fn mrb<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                ) -> () {
+                    struct Task {}
+                    impl<T: 'static, U: Host> wasmtime::component::AccessorTask<T, U, ()>
+                    for Task {
+                        async fn run(
+                            self,
+                            accessor: &mut wasmtime::component::Accessor<T, U>,
+                        ) -> () {
+                            <U as Host>::mrb(accessor).await
+                        }
+                    }
+                    accessor.forward(|v| *v, Task {}).await
                 }
-                async fn mrc(&mut self) -> u32 {
-                    Host::mrc(*self).await
+                async fn mrc<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                ) -> u32 {
+                    struct Task {}
+                    impl<
+                        T: 'static,
+                        U: Host,
+                    > wasmtime::component::AccessorTask<T, U, u32> for Task {
+                        async fn run(
+                            self,
+                            accessor: &mut wasmtime::component::Accessor<T, U>,
+                        ) -> u32 {
+                            <U as Host>::mrc(accessor).await
+                        }
+                    }
+                    accessor.forward(|v| *v, Task {}).await
                 }
-                async fn mrd(&mut self) -> u32 {
-                    Host::mrd(*self).await
+                async fn mrd<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                ) -> u32 {
+                    struct Task {}
+                    impl<
+                        T: 'static,
+                        U: Host,
+                    > wasmtime::component::AccessorTask<T, U, u32> for Task {
+                        async fn run(
+                            self,
+                            accessor: &mut wasmtime::component::Accessor<T, U>,
+                        ) -> u32 {
+                            <U as Host>::mrd(accessor).await
+                        }
+                    }
+                    accessor.forward(|v| *v, Task {}).await
                 }
-                async fn mre(&mut self) -> (u32, f32) {
-                    Host::mre(*self).await
+                async fn mre<T: 'static>(
+                    accessor: &mut wasmtime::component::Accessor<T, Self>,
+                ) -> (u32, f32) {
+                    struct Task {}
+                    impl<
+                        T: 'static,
+                        U: Host,
+                    > wasmtime::component::AccessorTask<T, U, (u32, f32)> for Task {
+                        async fn run(
+                            self,
+                            accessor: &mut wasmtime::component::Accessor<T, U>,
+                        ) -> (u32, f32) {
+                            <U as Host>::mre(accessor).await
+                        }
+                    }
+                    accessor.forward(|v| *v, Task {}).await
                 }
             }
         }
@@ -491,142 +673,92 @@ pub mod exports {
                     pub async fn call_mra<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<()>
+                    ) -> wasmtime::Result<wasmtime::component::Promise<()>>
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        use tracing::Instrument;
-                        let span = tracing::span!(
-                            tracing::Level::TRACE, "wit-bindgen export", module =
-                            "foo:foo/multi-return", function = "mra",
-                        );
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
                             >::new_unchecked(self.mra)
                         };
-                        let () = callee
-                            .call_async(store.as_context_mut(), ())
-                            .instrument(span.clone())
+                        let promise = callee
+                            .call_concurrent(store.as_context_mut(), ())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
-                        Ok(())
+                        Ok(promise)
                     }
                     pub async fn call_mrb<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<()>
+                    ) -> wasmtime::Result<wasmtime::component::Promise<()>>
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        use tracing::Instrument;
-                        let span = tracing::span!(
-                            tracing::Level::TRACE, "wit-bindgen export", module =
-                            "foo:foo/multi-return", function = "mrb",
-                        );
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (),
                             >::new_unchecked(self.mrb)
                         };
-                        let () = callee
-                            .call_async(store.as_context_mut(), ())
-                            .instrument(span.clone())
+                        let promise = callee
+                            .call_concurrent(store.as_context_mut(), ())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
-                        Ok(())
+                        Ok(promise)
                     }
                     pub async fn call_mrc<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<u32>
+                    ) -> wasmtime::Result<wasmtime::component::Promise<u32>>
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        use tracing::Instrument;
-                        let span = tracing::span!(
-                            tracing::Level::TRACE, "wit-bindgen export", module =
-                            "foo:foo/multi-return", function = "mrc",
-                        );
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (u32,),
                             >::new_unchecked(self.mrc)
                         };
-                        let (ret0,) = callee
-                            .call_async(store.as_context_mut(), ())
-                            .instrument(span.clone())
+                        let promise = callee
+                            .call_concurrent(store.as_context_mut(), ())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
-                        Ok(ret0)
+                        Ok(promise.map(|(v,)| v))
                     }
                     pub async fn call_mrd<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<u32>
+                    ) -> wasmtime::Result<wasmtime::component::Promise<u32>>
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        use tracing::Instrument;
-                        let span = tracing::span!(
-                            tracing::Level::TRACE, "wit-bindgen export", module =
-                            "foo:foo/multi-return", function = "mrd",
-                        );
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (u32,),
                             >::new_unchecked(self.mrd)
                         };
-                        let (ret0,) = callee
-                            .call_async(store.as_context_mut(), ())
-                            .instrument(span.clone())
+                        let promise = callee
+                            .call_concurrent(store.as_context_mut(), ())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
-                        Ok(ret0)
+                        Ok(promise.map(|(v,)| v))
                     }
                     pub async fn call_mre<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<(u32, f32)>
+                    ) -> wasmtime::Result<wasmtime::component::Promise<(u32, f32)>>
                     where
                         <S as wasmtime::AsContext>::Data: Send,
                     {
-                        use tracing::Instrument;
-                        let span = tracing::span!(
-                            tracing::Level::TRACE, "wit-bindgen export", module =
-                            "foo:foo/multi-return", function = "mre",
-                        );
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
                                 (u32, f32),
                             >::new_unchecked(self.mre)
                         };
-                        let (ret0, ret1) = callee
-                            .call_async(store.as_context_mut(), ())
-                            .instrument(span.clone())
+                        let promise = callee
+                            .call_concurrent(store.as_context_mut(), ())
                             .await?;
-                        callee
-                            .post_return_async(store.as_context_mut())
-                            .instrument(span)
-                            .await?;
-                        Ok((ret0, ret1))
+                        Ok(promise)
                     }
                 }
             }
