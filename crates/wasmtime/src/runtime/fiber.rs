@@ -578,7 +578,7 @@ unsafe fn suspend_fiber(
 
 /// Run the specified function on a newly-created fiber and `.await` its
 /// completion.
-pub(crate) async fn on_fiber<R: Send>(
+pub(crate) async fn on_fiber<R>(
     store: &mut StoreOpaque,
     func: impl FnOnce(&mut StoreOpaque) -> R + Send,
 ) -> Result<R> {
@@ -589,7 +589,7 @@ pub(crate) async fn on_fiber<R: Send>(
 }
 
 /// Wrap the specified function in a fiber and return it.
-fn prepare_fiber<'a, R: Send + 'a>(
+fn prepare_fiber<'a, R: 'a>(
     store: &mut dyn VMStore,
     func: impl FnOnce(&mut dyn VMStore) -> R + Send + 'a,
 ) -> Result<(StoreFiber<'a>, oneshot::Receiver<R>)> {
@@ -605,7 +605,7 @@ fn prepare_fiber<'a, R: Send + 'a>(
 
 /// Run the specified function on a newly-created fiber and `.await` its
 /// completion.
-async fn on_fiber_raw<R: Send>(
+async fn on_fiber_raw<R>(
     store: &mut StoreOpaque,
     func: impl FnOnce(&mut dyn VMStore) -> R + Send,
 ) -> Result<R> {

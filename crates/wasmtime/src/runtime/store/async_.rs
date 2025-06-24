@@ -171,7 +171,7 @@ impl StoreOpaque {
     /// This function will convert the synchronous `func` into an asynchronous
     /// future. This is done by running `func` in a fiber on a separate native
     /// stack which can be suspended and resumed from.
-    pub(crate) async fn on_fiber<R: Send>(
+    pub(crate) async fn on_fiber<R>(
         &mut self,
         func: impl FnOnce(&mut Self) -> R + Send,
     ) -> Result<R> {
@@ -286,7 +286,7 @@ impl StoreOpaque {
 
 impl<T> StoreContextMut<'_, T> {
     /// Executes a synchronous computation `func` asynchronously on a new fiber.
-    pub(crate) async fn on_fiber<R: Send>(
+    pub(crate) async fn on_fiber<R>(
         &mut self,
         func: impl FnOnce(&mut StoreContextMut<'_, T>) -> R + Send,
     ) -> Result<R>
