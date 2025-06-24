@@ -4292,9 +4292,14 @@
 (rule 1 (is_nonzero_band $I64 a (u64_from_iconst (bt_imm n)))
   (CondResult.CC (x64_bt_imm $I64 a n) (CC.B)))
 
-;; LLVM looks to favor `test` over `bt`, so if the right-hand-side is a 32-bit
-;; constant always use `test` for this to get prioritized over the `bt` rule
-;; above.
+;; If what we're testing against is a 32-bit integer then this is a candidate
+;; for both the `test` and `bt` instructions (only `bt` if the integer as one
+;; bit set). According to [1] the `test` instruction has a higher throughput
+;; at least historically than the `bt` instruction so here `test` is explicitly
+;; favored over `bt`, even if `bt` were applicable. Note that LLVM also looks to
+;; favor `bt` as well.
+;;
+;; [1]: https://github.com/bytecodealliance/wasmtime/pull/11128#discussion_r2164888415
 (rule 2 (is_nonzero_band ty a b @ (i32_from_iconst _))
   (CondResult.CC (x64_test ty a b) (CC.NZ)))
 
