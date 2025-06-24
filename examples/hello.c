@@ -5,8 +5,9 @@ function.
 You can compile and run this example on Linux with:
 
    cargo build --release -p wasmtime-c-api
+   cmake -S examples -B examples/build
    cc examples/hello.c \
-       -I crates/c-api/include \
+       -I examples/build/include \
        target/release/libwasmtime.a \
        -lpthread -ldl -lm \
        -o hello
