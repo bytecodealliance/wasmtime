@@ -24,9 +24,11 @@ pub trait CodeSink {
     /// required for assembling memory accesses.
     fn add_trap(&mut self, code: TrapCode);
 
-    /// Inform the code buffer of a use of `target` is about to happen within
-    /// this buffer at the current offset. After this method is called bytes are
-    /// then placed at this offset.
+    /// Inform the code buffer that a use of `target` is about to happen at the
+    /// current offset.
+    ///
+    /// After this method is called the bytes of the target are then expected to
+    /// be placed using one of the above `put*` methods.
     fn use_target(&mut self, target: DeferredTarget);
 
     /// Resolves a `KnownOffset` value to the actual signed offset.

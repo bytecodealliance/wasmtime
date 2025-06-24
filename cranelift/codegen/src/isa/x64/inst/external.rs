@@ -480,7 +480,7 @@ impl asm::CodeSink for AsmCodeSink<'_> {
         match offset {
             offsets::KEY_INCOMING_ARG => self.incoming_arg_offset,
             offsets::KEY_SLOT_OFFSET => self.slot_offset,
-            _ => unreachable!(),
+            other => panic!("unknown \"known\" offset {other}"),
         }
     }
 }
