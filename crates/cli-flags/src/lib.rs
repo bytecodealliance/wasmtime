@@ -564,7 +564,7 @@ pub struct CommonOptions {
     ///
     /// Generates of a serialized trace of the Wasm module execution that captures all
     /// non-determinism observable by the module. This trace can subsequently be
-    /// re-executed in a determinstic, embedding-free manner (see the `--replay` option).
+    /// re-executed in a determinstic, embedding-agnostic manner (see the `--replay` option).
     ///
     /// Note: Minimal configs for deterministic Wasm semantics will be
     /// enforced during recording by default (NaN canonicalization, deterministic relaxed SIMD)
@@ -574,7 +574,7 @@ pub struct CommonOptions {
 
     /// Options to enable and configure execution replay, `-P help` to see all.
     ///
-    /// Run a determinstic, embedding-free replay execution of the Wasm module
+    /// Run a determinstic, embedding-agnostic replay execution of the Wasm module
     /// according to a prior recorded execution trace (see the `--record` option).
     ///
     /// Note: Minimal configs for deterministic Wasm semantics will be
