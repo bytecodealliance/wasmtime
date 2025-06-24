@@ -284,9 +284,22 @@ impl Func {
             store.0.async_support(),
             "cannot use `call_async` without enabling async support in the config"
         );
-        store
-            .on_fiber(|store| self.call_impl(store, params, results))
-            .await?
+        #[cfg(feature = "component-model-async")]
+        {
+            let future = self.call_concurrent(store.as_context_mut(), params.to_vec());
+            let run_results = self.instance.run(store, future).await??;
+            assert_eq!(run_results.len(), results.len());
+            for (result, slot) in run_results.into_iter().zip(results) {
+                *slot = result;
+            }
+            Ok(())
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            store
+                .on_fiber(|store| self.call_impl(store, params, results))
+                .await?
+        }
     }
 
     fn check_param_count<T>(&self, store: StoreContextMut<T>, count: usize) -> Result<()> {
@@ -654,6 +667,13 @@ impl Func {
     fn post_return_impl(&self, mut store: impl AsContextMut) -> Result<()> {
         let mut store = store.as_context_mut();
 
+        #[cfg(feature = "component-model-async")]
+        if store.0.async_support() {
+            // In this case, the post-return function will already have been
+            // called.
+            return Ok(());
+        }
+
         let index = self.index;
         let vminstance = self.instance.id().get(store.0);
         let (_ty, _def, options) = vminstance.component().export_lifted_function(index);
@@ -814,6 +834,11 @@ impl Func {
             let offset = abi.next_field32_size(&mut offset);
             Val::load(cx, *ty, &bytes[offset..][..abi.size32 as usize])
         }))
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn instance(self) -> Instance {
+        self.instance
     }
 
     /// Creates a `LowerContext` using the configuration values of this lifted

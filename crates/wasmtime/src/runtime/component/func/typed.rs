@@ -189,11 +189,8 @@ where
             store.0.async_support(),
             "cannot use `call_async` when async support is not enabled on the config"
         );
-
-        // FIXME: this'll get updated in #11127 but for now it's just showing
-        // that this can compile.
         #[cfg(feature = "component-model-async")]
-        if false {
+        {
             use crate::runtime::vm::SendSyncPtr;
             use core::ptr::NonNull;
 
@@ -216,14 +213,19 @@ where
             // TODO: need to place a dtor on the stack referencing the store
             // which removes `prepared.task` from the store to ensure that the
             // future is for sure 100% gone when this stack frame goes away.
+            if true {
+                todo!()
+            }
 
             let result = concurrent::queue_call(store.as_context_mut(), prepared)?;
             return self.func.instance.run(store, result).await?;
         }
-
-        store
-            .on_fiber(|store| self.call_impl(store, params))
-            .await?
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            store
+                .on_fiber(|store| self.call_impl(store, params))
+                .await?
+        }
     }
 
     /// Start a concurrent call to this function.
@@ -1565,7 +1567,7 @@ pub struct WasmStr {
 }
 
 impl WasmStr {
-    fn new(ptr: usize, len: usize, cx: &mut LiftContext<'_>) -> Result<WasmStr> {
+    pub(crate) fn new(ptr: usize, len: usize, cx: &mut LiftContext<'_>) -> Result<WasmStr> {
         let byte_len = match cx.options.string_encoding() {
             StringEncoding::Utf8 => Some(len),
             StringEncoding::Utf16 => len.checked_mul(2),
@@ -1618,7 +1620,7 @@ impl WasmStr {
         self.to_str_from_memory(memory)
     }
 
-    fn to_str_from_memory<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
+    pub(crate) fn to_str_from_memory<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
         match self.options.string_encoding() {
             StringEncoding::Utf8 => self.decode_utf8(memory),
             StringEncoding::Utf16 => self.decode_utf16(memory, self.len),
@@ -1824,7 +1826,7 @@ pub struct WasmList<T> {
 }
 
 impl<T: Lift> WasmList<T> {
-    fn new(
+    pub(crate) fn new(
         ptr: usize,
         len: usize,
         cx: &mut LiftContext<'_>,
