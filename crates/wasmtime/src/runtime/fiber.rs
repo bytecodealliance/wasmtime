@@ -676,6 +676,7 @@ enum OnRelease {
     ReturnPending,
     /// Return `Poll::Ready` from `FiberFuture::poll`, handing ownership of the
     /// `StoreFiber` to the caller.
+    #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
     ReturnReady,
 }
 
