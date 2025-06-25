@@ -139,7 +139,7 @@ pub struct FuncEnvironment<'module_environment> {
     pcc_vmctx_memtype: Option<ir::MemoryType>,
 
     /// Caches of signatures for builtin functions.
-    pub(crate) builtin_functions: BuiltinFunctions,
+    builtin_functions: BuiltinFunctions,
 
     /// Offsets to struct fields accessed by JIT code.
     pub(crate) offsets: VMOffsets<u8>,
@@ -184,7 +184,7 @@ pub struct FuncEnvironment<'module_environment> {
     /// Used by the stack switching feature. If set, we have a allocated a
     /// slot on this function's stack to be used for the
     /// current continuation's `values` field.
-    pub(crate) stack_switching_values_buffer: Option<ir::StackSlot>,
+    pub stack_switching_values_buffer: Option<ir::StackSlot>,
 }
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
