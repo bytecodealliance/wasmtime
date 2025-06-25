@@ -1,9 +1,10 @@
 #![deny(unsafe_op_in_unsafe_fn)]
 
-use crate::Engine;
-use crate::store::{Executor, StoreId, StoreOpaque};
+use crate::prelude::*;
+use crate::store::{Executor, StoreId, StoreInner, StoreOpaque};
 use crate::vm::mpk::{self, ProtectionMask};
 use crate::vm::{AsyncWasmCallState, VMStore};
+use crate::{Engine, StoreContextMut};
 use anyhow::{Result, anyhow};
 use core::mem;
 use core::ops::Range;
@@ -12,44 +13,71 @@ use core::ptr;
 use core::task::{Context, Poll};
 use wasmtime_fiber::{Fiber, Suspend};
 
-/// Helper struct for reseting a raw pointer to its original value on drop.
-struct Reset<T: Copy>(*mut T, T);
+type WasmtimeResume = Result<*mut Context<'static>>;
+type WasmtimeYield = StoreFiberYield;
+type WasmtimeComplete = Result<()>;
+type WasmtimeSuspend = Suspend<WasmtimeResume, WasmtimeYield, WasmtimeComplete>;
 
-impl<T: Copy> Drop for Reset<T> {
-    fn drop(&mut self) {
-        unsafe {
-            *self.0 = self.1;
-        }
-    }
-}
-
-/// Represents the context of a `Future::poll` operation which involves resuming
-/// a fiber.
+/// State related to asynchronous computations stored within a `Store<T>`.
 ///
-/// See `self::poll_fn` for details.
-#[derive(Clone, Copy)]
-struct PollContext {
-    future_context: *mut Context<'static>,
-}
-
-impl Default for PollContext {
-    fn default() -> PollContext {
-        PollContext {
-            future_context: ptr::null_mut(),
-        }
-    }
-}
-
-/// Represents the state of a currently executing fiber which has been resumed
-/// via `self::poll_fn`.
+/// This structure resides inside of a `Store<T>` and is used to manage the
+/// various pieces of state associated with asynchronous computations. Chiefly
+/// this manages the `WasmtimeSuspend` pointer as well as `&mut Context<'_>`
+/// when polling futures. This serves as storage to use these pointers across a
+/// WebAssembly function boundary, for example, where the values cannot
+/// otherwise be explicitly threaded through.
 pub(crate) struct AsyncState {
-    /// The `Suspend` for the current fiber (or null if no such fiber is running).
+    /// The `Suspend` for the current fiber (or null if no such fiber is
+    /// running).
     ///
-    /// See `StoreFiber` for an explanation of the signature types we use here.
-    current_suspend: *mut Suspend<Result<()>, StoreFiberYield, Result<()>>,
+    /// This pointer is provided by the `wasmtime_fiber` crate when a fiber
+    /// first starts, but this pointer is unable to be carried through
+    /// WebAssembly frames for example. This serves as an alternative storage
+    /// location for the pointer provided by `wasmtime_fiber` within a fiber's
+    /// execution.
+    ///
+    /// This pointer is null when a fiber is not executing, but it is also null
+    /// when a `BlockingContext` is created. Note that when a fiber is suspended
+    /// it's always through a `BlockingContext` so this field is null whenever a
+    /// fiber is suspended as well. Fiber resumption will save the prior value
+    /// in a store and then set it to null, where suspension will then restore
+    /// what was previously in the store.
+    current_suspend: *mut WasmtimeSuspend,
 
-    /// See `PollContext`
-    current_poll_cx: PollContext,
+    /// The `Context` pointer last provided in `Future for FiberFuture`.
+    ///
+    /// Like `current_suspend` above this is an example of a piece of context
+    /// which needs to be carried over a WebAssembly function frame which
+    /// otherwise doesn't take this as a parameter. This differs from
+    /// `current_suspend` though in that it is provided as part of a `Future`
+    /// poll operation but is "gone" after that poll operation completes. That
+    /// means that while `current_suspend` is the same for the lifetime of a
+    /// future this field is always changing.
+    ///
+    /// Like `current_suspend` though this is null either when a fiber isn't
+    /// running or when a `BlockingContext` is created (in which case this is
+    /// "take"en). That means that this is null on suspension/resumption of a
+    /// fiber.
+    ///
+    /// The value for this pointer is threaded directly through the
+    /// `WasmtimeResume` type which is how a pointer flows into this field from
+    /// a future-related poll call. This means that the `BlockingContext`
+    /// creation may take one value of a pointer here but restore another. That
+    /// would represent suspending in one call to `Future::poll` and then
+    /// resuming some time later in a different call to `Future::poll`.
+    ///
+    /// # Safety
+    ///
+    /// Note that this is a pretty unsafe field for two reasons. One is that
+    /// it's a raw pointer to a `Context` provided ephemerally to some call to
+    /// `Future::poll` on the stack. Another reason is that the lifetime
+    /// parameter of `Context` is unsafely changed to `'static` here which is
+    /// not correct. The ephemeral nature of this pointer is managed through the
+    /// take-style operations in `BlockingContext` and the `'static` lifetime is
+    /// handled by ensuring the signatures that work with `BlockingContext` all
+    /// use constrained anonymous lifetimes that are guaranteed to be shorter
+    /// than the original `Context` lifetime.
+    current_future_cx: *mut Context<'static>,
 
     /// The last fiber stack that was in use by the store.
     ///
@@ -60,11 +88,18 @@ pub(crate) struct AsyncState {
     last_fiber_stack: Option<wasmtime_fiber::FiberStack>,
 }
 
+// Lots of pesky unsafe cells and pointers in this structure. This means we need
+// to declare explicitly that we use this in a threadsafe fashion.
+//
+// TODO: replace pointers above with `SendSyncPtr<..>` and remove this
+unsafe impl Send for AsyncState {}
+unsafe impl Sync for AsyncState {}
+
 impl Default for AsyncState {
     fn default() -> Self {
         Self {
             current_suspend: ptr::null_mut(),
-            current_poll_cx: PollContext::default(),
+            current_future_cx: ptr::null_mut(),
             last_fiber_stack: None,
         }
     }
@@ -76,56 +111,143 @@ impl AsyncState {
     }
 }
 
-// Lots of pesky unsafe cells and pointers in this structure. This means we need
-// to declare explicitly that we use this in a threadsafe fashion.
-unsafe impl Send for AsyncState {}
-unsafe impl Sync for AsyncState {}
-
-/// Used to "stackfully" poll a future by suspending the current fiber
-/// repeatedly in a loop until the future completes.
-pub(crate) struct AsyncCx {
-    current_suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, Result<()>>,
-    current_poll_cx: *mut PollContext,
+trait AsStoreOpaque {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque;
 }
 
-impl AsyncCx {
-    /// Create a new `AsyncCx`.
-    ///
-    /// This will panic if called outside the scope of a `self::poll_fn` call.
-    /// Consider using `Self::try_new` instead to avoid panicking.
-    pub(crate) fn new(store: &mut StoreOpaque) -> Self {
-        Self::try_new(store).unwrap()
+impl AsStoreOpaque for StoreOpaque {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        self
     }
+}
 
-    /// Create a new `AsyncCx`.
-    ///
-    /// This will return `None` if called outside the scope of a `self::poll_fn`
-    /// call.
-    pub(crate) fn try_new(store: &mut StoreOpaque) -> Option<Self> {
-        let current_poll_cx = unsafe { &raw mut (*store.async_state()).current_poll_cx };
-        if unsafe { (*current_poll_cx).future_context.is_null() } {
-            None
-        } else {
-            Some(Self {
-                current_suspend: unsafe { &raw mut (*store.async_state()).current_suspend },
-                current_poll_cx,
-            })
-        }
+impl<T: 'static> AsStoreOpaque for StoreInner<T> {
+    fn as_store_opaque(&mut self) -> &mut StoreOpaque {
+        self
     }
+}
 
-    /// Poll the specified future using `Self::current_poll_cx`.
+/// A helper structure used to block a fiber.
+///
+/// This is acquired via either `StoreContextMut::with_blocking` or
+/// `StoreOpaque::with_blocking`. This structure represents the "taken" state of
+/// pointers from a store's `AsyncState`, then modeling them as safe pointers.
+///
+/// Note that the lifetimes here are carefully controlled in instances of this
+/// structure through the construction of the `with` function.
+pub(crate) struct BlockingContext<'a, 'b> {
+    /// Pointer to `wasmtime_fiber::Suspend` which was supplied when a fiber
+    /// first started.
     ///
-    /// This will panic if called recursively using the same `AsyncState`.
+    /// When a `BlockingContext` is first created this pointer is "taken" from
+    /// the store (the store is null'd out) and then the raw pointer previously
+    /// in the store is unsafely transformed to this safe pointer. This
+    /// represents how a `BlockingContext` temporarily has access to this
+    /// suspend but when the `BlockingContext` goes away this'll make its way
+    /// back into the store.
+    suspend: &'a mut WasmtimeSuspend,
+
+    /// Pointer to the future `Context` that this fiber is being polled with.
     ///
-    /// SAFETY: `self` contains pointers into the `Store` with which it was
-    /// created and must not be used after that `Store` has been disposed.
-    unsafe fn poll<U>(&self, mut future: Pin<&mut (dyn Future<Output = U> + Send)>) -> Poll<U> {
+    /// Similar to `suspend` above this is taken from a store when a
+    /// `BlockingContext` is created and it's restored when the
+    /// `BlockingContext` goes away. Note though that unlike `suspend`, as
+    /// alluded to in the documentation on `AsyncState`, this value changes over
+    /// time as calls to poll are made. This field becomes `None` during a
+    /// suspension because that means that the context is released and no longer
+    /// available. Upon resumption the context here is *optionally* provided.
+    /// Cancellation is a case where it isn't passed back and a re-poll is a
+    /// case where it's passed back.
+    future_cx: Option<&'a mut Context<'b>>,
+}
+
+impl<'a, 'b> BlockingContext<'a, 'b> {
+    /// Method to go from a `store` provided (which internally contains a
+    /// `StoreOpaque`) to a `BlockingContext`.
+    ///
+    /// This function will "take" context from `store`'s `AsyncState` field. It
+    /// will then construct a `BlockingContext` and yield it to the closure `f`
+    /// provided. The closure can then block on futures, suspend, etc.
+    ///
+    /// Upon return of the closure `f` the state from `BlockingContext` is
+    /// restored within the store. The return value of `f` is the return value
+    /// of this function.
+    ///
+    /// Note that the `store` must be provided to this function as an argument
+    /// to originally acquire state from `AsyncState`. This store is then
+    /// supplied back to the closure `f` provided here so the store can be used
+    /// to construct an asynchronous or blocking computation which the
+    /// `BlockingContext` tries to block on.
+    ///
+    /// # Safety
+    ///
+    /// This method is safe to call at any time, but it's worth noting that the
+    /// safety of this function relies on the signature of this function.
+    /// Notably the lifetime parameters of `BlockingContext` in the `f` closure
+    /// here must be anonymous. That ensures that the `BlockingContext` that
+    /// callers get access to cannot be persisted outside of that closure call
+    /// and everything is scoped to just the closure `f` provided with nothing
+    /// escaping.
+    fn with<S, R>(store: &mut S, f: impl FnOnce(&mut S, &mut BlockingContext<'_, '_>) -> R) -> R
+    where
+        S: AsStoreOpaque,
+    {
+        let opaque = store.as_store_opaque();
+        let future_cx;
+        let suspend;
+
+        // SAFETY: this is taking pointers from `AsyncState` and then unsafely
+        // turning them into safe references. Lifetime-wise this should be safe
+        // because the inferred lifetimes for all these pointers is constrained
+        // by the signature of `f` provided here. That ensures that everything
+        // is scoped purely to the closure `f` and nothing should be persisted
+        // outside of this function call. This, for example, ensures that the
+        // `Context<'static>` doesn't leak out, it's only with an anonymous
+        // lifetime that's forcibly shorter.
+        //
+        // Provenance-wise this should be safe as if these fields in the store
+        // are non-null then the pointers are provided up-the-stack on this
+        // fiber and for this fiber. The "take" pattern here ensures that if
+        // this `BlockingContext` context acquires the pointers then there are
+        // no other instances of these pointers in use anywhere else.
         unsafe {
-            let poll_cx = *self.current_poll_cx;
-            let _reset = Reset(self.current_poll_cx, poll_cx);
-            *self.current_poll_cx = PollContext::default();
-            assert!(!poll_cx.future_context.is_null());
-            future.as_mut().poll(&mut *poll_cx.future_context)
+            let state = opaque.async_state();
+            assert!(!(*state).current_future_cx.is_null());
+            assert!(!(*state).current_suspend.is_null());
+            future_cx = Some(&mut *(*state).current_future_cx);
+            (*state).current_future_cx = ptr::null_mut();
+            suspend = &mut *(*state).current_suspend;
+            (*state).current_suspend = ptr::null_mut();
+        }
+
+        let mut reset = ResetBlockingContext {
+            store,
+            cx: BlockingContext { future_cx, suspend },
+        };
+        return f(&mut reset.store, &mut reset.cx);
+
+        struct ResetBlockingContext<'a, 'b, S: AsStoreOpaque> {
+            store: &'a mut S,
+            cx: BlockingContext<'a, 'b>,
+        }
+
+        impl<S: AsStoreOpaque> Drop for ResetBlockingContext<'_, '_, S> {
+            fn drop(&mut self) {
+                let store = self.store.as_store_opaque();
+                let state = store.async_state();
+
+                // SAFETY: TODO need to remove the unsafety from
+                // reading/writing `async_state`. Otherwise this is all state
+                // owned by the store.
+                unsafe {
+                    debug_assert!((*state).current_future_cx.is_null());
+                    debug_assert!((*state).current_suspend.is_null());
+                    (*state).current_suspend = self.cx.suspend;
+                    if let Some(cx) = &mut self.cx.future_cx {
+                        (*state).current_future_cx = change_context_lifetime(cx);
+                    }
+                }
+            }
         }
     }
 
@@ -157,44 +279,140 @@ impl AsyncCx {
     /// suspend and release the store to allow other tasks to run before this
     /// fiber is resumed.
     ///
-    /// SAFETY: `self` contains pointers into the `Store` with which it was
-    /// created and must not be used after that `Store` has been disposed.
-    pub(crate) unsafe fn block_on<U>(
-        &self,
-        mut future: Pin<&mut (dyn Future<Output = U> + Send)>,
-    ) -> Result<U> {
+    /// # Return Value
+    ///
+    /// A return value of `Ok(value)` means that the future completed with
+    /// `value`. A return value of `Err(e)` means that the fiber and its future
+    /// have been cancelled and the fiber needs to exit and complete ASAP.
+    ///
+    /// # Safety
+    ///
+    /// This function is safe to call at any time but relies on a trait bound
+    /// that is manually placed here the compiler does not otherwise require.
+    /// Notably the `Send` bound on the future provided here is not required
+    /// insofar as things compile without that. The purpose of this, however, is
+    /// to make the `unsafe impl Send for StoreFiber` more safe. The `future`
+    /// here is state that is stored on the stack during the suspension of this
+    /// fiber and is otherwise not visible to the compiler. By having a `Send`
+    /// bound here it ensures that the future doesn't have things like `Rc` or
+    /// similar pointing into thread locals which would not be sound if this
+    /// fiber crosses threads.
+    pub(crate) fn block_on<F>(&mut self, future: F) -> Result<F::Output>
+    where
+        F: Future + Send,
+    {
+        let mut future = core::pin::pin!(future);
         loop {
-            match unsafe { self.poll(future.as_mut()) } {
+            match future.as_mut().poll(self.future_cx.as_mut().unwrap()) {
                 Poll::Ready(v) => break Ok(v),
-                Poll::Pending => unsafe { self.suspend(StoreFiberYield::KeepStore)? },
+                Poll::Pending => self.suspend(StoreFiberYield::KeepStore)?,
             }
         }
     }
 
-    /// Suspend the current fiber, optionally transfering exclusive access to
-    /// the store back to the code which resumed it.
+    /// Suspend this fiber with `yield_` as the reason.
     ///
-    /// SAFETY: `self` contains pointers into the `Store` with which it was
-    /// created and must not be used after that `Store` has been disposed.
-    pub(crate) unsafe fn suspend(&self, yield_: StoreFiberYield) -> Result<()> {
-        // Take our current `Suspend` context which was configured as soon as our
-        // fiber started. Note that we must load it at the front here and save it on
-        // our stack frame. While we're polling the future other fibers may be
-        // started for recursive computations, and the current suspend context is
-        // only preserved at the edges of the fiber, not during the fiber itself.
-        //
-        // For a little bit of extra safety we also replace the current value with
-        // null to try to catch any accidental bugs on our part early.  This is all
-        // pretty unsafe so we're trying to be careful...
-        //
-        // Note that there should be a segfaulting test in `async_functions.rs` if
-        // this `Reset` is removed.
+    /// This function will suspend the current fiber and only return after the
+    /// fiber has resumed. This function return `Ok(())` if the fiber was
+    /// resumed to be completed, and `Err(e)` indicates that the fiber has been
+    /// cancelled and needs to exit/complete ASAP.
+    pub(crate) fn suspend(&mut self, yield_: StoreFiberYield) -> Result<()> {
+        // Over a suspension point we're guaranteed that the `Context` provided
+        // here is no longer valid, so discard it. If we're supposed to be able
+        // to poll afterwards this will be given back as part of the resume
+        // value given back.
+        self.future_cx.take();
+
+        let new_future_cx: *mut Context<'static> = self.suspend.suspend(yield_)?;
+
+        // SAFETY: this function is unsafe as we're doing "funky" things to the
+        // `new_future_cx` we have been given. The safety here relies on the
+        // fact that the lifetimes of `BlockingContext` are all "smaller" than
+        // the original `Context` itself, and that should be guaranteed through
+        // the exclusive constructor of this type `BlockingContext::with`.
         unsafe {
-            let reset_suspend = Reset(self.current_suspend, *self.current_suspend);
-            *self.current_suspend = ptr::null_mut();
-            assert!(!(reset_suspend.1).is_null());
-            (*reset_suspend.1).suspend(yield_)
+            self.future_cx = Some(change_context_lifetime(&mut *new_future_cx));
         }
+        Ok(())
+    }
+}
+
+impl<T> StoreContextMut<'_, T> {
+    /// Blocks on the future computed by `f`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is invoked outside the context of a fiber.
+    pub(crate) fn block_on<R>(
+        self,
+        f: impl FnOnce(StoreContextMut<'_, T>) -> Pin<Box<dyn Future<Output = R> + Send + '_>>,
+    ) -> Result<R> {
+        BlockingContext::with(self.0, |store, cx| {
+            cx.block_on(f(StoreContextMut(store)).as_mut())
+        })
+    }
+
+    /// Creates a `BlockingContext` suitable for blocking on futures or
+    /// suspending the current fiber.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is invoked outside the context of a fiber.
+    pub(crate) fn with_blocking<R>(
+        self,
+        f: impl FnOnce(StoreContextMut<'_, T>, &mut BlockingContext<'_, '_>) -> R,
+    ) -> R {
+        BlockingContext::with(self.0, |store, cx| f(StoreContextMut(store), cx))
+    }
+}
+
+impl<T> crate::store::StoreInner<T> {
+    /// Blocks on the future computed by `f`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is invoked outside the context of a fiber.
+    pub(crate) fn block_on<R>(
+        &mut self,
+        f: impl FnOnce(StoreContextMut<'_, T>) -> Pin<Box<dyn Future<Output = R> + Send + '_>>,
+    ) -> Result<R> {
+        BlockingContext::with(self, |store, cx| {
+            cx.block_on(f(StoreContextMut(store)).as_mut())
+        })
+    }
+}
+
+impl StoreOpaque {
+    /// Blocks on the future computed by `f`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is invoked outside the context of a fiber.
+    pub(crate) fn block_on<R>(
+        &mut self,
+        f: impl FnOnce(&mut Self) -> Pin<Box<dyn Future<Output = R> + Send + '_>>,
+    ) -> Result<R> {
+        BlockingContext::with(self, |store, cx| cx.block_on(f(store).as_mut()))
+    }
+
+    /// Creates a `BlockingContext` suitable for blocking on futures or
+    /// suspending the current fiber.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this is invoked outside the context of a fiber.
+    #[expect(dead_code, reason = "will be used by async things soon")]
+    pub(crate) fn with_blocking<R>(
+        &mut self,
+        f: impl FnOnce(&mut Self, &mut BlockingContext<'_, '_>) -> R,
+    ) -> R {
+        BlockingContext::with(self, |store, cx| f(store, cx))
+    }
+
+    /// Returns whether `block_on` will succeed or panic.
+    pub(crate) fn can_block(&mut self) -> bool {
+        let current_future_cx = unsafe { (*self.async_state()).current_future_cx };
+        !current_future_cx.is_null()
     }
 }
 
@@ -227,14 +445,11 @@ pub(crate) struct StoreFiber<'a> {
     ///
     /// Note also that every `StoreFiber` is implicitly granted exclusive access
     /// to the store when it is resumed.
-    fiber: Option<Fiber<'a, Result<()>, StoreFiberYield, Result<()>>>,
+    fiber: Option<Fiber<'a, WasmtimeResume, WasmtimeYield, WasmtimeComplete>>,
     /// See `FiberResumeState`
     state: Option<FiberResumeState>,
     /// The Wasmtime `Engine` to which this fiber belongs.
     engine: Engine,
-    /// The current `Suspend` for this fiber (or null if it's not currently
-    /// running).
-    suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, Result<()>>,
     /// The executor (e.g. the Pulley interpreter state) belonging to this
     /// fiber.
     ///
@@ -402,6 +617,12 @@ impl FiberResumeState {
             mpk,
             stack_limit: store.replace_stack_limit(self.stack_limit),
             async_guard_range: store.replace_async_guard_range(async_guard_range),
+
+            // The current suspend/future_cx are always null upon resumption, so
+            // insert null. Save the old values through to get preserved across
+            // this resume/suspend.
+            current_suspend: store.replace_current_suspend(ptr::null_mut()),
+            current_future_cx: store.replace_current_future_cx(ptr::null_mut()),
         }
     }
 
@@ -425,6 +646,14 @@ impl StoreOpaque {
     fn replace_async_guard_range(&mut self, range: Range<*mut u8>) -> Range<*mut u8> {
         mem::replace(&mut self.vm_store_context_mut().async_guard_range, range)
     }
+
+    fn replace_current_suspend(&mut self, ptr: *mut WasmtimeSuspend) -> *mut WasmtimeSuspend {
+        unsafe { mem::replace(&mut (*self.async_state()).current_suspend, ptr) }
+    }
+
+    fn replace_current_future_cx(&mut self, ptr: *mut Context<'static>) -> *mut Context<'static> {
+        unsafe { mem::replace(&mut (*self.async_state()).current_future_cx, ptr) }
+    }
 }
 
 struct PriorFiberResumeState {
@@ -432,6 +661,8 @@ struct PriorFiberResumeState {
     mpk: Option<ProtectionMask>,
     stack_limit: usize,
     async_guard_range: Range<*mut u8>,
+    current_suspend: *mut WasmtimeSuspend,
+    current_future_cx: *mut Context<'static>,
 }
 
 impl PriorFiberResumeState {
@@ -441,6 +672,15 @@ impl PriorFiberResumeState {
         // No need to save `_my_guard` since we can re-infer it from the fiber
         // that this state is attached to.
         let _my_guard = store.replace_async_guard_range(self.async_guard_range);
+
+        // Restore the previous values of current_{suspend,future_cx} but we
+        // should be guaranteed that the prior values are null, so double-check
+        // that here.
+        let prev = store.replace_current_suspend(self.current_suspend);
+        assert!(prev.is_null());
+        let prev = store.replace_current_future_cx(self.current_future_cx);
+        assert!(prev.is_null());
+
         FiberResumeState {
             tls,
             mpk,
@@ -467,8 +707,8 @@ fn swap_mpk_states(mask: Option<ProtectionMask>) -> Option<ProtectionMask> {
 fn resume_fiber<'a>(
     store: &mut StoreOpaque,
     fiber: &mut StoreFiber<'a>,
-    result: Result<()>,
-) -> Result<Result<()>, StoreFiberYield> {
+    result: WasmtimeResume,
+) -> Result<WasmtimeComplete, StoreFiberYield> {
     assert_eq!(store.id(), fiber.id);
 
     struct Restore<'a, 'b> {
@@ -484,7 +724,6 @@ fn resume_fiber<'a>(
         }
     }
     let result = unsafe {
-        let _reset_suspend = Reset(fiber.suspend, *fiber.suspend);
         let prev = fiber.state.take().unwrap().replace(store, fiber);
         store.swap_executor(&mut fiber.executor);
         let restore = Restore {
@@ -538,35 +777,57 @@ pub(crate) fn make_fiber<'a>(
     let executor = Executor::new(&engine);
     let id = store.store_opaque().id();
     let stack = store.store_opaque_mut().allocate_fiber_stack()?;
-    let suspend = unsafe { &raw mut (*store.store_opaque_mut().async_state()).current_suspend };
     let track_pkey_context_switch = store.has_pkey();
     let store = &raw mut *store;
-    let fiber = Fiber::new(stack, move |result: Result<()>, suspend| {
-        // Cancelled before we started? Just return.
-        if result.is_err() {
-            return Ok(());
-        }
+    let fiber = Fiber::new(stack, move |result: WasmtimeResume, suspend| {
+        let future_cx = match result {
+            Ok(cx) => cx,
+            // Cancelled before we started? Just return.
+            Err(_) => return Ok(()),
+        };
 
         // SAFETY: Per the documented contract for
         // `resume_fiber`, we've been given exclusive access to
         // the store until we exit or yield it back to the resumer.
         let store_ref = unsafe { &mut *store };
-        let suspend_ptr =
-            unsafe { &raw mut (*store_ref.store_opaque_mut().async_state()).current_suspend };
-        // Configure our store's suspension context for the rest of the
-        // execution of this fiber. Note that a raw pointer is stored here
-        // which is only valid for the duration of this closure.
-        // Consequently we at least replace it with the previous value when
-        // we're done. This reset is also required for correctness because
-        // otherwise our value will overwrite another active fiber's value.
-        // There should be a test that segfaults in `async_functions.rs` if
-        // this `Reset` is removed.
+        let async_state = store_ref.store_opaque_mut().async_state();
+
+        // It should be a guarantee that the store has null pointers here upon
+        // starting a fiber, so now's the time to fill in the pointers now that
+        // the fiber is running and `future_cx` and `suspend` are both in scope.
+        // Note that these pointers are removed when this function returns as
+        // that's when they fall out of scope.
         //
-        // SAFETY: The resumer is responsible for setting
-        // `current_suspend` to a valid pointer.
-        let _reset = Reset(suspend_ptr, unsafe { *suspend_ptr });
-        unsafe { *suspend_ptr = suspend };
-        fun(store_ref)
+        // SAFETY: TODO make manipulation of `AsyncState` safer.
+        unsafe {
+            assert!((*async_state).current_suspend.is_null());
+            assert!((*async_state).current_future_cx.is_null());
+
+            (*async_state).current_suspend = suspend;
+            (*async_state).current_future_cx = future_cx;
+        }
+
+        struct ResetCurrentPointersToNull<'a>(&'a mut dyn VMStore);
+
+        impl Drop for ResetCurrentPointersToNull<'_> {
+            fn drop(&mut self) {
+                let state = self.0.async_state();
+                unsafe {
+                    // Double-check that the current suspension isn't null (it
+                    // should be what's in this closure). Note though that we
+                    // can't check `current_future_cx` because it may either be
+                    // here or not be here depending on whether this was
+                    // cancelled or not.
+                    debug_assert!(!(*state).current_suspend.is_null());
+
+                    (*state).current_suspend = ptr::null_mut();
+                    (*state).current_future_cx = ptr::null_mut();
+                }
+            }
+        }
+        let reset = ResetCurrentPointersToNull(store_ref);
+
+        fun(reset.0)
     })?;
     Ok(StoreFiber {
         state: Some(FiberResumeState {
@@ -579,7 +840,6 @@ pub(crate) fn make_fiber<'a>(
             stack_limit: usize::MAX,
         }),
         engine,
-        suspend,
         executor,
         id,
         fiber: Some(fiber),
@@ -662,34 +922,21 @@ impl<'b> Future for FiberFuture<'_, 'b> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let me = self.get_mut();
 
-        let poll_cx = unsafe { &raw mut (*me.store.async_state()).current_poll_cx };
-        let _reset = Reset(poll_cx, unsafe { *poll_cx });
-
-        // We need to carry over this `cx` into our fiber's runtime for when
-        // it tries to poll sub-futures that are created. Doing this must be
-        // done unsafely, however, since `cx` is only alive for this one
+        // SAFETY: We need to carry over this `cx` into our fiber's runtime for
+        // when it tries to poll sub-futures that are created. Doing this must
+        // be done unsafely, however, since `cx` is only alive for this one
         // singular function call. Here we do a `transmute` to extend the
-        // lifetime of `Context` so it can be stored in our `Store`, and
-        // then we replace the current polling context with this one.
+        // lifetime of `Context` so it can be stored in our `Store`, and then we
+        // replace the current polling context with this one.
         //
-        // Note that the replace is done for weird situations where futures
-        // might be switching contexts and there's multiple wasmtime futures
-        // in a chain of futures.
-        //
-        // On exit from this function, though, we reset the polling context
-        // back to what it was to signify that `Store` no longer has access
-        // to this pointer.
-        //
-        // SAFETY: We store the pointer to the `Context` only for the
-        // duration of this call and then reset it to its previous value
-        // afterward, thereby ensuring `fun` never sees a stale pointer.
-        unsafe {
-            *poll_cx = PollContext {
-                future_context: mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx),
-            };
-        }
+        // The safety of this extension relies on never actually using
+        // `Context<'static>` with `'static` actually there, which should be
+        // satisfied by the users of this in the `BlockingContext` structure
+        // where the lifetime parameters there are always more constrained than
+        // they are here.
+        let cx: *mut Context<'static> = unsafe { change_context_lifetime(cx) };
 
-        match resume_fiber(me.store, me.fiber.as_mut().unwrap(), Ok(())) {
+        match resume_fiber(me.store, me.fiber.as_mut().unwrap(), Ok(cx)) {
             Ok(Ok(())) => Poll::Ready(Ok(None)),
             Ok(Err(e)) => Poll::Ready(Err(e)),
             Err(StoreFiberYield::KeepStore) => Poll::Pending,
@@ -707,4 +954,17 @@ impl Drop for FiberFuture<'_, '_> {
             fiber.dispose(self.store);
         }
     }
+}
+
+/// Changes the lifetime `'l` in `Context<'l>` to something else.
+///
+/// # Safety
+///
+/// Not a safe operation. Requires external knowledge about how the pointer is
+/// being used to determine whether it's actually safe or not. See docs on
+/// callers of this function. The purpose of this is to scope the `transmute` to
+/// as small an operation as possible.
+unsafe fn change_context_lifetime<'a, 'b>(cx: &'a mut Context<'_>) -> &'a mut Context<'b> {
+    // SAFETY: See the function documentation, this is not safe in general.
+    unsafe { mem::transmute::<&mut Context<'_>, &mut Context<'b>>(cx) }
 }

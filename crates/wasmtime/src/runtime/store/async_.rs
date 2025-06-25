@@ -1,10 +1,9 @@
 #[cfg(feature = "call-hook")]
 use crate::CallHook;
-use crate::fiber::{self, AsyncCx};
+use crate::fiber::{self};
 use crate::prelude::*;
 use crate::store::{ResourceLimiterInner, StoreInner, StoreOpaque, StoreToken};
 use crate::{AsContextMut, Store, StoreContextMut, UpdateDeadline};
-use core::pin::Pin;
 
 /// An object that can take callbacks when the runtime enters or exits hostcalls.
 #[cfg(feature = "call-hook")]
@@ -240,10 +239,6 @@ impl StoreOpaque {
     /// This only works on async futures and stores, and assumes that we're
     /// executing on a fiber. This will yield execution back to the caller once.
     pub fn async_yield_impl(&mut self) -> Result<()> {
-        use crate::runtime::vm::Yield;
-
-        let mut future = Yield::new();
-
         // When control returns, we have a `Result<()>` passed
         // in from the host fiber. If this finished successfully then
         // we were resumed normally via a `poll`, so keep going.  If
@@ -251,11 +246,7 @@ impl StoreOpaque {
         // to clean up this fiber. Do so by raising a trap which will
         // abort all wasm and get caught on the other side to clean
         // things up.
-        unsafe {
-            AsyncCx::try_new(self)
-                .expect("attempted to pull async context during shutdown")
-                .block_on(Pin::new_unchecked(&mut future))
-        }
+        self.block_on(|_| Box::pin(crate::runtime::vm::Yield::new()))
     }
 
     pub(crate) fn allocate_fiber_stack(&mut self) -> Result<wasmtime_fiber::FiberStack> {

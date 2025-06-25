@@ -80,7 +80,7 @@ use crate::RootSet;
 #[cfg(feature = "component-model-async")]
 use crate::component::ComponentStoreData;
 #[cfg(feature = "async")]
-use crate::fiber::{self, AsyncCx};
+use crate::fiber;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
 #[cfg(feature = "gc")]
@@ -1117,15 +1117,14 @@ impl<T> StoreInner<T> {
             CallHookInner::Sync(hook) => hook((&mut *self).as_context_mut(), s),
 
             #[cfg(all(feature = "async", feature = "call-hook"))]
-            CallHookInner::Async(handler) => unsafe {
-                AsyncCx::try_new(&mut self.inner)
-                    .ok_or_else(|| anyhow!("couldn't grab async_cx for call hook"))?
-                    .block_on(
-                        handler
-                            .handle_call_event((&mut *self).as_context_mut(), s)
-                            .as_mut(),
-                    )?
-            },
+            CallHookInner::Async(handler) => {
+                if !self.can_block() {
+                    bail!("couldn't grab async_cx for call hook")
+                }
+                return (&mut *self)
+                    .as_context_mut()
+                    .with_blocking(|store, cx| cx.block_on(handler.handle_call_event(store, s)))?;
+            }
 
             CallHookInner::ForceTypeParameterToBeUsed { uninhabited, .. } => {
                 let _ = s;
@@ -2131,15 +2130,13 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
                 limiter(&mut self.data).memory_growing(current, desired, maximum)
             }
             #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                AsyncCx::try_new(&mut self.inner)
-                    .expect("ResourceLimiterAsync requires async Store")
-                    .block_on(
-                        limiter(&mut self.data)
-                            .memory_growing(current, desired, maximum)
-                            .as_mut(),
-                    )?
-            },
+            Some(ResourceLimiterInner::Async(_)) => self.block_on(|store| {
+                let limiter = match &mut store.0.limiter {
+                    Some(ResourceLimiterInner::Async(limiter)) => limiter,
+                    _ => unreachable!(),
+                };
+                limiter(&mut store.0.data).memory_growing(current, desired, maximum)
+            })?,
             None => Ok(true),
         }
     }
@@ -2166,32 +2163,18 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
         desired: usize,
         maximum: Option<usize>,
     ) -> Result<bool, anyhow::Error> {
-        // Need to borrow async_cx before the mut borrow of the limiter.
-        // self.async_cx() panicks when used with a non-async store, so
-        // wrap this in an option.
-        #[cfg(feature = "async")]
-        let async_cx = if self.async_support()
-            && matches!(self.limiter, Some(ResourceLimiterInner::Async(_)))
-        {
-            AsyncCx::try_new(&mut self.inner)
-        } else {
-            None
-        };
-
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
                 limiter(&mut self.data).table_growing(current, desired, maximum)
             }
             #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                async_cx
-                    .expect("ResourceLimiterAsync requires async Store")
-                    .block_on(
-                        limiter(&mut self.data)
-                            .table_growing(current, desired, maximum)
-                            .as_mut(),
-                    )?
-            },
+            Some(ResourceLimiterInner::Async(_)) => self.block_on(|store| {
+                let limiter = match &mut store.0.limiter {
+                    Some(ResourceLimiterInner::Async(limiter)) => limiter,
+                    _ => unreachable!(),
+                };
+                limiter(&mut store.0.data).table_growing(current, desired, maximum)
+            })?,
             None => Ok(true),
         }
     }
@@ -2245,7 +2228,7 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
                         delta
                     }
                     #[cfg(feature = "async")]
-                    UpdateDeadline::YieldCustom(delta, mut future) => {
+                    UpdateDeadline::YieldCustom(delta, future) => {
                         assert!(
                             self.async_support(),
                             "cannot use `UpdateDeadline::YieldCustom` without enabling async support in the config"
@@ -2258,10 +2241,7 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
                         // to clean up this fiber. Do so by raising a trap which will
                         // abort all wasm and get caught on the other side to clean
                         // things up.
-                        unsafe {AsyncCx::try_new(self)
-                            .expect("attempted to pull async context during shutdown")
-                                .block_on(future.as_mut())?;
-                        }
+                        self.block_on(|_| future)?;
                         delta
                     }
                 };

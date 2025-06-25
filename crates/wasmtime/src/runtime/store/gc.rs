@@ -2,8 +2,6 @@
 
 use super::*;
 use crate::GcHeapOutOfMemory;
-#[cfg(feature = "async")]
-use crate::fiber::AsyncCx;
 
 impl StoreOpaque {
     /// Collect garbage, potentially growing the GC heap.
@@ -41,11 +39,7 @@ impl StoreOpaque {
 
         if scope.async_support() {
             #[cfg(feature = "async")]
-            {
-                let async_cx = AsyncCx::new(&mut scope);
-                let future = scope.grow_or_collect_gc_heap_async(bytes_needed);
-                async_cx.block_on(Box::pin(future).as_mut())?;
-            }
+            scope.block_on(|scope| Box::pin(scope.grow_or_collect_gc_heap_async(bytes_needed)))?;
         } else {
             scope.grow_or_collect_gc_heap(bytes_needed);
         }

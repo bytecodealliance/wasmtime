@@ -7,8 +7,6 @@ use crate::component::types;
 use crate::component::{
     Component, ComponentNamedList, Instance, InstancePre, Lift, Lower, ResourceType, Val,
 };
-#[cfg(feature = "async")]
-use crate::fiber::AsyncCx;
 use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
@@ -443,12 +441,8 @@ impl<T: 'static> LinkerInstance<'_, T> {
             self.engine.config().async_support,
             "cannot use `func_wrap_async` without enabling async support in the config"
         );
-        let ff = move |mut store: StoreContextMut<'_, T>, params: Params| -> Result<Return> {
-            let async_cx = AsyncCx::new(&mut store.0);
-            let mut future = Pin::from(f(store.as_context_mut(), params));
-            // SAFETY: The `Store` we used to create the `AsyncCx` above remains
-            // valid.
-            unsafe { async_cx.block_on(future.as_mut())? }
+        let ff = move |store: StoreContextMut<'_, T>, params: Params| -> Result<Return> {
+            store.block_on(|store| f(store, params).into())?
         };
         self.func_wrap(name, ff)
     }
@@ -607,14 +601,10 @@ impl<T: 'static> LinkerInstance<'_, T> {
             self.engine.config().async_support,
             "cannot use `func_new_async` without enabling async support in the config"
         );
-        let ff = move |mut store: StoreContextMut<'_, T>, params: &[Val], results: &mut [Val]| {
-            let async_cx = AsyncCx::new(&mut store.0);
-            let mut future = Pin::from(f(store.as_context_mut(), params, results));
-            // SAFETY: The `Store` we used to create the `AsyncCx` above remains
-            // valid.
-            unsafe { async_cx.block_on(future.as_mut())? }
+        let ff = move |store: StoreContextMut<'_, T>, params: &[Val], results: &mut [Val]| {
+            store.with_blocking(|store, cx| cx.block_on(Pin::from(f(store, params, results)))?)
         };
-        self.func_new(name, ff)
+        return self.func_new(name, ff);
     }
 
     /// Defines a [`Module`] within this instance.
@@ -682,14 +672,8 @@ impl<T: 'static> LinkerInstance<'_, T> {
         let dtor = Arc::new(crate::func::HostFunc::wrap_inner(
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| {
-                let async_cx = AsyncCx::new(&mut cx.as_context_mut().0);
-                let mut future = Pin::from(dtor(cx.as_context_mut(), param));
-                // SAFETY: The `Store` we used to create the `AsyncCx` above
-                // remains valid.
-                match unsafe { async_cx.block_on(future.as_mut()) } {
-                    Ok(Ok(())) => Ok(()),
-                    Ok(Err(trap)) | Err(trap) => Err(trap),
-                }
+                cx.as_context_mut()
+                    .block_on(|store| dtor(store, param).into())?
             },
         ));
         self.insert(name, Definition::Resource(ty, dtor))?;

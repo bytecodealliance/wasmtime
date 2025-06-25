@@ -9,9 +9,9 @@ use crate::{
 use crate::{IntoFunc, prelude::*};
 use alloc::sync::Arc;
 use core::fmt::{self, Debug};
-use core::marker;
 #[cfg(feature = "async")]
-use core::{future::Future, pin::Pin};
+use core::future::Future;
+use core::marker;
 use log::warn;
 
 /// Structure used to link wasm modules/instances together.
@@ -470,15 +470,12 @@ impl<T> Linker<T> {
             "cannot use `func_new_async` without enabling async support in the config"
         );
         assert!(ty.comes_from_same_engine(self.engine()));
-        self.func_new(module, name, ty, move |mut caller, params, results| {
-            let async_cx = crate::fiber::AsyncCx::new(&mut caller.store.0);
-            let mut future = Pin::from(func(caller, params, results));
-            // SAFETY: The `Store` we used to create the `AsyncCx` above remains
-            // valid.
-            match unsafe { async_cx.block_on(future.as_mut()) } {
-                Ok(Ok(())) => Ok(()),
-                Ok(Err(trap)) | Err(trap) => Err(trap),
-            }
+        self.func_new(module, name, ty, move |caller, params, results| {
+            let instance = caller.caller();
+            caller.store.with_blocking(|store, cx| {
+                let caller = Caller::new(store, instance);
+                cx.block_on(core::pin::Pin::from(func(caller, params, results)))
+            })?
         })
     }
 
@@ -572,19 +569,18 @@ impl<T> Linker<T> {
             self.engine.config().async_support,
             "cannot use `func_wrap_async` without enabling async support on the config",
         );
-        let func = HostFunc::wrap_inner(
-            &self.engine,
-            move |mut caller: Caller<'_, T>, args: Params| {
-                let async_cx = crate::fiber::AsyncCx::new(&mut caller.store.0);
-                let mut future = Pin::from(func(caller, args));
-                // SAFETY: The `Store` we used to create the `AsyncCx` above
-                // remains valid.
-                match unsafe { async_cx.block_on(future.as_mut()) } {
+        let func =
+            HostFunc::wrap_inner(&self.engine, move |caller: Caller<'_, T>, args: Params| {
+                let instance = caller.caller();
+                let result = caller.store.block_on(|store| {
+                    let caller = Caller::new(store, instance);
+                    func(caller, args).into()
+                });
+                match result {
                     Ok(ret) => ret.into_fallible(),
                     Err(e) => Args::fallible_from_error(e),
                 }
-            },
-        );
+            });
         let key = self.import_key(module, Some(name));
         self.insert(key, Definition::HostFunc(Arc::new(func)))?;
         Ok(self)
