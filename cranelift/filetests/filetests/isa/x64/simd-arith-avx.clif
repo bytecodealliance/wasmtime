@@ -1814,7 +1814,7 @@ block0(v0: i64x2, v1: i32):
 ; block0:
 ;   andq $0x3f, %rdi
 ;   vmovd %edi, %xmm5
-;   psrlq %xmm5, %xmm0
+;   vpsrlq %xmm5, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1826,7 +1826,7 @@ block0(v0: i64x2, v1: i32):
 ; block1: ; offset 0x4
 ;   andq $0x3f, %rdi
 ;   vmovd %edi, %xmm5
-;   psrlq %xmm5, %xmm0
+;   vpsrlq %xmm5, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1842,7 +1842,7 @@ block0(v0: i64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   psrlq $0x1, %xmm0
+;   vpsrlq $0x1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1852,7 +1852,7 @@ block0(v0: i64x2):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   psrlq $1, %xmm0
+;   vpsrlq $1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

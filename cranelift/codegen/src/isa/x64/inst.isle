@@ -3043,8 +3043,8 @@
 (rule 0 (x64_psrld src1 (is_imm8_xmm src2)) (x64_psrld_b_or_avx src1 src2))
 
 (decl x64_psrlq (Xmm XmmMemImm) Xmm)
-(rule 1 (x64_psrlq src1 (is_xmm_mem src2))  (x64_psrlq_a src1 src2))
-(rule 0 (x64_psrlq src1 (is_imm8_xmm src2)) (x64_psrlq_b src1 src2))
+(rule 1 (x64_psrlq src1 (is_xmm_mem src2))  (x64_psrlq_a_or_avx src1 src2))
+(rule 0 (x64_psrlq src1 (is_imm8_xmm src2)) (x64_psrlq_b_or_avx src1 src2))
 
 (decl x64_psraw (Xmm XmmMemImm) Xmm)
 (rule 1 (x64_psraw src1 (is_xmm_mem src2))  (x64_psraw_a_or_avx src1 src2))
