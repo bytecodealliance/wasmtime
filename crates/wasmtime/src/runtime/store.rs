@@ -77,6 +77,8 @@
 //! `wasmtime`, must uphold for the public interface to be safe.
 
 use crate::RootSet;
+#[cfg(feature = "component-model-async")]
+use crate::component::ComponentStoreData;
 #[cfg(feature = "async")]
 use crate::fiber::{self, AsyncCx};
 use crate::module::RegisteredModuleId;
@@ -647,9 +649,20 @@ impl<T> Store<T> {
         self.inner.data_mut()
     }
 
+    fn drop_everything_but_data(&mut self) {
+        // We need to drop the fibers of each component instance before
+        // attempting to drop the instances themselves since the fibers may need
+        // to be resumed and allowed to exit cleanly before we yank the state
+        // out from under them.
+        #[cfg(feature = "component-model-async")]
+        ComponentStoreData::drop_fibers(&mut self.inner);
+
+        self.inner.flush_fiber_stack();
+    }
+
     /// Consumes this [`Store`], destroying it, and returns the underlying data.
     pub fn into_data(mut self) -> T {
-        self.inner.flush_fiber_stack();
+        self.drop_everything_but_data();
 
         // This is an unsafe operation because we want to avoid having a runtime
         // check or boolean for whether the data is actually contained within a
@@ -2338,9 +2351,9 @@ impl<T: fmt::Debug> fmt::Debug for Store<T> {
 
 impl<T> Drop for Store<T> {
     fn drop(&mut self) {
-        self.inner.flush_fiber_stack();
+        self.drop_everything_but_data();
 
-        // for documentation on this `unsafe`, see `inrto_data`.
+        // for documentation on this `unsafe`, see `into_data`.
         unsafe {
             ManuallyDrop::drop(&mut self.inner.data);
             ManuallyDrop::drop(&mut self.inner);

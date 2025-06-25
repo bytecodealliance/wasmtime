@@ -50,7 +50,7 @@ pub(crate) struct AsyncState {
     /// The `Suspend` for the current fiber (or null if no such fiber is running).
     ///
     /// See `StoreFiber` for an explanation of the signature types we use here.
-    current_suspend: *mut Suspend<Result<()>, StoreFiberYield, ()>,
+    current_suspend: *mut Suspend<Result<()>, StoreFiberYield, Result<()>>,
 
     /// See `PollContext`
     current_poll_cx: PollContext,
@@ -93,7 +93,7 @@ unsafe impl Sync for AsyncState {}
 /// Used to "stackfully" poll a future by suspending the current fiber
 /// repeatedly in a loop until the future completes.
 pub(crate) struct AsyncCx {
-    current_suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, ()>,
+    current_suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, Result<()>>,
     current_poll_cx: *mut PollContext,
 }
 
@@ -236,14 +236,14 @@ pub(crate) struct StoreFiber<'a> {
     ///
     /// Note also that every `StoreFiber` is implicitly granted exclusive access
     /// to the store when it is resumed.
-    fiber: Option<Fiber<'a, Result<()>, StoreFiberYield, ()>>,
+    fiber: Option<Fiber<'a, Result<()>, StoreFiberYield, Result<()>>>,
     /// See `FiberResumeState`
     state: Option<FiberResumeState>,
     /// The Wasmtime `Engine` to which this fiber belongs.
     engine: Engine,
     /// The current `Suspend` for this fiber (or null if it's not currently
     /// running).
-    suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, ()>,
+    suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, Result<()>>,
     /// The executor (e.g. the Pulley interpreter state) belonging to this
     /// fiber.
     ///
@@ -258,7 +258,7 @@ pub(crate) struct StoreFiber<'a> {
 }
 
 impl StoreFiber<'_> {
-    fn dispose(&mut self, store: &mut StoreOpaque) {
+    pub(crate) fn dispose(&mut self, store: &mut StoreOpaque) {
         if let Some(fiber) = &mut self.fiber {
             if !fiber.done() {
                 let result = resume_fiber(store, self, Err(anyhow!("future dropped")));
@@ -456,7 +456,7 @@ pub(crate) fn resume_fiber<'a>(
     store: &mut StoreOpaque,
     fiber: &mut StoreFiber<'a>,
     result: Result<()>,
-) -> Result<(), StoreFiberYield> {
+) -> Result<Result<()>, StoreFiberYield> {
     assert_eq!(store.id(), fiber.id);
 
     struct Restore<'a, 'b> {
@@ -520,7 +520,7 @@ pub(crate) fn resume_fiber<'a>(
 /// Create a new `StoreFiber` which runs the specified closure.
 pub(crate) fn make_fiber<'a>(
     store: &mut dyn VMStore,
-    fun: impl FnOnce(&mut dyn VMStore) + Send + Sync + 'a,
+    fun: impl FnOnce(&mut dyn VMStore) -> Result<()> + Send + Sync + 'a,
 ) -> Result<StoreFiber<'a>> {
     let engine = store.engine().clone();
     let executor = Executor::new(&engine);
@@ -533,7 +533,7 @@ pub(crate) fn make_fiber<'a>(
         fiber: Some(Fiber::new(stack, move |result: Result<()>, suspend| {
             // Cancelled before we started? Just return.
             if result.is_err() {
-                return;
+                return Ok(());
             }
 
             // SAFETY: Per the documented contract for
@@ -584,77 +584,130 @@ pub(crate) async fn on_fiber<R: Send + Sync>(
     debug_assert!(config.async_stack_size > 0);
 
     let mut result = None;
-    let fiber = make_fiber(store.traitobj_mut(), |store| result = Some(func(store)))?;
+    let fiber = make_fiber(store.traitobj_mut(), |store| {
+        result = Some(func(store));
+        Ok(())
+    })?;
 
-    FiberFuture { store, fiber }.await;
+    {
+        let fiber = FiberFuture {
+            store,
+            fiber: Some(fiber),
+            on_release: OnRelease::ReturnPending,
+        }
+        .await
+        .unwrap();
+
+        debug_assert!(fiber.is_none());
+    }
 
     Ok(result.unwrap())
 }
 
+/// Run the specified fiber until it either suspends with
+/// `StoreFiberYield::ReleaseStore` or resolves.
+///
+/// This will return `Some` if the fiber suspends with
+/// `StoreFiberYield::ReleaseStore` or else `None` if it resolves.
+#[cfg(feature = "component-model-async")]
+// This will be used when `component-model-async` support is merged.
+#[allow(dead_code)]
+pub(crate) async fn resolve_or_release<'a>(
+    store: &mut StoreOpaque,
+    fiber: StoreFiber<'a>,
+) -> Result<Option<StoreFiber<'a>>> {
+    FiberFuture {
+        store,
+        fiber: Some(fiber),
+        on_release: OnRelease::ReturnReady,
+    }
+    .await
+}
+
+fn poll_fiber(
+    cx: &mut Context<'_>,
+    store: &mut StoreOpaque,
+    fiber: &mut StoreFiber<'_>,
+) -> Result<Result<()>, StoreFiberYield> {
+    let poll_cx = unsafe { &raw mut (*store.async_state()).current_poll_cx };
+    let _reset = Reset(poll_cx, unsafe { *poll_cx });
+    let (guard_range_start, guard_range_end) = fiber
+        .fiber
+        .as_ref()
+        .unwrap()
+        .stack()
+        .guard_range()
+        .map(|r| (r.start, r.end))
+        .unwrap_or((ptr::null_mut(), ptr::null_mut()));
+
+    // We need to carry over this `cx` into our fiber's runtime for when
+    // it tries to poll sub-futures that are created. Doing this must be
+    // done unsafely, however, since `cx` is only alive for this one
+    // singular function call. Here we do a `transmute` to extend the
+    // lifetime of `Context` so it can be stored in our `Store`, and
+    // then we replace the current polling context with this one.
+    //
+    // Note that the replace is done for weird situations where futures
+    // might be switching contexts and there's multiple wasmtime futures
+    // in a chain of futures.
+    //
+    // On exit from this function, though, we reset the polling context
+    // back to what it was to signify that `Store` no longer has access
+    // to this pointer.
+    //
+    // SAFETY: We store the pointer to the `Context` only for the
+    // duration of this call and then reset it to its previous value
+    // afterward, thereby ensuring `fun` never sees a stale pointer.
+    unsafe {
+        *poll_cx = PollContext {
+            future_context: mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx),
+            guard_range_start,
+            guard_range_end,
+        };
+    }
+
+    resume_fiber(store, fiber, Ok(()))
+}
+
+/// Tells a `FiberFuture` what to do if `poll_fiber` returns
+/// `Err(StoreFiberYield::ReleaseStore)`.
+enum OnRelease {
+    /// Return `Poll::Pending` from `FiberFuture::poll`
+    ReturnPending,
+    /// Return `Poll::Ready` from `FiberFuture::poll`, handing ownership of the
+    /// `StoreFiber` to the caller.
+    ReturnReady,
+}
+
 /// A `Future` implementation for running a `StoreFiber` to completion, giving
 /// it exclusive access to its store until it resolves.
-///
-/// This is used to implement `on_fiber`, where the returned `Future` closes
-/// over the `&mut StoreOpaque`.  It is not appropriate for use with fibers
-/// which might need to release access to the store when suspending.
 struct FiberFuture<'a, 'b> {
     store: &'a mut StoreOpaque,
-    fiber: StoreFiber<'b>,
+    fiber: Option<StoreFiber<'b>>,
+    on_release: OnRelease,
 }
 
 impl<'b> Future for FiberFuture<'_, 'b> {
-    type Output = ();
+    type Output = Result<Option<StoreFiber<'b>>>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let me = self.get_mut();
 
-        let poll_cx = unsafe { &raw mut (*me.store.async_state()).current_poll_cx };
-        let _reset = Reset(poll_cx, unsafe { *poll_cx });
-        let (guard_range_start, guard_range_end) = me
-            .fiber
-            .fiber
-            .as_ref()
-            .unwrap()
-            .stack()
-            .guard_range()
-            .map(|r| (r.start, r.end))
-            .unwrap_or((ptr::null_mut(), ptr::null_mut()));
-
-        // We need to carry over this `cx` into our fiber's runtime for when
-        // it tries to poll sub-futures that are created. Doing this must be
-        // done unsafely, however, since `cx` is only alive for this one
-        // singular function call. Here we do a `transmute` to extend the
-        // lifetime of `Context` so it can be stored in our `Store`, and
-        // then we replace the current polling context with this one.
-        //
-        // Note that the replace is done for weird situations where futures
-        // might be switching contexts and there's multiple wasmtime futures
-        // in a chain of futures.
-        //
-        // On exit from this function, though, we reset the polling context
-        // back to what it was to signify that `Store` no longer has access
-        // to this pointer.
-        //
-        // SAFETY: We store the pointer to the `Context` only for the
-        // duration of this call and then reset it to its previous value
-        // afterward, thereby ensuring `fun` never sees a stale pointer.
-        unsafe {
-            *poll_cx = PollContext {
-                future_context: mem::transmute::<&mut Context<'_>, *mut Context<'static>>(cx),
-                guard_range_start,
-                guard_range_end,
-            };
-        }
-
-        match resume_fiber(me.store, &mut me.fiber, Ok(())) {
-            Ok(()) => Poll::Ready(()),
-            Err(_) => Poll::Pending,
+        match poll_fiber(cx, me.store, me.fiber.as_mut().unwrap()) {
+            Ok(result) => Poll::Ready(result.map(|()| None)),
+            Err(StoreFiberYield::KeepStore) => Poll::Pending,
+            Err(StoreFiberYield::ReleaseStore) => match &me.on_release {
+                OnRelease::ReturnPending => Poll::Pending,
+                OnRelease::ReturnReady => Poll::Ready(Ok(me.fiber.take())),
+            },
         }
     }
 }
 
 impl Drop for FiberFuture<'_, '_> {
     fn drop(&mut self) {
-        self.fiber.dispose(self.store);
+        if let Some(fiber) = &mut self.fiber {
+            fiber.dispose(self.store);
+        }
     }
 }
