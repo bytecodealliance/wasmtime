@@ -244,7 +244,16 @@ pub(crate) struct StoreFiber<'a> {
     /// The current `Suspend` for this fiber (or null if it's not currently
     /// running).
     suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, ()>,
+    /// The executor (e.g. the Pulley interpreter state) belonging to this
+    /// fiber.
+    ///
+    /// This is swapped with `StoreOpaque::executor` whenever this fiber is
+    /// resumed, suspended, or resolved.
     executor: Executor,
+    /// The id of the store with which this fiber was created.
+    ///
+    /// Any attempt to resume a fiber with a different store than the one with
+    /// which it was created will panic.
     id: StoreId,
 }
 
@@ -582,6 +591,12 @@ pub(crate) async fn on_fiber<R: Send + Sync>(
     Ok(result.unwrap())
 }
 
+/// A `Future` implementation for running a `StoreFiber` to completion, giving
+/// it exclusive access to its store until it resolves.
+///
+/// This is used to implement `on_fiber`, where the returned `Future` closes
+/// over the `&mut StoreOpaque`.  It is not appropriate for use with fibers
+/// which might need to release access to the store when suspending.
 struct FiberFuture<'a, 'b> {
     store: &'a mut StoreOpaque,
     fiber: StoreFiber<'b>,
