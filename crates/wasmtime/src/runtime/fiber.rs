@@ -563,31 +563,26 @@ pub(crate) async fn on_fiber<R: Send + Sync>(
     let mut result = None;
     let fiber = make_fiber(store.traitobj_mut(), |store| result = Some(func(store)))?;
 
-    FiberFuture {
-        store,
-        fiber: Some(fiber),
-    }
-    .await;
+    FiberFuture { store, fiber }.await;
 
     Ok(result.unwrap())
 }
 
 struct FiberFuture<'a, 'b> {
     store: &'a mut StoreOpaque,
-    fiber: Option<StoreFiber<'b>>,
+    fiber: StoreFiber<'b>,
 }
 
 impl<'b> Future for FiberFuture<'_, 'b> {
-    type Output = StoreFiber<'b>;
+    type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let me = self.get_mut();
 
-        let fiber = me.fiber.take().unwrap();
-
         let poll_cx = unsafe { &raw mut (*me.store.async_state()).current_poll_cx };
         let _reset = Reset(poll_cx, unsafe { *poll_cx });
-        let (guard_range_start, guard_range_end) = fiber
+        let (guard_range_start, guard_range_end) = me
+            .fiber
             .fiber
             .as_ref()
             .unwrap()
@@ -622,21 +617,15 @@ impl<'b> Future for FiberFuture<'_, 'b> {
             };
         }
 
-        let mut fiber = Some(fiber);
-        match resume_fiber(me.store, fiber.as_mut().unwrap(), Ok(())) {
-            Ok(()) => Poll::Ready(fiber.take().unwrap()),
-            Err(_) => {
-                me.fiber = fiber;
-                Poll::Pending
-            }
+        match resume_fiber(me.store, &mut me.fiber, Ok(())) {
+            Ok(()) => Poll::Ready(()),
+            Err(_) => Poll::Pending,
         }
     }
 }
 
 impl Drop for FiberFuture<'_, '_> {
     fn drop(&mut self) {
-        if let Some(mut fiber) = self.fiber.take() {
-            fiber.dispose(self.store);
-        }
+        self.fiber.dispose(self.store);
     }
 }
