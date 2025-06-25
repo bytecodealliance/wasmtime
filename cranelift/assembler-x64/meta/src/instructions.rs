@@ -21,6 +21,7 @@ mod neg;
 mod nop;
 mod or;
 mod pack;
+mod pmadd;
 mod round;
 mod setcc;
 mod shift;
@@ -57,6 +58,7 @@ pub fn list() -> Vec<Inst> {
     all.extend(nop::list());
     all.extend(or::list());
     all.extend(pack::list());
+    all.extend(pmadd::list());
     all.extend(round::list());
     all.extend(setcc::list());
     all.extend(shift::list());
