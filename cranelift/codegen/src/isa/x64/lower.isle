@@ -1891,25 +1891,21 @@
 
 ;;;; Rules for `trapz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (trapz (maybe_uextend val) code))
-        (side_effect (trap_if_val (ZeroCond.Zero) val code)))
+(rule (lower (trapz val code))
+  (side_effect (trap_if_cond (cond_invert (is_nonzero_cmp val)) code)))
 
-(rule 1 (lower (trapz (maybe_uextend (icmp cc a b)) code))
-        (side_effect (trap_if_icmp (emit_cmp (intcc_complement cc) a b) code)))
-
-(rule 1 (lower (trapz (maybe_uextend (fcmp cc a b)) code))
-        (side_effect (trap_if_fcmp (emit_fcmp (floatcc_complement cc) a b) code)))
+(decl trap_if_cond (CondResult TrapCode) SideEffectNoResult)
+(rule (trap_if_cond (CondResult.CC producer cc) tc)
+      (with_flags_side_effect producer (trap_if cc tc)))
+(rule (trap_if_cond (CondResult.And producer cc1 cc2) tc)
+      (with_flags_side_effect producer (trap_if_and cc1 cc2 tc)))
+(rule (trap_if_cond (CondResult.Or producer cc1 cc2) tc)
+      (with_flags_side_effect producer (trap_if_or cc1 cc2 tc)))
 
 ;;;; Rules for `trapnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (trapnz (maybe_uextend val) code))
-        (side_effect (trap_if_val (ZeroCond.NonZero) val code)))
-
-(rule 1 (lower (trapnz (maybe_uextend (icmp cc a b)) code))
-        (side_effect (trap_if_icmp (emit_cmp cc a b) code)))
-
-(rule 1 (lower (trapnz (maybe_uextend (fcmp cc a b)) code))
-        (side_effect (trap_if_fcmp (emit_fcmp cc a b) code)))
+(rule (lower (trapnz val code))
+  (side_effect (trap_if_cond (is_nonzero_cmp val) code)))
 
 ;;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1942,10 +1938,10 @@
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -2 (lower (icmp cc a @ (value_type (fits_in_64 ty)) b))
-      (lower_icmp_bool (emit_cmp cc a b)))
+      (lower_cond_bool (emit_cmp cc a b)))
 
 (rule -1 (lower (icmp cc a @ (value_type $I128) b))
-      (lower_icmp_bool (emit_cmp cc a b)))
+      (lower_cond_bool (emit_cmp cc a b)))
 
 ;; Peephole optimization for `x < 0`, when x is a signed 64 bit value
 (rule 2 (lower (has_type $I8 (icmp (IntCC.SignedLessThan) x @ (value_type $I64) (u64_from_iconst 0))))
@@ -2135,7 +2131,7 @@
 ;;  - equal assigns        Z = 1, P = 0, C = 0
 
 (rule -1 (lower (fcmp cc a @ (value_type (ty_scalar_float ty)) b))
-      (lower_fcmp_bool (emit_fcmp cc a b)))
+      (lower_cond_bool (emit_fcmp cc a b)))
 
 ;; For vector lowerings, we use `CMPP*` instructions with a 3-bit operand that
 ;; determines the comparison to make. Note that comparisons that succeed will
@@ -2176,61 +2172,80 @@
 
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; When a `select` has an `fcmp` as a condition then rely on `emit_fcmp` to
-;; figure out how to perform the comparison.
-;;
-;; Note, though, that the `FloatCC.Equal` requires an "and" to happen for two
-;; condition codes which isn't the easiest thing to lower to a `cmove`
-;; instruction. For this reason a `select (fcmp eq ..) ..` is instead
-;; flipped around to be `select (fcmp ne ..) ..` with all operands reversed.
-;; This will produce a `FcmpCondResult.OrCondition` which is easier to codegen
-;; for.
-(rule (lower (has_type ty (select (maybe_uextend (fcmp cc a b)) x y)))
-      (lower_select_fcmp ty (emit_fcmp cc a b) x y))
-(rule 1 (lower (has_type ty (select (maybe_uextend (fcmp (FloatCC.Equal) a b)) x y)))
-        (lower_select_fcmp ty (emit_fcmp (FloatCC.NotEqual) a b) y x))
+(rule (lower (select cond x y)) (lower_select (is_nonzero_cmp cond) x y))
 
-(decl lower_select_fcmp (Type FcmpCondResult Value Value) InstOutput)
-(rule (lower_select_fcmp ty (FcmpCondResult.Condition flags cc) x y)
-      (with_flags flags (cmove_from_values ty cc x y)))
-(rule (lower_select_fcmp ty (FcmpCondResult.OrCondition flags cc1 cc2) x y)
-      (with_flags flags (cmove_or_from_values ty cc1 cc2 x y)))
+(decl lower_select (CondResult Value Value) InstOutput)
+(rule 0 (lower_select cond a @ (value_type (ty_int (fits_in_64 ty))) b)
+  (lower_select_gpr ty cond a b))
+(rule 1 (lower_select cond a @ (value_type (is_xmm_type ty)) b)
+  (lower_select_xmm ty cond a b))
+(rule 2 (lower_select cond a @ (value_type $I128) b)
+  (lower_select128 cond a b))
+;; Note that for all of the rules below if the condition evaluates to
+;; `CondResult.And` that's swapped to `CondResult.Or` by negating the conditions
+;; and swapping the two values to make codegen a bit easier (only have to do the
+;; "or" case).
+(rule 3 (lower_select cond @ (CondResult.And _ _ _) a b)
+  (lower_select (cond_invert cond) b a))
 
-;; We also can lower `select`s that depend on an `icmp` test, but more simply
-;; than the `fcmp` variants above. In these cases, we lower to a `CMP`
-;; instruction plus a `CMOV`; recall that `cmove_from_values` here may emit more
-;; than one instruction for certain types (e.g., XMM-held, I128).
+(decl lower_select_gpr (Type CondResult GprMem Gpr) Gpr)
+(rule (lower_select_gpr ty (CondResult.CC flags cc) a b)
+  (value_regs_get_gpr (with_flags flags (cmove ty cc a b)) 0))
+(rule (lower_select_gpr ty (CondResult.Or flags cc1 cc2) a b)
+  (let ((c1 ConsumesFlags (cmove ty cc1 a b))
+        (tmp Gpr (consumes_flags_get_reg c1))
+        (c2 ConsumesFlags (cmove ty cc2 a tmp)))
+  (value_regs_get (with_flags flags (consumes_flags_return_last c1 c2)) 0)))
 
-(rule (lower (has_type ty (select (maybe_uextend (icmp cc a b)) x y)))
-      (lower_select_icmp ty (emit_cmp cc a b) x y))
+(decl lower_select_xmm (Type CondResult Xmm Xmm) Xmm)
+(rule (lower_select_xmm ty (CondResult.CC flags cc) a b)
+  (value_regs_get (with_flags flags (cmove_xmm ty cc a b)) 0))
+(rule (lower_select_xmm ty (CondResult.Or flags cc1 cc2) a b)
+  (let ((c1 ConsumesFlags (cmove_xmm ty cc1 a b))
+        (tmp Xmm (consumes_flags_get_reg c1))
+        (c2 ConsumesFlags (cmove_xmm ty cc2 a tmp)))
+  (value_regs_get (with_flags flags (consumes_flags_return_last c1 c2)) 0)))
 
-;; Finally, we lower `select` from a condition value `c`. These rules are meant
-;; to be the final, default lowerings if no other patterns matched above.
+(decl lower_select128 (CondResult ValueRegs ValueRegs) ValueRegs)
+(rule (lower_select128 (CondResult.CC flags cc) a b)
+  (with_flags flags (cmove128 cc a b)))
+(rule (lower_select128 (CondResult.Or flags cc1 cc2) a b)
+  (let ((c1 ConsumesFlags (cmove128 cc1 a b))
+        (tmp ValueRegs (consumes_flags_get_regs c1))
+        (c2 ConsumesFlags (cmove128 cc2 a tmp)))
+    (with_flags flags (consumes_flags_return_last c1 c2))))
 
-(rule -1 (lower (has_type ty (select c @ (value_type (fits_in_64 a_ty)) x y)))
-      (let ( ;; N.B.: disallow load-op fusion, see above. TODO:
-             ;; https://github.com/bytecodealliance/wasmtime/issues/3953.
-            (gpr_c Gpr (put_in_gpr c)))
-           (with_flags (x64_test a_ty gpr_c gpr_c) (cmove_from_values ty (CC.NZ) x y))))
+;; Helper to `lower_select128` above to create two `cmove` instructions based
+;; on the CC provided for the upper/lower halves.
+(decl cmove128 (CC ValueRegs ValueRegs) ConsumesFlags)
+(rule (cmove128 cc cons alt)
+  (consumes_flags_concat
+    (cmove $I64 cc (value_regs_get_gpr cons 0) (value_regs_get_gpr alt 0))
+    (cmove $I64 cc (value_regs_get_gpr cons 1) (value_regs_get_gpr alt 1))))
 
-(rule -2 (lower (has_type ty (select c @ (value_type $I128) x y)))
-      (let ((cond_result IcmpCondResult (cmp_zero_i128 (CC.Z) c)))
-        (select_icmp cond_result x y)))
-
-(decl lower_select_icmp (Type IcmpCondResult Value Value) InstOutput)
-(rule (lower_select_icmp ty (IcmpCondResult.Condition flags cc) x y)
-      (with_flags flags (cmove_from_values ty cc x y)))
+;; Helper to the "Or" conditions above to create a `ConsumesFlags` that is a
+;; sequence of two other `ConsumesFlags` which returns the result of the
+;; second `ConsumesFlags`, the result of the `lower_select*` operation.
+(decl consumes_flags_return_last (ConsumesFlags ConsumesFlags) ConsumesFlags)
+(rule (consumes_flags_return_last
+        (ConsumesFlags.ConsumesFlagsReturnsReg inst1 _)
+        (ConsumesFlags.ConsumesFlagsReturnsReg inst2 dst))
+  (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs inst1 inst2 dst))
+(rule (consumes_flags_return_last
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs i1 i2 _)
+        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs i3 i4 dst))
+  (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs i1 i2 i3 i4 dst))
 
 ;; Specializations for floating-point compares to generate a `mins*` or a
 ;; `maxs*` instruction. These are equivalent to the "pseudo-m{in,ax}"
 ;; specializations for vectors.
-(rule 2 (lower (has_type $F32 (select (maybe_uextend (fcmp (FloatCC.LessThan) x y)) x y)))
+(rule 3 (lower (has_type $F32 (select (maybe_uextend (fcmp (FloatCC.LessThan) x y)) x y)))
         (x64_minss x y))
-(rule 2 (lower (has_type $F64 (select (maybe_uextend (fcmp (FloatCC.LessThan) x y)) x y)))
+(rule 3 (lower (has_type $F64 (select (maybe_uextend (fcmp (FloatCC.LessThan) x y)) x y)))
         (x64_minsd x y))
-(rule 3 (lower (has_type $F32 (select (maybe_uextend (fcmp (FloatCC.LessThan) y x)) x y)))
+(rule 4 (lower (has_type $F32 (select (maybe_uextend (fcmp (FloatCC.LessThan) y x)) x y)))
         (x64_maxss x y))
-(rule 3 (lower (has_type $F64 (select (maybe_uextend (fcmp (FloatCC.LessThan) y x)) x y)))
+(rule 4 (lower (has_type $F64 (select (maybe_uextend (fcmp (FloatCC.LessThan) y x)) x y)))
         (x64_maxsd x y))
 
 ;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3583,48 +3598,8 @@
 
 ;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 2 (lower_branch (brif (maybe_uextend (icmp cc a b)) _ _) (two_targets then else))
-        (emit_side_effect (jmp_cond_icmp (emit_cmp cc a b) then else)))
-
-(rule 2 (lower_branch (brif (maybe_uextend (fcmp cc a b)) _ _) (two_targets then else))
-        (emit_side_effect (jmp_cond_fcmp (emit_fcmp cc a b) then else)))
-
-(rule 2 (lower_branch (brif (maybe_uextend (vany_true a)) _ _) (two_targets then else))
-        (emit_side_effect (jmp_cond_icmp (emit_vany_true a) then else)))
-
-(rule 2 (lower_branch (brif (maybe_uextend (vall_true a)) _ _) (two_targets then else))
-        (emit_side_effect (jmp_cond_icmp (emit_vall_true a) then else)))
-
-(rule 1 (lower_branch (brif val @ (value_type $I128) _ _)
-                      (two_targets then else))
-      (emit_side_effect (jmp_cond_icmp (cmp_zero_i128 (CC.Z) val) then else)))
-
-(rule (lower_branch (brif val @ (value_type (ty_int_bool_or_ref)) _ _)
-                    (two_targets then else))
-      (emit_side_effect (with_flags_side_effect
-                          (cmp_zero_int_bool_ref val)
-                          (jmp_cond (CC.NZ) then else))))
-
-
-;; Compare an I128 value to zero, returning a flags result suitable for making a
-;; jump decision. The comparison is implemented as `(hi | low) == 0`,
-;; and the result can be interpreted as follows
-;; * CC.Z indicates that the value was non-zero, as one or both of the halves of
-;;   the value were non-zero
-;; * CC.NZ indicates that both halves of the value were 0
-(decl cmp_zero_i128 (CC ValueRegs) IcmpCondResult)
-(rule (cmp_zero_i128 (cc_nz_or_z cc) val)
-      (let ((lo Gpr (value_regs_get_gpr val 0))
-            (hi Gpr (value_regs_get_gpr val 1)))
-          (icmp_cond_result
-            (x64_produce_flags_side_effect (ProduceFlagsSideEffectOp.Or) $I64 lo hi)
-            (cc_invert cc))))
-
-
-(decl cmp_zero_int_bool_ref (Value) ProducesFlags)
-(rule (cmp_zero_int_bool_ref val @ (value_type ty))
-      (let ((src Gpr val))
-        (x64_test ty src src)))
+(rule (lower_branch (brif val _ _) (two_targets then else))
+      (emit_side_effect (jmp_cond_result (is_nonzero_cmp val) then else)))
 
 ;; Rules for `br_table` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3639,16 +3614,14 @@
 
 ;; Rules for `select_spectre_guard` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (select_spectre_guard (icmp cc a b) x y))
-      (select_icmp (emit_cmp cc a b) x y))
+(rule (lower (select_spectre_guard cond x y))
+  (lower_select (is_nonzero_cmp cond) x y))
 
-(rule -1 (lower (has_type ty (select_spectre_guard c @ (value_type (fits_in_64 a_ty)) x y)))
-      (let ((gpr_c Gpr (put_in_gpr c)))
-        (with_flags (x64_test a_ty gpr_c gpr_c) (cmove_from_values ty (CC.NZ) x y))))
-
-(rule -2 (lower (has_type ty (select_spectre_guard c @ (value_type $I128) x y)))
-      (let ((cond_result IcmpCondResult (cmp_zero_i128 (CC.Z) c)))
-        (select_icmp cond_result x y)))
+;; Note that for GPR-based spectre guards everything is forced into a register
+;; so go straight to the `lower_select_gpr` helper forcing `x` to be in a `Gpr`
+;; not `GprMem`.
+(rule 1 (lower (has_type (is_single_register_gpr_type ty) (select_spectre_guard cond x y)))
+  (lower_select_gpr ty (is_nonzero_cmp cond) (put_in_gpr x) y))
 
 ;; Rules for `fcvt_from_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4889,48 +4862,43 @@
 
 ;; Rules for `vany_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (vany_true val))
-        (if-let true (use_sse41))
-        (let ((val Xmm val))
-          (with_flags (x64_ptest val val) (x64_setcc (CC.NZ)))))
+(rule (lower (vany_true val)) (lower_cond_bool (is_vany_true val)))
 
 ;; Any nonzero byte in `val` means that any lane is true. Compare `val` with a
 ;; zeroed register and extract the high bits to a gpr mask. If the mask is
 ;; 0xffff then every byte was equal to zero, so test if the comparison is
 ;; not-equal or NZ.
-(rule (lower (vany_true val))
-      (lower_icmp_bool (emit_vany_true val)))
-
-(decl emit_vany_true (Value) IcmpCondResult)
-(rule (emit_vany_true val)
+(decl is_vany_true (Value) CondResult)
+(rule (is_vany_true val)
       (let (
           (any_byte_zero Xmm (x64_pcmpeqb val (xmm_zero $I8X16)))
           (mask Gpr (x64_pmovmskb any_byte_zero))
         )
-        (icmp_cond_result (x64_cmpl_mi mask 0xffff)
-                          (CC.NZ))))
+        (CondResult.CC (x64_cmpl_mi mask 0xffff) (CC.NZ))))
+(rule 1 (is_vany_true val)
+  (if-let true (use_sse41))
+  (let ((val Xmm val))
+    (CondResult.CC (x64_ptest val val) (CC.NZ))))
 
 ;; Rules for `vall_true` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (vall_true val))
-      (lower_icmp_bool (emit_vall_true val)))
+(rule (lower (vall_true val)) (lower_cond_bool (is_vall_true val)))
 
-(decl emit_vall_true (Value) IcmpCondResult)
-(rule 1 (emit_vall_true val @ (value_type ty))
+(decl is_vall_true (Value) CondResult)
+(rule 1 (is_vall_true val @ (value_type ty))
         (if-let true (use_sse41))
         (let ((src Xmm val)
               (zeros Xmm (xmm_zero ty))
               (cmp Xmm (x64_pcmpeq (vec_int_type ty) src zeros)))
-          (icmp_cond_result (x64_ptest cmp cmp) (CC.Z))))
+          (CondResult.CC (x64_ptest cmp cmp) (CC.Z))))
 
 ;; Perform an appropriately-sized lane-wise comparison with zero. If the
 ;; result is all 0s then all of them are true because nothing was equal to
 ;; zero.
-(rule (emit_vall_true val @ (value_type ty))
+(rule (is_vall_true val @ (value_type ty))
       (let ((lanes_with_zero Xmm (x64_pcmpeq (vec_int_type ty) val (xmm_zero ty)))
             (mask Gpr (x64_pmovmskb lanes_with_zero)))
-        (icmp_cond_result (x64_testl_mr mask mask)
-                          (CC.Z))))
+        (CondResult.CC (x64_testl_mr mask mask) (CC.Z))))
 
 ;; Rules for `vhigh_bits` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

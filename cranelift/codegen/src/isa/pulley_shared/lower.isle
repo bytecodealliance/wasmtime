@@ -221,16 +221,15 @@
 
 ;;;; Rules for `iconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type ty (iconst (u64_from_imm64 n))))
-      (imm ty n))
+(rule (lower (has_type ty (iconst c))) (imm (i64_sextend_imm64 ty c)))
 
 ;;;; Rules for `f32const`;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (f32const (u32_from_ieee32 x))) (imm $F32 x))
+(rule (lower (f32const (u32_from_ieee32 x))) (pulley_fconst32 x))
 
 ;;;; Rules for `f64const`;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (f64const (u64_from_ieee64 x))) (imm $F64 x))
+(rule (lower (f64const (u64_from_ieee64 x))) (pulley_fconst64 x))
 
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1368,51 +1367,31 @@
 (rule (emit_cond (Cond.IfXult64 src1 src2)) (pulley_xult64 src1 src2))
 (rule (emit_cond (Cond.IfXulteq64 src1 src2)) (pulley_xulteq64 src1 src2))
 
-(rule (emit_cond (Cond.IfXeq32I32 src1 src2))
-  (pulley_xeq32 src1 (imm $I32 (i64_cast_unsigned src2))))
-(rule (emit_cond (Cond.IfXneq32I32 src1 src2))
-  (pulley_xneq32 src1 (imm $I32 (i64_cast_unsigned src2))))
-(rule (emit_cond (Cond.IfXslt32I32 src1 src2))
-  (pulley_xslt32 src1 (imm $I32 (i64_cast_unsigned src2))))
-(rule (emit_cond (Cond.IfXslteq32I32 src1 src2))
-  (pulley_xslteq32 src1 (imm $I32 (i64_cast_unsigned src2))))
-(rule (emit_cond (Cond.IfXult32I32 src1 src2))
-  (pulley_xult32 src1 (imm $I32 src2)))
-(rule (emit_cond (Cond.IfXulteq32I32 src1 src2))
-  (pulley_xulteq32 src1 (imm $I32 src2)))
+(rule (emit_cond (Cond.IfXeq32I32 src1 src2)) (pulley_xeq32 src1 (imm src2)))
+(rule (emit_cond (Cond.IfXneq32I32 src1 src2)) (pulley_xneq32 src1 (imm src2)))
+(rule (emit_cond (Cond.IfXslt32I32 src1 src2)) (pulley_xslt32 src1 (imm src2)))
+(rule (emit_cond (Cond.IfXslteq32I32 src1 src2)) (pulley_xslteq32 src1 (imm src2)))
+(rule (emit_cond (Cond.IfXult32I32 src1 src2)) (pulley_xult32 src1 (imm src2)))
+(rule (emit_cond (Cond.IfXulteq32I32 src1 src2)) (pulley_xulteq32 src1 (imm src2)))
 
 ;; Note the operand swaps here
-(rule (emit_cond (Cond.IfXsgt32I32 src1 src2))
-  (pulley_xslt32 (imm $I32 (i64_cast_unsigned src2)) src1))
-(rule (emit_cond (Cond.IfXsgteq32I32 src1 src2))
-  (pulley_xslteq32 (imm $I32 (i64_cast_unsigned src2)) src1))
-(rule (emit_cond (Cond.IfXugt32I32 src1 src2))
-  (pulley_xult32 (imm $I32 src2) src1))
-(rule (emit_cond (Cond.IfXugteq32I32 src1 src2))
-  (pulley_xulteq32 (imm $I32 src2) src1))
+(rule (emit_cond (Cond.IfXsgt32I32 src1 src2)) (pulley_xslt32 (imm src2) src1))
+(rule (emit_cond (Cond.IfXsgteq32I32 src1 src2)) (pulley_xslteq32 (imm src2) src1))
+(rule (emit_cond (Cond.IfXugt32I32 src1 src2)) (pulley_xult32 (imm src2) src1))
+(rule (emit_cond (Cond.IfXugteq32I32 src1 src2)) (pulley_xulteq32 (imm src2) src1))
 
-(rule (emit_cond (Cond.IfXeq64I32 src1 src2))
-  (pulley_xeq64 src1 (imm $I64 (i64_cast_unsigned src2))))
-(rule (emit_cond (Cond.IfXneq64I32 src1 src2))
-  (pulley_xneq64 src1 (imm $I64 (i64_cast_unsigned src2))))
-(rule (emit_cond (Cond.IfXslt64I32 src1 src2))
-  (pulley_xslt64 src1 (imm $I64 (i64_cast_unsigned src2))))
-(rule (emit_cond (Cond.IfXslteq64I32 src1 src2))
-  (pulley_xslteq64 src1 (imm $I64 (i64_cast_unsigned src2))))
-(rule (emit_cond (Cond.IfXult64I32 src1 src2))
-  (pulley_xult64 src1 (imm $I64 src2)))
-(rule (emit_cond (Cond.IfXulteq64I32 src1 src2))
-  (pulley_xulteq64 src1 (imm $I64 src2)))
+(rule (emit_cond (Cond.IfXeq64I32 src1 src2)) (pulley_xeq64 src1 (imm src2)))
+(rule (emit_cond (Cond.IfXneq64I32 src1 src2)) (pulley_xneq64 src1 (imm src2)))
+(rule (emit_cond (Cond.IfXslt64I32 src1 src2)) (pulley_xslt64 src1 (imm src2)))
+(rule (emit_cond (Cond.IfXslteq64I32 src1 src2)) (pulley_xslteq64 src1 (imm src2)))
+(rule (emit_cond (Cond.IfXult64I32 src1 src2)) (pulley_xult64 src1 (imm src2)))
+(rule (emit_cond (Cond.IfXulteq64I32 src1 src2)) (pulley_xulteq64 src1 (imm src2)))
 
 ;; Note the operand swaps here
-(rule (emit_cond (Cond.IfXsgt64I32 src1 src2))
-  (pulley_xslt64 (imm $I64 (i64_cast_unsigned src2)) src1))
-(rule (emit_cond (Cond.IfXsgteq64I32 src1 src2))
-  (pulley_xslteq64 (imm $I64 (i64_cast_unsigned src2)) src1))
-(rule (emit_cond (Cond.IfXugt64I32 src1 src2))
-  (pulley_xult64 (imm $I64 src2) src1))
-(rule (emit_cond (Cond.IfXugteq64I32 src1 src2))
-  (pulley_xulteq64 (imm $I64 src2) src1))
+(rule (emit_cond (Cond.IfXsgt64I32 src1 src2)) (pulley_xslt64 (imm src2) src1))
+(rule (emit_cond (Cond.IfXsgteq64I32 src1 src2)) (pulley_xslteq64 (imm src2) src1))
+(rule (emit_cond (Cond.IfXugt64I32 src1 src2)) (pulley_xult64 (imm src2) src1))
+(rule (emit_cond (Cond.IfXugteq64I32 src1 src2)) (pulley_xulteq64 (imm src2) src1))
 
 ;;;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -352,7 +352,7 @@ impl dsl::Format {
                 }
                 fmtln!(
                     f,
-                    "self.{rm}.encode_rex_suffixes(buf, off, reg, {bytes_at_end});"
+                    "self.{rm}.encode_rex_suffixes(buf, reg, {bytes_at_end});"
                 );
             }
             ModRmStyle::Reg { reg, rm } => {

@@ -1,5 +1,6 @@
 use crate::runtime::vm::{ExportGlobalKind, StoreBox, VMGlobalDefinition};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
+use crate::type_registry::RegisteredType;
 use crate::{GlobalType, Mutability, Result, RootedGcRefImpl, Val};
 use core::ptr::{self, NonNull};
 use wasmtime_environ::{DefinedGlobalIndex, EntityRef, Global};
@@ -8,6 +9,8 @@ use wasmtime_environ::{DefinedGlobalIndex, EntityRef, Global};
 pub struct VMHostGlobalContext {
     pub(crate) ty: Global,
     pub(crate) global: VMGlobalDefinition,
+
+    _registered_type: Option<RegisteredType>,
 }
 
 pub fn generate_global_export(
@@ -25,6 +28,7 @@ pub fn generate_global_export(
     let ctx = StoreBox::new(VMHostGlobalContext {
         ty: global,
         global: VMGlobalDefinition::new(),
+        _registered_type: ty.into_registered_type(),
     });
 
     let mut store = AutoAssertNoGc::new(store);

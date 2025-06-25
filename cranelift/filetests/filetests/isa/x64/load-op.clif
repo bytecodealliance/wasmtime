@@ -220,7 +220,7 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ; block0:
 ;   cmpq (%rdi), %rdi
-;   setz    %dl
+;   sete %dl
 ;   movzbq %dl, %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -251,7 +251,7 @@ block0(v0: i64):
 ; block0:
 ;   movq (%rdi), %rcx
 ;   testq %rcx, %rcx
-;   setz    %al
+;   sete %al
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

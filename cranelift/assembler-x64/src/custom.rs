@@ -1,26 +1,26 @@
 pub mod encode {
-    use crate::{CodeSink, KnownOffsetTable, inst};
+    use crate::{CodeSink, inst};
 
     /// `NOP`
-    pub fn nop_1b(_: &inst::nop_1b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+    pub fn nop_1b(_: &inst::nop_1b, buf: &mut impl CodeSink) {
         buf.put1(0x90);
     }
 
     /// `66 NOP`
-    pub fn nop_2b(_: &inst::nop_2b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+    pub fn nop_2b(_: &inst::nop_2b, buf: &mut impl CodeSink) {
         buf.put1(0x66);
         buf.put1(0x90);
     }
 
     /// `NOP DWORD ptr [EAX]`
-    pub fn nop_3b(_: &inst::nop_3b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+    pub fn nop_3b(_: &inst::nop_3b, buf: &mut impl CodeSink) {
         buf.put1(0x0F);
         buf.put1(0x1F);
         buf.put1(0x00);
     }
 
     /// `NOP DWORD ptr [EAX + 00H]`
-    pub fn nop_4b(_: &inst::nop_4b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+    pub fn nop_4b(_: &inst::nop_4b, buf: &mut impl CodeSink) {
         buf.put1(0x0F);
         buf.put1(0x1F);
         buf.put1(0x40);
@@ -28,7 +28,7 @@ pub mod encode {
     }
 
     /// `NOP DWORD ptr [EAX + EAX*1 + 00H]`
-    pub fn nop_5b(_: &inst::nop_5b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+    pub fn nop_5b(_: &inst::nop_5b, buf: &mut impl CodeSink) {
         buf.put1(0x0F);
         buf.put1(0x1F);
         buf.put1(0x44);
@@ -36,7 +36,7 @@ pub mod encode {
     }
 
     /// `66 NOP DWORD ptr [EAX + EAX*1 + 00H]`
-    pub fn nop_6b(_: &inst::nop_6b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+    pub fn nop_6b(_: &inst::nop_6b, buf: &mut impl CodeSink) {
         buf.put1(0x66);
         buf.put1(0x0F);
         buf.put1(0x1F);
@@ -45,7 +45,7 @@ pub mod encode {
     }
 
     /// `NOP DWORD ptr [EAX + 00000000H]`
-    pub fn nop_7b(_: &inst::nop_7b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+    pub fn nop_7b(_: &inst::nop_7b, buf: &mut impl CodeSink) {
         buf.put1(0x0F);
         buf.put1(0x1F);
         buf.put1(0x80);
@@ -53,7 +53,7 @@ pub mod encode {
     }
 
     /// `NOP DWORD ptr [EAX + EAX*1 + 00000000H]`
-    pub fn nop_8b(_: &inst::nop_8b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+    pub fn nop_8b(_: &inst::nop_8b, buf: &mut impl CodeSink) {
         buf.put1(0x0F);
         buf.put1(0x1F);
         buf.put1(0x84);
@@ -62,7 +62,7 @@ pub mod encode {
     }
 
     /// `66 NOP DWORD ptr [EAX + EAX*1 + 00000000H]`
-    pub fn nop_9b(_: &inst::nop_9b, buf: &mut impl CodeSink, _: &impl KnownOffsetTable) {
+    pub fn nop_9b(_: &inst::nop_9b, buf: &mut impl CodeSink) {
         buf.put1(0x66);
         buf.put1(0x0F);
         buf.put1(0x1F);

@@ -2,9 +2,9 @@
 
 use crate::gpr;
 use crate::xmm;
-use crate::{Amode, GprMem, XmmMem};
+use crate::{Amode, DeferredTarget, GprMem, XmmMem};
 use std::fmt;
-use std::{num::NonZeroU8, ops::Index, vec::Vec};
+use std::{num::NonZeroU8, vec::Vec};
 
 /// Describe how an instruction is emitted into a code buffer.
 pub trait CodeSink {
@@ -24,17 +24,15 @@ pub trait CodeSink {
     /// required for assembling memory accesses.
     fn add_trap(&mut self, code: TrapCode);
 
-    /// Return the byte offset of the current location in the code buffer;
-    /// required for assembling RIP-relative memory accesses.
-    fn current_offset(&self) -> u32;
+    /// Inform the code buffer that a use of `target` is about to happen at the
+    /// current offset.
+    ///
+    /// After this method is called the bytes of the target are then expected to
+    /// be placed using one of the above `put*` methods.
+    fn use_target(&mut self, target: DeferredTarget);
 
-    /// Inform the code buffer of a use of `label` at `offset`; required for
-    /// assembling RIP-relative memory accesses.
-    fn use_label_at_offset(&mut self, offset: u32, label: Label);
-
-    /// Return the label for a constant `id`; required for assembling
-    /// RIP-relative memory accesses of constants.
-    fn get_label_for_constant(&mut self, id: Constant) -> Label;
+    /// Resolves a `KnownOffset` value to the actual signed offset.
+    fn known_offset(&self, offset: KnownOffset) -> i32;
 }
 
 /// Provide a convenient implementation for testing.
@@ -57,14 +55,10 @@ impl CodeSink for Vec<u8> {
 
     fn add_trap(&mut self, _: TrapCode) {}
 
-    fn current_offset(&self) -> u32 {
-        self.len().try_into().unwrap()
-    }
+    fn use_target(&mut self, _: DeferredTarget) {}
 
-    fn use_label_at_offset(&mut self, _: u32, _: Label) {}
-
-    fn get_label_for_constant(&mut self, c: Constant) -> Label {
-        Label(c.0)
+    fn known_offset(&self, offset: KnownOffset) -> i32 {
+        panic!("unknown offset {offset:?}")
     }
 }
 
@@ -88,20 +82,6 @@ impl fmt::Display for TrapCode {
         write!(f, "trap={}", self.0)
     }
 }
-
-/// A table mapping `KnownOffset` identifiers to their `i32` offset values.
-///
-/// When encoding instructions, Cranelift may not know all of the information
-/// needed to construct an immediate. Specifically, addressing modes that
-/// require knowing the size of the tail arguments or outgoing arguments (see
-/// `SyntheticAmode::finalize`) will not know these sizes until emission.
-///
-/// This table allows up to do a "late" look up of these values by their
-/// `KnownOffset`.
-pub trait KnownOffsetTable: Index<usize, Output = i32> {}
-impl KnownOffsetTable for Vec<i32> {}
-/// Provide a convenient implementation for testing.
-impl KnownOffsetTable for [i32; 2] {}
 
 /// A `KnownOffset` is a unique identifier for a specific offset known only at
 /// emission time.

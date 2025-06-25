@@ -16,7 +16,7 @@ block0(v0: i64, v1: i64):
 ; block0:
 ;   movq (%rsi), %r9
 ;   cmpq %r9, %rdi
-;   setz    %r10b
+;   sete %r10b
 ;   movzbq %r10b, %rax
 ;   cmpq %r9, %rdi
 ;   movq %rsi, %rdx
@@ -56,8 +56,8 @@ block0(v0: f64, v1: i64):
 ; block0:
 ;   movsd (%rdi), %xmm1
 ;   ucomisd %xmm1, %xmm0
-;   setnp   %dil
-;   setz    %al
+;   setnp %dil
+;   sete %al
 ;   andl %eax, %edi
 ;   movzbq %dil, %rax
 ;   ucomisd %xmm1, %xmm0
@@ -81,9 +81,9 @@ block0(v0: f64, v1: i64):
 ;   movzbq %dil, %rax
 ;   ucomisd %xmm1, %xmm0
 ;   movdqa %xmm0, %xmm2
-;   jnp 0x2b
+;   jnp 0x2a
 ;   movaps %xmm2, %xmm0
-;   je 0x34
+;   je 0x33
 ;   movaps %xmm2, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp

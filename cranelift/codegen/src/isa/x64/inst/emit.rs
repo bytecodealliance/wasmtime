@@ -3,7 +3,7 @@ use crate::ir::immediates::{Ieee32, Ieee64};
 use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength, RegisterOrAmode};
 use crate::isa::x64::encoding::rex::{
     LegacyPrefixes, OpcodeMap, RexFlags, emit_std_enc_enc, emit_std_enc_mem, emit_std_reg_mem,
-    emit_std_reg_reg, int_reg_enc, reg_enc,
+    emit_std_reg_reg, int_reg_enc,
 };
 use crate::isa::x64::encoding::vex::{VexInstruction, VexVectorLength};
 use crate::isa::x64::external::{AsmInst, CraneliftRegisters, PairedGpr};
@@ -264,22 +264,6 @@ pub(crate) fn emit(
             debug_assert!([regs::rsp(), regs::rbp(), regs::pinned_reg()].contains(&dst));
             let dst = WritableGpr::from_writable_reg(Writable::from_reg(dst)).unwrap();
             asm::inst::movq_mr::new(dst, *src).emit(sink, info, state);
-        }
-
-        Inst::Setcc { cc, dst } => {
-            let dst = dst.to_reg().to_reg();
-            let opcode = 0x0f90 + cc.get_enc() as u32;
-            let mut rex_flags = RexFlags::clear_w();
-            rex_flags.always_emit();
-            emit_std_enc_enc(
-                sink,
-                LegacyPrefixes::None,
-                opcode,
-                2,
-                0,
-                reg_enc(dst),
-                rex_flags,
-            );
         }
 
         Inst::XmmCmove {
@@ -1973,49 +1957,37 @@ pub(crate) fn emit(
             offset,
             distance,
         } => {
-            let dst = dst.to_reg();
-
+            let name = &**name;
+            let riprel = asm::Amode::RipRelative {
+                target: asm::DeferredTarget::None,
+            };
             if info.flags.is_pic() {
                 // Generates: movq symbol@GOTPCREL(%rip), %dst
-                let enc_dst = int_reg_enc(dst);
-                sink.put1(0x48 | ((enc_dst >> 3) & 1) << 2);
-                sink.put1(0x8B);
-                sink.put1(0x05 | ((enc_dst & 7) << 3));
-                emit_reloc(sink, Reloc::X86GOTPCRel4, name, -4);
-                sink.put4(0);
-                // Offset in the relocation above applies to the address of the *GOT entry*, not
-                // the loaded address; so we emit a separate add or sub instruction if needed.
-                if *offset < 0 {
-                    assert!(*offset >= -i32::MAX as i64);
-                    sink.put1(0x48 | ((enc_dst >> 3) & 1));
-                    sink.put1(0x81);
-                    sink.put1(0xe8 | (enc_dst & 7));
-                    sink.put4((-*offset) as u32);
-                } else if *offset > 0 {
-                    assert!(*offset <= i32::MAX as i64);
-                    sink.put1(0x48 | ((enc_dst >> 3) & 1));
-                    sink.put1(0x81);
-                    sink.put1(0xc0 | (enc_dst & 7));
-                    sink.put4(*offset as u32);
+                asm::inst::movq_rm::new(*dst, riprel).emit(sink, info, state);
+                let cur = sink.cur_offset();
+                sink.add_reloc_at_offset(cur - 4, Reloc::X86GOTPCRel4, name, -4);
+
+                // Offset in the relocation above applies to the address of the
+                // *GOT entry*, not the loaded address; so we emit a separate
+                // add instruction if needed.
+                let offset = i32::try_from(*offset).unwrap();
+                if offset != 0 {
+                    asm::inst::addq_mi_sxl::new(PairedGpr::from(*dst), offset)
+                        .emit(sink, info, state);
                 }
             } else if distance == &RelocDistance::Near {
-                // If we know the distance to the name is within 2GB (e.g., a module-local function),
-                // we can generate a RIP-relative address, with a relocation.
-                // Generates: lea $name(%rip), $dst
-                let enc_dst = int_reg_enc(dst);
-                sink.put1(0x48 | ((enc_dst >> 3) & 1) << 2);
-                sink.put1(0x8D);
-                sink.put1(0x05 | ((enc_dst & 7) << 3));
-                emit_reloc(sink, Reloc::X86CallPCRel4, name, -4);
-                sink.put4(0);
+                // If we know the distance to the name is within 2GB (e.g., a
+                // module-local function), we can generate a RIP-relative
+                // address, with a relocation.
+                asm::inst::leaq_rm::new(*dst, riprel).emit(sink, info, state);
+                let cur = sink.cur_offset();
+                sink.add_reloc_at_offset(cur - 4, Reloc::X86CallPCRel4, name, *offset - 4);
             } else {
-                // The full address can be encoded in the register, with a relocation.
-                // Generates: movabsq $name, %dst
-                let enc_dst = int_reg_enc(dst);
-                sink.put1(0x48 | ((enc_dst >> 3) & 1));
-                sink.put1(0xB8 | (enc_dst & 7));
-                emit_reloc(sink, Reloc::Abs8, name, *offset);
-                sink.put8(0);
+                // The full address can be encoded in the register, with a
+                // relocation.
+                asm::inst::movabsq_oi::new(*dst, 0).emit(sink, info, state);
+                let cur = sink.cur_offset();
+                sink.add_reloc_at_offset(cur - 8, Reloc::Abs8, name, *offset);
             }
         }
 
@@ -2402,19 +2374,25 @@ pub(crate) fn emit(
         }
 
         Inst::External { inst } => {
-            let mut known_offsets = [0, 0];
-            // These values are transcribed from what is happening in
-            // `SyntheticAmode::finalize`. This, plus the `Into` logic
-            // converting a `SyntheticAmode` to its external counterpart, are
-            // necessary to communicate Cranelift's internal offsets to the
-            // assembler; due to when Cranelift determines these offsets, this
-            // happens quite late (i.e., here during emission).
             let frame = state.frame_layout();
-            known_offsets[usize::from(external::offsets::KEY_INCOMING_ARG)] =
-                i32::try_from(frame.tail_args_size + frame.setup_area_size).unwrap();
-            known_offsets[usize::from(external::offsets::KEY_SLOT_OFFSET)] =
-                i32::try_from(frame.outgoing_args_size).unwrap();
-            emit_maybe_shrink(inst, sink, &known_offsets);
+            emit_maybe_shrink(
+                inst,
+                &mut external::AsmCodeSink {
+                    sink,
+
+                    // These values are transcribed from what is happening in
+                    // `SyntheticAmode::finalize`. This, plus the `Into` logic
+                    // converting a `SyntheticAmode` to its external counterpart, are
+                    // necessary to communicate Cranelift's internal offsets to the
+                    // assembler; due to when Cranelift determines these offsets, this
+                    // happens quite late (i.e., here during emission).
+                    incoming_arg_offset: i32::try_from(
+                        frame.tail_args_size + frame.setup_area_size,
+                    )
+                    .unwrap(),
+                    slot_offset: i32::try_from(frame.outgoing_args_size).unwrap(),
+                },
+            );
         }
     }
 
@@ -2507,7 +2485,7 @@ where
 /// has a smaller encoding for `AND AL, imm8` than it does for `AND r/m8, imm8`.
 /// Here the instructions are matched against and if regalloc state indicates
 /// that a smaller variant is available then that's swapped to instead.
-fn emit_maybe_shrink(inst: &AsmInst, sink: &mut MachBuffer<Inst>, table: &[i32; 2]) {
+fn emit_maybe_shrink(inst: &AsmInst, sink: &mut impl asm::CodeSink) {
     use cranelift_assembler_x64::GprMem;
     use cranelift_assembler_x64::inst::*;
 
@@ -2520,183 +2498,167 @@ fn emit_maybe_shrink(inst: &AsmInst, sink: &mut MachBuffer<Inst>, table: &[i32; 
 
     match *inst {
         // and
-        Inst::andb_mi(andb_mi { rm8: RAX_RM, imm8 }) => {
-            andb_i::<R>::new(RAX, imm8).encode(sink, table)
-        }
+        Inst::andb_mi(andb_mi { rm8: RAX_RM, imm8 }) => andb_i::<R>::new(RAX, imm8).encode(sink),
         Inst::andw_mi(andw_mi {
             rm16: RAX_RM,
             imm16,
-        }) => andw_i::<R>::new(RAX, imm16).encode(sink, table),
+        }) => andw_i::<R>::new(RAX, imm16).encode(sink),
         Inst::andl_mi(andl_mi {
             rm32: RAX_RM,
             imm32,
-        }) => andl_i::<R>::new(RAX, imm32).encode(sink, table),
+        }) => andl_i::<R>::new(RAX, imm32).encode(sink),
         Inst::andq_mi_sxl(andq_mi_sxl {
             rm64: RAX_RM,
             imm32,
-        }) => andq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+        }) => andq_i_sxl::<R>::new(RAX, imm32).encode(sink),
 
         // or
-        Inst::orb_mi(orb_mi { rm8: RAX_RM, imm8 }) => {
-            orb_i::<R>::new(RAX, imm8).encode(sink, table)
-        }
+        Inst::orb_mi(orb_mi { rm8: RAX_RM, imm8 }) => orb_i::<R>::new(RAX, imm8).encode(sink),
         Inst::orw_mi(orw_mi {
             rm16: RAX_RM,
             imm16,
-        }) => orw_i::<R>::new(RAX, imm16).encode(sink, table),
+        }) => orw_i::<R>::new(RAX, imm16).encode(sink),
         Inst::orl_mi(orl_mi {
             rm32: RAX_RM,
             imm32,
-        }) => orl_i::<R>::new(RAX, imm32).encode(sink, table),
+        }) => orl_i::<R>::new(RAX, imm32).encode(sink),
         Inst::orq_mi_sxl(orq_mi_sxl {
             rm64: RAX_RM,
             imm32,
-        }) => orq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+        }) => orq_i_sxl::<R>::new(RAX, imm32).encode(sink),
 
         // xor
-        Inst::xorb_mi(xorb_mi { rm8: RAX_RM, imm8 }) => {
-            xorb_i::<R>::new(RAX, imm8).encode(sink, table)
-        }
+        Inst::xorb_mi(xorb_mi { rm8: RAX_RM, imm8 }) => xorb_i::<R>::new(RAX, imm8).encode(sink),
         Inst::xorw_mi(xorw_mi {
             rm16: RAX_RM,
             imm16,
-        }) => xorw_i::<R>::new(RAX, imm16).encode(sink, table),
+        }) => xorw_i::<R>::new(RAX, imm16).encode(sink),
         Inst::xorl_mi(xorl_mi {
             rm32: RAX_RM,
             imm32,
-        }) => xorl_i::<R>::new(RAX, imm32).encode(sink, table),
+        }) => xorl_i::<R>::new(RAX, imm32).encode(sink),
         Inst::xorq_mi_sxl(xorq_mi_sxl {
             rm64: RAX_RM,
             imm32,
-        }) => xorq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+        }) => xorq_i_sxl::<R>::new(RAX, imm32).encode(sink),
 
         // add
-        Inst::addb_mi(addb_mi { rm8: RAX_RM, imm8 }) => {
-            addb_i::<R>::new(RAX, imm8).encode(sink, table)
-        }
+        Inst::addb_mi(addb_mi { rm8: RAX_RM, imm8 }) => addb_i::<R>::new(RAX, imm8).encode(sink),
         Inst::addw_mi(addw_mi {
             rm16: RAX_RM,
             imm16,
-        }) => addw_i::<R>::new(RAX, imm16).encode(sink, table),
+        }) => addw_i::<R>::new(RAX, imm16).encode(sink),
         Inst::addl_mi(addl_mi {
             rm32: RAX_RM,
             imm32,
-        }) => addl_i::<R>::new(RAX, imm32).encode(sink, table),
+        }) => addl_i::<R>::new(RAX, imm32).encode(sink),
         Inst::addq_mi_sxl(addq_mi_sxl {
             rm64: RAX_RM,
             imm32,
-        }) => addq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+        }) => addq_i_sxl::<R>::new(RAX, imm32).encode(sink),
 
         // adc
-        Inst::adcb_mi(adcb_mi { rm8: RAX_RM, imm8 }) => {
-            adcb_i::<R>::new(RAX, imm8).encode(sink, table)
-        }
+        Inst::adcb_mi(adcb_mi { rm8: RAX_RM, imm8 }) => adcb_i::<R>::new(RAX, imm8).encode(sink),
         Inst::adcw_mi(adcw_mi {
             rm16: RAX_RM,
             imm16,
-        }) => adcw_i::<R>::new(RAX, imm16).encode(sink, table),
+        }) => adcw_i::<R>::new(RAX, imm16).encode(sink),
         Inst::adcl_mi(adcl_mi {
             rm32: RAX_RM,
             imm32,
-        }) => adcl_i::<R>::new(RAX, imm32).encode(sink, table),
+        }) => adcl_i::<R>::new(RAX, imm32).encode(sink),
         Inst::adcq_mi_sxl(adcq_mi_sxl {
             rm64: RAX_RM,
             imm32,
-        }) => adcq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+        }) => adcq_i_sxl::<R>::new(RAX, imm32).encode(sink),
 
         // sub
-        Inst::subb_mi(subb_mi { rm8: RAX_RM, imm8 }) => {
-            subb_i::<R>::new(RAX, imm8).encode(sink, table)
-        }
+        Inst::subb_mi(subb_mi { rm8: RAX_RM, imm8 }) => subb_i::<R>::new(RAX, imm8).encode(sink),
         Inst::subw_mi(subw_mi {
             rm16: RAX_RM,
             imm16,
-        }) => subw_i::<R>::new(RAX, imm16).encode(sink, table),
+        }) => subw_i::<R>::new(RAX, imm16).encode(sink),
         Inst::subl_mi(subl_mi {
             rm32: RAX_RM,
             imm32,
-        }) => subl_i::<R>::new(RAX, imm32).encode(sink, table),
+        }) => subl_i::<R>::new(RAX, imm32).encode(sink),
         Inst::subq_mi_sxl(subq_mi_sxl {
             rm64: RAX_RM,
             imm32,
-        }) => subq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+        }) => subq_i_sxl::<R>::new(RAX, imm32).encode(sink),
 
         // sbb
-        Inst::sbbb_mi(sbbb_mi { rm8: RAX_RM, imm8 }) => {
-            sbbb_i::<R>::new(RAX, imm8).encode(sink, table)
-        }
+        Inst::sbbb_mi(sbbb_mi { rm8: RAX_RM, imm8 }) => sbbb_i::<R>::new(RAX, imm8).encode(sink),
         Inst::sbbw_mi(sbbw_mi {
             rm16: RAX_RM,
             imm16,
-        }) => sbbw_i::<R>::new(RAX, imm16).encode(sink, table),
+        }) => sbbw_i::<R>::new(RAX, imm16).encode(sink),
         Inst::sbbl_mi(sbbl_mi {
             rm32: RAX_RM,
             imm32,
-        }) => sbbl_i::<R>::new(RAX, imm32).encode(sink, table),
+        }) => sbbl_i::<R>::new(RAX, imm32).encode(sink),
         Inst::sbbq_mi_sxl(sbbq_mi_sxl {
             rm64: RAX_RM,
             imm32,
-        }) => sbbq_i_sxl::<R>::new(RAX, imm32).encode(sink, table),
+        }) => sbbq_i_sxl::<R>::new(RAX, imm32).encode(sink),
 
         // cmp
         Inst::cmpb_mi(cmpb_mi {
             rm8: GprMem::Gpr(Gpr::RAX),
             imm8,
-        }) => cmpb_i::<R>::new(Gpr::RAX, imm8).encode(sink, table),
+        }) => cmpb_i::<R>::new(Gpr::RAX, imm8).encode(sink),
         Inst::cmpw_mi(cmpw_mi {
             rm16: GprMem::Gpr(Gpr::RAX),
             imm16,
-        }) => cmpw_i::<R>::new(Gpr::RAX, imm16).encode(sink, table),
+        }) => cmpw_i::<R>::new(Gpr::RAX, imm16).encode(sink),
         Inst::cmpl_mi(cmpl_mi {
             rm32: GprMem::Gpr(Gpr::RAX),
             imm32,
-        }) => cmpl_i::<R>::new(Gpr::RAX, imm32).encode(sink, table),
+        }) => cmpl_i::<R>::new(Gpr::RAX, imm32).encode(sink),
         Inst::cmpq_mi(cmpq_mi {
             rm64: GprMem::Gpr(Gpr::RAX),
             imm32,
-        }) => cmpq_i::<R>::new(Gpr::RAX, imm32).encode(sink, table),
+        }) => cmpq_i::<R>::new(Gpr::RAX, imm32).encode(sink),
 
         // test
         Inst::testb_mi(testb_mi {
             rm8: GprMem::Gpr(Gpr::RAX),
             imm8,
-        }) => testb_i::<R>::new(Gpr::RAX, imm8).encode(sink, table),
+        }) => testb_i::<R>::new(Gpr::RAX, imm8).encode(sink),
         Inst::testw_mi(testw_mi {
             rm16: GprMem::Gpr(Gpr::RAX),
             imm16,
-        }) => testw_i::<R>::new(Gpr::RAX, imm16).encode(sink, table),
+        }) => testw_i::<R>::new(Gpr::RAX, imm16).encode(sink),
         Inst::testl_mi(testl_mi {
             rm32: GprMem::Gpr(Gpr::RAX),
             imm32,
-        }) => testl_i::<R>::new(Gpr::RAX, imm32).encode(sink, table),
+        }) => testl_i::<R>::new(Gpr::RAX, imm32).encode(sink),
         Inst::testq_mi(testq_mi {
             rm64: GprMem::Gpr(Gpr::RAX),
             imm32,
-        }) => testq_i::<R>::new(Gpr::RAX, imm32).encode(sink, table),
+        }) => testq_i::<R>::new(Gpr::RAX, imm32).encode(sink),
 
         // lea
         Inst::leal_rm(leal_rm { r32, m32 }) => emit_lea(
             r32,
             m32,
             sink,
-            table,
-            |dst, amode, s, t| leal_rm::<R>::new(dst, amode).encode(s, t),
-            |dst, simm32, s, t| addl_mi::<R>::new(dst, simm32.unsigned()).encode(s, t),
-            |dst, reg, s, t| addl_rm::<R>::new(dst, reg).encode(s, t),
+            |dst, amode, s| leal_rm::<R>::new(dst, amode).encode(s),
+            |dst, simm32, s| addl_mi::<R>::new(dst, simm32.unsigned()).encode(s),
+            |dst, reg, s| addl_rm::<R>::new(dst, reg).encode(s),
         ),
         Inst::leaq_rm(leaq_rm { r64, m64 }) => emit_lea(
             r64,
             m64,
             sink,
-            table,
-            |dst, amode, s, t| leaq_rm::<R>::new(dst, amode).encode(s, t),
-            |dst, simm32, s, t| addq_mi_sxl::<R>::new(dst, simm32).encode(s, t),
-            |dst, reg, s, t| addq_rm::<R>::new(dst, reg).encode(s, t),
+            |dst, amode, s| leaq_rm::<R>::new(dst, amode).encode(s),
+            |dst, simm32, s| addq_mi_sxl::<R>::new(dst, simm32).encode(s),
+            |dst, reg, s| addq_rm::<R>::new(dst, reg).encode(s),
         ),
 
         // All other instructions fall through to here and cannot be shrunk, so
         // return `false` to emit them as usual.
-        _ => inst.encode(sink, table),
+        _ => inst.encode(sink),
     }
 }
 
@@ -2715,15 +2677,16 @@ fn emit_maybe_shrink(inst: &AsmInst, sink: &mut MachBuffer<Inst>, table: &[i32; 
 /// of `lea` should "attempt" to put the `base` in the same register as `dst`
 /// but not at the expense of generating a `mov` instruction. Currently that's
 /// not possible but perhaps one day it may be worth it.
-fn emit_lea(
+fn emit_lea<S>(
     dst: asm::Gpr<WritableGpr>,
     addr: asm::Amode<Gpr>,
-    sink: &mut MachBuffer<Inst>,
-    table: &[i32; 2],
-    lea: fn(WritableGpr, asm::Amode<Gpr>, &mut MachBuffer<Inst>, &[i32; 2]),
-    add_mi: fn(PairedGpr, i32, &mut MachBuffer<Inst>, &[i32; 2]),
-    add_rm: fn(PairedGpr, Gpr, &mut MachBuffer<Inst>, &[i32; 2]),
-) {
+    sink: &mut S,
+    lea: fn(WritableGpr, asm::Amode<Gpr>, &mut S),
+    add_mi: fn(PairedGpr, i32, &mut S),
+    add_rm: fn(PairedGpr, Gpr, &mut S),
+) where
+    S: asm::CodeSink,
+{
     match addr {
         // If `base == dst` then this is `add dst, $imm`, so encode that
         // instead.
@@ -2742,7 +2705,6 @@ fn emit_lea(
             },
             simm32.value(),
             sink,
-            table,
         ),
 
         // If the offset is 0 and the shift is a scale of 1, then:
@@ -2764,7 +2726,6 @@ fn emit_lea(
                     },
                     *index.as_ref(),
                     sink,
-                    table,
                 )
             } else if dst.as_ref().to_reg() == *index.as_ref() {
                 add_rm(
@@ -2774,13 +2735,12 @@ fn emit_lea(
                     },
                     base,
                     sink,
-                    table,
                 )
             } else {
-                lea(*dst.as_ref(), addr, sink, table)
+                lea(*dst.as_ref(), addr, sink)
             }
         }
 
-        _ => lea(*dst.as_ref(), addr, sink, table),
+        _ => lea(*dst.as_ref(), addr, sink),
     }
 }

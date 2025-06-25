@@ -94,7 +94,6 @@ impl Inst {
             | Inst::StackProbeLoop { .. }
             | Inst::Args { .. }
             | Inst::Rets { .. }
-            | Inst::Setcc { .. }
             | Inst::StackSwitchBasic { .. }
             | Inst::TrapIf { .. }
             | Inst::TrapIfAnd { .. }
@@ -814,12 +813,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {src}, {dst}")
             }
 
-            Inst::Setcc { cc, dst } => {
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 1);
-                let op = ljustify2("set".to_string(), cc.to_string());
-                format!("{op} {dst}")
-            }
-
             Inst::XmmCmove {
                 ty,
                 cc,
@@ -1030,7 +1023,7 @@ impl PrettyPrint for Inst {
             Inst::LoadExtName {
                 dst, name, offset, ..
             } => {
-                let dst = pretty_print_reg(dst.to_reg(), 8);
+                let dst = pretty_print_reg(*dst.to_reg(), 8);
                 let name = name.display(None);
                 let op = ljustify("load_ext_name".into());
                 format!("{op} {name}+{offset}, {dst}")
@@ -1319,9 +1312,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_early_def(tmp_xmm2);
         }
 
-        Inst::Setcc { dst, .. } => {
-            collector.reg_def(dst);
-        }
         Inst::XmmCmove {
             consequent,
             alternative,

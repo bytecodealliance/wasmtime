@@ -1,6 +1,6 @@
 //! Memory operands to instructions.
 
-use crate::api::{AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, TrapCode};
+use crate::api::{AsReg, CodeSink, Constant, KnownOffset, Label, TrapCode};
 use crate::gpr::{self, NonRspGpr, Size};
 use crate::rex::{Disp, RexPrefix, encode_modrm, encode_sib};
 
@@ -53,11 +53,10 @@ impl<R: AsReg> Amode<R> {
     pub(crate) fn encode_rex_suffixes(
         &self,
         sink: &mut impl CodeSink,
-        offsets: &impl KnownOffsetTable,
         enc_reg: u8,
         bytes_at_end: u8,
     ) {
-        emit_modrm_sib_disp(sink, offsets, enc_reg, self, bytes_at_end, None);
+        emit_modrm_sib_disp(sink, enc_reg, self, bytes_at_end, None);
     }
 
     /// Return the registers for encoding the `b` and `x` bits (e.g., in a VEX
@@ -144,9 +143,9 @@ impl AmodeOffsetPlusKnownOffset {
     ///
     /// Panics if the sum of the immediate and the known offset value overflows.
     #[must_use]
-    pub fn value(&self, offsets: &impl KnownOffsetTable) -> i32 {
+    pub fn value(&self, sink: &impl CodeSink) -> i32 {
         let known_offset = match self.offset {
-            Some(offset) => offsets[usize::from(offset)],
+            Some(offset) => sink.known_offset(offset),
             None => 0,
         };
         known_offset
@@ -170,6 +169,7 @@ impl std::fmt::LowerHex for AmodeOffsetPlusKnownOffset {
 pub enum DeferredTarget {
     Label(Label),
     Constant(Constant),
+    None,
 }
 
 impl<R: AsReg> std::fmt::Display for Amode<R> {
@@ -284,7 +284,6 @@ impl<R: AsReg, M: AsReg> GprMem<R, M> {
     pub(crate) fn encode_rex_suffixes(
         &self,
         sink: &mut impl CodeSink,
-        offsets: &impl KnownOffsetTable,
         enc_reg: u8,
         bytes_at_end: u8,
     ) {
@@ -293,7 +292,7 @@ impl<R: AsReg, M: AsReg> GprMem<R, M> {
                 sink.put1(encode_modrm(0b11, enc_reg & 0b111, gpr.enc() & 0b111));
             }
             GprMem::Mem(amode) => {
-                amode.encode_rex_suffixes(sink, offsets, enc_reg, bytes_at_end);
+                amode.encode_rex_suffixes(sink, enc_reg, bytes_at_end);
             }
         }
     }
@@ -353,7 +352,6 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
     pub(crate) fn encode_rex_suffixes(
         &self,
         sink: &mut impl CodeSink,
-        offsets: &impl KnownOffsetTable,
         enc_reg: u8,
         bytes_at_end: u8,
     ) {
@@ -362,7 +360,7 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
                 sink.put1(encode_modrm(0b11, enc_reg & 0b111, xmm.enc() & 0b111));
             }
             XmmMem::Mem(amode) => {
-                amode.encode_rex_suffixes(sink, offsets, enc_reg, bytes_at_end);
+                amode.encode_rex_suffixes(sink, enc_reg, bytes_at_end);
             }
         }
     }
@@ -396,7 +394,6 @@ impl<R: AsReg, M: AsReg> From<Amode<M>> for XmmMem<R, M> {
 /// Emit the ModRM/SIB/displacement sequence for a memory operand.
 pub fn emit_modrm_sib_disp<R: AsReg>(
     sink: &mut impl CodeSink,
-    offsets: &impl KnownOffsetTable,
     enc_g: u8,
     mem_e: &Amode<R>,
     bytes_at_end: u8,
@@ -405,7 +402,7 @@ pub fn emit_modrm_sib_disp<R: AsReg>(
     match *mem_e {
         Amode::ImmReg { simm32, base, .. } => {
             let enc_e = base.enc();
-            let mut imm = Disp::new(simm32.value(offsets), evex_scaling);
+            let mut imm = Disp::new(simm32.value(sink), evex_scaling);
 
             // Most base registers allow for a single ModRM byte plus an
             // optional immediate. If rsp is the base register, however, then a
@@ -468,12 +465,10 @@ pub fn emit_modrm_sib_disp<R: AsReg>(
             // RIP-relative is mod=00, rm=101.
             sink.put1(encode_modrm(0b00, enc_g & 7, 0b101));
 
-            let offset = sink.current_offset();
-            let target = match target {
-                DeferredTarget::Label(label) => label,
-                DeferredTarget::Constant(constant) => sink.get_label_for_constant(constant),
-            };
-            sink.use_label_at_offset(offset, target);
+            // Inform the code sink about the RIP-relative `target` at the
+            // current offset, emitting a `LabelUse`, a relocation, or etc as
+            // appropriate.
+            sink.use_target(target);
 
             // N.B.: some instructions (XmmRmRImm format for example)
             // have bytes *after* the RIP-relative offset. The

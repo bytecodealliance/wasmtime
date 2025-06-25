@@ -12,90 +12,77 @@
 ;;       movq    %rsp, %rbp
 ;;       subq    $0x20, %rsp
 ;;       movq    %r14, 0x10(%rsp)
-;;       movq    8(%rdi), %rdx
+;;       movq    8(%rdi), %r11
 ;;       movq    %rdi, %r14
-;;       movq    0x10(%rdx), %rdx
-;;       movq    %rsp, %r8
-;;       cmpq    %rdx, %r8
-;;       jb      0x12d
+;;       movq    0x10(%r11), %r11
+;;       movq    %rsp, %rsi
+;;       cmpq    %r11, %rsi
+;;       jb      0x118
 ;;   24: ucomisd %xmm0, %xmm0
 ;;       movdqu  %xmm0, (%rsp)
-;;       setp    %r10b
-;;       setne   %r11b
-;;       orl     %r11d, %r10d
-;;       testb   %r10b, %r10b
-;;       jne     0x116
-;;   41: movq    %r14, %rdi
+;;       jp      0x101
+;;       jne     0x101
+;;   39: movq    %r14, %rdi
 ;;       movdqu  (%rsp), %xmm0
-;;       callq   0x244
-;;       movabsq $13830554455654793216, %r11
-;;       movq    %r11, %xmm4
-;;       ucomisd %xmm0, %xmm4
-;;       setae   %dil
-;;       testb   %dil, %dil
-;;       jne     0xff
-;;   6e: ucomisd 0xda(%rip), %xmm0
-;;       setae   %dl
-;;       testb   %dl, %dl
-;;       jne     0xe8
-;;   82: movdqu  (%rsp), %xmm2
-;;       movabsq $0x43e0000000000000, %r9
-;;       movq    %r9, %xmm7
-;;       ucomisd %xmm7, %xmm2
-;;       jae     0xb7
-;;       jp      0x141
-;;   a6: cvttsd2si %xmm2, %rax
+;;       callq   0x224
+;;       movabsq $13830554455654793216, %rax
+;;       movq    %rax, %xmm6
+;;       ucomisd %xmm0, %xmm6
+;;       jae     0xea
+;;   5f: ucomisd 0xc9(%rip), %xmm0
+;;       jae     0xd3
+;;   6d: movdqu  (%rsp), %xmm1
+;;       movabsq $0x43e0000000000000, %r10
+;;       movq    %r10, %xmm7
+;;       ucomisd %xmm7, %xmm1
+;;       jae     0xa2
+;;       jp      0x12c
+;;   91: cvttsd2si %xmm1, %rax
 ;;       cmpq    $0, %rax
-;;       jge     0xda
-;;   b5: ud2
-;;       movaps  %xmm2, %xmm0
+;;       jge     0xc5
+;;   a0: ud2
+;;       movaps  %xmm1, %xmm0
 ;;       subsd   %xmm7, %xmm0
 ;;       cvttsd2si %xmm0, %rax
 ;;       cmpq    $0, %rax
-;;       jl      0x143
-;;   cd: movabsq $9223372036854775808, %r9
-;;       addq    %r9, %rax
+;;       jl      0x12e
+;;   b8: movabsq $9223372036854775808, %r10
+;;       addq    %r10, %rax
 ;;       movq    0x10(%rsp), %r14
 ;;       addq    $0x20, %rsp
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   e8: movl    $6, %esi
-;;   ed: movq    %r14, %rdi
-;;   f0: callq   0x283
-;;   f5: movq    %r14, %rdi
-;;   f8: callq   0x2c6
-;;   fd: ud2
-;;   ff: movl    $6, %esi
-;;  104: movq    %r14, %rdi
-;;  107: callq   0x283
-;;  10c: movq    %r14, %rdi
-;;  10f: callq   0x2c6
-;;  114: ud2
-;;  116: movl    $8, %esi
-;;  11b: movq    %r14, %rdi
-;;  11e: callq   0x283
-;;  123: movq    %r14, %rdi
-;;  126: callq   0x2c6
-;;  12b: ud2
-;;  12d: xorl    %esi, %esi
-;;  12f: movq    %r14, %rdi
-;;  132: callq   0x283
-;;  137: movq    %r14, %rdi
-;;  13a: callq   0x2c6
-;;  13f: ud2
-;;  141: ud2
-;;  143: ud2
-;;  145: addb    %al, (%rax)
-;;  147: addb    %al, (%rax)
-;;  149: addb    %al, (%rax)
-;;  14b: addb    %al, (%rax)
-;;  14d: addb    %al, (%rax)
-;;  14f: addb    %al, (%rax)
-;;  151: addb    %al, (%rax)
-;;  153: addb    %al, (%rax)
-;;  155: addb    %dh, %al
-;;  157: addb    %al, (%r8)
-;;  15a: addb    %al, (%rax)
-;;  15c: addb    %al, (%rax)
-;;  15e: addb    %al, (%rax)
+;;   d3: movl    $6, %esi
+;;   d8: movq    %r14, %rdi
+;;   db: callq   0x263
+;;   e0: movq    %r14, %rdi
+;;   e3: callq   0x2a6
+;;   e8: ud2
+;;   ea: movl    $6, %esi
+;;   ef: movq    %r14, %rdi
+;;   f2: callq   0x263
+;;   f7: movq    %r14, %rdi
+;;   fa: callq   0x2a6
+;;   ff: ud2
+;;  101: movl    $8, %esi
+;;  106: movq    %r14, %rdi
+;;  109: callq   0x263
+;;  10e: movq    %r14, %rdi
+;;  111: callq   0x2a6
+;;  116: ud2
+;;  118: xorl    %esi, %esi
+;;  11a: movq    %r14, %rdi
+;;  11d: callq   0x263
+;;  122: movq    %r14, %rdi
+;;  125: callq   0x2a6
+;;  12a: ud2
+;;  12c: ud2
+;;  12e: ud2
+;;  130: addb    %al, (%rax)
+;;  132: addb    %al, (%rax)
+;;  134: addb    %al, (%rax)
+;;  136: lock addb %al, (%r8)
+;;  13a: addb    %al, (%rax)
+;;  13c: addb    %al, (%rax)
+;;  13e: addb    %al, (%rax)

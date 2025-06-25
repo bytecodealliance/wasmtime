@@ -337,3 +337,32 @@ fn i31ref_table_copy() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn host_table_keep_type_registration() -> Result<()> {
+    let engine = Engine::default();
+    let mut store = Store::new(&engine, ());
+
+    let ty = FuncType::new(&engine, [], []);
+
+    let t = Table::new(
+        &mut store,
+        TableType::new(RefType::new(true, HeapType::ConcreteFunc(ty)), 1, None),
+        Ref::Func(None),
+    )?;
+
+    {
+        let _ty2 = FuncType::new(&engine, [ValType::I32], [ValType::I32]);
+        let ty = t.ty(&store);
+        let fty = ty.element().heap_type().unwrap_concrete_func();
+        assert!(fty.params().len() == 0);
+        assert!(fty.results().len() == 0);
+    }
+
+    let ty = t.ty(&store);
+    let fty = ty.element().heap_type().unwrap_concrete_func();
+    assert!(fty.params().len() == 0);
+    assert!(fty.results().len() == 0);
+
+    Ok(())
+}
