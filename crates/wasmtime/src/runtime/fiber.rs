@@ -404,18 +404,16 @@ fn resume_fiber_raw<'a>(
 ) -> Result<(), StoreFiberYield> {
     assert_eq!(store.id(), fiber.id);
 
-    struct Restore<'a> {
-        store: *mut StoreOpaque,
-        fiber: *mut StoreFiber<'a>,
+    struct Restore<'a, 'b> {
+        store: &'b mut StoreOpaque,
+        fiber: &'b mut StoreFiber<'a>,
         state: Option<PriorFiberResumeState>,
     }
 
-    impl Drop for Restore<'_> {
+    impl Drop for Restore<'_, '_> {
         fn drop(&mut self) {
-            unsafe {
-                (*self.fiber).state = Some(self.state.take().unwrap().replace());
-                (*self.store).swap_executor(&mut (*self.fiber).executor);
-            }
+            self.fiber.state = Some(unsafe { self.state.take().unwrap().replace() });
+            self.store.swap_executor(&mut self.fiber.executor);
         }
     }
     unsafe {
@@ -423,11 +421,11 @@ fn resume_fiber_raw<'a>(
         let prev = fiber.state.take().unwrap().replace();
         store.swap_executor(&mut fiber.executor);
         let restore = Restore {
-            store: &raw mut *store,
-            fiber: &raw mut *fiber,
+            store,
+            fiber,
             state: Some(prev),
         };
-        (*restore.fiber).fiber.as_ref().unwrap().resume(result)
+        restore.fiber.fiber.as_ref().unwrap().resume(result)
     }
 }
 
