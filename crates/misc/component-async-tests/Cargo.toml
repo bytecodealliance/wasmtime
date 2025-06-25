@@ -1,0 +1,38 @@
+[package]
+name = "component-async-tests"
+authors = ["The Wasmtime Project Developers"]
+license = "Apache-2.0 WITH LLVM-exception"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+futures = { workspace = true }
+env_logger = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = [
+  "fs",
+  "process",
+  "macros",
+  "rt-multi-thread",
+  "time",
+] }
+wasm-compose = { workspace = true }
+wasmparser = { workspace = true }
+wasmtime = { workspace = true, features = [
+  "default",
+  "pulley",
+  "cranelift",
+  "component-model-async",
+] }
+wasmtime-wasi = { workspace = true }
+
+[dev-dependencies]
+test-programs-artifacts = { workspace = true }
+bytes = { workspace = true }
+once_cell = { version = "1.12.0" }

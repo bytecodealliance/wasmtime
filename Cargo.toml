@@ -156,6 +156,7 @@ members = [
   "crates/bench-api",
   "crates/c-api/artifact",
   "crates/environ/fuzz",
+  "crates/misc/component-async-tests",
   "crates/test-programs",
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
@@ -304,6 +305,7 @@ test-programs-artifacts = { path = 'crates/test-programs/artifacts' }
 wasmtime-test-util = { path = "crates/test-util" }
 byte-array-literals = { path = "crates/wasi-preview1-component-adapter/byte-array-literals" }
 pulley-interpreter-fuzz = { path = 'pulley/fuzz' }
+component-async-tests = { path = "crates/misc/component-async-tests" }
 
 # Bytecode Alliance maintained dependencies:
 # ---------------------------

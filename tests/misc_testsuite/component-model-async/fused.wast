@@ -31,8 +31,7 @@
       (import "" "foo" (func $foo (param i32 i32) (result i32)))
       (func (export "run")
         block
-          (i32.store offset=0 (i32.const 1200) (i32.const 42))
-          (call $foo (i32.const 1200) (i32.const 1204))
+          (call $foo (i32.const 42) (i32.const 1204))
           (i32.eq (i32.load offset=0 (i32.const 1204)) (i32.const 42))
           br_if 0
           unreachable
@@ -51,8 +50,7 @@
   (func (export "run") (alias export $lowerer "run"))
 )
 
-;; TODO: this requires async support in `wasmtime-wast`:
-;;(assert_return (invoke "run"))
+(assert_return (invoke "run"))
 
 ;; async lower -> async lift with callback
 (component
@@ -85,8 +83,7 @@
       (import "" "foo" (func $foo (param i32 i32) (result i32)))
       (func (export "run")
         block
-          (i32.store offset=0 (i32.const 1200) (i32.const 42))
-          (call $foo (i32.const 1200) (i32.const 1204))
+          (call $foo (i32.const 42) (i32.const 1204))
           (i32.eq (i32.load offset=0 (i32.const 1204)) (i32.const 42))
           br_if 0
           unreachable
@@ -105,8 +102,7 @@
   (func (export "run") (alias export $lowerer "run"))
 )
 
-;; TODO: this requires async support in `wasmtime-wast`:
-;;(assert_return (invoke "run"))
+(assert_return (invoke "run"))
 
 ;; async lower -> sync lift
 (component
@@ -132,8 +128,7 @@
       (import "" "foo" (func $foo (param i32 i32) (result i32)))
       (func (export "run")
         block
-          (i32.store offset=0 (i32.const 1200) (i32.const 42))
-          (call $foo (i32.const 1200) (i32.const 1204))
+          (call $foo (i32.const 42) (i32.const 1204))
           (i32.eq (i32.load offset=0 (i32.const 1204)) (i32.const 42))
           br_if 0
           unreachable
@@ -152,8 +147,7 @@
   (func (export "run") (alias export $lowerer "run"))
 )
 
-;; TODO: this requires async support in `wasmtime-wast`:
-;;(assert_return (invoke "run"))
+(assert_return (invoke "run"))
 
 ;; sync lower -> async lift without callback
 (component
@@ -196,8 +190,7 @@
   (func (export "run") (alias export $lowerer "run"))
 )
 
-;; TODO: this requires async support in `wasmtime-wast`:
-;;(assert_return (invoke "run"))
+(assert_return (invoke "run"))
 
 ;; sync lower -> async lift with callback
 (component
@@ -244,5 +237,4 @@
   (func (export "run") (alias export $lowerer "run"))
 )
 
-;; TODO: this requires async support in `wasmtime-wast`:
-;;(assert_return (invoke "run"))
+(assert_return (invoke "run"))

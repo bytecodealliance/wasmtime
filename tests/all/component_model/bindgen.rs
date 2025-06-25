@@ -3,7 +3,7 @@
 use super::engine;
 use anyhow::Result;
 use wasmtime::{
-    Store,
+    Config, Engine, Store,
     component::{Component, Linker},
 };
 
@@ -60,6 +60,86 @@ mod no_imports {
         let no_imports = NoImports::instantiate(&mut non_send_store, &component, &linker)?;
         no_imports.call_bar(&mut non_send_store)?;
         no_imports.foo().call_foo(&mut non_send_store)?;
+        Ok(())
+    }
+}
+
+mod no_imports_concurrent {
+    use super::*;
+    use futures::{
+        FutureExt,
+        stream::{FuturesUnordered, TryStreamExt},
+    };
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo;
+
+            world no-imports {
+                export foo: interface {
+                    foo: func();
+                }
+
+                export bar: func();
+            }
+        ",
+        async: true,
+        concurrent_exports: true,
+    });
+
+    #[tokio::test]
+    async fn run() -> Result<()> {
+        let mut config = Config::new();
+        config.wasm_component_model_async(true);
+        config.async_support(true);
+        let engine = &Engine::new(&config)?;
+
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (core module $m
+                        (import "" "task.return" (func $task-return))
+                        (func (export "bar") (result i32)
+                            call $task-return
+                            i32.const 0
+                        )
+                        (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
+                    )
+                    (core func $task-return (canon task.return))
+                    (core instance $i (instantiate $m
+                        (with "" (instance (export "task.return" (func $task-return))))
+                    ))
+
+                    (func $f (export "bar")
+                        (canon lift (core func $i "bar") async (callback (func $i "callback")))
+                    )
+
+                    (instance $i (export "foo" (func $f)))
+                    (export "foo" (instance $i))
+                )
+            "#,
+        )?;
+
+        let linker = Linker::new(&engine);
+        let mut store = Store::new(&engine, ());
+        let instance = linker.instantiate_async(&mut store, &component).await?;
+        let no_imports = NoImports::new(&mut store, &instance)?;
+        let mut futures = FuturesUnordered::new();
+        futures.push(no_imports.call_bar(&mut store).boxed());
+        futures.push(no_imports.foo().call_foo(&mut store).boxed());
+        assert!(
+            instance
+                .run(&mut store, futures.try_next())
+                .await??
+                .is_some()
+        );
+        assert!(
+            instance
+                .run(&mut store, futures.try_next())
+                .await??
+                .is_some()
+        );
         Ok(())
     }
 }
@@ -123,6 +203,104 @@ mod one_import {
         let mut store = Store::new(&engine, MyImports::default());
         let one_import = OneImport::instantiate(&mut store, &component, &linker)?;
         one_import.call_bar(&mut store)?;
+        assert!(store.data().hit);
+        Ok(())
+    }
+}
+
+mod one_import_concurrent {
+    use super::*;
+    use wasmtime::component::{Accessor, HasData};
+
+    wasmtime::component::bindgen!({
+        inline: "
+            package foo:foo;
+
+            world no-imports {
+                import foo: interface {
+                    foo: func();
+                }
+
+                export bar: func();
+            }
+        ",
+        async: true,
+        concurrent_imports: true,
+        concurrent_exports: true,
+    });
+
+    #[tokio::test]
+    async fn run() -> Result<()> {
+        let mut config = Config::new();
+        config.wasm_component_model_async(true);
+        config.async_support(true);
+        let engine = &Engine::new(&config)?;
+
+        let component = Component::new(
+            &engine,
+            r#"
+                (component
+                    (import "foo" (instance $foo-instance
+                        (export "foo" (func))
+                    ))
+                    (core module $libc
+                        (memory (export "memory") 1)
+                    )
+                    (core instance $libc-instance (instantiate $libc))
+                    (core module $m
+                        (import "" "foo" (func $foo (param) (result i32)))
+                        (import "" "task.return" (func $task-return))
+                        (func (export "bar") (result i32)
+                            call $foo
+                            drop
+                            call $task-return
+                            i32.const 0
+                        )
+                        (func (export "callback") (param i32 i32 i32) (result i32) unreachable)
+                    )
+                    (core func $foo (canon lower (func $foo-instance "foo") async (memory $libc-instance "memory")))
+                    (core func $task-return (canon task.return))
+                    (core instance $i (instantiate $m
+                        (with "" (instance
+                            (export "task.return" (func $task-return))
+                            (export "foo" (func $foo))
+                        ))
+                    ))
+
+                    (func $f (export "bar")
+                        (canon lift (core func $i "bar") async (callback (func $i "callback")))
+                    )
+
+                    (instance $i (export "foo" (func $f)))
+                    (export "foo" (instance $i))
+                )
+            "#,
+        )?;
+
+        #[derive(Default)]
+        struct MyImports {
+            hit: bool,
+        }
+
+        impl HasData for MyImports {
+            type Data<'a> = &'a mut MyImports;
+        }
+
+        impl foo::HostConcurrent for MyImports {
+            async fn foo<T>(accessor: &mut Accessor<T, Self>) {
+                accessor.with(|mut view| view.get().hit = true);
+            }
+        }
+
+        impl foo::Host for MyImports {}
+
+        let mut linker = Linker::new(&engine);
+        foo::add_to_linker::<_, MyImports>(&mut linker, |x| x)?;
+        let mut store = Store::new(&engine, MyImports::default());
+        let instance = linker.instantiate_async(&mut store, &component).await?;
+        let no_imports = NoImports::new(&mut store, &instance)?;
+        let call = no_imports.call_bar(&mut store);
+        instance.run(&mut store, call).await??;
         assert!(store.data().hit);
         Ok(())
     }
