@@ -236,9 +236,11 @@ pub(crate) struct StoreFiber<'a> {
 
 impl StoreFiber<'_> {
     fn dispose(&mut self, store: &mut StoreOpaque) {
-        if !self.fiber.as_ref().unwrap().done() {
-            let result = resume_fiber_raw(store, self, Err(anyhow!("future dropped")));
-            debug_assert!(result.is_ok());
+        if let Some(fiber) = &mut self.fiber {
+            if !fiber.done() {
+                let result = resume_fiber(store, self, Err(anyhow!("future dropped")));
+                debug_assert!(result.is_ok());
+            }
         }
     }
 }
@@ -397,7 +399,7 @@ fn swap_mpk_states(mask: Option<ProtectionMask>) -> Option<ProtectionMask> {
 /// returned value; it will return `Err(yield_)` if the fiber suspended, where
 /// `yield_` indicates whether it released access to the store or not.  See
 /// `StoreFiber::fiber` for details.
-fn resume_fiber_raw<'a>(
+pub(crate) fn resume_fiber<'a>(
     store: &mut StoreOpaque,
     fiber: &mut StoreFiber<'a>,
     result: Result<()>,
@@ -416,7 +418,7 @@ fn resume_fiber_raw<'a>(
             self.store.swap_executor(&mut self.fiber.executor);
         }
     }
-    unsafe {
+    let result = unsafe {
         let _reset_suspend = Reset(fiber.suspend, *fiber.suspend);
         let prev = fiber.state.take().unwrap().replace();
         store.swap_executor(&mut fiber.executor);
@@ -426,7 +428,40 @@ fn resume_fiber_raw<'a>(
             state: Some(prev),
         };
         restore.fiber.fiber.as_ref().unwrap().resume(result)
+    };
+
+    match &result {
+        // The fiber has finished, so recycle its stack by disposing of the
+        // underlying fiber itself.
+        Ok(_) => {
+            let stack = fiber.fiber.take().map(|f| f.into_stack());
+            if let Some(stack) = stack {
+                store.deallocate_fiber_stack(stack);
+            }
+        }
+
+        // The fiber has not yet finished, so it stays as-is.
+        Err(_) => {
+            // If `Err` is returned that means the fiber suspended, so we
+            // propagate that here.
+            //
+            // An additional safety check is performed when leaving this
+            // function to help bolster the guarantees of `unsafe impl Send`
+            // above. Notably this future may get re-polled on a different
+            // thread. Wasmtime's thread-local state points to the stack,
+            // however, meaning that it would be incorrect to leave a pointer in
+            // TLS when this function returns. This function performs a runtime
+            // assert to verify that this is the case, notably that the one TLS
+            // pointer Wasmtime uses is not pointing anywhere within the
+            // stack. If it is then that's a bug indicating that TLS management
+            // in Wasmtime is incorrect.
+            if let Some(range) = fiber.fiber.as_ref().unwrap().stack().range() {
+                AsyncWasmCallState::assert_current_state_not_in_range(range);
+            }
+        }
     }
+
+    result
 }
 
 /// Create a new `StoreFiber` which runs the specified closure.
@@ -449,7 +484,7 @@ pub(crate) fn make_fiber<'a>(
             }
 
             // SAFETY: Per the documented contract for
-            // `resume_fiber_raw`, we've been given exclusive access to
+            // `resume_fiber`, we've been given exclusive access to
             // the store until we exit or yield it back to the resumer.
             let store_ref = unsafe { &mut *store };
             let suspend_ptr =
@@ -482,37 +517,6 @@ pub(crate) fn make_fiber<'a>(
         executor,
         id,
     })
-}
-
-/// See `resume_fiber_raw`
-pub(crate) fn resume_fiber(
-    store: &mut StoreOpaque,
-    fiber: &mut StoreFiber,
-    result: Result<()>,
-) -> Result<(), StoreFiberYield> {
-    match resume_fiber_raw(store, fiber, result) {
-        Ok(result) => Ok(result),
-        Err(yield_) => {
-            // If `Err` is returned that means the fiber suspended, so we
-            // propagate that here.
-            //
-            // An additional safety check is performed when leaving this
-            // function to help bolster the guarantees of `unsafe impl Send`
-            // above. Notably this future may get re-polled on a different
-            // thread. Wasmtime's thread-local state points to the stack,
-            // however, meaning that it would be incorrect to leave a pointer in
-            // TLS when this function returns. This function performs a runtime
-            // assert to verify that this is the case, notably that the one TLS
-            // pointer Wasmtime uses is not pointing anywhere within the
-            // stack. If it is then that's a bug indicating that TLS management
-            // in Wasmtime is incorrect.
-            if let Some(range) = fiber.fiber.as_ref().unwrap().stack().range() {
-                AsyncWasmCallState::assert_current_state_not_in_range(range);
-            }
-
-            Err(yield_)
-        }
-    }
 }
 
 /// Suspend the current fiber, optionally returning exclusive access to the
@@ -654,17 +658,11 @@ async fn on_fiber_raw<R: Send>(
 
     let (fiber, mut rx) = prepare_fiber(store.traitobj_mut(), func)?;
 
-    let mut fiber = FiberFuture {
+    FiberFuture {
         store,
         fiber: Some(fiber),
     }
     .await;
-
-    let stack = fiber.fiber.take().map(|f| f.into_stack());
-    drop(fiber);
-    if let Some(stack) = stack {
-        store.deallocate_fiber_stack(stack);
-    }
 
     Ok(rx.try_recv().unwrap().unwrap())
 }
