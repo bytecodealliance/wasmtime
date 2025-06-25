@@ -467,7 +467,6 @@
             Rcpss
             Rsqrtss
             Shufps
-            Pblendw
           ))
 
 (type RegMemImm extern
@@ -2713,11 +2712,7 @@
 
 ;; Helper for creating `pblendw` instructions.
 (decl x64_pblendw (Xmm XmmMem u8) Xmm)
-(rule 0 (x64_pblendw src1 src2 imm)
-      (xmm_rm_r_imm (SseOpcode.Pblendw) src1 src2 imm (OperandSize.Size32)))
-(rule 1 (x64_pblendw src1 src2 imm)
-      (if-let true (use_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vpblendw) src1 src2 imm))
+(rule (x64_pblendw src1 src2 imm) (x64_pblendw_rmi_or_avx src1 src2 imm))
 
 ;; Helper for creating `movsd`/`movss` instructions which create a new vector
 ;; register where the upper bits are from the first operand and the low
