@@ -204,7 +204,9 @@ pub mod display {
         write!(f, "callq *{op}")
     }
 
-    pub fn pseudo_op(imm: u8) -> &'static str {
+    /// Return the predicate string used for the immediate of a `cmp*`
+    /// instruction.
+    fn pred_as_str(imm: u8) -> &'static str {
         match imm {
             0 => "eq",
             1 => "lt",
@@ -214,52 +216,164 @@ pub mod display {
             5 => "nlt",
             6 => "nle",
             7 => "ord",
-            _ => panic!("not a valid immediate for pseudo op"),
+            _ => panic!("not a valid predicate for `cmp*`"),
+        }
+    }
+
+    pub fn cmpss_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpss_a<R>) -> fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m32 = inst.xmm_m32.to_string();
+        let pred = inst.imm8.value();
+        if pred > 7 {
+            let imm8 = inst.imm8.to_string();
+            write!(f, "cmpss {imm8}, {xmm_m32}, {xmm1}")
+        } else {
+            write!(f, "cmp{}ss {xmm_m32}, {xmm1}", pred_as_str(pred))
+        }
+    }
+
+    pub fn cmpsd_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpsd_a<R>) -> fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm_m64 = inst.xmm_m64.to_string();
+        let pred = inst.imm8.value();
+        if pred > 7 {
+            let imm8 = inst.imm8.to_string();
+            write!(f, "cmpsd {imm8}, {xmm_m64}, {xmm1}")
+        } else {
+            write!(f, "cmp{}sd {xmm_m64}, {xmm1}", pred_as_str(pred))
         }
     }
 
     pub fn cmpps_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpps_a<R>) -> fmt::Result {
         let xmm1 = inst.xmm1.to_string();
         let xmm_m128 = inst.xmm_m128.to_string();
-        let imm8 = inst.imm8.to_string();
-        if inst.imm8.value() > 7 {
-            return write!(f, "{} {imm8}, {xmm_m128}, {xmm1}", inst.mnemonic());
+        let pred = inst.imm8.value();
+        if pred > 7 {
+            let imm8 = inst.imm8.to_string();
+            write!(f, "cmpps {imm8}, {xmm_m128}, {xmm1}")
+        } else {
+            write!(f, "cmp{}ps {xmm_m128}, {xmm1}", pred_as_str(pred))
         }
-        let name = format!("cmp{}ps", pseudo_op(inst.imm8.value()));
-        write!(f, "{name} {xmm_m128}, {xmm1}")
-    }
-
-    pub fn cmpss_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpss_a<R>) -> fmt::Result {
-        let xmm1 = inst.xmm1.to_string();
-        let xmm_m32 = inst.xmm_m32.to_string();
-        let imm8 = inst.imm8.to_string();
-        if inst.imm8.value() > 7 {
-            return write!(f, "{} {imm8}, {xmm_m32}, {xmm1}", inst.mnemonic());
-        }
-        let name = format!("cmp{}ss", pseudo_op(inst.imm8.value()));
-        write!(f, "{name} {xmm_m32}, {xmm1}")
-    }
-
-    pub fn cmpsd_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmpsd_a<R>) -> fmt::Result {
-        let xmm1 = inst.xmm1.to_string();
-        let xmm_m64 = inst.xmm_m64.to_string();
-        let imm8 = inst.imm8.to_string();
-        if inst.imm8.value() > 7 {
-            return write!(f, "{} {imm8}, {xmm_m64}, {xmm1}", inst.mnemonic());
-        }
-        let name = format!("cmp{}sd", pseudo_op(inst.imm8.value()));
-        write!(f, "{name} {xmm_m64}, {xmm1}")
     }
 
     pub fn cmppd_a<R: Registers>(f: &mut fmt::Formatter, inst: &inst::cmppd_a<R>) -> fmt::Result {
         let xmm1 = inst.xmm1.to_string();
         let xmm_m128 = inst.xmm_m128.to_string();
-        let imm8 = inst.imm8.to_string();
-        if inst.imm8.value() > 7 {
-            return write!(f, "{} {imm8}, {xmm_m128}, {xmm1}", inst.mnemonic());
+        let pred = inst.imm8.value();
+        if pred > 7 {
+            let imm8 = inst.imm8.to_string();
+            write!(f, "cmppd {imm8}, {xmm_m128}, {xmm1}")
+        } else {
+            write!(f, "cmp{}pd {xmm_m128}, {xmm1}", pred_as_str(pred))
         }
-        let name = format!("cmp{}pd", pseudo_op(inst.imm8.value()));
-        write!(f, "{name} {xmm_m128}, {xmm1}")
+    }
+
+    /// Return the predicate string used for the immediate of a `vcmp*`
+    /// instruction; this is a more complex version of `pred_as_str`.
+    fn vex_pred_as_str(imm: u8) -> &'static str {
+        match imm {
+            0x0 => "eq",
+            0x1 => "lt",
+            0x2 => "le",
+            0x3 => "unord",
+            0x4 => "neq",
+            0x5 => "nlt",
+            0x6 => "nle",
+            0x7 => "ord",
+            0x8 => "eq_uq",
+            0x9 => "nge",
+            0xa => "ngt",
+            0xb => "false",
+            0xc => "neq_oq",
+            0xd => "ge",
+            0xe => "gt",
+            0xf => "true",
+            0x10 => "eq_os",
+            0x11 => "lt_oq",
+            0x12 => "le_oq",
+            0x13 => "unord_s",
+            0x14 => "neq_us",
+            0x15 => "nlt_uq",
+            0x16 => "nle_uq",
+            0x17 => "ord_s",
+            0x18 => "eq_us",
+            0x19 => "nge_uq",
+            0x1a => "ngt_uq",
+            0x1b => "false_os",
+            0x1c => "neq_os",
+            0x1d => "ge_oq",
+            0x1e => "gt_oq",
+            0x1f => "true_us",
+            _ => panic!("not a valid predicate for `cmp*`"),
+        }
+    }
+
+    pub fn vcmpss_b<R: Registers>(f: &mut fmt::Formatter, inst: &inst::vcmpss_b<R>) -> fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm2 = inst.xmm2.to_string();
+        let xmm_m32 = inst.xmm_m32.to_string();
+        let pred = inst.imm8.value();
+        if pred > 0x1f {
+            let imm8 = inst.imm8.to_string();
+            write!(f, "vcmpss {imm8}, {xmm_m32}, {xmm2}, {xmm1}")
+        } else {
+            write!(
+                f,
+                "vcmp{}ss {xmm_m32}, {xmm2}, {xmm1}",
+                vex_pred_as_str(pred)
+            )
+        }
+    }
+
+    pub fn vcmpsd_b<R: Registers>(f: &mut fmt::Formatter, inst: &inst::vcmpsd_b<R>) -> fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm2 = inst.xmm2.to_string();
+        let xmm_m64 = inst.xmm_m64.to_string();
+        let pred = inst.imm8.value();
+        if pred > 0x1f {
+            let imm8 = inst.imm8.to_string();
+            write!(f, "vcmpsd {imm8}, {xmm_m64}, {xmm2}, {xmm1}")
+        } else {
+            write!(
+                f,
+                "vcmp{}sd {xmm_m64}, {xmm2}, {xmm1}",
+                vex_pred_as_str(pred)
+            )
+        }
+    }
+
+    pub fn vcmpps_b<R: Registers>(f: &mut fmt::Formatter, inst: &inst::vcmpps_b<R>) -> fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm2 = inst.xmm2.to_string();
+        let xmm_m128 = inst.xmm_m128.to_string();
+        let pred = inst.imm8.value();
+        if pred > 0x1f {
+            let imm8 = inst.imm8.to_string();
+            write!(f, "vcmpps {imm8}, {xmm_m128}, {xmm2}, {xmm1}")
+        } else {
+            write!(
+                f,
+                "vcmp{}ps {xmm_m128}, {xmm2}, {xmm1}",
+                vex_pred_as_str(pred)
+            )
+        }
+    }
+
+    pub fn vcmppd_b<R: Registers>(f: &mut fmt::Formatter, inst: &inst::vcmppd_b<R>) -> fmt::Result {
+        let xmm1 = inst.xmm1.to_string();
+        let xmm2 = inst.xmm2.to_string();
+        let xmm_m128 = inst.xmm_m128.to_string();
+        let pred = inst.imm8.value();
+        if pred > 0x1f {
+            let imm8 = inst.imm8.to_string();
+            write!(f, "vcmppd {imm8}, {xmm_m128}, {xmm2}, {xmm1}")
+        } else {
+            write!(
+                f,
+                "vcmp{}pd {xmm_m128}, {xmm2}, {xmm1}",
+                vex_pred_as_str(pred)
+            )
+        }
     }
 
     pub fn nop_1b(f: &mut fmt::Formatter, _: &inst::nop_1b) -> fmt::Result {

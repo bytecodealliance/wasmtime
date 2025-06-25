@@ -142,28 +142,6 @@ fn check_sse_matches_avx(sse_inst: &Inst, avx_inst: &Inst) {
             ],
         ) => {}
         (
-            [
-                (Write, Reg(_) | RegMem(_) | Mem(_)),
-                (Read, Reg(_) | RegMem(_) | Mem(_)),
-            ],
-            [
-                (Write, Reg(_) | RegMem(_) | Mem(_)),
-                (Read, Reg(_) | RegMem(_) | Mem(_)),
-            ],
-        ) => {}
-        (
-            [
-                (Write, Reg(_) | RegMem(_)),
-                (Read, Reg(_) | RegMem(_)),
-                (Read, Imm(_)),
-            ],
-            [
-                (Write, Reg(_) | RegMem(_)),
-                (Read, Reg(_) | RegMem(_)),
-                (Read, Imm(_)),
-            ],
-        ) => {}
-        (
             [(ReadWrite, Reg(_)), (Read, RegMem(_)), (Read, Imm(_))],
             [
                 (Write, Reg(_)),
@@ -172,6 +150,34 @@ fn check_sse_matches_avx(sse_inst: &Inst, avx_inst: &Inst) {
                 (Read, Imm(_)),
             ],
         ) => {}
+        (
+            [(ReadWrite, Reg(_)), (Read, Imm(_))],
+            [(Write, Reg(_)), (Read, Reg(_)), (Read, Imm(_))],
+        ) => {}
+        // The following formats are identical.
+        (
+            [
+                (Write, Reg(_) | RegMem(_) | Mem(_)),
+                (Read, Reg(_) | RegMem(_) | Mem(_)),
+            ],
+            [
+                (Write, Reg(_) | RegMem(_) | Mem(_)),
+                (Read, Reg(_) | RegMem(_) | Mem(_)),
+            ],
+        ) => {}
+        (
+            [
+                (Write, Reg(_) | RegMem(_)),
+                (Read, Reg(_) | RegMem(_)),
+                (Read, Imm(_)),
+            ],
+            [
+                (Write, Reg(_) | RegMem(_)),
+                (Read, Reg(_) | RegMem(_)),
+                (Read, Imm(_)),
+            ],
+        ) => {}
+        ([(Read, Reg(_)), (Read, RegMem(_))], [(Read, Reg(_)), (Read, RegMem(_))]) => {}
         // We panic on other formats for now; feel free to add more patterns to
         // avoid this.
         _ => panic!(

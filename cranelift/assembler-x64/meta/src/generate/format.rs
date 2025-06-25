@@ -282,14 +282,31 @@ impl dsl::Format {
                     }
                 }
             },
-            [Reg(reg), Reg(rm)] | [Reg(reg), Reg(rm), Imm(_)] => {
-                assert!(!vex.is4);
-                fmtln!(f, "let reg = self.{reg}.enc();");
-                fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
-                fmtln!(f, "let vex = VexPrefix::two_op(reg, rm, {bits});");
-                ModRmStyle::Reg {
-                    reg: ModRmReg::Reg(*reg),
-                    rm: *rm,
+            [Reg(reg_or_vvvv), Reg(rm)] | [Reg(reg_or_vvvv), Reg(rm), Imm(_)] => {
+                match vex.unwrap_digit() {
+                    Some(digit) => {
+                        assert!(!vex.is4);
+                        let vvvv = reg_or_vvvv;
+                        fmtln!(f, "let reg = {digit:#x};");
+                        fmtln!(f, "let vvvv = self.{vvvv}.enc();");
+                        fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
+                        fmtln!(f, "let vex = VexPrefix::three_op(reg, vvvv, rm, {bits});");
+                        ModRmStyle::Reg {
+                            reg: ModRmReg::Digit(digit),
+                            rm: *rm,
+                        }
+                    }
+                    None => {
+                        assert!(!vex.is4);
+                        let reg = reg_or_vvvv;
+                        fmtln!(f, "let reg = self.{reg}.enc();");
+                        fmtln!(f, "let rm = self.{rm}.encode_bx_regs();");
+                        fmtln!(f, "let vex = VexPrefix::two_op(reg, rm, {bits});");
+                        ModRmStyle::Reg {
+                            reg: ModRmReg::Reg(*reg),
+                            rm: *rm,
+                        }
+                    }
                 }
             }
             [Reg(reg), Mem(rm)] | [Mem(rm), Reg(reg)] | [RegMem(rm), Reg(reg), Imm(_)] => {

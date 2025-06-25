@@ -4,6 +4,7 @@ use crate::dsl::{align, fmt, inst, r, rex, rw, vex, w};
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
     vec![
+        // Scalar arithmetic right shifts.
         inst("sarb", fmt("MC", [rw(rm8), r(cl)]), rex([0xD2]).digit(7), _64b | compat),
         inst("sarb", fmt("MI", [rw(rm8), r(imm8)]), rex([0xC0]).digit(7).ib(), _64b | compat),
         inst("sarb", fmt("M1", [rw(rm8)]), rex([0xD0]).digit(7).ib(), _64b | compat).custom(Display),
@@ -16,6 +17,7 @@ pub fn list() -> Vec<Inst> {
         inst("sarq", fmt("MC", [rw(rm64), r(cl)]), rex([0xD3]).digit(7).w(), _64b),
         inst("sarq", fmt("MI", [rw(rm64), r(imm8)]), rex([0xC1]).digit(7).ib().w(), _64b),
         inst("sarq", fmt("M1", [rw(rm64)]), rex([0xD1]).digit(7).ib().w(), _64b).custom(Display),
+        // Scalar logical left shifts.
         inst("shlb", fmt("MC", [rw(rm8), r(cl)]), rex([0xD2]).digit(4), _64b | compat),
         inst("shlb", fmt("MI", [rw(rm8), r(imm8)]), rex([0xC0]).digit(4).ib(), _64b | compat),
         inst("shlb", fmt("M1", [rw(rm8)]), rex([0xD0]).digit(4).ib(), _64b | compat).custom(Display),
@@ -28,6 +30,7 @@ pub fn list() -> Vec<Inst> {
         inst("shlq", fmt("MC", [rw(rm64), r(cl)]), rex([0xD3]).digit(4).w(), _64b),
         inst("shlq", fmt("MI", [rw(rm64), r(imm8)]), rex([0xC1]).digit(4).ib().w(), _64b),
         inst("shlq", fmt("M1", [rw(rm64)]), rex([0xD1]).digit(4).ib().w(), _64b).custom(Display),
+        // Scalar logical right shifts.
         inst("shrb", fmt("MC", [rw(rm8), r(cl)]), rex([0xD2]).digit(5), _64b | compat),
         inst("shrb", fmt("MI", [rw(rm8), r(imm8)]), rex([0xC0]).digit(5).ib(), _64b | compat),
         inst("shrb", fmt("M1", [rw(rm8)]), rex([0xD0]).digit(5).ib(), _64b | compat).custom(Display),
@@ -83,22 +86,38 @@ pub fn list() -> Vec<Inst> {
         inst("rorxq", fmt("RMI", [w(r64), r(rm64), r(imm8)]), vex(LZ)._f2()._0f3a().w1().op(0xF0).r().ib(), _64b | bmi2),
 
         // Vector instructions (shift left).
-        inst("psllw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF1]).r(), _64b | compat | sse2),
-        inst("psllw", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x71]).digit(6).ib(), _64b | compat | sse2),
-        inst("pslld", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF2]).r(), _64b | compat | sse2),
-        inst("pslld", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x72]).digit(6).ib(), _64b | compat | sse2),
-        inst("psllq", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF3]).r(), _64b | compat | sse2),
-        inst("psllq", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x73]).digit(6).ib(), _64b | compat | sse2),
+        inst("psllw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF1]).r(), _64b | compat | sse2).alt(avx, "vpsllw_c"),
+        inst("psllw", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x71]).digit(6).ib(), _64b | compat | sse2).alt(avx, "vpsllw_d"),
+        inst("pslld", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF2]).r(), _64b | compat | sse2).alt(avx, "vpslld_c"),
+        inst("pslld", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x72]).digit(6).ib(), _64b | compat | sse2).alt(avx, "vpslld_d"),
+        inst("psllq", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF3]).r(), _64b | compat | sse2).alt(avx, "vpsllq_c"),
+        inst("psllq", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x73]).digit(6).ib(), _64b | compat | sse2).alt(avx, "vpsllq_d"),
+        inst("vpsllw", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xF1).r(), _64b | compat | avx),
+        inst("vpsllw", fmt("D", [w(xmm1), r(xmm2), r(imm8)]), vex(L128)._66()._0f().op(0x71).digit(6).ib(), _64b | compat | avx),
+        inst("vpslld", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xF2).r(), _64b | compat | avx),
+        inst("vpslld", fmt("D", [w(xmm1), r(xmm2), r(imm8)]), vex(L128)._66()._0f().op(0x72).digit(6).ib(), _64b | compat | avx),
+        inst("vpsllq", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xF3).r(), _64b | compat | avx),
+        inst("vpsllq", fmt("D", [w(xmm1), r(xmm2), r(imm8)]), vex(L128)._66()._0f().op(0x73).digit(6).ib(), _64b | compat | avx),
         // Vector instructions (shift right).
-        inst("psraw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xE1]).r(), _64b | compat | sse2),
-        inst("psraw", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x71]).digit(4).ib(), _64b | compat | sse2),
-        inst("psrad", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xE2]).r(), _64b | compat | sse2),
-        inst("psrad", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x72]).digit(4).ib(), _64b | compat | sse2),
-        inst("psrlw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD1]).r(), _64b | compat | sse2),
-        inst("psrlw", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x71]).digit(2).ib(), _64b | compat | sse2),
-        inst("psrld", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD2]).r(), _64b | compat | sse2),
-        inst("psrld", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x72]).digit(2).ib(), _64b | compat | sse2),
-        inst("psrlq", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD3]).r(), _64b | compat | sse2),
-        inst("psrlq", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x73]).digit(2).ib(), _64b | compat | sse2),
+        inst("psraw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xE1]).r(), _64b | compat | sse2).alt(avx, "vpsraw_c"),
+        inst("psraw", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x71]).digit(4).ib(), _64b | compat | sse2).alt(avx, "vpsraw_d"),
+        inst("psrad", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xE2]).r(), _64b | compat | sse2).alt(avx, "vpsrad_c"),
+        inst("psrad", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x72]).digit(4).ib(), _64b | compat | sse2).alt(avx, "vpsrad_d"),
+        inst("psrlw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD1]).r(), _64b | compat | sse2).alt(avx, "vpsrlw_c"),
+        inst("psrlw", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x71]).digit(2).ib(), _64b | compat | sse2).alt(avx, "vpsrlw_d"),
+        inst("psrld", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD2]).r(), _64b | compat | sse2).alt(avx, "vpsrld_c"),
+        inst("psrld", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x72]).digit(2).ib(), _64b | compat | sse2).alt(avx, "vpsrld_d"),
+        inst("psrlq", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD3]).r(), _64b | compat | sse2).alt(avx, "vpsrlq_c"),
+        inst("psrlq", fmt("B", [rw(xmm1), r(imm8)]), rex([0x66, 0x0F, 0x73]).digit(2).ib(), _64b | compat | sse2).alt(avx, "vpsrlq_d"),
+        inst("vpsraw", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xE1).r(), _64b | compat | avx),
+        inst("vpsraw", fmt("D", [w(xmm1), r(xmm2), r(imm8)]), vex(L128)._66()._0f().op(0x71).digit(4).ib(), _64b | compat | avx),
+        inst("vpsrad", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xE2).r(), _64b | compat | avx),
+        inst("vpsrad", fmt("D", [w(xmm1), r(xmm2), r(imm8)]), vex(L128)._66()._0f().op(0x72).digit(4).ib(), _64b | compat | avx),
+        inst("vpsrlw", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xD1).r(), _64b | compat | avx),
+        inst("vpsrlw", fmt("D", [w(xmm1), r(xmm2), r(imm8)]), vex(L128)._66()._0f().op(0x71).digit(2).ib(), _64b | compat | avx),
+        inst("vpsrld", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xD2).r(), _64b | compat | avx),
+        inst("vpsrld", fmt("D", [w(xmm1), r(xmm2), r(imm8)]), vex(L128)._66()._0f().op(0x72).digit(2).ib(), _64b | compat | avx),
+        inst("vpsrlq", fmt("C", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xD3).r(), _64b | compat | avx),
+        inst("vpsrlq", fmt("D", [w(xmm1), r(xmm2), r(imm8)]), vex(L128)._66()._0f().op(0x73).digit(2).ib(), _64b | compat | avx),
     ]
 }
