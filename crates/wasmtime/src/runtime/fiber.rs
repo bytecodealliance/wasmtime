@@ -556,10 +556,20 @@ pub(crate) async fn on_fiber<R: Send + Sync>(
     store: &mut StoreOpaque,
     func: impl FnOnce(&mut StoreOpaque) -> R + Send + Sync,
 ) -> Result<R> {
-    on_fiber_raw(store.traitobj_mut(), move |store| {
-        func((*store).store_opaque_mut())
-    })
-    .await
+    let config = store.engine().config();
+    debug_assert!(store.async_support());
+    debug_assert!(config.async_stack_size > 0);
+
+    let mut result = None;
+    let fiber = make_fiber(store.traitobj_mut(), |store| result = Some(func(store)))?;
+
+    FiberFuture {
+        store,
+        fiber: Some(fiber),
+    }
+    .await;
+
+    Ok(result.unwrap())
 }
 
 struct FiberFuture<'a, 'b> {
@@ -629,26 +639,4 @@ impl Drop for FiberFuture<'_, '_> {
             fiber.dispose(self.store);
         }
     }
-}
-
-/// Run the specified function on a newly-created fiber and `.await` its
-/// completion.
-async fn on_fiber_raw<R: Send + Sync>(
-    store: &mut StoreOpaque,
-    func: impl FnOnce(&mut dyn VMStore) -> R + Send + Sync,
-) -> Result<R> {
-    let config = store.engine().config();
-    debug_assert!(store.async_support());
-    debug_assert!(config.async_stack_size > 0);
-
-    let mut result = None;
-    let fiber = make_fiber(store.traitobj_mut(), |store| result = Some(func(store)))?;
-
-    FiberFuture {
-        store,
-        fiber: Some(fiber),
-    }
-    .await;
-
-    Ok(result.unwrap())
 }
