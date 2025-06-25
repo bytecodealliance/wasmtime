@@ -51,7 +51,7 @@ pub(crate) struct AsyncState {
     /// The `Suspend` for the current fiber (or null if no such fiber is running).
     ///
     /// See `StoreFiber` for an explanation of the signature types we use here.
-    current_suspend: *mut Suspend<Result<()>, StoreFiberYield, Result<()>>,
+    current_suspend: *mut Suspend<Result<()>, StoreFiberYield, ()>,
 
     /// See `PollContext`
     current_poll_cx: PollContext,
@@ -94,7 +94,7 @@ unsafe impl Sync for AsyncState {}
 /// Used to "stackfully" poll a future by suspending the current fiber
 /// repeatedly in a loop until the future completes.
 pub(crate) struct AsyncCx {
-    current_suspend: *mut *mut wasmtime_fiber::Suspend<Result<()>, StoreFiberYield, Result<()>>,
+    current_suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, ()>,
     current_stack_limit: *mut usize,
     current_poll_cx: *mut PollContext,
 }
@@ -222,14 +222,14 @@ pub(crate) struct StoreFiber<'a> {
     ///
     /// Note also that every `StoreFiber` is implicitly granted exclusive access
     /// to the store when it is resumed.
-    fiber: Option<Fiber<'a, Result<()>, StoreFiberYield, Result<()>>>,
+    fiber: Option<Fiber<'a, Result<()>, StoreFiberYield, ()>>,
     /// See `FiberResumeState`
     state: Option<FiberResumeState>,
     /// The Wasmtime `Engine` to which this fiber belongs.
     engine: Engine,
     /// The current `Suspend` for this fiber (or null if it's not currently
     /// running).
-    suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, Result<()>>,
+    suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, ()>,
     executor: Executor,
     id: StoreId,
 }
@@ -401,7 +401,7 @@ fn resume_fiber_raw<'a>(
     store: &mut StoreOpaque,
     fiber: &mut StoreFiber<'a>,
     result: Result<()>,
-) -> Result<Result<()>, StoreFiberYield> {
+) -> Result<(), StoreFiberYield> {
     assert_eq!(store.id(), fiber.id);
 
     struct Restore<'a> {
@@ -434,7 +434,7 @@ fn resume_fiber_raw<'a>(
 /// Create a new `StoreFiber` which runs the specified closure.
 pub(crate) fn make_fiber<'a>(
     store: &mut dyn VMStore,
-    fun: impl FnOnce(&mut dyn VMStore) -> Result<()> + Send + Sync + 'a,
+    fun: impl FnOnce(&mut dyn VMStore) + Send + Sync + 'a,
 ) -> Result<StoreFiber<'a>> {
     let engine = store.engine().clone();
     let executor = Executor::new(&engine);
@@ -445,31 +445,31 @@ pub(crate) fn make_fiber<'a>(
     let store = &raw mut *store;
     Ok(StoreFiber {
         fiber: Some(Fiber::new(stack, move |result: Result<()>, suspend| {
+            // Cancelled before we started? Just return.
             if result.is_err() {
-                result
-            } else {
-                // SAFETY: Per the documented contract for
-                // `resume_fiber_raw`, we've been given exclusive access to
-                // the store until we exit or yield it back to the resumer.
-                let store_ref = unsafe { &mut *store };
-                let suspend_ptr = unsafe {
-                    &raw mut (*store_ref.store_opaque_mut().async_state()).current_suspend
-                };
-                // Configure our store's suspension context for the rest of the
-                // execution of this fiber. Note that a raw pointer is stored here
-                // which is only valid for the duration of this closure.
-                // Consequently we at least replace it with the previous value when
-                // we're done. This reset is also required for correctness because
-                // otherwise our value will overwrite another active fiber's value.
-                // There should be a test that segfaults in `async_functions.rs` if
-                // this `Reset` is removed.
-                //
-                // SAFETY: The resumer is responsible for setting
-                // `current_suspend` to a valid pointer.
-                let _reset = Reset(suspend_ptr, unsafe { *suspend_ptr });
-                unsafe { *suspend_ptr = suspend };
-                fun(store_ref)
+                return;
             }
+
+            // SAFETY: Per the documented contract for
+            // `resume_fiber_raw`, we've been given exclusive access to
+            // the store until we exit or yield it back to the resumer.
+            let store_ref = unsafe { &mut *store };
+            let suspend_ptr =
+                unsafe { &raw mut (*store_ref.store_opaque_mut().async_state()).current_suspend };
+            // Configure our store's suspension context for the rest of the
+            // execution of this fiber. Note that a raw pointer is stored here
+            // which is only valid for the duration of this closure.
+            // Consequently we at least replace it with the previous value when
+            // we're done. This reset is also required for correctness because
+            // otherwise our value will overwrite another active fiber's value.
+            // There should be a test that segfaults in `async_functions.rs` if
+            // this `Reset` is removed.
+            //
+            // SAFETY: The resumer is responsible for setting
+            // `current_suspend` to a valid pointer.
+            let _reset = Reset(suspend_ptr, unsafe { *suspend_ptr });
+            unsafe { *suspend_ptr = suspend };
+            fun(store_ref)
         })?),
         state: Some(FiberResumeState {
             tls: crate::runtime::vm::AsyncWasmCallState::new(),
@@ -491,7 +491,7 @@ pub(crate) fn resume_fiber(
     store: &mut StoreOpaque,
     fiber: &mut StoreFiber,
     result: Result<()>,
-) -> Result<Result<()>, StoreFiberYield> {
+) -> Result<(), StoreFiberYield> {
     match resume_fiber_raw(store, fiber, result) {
         Ok(result) => Ok(result),
         Err(yield_) => {
@@ -524,7 +524,7 @@ pub(crate) fn resume_fiber(
 /// is provided, the fiber must give up access to the store until it is given
 /// back access when next resumed.
 unsafe fn suspend_fiber(
-    suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, Result<()>>,
+    suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, ()>,
     stack_limit: *mut usize,
     yield_: StoreFiberYield,
 ) -> Result<()> {
@@ -570,7 +570,6 @@ fn prepare_fiber<'a, R: Send + 'a>(
     let fiber = make_fiber(store, {
         move |store| {
             _ = tx.send(func(store));
-            Ok(())
         }
     })?;
     Ok((fiber, rx))
@@ -582,7 +581,7 @@ struct FiberFuture<'a, 'b> {
 }
 
 impl<'b> Future for FiberFuture<'_, 'b> {
-    type Output = Result<StoreFiber<'b>>;
+    type Output = StoreFiber<'b>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let me = self.get_mut();
@@ -628,7 +627,7 @@ impl<'b> Future for FiberFuture<'_, 'b> {
 
         let mut fiber = Some(fiber);
         match resume_fiber(me.store, fiber.as_mut().unwrap(), Ok(())) {
-            Ok(result) => Poll::Ready(result.map(|()| fiber.take().unwrap())),
+            Ok(()) => Poll::Ready(fiber.take().unwrap()),
             Err(_) => {
                 me.fiber = fiber;
                 Poll::Pending
@@ -661,7 +660,7 @@ async fn on_fiber_raw<R: Send>(
         store,
         fiber: Some(fiber),
     }
-    .await?;
+    .await;
 
     let stack = fiber.fiber.take().map(|f| f.into_stack());
     drop(fiber);
