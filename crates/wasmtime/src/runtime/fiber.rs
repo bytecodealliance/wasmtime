@@ -10,7 +10,6 @@ use core::ops::Range;
 use core::pin::Pin;
 use core::ptr;
 use core::task::{Context, Poll};
-use futures::channel::oneshot;
 use wasmtime_fiber::{Fiber, Suspend};
 
 /// Helper struct for reseting a raw pointer to its original value on drop.
@@ -553,7 +552,7 @@ unsafe fn suspend_fiber(
 
 /// Run the specified function on a newly-created fiber and `.await` its
 /// completion.
-pub(crate) async fn on_fiber<R: Send>(
+pub(crate) async fn on_fiber<R: Send + Sync>(
     store: &mut StoreOpaque,
     func: impl FnOnce(&mut StoreOpaque) -> R + Send + Sync,
 ) -> Result<R> {
@@ -561,20 +560,6 @@ pub(crate) async fn on_fiber<R: Send>(
         func((*store).store_opaque_mut())
     })
     .await
-}
-
-/// Wrap the specified function in a fiber and return it.
-fn prepare_fiber<'a, R: Send + 'a>(
-    store: &mut dyn VMStore,
-    func: impl FnOnce(&mut dyn VMStore) -> R + Send + Sync + 'a,
-) -> Result<(StoreFiber<'a>, oneshot::Receiver<R>)> {
-    let (tx, rx) = oneshot::channel();
-    let fiber = make_fiber(store, {
-        move |store| {
-            _ = tx.send(func(store));
-        }
-    })?;
-    Ok((fiber, rx))
 }
 
 struct FiberFuture<'a, 'b> {
@@ -648,7 +633,7 @@ impl Drop for FiberFuture<'_, '_> {
 
 /// Run the specified function on a newly-created fiber and `.await` its
 /// completion.
-async fn on_fiber_raw<R: Send>(
+async fn on_fiber_raw<R: Send + Sync>(
     store: &mut StoreOpaque,
     func: impl FnOnce(&mut dyn VMStore) -> R + Send + Sync,
 ) -> Result<R> {
@@ -656,7 +641,8 @@ async fn on_fiber_raw<R: Send>(
     debug_assert!(store.async_support());
     debug_assert!(config.async_stack_size > 0);
 
-    let (fiber, mut rx) = prepare_fiber(store.traitobj_mut(), func)?;
+    let mut result = None;
+    let fiber = make_fiber(store.traitobj_mut(), |store| result = Some(func(store)))?;
 
     FiberFuture {
         store,
@@ -664,5 +650,5 @@ async fn on_fiber_raw<R: Send>(
     }
     .await;
 
-    Ok(rx.try_recv().unwrap().unwrap())
+    Ok(result.unwrap())
 }

@@ -135,6 +135,7 @@ where
     ) -> Result<Results>
     where
         Params: Sync,
+        Results: Sync,
     {
         let mut store = store.as_context_mut();
         assert!(
