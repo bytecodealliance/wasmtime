@@ -188,7 +188,25 @@ impl AsyncCx {
     /// SAFETY: `self` contains pointers into the `Store` with which it was
     /// created and must not be used after that `Store` has been disposed.
     pub(crate) unsafe fn suspend(&self, yield_: StoreFiberYield) -> Result<()> {
-        unsafe { suspend_fiber(self.current_suspend, self.current_stack_limit, yield_) }
+        // Take our current `Suspend` context which was configured as soon as our
+        // fiber started. Note that we must load it at the front here and save it on
+        // our stack frame. While we're polling the future other fibers may be
+        // started for recursive computations, and the current suspend context is
+        // only preserved at the edges of the fiber, not during the fiber itself.
+        //
+        // For a little bit of extra safety we also replace the current value with
+        // null to try to catch any accidental bugs on our part early.  This is all
+        // pretty unsafe so we're trying to be careful...
+        //
+        // Note that there should be a segfaulting test in `async_functions.rs` if
+        // this `Reset` is removed.
+        unsafe {
+            let reset_suspend = Reset(self.current_suspend, *self.current_suspend);
+            *self.current_suspend = ptr::null_mut();
+            let _reset_stack_limit = Reset(self.current_stack_limit, *self.current_stack_limit);
+            assert!(!(reset_suspend.1).is_null());
+            (*reset_suspend.1).suspend(yield_)
+        }
     }
 }
 
@@ -516,38 +534,6 @@ pub(crate) fn make_fiber<'a>(
         executor,
         id,
     })
-}
-
-/// Suspend the current fiber, optionally returning exclusive access to the
-/// specified store to the code which resumed the fiber.
-///
-/// SAFETY: `suspend` must be a valid pointer.  Additionally, if a store pointer
-/// is provided, the fiber must give up access to the store until it is given
-/// back access when next resumed.
-unsafe fn suspend_fiber(
-    suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, ()>,
-    stack_limit: *mut usize,
-    yield_: StoreFiberYield,
-) -> Result<()> {
-    // Take our current `Suspend` context which was configured as soon as our
-    // fiber started. Note that we must load it at the front here and save it on
-    // our stack frame. While we're polling the future other fibers may be
-    // started for recursive computations, and the current suspend context is
-    // only preserved at the edges of the fiber, not during the fiber itself.
-    //
-    // For a little bit of extra safety we also replace the current value with
-    // null to try to catch any accidental bugs on our part early.  This is all
-    // pretty unsafe so we're trying to be careful...
-    //
-    // Note that there should be a segfaulting test in `async_functions.rs` if
-    // this `Reset` is removed.
-    unsafe {
-        let reset_suspend = Reset(suspend, *suspend);
-        *suspend = ptr::null_mut();
-        let _reset_stack_limit = Reset(stack_limit, *stack_limit);
-        assert!(!(reset_suspend.1).is_null());
-        (*reset_suspend.1).suspend(yield_)
-    }
 }
 
 /// Run the specified function on a newly-created fiber and `.await` its
