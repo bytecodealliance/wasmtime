@@ -223,35 +223,6 @@ fn test_x64_emit() {
     // JmpCondCompound isn't a real instruction
 
     // ========================================================
-    // JmpUnknown
-    insns.push((Inst::jmp_unknown(RegMem::reg(rbp)), "FFE5", "jmp     *%rbp"));
-    insns.push((
-        Inst::jmp_unknown(RegMem::reg(r11)),
-        "41FFE3",
-        "jmp     *%r11",
-    ));
-    insns.push((
-        Inst::jmp_unknown(RegMem::mem(Amode::imm_reg_reg_shift(
-            321,
-            Gpr::unwrap_new(rsi),
-            Gpr::unwrap_new(rcx),
-            3,
-        ))),
-        "FFA4CE41010000",
-        "jmp     *321(%rsi,%rcx,8)",
-    ));
-    insns.push((
-        Inst::jmp_unknown(RegMem::mem(Amode::imm_reg_reg_shift(
-            321,
-            Gpr::unwrap_new(r10),
-            Gpr::unwrap_new(rdx),
-            2,
-        ))),
-        "41FFA49241010000",
-        "jmp     *321(%r10,%rdx,4)",
-    ));
-
-    // ========================================================
     // XMM_RM_R: Integer Packed
 
     insns.push((

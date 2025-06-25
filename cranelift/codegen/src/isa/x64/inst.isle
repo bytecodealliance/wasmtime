@@ -196,9 +196,6 @@
                     (default_target MachLabel)
                     (targets BoxVecMachLabel))
 
-       ;; Indirect jump: jmpq (reg mem).
-       (JmpUnknown (target RegMem))
-
        ;; Traps if the condition code is set.
        (TrapIf (cc CC)
                (trap_code TrapCode))

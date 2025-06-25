@@ -579,6 +579,12 @@ pub mod display {
             GprMem::Mem(_) => write!(f, "{mnemonic} {reg}"),
         }
     }
+
+    pub fn jmpq_m<R: Registers>(f: &mut fmt::Formatter<'_>, jmp: &inst::jmpq_m<R>) -> fmt::Result {
+        let inst::jmpq_m { rm64 } = jmp;
+        let rm64 = rm64.to_string(Size::Quadword);
+        write!(f, "jmpq *{rm64}")
+    }
 }
 
 pub mod visit {

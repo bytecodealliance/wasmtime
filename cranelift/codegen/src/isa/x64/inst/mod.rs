@@ -87,7 +87,6 @@ impl Inst {
             | Inst::WinchJmpIf { .. }
             | Inst::JmpKnown { .. }
             | Inst::JmpTableSeq { .. }
-            | Inst::JmpUnknown { .. }
             | Inst::LoadExtName { .. }
             | Inst::MovFromPReg { .. }
             | Inst::MovToPReg { .. }
@@ -309,11 +308,6 @@ impl Inst {
 
     pub(crate) fn jmp_known(dst: MachLabel) -> Inst {
         Inst::JmpKnown { dst }
-    }
-
-    pub(crate) fn jmp_unknown(target: RegMem) -> Inst {
-        target.assert_regclass_is(RegClass::Int);
-        Inst::JmpUnknown { target }
     }
 
     /// Choose which instruction to use for loading a register value from memory. For loads smaller
@@ -815,12 +809,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {idx}, {tmp1}, {tmp2}")
             }
 
-            Inst::JmpUnknown { target } => {
-                let target = target.pretty_print(8);
-                let op = ljustify("jmp".to_string());
-                format!("{op} *{target}")
-            }
-
             Inst::TrapIf { cc, trap_code, .. } => {
                 format!("j{cc} #trap={trap_code}")
             }
@@ -1204,10 +1192,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             // tmp2 is only written after idx is read, so it doesn't need to be
             // an early def.
             collector.reg_def(tmp2);
-        }
-
-        Inst::JmpUnknown { target } => {
-            target.get_operands(collector);
         }
 
         Inst::LoadExtName { dst, .. } => {
