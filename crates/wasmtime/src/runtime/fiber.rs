@@ -94,7 +94,6 @@ unsafe impl Sync for AsyncState {}
 /// repeatedly in a loop until the future completes.
 pub(crate) struct AsyncCx {
     current_suspend: *mut *mut Suspend<Result<()>, StoreFiberYield, ()>,
-    current_stack_limit: *mut usize,
     current_poll_cx: *mut PollContext,
 }
 
@@ -118,7 +117,6 @@ impl AsyncCx {
         } else {
             Some(Self {
                 current_suspend: unsafe { &raw mut (*store.async_state()).current_suspend },
-                current_stack_limit: store.vm_store_context().stack_limit.get(),
                 current_poll_cx,
             })
         }
@@ -203,7 +201,6 @@ impl AsyncCx {
         unsafe {
             let reset_suspend = Reset(self.current_suspend, *self.current_suspend);
             *self.current_suspend = ptr::null_mut();
-            let _reset_stack_limit = Reset(self.current_stack_limit, *self.current_stack_limit);
             assert!(!(reset_suspend.1).is_null());
             (*reset_suspend.1).suspend(yield_)
         }
@@ -374,13 +371,26 @@ struct FiberResumeState {
     /// the current mask when this function is called and then restore the mask
     /// when the function returns (aka the fiber suspends).
     mpk: Option<ProtectionMask>,
+
+    /// The current wasm stack limit, if in use.
+    ///
+    /// This field stores the old of `VMStoreContext::stack_limit` that this
+    /// fiber should be using during its execution. This is saved/restored when
+    /// a fiber is suspended/resumed to ensure that when there are multiple
+    /// fibers within the store they all maintain an appropriate fiber-relative
+    /// stack limit.
+    stack_limit: usize,
 }
 
 impl FiberResumeState {
-    unsafe fn replace(self) -> PriorFiberResumeState {
+    unsafe fn replace(self, store: &mut StoreOpaque) -> PriorFiberResumeState {
         let tls = unsafe { self.tls.push() };
         let mpk = swap_mpk_states(self.mpk);
-        PriorFiberResumeState { tls, mpk }
+        PriorFiberResumeState {
+            tls,
+            mpk,
+            stack_limit: store.replace_stack_limit(self.stack_limit),
+        }
     }
 
     fn dispose(self) {
@@ -388,16 +398,33 @@ impl FiberResumeState {
     }
 }
 
+impl StoreOpaque {
+    /// Helper function to swap the `stack_limit` field in the `VMStoreContext`
+    /// within this store.
+    fn replace_stack_limit(&mut self, stack_limit: usize) -> usize {
+        // SAFETY: the `VMStoreContext` points to within this store itself but
+        // is accessed through raw pointers to assist with Miri. The `&mut
+        // StoreOpaque` passed to this function shows that this has permission
+        // to mutate state in the store, however.
+        unsafe { mem::replace(&mut *self.vm_store_context().stack_limit.get(), stack_limit) }
+    }
+}
+
 struct PriorFiberResumeState {
     tls: crate::runtime::vm::PreviousAsyncWasmCallState,
     mpk: Option<ProtectionMask>,
+    stack_limit: usize,
 }
 
 impl PriorFiberResumeState {
-    unsafe fn replace(self) -> FiberResumeState {
+    unsafe fn replace(self, store: &mut StoreOpaque) -> FiberResumeState {
         let tls = unsafe { self.tls.restore() };
         let mpk = swap_mpk_states(self.mpk);
-        FiberResumeState { tls, mpk }
+        FiberResumeState {
+            tls,
+            mpk,
+            stack_limit: store.replace_stack_limit(self.stack_limit),
+        }
     }
 }
 
@@ -431,13 +458,13 @@ pub(crate) fn resume_fiber<'a>(
 
     impl Drop for Restore<'_, '_> {
         fn drop(&mut self) {
-            self.fiber.state = Some(unsafe { self.state.take().unwrap().replace() });
+            self.fiber.state = Some(unsafe { self.state.take().unwrap().replace(self.store) });
             self.store.swap_executor(&mut self.fiber.executor);
         }
     }
     let result = unsafe {
         let _reset_suspend = Reset(fiber.suspend, *fiber.suspend);
-        let prev = fiber.state.take().unwrap().replace();
+        let prev = fiber.state.take().unwrap().replace(store);
         store.swap_executor(&mut fiber.executor);
         let restore = Restore {
             store,
@@ -528,6 +555,7 @@ pub(crate) fn make_fiber<'a>(
             } else {
                 None
             },
+            stack_limit: usize::MAX,
         }),
         engine,
         suspend,
