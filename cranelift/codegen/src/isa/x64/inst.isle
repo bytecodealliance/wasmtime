@@ -2984,18 +2984,6 @@
       (if-let true (use_avx))
       (xmm_rmr_imm_vex (AvxOpcode.Vshufps) src1 src2 byte))
 
-;; Helper for creating `pabsb` instructions.
-(decl x64_pabsb (XmmMem) Xmm)
-(rule (x64_pabsb src) (x64_pabsb_a_or_avx src))
-
-;; Helper for creating `pabsw` instructions.
-(decl x64_pabsw (XmmMem) Xmm)
-(rule (x64_pabsw src) (x64_pabsw_a_or_avx src))
-
-;; Helper for creating `pabsd` instructions.
-(decl x64_pabsd (XmmMem) Xmm)
-(rule (x64_pabsd src) (x64_pabsd_a_or_avx src))
-
 ;; Helper for creating `vcvtudq2ps` instructions.
 (decl x64_vcvtudq2ps (XmmMem) Xmm)
 (rule (x64_vcvtudq2ps src)

@@ -1892,7 +1892,7 @@ block0(v0: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   pabsw %xmm0, %xmm0
+;   vpabsw %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1902,7 +1902,7 @@ block0(v0: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pabsw %xmm0, %xmm0
+;   vpabsw %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1917,7 +1917,7 @@ block0(v0: i32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   pabsd %xmm0, %xmm0
+;   vpabsd %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1927,7 +1927,7 @@ block0(v0: i32x4):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   pabsd %xmm0, %xmm0
+;   vpabsd %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

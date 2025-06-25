@@ -1280,7 +1280,7 @@
 
 (rule 1 (lower (has_type $I8X16 (iabs x)))
         (if-let true (use_ssse3))
-        (x64_pabsb x))
+        (x64_pabsb_a_or_avx x))
 
 ;; Note the use of `pminub` with signed inputs will produce the positive signed
 ;; result which is what is desired here. The `pmaxub` isn't available until
@@ -1294,7 +1294,7 @@
 
 (rule 1 (lower (has_type $I16X8 (iabs x)))
         (if-let true (use_ssse3))
-        (x64_pabsw_a x))
+        (x64_pabsw_a_or_avx x))
 
 (rule (lower (has_type $I16X8 (iabs x)))
       (let (
@@ -1305,7 +1305,7 @@
 
 (rule 1 (lower (has_type $I32X4 (iabs x)))
         (if-let true (use_ssse3))
-        (x64_pabsd_a x))
+        (x64_pabsd_a_or_avx x))
 
 ;; Generate a `negative_mask` which is either numerically -1 or 0 depending on
 ;; if the lane is negative. If the lane is positive then the xor operation
@@ -4232,12 +4232,12 @@
 (rule (unarrow_i32x4_lanes_to_low_u16_lanes val)
       (let (
           ;; First convert all negative values in `val` to zero lanes.
-          (val_gt_zero Xmm (x64_pcmpgtd_a val (xmm_zero $I32X4)))
+          (val_gt_zero Xmm (x64_pcmpgtd_a_or_avx val (xmm_zero $I32X4)))
           (val Xmm (x64_pand val val_gt_zero))
 
           ;; Next clamp all larger-than-u16-max lanes to u16::MAX.
           (max Xmm (x64_movdqu_load (emit_u128_le_const 0x0000ffff_0000ffff_0000ffff_0000ffff)))
-          (cmp Xmm (x64_pcmpgtd_a max val))
+          (cmp Xmm (x64_pcmpgtd_a_or_avx max val))
           (valid_lanes Xmm (x64_pand val cmp))
           (clamped_lanes Xmm (x64_pandn cmp max))
           (val Xmm (x64_por valid_lanes clamped_lanes))
