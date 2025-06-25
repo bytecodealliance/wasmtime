@@ -123,10 +123,9 @@
       (apply_div_const_magic_s64 (Opcode.Sdiv) x d))
 
 ;; x % 1 == 0
-(rule (simplify_skeleton (urem x (iconst_u ty 1)))
-      (iconst_u ty 0))
-(rule (simplify_skeleton (srem x (iconst_u ty 1)))
-      (iconst_u ty 0))
+(rule (simplify_skeleton (urem x (iconst_u ty 1))) (iconst_u ty 0))
+(rule (simplify_skeleton (srem x (iconst_u ty 1))) (iconst_u ty 0))
+(rule (simplify_skeleton (srem x (iconst_s ty -1))) (iconst_u ty 0))
 
 ;; Unsigned `x % d == x & ((1 << ilog2(d)) - 1)` when `d` is a power of two.
 (rule (simplify_skeleton (urem x (iconst_u ty (u64_extract_power_of_two d))))
@@ -141,6 +140,7 @@
       ;; powers of two.
       (if-let true (i64_is_any_sign_power_of_two d))
       (if-let true (i64_ne d 1))
+      (if-let true (i64_ne d -1))
       (let ((k u32 (i64_trailing_zeros d))
             (t1 Value (sshr ty x (iconst_u ty (u32_sub k 1))))
             (t2 Value (ushr ty t1 (iconst_u ty (u32_sub (ty_bits ty) k))))
