@@ -297,7 +297,7 @@
        ;; movq $name@GOTPCREL(%rip), dst    if PIC is enabled, or
        ;; lea $name($rip), dst              if distance is near, or
        ;; movabsq $name, dst                otherwise.
-       (LoadExtName (dst WritableReg)
+       (LoadExtName (dst WritableGpr)
                     (name BoxExternalName)
                     (offset i64)
                     (distance RelocDistance))
@@ -1383,7 +1383,7 @@
         dst))
 
 ;; Helper for constructing a LoadExtName instruction.
-(decl load_ext_name (ExternalName i64 RelocDistance) Reg)
+(decl load_ext_name (ExternalName i64 RelocDistance) Gpr)
 (rule (load_ext_name extname offset distance)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.LoadExtName dst extname offset distance))))

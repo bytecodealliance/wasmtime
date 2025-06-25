@@ -1023,7 +1023,7 @@ impl PrettyPrint for Inst {
             Inst::LoadExtName {
                 dst, name, offset, ..
             } => {
-                let dst = pretty_print_reg(dst.to_reg(), 8);
+                let dst = pretty_print_reg(*dst.to_reg(), 8);
                 let name = name.display(None);
                 let op = ljustify("load_ext_name".into());
                 format!("{op} {name}+{offset}, {dst}")

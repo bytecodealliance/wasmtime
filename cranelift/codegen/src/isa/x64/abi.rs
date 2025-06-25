@@ -821,7 +821,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // information about the libcall `RelocDistance` here, so we
         // conservatively use the more flexible calling sequence.
         insts.push(Inst::LoadExtName {
-            dst: temp2,
+            dst: temp2.map(Gpr::unwrap_new),
             name: Box::new(ExternalName::LibCall(LibCall::Memcpy)),
             offset: 0,
             distance: RelocDistance::Far,

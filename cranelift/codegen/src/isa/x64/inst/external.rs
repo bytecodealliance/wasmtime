@@ -429,37 +429,59 @@ pub mod offsets {
     pub const KEY_SLOT_OFFSET: u8 = 1;
 }
 
-impl asm::CodeSink for MachBuffer<Inst> {
+/// Implementor of the [`asm::CodeSink`] trait.
+pub struct AsmCodeSink<'a> {
+    /// The buffer this is emitting into.
+    pub sink: &'a mut MachBuffer<Inst>,
+    /// The value of `KEY_INCOMING_ARG`.
+    pub incoming_arg_offset: i32,
+    /// The value of `KEY_SLOT_OFFSET`.
+    pub slot_offset: i32,
+}
+
+impl asm::CodeSink for AsmCodeSink<'_> {
     fn put1(&mut self, value: u8) {
-        self.put1(value)
+        self.sink.put1(value)
     }
 
     fn put2(&mut self, value: u16) {
-        self.put2(value)
+        self.sink.put2(value)
     }
 
     fn put4(&mut self, value: u32) {
-        self.put4(value)
+        self.sink.put4(value)
     }
 
     fn put8(&mut self, value: u64) {
-        self.put8(value)
-    }
-
-    fn current_offset(&self) -> u32 {
-        self.cur_offset()
-    }
-
-    fn use_label_at_offset(&mut self, offset: u32, label: asm::Label) {
-        self.use_label_at_offset(offset, label.into(), LabelUse::JmpRel32);
+        self.sink.put8(value)
     }
 
     fn add_trap(&mut self, code: asm::TrapCode) {
-        self.add_trap(code.into());
+        self.sink.add_trap(code.into());
     }
 
-    fn get_label_for_constant(&mut self, c: asm::Constant) -> asm::Label {
-        self.get_label_for_constant(c.into()).into()
+    fn use_target(&mut self, target: asm::DeferredTarget) {
+        let offset = self.sink.cur_offset();
+        match target {
+            asm::DeferredTarget::Label(label) => {
+                self.sink
+                    .use_label_at_offset(offset, label.into(), LabelUse::JmpRel32);
+            }
+            asm::DeferredTarget::Constant(constant) => {
+                let label = self.sink.get_label_for_constant(constant.into());
+                self.sink
+                    .use_label_at_offset(offset, label, LabelUse::JmpRel32);
+            }
+            asm::DeferredTarget::None => {}
+        }
+    }
+
+    fn known_offset(&self, offset: asm::KnownOffset) -> i32 {
+        match offset {
+            offsets::KEY_INCOMING_ARG => self.incoming_arg_offset,
+            offsets::KEY_SLOT_OFFSET => self.slot_offset,
+            other => panic!("unknown \"known\" offset {other}"),
+        }
     }
 }
 
