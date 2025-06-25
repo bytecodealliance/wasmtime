@@ -218,6 +218,15 @@
 (rule (i64_is_negative_power_of_two x)
       (u64_is_power_of_two (i64_cast_unsigned (i64_wrapping_neg x))))
 
+(decl pure i64_is_any_sign_power_of_two (i64) bool)
+(rule 2 (i64_is_any_sign_power_of_two x)
+      (if-let true (u64_is_power_of_two (i64_cast_unsigned x)))
+      true)
+(rule 1 (i64_is_any_sign_power_of_two x)
+      (if-let true (i64_is_negative_power_of_two x))
+      true)
+(rule 0 (i64_is_any_sign_power_of_two _) false)
+
 (type DivConstMagicU32 (enum (U32 (mul_by u32)
                                   (do_add bool)
                                   (shift_by u32))))
@@ -412,11 +421,7 @@
                                        magic @ (DivConstMagicS32.S32 mul_by _shift_by))
       (let ((q0 Value (iconst_s $I32 mul_by))
             (q1 Value (smulhi $I32 numerator q0)))
-        (apply_div_const_magic_s32_add_sub opcode
-                                           numerator
-                                           divisor
-                                           magic
-                                           q1)))
+        (apply_div_const_magic_s32_add_sub opcode numerator divisor magic q1)))
 
 ;; q2 = if divisor > 0 && mul_by < 0 {
 ;;     iadd q1, numerator
@@ -434,11 +439,7 @@
       (if-let true (i32_gt divisor 0))
       (if-let true (i32_lt mul_by 0))
       (let ((q2 Value (iadd $I32 q1 numerator)))
-        (apply_div_const_magic_s32_shift opcode
-                                         numerator
-                                         divisor
-                                         magic
-                                         q2)))
+        (apply_div_const_magic_s32_shift opcode numerator divisor magic q2)))
 (rule 1 (apply_div_const_magic_s32_add_sub opcode
                                            numerator
                                            divisor
@@ -447,21 +448,13 @@
       (if-let true (i32_lt divisor 0))
       (if-let true (i32_gt mul_by 0))
       (let ((q2 Value (isub $I32 q1 numerator)))
-        (apply_div_const_magic_s32_shift opcode
-                                         numerator
-                                         divisor
-                                         magic
-                                         q2)))
+        (apply_div_const_magic_s32_shift opcode numerator divisor magic q2)))
 (rule 0 (apply_div_const_magic_s32_add_sub opcode
                                            numerator
                                            divisor
                                            magic
                                            q1)
-      (apply_div_const_magic_s32_shift opcode
-                                       numerator
-                                       divisor
-                                       magic
-                                       q1))
+      (apply_div_const_magic_s32_shift opcode numerator divisor magic q1))
 
 ;; q3 = sshr q2, shift_by
 ;; t1 = ushr q3, 31
@@ -509,11 +502,7 @@
                                        magic @ (DivConstMagicS64.S64 mul_by _shift_by))
       (let ((q0 Value (iconst_s $I64 mul_by))
             (q1 Value (smulhi $I64 numerator q0)))
-        (apply_div_const_magic_s64_add_sub opcode
-                                           numerator
-                                           divisor
-                                           magic
-                                           q1)))
+        (apply_div_const_magic_s64_add_sub opcode numerator divisor magic q1)))
 
 ;; q2 = if divisor > 0 && mul_by < 0 {
 ;;     iadd q1, numerator
@@ -531,11 +520,7 @@
       (if-let true (i64_gt divisor 0))
       (if-let true (i64_lt mul_by 0))
       (let ((q2 Value (iadd $I64 q1 numerator)))
-        (apply_div_const_magic_s64_shift opcode
-                                         numerator
-                                         divisor
-                                         magic
-                                         q2)))
+        (apply_div_const_magic_s64_shift opcode numerator divisor magic q2)))
 (rule 1 (apply_div_const_magic_s64_add_sub opcode
                                            numerator
                                            divisor
@@ -544,24 +529,16 @@
       (if-let true (i64_lt divisor 0))
       (if-let true (i64_gt mul_by 0))
       (let ((q2 Value (isub $I64 q1 numerator)))
-        (apply_div_const_magic_s64_shift opcode
-                                         numerator
-                                         divisor
-                                         magic
-                                         q2)))
+        (apply_div_const_magic_s64_shift opcode numerator divisor magic q2)))
 (rule 0 (apply_div_const_magic_s64_add_sub opcode
                                            numerator
                                            divisor
                                            magic
                                            q1)
-      (apply_div_const_magic_s64_shift opcode
-                                       numerator
-                                       divisor
-                                       magic
-                                       q1))
+      (apply_div_const_magic_s64_shift opcode numerator divisor magic q1))
 
 ;; q3 = sshr q2, shift_by
-;; t1 = ushr q3, 31
+;; t1 = ushr q3, 63
 ;; qf = iadd q3, t1
 (decl apply_div_const_magic_s64_shift (Opcode Value i64 DivConstMagicS64 Value) Value)
 (rule (apply_div_const_magic_s64_shift opcode
@@ -571,7 +548,7 @@
                                        q2)
       ;; Note: let other rules clean up `q2` when `shift_by == 0`.
       (let ((q3 Value (sshr $I64 q2 (iconst_s $I64 shift_by)))
-            (t1 Value (ushr $I64 q3 (iconst_s $I64 31)))
+            (t1 Value (ushr $I64 q3 (iconst_s $I64 63)))
             (qf Value (iadd $I64 q3 t1)))
         (apply_div_const_magic_s64_finish opcode numerator divisor qf)))
 

@@ -74,8 +74,8 @@ block0(v0: i64):
 ; block0(v0: i64):
 ;     v3 = iconst.i64 2
 ;     v4 = sshr v0, v3  ; v3 = 2
-;     v5 = iconst.i64 29
-;     v6 = ushr v4, v5  ; v5 = 29
+;     v5 = iconst.i64 61
+;     v6 = ushr v4, v5  ; v5 = 61
 ;     v7 = iadd v0, v6
 ;     v8 = iconst.i64 3
 ;     v9 = sshr v7, v8  ; v8 = 3
@@ -94,8 +94,8 @@ block0(v0: i64):
 ; block0(v0: i64):
 ;     v3 = iconst.i64 5
 ;     v4 = sshr v0, v3  ; v3 = 5
-;     v5 = iconst.i64 26
-;     v6 = ushr v4, v5  ; v5 = 26
+;     v5 = iconst.i64 58
+;     v6 = ushr v4, v5  ; v5 = 58
 ;     v7 = iadd v0, v6
 ;     v8 = iconst.i64 6
 ;     v9 = sshr v7, v8  ; v8 = 6
@@ -117,8 +117,8 @@ block0(v0: i64):
 ;     v4 = smulhi v0, v3  ; v3 = -7064123384995729565
 ;     v5 = iconst.i64 9
 ;     v6 = sshr v4, v5  ; v5 = 9
-;     v7 = iconst.i64 31
-;     v8 = ushr v6, v7  ; v7 = 31
+;     v7 = iconst.i64 63
+;     v8 = ushr v6, v7  ; v7 = 63
 ;     v9 = iadd v6, v8
 ;     v2 -> v9
 ;     return v9
