@@ -726,6 +726,7 @@ dependencies = [
  "hashbrown 0.15.2",
  "log",
  "postcard",
+ "proptest",
  "pulley-interpreter",
  "regalloc2",
  "rustc-hash 2.1.1",

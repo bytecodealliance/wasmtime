@@ -53,6 +53,7 @@ wasmtime-math = { workspace = true }
 criterion = { workspace = true }
 similar = "2.1.0"
 env_logger = { workspace = true }
+proptest = { workspace = true }
 
 [build-dependencies]
 cranelift-codegen-meta = { path = "meta", version = "0.122.0" }
