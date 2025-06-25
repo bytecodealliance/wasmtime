@@ -4,7 +4,6 @@ use crate::fiber::{self, AsyncCx};
 use crate::prelude::*;
 use crate::store::{ResourceLimiterInner, StoreInner, StoreOpaque, StoreToken};
 use crate::{AsContextMut, Store, StoreContextMut, UpdateDeadline};
-use core::ops::Range;
 use core::pin::Pin;
 
 /// An object that can take callbacks when the runtime enters or exits hostcalls.
@@ -257,10 +256,6 @@ impl StoreOpaque {
                 .expect("attempted to pull async context during shutdown")
                 .block_on(Pin::new_unchecked(&mut future))
         }
-    }
-
-    pub(crate) fn async_guard_range(&mut self) -> Range<*mut u8> {
-        unsafe { (*self.async_state()).async_guard_range() }
     }
 
     pub(crate) fn allocate_fiber_stack(&mut self) -> Result<wasmtime_fiber::FiberStack> {

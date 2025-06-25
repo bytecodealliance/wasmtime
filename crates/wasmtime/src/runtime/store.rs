@@ -1367,6 +1367,11 @@ impl StoreOpaque {
         &self.vm_store_context
     }
 
+    #[inline]
+    pub fn vm_store_context_mut(&mut self) -> &mut VMStoreContext {
+        &mut self.vm_store_context
+    }
+
     #[inline(never)]
     pub(crate) fn allocate_gc_heap(&mut self) -> Result<()> {
         log::trace!("allocating GC heap for store {:?}", self.id());
@@ -1956,11 +1961,6 @@ at https://bytecodealliance.org/security.
     #[cfg(feature = "async")]
     pub(crate) fn has_pkey(&self) -> bool {
         self.pkey.is_some()
-    }
-
-    #[cfg(not(feature = "async"))]
-    pub(crate) fn async_guard_range(&self) -> core::ops::Range<*mut u8> {
-        core::ptr::null_mut()..core::ptr::null_mut()
     }
 
     pub(crate) fn executor(&mut self) -> ExecutorRef<'_> {

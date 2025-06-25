@@ -13,6 +13,7 @@ use core::ffi::c_void;
 use core::fmt;
 use core::marker;
 use core::mem::{self, MaybeUninit};
+use core::ops::Range;
 use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use wasmtime_environ::{
@@ -1114,6 +1115,18 @@ pub struct VMStoreContext {
     /// Stack information used by stack switching instructions. See documentation
     /// on `VMStackChain` for details.
     pub stack_chain: UnsafeCell<VMStackChain>,
+
+    /// The range, in addresses, of the guard page that is currently in use.
+    ///
+    /// This field is used when signal handlers are run to determine whether a
+    /// faulting address lies within the guard page of an async stack for
+    /// example. If this happens then the signal handler aborts with a stack
+    /// overflow message similar to what would happen had the stack overflow
+    /// happened on the main thread. This field is, by default a null..null
+    /// range indicating that no async guard is in use (aka no fiber). In such a
+    /// situation while this field is read it'll never classify a fault as an
+    /// guard page fault.
+    pub async_guard_range: Range<*mut u8>,
 }
 
 // The `VMStoreContext` type is a pod-type with no destructor, and we don't
@@ -1140,6 +1153,7 @@ impl Default for VMStoreContext {
             last_wasm_exit_pc: UnsafeCell::new(0),
             last_wasm_entry_fp: UnsafeCell::new(0),
             stack_chain: UnsafeCell::new(VMStackChain::Absent),
+            async_guard_range: ptr::null_mut()..ptr::null_mut(),
         }
     }
 }
