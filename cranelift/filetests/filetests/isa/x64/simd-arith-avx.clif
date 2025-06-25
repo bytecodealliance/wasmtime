@@ -1312,7 +1312,7 @@ block0(v0: i8):
 ;   vmovd %edi, %xmm2
 ;   uninit  %xmm4
 ;   vpxor %xmm4, %xmm4, %xmm6
-;   vpshufb %xmm2, %xmm6, %xmm0
+;   vpshufb %xmm6, %xmm2, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -1347,7 +1347,7 @@ block0(v0: f64x2):
 ;   vminpd (%rip), %xmm6, %xmm0
 ;   vroundpd $0x3, %xmm0, %xmm2
 ;   vaddpd (%rip), %xmm2, %xmm5
-;   vshufps $136, %xmm5, %xmm4, %xmm0
+;   vshufps $0x88, %xmm4, %xmm5, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

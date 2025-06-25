@@ -62,9 +62,15 @@ pub fn list() -> Vec<Inst> {
         inst("vblendvpd", fmt("RVMR", [w(xmm1), r(xmm2), r(xmm_m128), r(xmm3)]), vex(L128)._66()._0f3a().w0().op(0x4B).r().is4(), _64b | compat | avx),
 
         // Shuffle lanes in various ways.
+        inst("shufpd", fmt("A", [rw(xmm1), r(align(xmm_m128)), r(imm8)]), rex([0x66, 0x0F, 0xC6]).ib(), _64b | compat | sse2).alt(avx, "vshufpd_b"),
+        inst("vshufpd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128), r(imm8)]), vex(L128)._66()._0f().ib().op(0xC6), _64b | compat | avx),
+        inst("shufps", fmt("A", [rw(xmm1), r(align(xmm_m128)), r(imm8)]), rex([0x0F, 0xC6]).ib(), _64b | compat | sse).alt(avx, "vshufps_b"),
+        inst("vshufps", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128), r(imm8)]), vex(L128)._0f().ib().op(0xC6), _64b | compat | avx),
+        inst("pshufb", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x00]), _64b | compat | ssse3).alt(avx, "vpshufb_b"),
         inst("pshufd", fmt("A", [w(xmm1), r(align(xmm_m128)), r(imm8)]), rex([0x66, 0x0F, 0x70]).r().ib(), _64b | compat | sse2).alt(avx, "vpshufd_a"),
         inst("pshuflw", fmt("A", [w(xmm1), r(align(xmm_m128)), r(imm8)]), rex([0xF2, 0x0F, 0x70]).r().ib(), _64b | compat | sse2).alt(avx, "vpshuflw_a"),
         inst("pshufhw", fmt("A", [w(xmm1), r(align(xmm_m128)), r(imm8)]), rex([0xF3, 0x0F, 0x70]).r().ib(), _64b | compat | sse2).alt(avx, "vpshufhw_a"),
+        inst("vpshufb", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f38().op(0x00), _64b | compat | avx),
         inst("vpshufd", fmt("A", [w(xmm1), r(xmm_m128), r(imm8)]), vex(L128)._66()._0f().op(0x70).r().ib(), _64b | compat | avx),
         inst("vpshuflw", fmt("A", [w(xmm1), r(xmm_m128), r(imm8)]), vex(L128)._f2()._0f().op(0x70).r().ib(), _64b | compat | avx),
         inst("vpshufhw", fmt("A", [w(xmm1), r(xmm_m128), r(imm8)]), vex(L128)._f3()._0f().op(0x70).r().ib(), _64b | compat | avx),

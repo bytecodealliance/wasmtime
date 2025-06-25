@@ -460,11 +460,7 @@
 (rule (operand_size_bits (OperandSize.Size32)) 32)
 (rule (operand_size_bits (OperandSize.Size64)) 64)
 
-(type SseOpcode extern
-      (enum Insertps
-            Pshufb
-            Shufps
-          ))
+(type SseOpcode extern (enum Insertps))
 
 (type RegMemImm extern
       (enum
@@ -2881,11 +2877,15 @@
 
 ;; Helper for creating `pshufb` instructions.
 (decl x64_pshufb (Xmm XmmMem) Xmm)
-(rule 0 (x64_pshufb src1 src2)
-      (xmm_rm_r (SseOpcode.Pshufb) src1 src2))
-(rule 1 (x64_pshufb src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpshufb) src1 src2))
+(rule (x64_pshufb src1 src2) (x64_pshufb_a_or_avx src1 src2))
+
+;; Helper for creating `shufpd` instructions.
+(decl x64_shufpd (Xmm XmmMem u8) Xmm)
+(rule (x64_shufpd src1 src2 byte) (x64_shufpd_a_or_avx src1 src2 byte))
+
+;; Helper for creating `shufps` instructions.
+(decl x64_shufps (Xmm XmmMem u8) Xmm)
+(rule (x64_shufps src1 src2 byte) (x64_shufps_a_or_avx src1 src2 byte))
 
 ;; Helper for creating `pshuflw` instructions.
 (decl x64_pshuflw (XmmMem u8) Xmm)
@@ -2901,17 +2901,7 @@
       (if-let true (use_avx))
       (x64_vpshufhw_a src imm))
 
-;; Helper for creating `shufps` instructions.
-(decl x64_shufps (Xmm XmmMem u8) Xmm)
-(rule 0 (x64_shufps src1 src2 byte)
-      (xmm_rm_r_imm (SseOpcode.Shufps)
-                    src1
-                    src2
-                    byte
-                    (OperandSize.Size32)))
-(rule 1 (x64_shufps src1 src2 byte)
-      (if-let true (use_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vshufps) src1 src2 byte))
+
 
 ;; Helper for creating `vcvtudq2ps` instructions.
 (decl x64_vcvtudq2ps (XmmMem) Xmm)
