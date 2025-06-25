@@ -452,7 +452,7 @@ fn swap_mpk_states(mask: Option<ProtectionMask>) -> Option<ProtectionMask> {
 /// returned value; it will return `Err(yield_)` if the fiber suspended, where
 /// `yield_` indicates whether it released access to the store or not.  See
 /// `StoreFiber::fiber` for details.
-pub(crate) fn resume_fiber<'a>(
+fn resume_fiber<'a>(
     store: &mut StoreOpaque,
     fiber: &mut StoreFiber<'a>,
     result: Result<()>,
