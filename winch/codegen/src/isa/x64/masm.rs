@@ -1940,10 +1940,11 @@ impl Masm for MacroAssembler {
         self.ensure_has_avx()?;
 
         self.with_scratch::<FloatScratch, _>(|masm, tmp| {
-            // First, we initialize `tmp` with all ones, by comparing it with itself.
+            // First, we initialize `tmp` with all ones by comparing it with
+            // itself.
             masm.asm
-                .xmm_vpcmpeq_rrr(tmp.writable(), tmp.inner(), tmp.inner(), OperandSize::S8);
-            // then we `xor` tmp and `dst` together, yielding `!dst`.
+                .xmm_vpcmpeq_rrr(tmp.writable(), tmp.inner(), tmp.inner(), OperandSize::S32);
+            // Then we `xor` tmp and `dst` together, yielding `!dst`.
             masm.asm.xmm_vpxor_rrr(tmp.inner(), dst.to_reg(), dst);
             Ok(())
         })
