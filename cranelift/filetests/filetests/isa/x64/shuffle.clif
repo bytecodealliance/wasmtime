@@ -653,7 +653,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   pblendw $0, %xmm0, %xmm1, %xmm0
+;   pblendw $0x0, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -765,7 +765,7 @@ block0(v0: i8x16, v1: i8x16):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   pblendw $255, %xmm0, %xmm1, %xmm0
+;   pblendw $0xff, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -793,7 +793,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   pblendw $153, %xmm0, %xmm1, %xmm0
+;   pblendw $0x99, %xmm1, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

@@ -126,7 +126,7 @@ block0(v0: i16x8, v1: i16x8):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vpblendw $153, %xmm0, %xmm1, %xmm0
+;   vpblendw $0x99, %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
