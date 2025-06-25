@@ -2,22 +2,7 @@
 Example of instantiating of the WebAssembly module and invoking its exported
 function.
 
-You can compile and run this example on Linux with:
-
-   cargo build --release -p wasmtime-c-api
-   cmake -S examples -B examples/build
-   cc examples/hello.c \
-       -I examples/build/include \
-       target/release/libwasmtime.a \
-       -lpthread -ldl -lm \
-       -o hello
-   ./hello
-
-Note that on Windows and macOS the command will be similar, but you'll need
-to tweak the `-lpthread` and such annotations as well as the name of the
-`libwasmtime.a` file on Windows.
-
-You can also build using cmake:
+You can build using cmake:
 
 mkdir build && cd build && cmake .. && cmake --build . --target wasmtime-hello
 */
