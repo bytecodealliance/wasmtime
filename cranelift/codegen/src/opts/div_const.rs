@@ -682,40 +682,26 @@ mod tests {
 
     // Returns the high half of a 64 bit unsigned widening multiply.
     fn mulhw_u64(x: u64, y: u64) -> u64 {
-        let t0: u64 = x & 0xffffffffu64;
-        let t1: u64 = x >> 32;
-        let t2: u64 = y & 0xffffffffu64;
-        let t3: u64 = y >> 32;
-        let t4: u64 = t0 * t2;
-        let t5: u64 = t1 * t2 + (t4 >> 32);
-        let t6: u64 = t5 & 0xffffffffu64;
-        let t7: u64 = t5 >> 32;
-        let t8: u64 = t0 * t3 + t6;
-        let t9: u64 = t1 * t3 + t7 + (t8 >> 32);
-        t9
+        let x128 = x as u128;
+        let y128 = y as u128;
+        let r128 = x128 * y128;
+        (r128 >> 64) as u64
     }
 
     // Returns the high half of a 64 bit signed widening multiply.
     fn mulhw_s64(x: i64, y: i64) -> i64 {
-        let t0: u64 = x as u64 & 0xffffffffu64;
-        let t1: i64 = x >> 32;
-        let t2: u64 = y as u64 & 0xffffffffu64;
-        let t3: i64 = y >> 32;
-        let t4: u64 = t0 * t2;
-        let t5: i64 = t1 * t2 as i64 + (t4 >> 32) as i64;
-        let t6: u64 = t5 as u64 & 0xffffffffu64;
-        let t7: i64 = t5 >> 32;
-        let t8: i64 = t0 as i64 * t3 + t6 as i64;
-        let t9: i64 = t1 * t3 + t7 + (t8 >> 32);
-        t9
+        let x128 = x as i128;
+        let y128 = y as i128;
+        let r128 = x128 * y128;
+        (r128 >> 64) as i64
     }
 
     /// Compute and check `q = n / d` using `magic`.
-    fn eval_magic_u32(n: u32, magic: &MU32) -> u32 {
-        let mut q: u32 = mulhw_u32(n, magic.mul_by);
+    fn eval_magic_u32_div(n: u32, magic: &MU32) -> u32 {
+        let mut q = mulhw_u32(n, magic.mul_by);
         if magic.do_add {
             assert!(magic.shift_by >= 1 && magic.shift_by <= 32);
-            let mut t: u32 = n - q;
+            let mut t = n - q;
             t >>= 1;
             t = t + q;
             q = t >> (magic.shift_by - 1);
@@ -726,12 +712,29 @@ mod tests {
         q
     }
 
+    /// Compute and check `r = n % d` using `magic`.
+    fn eval_magic_u32_rem(n: u32, d: u32, magic: &MU32) -> u32 {
+        let mut q = mulhw_u32(n, magic.mul_by);
+        if magic.do_add {
+            assert!(magic.shift_by >= 1 && magic.shift_by <= 32);
+            let mut t = n - q;
+            t >>= 1;
+            t = t + q;
+            q = t >> (magic.shift_by - 1);
+        } else {
+            assert!(magic.shift_by >= 0 && magic.shift_by <= 31);
+            q >>= magic.shift_by;
+        }
+        let tt = q.wrapping_mul(d);
+        n.wrapping_sub(tt)
+    }
+
     /// Compute and check `q = n / d` using `magic`.
-    fn eval_magic_u64(n: u64, magic: &MU64) -> u64 {
+    fn eval_magic_u64_div(n: u64, magic: &MU64) -> u64 {
         let mut q = mulhw_u64(n, magic.mul_by);
         if magic.do_add {
             assert!(magic.shift_by >= 1 && magic.shift_by <= 64);
-            let mut t: u64 = n - q;
+            let mut t = n - q;
             t >>= 1;
             t = t + q;
             q = t >> (magic.shift_by - 1);
@@ -742,8 +745,25 @@ mod tests {
         q
     }
 
+    /// Compute and check `r = n % d` using `magic`.
+    fn eval_magic_u64_rem(n: u64, d: u64, magic: &MU64) -> u64 {
+        let mut q = mulhw_u64(n, magic.mul_by);
+        if magic.do_add {
+            assert!(magic.shift_by >= 1 && magic.shift_by <= 64);
+            let mut t = n - q;
+            t >>= 1;
+            t = t + q;
+            q = t >> (magic.shift_by - 1);
+        } else {
+            assert!(magic.shift_by >= 0 && magic.shift_by <= 63);
+            q >>= magic.shift_by;
+        }
+        let tt = q.wrapping_mul(d);
+        n.wrapping_sub(tt)
+    }
+
     /// Compute and check `q = n / d` using `magic`.
-    fn eval_magic_s32(n: i32, d: i32, magic: &MS32) -> i32 {
+    fn eval_magic_s32_div(n: i32, d: i32, magic: &MS32) -> i32 {
         let mut q: i32 = mulhw_s32(n, magic.mul_by);
         if d > 0 && magic.mul_by < 0 {
             q = q + n;
@@ -758,8 +778,25 @@ mod tests {
         q
     }
 
+    /// Compute and check `r = n % d` using `magic`.
+    fn eval_magic_s32_rem(n: i32, d: i32, magic: &MS32) -> i32 {
+        let mut q: i32 = mulhw_s32(n, magic.mul_by);
+        if d > 0 && magic.mul_by < 0 {
+            q = q + n;
+        } else if d < 0 && magic.mul_by > 0 {
+            q = q - n;
+        }
+        assert!(magic.shift_by >= 0 && magic.shift_by <= 31);
+        q = q >> magic.shift_by;
+        let mut t: u32 = q as u32;
+        t = t >> 31;
+        q = q + (t as i32);
+        let tt = q.wrapping_mul(d);
+        n.wrapping_sub(tt)
+    }
+
     /// Compute and check `q = n / d` using `magic`. */
-    fn eval_magic_s64(n: i64, d: i64, magic: &MS64) -> i64 {
+    fn eval_magic_s64_div(n: i64, d: i64, magic: &MS64) -> i64 {
         let mut q: i64 = mulhw_s64(n, magic.mul_by);
         if d > 0 && magic.mul_by < 0 {
             q = q + n;
@@ -772,6 +809,23 @@ mod tests {
         t = t >> 63;
         q = q + (t as i64);
         q
+    }
+
+    /// Compute and check `r = n % d` using `magic`.
+    fn eval_magic_s64_rem(n: i64, d: i64, magic: &MS64) -> i64 {
+        let mut q: i64 = mulhw_s64(n, magic.mul_by);
+        if d > 0 && magic.mul_by < 0 {
+            q = q + n;
+        } else if d < 0 && magic.mul_by > 0 {
+            q = q - n;
+        }
+        assert!(magic.shift_by >= 0 && magic.shift_by <= 63);
+        q = q >> magic.shift_by;
+        let mut t: u64 = q as u64;
+        t = t >> 63;
+        q = q + (t as i64);
+        let tt = q.wrapping_mul(d);
+        n.wrapping_sub(tt)
     }
 
     #[test]
@@ -830,7 +884,7 @@ mod tests {
             let mut n: u32 = MIN_U32;
             loop {
                 *n_tests_done += 1;
-                let q = eval_magic_u32(n, &magic);
+                let q = eval_magic_u32_div(n, &magic);
                 assert_eq!(q, div_u32(n, d));
 
                 n = advance_n_u32(n);
@@ -881,7 +935,7 @@ mod tests {
             let mut n: i32 = MIN_S32;
             loop {
                 *n_tests_done += 1;
-                let q = eval_magic_s32(n, d, &magic);
+                let q = eval_magic_s32_div(n, d, &magic);
                 assert_eq!(q, div_s32(n, d));
 
                 n = advance_n_s32(n);
@@ -921,7 +975,7 @@ mod tests {
             let mut n: u64 = MIN_U64;
             loop {
                 *n_tests_done += 1;
-                let q = eval_magic_u64(n, &magic);
+                let q = eval_magic_u64_div(n, &magic);
                 assert_eq!(q, div_u64(n, d));
 
                 n = advance_n_u64(n);
@@ -972,7 +1026,7 @@ mod tests {
             let mut n: i64 = MIN_S64;
             loop {
                 *n_tests_done += 1;
-                let q = eval_magic_s64(n, d, &magic);
+                let q = eval_magic_s64_div(n, d, &magic);
                 assert_eq!(q, div_s64(n, d));
 
                 n = advance_n_s64(n);
@@ -1101,22 +1155,28 @@ mod tests {
     proptest::proptest! {
         #[test]
         fn proptest_magic_u32(numerator in 0..u32::MAX, divisor in 1..u32::MAX) {
-            let expected = numerator.wrapping_div(divisor);
+            let expected_div = numerator.wrapping_div(divisor);
+            let expected_rem = numerator.wrapping_rem(divisor);
 
             let magic = magic_u32(divisor);
-            let actual = eval_magic_u32(numerator, &magic);
+            let actual_div = eval_magic_u32_div(numerator, &magic);
+            let actual_rem = eval_magic_u32_rem(numerator, divisor, &magic);
 
-            assert_eq!(expected, actual);
+            assert_eq!(expected_div, actual_div);
+            assert_eq!(expected_rem, actual_rem);
         }
 
         #[test]
         fn proptest_magic_u64(numerator in 0..u64::MAX, divisor in 1..u64::MAX) {
-            let expected = numerator.wrapping_div(divisor);
+            let expected_div = numerator.wrapping_div(divisor);
+            let expected_rem = numerator.wrapping_rem(divisor);
 
             let magic = magic_u64(divisor);
-            let actual = eval_magic_u64(numerator, &magic);
+            let actual_div = eval_magic_u64_div(numerator, &magic);
+            let actual_rem = eval_magic_u64_rem(numerator, divisor, &magic);
 
-            assert_eq!(expected, actual);
+            assert_eq!(expected_div, actual_div);
+            assert_eq!(expected_rem, actual_rem);
         }
 
         #[test]
@@ -1124,12 +1184,15 @@ mod tests {
             numerator in i32::MIN..i32::MAX,
             divisor in (i32::MIN..i32::MAX).prop_filter("avoid divide-by-zero", |d| *d != 0),
         ) {
-            let expected = numerator.wrapping_div(divisor);
+            let expected_div = numerator.wrapping_div(divisor);
+            let expected_rem = numerator.wrapping_rem(divisor);
 
             let magic = magic_s32(divisor);
-            let actual = eval_magic_s32(numerator, divisor, &magic);
+            let actual_div = eval_magic_s32_div(numerator, divisor, &magic);
+            let actual_rem = eval_magic_s32_rem(numerator, divisor, &magic);
 
-            assert_eq!(expected, actual);
+            assert_eq!(expected_div, actual_div);
+            assert_eq!(expected_rem, actual_rem);
         }
 
         #[test]
@@ -1137,12 +1200,15 @@ mod tests {
             numerator in i64::MIN..i64::MAX,
             divisor in (i64::MIN..i64::MAX).prop_filter("avoid divide-by-zero", |d| *d != 0),
         ) {
-            let expected = numerator.wrapping_div(divisor);
+            let expected_div = numerator.wrapping_div(divisor);
+            let expected_rem = numerator.wrapping_rem(divisor);
 
             let magic = magic_s64(divisor);
-            let actual = eval_magic_s64(numerator, divisor, &magic);
+            let actual_div = eval_magic_s64_div(numerator, divisor, &magic);
+            let actual_rem = eval_magic_s64_rem(numerator, divisor, &magic);
 
-            assert_eq!(expected, actual);
+            assert_eq!(expected_div, actual_div);
+            assert_eq!(expected_rem, actual_rem);
         }
     }
 }
