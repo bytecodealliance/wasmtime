@@ -125,7 +125,6 @@ impl Inst {
             | Inst::XmmUnaryRmRImmEvex { op, .. } => op.available_from(),
 
             Inst::XmmRmiRVex { op, .. }
-            | Inst::XmmRmRVex3 { op, .. }
             | Inst::XmmRmRImmVex { op, .. }
             | Inst::XmmMovRMVex { op, .. }
             | Inst::XmmCmpRmRVex { op, .. } => op.available_from(),
@@ -149,6 +148,7 @@ impl Inst {
                         avx => features.push(InstructionSet::AVX),
                         avx2 => features.push(InstructionSet::AVX2),
                         cmpxchg16b => features.push(InstructionSet::CMPXCHG16b),
+                        fma => features.push(InstructionSet::FMA),
                     }
                 }
                 features
@@ -252,20 +252,6 @@ impl Inst {
             op,
             src1: Xmm::unwrap_new(dst.to_reg()),
             src2: XmmMemAligned::unwrap_new(src),
-            dst: WritableXmm::from_writable_reg(dst).unwrap(),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn xmm_rmr_vex3(op: AvxOpcode, src3: RegMem, src2: Reg, dst: Writable<Reg>) -> Self {
-        src3.assert_regclass_is(RegClass::Float);
-        debug_assert!(src2.class() == RegClass::Float);
-        debug_assert!(dst.to_reg().class() == RegClass::Float);
-        Inst::XmmRmRVex3 {
-            op,
-            src3: XmmMem::unwrap_new(src3),
-            src2: Xmm::unwrap_new(src2),
-            src1: Xmm::unwrap_new(dst.to_reg()),
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
@@ -610,22 +596,6 @@ impl PrettyPrint for Inst {
                 let src2 = src2.pretty_print(8);
                 let op = ljustify(op.to_string());
                 format!("{op} ${imm}, {src1}, {src2}, {dst}")
-            }
-
-            Inst::XmmRmRVex3 {
-                op,
-                src1,
-                src2,
-                src3,
-                dst,
-                ..
-            } => {
-                let src1 = pretty_print_reg(src1.to_reg(), 8);
-                let dst = pretty_print_reg(dst.to_reg().to_reg(), 8);
-                let src2 = pretty_print_reg(src2.to_reg(), 8);
-                let src3 = src3.pretty_print(8);
-                let op = ljustify(op.to_string());
-                format!("{op} {src1}, {src2}, {src3}, {dst}")
             }
 
             Inst::XmmRmREvex {
@@ -1198,18 +1168,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_def(dst);
             collector.reg_use(src1);
             src2.get_operands(collector);
-        }
-        Inst::XmmRmRVex3 {
-            src1,
-            src2,
-            src3,
-            dst,
-            ..
-        } => {
-            collector.reg_use(src1);
-            collector.reg_reuse_def(dst, 0);
-            collector.reg_use(src2);
-            src3.get_operands(collector);
         }
         Inst::XmmRmREvex {
             op,
