@@ -444,12 +444,6 @@ pub(crate) struct StoreFiber<'a> {
     state: Option<FiberResumeState>,
     /// The Wasmtime `Engine` to which this fiber belongs.
     engine: Engine,
-    /// The executor (e.g. the Pulley interpreter state) belonging to this
-    /// fiber.
-    ///
-    /// This is swapped with `StoreOpaque::executor` whenever this fiber is
-    /// resumed, suspended, or resolved.
-    executor: Executor,
     /// The id of the store with which this fiber was created.
     ///
     /// Any attempt to resume a fiber with a different store than the one with
@@ -589,6 +583,13 @@ struct FiberResumeState {
     /// fibers within the store they all maintain an appropriate fiber-relative
     /// stack limit.
     stack_limit: usize,
+
+    /// The executor (e.g. the Pulley interpreter state) belonging to this
+    /// fiber.
+    ///
+    /// This is swapped with `StoreOpaque::executor` whenever this fiber is
+    /// resumed, suspended, or resolved.
+    executor: Executor,
 }
 
 impl FiberResumeState {
@@ -606,9 +607,12 @@ impl FiberResumeState {
             .stack()
             .guard_range()
             .unwrap_or(ptr::null_mut()..ptr::null_mut());
+        let mut executor = self.executor;
+        store.swap_executor(&mut executor);
         PriorFiberResumeState {
             tls,
             mpk,
+            executor,
             stack_limit: store.replace_stack_limit(self.stack_limit),
             async_guard_range: store.replace_async_guard_range(async_guard_range),
 
@@ -663,6 +667,7 @@ struct PriorFiberResumeState {
     async_guard_range: Range<*mut u8>,
     current_suspend: Option<NonNull<WasmtimeSuspend>>,
     current_future_cx: Option<NonNull<Context<'static>>>,
+    executor: Executor,
 }
 
 impl PriorFiberResumeState {
@@ -681,9 +686,13 @@ impl PriorFiberResumeState {
         let prev = store.replace_current_future_cx(self.current_future_cx);
         assert!(prev.is_none());
 
+        let mut executor = self.executor;
+        store.swap_executor(&mut executor);
+
         FiberResumeState {
             tls,
             mpk,
+            executor,
             stack_limit: store.replace_stack_limit(self.stack_limit),
         }
     }
@@ -720,12 +729,10 @@ fn resume_fiber<'a>(
     impl Drop for Restore<'_, '_> {
         fn drop(&mut self) {
             self.fiber.state = Some(unsafe { self.state.take().unwrap().replace(self.store) });
-            self.store.swap_executor(&mut self.fiber.executor);
         }
     }
     let result = unsafe {
         let prev = fiber.state.take().unwrap().replace(store, fiber);
-        store.swap_executor(&mut fiber.executor);
         let restore = Restore {
             store,
             fiber,
@@ -832,9 +839,9 @@ pub(crate) fn make_fiber<'a>(
                 None
             },
             stack_limit: usize::MAX,
+            executor,
         }),
         engine,
-        executor,
         id,
         fiber: Some(fiber),
     })
