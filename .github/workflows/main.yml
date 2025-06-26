@@ -812,6 +812,23 @@ jobs:
     # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
 
+  # Test `wasmtime-wasi-tls-nativetls` in its own job. This is because it
+  # depends on OpenSSL, which is not easily available on all platforms.
+  test_wasi_tls_nativetls:
+    name: Test wasi-tls using native-tls provider
+    needs: determine
+    if: needs.determine.outputs.run-full
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - run: cargo test -p wasmtime-wasi-tls-nativetls
+
   # Test the `wasmtime-fuzzing` crate. Split out from the main tests because
   # `--all-features` brings in OCaml, which is a pain to get setup for all
   # targets.
@@ -1114,6 +1131,7 @@ jobs:
       - doc
       - micro_checks
       - special_tests
+      - test_wasi_tls_nativetls
       - clippy
       - monolith_checks
       - platform_checks

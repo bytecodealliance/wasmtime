@@ -55,7 +55,6 @@ wasmtime-wasi = { workspace = true, default-features = true, optional = true }
 wasmtime-wasi-nn = { workspace = true, optional = true }
 wasmtime-wasi-config = { workspace = true, optional = true }
 wasmtime-wasi-tls = { workspace = true, optional = true }
-wasmtime-wasi-tls-nativetls = { workspace = true, optional = true }
 wasmtime-wasi-keyvalue = { workspace = true, optional = true }
 wasmtime-wasi-threads = { workspace = true, optional = true }
 wasmtime-wasi-http = { workspace = true, optional = true }
@@ -159,6 +158,7 @@ members = [
   "crates/test-programs",
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
+  "crates/wasi-tls-nativetls",
   "examples/fib-debug/wasm",
   "examples/wasm",
   "examples/tokio/wasm",
