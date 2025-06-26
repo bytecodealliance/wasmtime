@@ -1,6 +1,5 @@
 use cranelift_codegen::ir;
 use cranelift_codegen::ir::InstBuilder;
-use cranelift_codegen::ir::types::I64;
 
 /// The Cranelift type used to represent all of the following:
 /// - wasm values of type `(ref null $ct)` and `(ref $ct)`
@@ -21,22 +20,13 @@ pub(crate) fn deconstruct<'a>(
     contobj: ir::Value,
 ) -> (ir::Value, ir::Value) {
     debug_assert_eq!(pos.func.dfg.value_type(contobj), POINTER_TYPE);
+    let ptr_ty = env.pointer_type();
+    assert!(ptr_ty.bits() <= 64);
 
-    let (lsbs, msbs) = pos.ins().isplit(contobj);
+    let contref = pos.ins().ireduce(ptr_ty, contobj);
+    let shifted = pos.ins().ushr_imm(contobj, 64);
+    let revision_counter = pos.ins().ireduce(ir::types::I64, shifted);
 
-    let (revision_counter, contref) = match env.isa().endianness() {
-        ir::Endianness::Little => (lsbs, msbs),
-        ir::Endianness::Big => {
-            let pad_bits = 64 - env.pointer_type().bits();
-            let contref = pos.ins().ushr_imm(lsbs, pad_bits as i64);
-            (msbs, contref)
-        }
-    };
-    let contref = if env.pointer_type().bits() < I64.bits() {
-        pos.ins().ireduce(env.pointer_type(), contref)
-    } else {
-        contref
-    };
     (revision_counter, contref)
 }
 
@@ -50,22 +40,12 @@ pub(crate) fn construct<'a>(
 ) -> ir::Value {
     debug_assert_eq!(pos.func.dfg.value_type(contref_addr), env.pointer_type());
     debug_assert_eq!(pos.func.dfg.value_type(revision_counter), ir::types::I64);
-    let contref_addr = if env.pointer_type().bits() < I64.bits() {
-        pos.ins().uextend(I64, contref_addr)
-    } else {
-        contref_addr
-    };
-    let (msbs, lsbs) = match env.isa().endianness() {
-        ir::Endianness::Little => (contref_addr, revision_counter),
-        ir::Endianness::Big => {
-            let pad_bits = 64 - env.pointer_type().bits();
-            let lsbs = pos.ins().ishl_imm(contref_addr, pad_bits as i64);
-            (revision_counter, lsbs)
-        }
-    };
+    assert!(env.pointer_type().bits() <= 64);
 
-    let lsbs = pos.ins().uextend(ir::types::I128, lsbs);
-    let msbs = pos.ins().uextend(ir::types::I128, msbs);
-    let msbs = pos.ins().ishl_imm(msbs, 64);
-    pos.ins().bor(lsbs, msbs)
+    let contref_addr = pos.ins().uextend(ir::types::I128, contref_addr);
+    let revision_counter = pos.ins().uextend(ir::types::I128, revision_counter);
+    let shifted_counter = pos.ins().ishl_imm(revision_counter, 64);
+    let contobj = pos.ins().bor(shifted_counter, contref_addr);
+
+    contobj
 }
