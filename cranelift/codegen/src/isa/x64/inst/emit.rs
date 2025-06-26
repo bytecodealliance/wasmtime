@@ -1089,7 +1089,6 @@ pub(crate) fn emit(
             };
 
             let (w, prefix, map, opcode) = match op {
-                AvxOpcode::Vpalignr => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x0F),
                 AvxOpcode::Vinsertps => (false, LegacyPrefixes::_66, OpcodeMap::_0F3A, 0x21),
                 AvxOpcode::Vshufps => (false, LegacyPrefixes::None, OpcodeMap::_0F, 0xC6),
                 _ => panic!("unexpected rmr_imm_vex opcode {op:?}"),

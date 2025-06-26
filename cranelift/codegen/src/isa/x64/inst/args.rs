@@ -927,11 +927,7 @@ impl AvxOpcode {
     /// Which `InstructionSet`s support the opcode?
     pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
         match self {
-            AvxOpcode::Vpalignr
-            | AvxOpcode::Vinsertps
-            | AvxOpcode::Vpshufb
-            | AvxOpcode::Vshufps
-            | AvxOpcode::Vptest => {
+            AvxOpcode::Vinsertps | AvxOpcode::Vpshufb | AvxOpcode::Vshufps | AvxOpcode::Vptest => {
                 smallvec![InstructionSet::AVX]
             }
         }

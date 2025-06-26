@@ -732,8 +732,7 @@
 (extern extractor cc_nz_or_z cc_nz_or_z)
 
 (type AvxOpcode
-      (enum Vpalignr
-            Vinsertps
+      (enum Vinsertps
             Vpshufb
             Vshufps
             Vptest

@@ -40,7 +40,7 @@ use cranelift_codegen::{
         unwind::UnwindInst,
         x64::{
             AtomicRmwSeqOp,
-            args::{Avx512Opcode, AvxOpcode, CC},
+            args::{Avx512Opcode, CC},
             settings as x64_settings,
         },
     },

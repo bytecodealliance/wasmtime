@@ -1997,17 +1997,6 @@ impl Assembler {
         self.emit(Inst::External { inst });
     }
 
-    /// Perform an AVX opcode `op` involving registers `src1` and `src2`, writing the
-    /// result to `dst`.
-    pub fn xmm_vex_rr(&mut self, op: AvxOpcode, src1: Reg, src2: Reg, dst: WritableReg) {
-        self.emit(Inst::XmmRmiRVex {
-            op,
-            src1: src1.into(),
-            src2: src2.into(),
-            dst: dst.map(Into::into),
-        })
-    }
-
     pub fn xmm_vptest(&mut self, src1: Reg, src2: Reg) {
         self.emit(Inst::XmmCmpRmRVex {
             op: AvxOpcode::Vptest,
@@ -2285,13 +2274,9 @@ impl Assembler {
     /// Concatenates `src1` and `src2` and shifts right by `imm` and puts
     /// result in `dst`.
     pub fn xmm_vpalignr_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, imm: u8) {
-        self.emit(Inst::XmmRmRImmVex {
-            op: AvxOpcode::Vpalignr,
-            src1: src1.into(),
-            src2: src2.into(),
-            dst: dst.to_reg().into(),
-            imm,
-        })
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vpalignr_b::new(dst, src1, src2, imm).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Takes the lower lanes of vectors of floats in `src1` and `src2` and
