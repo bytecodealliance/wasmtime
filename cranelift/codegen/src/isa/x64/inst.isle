@@ -463,7 +463,6 @@
 (type SseOpcode extern
       (enum Insertps
             Pshufb
-            Ptest
             Shufps
           ))
 
@@ -2385,11 +2384,7 @@
 
 ;; Helper for creating `ptest` instructions.
 (decl x64_ptest (Xmm XmmMem) ProducesFlags)
-(rule (x64_ptest src1 src2)
-      (xmm_cmp_rm_r (SseOpcode.Ptest) src1 src2))
-(rule 1 (x64_ptest src1 src2)
-        (if-let true (use_avx))
-        (xmm_cmp_rm_r_vex (AvxOpcode.Vptest) src1 src2))
+(rule (x64_ptest src1 src2) (x64_ptest_rm_or_avx src1 src2))
 
 ;; Helper for creating `cmove` instructions. Note that these instructions do not
 ;; always result in a single emitted x86 instruction; e.g., XmmCmove uses jumps

@@ -37,6 +37,9 @@ pub fn list() -> Vec<Inst> {
         inst("testw", fmt("MR", [r(rm16), r(r16)]).flags(W), rex([0x66, 0x85]), _64b | compat),
         inst("testl", fmt("MR", [r(rm32), r(r32)]).flags(W), rex([0x85]), _64b | compat),
         inst("testq", fmt("MR", [r(rm64), r(r64)]).flags(W), rex([0x85]).w(), _64b | compat),
+        // `AND` xmm and set flags.
+        inst("ptest", fmt("RM", [r(xmm1), r(align(xmm_m128))]).flags(W), rex([0x66, 0x0F, 0x38, 0x17]).r(), _64b | compat | sse41).alt(avx, "vptest_rm"),
+        inst("vptest", fmt("RM", [r(xmm1), r(xmm_m128)]).flags(W), vex(L128)._66()._0f38().op(0x17).r(), _64b | compat | avx),
         // Compare floating point and set flags.
         inst("ucomiss", fmt("A", [r(xmm1), r(xmm_m32)]).flags(W), rex([0x0F, 0x2E]).r(), _64b | compat | sse).alt(avx, "vucomiss_a"),
         inst("ucomisd", fmt("A", [r(xmm1), r(xmm_m64)]).flags(W), rex([0x66, 0x0F, 0x2E]).r(), _64b | compat | sse2).alt(avx, "vucomisd_a"),
