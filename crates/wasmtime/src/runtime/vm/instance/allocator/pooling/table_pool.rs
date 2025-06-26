@@ -120,7 +120,7 @@ impl TablePool {
     ///
     /// This is typically just the `nominal_table_elements` multiplied by
     /// the size of the table's element type, but may be less in the case
-    /// of types such as VMContRef for which less capacity will be avialable
+    /// of types such as VMContRef for which less capacity will be available
     /// (maintaining a consistent table size in the pool).
     fn data_size(&self, table_type: crate::vm::table::TableElementType) -> usize {
         let element_size = table_type.element_size();
