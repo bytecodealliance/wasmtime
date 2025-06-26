@@ -1953,8 +1953,8 @@ at https://bytecodealliance.org/security.
     }
 
     #[cfg(feature = "async")]
-    pub(crate) fn async_state(&mut self) -> *mut fiber::AsyncState {
-        &raw mut self.async_state
+    pub(crate) fn fiber_async_state_mut(&mut self) -> &mut fiber::AsyncState {
+        &mut self.async_state
     }
 
     #[cfg(feature = "async")]

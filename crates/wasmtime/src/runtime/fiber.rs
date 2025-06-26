@@ -193,8 +193,10 @@ impl<'a, 'b> BlockingContext<'a, 'b> {
         S: AsStoreOpaque,
     {
         let opaque = store.as_store_opaque();
-        let future_cx;
-        let suspend;
+
+        let state = opaque.fiber_async_state_mut();
+        assert!(!state.current_future_cx.is_null());
+        assert!(!state.current_suspend.is_null());
 
         // SAFETY: this is taking pointers from `AsyncState` and then unsafely
         // turning them into safe references. Lifetime-wise this should be safe
@@ -210,15 +212,11 @@ impl<'a, 'b> BlockingContext<'a, 'b> {
         // fiber and for this fiber. The "take" pattern here ensures that if
         // this `BlockingContext` context acquires the pointers then there are
         // no other instances of these pointers in use anywhere else.
-        unsafe {
-            let state = opaque.async_state();
-            assert!(!(*state).current_future_cx.is_null());
-            assert!(!(*state).current_suspend.is_null());
-            future_cx = Some(&mut *(*state).current_future_cx);
-            (*state).current_future_cx = ptr::null_mut();
-            suspend = &mut *(*state).current_suspend;
-            (*state).current_suspend = ptr::null_mut();
-        }
+        let future_cx = unsafe { Some(&mut *state.current_future_cx) };
+        let suspend = unsafe { &mut *state.current_suspend };
+
+        state.current_future_cx = ptr::null_mut();
+        state.current_suspend = ptr::null_mut();
 
         let mut reset = ResetBlockingContext {
             store,
@@ -234,18 +232,17 @@ impl<'a, 'b> BlockingContext<'a, 'b> {
         impl<S: AsStoreOpaque> Drop for ResetBlockingContext<'_, '_, S> {
             fn drop(&mut self) {
                 let store = self.store.as_store_opaque();
-                let state = store.async_state();
+                let state = store.fiber_async_state_mut();
 
-                // SAFETY: TODO need to remove the unsafety from
-                // reading/writing `async_state`. Otherwise this is all state
-                // owned by the store.
-                unsafe {
-                    debug_assert!((*state).current_future_cx.is_null());
-                    debug_assert!((*state).current_suspend.is_null());
-                    (*state).current_suspend = self.cx.suspend;
-                    if let Some(cx) = &mut self.cx.future_cx {
-                        (*state).current_future_cx = change_context_lifetime(cx);
-                    }
+                debug_assert!(state.current_future_cx.is_null());
+                debug_assert!(state.current_suspend.is_null());
+                state.current_suspend = self.cx.suspend;
+
+                if let Some(cx) = &mut self.cx.future_cx {
+                    // SAFETY: while this is changing the lifetime to `'static`
+                    // it should never be used while it's `'static` given this
+                    // `BlockingContext` abstraction.
+                    state.current_future_cx = unsafe { change_context_lifetime(cx) };
                 }
             }
         }
@@ -411,8 +408,7 @@ impl StoreOpaque {
 
     /// Returns whether `block_on` will succeed or panic.
     pub(crate) fn can_block(&mut self) -> bool {
-        let current_future_cx = unsafe { (*self.async_state()).current_future_cx };
-        !current_future_cx.is_null()
+        !self.fiber_async_state_mut().current_future_cx.is_null()
     }
 }
 
@@ -646,11 +642,11 @@ impl StoreOpaque {
     }
 
     fn replace_current_suspend(&mut self, ptr: *mut WasmtimeSuspend) -> *mut WasmtimeSuspend {
-        unsafe { mem::replace(&mut (*self.async_state()).current_suspend, ptr) }
+        mem::replace(&mut self.fiber_async_state_mut().current_suspend, ptr)
     }
 
     fn replace_current_future_cx(&mut self, ptr: *mut Context<'static>) -> *mut Context<'static> {
-        unsafe { mem::replace(&mut (*self.async_state()).current_future_cx, ptr) }
+        mem::replace(&mut self.fiber_async_state_mut().current_future_cx, ptr)
     }
 }
 
@@ -788,39 +784,33 @@ pub(crate) fn make_fiber<'a>(
         // `resume_fiber`, we've been given exclusive access to
         // the store until we exit or yield it back to the resumer.
         let store_ref = unsafe { &mut *store };
-        let async_state = store_ref.store_opaque_mut().async_state();
 
         // It should be a guarantee that the store has null pointers here upon
         // starting a fiber, so now's the time to fill in the pointers now that
         // the fiber is running and `future_cx` and `suspend` are both in scope.
         // Note that these pointers are removed when this function returns as
         // that's when they fall out of scope.
-        //
-        // SAFETY: TODO make manipulation of `AsyncState` safer.
-        unsafe {
-            assert!((*async_state).current_suspend.is_null());
-            assert!((*async_state).current_future_cx.is_null());
-
-            (*async_state).current_suspend = suspend;
-            (*async_state).current_future_cx = future_cx;
-        }
+        let async_state = store_ref.store_opaque_mut().fiber_async_state_mut();
+        assert!(async_state.current_suspend.is_null());
+        assert!(async_state.current_future_cx.is_null());
+        async_state.current_suspend = suspend;
+        async_state.current_future_cx = future_cx;
 
         struct ResetCurrentPointersToNull<'a>(&'a mut dyn VMStore);
 
         impl Drop for ResetCurrentPointersToNull<'_> {
             fn drop(&mut self) {
-                let state = self.0.async_state();
-                unsafe {
-                    // Double-check that the current suspension isn't null (it
-                    // should be what's in this closure). Note though that we
-                    // can't check `current_future_cx` because it may either be
-                    // here or not be here depending on whether this was
-                    // cancelled or not.
-                    debug_assert!(!(*state).current_suspend.is_null());
+                let state = self.0.fiber_async_state_mut();
 
-                    (*state).current_suspend = ptr::null_mut();
-                    (*state).current_future_cx = ptr::null_mut();
-                }
+                // Double-check that the current suspension isn't null (it
+                // should be what's in this closure). Note though that we
+                // can't check `current_future_cx` because it may either be
+                // here or not be here depending on whether this was
+                // cancelled or not.
+                debug_assert!(!state.current_suspend.is_null());
+
+                state.current_suspend = ptr::null_mut();
+                state.current_future_cx = ptr::null_mut();
             }
         }
         let reset = ResetCurrentPointersToNull(store_ref);
