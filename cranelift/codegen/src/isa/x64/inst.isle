@@ -88,12 +88,6 @@
                      (dst WritableXmm)
                      (imm u8))
 
-       ;; XMM (scalar or vector) unary op (from xmm to reg/mem) using the
-       ;; VEX prefix
-       (XmmMovRMVex (op AvxOpcode)
-                    (src Xmm)
-                    (dst SyntheticAmode))
-
        ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
        (XmmCmpRmRVex (op AvxOpcode)
                      (src1 Xmm)
@@ -742,11 +736,6 @@
             Vinsertps
             Vpshufb
             Vshufps
-            Vmovss
-            Vmovsd
-            Vmovups
-            Vmovupd
-            Vmovdqu
             Vpblendw
             Vptest
           ))
@@ -1694,10 +1683,6 @@
 (rule (x64_movimm_m $I16 addr (i16_from_i32 imm)) (x64_movw_mi_mem addr (i16_cast_unsigned imm)))
 (rule (x64_movimm_m $I32 addr imm) (x64_movl_mi_mem addr (i32_cast_unsigned imm)))
 (rule (x64_movimm_m $I64 addr imm) (x64_movq_mi_sxl_mem addr imm))
-
-(decl xmm_movrm_vex (AvxOpcode SyntheticAmode Xmm) SideEffectNoResult)
-(rule (xmm_movrm_vex op addr data)
-      (SideEffectNoResult.Inst (MInst.XmmMovRMVex op data addr)))
 
 ;; Load a constant into an XMM register.
 (decl x64_xmm_load_const (Type VCodeConstant) Xmm)

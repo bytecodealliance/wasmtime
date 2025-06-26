@@ -126,7 +126,6 @@ impl Inst {
 
             Inst::XmmRmiRVex { op, .. }
             | Inst::XmmRmRImmVex { op, .. }
-            | Inst::XmmMovRMVex { op, .. }
             | Inst::XmmCmpRmRVex { op, .. } => op.available_from(),
 
             Inst::External { inst } => {
@@ -532,13 +531,6 @@ impl PrettyPrint for Inst {
                 let src = src.pretty_print(8);
                 let op = ljustify(op.to_string());
                 format!("{op} ${imm}, {src}, {dst}")
-            }
-
-            Inst::XmmMovRMVex { op, src, dst, .. } => {
-                let src = pretty_print_reg(src.to_reg(), 8);
-                let dst = dst.pretty_print(8);
-                let op = ljustify(op.to_string());
-                format!("{op} {src}, {dst}")
             }
 
             Inst::XmmRmR {
@@ -1208,10 +1200,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(rhs);
             collector.reg_use(lhs);
             collector.reg_reuse_def(dst, 0); // Reuse RHS.
-        }
-        Inst::XmmMovRMVex { src, dst, .. } => {
-            collector.reg_use(src);
-            dst.get_operands(collector);
         }
         Inst::XmmCmpRmR { src1, src2, .. } => {
             collector.reg_use(src1);

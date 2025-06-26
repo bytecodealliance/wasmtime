@@ -931,11 +931,6 @@ impl AvxOpcode {
             | AvxOpcode::Vinsertps
             | AvxOpcode::Vpshufb
             | AvxOpcode::Vshufps
-            | AvxOpcode::Vmovss
-            | AvxOpcode::Vmovsd
-            | AvxOpcode::Vmovups
-            | AvxOpcode::Vmovupd
-            | AvxOpcode::Vmovdqu
             | AvxOpcode::Vpblendw
             | AvxOpcode::Vptest => {
                 smallvec![InstructionSet::AVX]

@@ -2,7 +2,6 @@
 
 use crate::ir::pcc::*;
 use crate::ir::types::*;
-use crate::isa::x64::args::AvxOpcode;
 use crate::isa::x64::inst::Inst;
 use crate::isa::x64::inst::args::{Amode, Gpr, RegMem, RegMemImm, SyntheticAmode, ToWritableReg};
 use crate::machinst::pcc::*;
@@ -115,17 +114,9 @@ pub(crate) fn check(
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
 
-        Inst::XmmRmRImmVex {
-            op, dst, ref src2, ..
-        } => {
-            let (ty, size) = match op {
-                AvxOpcode::Vmovss => (F32, 32),
-                AvxOpcode::Vmovsd => (F64, 64),
-
-                // We assume all other operations happen on 128-bit values.
-                _ => (I8X16, 128),
-            };
-
+        Inst::XmmRmRImmVex { dst, ref src2, .. } => {
+            // We assume all other operations happen on 128-bit values.
+            let (ty, size) = (I8X16, 128);
             match <&RegMem>::from(src2) {
                 RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, ty, size)?;
@@ -144,8 +135,6 @@ pub(crate) fn check(
             }
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
-
-        Inst::XmmMovRMVex { ref dst, .. } => check_store(ctx, None, dst, vcode, I8X16),
 
         Inst::CvtUint64ToFloatSeq {
             dst,

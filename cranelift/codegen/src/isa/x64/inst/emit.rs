@@ -1057,8 +1057,6 @@ pub(crate) fn emit(
 
             let (prefix, map, opcode) = match op {
                 AvxOpcode::Vpshufb => (LP::_66, OM::_0F38, 0x00),
-                AvxOpcode::Vmovsd => (LP::_F2, OM::_0F, 0x10),
-                AvxOpcode::Vmovss => (LP::_F3, OM::_0F, 0x10),
                 _ => panic!("unexpected rmir vex opcode {op:?}"),
             };
             VexInstruction::new()
@@ -1108,28 +1106,6 @@ pub(crate) fn emit(
                 .vvvv(src1.to_real_reg().unwrap().hw_enc())
                 .rm(src2)
                 .imm(*imm)
-                .encode(sink);
-        }
-
-        Inst::XmmMovRMVex { op, src, dst } => {
-            let src = src.to_reg();
-            let dst = dst.clone().finalize(state.frame_layout(), sink);
-
-            let (prefix, map, opcode) = match op {
-                AvxOpcode::Vmovdqu => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x7F),
-                AvxOpcode::Vmovss => (LegacyPrefixes::_F3, OpcodeMap::_0F, 0x11),
-                AvxOpcode::Vmovsd => (LegacyPrefixes::_F2, OpcodeMap::_0F, 0x11),
-                AvxOpcode::Vmovups => (LegacyPrefixes::None, OpcodeMap::_0F, 0x11),
-                AvxOpcode::Vmovupd => (LegacyPrefixes::_66, OpcodeMap::_0F, 0x11),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-            VexInstruction::new()
-                .length(VexVectorLength::V128)
-                .prefix(prefix)
-                .map(map)
-                .opcode(opcode)
-                .rm(dst)
-                .reg(src.to_real_reg().unwrap().hw_enc())
                 .encode(sink);
         }
 

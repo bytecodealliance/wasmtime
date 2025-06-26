@@ -1944,12 +1944,9 @@ impl Assembler {
     /// Moves lower 64-bit float from `src2` into lower 64-bits of `dst` and the
     /// upper 64-bits in `src1` into the upper 64-bits of `dst`.
     pub fn xmm_vmovsd_rrr(&mut self, dst: WritableReg, src1: Reg, src2: Reg) {
-        self.emit(Inst::XmmRmiRVex {
-            op: AvxOpcode::Vmovsd,
-            src1: src1.into(),
-            src2: XmmMemImm::unwrap_new(src2.into()),
-            dst: dst.to_reg().into(),
-        })
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vmovsd_b::new(dst, src1, src2).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Moves 64-bit float from `src` into lower 64-bits of `dst`.
