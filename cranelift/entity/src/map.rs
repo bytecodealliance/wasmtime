@@ -5,6 +5,7 @@ use crate::iter::{Iter, IterMut};
 use crate::keys::Keys;
 use alloc::vec::Vec;
 use core::cmp::min;
+use core::fmt;
 use core::marker::PhantomData;
 use core::ops::{Index, IndexMut};
 use core::slice;
@@ -23,7 +24,7 @@ use serde::{
 ///
 /// The map does not track if an entry for a key has been inserted or not. Instead it behaves as if
 /// all keys have a default entry from the beginning.
-#[derive(Debug, Clone, Hash)]
+#[derive(Clone, Hash)]
 pub struct SecondaryMap<K, V>
 where
     K: EntityRef,
@@ -279,6 +280,15 @@ where
         deserializer.deserialize_seq(SecondaryMapVisitor {
             unused: PhantomData {},
         })
+    }
+}
+
+impl<K: EntityRef + fmt::Debug, V: fmt::Debug + Clone> fmt::Debug for SecondaryMap<K, V> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SecondaryMap")
+            .field("elems", &self.elems)
+            .field("default", &self.default)
+            .finish()
     }
 }
 

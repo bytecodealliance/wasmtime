@@ -169,6 +169,10 @@ audited_as = "33.0.0"
 version = "35.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.pulley-macros]]
+version = "35.0.0"
+audited_as = "34.0.0"
+
 [[unpublished.wasi-common]]
 version = "34.0.0"
 audited_as = "33.0.0"
@@ -618,13 +622,6 @@ user-id = 6743
 user-login = "epage"
 user-name = "Ed Page"
 
-[[publisher.core-foundation]]
-version = "0.9.3"
-when = "2022-02-07"
-user-id = 5946
-user-login = "jrmuizel"
-user-name = "Jeff Muizelaar"
-
 [[publisher.core-foundation-sys]]
 version = "0.8.4"
 when = "2023-04-03"
@@ -934,13 +931,6 @@ user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
-[[publisher.openssl-probe]]
-version = "0.1.6"
-when = "2025-01-23"
-user-id = 1
-user-login = "alexcrichton"
-user-name = "Alex Crichton"
-
 [[publisher.prettyplease]]
 version = "0.2.31"
 when = "2025-03-13"
@@ -958,6 +948,12 @@ user-name = "David Tolnay"
 [[publisher.pulley-interpreter]]
 version = "33.0.0"
 when = "2025-05-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.pulley-macros]]
+version = "34.0.0"
+when = "2025-06-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1564,14 +1560,14 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.wit-bindgen]]
-version = "0.42.1"
-when = "2025-05-06"
+version = "0.43.0"
+when = "2025-06-24"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-core]]
-version = "0.42.1"
-when = "2025-05-06"
+version = "0.43.0"
+when = "2025-06-24"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1588,20 +1584,20 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rt]]
-version = "0.42.1"
-when = "2025-05-06"
+version = "0.43.0"
+when = "2025-06-24"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.42.1"
-when = "2025-05-06"
+version = "0.43.0"
+when = "2025-06-24"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.42.1"
-when = "2025-05-06"
+version = "0.43.0"
+when = "2025-06-24"
 user-id = 73222
 user-login = "wasmtime-publish"
 

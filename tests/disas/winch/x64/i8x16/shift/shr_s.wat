@@ -14,7 +14,7 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x6b
+;;       ja      0x69
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
@@ -32,7 +32,8 @@
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   6b: ud2
+;;   69: ud2
+;;   6b: addb    %al, (%rax)
 ;;   6d: addb    %al, (%rax)
 ;;   6f: addb    %al, (%rcx)
 ;;   71: addb    %al, (%rax)

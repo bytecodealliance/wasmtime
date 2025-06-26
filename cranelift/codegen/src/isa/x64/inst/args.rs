@@ -304,6 +304,26 @@ newtype_of_reg!(
     |reg| reg.class() == RegClass::Int
 );
 
+#[expect(missing_docs, reason = "self-describing fields")]
+impl Gpr {
+    pub const RAX: Gpr = Gpr(regs::rax());
+    pub const RBX: Gpr = Gpr(regs::rbx());
+    pub const RCX: Gpr = Gpr(regs::rcx());
+    pub const RDX: Gpr = Gpr(regs::rdx());
+    pub const RSI: Gpr = Gpr(regs::rsi());
+    pub const RDI: Gpr = Gpr(regs::rdi());
+    pub const RSP: Gpr = Gpr(regs::rsp());
+    pub const RBP: Gpr = Gpr(regs::rbp());
+    pub const R8: Gpr = Gpr(regs::r8());
+    pub const R9: Gpr = Gpr(regs::r9());
+    pub const R10: Gpr = Gpr(regs::r10());
+    pub const R11: Gpr = Gpr(regs::r11());
+    pub const R12: Gpr = Gpr(regs::r12());
+    pub const R13: Gpr = Gpr(regs::r13());
+    pub const R14: Gpr = Gpr(regs::r14());
+    pub const R15: Gpr = Gpr(regs::r15());
+}
+
 // Define a newtype of `Reg` for XMM registers.
 newtype_of_reg!(
     Xmm,
@@ -624,13 +644,6 @@ impl RegMemImm {
         Self::Imm { simm32 }
     }
 
-    /// Asserts that in register mode, the reg class is the one that's expected.
-    pub(crate) fn assert_regclass_is(&self, expected_reg_class: RegClass) {
-        if let Self::Reg { reg } = self {
-            debug_assert_eq!(reg.class(), expected_reg_class);
-        }
-    }
-
     /// Add the regs mentioned by `self` to `collector`.
     pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
         match self {
@@ -727,15 +740,6 @@ impl PrettyPrint for RegMem {
             RegMem::Mem { addr, .. } => addr.pretty_print(size),
         }
     }
-}
-
-#[derive(Clone, Copy, PartialEq)]
-/// Comparison operations.
-pub enum CmpOpcode {
-    /// CMP instruction: compute `a - b` and set flags from result.
-    Cmp,
-    /// TEST instruction: compute `a & b` and set flags from result.
-    Test,
 }
 
 #[derive(Debug)]
@@ -955,88 +959,7 @@ impl AvxOpcode {
             | AvxOpcode::Vfnmsub132sd
             | AvxOpcode::Vfnmsub132ps
             | AvxOpcode::Vfnmsub132pd => smallvec![InstructionSet::FMA],
-            AvxOpcode::Vminps
-            | AvxOpcode::Vminpd
-            | AvxOpcode::Vmaxps
-            | AvxOpcode::Vmaxpd
-            | AvxOpcode::Vandnps
-            | AvxOpcode::Vandnpd
-            | AvxOpcode::Vpandn
-            | AvxOpcode::Vcmpps
-            | AvxOpcode::Vcmppd
-            | AvxOpcode::Vpsrlw
-            | AvxOpcode::Vpsrld
-            | AvxOpcode::Vpsrlq
-            | AvxOpcode::Vpaddb
-            | AvxOpcode::Vpaddw
-            | AvxOpcode::Vpaddd
-            | AvxOpcode::Vpaddq
-            | AvxOpcode::Vpaddsb
-            | AvxOpcode::Vpaddsw
-            | AvxOpcode::Vpaddusb
-            | AvxOpcode::Vpaddusw
-            | AvxOpcode::Vpsubb
-            | AvxOpcode::Vpsubw
-            | AvxOpcode::Vpsubd
-            | AvxOpcode::Vpsubq
-            | AvxOpcode::Vpsubsb
-            | AvxOpcode::Vpsubsw
-            | AvxOpcode::Vpsubusb
-            | AvxOpcode::Vpsubusw
-            | AvxOpcode::Vpavgb
-            | AvxOpcode::Vpavgw
-            | AvxOpcode::Vpand
-            | AvxOpcode::Vandps
-            | AvxOpcode::Vandpd
-            | AvxOpcode::Vpor
-            | AvxOpcode::Vorps
-            | AvxOpcode::Vorpd
-            | AvxOpcode::Vpxor
-            | AvxOpcode::Vxorps
-            | AvxOpcode::Vxorpd
-            | AvxOpcode::Vpmullw
-            | AvxOpcode::Vpmulld
-            | AvxOpcode::Vpmulhw
-            | AvxOpcode::Vpmulhd
-            | AvxOpcode::Vpmulhrsw
-            | AvxOpcode::Vpmulhuw
-            | AvxOpcode::Vpmuldq
-            | AvxOpcode::Vpmuludq
-            | AvxOpcode::Vpunpckhwd
-            | AvxOpcode::Vpunpcklwd
-            | AvxOpcode::Vunpcklps
-            | AvxOpcode::Vunpckhps
-            | AvxOpcode::Vaddps
-            | AvxOpcode::Vaddpd
-            | AvxOpcode::Vsubps
-            | AvxOpcode::Vsubpd
-            | AvxOpcode::Vmulps
-            | AvxOpcode::Vmulpd
-            | AvxOpcode::Vdivps
-            | AvxOpcode::Vdivpd
-            | AvxOpcode::Vpcmpeqb
-            | AvxOpcode::Vpcmpeqw
-            | AvxOpcode::Vpcmpeqd
-            | AvxOpcode::Vpcmpeqq
-            | AvxOpcode::Vpcmpgtb
-            | AvxOpcode::Vpcmpgtw
-            | AvxOpcode::Vpcmpgtd
-            | AvxOpcode::Vpcmpgtq
-            | AvxOpcode::Vpminsb
-            | AvxOpcode::Vpminsw
-            | AvxOpcode::Vpminsd
-            | AvxOpcode::Vpminub
-            | AvxOpcode::Vpminuw
-            | AvxOpcode::Vpminud
-            | AvxOpcode::Vpmaxsb
-            | AvxOpcode::Vpmaxsw
-            | AvxOpcode::Vpmaxsd
-            | AvxOpcode::Vpmaxub
-            | AvxOpcode::Vpmaxuw
-            | AvxOpcode::Vpmaxud
-            | AvxOpcode::Vpunpcklbw
-            | AvxOpcode::Vpunpckhbw
-            | AvxOpcode::Vpacksswb
+            AvxOpcode::Vpacksswb
             | AvxOpcode::Vpackssdw
             | AvxOpcode::Vpackuswb
             | AvxOpcode::Vpackusdw
@@ -1046,62 +969,16 @@ impl AvxOpcode {
             | AvxOpcode::Vinsertps
             | AvxOpcode::Vpshufb
             | AvxOpcode::Vshufps
-            | AvxOpcode::Vpsllw
-            | AvxOpcode::Vpslld
-            | AvxOpcode::Vpsllq
-            | AvxOpcode::Vpsraw
-            | AvxOpcode::Vpsrad
-            | AvxOpcode::Vpmovsxbw
-            | AvxOpcode::Vpmovzxbw
-            | AvxOpcode::Vpmovsxwd
-            | AvxOpcode::Vpmovzxwd
-            | AvxOpcode::Vpmovsxdq
-            | AvxOpcode::Vpmovzxdq
-            | AvxOpcode::Vaddss
-            | AvxOpcode::Vaddsd
-            | AvxOpcode::Vmulss
-            | AvxOpcode::Vmulsd
-            | AvxOpcode::Vsubss
-            | AvxOpcode::Vsubsd
-            | AvxOpcode::Vdivss
-            | AvxOpcode::Vdivsd
-            | AvxOpcode::Vpabsb
-            | AvxOpcode::Vpabsw
-            | AvxOpcode::Vpabsd
-            | AvxOpcode::Vminss
-            | AvxOpcode::Vminsd
-            | AvxOpcode::Vmaxss
-            | AvxOpcode::Vmaxsd
-            | AvxOpcode::Vsqrtps
-            | AvxOpcode::Vsqrtpd
             | AvxOpcode::Vphaddw
             | AvxOpcode::Vphaddd
-            | AvxOpcode::Vpunpckldq
-            | AvxOpcode::Vpunpckhdq
-            | AvxOpcode::Vpunpcklqdq
-            | AvxOpcode::Vpunpckhqdq
             | AvxOpcode::Vmovss
             | AvxOpcode::Vmovsd
             | AvxOpcode::Vmovups
             | AvxOpcode::Vmovupd
             | AvxOpcode::Vmovdqu
-            | AvxOpcode::Vpextrb
-            | AvxOpcode::Vpextrw
-            | AvxOpcode::Vpextrd
-            | AvxOpcode::Vpextrq
             | AvxOpcode::Vpblendw
-            | AvxOpcode::Vbroadcastss
-            | AvxOpcode::Vsqrtss
-            | AvxOpcode::Vsqrtsd
-            | AvxOpcode::Vunpcklpd
-            | AvxOpcode::Vptest
-            | AvxOpcode::Vucomiss
-            | AvxOpcode::Vucomisd => {
+            | AvxOpcode::Vptest => {
                 smallvec![InstructionSet::AVX]
-            }
-
-            AvxOpcode::Vpbroadcastb | AvxOpcode::Vpbroadcastw | AvxOpcode::Vpbroadcastd => {
-                smallvec![InstructionSet::AVX2]
             }
         }
     }
@@ -1111,40 +988,7 @@ impl AvxOpcode {
     /// Note that this method is not exhaustive, and there may be commutative
     /// opcodes that we don't recognize as commutative.
     pub(crate) fn is_commutative(&self) -> bool {
-        match *self {
-            AvxOpcode::Vpaddb
-            | AvxOpcode::Vpaddw
-            | AvxOpcode::Vpaddd
-            | AvxOpcode::Vpaddq
-            | AvxOpcode::Vpaddsb
-            | AvxOpcode::Vpaddsw
-            | AvxOpcode::Vpaddusb
-            | AvxOpcode::Vpaddusw
-            | AvxOpcode::Vpand
-            | AvxOpcode::Vandps
-            | AvxOpcode::Vandpd
-            | AvxOpcode::Vpor
-            | AvxOpcode::Vorps
-            | AvxOpcode::Vorpd
-            | AvxOpcode::Vpxor
-            | AvxOpcode::Vxorps
-            | AvxOpcode::Vxorpd
-            | AvxOpcode::Vpmuldq
-            | AvxOpcode::Vpmuludq
-            | AvxOpcode::Vaddps
-            | AvxOpcode::Vaddpd
-            | AvxOpcode::Vmulps
-            | AvxOpcode::Vmulpd
-            | AvxOpcode::Vpcmpeqb
-            | AvxOpcode::Vpcmpeqw
-            | AvxOpcode::Vpcmpeqd
-            | AvxOpcode::Vpcmpeqq
-            | AvxOpcode::Vaddss
-            | AvxOpcode::Vaddsd
-            | AvxOpcode::Vmulss
-            | AvxOpcode::Vmulsd => true,
-            _ => false,
-        }
+        false
     }
 }
 

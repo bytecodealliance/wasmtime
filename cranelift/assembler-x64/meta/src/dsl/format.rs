@@ -333,6 +333,7 @@ pub enum Location {
     xmm1,
     xmm2,
     xmm3,
+    xmm_m8,
     xmm_m16,
     xmm_m32,
     xmm_m64,
@@ -352,7 +353,7 @@ impl Location {
     pub fn bits(&self) -> u16 {
         use Location::*;
         match self {
-            al | cl | imm8 | r8 | rm8 | m8 => 8,
+            al | cl | imm8 | r8 | rm8 | m8 | xmm_m8 => 8,
             ax | dx | imm16 | r16 | rm16 | m16 | xmm_m16 => 16,
             eax | edx | imm32 | r32 | r32a | r32b | rm32 | m32 | xmm_m32 => 32,
             rax | rbx | rcx | rdx | imm64 | r64 | r64a | r64b | rm64 | m64 | xmm_m64 => 64,
@@ -399,7 +400,7 @@ impl Location {
             r8 | r16 | r32 | r32a | r32b | r64 | r64a | r64b | xmm1 | xmm2 | xmm3 => {
                 OperandKind::Reg(*self)
             }
-            rm8 | rm16 | rm32 | rm64 | xmm_m16 | xmm_m32 | xmm_m64 | xmm_m128 => {
+            rm8 | rm16 | rm32 | rm64 | xmm_m8 | xmm_m16 | xmm_m32 | xmm_m64 | xmm_m128 => {
                 OperandKind::RegMem(*self)
             }
             m8 | m16 | m32 | m64 | m128 => OperandKind::Mem(*self),
@@ -417,7 +418,7 @@ impl Location {
             imm8 | imm16 | imm32 | imm64 | m8 | m16 | m32 | m64 | m128 => None,
             al | ax | eax | rax | rbx | cl | rcx | dx | edx | rdx | r8 | r16 | r32 | r32a
             | r32b | r64 | r64a | r64b | rm8 | rm16 | rm32 | rm64 => Some(RegClass::Gpr),
-            xmm1 | xmm2 | xmm3 | xmm_m16 | xmm_m32 | xmm_m64 | xmm_m128 | xmm0 => {
+            xmm1 | xmm2 | xmm3 | xmm_m8 | xmm_m16 | xmm_m32 | xmm_m64 | xmm_m128 | xmm0 => {
                 Some(RegClass::Xmm)
             }
         }
@@ -461,6 +462,7 @@ impl core::fmt::Display for Location {
             xmm1 => write!(f, "xmm1"),
             xmm2 => write!(f, "xmm2"),
             xmm3 => write!(f, "xmm3"),
+            xmm_m8 => write!(f, "xmm_m8"),
             xmm_m16 => write!(f, "xmm_m16"),
             xmm_m32 => write!(f, "xmm_m32"),
             xmm_m64 => write!(f, "xmm_m64"),
@@ -596,6 +598,26 @@ pub enum Eflags {
     R,
     W,
     RW,
+}
+
+impl Eflags {
+    /// Returns whether this represents a read of any bit in the EFLAGS
+    /// register.
+    pub fn is_read(&self) -> bool {
+        match self {
+            Eflags::None | Eflags::W => false,
+            Eflags::R | Eflags::RW => true,
+        }
+    }
+
+    /// Returns whether this represents a writes to any bit in the EFLAGS
+    /// register.
+    pub fn is_write(&self) -> bool {
+        match self {
+            Eflags::None | Eflags::R => false,
+            Eflags::W | Eflags::RW => true,
+        }
+    }
 }
 
 impl Default for Eflags {

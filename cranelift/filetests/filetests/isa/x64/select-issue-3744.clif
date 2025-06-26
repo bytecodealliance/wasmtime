@@ -18,8 +18,8 @@ block0(v0: f32, v1: f32):
 ; block0:
 ;   movl $0x1, %eax
 ;   ucomiss %xmm1, %xmm0
-;   cmovpl  const(0), %eax, %eax
-;   cmovnzl const(0), %eax, %eax
+;   cmovpl (%rip), %eax
+;   cmovnel (%rip), %eax
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

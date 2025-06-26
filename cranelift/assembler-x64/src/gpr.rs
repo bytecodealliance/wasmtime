@@ -69,7 +69,7 @@ pub enum Size {
 ///
 /// This is due to avoid special cases of REX encodings, see Intel SDM Vol. 2A,
 /// table 2-5.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct NonRspGpr<R: AsReg>(R);
 
 impl<R: AsReg> NonRspGpr<R> {
@@ -93,6 +93,12 @@ impl<R: AsReg> NonRspGpr<R> {
         assert!(enc < 16, "invalid register: {enc}");
         assert_ne!(enc, enc::RSP, "invalid register: %rsp");
         enc
+    }
+}
+
+impl<R: AsReg> AsRef<R> for NonRspGpr<R> {
+    fn as_ref(&self) -> &R {
+        &self.0
     }
 }
 

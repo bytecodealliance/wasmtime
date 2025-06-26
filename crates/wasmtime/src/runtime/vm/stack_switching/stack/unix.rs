@@ -322,7 +322,7 @@ unsafe extern "C" fn fiber_start(
 
         // NOTE(frank-emrich) The usage of the `caller_vmctx` is probably not
         // 100% correct here. Currently, we determine the "caller" vmctx when
-        // initilizing the fiber stack/continuation (i.e. as part of
+        // initializing the fiber stack/continuation (i.e. as part of
         // `cont.new`). However, we may subsequenly `resume` the continuation
         // from a different Wasm instance. The way to fix this would be to make
         // the currently active `VMContext` an additional parameter of

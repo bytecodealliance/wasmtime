@@ -294,6 +294,7 @@ impl Config {
             Some(self.module_config.component_model_async_stackful);
         cfg.wasm.component_model_error_context =
             Some(self.module_config.component_model_error_context);
+        cfg.wasm.component_model_gc = Some(self.module_config.component_model_gc);
         cfg.wasm.custom_page_sizes = Some(self.module_config.config.custom_page_sizes_enabled);
         cfg.wasm.epoch_interruption = Some(self.wasmtime.epoch_interruption);
         cfg.wasm.extended_const = Some(self.module_config.config.extended_const_enabled);
