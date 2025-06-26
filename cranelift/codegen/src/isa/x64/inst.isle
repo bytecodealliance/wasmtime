@@ -60,34 +60,6 @@
        ;; =========================================
        ;; Floating-point operations.
 
-       ;; XMM (scalar or vector) binary op: (add sub and or xor mul adc? sbb?)
-       ;; (32 64) (reg addr) reg
-       (XmmRmR (op SseOpcode)
-               (src1 Xmm)
-               (src2 XmmMemAligned)
-               (dst WritableXmm))
-
-       ;; Same as `XmmRmR` except the memory operand can be unaligned
-       (XmmRmRUnaligned (op SseOpcode)
-                        (src1 Xmm)
-                        (src2 XmmMem)
-                        (dst WritableXmm))
-
-       ;; XMM (scalar or vector) binary op that relies on the VEX prefix and
-       ;; has two inputs.
-       (XmmRmiRVex (op AvxOpcode)
-                   (src1 Xmm)
-                   (src2 XmmMemImm)
-                   (dst WritableXmm))
-
-       ;; XMM (scalar or vector) ternary op that relies on the VEX prefix and
-       ;; has two dynamic inputs plus one immediate input.
-       (XmmRmRImmVex (op AvxOpcode)
-                     (src1 Xmm)
-                     (src2 XmmMem)
-                     (dst WritableXmm)
-                     (imm u8))
-
        ;; XMM (scalar or vector) binary op that relies on the EVEX
        ;; prefix. Takes two inputs.
        (XmmRmREvex (op Avx512Opcode)
@@ -107,17 +79,6 @@
                     (src1 Xmm)
                     (src2 Xmm)
                     (src3 XmmMem)
-                    (dst WritableXmm))
-
-       ;; XMM (scalar or vector) unary op: mov between XMM registers (32 64)
-       ;; (reg addr) reg, sqrt, etc.
-       ;;
-       ;; This differs from XMM_RM_R in that the dst register of XmmUnaryRmR is
-       ;; not used in the computation of the instruction dst value and so does
-       ;; not have to be a previously valid value. This is characteristic of mov
-       ;; instructions.
-       (XmmUnaryRmR (op SseOpcode)
-                    (src XmmMemAligned)
                     (dst WritableXmm))
 
        ;; XMM (scalar or vector) unary op that relies on the EVEX prefix.
@@ -158,27 +119,6 @@
                      (lhs Xmm)
                      (rhs Xmm)
                      (dst WritableXmm))
-
-       ;; Float comparisons/tests
-       ;;
-       ;; Compares `src1` against `src2` with `op`. Note that if you're testing
-       ;; `a < b` then `src1 == a` and `src2 == b`.
-       (XmmCmpRmR (op SseOpcode)
-                  (src1 Xmm)
-                  (src2 XmmMemAligned))
-
-       ;; A binary XMM instruction with an 8-bit immediate: e.g. cmp (ps pd) imm
-       ;; (reg addr) reg
-       ;;
-       ;; Note: this has to use `Reg*`, not `Xmm*`, operands because it is used
-       ;; in various lane insertion and extraction instructions that move
-       ;; between XMMs and GPRs.
-       (XmmRmRImm (op SseOpcode)
-                  (src1 Reg)
-                  (src2 RegMem)
-                  (dst WritableReg)
-                  (imm u8)
-                  (size OperandSize))
 
        ;; =========================================
        ;; Control flow instructions.
@@ -440,8 +380,6 @@
 (rule (operand_size_bits (OperandSize.Size16)) 16)
 (rule (operand_size_bits (OperandSize.Size32)) 32)
 (rule (operand_size_bits (OperandSize.Size64)) 64)
-
-(type SseOpcode extern (enum Insertps))
 
 (type RegMemImm extern
       (enum
@@ -725,11 +663,6 @@
 ;; Fails if the argument is not either CC.NZ or CC.Z.
 (decl cc_nz_or_z (CC) CC)
 (extern extractor cc_nz_or_z cc_nz_or_z)
-
-(type AvxOpcode
-      (enum Vpshufb
-            Vshufps
-          ))
 
 (type Avx512Opcode
       (enum Vcvtudq2ps
@@ -1204,39 +1137,6 @@
             (_ Unit (emit (MInst.LoadExtName dst extname offset distance))))
         dst))
 
-;; Helper for creating `MInst.XmmRmR` instructions.
-(decl xmm_rm_r (SseOpcode Xmm XmmMemAligned) Xmm)
-(rule (xmm_rm_r op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmR op src1 src2 dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmRUnaligned` instructions.
-(decl xmm_rm_r_unaligned (SseOpcode Xmm XmmMem) Xmm)
-(rule (xmm_rm_r_unaligned op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRUnaligned op src1 src2 dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmRImm` instructions.
-(decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Xmm)
-(rule (xmm_rm_r_imm op src1 src2 imm size)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRImm op
-                                           src1
-                                           src2
-                                           dst
-                                           imm
-                                           size))))
-        dst))
-
-;; Helper for creating `MInst.XmmUnaryRmR` instructions.
-(decl xmm_unary_rm_r (SseOpcode XmmMemAligned) Xmm)
-(rule (xmm_unary_rm_r op src)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmR op src dst))))
-        dst))
-
 ;; Helper for creating `MInst.XmmUnaryRmREvex` instructions.
 (decl xmm_unary_rm_r_evex (Avx512Opcode XmmMem) Xmm)
 (rule (xmm_unary_rm_r_evex op src)
@@ -1267,20 +1167,6 @@
       (let ((dst WritableXmm (temp_writable_xmm))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.XmmMinMaxSeq size is_min lhs rhs dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmiRVex` instructions.
-(decl xmm_rmir_vex (AvxOpcode Xmm XmmMemImm) Xmm)
-(rule (xmm_rmir_vex op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmiRVex op src1 src2 dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmRImmVex` instructions.
-(decl xmm_rmr_imm_vex (AvxOpcode Xmm XmmMem u8) Xmm)
-(rule (xmm_rmr_imm_vex op src1 src2 imm)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRImmVex op src1 src2 dst imm))))
         dst))
 
 (decl cvt_u64_to_float_seq (Type Gpr) Xmm)
@@ -2268,12 +2154,6 @@
 (rule 0 (x64_cmp $I16 src1 (is_gpr_mem src2)) (x64_cmpw_rm src1 src2))
 (rule 0 (x64_cmp $I32 src1 (is_gpr_mem src2)) (x64_cmpl_rm src1 src2))
 (rule 0 (x64_cmp $I64 src1 (is_gpr_mem src2)) (x64_cmpq_rm src1 src2))
-
-;; Helper for creating `MInst.XmmCmpRmR` instructions.
-(decl xmm_cmp_rm_r (SseOpcode Xmm XmmMem) ProducesFlags)
-(rule (xmm_cmp_rm_r opcode src1 src2)
-      (ProducesFlags.ProducesFlagsSideEffect
-       (MInst.XmmCmpRmR opcode src1 src2)))
 
 ;; Helper for creating floating-point comparison instructions (`UCOMIS[S|D]`).
 (decl x64_ucomis (Type Xmm XmmMem) ProducesFlags)

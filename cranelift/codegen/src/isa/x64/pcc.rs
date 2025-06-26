@@ -3,7 +3,7 @@
 use crate::ir::pcc::*;
 use crate::ir::types::*;
 use crate::isa::x64::inst::Inst;
-use crate::isa::x64::inst::args::{Amode, Gpr, RegMem, RegMemImm, SyntheticAmode, ToWritableReg};
+use crate::isa::x64::inst::args::{Amode, Gpr, RegMem, SyntheticAmode, ToWritableReg};
 use crate::machinst::pcc::*;
 use crate::machinst::{InsnIndex, VCode};
 use crate::machinst::{Reg, Writable};
@@ -76,24 +76,10 @@ pub(crate) fn check(
 
         Inst::StackProbeLoop { tmp, .. } => ensure_no_fact(vcode, tmp.to_reg()),
 
-        Inst::XmmRmR { dst, ref src2, .. }
-        | Inst::XmmUnaryRmR {
-            dst, src: ref src2, ..
-        } => {
-            match <&RegMem>::from(src2) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
-        }
-
         // NOTE: it's assumed that all of these cases perform 128-bit loads, but this hasn't been
         // verified. The effect of this will be spurious PCC failures when these instructions are
         // involved.
-        Inst::XmmRmRUnaligned { dst, ref src2, .. }
-        | Inst::XmmRmREvex { dst, ref src2, .. }
+        Inst::XmmRmREvex { dst, ref src2, .. }
         | Inst::XmmUnaryRmRImmEvex {
             dst, src: ref src2, ..
         }
@@ -110,28 +96,6 @@ pub(crate) fn check(
                     check_load(ctx, None, addr, vcode, I8X16, 128)?;
                 }
                 RegMem::Reg { .. } => {}
-            }
-            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
-        }
-
-        Inst::XmmRmRImmVex { dst, ref src2, .. } => {
-            // We assume all other operations happen on 128-bit values.
-            let (ty, size) = (I8X16, 128);
-            match <&RegMem>::from(src2) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, ty, size)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
-        }
-
-        Inst::XmmRmiRVex { dst, ref src2, .. } => {
-            match <&RegMemImm>::from(src2) {
-                RegMemImm::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
-                }
-                RegMemImm::Reg { .. } | RegMemImm::Imm { .. } => {}
             }
             ensure_no_fact(vcode, dst.to_writable_reg().to_reg())
         }
@@ -175,51 +139,6 @@ pub(crate) fn check(
         }
 
         Inst::XmmMinMaxSeq { dst, .. } => ensure_no_fact(vcode, dst.to_writable_reg().to_reg()),
-
-        Inst::XmmCmpRmR {
-            ref src1, ref src2, ..
-        } => {
-            match <&RegMem>::from(src2) {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            ensure_no_fact(vcode, src1.to_reg())
-        }
-
-        Inst::XmmRmRImm {
-            dst,
-            ref src2,
-            size,
-            op,
-            ..
-        } if op.has_scalar_src2() => {
-            match src2 {
-                RegMem::Mem { addr } => {
-                    check_load(
-                        ctx,
-                        None,
-                        addr,
-                        vcode,
-                        size.to_type(),
-                        size.to_bits().into(),
-                    )?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            ensure_no_fact(vcode, dst.to_reg())
-        }
-
-        Inst::XmmRmRImm { dst, ref src2, .. } => {
-            match src2 {
-                RegMem::Mem { addr } => {
-                    check_load(ctx, None, addr, vcode, I8X16, 128)?;
-                }
-                RegMem::Reg { .. } => {}
-            }
-            ensure_no_fact(vcode, dst.to_reg())
-        }
 
         Inst::CallKnown { .. }
         | Inst::ReturnCallKnown { .. }

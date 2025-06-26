@@ -18,9 +18,9 @@ use cranelift_codegen::{
         x64::{
             AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
             args::{
-                self, Amode, Avx512Opcode, AvxOpcode, CC, ExtMode, FromWritableReg, Gpr, GprMem,
-                GprMemImm, RegMem, RegMemImm, SyntheticAmode, WritableGpr, WritableXmm, Xmm,
-                XmmMem, XmmMemImm,
+                self, Amode, Avx512Opcode, CC, ExtMode, FromWritableReg, Gpr, GprMem, GprMemImm,
+                RegMem, RegMemImm, SyntheticAmode, WritableGpr, WritableXmm, Xmm, XmmMem,
+                XmmMemImm,
             },
             encoding::rex::{RexFlags, encode_modrm},
             external::{PairedGpr, PairedXmm},
@@ -1734,25 +1734,18 @@ impl Assembler {
     /// Shuffles bytes in `src` according to contents of `mask` and puts
     /// result in `dst`.
     pub fn xmm_vpshufb_rrm(&mut self, dst: WritableReg, src: Reg, mask: &Address) {
+        let dst: WritableXmm = dst.map(|r| r.into());
         let mask = Self::to_synthetic_amode(mask, MemFlags::trusted());
-
-        self.emit(Inst::XmmRmiRVex {
-            op: args::AvxOpcode::Vpshufb,
-            src1: src.into(),
-            src2: XmmMemImm::unwrap_new(RegMemImm::Mem { addr: mask }),
-            dst: dst.to_reg().into(),
-        });
+        let inst = asm::inst::vpshufb_b::new(dst, src, mask).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Shuffles bytes in `src` according to contents of `mask` and puts
     /// result in `dst`.
     pub fn xmm_vpshufb_rrr(&mut self, dst: WritableReg, src: Reg, mask: Reg) {
-        self.emit(Inst::XmmRmiRVex {
-            op: args::AvxOpcode::Vpshufb,
-            src1: src.into(),
-            src2: XmmMemImm::unwrap_new(RegMemImm::reg(mask.into())),
-            dst: dst.to_reg().into(),
-        })
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vpshufb_b::new(dst, src, mask).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Add unsigned integers with unsigned saturation.
@@ -2654,18 +2647,12 @@ impl Assembler {
         imm: u8,
         size: OperandSize,
     ) {
-        let op = match size {
-            OperandSize::S32 => AvxOpcode::Vshufps,
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = match size {
+            OperandSize::S32 => asm::inst::vshufps_b::new(dst, src1, src2, imm).into(),
             _ => unimplemented!(),
         };
-
-        self.emit(Inst::XmmRmRImmVex {
-            op,
-            src1: src1.into(),
-            src2: src2.into(),
-            dst: dst.to_reg().into(),
-            imm,
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Each lane in `src1` is multiplied by the corresponding lane in `src2`

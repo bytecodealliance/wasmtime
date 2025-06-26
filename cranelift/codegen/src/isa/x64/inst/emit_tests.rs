@@ -63,24 +63,6 @@ impl Inst {
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
-
-    fn xmm_rm_r_imm(
-        op: SseOpcode,
-        src: RegMem,
-        dst: Writable<Reg>,
-        imm: u8,
-        size: OperandSize,
-    ) -> Inst {
-        debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        Inst::XmmRmRImm {
-            op,
-            src1: dst.to_reg(),
-            src2: src,
-            dst,
-            imm,
-            size,
-        }
-    }
 }
 
 #[test]
@@ -308,63 +290,10 @@ fn test_x64_emit() {
         "vpermi2b %xmm1, %xmm0, %xmm2, %xmm2",
     ));
 
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmaddwd, RegMem::reg(xmm8), w_xmm1),
-        "66410FF5C8",
-        "pmaddwd %xmm1, %xmm8, %xmm1",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::reg(xmm11), w_xmm2),
-        "66410F3800D3",
-        "pshufb  %xmm2, %xmm11, %xmm2",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Packssdw, RegMem::reg(xmm11), w_xmm12),
-        "66450F6BE3",
-        "packssdw %xmm12, %xmm11, %xmm12",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Packsswb, RegMem::reg(xmm11), w_xmm2),
-        "66410F63D3",
-        "packsswb %xmm2, %xmm11, %xmm2",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Packusdw, RegMem::reg(xmm13), w_xmm6),
-        "66410F382BF5",
-        "packusdw %xmm6, %xmm13, %xmm6",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Packuswb, RegMem::reg(xmm9), w_xmm4),
-        "66410F67E1",
-        "packuswb %xmm4, %xmm9, %xmm4",
-    ));
-
     // ========================================================
     // XMM_MOV: Packed Move
 
     // XmmUnary: moves and unary float ops
-
-    insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Pabsb, RegMem::reg(xmm2), w_xmm1),
-        "660F381CCA",
-        "pabsb   %xmm2, %xmm1",
-    ));
-    insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Pabsw, RegMem::reg(xmm0), w_xmm0),
-        "660F381DC0",
-        "pabsw   %xmm0, %xmm0",
-    ));
-    insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Pabsd, RegMem::reg(xmm10), w_xmm11),
-        "66450F381EDA",
-        "pabsd   %xmm10, %xmm11",
-    ));
-
     insns.push((
         Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vpabsq, RegMem::reg(xmm2), w_xmm8),
         "6272FD081FC2",
@@ -381,32 +310,6 @@ fn test_x64_emit() {
         Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vpopcntb, RegMem::reg(xmm2), w_xmm8),
         "62727D0854C2",
         "vpopcntb %xmm2, %xmm8",
-    ));
-
-    // ========================================================
-    // XmmRmRImm
-    insns.push((
-        Inst::xmm_rm_r_imm(
-            SseOpcode::Palignr,
-            RegMem::reg(xmm1),
-            w_xmm9,
-            3,
-            OperandSize::Size32,
-        ),
-        "66440F3A0FC903",
-        "palignr $3, %xmm9, %xmm1, %xmm9",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r_imm(
-            SseOpcode::Shufps,
-            RegMem::reg(xmm1),
-            w_xmm10,
-            136,
-            OperandSize::Size32,
-        ),
-        "440FC6D188",
-        "shufps  $136, %xmm10, %xmm1, %xmm10",
     ));
 
     // ========================================================
