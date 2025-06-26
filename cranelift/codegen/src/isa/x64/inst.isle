@@ -464,8 +464,6 @@
       (enum Insertps
             Pshufb
             Ptest
-            Rcpss
-            Rsqrtss
             Shufps
           ))
 
@@ -3286,6 +3284,33 @@
 ;; Helper for creating `sqrtpd` instructions.
 (decl x64_sqrtpd (XmmMem) Xmm)
 (rule (x64_sqrtpd x) (x64_sqrtpd_a_or_avx x))
+
+;; Helper for creating `reciprocal` instructions.
+;;
+;; Helper for creating `rcpps` instructions.
+(decl x64_rcpps (XmmMem) Xmm)
+(rule (x64_rcpps x) (x64_rcpps_rm_or_avx x))
+
+;; Helper for creating `rcpss` instructions.
+(decl x64_rcpss (XmmMem) Xmm)
+(rule (x64_rcpss x) (x64_rcpss_rm x))
+
+;; Helper for creating `vrsqrtss` instructions.
+(decl x64_vrcpss (Xmm XmmMem) Xmm)
+(rule (x64_vrcpss x y) (x64_vrcpss_rvm x y))
+
+;; Helper for creating `rsqrtps` instructions.
+(decl x64_rsqrtps (XmmMem) Xmm)
+(rule (x64_rsqrtps x) (x64_rsqrtps_rm_or_avx x))
+
+;; Helper for creating `rsqrtss` instructions.
+(decl x64_rsqrtss (XmmMem) Xmm)
+(rule (x64_rsqrtss x) (x64_rsqrtss_rm x))
+
+;; Helper for creating `vrsqrtss` instructions.
+(decl x64_vrsqrtss (Xmm XmmMem) Xmm)
+(rule (x64_vrsqrtss x y) (x64_vrsqrtss_rvm x y))
+
 
 ;; Helper for creating `cvtss2sd` instructions.
 ;;
