@@ -1056,15 +1056,7 @@ pub(crate) fn emit(
             };
 
             let (prefix, map, opcode) = match op {
-                AvxOpcode::Vpacksswb => (LP::_66, OM::_0F, 0x63),
-                AvxOpcode::Vpackssdw => (LP::_66, OM::_0F, 0x6B),
-                AvxOpcode::Vpackuswb => (LP::_66, OM::_0F, 0x67),
-                AvxOpcode::Vpackusdw => (LP::_66, OM::_0F38, 0x2B),
-                AvxOpcode::Vpmaddwd => (LP::_66, OM::_0F, 0xF5),
-                AvxOpcode::Vpmaddubsw => (LP::_66, OM::_0F38, 0x04),
                 AvxOpcode::Vpshufb => (LP::_66, OM::_0F38, 0x00),
-                AvxOpcode::Vphaddw => (LP::_66, OM::_0F38, 0x01),
-                AvxOpcode::Vphaddd => (LP::_66, OM::_0F38, 0x02),
                 AvxOpcode::Vmovsd => (LP::_F2, OM::_0F, 0x10),
                 AvxOpcode::Vmovss => (LP::_F3, OM::_0F, 0x10),
                 _ => panic!("unexpected rmir vex opcode {op:?}"),

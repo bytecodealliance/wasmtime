@@ -738,18 +738,10 @@
 (extern extractor cc_nz_or_z cc_nz_or_z)
 
 (type AvxOpcode
-      (enum Vpacksswb
-            Vpackssdw
-            Vpackuswb
-            Vpackusdw
-            Vpalignr
-            Vpmaddwd
-            Vpmaddubsw
+      (enum Vpalignr
             Vinsertps
             Vpshufb
             Vshufps
-            Vphaddw
-            Vphaddd
             Vmovss
             Vmovsd
             Vmovups

@@ -2577,7 +2577,7 @@ impl Masm for MacroAssembler {
 
                     // Merge lower and upper bytes back.
                     this.asm
-                        .xmm_vex_rr(AvxOpcode::Vpacksswb, tmp_lo, tmp_hi, writable!(operand));
+                        .xmm_vpackss_rrr(tmp_lo, tmp_hi, writable!(operand), OperandSize::S8);
 
                     context.free_reg(tmp_lo);
                     context.free_reg(tmp_hi);
@@ -2986,8 +2986,7 @@ impl Masm for MacroAssembler {
                         OperandSize::S128,
                         MemFlags::trusted(),
                     );
-                    masm.asm
-                        .xmm_vex_rr(AvxOpcode::Vpmaddubsw, scratch.inner(), src, dst);
+                    masm.asm.xmm_vpmaddubsw_rrr(scratch.inner(), src, dst);
                 });
             }
             V128ExtAddKind::I8x16U => {
@@ -2995,8 +2994,7 @@ impl Masm for MacroAssembler {
                 // unsigned instead of signed by passing it as the first
                 // operand.
                 let mask = self.asm.add_constant(&[1; 16]);
-                self.asm
-                    .xmm_vpmaddubs_rmr(src, &mask, dst, OperandSize::S16);
+                self.asm.xmm_vpmaddubsw_rmr(src, &mask, dst);
             }
             V128ExtAddKind::I16x8S => {
                 // Similar approach to the two variants above. The vector is 8
@@ -3040,7 +3038,7 @@ impl Masm for MacroAssembler {
 
     fn v128_dot(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg) -> Result<()> {
         self.ensure_has_avx()?;
-        self.asm.xmm_vex_rr(AvxOpcode::Vpmaddwd, lhs, rhs, dst);
+        self.asm.xmm_vpmaddwd_rrr(lhs, rhs, dst);
         Ok(())
     }
 

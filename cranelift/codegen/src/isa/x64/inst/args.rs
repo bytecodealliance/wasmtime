@@ -927,18 +927,10 @@ impl AvxOpcode {
     /// Which `InstructionSet`s support the opcode?
     pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
         match self {
-            AvxOpcode::Vpacksswb
-            | AvxOpcode::Vpackssdw
-            | AvxOpcode::Vpackuswb
-            | AvxOpcode::Vpackusdw
             | AvxOpcode::Vpalignr
-            | AvxOpcode::Vpmaddwd
-            | AvxOpcode::Vpmaddubsw
             | AvxOpcode::Vinsertps
             | AvxOpcode::Vpshufb
             | AvxOpcode::Vshufps
-            | AvxOpcode::Vphaddw
-            | AvxOpcode::Vphaddd
             | AvxOpcode::Vmovss
             | AvxOpcode::Vmovsd
             | AvxOpcode::Vmovups

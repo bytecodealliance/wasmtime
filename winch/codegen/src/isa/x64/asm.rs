@@ -2783,38 +2783,33 @@ impl Assembler {
     }
 
     /// Multiply and add packed signed and unsigned bytes.
-    pub fn xmm_vpmaddubs_rmr(
-        &mut self,
-        src: Reg,
-        address: &Address,
-        dst: WritableReg,
-        size: OperandSize,
-    ) {
+    pub fn xmm_vpmaddubsw_rmr(&mut self, src: Reg, address: &Address, dst: WritableReg) {
+        let dst: WritableXmm = dst.map(|r| r.into());
         let address = Self::to_synthetic_amode(address, MemFlags::trusted());
+        let inst = asm::inst::vpmaddubsw_b::new(dst, src, address).into();
+        self.emit(Inst::External { inst });
+    }
 
-        let op = match size {
-            OperandSize::S16 => AvxOpcode::Vpmaddubsw,
-            _ => unimplemented!(),
-        };
-
-        self.emit(Inst::XmmRmiRVex {
-            op,
-            src1: src.into(),
-            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
-            dst: dst.to_reg().into(),
-        });
+    /// Multiply and add packed signed and unsigned bytes.
+    pub fn xmm_vpmaddubsw_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg) {
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vpmaddubsw_b::new(dst, src1, src2).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Multiple and add packed integers.
     pub fn xmm_vpmaddwd_rmr(&mut self, src: Reg, address: &Address, dst: WritableReg) {
+        let dst: WritableXmm = dst.map(|r| r.into());
         let address = Self::to_synthetic_amode(address, MemFlags::trusted());
+        let inst = asm::inst::vpmaddwd_b::new(dst, src, address).into();
+        self.emit(Inst::External { inst });
+    }
 
-        self.emit(Inst::XmmRmiRVex {
-            op: AvxOpcode::Vpmaddwd,
-            src1: src.into(),
-            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
-            dst: dst.to_reg().into(),
-        })
+    /// Multiple and add packed integers.
+    pub fn xmm_vpmaddwd_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg) {
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vpmaddwd_b::new(dst, src1, src2).into();
+        self.emit(Inst::External { inst });
     }
 }
 

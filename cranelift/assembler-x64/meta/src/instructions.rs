@@ -22,7 +22,7 @@ mod neg;
 mod nop;
 mod or;
 mod pack;
-mod pmadd;
+mod pma;
 mod recip;
 mod round;
 mod setcc;
@@ -61,7 +61,7 @@ pub fn list() -> Vec<Inst> {
     all.extend(nop::list());
     all.extend(or::list());
     all.extend(pack::list());
-    all.extend(pmadd::list());
+    all.extend(pma::list());
     all.extend(recip::list());
     all.extend(round::list());
     all.extend(setcc::list());
