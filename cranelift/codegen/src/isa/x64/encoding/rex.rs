@@ -46,14 +46,6 @@ pub(crate) fn int_reg_enc(reg: impl Into<Reg>) -> u8 {
     reg.to_real_reg().unwrap().hw_enc()
 }
 
-/// Get the encoding number of any register.
-#[inline(always)]
-pub(crate) fn reg_enc(reg: impl Into<Reg>) -> u8 {
-    let reg = reg.into();
-    debug_assert!(reg.is_real());
-    reg.to_real_reg().unwrap().hw_enc()
-}
-
 /// A small bit field to record a REX prefix specification:
 /// - bit 0 set to 1 indicates REX.W must be 0 (cleared).
 /// - bit 1 set to 1 indicates the REX prefix must always be emitted.
@@ -536,44 +528,4 @@ pub(crate) fn emit_std_enc_enc<BS: ByteSink + ?Sized>(
     // Now the mod/rm byte.  The instruction we're generating doesn't access
     // memory, so there is no SIB byte or immediate -- we're done.
     sink.put1(encode_modrm(0b11, enc_g & 7, enc_e & 7));
-}
-
-// These are merely wrappers for the above two functions that facilitate passing
-// actual `Reg`s rather than their encodings.
-
-pub(crate) fn emit_std_reg_mem(
-    sink: &mut MachBuffer<Inst>,
-    prefixes: LegacyPrefixes,
-    opcodes: u32,
-    num_opcodes: usize,
-    reg_g: Reg,
-    mem_e: &Amode,
-    rex: RexFlags,
-    bytes_at_end: u8,
-) {
-    let enc_g = reg_enc(reg_g);
-    emit_std_enc_mem(
-        sink,
-        prefixes,
-        opcodes,
-        num_opcodes,
-        enc_g,
-        mem_e,
-        rex,
-        bytes_at_end,
-    );
-}
-
-pub(crate) fn emit_std_reg_reg<BS: ByteSink + ?Sized>(
-    sink: &mut BS,
-    prefixes: LegacyPrefixes,
-    opcodes: u32,
-    num_opcodes: usize,
-    reg_g: Reg,
-    reg_e: Reg,
-    rex: RexFlags,
-) {
-    let enc_g = reg_enc(reg_g);
-    let enc_e = reg_enc(reg_e);
-    emit_std_enc_enc(sink, prefixes, opcodes, num_opcodes, enc_g, enc_e, rex);
 }

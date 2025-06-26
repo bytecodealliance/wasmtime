@@ -1126,13 +1126,4 @@ impl OperandSize {
     pub(crate) fn to_bits(&self) -> u8 {
         self.to_bytes() * 8
     }
-
-    pub(crate) fn to_type(&self) -> Type {
-        match self {
-            Self::Size8 => I8,
-            Self::Size16 => I16,
-            Self::Size32 => I32,
-            Self::Size64 => I64,
-        }
-    }
 }
