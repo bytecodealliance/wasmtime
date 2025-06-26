@@ -14,7 +14,7 @@ block0(v0: i8):
 ;   movd %edi, %xmm0
 ;   uninit  %xmm5
 ;   pxor %xmm5, %xmm5
-;   pshufb  %xmm0, %xmm5, %xmm0
+;   pshufb %xmm5, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -124,7 +124,7 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   shufps  $0, %xmm0, %xmm0, %xmm0
+;   shufps $0x0, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -179,7 +179,7 @@ block0(v0: i64):
 ;   pinsrb $0x0, (%rdi), %xmm0
 ;   uninit  %xmm7
 ;   pxor %xmm7, %xmm7
-;   pshufb  %xmm0, %xmm7, %xmm0
+;   pshufb %xmm7, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -239,7 +239,7 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movss (%rdi), %xmm0
-;   shufps  $0, %xmm0, %xmm0, %xmm0
+;   shufps $0x0, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -293,7 +293,7 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ; block0:
 ;   movss (%rdi), %xmm0
-;   shufps  $0, %xmm0, %xmm0, %xmm0
+;   shufps $0x0, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

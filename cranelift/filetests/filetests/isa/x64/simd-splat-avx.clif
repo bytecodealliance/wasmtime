@@ -14,7 +14,7 @@ block0(v0: i8):
 ;   vmovd %edi, %xmm2
 ;   uninit  %xmm4
 ;   vpxor %xmm4, %xmm4, %xmm6
-;   vpshufb %xmm2, %xmm6, %xmm0
+;   vpshufb %xmm6, %xmm2, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -124,7 +124,7 @@ block0(v0: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vshufps $0, %xmm0, %xmm0, %xmm0
+;   vshufps $0x0, %xmm0, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -179,7 +179,7 @@ block0(v0: i64):
 ;   vpinsrb $0x0, (%rdi), %xmm2, %xmm4
 ;   uninit  %xmm6
 ;   vpxor %xmm6, %xmm6, %xmm0
-;   vpshufb %xmm4, %xmm0, %xmm0
+;   vpshufb %xmm0, %xmm4, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
