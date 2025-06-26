@@ -1107,32 +1107,6 @@ pub(crate) fn emit(
                 .encode(sink);
         }
 
-        Inst::XmmCmpRmRVex { op, src1, src2 } => {
-            let src1 = src1.to_reg();
-            let src2 = match src2.clone().to_reg_mem().clone() {
-                RegMem::Reg { reg } => {
-                    RegisterOrAmode::Register(reg.to_real_reg().unwrap().hw_enc().into())
-                }
-                RegMem::Mem { addr } => {
-                    RegisterOrAmode::Amode(addr.finalize(state.frame_layout(), sink))
-                }
-            };
-
-            let (prefix, map, opcode) = match op {
-                AvxOpcode::Vptest => (LegacyPrefixes::_66, OpcodeMap::_0F38, 0x17),
-                _ => unimplemented!("Opcode {:?} not implemented", op),
-            };
-
-            VexInstruction::new()
-                .length(VexVectorLength::V128)
-                .prefix(prefix)
-                .map(map)
-                .opcode(opcode)
-                .rm(src2)
-                .reg(src1.to_real_reg().unwrap().hw_enc())
-                .encode(sink);
-        }
-
         Inst::XmmRmREvex {
             op,
             src1,

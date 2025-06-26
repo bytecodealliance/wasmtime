@@ -1998,11 +1998,8 @@ impl Assembler {
     }
 
     pub fn xmm_vptest(&mut self, src1: Reg, src2: Reg) {
-        self.emit(Inst::XmmCmpRmRVex {
-            op: AvxOpcode::Vptest,
-            src1: src1.into(),
-            src2: src2.into(),
-        })
+        let inst = asm::inst::vptest_rm::new(src1, src2).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Converts vector of integers into vector of floating values.
@@ -2016,7 +2013,6 @@ impl Assembler {
             VcvtKind::F32ToF64 => asm::inst::vcvtps2pd_a::new(dst, src).into(),
             VcvtKind::F32ToI32 => asm::inst::vcvttps2dq_a::new(dst, src).into(),
         };
-
         self.emit(Inst::External { inst });
     }
 

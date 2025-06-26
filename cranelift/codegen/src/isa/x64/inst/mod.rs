@@ -124,9 +124,7 @@ impl Inst {
             | Inst::XmmRmREvex3 { op, .. }
             | Inst::XmmUnaryRmRImmEvex { op, .. } => op.available_from(),
 
-            Inst::XmmRmiRVex { op, .. }
-            | Inst::XmmRmRImmVex { op, .. }
-            | Inst::XmmCmpRmRVex { op, .. } => op.available_from(),
+            Inst::XmmRmiRVex { op, .. } | Inst::XmmRmRImmVex { op, .. } => op.available_from(),
 
             Inst::External { inst } => {
                 use cranelift_assembler_x64::Feature::*;
@@ -684,12 +682,6 @@ impl PrettyPrint for Inst {
                 format!("{op} {src2}, {src1}")
             }
 
-            Inst::XmmCmpRmRVex { op, src1, src2 } => {
-                let src1 = pretty_print_reg(src1.to_reg(), 8);
-                let src2 = src2.pretty_print(8);
-                format!("{} {src2}, {src1}", ljustify(op.to_string()))
-            }
-
             Inst::CvtUint64ToFloatSeq {
                 src,
                 dst,
@@ -1202,10 +1194,6 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_reuse_def(dst, 0); // Reuse RHS.
         }
         Inst::XmmCmpRmR { src1, src2, .. } => {
-            collector.reg_use(src1);
-            src2.get_operands(collector);
-        }
-        Inst::XmmCmpRmRVex { src1, src2, .. } => {
             collector.reg_use(src1);
             src2.get_operands(collector);
         }

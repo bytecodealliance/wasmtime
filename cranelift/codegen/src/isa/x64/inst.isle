@@ -88,11 +88,6 @@
                      (dst WritableXmm)
                      (imm u8))
 
-       ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
-       (XmmCmpRmRVex (op AvxOpcode)
-                     (src1 Xmm)
-                     (src2 XmmMem))
-
        ;; XMM (scalar or vector) binary op that relies on the EVEX
        ;; prefix. Takes two inputs.
        (XmmRmREvex (op Avx512Opcode)
@@ -735,7 +730,6 @@
       (enum Vinsertps
             Vpshufb
             Vshufps
-            Vptest
           ))
 
 (type Avx512Opcode
@@ -2281,12 +2275,6 @@
 (rule (xmm_cmp_rm_r opcode src1 src2)
       (ProducesFlags.ProducesFlagsSideEffect
        (MInst.XmmCmpRmR opcode src1 src2)))
-
-;; Helper for creating `MInst.XmmCmpRmRVex` instructions.
-(decl xmm_cmp_rm_r_vex (AvxOpcode Xmm XmmMem) ProducesFlags)
-(rule (xmm_cmp_rm_r_vex opcode src1 src2)
-      (ProducesFlags.ProducesFlagsSideEffect
-       (MInst.XmmCmpRmRVex opcode src1 src2)))
 
 ;; Helper for creating floating-point comparison instructions (`UCOMIS[S|D]`).
 (decl x64_ucomis (Type Xmm XmmMem) ProducesFlags)
