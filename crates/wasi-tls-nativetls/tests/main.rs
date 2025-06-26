@@ -24,6 +24,7 @@ impl WasiView for Ctx {
 }
 
 async fn run_test(path: &str) -> Result<()> {
+    let provider = Box::new(wasmtime_wasi_tls_nativetls::NativeTlsProvider::default());
     let ctx = Ctx {
         table: ResourceTable::new(),
         wasi_ctx: WasiCtxBuilder::new()
@@ -31,7 +32,7 @@ async fn run_test(path: &str) -> Result<()> {
             .inherit_network()
             .allow_ip_name_lookup(true)
             .build(),
-        wasi_tls_ctx: WasiTlsCtxBuilder::new().build(),
+        wasi_tls_ctx: WasiTlsCtxBuilder::new().provider(provider).build(),
     };
 
     let engine = test_programs_artifacts::engine(|config| {

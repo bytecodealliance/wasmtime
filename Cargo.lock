@@ -4450,6 +4450,7 @@ dependencies = [
  "wasmtime-wasi-nn",
  "wasmtime-wasi-threads",
  "wasmtime-wasi-tls",
+ "wasmtime-wasi-tls-nativetls",
  "wasmtime-wast",
  "wast 235.0.0",
  "wat",
@@ -4930,17 +4931,29 @@ version = "35.0.0"
 dependencies = [
  "anyhow",
  "bytes",
- "cfg-if",
  "futures",
- "native-tls",
  "rustls 0.22.4",
  "test-programs-artifacts",
  "tokio",
- "tokio-native-tls",
  "tokio-rustls",
  "wasmtime",
  "wasmtime-wasi",
  "webpki-roots",
+]
+
+[[package]]
+name = "wasmtime-wasi-tls-nativetls"
+version = "35.0.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "native-tls",
+ "test-programs-artifacts",
+ "tokio",
+ "tokio-native-tls",
+ "wasmtime",
+ "wasmtime-wasi",
+ "wasmtime-wasi-tls",
 ]
 
 [[package]]

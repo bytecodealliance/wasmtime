@@ -43,9 +43,8 @@
 //!             .allow_ip_name_lookup(true)
 //!             .build(),
 //!         wasi_tls_ctx: WasiTlsCtxBuilder::new()
-//!             // Optionally, configure a specific TLS provider:
-//!             // .provider(Box::new(wasmtime_wasi_tls::RustlsProvider::default()))
-//!             // .provider(Box::new(wasmtime_wasi_tls::NativeTlsProvider::default()))
+//!             // Optionally, configure a different TLS provider:
+//!             // .provider(Box::new(wasmtime_wasi_tls_nativetls::NativeTlsProvider::default()))
 //!             .build(),
 //!     };
 //!
@@ -83,11 +82,11 @@ use wasmtime::component::{HasData, ResourceTable};
 pub mod bindings;
 mod host;
 mod io;
-mod providers;
+mod rustls;
 
 pub use bindings::types::LinkOptions;
 pub use host::{HostClientConnection, HostClientHandshake, HostFutureClientStreams};
-pub use providers::*;
+pub use rustls::RustlsProvider;
 
 /// Capture the state necessary for use in the `wasi-tls` API implementation.
 pub struct WasiTls<'a> {
@@ -128,12 +127,9 @@ impl WasiTlsCtxBuilder {
         Default::default()
     }
 
-    /// Sets the TLS provider to use for this context.
+    /// Configure the TLS provider to use for this context.
     ///
-    /// By default, this is set to the [`DefaultProvider`] which is picked at
-    /// compile time based on feature flags. If this crate is compiled with
-    /// multiple TLS providers, this method can be used to specify the provider
-    /// at runtime.
+    /// By default, this is set to the [`RustlsProvider`].
     pub fn provider(mut self, provider: Box<dyn TlsProvider>) -> Self {
         self.provider = provider;
         self
@@ -149,7 +145,7 @@ impl WasiTlsCtxBuilder {
 impl Default for WasiTlsCtxBuilder {
     fn default() -> Self {
         Self {
-            provider: Box::new(DefaultProvider::default()),
+            provider: Box::new(RustlsProvider::default()),
         }
     }
 }

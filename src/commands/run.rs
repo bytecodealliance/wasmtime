@@ -998,12 +998,12 @@ impl RunCommand {
                                 preview2_ctx.table(),
                             )
                         })?;
-                        self.set_wasi_tls_ctx(store)?;
+
+                        let ctx = wasmtime_wasi_tls::WasiTlsCtxBuilder::new().build();
+                        store.data_mut().wasi_tls = Some(Arc::new(ctx));
                     }
                 }
             }
-        } else if self.run.common.wasi.tls_provider.is_some() {
-            bail!("`tls-provider` option requires `tls` to be enabled.");
         }
 
         Ok(())
@@ -1062,30 +1062,6 @@ impl RunCommand {
         self.run.configure_wasip2(&mut builder)?;
         let ctx = builder.build_p1();
         store.data_mut().preview2_ctx = Some(Arc::new(Mutex::new(ctx)));
-        Ok(())
-    }
-
-    #[cfg(all(feature = "wasi-tls", feature = "component-model",))]
-    fn set_wasi_tls_ctx(&self, store: &mut Store<Host>) -> Result<()> {
-        use wasmtime_wasi_tls::*;
-
-        let provider_name = self.run.common.wasi.tls_provider.as_deref();
-        let provider: Box<dyn TlsProvider> = match provider_name {
-            None => Box::new(DefaultProvider::default()),
-            #[cfg(feature = "wasi-tls-rustls")]
-            Some("rustls") => Box::new(RustlsProvider::default()),
-            #[cfg(feature = "wasi-tls-nativetls")]
-            Some("nativetls") => Box::new(NativeTlsProvider::default()),
-            Some(p) => {
-                bail!(
-                    "Unknown TLS provider: {p}. Either the option does not exist or the binary is not compiled with this feature.",
-                );
-            }
-        };
-
-        let ctx = WasiTlsCtxBuilder::new().provider(provider).build();
-
-        store.data_mut().wasi_tls = Some(Arc::new(ctx));
         Ok(())
     }
 
