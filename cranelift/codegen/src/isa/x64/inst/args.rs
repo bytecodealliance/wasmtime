@@ -773,7 +773,6 @@ pub(crate) enum InstructionSet {
 pub enum SseOpcode {
     Blendvpd,
     Blendvps,
-    Insertps,
     Pabsb,
     Pabsw,
     Pabsd,
@@ -842,7 +841,6 @@ impl SseOpcode {
 
             SseOpcode::Blendvpd
             | SseOpcode::Blendvps
-            | SseOpcode::Insertps
             | SseOpcode::Packusdw
             | SseOpcode::Pblendvb
             | SseOpcode::Pcmpeqq
@@ -875,7 +873,6 @@ impl fmt::Debug for SseOpcode {
         let name = match self {
             SseOpcode::Blendvpd => "blendvpd",
             SseOpcode::Blendvps => "blendvps",
-            SseOpcode::Insertps => "insertps",
             SseOpcode::Pabsb => "pabsb",
             SseOpcode::Pabsw => "pabsw",
             SseOpcode::Pabsd => "pabsd",
@@ -927,7 +924,7 @@ impl AvxOpcode {
     /// Which `InstructionSet`s support the opcode?
     pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
         match self {
-            AvxOpcode::Vinsertps | AvxOpcode::Vpshufb | AvxOpcode::Vshufps => {
+            AvxOpcode::Vpshufb | AvxOpcode::Vshufps => {
                 smallvec![InstructionSet::AVX]
             }
         }

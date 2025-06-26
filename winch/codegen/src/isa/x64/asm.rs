@@ -1918,27 +1918,18 @@ impl Assembler {
     }
 
     /// Copy a 32-bit float in `src2`, merge into `src1`, and put result in `dst`.
-    pub fn xmm_vinsertps_rrm(&mut self, dst: WritableReg, src1: Reg, src2: &Address, imm: u8) {
-        let src2 = Self::to_synthetic_amode(src2, MemFlags::trusted());
-
-        self.emit(Inst::XmmRmRImmVex {
-            op: AvxOpcode::Vinsertps,
-            src1: src1.into(),
-            src2: XmmMem::unwrap_new(RegMem::mem(src2)),
-            dst: dst.to_reg().into(),
-            imm,
-        });
+    pub fn xmm_vinsertps_rrm(&mut self, dst: WritableReg, src1: Reg, address: &Address, imm: u8) {
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let address = Self::to_synthetic_amode(address, MemFlags::trusted());
+        let inst = asm::inst::vinsertps_b::new(dst, src1, address, imm).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Copy a 32-bit float in `src2`, merge into `src1`, and put result in `dst`.
     pub fn xmm_vinsertps_rrr(&mut self, dst: WritableReg, src1: Reg, src2: Reg, imm: u8) {
-        self.emit(Inst::XmmRmRImmVex {
-            op: AvxOpcode::Vinsertps,
-            src1: src1.into(),
-            src2: XmmMem::unwrap_new(RegMem::reg(src2.into())),
-            dst: dst.to_reg().into(),
-            imm,
-        });
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vinsertps_b::new(dst, src1, src2, imm).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Moves lower 64-bit float from `src2` into lower 64-bits of `dst` and the

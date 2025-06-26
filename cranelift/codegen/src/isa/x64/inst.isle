@@ -727,8 +727,7 @@
 (extern extractor cc_nz_or_z cc_nz_or_z)
 
 (type AvxOpcode
-      (enum Vinsertps
-            Vpshufb
+      (enum Vpshufb
             Vshufps
           ))
 
@@ -2774,15 +2773,7 @@
 
 ;; Helper for creating `insertps` instructions.
 (decl x64_insertps (Xmm XmmMem u8) Xmm)
-(rule 0 (x64_insertps src1 src2 lane)
-      (xmm_rm_r_imm (SseOpcode.Insertps)
-                    src1
-                    src2
-                    lane
-                    (OperandSize.Size32)))
-(rule 1 (x64_insertps src1 src2 lane)
-      (if-let true (use_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vinsertps) src1 src2 lane))
+(rule 0 (x64_insertps src1 src2 lane) (x64_insertps_a_or_avx src1 src2 lane))
 
 ;; Helper for creating `pshufd` instructions.
 (decl x64_pshufd (XmmMem u8) Xmm)
