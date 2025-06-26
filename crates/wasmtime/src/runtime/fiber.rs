@@ -426,9 +426,7 @@ pub(crate) enum StoreFiberYield {
     /// Indicates the fiber does _not_ need exclusive access across the
     /// suspend/resume interval, meaning the store may be used as needed until
     /// the fiber is resumed.
-    // TODO: This will be used once full `component-model-async` support is
-    // merged:
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "will be used by async thing soon")]
     ReleaseStore,
 }
 
@@ -883,8 +881,7 @@ pub(crate) async fn on_fiber<R: Send + Sync>(
 /// This will return `Some` if the fiber suspends with
 /// `StoreFiberYield::ReleaseStore` or else `None` if it resolves.
 #[cfg(feature = "component-model-async")]
-// This will be used when `component-model-async` support is merged.
-#[allow(dead_code)]
+#[expect(dead_code, reason = "will be used by async thing soon")]
 pub(crate) async fn resolve_or_release<'a>(
     store: &mut StoreOpaque,
     fiber: StoreFiber<'a>,
@@ -904,7 +901,7 @@ enum OnRelease {
     ReturnPending,
     /// Return `Poll::Ready` from `FiberFuture::poll`, handing ownership of the
     /// `StoreFiber` to the caller.
-    #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
+    #[cfg(feature = "component-model-async")]
     ReturnReady,
 }
 
@@ -942,6 +939,7 @@ impl<'b> Future for FiberFuture<'_, 'b> {
             Err(StoreFiberYield::KeepStore) => Poll::Pending,
             Err(StoreFiberYield::ReleaseStore) => match &me.on_release {
                 OnRelease::ReturnPending => Poll::Pending,
+                #[cfg(feature = "component-model-async")]
                 OnRelease::ReturnReady => Poll::Ready(Ok(me.fiber.take())),
             },
         }
