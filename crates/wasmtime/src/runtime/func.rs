@@ -2027,10 +2027,12 @@ pub struct Caller<'a, T: 'static> {
 }
 
 impl<T> Caller<'_, T> {
+    #[cfg(feature = "async")]
     pub(crate) fn new(store: StoreContextMut<'_, T>, caller: Instance) -> Caller<'_, T> {
         Caller { store, caller }
     }
 
+    #[cfg(feature = "async")]
     pub(crate) fn caller(&self) -> Instance {
         self.caller
     }
