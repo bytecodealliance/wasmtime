@@ -77,6 +77,10 @@
 //! `wasmtime`, must uphold for the public interface to be safe.
 
 use crate::RootSet;
+#[cfg(feature = "component-model-async")]
+use crate::component::ComponentStoreData;
+#[cfg(feature = "async")]
+use crate::fiber;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
 #[cfg(feature = "gc")]
@@ -109,11 +113,13 @@ pub use self::data::*;
 mod func_refs;
 use func_refs::FuncRefs;
 #[cfg(feature = "async")]
+mod token;
+#[cfg(feature = "async")]
+pub(crate) use token::StoreToken;
+#[cfg(feature = "async")]
 mod async_;
 #[cfg(all(feature = "async", feature = "call-hook"))]
 pub use self::async_::CallHookHandler;
-#[cfg(feature = "async")]
-use self::async_::*;
 #[cfg(feature = "gc")]
 mod gc;
 
@@ -353,7 +359,7 @@ pub struct StoreOpaque {
     table_count: usize,
     table_limit: usize,
     #[cfg(feature = "async")]
-    async_state: AsyncState,
+    async_state: fiber::AsyncState,
 
     // If fuel_yield_interval is enabled, then we store the remaining fuel (that isn't in
     // runtime_limits) here. The total amount of fuel is the runtime limits and reserve added
@@ -401,10 +407,26 @@ pub struct StoreOpaque {
 ///
 /// Effectively stores Pulley interpreter state and handles conditional support
 /// for Cranelift at compile time.
-enum Executor {
+pub(crate) enum Executor {
     Interpreter(Interpreter),
     #[cfg(has_host_compiler_backend)]
     Native,
+}
+
+impl Executor {
+    pub(crate) fn new(engine: &Engine) -> Self {
+        #[cfg(has_host_compiler_backend)]
+        if cfg!(feature = "pulley") && engine.target().is_pulley() {
+            Executor::Interpreter(Interpreter::new(engine))
+        } else {
+            Executor::Native
+        }
+        #[cfg(not(has_host_compiler_backend))]
+        {
+            debug_assert!(engine.target().is_pulley());
+            Executor::Interpreter(Interpreter::new(engine))
+        }
+    }
 }
 
 /// A borrowed reference to `Executor` above.
@@ -553,7 +575,7 @@ impl<T> Store<T> {
             table_count: 0,
             table_limit: crate::DEFAULT_TABLE_LIMIT,
             #[cfg(feature = "async")]
-            async_state: AsyncState::default(),
+            async_state: Default::default(),
             fuel_reserve: 0,
             fuel_yield_interval: None,
             store_data,
@@ -568,17 +590,7 @@ impl<T> Store<T> {
             component_calls: Default::default(),
             #[cfg(feature = "component-model")]
             host_resource_data: Default::default(),
-            #[cfg(has_host_compiler_backend)]
-            executor: if cfg!(feature = "pulley") && engine.target().is_pulley() {
-                Executor::Interpreter(Interpreter::new(engine))
-            } else {
-                Executor::Native
-            },
-            #[cfg(not(has_host_compiler_backend))]
-            executor: {
-                debug_assert!(engine.target().is_pulley());
-                Executor::Interpreter(Interpreter::new(engine))
-            },
+            executor: Executor::new(engine),
         };
         let mut inner = Box::new(StoreInner {
             inner,
@@ -637,9 +649,22 @@ impl<T> Store<T> {
         self.inner.data_mut()
     }
 
+    fn run_manual_drop_routines(&mut self) {
+        // We need to drop the fibers of each component instance before
+        // attempting to drop the instances themselves since the fibers may need
+        // to be resumed and allowed to exit cleanly before we yank the state
+        // out from under them.
+        #[cfg(feature = "component-model-async")]
+        ComponentStoreData::drop_fibers(&mut self.inner);
+
+        // Ensure all fiber stacks, even cached ones, are all flushed out to the
+        // instance allocator.
+        self.inner.flush_fiber_stack();
+    }
+
     /// Consumes this [`Store`], destroying it, and returns the underlying data.
     pub fn into_data(mut self) -> T {
-        self.inner.flush_fiber_stack();
+        self.run_manual_drop_routines();
 
         // This is an unsafe operation because we want to avoid having a runtime
         // check or boolean for whether the data is actually contained within a
@@ -1094,16 +1119,14 @@ impl<T> StoreInner<T> {
             CallHookInner::Sync(hook) => hook((&mut *self).as_context_mut(), s),
 
             #[cfg(all(feature = "async", feature = "call-hook"))]
-            CallHookInner::Async(handler) => unsafe {
-                self.inner
-                    .async_cx()
-                    .ok_or_else(|| anyhow!("couldn't grab async_cx for call hook"))?
-                    .block_on(
-                        handler
-                            .handle_call_event((&mut *self).as_context_mut(), s)
-                            .as_mut(),
-                    )?
-            },
+            CallHookInner::Async(handler) => {
+                if !self.can_block() {
+                    bail!("couldn't grab async_cx for call hook")
+                }
+                return (&mut *self)
+                    .as_context_mut()
+                    .with_blocking(|store, cx| cx.block_on(handler.handle_call_event(store, s)))?;
+            }
 
             CallHookInner::ForceTypeParameterToBeUsed { uninhabited, .. } => {
                 let _ = s;
@@ -1343,6 +1366,11 @@ impl StoreOpaque {
     #[inline]
     pub fn vm_store_context(&self) -> &VMStoreContext {
         &self.vm_store_context
+    }
+
+    #[inline]
+    pub fn vm_store_context_mut(&mut self) -> &mut VMStoreContext {
+        &mut self.vm_store_context
     }
 
     #[inline(never)]
@@ -1926,9 +1954,14 @@ at https://bytecodealliance.org/security.
         )
     }
 
-    #[cfg(not(feature = "async"))]
-    pub(crate) fn async_guard_range(&self) -> core::ops::Range<*mut u8> {
-        core::ptr::null_mut()..core::ptr::null_mut()
+    #[cfg(feature = "async")]
+    pub(crate) fn fiber_async_state_mut(&mut self) -> &mut fiber::AsyncState {
+        &mut self.async_state
+    }
+
+    #[cfg(feature = "async")]
+    pub(crate) fn has_pkey(&self) -> bool {
+        self.pkey.is_some()
     }
 
     pub(crate) fn executor(&mut self) -> ExecutorRef<'_> {
@@ -1937,6 +1970,11 @@ at https://bytecodealliance.org/security.
             #[cfg(has_host_compiler_backend)]
             Executor::Native => ExecutorRef::Native,
         }
+    }
+
+    #[cfg(feature = "async")]
+    pub(crate) fn swap_executor(&mut self, executor: &mut Executor) {
+        mem::swap(&mut self.executor, executor);
     }
 
     pub(crate) fn unwinder(&self) -> &'static dyn Unwind {
@@ -2094,16 +2132,13 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
                 limiter(&mut self.data).memory_growing(current, desired, maximum)
             }
             #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                self.inner
-                    .async_cx()
-                    .expect("ResourceLimiterAsync requires async Store")
-                    .block_on(
-                        limiter(&mut self.data)
-                            .memory_growing(current, desired, maximum)
-                            .as_mut(),
-                    )?
-            },
+            Some(ResourceLimiterInner::Async(_)) => self.block_on(|store| {
+                let limiter = match &mut store.0.limiter {
+                    Some(ResourceLimiterInner::Async(limiter)) => limiter,
+                    _ => unreachable!(),
+                };
+                limiter(&mut store.0.data).memory_growing(current, desired, maximum)
+            })?,
             None => Ok(true),
         }
     }
@@ -2130,28 +2165,18 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
         desired: usize,
         maximum: Option<usize>,
     ) -> Result<bool, anyhow::Error> {
-        // Need to borrow async_cx before the mut borrow of the limiter.
-        // self.async_cx() panicks when used with a non-async store, so
-        // wrap this in an option.
-        #[cfg(feature = "async")]
-        let async_cx = if self.async_support()
-            && matches!(self.limiter, Some(ResourceLimiterInner::Async(_)))
-        {
-            Some(self.async_cx().unwrap())
-        } else {
-            None
-        };
-
         match self.limiter {
             Some(ResourceLimiterInner::Sync(ref mut limiter)) => {
                 limiter(&mut self.data).table_growing(current, desired, maximum)
             }
             #[cfg(feature = "async")]
-            Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                async_cx
-                    .expect("ResourceLimiterAsync requires async Store")
-                    .block_on(limiter(&mut self.data).table_growing(current, desired, maximum))?
-            },
+            Some(ResourceLimiterInner::Async(_)) => self.block_on(|store| {
+                let limiter = match &mut store.0.limiter {
+                    Some(ResourceLimiterInner::Async(limiter)) => limiter,
+                    _ => unreachable!(),
+                };
+                limiter(&mut store.0.data).table_growing(current, desired, maximum)
+            })?,
             None => Ok(true),
         }
     }
@@ -2218,11 +2243,7 @@ unsafe impl<T> vm::VMStore for StoreInner<T> {
                         // to clean up this fiber. Do so by raising a trap which will
                         // abort all wasm and get caught on the other side to clean
                         // things up.
-                        unsafe {
-                            self.async_cx()
-                                .expect("attempted to pull async context during shutdown")
-                                .block_on(future)?
-                        }
+                        self.block_on(|_| future)?;
                         delta
                     }
                 };
@@ -2312,7 +2333,7 @@ impl<T: fmt::Debug> fmt::Debug for Store<T> {
 
 impl<T> Drop for Store<T> {
     fn drop(&mut self) {
-        self.inner.flush_fiber_stack();
+        self.run_manual_drop_routines();
 
         // for documentation on this `unsafe`, see `into_data`.
         unsafe {

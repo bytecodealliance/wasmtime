@@ -441,10 +441,8 @@ impl<T: 'static> LinkerInstance<'_, T> {
             self.engine.config().async_support,
             "cannot use `func_wrap_async` without enabling async support in the config"
         );
-        let ff = move |mut store: StoreContextMut<'_, T>, params: Params| -> Result<Return> {
-            let async_cx = store.as_context_mut().0.async_cx().expect("async cx");
-            let future = f(store.as_context_mut(), params);
-            unsafe { async_cx.block_on(Pin::from(future)) }?
+        let ff = move |store: StoreContextMut<'_, T>, params: Params| -> Result<Return> {
+            store.block_on(|store| f(store, params).into())?
         };
         self.func_wrap(name, ff)
     }
@@ -603,12 +601,10 @@ impl<T: 'static> LinkerInstance<'_, T> {
             self.engine.config().async_support,
             "cannot use `func_new_async` without enabling async support in the config"
         );
-        let ff = move |mut store: StoreContextMut<'_, T>, params: &[Val], results: &mut [Val]| {
-            let async_cx = store.as_context_mut().0.async_cx().expect("async cx");
-            let future = f(store.as_context_mut(), params, results);
-            unsafe { async_cx.block_on(Pin::from(future)) }?
+        let ff = move |store: StoreContextMut<'_, T>, params: &[Val], results: &mut [Val]| {
+            store.with_blocking(|store, cx| cx.block_on(Pin::from(f(store, params, results)))?)
         };
-        self.func_new(name, ff)
+        return self.func_new(name, ff);
     }
 
     /// Defines a [`Module`] within this instance.
@@ -676,12 +672,8 @@ impl<T: 'static> LinkerInstance<'_, T> {
         let dtor = Arc::new(crate::func::HostFunc::wrap_inner(
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| {
-                let async_cx = cx.as_context_mut().0.async_cx().expect("async cx");
-                let future = dtor(cx.as_context_mut(), param);
-                match unsafe { async_cx.block_on(Pin::from(future)) } {
-                    Ok(Ok(())) => Ok(()),
-                    Ok(Err(trap)) | Err(trap) => Err(trap),
-                }
+                cx.as_context_mut()
+                    .block_on(|store| dtor(store, param).into())?
             },
         ));
         self.insert(name, Definition::Resource(ty, dtor))?;
