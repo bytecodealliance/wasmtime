@@ -793,9 +793,9 @@ pub(crate) fn make_fiber<'a>(
             Err(_) => return Ok(()),
         };
 
-        // SAFETY: Per the documented contract for
-        // `resume_fiber`, we've been given exclusive access to
-        // the store until we exit or yield it back to the resumer.
+        // SAFETY: This fiber will only be resumed using `resume_fiber`, which
+        // takes a `&mut StoreOpaque` parameter and has given us exclusive
+        // access to the store until we exit or yield it back to the resumer.
         let store_ref = unsafe { &mut *store };
 
         // It should be a guarantee that the store has null pointers here upon
