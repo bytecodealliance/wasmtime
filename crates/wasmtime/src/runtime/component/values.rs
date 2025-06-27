@@ -1111,20 +1111,26 @@ fn unexpected<T>(ty: InterfaceType, val: &Val) -> Result<T> {
     )
 }
 
-// TODO: This is prone to leaks and infinitely blocked writers given that
-// there's no reference counting and thus no way to know when to close the
-// handle.
+/// Represents a component model `future`.
+///
+/// TODO: This is prone to leaks and infinitely blocked writers given that
+/// there's no reference counting and thus no way to know when to close the
+/// handle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FutureAny(pub(crate) u32);
 
-// TODO: This is prone to leaks and infinitely blocked writers given that
-// there's no reference counting and thus no way to know when to close the
-// handle.
+/// Represents a component model `stream`.
+///
+/// TODO: This is prone to leaks and infinitely blocked writers given that
+/// there's no reference counting and thus no way to know when to close the
+/// handle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StreamAny(pub(crate) u32);
 
-// TODO: This is prone to leaks and infinitely blocked writers given that
-// there's no reference counting and thus no way to know when to close the
-// handle.
+/// Represents a component model `error-context`.
+///
+/// TODO: This is prone to leaks and infinitely blocked writers given that
+/// there's no reference counting and thus no way to know when to close the
+/// handle.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorContextAny(pub(crate) u32);
