@@ -343,10 +343,7 @@ pub mod exports {
                 &self,
                 mut store: S,
                 arg0: &Request,
-            ) -> wasmtime::Result<Response>
-            where
-                <S as wasmtime::AsContext>::Data: Send + 'static,
-            {
+            ) -> wasmtime::Result<Response> {
                 let callee = unsafe {
                     wasmtime::component::TypedFunc::<
                         (&Request,),

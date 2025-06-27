@@ -360,7 +360,7 @@ pub mod exports {
                 Output = wasmtime::Result<Response>,
             > + Send + 'static + use<S>
             where
-                <S as wasmtime::AsContext>::Data: Send,
+                <S as wasmtime::AsContext>::Data: Send + 'static,
             {
                 let callee = unsafe {
                     wasmtime::component::TypedFunc::<

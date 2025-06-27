@@ -359,10 +359,7 @@ pub mod exports {
                     pub fn call_constructor<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::ResourceAny>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::ResourceAny> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -376,10 +373,7 @@ pub mod exports {
                     pub fn call_static_a<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<u32>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
-                    {
+                    ) -> wasmtime::Result<u32> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -394,10 +388,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: wasmtime::component::ResourceAny,
-                    ) -> wasmtime::Result<u32>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
-                    {
+                    ) -> wasmtime::Result<u32> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (wasmtime::component::ResourceAny,),
@@ -517,10 +508,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: wasmtime::component::Resource<Y>,
-                    ) -> wasmtime::Result<wasmtime::component::ResourceAny>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::ResourceAny> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (wasmtime::component::Resource<Y>,),
@@ -534,10 +522,7 @@ pub mod exports {
                     pub fn call_static_a<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::Resource<Y>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::Resource<Y>> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -553,10 +538,7 @@ pub mod exports {
                         mut store: S,
                         arg0: wasmtime::component::ResourceAny,
                         arg1: wasmtime::component::Resource<Y>,
-                    ) -> wasmtime::Result<wasmtime::component::Resource<Y>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::Resource<Y>> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (
@@ -650,10 +632,7 @@ pub mod exports {
                     pub fn call_constructor<S: wasmtime::AsContextMut>(
                         &self,
                         mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::ResourceAny>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::ResourceAny> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (),
@@ -746,10 +725,7 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: wasmtime::component::ResourceAny,
-                    ) -> wasmtime::Result<wasmtime::component::ResourceAny>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
-                    {
+                    ) -> wasmtime::Result<wasmtime::component::ResourceAny> {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (wasmtime::component::ResourceAny,),
