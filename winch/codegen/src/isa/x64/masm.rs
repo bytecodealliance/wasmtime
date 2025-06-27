@@ -3193,7 +3193,7 @@ impl MacroAssembler {
     /// finalized.
     fn add_stack_max(&mut self, reg: Reg) {
         assert!(self.stack_max_use_add.is_none());
-        let patch = PatchableAddToReg::new(reg, OperandSize::S64, self.asm.buffer_mut());
+        let patch = PatchableAddToReg::new(reg, OperandSize::S64, &mut self.asm);
         self.stack_max_use_add.replace(patch);
     }
 

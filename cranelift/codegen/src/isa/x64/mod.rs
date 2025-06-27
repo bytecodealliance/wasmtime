@@ -23,7 +23,7 @@ use std::string::String;
 use target_lexicon::Triple;
 
 mod abi;
-pub mod encoding;
+pub(crate) mod encoding;
 mod inst;
 mod lower;
 mod pcc;
