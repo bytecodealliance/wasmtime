@@ -158,6 +158,7 @@ members = [
   "crates/test-programs",
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
+  "crates/wasi-tls-nativetls",
   "examples/fib-debug/wasm",
   "examples/wasm",
   "examples/tokio/wasm",
@@ -235,6 +236,7 @@ wasmtime-wasi-config = { path = "crates/wasi-config", version = "35.0.0" }
 wasmtime-wasi-keyvalue = { path = "crates/wasi-keyvalue", version = "35.0.0" }
 wasmtime-wasi-threads = { path = "crates/wasi-threads", version = "35.0.0" }
 wasmtime-wasi-tls = { path = "crates/wasi-tls", version = "35.0.0" }
+wasmtime-wasi-tls-nativetls = { path = "crates/wasi-tls-nativetls", version = "35.0.0" }
 wasmtime-wast = { path = "crates/wast", version = "=35.0.0" }
 
 # Internal Wasmtime-specific crates.
@@ -399,6 +401,8 @@ ittapi = "0.4.0"
 libm = "0.2.7"
 tokio-rustls = "0.25.0"
 rustls = "0.22.0"
+tokio-native-tls = "0.3.1"
+native-tls = "0.2.11"
 webpki-roots = "0.26.0"
 itertools = "0.14.0"
 base64 = "0.22.1"
