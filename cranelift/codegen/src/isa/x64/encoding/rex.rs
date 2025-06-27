@@ -95,22 +95,6 @@ impl RexFlags {
         self
     }
 
-    /// Emit a unary instruction.
-    #[inline(always)]
-    pub fn emit_one_op<BS: ByteSink + ?Sized>(&self, sink: &mut BS, enc_e: u8) {
-        // Register Operand coded in Opcode Byte
-        // REX.R and REX.X unused
-        // REX.B == 1 accesses r8-r15
-        let w = if self.must_clear_w() { 0 } else { 1 };
-        let r = 0;
-        let x = 0;
-        let b = (enc_e >> 3) & 1;
-        let rex = 0x40 | (w << 3) | (r << 2) | (x << 1) | b;
-        if rex != 0x40 || self.must_always_emit() {
-            sink.put1(rex);
-        }
-    }
-
     /// Emit a binary instruction.
     #[inline(always)]
     pub fn emit_two_op<BS: ByteSink + ?Sized>(&self, sink: &mut BS, enc_g: u8, enc_e: u8) {

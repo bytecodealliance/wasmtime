@@ -22,7 +22,6 @@ use cranelift_codegen::{
                 RegMem, RegMemImm, SyntheticAmode, WritableGpr, WritableXmm, Xmm, XmmMem,
                 XmmMemImm,
             },
-            encoding::rex::{RexFlags, encode_modrm},
             external::{PairedGpr, PairedXmm},
             settings as x64_settings,
         },
@@ -2788,50 +2787,34 @@ impl PatchableAddToReg {
     ///
     /// Currently this implementation expects to be able to patch a 32-bit immediate, which means
     /// that 8 and 16-bit addition cannot be supported.
-    pub(crate) fn new(reg: Reg, size: OperandSize, buf: &mut MachBuffer<Inst>) -> Self {
-        let open = buf.start_patchable();
+    pub(crate) fn new(reg: Reg, size: OperandSize, asm: &mut Assembler) -> Self {
+        let open = asm.buffer_mut().start_patchable();
+        let start = asm.buffer().cur_offset();
 
         // Emit the opcode and register use for the add instruction.
-        let start = buf.cur_offset();
-        Self::add_inst_bytes(reg, size, buf);
-        let constant_offset = usize::try_from(buf.cur_offset() - start).unwrap();
-
-        // Emit a placeholder for the 32-bit immediate.
-        buf.put4(0);
-
-        let region = buf.end_patchable(open);
-
-        Self {
-            region,
-            constant_offset,
-        }
-    }
-
-    /// Generate the prefix of the add instruction (rex byte (depending on register use), opcode,
-    /// and register reference).
-    fn add_inst_bytes(reg: Reg, size: OperandSize, buf: &mut MachBuffer<Inst>) {
-        match size {
-            OperandSize::S32 | OperandSize::S64 => {}
+        let reg = pair_gpr(Writable::from_reg(reg));
+        let inst = match size {
+            OperandSize::S32 => asm::inst::addl_mi::new(reg, 0_u32).into(),
+            OperandSize::S64 => asm::inst::addq_mi_sxl::new(reg, 0_i32).into(),
             _ => {
                 panic!(
                     "{}-bit addition is not supported, please see the comment on PatchableAddToReg::new",
                     size.num_bits(),
                 )
             }
+        };
+        asm.emit(Inst::External { inst });
+
+        // The offset to the constant is the width of what was just emitted
+        // minus 4, the width of the 32-bit immediate.
+        let constant_offset = usize::try_from(asm.buffer().cur_offset() - start - 4).unwrap();
+
+        let region = asm.buffer_mut().end_patchable(open);
+
+        Self {
+            region,
+            constant_offset,
         }
-
-        let enc_g = 0;
-
-        debug_assert!(reg.is_int());
-        let enc_e = u8::try_from(reg.hw_enc()).unwrap();
-
-        RexFlags::from(args::OperandSize::from(size)).emit_two_op(buf, enc_g, enc_e);
-
-        // the opcode for an add
-        buf.put1(0x81);
-
-        // the modrm byte
-        buf.put1(encode_modrm(0b11, enc_g & 7, enc_e & 7));
     }
 
     /// Patch the [`MachBuffer`] with the known constant to be added to the register. The final
