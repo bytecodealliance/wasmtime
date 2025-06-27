@@ -614,9 +614,3 @@ debug = "line-tables-only"
 inherits = "release"
 codegen-units = 1
 lto = true
-
-# TODO: remove this once we've switched to a wit-bindgen release:
-[patch.crates-io]
-wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen" }
-wit-bindgen-rt = { git = "https://github.com/bytecodealliance/wit-bindgen" }
-wit-bindgen-rust-macro = { git = "https://github.com/bytecodealliance/wit-bindgen" }
