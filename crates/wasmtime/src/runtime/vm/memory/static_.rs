@@ -75,4 +75,8 @@ impl RuntimeLinearMemory for StaticMemory {
     fn base(&self) -> MemoryBase {
         self.base.clone()
     }
+
+    fn base_non_null(&self) -> core::ptr::NonNull<u8> {
+        self.base.as_non_null()
+    }
 }

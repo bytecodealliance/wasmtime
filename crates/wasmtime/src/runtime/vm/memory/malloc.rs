@@ -83,6 +83,10 @@ impl RuntimeLinearMemory for MallocMemory {
     fn base(&self) -> MemoryBase {
         MemoryBase::Raw(self.base_ptr)
     }
+
+    fn base_non_null(&self) -> NonNull<u8> {
+        self.base_ptr.as_non_null()
+    }
 }
 
 fn byte_size_to_element_len(byte_size: usize) -> usize {

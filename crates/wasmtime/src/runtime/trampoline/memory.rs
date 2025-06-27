@@ -82,6 +82,10 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
     fn base(&self) -> MemoryBase {
         MemoryBase::new_raw(self.mem.as_ptr())
     }
+
+    fn base_non_null(&self) -> core::ptr::NonNull<u8> {
+        core::ptr::NonNull::new(self.mem.as_ptr()).unwrap()
+    }
 }
 
 #[derive(Clone)]
