@@ -95,7 +95,7 @@ fn test_x64_emit() {
     let xmm10 = regs::xmm10();
     let xmm11 = regs::xmm11();
     let xmm12 = regs::xmm12();
-    let xmm13 = regs::xmm13();
+    let _xmm13 = regs::xmm13();
     let xmm14 = regs::xmm14();
     let _xmm15 = regs::xmm15();
 
@@ -113,18 +113,18 @@ fn test_x64_emit() {
     let _w_r14 = Writable::<Reg>::from_reg(r14);
     let _w_r15 = Writable::<Reg>::from_reg(r15);
 
-    let w_xmm0 = Writable::<Reg>::from_reg(xmm0);
+    let _w_xmm0 = Writable::<Reg>::from_reg(xmm0);
     let w_xmm1 = Writable::<Reg>::from_reg(xmm1);
     let w_xmm2 = Writable::<Reg>::from_reg(xmm2);
     let _w_xmm3 = Writable::<Reg>::from_reg(xmm3);
-    let w_xmm4 = Writable::<Reg>::from_reg(xmm4);
-    let w_xmm6 = Writable::<Reg>::from_reg(xmm6);
+    let _w_xmm4 = Writable::<Reg>::from_reg(xmm4);
+    let _w_xmm6 = Writable::<Reg>::from_reg(xmm6);
     let _w_xmm7 = Writable::<Reg>::from_reg(xmm7);
     let w_xmm8 = Writable::<Reg>::from_reg(xmm8);
-    let w_xmm9 = Writable::<Reg>::from_reg(xmm9);
-    let w_xmm10 = Writable::<Reg>::from_reg(xmm10);
-    let w_xmm11 = Writable::<Reg>::from_reg(xmm11);
-    let w_xmm12 = Writable::<Reg>::from_reg(xmm12);
+    let _w_xmm9 = Writable::<Reg>::from_reg(xmm9);
+    let _w_xmm10 = Writable::<Reg>::from_reg(xmm10);
+    let _w_xmm11 = Writable::<Reg>::from_reg(xmm11);
+    let _w_xmm12 = Writable::<Reg>::from_reg(xmm12);
 
     let mut insns = Vec::<(Inst, &str, &str)>::new();
 
