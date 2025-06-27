@@ -80,8 +80,10 @@ pub struct ComponentInstance {
     /// is how this field is manipulated.
     instance_resource_tables: PrimaryMap<RuntimeComponentInstanceIndex, ResourceTable>,
 
+    /// State related to async for this component, e.g. futures, streams, tasks,
+    /// etc.
     #[cfg(feature = "component-model-async")]
-    pub(crate) concurrent_state: concurrent::ConcurrentState,
+    concurrent_state: concurrent::ConcurrentState,
 
     /// What all compile-time-identified core instances are mapped to within the
     /// `Store` that this component belongs to.
