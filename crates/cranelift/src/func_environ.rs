@@ -767,7 +767,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         val: ir::Value,
         index_type: IndexType,
         // When it is a memory and the memory is using single-byte pages,
-        // we need to handle the tuncation differently. See comments below.
+        // we need to handle the truncation differently. See comments below.
         //
         // When it is a table, this should be set to false.
         single_byte_pages: bool,
@@ -3808,7 +3808,7 @@ fn index_type_to_ir_type(index_type: IndexType) -> ir::Type {
 #[cfg(feature = "stack-switching")]
 #[allow(
     dead_code,
-    reason = "Dummy function to supress more dead code warnings"
+    reason = "Dummy function to suppress more dead code warnings"
 )]
 pub fn use_stack_switching_libcalls() {
     let _ = BuiltinFunctions::cont_new;

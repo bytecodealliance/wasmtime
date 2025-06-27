@@ -732,7 +732,7 @@ impl ComponentInstance {
     /// the `arg` specified.
     ///
     /// This function is used in conjunction with function calls to record,
-    /// after a fuction call completes, the optional ABI return value. This
+    /// after a function call completes, the optional ABI return value. This
     /// return value is cached within this instance for future use when the
     /// `post_return` Rust-API-level function is invoked.
     ///
