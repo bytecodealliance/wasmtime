@@ -160,23 +160,8 @@ pub mod __internal {
     pub use alloc::vec::Vec;
     pub use anyhow;
     pub use core::cell::RefCell;
-    #[cfg(feature = "component-model-async")]
     pub use core::future::Future;
-    #[cfg(feature = "component-model-async")]
-    pub use core::mem;
     pub use core::mem::transmute;
-    #[cfg(feature = "component-model-async")]
-    pub use core::ops::DerefMut;
-    #[cfg(feature = "component-model-async")]
-    pub use core::pin::{Pin, pin};
-    #[cfg(feature = "component-model-async")]
-    pub use core::ptr::NonNull;
-    #[cfg(feature = "component-model-async")]
-    pub use core::task::{Context, Poll};
-    #[cfg(feature = "component-model-async")]
-    pub use futures::future::{FutureExt, poll_fn};
-    #[cfg(feature = "component-model-async")]
-    pub use std::sync::{Arc, Mutex};
     #[cfg(feature = "async")]
     pub use trait_variant::make as trait_variant_make;
     pub use wasmtime_environ;

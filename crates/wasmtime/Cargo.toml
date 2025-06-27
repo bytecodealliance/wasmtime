@@ -391,9 +391,6 @@ component-model-async = [
   "async",
   "component-model",
   "std",
-  "futures/std",
   "wasmtime-environ/compile",
   "wasmtime-component-macro?/component-model-async",
-  "dep:futures",
-  "dep:bytes",
 ]
