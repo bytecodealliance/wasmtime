@@ -1,0 +1,88 @@
+//! Encoding logic for EVEX instructions.
+
+use crate::api::CodeSink;
+
+/// EVEX prefix is always 4 bytes, byte 0 is 0x62
+pub struct EvexPrefix {
+    byte1: u8,
+    byte2: u8,
+    byte3: u8,
+}
+
+/// The EVEX prefix only ever uses the top bit (bit 3--the fourth bit) of any
+/// HW-encoded register.
+#[inline(always)]
+fn invert_top_bit(enc: u8) -> u8 {
+    (!(enc >> 3)) & 1
+}
+
+//         ┌───┬───┬───┬───┬───┬───┬───┬───┐
+// Byte 1: │ R │ X │ B │ R'│ 0 │ 0 │ m │ m │
+//         ├───┼───┼───┼───┼───┼───┼───┼───┤
+// Byte 2: │ W │ v │ v │ v │ v │ 1 │ p │ p │
+//         ├───┼───┼───┼───┼───┼───┼───┼───┤
+// Byte 3: │ z │ L'│ L │ b │ V'│ a │ a │ a │
+//         └───┴───┴───┴───┴───┴───┴───┴───┘
+
+impl EvexPrefix {
+    /// Construct the [`EvexPrefix`] for an instruction.
+    pub fn new(
+        reg: u8,
+        vvvv: u8,
+        (b, x): (Option<u8>, Option<u8>),
+        ll: (u8, u8),
+        pp: u8,
+        mmmmm: u8,
+        w: bool,
+        broadcast: bool,
+        masking: Option<(u8, bool)>,
+    ) -> Self {
+        let r = invert_top_bit(reg);
+        let r_prime = invert_top_bit(reg >> 1);
+        let b = invert_top_bit(b.unwrap_or(0));
+        let x = invert_top_bit(x.unwrap_or(0));
+        let vvvv_value = !vvvv & 0b1111;
+        let v_prime = !(vvvv >> 4) & 0b1;
+
+        // byte1
+        debug_assert!(mmmmm >= 0b01 && mmmmm <= 0b11);
+        let byte1 = r << 7 | x << 6 | b << 5 | r_prime << 4 | mmmmm;
+
+        // byte2
+        debug_assert!(vvvv <= 0b11111);
+        debug_assert!(pp <= 0b11);
+        let byte2 = (w as u8) << 7 | vvvv_value << 3 | 0b100 | (pp & 0b11);
+
+        // byte3
+        let (l, l_prime) = ll;
+        debug_assert!(l <= 0b1);
+        debug_assert!(l_prime <= 0b1);
+
+        let (z_bit, aaa_bits) = match masking {
+            Some((k_reg, zeroing)) => {
+                debug_assert!(
+                    k_reg >= 1 && k_reg <= 7,
+                    "k register must be between 1 and 7"
+                );
+                ((zeroing as u8) << 7, k_reg & 0b111)
+            }
+            None => (0, 0),
+        };
+
+        let byte3 =
+            z_bit | l_prime << 6 | l << 5 | (broadcast as u8) << 4 | v_prime << 3 | aaa_bits;
+
+        Self {
+            byte1,
+            byte2,
+            byte3,
+        }
+    }
+
+    pub(crate) fn encode(&self, sink: &mut impl CodeSink) {
+        sink.put1(0x62);
+        sink.put1(self.byte1);
+        sink.put1(self.byte2);
+        sink.put1(self.byte3);
+    }
+}

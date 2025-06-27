@@ -1,5 +1,5 @@
-use crate::dsl::{Customization::*, Feature::*, Inst, Location::*, VexLength::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
+use crate::dsl::{Customization::*, EvexLength, Feature::*, Inst, Location::*, VexLength::*};
+use crate::dsl::{align, evex, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -67,8 +67,8 @@ pub fn list() -> Vec<Inst> {
         inst("addsd", fmt("A", [rw(xmm1), r(xmm_m64)]), rex([0xF2, 0x0F, 0x58]).r(), _64b | compat | sse2),
         inst("addps", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x0F, 0x58]).r(), _64b | compat | sse).alt(avx, "vaddps_b"),
         inst("vaddps", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._0f().op(0x58), _64b | compat | avx),
-        inst("addpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x58]).r(), _64b | compat | sse2).alt(avx, "vaddpd_b"),
-        inst("vaddpd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0x58), _64b | compat | avx),
+        inst("addpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x58]), _64b | compat | sse2).alt(avx, "vaddpd_b"),
+        inst("vaddpd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128).r()._66()._0f().op(0x58), _64b | compat | avx),
         inst("paddb", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFC]).r(), _64b | compat | sse2),
         inst("paddw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFD]).r(), _64b | compat | sse2),
         inst("paddd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFE]).r(), _64b | compat | sse2),
@@ -79,6 +79,7 @@ pub fn list() -> Vec<Inst> {
         inst("paddusw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xDD]).r(), _64b | compat | sse2),
         inst("phaddw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x01]).r(), _64b | compat | ssse3),
         inst("phaddd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x38, 0x02]).r(), _64b | compat | ssse3),
+        inst("vaddpd", fmt("C", [w(xmm1).k(1).z(), r(xmm2), r(xmm_m128)]), evex(EvexLength::L128).r().w1()._66()._0f().op(0x58), _64b | compat | avx512vl),
         // `LOCK`-prefixed xadd
         inst("lock_xaddb", fmt("MR", [rw(m8), rw(r8)]), rex([0xf0, 0x0f, 0xc0]).r(), _64b | compat).custom(Mnemonic | Visit),
         inst("lock_xaddw", fmt("MR", [rw(m16), rw(r16)]), rex([0xf0, 0x66, 0x0f, 0xc1]).r(), _64b | compat).custom(Mnemonic | Visit),

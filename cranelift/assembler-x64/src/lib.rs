@@ -48,6 +48,7 @@
 
 mod api;
 mod custom;
+mod evex;
 mod fixed;
 pub mod gpr;
 mod imm;

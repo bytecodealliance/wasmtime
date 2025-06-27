@@ -45,10 +45,25 @@ pub fn vex(length: VexLength) -> Vex {
     }
 }
 
+/// An abbreviated constructor for EVEX-encoded instructions.
+#[must_use]
+pub fn evex(length: EvexLength) -> Evex {
+    Evex {
+        length,
+        pp: None,
+        mmmmm: None,
+        w: VexW::WIG,
+        opcode: u8::MAX,
+        modrm: None,
+        imm: Imm::None,
+    }
+}
+
 /// Enumerate the ways x64 encodes instructions.
 pub enum Encoding {
     Rex(Rex),
     Vex(Vex),
+    Evex(Evex),
 }
 
 impl Encoding {
@@ -58,6 +73,7 @@ impl Encoding {
         match self {
             Encoding::Rex(rex) => rex.validate(operands),
             Encoding::Vex(vex) => vex.validate(operands),
+            Encoding::Evex(evex) => evex.validate(operands),
         }
     }
 
@@ -66,6 +82,7 @@ impl Encoding {
         match self {
             Encoding::Rex(rex) => rex.opcodes.opcode(),
             Encoding::Vex(vex) => vex.opcode,
+            Encoding::Evex(evex) => evex.opcode,
         }
     }
 }
@@ -75,6 +92,7 @@ impl fmt::Display for Encoding {
         match self {
             Encoding::Rex(rex) => write!(f, "{rex}"),
             Encoding::Vex(vex) => write!(f, "{vex}"),
+            Encoding::Evex(evex) => write!(f, "{evex}"),
         }
     }
 }
@@ -1160,6 +1178,194 @@ impl From<Vex> for Encoding {
 impl fmt::Display for Vex {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "VEX.{}", self.length)?;
+        if let Some(pp) = self.pp {
+            write!(f, ".{pp}")?;
+        }
+        if let Some(mmmmm) = self.mmmmm {
+            write!(f, ".{mmmmm}")?;
+        }
+        write!(f, ".{} {:#04X}", self.w, self.opcode)?;
+        if let Some(modrm) = self.modrm {
+            write!(f, " {modrm}")?;
+        }
+        if self.imm != Imm::None {
+            write!(f, " {}", self.imm)?;
+        }
+        Ok(())
+    }
+}
+
+pub enum EvexLength {
+    L128,
+    L256,
+    L512,
+}
+
+impl EvexLength {
+    /// Encode the `L L'` bits.
+    pub fn bits(&self) -> (u8, u8) {
+        match self {
+            Self::L128 => (0b0, 0b0),
+            Self::L256 => (0b1, 0b0),
+            Self::L512 => (0b0, 0b1),
+        }
+    }
+}
+
+impl fmt::Display for EvexLength {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::L128 => write!(f, "128"),
+            Self::L256 => write!(f, "256"),
+            Self::L512 => write!(f, "512"),
+        }
+    }
+}
+
+pub struct Evex {
+    /// The length of the operand (e.g., 128-bit, 256-bit, or 512-bit).
+    pub length: EvexLength,
+    /// Map the `PP` field encodings.
+    pub pp: Option<VexPrefix>,
+    /// Map the `MMMMM` field encodings.
+    pub mmmmm: Option<VexEscape>,
+    /// The `W` bit.
+    pub w: VexW,
+    /// EVEX-encoded instructions opcode byte"
+    pub opcode: u8,
+    /// See [`Rex.modrm`](Rex.modrm).
+    pub modrm: Option<ModRmKind>,
+    /// See [`Rex.imm`](Rex.imm).
+    pub imm: Imm,
+}
+
+impl Evex {
+    /// Set the `pp` field to use [`VexPrefix::_66`]; equivalent to `.66` in the
+    /// manual.
+    pub fn _66(self) -> Self {
+        assert!(self.pp.is_none());
+        Self {
+            pp: Some(VexPrefix::_66),
+            ..self
+        }
+    }
+
+    /// Set the `pp` field to use [`VexPrefix::_F2`]; equivalent to `.F2` in the
+    /// manual.
+    pub fn _f2(self) -> Self {
+        assert!(self.pp.is_none());
+        Self {
+            pp: Some(VexPrefix::_F2),
+            ..self
+        }
+    }
+
+    /// Set the `pp` field to use [`VexPrefix::_F3`]; equivalent to `.F3` in the
+    /// manual.
+    pub fn _f3(self) -> Self {
+        assert!(self.pp.is_none());
+        Self {
+            pp: Some(VexPrefix::_F3),
+            ..self
+        }
+    }
+
+    /// Set the `mmmmmm` field to use [`VexEscape::_0F`]; equivalent to `.0F` in
+    /// the manual.
+    pub fn _0f(self) -> Self {
+        assert!(self.mmmmm.is_none());
+        Self {
+            mmmmm: Some(VexEscape::_0F),
+            ..self
+        }
+    }
+
+    /// Set the `mmmmmm` field to use [`VexEscape::_0F3A`]; equivalent to
+    /// `.0F3A` in the manual.
+    pub fn _0f3a(self) -> Self {
+        assert!(self.mmmmm.is_none());
+        Self {
+            mmmmm: Some(VexEscape::_0F3A),
+            ..self
+        }
+    }
+
+    /// Set the `mmmmmm` field to use [`VexEscape::_0F38`]; equivalent to
+    /// `.0F38` in the manual.
+    pub fn _0f38(self) -> Self {
+        assert!(self.mmmmm.is_none());
+        Self {
+            mmmmm: Some(VexEscape::_0F38),
+            ..self
+        }
+    }
+
+    /// Set the `W` bit to `0`; equivalent to `.W0` in the manual.
+    pub fn w0(self) -> Self {
+        assert!(self.w.is_ignored());
+        Self {
+            w: VexW::W0,
+            ..self
+        }
+    }
+
+    /// Set the `W` bit to `1`; equivalent to `.W1` in the manual.
+    pub fn w1(self) -> Self {
+        assert!(self.w.is_ignored());
+        Self {
+            w: VexW::W1,
+            ..self
+        }
+    }
+
+    /// Ignore the `W` bit; equivalent to `.WIG` in the manual.
+    pub fn wig(self) -> Self {
+        assert!(self.w.is_ignored());
+        Self {
+            w: VexW::WIG,
+            ..self
+        }
+    }
+
+    /// Set the single opcode for this VEX-encoded instruction.
+    pub fn op(self, opcode: u8) -> Self {
+        assert_eq!(self.opcode, u8::MAX);
+        Self { opcode, ..self }
+    }
+
+    /// Set the ModR/M byte to contain a register operand; see [`Rex::r`].
+    pub fn r(self) -> Self {
+        assert!(self.modrm.is_none());
+        Self {
+            modrm: Some(ModRmKind::Reg),
+            ..self
+        }
+    }
+
+    fn validate(&self, _operands: &[Operand]) {
+        assert!(self.opcode != u8::MAX);
+        assert!(self.mmmmm.is_some());
+    }
+
+    /// Retrieve the digit extending the opcode, if available.
+    #[must_use]
+    pub fn unwrap_digit(&self) -> Option<u8> {
+        match self.modrm {
+            Some(ModRmKind::Digit(digit)) => Some(digit),
+            _ => None,
+        }
+    }
+}
+
+impl From<Evex> for Encoding {
+    fn from(evex: Evex) -> Encoding {
+        Encoding::Evex(evex)
+    }
+}
+
+impl fmt::Display for Evex {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "EVEX.{}", self.length)?;
         if let Some(pp) = self.pp {
             write!(f, ".{pp}")?;
         }
