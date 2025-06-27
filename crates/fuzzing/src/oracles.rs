@@ -705,7 +705,7 @@ pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
 
     let test = &test.test;
 
-    if test.config.component_model_async() {
+    if test.config.component_model_async() || u.arbitrary()? {
         fuzz_config.enable_async(u)?;
     }
 
