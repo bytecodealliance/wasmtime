@@ -304,8 +304,7 @@ impl dyn VMStore + '_ {
 /// usage of `Instance` and `ComponentInstance` for example.
 #[derive(Copy, Clone)]
 #[repr(transparent)]
-#[doc(hidden)]
-pub struct VMStoreRawPtr(pub NonNull<dyn VMStore>);
+struct VMStoreRawPtr(pub NonNull<dyn VMStore>);
 
 // SAFETY: this is the purpose of `VMStoreRawPtr`, see docs above about safe
 // usage.
