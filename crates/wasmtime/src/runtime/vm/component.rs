@@ -262,9 +262,6 @@ impl ComponentInstance {
             instance_resource_tables.push(ResourceTable::default());
         }
 
-        #[cfg(feature = "component-model-async")]
-        let concurrent_state = concurrent::ConcurrentState::new(component);
-
         let mut ret = OwnedInstance::new(ComponentInstance {
             id,
             offsets,
@@ -282,7 +279,7 @@ impl ComponentInstance {
             store: VMStoreRawPtr(store),
             post_return_arg: None,
             #[cfg(feature = "component-model-async")]
-            concurrent_state,
+            concurrent_state: concurrent::ConcurrentState::new(component),
             vmctx: OwnedVMContext::new(),
         });
         unsafe {
