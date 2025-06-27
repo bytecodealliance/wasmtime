@@ -88,14 +88,6 @@
                      (dst WritableXmm)
                      (imm u8))
 
-       ;; XMM (scalar or vector) ternary op that relies on the VEX prefix and
-       ;; has three dynamic inputs.
-       (XmmRmRVex3 (op AvxOpcode)
-                   (src1 Xmm)
-                   (src2 Xmm)
-                   (src3 XmmMem)
-                   (dst WritableXmm))
-
        ;; XMM (scalar or vector) unary op (from xmm to reg/mem) using the
        ;; VEX prefix
        (XmmMovRMVex (op AvxOpcode)
@@ -746,39 +738,7 @@
 (extern extractor cc_nz_or_z cc_nz_or_z)
 
 (type AvxOpcode
-      (enum Vfmadd213ss
-            Vfmadd213sd
-            Vfmadd213ps
-            Vfmadd213pd
-            Vfmadd132ss
-            Vfmadd132sd
-            Vfmadd132ps
-            Vfmadd132pd
-            Vfnmadd213ss
-            Vfnmadd213sd
-            Vfnmadd213ps
-            Vfnmadd213pd
-            Vfnmadd132ss
-            Vfnmadd132sd
-            Vfnmadd132ps
-            Vfnmadd132pd
-            Vfmsub213ss
-            Vfmsub213sd
-            Vfmsub213ps
-            Vfmsub213pd
-            Vfmsub132ss
-            Vfmsub132sd
-            Vfmsub132ps
-            Vfmsub132pd
-            Vfnmsub213ss
-            Vfnmsub213sd
-            Vfnmsub213ps
-            Vfnmsub213pd
-            Vfnmsub132ss
-            Vfnmsub132sd
-            Vfnmsub132ps
-            Vfnmsub132pd
-            Vpacksswb
+      (enum Vpacksswb
             Vpackssdw
             Vpackuswb
             Vpackusdw
@@ -1349,13 +1309,6 @@
 (rule (xmm_rmr_imm_vex op src1 src2 imm)
       (let ((dst WritableXmm (temp_writable_xmm))
             (_ Unit (emit (MInst.XmmRmRImmVex op src1 src2 dst imm))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmRVex3` instructions.
-(decl xmm_rmr_vex3 (AvxOpcode Xmm Xmm XmmMem) Xmm)
-(rule (xmm_rmr_vex3 op src1 src2 src3)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRVex3 op src1 src2 src3 dst))))
         dst))
 
 (decl cvt_u64_to_float_seq (Type Gpr) Xmm)
@@ -3187,59 +3140,59 @@
 
 ;; Helper for creating `vfmadd213*` instructions
 (decl x64_vfmadd213 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfmadd213 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd213ss) a b c))
-(rule (x64_vfmadd213 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd213sd) a b c))
-(rule (x64_vfmadd213 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd213ps) a b c))
-(rule (x64_vfmadd213 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd213pd) a b c))
+(rule (x64_vfmadd213 $F32 a b c)   (x64_vfmadd213ss_a a b c))
+(rule (x64_vfmadd213 $F64 a b c)   (x64_vfmadd213sd_a a b c))
+(rule (x64_vfmadd213 $F32X4 a b c) (x64_vfmadd213ps_a a b c))
+(rule (x64_vfmadd213 $F64X2 a b c) (x64_vfmadd213pd_a a b c))
 
 ;; Helper for creating `vfmadd132*` instructions
 (decl x64_vfmadd132 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfmadd132 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd132ss) a b c))
-(rule (x64_vfmadd132 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd132sd) a b c))
-(rule (x64_vfmadd132 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd132ps) a b c))
-(rule (x64_vfmadd132 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd132pd) a b c))
+(rule (x64_vfmadd132 $F32 a b c)   (x64_vfmadd132ss_a a b c))
+(rule (x64_vfmadd132 $F64 a b c)   (x64_vfmadd132sd_a a b c))
+(rule (x64_vfmadd132 $F32X4 a b c) (x64_vfmadd132ps_a a b c))
+(rule (x64_vfmadd132 $F64X2 a b c) (x64_vfmadd132pd_a a b c))
 
 ;; Helper for creating `vfnmadd213*` instructions
 (decl x64_vfnmadd213 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfnmadd213 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd213ss) a b c))
-(rule (x64_vfnmadd213 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd213sd) a b c))
-(rule (x64_vfnmadd213 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd213ps) a b c))
-(rule (x64_vfnmadd213 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd213pd) a b c))
+(rule (x64_vfnmadd213 $F32 a b c)   (x64_vfnmadd213ss_a a b c))
+(rule (x64_vfnmadd213 $F64 a b c)   (x64_vfnmadd213sd_a a b c))
+(rule (x64_vfnmadd213 $F32X4 a b c) (x64_vfnmadd213ps_a a b c))
+(rule (x64_vfnmadd213 $F64X2 a b c) (x64_vfnmadd213pd_a a b c))
 
 ;; Helper for creating `vfnmadd132*` instructions
 (decl x64_vfnmadd132 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfnmadd132 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132ss) a b c))
-(rule (x64_vfnmadd132 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132sd) a b c))
-(rule (x64_vfnmadd132 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132ps) a b c))
-(rule (x64_vfnmadd132 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132pd) a b c))
+(rule (x64_vfnmadd132 $F32 a b c)   (x64_vfnmadd132ss_a a b c))
+(rule (x64_vfnmadd132 $F64 a b c)   (x64_vfnmadd132sd_a a b c))
+(rule (x64_vfnmadd132 $F32X4 a b c) (x64_vfnmadd132ps_a a b c))
+(rule (x64_vfnmadd132 $F64X2 a b c) (x64_vfnmadd132pd_a a b c))
 
 ;; Helper for creating `vfmsub213*` instructions
 (decl x64_vfmsub213 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfmsub213 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub213ss) a b c))
-(rule (x64_vfmsub213 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub213sd) a b c))
-(rule (x64_vfmsub213 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub213ps) a b c))
-(rule (x64_vfmsub213 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub213pd) a b c))
+(rule (x64_vfmsub213 $F32 a b c)   (x64_vfmsub213ss_a a b c))
+(rule (x64_vfmsub213 $F64 a b c)   (x64_vfmsub213sd_a a b c))
+(rule (x64_vfmsub213 $F32X4 a b c) (x64_vfmsub213ps_a a b c))
+(rule (x64_vfmsub213 $F64X2 a b c) (x64_vfmsub213pd_a a b c))
 
 ;; Helper for creating `vfmsub132*` instructions
 (decl x64_vfmsub132 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfmsub132 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub132ss) a b c))
-(rule (x64_vfmsub132 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub132sd) a b c))
-(rule (x64_vfmsub132 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub132ps) a b c))
-(rule (x64_vfmsub132 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub132pd) a b c))
+(rule (x64_vfmsub132 $F32 a b c)   (x64_vfmsub132ss_a a b c))
+(rule (x64_vfmsub132 $F64 a b c)   (x64_vfmsub132sd_a a b c))
+(rule (x64_vfmsub132 $F32X4 a b c) (x64_vfmsub132ps_a a b c))
+(rule (x64_vfmsub132 $F64X2 a b c) (x64_vfmsub132pd_a a b c))
 
 ;; Helper for creating `vfnmsub213*` instructions
 (decl x64_vfnmsub213 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfnmsub213 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub213ss) a b c))
-(rule (x64_vfnmsub213 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub213sd) a b c))
-(rule (x64_vfnmsub213 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub213ps) a b c))
-(rule (x64_vfnmsub213 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub213pd) a b c))
+(rule (x64_vfnmsub213 $F32 a b c)   (x64_vfnmsub213ss_a a b c))
+(rule (x64_vfnmsub213 $F64 a b c)   (x64_vfnmsub213sd_a a b c))
+(rule (x64_vfnmsub213 $F32X4 a b c) (x64_vfnmsub213ps_a a b c))
+(rule (x64_vfnmsub213 $F64X2 a b c) (x64_vfnmsub213pd_a a b c))
 
 ;; Helper for creating `vfnmsub132*` instructions
 (decl x64_vfnmsub132 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfnmsub132 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub132ss) a b c))
-(rule (x64_vfnmsub132 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub132sd) a b c))
-(rule (x64_vfnmsub132 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub132ps) a b c))
-(rule (x64_vfnmsub132 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub132pd) a b c))
+(rule (x64_vfnmsub132 $F32 a b c)   (x64_vfnmsub132ss_a a b c))
+(rule (x64_vfnmsub132 $F64 a b c)   (x64_vfnmsub132sd_a a b c))
+(rule (x64_vfnmsub132 $F32X4 a b c) (x64_vfnmsub132ps_a a b c))
+(rule (x64_vfnmsub132 $F64X2 a b c) (x64_vfnmsub132pd_a a b c))
 
 ;; Note, the `vfmsub231` and `vfnmsub231*` instructions are omitted, because
 ;; instruction selection happens before register allocation and therefore there

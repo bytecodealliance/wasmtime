@@ -105,7 +105,7 @@ fn test_x64_emit() {
     let xmm2 = regs::xmm2();
     let xmm3 = regs::xmm3();
     let xmm4 = regs::xmm4();
-    let xmm5 = regs::xmm5();
+    let _xmm5 = regs::xmm5();
     let xmm6 = regs::xmm6();
     let xmm7 = regs::xmm7();
     let xmm8 = regs::xmm8();
@@ -134,7 +134,7 @@ fn test_x64_emit() {
     let w_xmm0 = Writable::<Reg>::from_reg(xmm0);
     let w_xmm1 = Writable::<Reg>::from_reg(xmm1);
     let w_xmm2 = Writable::<Reg>::from_reg(xmm2);
-    let w_xmm3 = Writable::<Reg>::from_reg(xmm3);
+    let _w_xmm3 = Writable::<Reg>::from_reg(xmm3);
     let w_xmm4 = Writable::<Reg>::from_reg(xmm4);
     let w_xmm6 = Writable::<Reg>::from_reg(xmm6);
     let _w_xmm7 = Writable::<Reg>::from_reg(xmm7);
@@ -267,33 +267,6 @@ fn test_x64_emit() {
         ))),
         "41FFA49241010000",
         "jmp     *321(%r10,%rdx,4)",
-    ));
-
-    // ========================================================
-    // XMM FMA
-
-    insns.push((
-        Inst::xmm_rmr_vex3(AvxOpcode::Vfmadd213ss, RegMem::reg(xmm2), xmm1, w_xmm0),
-        "C4E271A9C2",
-        "vfmadd213ss %xmm0, %xmm1, %xmm2, %xmm0",
-    ));
-
-    insns.push((
-        Inst::xmm_rmr_vex3(AvxOpcode::Vfmadd213sd, RegMem::reg(xmm5), xmm4, w_xmm3),
-        "C4E2D9A9DD",
-        "vfmadd213sd %xmm3, %xmm4, %xmm5, %xmm3",
-    ));
-
-    insns.push((
-        Inst::xmm_rmr_vex3(AvxOpcode::Vfmadd213ps, RegMem::reg(xmm2), xmm1, w_xmm0),
-        "C4E271A8C2",
-        "vfmadd213ps %xmm0, %xmm1, %xmm2, %xmm0",
-    ));
-
-    insns.push((
-        Inst::xmm_rmr_vex3(AvxOpcode::Vfmadd213pd, RegMem::reg(xmm5), xmm4, w_xmm3),
-        "C4E2D9A8DD",
-        "vfmadd213pd %xmm3, %xmm4, %xmm5, %xmm3",
     ));
 
     // ========================================================

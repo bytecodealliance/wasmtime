@@ -927,38 +927,6 @@ impl AvxOpcode {
     /// Which `InstructionSet`s support the opcode?
     pub(crate) fn available_from(&self) -> SmallVec<[InstructionSet; 2]> {
         match self {
-            AvxOpcode::Vfmadd213ss
-            | AvxOpcode::Vfmadd213sd
-            | AvxOpcode::Vfmadd213ps
-            | AvxOpcode::Vfmadd213pd
-            | AvxOpcode::Vfmadd132ss
-            | AvxOpcode::Vfmadd132sd
-            | AvxOpcode::Vfmadd132ps
-            | AvxOpcode::Vfmadd132pd
-            | AvxOpcode::Vfnmadd213ss
-            | AvxOpcode::Vfnmadd213sd
-            | AvxOpcode::Vfnmadd213ps
-            | AvxOpcode::Vfnmadd213pd
-            | AvxOpcode::Vfnmadd132ss
-            | AvxOpcode::Vfnmadd132sd
-            | AvxOpcode::Vfnmadd132ps
-            | AvxOpcode::Vfnmadd132pd
-            | AvxOpcode::Vfmsub213ss
-            | AvxOpcode::Vfmsub213sd
-            | AvxOpcode::Vfmsub213ps
-            | AvxOpcode::Vfmsub213pd
-            | AvxOpcode::Vfmsub132ss
-            | AvxOpcode::Vfmsub132sd
-            | AvxOpcode::Vfmsub132ps
-            | AvxOpcode::Vfmsub132pd
-            | AvxOpcode::Vfnmsub213ss
-            | AvxOpcode::Vfnmsub213sd
-            | AvxOpcode::Vfnmsub213ps
-            | AvxOpcode::Vfnmsub213pd
-            | AvxOpcode::Vfnmsub132ss
-            | AvxOpcode::Vfnmsub132sd
-            | AvxOpcode::Vfnmsub132ps
-            | AvxOpcode::Vfnmsub132pd => smallvec![InstructionSet::FMA],
             AvxOpcode::Vpacksswb
             | AvxOpcode::Vpackssdw
             | AvxOpcode::Vpackuswb
