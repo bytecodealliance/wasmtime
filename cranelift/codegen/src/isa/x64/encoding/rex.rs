@@ -11,7 +11,7 @@
 //! register encoding number".
 
 use super::ByteSink;
-use crate::isa::x64::inst::args::{Amode, OperandSize};
+use crate::isa::x64::inst::args::Amode;
 use crate::isa::x64::inst::{Inst, LabelUse, regs};
 use crate::machinst::{MachBuffer, Reg, RegClass};
 
@@ -44,64 +44,6 @@ pub(crate) fn int_reg_enc(reg: impl Into<Reg>) -> u8 {
     debug_assert!(reg.is_real(), "reg = {reg:?}");
     debug_assert_eq!(reg.class(), RegClass::Int);
     reg.to_real_reg().unwrap().hw_enc()
-}
-
-/// A small bit field to record a REX prefix specification:
-/// - bit 0 set to 1 indicates REX.W must be 0 (cleared).
-/// - bit 1 set to 1 indicates the REX prefix must always be emitted.
-#[repr(transparent)]
-#[derive(Clone, Copy)]
-pub struct RexFlags(u8);
-
-impl RexFlags {
-    /// By default, set the W field, and don't always emit.
-    #[inline(always)]
-    pub fn set_w() -> Self {
-        Self(0)
-    }
-
-    /// Creates a new RexPrefix for which the REX.W bit will be cleared.
-    #[inline(always)]
-    pub fn clear_w() -> Self {
-        Self(1)
-    }
-
-    /// Require that the REX prefix is emitted.
-    #[inline(always)]
-    pub fn always_emit(&mut self) -> &mut Self {
-        self.0 = self.0 | 2;
-        self
-    }
-
-    /// Emit the rex prefix if the referenced register would require it for 8-bit operations.
-    #[inline(always)]
-    pub fn always_emit_if_8bit_needed(&mut self, reg: Reg) -> &mut Self {
-        let enc_reg = int_reg_enc(reg);
-        if enc_reg >= 4 && enc_reg <= 7 {
-            self.always_emit();
-        }
-        self
-    }
-}
-
-/// Generate the proper Rex flags for the given operand size.
-impl From<OperandSize> for RexFlags {
-    fn from(size: OperandSize) -> Self {
-        match size {
-            OperandSize::Size64 => RexFlags::set_w(),
-            _ => RexFlags::clear_w(),
-        }
-    }
-}
-/// Generate Rex flags for an OperandSize/register tuple.
-impl From<(OperandSize, Reg)> for RexFlags {
-    fn from((size, reg): (OperandSize, Reg)) -> Self {
-        let mut rex = RexFlags::from(size);
-        if size == OperandSize::Size8 {
-            rex.always_emit_if_8bit_needed(reg);
-        }
-        rex
-    }
 }
 
 /// Allows using the same opcode byte in different "opcode maps" to allow for more instruction
