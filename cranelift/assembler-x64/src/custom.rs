@@ -195,7 +195,12 @@ pub mod display {
 
     pub fn callq_d(f: &mut fmt::Formatter, inst: &inst::callq_d) -> fmt::Result {
         let inst::callq_d { imm32 } = inst;
-        write!(f, "callq {:#x}", i64::from(imm32.value()) + 5)
+        let displacement = i64::from(imm32.value()) + 5;
+        if displacement >= 0 && displacement < 10 {
+            write!(f, "callq {displacement:}")
+        } else {
+            write!(f, "callq {displacement:#x}")
+        }
     }
 
     pub fn callq_m<R: Registers>(f: &mut fmt::Formatter, inst: &inst::callq_m<R>) -> fmt::Result {
