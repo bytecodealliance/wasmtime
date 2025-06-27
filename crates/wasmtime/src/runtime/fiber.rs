@@ -354,6 +354,7 @@ impl<T> StoreContextMut<'_, T> {
     /// # Panics
     ///
     /// Panics if this is invoked outside the context of a fiber.
+    #[allow(dead_code)]
     pub(crate) fn with_blocking<R>(
         self,
         f: impl FnOnce(StoreContextMut<'_, T>, &mut BlockingContext<'_, '_>) -> R,
