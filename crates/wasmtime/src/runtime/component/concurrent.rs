@@ -72,14 +72,6 @@ fn dummy_waker() -> Waker {
     Arc::new(DummyWaker).into()
 }
 
-pub(crate) struct AsyncState {}
-
-impl Default for AsyncState {
-    fn default() -> Self {
-        Self {}
-    }
-}
-
 pub(crate) struct ConcurrentState {}
 
 impl ConcurrentState {
