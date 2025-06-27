@@ -1,29 +1,21 @@
-use {
-    crate::{
-        AsContextMut, StoreContextMut, ValRaw,
-        component::{Component, Func, HasData, HasSelf, Instance},
-        store::{StoreInner, StoreOpaque},
-        vm::{VMFuncRef, VMMemoryDefinition, VMStore, component::ComponentInstance},
-    },
-    anyhow::Result,
-    std::{
-        any::Any,
-        boxed::Box,
-        future::Future,
-        marker::PhantomData,
-        mem::MaybeUninit,
-        pin::{Pin, pin},
-        ptr,
-        sync::{
-            Arc, Mutex,
-            atomic::{AtomicPtr, Ordering::Relaxed},
-        },
-        task::{Context, Poll, Wake, Waker},
-    },
-    wasmtime_environ::component::{
-        RuntimeComponentInstanceIndex, TypeComponentLocalErrorContextTableIndex,
-        TypeFutureTableIndex, TypeStreamTableIndex, TypeTupleIndex,
-    },
+use crate::component::{Component, Func, HasData, HasSelf, Instance};
+use crate::store::{StoreInner, StoreOpaque};
+use crate::vm::{VMFuncRef, VMMemoryDefinition, VMStore, component::ComponentInstance};
+use crate::{AsContextMut, StoreContextMut, ValRaw};
+use anyhow::Result;
+use std::any::Any;
+use std::boxed::Box;
+use std::future::Future;
+use std::marker::PhantomData;
+use std::mem::MaybeUninit;
+use std::pin::{Pin, pin};
+use std::ptr;
+use std::sync::atomic::{AtomicPtr, Ordering::Relaxed};
+use std::sync::{Arc, Mutex};
+use std::task::{Context, Poll, Wake, Waker};
+use wasmtime_environ::component::{
+    RuntimeComponentInstanceIndex, TypeComponentLocalErrorContextTableIndex, TypeFutureTableIndex,
+    TypeStreamTableIndex, TypeTupleIndex,
 };
 
 pub(crate) use futures_and_streams::ResourcePair;

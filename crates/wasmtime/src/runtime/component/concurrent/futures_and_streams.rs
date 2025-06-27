@@ -1,20 +1,14 @@
-use {
-    super::ConcurrentState,
-    crate::{
-        component::{
-            Instance, Val,
-            func::{self, LiftContext, LowerContext},
-            matching::InstanceType,
-        },
-        store::StoreOpaque,
-        vm::{VMFuncRef, VMMemoryDefinition, VMStore},
-    },
-    anyhow::Result,
-    std::{marker::PhantomData, mem::MaybeUninit},
-    wasmtime_environ::component::{
-        CanonicalAbiInfo, InterfaceType, TypeComponentLocalErrorContextTableIndex,
-        TypeFutureTableIndex, TypeStreamTableIndex,
-    },
+use super::ConcurrentState;
+use crate::component::func::{self, LiftContext, LowerContext};
+use crate::component::matching::InstanceType;
+use crate::component::{Instance, Val};
+use crate::store::StoreOpaque;
+use crate::vm::{VMFuncRef, VMMemoryDefinition, VMStore};
+use anyhow::Result;
+use std::{marker::PhantomData, mem::MaybeUninit};
+use wasmtime_environ::component::{
+    CanonicalAbiInfo, InterfaceType, TypeComponentLocalErrorContextTableIndex,
+    TypeFutureTableIndex, TypeStreamTableIndex,
 };
 
 pub use buffers::{ReadBuffer, VecBuffer, WriteBuffer};
