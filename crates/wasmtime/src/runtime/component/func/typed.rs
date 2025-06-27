@@ -17,13 +17,13 @@ use wasmtime_environ::component::{
 };
 
 #[cfg(feature = "component-model-async")]
-use crate::component::concurrent::{self, PreparedCall, ResetPtr};
+use crate::component::concurrent::{self, PreparedCall};
 #[cfg(feature = "component-model-async")]
 use core::any::Any;
 #[cfg(feature = "component-model-async")]
 use core::future::{self, Future};
 #[cfg(feature = "component-model-async")]
-use core::pin::{Pin, pin};
+use core::pin::Pin;
 #[cfg(feature = "component-model-async")]
 use core::sync::atomic::Ordering::Relaxed;
 
@@ -192,40 +192,14 @@ where
         Params: Send + Sync,
         Return: Send + Sync + 'static,
     {
-        let store = store.as_context_mut();
+        let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
             "cannot use `call_async` when async support is not enabled on the config"
         );
-        #[cfg(feature = "component-model-async")]
-        {
-            let mut params = params;
-            let mut store = store;
-            let instance = self.func.instance();
-            // SAFETY: We uphold the contract documented in
-            // `concurrent::prepare_call` by only setting `PreparedCall::params`
-            // to a valid pointer while polling the event loop and resetting it
-            // to null afterward, thus ensuring that the parameter lowering code
-            // never sees a stale pointer.
-            let prepared = unsafe { self.prepare_call(store.as_context_mut(), drop) }?;
-            let param_ptr = prepared.params().clone();
-            let call = concurrent::queue_call(store.as_context_mut(), prepared)?;
-            let mut future = pin!(instance.run(store, call));
-            future::poll_fn(move |cx| {
-                let params = &mut params;
-                param_ptr.store((params as *mut Params).cast(), Relaxed);
-                let _reset = ResetPtr(&param_ptr);
-                future.as_mut().poll(cx)
-            })
+        store
+            .on_fiber(|store| self.call_impl(store, params))
             .await?
-        }
-        #[cfg(not(feature = "component-model-async"))]
-        {
-            let mut store = store;
-            store
-                .on_fiber(|store| self.call_impl(store, params))
-                .await?
-        }
     }
 
     /// Start a concurrent call to this function.

@@ -9,8 +9,7 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::pin::{Pin, pin};
-use std::ptr;
-use std::sync::atomic::{AtomicPtr, Ordering::Relaxed};
+use std::sync::atomic::AtomicPtr;
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Wake, Waker};
 use wasmtime_environ::component::{
@@ -1112,15 +1111,6 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
             debug_msg_address,
         );
         todo!()
-    }
-}
-
-/// Helper struct for nulling out an `AtomicPtr<u8>` on drop.
-pub(crate) struct ResetPtr<'a>(pub(crate) &'a AtomicPtr<u8>);
-
-impl<'a> Drop for ResetPtr<'a> {
-    fn drop(&mut self) {
-        self.0.store(ptr::null_mut(), Relaxed);
     }
 }
 

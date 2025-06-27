@@ -289,29 +289,14 @@ impl Func {
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {
-        let store = store.as_context_mut();
+        let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
             "cannot use `call_async` without enabling async support in the config"
         );
-        #[cfg(feature = "component-model-async")]
-        {
-            let mut store = store;
-            let call =
-                self.call_concurrent(store.as_context_mut(), params.iter().cloned().collect());
-            let result_vec = self.instance.run(store, call).await??;
-            for (result, slot) in result_vec.into_iter().zip(results) {
-                *slot = result;
-            }
-            Ok(())
-        }
-        #[cfg(not(feature = "component-model-async"))]
-        {
-            let mut store = store;
-            store
-                .on_fiber(|store| self.call_impl(store, params, results))
-                .await?
-        }
+        store
+            .on_fiber(|store| self.call_impl(store, params, results))
+            .await?
     }
 
     #[cfg(feature = "component-model-async")]
@@ -682,13 +667,6 @@ impl Func {
     fn post_return_impl(&self, mut store: impl AsContextMut) -> Result<()> {
         let mut store = store.as_context_mut();
 
-        #[cfg(feature = "component-model-async")]
-        if store.0.async_support() {
-            // In this case, the post-return function will already have been
-            // called.
-            return Ok(());
-        }
-
         let index = self.index;
         let vminstance = self.instance.id().get(store.0);
         let (_ty, _def, options) = vminstance.component().export_lifted_function(index);
@@ -925,11 +903,6 @@ impl Func {
                 Val::load(cx, *ty, &bytes[offset..][..abi.size32 as usize])
             })
             .collect()
-    }
-
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn instance(&self) -> Instance {
-        self.instance
     }
 }
 
