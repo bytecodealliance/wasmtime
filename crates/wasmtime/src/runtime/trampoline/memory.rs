@@ -83,8 +83,12 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
         MemoryBase::new_raw(self.mem.as_ptr())
     }
 
-    fn base_non_null(&self) -> core::ptr::NonNull<u8> {
-        core::ptr::NonNull::new(self.mem.as_ptr()).unwrap()
+    fn vmmemory(&self) -> crate::vm::VMMemoryDefinition {
+        let base = core::ptr::NonNull::new(self.mem.as_ptr()).unwrap();
+        crate::vm::VMMemoryDefinition {
+            base: base.into(),
+            current_length: self.mem.byte_size().into(),
+        }
     }
 }
 

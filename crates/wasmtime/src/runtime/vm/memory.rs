@@ -169,13 +169,8 @@ pub trait RuntimeLinearMemory: Send + Sync {
     /// offset within it.
     fn base(&self) -> MemoryBase;
 
-    /// Returns a raw pointer to the base of this linear memory allocation.
-    ///
-    /// This is for use in scenarios where the caller does not need to hold a
-    /// strong reference to the underlying mmap (if any) and therefore does not
-    /// desire to pay the cost of creating and then dropping that strong mmap
-    /// reference (an `Arc` clone and drop).
-    fn base_non_null(&self) -> NonNull<u8>;
+    /// Get a `VMMemoryDefinition` for this linear memory.
+    fn vmmemory(&self) -> VMMemoryDefinition;
 
     /// Internal method for Wasmtime when used in conjunction with CoW images.
     /// This is used to inform the underlying memory that the size of memory has
@@ -710,14 +705,7 @@ impl LocalMemory {
     }
 
     pub fn vmmemory(&self) -> VMMemoryDefinition {
-        // NB: use `self.alloc.base_non_null()` instead of
-        // `self.alloc.base().as_non_null()` here to avoid cloning and
-        // dropping a strong mmap reference.
-        let base = self.alloc.base_non_null().into();
-        VMMemoryDefinition {
-            base,
-            current_length: self.alloc.byte_size().into(),
-        }
+        self.alloc.vmmemory()
     }
 
     pub fn byte_size(&self) -> usize {
