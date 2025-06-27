@@ -324,13 +324,13 @@ macro_rules! define_table_ops {
         }
 
         $(
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, reason = "macro-generated code")]
             fn $op(
                 _ctx: &mut mutatis::Context,
                 _ops: &TableOps,
                 stack: usize,
             ) -> mutatis::Result<(TableOp, usize)> {
-                #[allow(unused_comparisons)]
+                #[allow(unused_comparisons, reason = "macro-generated code")]
                 {
                     debug_assert!(stack >= $params);
                 }
@@ -359,7 +359,7 @@ macro_rules! define_table_ops {
                 > = vec![];
 
                 $(
-                    #[allow(unused_comparisons)]
+                    #[allow(unused_comparisons, reason = "macro-generated code")]
                     if stack >= $params $($(
                         && {
                             let limit_fn: fn(&TableOps) -> $ty = $limit;
