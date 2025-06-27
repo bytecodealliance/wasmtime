@@ -1860,7 +1860,7 @@ impl StoreOpaque {
         }
 
         cfg_if::cfg_if! {
-            if #[cfg(any(feature = "std", unix, windows))] {
+            if #[cfg(feature = "std")] {
                 // With the standard library a rich error can be printed here
                 // to stderr and the native abort path is used.
                 eprintln!(
