@@ -100,7 +100,7 @@ impl Context {
 /// Backing storage for an incremental compilation cache, when enabled.
 pub trait CacheKvStore {
     /// Given a cache key hash, retrieves the associated opaque serialized data.
-    fn get(&self, key: &[u8]) -> Option<Cow<[u8]>>;
+    fn get(&self, key: &[u8]) -> Option<Cow<'_, [u8]>>;
 
     /// Given a new cache key and a serialized blob obtained from `serialize_compiled`, stores it
     /// in the cache store.
