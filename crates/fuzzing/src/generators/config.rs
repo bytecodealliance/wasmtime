@@ -1,13 +1,9 @@
 //! Generate a configuration for both Wasmtime and the Wasm module to execute.
 
-use super::{
-    AsyncConfig, CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig,
-    NormalMemoryConfig, UnalignedMemoryCreator,
-};
+use super::{AsyncConfig, CodegenSettings, InstanceAllocationStrategy, MemoryConfig, ModuleConfig};
 use crate::oracles::{StoreLimits, Timeout};
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
-use std::sync::Arc;
 use std::time::Duration;
 use wasmtime::{Engine, Module, MpkEnabled, Store};
 use wasmtime_test_util::wast::{WastConfig, WastTest, limits};
@@ -92,11 +88,10 @@ impl Config {
 
             pooling.core_instance_size = 1_000_000;
 
-            if let MemoryConfig::Normal(cfg) = &mut self.wasmtime.memory_config {
-                match &mut cfg.memory_reservation {
-                    Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
-                    other @ None => *other = Some(pooling.max_memory_size as u64),
-                }
+            let cfg = &mut self.wasmtime.memory_config;
+            match &mut cfg.memory_reservation {
+                Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
+                other @ None => *other = Some(pooling.max_memory_size as u64),
             }
         }
 
@@ -194,13 +189,8 @@ impl Config {
             config.max_memories = 1;
         }
 
-        match &mut self.wasmtime.memory_config {
-            MemoryConfig::Normal(config) => {
-                if let Some(n) = &mut config.memory_reservation {
-                    *n = (*n).max(limits::MEMORY_SIZE as u64);
-                }
-            }
-            MemoryConfig::CustomUnaligned => {}
+        if let Some(n) = &mut self.wasmtime.memory_config.memory_reservation {
+            *n = (*n).max(limits::MEMORY_SIZE as u64);
         }
 
         // FIXME: it might be more ideal to avoid the need for this entirely
@@ -384,11 +374,11 @@ impl Config {
         // - shared memories are required to be aligned which means that the
         //   `CustomUnaligned` variant isn't actually safe to use with a shared
         //   memory.
-        let host_memory = if !self.module_config.config.threads_enabled {
+        if !self.module_config.config.threads_enabled {
             // If PCC is enabled, force other options to be compatible: PCC is currently only
             // supported when bounds checks are elided.
             let memory_config = if pcc {
-                MemoryConfig::Normal(NormalMemoryConfig {
+                MemoryConfig {
                     memory_reservation: Some(4 << 30), // 4 GiB
                     memory_guard_size: Some(2 << 30),  // 2 GiB
                     memory_reservation_for_growth: Some(0),
@@ -396,28 +386,12 @@ impl Config {
                     memory_init_cow: true,
                     // Doesn't matter, only using virtual memory.
                     cranelift_enable_heap_access_spectre_mitigations: None,
-                })
+                }
             } else {
                 self.wasmtime.memory_config.clone()
             };
 
-            match &memory_config {
-                MemoryConfig::Normal(memory_config) => {
-                    memory_config.configure(&mut cfg);
-                    None
-                }
-                MemoryConfig::CustomUnaligned => {
-                    cfg.opts.memory_reservation = Some(0);
-                    cfg.opts.memory_guard_size = Some(0);
-                    cfg.opts.memory_reservation_for_growth = Some(0);
-                    cfg.opts.guard_before_linear_memory = Some(false);
-                    cfg.opts.memory_init_cow = Some(false);
-                    log::debug!("a custom unaligned host memory will be in use");
-                    Some(Arc::new(UnalignedMemoryCreator))
-                }
-            }
-        } else {
-            None
+            memory_config.configure(&mut cfg);
         };
 
         // If malloc-based memory is going to be used, which requires these four
@@ -441,10 +415,6 @@ impl Config {
 
         log::debug!("creating wasmtime config with CLI options:\n{cfg}");
         let mut cfg = cfg.config(None).expect("failed to create wasmtime::Config");
-
-        if let Some(host_memory) = host_memory {
-            cfg.with_host_memory(host_memory);
-        }
 
         if self.wasmtime.async_config != AsyncConfig::Disabled {
             log::debug!("async config in use {:?}", self.wasmtime.async_config);
@@ -639,7 +609,7 @@ impl WasmtimeConfig {
     pub fn update_module_config(
         &mut self,
         config: &mut ModuleConfig,
-        u: &mut Unstructured<'_>,
+        _u: &mut Unstructured<'_>,
     ) -> arbitrary::Result<()> {
         match self.compiler_strategy {
             CompilerStrategy::CraneliftNative => {}
@@ -690,18 +660,6 @@ impl WasmtimeConfig {
             }
         }
 
-        // Forcibly don't use the `CustomUnaligned` memory configuration when
-        // wasm threads are enabled or when the pooling allocator is used. For
-        // the pooling allocator it doesn't use custom memory creators anyway
-        // and for wasm threads that will require some refactoring of the
-        // `LinearMemory` trait to bubble up the request that the linear memory
-        // not move. Otherwise that just generates a panic right now.
-        if config.config.threads_enabled
-            || matches!(self.strategy, InstanceAllocationStrategy::Pooling(_))
-        {
-            self.avoid_custom_unaligned_memory(u)?;
-        }
-
         // If using the pooling allocator, constrain the memory and module configurations
         // to the module limits.
         if let InstanceAllocationStrategy::Pooling(pooling) = &mut self.strategy {
@@ -724,10 +682,9 @@ impl WasmtimeConfig {
                         .try_into()
                         .unwrap_or(u64::MAX),
                 );
-            let mut min = min_bytes.min(pooling.max_memory_size as u64);
-            if let MemoryConfig::Normal(cfg) = &self.memory_config {
-                min = min.min(cfg.memory_reservation.unwrap_or(0));
-            }
+            let min = min_bytes
+                .min(pooling.max_memory_size as u64)
+                .min(self.memory_config.memory_reservation.unwrap_or(0));
             pooling.max_memory_size = min as usize;
             config.config.max_memory32_bytes = min;
             config.config.max_memory64_bytes = min as u128;
@@ -740,11 +697,10 @@ impl WasmtimeConfig {
                     pooling.max_memory_size = 1 << 16;
                     config.config.max_memory32_bytes = 1 << 16;
                     config.config.max_memory64_bytes = 1 << 16;
-                    if let MemoryConfig::Normal(cfg) = &mut self.memory_config {
-                        match &mut cfg.memory_reservation {
-                            Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
-                            size @ None => *size = Some(pooling.max_memory_size as u64),
-                        }
+                    let cfg = &mut self.memory_config;
+                    match &mut cfg.memory_reservation {
+                        Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
+                        size @ None => *size = Some(pooling.max_memory_size as u64),
                     }
                 }
                 // .. additionally update tables
@@ -775,9 +731,8 @@ impl WasmtimeConfig {
 
             // Spectre-based heap mitigations require signal handlers so this
             // must always be disabled if signals-based traps are disabled.
-            if let MemoryConfig::Normal(cfg) = &mut self.memory_config {
-                cfg.cranelift_enable_heap_access_spectre_mitigations = None;
-            }
+            self.memory_config
+                .cranelift_enable_heap_access_spectre_mitigations = None;
         }
 
         self.make_internally_consistent();
@@ -796,15 +751,6 @@ impl WasmtimeConfig {
         })
     }
 
-    /// Helper to switch `MemoryConfig::CustomUnaligned` to
-    /// `MemoryConfig::Normal`
-    fn avoid_custom_unaligned_memory(&mut self, u: &mut Unstructured<'_>) -> arbitrary::Result<()> {
-        if let MemoryConfig::CustomUnaligned = self.memory_config {
-            self.memory_config = MemoryConfig::Normal(u.arbitrary()?);
-        }
-        Ok(())
-    }
-
     /// Helper method to handle some dependencies between various configuration
     /// options. This is intended to be called whenever a `Config` is created or
     /// modified to ensure that the final result is an instantiable `Config`.
@@ -815,25 +761,24 @@ impl WasmtimeConfig {
     /// the current state of the engine's development.
     fn make_internally_consistent(&mut self) {
         if !self.signals_based_traps {
-            if let MemoryConfig::Normal(cfg) = &mut self.memory_config {
-                // Spectre-based heap mitigations require signal handlers so
-                // this must always be disabled if signals-based traps are
-                // disabled.
-                cfg.cranelift_enable_heap_access_spectre_mitigations = None;
+            let cfg = &mut self.memory_config;
+            // Spectre-based heap mitigations require signal handlers so
+            // this must always be disabled if signals-based traps are
+            // disabled.
+            cfg.cranelift_enable_heap_access_spectre_mitigations = None;
 
-                // With configuration settings that match the use of malloc for
-                // linear memories cap the `memory_reservation_for_growth` value
-                // to something reasonable to avoid OOM in fuzzing.
-                if !cfg.memory_init_cow
-                    && cfg.memory_guard_size == Some(0)
-                    && cfg.memory_reservation == Some(0)
-                {
-                    let min = 10 << 20; // 10 MiB
-                    if let Some(val) = &mut cfg.memory_reservation_for_growth {
-                        *val = (*val).min(min);
-                    } else {
-                        cfg.memory_reservation_for_growth = Some(min);
-                    }
+            // With configuration settings that match the use of malloc for
+            // linear memories cap the `memory_reservation_for_growth` value
+            // to something reasonable to avoid OOM in fuzzing.
+            if !cfg.memory_init_cow
+                && cfg.memory_guard_size == Some(0)
+                && cfg.memory_reservation == Some(0)
+            {
+                let min = 10 << 20; // 10 MiB
+                if let Some(val) = &mut cfg.memory_reservation_for_growth {
+                    *val = (*val).min(min);
+                } else {
+                    cfg.memory_reservation_for_growth = Some(min);
                 }
             }
         }
