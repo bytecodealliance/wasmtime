@@ -2345,9 +2345,9 @@ checksum = "685a9ac4b61f4e728e1d2c6a7844609c16527aeb5e6c865915c08e619c16410f"
 
 [[package]]
 name = "mutatis"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f433cdf0901e1f31df267311aaf26e35574d001bf774aa5d56e177a7b7240a00"
+checksum = "31be5d2bfb418a4362eec78ca556ce9a15542a00d389860c3bf3adc132edb1d9"
 dependencies = [
  "rand",
 ]
@@ -4523,6 +4523,7 @@ dependencies = [
  "rand",
  "rayon",
  "serde_json",
+ "smallvec",
  "target-lexicon",
  "tempfile",
  "v8",
