@@ -1977,7 +1977,7 @@ pub struct MachSrcLoc<T: CompilePhase> {
     /// section.
     pub start: CodeOffset,
     /// The end of the region of code corresponding to a source location.
-    /// This is relative to the start of the section, not to the start of the
+    /// This is relative to the start of the function, not to the start of the
     /// section.
     pub end: CodeOffset,
     /// The source location.

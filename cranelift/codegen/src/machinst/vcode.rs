@@ -208,11 +208,11 @@ pub struct EmitResult {
     pub buffer: MachBufferFinalized<Stencil>,
 
     /// Offset of each basic block, recorded during emission. Computed
-    /// only if `debug_value_labels` is non-empty.
+    /// only if `machine_code_cfg_info` is enabled.
     pub bb_offsets: Vec<CodeOffset>,
 
     /// Final basic-block edges, in terms of code offsets of
-    /// bb-starts. Computed only if `debug_value_labels` is non-empty.
+    /// bb-starts. Computed only if `machine_code_cfg_info` is enabled.
     pub bb_edges: Vec<(CodeOffset, CodeOffset)>,
 
     /// Final length of function body.
