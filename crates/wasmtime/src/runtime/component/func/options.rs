@@ -45,6 +45,7 @@ pub struct Options {
     /// This defaults to utf-8 but can be changed if necessary.
     string_encoding: StringEncoding,
 
+    /// Whether or not this the async option was set when lowering.
     async_: bool,
 }
 

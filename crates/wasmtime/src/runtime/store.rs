@@ -533,7 +533,7 @@ enum StoreInstanceKind {
     Dummy,
 }
 
-impl<T: 'static> Store<T> {
+impl<T> Store<T> {
     /// Creates a new [`Store`] to be associated with the given [`Engine`] and
     /// `data` provided.
     ///
@@ -1926,25 +1926,6 @@ at https://bytecodealliance.org/security.
         )
     }
 
-    #[inline]
-    #[cfg(feature = "component-model")]
-    pub(crate) fn component_resource_state_with_instance(
-        &mut self,
-        instance: crate::component::Instance,
-    ) -> (
-        &mut crate::runtime::vm::component::CallContexts,
-        &mut crate::runtime::vm::component::ResourceTable,
-        &mut crate::component::HostResourceData,
-        Pin<&mut crate::vm::component::ComponentInstance>,
-    ) {
-        (
-            &mut self.component_calls,
-            &mut self.component_host_table,
-            &mut self.host_resource_data,
-            instance.id().from_data_get_mut(&mut self.store_data),
-        )
-    }
-
     #[cfg(feature = "component-model")]
     pub(crate) fn push_component_instance(&mut self, instance: crate::component::Instance) {
         // We don't actually need the instance itself right now, but it seems
@@ -1953,6 +1934,25 @@ at https://bytecodealliance.org/security.
         let _ = instance;
 
         self.num_component_instances += 1;
+    }
+
+    #[inline]
+    #[cfg(feature = "component-model")]
+    pub(crate) fn component_resource_state_with_instance(
+        &mut self,
+        instance: crate::component::Instance,
+    ) -> (
+        &mut vm::component::CallContexts,
+        &mut vm::component::ResourceTable,
+        &mut crate::component::HostResourceData,
+        Pin<&mut vm::component::ComponentInstance>,
+    ) {
+        (
+            &mut self.component_calls,
+            &mut self.component_host_table,
+            &mut self.host_resource_data,
+            instance.id().from_data_get_mut(&mut self.store_data),
+        )
     }
 
     #[cfg(feature = "async")]
@@ -2316,7 +2316,7 @@ impl<T> StoreInner<T> {
     }
 }
 
-impl<T: Default + 'static> Default for Store<T> {
+impl<T: Default> Default for Store<T> {
     fn default() -> Store<T> {
         Store::new(&Engine::default(), T::default())
     }

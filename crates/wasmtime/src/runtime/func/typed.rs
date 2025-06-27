@@ -138,7 +138,6 @@ where
         Results: Sync,
     {
         let mut store = store.as_context_mut();
-        let _ = &mut store; // always require mutability
         assert!(
             store.0.async_support(),
             "must use `call` with non-async stores"
