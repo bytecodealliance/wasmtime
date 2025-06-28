@@ -254,8 +254,6 @@ runtime = [
   "dep:wasmtime-slab",
   "dep:wasmtime-versioned-export-macros",
   "dep:windows-sys",
-  "dep:rustix",
-  "rustix/mm",
   "pulley-interpreter/interp",
   "dep:wasmtime-jit-icache-coherence",
   "dep:wasmtime-unwinder",
@@ -333,6 +331,8 @@ std = [
   'pulley-interpreter/std',
   'wasmtime-math/std',
   'addr2line?/std',
+  "dep:rustix",
+  "rustix/mm",  
 ]
 
 # Enables support for the `Store::call_hook` API which enables injecting custom

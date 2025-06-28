@@ -50,6 +50,9 @@ cfg_if::cfg_if! {
     if #[cfg(miri)] {
         mod miri;
         pub use miri::*;
+    } else if #[cfg(not(feature = "std"))] {
+        mod custom;
+        pub use custom::*;
     } else if #[cfg(windows)] {
         mod windows;
         pub use windows::*;

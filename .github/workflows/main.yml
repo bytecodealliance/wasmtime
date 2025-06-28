@@ -322,12 +322,12 @@ jobs:
               -p wasmtime --no-default-features --features wat
               -p wasmtime --no-default-features --features profiling
               -p wasmtime --no-default-features --features cache
-              -p wasmtime --no-default-features --features async
+              -p wasmtime --no-default-features --features async,std
               -p wasmtime --no-default-features --features std
               -p wasmtime --no-default-features --features pooling-allocator
               -p wasmtime --no-default-features --features cranelift
               -p wasmtime --no-default-features --features component-model
-              -p wasmtime --no-default-features --features runtime,component-model
+              -p wasmtime --no-default-features --features runtime,component-model,std
               -p wasmtime --no-default-features --features cranelift,wat,async,std,cache
               -p wasmtime --no-default-features --features winch
               -p wasmtime --no-default-features --features wmemcheck
@@ -335,21 +335,21 @@ jobs:
               -p wasmtime --no-default-features --features demangle
               -p wasmtime --no-default-features --features addr2line
               -p wasmtime --no-default-features --features gc
-              -p wasmtime --no-default-features --features runtime,gc
+              -p wasmtime --no-default-features --features runtime,gc,std
               -p wasmtime --no-default-features --features cranelift,gc
               -p wasmtime --no-default-features --features gc-drc
-              -p wasmtime --no-default-features --features runtime,gc-drc
+              -p wasmtime --no-default-features --features runtime,gc-drc,std
               -p wasmtime --no-default-features --features cranelift,gc-drc
               -p wasmtime --no-default-features --features gc-null
-              -p wasmtime --no-default-features --features runtime,gc-null
+              -p wasmtime --no-default-features --features runtime,gc-null,std
               -p wasmtime --no-default-features --features cranelift,gc-null
-              -p wasmtime --no-default-features --features runtime
+              -p wasmtime --no-default-features --features runtime,std
               -p wasmtime --no-default-features --features threads
               -p wasmtime --no-default-features --features runtime,threads
               -p wasmtime --no-default-features --features cranelift,threads
-              -p wasmtime --no-default-features --features stack-switching
+              -p wasmtime --no-default-features --features stack-switching,std
               -p wasmtime --no-default-features --features cranelift,stack-switching
-              -p wasmtime --no-default-features --features runtime,stack-switching
+              -p wasmtime --no-default-features --features runtime,stack-switching,std
               -p wasmtime --features incremental-cache
               -p wasmtime --features profile-pulley
               -p wasmtime --all-features
