@@ -160,15 +160,6 @@ pub(crate) fn check(
             }
             RegMem::Reg { .. } => Ok(()),
         },
-        Inst::JmpUnknown {
-            target: ref dest, ..
-        } => match dest {
-            RegMem::Mem { addr } => {
-                check_load(ctx, None, addr, vcode, I64, 64)?;
-                Ok(())
-            }
-            RegMem::Reg { .. } => Ok(()),
-        },
 
         Inst::JmpTableSeq { tmp1, tmp2, .. } => {
             ensure_no_fact(vcode, tmp1.to_reg())?;

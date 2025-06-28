@@ -1,9 +1,7 @@
 use crate::ir::KnownSymbol;
 use crate::ir::immediates::{Ieee32, Ieee64};
 use crate::isa::x64::encoding::evex::{EvexInstruction, EvexVectorLength, RegisterOrAmode};
-use crate::isa::x64::encoding::rex::{
-    LegacyPrefixes, OpcodeMap, RexFlags, emit_std_enc_enc, emit_std_enc_mem, int_reg_enc,
-};
+use crate::isa::x64::encoding::rex::{LegacyPrefixes, OpcodeMap};
 use crate::isa::x64::external::{AsmInst, CraneliftRegisters, PairedGpr};
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
@@ -442,10 +440,7 @@ pub(crate) fn emit(
 
             emit_return_call_common_sequence(sink, info, state, &call_info);
 
-            Inst::JmpUnknown {
-                target: RegMem::reg(callee),
-            }
-            .emit(sink, info, state);
+            asm::inst::jmpq_m::new(callee).emit(sink, info, state);
             sink.add_call_site(&[]);
         }
 
@@ -595,10 +590,7 @@ pub(crate) fn emit(
             )
             .emit(sink, info, state);
 
-            let inst = Inst::JmpUnknown {
-                target: RegMem::reg(tmp1.to_reg().into()),
-            };
-            emit(&inst, sink, info, state);
+            asm::inst::jmpq_m::new(tmp1.to_reg()).emit(sink, info, state);
 
             sink.bind_label(resume, state.ctrl_plane_mut());
         }
@@ -731,39 +723,6 @@ pub(crate) fn emit(
             sink.put4(0x0);
         }
 
-        Inst::JmpUnknown { target } => {
-            let target = target.clone();
-
-            match target {
-                RegMem::Reg { reg } => {
-                    let reg_enc = int_reg_enc(reg);
-                    emit_std_enc_enc(
-                        sink,
-                        LegacyPrefixes::None,
-                        0xFF,
-                        1,
-                        4, /*subopcode*/
-                        reg_enc,
-                        RexFlags::clear_w(),
-                    );
-                }
-
-                RegMem::Mem { addr } => {
-                    let addr = &addr.finalize(state.frame_layout(), sink);
-                    emit_std_enc_mem(
-                        sink,
-                        LegacyPrefixes::None,
-                        0xFF,
-                        1,
-                        4, /*subopcode*/
-                        addr,
-                        RexFlags::clear_w(),
-                        0,
-                    );
-                }
-            }
-        }
-
         &Inst::JmpTableSeq {
             idx,
             tmp1,
@@ -813,8 +772,7 @@ pub(crate) fn emit(
             asm::inst::addq_rm::new(tmp1, tmp2).emit(sink, info, state);
 
             // Branch to computed address.
-            let inst = Inst::jmp_unknown(RegMem::reg(tmp1.to_reg()));
-            inst.emit(sink, info, state);
+            asm::inst::jmpq_m::new(tmp1.to_reg()).emit(sink, info, state);
 
             // Emit jump table (table of 32-bit offsets).
             sink.bind_label(start_of_jumptable, state.ctrl_plane_mut());
