@@ -117,8 +117,9 @@ mod values;
 pub use self::component::{Component, ComponentExportIndex};
 #[cfg(feature = "component-model-async")]
 pub use self::concurrent::{
-    Accessor, ErrorContext, FutureReader, Promise, PromisesUnordered, StreamReader,
-    VMComponentAsyncStore,
+    AbortOnDropHandle, Access, Accessor, AccessorTask, ErrorContext, FutureReader, FutureWriter,
+    HostFuture, HostStream, ReadBuffer, StreamReader, StreamWriter, VMComponentAsyncStore,
+    VecBuffer, Watch, WriteBuffer,
 };
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
@@ -144,6 +145,8 @@ pub use wasm_wave;
 // Wasmtime's API stability guarantees
 #[doc(hidden)]
 pub mod __internal {
+    #[cfg(feature = "component-model-async")]
+    pub use super::concurrent::{AbortHandle, AbortWrapper, Spawned};
     pub use super::func::{
         ComponentVariant, LiftContext, LowerContext, Options, bad_type_info, format_flags,
         lower_payload, typecheck_enum, typecheck_flags, typecheck_record, typecheck_variant,
@@ -157,10 +160,23 @@ pub mod __internal {
     pub use alloc::vec::Vec;
     pub use anyhow;
     pub use core::cell::RefCell;
+    #[cfg(feature = "component-model-async")]
     pub use core::future::Future;
+    #[cfg(feature = "component-model-async")]
+    pub use core::mem;
     pub use core::mem::transmute;
     #[cfg(feature = "component-model-async")]
-    pub use futures::future::FutureExt;
+    pub use core::ops::DerefMut;
+    #[cfg(feature = "component-model-async")]
+    pub use core::pin::{Pin, pin};
+    #[cfg(feature = "component-model-async")]
+    pub use core::ptr::NonNull;
+    #[cfg(feature = "component-model-async")]
+    pub use core::task::{Context, Poll};
+    #[cfg(feature = "component-model-async")]
+    pub use futures::future::{FutureExt, poll_fn};
+    #[cfg(feature = "component-model-async")]
+    pub use std::sync::{Arc, Mutex};
     #[cfg(feature = "async")]
     pub use trait_variant::make as trait_variant_make;
     pub use wasmtime_environ;
@@ -683,3 +699,151 @@ pub mod bindgen_examples;
 #[cfg(not(any(docsrs, test, doctest)))]
 #[doc(hidden)]
 pub mod bindgen_examples {}
+
+#[cfg(not(feature = "component-model-async"))]
+pub(crate) mod concurrent {
+    use {
+        crate::{
+            component::{
+                Instance, Val,
+                func::{ComponentType, LiftContext, LowerContext},
+            },
+            runtime::vm::VMStore,
+        },
+        alloc::{sync::Arc, task::Wake},
+        anyhow::Result,
+        core::{
+            future::Future,
+            marker::PhantomData,
+            pin::pin,
+            task::{Context, Poll, Waker},
+        },
+        wasmtime_environ::component::{InterfaceType, RuntimeComponentInstanceIndex},
+    };
+
+    fn dummy_waker() -> Waker {
+        struct DummyWaker;
+
+        impl Wake for DummyWaker {
+            fn wake(self: Arc<Self>) {}
+        }
+
+        Arc::new(DummyWaker).into()
+    }
+
+    impl Instance {
+        pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
+            self,
+            _store: &mut dyn VMStore,
+            future: impl Future<Output = Result<R>> + Send + 'static,
+            _caller_instance: RuntimeComponentInstanceIndex,
+        ) -> Result<R> {
+            match pin!(future).poll(&mut Context::from_waker(&dummy_waker())) {
+                Poll::Ready(result) => result,
+                Poll::Pending => {
+                    unreachable!()
+                }
+            }
+        }
+    }
+
+    pub(crate) fn lower_future_to_index<U>(
+        _rep: u32,
+        _cx: &mut LowerContext<'_, U>,
+        _ty: InterfaceType,
+    ) -> Result<u32> {
+        unreachable!()
+    }
+
+    pub(crate) fn lower_stream_to_index<U>(
+        _rep: u32,
+        _cx: &mut LowerContext<'_, U>,
+        _ty: InterfaceType,
+    ) -> Result<u32> {
+        unreachable!()
+    }
+
+    pub(crate) fn lower_error_context_to_index<U>(
+        _rep: u32,
+        _cx: &mut LowerContext<'_, U>,
+        _ty: InterfaceType,
+    ) -> Result<u32> {
+        unreachable!()
+    }
+
+    pub struct ErrorContext;
+
+    impl ErrorContext {
+        pub(crate) fn into_val(self) -> Val {
+            unreachable!()
+        }
+
+        pub(crate) fn linear_lift_from_flat(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _src: &<u32 as ComponentType>::Lower,
+        ) -> Result<Self> {
+            unreachable!()
+        }
+
+        pub(crate) fn linear_lift_from_memory(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _bytes: &[u8],
+        ) -> Result<Self> {
+            unreachable!()
+        }
+    }
+
+    pub struct HostStream<P> {
+        _phantom: PhantomData<P>,
+    }
+
+    impl<P> HostStream<P> {
+        pub(crate) fn into_val(self) -> Val {
+            unreachable!()
+        }
+
+        pub(crate) fn linear_lift_from_flat(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _src: &<u32 as ComponentType>::Lower,
+        ) -> Result<Self> {
+            unreachable!()
+        }
+
+        pub(crate) fn linear_lift_from_memory(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _bytes: &[u8],
+        ) -> Result<Self> {
+            unreachable!()
+        }
+    }
+
+    pub struct HostFuture<P> {
+        _phantom: PhantomData<P>,
+    }
+
+    impl<P> HostFuture<P> {
+        pub(crate) fn into_val(self) -> Val {
+            unreachable!()
+        }
+
+        pub(crate) fn linear_lift_from_flat(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _src: &<u32 as ComponentType>::Lower,
+        ) -> Result<Self> {
+            unreachable!()
+        }
+
+        pub(crate) fn linear_lift_from_memory(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _bytes: &[u8],
+        ) -> Result<Self> {
+            unreachable!()
+        }
+    }
+}
