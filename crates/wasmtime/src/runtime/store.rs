@@ -1077,7 +1077,7 @@ impl<T> StoreInner<T> {
     }
 
     #[inline]
-    fn data_mut(&mut self) -> &mut T {
+    pub(crate) fn data_mut(&mut self) -> &mut T {
         &mut self.data
     }
 
@@ -1936,6 +1936,7 @@ at https://bytecodealliance.org/security.
         self.num_component_instances += 1;
     }
 
+    #[inline]
     #[cfg(feature = "component-model")]
     pub(crate) fn component_resource_state_with_instance(
         &mut self,
@@ -2337,6 +2338,13 @@ impl<T> Drop for Store<T> {
 
         // for documentation on this `unsafe`, see `into_data`.
         unsafe {
+            // We need to drop the fibers of each component instance before
+            // attempting to drop the instances themselves since the fibers may
+            // need to be resumed and allowed to exit cleanly before we yank the
+            // state out from under them.
+            #[cfg(feature = "component-model-async")]
+            ComponentStoreData::drop_fibers(&mut self.inner);
+
             ManuallyDrop::drop(&mut self.inner.data);
             ManuallyDrop::drop(&mut self.inner);
         }

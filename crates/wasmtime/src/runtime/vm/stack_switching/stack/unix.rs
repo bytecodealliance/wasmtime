@@ -349,7 +349,7 @@ cfg_if::cfg_if! {
     if #[cfg(target_arch = "x86_64")] {
         mod x86_64;
     } else {
-        // Note that this shoul be unreachable: In stack.rs, we currently select
+        // Note that this should be unreachable: In stack.rs, we currently select
         // the module defined in the current file only if we are on unix AND
         // x86_64.
         compile_error!("the stack switching feature is not supported on this CPU architecture");

@@ -307,6 +307,9 @@ impl From<&Val> for wasmtime_component_val_t {
             Val::Result(x) => wasmtime_component_val_t::Result(x.into()),
             Val::Flags(x) => wasmtime_component_val_t::Flags(x.as_slice().into()),
             Val::Resource(_resource_any) => todo!(),
+            Val::Future(_) => todo!(),
+            Val::Stream(_) => todo!(),
+            Val::ErrorContext(_) => todo!(),
         }
     }
 }

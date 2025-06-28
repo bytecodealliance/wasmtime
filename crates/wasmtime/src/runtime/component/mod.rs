@@ -117,8 +117,9 @@ mod values;
 pub use self::component::{Component, ComponentExportIndex};
 #[cfg(feature = "component-model-async")]
 pub use self::concurrent::{
-    Accessor, ErrorContext, FutureReader, Promise, PromisesUnordered, StreamReader,
-    VMComponentAsyncStore,
+    AbortOnDropHandle, Access, Accessor, AccessorTask, ErrorContext, FutureReader, FutureWriter,
+    HostFuture, HostStream, ReadBuffer, StreamReader, StreamWriter, VMComponentAsyncStore,
+    VecBuffer, Watch, WriteBuffer,
 };
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
@@ -144,6 +145,8 @@ pub use wasm_wave;
 // Wasmtime's API stability guarantees
 #[doc(hidden)]
 pub mod __internal {
+    #[cfg(feature = "component-model-async")]
+    pub use super::concurrent::{AbortHandle, AbortWrapper, Spawned};
     pub use super::func::{
         ComponentVariant, LiftContext, LowerContext, Options, bad_type_info, format_flags,
         lower_payload, typecheck_enum, typecheck_flags, typecheck_record, typecheck_variant,
@@ -157,10 +160,23 @@ pub mod __internal {
     pub use alloc::vec::Vec;
     pub use anyhow;
     pub use core::cell::RefCell;
+    #[cfg(feature = "component-model-async")]
     pub use core::future::Future;
+    #[cfg(feature = "component-model-async")]
+    pub use core::mem;
     pub use core::mem::transmute;
     #[cfg(feature = "component-model-async")]
-    pub use futures::future::FutureExt;
+    pub use core::ops::DerefMut;
+    #[cfg(feature = "component-model-async")]
+    pub use core::pin::{Pin, pin};
+    #[cfg(feature = "component-model-async")]
+    pub use core::ptr::NonNull;
+    #[cfg(feature = "component-model-async")]
+    pub use core::task::{Context, Poll};
+    #[cfg(feature = "component-model-async")]
+    pub use futures::future::{FutureExt, poll_fn};
+    #[cfg(feature = "component-model-async")]
+    pub use std::sync::{Arc, Mutex};
     #[cfg(feature = "async")]
     pub use trait_variant::make as trait_variant_make;
     pub use wasmtime_environ;
@@ -683,3 +699,9 @@ pub mod bindgen_examples;
 #[cfg(not(any(docsrs, test, doctest)))]
 #[doc(hidden)]
 pub mod bindgen_examples {}
+
+#[cfg(not(feature = "component-model-async"))]
+pub(crate) mod concurrent_disabled;
+
+#[cfg(not(feature = "component-model-async"))]
+pub(crate) use concurrent_disabled as concurrent;
