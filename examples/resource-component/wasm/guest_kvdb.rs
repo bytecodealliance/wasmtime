@@ -6,7 +6,7 @@ wit_bindgen::generate!({
 use crate::example::kv_store::kvdb::Connection;
 use std::sync::LazyLock;
 
-static KV_CONNECTION: LazyLock<Connection> = LazyLock::new(|| Connection::new());
+static KV_CONNECTION: LazyLock<Connection> = LazyLock::new(Connection::new);
 
 struct KVStore;
 
