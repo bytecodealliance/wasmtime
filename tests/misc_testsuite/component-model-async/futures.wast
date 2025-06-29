@@ -73,19 +73,19 @@
 ;; future.drop-readable
 (component
   (core module $m
-    (import "" "future.drop-readable" (func $future.drop-readable (param i32)))
+    (import "" "future.drop-readable" (func $future-drop-readable (param i32)))
   )
   (type $future-type (future u8))
-  (core func $future.drop-readable (canon future.drop-readable $future-type))
-  (core instance $i (instantiate $m (with "" (instance (export "future.drop-readable" (func $future.drop-readable))))))
+  (core func $future-drop-readable (canon future.drop-readable $future-type))
+  (core instance $i (instantiate $m (with "" (instance (export "future.drop-readable" (func $future-drop-readable))))))
 )
 
 ;; future.drop-writable
 (component
   (core module $m
-    (import "" "future.drop-writable" (func $future.drop-writable (param i32)))
+    (import "" "future.drop-writable" (func $future-drop-writable (param i32)))
   )
   (type $future-type (future u8))
-  (core func $future.drop-writable (canon future.drop-writable $future-type))
-  (core instance $i (instantiate $m (with "" (instance (export "future.drop-writable" (func $future.drop-writable))))))
+  (core func $future-drop-writable (canon future.drop-writable $future-type))
+  (core instance $i (instantiate $m (with "" (instance (export "future.drop-writable" (func $future-drop-writable))))))
 )

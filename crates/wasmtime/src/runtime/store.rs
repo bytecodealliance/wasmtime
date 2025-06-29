@@ -79,6 +79,8 @@
 use crate::RootSet;
 #[cfg(feature = "component-model-async")]
 use crate::component::ComponentStoreData;
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent;
 #[cfg(feature = "async")]
 use crate::fiber;
 use crate::module::RegisteredModuleId;
@@ -396,6 +398,9 @@ pub struct StoreOpaque {
     #[cfg(feature = "component-model")]
     host_resource_data: crate::component::HostResourceData,
 
+    #[cfg(feature = "component-model-async")]
+    concurrent_async_state: concurrent::AsyncState,
+
     /// State related to the executor of wasm code.
     ///
     /// For example if Pulley is enabled and configured then this will store a
@@ -533,7 +538,7 @@ enum StoreInstanceKind {
     Dummy,
 }
 
-impl<T> Store<T> {
+impl<T: 'static> Store<T> {
     /// Creates a new [`Store`] to be associated with the given [`Engine`] and
     /// `data` provided.
     ///
@@ -591,6 +596,8 @@ impl<T> Store<T> {
             #[cfg(feature = "component-model")]
             host_resource_data: Default::default(),
             executor: Executor::new(engine),
+            #[cfg(feature = "component-model-async")]
+            concurrent_async_state: Default::default(),
         };
         let mut inner = Box::new(StoreInner {
             inner,
@@ -1077,7 +1084,7 @@ impl<T> StoreInner<T> {
     }
 
     #[inline]
-    fn data_mut(&mut self) -> &mut T {
+    pub(crate) fn data_mut(&mut self) -> &mut T {
         &mut self.data
     }
 
@@ -1926,6 +1933,25 @@ at https://bytecodealliance.org/security.
         )
     }
 
+    #[inline]
+    #[cfg(feature = "component-model")]
+    pub(crate) fn component_resource_state_with_instance(
+        &mut self,
+        instance: crate::component::Instance,
+    ) -> (
+        &mut crate::runtime::vm::component::CallContexts,
+        &mut crate::runtime::vm::component::ResourceTable,
+        &mut crate::component::HostResourceData,
+        Pin<&mut crate::vm::component::ComponentInstance>,
+    ) {
+        (
+            &mut self.component_calls,
+            &mut self.component_host_table,
+            &mut self.host_resource_data,
+            instance.id().from_data_get_mut(&mut self.store_data),
+        )
+    }
+
     #[cfg(feature = "component-model")]
     pub(crate) fn push_component_instance(&mut self, instance: crate::component::Instance) {
         // We don't actually need the instance itself right now, but it seems
@@ -1936,27 +1962,14 @@ at https://bytecodealliance.org/security.
         self.num_component_instances += 1;
     }
 
-    #[cfg(feature = "component-model")]
-    pub(crate) fn component_resource_state_with_instance(
-        &mut self,
-        instance: crate::component::Instance,
-    ) -> (
-        &mut vm::component::CallContexts,
-        &mut vm::component::ResourceTable,
-        &mut crate::component::HostResourceData,
-        Pin<&mut vm::component::ComponentInstance>,
-    ) {
-        (
-            &mut self.component_calls,
-            &mut self.component_host_table,
-            &mut self.host_resource_data,
-            instance.id().from_data_get_mut(&mut self.store_data),
-        )
-    }
-
     #[cfg(feature = "async")]
     pub(crate) fn fiber_async_state_mut(&mut self) -> &mut fiber::AsyncState {
         &mut self.async_state
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn concurrent_async_state(&mut self) -> *mut concurrent::AsyncState {
+        &raw mut self.concurrent_async_state
     }
 
     #[cfg(feature = "async")]
@@ -2315,7 +2328,7 @@ impl<T> StoreInner<T> {
     }
 }
 
-impl<T: Default> Default for Store<T> {
+impl<T: Default + 'static> Default for Store<T> {
     fn default() -> Store<T> {
         Store::new(&Engine::default(), T::default())
     }
@@ -2337,6 +2350,13 @@ impl<T> Drop for Store<T> {
 
         // for documentation on this `unsafe`, see `into_data`.
         unsafe {
+            // We need to drop the fibers of each component instance before
+            // attempting to drop the instances themselves since the fibers may
+            // need to be resumed and allowed to exit cleanly before we yank the
+            // state out from under them.
+            #[cfg(feature = "component-model-async")]
+            ComponentStoreData::drop_fibers(&mut self.inner);
+
             ManuallyDrop::drop(&mut self.inner.data);
             ManuallyDrop::drop(&mut self.inner);
         }

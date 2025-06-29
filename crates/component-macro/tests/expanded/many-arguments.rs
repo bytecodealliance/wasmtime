@@ -605,7 +605,10 @@ pub mod exports {
                         arg13: u64,
                         arg14: u64,
                         arg15: u64,
-                    ) -> wasmtime::Result<()> {
+                    ) -> wasmtime::Result<()>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send + 'static,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (
@@ -658,7 +661,10 @@ pub mod exports {
                         &self,
                         mut store: S,
                         arg0: &BigStruct,
-                    ) -> wasmtime::Result<()> {
+                    ) -> wasmtime::Result<()>
+                    where
+                        <S as wasmtime::AsContext>::Data: Send + 'static,
+                    {
                         let callee = unsafe {
                             wasmtime::component::TypedFunc::<
                                 (&BigStruct,),
