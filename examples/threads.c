@@ -27,6 +27,7 @@ const int N_THREADS = 10;
 const int N_REPS = 3;
 
 #if defined(__linux__)
+#define _GNU_SOURCE
 #include <sys/syscall.h>
 uint64_t get_thread_id() { return (uint64_t)syscall(SYS_gettid); }
 
