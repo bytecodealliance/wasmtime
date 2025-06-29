@@ -66,7 +66,7 @@ pub struct Connection {
 impl KvDatabaseImports for ComponentRunStates {
     async fn log(&mut self, msg: String) -> Result<(), wasmtime::Error> {
         // provide host function to the component
-        println!("Log: {}", msg);
+        println!("Log: {msg}");
         Ok(())
     }
 }
@@ -86,7 +86,7 @@ impl example::kv_store::kvdb::HostConnection for ComponentRunStates {
         key: String,
     ) -> Result<Option<String>, wasmtime::Error> {
         let connection = self.resource_table.get(&resource)?;
-        Ok(connection.storage.get(&key).map(String::clone))
+        Ok(connection.storage.get(&key).cloned())
     }
 
     async fn set(
