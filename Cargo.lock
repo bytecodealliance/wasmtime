@@ -1288,6 +1288,13 @@ name = "example-fib-debug-wasm"
 version = "0.0.0"
 
 [[package]]
+name = "example-resource-component-wasm"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen",
+]
+
+[[package]]
 name = "example-tokio-wasm"
 version = "0.0.0"
 
