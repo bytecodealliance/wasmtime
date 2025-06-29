@@ -50,6 +50,7 @@ create_rust_wasm(tokio wasm32-wasip1)
 create_rust_wasm(wasi wasm32-wasip1)
 create_rust_wasm(wasi wasm32-wasip2)
 create_rust_wasm(component wasm32-unknown-unknown)
+create_rust_wasm(resource-component wasm32-wasip2)
 
 # C/C++ examples/tests
 create_target(anyref anyref.c)
@@ -96,3 +97,4 @@ create_rust_test(wasip2)
 create_rust_test(wasip2-async)
 create_rust_test(tokio wasi-common/tokio)
 create_rust_test(component)
+create_rust_test(resource-component)

@@ -1,0 +1,14 @@
+[package]
+name = "example-resource-component-wasm"
+version = "0.1.0"
+authors = ["The Wasmtime Project Developers"]
+edition = "2024"
+publish = false
+
+[dependencies]
+wit-bindgen = { workspace = true, default-features = true }
+
+[lib]
+path = "guest_kvdb.rs"
+name = "guest_kvdb"
+crate-type = ["cdylib"]

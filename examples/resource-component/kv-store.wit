@@ -1,0 +1,17 @@
+package example:kv-store;
+
+interface kvdb {
+  resource connection {
+    constructor();
+    get: func(key: string) -> option<string>;
+    set: func(key: string, value: string);
+    remove: func(key: string) -> option<string>;
+    clear: func();
+  }
+}
+
+world kv-database {
+  import kvdb;
+  import log: func(msg: string);
+  export replace-value: func(key: string, value: string) -> option<string>;
+}
