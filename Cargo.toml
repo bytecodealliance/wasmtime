@@ -163,6 +163,7 @@ members = [
   "examples/wasm",
   "examples/tokio/wasm",
   "examples/component/wasm",
+  "examples/resource-component/wasm",
   "examples/min-platform",
   "examples/min-platform/embedding",
   "fuzz",
