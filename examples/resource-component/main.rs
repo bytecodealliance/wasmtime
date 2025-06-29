@@ -8,12 +8,12 @@ You can execute this example with:
 
 use std::collections::HashMap;
 
+use wasmtime::component::bindgen;
 use wasmtime::component::{Component, Linker, ResourceTable};
+use wasmtime::component::{HasSelf, Resource};
 use wasmtime::{Config, Engine, Result, Store};
 use wasmtime_wasi::p2::add_to_linker_async;
 use wasmtime_wasi::p2::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
-use wasmtime::component::bindgen;
-use wasmtime::component::{HasSelf, Resource};
 
 pub struct ComponentRunStates {
     // These two are required basically as a standard way to enable the impl of IoView and
@@ -121,8 +121,6 @@ impl example::kv_store::kvdb::HostConnection for ComponentRunStates {
     }
 }
 
-
-
 #[tokio::main]
 async fn main() -> Result<()> {
     // Construct the wasm engine with async support enabled.
@@ -139,9 +137,13 @@ async fn main() -> Result<()> {
     // Instantiate our component with the imports we've created, and run its function
     let component = Component::from_file(&engine, "target/wasm32-wasip2/debug/guest_kvdb.wasm")?;
     let bindings = KvDatabase::instantiate_async(&mut store, &component, &linker).await?;
-    let result = bindings.call_replace_value(&mut store, "hello", "world").await?;
+    let result = bindings
+        .call_replace_value(&mut store, "hello", "world")
+        .await?;
     assert_eq!(result, None);
-    let result = bindings.call_replace_value(&mut store, "hello", "wasmtime").await?;
+    let result = bindings
+        .call_replace_value(&mut store, "hello", "wasmtime")
+        .await?;
     assert_eq!(result, Some("world".to_string()));
     Ok(())
 }
