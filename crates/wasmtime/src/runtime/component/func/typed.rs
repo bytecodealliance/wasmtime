@@ -433,55 +433,59 @@ pub unsafe trait ComponentNamedList: ComponentType {}
 /// The contents of this trait are hidden as it's intended to be an
 /// implementation detail of Wasmtime. The contents of this trait are not
 /// covered by Wasmtime's stability guarantees.
-//
-// Note that this is an `unsafe` trait as `TypedFunc`'s safety heavily relies on
-// the correctness of the implementations of this trait. Some ways in which this
-// trait must be correct to be safe are:
-//
-// * The `Lower` associated type must be a `ValRaw` sequence. It doesn't have to
-//   literally be `[ValRaw; N]` but when laid out in memory it must be adjacent
-//   `ValRaw` values and have a multiple of the size of `ValRaw` and the same
-//   alignment.
-//
-// * The `lower` function must initialize the bits within `Lower` that are going
-//   to be read by the trampoline that's used to enter core wasm. A trampoline
-//   is passed `*mut Lower` and will read the canonical abi arguments in
-//   sequence, so all of the bits must be correctly initialized.
-//
-// * The `size` and `align` functions must be correct for this value stored in
-//   the canonical ABI. The `Cursor<T>` iteration of these bytes rely on this
-//   for correctness as they otherwise eschew bounds-checking.
-//
-// There are likely some other correctness issues which aren't documented as
-// well, this isn't intended to be an exhaustive list. It suffices to say,
-// though, that correctness bugs in this trait implementation are highly likely
-// to lead to security bugs, which again leads to the `unsafe` in the trait.
-//
-// Also note that this trait specifically is not sealed because we have a proc
-// macro that generates implementations of this trait for external types in a
-// `#[derive]`-like fashion.
-//
-// # Send and Sync
-//
-// While on the topic of safety it's worth discussing the `Send` and `Sync`
-// bounds here as well. These bounds might naively seem like they shouldn't be
-// required for all component types as they're host-level types not guest-level
-// types persisted anywhere. Various subtleties lead to these bounds, however:
-//
-// * Fibers require that all stack-local variables are `Send` and `Sync` for
-//   fibers themselves to be send/sync. Unfortunately we have no help from the
-//   compiler on this one so it's up to Wasmtime's discipline to maintain this.
-//   One instance of this is that return values are placed on the stack as
-//   they're lowered into guest memory. This lowering operation can involve
-//   malloc and context switches, so return values must be Send/Sync.
-//
-// * In the implementation of component model async it's not uncommon for types
-//   to be "buffered" in the store temporarily. For example parameters might
-//   reside in a store temporarily while wasm has backpressure turned on.
-//
-// Overall it's generally easiest to require `Send` and `Sync` for all
-// component types. There additionally aren't known use case for non-`Send` or
-// non-`Sync` types at this time.
+///
+/// # Safety
+///
+/// Note that this is an `unsafe` trait as `TypedFunc`'s safety heavily relies on
+/// the correctness of the implementations of this trait. Some ways in which this
+/// trait must be correct to be safe are:
+///
+/// * The `Lower` associated type must be a `ValRaw` sequence. It doesn't have to
+///   literally be `[ValRaw; N]` but when laid out in memory it must be adjacent
+///   `ValRaw` values and have a multiple of the size of `ValRaw` and the same
+///   alignment.
+///
+/// * The `lower` function must initialize the bits within `Lower` that are going
+///   to be read by the trampoline that's used to enter core wasm. A trampoline
+///   is passed `*mut Lower` and will read the canonical abi arguments in
+///   sequence, so all of the bits must be correctly initialized.
+///
+/// * The `size` and `align` functions must be correct for this value stored in
+///   the canonical ABI. The `Cursor<T>` iteration of these bytes rely on this
+///   for correctness as they otherwise eschew bounds-checking.
+///
+/// There are likely some other correctness issues which aren't documented as
+/// well, this isn't currently an exhaustive list. It suffices to say, though,
+/// that correctness bugs in this trait implementation are highly likely to
+/// lead to security bugs, which again leads to the `unsafe` in the trait.
+///
+/// Note that this trait specifically is not sealed because `bindgen!`-generated
+/// types must be able to implement this trait using a `#[derive]` macro. For
+/// users it's recommended to not implement this trait manually given the
+/// non-exhaustive list of safety requirements that must be upheld. This trait
+/// is implemented at your own risk if you do so.
+///
+/// # Send and Sync
+///
+/// While on the topic of safety it's worth discussing the `Send` and `Sync`
+/// bounds here as well. These bounds might naively seem like they shouldn't be
+/// required for all component types as they're host-level types not guest-level
+/// types persisted anywhere. Various subtleties lead to these bounds, however:
+///
+/// * Fibers require that all stack-local variables are `Send` and `Sync` for
+///   fibers themselves to be send/sync. Unfortunately we have no help from the
+///   compiler on this one so it's up to Wasmtime's discipline to maintain this.
+///   One instance of this is that return values are placed on the stack as
+///   they're lowered into guest memory. This lowering operation can involve
+///   malloc and context switches, so return values must be Send/Sync.
+///
+/// * In the implementation of component model async it's not uncommon for types
+///   to be "buffered" in the store temporarily. For example parameters might
+///   reside in a store temporarily while wasm has backpressure turned on.
+///
+/// Overall it's generally easiest to require `Send` and `Sync` for all
+/// component types. There additionally aren't known use case for non-`Send` or
+/// non-`Sync` types at this time.
 pub unsafe trait ComponentType: Send + Sync {
     /// Representation of the "lowered" form of this component value.
     ///
