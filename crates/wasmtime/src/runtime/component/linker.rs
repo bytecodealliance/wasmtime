@@ -678,7 +678,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
     /// As [`Self::func_wrap_async`] is a dual of [`Self::func_wrap`], this
     /// function is the dual of [`Self::func_new`].
     ///
-    /// For documentation on async/blocking behavior see [`Self::func_wrap_async`].
+    /// For documentation on blocking behavior see [`Self::func_wrap_async`].
     #[cfg(feature = "async")]
     pub fn func_new_async<F>(&mut self, name: &str, f: F) -> Result<()>
     where

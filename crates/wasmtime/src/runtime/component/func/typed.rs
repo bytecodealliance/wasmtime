@@ -349,10 +349,7 @@ where
         }
     }
 
-    fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return>
-    where
-        Return: Send + Sync + 'static,
-    {
+    fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
         let store = store.as_context_mut();
 
         if self.func.abi_async(store.0) {

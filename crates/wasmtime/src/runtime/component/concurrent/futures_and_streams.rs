@@ -33,7 +33,7 @@ impl<T> HostFuture<T> {
 
 // SAFETY: This relies on the `ComponentType` implementation for `u32` being
 // safe and correct since we lift and lower future handles as `u32`s.
-unsafe impl<T> func::ComponentType for HostFuture<T> {
+unsafe impl<T: Send + Sync> func::ComponentType for HostFuture<T> {
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
 
     type Lower = <u32 as func::ComponentType>::Lower;
@@ -45,7 +45,7 @@ unsafe impl<T> func::ComponentType for HostFuture<T> {
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T> func::Lower for HostFuture<T> {
+unsafe impl<T: Send + Sync> func::Lower for HostFuture<T> {
     fn linear_lower_to_flat<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
@@ -68,7 +68,7 @@ unsafe impl<T> func::Lower for HostFuture<T> {
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T> func::Lift for HostFuture<T> {
+unsafe impl<T: Send + Sync> func::Lift for HostFuture<T> {
     fn linear_lift_from_flat(
         cx: &mut LiftContext<'_>,
         ty: InterfaceType,
@@ -125,7 +125,7 @@ impl<T> HostStream<T> {
 
 // SAFETY: This relies on the `ComponentType` implementation for `u32` being
 // safe and correct since we lift and lower stream handles as `u32`s.
-unsafe impl<T> func::ComponentType for HostStream<T> {
+unsafe impl<T: Send + Sync> func::ComponentType for HostStream<T> {
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::SCALAR4;
 
     type Lower = <u32 as func::ComponentType>::Lower;
@@ -137,7 +137,7 @@ unsafe impl<T> func::ComponentType for HostStream<T> {
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T> func::Lower for HostStream<T> {
+unsafe impl<T: Send + Sync> func::Lower for HostStream<T> {
     fn linear_lower_to_flat<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
@@ -160,7 +160,7 @@ unsafe impl<T> func::Lower for HostStream<T> {
 }
 
 // SAFETY: See the comment on the `ComponentType` `impl` for this type.
-unsafe impl<T> func::Lift for HostStream<T> {
+unsafe impl<T: Send + Sync> func::Lift for HostStream<T> {
     fn linear_lift_from_flat(
         cx: &mut LiftContext<'_>,
         ty: InterfaceType,
