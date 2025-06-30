@@ -204,7 +204,7 @@ pub struct VMContRef {
     /// that case, this points to the end of the stack chain (i.e., the
     /// continuation in the parent chain whose own `parent_chain` field is
     /// `VMStackChain::Absent`).
-    /// Note that this may be a pointer to iself (if the state is `Fresh`, this is always the case).
+    /// Note that this may be a pointer to itself (if the state is `Fresh`, this is always the case).
     pub last_ancestor: *mut VMContRef,
 
     /// Revision counter.
@@ -335,7 +335,7 @@ pub fn cont_new(
     // Now that the initial stack pointer was set by the initialization
     // function, use it to determine stack limit.
     let stack_pointer = contref.stack.control_context_stack_pointer();
-    // Same caveat regarding stack_limit here as descibed in
+    // Same caveat regarding stack_limit here as described in
     // `wasmtime::runtime::func::EntryStoreContext::enter_wasm`.
     let wasm_stack_limit = core::cmp::max(
         stack_pointer - store.engine().config().max_wasm_stack,
