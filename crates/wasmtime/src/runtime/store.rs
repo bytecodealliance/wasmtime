@@ -2338,13 +2338,6 @@ impl<T> Drop for Store<T> {
 
         // for documentation on this `unsafe`, see `into_data`.
         unsafe {
-            // We need to drop the fibers of each component instance before
-            // attempting to drop the instances themselves since the fibers may
-            // need to be resumed and allowed to exit cleanly before we yank the
-            // state out from under them.
-            #[cfg(feature = "component-model-async")]
-            ComponentStoreData::drop_fibers(&mut self.inner);
-
             ManuallyDrop::drop(&mut self.inner.data);
             ManuallyDrop::drop(&mut self.inner);
         }
