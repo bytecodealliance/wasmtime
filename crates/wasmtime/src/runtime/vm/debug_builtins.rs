@@ -8,7 +8,7 @@ use wasmtime_versioned_export_macros::versioned_export;
 
 static mut VMCTX_AND_MEMORY: (NonNull<VMContext>, usize) = (NonNull::dangling(), 0);
 
-// These implementatations are referenced from C code in "helpers.c". The symbols defined
+// These implementations are referenced from C code in "helpers.c". The symbols defined
 // there (prefixed by "wasmtime_") are the real 'public' interface used in the debug info.
 
 #[versioned_export]
