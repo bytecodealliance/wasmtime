@@ -18,7 +18,7 @@ pub(crate) struct Aarch64ABI;
 /// any callee-saved registers.
 ///
 /// Note that 16 bytes are used to save the shadow stack pointer register even
-/// though only 8 are needed. 16 is used for simplicitly to ensure that the
+/// though only 8 are needed. 16 is used for simplicity to ensure that the
 /// 16-byte alignment requirement for memory addressing is met at the function's
 /// prologue and epilogue.
 pub const SHADOW_STACK_POINTER_SLOT_SIZE: u8 = 16;

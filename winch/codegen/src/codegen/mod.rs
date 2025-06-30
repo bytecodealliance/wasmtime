@@ -749,7 +749,7 @@ where
             // type since we want to check for overflow; even though the
             // offset and access size are guaranteed to be bounded by the heap
             // type, when added, if used with the wrong operand size, their
-            // result could be clamped, resulting in an erroneus overflow
+            // result could be clamped, resulting in an erroneous overflow
             // check.
             self.masm.checked_uadd(
                 writable!(index_offset_and_access_size),
@@ -850,7 +850,7 @@ where
                         // Similar to the dynamic heap case, even though the
                         // offset and access size are bound through the heap
                         // type, when added they can overflow, resulting in
-                        // an erroneus comparison, therfore we rely on the
+                        // an erroneous comparison, therfore we rely on the
                         // target pointer size.
                         ptr_size,
                     )?;
