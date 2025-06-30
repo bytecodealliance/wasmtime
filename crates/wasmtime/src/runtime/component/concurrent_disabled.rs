@@ -9,6 +9,15 @@ use core::pin::pin;
 use core::task::{Context, Poll, Waker};
 use wasmtime_environ::component::{InterfaceType, RuntimeComponentInstanceIndex};
 
+fn should_have_failed_validation<T>(what: &str) -> Result<T> {
+    // This should be unreachable; if we trap here, it indicates a
+    // bug in Wasmtime rather than in the guest.
+    Err(anyhow!(
+        "{what} should have failed validation \
+         when `component-model-async` feature disabled"
+    ))
+}
+
 impl Instance {
     pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
         self,
@@ -18,14 +27,7 @@ impl Instance {
     ) -> Result<R> {
         match pin!(future).poll(&mut Context::from_waker(Waker::noop())) {
             Poll::Ready(result) => result,
-            Poll::Pending => {
-                // This should be unreachable; if we trap here, it indicates a
-                // bug in Wasmtime rather than in the guest.
-                Err(anyhow!(
-                    "async-lowered import should have failed validation \
-                     when `component-model-async` feature disabled"
-                ))
-            }
+            Poll::Pending => should_have_failed_validation("async lowered import"),
         }
     }
 }
@@ -35,12 +37,7 @@ pub(crate) fn lower_future_to_index<U>(
     _cx: &mut LowerContext<'_, U>,
     _ty: InterfaceType,
 ) -> Result<u32> {
-    // This should be unreachable; if we trap here, it indicates a bug in
-    // Wasmtime rather than in the guest.
-    Err(anyhow!(
-        "use of `future` should have failed validation \
-         when `component-model-async` feature disabled"
-    ))
+    should_have_failed_validation("use of `future`")
 }
 
 pub(crate) fn lower_stream_to_index<U>(
@@ -48,12 +45,7 @@ pub(crate) fn lower_stream_to_index<U>(
     _cx: &mut LowerContext<'_, U>,
     _ty: InterfaceType,
 ) -> Result<u32> {
-    // This should be unreachable; if we trap here, it indicates a bug in
-    // Wasmtime rather than in the guest.
-    Err(anyhow!(
-        "use of `stream` should have failed validation \
-         when `component-model-async` feature disabled"
-    ))
+    should_have_failed_validation("use of `stream`")
 }
 
 pub(crate) fn lower_error_context_to_index<U>(
@@ -61,12 +53,7 @@ pub(crate) fn lower_error_context_to_index<U>(
     _cx: &mut LowerContext<'_, U>,
     _ty: InterfaceType,
 ) -> Result<u32> {
-    // This should be unreachable; if we trap here, it indicates a bug in
-    // Wasmtime rather than in the guest.
-    Err(anyhow!(
-        "use of `error-context` should have failed validation \
-         when `component-model-async` feature disabled"
-    ))
+    should_have_failed_validation("use of `error-context`")
 }
 
 pub struct ErrorContext(Uninhabited);
@@ -81,12 +68,7 @@ impl ErrorContext {
         _ty: InterfaceType,
         _src: &<u32 as ComponentType>::Lower,
     ) -> Result<Self> {
-        // This should be unreachable; if we trap here, it indicates a bug in
-        // Wasmtime rather than in the guest.
-        Err(anyhow!(
-            "use of `error-context` should have failed validation \
-             when `component-model-async` feature disabled"
-        ))
+        should_have_failed_validation("use of `error-context`")
     }
 
     pub(crate) fn linear_lift_from_memory(
@@ -94,12 +76,7 @@ impl ErrorContext {
         _ty: InterfaceType,
         _bytes: &[u8],
     ) -> Result<Self> {
-        // This should be unreachable; if we trap here, it indicates a bug in
-        // Wasmtime rather than in the guest.
-        Err(anyhow!(
-            "use of `error-context` should have failed validation \
-             when `component-model-async` feature disabled"
-        ))
+        should_have_failed_validation("use of `error-context`")
     }
 }
 
@@ -118,12 +95,7 @@ impl<P> HostStream<P> {
         _ty: InterfaceType,
         _src: &<u32 as ComponentType>::Lower,
     ) -> Result<Self> {
-        // This should be unreachable; if we trap here, it indicates a bug in
-        // Wasmtime rather than in the guest.
-        Err(anyhow!(
-            "use of `stream` should have failed validation \
-             when `component-model-async` feature disabled"
-        ))
+        should_have_failed_validation("use of `stream`")
     }
 
     pub(crate) fn linear_lift_from_memory(
@@ -131,12 +103,7 @@ impl<P> HostStream<P> {
         _ty: InterfaceType,
         _bytes: &[u8],
     ) -> Result<Self> {
-        // This should be unreachable; if we trap here, it indicates a bug in
-        // Wasmtime rather than in the guest.
-        Err(anyhow!(
-            "use of `stream` should have failed validation \
-             when `component-model-async` feature disabled"
-        ))
+        should_have_failed_validation("use of `stream`")
     }
 }
 
@@ -155,12 +122,7 @@ impl<P> HostFuture<P> {
         _ty: InterfaceType,
         _src: &<u32 as ComponentType>::Lower,
     ) -> Result<Self> {
-        // This should be unreachable; if we trap here, it indicates a bug in
-        // Wasmtime rather than in the guest.
-        Err(anyhow!(
-            "use of `future` should have failed validation \
-             when `component-model-async` feature disabled"
-        ))
+        should_have_failed_validation("use of `future`")
     }
 
     pub(crate) fn linear_lift_from_memory(
@@ -168,11 +130,6 @@ impl<P> HostFuture<P> {
         _ty: InterfaceType,
         _bytes: &[u8],
     ) -> Result<Self> {
-        // This should be unreachable; if we trap here, it indicates a bug in
-        // Wasmtime rather than in the guest.
-        Err(anyhow!(
-            "use of `future` should have failed validation \
-             when `component-model-async` feature disabled"
-        ))
+        should_have_failed_validation("use of `future`")
     }
 }
