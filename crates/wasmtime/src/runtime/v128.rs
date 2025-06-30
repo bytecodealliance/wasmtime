@@ -1,8 +1,3 @@
-#![cfg_attr(
-    not(any(target_arch = "x86_64", target_arch = "aarch64")),
-    allow(unused_imports)
-)]
-
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{Result, ValRaw, ValType, WasmTy};
 use core::cmp::Ordering;
@@ -81,7 +76,6 @@ impl Ord for V128 {
 
 // Note that this trait is conditionally implemented which is intentional. See
 // the documentation above in the `cfg_if!` for why this is conditional.
-#[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 unsafe impl WasmTy for V128 {
     #[inline]
     fn valtype() -> ValType {
