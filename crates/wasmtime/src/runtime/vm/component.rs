@@ -794,13 +794,6 @@ impl ComponentInstance {
         // the map returned.
         unsafe { &mut self.get_unchecked_mut().post_return_arg }
     }
-
-    #[cfg(feature = "component-model-async")]
-    pub(crate) fn concurrent_state_mut(self: Pin<&mut Self>) -> &mut concurrent::ConcurrentState {
-        // SAFETY: we've chosen the `Pin` guarantee of `Self` to not apply to
-        // the state returned.
-        unsafe { &mut self.get_unchecked_mut().concurrent_state }
-    }
 }
 
 // SAFETY: `layout` should describe this accurately and `OwnedVMContext` is the

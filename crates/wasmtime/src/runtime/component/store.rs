@@ -31,13 +31,9 @@ impl ComponentStoreData {
 
     #[cfg(feature = "component-model-async")]
     pub(crate) fn drop_fibers(store: &mut StoreOpaque) {
-        for (_, instance) in store.store_data_mut().components.instances.iter_mut() {
-            let Some(instance) = instance.as_mut() else {
-                continue;
-            };
-
-            instance.get_mut().concurrent_state_mut().drop_fibers();
-        }
+        _ = store;
+        // This function will actually do something when runtime support for
+        // `component-model-async` is merged.
     }
 }
 

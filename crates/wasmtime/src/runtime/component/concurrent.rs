@@ -70,15 +70,6 @@ impl ConcurrentState {
         Self {}
     }
 
-    /// Drop any and all fibers prior to dropping the `ComponentInstance` and
-    /// `Store` to which `self` belongs.
-    ///
-    /// This is necessary to avoid possible use-after-free bugs due to fibers
-    /// which may still have access to the `Store`.
-    pub(crate) fn drop_fibers(&mut self) {
-        // TODO
-    }
-
     /// Implements the `context.get` intrinsic.
     pub(crate) fn context_get(&mut self, slot: u32) -> Result<u32> {
         _ = slot;
