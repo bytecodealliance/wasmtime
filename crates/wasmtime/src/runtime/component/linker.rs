@@ -434,7 +434,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Send
             + Sync
             + 'static,
-        Params: ComponentNamedList + Lift + Send + Sync + 'static,
+        Params: ComponentNamedList + Lift + 'static,
         Return: ComponentNamedList + Lower + Send + Sync + 'static,
     {
         assert!(
