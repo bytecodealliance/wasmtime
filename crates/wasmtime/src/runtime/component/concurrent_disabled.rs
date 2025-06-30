@@ -1,32 +1,13 @@
-use {
-    crate::{
-        Uninhabited,
-        component::{
-            Instance, Val,
-            func::{ComponentType, LiftContext, LowerContext},
-        },
-        runtime::vm::VMStore,
-    },
-    alloc::{sync::Arc, task::Wake},
-    anyhow::{Result, anyhow},
-    core::{
-        future::Future,
-        marker::PhantomData,
-        pin::pin,
-        task::{Context, Poll, Waker},
-    },
-    wasmtime_environ::component::{InterfaceType, RuntimeComponentInstanceIndex},
-};
-
-fn dummy_waker() -> Waker {
-    struct DummyWaker;
-
-    impl Wake for DummyWaker {
-        fn wake(self: Arc<Self>) {}
-    }
-
-    Arc::new(DummyWaker).into()
-}
+use crate::Uninhabited;
+use crate::component::func::{ComponentType, LiftContext, LowerContext};
+use crate::component::{Instance, Val};
+use crate::runtime::vm::VMStore;
+use anyhow::{Result, anyhow};
+use core::future::Future;
+use core::marker::PhantomData;
+use core::pin::pin;
+use core::task::{Context, Poll, Waker};
+use wasmtime_environ::component::{InterfaceType, RuntimeComponentInstanceIndex};
 
 impl Instance {
     pub(crate) fn poll_and_block<R: Send + Sync + 'static>(
@@ -35,7 +16,7 @@ impl Instance {
         future: impl Future<Output = Result<R>> + Send + 'static,
         _caller_instance: RuntimeComponentInstanceIndex,
     ) -> Result<R> {
-        match pin!(future).poll(&mut Context::from_waker(&dummy_waker())) {
+        match pin!(future).poll(&mut Context::from_waker(Waker::noop())) {
             Poll::Ready(result) => result,
             Poll::Pending => {
                 // This should be unreachable; if we trap here, it indicates a

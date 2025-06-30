@@ -11,7 +11,7 @@ use std::mem::MaybeUninit;
 use std::pin::{Pin, pin};
 use std::sync::atomic::AtomicPtr;
 use std::sync::{Arc, Mutex};
-use std::task::{Context, Poll, Wake, Waker};
+use std::task::{Context, Poll, Waker};
 use wasmtime_environ::component::{
     RuntimeComponentInstanceIndex, TypeComponentLocalErrorContextTableIndex, TypeFutureTableIndex,
     TypeStreamTableIndex, TypeTupleIndex,
@@ -60,16 +60,6 @@ impl Status {
         _ = waitable;
         todo!()
     }
-}
-
-fn dummy_waker() -> Waker {
-    struct DummyWaker;
-
-    impl Wake for DummyWaker {
-        fn wake(self: Arc<Self>) {}
-    }
-
-    Arc::new(DummyWaker).into()
 }
 
 pub(crate) struct ConcurrentState {}
@@ -296,7 +286,7 @@ impl Instance {
         caller_instance: RuntimeComponentInstanceIndex,
     ) -> Result<R> {
         _ = (store, caller_instance);
-        match pin!(future).poll(&mut Context::from_waker(&dummy_waker())) {
+        match pin!(future).poll(&mut Context::from_waker(Waker::noop())) {
             Poll::Ready(result) => result,
             Poll::Pending => {
                 todo!()
