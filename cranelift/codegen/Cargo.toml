@@ -128,7 +128,3 @@ isle-errors = ["cranelift-isle/fancy-errors"]
 #
 # Enabled by default.
 timing = []
-
-[[bench]]
-name = "x64-evex-encoding"
-harness = false

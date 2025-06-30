@@ -15,7 +15,7 @@ block0(v0: f32x4, v1: f32x4):
 ;   addps %xmm1, %xmm0
 ;   movl $0x7fc00000, %r10d
 ;   movd %r10d, %xmm7
-;   shufps  $0, %xmm7, const(0), %xmm7
+;   shufps $0x0, (%rip), %xmm7
 ;   movdqa %xmm0, %xmm1
 ;   cmpunordps %xmm0, %xmm1
 ;   movdqa %xmm0, %xmm2

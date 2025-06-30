@@ -18,11 +18,10 @@ use cranelift_codegen::{
         x64::{
             AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
             args::{
-                self, Amode, Avx512Opcode, AvxOpcode, CC, ExtMode, FromWritableReg, Gpr, GprMem,
-                GprMemImm, RegMem, RegMemImm, SyntheticAmode, WritableGpr, WritableXmm, Xmm,
-                XmmMem, XmmMemImm,
+                self, Amode, Avx512Opcode, CC, ExtMode, FromWritableReg, Gpr, GprMem, GprMemImm,
+                RegMem, RegMemImm, SyntheticAmode, WritableGpr, WritableXmm, Xmm, XmmMem,
+                XmmMemImm,
             },
-            encoding::rex::{RexFlags, encode_modrm},
             external::{PairedGpr, PairedXmm},
             settings as x64_settings,
         },
@@ -1734,25 +1733,18 @@ impl Assembler {
     /// Shuffles bytes in `src` according to contents of `mask` and puts
     /// result in `dst`.
     pub fn xmm_vpshufb_rrm(&mut self, dst: WritableReg, src: Reg, mask: &Address) {
+        let dst: WritableXmm = dst.map(|r| r.into());
         let mask = Self::to_synthetic_amode(mask, MemFlags::trusted());
-
-        self.emit(Inst::XmmRmiRVex {
-            op: args::AvxOpcode::Vpshufb,
-            src1: src.into(),
-            src2: XmmMemImm::unwrap_new(RegMemImm::Mem { addr: mask }),
-            dst: dst.to_reg().into(),
-        });
+        let inst = asm::inst::vpshufb_b::new(dst, src, mask).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Shuffles bytes in `src` according to contents of `mask` and puts
     /// result in `dst`.
     pub fn xmm_vpshufb_rrr(&mut self, dst: WritableReg, src: Reg, mask: Reg) {
-        self.emit(Inst::XmmRmiRVex {
-            op: args::AvxOpcode::Vpshufb,
-            src1: src.into(),
-            src2: XmmMemImm::unwrap_new(RegMemImm::reg(mask.into())),
-            dst: dst.to_reg().into(),
-        })
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vpshufb_b::new(dst, src, mask).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Add unsigned integers with unsigned saturation.
@@ -1918,38 +1910,26 @@ impl Assembler {
     }
 
     /// Copy a 32-bit float in `src2`, merge into `src1`, and put result in `dst`.
-    pub fn xmm_vinsertps_rrm(&mut self, dst: WritableReg, src1: Reg, src2: &Address, imm: u8) {
-        let src2 = Self::to_synthetic_amode(src2, MemFlags::trusted());
-
-        self.emit(Inst::XmmRmRImmVex {
-            op: AvxOpcode::Vinsertps,
-            src1: src1.into(),
-            src2: XmmMem::unwrap_new(RegMem::mem(src2)),
-            dst: dst.to_reg().into(),
-            imm,
-        });
+    pub fn xmm_vinsertps_rrm(&mut self, dst: WritableReg, src1: Reg, address: &Address, imm: u8) {
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let address = Self::to_synthetic_amode(address, MemFlags::trusted());
+        let inst = asm::inst::vinsertps_b::new(dst, src1, address, imm).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Copy a 32-bit float in `src2`, merge into `src1`, and put result in `dst`.
     pub fn xmm_vinsertps_rrr(&mut self, dst: WritableReg, src1: Reg, src2: Reg, imm: u8) {
-        self.emit(Inst::XmmRmRImmVex {
-            op: AvxOpcode::Vinsertps,
-            src1: src1.into(),
-            src2: XmmMem::unwrap_new(RegMem::reg(src2.into())),
-            dst: dst.to_reg().into(),
-            imm,
-        });
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vinsertps_b::new(dst, src1, src2, imm).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Moves lower 64-bit float from `src2` into lower 64-bits of `dst` and the
     /// upper 64-bits in `src1` into the upper 64-bits of `dst`.
     pub fn xmm_vmovsd_rrr(&mut self, dst: WritableReg, src1: Reg, src2: Reg) {
-        self.emit(Inst::XmmRmiRVex {
-            op: AvxOpcode::Vmovsd,
-            src1: src1.into(),
-            src2: XmmMemImm::unwrap_new(src2.into()),
-            dst: dst.to_reg().into(),
-        })
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vmovsd_b::new(dst, src1, src2).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Moves 64-bit float from `src` into lower 64-bits of `dst`.
@@ -2000,23 +1980,9 @@ impl Assembler {
         self.emit(Inst::External { inst });
     }
 
-    /// Perform an AVX opcode `op` involving registers `src1` and `src2`, writing the
-    /// result to `dst`.
-    pub fn xmm_vex_rr(&mut self, op: AvxOpcode, src1: Reg, src2: Reg, dst: WritableReg) {
-        self.emit(Inst::XmmRmiRVex {
-            op,
-            src1: src1.into(),
-            src2: src2.into(),
-            dst: dst.map(Into::into),
-        })
-    }
-
     pub fn xmm_vptest(&mut self, src1: Reg, src2: Reg) {
-        self.emit(Inst::XmmCmpRmRVex {
-            op: AvxOpcode::Vptest,
-            src1: src1.into(),
-            src2: src2.into(),
-        })
+        let inst = asm::inst::vptest_rm::new(src1, src2).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Converts vector of integers into vector of floating values.
@@ -2030,7 +1996,6 @@ impl Assembler {
             VcvtKind::F32ToF64 => asm::inst::vcvtps2pd_a::new(dst, src).into(),
             VcvtKind::F32ToI32 => asm::inst::vcvttps2dq_a::new(dst, src).into(),
         };
-
         self.emit(Inst::External { inst });
     }
 
@@ -2288,13 +2253,9 @@ impl Assembler {
     /// Concatenates `src1` and `src2` and shifts right by `imm` and puts
     /// result in `dst`.
     pub fn xmm_vpalignr_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, imm: u8) {
-        self.emit(Inst::XmmRmRImmVex {
-            op: AvxOpcode::Vpalignr,
-            src1: src1.into(),
-            src2: src2.into(),
-            dst: dst.to_reg().into(),
-            imm,
-        })
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vpalignr_b::new(dst, src1, src2, imm).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Takes the lower lanes of vectors of floats in `src1` and `src2` and
@@ -2685,18 +2646,12 @@ impl Assembler {
         imm: u8,
         size: OperandSize,
     ) {
-        let op = match size {
-            OperandSize::S32 => AvxOpcode::Vshufps,
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = match size {
+            OperandSize::S32 => asm::inst::vshufps_b::new(dst, src1, src2, imm).into(),
             _ => unimplemented!(),
         };
-
-        self.emit(Inst::XmmRmRImmVex {
-            op,
-            src1: src1.into(),
-            src2: src2.into(),
-            dst: dst.to_reg().into(),
-            imm,
-        });
+        self.emit(Inst::External { inst });
     }
 
     /// Each lane in `src1` is multiplied by the corresponding lane in `src2`
@@ -2783,38 +2738,33 @@ impl Assembler {
     }
 
     /// Multiply and add packed signed and unsigned bytes.
-    pub fn xmm_vpmaddubs_rmr(
-        &mut self,
-        src: Reg,
-        address: &Address,
-        dst: WritableReg,
-        size: OperandSize,
-    ) {
+    pub fn xmm_vpmaddubsw_rmr(&mut self, src: Reg, address: &Address, dst: WritableReg) {
+        let dst: WritableXmm = dst.map(|r| r.into());
         let address = Self::to_synthetic_amode(address, MemFlags::trusted());
+        let inst = asm::inst::vpmaddubsw_b::new(dst, src, address).into();
+        self.emit(Inst::External { inst });
+    }
 
-        let op = match size {
-            OperandSize::S16 => AvxOpcode::Vpmaddubsw,
-            _ => unimplemented!(),
-        };
-
-        self.emit(Inst::XmmRmiRVex {
-            op,
-            src1: src.into(),
-            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
-            dst: dst.to_reg().into(),
-        });
+    /// Multiply and add packed signed and unsigned bytes.
+    pub fn xmm_vpmaddubsw_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg) {
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vpmaddubsw_b::new(dst, src1, src2).into();
+        self.emit(Inst::External { inst });
     }
 
     /// Multiple and add packed integers.
     pub fn xmm_vpmaddwd_rmr(&mut self, src: Reg, address: &Address, dst: WritableReg) {
+        let dst: WritableXmm = dst.map(|r| r.into());
         let address = Self::to_synthetic_amode(address, MemFlags::trusted());
+        let inst = asm::inst::vpmaddwd_b::new(dst, src, address).into();
+        self.emit(Inst::External { inst });
+    }
 
-        self.emit(Inst::XmmRmiRVex {
-            op: AvxOpcode::Vpmaddwd,
-            src1: src.into(),
-            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
-            dst: dst.to_reg().into(),
-        })
+    /// Multiple and add packed integers.
+    pub fn xmm_vpmaddwd_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg) {
+        let dst: WritableXmm = dst.map(|r| r.into());
+        let inst = asm::inst::vpmaddwd_b::new(dst, src1, src2).into();
+        self.emit(Inst::External { inst });
     }
 }
 
@@ -2837,50 +2787,34 @@ impl PatchableAddToReg {
     ///
     /// Currently this implementation expects to be able to patch a 32-bit immediate, which means
     /// that 8 and 16-bit addition cannot be supported.
-    pub(crate) fn new(reg: Reg, size: OperandSize, buf: &mut MachBuffer<Inst>) -> Self {
-        let open = buf.start_patchable();
+    pub(crate) fn new(reg: Reg, size: OperandSize, asm: &mut Assembler) -> Self {
+        let open = asm.buffer_mut().start_patchable();
+        let start = asm.buffer().cur_offset();
 
         // Emit the opcode and register use for the add instruction.
-        let start = buf.cur_offset();
-        Self::add_inst_bytes(reg, size, buf);
-        let constant_offset = usize::try_from(buf.cur_offset() - start).unwrap();
-
-        // Emit a placeholder for the 32-bit immediate.
-        buf.put4(0);
-
-        let region = buf.end_patchable(open);
-
-        Self {
-            region,
-            constant_offset,
-        }
-    }
-
-    /// Generate the prefix of the add instruction (rex byte (depending on register use), opcode,
-    /// and register reference).
-    fn add_inst_bytes(reg: Reg, size: OperandSize, buf: &mut MachBuffer<Inst>) {
-        match size {
-            OperandSize::S32 | OperandSize::S64 => {}
+        let reg = pair_gpr(Writable::from_reg(reg));
+        let inst = match size {
+            OperandSize::S32 => asm::inst::addl_mi::new(reg, 0_u32).into(),
+            OperandSize::S64 => asm::inst::addq_mi_sxl::new(reg, 0_i32).into(),
             _ => {
                 panic!(
                     "{}-bit addition is not supported, please see the comment on PatchableAddToReg::new",
                     size.num_bits(),
                 )
             }
+        };
+        asm.emit(Inst::External { inst });
+
+        // The offset to the constant is the width of what was just emitted
+        // minus 4, the width of the 32-bit immediate.
+        let constant_offset = usize::try_from(asm.buffer().cur_offset() - start - 4).unwrap();
+
+        let region = asm.buffer_mut().end_patchable(open);
+
+        Self {
+            region,
+            constant_offset,
         }
-
-        let enc_g = 0;
-
-        debug_assert!(reg.is_int());
-        let enc_e = u8::try_from(reg.hw_enc()).unwrap();
-
-        RexFlags::from(args::OperandSize::from(size)).emit_two_op(buf, enc_g, enc_e);
-
-        // the opcode for an add
-        buf.put1(0x81);
-
-        // the modrm byte
-        buf.put1(encode_modrm(0b11, enc_g & 7, enc_e & 7));
     }
 
     /// Patch the [`MachBuffer`] with the known constant to be added to the register. The final

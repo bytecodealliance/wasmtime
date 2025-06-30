@@ -11,6 +11,8 @@ mod cmov;
 mod cmp;
 mod cvt;
 mod div;
+mod fma;
+mod jmp;
 mod lanes;
 mod max;
 mod min;
@@ -21,7 +23,7 @@ mod neg;
 mod nop;
 mod or;
 mod pack;
-mod pmadd;
+mod pma;
 mod recip;
 mod round;
 mod setcc;
@@ -49,6 +51,8 @@ pub fn list() -> Vec<Inst> {
     all.extend(cmp::list());
     all.extend(cvt::list());
     all.extend(div::list());
+    all.extend(fma::list());
+    all.extend(jmp::list());
     all.extend(lanes::list());
     all.extend(max::list());
     all.extend(min::list());
@@ -59,7 +63,7 @@ pub fn list() -> Vec<Inst> {
     all.extend(nop::list());
     all.extend(or::list());
     all.extend(pack::list());
-    all.extend(pmadd::list());
+    all.extend(pma::list());
     all.extend(recip::list());
     all.extend(round::list());
     all.extend(setcc::list());
@@ -67,8 +71,8 @@ pub fn list() -> Vec<Inst> {
     all.extend(sqrt::list());
     all.extend(stack::list());
     all.extend(sub::list());
-    all.extend(xor::list());
     all.extend(unpack::list());
+    all.extend(xor::list());
 
     check_avx_alternates(&mut all);
 

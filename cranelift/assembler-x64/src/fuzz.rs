@@ -380,4 +380,13 @@ mod test {
         // This will run the `roundtrip` fuzzer for one second. To repeatably
         // test a single input, append `.seed(0x<failing seed>)`.
     }
+
+    #[test]
+    fn callq() {
+        for i in -500..500 {
+            println!("immediate: {i}");
+            let inst = crate::inst::callq_d::new(i);
+            roundtrip(&inst.into());
+        }
+    }
 }

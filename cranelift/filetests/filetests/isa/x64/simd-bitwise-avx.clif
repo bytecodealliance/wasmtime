@@ -529,7 +529,7 @@ block0(v0: f32x4, v1: f32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   vinsertps $16, %xmm0, %xmm1, %xmm0
+;   vinsertps $0x10, %xmm1, %xmm0, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq

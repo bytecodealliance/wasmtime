@@ -232,4 +232,20 @@ impl RuntimeLinearMemory for MmapMemory {
                 .expect("pre_guard_size is in bounds"),
         )
     }
+
+    fn vmmemory(&self) -> crate::vm::VMMemoryDefinition {
+        let pre_guard_size = self.pre_guard_size.byte_count();
+        assert!(pre_guard_size <= self.mmap.len());
+        let pre_guard_size = isize::try_from(pre_guard_size).unwrap();
+        let mmap = self.mmap.as_non_null();
+        let base = unsafe {
+            // Safety: `pre_guard_size` is within the mmap allocation.
+            mmap.offset(pre_guard_size)
+        };
+
+        crate::vm::VMMemoryDefinition {
+            base: base.into(),
+            current_length: self.len.into(),
+        }
+    }
 }

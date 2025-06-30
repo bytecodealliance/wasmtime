@@ -51,6 +51,7 @@ use crate::runtime::vm::{
 };
 use crate::vm::{SendSyncPtr, VMMemoryDefinition};
 use crate::{Engine, EngineWeak, prelude::*};
+use core::ptr;
 use core::{
     alloc::Layout,
     any::Any,
@@ -398,7 +399,7 @@ impl DrcHeap {
     }
 
     fn iter_bump_chunk(&mut self) -> impl Iterator<Item = VMGcRef> + '_ {
-        let num_filled = self.activations_table.num_filled_in_bump_chunk();
+        let num_filled = self.activations_table.alloc.len();
         self.activations_table
             .alloc
             .chunk
@@ -424,51 +425,22 @@ impl DrcHeap {
         log::trace!("{prefix}: {set}");
     }
 
-    fn drain_bump_chunk(&mut self, mut f: impl FnMut(&mut Self, VMGcRef)) {
-        let num_filled = self.activations_table.num_filled_in_bump_chunk();
-
-        // Temporarily take the allocation out of `self` to avoid conflicting
-        // borrows.
+    /// Temporarily take the table's bump chunk out of `self` to split borrows.
+    fn with_table_alloc<T>(
+        &mut self,
+        mut f: impl FnMut(&mut Self, &mut VMGcRefTableAlloc) -> T,
+    ) -> T {
         let mut alloc = mem::take(&mut self.activations_table.alloc);
-        for slot in alloc.chunk.iter_mut().take(num_filled) {
-            let raw = mem::take(slot);
-            let gc_ref = VMGcRef::from_raw_u32(raw).expect("non-null");
-            f(self, gc_ref);
-            *slot = 0;
-        }
-
-        debug_assert!(
-            alloc.chunk.iter().all(|slot| *slot == 0),
-            "after sweeping the bump chunk, all slots should be empty",
-        );
-
+        let result = f(self, &mut alloc);
         debug_assert!(self.activations_table.alloc.chunk.is_empty());
         self.activations_table.alloc = alloc;
+        result
     }
 
     /// Sweep the bump allocation table after we've discovered our precise stack
     /// roots.
     fn sweep(&mut self, host_data_table: &mut ExternRefHostDataTable) {
-        if log::log_enabled!(log::Level::Trace) {
-            Self::log_gc_ref_set("bump chunk before sweeping", self.iter_bump_chunk());
-        }
-
-        // Sweep our bump chunk.
-        log::trace!("Begin sweeping bump chunk");
-        self.drain_bump_chunk(|heap, gc_ref| {
-            heap.dec_ref_and_maybe_dealloc(host_data_table, &gc_ref);
-        });
-        log::trace!("Done sweeping bump chunk");
-
-        if self.activations_table.alloc.chunk.is_empty() {
-            // If this is the first collection, then the bump chunk is empty
-            // since we lazily allocate it. Force that lazy allocation now so we
-            // have fast bump-allocation in the future.
-            self.activations_table.alloc.force_allocation();
-        } else {
-            // Reset our `next` finger to the start of the bump allocation chunk.
-            self.activations_table.alloc.reset();
-        }
+        self.sweep_bump_chunk(host_data_table);
 
         if log::log_enabled!(log::Level::Trace) {
             Self::log_gc_ref_set(
@@ -513,6 +485,48 @@ impl DrcHeap {
                     .map(|r| r.unchecked_copy()),
             );
         }
+    }
+
+    fn sweep_bump_chunk(&mut self, host_data_table: &mut ExternRefHostDataTable) {
+        if log::log_enabled!(log::Level::Trace) {
+            Self::log_gc_ref_set("bump chunk before sweeping", self.iter_bump_chunk());
+        }
+
+        let mut bump_chunk_was_full = false;
+
+        log::trace!("Begin sweeping bump chunk");
+
+        self.with_table_alloc(|heap, alloc| {
+            let len = alloc.len();
+
+            bump_chunk_was_full = len == alloc.capacity();
+
+            for slot in alloc.chunk.iter_mut().take(len) {
+                let raw = mem::take(slot);
+                let gc_ref = VMGcRef::from_raw_u32(raw).expect("non-null");
+                heap.dec_ref_and_maybe_dealloc(host_data_table, &gc_ref);
+                *slot = 0;
+            }
+        });
+
+        log::trace!("Done sweeping bump chunk");
+        debug_assert!(
+            self.activations_table
+                .alloc
+                .chunk
+                .iter()
+                .all(|slot| *slot == 0),
+            "after sweeping the bump chunk, all slots should be empty",
+        );
+
+        // When we GC'd because the bump chunk was at capacity, grow the bump
+        // chunk so that we GC less often.
+        if bump_chunk_was_full {
+            self.activations_table.alloc.grow_bump_chunk();
+        }
+
+        // Reset the bump chunk fingers.
+        self.activations_table.alloc.reset();
     }
 }
 
@@ -947,25 +961,74 @@ impl Default for VMGcRefTableAlloc {
     }
 }
 
-impl VMGcRefTableAlloc {
-    /// Create a new, empty bump region.
-    const CHUNK_SIZE: usize = 4096 / mem::size_of::<TableElem>();
+const KIB: usize = 1024;
+const MIB: usize = 1024 * KIB;
 
-    /// Force the lazy allocation of this bump region.
-    fn force_allocation(&mut self) {
-        assert!(self.chunk.is_empty());
-        self.chunk = (0..Self::CHUNK_SIZE).map(|_| 0).collect();
-        self.reset();
+impl VMGcRefTableAlloc {
+    /// The initial capacity, in elements, of the first non-empty bump chunk
+    /// allocation.
+    const INITIAL_CAPACITY: usize = 4 * KIB / mem::size_of::<TableElem>();
+
+    /// The maximum capacity, in elements, that we will grow the bump chunk
+    /// to.
+    const MAX_CAPACITY: usize = 128 * MIB / mem::size_of::<TableElem>();
+
+    /// The capacity of this bump chunk.
+    fn capacity(&self) -> usize {
+        self.chunk.len()
+    }
+
+    /// The length of this bump chunk, aka how many slots are filled in.
+    fn len(&self) -> usize {
+        let bytes_unused = (self.end.as_ptr() as usize) - (self.next.as_ptr() as usize);
+        let slots_unused = bytes_unused / mem::size_of::<TableElem>();
+        self.chunk.len().saturating_sub(slots_unused)
     }
 
     /// Reset this bump region, retaining any underlying allocation, but moving
     /// the bump pointer and limit to their default positions.
     fn reset(&mut self) {
-        let len = self.chunk.len();
+        let cap = self.chunk.len();
         let next = NonNull::new(self.chunk.as_mut_ptr()).unwrap();
-        let end = unsafe { next.add(len) };
+        let end = unsafe { next.add(cap) };
         self.next = SendSyncPtr::new(next);
         self.end = SendSyncPtr::new(end);
+    }
+
+    /// Grow the underlying bump chunk, if possible.
+    ///
+    /// Does not update the `next`/`end` pointers; callers must call `reset`
+    /// after calling this method.
+    fn grow_bump_chunk(&mut self) {
+        let new_cap = self.capacity().checked_mul(2).unwrap();
+        let new_cap = core::cmp::min(new_cap, Self::MAX_CAPACITY);
+        let new_cap = core::cmp::max(new_cap, Self::INITIAL_CAPACITY);
+        assert!(new_cap > 0);
+
+        let layout = Layout::from_size_align(
+            new_cap.checked_mul(mem::size_of::<TableElem>()).unwrap(),
+            mem::align_of::<TableElem>(),
+        )
+        .unwrap();
+        assert!(layout.size() > 0);
+
+        let ptr = unsafe {
+            // Safety: layout.size() is non-zero.
+            alloc::alloc::alloc_zeroed(layout)
+        };
+
+        if !ptr.is_null() {
+            let ptr = ptr::slice_from_raw_parts_mut(ptr.cast::<TableElem>(), new_cap);
+            self.chunk = unsafe {
+                // Safety: `ptr` is from the global allocator and has the
+                // correct memory layout.
+                Box::from_raw(ptr)
+            };
+        } else {
+            // When allocating a new bump chunk fails, it is not an
+            // unrecoverable error: we can keep running with the existing bump
+            // chunk.
+        }
     }
 }
 
@@ -1054,13 +1117,6 @@ impl VMGcRefActivationsTable {
         self.over_approximated_stack_roots.insert(gc_ref);
     }
 
-    fn num_filled_in_bump_chunk(&self) -> usize {
-        let next = self.alloc.next;
-        let bytes_unused = (self.alloc.end.as_ptr() as usize) - (next.as_ptr() as usize);
-        let slots_unused = bytes_unused / mem::size_of::<TableElem>();
-        self.alloc.chunk.len().saturating_sub(slots_unused)
-    }
-
     fn elements(&self, mut f: impl FnMut(&VMGcRef)) {
         for elem in self.over_approximated_stack_roots.iter() {
             f(elem);
@@ -1068,7 +1124,7 @@ impl VMGcRefActivationsTable {
 
         // The bump chunk is not all the way full, so we only iterate over its
         // filled-in slots.
-        let num_filled = self.num_filled_in_bump_chunk();
+        let num_filled = self.alloc.len();
         for slot in self.alloc.chunk.iter().take(num_filled) {
             if let Some(elem) = VMGcRef::from_raw_u32(*slot) {
                 f(&elem);

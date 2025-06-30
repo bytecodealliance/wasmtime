@@ -195,7 +195,12 @@ pub mod display {
 
     pub fn callq_d(f: &mut fmt::Formatter, inst: &inst::callq_d) -> fmt::Result {
         let inst::callq_d { imm32 } = inst;
-        write!(f, "callq {:#x}", i64::from(imm32.value()) + 5)
+        let displacement = i64::from(imm32.value()) + 5;
+        if displacement >= 0 && displacement < 10 {
+            write!(f, "callq {displacement:}")
+        } else {
+            write!(f, "callq {displacement:#x}")
+        }
     }
 
     pub fn callq_m<R: Registers>(f: &mut fmt::Formatter, inst: &inst::callq_m<R>) -> fmt::Result {
@@ -573,6 +578,12 @@ pub mod display {
             GprMem::Gpr(_) => write!(f, "{mnemonic} $1, {reg}"),
             GprMem::Mem(_) => write!(f, "{mnemonic} {reg}"),
         }
+    }
+
+    pub fn jmpq_m<R: Registers>(f: &mut fmt::Formatter<'_>, jmp: &inst::jmpq_m<R>) -> fmt::Result {
+        let inst::jmpq_m { rm64 } = jmp;
+        let rm64 = rm64.to_string(Size::Quadword);
+        write!(f, "jmpq *{rm64}")
     }
 }
 
