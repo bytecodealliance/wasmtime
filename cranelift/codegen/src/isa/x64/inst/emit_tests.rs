@@ -13,7 +13,7 @@
 //!   -- isa::x64::inst::emit_tests::test_x64_emit
 
 use super::*;
-use crate::ir::{MemFlags, UserExternalNameRef};
+use crate::ir::UserExternalNameRef;
 use crate::isa::x64;
 use crate::isa::x64::lower::isle::generated_code::{Atomic128RmwSeqOp, AtomicRmwSeqOp};
 use alloc::vec::Vec;
@@ -63,30 +63,6 @@ impl Inst {
             dst: WritableXmm::from_writable_reg(dst).unwrap(),
         }
     }
-
-    fn setcc(cc: CC, dst: Writable<Reg>) -> Inst {
-        debug_assert!(dst.to_reg().class() == RegClass::Int);
-        let dst = WritableGpr::from_writable_reg(dst).unwrap();
-        Inst::Setcc { cc, dst }
-    }
-
-    fn xmm_rm_r_imm(
-        op: SseOpcode,
-        src: RegMem,
-        dst: Writable<Reg>,
-        imm: u8,
-        size: OperandSize,
-    ) -> Inst {
-        debug_assert!(size.is_one_of(&[OperandSize::Size32, OperandSize::Size64]));
-        Inst::XmmRmRImm {
-            op,
-            src1: dst.to_reg(),
-            src2: src,
-            dst,
-            imm,
-            size,
-        }
-    }
 }
 
 #[test]
@@ -96,7 +72,7 @@ fn test_x64_emit() {
     let rcx = regs::rcx();
     let rdx = regs::rdx();
     let rsi = regs::rsi();
-    let rdi = regs::rdi();
+    let _rdi = regs::rdi();
     let rsp = regs::rsp();
     let rbp = regs::rbp();
     let r8 = regs::r8();
@@ -111,7 +87,7 @@ fn test_x64_emit() {
     let xmm2 = regs::xmm2();
     let xmm3 = regs::xmm3();
     let xmm4 = regs::xmm4();
-    let xmm5 = regs::xmm5();
+    let _xmm5 = regs::xmm5();
     let xmm6 = regs::xmm6();
     let xmm7 = regs::xmm7();
     let xmm8 = regs::xmm8();
@@ -119,7 +95,7 @@ fn test_x64_emit() {
     let xmm10 = regs::xmm10();
     let xmm11 = regs::xmm11();
     let xmm12 = regs::xmm12();
-    let xmm13 = regs::xmm13();
+    let _xmm13 = regs::xmm13();
     let xmm14 = regs::xmm14();
     let _xmm15 = regs::xmm15();
 
@@ -128,28 +104,27 @@ fn test_x64_emit() {
     let w_rbx = Writable::<Reg>::from_reg(rbx);
     let w_rcx = Writable::<Reg>::from_reg(rcx);
     let w_rdx = Writable::<Reg>::from_reg(rdx);
-    let w_rsi = Writable::<Reg>::from_reg(rsi);
-    let w_rdi = Writable::<Reg>::from_reg(rdi);
+    let _w_rsi = Writable::<Reg>::from_reg(rsi);
     let _w_rsp = Writable::<Reg>::from_reg(rsp);
     let _w_rbp = Writable::<Reg>::from_reg(rbp);
-    let w_r8 = Writable::<Reg>::from_reg(r8);
-    let w_r9 = Writable::<Reg>::from_reg(r9);
+    let _w_r8 = Writable::<Reg>::from_reg(r8);
+    let _w_r9 = Writable::<Reg>::from_reg(r9);
     let w_r11 = Writable::<Reg>::from_reg(r11);
-    let w_r14 = Writable::<Reg>::from_reg(r14);
-    let w_r15 = Writable::<Reg>::from_reg(r15);
+    let _w_r14 = Writable::<Reg>::from_reg(r14);
+    let _w_r15 = Writable::<Reg>::from_reg(r15);
 
-    let w_xmm0 = Writable::<Reg>::from_reg(xmm0);
+    let _w_xmm0 = Writable::<Reg>::from_reg(xmm0);
     let w_xmm1 = Writable::<Reg>::from_reg(xmm1);
     let w_xmm2 = Writable::<Reg>::from_reg(xmm2);
-    let w_xmm3 = Writable::<Reg>::from_reg(xmm3);
-    let w_xmm4 = Writable::<Reg>::from_reg(xmm4);
-    let w_xmm6 = Writable::<Reg>::from_reg(xmm6);
+    let _w_xmm3 = Writable::<Reg>::from_reg(xmm3);
+    let _w_xmm4 = Writable::<Reg>::from_reg(xmm4);
+    let _w_xmm6 = Writable::<Reg>::from_reg(xmm6);
     let _w_xmm7 = Writable::<Reg>::from_reg(xmm7);
     let w_xmm8 = Writable::<Reg>::from_reg(xmm8);
-    let w_xmm9 = Writable::<Reg>::from_reg(xmm9);
-    let w_xmm10 = Writable::<Reg>::from_reg(xmm10);
-    let w_xmm11 = Writable::<Reg>::from_reg(xmm11);
-    let w_xmm12 = Writable::<Reg>::from_reg(xmm12);
+    let _w_xmm9 = Writable::<Reg>::from_reg(xmm9);
+    let _w_xmm10 = Writable::<Reg>::from_reg(xmm10);
+    let _w_xmm11 = Writable::<Reg>::from_reg(xmm11);
+    let _w_xmm12 = Writable::<Reg>::from_reg(xmm12);
 
     let mut insns = Vec::<(Inst, &str, &str)>::new();
 
@@ -160,97 +135,6 @@ fn test_x64_emit() {
     // General tests for each insn.  Don't forget to follow the
     // guidelines commented just prior to `fn x64_emit`.
     //
-
-    // ========================================================
-    // LoadEffectiveAddress
-    insns.push((
-        Inst::lea(Amode::imm_reg(42, r10), w_r8),
-        "4D8D422A",
-        "lea     42(%r10), %r8",
-    ));
-    insns.push((
-        Inst::lea(Amode::imm_reg(42, r10), w_r15),
-        "4D8D7A2A",
-        "lea     42(%r10), %r15",
-    ));
-    insns.push((
-        Inst::lea(
-            Amode::imm_reg_reg_shift(179, Gpr::unwrap_new(r10), Gpr::unwrap_new(r9), 0),
-            w_r8,
-        ),
-        "4F8D840AB3000000",
-        "lea     179(%r10,%r9,1), %r8",
-    ));
-    insns.push((
-        Inst::lea(
-            Amode::rip_relative(MachLabel::from_block(BlockIndex::new(0))),
-            w_rdi,
-        ),
-        "488D3D00000000",
-        "lea     label0(%rip), %rdi",
-    ));
-
-    // ========================================================
-    // SetCC
-    insns.push((Inst::setcc(CC::O, w_rsi), "400F90C6", "seto    %sil"));
-    insns.push((Inst::setcc(CC::NLE, w_rsi), "400F9FC6", "setnle  %sil"));
-    insns.push((Inst::setcc(CC::Z, w_r14), "410F94C6", "setz    %r14b"));
-    insns.push((Inst::setcc(CC::LE, w_r14), "410F9EC6", "setle   %r14b"));
-    insns.push((Inst::setcc(CC::P, w_r9), "410F9AC1", "setp    %r9b"));
-    insns.push((Inst::setcc(CC::NP, w_r8), "410F9BC0", "setnp   %r8b"));
-
-    // ========================================================
-    // Cmove
-    insns.push((
-        Inst::cmove(OperandSize::Size16, CC::O, RegMem::reg(rdi), w_rsi),
-        "660F40F7",
-        "cmovow  %di, %si, %si",
-    ));
-    insns.push((
-        Inst::cmove(
-            OperandSize::Size16,
-            CC::NO,
-            RegMem::mem(Amode::imm_reg_reg_shift(
-                37,
-                Gpr::unwrap_new(rdi),
-                Gpr::unwrap_new(rsi),
-                2,
-            )),
-            w_r15,
-        ),
-        "66440F417CB725",
-        "cmovnow 37(%rdi,%rsi,4), %r15w, %r15w",
-    ));
-    insns.push((
-        Inst::cmove(OperandSize::Size32, CC::LE, RegMem::reg(rdi), w_rsi),
-        "0F4EF7",
-        "cmovlel %edi, %esi, %esi",
-    ));
-    insns.push((
-        Inst::cmove(
-            OperandSize::Size32,
-            CC::NLE,
-            RegMem::mem(Amode::imm_reg(0, r15)),
-            w_rsi,
-        ),
-        "410F4F37",
-        "cmovnlel 0(%r15), %esi, %esi",
-    ));
-    insns.push((
-        Inst::cmove(OperandSize::Size64, CC::Z, RegMem::reg(rdi), w_r14),
-        "4C0F44F7",
-        "cmovzq  %rdi, %r14, %r14",
-    ));
-    insns.push((
-        Inst::cmove(
-            OperandSize::Size64,
-            CC::NZ,
-            RegMem::mem(Amode::imm_reg(13, rdi)),
-            w_r14,
-        ),
-        "4C0F45770D",
-        "cmovnzq 13(%rdi), %r14, %r14",
-    ));
 
     // ========================================================
     // CallKnown
@@ -297,7 +181,7 @@ fn test_x64_emit() {
     // N.B.: test harness below sets is_pic.
     insns.push((
         Inst::LoadExtName {
-            dst: Writable::from_reg(r11),
+            dst: Writable::from_reg(Gpr::R11),
             name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: 0,
             distance: RelocDistance::Far,
@@ -307,7 +191,7 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::LoadExtName {
-            dst: Writable::from_reg(r11),
+            dst: Writable::from_reg(Gpr::R11),
             name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: 0x12345678,
             distance: RelocDistance::Far,
@@ -317,12 +201,12 @@ fn test_x64_emit() {
     ));
     insns.push((
         Inst::LoadExtName {
-            dst: Writable::from_reg(r11),
+            dst: Writable::from_reg(Gpr::R11),
             name: Box::new(ExternalName::User(UserExternalNameRef::new(0))),
             offset: -0x12345678,
             distance: RelocDistance::Far,
         },
-        "4C8B1D000000004981EB78563412",
+        "4C8B1D000000004981C388A9CBED",
         "load_ext_name userextname0+-305419896, %r11",
     ));
 
@@ -337,62 +221,6 @@ fn test_x64_emit() {
 
     // ========================================================
     // JmpCondCompound isn't a real instruction
-
-    // ========================================================
-    // JmpUnknown
-    insns.push((Inst::jmp_unknown(RegMem::reg(rbp)), "FFE5", "jmp     *%rbp"));
-    insns.push((
-        Inst::jmp_unknown(RegMem::reg(r11)),
-        "41FFE3",
-        "jmp     *%r11",
-    ));
-    insns.push((
-        Inst::jmp_unknown(RegMem::mem(Amode::imm_reg_reg_shift(
-            321,
-            Gpr::unwrap_new(rsi),
-            Gpr::unwrap_new(rcx),
-            3,
-        ))),
-        "FFA4CE41010000",
-        "jmp     *321(%rsi,%rcx,8)",
-    ));
-    insns.push((
-        Inst::jmp_unknown(RegMem::mem(Amode::imm_reg_reg_shift(
-            321,
-            Gpr::unwrap_new(r10),
-            Gpr::unwrap_new(rdx),
-            2,
-        ))),
-        "41FFA49241010000",
-        "jmp     *321(%r10,%rdx,4)",
-    ));
-
-    // ========================================================
-    // XMM FMA
-
-    insns.push((
-        Inst::xmm_rmr_vex3(AvxOpcode::Vfmadd213ss, RegMem::reg(xmm2), xmm1, w_xmm0),
-        "C4E271A9C2",
-        "vfmadd213ss %xmm0, %xmm1, %xmm2, %xmm0",
-    ));
-
-    insns.push((
-        Inst::xmm_rmr_vex3(AvxOpcode::Vfmadd213sd, RegMem::reg(xmm5), xmm4, w_xmm3),
-        "C4E2D9A9DD",
-        "vfmadd213sd %xmm3, %xmm4, %xmm5, %xmm3",
-    ));
-
-    insns.push((
-        Inst::xmm_rmr_vex3(AvxOpcode::Vfmadd213ps, RegMem::reg(xmm2), xmm1, w_xmm0),
-        "C4E271A8C2",
-        "vfmadd213ps %xmm0, %xmm1, %xmm2, %xmm0",
-    ));
-
-    insns.push((
-        Inst::xmm_rmr_vex3(AvxOpcode::Vfmadd213pd, RegMem::reg(xmm5), xmm4, w_xmm3),
-        "C4E2D9A8DD",
-        "vfmadd213pd %xmm3, %xmm4, %xmm5, %xmm3",
-    ));
 
     // ========================================================
     // XMM_RM_R: Integer Packed
@@ -433,63 +261,10 @@ fn test_x64_emit() {
         "vpermi2b %xmm1, %xmm0, %xmm2, %xmm2",
     ));
 
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pmaddwd, RegMem::reg(xmm8), w_xmm1),
-        "66410FF5C8",
-        "pmaddwd %xmm1, %xmm8, %xmm1",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Pshufb, RegMem::reg(xmm11), w_xmm2),
-        "66410F3800D3",
-        "pshufb  %xmm2, %xmm11, %xmm2",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Packssdw, RegMem::reg(xmm11), w_xmm12),
-        "66450F6BE3",
-        "packssdw %xmm12, %xmm11, %xmm12",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Packsswb, RegMem::reg(xmm11), w_xmm2),
-        "66410F63D3",
-        "packsswb %xmm2, %xmm11, %xmm2",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Packusdw, RegMem::reg(xmm13), w_xmm6),
-        "66410F382BF5",
-        "packusdw %xmm6, %xmm13, %xmm6",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r(SseOpcode::Packuswb, RegMem::reg(xmm9), w_xmm4),
-        "66410F67E1",
-        "packuswb %xmm4, %xmm9, %xmm4",
-    ));
-
     // ========================================================
     // XMM_MOV: Packed Move
 
     // XmmUnary: moves and unary float ops
-
-    insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Pabsb, RegMem::reg(xmm2), w_xmm1),
-        "660F381CCA",
-        "pabsb   %xmm2, %xmm1",
-    ));
-    insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Pabsw, RegMem::reg(xmm0), w_xmm0),
-        "660F381DC0",
-        "pabsw   %xmm0, %xmm0",
-    ));
-    insns.push((
-        Inst::xmm_unary_rm_r(SseOpcode::Pabsd, RegMem::reg(xmm10), w_xmm11),
-        "66450F381EDA",
-        "pabsd   %xmm10, %xmm11",
-    ));
-
     insns.push((
         Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vpabsq, RegMem::reg(xmm2), w_xmm8),
         "6272FD081FC2",
@@ -506,102 +281,6 @@ fn test_x64_emit() {
         Inst::xmm_unary_rm_r_evex(Avx512Opcode::Vpopcntb, RegMem::reg(xmm2), w_xmm8),
         "62727D0854C2",
         "vpopcntb %xmm2, %xmm8",
-    ));
-
-    // ========================================================
-    // XmmRmRImm
-    insns.push((
-        Inst::xmm_rm_r_imm(
-            SseOpcode::Palignr,
-            RegMem::reg(xmm1),
-            w_xmm9,
-            3,
-            OperandSize::Size32,
-        ),
-        "66440F3A0FC903",
-        "palignr $3, %xmm9, %xmm1, %xmm9",
-    ));
-
-    insns.push((
-        Inst::xmm_rm_r_imm(
-            SseOpcode::Shufps,
-            RegMem::reg(xmm1),
-            w_xmm10,
-            136,
-            OperandSize::Size32,
-        ),
-        "440FC6D188",
-        "shufps  $136, %xmm10, %xmm1, %xmm10",
-    ));
-
-    // ========================================================
-    // XmmRmiRVex
-
-    // Standard instruction w/ XmmMemImm::Reg operand.
-    insns.push((
-        Inst::XmmRmiRVex {
-            op: AvxOpcode::Vpmaxub,
-            dst: Writable::from_reg(Xmm::unwrap_new(xmm13)),
-            src1: Xmm::unwrap_new(xmm1),
-            src2: XmmMemImm::unwrap_new(xmm12.into()),
-        },
-        "C44171DEEC",
-        "vpmaxub %xmm1, %xmm12, %xmm13",
-    ));
-
-    // Standard instruction w/ XmmMemImm::Mem operand.
-    insns.push((
-        Inst::XmmRmiRVex {
-            op: AvxOpcode::Vpmaxub,
-            dst: Writable::from_reg(Xmm::unwrap_new(xmm13)),
-            src1: Xmm::unwrap_new(xmm1),
-            src2: XmmMemImm::unwrap_new(RegMemImm::Mem {
-                addr: Amode::ImmReg {
-                    simm32: 10,
-                    base: rax,
-                    flags: MemFlags::trusted(),
-                }
-                .into(),
-            }),
-        },
-        "C571DE680A",
-        "vpmaxub %xmm1, 10(%rax), %xmm13",
-    ));
-
-    // When there's an immediate.
-    insns.push((
-        Inst::XmmRmiRVex {
-            op: AvxOpcode::Vpsrlw,
-            dst: Writable::from_reg(Xmm::unwrap_new(xmm13)),
-            src1: Xmm::unwrap_new(xmm1),
-            src2: XmmMemImm::unwrap_new(RegMemImm::Imm { simm32: 36 }),
-        },
-        "C59171D124",
-        "vpsrlw  %xmm1, $36, %xmm13",
-    ));
-
-    // Certain commutative ops get their operands swapped to avoid relying on an
-    // extra prefix byte, when possible. Note that these two instructions encode
-    // to the same bytes, and are 4-byte encodings rather than 5-byte encodings.
-    insns.push((
-        Inst::XmmRmiRVex {
-            op: AvxOpcode::Vmulsd,
-            dst: Writable::from_reg(Xmm::unwrap_new(xmm13)),
-            src1: Xmm::unwrap_new(xmm1),
-            src2: XmmMemImm::unwrap_new(xmm12.into()),
-        },
-        "C51B59E9",
-        "vmulsd  %xmm1, %xmm12, %xmm13",
-    ));
-    insns.push((
-        Inst::XmmRmiRVex {
-            op: AvxOpcode::Vmulsd,
-            dst: Writable::from_reg(Xmm::unwrap_new(xmm13)),
-            src1: Xmm::unwrap_new(xmm12),
-            src2: XmmMemImm::unwrap_new(xmm1.into()),
-        },
-        "C51B59E9",
-        "vmulsd  %xmm12, %xmm1, %xmm13",
     ));
 
     // ========================================================

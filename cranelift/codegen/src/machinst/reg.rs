@@ -205,7 +205,7 @@ impl<T> Writable<T> {
     /// the documentation for `Writable`, this is not hidden or
     /// disallowed from the outside; anyone can perform the "cast";
     /// but it is explicit so that we can audit the use sites.
-    pub fn from_reg(reg: T) -> Writable<T> {
+    pub const fn from_reg(reg: T) -> Writable<T> {
         Writable { reg }
     }
 

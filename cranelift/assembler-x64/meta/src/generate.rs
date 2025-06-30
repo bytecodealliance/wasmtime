@@ -83,17 +83,14 @@ fn generate_inst_display_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
 /// `impl Inst { fn encode... }`
 fn generate_inst_encode_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
     f.add_block("impl<R: Registers> Inst<R>", |f| {
-        f.add_block(
-            "pub fn encode(&self, b: &mut impl CodeSink, o: &impl KnownOffsetTable)",
-            |f| {
-                f.add_block("match self", |f| {
-                    for inst in insts {
-                        let variant_name = inst.name();
-                        fmtln!(f, "Self::{variant_name}(i) => i.encode(b, o),");
-                    }
-                });
-            },
-        );
+        f.add_block("pub fn encode(&self, b: &mut impl CodeSink)", |f| {
+            f.add_block("match self", |f| {
+                for inst in insts {
+                    let variant_name = inst.name();
+                    fmtln!(f, "Self::{variant_name}(i) => i.encode(b),");
+                }
+            });
+        });
     });
 }
 

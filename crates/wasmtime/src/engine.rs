@@ -688,12 +688,8 @@ impl Engine {
         self.inner.allocator.as_ref()
     }
 
-    pub(crate) fn gc_runtime(&self) -> Result<&Arc<dyn GcRuntime>> {
-        if let Some(rt) = &self.inner.gc_runtime {
-            Ok(rt)
-        } else {
-            bail!("no GC runtime: GC disabled at compile time or configuration time")
-        }
+    pub(crate) fn gc_runtime(&self) -> Option<&Arc<dyn GcRuntime>> {
+        self.inner.gc_runtime.as_ref()
     }
 
     pub(crate) fn profiler(&self) -> &dyn crate::profiling_agent::ProfilingAgent {

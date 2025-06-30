@@ -1,13 +1,18 @@
 //! Defines x64 instructions using the DSL.
 
+mod abs;
 mod add;
+mod align;
 mod and;
 mod atomic;
 mod avg;
 mod bitmanip;
+mod cmov;
 mod cmp;
 mod cvt;
 mod div;
+mod fma;
+mod jmp;
 mod lanes;
 mod max;
 mod min;
@@ -17,7 +22,11 @@ mod mul;
 mod neg;
 mod nop;
 mod or;
+mod pack;
+mod pma;
+mod recip;
 mod round;
+mod setcc;
 mod shift;
 mod sqrt;
 mod stack;
@@ -31,14 +40,19 @@ use std::collections::HashMap;
 #[must_use]
 pub fn list() -> Vec<Inst> {
     let mut all = vec![];
+    all.extend(abs::list());
     all.extend(add::list());
+    all.extend(align::list());
     all.extend(and::list());
     all.extend(atomic::list());
     all.extend(avg::list());
     all.extend(bitmanip::list());
+    all.extend(cmov::list());
     all.extend(cmp::list());
     all.extend(cvt::list());
     all.extend(div::list());
+    all.extend(fma::list());
+    all.extend(jmp::list());
     all.extend(lanes::list());
     all.extend(max::list());
     all.extend(min::list());
@@ -48,13 +62,17 @@ pub fn list() -> Vec<Inst> {
     all.extend(neg::list());
     all.extend(nop::list());
     all.extend(or::list());
+    all.extend(pack::list());
+    all.extend(pma::list());
+    all.extend(recip::list());
     all.extend(round::list());
+    all.extend(setcc::list());
     all.extend(shift::list());
     all.extend(sqrt::list());
     all.extend(stack::list());
     all.extend(sub::list());
-    all.extend(xor::list());
     all.extend(unpack::list());
+    all.extend(xor::list());
 
     check_avx_alternates(&mut all);
 
@@ -74,7 +92,10 @@ fn check_avx_alternates(all: &mut [Inst]) {
         .map(|(index, inst)| (inst.name().clone(), index))
         .collect();
     for inst in all.iter().filter(|inst| inst.alternate.is_some()) {
-        assert!(inst.features.is_sse());
+        assert!(
+            inst.features.is_sse(),
+            "expected an SSE instruction: {inst}"
+        );
         let alternate = inst.alternate.as_ref().unwrap();
         assert_eq!(alternate.feature, Feature::avx);
         let avx_index = name_to_index.get(&alternate.name).expect(&format!(
@@ -116,16 +137,60 @@ fn check_sse_matches_avx(sse_inst: &Inst, avx_inst: &Inst) {
         // may have slightly different operand semantics (e.g., `roundss` ->
         // `vroundss`) and we want to be careful about matching too freely.
         (
-            [(ReadWrite, Reg(_)), (Read, Reg(_) | RegMem(_) | Mem(_))],
+            [
+                (ReadWrite | Write, Reg(_)),
+                (Read, Reg(_) | RegMem(_) | Mem(_)),
+            ],
             [
                 (Write, Reg(_)),
                 (Read, Reg(_)),
                 (Read, Reg(_) | RegMem(_) | Mem(_)),
             ],
         ) => {}
+        (
+            [(ReadWrite, Reg(_)), (Read, RegMem(_)), (Read, Imm(_))],
+            [
+                (Write, Reg(_)),
+                (Read, Reg(_)),
+                (Read, RegMem(_)),
+                (Read, Imm(_)),
+            ],
+        ) => {}
+        (
+            [(ReadWrite, Reg(_)), (Read, Imm(_))],
+            [(Write, Reg(_)), (Read, Reg(_)), (Read, Imm(_))],
+        ) => {}
+        // The following formats are identical.
+        (
+            [
+                (Write, Reg(_) | RegMem(_) | Mem(_)),
+                (Read, Reg(_) | RegMem(_) | Mem(_)),
+            ],
+            [
+                (Write, Reg(_) | RegMem(_) | Mem(_)),
+                (Read, Reg(_) | RegMem(_) | Mem(_)),
+            ],
+        ) => {}
+        (
+            [
+                (Write, Reg(_) | RegMem(_)),
+                (Read, Reg(_) | RegMem(_)),
+                (Read, Imm(_)),
+            ],
+            [
+                (Write, Reg(_) | RegMem(_)),
+                (Read, Reg(_) | RegMem(_)),
+                (Read, Imm(_)),
+            ],
+        ) => {}
+        ([(Read, Reg(_)), (Read, RegMem(_))], [(Read, Reg(_)), (Read, RegMem(_))]) => {}
         // We panic on other formats for now; feel free to add more patterns to
         // avoid this.
-        _ => panic!("unmatched formats for SSE-to-AVX alternate:\n{sse_inst}\n{avx_inst}"),
+        _ => panic!(
+            "unmatched formats for SSE-to-AVX alternate:\n{sse_inst}\n{avx_inst}. {:?}, {:?}",
+            list_ops(sse_inst),
+            list_ops(avx_inst)
+        ),
     }
 }
 

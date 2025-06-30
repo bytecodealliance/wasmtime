@@ -169,6 +169,10 @@ audited_as = "33.0.0"
 version = "35.0.0"
 audited_as = "33.0.0"
 
+[[unpublished.pulley-macros]]
+version = "35.0.0"
+audited_as = "34.0.0"
+
 [[unpublished.wasi-common]]
 version = "34.0.0"
 audited_as = "33.0.0"
@@ -961,6 +965,12 @@ when = "2025-05-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.pulley-macros]]
+version = "34.0.0"
+when = "2025-06-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.quote]]
 version = "1.0.36"
 when = "2024-04-10"
@@ -1564,14 +1574,14 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.wit-bindgen]]
-version = "0.42.1"
-when = "2025-05-06"
+version = "0.43.0"
+when = "2025-06-24"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-core]]
-version = "0.42.1"
-when = "2025-05-06"
+version = "0.43.0"
+when = "2025-06-24"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1588,20 +1598,20 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rt]]
-version = "0.42.1"
-when = "2025-05-06"
+version = "0.43.0"
+when = "2025-06-24"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.42.1"
-when = "2025-05-06"
+version = "0.43.0"
+when = "2025-06-24"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.42.1"
-when = "2025-05-06"
+version = "0.43.0"
+when = "2025-06-24"
 user-id = 73222
 user-login = "wasmtime-publish"
 

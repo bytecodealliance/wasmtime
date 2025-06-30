@@ -13,10 +13,10 @@ use crate::{
 };
 use alloc::sync::Arc;
 use core::ffi::c_void;
+#[cfg(feature = "async")]
+use core::future::Future;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
-#[cfg(feature = "async")]
-use core::{future::Future, pin::Pin};
 use wasmtime_environ::VMSharedTypeIndex;
 
 /// A reference to the abstract `nofunc` heap value.
@@ -513,19 +513,19 @@ impl Func {
             "cannot use `new_async` without enabling async support in the config"
         );
         assert!(ty.comes_from_same_engine(store.as_context().engine()));
-        Func::new(store, ty, move |mut caller, params, results| {
-            let async_cx = caller
-                .store
-                .as_context_mut()
-                .0
-                .async_cx()
-                .expect("Attempt to spawn new action on dying fiber");
-            let future = func(caller, params, results);
-            match unsafe { async_cx.block_on(Pin::from(future)) } {
-                Ok(Ok(())) => Ok(()),
-                Ok(Err(trap)) | Err(trap) => Err(trap),
-            }
-        })
+        return Func::new(
+            store,
+            ty,
+            move |Caller { store, caller }, params, results| {
+                store.with_blocking(|store, cx| {
+                    cx.block_on(core::pin::Pin::from(func(
+                        Caller { store, caller },
+                        params,
+                        results,
+                    )))
+                })?
+            },
+        );
     }
 
     pub(crate) unsafe fn from_vm_func_ref(
@@ -839,16 +839,8 @@ impl Func {
             store.as_context().async_support(),
             concat!("cannot use `wrap_async` without enabling async support on the config")
         );
-        Func::wrap_inner(store, move |mut caller: Caller<'_, T>, args| {
-            let async_cx = caller
-                .store
-                .as_context_mut()
-                .0
-                .async_cx()
-                .expect("Attempt to start async function on dying fiber");
-            let future = func(caller, args);
-
-            match unsafe { async_cx.block_on(Pin::from(future)) } {
+        Func::wrap_inner(store, move |Caller { store, caller }, args| {
+            match store.block_on(|store| func(Caller { store, caller }, args).into()) {
                 Ok(ret) => ret.into_fallible(),
                 Err(e) => R::fallible_from_error(e),
             }
@@ -2035,6 +2027,16 @@ pub struct Caller<'a, T: 'static> {
 }
 
 impl<T> Caller<'_, T> {
+    #[cfg(feature = "async")]
+    pub(crate) fn new(store: StoreContextMut<'_, T>, caller: Instance) -> Caller<'_, T> {
+        Caller { store, caller }
+    }
+
+    #[cfg(feature = "async")]
+    pub(crate) fn caller(&self) -> Instance {
+        self.caller
+    }
+
     unsafe fn with<F, R>(caller: NonNull<VMContext>, f: F) -> R
     where
         // The closure must be valid for any `Caller` it is given; it doesn't

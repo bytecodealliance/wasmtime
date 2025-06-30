@@ -281,7 +281,7 @@ unsafe fn table_grow_cont_obj(
     mut instance: Pin<&mut Instance>,
     table_index: u32,
     delta: u64,
-    // The following two values together form the intitial Option<VMContObj>.
+    // The following two values together form the initial Option<VMContObj>.
     // A None value is indicated by the pointer being null.
     init_value_contref: *mut u8,
     init_value_revision: u64,

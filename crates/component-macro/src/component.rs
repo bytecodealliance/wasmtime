@@ -456,16 +456,20 @@ impl Expander for LiftExpander {
 
         for (i, syn::Field { ident, ty, .. }) in fields.iter().enumerate() {
             let field_ty = quote!(ty.fields[#i].ty);
-            lifts.extend(quote!(#ident: <#ty as #wt::component::Lift>::lift(
+            lifts.extend(
+                quote!(#ident: <#ty as #wt::component::Lift>::linear_lift_from_flat(
                 cx, #field_ty, &src.#ident
-            )?,));
+            )?,),
+            );
 
-            loads.extend(quote!(#ident: <#ty as #wt::component::Lift>::load(
+            loads.extend(
+                quote!(#ident: <#ty as #wt::component::Lift>::linear_lift_from_memory(
                 cx, #field_ty,
                 &bytes
                     [<#ty as #wt::component::ComponentType>::ABI.next_field32_size(&mut offset)..]
                     [..<#ty as #wt::component::ComponentType>::SIZE32]
-            )?,));
+            )?,),
+            );
         }
 
         let generics = add_trait_bounds(generics, parse_quote!(#wt::component::Lift));
@@ -481,7 +485,7 @@ impl Expander for LiftExpander {
         let expanded = quote! {
             unsafe impl #impl_generics #wt::component::Lift for #name #ty_generics #where_clause {
                 #[inline]
-                fn lift(
+                fn linear_lift_from_flat(
                     cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     src: &Self::Lower,
@@ -493,7 +497,7 @@ impl Expander for LiftExpander {
                 }
 
                 #[inline]
-                fn load(
+                fn linear_lift_from_memory(
                     cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     bytes: &[u8],
@@ -536,13 +540,13 @@ impl Expander for LiftExpander {
             if let Some(ty) = ty {
                 let payload_ty = quote!(ty.cases[#index].unwrap_or_else(#internal::bad_type_info));
                 lifts.extend(
-                    quote!(#index_u32 => Self::#ident(<#ty as #wt::component::Lift>::lift(
+                    quote!(#index_u32 => Self::#ident(<#ty as #wt::component::Lift>::linear_lift_from_flat(
                         cx, #payload_ty, unsafe { &src.payload.#ident }
                     )?),),
                 );
 
                 loads.extend(
-                    quote!(#index_quoted => Self::#ident(<#ty as #wt::component::Lift>::load(
+                    quote!(#index_quoted => Self::#ident(<#ty as #wt::component::Lift>::linear_lift_from_memory(
                         cx, #payload_ty, &payload[..<#ty as #wt::component::ComponentType>::SIZE32]
                     )?),),
                 );
@@ -572,7 +576,7 @@ impl Expander for LiftExpander {
         let expanded = quote! {
             unsafe impl #impl_generics #wt::component::Lift for #name #ty_generics #where_clause {
                 #[inline]
-                fn lift(
+                fn linear_lift_from_flat(
                     cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     src: &Self::Lower,
@@ -585,7 +589,7 @@ impl Expander for LiftExpander {
                 }
 
                 #[inline]
-                fn load(
+                fn linear_lift_from_memory(
                     cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     bytes: &[u8],
@@ -639,7 +643,7 @@ impl Expander for LiftExpander {
         let expanded = quote! {
             unsafe impl #wt::component::Lift for #name {
                 #[inline]
-                fn lift(
+                fn linear_lift_from_flat(
                     cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     src: &Self::Lower,
@@ -655,7 +659,7 @@ impl Expander for LiftExpander {
                 }
 
                 #[inline]
-                fn load(
+                fn linear_lift_from_memory(
                     cx: &mut #internal::LiftContext<'_>,
                     ty: #internal::InterfaceType,
                     bytes: &[u8],
@@ -694,11 +698,11 @@ impl Expander for LowerExpander {
 
         for (i, syn::Field { ident, ty, .. }) in fields.iter().enumerate() {
             let field_ty = quote!(ty.fields[#i].ty);
-            lowers.extend(quote!(#wt::component::Lower::lower(
+            lowers.extend(quote!(#wt::component::Lower::linear_lower_to_flat(
                 &self.#ident, cx, #field_ty, #internal::map_maybe_uninit!(dst.#ident)
             )?;));
 
-            stores.extend(quote!(#wt::component::Lower::store(
+            stores.extend(quote!(#wt::component::Lower::linear_lower_to_memory(
                 &self.#ident,
                 cx,
                 #field_ty,
@@ -719,7 +723,7 @@ impl Expander for LowerExpander {
         let expanded = quote! {
             unsafe impl #impl_generics #wt::component::Lower for #name #ty_generics #where_clause {
                 #[inline]
-                fn lower<T>(
+                fn linear_lower_to_flat<T>(
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
@@ -731,7 +735,7 @@ impl Expander for LowerExpander {
                 }
 
                 #[inline]
-                fn store<T>(
+                fn linear_lower_to_memory<T>(
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
@@ -775,8 +779,8 @@ impl Expander for LowerExpander {
             if ty.is_some() {
                 let ty = quote!(ty.cases[#index].unwrap_or_else(#internal::bad_type_info));
                 pattern = quote!(Self::#ident(value));
-                lower = quote!(value.lower(cx, #ty, dst));
-                store = quote!(value.store(
+                lower = quote!(value.linear_lower_to_flat(cx, #ty, dst));
+                store = quote!(value.linear_lower_to_memory(
                     cx,
                     #ty,
                     offset + <Self as #internal::ComponentVariant>::PAYLOAD_OFFSET32,
@@ -817,7 +821,7 @@ impl Expander for LowerExpander {
         let expanded = quote! {
             unsafe impl #impl_generics #wt::component::Lower for #name #ty_generics #where_clause {
                 #[inline]
-                fn lower<T>(
+                fn linear_lower_to_flat<T>(
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
@@ -830,7 +834,7 @@ impl Expander for LowerExpander {
                 }
 
                 #[inline]
-                fn store<T>(
+                fn linear_lower_to_memory<T>(
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
@@ -874,7 +878,7 @@ impl Expander for LowerExpander {
         let expanded = quote! {
             unsafe impl #wt::component::Lower for #name {
                 #[inline]
-                fn lower<T>(
+                fn linear_lower_to_flat<T>(
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
@@ -887,7 +891,7 @@ impl Expander for LowerExpander {
                 }
 
                 #[inline]
-                fn store<T>(
+                fn linear_lower_to_memory<T>(
                     &self,
                     cx: &mut #internal::LowerContext<'_, T>,
                     ty: #internal::InterfaceType,
@@ -1463,14 +1467,14 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
         #component_type_impl
 
         unsafe impl #wt::component::Lower for #name {
-            fn lower<T>(
+            fn linear_lower_to_flat<T>(
                 &self,
                 cx: &mut #internal::LowerContext<'_, T>,
                 _ty: #internal::InterfaceType,
                 dst: &mut core::mem::MaybeUninit<Self::Lower>,
             ) -> #internal::anyhow::Result<()> {
                 #(
-                    self.#field_names.lower(
+                    self.#field_names.linear_lower_to_flat(
                         cx,
                         #field_interface_type,
                         #internal::map_maybe_uninit!(dst.#field_names),
@@ -1479,7 +1483,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 Ok(())
             }
 
-            fn store<T>(
+            fn linear_lower_to_memory<T>(
                 &self,
                 cx: &mut #internal::LowerContext<'_, T>,
                 _ty: #internal::InterfaceType,
@@ -1487,7 +1491,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
             ) -> #internal::anyhow::Result<()> {
                 debug_assert!(offset % (<Self as #wt::component::ComponentType>::ALIGN32 as usize) == 0);
                 #(
-                    self.#field_names.store(
+                    self.#field_names.linear_lower_to_memory(
                         cx,
                         #field_interface_type,
                         offset,
@@ -1499,14 +1503,14 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
         }
 
         unsafe impl #wt::component::Lift for #name {
-            fn lift(
+            fn linear_lift_from_flat(
                 cx: &mut #internal::LiftContext<'_>,
                 _ty: #internal::InterfaceType,
                 src: &Self::Lower,
             ) -> #internal::anyhow::Result<Self> {
                 Ok(Self {
                     #(
-                        #field_names: #wt::component::Lift::lift(
+                        #field_names: #wt::component::Lift::linear_lift_from_flat(
                             cx,
                             #field_interface_type,
                             &src.#field_names,
@@ -1515,7 +1519,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 })
             }
 
-            fn load(
+            fn linear_lift_from_memory(
                 cx: &mut #internal::LiftContext<'_>,
                 _ty: #internal::InterfaceType,
                 bytes: &[u8],
@@ -1527,7 +1531,7 @@ pub fn expand_flags(flags: &Flags) -> Result<TokenStream> {
                 );
                 #(
                     let (field, bytes) = bytes.split_at(#field_size);
-                    let #field_names = #wt::component::Lift::load(
+                    let #field_names = #wt::component::Lift::linear_lift_from_memory(
                         cx,
                         #field_interface_type,
                         field,

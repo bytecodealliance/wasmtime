@@ -75,4 +75,11 @@ impl RuntimeLinearMemory for StaticMemory {
     fn base(&self) -> MemoryBase {
         self.base.clone()
     }
+
+    fn vmmemory(&self) -> crate::vm::VMMemoryDefinition {
+        crate::vm::VMMemoryDefinition {
+            base: self.base.as_non_null().into(),
+            current_length: self.size.into(),
+        }
+    }
 }

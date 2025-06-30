@@ -41,17 +41,25 @@ impl AddressMapSection {
 
         self.offsets.reserve(instrs.len());
         self.positions.reserve(instrs.len());
+        let mut last_srcloc = None;
         for map in instrs {
             // Sanity-check to ensure that functions are pushed in-order, otherwise
             // the `offsets` array won't be sorted which is our goal.
             let pos = func_start + map.code_offset;
             assert!(pos >= self.last_offset);
-            self.offsets.push(U32Bytes::new(LittleEndian, pos));
-            self.positions.push(U32Bytes::new(
-                LittleEndian,
-                map.srcloc.file_offset().unwrap_or(u32::MAX),
-            ));
             self.last_offset = pos;
+
+            // Drop duplicate instruction mappings that match what was
+            // previously pushed into the array since the representation used
+            // here will naturally cover `pos` with the previous entry.
+            let srcloc = map.srcloc.file_offset().unwrap_or(u32::MAX);
+            if Some(srcloc) == last_srcloc {
+                continue;
+            }
+            last_srcloc = Some(srcloc);
+
+            self.offsets.push(U32Bytes::new(LittleEndian, pos));
+            self.positions.push(U32Bytes::new(LittleEndian, srcloc));
         }
         self.last_offset = func_end;
     }

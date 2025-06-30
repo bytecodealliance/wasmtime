@@ -37,6 +37,7 @@ use crate::StoreContextMut;
 use crate::prelude::*;
 use crate::store::StoreInner;
 use crate::store::StoreOpaque;
+use crate::type_registry::RegisteredType;
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Deref;
@@ -182,7 +183,7 @@ cfg_if::cfg_if! {
 /// APIs using `Store<T>` are correctly inferring send/sync on the returned
 /// values (e.g. futures) and that internally in the runtime we aren't doing
 /// anything "weird" with threads for example.
-pub unsafe trait VMStore {
+pub unsafe trait VMStore: 'static {
     /// Get a shared borrow of this store's `StoreOpaque`.
     fn store_opaque(&self) -> &StoreOpaque;
 
@@ -336,23 +337,23 @@ pub enum ModuleRuntimeInfo {
 #[derive(Clone)]
 pub struct BareModuleInfo {
     module: Arc<wasmtime_environ::Module>,
-    one_signature: Option<VMSharedTypeIndex>,
     offsets: VMOffsets<HostPtr>,
+    _registered_type: Option<RegisteredType>,
 }
 
 impl ModuleRuntimeInfo {
     pub(crate) fn bare(module: Arc<wasmtime_environ::Module>) -> Self {
-        ModuleRuntimeInfo::bare_maybe_imported_func(module, None)
+        ModuleRuntimeInfo::bare_with_registered_type(module, None)
     }
 
-    pub(crate) fn bare_maybe_imported_func(
+    pub(crate) fn bare_with_registered_type(
         module: Arc<wasmtime_environ::Module>,
-        one_signature: Option<VMSharedTypeIndex>,
+        registered_type: Option<RegisteredType>,
     ) -> Self {
         ModuleRuntimeInfo::Bare(Box::new(BareModuleInfo {
             offsets: VMOffsets::new(HostPtr, &module),
             module,
-            one_signature,
+            _registered_type: registered_type,
         }))
     }
 
@@ -454,10 +455,7 @@ impl ModuleRuntimeInfo {
                 .as_module_map()
                 .values()
                 .as_slice(),
-            ModuleRuntimeInfo::Bare(b) => match &b.one_signature {
-                Some(s) => core::slice::from_ref(s),
-                None => &[],
-            },
+            ModuleRuntimeInfo::Bare(_) => &[],
         }
     }
 

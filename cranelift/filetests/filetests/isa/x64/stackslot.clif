@@ -23,14 +23,14 @@ block0(v0: i64):
 ;   movq %rsp, %rbp
 ;   movq %rsi, %r10
 ;   addq $0x30, %r10
-;   cmpq    %rsp, %r10
+;   cmpq %rsp, %r10
 ;   jnbe #trap=stk_ovf
 ;   subq $0x30, %rsp
 ; block0:
-;   lea     rsp(0 + virtual offset), %rax
-;   lea     rsp(16 + virtual offset), %rdx
-;   lea     rsp(24 + virtual offset), %r8
-;   lea     rsp(32 + virtual offset), %r9
+;   leaq <offset:1>+(%rsp), %rax
+;   leaq <offset:1>+0x10(%rsp), %rdx
+;   leaq <offset:1>+0x18(%rsp), %r8
+;   leaq <offset:1>+0x20(%rsp), %r9
 ;   movq %r8, (%rdi)
 ;   movq %r9, 8(%rdi)
 ;   addq $0x30, %rsp

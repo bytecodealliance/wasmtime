@@ -14,12 +14,12 @@ block0(v0: i32, v1: i128, v2: i128):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   cmpl    $42, %edi
+;   cmpl $0x2a, %edi
 ;   movq %rcx, %rax
-;   cmovzq  %rsi, %rax, %rax
+;   cmoveq %rsi, %rax
 ;   movq %rdx, %rdi
 ;   movq %r8, %rdx
-;   cmovzq  %rdi, %rdx, %rdx
+;   cmoveq %rdi, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -51,12 +51,12 @@ block0(v0: f32, v1: i128, v2: i128):
 ;   movq %rsp, %rbp
 ; block0:
 ;   ucomiss %xmm0, %xmm0
-;   cmovpq  %rdx, %rdi, %rdi
+;   cmovpq %rdx, %rdi
+;   cmovpq %rcx, %rsi
 ;   movq %rdi, %rax
-;   cmovnzq %rdx, %rax, %rax
-;   cmovpq  %rcx, %rsi, %rsi
+;   cmovneq %rdx, %rax
 ;   movq %rsi, %rdx
-;   cmovnzq %rcx, %rdx, %rdx
+;   cmovneq %rcx, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -68,9 +68,9 @@ block0(v0: f32, v1: i128, v2: i128):
 ; block1: ; offset 0x4
 ;   ucomiss %xmm0, %xmm0
 ;   cmovpq %rdx, %rdi
+;   cmovpq %rcx, %rsi
 ;   movq %rdi, %rax
 ;   cmovneq %rdx, %rax
-;   cmovpq %rcx, %rsi
 ;   movq %rsi, %rdx
 ;   cmovneq %rcx, %rdx
 ;   movq %rbp, %rsp

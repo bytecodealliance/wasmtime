@@ -142,6 +142,23 @@ pub struct Adapter {
     pub func: dfg::CoreDef,
 }
 
+/// The data model for objects that are not unboxed in locals.
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub enum DataModel {
+    /// Data is stored in GC objects.
+    Gc {},
+
+    /// Data is stored in a linear memory.
+    LinearMemory {
+        /// An optional memory definition supplied.
+        memory: Option<dfg::CoreExport<MemoryIndex>>,
+        /// If `memory` is specified, whether it's a 64-bit memory.
+        memory64: bool,
+        /// An optional definition of `realloc` to used.
+        realloc: Option<dfg::CoreDef>,
+    },
+}
+
 /// Configuration options which can be specified as part of the canonical ABI
 /// in the component model.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
@@ -151,18 +168,16 @@ pub struct AdapterOptions {
     pub instance: RuntimeComponentInstanceIndex,
     /// How strings are encoded.
     pub string_encoding: StringEncoding,
-    /// An optional memory definition supplied.
-    pub memory: Option<dfg::CoreExport<MemoryIndex>>,
-    /// If `memory` is specified, whether it's a 64-bit memory.
-    pub memory64: bool,
-    /// An optional definition of `realloc` to used.
-    pub realloc: Option<dfg::CoreDef>,
     /// The async callback function used by these options, if specified.
     pub callback: Option<dfg::CoreDef>,
     /// An optional definition of a `post-return` to use.
     pub post_return: Option<dfg::CoreDef>,
     /// Whether to use the async ABI for lifting or lowering.
     pub async_: bool,
+    /// The core function type that is being lifted from / lowered to.
+    pub core_type: ModuleInternedTypeIndex,
+    /// The data model used by this adapter: linear memory or GC objects.
+    pub data_model: DataModel,
 }
 
 impl<'data> Translator<'_, 'data> {
@@ -381,17 +396,28 @@ impl PartitionAdapterModules {
     }
 
     fn adapter_options(&mut self, dfg: &dfg::ComponentDfg, options: &AdapterOptions) {
-        if let Some(memory) = &options.memory {
-            self.core_export(dfg, memory);
-        }
-        if let Some(def) = &options.realloc {
-            self.core_def(dfg, def);
-        }
         if let Some(def) = &options.callback {
             self.core_def(dfg, def);
         }
         if let Some(def) = &options.post_return {
             self.core_def(dfg, def);
+        }
+        match &options.data_model {
+            DataModel::Gc {} => {
+                // Nothing to do here yet.
+            }
+            DataModel::LinearMemory {
+                memory,
+                memory64: _,
+                realloc,
+            } => {
+                if let Some(memory) = memory {
+                    self.core_export(dfg, memory);
+                }
+                if let Some(def) = realloc {
+                    self.core_def(dfg, def);
+                }
+            }
         }
     }
 

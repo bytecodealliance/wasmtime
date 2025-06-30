@@ -23,7 +23,6 @@ use crate::{EntryStoreContext, prelude::*};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
-use core::ops::Range;
 use core::ptr::{self, NonNull};
 
 pub use self::backtrace::Backtrace;
@@ -477,8 +476,6 @@ mod call_thread_state {
         pub(crate) unwinder: &'static dyn Unwind,
 
         pub(super) prev: Cell<tls::Ptr>,
-        #[cfg(all(has_native_signals, unix))]
-        pub(crate) async_guard_range: Range<*mut u8>,
 
         // The state of the runtime for the *previous* `CallThreadState` for
         // this same store. Our *current* state is saved in `self.vm_store_context`,
@@ -507,10 +504,6 @@ mod call_thread_state {
             store: &mut StoreOpaque,
             old_state: *const EntryStoreContext,
         ) -> CallThreadState {
-            // Don't try to plumb #[cfg] everywhere for this field, just pretend
-            // we're using it on miri/windows to silence compiler warnings.
-            let _: Range<_> = store.async_guard_range();
-
             CallThreadState {
                 unwind: Cell::new(None),
                 unwinder: store.unwinder(),
@@ -521,8 +514,6 @@ mod call_thread_state {
                 #[cfg(feature = "coredump")]
                 capture_coredump: store.engine().config().coredump_on_trap,
                 vm_store_context: store.vm_store_context_ptr(),
-                #[cfg(all(has_native_signals, unix))]
-                async_guard_range: store.async_guard_range(),
                 prev: Cell::new(ptr::null()),
                 old_state,
             }

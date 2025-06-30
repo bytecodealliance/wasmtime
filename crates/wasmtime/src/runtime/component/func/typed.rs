@@ -179,7 +179,7 @@ where
     ) -> Result<Return>
     where
         Params: Send + Sync,
-        Return: Send + Sync,
+        Return: Send + Sync + 'static,
     {
         let mut store = store.as_context_mut();
         assert!(
@@ -277,7 +277,7 @@ where
         dst: &mut MaybeUninit<Params::Lower>,
     ) -> Result<()> {
         assert!(Params::flatten_count() <= MAX_FLAT_PARAMS);
-        params.lower(cx, ty, dst)?;
+        params.linear_lower_to_flat(cx, ty, dst)?;
         Ok(())
     }
 
@@ -303,7 +303,7 @@ where
         // Note that `realloc` will bake in a check that the returned pointer is
         // in-bounds.
         let ptr = cx.realloc(0, 0, Params::ALIGN32, Params::SIZE32)?;
-        params.store(cx, ty, ptr)?;
+        params.linear_lower_to_memory(cx, ty, ptr)?;
 
         // Note that the pointer here is stored as a 64-bit integer. This allows
         // this to work with either 32 or 64-bit memories. For a 32-bit memory
@@ -330,7 +330,7 @@ where
         dst: &Return::Lower,
     ) -> Result<Return> {
         assert!(Return::flatten_count() <= MAX_FLAT_RESULTS);
-        Return::lift(cx, ty, dst)
+        Return::linear_lift_from_flat(cx, ty, dst)
     }
 
     /// Lift the result of a function where the result is stored indirectly on
@@ -352,7 +352,7 @@ where
             .get(ptr..)
             .and_then(|b| b.get(..Return::SIZE32))
             .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
-        Return::load(cx, ty, bytes)
+        Return::linear_lift_from_memory(cx, ty, bytes)
     }
 
     /// See [`Func::post_return`]
@@ -530,7 +530,8 @@ pub unsafe trait ComponentVariant: ComponentType {
 /// be an internal implementation detail of Wasmtime at this time. It's
 /// recommended to use the `#[derive(Lower)]` implementation instead.
 pub unsafe trait Lower: ComponentType {
-    /// Performs the "lower" function in the canonical ABI.
+    /// Performs the "lower" function in the linear memory version of the
+    /// canonical ABI.
     ///
     /// This method will lower the current value into a component. The `lower`
     /// function performs a "flat" lowering into the `dst` specified which is
@@ -548,14 +549,15 @@ pub unsafe trait Lower: ComponentType {
     ///
     /// This will only be called if `typecheck` passes for `Op::Lower`.
     #[doc(hidden)]
-    fn lower<T>(
+    fn linear_lower_to_flat<T>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
         dst: &mut MaybeUninit<Self::Lower>,
     ) -> Result<()>;
 
-    /// Performs the "store" operation in the canonical ABI.
+    /// Performs the "store" operation in the linear memory version of the
+    /// canonical ABI.
     ///
     /// This function will store `self` into the linear memory described by
     /// `cx` at the `offset` provided.
@@ -573,7 +575,7 @@ pub unsafe trait Lower: ComponentType {
     ///
     /// This will only be called if `typecheck` passes for `Op::Lower`.
     #[doc(hidden)]
-    fn store<T>(
+    fn linear_lower_to_memory<T>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -589,7 +591,7 @@ pub unsafe trait Lower: ComponentType {
     /// which can avoid some extra fluff and use a pattern that's more easily
     /// optimizable by LLVM.
     #[doc(hidden)]
-    fn store_list<T>(
+    fn linear_store_list_to_memory<T>(
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
         mut offset: usize,
@@ -599,7 +601,7 @@ pub unsafe trait Lower: ComponentType {
         Self: Sized,
     {
         for item in items {
-            item.store(cx, ty, offset)?;
+            item.linear_lower_to_memory(cx, ty, offset)?;
             offset += Self::SIZE32;
         }
         Ok(())
@@ -623,7 +625,8 @@ pub unsafe trait Lower: ComponentType {
 /// be an internal implementation detail of Wasmtime at this time. It's
 /// recommended to use the `#[derive(Lift)]` implementation instead.
 pub unsafe trait Lift: Sized + ComponentType {
-    /// Performs the "lift" operation in the canonical ABI.
+    /// Performs the "lift" operation in the linear memory version of the
+    /// canonical ABI.
     ///
     /// This function performs a "flat" lift operation from the `src` specified
     /// which is a sequence of core wasm values. The lifting operation will
@@ -639,9 +642,14 @@ pub unsafe trait Lift: Sized + ComponentType {
     /// Note that this has a default implementation but if `typecheck` passes
     /// for `Op::Lift` this needs to be overridden.
     #[doc(hidden)]
-    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self>;
+    fn linear_lift_from_flat(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self>;
 
-    /// Performs the "load" operation in the canonical ABI.
+    /// Performs the "load" operation in the linear memory version of the
+    /// canonical ABI.
     ///
     /// This will read the `bytes` provided, which are a sub-slice into the
     /// linear memory described by `cx`. The `bytes` array provided is
@@ -655,7 +663,11 @@ pub unsafe trait Lift: Sized + ComponentType {
     /// Note that this has a default implementation but if `typecheck` passes
     /// for `Op::Lift` this needs to be overridden.
     #[doc(hidden)]
-    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self>;
+    fn linear_lift_from_memory(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self>;
 
     /// Converts `list` into a `Vec<T>`, used in `Lift for Vec<T>`.
     ///
@@ -663,7 +675,10 @@ pub unsafe trait Lift: Sized + ComponentType {
     /// which can avoid some extra fluff and use a pattern that's more easily
     /// optimizable by LLVM.
     #[doc(hidden)]
-    fn load_list(cx: &mut LiftContext<'_>, list: &WasmList<Self>) -> Result<Vec<Self>>
+    fn linear_lift_list_from_memory(
+        cx: &mut LiftContext<'_>,
+        list: &WasmList<Self>,
+    ) -> Result<Vec<Self>>
     where
         Self: Sized,
     {
@@ -704,22 +719,22 @@ forward_type_impls! {
 macro_rules! forward_lowers {
     ($(($($generics:tt)*) $a:ty => $b:ty,)*) => ($(
         unsafe impl <$($generics)*> Lower for $a {
-            fn lower<U>(
+            fn linear_lower_to_flat<U>(
                 &self,
                 cx: &mut LowerContext<'_, U>,
                 ty: InterfaceType,
                 dst: &mut MaybeUninit<Self::Lower>,
             ) -> Result<()> {
-                <$b as Lower>::lower(self, cx, ty, dst)
+                <$b as Lower>::linear_lower_to_flat(self, cx, ty, dst)
             }
 
-            fn store<U>(
+            fn linear_lower_to_memory<U>(
                 &self,
                 cx: &mut LowerContext<'_, U>,
                 ty: InterfaceType,
                 offset: usize,
             ) -> Result<()> {
-                <$b as Lower>::store(self, cx, ty, offset)
+                <$b as Lower>::linear_lower_to_memory(self, cx, ty, offset)
             }
         }
     )*)
@@ -738,13 +753,13 @@ macro_rules! forward_string_lifts {
     ($($a:ty,)*) => ($(
         unsafe impl Lift for $a {
             #[inline]
-            fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
-                Ok(<WasmStr as Lift>::lift(cx, ty, src)?.to_str_from_memory(cx.memory())?.into())
+            fn linear_lift_from_flat(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+                Ok(<WasmStr as Lift>::linear_lift_from_flat(cx, ty, src)?.to_str_from_memory(cx.memory())?.into())
             }
 
             #[inline]
-            fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
-                Ok(<WasmStr as Lift>::load(cx, ty, bytes)?.to_str_from_memory(cx.memory())?.into())
+            fn linear_lift_from_memory(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+                Ok(<WasmStr as Lift>::linear_lift_from_memory(cx, ty, bytes)?.to_str_from_memory(cx.memory())?.into())
             }
         }
     )*)
@@ -760,14 +775,14 @@ forward_string_lifts! {
 macro_rules! forward_list_lifts {
     ($($a:ty,)*) => ($(
         unsafe impl <T: Lift> Lift for $a {
-            fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
-                let list = <WasmList::<T> as Lift>::lift(cx, ty, src)?;
-                Ok(T::load_list(cx, &list)?.into())
+            fn linear_lift_from_flat(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+                let list = <WasmList::<T> as Lift>::linear_lift_from_flat(cx, ty, src)?;
+                Ok(T::linear_lift_list_from_memory(cx, &list)?.into())
             }
 
-            fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
-                let list = <WasmList::<T> as Lift>::load(cx, ty, bytes)?;
-                Ok(T::load_list(cx, &list)?.into())
+            fn linear_lift_from_memory(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+                let list = <WasmList::<T> as Lift>::linear_lift_from_memory(cx, ty, bytes)?;
+                Ok(T::linear_lift_list_from_memory(cx, &list)?.into())
             }
         }
     )*)
@@ -800,7 +815,7 @@ macro_rules! integers {
         unsafe impl Lower for $primitive {
             #[inline]
             #[allow(trivial_numeric_casts)]
-            fn lower<T>(
+            fn linear_lower_to_flat<T>(
                 &self,
                 _cx: &mut LowerContext<'_, T>,
                 ty: InterfaceType,
@@ -812,7 +827,7 @@ macro_rules! integers {
             }
 
             #[inline]
-            fn store<T>(
+            fn linear_lower_to_memory<T>(
                 &self,
                 cx: &mut LowerContext<'_, T>,
                 ty: InterfaceType,
@@ -824,7 +839,7 @@ macro_rules! integers {
                 Ok(())
             }
 
-            fn store_list<T>(
+            fn linear_store_list_to_memory<T>(
                 cx: &mut LowerContext<'_, T>,
                 ty: InterfaceType,
                 offset: usize,
@@ -865,19 +880,19 @@ macro_rules! integers {
         unsafe impl Lift for $primitive {
             #[inline]
             #[allow(trivial_numeric_casts, clippy::cast_possible_truncation)]
-            fn lift(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+            fn linear_lift_from_flat(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 Ok(src.$get() as $primitive)
             }
 
             #[inline]
-            fn load(_cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+            fn linear_lift_from_memory(_cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 debug_assert!((bytes.as_ptr() as usize) % Self::SIZE32 == 0);
                 Ok($primitive::from_le_bytes(bytes.try_into().unwrap()))
             }
 
-            fn load_list(cx: &mut LiftContext<'_>, list: &WasmList<Self>) -> Result<Vec<Self>> {
+            fn linear_lift_list_from_memory(cx: &mut LiftContext<'_>, list: &WasmList<Self>) -> Result<Vec<Self>> {
                 Ok(
                     list._as_le_slice(cx.memory())
                         .iter()
@@ -917,7 +932,7 @@ macro_rules! floats {
 
         unsafe impl Lower for $float {
             #[inline]
-            fn lower<T>(
+            fn linear_lower_to_flat<T>(
                 &self,
                 _cx: &mut LowerContext<'_, T>,
                 ty: InterfaceType,
@@ -929,7 +944,7 @@ macro_rules! floats {
             }
 
             #[inline]
-            fn store<T>(
+            fn linear_lower_to_memory<T>(
                 &self,
                 cx: &mut LowerContext<'_, T>,
                 ty: InterfaceType,
@@ -942,7 +957,7 @@ macro_rules! floats {
                 Ok(())
             }
 
-            fn store_list<T>(
+            fn linear_store_list_to_memory<T>(
                 cx: &mut LowerContext<'_, T>,
                 ty: InterfaceType,
                 offset: usize,
@@ -978,19 +993,19 @@ macro_rules! floats {
 
         unsafe impl Lift for $float {
             #[inline]
-            fn lift(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+            fn linear_lift_from_flat(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 Ok($float::from_bits(src.$get_float()))
             }
 
             #[inline]
-            fn load(_cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+            fn linear_lift_from_memory(_cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 debug_assert!((bytes.as_ptr() as usize) % Self::SIZE32 == 0);
                 Ok($float::from_le_bytes(bytes.try_into().unwrap()))
             }
 
-            fn load_list(cx: &mut LiftContext<'_>, list: &WasmList<Self>) -> Result<Vec<Self>> where Self: Sized {
+            fn linear_lift_list_from_memory(cx: &mut LiftContext<'_>, list: &WasmList<Self>) -> Result<Vec<Self>> where Self: Sized {
                 // See comments in `WasmList::get` for the panicking indexing
                 let byte_size = list.len * mem::size_of::<Self>();
                 let bytes = &cx.memory()[list.ptr..][..byte_size];
@@ -1033,7 +1048,7 @@ unsafe impl ComponentType for bool {
 }
 
 unsafe impl Lower for bool {
-    fn lower<T>(
+    fn linear_lower_to_flat<T>(
         &self,
         _cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1044,7 +1059,7 @@ unsafe impl Lower for bool {
         Ok(())
     }
 
-    fn store<T>(
+    fn linear_lower_to_memory<T>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1059,7 +1074,11 @@ unsafe impl Lower for bool {
 
 unsafe impl Lift for bool {
     #[inline]
-    fn lift(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn linear_lift_from_flat(
+        _cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::Bool));
         match src.get_i32() {
             0 => Ok(false),
@@ -1068,7 +1087,11 @@ unsafe impl Lift for bool {
     }
 
     #[inline]
-    fn load(_cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn linear_lift_from_memory(
+        _cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::Bool));
         match bytes[0] {
             0 => Ok(false),
@@ -1092,7 +1115,7 @@ unsafe impl ComponentType for char {
 
 unsafe impl Lower for char {
     #[inline]
-    fn lower<T>(
+    fn linear_lower_to_flat<T>(
         &self,
         _cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1104,7 +1127,7 @@ unsafe impl Lower for char {
     }
 
     #[inline]
-    fn store<T>(
+    fn linear_lower_to_memory<T>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1119,13 +1142,21 @@ unsafe impl Lower for char {
 
 unsafe impl Lift for char {
     #[inline]
-    fn lift(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn linear_lift_from_flat(
+        _cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::Char));
         Ok(char::try_from(src.get_u32())?)
     }
 
     #[inline]
-    fn load(_cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn linear_lift_from_memory(
+        _cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::Char));
         debug_assert!((bytes.as_ptr() as usize) % Self::SIZE32 == 0);
         let bits = u32::from_le_bytes(bytes.try_into().unwrap());
@@ -1153,7 +1184,7 @@ unsafe impl ComponentType for str {
 }
 
 unsafe impl Lower for str {
-    fn lower<T>(
+    fn linear_lower_to_flat<T>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1168,7 +1199,7 @@ unsafe impl Lower for str {
         Ok(())
     }
 
-    fn store<T>(
+    fn linear_lower_to_memory<T>(
         &self,
         cx: &mut LowerContext<'_, T>,
         ty: InterfaceType,
@@ -1448,7 +1479,11 @@ unsafe impl ComponentType for WasmStr {
 
 unsafe impl Lift for WasmStr {
     #[inline]
-    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn linear_lift_from_flat(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::String));
         // FIXME(#4311): needs memory64 treatment
         let ptr = src[0].get_u32();
@@ -1458,7 +1493,11 @@ unsafe impl Lift for WasmStr {
     }
 
     #[inline]
-    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn linear_lift_from_memory(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::String));
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
         // FIXME(#4311): needs memory64 treatment
@@ -1489,7 +1528,7 @@ unsafe impl<T> Lower for [T]
 where
     T: Lower,
 {
-    fn lower<U>(
+    fn linear_lower_to_flat<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -1507,7 +1546,7 @@ where
         Ok(())
     }
 
-    fn store<U>(
+    fn linear_lower_to_memory<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -1554,7 +1593,7 @@ where
         .checked_mul(elem_size)
         .ok_or_else(|| anyhow!("size overflow copying a list"))?;
     let ptr = cx.realloc(0, 0, T::ALIGN32, size)?;
-    T::store_list(cx, ty, ptr, list)?;
+    T::linear_store_list_to_memory(cx, ty, ptr, list)?;
     Ok((ptr, list.len()))
 }
 
@@ -1653,7 +1692,7 @@ impl<T: Lift> WasmList<T> {
         // unchecked indexing if we're confident enough and it's actually a perf
         // issue one day.
         let bytes = &cx.memory()[self.ptr + index * T::SIZE32..][..T::SIZE32];
-        Some(T::load(cx, self.elem, bytes))
+        Some(T::linear_lift_from_memory(cx, self.elem, bytes))
     }
 
     /// Returns an iterator over the elements of this list.
@@ -1740,7 +1779,11 @@ unsafe impl<T: ComponentType> ComponentType for WasmList<T> {
 }
 
 unsafe impl<T: Lift> Lift for WasmList<T> {
-    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn linear_lift_from_flat(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
         let elem = match ty {
             InterfaceType::List(i) => cx.types[i].element,
             _ => bad_type_info(),
@@ -1752,7 +1795,11 @@ unsafe impl<T: Lift> Lift for WasmList<T> {
         WasmList::new(ptr, len, cx, elem)
     }
 
-    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn linear_lift_from_memory(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
         let elem = match ty {
             InterfaceType::List(i) => cx.types[i].element,
             _ => bad_type_info(),
@@ -1978,7 +2025,7 @@ unsafe impl<T> Lower for Option<T>
 where
     T: Lower,
 {
-    fn lower<U>(
+    fn linear_lower_to_flat<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -2003,13 +2050,13 @@ where
             }
             Some(val) => {
                 map_maybe_uninit!(dst.A1).write(ValRaw::i32(1));
-                val.lower(cx, payload, map_maybe_uninit!(dst.A2))?;
+                val.linear_lower_to_flat(cx, payload, map_maybe_uninit!(dst.A2))?;
             }
         }
         Ok(())
     }
 
-    fn store<U>(
+    fn linear_lower_to_memory<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -2026,7 +2073,11 @@ where
             }
             Some(val) => {
                 cx.get::<1>(offset)[0] = 1;
-                val.store(cx, payload, offset + (Self::INFO.payload_offset32 as usize))?;
+                val.linear_lower_to_memory(
+                    cx,
+                    payload,
+                    offset + (Self::INFO.payload_offset32 as usize),
+                )?;
             }
         }
         Ok(())
@@ -2037,19 +2088,27 @@ unsafe impl<T> Lift for Option<T>
 where
     T: Lift,
 {
-    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn linear_lift_from_flat(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
         let payload = match ty {
             InterfaceType::Option(ty) => cx.types[ty].ty,
             _ => bad_type_info(),
         };
         Ok(match src.A1.get_i32() {
             0 => None,
-            1 => Some(T::lift(cx, payload, &src.A2)?),
+            1 => Some(T::linear_lift_from_flat(cx, payload, &src.A2)?),
             _ => bail!("invalid option discriminant"),
         })
     }
 
-    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn linear_lift_from_memory(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
         let payload_ty = match ty {
             InterfaceType::Option(ty) => cx.types[ty].ty,
@@ -2059,7 +2118,7 @@ where
         let payload = &bytes[Self::INFO.payload_offset32 as usize..];
         match discrim {
             0 => Ok(None),
-            1 => Ok(Some(T::load(cx, payload_ty, payload)?)),
+            1 => Ok(Some(T::linear_lift_from_memory(cx, payload_ty, payload)?)),
             _ => bail!("invalid option discriminant"),
         }
     }
@@ -2150,7 +2209,7 @@ where
     T: Lower,
     E: Lower,
 {
-    fn lower<U>(
+    fn linear_lower_to_flat<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -2233,7 +2292,7 @@ where
                         map_maybe_uninit!(dst.payload),
                         |payload| map_maybe_uninit!(payload.ok),
                         |dst| match ok {
-                            Some(ok) => e.lower(cx, ok, dst),
+                            Some(ok) => e.linear_lower_to_flat(cx, ok, dst),
                             None => Ok(()),
                         },
                     )
@@ -2246,7 +2305,7 @@ where
                         map_maybe_uninit!(dst.payload),
                         |payload| map_maybe_uninit!(payload.err),
                         |dst| match err {
-                            Some(err) => e.lower(cx, err, dst),
+                            Some(err) => e.linear_lower_to_flat(cx, err, dst),
                             None => Ok(()),
                         },
                     )
@@ -2255,7 +2314,7 @@ where
         }
     }
 
-    fn store<U>(
+    fn linear_lower_to_memory<U>(
         &self,
         cx: &mut LowerContext<'_, U>,
         ty: InterfaceType,
@@ -2274,13 +2333,13 @@ where
             Ok(e) => {
                 cx.get::<1>(offset)[0] = 0;
                 if let Some(ok) = ok {
-                    e.store(cx, ok, offset + payload_offset)?;
+                    e.linear_lower_to_memory(cx, ok, offset + payload_offset)?;
                 }
             }
             Err(e) => {
                 cx.get::<1>(offset)[0] = 1;
                 if let Some(err) = err {
-                    e.store(cx, err, offset + payload_offset)?;
+                    e.linear_lower_to_memory(cx, err, offset + payload_offset)?;
                 }
             }
         }
@@ -2294,7 +2353,11 @@ where
     E: Lift,
 {
     #[inline]
-    fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
+    fn linear_lift_from_flat(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        src: &Self::Lower,
+    ) -> Result<Self> {
         let (ok, err) = match ty {
             InterfaceType::Result(ty) => {
                 let ty = &cx.types[ty];
@@ -2329,7 +2392,11 @@ where
     }
 
     #[inline]
-    fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+    fn linear_lift_from_memory(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        bytes: &[u8],
+    ) -> Result<Self> {
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
         let discrim = bytes[0];
         let payload = &bytes[Self::INFO.payload_offset32 as usize..];
@@ -2353,7 +2420,7 @@ where
     T: Lift,
 {
     match ty {
-        Some(ty) => T::lift(cx, ty, src),
+        Some(ty) => T::linear_lift_from_flat(cx, ty, src),
         None => Ok(empty_lift()),
     }
 }
@@ -2363,7 +2430,7 @@ where
     T: Lift,
 {
     match ty {
-        Some(ty) => T::load(cx, ty, bytes),
+        Some(ty) => T::linear_lift_from_memory(cx, ty, bytes),
         None => Ok(empty_lift()),
     }
 }
@@ -2458,7 +2525,7 @@ macro_rules! impl_component_ty_for_tuples {
         unsafe impl<$($t,)*> Lower for ($($t,)*)
             where $($t: Lower),*
         {
-            fn lower<U>(
+            fn linear_lower_to_flat<U>(
                 &self,
                 cx: &mut LowerContext<'_, U>,
                 ty: InterfaceType,
@@ -2472,12 +2539,12 @@ macro_rules! impl_component_ty_for_tuples {
                 let mut _types = types.iter();
                 $(
                     let ty = *_types.next().unwrap_or_else(bad_type_info);
-                    $t.lower(cx, ty, map_maybe_uninit!(_dst.$t))?;
+                    $t.linear_lower_to_flat(cx, ty, map_maybe_uninit!(_dst.$t))?;
                 )*
                 Ok(())
             }
 
-            fn store<U>(
+            fn linear_lower_to_memory<U>(
                 &self,
                 cx: &mut LowerContext<'_, U>,
                 ty: InterfaceType,
@@ -2492,7 +2559,7 @@ macro_rules! impl_component_ty_for_tuples {
                 let mut _types = types.iter();
                 $(
                     let ty = *_types.next().unwrap_or_else(bad_type_info);
-                    $t.store(cx, ty, $t::ABI.next_field32_size(&mut _offset))?;
+                    $t.linear_lower_to_memory(cx, ty, $t::ABI.next_field32_size(&mut _offset))?;
                 )*
                 Ok(())
             }
@@ -2503,14 +2570,14 @@ macro_rules! impl_component_ty_for_tuples {
             where $($t: Lift),*
         {
             #[inline]
-            fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, _src: &Self::Lower) -> Result<Self> {
+            fn linear_lift_from_flat(cx: &mut LiftContext<'_>, ty: InterfaceType, _src: &Self::Lower) -> Result<Self> {
                 let types = match ty {
                     InterfaceType::Tuple(t) => &cx.types[t].types,
                     _ => bad_type_info(),
                 };
                 let mut _types = types.iter();
                 Ok(($(
-                    $t::lift(
+                    $t::linear_lift_from_flat(
                         cx,
                         *_types.next().unwrap_or_else(bad_type_info),
                         &_src.$t,
@@ -2519,7 +2586,7 @@ macro_rules! impl_component_ty_for_tuples {
             }
 
             #[inline]
-            fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
+            fn linear_lift_from_memory(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
                 debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
                 let types = match ty {
                     InterfaceType::Tuple(t) => &cx.types[t].types,
@@ -2529,7 +2596,7 @@ macro_rules! impl_component_ty_for_tuples {
                 let mut _offset = 0;
                 $(
                     let ty = *_types.next().unwrap_or_else(bad_type_info);
-                    let $t = $t::load(cx, ty, &bytes[$t::ABI.next_field32_size(&mut _offset)..][..$t::SIZE32])?;
+                    let $t = $t::linear_lift_from_memory(cx, ty, &bytes[$t::ABI.next_field32_size(&mut _offset)..][..$t::SIZE32])?;
                 )*
                 Ok(($($t,)*))
             }

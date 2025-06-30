@@ -83,6 +83,14 @@ impl RuntimeLinearMemory for MallocMemory {
     fn base(&self) -> MemoryBase {
         MemoryBase::Raw(self.base_ptr)
     }
+
+    fn vmmemory(&self) -> crate::vm::VMMemoryDefinition {
+        let base = self.base_ptr.as_non_null();
+        crate::vm::VMMemoryDefinition {
+            base: base.into(),
+            current_length: self.byte_len.into(),
+        }
+    }
 }
 
 fn byte_size_to_element_len(byte_size: usize) -> usize {

@@ -290,6 +290,9 @@ impl Artifacts {
         cmd.args(&config.flags);
         cmd.arg("-o");
         cmd.arg(&wasm_path);
+        // If optimizations are enabled, clang will look for wasm-opt in PATH
+        // and run it. This will strip DWARF debug info, which we don't want.
+        cmd.env("PATH", "");
         println!("running: {cmd:?}");
         let result = cmd.status().expect("failed to spawn clang");
         assert!(result.success());

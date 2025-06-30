@@ -1,5 +1,5 @@
-use crate::dsl::{Customization::*, Feature::*, Inst, Location::*};
-use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq};
+use crate::dsl::{Customization::*, Feature::*, Inst, Location::*, VexLength::*};
+use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq, vex, w};
 
 #[rustfmt::skip] // Keeps instructions on a single line.
 pub fn list() -> Vec<Inst> {
@@ -63,17 +63,29 @@ pub fn list() -> Vec<Inst> {
         inst("lock_sbbl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x19]).r(), _64b | compat).custom(Mnemonic),
         inst("lock_sbbq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x19]).w().r(), _64b).custom(Mnemonic),
         // Vector instructions.
-        inst("subss", fmt("A", [rw(xmm1), r(xmm_m32)]), rex([0xF3, 0x0F, 0x5C]).r(), _64b | compat | sse),
-        inst("subsd", fmt("A", [rw(xmm1), r(xmm_m64)]), rex([0xF2, 0x0F, 0x5C]).r(), _64b | compat | sse2),
-        inst("subps", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x0F, 0x5C]).r(), _64b | compat | sse),
-        inst("subpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x5C]).r(), _64b | compat | sse2),
-        inst("psubb", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF8]).r(), _64b | compat | sse2),
-        inst("psubw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF9]).r(), _64b | compat | sse2),
-        inst("psubd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFA]).r(), _64b | compat | sse2),
-        inst("psubq", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFB]).r(), _64b | compat | sse2),
-        inst("psubsb", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xE8]).r(), _64b | compat | sse2),
-        inst("psubsw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xE9]).r(), _64b | compat | sse2),
-        inst("psubusb", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD8]).r(), _64b | compat | sse2),
-        inst("psubusw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD9]).r(), _64b | compat | sse2),
+        inst("subss", fmt("A", [rw(xmm1), r(xmm_m32)]), rex([0xF3, 0x0F, 0x5C]).r(), _64b | compat | sse).alt(avx, "vsubss_b"),
+        inst("subsd", fmt("A", [rw(xmm1), r(xmm_m64)]), rex([0xF2, 0x0F, 0x5C]).r(), _64b | compat | sse2).alt(avx, "vsubsd_b"),
+        inst("subps", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x0F, 0x5C]).r(), _64b | compat | sse).alt(avx, "vsubps_b"),
+        inst("subpd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0x5C]).r(), _64b | compat | sse2).alt(avx, "vsubpd_b"),
+        inst("psubb", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF8]).r(), _64b | compat | sse2).alt(avx, "vpsubb_b"),
+        inst("psubw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xF9]).r(), _64b | compat | sse2).alt(avx, "vpsubw_b"),
+        inst("psubd", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFA]).r(), _64b | compat | sse2).alt(avx, "vpsubd_b"),
+        inst("psubq", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xFB]).r(), _64b | compat | sse2).alt(avx, "vpsubq_b"),
+        inst("psubsb", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xE8]).r(), _64b | compat | sse2).alt(avx, "vpsubsb_b"),
+        inst("psubsw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xE9]).r(), _64b | compat | sse2).alt(avx, "vpsubsw_b"),
+        inst("psubusb", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD8]).r(), _64b | compat | sse2).alt(avx, "vpsubusb_b"),
+        inst("psubusw", fmt("A", [rw(xmm1), r(align(xmm_m128))]), rex([0x66, 0x0F, 0xD9]).r(), _64b | compat | sse2).alt(avx, "vpsubusw_b"),
+        inst("vsubss", fmt("B", [w(xmm1), r(xmm2), r(xmm_m32)]), vex(L128)._f3()._0f().op(0x5C).r(), _64b | compat | avx),
+        inst("vsubsd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m64)]), vex(L128)._f2()._0f().op(0x5C).r(), _64b | compat | avx),
+        inst("vsubps", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._0f().op(0x5C).r(), _64b | compat | avx),
+        inst("vsubpd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0x5C).r(), _64b | compat | avx),
+        inst("vpsubb", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xF8).r(), _64b | compat | avx),
+        inst("vpsubw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xF9).r(), _64b | compat | avx),
+        inst("vpsubd", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xFA).r(), _64b | compat | avx),
+        inst("vpsubq", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xFB).r(), _64b | compat | avx),
+        inst("vpsubsb", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xE8).r(), _64b | compat | avx),
+        inst("vpsubsw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xE9).r(), _64b | compat | avx),
+        inst("vpsubusb", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xD8).r(), _64b | compat | avx),
+        inst("vpsubusw", fmt("B", [w(xmm1), r(xmm2), r(xmm_m128)]), vex(L128)._66()._0f().op(0xD9).r(), _64b | compat | avx),
     ]
 }

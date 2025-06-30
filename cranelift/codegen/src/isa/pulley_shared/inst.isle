@@ -176,7 +176,7 @@
 (decl pure amode_base (Value Offset32) ValueOffset)
 (rule (amode_base addr (offset32 offset)) (ValueOffset.Both addr offset))
 (rule 1 (amode_base (iadd addr (i32_from_iconst b)) (offset32 offset))
-  (if-let new_offset (s32_add_fallible b offset))
+  (if-let new_offset (i32_checked_add b offset))
   (ValueOffset.Both addr new_offset))
 
 (type StackAMode extern (enum))
@@ -266,7 +266,7 @@
   (if-let inst @ (load flags addr (offset32 offset)) (is_sinkable_inst value))
   (if-let true (is_native_endianness (endianness flags)))
   (if-let true (memflags_nontrapping flags))
-  (if-let offset8 (u8_try_from_i32 offset))
+  (if-let offset8 (i32_try_into_u8 offset))
   (SinkableLoad.Load inst ty addr offset8))
 
 ;; Representation of a "sunk load" where once this is created it must be used.
@@ -324,7 +324,7 @@
 (decl pure partial addrg32bne (G32) G32Bne)
 (rule (addrg32bne (G32.All heap_base heap_bound wasm_addr offset))
   (if-let heap_bound_load (sinkable_load heap_bound))
-  (if-let offset8 (u8_try_from_u16 offset))
+  (if-let offset8 (u16_try_into_u8 offset))
   (G32Bne.All heap_base heap_bound_load wasm_addr offset8))
 
 ;; Main entrypoint for matching a `G32` address which can be used in `*_g32`
@@ -619,35 +619,18 @@
 ;;;; Materializing Constants ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Lower a constant into a register.
-(decl imm (Type u64) Reg)
+(decl imm (i64) Reg)
 
-(rule 4 (imm (ty_int _) 0) (pulley_xzero))
-(rule 5 (imm (ty_int _) 1) (pulley_xone))
+;; Special case some instructions with no immediates
+(rule 6 (imm 0) (pulley_xzero))
+(rule 5 (imm 1) (pulley_xone))
 
-;; If a value can fit into 8 bits, then prioritize that.
-(rule 3 (imm (ty_int _) x)
-      (if-let y (i8_try_from_u64 x))
-      (pulley_xconst8 y))
-
-;; If a value can fit into 16 bits, then prioritize that.
-(rule 2 (imm (ty_int _) x)
-      (if-let y (i16_try_from_u64 x))
-      (pulley_xconst16 y))
-
-;; If a value can fit into 32 bits, then prioritize that.
-(rule 1 (imm (ty_int _) x)
-      (if-let y (i32_try_from_u64 x))
-      (pulley_xconst32 y))
-
-;; Base cases for integers.
-(rule 0 (imm $I8 x) (pulley_xconst8 (u8_as_i8 (u64_as_u8 x))))
-(rule 0 (imm $I16 x) (pulley_xconst16 (u16_as_i16 (u64_as_u16 x))))
-(rule 0 (imm $I32 x) (pulley_xconst32 (u64_as_i32 x)))
-(rule 0 (imm $I64 x) (pulley_xconst64 (u64_as_i64 x)))
-
-;; Base cases for floats.
-(rule 0 (imm $F32 (u64_as_u32 c)) (pulley_fconst32 c))
-(rule 0 (imm $F64 c) (pulley_fconst64 c))
+;; For integer constants use the smallest instructions we can that fits the
+;; desired value
+(rule 4 (imm (i8_from_i64 imm)) (pulley_xconst8 imm))
+(rule 3 (imm (i16_from_i64 imm)) (pulley_xconst16 imm))
+(rule 2 (imm (i32_from_i64 imm)) (pulley_xconst32 imm))
+(rule 1 (imm imm) (pulley_xconst64 imm))
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

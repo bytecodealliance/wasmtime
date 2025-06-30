@@ -159,7 +159,7 @@ impl InterpreterRef<'_> {
         // that pointer originates from a `StoreBox<VM>` in the store itself.
         // One level of safety here relies on that never being deallocated or
         // overwritten, which this file upholds as it's a private field only
-        // this module can acccess.
+        // this module can access.
         //
         // Another aspect upheld by `InterpreterRef` is that it transfers, to
         // the compiler, a mutable borrow of the store (e.g `struct Interpreter`
@@ -473,6 +473,7 @@ fn trap(vm: &mut Vm, pc: NonNull<u8>, kind: Option<TrapKind>, setjmp: Setjmp) {
                     TrapKind::BadConversionToInteger => Trap::BadConversionToInteger,
                     TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds,
                     TrapKind::DisabledOpcode => Trap::DisabledOpcode,
+                    TrapKind::StackOverflow => Trap::StackOverflow,
                 };
                 s.set_jit_trap(regs, None, trap);
             }

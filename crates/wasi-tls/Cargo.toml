@@ -18,13 +18,14 @@ tokio = { workspace = true, features = [
     "net",
     "rt-multi-thread",
     "time",
+    "io-util",
 ] }
 wasmtime = { workspace = true, features = ["runtime", "component-model"] }
 wasmtime-wasi = { workspace = true }
+
 tokio-rustls = { workspace = true }
 rustls = { workspace = true }
 webpki-roots = { workspace = true }
-
 
 [dev-dependencies]
 test-programs-artifacts = { workspace = true }

@@ -28,6 +28,13 @@ impl ComponentStoreData {
     pub fn next_component_instance_id(&self) -> ComponentInstanceId {
         self.instances.next_key()
     }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn drop_fibers(store: &mut StoreOpaque) {
+        _ = store;
+        // This function will actually do something when runtime support for
+        // `component-model-async` is merged.
+    }
 }
 
 impl StoreData {

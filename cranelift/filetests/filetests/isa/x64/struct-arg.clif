@@ -11,7 +11,7 @@ block0(v0: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   lea     rbp(stack args max - 64), %rsi
+;   leaq <offset:0>+-0x40(%rbp), %rsi
 ;   movzbq (%rsi), %rax
 ;   movq %rbp, %rsp
 ;   popq %rbp
@@ -40,7 +40,7 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   lea     rbp(stack args max - 64), %rcx
+;   leaq <offset:0>+-0x40(%rbp), %rcx
 ;   movzbq (%rdi), %rax
 ;   movzbq (%rcx), %r9
 ;   addl %r9d, %eax
@@ -75,7 +75,7 @@ block0(v0: i64):
 ;   subq $0x40, %rsp
 ; block0:
 ;   movq %rdi, %rsi
-;   lea     0(%rsp), %rdi
+;   leaq (%rsp), %rdi
 ;   movl $0x40, %edx
 ;   load_ext_name %Memcpy+0, %r10
 ;   call    *%r10
@@ -117,7 +117,7 @@ block0(v0: i64, v1: i64):
 ;   movq %r14, 0x40(%rsp)
 ; block0:
 ;   movq %rdi, %r14
-;   lea     0(%rsp), %rdi
+;   leaq (%rsp), %rdi
 ;   movl $0x40, %edx
 ;   load_ext_name %Memcpy+0, %r11
 ;   call    *%r11
@@ -161,8 +161,8 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block0:
-;   lea     rbp(stack args max - 192), %rsi
-;   lea     rbp(stack args max - 64), %rcx
+;   leaq <offset:0>+-0xc0(%rbp), %rsi
+;   leaq <offset:0>+-0x40(%rbp), %rcx
 ;   movzbq (%rsi), %rax
 ;   movzbq (%rcx), %r9
 ;   addl %r9d, %eax
@@ -201,11 +201,11 @@ block0(v0: i64, v1: i64, v2: i64):
 ; block0:
 ;   movq %rdx, %rbx
 ;   movq %rdi, %r13
-;   lea     0(%rsp), %rdi
+;   leaq (%rsp), %rdi
 ;   movl $0x80, %edx
 ;   load_ext_name %Memcpy+0, %rax
 ;   call    *%rax
-;   lea     128(%rsp), %rdi
+;   leaq 0x80(%rsp), %rdi
 ;   movl $0x40, %edx
 ;   load_ext_name %Memcpy+0, %r10
 ;   movq %rbx, %rsi

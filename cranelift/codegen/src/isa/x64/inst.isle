@@ -39,30 +39,8 @@
        (MovToPReg (src Gpr)
                   (dst PReg))
 
-       ;; Loads the memory address of addr into dst.
-       (LoadEffectiveAddress (addr SyntheticAmode)
-                             (dst WritableGpr)
-                             (size OperandSize))
-
-       ;; Integer comparisons/tests: cmp or test (b w l q) (reg addr imm) reg.
-       (CmpRmiR (size OperandSize) ;; 1, 2, 4, or 8
-                (opcode CmpOpcode)
-                (src1 Gpr)
-                (src2 GprMemImm))
-
-       ;; Materializes the requested condition code in the destination reg.
-       (Setcc (cc CC)
-              (dst WritableGpr))
-
        ;; =========================================
        ;; Conditional moves.
-
-       ;; GPR conditional move; overwrites the destination register.
-       (Cmove (size OperandSize)
-              (cc CC)
-              (consequent GprMem)
-              (alternative Gpr)
-              (dst WritableGpr))
 
        ;; XMM conditional move; overwrites the destination register.
        (XmmCmove (ty Type)
@@ -81,68 +59,6 @@
 
        ;; =========================================
        ;; Floating-point operations.
-
-       ;; XMM (scalar or vector) binary op: (add sub and or xor mul adc? sbb?)
-       ;; (32 64) (reg addr) reg
-       (XmmRmR (op SseOpcode)
-               (src1 Xmm)
-               (src2 XmmMemAligned)
-               (dst WritableXmm))
-
-       ;; Same as `XmmRmR` except the memory operand can be unaligned
-       (XmmRmRUnaligned (op SseOpcode)
-                        (src1 Xmm)
-                        (src2 XmmMem)
-                        (dst WritableXmm))
-
-       ;; XMM (scalar or vector) binary op that relies on the VEX prefix and
-       ;; has two inputs.
-       (XmmRmiRVex (op AvxOpcode)
-                   (src1 Xmm)
-                   (src2 XmmMemImm)
-                   (dst WritableXmm))
-
-       ;; XMM (scalar or vector) ternary op that relies on the VEX prefix and
-       ;; has two dynamic inputs plus one immediate input.
-       (XmmRmRImmVex (op AvxOpcode)
-                     (src1 Xmm)
-                     (src2 XmmMem)
-                     (dst WritableXmm)
-                     (imm u8))
-
-       ;; XMM (scalar or vector) ternary op that relies on the VEX prefix and
-       ;; has three dynamic inputs.
-       (XmmRmRVex3 (op AvxOpcode)
-                   (src1 Xmm)
-                   (src2 Xmm)
-                   (src3 XmmMem)
-                   (dst WritableXmm))
-
-       ;; XMM unary op using a VEX encoding (aka AVX).
-       (XmmUnaryRmRVex (op AvxOpcode)
-                       (src XmmMem)
-                       (dst WritableXmm))
-
-       ;; XMM (scalar or vector) unary op (from xmm to reg/mem) using the
-       ;; VEX prefix
-       (XmmMovRMVex (op AvxOpcode)
-                    (src Xmm)
-                    (dst SyntheticAmode))
-       (XmmMovRMImmVex (op AvxOpcode)
-                       (src Xmm)
-                       (dst SyntheticAmode)
-                       (imm u8))
-
-       ;; XMM (scalar) unary op (from xmm to integer reg): vpextr{w,b,d,q}
-       (XmmToGprImmVex (op AvxOpcode)
-                       (src Xmm)
-                       (dst WritableGpr)
-                       (imm u8))
-
-       ;; Float comparisons/tests: cmp (b w l q) (reg addr imm) reg.
-       (XmmCmpRmRVex (op AvxOpcode)
-                     (src1 Xmm)
-                     (src2 XmmMem))
 
        ;; XMM (scalar or vector) binary op that relies on the EVEX
        ;; prefix. Takes two inputs.
@@ -163,17 +79,6 @@
                     (src1 Xmm)
                     (src2 Xmm)
                     (src3 XmmMem)
-                    (dst WritableXmm))
-
-       ;; XMM (scalar or vector) unary op: mov between XMM registers (32 64)
-       ;; (reg addr) reg, sqrt, etc.
-       ;;
-       ;; This differs from XMM_RM_R in that the dst register of XmmUnaryRmR is
-       ;; not used in the computation of the instruction dst value and so does
-       ;; not have to be a previously valid value. This is characteristic of mov
-       ;; instructions.
-       (XmmUnaryRmR (op SseOpcode)
-                    (src XmmMemAligned)
                     (dst WritableXmm))
 
        ;; XMM (scalar or vector) unary op that relies on the EVEX prefix.
@@ -214,27 +119,6 @@
                      (lhs Xmm)
                      (rhs Xmm)
                      (dst WritableXmm))
-
-       ;; Float comparisons/tests
-       ;;
-       ;; Compares `src1` against `src2` with `op`. Note that if you're testing
-       ;; `a < b` then `src1 == a` and `src2 == b`.
-       (XmmCmpRmR (op SseOpcode)
-                  (src1 Xmm)
-                  (src2 XmmMemAligned))
-
-       ;; A binary XMM instruction with an 8-bit immediate: e.g. cmp (ps pd) imm
-       ;; (reg addr) reg
-       ;;
-       ;; Note: this has to use `Reg*`, not `Xmm*`, operands because it is used
-       ;; in various lane insertion and extraction instructions that move
-       ;; between XMMs and GPRs.
-       (XmmRmRImm (op SseOpcode)
-                  (src1 Reg)
-                  (src2 RegMem)
-                  (dst WritableReg)
-                  (imm u8)
-                  (size OperandSize))
 
        ;; =========================================
        ;; Control flow instructions.
@@ -312,9 +196,6 @@
                     (default_target MachLabel)
                     (targets BoxVecMachLabel))
 
-       ;; Indirect jump: jmpq (reg mem).
-       (JmpUnknown (target RegMem))
-
        ;; Traps if the condition code is set.
        (TrapIf (cc CC)
                (trap_code TrapCode))
@@ -334,7 +215,7 @@
        ;; movq $name@GOTPCREL(%rip), dst    if PIC is enabled, or
        ;; lea $name($rip), dst              if distance is near, or
        ;; movabsq $name, dst                otherwise.
-       (LoadExtName (dst WritableReg)
+       (LoadExtName (dst WritableGpr)
                     (name BoxExternalName)
                     (offset i64)
                     (distance RelocDistance))
@@ -496,30 +377,6 @@
 (rule (operand_size_bits (OperandSize.Size16)) 16)
 (rule (operand_size_bits (OperandSize.Size32)) 32)
 (rule (operand_size_bits (OperandSize.Size64)) 64)
-
-(type SseOpcode extern
-      (enum Insertps
-            Pabsb
-            Pabsw
-            Pabsd
-            Packssdw
-            Packsswb
-            Packusdw
-            Packuswb
-            Palignr
-            Pmaddubsw
-            Pmaddwd
-            Pshufb
-            Ptest
-            Rcpss
-            Rsqrtss
-            Shufps
-            Pblendw
-          ))
-
-(type CmpOpcode extern
-      (enum Cmp
-            Test))
 
 (type RegMemImm extern
       (enum
@@ -686,22 +543,22 @@
 (rule to_amode_add_base_case 0 (to_amode_add flags x y offset)
         (amode_imm_reg_reg_shift flags x y offset))
 (rule to_amode_add_const_rhs 1 (to_amode_add flags x (i32_from_iconst c) offset)
-        (if-let sum (s32_add_fallible offset c))
+        (if-let sum (i32_checked_add offset c))
         (amode_imm_reg flags x sum))
 (rule to_amode_add_const_lhs 2 (to_amode_add flags (i32_from_iconst c) x offset)
-        (if-let sum (s32_add_fallible offset c))
+        (if-let sum (i32_checked_add offset c))
         (amode_imm_reg flags x sum))
 (rule to_amode_add_const_fold_iadd_lhs_rhs 3 (to_amode_add flags (iadd x (i32_from_iconst c)) y offset)
-        (if-let sum (s32_add_fallible offset c))
+        (if-let sum (i32_checked_add offset c))
         (amode_imm_reg_reg_shift flags x y sum))
 (rule to_amode_add_const_fold_iadd_lhs_lhs 4 (to_amode_add flags (iadd (i32_from_iconst c) x) y offset)
-        (if-let sum (s32_add_fallible offset c))
+        (if-let sum (i32_checked_add offset c))
         (amode_imm_reg_reg_shift flags x y sum))
 (rule to_amode_add_const_fold_iadd_rhs_rhs 5 (to_amode_add flags x (iadd y (i32_from_iconst c)) offset)
-        (if-let sum (s32_add_fallible offset c))
+        (if-let sum (i32_checked_add offset c))
         (amode_imm_reg_reg_shift flags x y sum))
 (rule to_amode_add_const_fold_iadd_rhs_lhs 6 (to_amode_add flags x (iadd (i32_from_iconst c) y) offset)
-        (if-let sum (s32_add_fallible offset c))
+        (if-let sum (i32_checked_add offset c))
         (amode_imm_reg_reg_shift flags x y sum))
 
 ;; Final cases of amode lowering. Does not hunt for constants and only attempts
@@ -729,10 +586,10 @@
 (rule amode_imm_reg_reg_shift_no_shift 0 (amode_imm_reg_reg_shift flags x y offset)
         (Amode.ImmRegRegShift offset x y 0 flags)) ;; 0 == y<<0 == "no shift"
 (rule amode_imm_reg_reg_shift_shl_rhs 1 (amode_imm_reg_reg_shift flags x (ishl y (iconst (uimm8 shift))) offset)
-        (if (u32_lteq (u8_as_u32 shift) 3))
+        (if-let true (u32_lt_eq shift 3))
         (Amode.ImmRegRegShift offset x y shift flags))
 (rule amode_imm_reg_reg_shift_shl_lhs 2 (amode_imm_reg_reg_shift flags (ishl y (iconst (uimm8 shift))) x offset)
-        (if (u32_lteq (u8_as_u32 shift) 3))
+        (if-let true (u32_lt_eq shift 3))
         (Amode.ImmRegRegShift offset x y shift flags))
 
 ;; Offsetting an Amode. Used when we need to do consecutive
@@ -769,7 +626,7 @@
 ;; This is used when lowering various shifts and rotates.
 (decl put_masked_in_imm8_gpr (Value Type) Imm8Gpr)
 (rule 2 (put_masked_in_imm8_gpr (u64_from_iconst amt) ty)
-      (Imm8Gpr.Imm8 (u64_as_u8 (u64_and amt (shift_mask ty)))))
+      (Imm8Gpr.Imm8 (u64_truncate_into_u8 (u64_and amt (shift_mask ty)))))
 (rule 1 (put_masked_in_imm8_gpr amt (fits_in_16 ty))
       (x64_and $I64 (value_regs_get_gpr amt 0) (RegMemImm.Imm (shift_mask ty))))
 (rule (put_masked_in_imm8_gpr amt ty)
@@ -803,186 +660,6 @@
 ;; Fails if the argument is not either CC.NZ or CC.Z.
 (decl cc_nz_or_z (CC) CC)
 (extern extractor cc_nz_or_z cc_nz_or_z)
-
-(type AvxOpcode
-      (enum Vfmadd213ss
-            Vfmadd213sd
-            Vfmadd213ps
-            Vfmadd213pd
-            Vfmadd132ss
-            Vfmadd132sd
-            Vfmadd132ps
-            Vfmadd132pd
-            Vfnmadd213ss
-            Vfnmadd213sd
-            Vfnmadd213ps
-            Vfnmadd213pd
-            Vfnmadd132ss
-            Vfnmadd132sd
-            Vfnmadd132ps
-            Vfnmadd132pd
-            Vfmsub213ss
-            Vfmsub213sd
-            Vfmsub213ps
-            Vfmsub213pd
-            Vfmsub132ss
-            Vfmsub132sd
-            Vfmsub132ps
-            Vfmsub132pd
-            Vfnmsub213ss
-            Vfnmsub213sd
-            Vfnmsub213ps
-            Vfnmsub213pd
-            Vfnmsub132ss
-            Vfnmsub132sd
-            Vfnmsub132ps
-            Vfnmsub132pd
-            Vcmpps
-            Vcmppd
-            Vpsrlw
-            Vpsrld
-            Vpsrlq
-            Vpaddb
-            Vpaddw
-            Vpaddd
-            Vpaddq
-            Vpaddsb
-            Vpaddsw
-            Vpaddusb
-            Vpaddusw
-            Vpsubb
-            Vpsubw
-            Vpsubd
-            Vpsubq
-            Vpsubsb
-            Vpsubsw
-            Vpsubusb
-            Vpsubusw
-            Vpavgb
-            Vpavgw
-            Vpand
-            Vandps
-            Vandpd
-            Vpor
-            Vorps
-            Vorpd
-            Vpxor
-            Vxorps
-            Vxorpd
-            Vpmullw
-            Vpmulld
-            Vpmulhw
-            Vpmulhd
-            Vpmulhrsw
-            Vpmulhuw
-            Vpmuldq
-            Vpmuludq
-            Vpunpckhwd
-            Vpunpcklwd
-            Vunpcklps
-            Vunpcklpd
-            Vunpckhps
-            Vandnps
-            Vandnpd
-            Vpandn
-            Vaddps
-            Vaddpd
-            Vsubps
-            Vsubpd
-            Vmulps
-            Vmulpd
-            Vdivps
-            Vdivpd
-            Vpcmpeqb
-            Vpcmpeqw
-            Vpcmpeqd
-            Vpcmpeqq
-            Vpcmpgtb
-            Vpcmpgtw
-            Vpcmpgtd
-            Vpcmpgtq
-            Vminps
-            Vminpd
-            Vmaxps
-            Vmaxpd
-            Vpmaxsb
-            Vpmaxsw
-            Vpmaxsd
-            Vpminsb
-            Vpminsw
-            Vpminsd
-            Vpmaxub
-            Vpmaxuw
-            Vpmaxud
-            Vpminub
-            Vpminuw
-            Vpminud
-            Vpunpcklbw
-            Vpunpckhbw
-            Vpacksswb
-            Vpackssdw
-            Vpackuswb
-            Vpackusdw
-            Vpalignr
-            Vpmaddwd
-            Vpmaddubsw
-            Vinsertps
-            Vpshufb
-            Vshufps
-            Vpsllw
-            Vpslld
-            Vpsllq
-            Vpsraw
-            Vpsrad
-            Vpmovsxbw
-            Vpmovzxbw
-            Vpmovsxwd
-            Vpmovzxwd
-            Vpmovsxdq
-            Vpmovzxdq
-            Vaddss
-            Vaddsd
-            Vmulss
-            Vmulsd
-            Vsubss
-            Vsubsd
-            Vdivss
-            Vdivsd
-            Vpabsb
-            Vpabsw
-            Vpabsd
-            Vminss
-            Vminsd
-            Vmaxss
-            Vmaxsd
-            Vsqrtps
-            Vsqrtpd
-            Vphaddw
-            Vphaddd
-            Vpunpckhdq
-            Vpunpckldq
-            Vpunpckhqdq
-            Vpunpcklqdq
-            Vmovss
-            Vmovsd
-            Vmovups
-            Vmovupd
-            Vmovdqu
-            Vpextrb
-            Vpextrw
-            Vpextrd
-            Vpextrq
-            Vpblendw
-            Vpbroadcastb
-            Vpbroadcastw
-            Vpbroadcastd
-            Vbroadcastss
-            Vsqrtss
-            Vsqrtsd
-            Vucomiss
-            Vucomisd
-            Vptest
-          ))
 
 (type Avx512Opcode
       (enum Vcvtudq2ps
@@ -1309,6 +986,8 @@
 (extern extractor is_xmm_mem is_xmm_mem)
 (decl is_xmm (Xmm) XmmMem)
 (extern extractor is_xmm is_xmm)
+(decl is_mem (SyntheticAmode) XmmMem)
+(extern extractor is_mem is_mem)
 
 ;;;; Helpers for Querying Enabled ISA Extensions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1449,50 +1128,10 @@
         dst))
 
 ;; Helper for constructing a LoadExtName instruction.
-(decl load_ext_name (ExternalName i64 RelocDistance) Reg)
+(decl load_ext_name (ExternalName i64 RelocDistance) Gpr)
 (rule (load_ext_name extname offset distance)
       (let ((dst WritableGpr (temp_writable_gpr))
             (_ Unit (emit (MInst.LoadExtName dst extname offset distance))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmR` instructions.
-(decl xmm_rm_r (SseOpcode Xmm XmmMemAligned) Xmm)
-(rule (xmm_rm_r op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmR op src1 src2 dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmRUnaligned` instructions.
-(decl xmm_rm_r_unaligned (SseOpcode Xmm XmmMem) Xmm)
-(rule (xmm_rm_r_unaligned op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRUnaligned op src1 src2 dst))))
-        dst))
-
-;; Helper for creating `XmmUnaryRmRVex` instructions
-(decl xmm_unary_rm_r_vex (AvxOpcode XmmMem) Xmm)
-(rule (xmm_unary_rm_r_vex op src)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmRVex op src dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmRImm` instructions.
-(decl xmm_rm_r_imm (SseOpcode Reg RegMem u8 OperandSize) Xmm)
-(rule (xmm_rm_r_imm op src1 src2 imm size)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRImm op
-                                           src1
-                                           src2
-                                           dst
-                                           imm
-                                           size))))
-        dst))
-
-;; Helper for creating `MInst.XmmUnaryRmR` instructions.
-(decl xmm_unary_rm_r (SseOpcode XmmMemAligned) Xmm)
-(rule (xmm_unary_rm_r op src)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmUnaryRmR op src dst))))
         dst))
 
 ;; Helper for creating `MInst.XmmUnaryRmREvex` instructions.
@@ -1519,40 +1158,12 @@
             (_ Unit (emit (MInst.XmmUnaryRmRImmEvex op src dst imm))))
         dst))
 
-;; Helper for creating `MInst.XmmToGprImmVex` instructions.
-(decl xmm_to_gpr_imm_vex (AvxOpcode Xmm u8) Gpr)
-(rule (xmm_to_gpr_imm_vex op src imm)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.XmmToGprImmVex op src dst imm))))
-        dst))
-
 ;; Helper for creating `xmm_min_max_seq` pseudo-instructions.
 (decl xmm_min_max_seq (Type bool Xmm Xmm) Xmm)
 (rule (xmm_min_max_seq ty is_min lhs rhs)
       (let ((dst WritableXmm (temp_writable_xmm))
             (size OperandSize (operand_size_of_type_32_64 ty))
             (_ Unit (emit (MInst.XmmMinMaxSeq size is_min lhs rhs dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmiRVex` instructions.
-(decl xmm_rmir_vex (AvxOpcode Xmm XmmMemImm) Xmm)
-(rule (xmm_rmir_vex op src1 src2)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmiRVex op src1 src2 dst))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmRImmVex` instructions.
-(decl xmm_rmr_imm_vex (AvxOpcode Xmm XmmMem u8) Xmm)
-(rule (xmm_rmr_imm_vex op src1 src2 imm)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRImmVex op src1 src2 dst imm))))
-        dst))
-
-;; Helper for creating `MInst.XmmRmRVex3` instructions.
-(decl xmm_rmr_vex3 (AvxOpcode Xmm Xmm XmmMem) Xmm)
-(rule (xmm_rmr_vex3 op src1 src2 src3)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (_ Unit (emit (MInst.XmmRmRVex3 op src1 src2 src3 dst))))
         dst))
 
 (decl cvt_u64_to_float_seq (Type Gpr) Xmm)
@@ -1858,52 +1469,28 @@
 (rule (x64_movsx (ExtMode.LQ) src) (x64_movslq_rm src))
 
 (decl x64_movss_load (SyntheticAmode) Xmm)
-(rule (x64_movss_load from) (x64_movss_a_m from))
-(rule 1 (x64_movss_load from)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vmovss) from))
+(rule (x64_movss_load from) (x64_movss_a_m_or_avx from))
 
 (decl x64_movss_store (SyntheticAmode Xmm) SideEffectNoResult)
-(rule (x64_movss_store addr data) (x64_movss_c_m_mem addr data))
-(rule 1 (x64_movss_store addr data)
-        (if-let true (use_avx))
-        (xmm_movrm_vex (AvxOpcode.Vmovss) addr data))
+(rule (x64_movss_store addr data) (x64_movss_c_m_mem_or_avx addr data))
 
 (decl x64_movsd_load (SyntheticAmode) Xmm)
-(rule (x64_movsd_load from) (x64_movsd_a_m from))
-(rule 1 (x64_movsd_load from)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vmovsd) from))
+(rule (x64_movsd_load from) (x64_movsd_a_m_or_avx from))
 
 (decl x64_movsd_store (SyntheticAmode Xmm) SideEffectNoResult)
-(rule (x64_movsd_store addr data) (x64_movsd_c_m_mem addr data))
-(rule 1 (x64_movsd_store addr data)
-        (if-let true (use_avx))
-        (xmm_movrm_vex (AvxOpcode.Vmovsd) addr data))
+(rule (x64_movsd_store addr data) (x64_movsd_c_m_mem_or_avx addr data))
 
 (decl x64_movups_load (SyntheticAmode) Xmm)
-(rule (x64_movups_load from) (x64_movups_a from))
-(rule 1 (x64_movups_load from)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vmovups) from))
+(rule (x64_movups_load from) (x64_movups_a_or_avx from))
 
 (decl x64_movups_store (SyntheticAmode Xmm) SideEffectNoResult)
-(rule (x64_movups_store addr data) (x64_movups_b_mem addr data))
-(rule 1 (x64_movups_store addr data)
-        (if-let true (use_avx))
-        (xmm_movrm_vex (AvxOpcode.Vmovups) addr data))
+(rule (x64_movups_store addr data) (x64_movups_b_mem_or_avx addr data))
 
 (decl x64_movupd_load (SyntheticAmode) Xmm)
-(rule (x64_movupd_load from) (x64_movupd_a from))
-(rule 1 (x64_movupd_load from)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vmovupd) from))
+(rule (x64_movupd_load from) (x64_movupd_a_or_avx from))
 
 (decl x64_movupd_store (SyntheticAmode Xmm) SideEffectNoResult)
-(rule (x64_movupd_store addr data) (x64_movupd_b_mem addr data))
-(rule 1 (x64_movupd_store addr data)
-        (if-let true (use_avx))
-        (xmm_movrm_vex (AvxOpcode.Vmovupd) addr data))
+(rule (x64_movupd_store addr data) (x64_movupd_b_mem_or_avx addr data))
 
 ;; Helper for creating `movd` instructions.
 (decl x64_movd_to_gpr (Xmm) Gpr)
@@ -1934,52 +1521,28 @@
         (x64_vmovq_b from))
 
 (decl x64_movdqu_load (XmmMem) Xmm)
-(rule (x64_movdqu_load from) (x64_movdqu_a from))
-(rule 1 (x64_movdqu_load from)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vmovdqu) from))
+(rule (x64_movdqu_load from) (x64_movdqu_a_or_avx from))
 
 (decl x64_movdqu_store (SyntheticAmode Xmm) SideEffectNoResult)
-(rule (x64_movdqu_store addr data) (x64_movdqu_b_mem addr data))
-(rule 1 (x64_movdqu_store addr data)
-        (if-let true (use_avx))
-        (xmm_movrm_vex (AvxOpcode.Vmovdqu) addr data))
+(rule (x64_movdqu_store addr data) (x64_movdqu_b_mem_or_avx addr data))
 
 (decl x64_pmovsxbw (XmmMem) Xmm)
-(rule 1 (x64_pmovsxbw from)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpmovsxbw) from))
-(rule 0 (x64_pmovsxbw from) (x64_pmovsxbw_a from))
+(rule (x64_pmovsxbw from) (x64_pmovsxbw_a_or_avx from))
 
 (decl x64_pmovzxbw (XmmMem) Xmm)
-(rule 1 (x64_pmovzxbw from)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpmovzxbw) from))
-(rule 0 (x64_pmovzxbw from) (x64_pmovzxbw_a from))
+(rule (x64_pmovzxbw from) (x64_pmovzxbw_a_or_avx from))
 
 (decl x64_pmovsxwd (XmmMem) Xmm)
-(rule 1 (x64_pmovsxwd from)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpmovsxwd) from))
-(rule 0 (x64_pmovsxwd from) (x64_pmovsxwd_a from))
+(rule (x64_pmovsxwd from) (x64_pmovsxwd_a_or_avx from))
 
 (decl x64_pmovzxwd (XmmMem) Xmm)
-(rule 1 (x64_pmovzxwd from)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpmovzxwd) from))
-(rule 0 (x64_pmovzxwd from) (x64_pmovzxwd_a from))
+(rule (x64_pmovzxwd from) (x64_pmovzxwd_a_or_avx from))
 
 (decl x64_pmovsxdq (XmmMem) Xmm)
-(rule 1 (x64_pmovsxdq from)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpmovsxdq) from))
-(rule 0 (x64_pmovsxdq from) (x64_pmovsxdq_a from))
+(rule (x64_pmovsxdq from) (x64_pmovsxdq_a_or_avx from))
 
 (decl x64_pmovzxdq (XmmMem) Xmm)
-(rule 1 (x64_pmovzxdq from)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpmovzxdq) from))
-(rule 0 (x64_pmovzxdq from) (x64_pmovzxdq_a from))
+(rule (x64_pmovzxdq from) (x64_pmovzxdq_a_or_avx from))
 
 (decl x64_movrm (Type SyntheticAmode Gpr) SideEffectNoResult)
 (spec (x64_movrm ty addr data)
@@ -1990,18 +1553,10 @@
 (rule (x64_movrm $I64 addr data) (x64_movq_mr_mem addr data))
 
 (decl x64_movimm_m (Type SyntheticAmode i32) SideEffectNoResult)
-(rule (x64_movimm_m $I8 addr (i8_try_from_i32 imm)) (x64_movb_mi_mem addr (i8_as_u8 imm)))
-(rule (x64_movimm_m $I16 addr (i16_try_from_i32 imm)) (x64_movw_mi_mem addr (i16_as_u16 imm)))
-(rule (x64_movimm_m $I32 addr imm) (x64_movl_mi_mem addr (i32_as_u32 imm)))
+(rule (x64_movimm_m $I8 addr (i8_from_i32 imm)) (x64_movb_mi_mem addr (i8_cast_unsigned imm)))
+(rule (x64_movimm_m $I16 addr (i16_from_i32 imm)) (x64_movw_mi_mem addr (i16_cast_unsigned imm)))
+(rule (x64_movimm_m $I32 addr imm) (x64_movl_mi_mem addr (i32_cast_unsigned imm)))
 (rule (x64_movimm_m $I64 addr imm) (x64_movq_mi_sxl_mem addr imm))
-
-(decl xmm_movrm_vex (AvxOpcode SyntheticAmode Xmm) SideEffectNoResult)
-(rule (xmm_movrm_vex op addr data)
-      (SideEffectNoResult.Inst (MInst.XmmMovRMVex op data addr)))
-
-(decl xmm_movrm_imm_vex (AvxOpcode SyntheticAmode Xmm u8) SideEffectNoResult)
-(rule (xmm_movrm_imm_vex op addr data imm)
-      (SideEffectNoResult.Inst (MInst.XmmMovRMImmVex op data addr imm)))
 
 ;; Load a constant into an XMM register.
 (decl x64_xmm_load_const (Type VCodeConstant) Xmm)
@@ -2066,6 +1621,10 @@
 (decl asm_consume_flags (AssemblerOutputs) ConsumesFlags)
 (rule (asm_consume_flags (AssemblerOutputs.RetGpr inst gpr))
       (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer inst gpr))
+
+(decl asm_consumes_flags_returns_gpr (AssemblerOutputs) ConsumesFlags)
+(rule (asm_consumes_flags_returns_gpr (AssemblerOutputs.RetGpr inst gpr))
+      (ConsumesFlags.ConsumesFlagsReturnsReg inst gpr))
 
 
 
@@ -2276,11 +1835,11 @@
 ;; Helper for creating `imul` instructions with an immediate operand. Match
 ;; 8-bit immediates first to allow a smaller instruction encoding.
 (decl x64_imul_imm (Type GprMem i32) Gpr)
-(rule 2 (x64_imul_imm $I16 src1 (i8_try_from_i32 src2))  (x64_imulw_rmi_sxb src1 src2))
-(rule 2 (x64_imul_imm $I32 src1 (i8_try_from_i32 src2))  (x64_imull_rmi_sxb src1 src2))
-(rule 2 (x64_imul_imm $I64 src1 (i8_try_from_i32 src2))  (x64_imulq_rmi_sxb src1 src2))
-(rule 1 (x64_imul_imm $I16 src1 (i16_try_from_i32 src2)) (x64_imulw_rmi src1 (i16_as_u16 src2)))
-(rule 1 (x64_imul_imm $I32 src1 src2) (x64_imull_rmi src1 (i32_as_u32 src2)))
+(rule 2 (x64_imul_imm $I16 src1 (i8_from_i32 src2))  (x64_imulw_rmi_sxb src1 src2))
+(rule 2 (x64_imul_imm $I32 src1 (i8_from_i32 src2))  (x64_imull_rmi_sxb src1 src2))
+(rule 2 (x64_imul_imm $I64 src1 (i8_from_i32 src2))  (x64_imulq_rmi_sxb src1 src2))
+(rule 1 (x64_imul_imm $I16 src1 (i16_from_i32 src2)) (x64_imulw_rmi src1 (i16_cast_unsigned src2)))
+(rule 1 (x64_imul_imm $I32 src1 src2) (x64_imull_rmi src1 (i32_cast_unsigned src2)))
 (rule 1 (x64_imul_imm $I64 src1 src2) (x64_imulq_rmi_sxl src1 src2))
 
 ;; Helper for creating `mul` instructions or `imul` instructions (depending
@@ -2404,7 +1963,7 @@
 ;; negative numbers to be used as immediates.
 (decl imm_i64 (Type i64) Reg)
 (rule (imm_i64 ty value)
-      (imm ty (i64_as_u64 value)))
+      (imm ty (i64_cast_unsigned value)))
 
 ;; Helper for emitting immediates.
 ;;
@@ -2422,25 +1981,24 @@
 ;; guarantee that the value in the register is the same logical value as the
 ;; immediate passed to this constructor. This is not possible today though
 ;; because literals like `0x8000_0000_u64` don't convert to `i32`.
-(rule 0 (imm (fits_in_32 (ty_int ty)) (u64_as_u32 imm)) (x64_movl_oi imm))
+(rule 0 (imm (fits_in_32 (ty_int ty)) (u32_from_u64 imm)) (x64_movl_oi imm))
 
 ;; Base cases for other types
 (rule 1 (imm $I64 imm) (x64_movabsq_oi imm))
-(rule 1 (imm $F16 (u64_nonzero bits)) (bitcast_gpr_to_xmm 16 (imm $I16 bits)))
-(rule 1 (imm $F32 (u64_nonzero bits)) (x64_movd_to_xmm (imm $I32 bits)))
-(rule 1 (imm $F64 (u64_nonzero bits)) (x64_movq_to_xmm (imm $I64 bits)))
+(rule 1 (imm $F16 (u64_extract_non_zero bits)) (bitcast_gpr_to_xmm 16 (imm $I16 bits)))
+(rule 1 (imm $F32 (u64_extract_non_zero bits)) (x64_movd_to_xmm (imm $I32 bits)))
+(rule 1 (imm $F64 (u64_extract_non_zero bits)) (x64_movq_to_xmm (imm $I64 bits)))
 
 ;; Special case: a 64-bit immediate which sign extends from a 32-bit immediate.
 (rule 2 (imm $I64 imm)
-  (if-let imm32 (i32_try_from_i64 (u64_as_i64 imm)))
+  (if-let imm32 (i64_try_into_i32 (u64_cast_signed imm)))
   (x64_movq_mi_sxl imm32))
 
 ;; Special case: a 64-bit immediate which zero extends from a 32-bit immediate.
 ;;
 ;; Note that `movl` here will zero-extend the destination register in 64-bit
 ;; mode which is the zero-extension we want.
-(rule 3 (imm $I64 imm)
-  (if-let imm32 (u32_try_from_u64 imm))
+(rule 3 (imm $I64 (u32_from_u64 imm32))
   (x64_movl_oi imm32))
 
 ;; Special case the 0 immediate:
@@ -2469,9 +2027,13 @@
 (rule (x64_rotl $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_roll_mi src1 src2))
 (rule (x64_rotl $I64 src1 (Imm8Gpr.Gpr src2)) (x64_rolq_mc src1 src2))
 (rule (x64_rotl $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_rolq_mi src1 src2))
-(rule 1 (x64_rotl (ty_32_or_64 ty) src (Imm8Gpr.Imm8 imm))
+(rule 1 (x64_rotl $I8 src1 (Imm8Gpr.Imm8 1)) (x64_rolb_m1 src1))
+(rule 1 (x64_rotl $I16 src1 (Imm8Gpr.Imm8 1)) (x64_rolw_m1 src1))
+(rule 1 (x64_rotl $I32 src1 (Imm8Gpr.Imm8 1)) (x64_roll_m1 src1))
+(rule 1 (x64_rotl $I64 src1 (Imm8Gpr.Imm8 1)) (x64_rolq_m1 src1))
+(rule 2 (x64_rotl (ty_32_or_64 ty) src (Imm8Gpr.Imm8 imm))
         (if-let true (use_bmi2))
-        (x64_rorx ty src (u8_sub (ty_bits ty) imm)))
+        (x64_rorx ty src (u8_wrapping_sub (ty_bits ty) imm)))
 
 ;; Helper for creating `rotr` instructions.
 (decl x64_rotr (Type Gpr Imm8Gpr) Gpr)
@@ -2483,7 +2045,11 @@
 (rule (x64_rotr $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_rorl_mi src1 src2))
 (rule (x64_rotr $I64 src1 (Imm8Gpr.Gpr src2)) (x64_rorq_mc src1 src2))
 (rule (x64_rotr $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_rorq_mi src1 src2))
-(rule 1 (x64_rotr (ty_32_or_64 ty) src (Imm8Gpr.Imm8 imm))
+(rule 1 (x64_rotr $I8 src1 (Imm8Gpr.Imm8 1)) (x64_rorb_m1 src1))
+(rule 1 (x64_rotr $I16 src1 (Imm8Gpr.Imm8 1)) (x64_rorw_m1 src1))
+(rule 1 (x64_rotr $I32 src1 (Imm8Gpr.Imm8 1)) (x64_rorl_m1 src1))
+(rule 1 (x64_rotr $I64 src1 (Imm8Gpr.Imm8 1)) (x64_rorq_m1 src1))
+(rule 2 (x64_rotr (ty_32_or_64 ty) src (Imm8Gpr.Imm8 imm))
         (if-let true (use_bmi2))
         (x64_rorx ty src imm))
 
@@ -2497,6 +2063,10 @@
 (rule (x64_shl $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_shll_mi src1 src2))
 (rule (x64_shl $I64 src1 (Imm8Gpr.Gpr src2)) (x64_shlq_mc src1 src2))
 (rule (x64_shl $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_shlq_mi src1 src2))
+(rule 1 (x64_shl $I8 src1 (Imm8Gpr.Imm8 1)) (x64_shlb_m1 src1))
+(rule 1 (x64_shl $I16 src1 (Imm8Gpr.Imm8 1)) (x64_shlw_m1 src1))
+(rule 1 (x64_shl $I32 src1 (Imm8Gpr.Imm8 1)) (x64_shll_m1 src1))
+(rule 1 (x64_shl $I64 src1 (Imm8Gpr.Imm8 1)) (x64_shlq_m1 src1))
 ;; With BMI2 the `shlx` instruction is also available, and it's unconditionally
 ;; used for registers shifted by registers since it provides more freedom
 ;; in regalloc since nothing is constrained. Note that the `shlx` instruction
@@ -2515,6 +2085,10 @@
 (rule (x64_shr $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_shrl_mi src1 src2))
 (rule (x64_shr $I64 src1 (Imm8Gpr.Gpr src2)) (x64_shrq_mc src1 src2))
 (rule (x64_shr $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_shrq_mi src1 src2))
+(rule 1 (x64_shr $I8 src1 (Imm8Gpr.Imm8 1)) (x64_shrb_m1 src1))
+(rule 1 (x64_shr $I16 src1 (Imm8Gpr.Imm8 1)) (x64_shrw_m1 src1))
+(rule 1 (x64_shr $I32 src1 (Imm8Gpr.Imm8 1)) (x64_shrl_m1 src1))
+(rule 1 (x64_shr $I64 src1 (Imm8Gpr.Imm8 1)) (x64_shrq_m1 src1))
 ;; see `x64_shl` for more info about this rule
 (rule 1 (x64_shr (ty_32_or_64 ty) src1 (Imm8Gpr.Gpr src2))
         (if-let true (use_bmi2))
@@ -2530,6 +2104,10 @@
 (rule (x64_sar $I32 src1 (Imm8Gpr.Imm8 src2)) (x64_sarl_mi src1 src2))
 (rule (x64_sar $I64 src1 (Imm8Gpr.Gpr src2)) (x64_sarq_mc src1 src2))
 (rule (x64_sar $I64 src1 (Imm8Gpr.Imm8 src2)) (x64_sarq_mi src1 src2))
+(rule 1 (x64_sar $I8 src1 (Imm8Gpr.Imm8 1)) (x64_sarb_m1 src1))
+(rule 1 (x64_sar $I16 src1 (Imm8Gpr.Imm8 1)) (x64_sarw_m1 src1))
+(rule 1 (x64_sar $I32 src1 (Imm8Gpr.Imm8 1)) (x64_sarl_m1 src1))
+(rule 1 (x64_sar $I64 src1 (Imm8Gpr.Imm8 1)) (x64_sarq_m1 src1))
 ;; see `x64_shl` for more info about this rule
 (rule 1 (x64_sar (ty_32_or_64 ty) src1 (Imm8Gpr.Gpr src2))
         (if-let true (use_bmi2))
@@ -2554,73 +2132,94 @@
 (rule (x64_bswap $I32 src) (x64_bswapl_o src))
 (rule (x64_bswap $I64 src) (x64_bswapq_o src))
 
-;; Helper for creating `MInst.CmpRmiR` instructions.
-(decl cmp_rmi_r (OperandSize CmpOpcode Gpr GprMemImm) ProducesFlags)
-(rule (cmp_rmi_r size opcode src1 src2)
-      (ProducesFlags.ProducesFlagsSideEffect
-       (MInst.CmpRmiR size
-                      opcode
-                      src1
-                      src2)))
-
 ;; Helper for creating `cmp` instructions.
-(decl x64_cmp (OperandSize Gpr GprMemImm) ProducesFlags)
-(rule (x64_cmp size src1 src2)
-      (cmp_rmi_r size (CmpOpcode.Cmp) src1 src2))
+(decl x64_cmp (Type Gpr GprMemImm) ProducesFlags)
 
-;; Helper for creating `cmp` instructions with an immediate.
-(decl x64_cmp_imm (OperandSize Gpr u32) ProducesFlags)
-(rule (x64_cmp_imm size src1 src2)
-      (x64_cmp size src1 (RegMemImm.Imm src2)))
+;; If the rhs is an immediate try to use the 8-bit form if the immediate fits.
+(rule 2 (x64_cmp $I16 src1 (is_simm8 src2)) (x64_cmpw_mi_sxb src1 src2))
+(rule 2 (x64_cmp $I32 src1 (is_simm8 src2)) (x64_cmpl_mi_sxb src1 src2))
+(rule 2 (x64_cmp $I64 src1 (is_simm8 src2)) (x64_cmpq_mi_sxb src1 src2))
 
-;; Helper for creating `MInst.XmmCmpRmR` instructions.
-(decl xmm_cmp_rm_r (SseOpcode Xmm XmmMem) ProducesFlags)
-(rule (xmm_cmp_rm_r opcode src1 src2)
-      (ProducesFlags.ProducesFlagsSideEffect
-       (MInst.XmmCmpRmR opcode src1 src2)))
+;; Base case: rhs is an immediate
+(rule 1 (x64_cmp $I8 src1 (is_imm8 src2)) (x64_cmpb_mi src1 src2))
+(rule 1 (x64_cmp $I16 src1 (is_imm16 src2)) (x64_cmpw_mi src1 src2))
+(rule 1 (x64_cmp $I32 src1 (is_imm32 src2)) (x64_cmpl_mi src1 src2))
+(rule 1 (x64_cmp $I64 src1 (is_simm32 src2)) (x64_cmpq_mi src1 src2))
 
-;; Helper for creating `MInst.XmmCmpRmRVex` instructions.
-(decl xmm_cmp_rm_r_vex (AvxOpcode Xmm XmmMem) ProducesFlags)
-(rule (xmm_cmp_rm_r_vex opcode src1 src2)
-      (ProducesFlags.ProducesFlagsSideEffect
-       (MInst.XmmCmpRmRVex opcode src1 src2)))
+;; Base case: rhs is a GprMem operand.
+(rule 0 (x64_cmp $I8 src1 (is_gpr_mem src2)) (x64_cmpb_rm src1 src2))
+(rule 0 (x64_cmp $I16 src1 (is_gpr_mem src2)) (x64_cmpw_rm src1 src2))
+(rule 0 (x64_cmp $I32 src1 (is_gpr_mem src2)) (x64_cmpl_rm src1 src2))
+(rule 0 (x64_cmp $I64 src1 (is_gpr_mem src2)) (x64_cmpq_rm src1 src2))
 
 ;; Helper for creating floating-point comparison instructions (`UCOMIS[S|D]`).
 (decl x64_ucomis (Type Xmm XmmMem) ProducesFlags)
-(rule (x64_ucomis $F32 src1 src2)
-      (asm_produce_flags_side_effect (x64_ucomiss_a_raw src1 src2)))
-(rule (x64_ucomis $F64 src1 src2)
-      (asm_produce_flags_side_effect (x64_ucomisd_a_raw src1 src2)))
-(rule 1 (x64_ucomis $F32 src1 src2)
-        (if-let true (use_avx))
-        (xmm_cmp_rm_r_vex (AvxOpcode.Vucomiss) src1 src2))
-(rule 1 (x64_ucomis $F64 src1 src2)
-        (if-let true (use_avx))
-        (xmm_cmp_rm_r_vex (AvxOpcode.Vucomisd) src1 src2))
+(rule (x64_ucomis $F32 src1 src2) (x64_ucomiss_a_or_avx src1 src2))
+(rule (x64_ucomis $F64 src1 src2) (x64_ucomisd_a_or_avx src1 src2))
 
 ;; Helper for creating `test` instructions.
-(decl x64_test (OperandSize Gpr GprMemImm) ProducesFlags)
-(rule (x64_test size src1 src2)
-      (cmp_rmi_r size (CmpOpcode.Test) src1 src2))
+(decl x64_test (Type Gpr GprMemImm) ProducesFlags)
+
+(rule 1 (x64_test $I8 src1 (is_imm8 src2)) (x64_testb_mi src1 src2))
+(rule 1 (x64_test $I16 src1 (is_imm16 src2)) (x64_testw_mi src1 src2))
+(rule 1 (x64_test $I32 src1 (is_imm32 src2)) (x64_testl_mi src1 src2))
+(rule 1 (x64_test $I64 src1 (is_simm32 src2)) (x64_testq_mi src1 src2))
+
+(rule 0 (x64_test $I8 src1 (is_gpr_mem src2)) (x64_testb_mr src2 src1))
+(rule 0 (x64_test $I16 src1 (is_gpr_mem src2)) (x64_testw_mr src2 src1))
+(rule 0 (x64_test $I32 src1 (is_gpr_mem src2)) (x64_testl_mr src2 src1))
+(rule 0 (x64_test $I64 src1 (is_gpr_mem src2)) (x64_testq_mr src2 src1))
 
 ;; Helper for creating `ptest` instructions.
 (decl x64_ptest (Xmm XmmMem) ProducesFlags)
-(rule (x64_ptest src1 src2)
-      (xmm_cmp_rm_r (SseOpcode.Ptest) src1 src2))
-(rule 1 (x64_ptest src1 src2)
-        (if-let true (use_avx))
-        (xmm_cmp_rm_r_vex (AvxOpcode.Vptest) src1 src2))
+(rule (x64_ptest src1 src2) (x64_ptest_rm_or_avx src1 src2))
 
 ;; Helper for creating `cmove` instructions. Note that these instructions do not
 ;; always result in a single emitted x86 instruction; e.g., XmmCmove uses jumps
 ;; to conditionally move the selected value into an XMM register.
+;;
+;; Also note that 8/16-bit conditional moves use the 32-bit instruction variant
+;; since that is semantically equivalent and helps break data dependencies by
+;; defining the entire register.
+;;
+;; Also note that the mnemonics used in `CC` don't always match those used in
+;; the instruction variants and that is intentiona. This is due to the fact
+;; that the Intel manual (and assemblers) support multiple mnemonics for the
+;; same instruction but disassemblers only print one mnemonic and that's the
+;; name used here.
 (decl cmove (Type CC GprMem Gpr) ConsumesFlags)
-(rule (cmove ty cc consequent alternative)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty)))
-        (ConsumesFlags.ConsumesFlagsReturnsReg
-         (MInst.Cmove size cc consequent alternative dst)
-         dst)))
+(rule 0 (cmove (fits_in_32 _) (CC.O) c a) (x64_cmovol_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NO) c a) (x64_cmovnol_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.B) c a) (x64_cmovbl_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NB) c a) (x64_cmovael_rm a c)) ;;  nb == ae
+(rule 0 (cmove (fits_in_32 _) (CC.Z) c a) (x64_cmovel_rm a c))   ;;   z ==  e
+(rule 0 (cmove (fits_in_32 _) (CC.NZ) c a) (x64_cmovnel_rm a c)) ;;  nz == ne
+(rule 0 (cmove (fits_in_32 _) (CC.BE) c a) (x64_cmovbel_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NBE) c a) (x64_cmoval_rm a c)) ;; nbe ==  a
+(rule 0 (cmove (fits_in_32 _) (CC.S) c a) (x64_cmovsl_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NS) c a) (x64_cmovnsl_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.L) c a) (x64_cmovll_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NL) c a) (x64_cmovgel_rm a c)) ;;  nl == ge
+(rule 0 (cmove (fits_in_32 _) (CC.LE) c a) (x64_cmovlel_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NLE) c a) (x64_cmovgl_rm a c)) ;; nle ==  g
+(rule 0 (cmove (fits_in_32 _) (CC.P) c a) (x64_cmovpl_rm a c))
+(rule 0 (cmove (fits_in_32 _) (CC.NP) c a) (x64_cmovnpl_rm a c))
+(rule 1 (cmove $I64 (CC.O) c a) (x64_cmovoq_rm a c))
+(rule 1 (cmove $I64 (CC.NO) c a) (x64_cmovnoq_rm a c))
+(rule 1 (cmove $I64 (CC.B) c a) (x64_cmovbq_rm a c))
+(rule 1 (cmove $I64 (CC.NB) c a) (x64_cmovaeq_rm a c)) ;;  nb == ae
+(rule 1 (cmove $I64 (CC.Z) c a) (x64_cmoveq_rm a c))   ;;   z ==  e
+(rule 1 (cmove $I64 (CC.NZ) c a) (x64_cmovneq_rm a c)) ;;  nz == ne
+(rule 1 (cmove $I64 (CC.BE) c a) (x64_cmovbeq_rm a c))
+(rule 1 (cmove $I64 (CC.NBE) c a) (x64_cmovaq_rm a c)) ;; nbe ==  a
+(rule 1 (cmove $I64 (CC.S) c a) (x64_cmovsq_rm a c))
+(rule 1 (cmove $I64 (CC.NS) c a) (x64_cmovnsq_rm a c))
+(rule 1 (cmove $I64 (CC.L) c a) (x64_cmovlq_rm a c))
+(rule 1 (cmove $I64 (CC.NL) c a) (x64_cmovgeq_rm a c)) ;;  nl == ge
+(rule 1 (cmove $I64 (CC.LE) c a) (x64_cmovleq_rm a c))
+(rule 1 (cmove $I64 (CC.NLE) c a) (x64_cmovgq_rm a c)) ;; nle ==  g
+(rule 1 (cmove $I64 (CC.P) c a) (x64_cmovpq_rm a c))
+(rule 1 (cmove $I64 (CC.NP) c a) (x64_cmovnpq_rm a c))
 
 (decl cmove_xmm (Type CC Xmm Xmm) ConsumesFlags)
 (rule (cmove_xmm ty cc consequent alternative)
@@ -2629,565 +2228,247 @@
          (MInst.XmmCmove ty cc consequent alternative dst)
          dst)))
 
-;; Helper for creating `cmove` instructions directly from values. This allows us
-;; to special-case the `I128` types and default to the `cmove` helper otherwise.
-;; It also eliminates some `put_in_reg*` boilerplate in the lowering ISLE code.
-(decl cmove_from_values (Type CC Value Value) ConsumesFlags)
-(rule (cmove_from_values (is_multi_register_gpr_type $I128) cc consequent alternative)
-      (let ((cons ValueRegs consequent)
-            (alt ValueRegs alternative)
-            (dst1 WritableGpr (temp_writable_gpr))
-            (dst2 WritableGpr (temp_writable_gpr))
-            (size OperandSize (OperandSize.Size64))
-            (lower_cmove MInst (MInst.Cmove
-                                size cc
-                                (value_regs_get_gpr cons 0)
-                                (value_regs_get_gpr alt 0)
-                                dst1))
-            (upper_cmove MInst (MInst.Cmove
-                                size cc
-                                (value_regs_get_gpr cons 1)
-                                (value_regs_get_gpr alt 1)
-                                dst2)))
-        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
-         lower_cmove
-         upper_cmove
-         (value_regs dst1 dst2))))
-
-(rule (cmove_from_values (is_single_register_gpr_type ty) cc consequent alternative)
-      (cmove ty cc consequent alternative))
-
-(rule (cmove_from_values (is_xmm_type ty) cc consequent alternative)
-      (cmove_xmm ty cc consequent alternative))
-
-;; Helper for creating `cmove` instructions with the logical OR of multiple
-;; flags. Note that these instructions will always result in more than one
-;; emitted x86 instruction.
-(decl cmove_or (Type CC CC GprMem Gpr) ConsumesFlags)
-(rule (cmove_or ty cc1 cc2 consequent alternative)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (tmp WritableGpr (temp_writable_gpr))
-            (size OperandSize (operand_size_of_type_32_64 ty))
-            (cmove1 MInst (MInst.Cmove size cc1 consequent alternative tmp))
-            (cmove2 MInst (MInst.Cmove size cc2 consequent tmp dst)))
-        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
-         cmove1
-         cmove2
-         dst)))
-
-(decl cmove_or_xmm (Type CC CC Xmm Xmm) ConsumesFlags)
-(rule (cmove_or_xmm ty cc1 cc2 consequent alternative)
-      (let ((dst WritableXmm (temp_writable_xmm))
-            (tmp WritableXmm (temp_writable_xmm))
-            (cmove1 MInst (MInst.XmmCmove ty cc1 consequent alternative tmp))
-            (cmove2 MInst (MInst.XmmCmove ty cc2 consequent tmp dst)))
-        (ConsumesFlags.ConsumesFlagsTwiceReturnsValueRegs
-         cmove1
-         cmove2
-         dst)))
-
-;; Helper for creating `cmove_or` instructions directly from values. This allows
-;; us to special-case the `I128` types and default to the `cmove_or` helper
-;; otherwise.
-(decl cmove_or_from_values (Type CC CC Value Value) ConsumesFlags)
-(rule (cmove_or_from_values (is_multi_register_gpr_type $I128) cc1 cc2 consequent alternative)
-      (let ((cons ValueRegs consequent)
-            (alt ValueRegs alternative)
-            (dst1 WritableGpr (temp_writable_gpr))
-            (dst2 WritableGpr (temp_writable_gpr))
-            (tmp1 WritableGpr (temp_writable_gpr))
-            (tmp2 WritableGpr (temp_writable_gpr))
-            (size OperandSize (OperandSize.Size64))
-            (cmove1 MInst (MInst.Cmove size cc1 (value_regs_get_gpr cons 0) (value_regs_get_gpr alt 0) tmp1))
-            (cmove2 MInst (MInst.Cmove size cc2 (value_regs_get_gpr cons 0) tmp1 dst1))
-            (cmove3 MInst (MInst.Cmove size cc1 (value_regs_get_gpr cons 1) (value_regs_get_gpr alt 1) tmp2))
-            (cmove4 MInst (MInst.Cmove size cc2 (value_regs_get_gpr cons 1) tmp2 dst2)))
-        (ConsumesFlags.ConsumesFlagsFourTimesReturnsValueRegs
-         cmove1
-         cmove2
-         cmove3
-         cmove4
-         (value_regs dst1 dst2))))
-
-(rule (cmove_or_from_values (is_single_register_gpr_type ty) cc1 cc2 consequent alternative)
-      (cmove_or ty cc1 cc2 consequent alternative))
-
-(rule (cmove_or_from_values (is_xmm_type ty) cc1 cc2 consequent alternative)
-      (cmove_or_xmm ty cc1 cc2 consequent alternative))
-
-;; Helper for creating `MInst.Setcc` instructions.
+;; Helper for creating `setcc` instructions.
+;;
+;; Note that the mnemonics here don't always match exactly with the raw
+;; instruction and that's intentional. The Intel manual documents multiple
+;; mnemonics for the same opcode and the ones in Cranelift (CC.*) don't
+;; match the ones that Capstone disassembles to (which the assembler matches).
 (decl x64_setcc (CC) ConsumesFlags)
-(rule (x64_setcc cc)
-      (let ((dst WritableGpr (temp_writable_gpr)))
-        (ConsumesFlags.ConsumesFlagsReturnsReg
-         (MInst.Setcc cc dst)
-         dst)))
+(rule (x64_setcc (CC.O)) (x64_seto_m))
+(rule (x64_setcc (CC.NO)) (x64_setno_m))
+(rule (x64_setcc (CC.B)) (x64_setb_m))
+(rule (x64_setcc (CC.NB)) (x64_setae_m)) ;;  nb == ae
+(rule (x64_setcc (CC.Z)) (x64_sete_m))   ;;   z ==  e
+(rule (x64_setcc (CC.NZ)) (x64_setne_m)) ;;  nz == ne
+(rule (x64_setcc (CC.BE)) (x64_setbe_m))
+(rule (x64_setcc (CC.NBE)) (x64_seta_m)) ;; nbe ==  a
+(rule (x64_setcc (CC.S)) (x64_sets_m))
+(rule (x64_setcc (CC.NS)) (x64_setns_m))
+(rule (x64_setcc (CC.L)) (x64_setl_m))
+(rule (x64_setcc (CC.NL)) (x64_setge_m)) ;;  nl == ge
+(rule (x64_setcc (CC.LE)) (x64_setle_m))
+(rule (x64_setcc (CC.NLE)) (x64_setg_m)) ;; nle ==  g
+(rule (x64_setcc (CC.P)) (x64_setp_m))
+(rule (x64_setcc (CC.NP)) (x64_setnp_m))
 
-;; Helper for creating `MInst.Setcc` instructions, when the flags producer will
+;; Helper for creating `setcc` instructions, when the flags producer will
 ;; also return a value.
 (decl x64_setcc_paired (CC) ConsumesFlags)
-(rule (x64_setcc_paired cc)
-      (let ((dst WritableGpr (temp_writable_gpr)))
-        (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer
-         (MInst.Setcc cc dst)
-         dst)))
+(rule (x64_setcc_paired cc) (consumes_flags_with_producer (x64_setcc cc)))
 
-;; Helper for creating `paddb` instructions.
-(decl x64_paddb (Xmm XmmMem) Xmm)
-(rule 1 (x64_paddb src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpaddb) src1 src2))
-(rule 0 (x64_paddb src1 src2) (x64_paddb_a src1 src2))
+(decl consumes_flags_with_producer (ConsumesFlags) ConsumesFlags)
+(rule (consumes_flags_with_producer (ConsumesFlags.ConsumesFlagsReturnsReg flags reg))
+  (ConsumesFlags.ConsumesFlagsReturnsResultWithProducer flags reg))
 
-;; Helper for creating `paddw` instructions.
-(decl x64_paddw (Xmm XmmMem) Xmm)
-(rule 1 (x64_paddw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpaddw) src1 src2))
-(rule 0 (x64_paddw src1 src2) (x64_paddw_a src1 src2))
 
-;; Helper for creating `paddd` instructions.
-(decl x64_paddd (Xmm XmmMem) Xmm)
-(rule 1 (x64_paddd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpaddd) src1 src2))
-(rule 0 (x64_paddd src1 src2) (x64_paddd_a src1 src2))
-
-;; Helper for creating `paddq` instructions.
-(decl x64_paddq (Xmm XmmMem) Xmm)
-(rule 1 (x64_paddq src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpaddq) src1 src2))
-(rule 0 (x64_paddq src1 src2) (x64_paddq_a src1 src2))
-
-;; Helper for creating `paddsb` instructions.
-(decl x64_paddsb (Xmm XmmMem) Xmm)
-(rule 1 (x64_paddsb src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpaddsb) src1 src2))
-(rule 0 (x64_paddsb src1 src2) (x64_paddsb_a src1 src2))
-
-;; Helper for creating `paddsw` instructions.
-(decl x64_paddsw (Xmm XmmMem) Xmm)
-(rule 1 (x64_paddsw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpaddsw) src1 src2))
-(rule 0 (x64_paddsw src1 src2) (x64_paddsw_a src1 src2))
-
-;; Helper for creating `phaddw` instructions.
-(decl x64_phaddw (Xmm XmmMem) Xmm)
-(rule 1 (x64_phaddw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vphaddw) src1 src2))
-(rule 0 (x64_phaddw src1 src2) (x64_phaddw_a src1 src2))
-
-;; Helper for creating `phaddd` instructions.
-(decl x64_phaddd (Xmm XmmMem) Xmm)
-(rule 1 (x64_phaddd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vphaddd) src1 src2))
-(rule 0 (x64_phaddd src1 src2) (x64_phaddd_a src1 src2))
-
-;; Helper for creating `paddusb` instructions.
-(decl x64_paddusb (Xmm XmmMem) Xmm)
-(rule 1 (x64_paddusb src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpaddusb) src1 src2))
-(rule 0 (x64_paddusb src1 src2) (x64_paddusb_a src1 src2))
-
-;; Helper for creating `paddusw` instructions.
-(decl x64_paddusw (Xmm XmmMem) Xmm)
-(rule 1 (x64_paddusw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpaddusw) src1 src2))
-(rule 0 (x64_paddusw src1 src2) (x64_paddusw_a src1 src2))
-
-;; Helper for creating `psubb` instructions.
-(decl x64_psubb (Xmm XmmMem) Xmm)
-(rule 1 (x64_psubb src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpsubb) src1 src2))
-(rule 0 (x64_psubb src1 src2) (x64_psubb_a src1 src2))
-
-;; Helper for creating `psubw` instructions.
-(decl x64_psubw (Xmm XmmMem) Xmm)
-(rule 1 (x64_psubw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpsubw) src1 src2))
-(rule 0 (x64_psubw src1 src2) (x64_psubw_a src1 src2))
-
-;; Helper for creating `psubd` instructions.
-(decl x64_psubd (Xmm XmmMem) Xmm)
-(rule 1 (x64_psubd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpsubd) src1 src2))
-(rule 0 (x64_psubd src1 src2) (x64_psubd_a src1 src2))
-
-;; Helper for creating `psubq` instructions.
-(decl x64_psubq (Xmm XmmMem) Xmm)
-(rule 1 (x64_psubq src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpsubq) src1 src2))
-(rule 0 (x64_psubq src1 src2) (x64_psubq_a src1 src2))
-
-;; Helper for creating `psubsb` instructions.
-(decl x64_psubsb (Xmm XmmMem) Xmm)
-(rule 1 (x64_psubsb src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpsubsb) src1 src2))
-(rule 0 (x64_psubsb src1 src2) (x64_psubsb_a src1 src2))
-
-;; Helper for creating `psubsw` instructions.
-(decl x64_psubsw (Xmm XmmMem) Xmm)
-(rule 1 (x64_psubsw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpsubsw) src1 src2))
-(rule 0 (x64_psubsw src1 src2) (x64_psubsw_a src1 src2))
-
-;; Helper for creating `psubusb` instructions.
-(decl x64_psubusb (Xmm XmmMem) Xmm)
-(rule 1 (x64_psubusb src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpsubusb) src1 src2))
-(rule 0 (x64_psubusb src1 src2) (x64_psubusb_a src1 src2))
-
-;; Helper for creating `psubusw` instructions.
-(decl x64_psubusw (Xmm XmmMem) Xmm)
-(rule 1 (x64_psubusw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpsubusw) src1 src2))
-(rule 0 (x64_psubusw src1 src2) (x64_psubusw_a src1 src2))
-
-;; Helper for creating `pavgb` instructions.
-(decl x64_pavgb (Xmm XmmMem) Xmm)
-(rule 1 (x64_pavgb src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpavgb) src1 src2))
-(rule 0 (x64_pavgb src1 src2)
-      (x64_pavgb_a src1 src2))
-
-;; Helper for creating `pavgw` instructions.
-(decl x64_pavgw (Xmm XmmMem) Xmm)
-(rule 1 (x64_pavgw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpavgw) src1 src2))
-(rule 0 (x64_pavgw src1 src2)
-      (x64_pavgw_a src1 src2))
-
-;; Helper for creating `pand` instructions.
-(decl x64_pand (Xmm XmmMem) Xmm)
-(rule 1 (x64_pand src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpand) src1 src2))
-(rule 0 (x64_pand src1 src2) (x64_pand_a src1 src2))
-
-;; Helper for creating `andps` instructions.
-(decl x64_andps (Xmm XmmMem) Xmm)
-(rule 1 (x64_andps src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vandps) src1 src2))
-(rule 0 (x64_andps src1 src2) (x64_andps_a src1 src2))
-
-;; Helper for creating `andpd` instructions.
-(decl x64_andpd (Xmm XmmMem) Xmm)
-(rule 1 (x64_andpd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vandpd) src1 src2))
-(rule 0 (x64_andpd src1 src2) (x64_andpd_a src1 src2))
-
-;; Helper for creating `por` instructions.
-(decl x64_por (Xmm XmmMem) Xmm)
-(rule 1 (x64_por src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpor) src1 src2))
-(rule 0 (x64_por src1 src2) (x64_por_a src1 src2))
-
-;; Helper for creating `orps` instructions.
-(decl x64_orps (Xmm XmmMem) Xmm)
-(rule 1 (x64_orps src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vorps) src1 src2))
-(rule 0 (x64_orps src1 src2) (x64_orps_a src1 src2))
-
-;; Helper for creating `orpd` instructions.
-(decl x64_orpd (Xmm XmmMem) Xmm)
-(rule 1 (x64_orpd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vorpd) src1 src2))
-(rule 0 (x64_orpd src1 src2) (x64_orpd_a src1 src2))
-
-;; Helper fxor creating `pxor` instructions.
-(decl x64_pxor (Xmm XmmMem) Xmm)
-(rule 1 (x64_pxor src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpxor) src1 src2))
-(rule 0 (x64_pxor src1 src2) (x64_pxor_a src1 src2))
-
-;; Helper fxor creating `xorps` instructions.
-(decl x64_xorps (Xmm XmmMem) Xmm)
-(rule 1 (x64_xorps src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vxorps) src1 src2))
-(rule 0 (x64_xorps src1 src2) (x64_xorps_a src1 src2))
-
-;; Helper fxor creating `xorpd` instructions.
-(decl x64_xorpd (Xmm XmmMem) Xmm)
-(rule 1 (x64_xorpd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vxorpd) src1 src2))
-(rule 0 (x64_xorpd src1 src2) (x64_xorpd_a src1 src2))
-
-;; Helper for creating `pmullw` instructions.
-(decl x64_pmullw (Xmm XmmMem) Xmm)
-(rule 1 (x64_pmullw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpmullw) src1 src2))
-(rule 0 (x64_pmullw src1 src2) (x64_pmullw_a src1 src2))
-
-;; Helper for creating `pmulld` instructions.
-(decl x64_pmulld (Xmm XmmMem) Xmm)
-(rule 1 (x64_pmulld src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpmulld) src1 src2))
-(rule 0 (x64_pmulld src1 src2) (x64_pmulld_a src1 src2))
-
-;; Helper for creating `pmulhw` instructions.
-(decl x64_pmulhw (Xmm XmmMem) Xmm)
-(rule 1 (x64_pmulhw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpmulhw) src1 src2))
-(rule 0 (x64_pmulhw src1 src2) (x64_pmulhw_a src1 src2))
-
-;; Helper for creating `pmulhrsw` instructions.
-(decl x64_pmulhrsw (Xmm XmmMem) Xmm)
-(rule 1 (x64_pmulhrsw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpmulhrsw) src1 src2))
-(rule 0 (x64_pmulhrsw src1 src2) (x64_pmulhrsw_a src1 src2))
-
-;; Helper for creating `pmulhuw` instructions.
-(decl x64_pmulhuw (Xmm XmmMem) Xmm)
-(rule 1 (x64_pmulhuw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpmulhuw) src1 src2))
-(rule 0 (x64_pmulhuw src1 src2) (x64_pmulhuw_a src1 src2))
-
-;; Helper for creating `pmuldq` instructions.
-(decl x64_pmuldq (Xmm XmmMem) Xmm)
-(rule 1 (x64_pmuldq src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpmuldq) src1 src2))
-(rule 0 (x64_pmuldq src1 src2) (x64_pmuldq_a src1 src2))
-
-;; Helper for creating `pmuludq` instructions.
-(decl x64_pmuludq (Xmm XmmMem) Xmm)
-(rule 1 (x64_pmuludq src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpmuludq) src1 src2))
-(rule 0 (x64_pmuludq src1 src2) (x64_pmuludq_a src1 src2))
-
-;; Helper for creating `punpckhwd` instructions.
-(decl x64_punpckhwd (Xmm XmmMem) Xmm)
-(rule 0 (x64_punpckhwd src1 src2)
-      (x64_punpckhwd_a src1 src2))
-(rule 1 (x64_punpckhwd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpunpckhwd) src1 src2))
-
-;; Helper for creating `punpcklwd` instructions.
-(decl x64_punpcklwd (Xmm XmmMem) Xmm)
-(rule 0 (x64_punpcklwd src1 src2)
-      (x64_punpcklwd_a src1 src2))
-(rule 1 (x64_punpcklwd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpunpcklwd) src1 src2))
-
-;; Helper for creating `punpckldq` instructions.
-(decl x64_punpckldq (Xmm XmmMem) Xmm)
-(rule 0 (x64_punpckldq src1 src2)
-      (x64_punpckldq_a src1 src2))
-(rule 1 (x64_punpckldq src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpunpckldq) src1 src2))
-
-;; Helper for creating `punpckhdq` instructions.
-(decl x64_punpckhdq (Xmm XmmMem) Xmm)
-(rule 0 (x64_punpckhdq src1 src2)
-      (x64_punpckhdq_a src1 src2))
-(rule 1 (x64_punpckhdq src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpunpckhdq) src1 src2))
-
-;; Helper for creating `punpcklqdq` instructions.
-(decl x64_punpcklqdq (Xmm XmmMem) Xmm)
-(rule 0 (x64_punpcklqdq src1 src2)
-      (x64_punpcklqdq_a src1 src2))
-(rule 1 (x64_punpcklqdq src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpunpcklqdq) src1 src2))
-
-;; Helper for creating `punpckhqdq` instructions.
-(decl x64_punpckhqdq (Xmm XmmMem) Xmm)
-(rule 0 (x64_punpckhqdq src1 src2)
-      (x64_punpckhqdq_a src1 src2))
-(rule 1 (x64_punpckhqdq src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpunpckhqdq) src1 src2))
-
-;; Helper for creating `unpcklps` instructions.
-(decl x64_unpcklps (Xmm XmmMem) Xmm)
-(rule 0 (x64_unpcklps src1 src2)
-      (x64_unpcklps_a src1 src2))
-(rule 1 (x64_unpcklps src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vunpcklps) src1 src2))
-
-;; Helper for creating `unpcklpd` instructions.
-(decl x64_unpcklpd (Xmm XmmMem) Xmm)
-(rule 0 (x64_unpcklpd src1 src2)
-      (x64_unpcklpd_a src1 src2))
-(rule 1 (x64_unpcklpd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vunpcklpd) src1 src2))
-
-;; Helper for creating `unpckhps` instructions.
-(decl x64_unpckhps (Xmm XmmMem) Xmm)
-(rule 0 (x64_unpckhps src1 src2)
-      (x64_unpckhps_a src1 src2))
-(rule 1 (x64_unpckhps src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vunpckhps) src1 src2))
-
-;; Helper for creating `andnps` instructions.
-(decl x64_andnps (Xmm XmmMem) Xmm)
-(rule 1 (x64_andnps src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vandnps) src1 src2))
-(rule 0 (x64_andnps src1 src2) (x64_andnps_a src1 src2))
-
-;; Helper for creating `andnpd` instructions.
-(decl x64_andnpd (Xmm XmmMem) Xmm)
-(rule 1 (x64_andnpd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vandnpd) src1 src2))
-(rule 0 (x64_andnpd src1 src2) (x64_andnpd_a src1 src2))
-
-;; Helper for creating `pandn` instructions.
-(decl x64_pandn (Xmm XmmMem) Xmm)
-(rule 1 (x64_pandn src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpandn) src1 src2))
-(rule 0 (x64_pandn src1 src2) (x64_pandn_a src1 src2))
-
-;; Helper for creating `addss` instructions.
+;; Helpers for creating vector `add` instructions.
 (decl x64_addss (Xmm XmmMem) Xmm)
-(rule 1 (x64_addss src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vaddss) src1 src2))
-(rule 0 (x64_addss src1 src2) (x64_addss_a src1 src2))
+(rule (x64_addss src1 src2) (x64_addss_a_or_avx src1 src2))
 
-;; Helper for creating `addsd` instructions.
 (decl x64_addsd (Xmm XmmMem) Xmm)
-(rule 1 (x64_addsd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vaddsd) src1 src2))
-(rule 0 (x64_addsd src1 src2) (x64_addsd_a src1 src2))
+(rule (x64_addsd src1 src2) (x64_addsd_a_or_avx src1 src2))
 
-;; Helper for creating `addps` instructions.
 (decl x64_addps (Xmm XmmMem) Xmm)
 (rule (x64_addps src1 src2) (x64_addps_a_or_avx src1 src2))
 
-;; Helper for creating `addpd` instructions.
 (decl x64_addpd (Xmm XmmMem) Xmm)
 (rule (x64_addpd src1 src2) (x64_addpd_a_or_avx src1 src2))
 
-;; Helper for creating `subss` instructions.
+(decl x64_paddb (Xmm XmmMem) Xmm)
+(rule (x64_paddb src1 src2) (x64_paddb_a_or_avx src1 src2))
+
+(decl x64_paddw (Xmm XmmMem) Xmm)
+(rule (x64_paddw src1 src2) (x64_paddw_a_or_avx src1 src2))
+
+(decl x64_paddd (Xmm XmmMem) Xmm)
+(rule (x64_paddd src1 src2) (x64_paddd_a_or_avx src1 src2))
+
+(decl x64_paddq (Xmm XmmMem) Xmm)
+(rule (x64_paddq src1 src2) (x64_paddq_a_or_avx src1 src2))
+
+(decl x64_paddsb (Xmm XmmMem) Xmm)
+(rule (x64_paddsb src1 src2) (x64_paddsb_a_or_avx src1 src2))
+
+(decl x64_paddsw (Xmm XmmMem) Xmm)
+(rule (x64_paddsw src1 src2) (x64_paddsw_a_or_avx src1 src2))
+
+(decl x64_phaddw (Xmm XmmMem) Xmm)
+(rule (x64_phaddw src1 src2) (x64_phaddw_a_or_avx src1 src2))
+
+(decl x64_phaddd (Xmm XmmMem) Xmm)
+(rule (x64_phaddd src1 src2) (x64_phaddd_a_or_avx src1 src2))
+
+(decl x64_paddusb (Xmm XmmMem) Xmm)
+(rule (x64_paddusb src1 src2) (x64_paddusb_a_or_avx src1 src2))
+
+(decl x64_paddusw (Xmm XmmMem) Xmm)
+(rule (x64_paddusw src1 src2) (x64_paddusw_a_or_avx src1 src2))
+
+;; Helpers for creating vector `sub` instructions.
 (decl x64_subss (Xmm XmmMem) Xmm)
-(rule 1 (x64_subss src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vsubss) src1 src2))
-(rule 0 (x64_subss src1 src2) (x64_subss_a src1 src2))
+(rule (x64_subss src1 src2) (x64_subss_a_or_avx src1 src2))
 
-;; Helper for creating `subsd` instructions.
 (decl x64_subsd (Xmm XmmMem) Xmm)
-(rule 1 (x64_subsd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vsubsd) src1 src2))
-(rule 0 (x64_subsd src1 src2) (x64_subsd_a src1 src2))
+(rule (x64_subsd src1 src2) (x64_subsd_a_or_avx src1 src2))
 
-;; Helper for creating `subps` instructions.
 (decl x64_subps (Xmm XmmMem) Xmm)
-(rule 1 (x64_subps src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vsubps) src1 src2))
-(rule 0 (x64_subps src1 src2) (x64_subps_a src1 src2))
+(rule (x64_subps src1 src2) (x64_subps_a_or_avx src1 src2))
 
-;; Helper for creating `subpd` instructions.
 (decl x64_subpd (Xmm XmmMem) Xmm)
-(rule 1 (x64_subpd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vsubpd) src1 src2))
-(rule 0 (x64_subpd src1 src2) (x64_subpd_a src1 src2))
+(rule (x64_subpd src1 src2) (x64_subpd_a_or_avx src1 src2))
 
-;; Helper for creating `mulss` instructions.
+(decl x64_psubb (Xmm XmmMem) Xmm)
+(rule (x64_psubb src1 src2) (x64_psubb_a_or_avx src1 src2))
+
+(decl x64_psubw (Xmm XmmMem) Xmm)
+(rule (x64_psubw src1 src2) (x64_psubw_a_or_avx src1 src2))
+
+(decl x64_psubd (Xmm XmmMem) Xmm)
+(rule (x64_psubd src1 src2) (x64_psubd_a_or_avx src1 src2))
+
+(decl x64_psubq (Xmm XmmMem) Xmm)
+(rule (x64_psubq src1 src2) (x64_psubq_a_or_avx src1 src2))
+
+(decl x64_psubsb (Xmm XmmMem) Xmm)
+(rule (x64_psubsb src1 src2) (x64_psubsb_a_or_avx src1 src2))
+
+(decl x64_psubsw (Xmm XmmMem) Xmm)
+(rule (x64_psubsw src1 src2) (x64_psubsw_a_or_avx src1 src2))
+
+(decl x64_psubusb (Xmm XmmMem) Xmm)
+(rule (x64_psubusb src1 src2) (x64_psubusb_a_or_avx src1 src2))
+
+(decl x64_psubusw (Xmm XmmMem) Xmm)
+(rule (x64_psubusw src1 src2) (x64_psubusw_a_or_avx src1 src2))
+
+;; Helpers for creating `pavg*` instructions.
+(decl x64_pavgb (Xmm XmmMem) Xmm)
+(rule (x64_pavgb src1 src2) (x64_pavgb_a_or_avx src1 src2))
+
+(decl x64_pavgw (Xmm XmmMem) Xmm)
+(rule (x64_pavgw src1 src2) (x64_pavgw_a_or_avx src1 src2))
+
+;; Helpers for creating vector `and` instructions.
+(decl x64_pand (Xmm XmmMem) Xmm)
+(rule (x64_pand src1 src2) (x64_pand_a_or_avx src1 src2))
+
+(decl x64_andps (Xmm XmmMem) Xmm)
+(rule (x64_andps src1 src2) (x64_andps_a_or_avx src1 src2))
+
+(decl x64_andpd (Xmm XmmMem) Xmm)
+(rule (x64_andpd src1 src2) (x64_andpd_a_or_avx src1 src2))
+
+;; Helpers for creating vector `or` instructions.
+(decl x64_por (Xmm XmmMem) Xmm)
+(rule (x64_por src1 src2) (x64_por_a_or_avx src1 src2))
+
+(decl x64_orps (Xmm XmmMem) Xmm)
+(rule (x64_orps src1 src2) (x64_orps_a_or_avx src1 src2))
+
+(decl x64_orpd (Xmm XmmMem) Xmm)
+(rule (x64_orpd src1 src2) (x64_orpd_a_or_avx src1 src2))
+
+;; Helpers for creating vector `xor` instructions.
+(decl x64_pxor (Xmm XmmMem) Xmm)
+(rule (x64_pxor src1 src2) (x64_pxor_a_or_avx src1 src2))
+
+(decl x64_xorps (Xmm XmmMem) Xmm)
+(rule (x64_xorps src1 src2) (x64_xorps_a_or_avx src1 src2))
+
+(decl x64_xorpd (Xmm XmmMem) Xmm)
+(rule (x64_xorpd src1 src2) (x64_xorpd_a_or_avx src1 src2))
+
+;; Helpers for creating vector `andn` instructions.
+(decl x64_andnps (Xmm XmmMem) Xmm)
+(rule (x64_andnps src1 src2) (x64_andnps_a_or_avx src1 src2))
+
+(decl x64_andnpd (Xmm XmmMem) Xmm)
+(rule (x64_andnpd src1 src2) (x64_andnpd_a_or_avx src1 src2))
+
+(decl x64_pandn (Xmm XmmMem) Xmm)
+(rule (x64_pandn src1 src2) (x64_pandn_a_or_avx src1 src2))
+
+;; Helper for creating vector `mul` instructions.
 (decl x64_mulss (Xmm XmmMem) Xmm)
-(rule 1 (x64_mulss src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vmulss) src1 src2))
-(rule 0 (x64_mulss src1 src2) (x64_mulss_a src1 src2))
+(rule (x64_mulss src1 src2) (x64_mulss_a_or_avx src1 src2))
 
-;; Helper for creating `mulsd` instructions.
 (decl x64_mulsd (Xmm XmmMem) Xmm)
-(rule 1 (x64_mulsd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vmulsd) src1 src2))
-(rule 0 (x64_mulsd src1 src2) (x64_mulsd_a src1 src2))
+(rule (x64_mulsd src1 src2) (x64_mulsd_a_or_avx src1 src2))
 
-;; Helper for creating `mulps` instructions.
 (decl x64_mulps (Xmm XmmMem) Xmm)
-(rule 1 (x64_mulps src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vmulps) src1 src2))
-(rule 0 (x64_mulps src1 src2) (x64_mulps_a src1 src2))
+(rule (x64_mulps src1 src2) (x64_mulps_a_or_avx src1 src2))
 
-;; Helper for creating `mulpd` instructions.
 (decl x64_mulpd (Xmm XmmMem) Xmm)
-(rule 1 (x64_mulpd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vmulpd) src1 src2))
-(rule 0 (x64_mulpd src1 src2) (x64_mulpd_a src1 src2))
+(rule (x64_mulpd src1 src2) (x64_mulpd_a_or_avx src1 src2))
 
-;; Helper for creating `divss` instructions.
+(decl x64_pmullw (Xmm XmmMem) Xmm)
+(rule (x64_pmullw src1 src2) (x64_pmullw_a_or_avx src1 src2))
+
+(decl x64_pmulld (Xmm XmmMem) Xmm)
+(rule (x64_pmulld src1 src2) (x64_pmulld_a_or_avx src1 src2))
+
+(decl x64_pmulhw (Xmm XmmMem) Xmm)
+(rule (x64_pmulhw src1 src2) (x64_pmulhw_a_or_avx src1 src2))
+
+(decl x64_pmulhrsw (Xmm XmmMem) Xmm)
+(rule (x64_pmulhrsw src1 src2) (x64_pmulhrsw_a_or_avx src1 src2))
+
+(decl x64_pmulhuw (Xmm XmmMem) Xmm)
+(rule (x64_pmulhuw src1 src2) (x64_pmulhuw_a_or_avx src1 src2))
+
+(decl x64_pmuldq (Xmm XmmMem) Xmm)
+(rule (x64_pmuldq src1 src2) (x64_pmuldq_a_or_avx src1 src2))
+
+(decl x64_pmuludq (Xmm XmmMem) Xmm)
+(rule (x64_pmuludq src1 src2) (x64_pmuludq_a_or_avx src1 src2))
+
+;; Helpers for creating vector `div` instructions.
 (decl x64_divss (Xmm XmmMem) Xmm)
-(rule (x64_divss src1 src2)
-      (x64_divss_a src1 src2))
-(rule 1 (x64_divss src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vdivss) src1 src2))
+(rule (x64_divss src1 src2) (x64_divss_a_or_avx src1 src2))
 
-;; Helper for creating `divsd` instructions.
 (decl x64_divsd (Xmm XmmMem) Xmm)
-(rule (x64_divsd src1 src2)
-      (x64_divsd_a src1 src2))
-(rule 1 (x64_divsd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vdivsd) src1 src2))
+(rule (x64_divsd src1 src2) (x64_divsd_a_or_avx src1 src2))
 
-;; Helper for creating `divps` instructions.
 (decl x64_divps (Xmm XmmMem) Xmm)
-(rule 0 (x64_divps src1 src2)
-      (x64_divps_a src1 src2))
-(rule 1 (x64_divps src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vdivps) src1 src2))
+(rule (x64_divps src1 src2) (x64_divps_a_or_avx src1 src2))
 
-;; Helper for creating `divpd` instructions.
 (decl x64_divpd (Xmm XmmMem) Xmm)
-(rule 0 (x64_divpd src1 src2)
-      (x64_divpd_a src1 src2))
-(rule 1 (x64_divpd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vdivpd) src1 src2))
+(rule (x64_divpd src1 src2) (x64_divpd_a_or_avx src1 src2))
+
+;; Helpers for creating `unpack` instructions.
+(decl x64_punpckhwd (Xmm XmmMem) Xmm)
+(rule (x64_punpckhwd src1 src2) (x64_punpckhwd_a_or_avx src1 src2))
+
+(decl x64_punpcklwd (Xmm XmmMem) Xmm)
+(rule (x64_punpcklwd src1 src2) (x64_punpcklwd_a_or_avx src1 src2))
+
+(decl x64_punpckldq (Xmm XmmMem) Xmm)
+(rule (x64_punpckldq src1 src2) (x64_punpckldq_a_or_avx src1 src2))
+
+(decl x64_punpckhdq (Xmm XmmMem) Xmm)
+(rule (x64_punpckhdq src1 src2) (x64_punpckhdq_a_or_avx src1 src2))
+
+(decl x64_punpcklqdq (Xmm XmmMem) Xmm)
+(rule (x64_punpcklqdq src1 src2) (x64_punpcklqdq_a_or_avx src1 src2))
+
+(decl x64_punpckhqdq (Xmm XmmMem) Xmm)
+(rule (x64_punpckhqdq src1 src2) (x64_punpckhqdq_a_or_avx src1 src2))
+
+(decl x64_unpcklps (Xmm XmmMem) Xmm)
+(rule (x64_unpcklps src1 src2) (x64_unpcklps_a_or_avx src1 src2))
+
+(decl x64_unpcklpd (Xmm XmmMem) Xmm)
+(rule (x64_unpcklpd src1 src2) (x64_unpcklpd_a_or_avx src1 src2))
+
+(decl x64_unpckhps (Xmm XmmMem) Xmm)
+(rule (x64_unpckhps src1 src2) (x64_unpckhps_a_or_avx src1 src2))
+
+(decl x64_punpcklbw (Xmm XmmMem) Xmm)
+(rule (x64_punpcklbw src1 src2) (x64_punpcklbw_a_or_avx src1 src2))
+
+(decl x64_punpckhbw (Xmm XmmMem) Xmm)
+(rule  (x64_punpckhbw src1 src2) (x64_punpckhbw_a_or_avx src1 src2))
 
 ;; Helper for creating `blendvpd` instructions.
 (decl x64_blendvpd (Xmm XmmMem Xmm) Xmm)
@@ -3212,11 +2493,7 @@
 
 ;; Helper for creating `pblendw` instructions.
 (decl x64_pblendw (Xmm XmmMem u8) Xmm)
-(rule 0 (x64_pblendw src1 src2 imm)
-      (xmm_rm_r_imm (SseOpcode.Pblendw) src1 src2 imm (OperandSize.Size32)))
-(rule 1 (x64_pblendw src1 src2 imm)
-      (if-let true (use_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vpblendw) src1 src2 imm))
+(rule (x64_pblendw src1 src2 imm) (x64_pblendw_rmi_or_avx src1 src2 imm))
 
 ;; Helper for creating `movsd`/`movss` instructions which create a new vector
 ;; register where the upper bits are from the first operand and the low
@@ -3227,16 +2504,10 @@
 ;; when used as a load instruction it wipes out the entire destination register
 ;; which defeats the purpose of this being a 2-operand instruction.
 (decl x64_movsd_regmove (Xmm Xmm) Xmm)
-(rule (x64_movsd_regmove src1 src2) (x64_movsd_a_r src1 src2))
-(rule 1 (x64_movsd_regmove src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vmovsd) src1 src2))
+(rule (x64_movsd_regmove src1 src2) (x64_movsd_a_r_or_avx src1 src2))
 
 (decl x64_movss_regmove (Xmm Xmm) Xmm)
-(rule (x64_movss_regmove src1 src2) (x64_movss_a_r src1 src2))
-(rule 1 (x64_movss_regmove src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vmovss) src1 src2))
+(rule (x64_movss_regmove src1 src2) (x64_movss_a_r_or_avx src1 src2))
 
 ;; Helper for creating `movlhps` instructions.
 (decl x64_movlhps (Xmm Xmm) Xmm)
@@ -3244,151 +2515,51 @@
 
 ;; Helpers for creating `pmaxs*` instructions.
 (decl x64_pmaxs (Type Xmm XmmMem) Xmm)
-(rule (x64_pmaxs $I8X16 x y) (x64_pmaxsb x y))
-(rule (x64_pmaxs $I16X8 x y) (x64_pmaxsw x y))
-(rule (x64_pmaxs $I32X4 x y) (x64_pmaxsd x y))
+(rule (x64_pmaxs $I8X16 x y) (x64_pmaxsb_a_or_avx x y))
+(rule (x64_pmaxs $I16X8 x y) (x64_pmaxsw_a_or_avx x y))
+(rule (x64_pmaxs $I32X4 x y) (x64_pmaxsd_a_or_avx x y))
 ;; No $I64X2 version (PMAXSQ) in SSE4.1.
-(decl x64_pmaxsb (Xmm XmmMem) Xmm)
-(rule 1 (x64_pmaxsb src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpmaxsb) src1 src2))
-(rule 0 (x64_pmaxsb src1 src2) (x64_pmaxsb_a src1 src2))
-(decl x64_pmaxsw (Xmm XmmMem) Xmm)
-(rule 1 (x64_pmaxsw src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpmaxsw) src1 src2))
-(rule 0 (x64_pmaxsw src1 src2) (x64_pmaxsw_a src1 src2))
-(decl x64_pmaxsd (Xmm XmmMem) Xmm)
-(rule 1 (x64_pmaxsd src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpmaxsd) src1 src2))
-(rule 0 (x64_pmaxsd src1 src2) (x64_pmaxsd_a src1 src2))
 
 ;; Helpers for creating `pmins*` instructions.
 (decl x64_pmins (Type Xmm XmmMem) Xmm)
-(rule (x64_pmins $I8X16 x y) (x64_pminsb x y))
-(rule (x64_pmins $I16X8 x y) (x64_pminsw x y))
-(rule (x64_pmins $I32X4 x y) (x64_pminsd x y))
+(rule (x64_pmins $I8X16 x y) (x64_pminsb_a_or_avx x y))
+(rule (x64_pmins $I16X8 x y) (x64_pminsw_a_or_avx x y))
+(rule (x64_pmins $I32X4 x y) (x64_pminsd_a_or_avx x y))
 ;; No $I64X2 version (PMINSQ) in SSE4.1.
-(decl x64_pminsb (Xmm XmmMem) Xmm)
-(rule 1 (x64_pminsb src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpminsb) src1 src2))
-(rule 0 (x64_pminsb src1 src2) (x64_pminsb_a src1 src2))
-(decl x64_pminsw (Xmm XmmMem) Xmm)
-(rule 1 (x64_pminsw src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpminsw) src1 src2))
-(rule 0 (x64_pminsw src1 src2) (x64_pminsw_a src1 src2))
-(decl x64_pminsd (Xmm XmmMem) Xmm)
-(rule 1 (x64_pminsd src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpminsd) src1 src2))
-(rule 0 (x64_pminsd src1 src2) (x64_pminsd_a src1 src2))
 
 ;; Helpers for creating `pmaxu*` instructions.
 (decl x64_pmaxu (Type Xmm XmmMem) Xmm)
-(rule (x64_pmaxu $I8X16 x y) (x64_pmaxub x y))
-(rule (x64_pmaxu $I16X8 x y) (x64_pmaxuw x y))
-(rule (x64_pmaxu $I32X4 x y) (x64_pmaxud x y))
+(rule (x64_pmaxu $I8X16 x y) (x64_pmaxub_a_or_avx x y))
+(rule (x64_pmaxu $I16X8 x y) (x64_pmaxuw_a_or_avx x y))
+(rule (x64_pmaxu $I32X4 x y) (x64_pmaxud_a_or_avx x y))
 ;; No $I64X2 version (PMAXUQ) in SSE4.1.
-(decl x64_pmaxub (Xmm XmmMem) Xmm)
-(rule 1 (x64_pmaxub src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpmaxub) src1 src2))
-(rule 0 (x64_pmaxub src1 src2) (x64_pmaxub_a src1 src2))
-(decl x64_pmaxuw (Xmm XmmMem) Xmm)
-(rule 1 (x64_pmaxuw src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpmaxuw) src1 src2))
-(rule 0 (x64_pmaxuw src1 src2) (x64_pmaxuw_a src1 src2))
-(decl x64_pmaxud (Xmm XmmMem) Xmm)
-(rule 1 (x64_pmaxud src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpmaxud) src1 src2))
-(rule 0 (x64_pmaxud src1 src2) (x64_pmaxud_a src1 src2))
 
 ;; Helper for creating `pminu*` instructions.
 (decl x64_pminu (Type Xmm XmmMem) Xmm)
-(rule (x64_pminu $I8X16 x y) (x64_pminub x y))
-(rule (x64_pminu $I16X8 x y) (x64_pminuw x y))
-(rule (x64_pminu $I32X4 x y) (x64_pminud x y))
+(rule (x64_pminu $I8X16 x y) (x64_pminub_a_or_avx x y))
+(rule (x64_pminu $I16X8 x y) (x64_pminuw_a_or_avx x y))
+(rule (x64_pminu $I32X4 x y) (x64_pminud_a_or_avx x y))
 ;; No $I64X2 version (PMINUQ) in SSE4.1.
-(decl x64_pminub (Xmm XmmMem) Xmm)
-(rule 1 (x64_pminub src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpminub) src1 src2))
-(rule 0 (x64_pminub src1 src2) (x64_pminub_a src1 src2))
-(decl x64_pminuw (Xmm XmmMem) Xmm)
-(rule 1 (x64_pminuw src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpminuw) src1 src2))
-(rule 0 (x64_pminuw src1 src2) (x64_pminuw_a src1 src2))
-(decl x64_pminud (Xmm XmmMem) Xmm)
-(rule 1 (x64_pminud src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpminud) src1 src2))
-(rule 0 (x64_pminud src1 src2) (x64_pminud_a src1 src2))
-
-;; Helper for creating `punpcklbw` instructions.
-(decl x64_punpcklbw (Xmm XmmMem) Xmm)
-(rule 0 (x64_punpcklbw src1 src2)
-      (x64_punpcklbw_a src1 src2))
-(rule 1 (x64_punpcklbw src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpunpcklbw) src1 src2))
-
-;; Helper for creating `punpckhbw` instructions.
-(decl x64_punpckhbw (Xmm XmmMem) Xmm)
-(rule 0 (x64_punpckhbw src1 src2)
-      (x64_punpckhbw_a src1 src2))
-(rule 1 (x64_punpckhbw src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpunpckhbw) src1 src2))
 
 ;; Helper for creating `packsswb` instructions.
 (decl x64_packsswb (Xmm XmmMem) Xmm)
-(rule 0 (x64_packsswb src1 src2)
-      (xmm_rm_r (SseOpcode.Packsswb) src1 src2))
-(rule 1 (x64_packsswb src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpacksswb) src1 src2))
+(rule (x64_packsswb src1 src2) (x64_packsswb_a_or_avx src1 src2))
 
 ;; Helper for creating `packssdw` instructions.
 (decl x64_packssdw (Xmm XmmMem) Xmm)
-(rule 0 (x64_packssdw src1 src2)
-      (xmm_rm_r (SseOpcode.Packssdw) src1 src2))
-(rule 1 (x64_packssdw src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpackssdw) src1 src2))
+(rule (x64_packssdw src1 src2) (x64_packssdw_a_or_avx src1 src2))
 
 ;; Helper for creating `packuswb` instructions.
 (decl x64_packuswb (Xmm XmmMem) Xmm)
-(rule 0 (x64_packuswb src1 src2)
-      (xmm_rm_r (SseOpcode.Packuswb) src1 src2))
-(rule 1 (x64_packuswb src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpackuswb) src1 src2))
+(rule (x64_packuswb src1 src2) (x64_packuswb_a_or_avx src1 src2))
 
 ;; Helper for creating `packusdw` instructions.
 (decl x64_packusdw (Xmm XmmMem) Xmm)
-(rule 0 (x64_packusdw src1 src2)
-      (xmm_rm_r (SseOpcode.Packusdw) src1 src2))
-(rule 1 (x64_packusdw src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpackusdw) src1 src2))
+(rule (x64_packusdw src1 src2) (x64_packusdw_a_or_avx src1 src2))
 
 ;; Helper for creating `palignr` instructions.
 (decl x64_palignr (Xmm XmmMem u8) Xmm)
-(rule 0 (x64_palignr src1 src2 imm)
-      (xmm_rm_r_imm (SseOpcode.Palignr)
-                    src1
-                    src2
-                    imm
-                    (OperandSize.Size32)))
-(rule 1 (x64_palignr src1 src2 imm)
-      (if-let true (use_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vpalignr) src1 src2 imm))
+(rule (x64_palignr src1 src2 imm) (x64_palignr_a_or_avx src1 src2 imm))
 
 ;; Helpers for creating `cmpp*` instructions.
 (decl x64_cmpp (Type Xmm XmmMem FcmpImm) Xmm)
@@ -3396,53 +2567,47 @@
 (rule (x64_cmpp $F64X2 x y imm) (x64_cmppd x y imm))
 
 (decl x64_cmpps (Xmm XmmMem FcmpImm) Xmm)
-(rule 0 (x64_cmpps src1 src2 imm) (x64_cmpps_a src1 src2 (encode_fcmp_imm imm)))
 (rule 1 (x64_cmpps src1 src2 imm)
       (if-let true (use_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vcmpps)
-                       src1
-                       src2
-                       (encode_fcmp_imm imm)))
+      (x64_vcmpps_b src1 src2 (encode_fcmp_imm imm)))
+(rule 0 (x64_cmpps src1 src2 imm) (x64_cmpps_a src1 src2 (encode_fcmp_imm imm)))
 
 ;; Note that `Size32` is intentional despite this being used for 64-bit
 ;; operations, since this presumably induces the correct encoding of the
 ;; instruction.
 (decl x64_cmppd (Xmm XmmMem FcmpImm) Xmm)
-(rule 0 (x64_cmppd src1 src2 imm) (x64_cmppd_a src1 src2 (encode_fcmp_imm imm)))
 (rule 1 (x64_cmppd src1 src2 imm)
       (if-let true (use_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vcmppd)
-                       src1
-                       src2
-                       (encode_fcmp_imm imm)))
+      (x64_vcmppd_b src1 src2 (encode_fcmp_imm imm)))
+(rule 0 (x64_cmppd src1 src2 imm) (x64_cmppd_a src1 src2 (encode_fcmp_imm imm)))
 
 ;; Helper for creating `pinsrb` instructions.
 (decl x64_pinsrb (Xmm GprMem u8) Xmm)
-(rule 0 (x64_pinsrb src1 src2 lane) (x64_pinsrb_a src1 src2 lane))
 (rule 1 (x64_pinsrb src1 src2 lane)
       (if-let true (use_avx))
       (x64_vpinsrb_b src1 src2 lane))
+(rule 0 (x64_pinsrb src1 src2 lane) (x64_pinsrb_a src1 src2 lane))
 
 ;; Helper for creating `pinsrw` instructions.
 (decl x64_pinsrw (Xmm GprMem u8) Xmm)
-(rule 0 (x64_pinsrw src1 src2 lane) (x64_pinsrw_a src1 src2 lane))
 (rule 1 (x64_pinsrw src1 src2 lane)
       (if-let true (use_avx))
       (x64_vpinsrw_b src1 src2 lane))
+(rule 0 (x64_pinsrw src1 src2 lane) (x64_pinsrw_a src1 src2 lane))
 
 ;; Helper for creating `pinsrd` instructions.
 (decl x64_pinsrd (Xmm GprMem u8) Xmm)
-(rule 0 (x64_pinsrd src1 src2 lane) (x64_pinsrd_a src1 src2 lane))
 (rule 1 (x64_pinsrd src1 src2 lane)
       (if-let true (use_avx))
       (x64_vpinsrd_b src1 src2 lane))
+(rule 0 (x64_pinsrd src1 src2 lane) (x64_pinsrd_a src1 src2 lane))
 
 ;; Helper for creating `pinsrq` instructions.
 (decl x64_pinsrq (Xmm GprMem u8) Xmm)
-(rule (x64_pinsrq src1 src2 lane) (x64_pinsrq_a src1 src2 lane))
 (rule 1 (x64_pinsrq src1 src2 lane)
       (if-let true (use_avx))
       (x64_vpinsrq_b src1 src2 lane))
+(rule 0 (x64_pinsrq src1 src2 lane) (x64_pinsrq_a src1 src2 lane))
 
 ;; Helper for creating `roundss` instructions.
 (decl x64_roundss (XmmMem RoundImm) Xmm)
@@ -3478,30 +2643,14 @@
 
 ;; Helper for creating `pmaddwd` instructions.
 (decl x64_pmaddwd (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmaddwd src1 src2)
-      (xmm_rm_r (SseOpcode.Pmaddwd) src1 src2))
-(rule 1 (x64_pmaddwd src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpmaddwd) src1 src2))
+(rule 0 (x64_pmaddwd src1 src2) (x64_pmaddwd_a_or_avx src1 src2))
 
 (decl x64_pmaddubsw (Xmm XmmMem) Xmm)
-(rule 0 (x64_pmaddubsw src1 src2)
-      (xmm_rm_r (SseOpcode.Pmaddubsw) src1 src2))
-(rule 1 (x64_pmaddubsw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpmaddubsw) src1 src2))
+(rule (x64_pmaddubsw src1 src2) (x64_pmaddubsw_a_or_avx src1 src2))
 
 ;; Helper for creating `insertps` instructions.
 (decl x64_insertps (Xmm XmmMem u8) Xmm)
-(rule 0 (x64_insertps src1 src2 lane)
-      (xmm_rm_r_imm (SseOpcode.Insertps)
-                    src1
-                    src2
-                    lane
-                    (OperandSize.Size32)))
-(rule 1 (x64_insertps src1 src2 lane)
-      (if-let true (use_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vinsertps) src1 src2 lane))
+(rule 0 (x64_insertps src1 src2 lane) (x64_insertps_a_or_avx src1 src2 lane))
 
 ;; Helper for creating `pshufd` instructions.
 (decl x64_pshufd (XmmMem u8) Xmm)
@@ -3512,11 +2661,15 @@
 
 ;; Helper for creating `pshufb` instructions.
 (decl x64_pshufb (Xmm XmmMem) Xmm)
-(rule 0 (x64_pshufb src1 src2)
-      (xmm_rm_r (SseOpcode.Pshufb) src1 src2))
-(rule 1 (x64_pshufb src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpshufb) src1 src2))
+(rule (x64_pshufb src1 src2) (x64_pshufb_a_or_avx src1 src2))
+
+;; Helper for creating `shufpd` instructions.
+(decl x64_shufpd (Xmm XmmMem u8) Xmm)
+(rule (x64_shufpd src1 src2 byte) (x64_shufpd_a_or_avx src1 src2 byte))
+
+;; Helper for creating `shufps` instructions.
+(decl x64_shufps (Xmm XmmMem u8) Xmm)
+(rule (x64_shufps src1 src2 byte) (x64_shufps_a_or_avx src1 src2 byte))
 
 ;; Helper for creating `pshuflw` instructions.
 (decl x64_pshuflw (XmmMem u8) Xmm)
@@ -3532,41 +2685,7 @@
       (if-let true (use_avx))
       (x64_vpshufhw_a src imm))
 
-;; Helper for creating `shufps` instructions.
-(decl x64_shufps (Xmm XmmMem u8) Xmm)
-(rule 0 (x64_shufps src1 src2 byte)
-      (xmm_rm_r_imm (SseOpcode.Shufps)
-                    src1
-                    src2
-                    byte
-                    (OperandSize.Size32)))
-(rule 1 (x64_shufps src1 src2 byte)
-      (if-let true (use_avx))
-      (xmm_rmr_imm_vex (AvxOpcode.Vshufps) src1 src2 byte))
 
-;; Helper for creating `pabsb` instructions.
-(decl x64_pabsb (XmmMem) Xmm)
-(rule (x64_pabsb src)
-      (xmm_unary_rm_r (SseOpcode.Pabsb) src))
-(rule 1 (x64_pabsb src)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpabsb) src))
-
-;; Helper for creating `pabsw` instructions.
-(decl x64_pabsw (XmmMem) Xmm)
-(rule (x64_pabsw src)
-      (xmm_unary_rm_r (SseOpcode.Pabsw) src))
-(rule 1 (x64_pabsw src)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpabsw) src))
-
-;; Helper for creating `pabsd` instructions.
-(decl x64_pabsd (XmmMem) Xmm)
-(rule (x64_pabsd src)
-      (xmm_unary_rm_r (SseOpcode.Pabsd) src))
-(rule 1 (x64_pabsd src)
-      (if-let true (use_avx))
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpabsd) src))
 
 ;; Helper for creating `vcvtudq2ps` instructions.
 (decl x64_vcvtudq2ps (XmmMem) Xmm)
@@ -3605,69 +2724,38 @@
                                              dst))))
         dst))
 
-;; Helper for creating `psllw` instructions.
+;; Helpers for creating vector `shift` instructions.
 (decl x64_psllw (Xmm XmmMemImm) Xmm)
-(rule 2 (x64_psllw src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpsllw) src1 src2))
-(rule 1 (x64_psllw src1 (is_xmm_mem src2))  (x64_psllw_a src1 src2))
-(rule 0 (x64_psllw src1 (is_imm8_xmm src2)) (x64_psllw_b src1 src2))
+(rule 1 (x64_psllw src1 (is_xmm_mem src2))  (x64_psllw_a_or_avx src1 src2))
+(rule 0 (x64_psllw src1 (is_imm8_xmm src2)) (x64_psllw_b_or_avx src1 src2))
 
-;; Helper for creating `pslld` instructions.
 (decl x64_pslld (Xmm XmmMemImm) Xmm)
-(rule 2 (x64_pslld src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpslld) src1 src2))
-(rule 1 (x64_pslld src1 (is_xmm_mem src2))  (x64_pslld_a src1 src2))
-(rule 0 (x64_pslld src1 (is_imm8_xmm src2)) (x64_pslld_b src1 src2))
+(rule 1 (x64_pslld src1 (is_xmm_mem src2))  (x64_pslld_a_or_avx src1 src2))
+(rule 0 (x64_pslld src1 (is_imm8_xmm src2)) (x64_pslld_b_or_avx src1 src2))
 
-;; Helper for creating `psllq` instructions.
 (decl x64_psllq (Xmm XmmMemImm) Xmm)
-(rule 2 (x64_psllq src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpsllq) src1 src2))
-(rule 1 (x64_psllq src1 (is_xmm_mem src2))  (x64_psllq_a src1 src2))
-(rule 0 (x64_psllq src1 (is_imm8_xmm src2)) (x64_psllq_b src1 src2))
+(rule 1 (x64_psllq src1 (is_xmm_mem src2))  (x64_psllq_a_or_avx src1 src2))
+(rule 0 (x64_psllq src1 (is_imm8_xmm src2)) (x64_psllq_b_or_avx src1 src2))
 
-;; Helper for creating `psrlw` instructions.
 (decl x64_psrlw (Xmm XmmMemImm) Xmm)
-(rule 2 (x64_psrlw src1 src2)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpsrlw) src1 src2))
-(rule 1 (x64_psrlw src1 (is_xmm_mem src2))  (x64_psrlw_a src1 src2))
-(rule 0 (x64_psrlw src1 (is_imm8_xmm src2)) (x64_psrlw_b src1 src2))
+(rule 1 (x64_psrlw src1 (is_xmm_mem src2))  (x64_psrlw_a_or_avx src1 src2))
+(rule 0 (x64_psrlw src1 (is_imm8_xmm src2)) (x64_psrlw_b_or_avx src1 src2))
 
-;; Helper for creating `psrld` instructions.
 (decl x64_psrld (Xmm XmmMemImm) Xmm)
-(rule 2 (x64_psrld src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpsrld) src1 src2))
-(rule 1 (x64_psrld src1 (is_xmm_mem src2))  (x64_psrld_a src1 src2))
-(rule 0 (x64_psrld src1 (is_imm8_xmm src2)) (x64_psrld_b src1 src2))
+(rule 1 (x64_psrld src1 (is_xmm_mem src2))  (x64_psrld_a_or_avx src1 src2))
+(rule 0 (x64_psrld src1 (is_imm8_xmm src2)) (x64_psrld_b_or_avx src1 src2))
 
-;; Helper for creating `psrlq` instructions.
 (decl x64_psrlq (Xmm XmmMemImm) Xmm)
-(rule 2 (x64_psrlq src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpsrlq) src1 src2))
-(rule 1 (x64_psrlq src1 (is_xmm_mem src2))  (x64_psrlq_a src1 src2))
-(rule 0 (x64_psrlq src1 (is_imm8_xmm src2)) (x64_psrlq_b src1 src2))
+(rule 1 (x64_psrlq src1 (is_xmm_mem src2))  (x64_psrlq_a_or_avx src1 src2))
+(rule 0 (x64_psrlq src1 (is_imm8_xmm src2)) (x64_psrlq_b_or_avx src1 src2))
 
-;; Helper for creating `psraw` instructions.
 (decl x64_psraw (Xmm XmmMemImm) Xmm)
-(rule 2 (x64_psraw src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpsraw) src1 src2))
-(rule 1 (x64_psraw src1 (is_xmm_mem src2))  (x64_psraw_a src1 src2))
-(rule 0 (x64_psraw src1 (is_imm8_xmm src2)) (x64_psraw_b src1 src2))
+(rule 1 (x64_psraw src1 (is_xmm_mem src2))  (x64_psraw_a_or_avx src1 src2))
+(rule 0 (x64_psraw src1 (is_imm8_xmm src2)) (x64_psraw_b_or_avx src1 src2))
 
-;; Helper for creating `psrad` instructions.
 (decl x64_psrad (Xmm XmmMemImm) Xmm)
-(rule 2 (x64_psrad src1 src2)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vpsrad) src1 src2))
-(rule 1 (x64_psrad src1 (is_xmm_mem src2))  (x64_psrad_a src1 src2))
-(rule 0 (x64_psrad src1 (is_imm8_xmm src2)) (x64_psrad_b src1 src2))
+(rule 1 (x64_psrad src1 (is_xmm_mem src2))  (x64_psrad_a_or_avx src1 src2))
+(rule 0 (x64_psrad src1 (is_imm8_xmm src2)) (x64_psrad_b_or_avx src1 src2))
 
 ;; Helper for creating `vpsraq` instructions.
 (decl x64_vpsraq (Xmm XmmMem) Xmm)
@@ -3679,57 +2767,30 @@
 (rule (x64_vpsraq_imm src imm)
       (xmm_unary_rm_r_imm_evex (Avx512Opcode.VpsraqImm) src imm))
 
-;; Helper for creating `pextrb` instructions.
+;; Helper for creating `pextr*` instructions.
 (decl x64_pextrb (Xmm u8) Gpr)
-(rule (x64_pextrb src lane) (x64_pextrb_a src lane))
-(rule 1 (x64_pextrb src lane)
-        (if-let true (use_avx))
-        (xmm_to_gpr_imm_vex (AvxOpcode.Vpextrb) src lane))
+(rule (x64_pextrb src lane) (x64_pextrb_a_or_avx src lane))
 
 (decl x64_pextrb_store (Amode Xmm u8) SideEffectNoResult)
-(rule (x64_pextrb_store addr src lane) (x64_pextrb_a_mem addr src lane))
-(rule 1 (x64_pextrb_store addr src lane)
-        (if-let true (use_avx))
-        (xmm_movrm_imm_vex (AvxOpcode.Vpextrb) addr src lane))
+(rule (x64_pextrb_store addr src lane) (x64_pextrb_a_mem_or_avx addr src lane))
 
-;; Helper for creating `pextrw` instructions.
 (decl x64_pextrw (Xmm u8) Gpr)
-(rule (x64_pextrw src lane) (x64_pextrw_a src lane))
-(rule 1 (x64_pextrw src lane)
-        (if-let true (use_avx))
-        (xmm_to_gpr_imm_vex (AvxOpcode.Vpextrw) src lane))
+(rule (x64_pextrw src lane) (x64_pextrw_a_or_avx src lane))
 
 (decl x64_pextrw_store (Amode Xmm u8) SideEffectNoResult)
-(rule (x64_pextrw_store addr src lane) (x64_pextrw_b_mem addr src lane))
-(rule 1 (x64_pextrw_store addr src lane)
-        (if-let true (use_avx))
-        (xmm_movrm_imm_vex (AvxOpcode.Vpextrw) addr src lane))
+(rule (x64_pextrw_store addr src lane) (x64_pextrw_b_mem_or_avx addr src lane))
 
-;; Helper for creating `pextrd` instructions.
 (decl x64_pextrd (Xmm u8) Gpr)
-(rule (x64_pextrd src lane) (x64_pextrd_a src lane))
-(rule 1 (x64_pextrd src lane)
-        (if-let true (use_avx))
-        (xmm_to_gpr_imm_vex (AvxOpcode.Vpextrd) src lane))
+(rule (x64_pextrd src lane) (x64_pextrd_a_or_avx src lane))
 
 (decl x64_pextrd_store (Amode Xmm u8) SideEffectNoResult)
-(rule (x64_pextrd_store addr src lane) (x64_pextrd_a_mem addr src lane))
-(rule 1 (x64_pextrd_store addr src lane)
-        (if-let true (use_avx))
-        (xmm_movrm_imm_vex (AvxOpcode.Vpextrd) addr src lane))
+(rule (x64_pextrd_store addr src lane) (x64_pextrd_a_mem_or_avx addr src lane))
 
-;; Helper for creating `pextrq` instructions.
 (decl x64_pextrq (Xmm u8) Gpr)
-(rule (x64_pextrq src lane) (x64_pextrq_a src lane))
-(rule 1 (x64_pextrq src lane)
-        (if-let true (use_avx))
-        (xmm_to_gpr_imm_vex (AvxOpcode.Vpextrq) src lane))
+(rule (x64_pextrq src lane) (x64_pextrq_a_or_avx src lane))
 
 (decl x64_pextrq_store (Amode Xmm u8) SideEffectNoResult)
-(rule (x64_pextrq_store addr src lane) (x64_pextrq_a_mem addr src lane))
-(rule 1 (x64_pextrq_store addr src lane)
-        (if-let true (use_avx))
-        (xmm_movrm_imm_vex (AvxOpcode.Vpextrq) addr src lane))
+(rule (x64_pextrq_store addr src lane) (x64_pextrq_a_mem_or_avx addr src lane))
 
 ;; Helper for creating `pmovmskb` instructions.
 (decl x64_pmovmskb (Xmm) Gpr)
@@ -3778,10 +2839,9 @@
       (provide (= result amode))
       (require (or (= ty 32) (= ty 64))))
 (decl x64_lea (Type SyntheticAmode) Gpr)
-(rule (x64_lea ty addr)
-      (let ((dst WritableGpr (temp_writable_gpr))
-            (_ Unit (emit (MInst.LoadEffectiveAddress addr dst (operand_size_of_type_32_64 ty)))))
-        dst))
+(rule (x64_lea $I16 addr) (x64_leaw_rm addr))
+(rule (x64_lea $I32 addr) (x64_leal_rm addr))
+(rule (x64_lea $I64 addr) (x64_leaq_rm addr))
 
 ;; Helper for creating `lzcnt` instructions.
 (decl x64_lzcnt (Type GprMem) Gpr)
@@ -3846,6 +2906,18 @@
 (rule (x64_blsr $I32 src) (x64_blsrl_vm src))
 (rule (x64_blsr $I64 src) (x64_blsrq_vm src))
 
+;; Helper for creating `bt` instructions.
+(decl x64_bt (Type GprMem Gpr) ProducesFlags)
+(rule (x64_bt $I16 src1 src2) (x64_btw_mr src1 src2))
+(rule (x64_bt $I32 src1 src2) (x64_btl_mr src1 src2))
+(rule (x64_bt $I64 src1 src2) (x64_btq_mr src1 src2))
+
+;; Helper for creating `bt` instructions.
+(decl x64_bt_imm (Type GprMem u8) ProducesFlags)
+(rule (x64_bt_imm $I16 src imm) (x64_btw_mi src imm))
+(rule (x64_bt_imm $I32 src imm) (x64_btl_mi src imm))
+(rule (x64_bt_imm $I64 src imm) (x64_btq_mi src imm))
+
 ;; Helper for creating `sarx` instructions.
 (decl x64_sarx (Type GprMem Gpr) Gpr)
 (rule (x64_sarx $I32 val amt) (x64_sarxl_rmv val amt))
@@ -3872,117 +2944,86 @@
 (rule (x64_popcnt $I32 src) (x64_popcntl_rm src))
 (rule (x64_popcnt $I64 src) (x64_popcntq_rm src))
 
-;; Helper for creating `minss` instructions.
+;; Helpers for creating `min*` instructions.
 (decl x64_minss (Xmm XmmMem) Xmm)
-(rule 1 (x64_minss x y)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vminss) x y))
-(rule 0 (x64_minss x y) (x64_minss_a x y))
+(rule (x64_minss src1 src2) (x64_minss_a_or_avx src1 src2))
 
-;; Helper for creating `minsd` instructions.
 (decl x64_minsd (Xmm XmmMem) Xmm)
-(rule 1 (x64_minsd x y)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vminsd) x y))
-(rule 0 (x64_minsd x y) (x64_minsd_a x y))
+(rule (x64_minsd src1 src2) (x64_minsd_a_or_avx src1 src2))
 
-;; Helper for creating `minps` instructions.
 (decl x64_minps (Xmm XmmMem) Xmm)
-(rule 1 (x64_minps x y)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vminps) x y))
-(rule 0 (x64_minps x y) (x64_minps_a x y))
+(rule (x64_minps src1 src2) (x64_minps_a_or_avx src1 src2))
 
-;; Helper for creating `minpd` instructions.
 (decl x64_minpd (Xmm XmmMem) Xmm)
-(rule 1 (x64_minpd x y)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vminpd) x y))
-(rule 0 (x64_minpd x y) (x64_minpd_a x y))
+(rule (x64_minpd src1 src2) (x64_minpd_a_or_avx src1 src2))
 
-;; Helper for creating `maxss` instructions.
 (decl x64_maxss (Xmm XmmMem) Xmm)
-(rule 1 (x64_maxss x y)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vmaxss) x y))
-(rule 0 (x64_maxss x y) (x64_maxss_a x y))
+(rule (x64_maxss src1 src2) (x64_maxss_a_or_avx src1 src2))
 
-;; Helper for creating `maxsd` instructions.
 (decl x64_maxsd (Xmm XmmMem) Xmm)
-(rule 1 (x64_maxsd x y)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vmaxsd) x y))
-(rule 0 (x64_maxsd x y) (x64_maxsd_a x y))
+(rule (x64_maxsd src1 src2) (x64_maxsd_a_or_avx src1 src2))
 
-;; Helper for creating `maxps` instructions.
 (decl x64_maxps (Xmm XmmMem) Xmm)
-(rule 1 (x64_maxps x y)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vmaxps) x y))
-(rule 0 (x64_maxps x y) (x64_maxps_a x y))
+(rule (x64_maxps src1 src2) (x64_maxps_a_or_avx src1 src2))
 
-;; Helper for creating `maxpd` instructions.
 (decl x64_maxpd (Xmm XmmMem) Xmm)
-(rule 1 (x64_maxpd x y)
-      (if-let true (use_avx))
-      (xmm_rmir_vex (AvxOpcode.Vmaxpd) x y))
-(rule 0 (x64_maxpd x y) (x64_maxpd_a x y))
+(rule (x64_maxpd src1 src2) (x64_maxpd_a_or_avx src1 src2))
 
 ;; Helper for creating `vfmadd213*` instructions
 (decl x64_vfmadd213 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfmadd213 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd213ss) a b c))
-(rule (x64_vfmadd213 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd213sd) a b c))
-(rule (x64_vfmadd213 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd213ps) a b c))
-(rule (x64_vfmadd213 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd213pd) a b c))
+(rule (x64_vfmadd213 $F32 a b c)   (x64_vfmadd213ss_a a b c))
+(rule (x64_vfmadd213 $F64 a b c)   (x64_vfmadd213sd_a a b c))
+(rule (x64_vfmadd213 $F32X4 a b c) (x64_vfmadd213ps_a a b c))
+(rule (x64_vfmadd213 $F64X2 a b c) (x64_vfmadd213pd_a a b c))
 
 ;; Helper for creating `vfmadd132*` instructions
 (decl x64_vfmadd132 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfmadd132 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd132ss) a b c))
-(rule (x64_vfmadd132 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd132sd) a b c))
-(rule (x64_vfmadd132 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd132ps) a b c))
-(rule (x64_vfmadd132 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmadd132pd) a b c))
+(rule (x64_vfmadd132 $F32 a b c)   (x64_vfmadd132ss_a a b c))
+(rule (x64_vfmadd132 $F64 a b c)   (x64_vfmadd132sd_a a b c))
+(rule (x64_vfmadd132 $F32X4 a b c) (x64_vfmadd132ps_a a b c))
+(rule (x64_vfmadd132 $F64X2 a b c) (x64_vfmadd132pd_a a b c))
 
 ;; Helper for creating `vfnmadd213*` instructions
 (decl x64_vfnmadd213 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfnmadd213 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd213ss) a b c))
-(rule (x64_vfnmadd213 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd213sd) a b c))
-(rule (x64_vfnmadd213 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd213ps) a b c))
-(rule (x64_vfnmadd213 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd213pd) a b c))
+(rule (x64_vfnmadd213 $F32 a b c)   (x64_vfnmadd213ss_a a b c))
+(rule (x64_vfnmadd213 $F64 a b c)   (x64_vfnmadd213sd_a a b c))
+(rule (x64_vfnmadd213 $F32X4 a b c) (x64_vfnmadd213ps_a a b c))
+(rule (x64_vfnmadd213 $F64X2 a b c) (x64_vfnmadd213pd_a a b c))
 
 ;; Helper for creating `vfnmadd132*` instructions
 (decl x64_vfnmadd132 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfnmadd132 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132ss) a b c))
-(rule (x64_vfnmadd132 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132sd) a b c))
-(rule (x64_vfnmadd132 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132ps) a b c))
-(rule (x64_vfnmadd132 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmadd132pd) a b c))
+(rule (x64_vfnmadd132 $F32 a b c)   (x64_vfnmadd132ss_a a b c))
+(rule (x64_vfnmadd132 $F64 a b c)   (x64_vfnmadd132sd_a a b c))
+(rule (x64_vfnmadd132 $F32X4 a b c) (x64_vfnmadd132ps_a a b c))
+(rule (x64_vfnmadd132 $F64X2 a b c) (x64_vfnmadd132pd_a a b c))
 
 ;; Helper for creating `vfmsub213*` instructions
 (decl x64_vfmsub213 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfmsub213 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub213ss) a b c))
-(rule (x64_vfmsub213 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub213sd) a b c))
-(rule (x64_vfmsub213 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub213ps) a b c))
-(rule (x64_vfmsub213 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub213pd) a b c))
+(rule (x64_vfmsub213 $F32 a b c)   (x64_vfmsub213ss_a a b c))
+(rule (x64_vfmsub213 $F64 a b c)   (x64_vfmsub213sd_a a b c))
+(rule (x64_vfmsub213 $F32X4 a b c) (x64_vfmsub213ps_a a b c))
+(rule (x64_vfmsub213 $F64X2 a b c) (x64_vfmsub213pd_a a b c))
 
 ;; Helper for creating `vfmsub132*` instructions
 (decl x64_vfmsub132 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfmsub132 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub132ss) a b c))
-(rule (x64_vfmsub132 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub132sd) a b c))
-(rule (x64_vfmsub132 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub132ps) a b c))
-(rule (x64_vfmsub132 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfmsub132pd) a b c))
+(rule (x64_vfmsub132 $F32 a b c)   (x64_vfmsub132ss_a a b c))
+(rule (x64_vfmsub132 $F64 a b c)   (x64_vfmsub132sd_a a b c))
+(rule (x64_vfmsub132 $F32X4 a b c) (x64_vfmsub132ps_a a b c))
+(rule (x64_vfmsub132 $F64X2 a b c) (x64_vfmsub132pd_a a b c))
 
 ;; Helper for creating `vfnmsub213*` instructions
 (decl x64_vfnmsub213 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfnmsub213 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub213ss) a b c))
-(rule (x64_vfnmsub213 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub213sd) a b c))
-(rule (x64_vfnmsub213 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub213ps) a b c))
-(rule (x64_vfnmsub213 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub213pd) a b c))
+(rule (x64_vfnmsub213 $F32 a b c)   (x64_vfnmsub213ss_a a b c))
+(rule (x64_vfnmsub213 $F64 a b c)   (x64_vfnmsub213sd_a a b c))
+(rule (x64_vfnmsub213 $F32X4 a b c) (x64_vfnmsub213ps_a a b c))
+(rule (x64_vfnmsub213 $F64X2 a b c) (x64_vfnmsub213pd_a a b c))
 
 ;; Helper for creating `vfnmsub132*` instructions
 (decl x64_vfnmsub132 (Type Xmm Xmm XmmMem) Xmm)
-(rule (x64_vfnmsub132 $F32 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub132ss) a b c))
-(rule (x64_vfnmsub132 $F64 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub132sd) a b c))
-(rule (x64_vfnmsub132 $F32X4 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub132ps) a b c))
-(rule (x64_vfnmsub132 $F64X2 a b c) (xmm_rmr_vex3 (AvxOpcode.Vfnmsub132pd) a b c))
+(rule (x64_vfnmsub132 $F32 a b c)   (x64_vfnmsub132ss_a a b c))
+(rule (x64_vfnmsub132 $F64 a b c)   (x64_vfnmsub132sd_a a b c))
+(rule (x64_vfnmsub132 $F32X4 a b c) (x64_vfnmsub132ps_a a b c))
+(rule (x64_vfnmsub132 $F64X2 a b c) (x64_vfnmsub132pd_a a b c))
 
 ;; Note, the `vfmsub231` and `vfnmsub231*` instructions are omitted, because
 ;; instruction selection happens before register allocation and therefore there
@@ -3997,35 +3038,48 @@
 ;; a data-dependency on the contents of the first register which is modeled
 ;; here.
 (decl x64_sqrtss (Xmm XmmMem) Xmm)
-(rule 1 (x64_sqrtss x y)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vsqrtss) x y))
-(rule 0 (x64_sqrtss x y) (x64_sqrtss_a x y))
+(rule (x64_sqrtss x y) (x64_sqrtss_a_or_avx x y))
 
 ;; Helper for creating `sqrtsd` instructions.
 ;;
 ;; NB: see `x64_sqrtss` for explanation of why this has two args.
 (decl x64_sqrtsd (Xmm XmmMem) Xmm)
-(rule 1 (x64_sqrtsd x y)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vsqrtsd) x y))
-(rule 0 (x64_sqrtsd x y) (x64_sqrtsd_a x y))
+(rule 0 (x64_sqrtsd x y) (x64_sqrtsd_a_or_avx x y))
 
 ;; Helper for creating `sqrtps` instructions.
 (decl x64_sqrtps (XmmMem) Xmm)
-(rule 1 (x64_sqrtps x)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtps) x))
-(rule 0 (x64_sqrtps x)
-      (x64_sqrtps_a x))
+(rule (x64_sqrtps x) (x64_sqrtps_a_or_avx x))
 
 ;; Helper for creating `sqrtpd` instructions.
 (decl x64_sqrtpd (XmmMem) Xmm)
-(rule 1 (x64_sqrtpd x)
-        (if-let true (use_avx))
-        (xmm_unary_rm_r_vex (AvxOpcode.Vsqrtpd) x))
-(rule 0 (x64_sqrtpd x)
-      (x64_sqrtpd_a x))
+(rule (x64_sqrtpd x) (x64_sqrtpd_a_or_avx x))
+
+;; Helper for creating `reciprocal` instructions.
+;;
+;; Helper for creating `rcpps` instructions.
+(decl x64_rcpps (XmmMem) Xmm)
+(rule (x64_rcpps x) (x64_rcpps_rm_or_avx x))
+
+;; Helper for creating `rcpss` instructions.
+(decl x64_rcpss (XmmMem) Xmm)
+(rule (x64_rcpss x) (x64_rcpss_rm x))
+
+;; Helper for creating `vrsqrtss` instructions.
+(decl x64_vrcpss (Xmm XmmMem) Xmm)
+(rule (x64_vrcpss x y) (x64_vrcpss_rvm x y))
+
+;; Helper for creating `rsqrtps` instructions.
+(decl x64_rsqrtps (XmmMem) Xmm)
+(rule (x64_rsqrtps x) (x64_rsqrtps_rm_or_avx x))
+
+;; Helper for creating `rsqrtss` instructions.
+(decl x64_rsqrtss (XmmMem) Xmm)
+(rule (x64_rsqrtss x) (x64_rsqrtss_rm x))
+
+;; Helper for creating `vrsqrtss` instructions.
+(decl x64_vrsqrtss (Xmm XmmMem) Xmm)
+(rule (x64_vrsqrtss x y) (x64_vrsqrtss_rvm x y))
+
 
 ;; Helper for creating `cvtss2sd` instructions.
 ;;
@@ -4128,38 +3182,35 @@
                (cmp32_swapped Xmm (x64_pshufd cmp32 0b10_11_00_01)))
             (x64_pand cmp32 cmp32_swapped)))
 
+;; Helpers for creating `pcmpeq*` instructions.
 (decl x64_pcmpeqb (Xmm XmmMem) Xmm)
-(rule 1 (x64_pcmpeqb x y)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpcmpeqb) x y))
-(rule 0 (x64_pcmpeqb x y) (x64_pcmpeqb_a x y))
+(rule (x64_pcmpeqb x y) (x64_pcmpeqb_a_or_avx x y))
+
 (decl x64_pcmpeqw (Xmm XmmMem) Xmm)
-(rule 1 (x64_pcmpeqw x y)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpcmpeqw) x y))
-(rule 0 (x64_pcmpeqw x y) (x64_pcmpeqw_a x y))
+(rule (x64_pcmpeqw x y) (x64_pcmpeqw_a_or_avx x y))
+
 (decl x64_pcmpeqd (Xmm XmmMem) Xmm)
-(rule 1 (x64_pcmpeqd x y)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpcmpeqd) x y))
-(rule 0 (x64_pcmpeqd x y) (x64_pcmpeqd_a x y))
+(rule (x64_pcmpeqd x y) (x64_pcmpeqd_a_or_avx x y))
+
 (decl x64_pcmpeqq (Xmm XmmMem) Xmm)
-(rule 1 (x64_pcmpeqq x y)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpcmpeqq) x y))
-(rule 0 (x64_pcmpeqq x y) (x64_pcmpeqq_a x y))
+(rule (x64_pcmpeqq x y) (x64_pcmpeqq_a_or_avx x y))
 
 ;; Helpers for creating `pcmpgt*` instructions.
 (decl x64_pcmpgt (Type Xmm XmmMem) Xmm)
-(rule (x64_pcmpgt $I8X16 x y) (x64_pcmpgtb x y))
-(rule (x64_pcmpgt $I16X8 x y) (x64_pcmpgtw x y))
-(rule (x64_pcmpgt $I32X4 x y) (x64_pcmpgtd x y))
+(rule (x64_pcmpgt $I8X16 x y) (x64_pcmpgtb_a_or_avx x y))
+(rule (x64_pcmpgt $I16X8 x y) (x64_pcmpgtw_a_or_avx x y))
+(rule (x64_pcmpgt $I32X4 x y) (x64_pcmpgtd_a_or_avx x y))
 
-;; SSE4.2 gives a single-instruction for this lowering, but prior to that it's a
-;; bit more complicated.
+;; AVX has a single-instruction lowering; we do not use the `or_avx` suffix so
+;; we can match a non-AVX/SSE4.2 below.
+(rule 2 (x64_pcmpgt $I64X2 x y)
+        (if-let true (use_avx))
+        (x64_vpcmpgtq_b x y))
+;; SSE4.2 also gives a single-instruction for this lowering, but prior to that
+;; it's a bit more complicated.
 (rule 1 (x64_pcmpgt $I64X2 x y)
         (if-let true (use_sse42))
-        (x64_pcmpgtq x y))
+        (x64_pcmpgtq_a x y))
 
 ;; Without SSE4.2 a 64-bit comparison is expanded to a number of instructions.
 ;; The basic idea is to delegate to a 32-bit comparison and work with the
@@ -4191,7 +3242,7 @@
             (mask Xmm (x64_movdqu_load (emit_u128_le_const 0x00000000_80000000_00000000_80000000)))
             (x_masked           Xmm (x64_pxor mask x))
             (y_masked           Xmm (x64_pxor mask y))
-            (cmp32              Xmm (x64_pcmpgtd x_masked y_masked))
+            (cmp32              Xmm (x64_pcmpgtd_a x_masked y_masked))
             (low_halves_gt      Xmm (x64_pshufd cmp32 0xa0))
             (high_halves_gt     Xmm (x64_pshufd cmp32 0xf5))
             (cmp_eq             Xmm (x64_pcmpeqd x_masked y_masked))
@@ -4199,27 +3250,6 @@
             (low_gt_and_high_eq Xmm (x64_pand low_halves_gt high_halves_eq))
           )
           (x64_por low_gt_and_high_eq high_halves_gt)))
-
-(decl x64_pcmpgtb (Xmm XmmMem) Xmm)
-(rule 1 (x64_pcmpgtb x y)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpcmpgtb) x y))
-(rule 0 (x64_pcmpgtb x y) (x64_pcmpgtb_a x y))
-(decl x64_pcmpgtw (Xmm XmmMem) Xmm)
-(rule 1 (x64_pcmpgtw x y)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpcmpgtw) x y))
-(rule 0 (x64_pcmpgtw x y) (x64_pcmpgtw_a x y))
-(decl x64_pcmpgtd (Xmm XmmMem) Xmm)
-(rule 1 (x64_pcmpgtd x y)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpcmpgtd) x y))
-(rule 0 (x64_pcmpgtd x y) (x64_pcmpgtd_a x y))
-(decl x64_pcmpgtq (Xmm XmmMem) Xmm)
-(rule 1 (x64_pcmpgtq x y)
-        (if-let true (use_avx))
-        (xmm_rmir_vex (AvxOpcode.Vpcmpgtq) x y))
-(rule 0 (x64_pcmpgtq x y) (x64_pcmpgtq_a x y))
 
 (decl x64_add_mem (Type Amode Value) SideEffectNoResult)
 (spec (x64_add_mem ty addr val)
@@ -4243,14 +3273,9 @@
 (rule 1 (x64_add_mem $I8 addr (u8_from_iconst val)) (x64_addb_mi_mem addr val))
 (rule 1 (x64_add_mem $I16 addr (u16_from_iconst val)) (x64_addw_mi_mem addr val))
 (rule 1 (x64_add_mem $I32 addr (u32_from_iconst val)) (x64_addl_mi_mem addr val))
-(rule 1 (x64_add_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i32_try_from_i64 val))
-      (x64_addq_mi_sxl_mem addr val2))
-(rule 2 (x64_add_mem $I32 addr (i32_from_iconst (i8_try_from_i32 val)))
-      (x64_addl_mi_sxb_mem addr val))
-(rule 2 (x64_add_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i8_try_from_i64 val))
-      (x64_addq_mi_sxb_mem addr val2))
+(rule 1 (x64_add_mem $I64 addr (i32_from_iconst val)) (x64_addq_mi_sxl_mem addr val))
+(rule 2 (x64_add_mem $I32 addr (i8_from_iconst val)) (x64_addl_mi_sxb_mem addr val))
+(rule 2 (x64_add_mem $I64 addr (i8_from_iconst val)) (x64_addq_mi_sxb_mem addr val))
 
 (decl x64_sub_mem (Type Amode Value) SideEffectNoResult)
 
@@ -4264,14 +3289,9 @@
 (rule 1 (x64_sub_mem $I8 addr (u8_from_iconst val)) (x64_subb_mi_mem addr val))
 (rule 1 (x64_sub_mem $I16 addr (u16_from_iconst val)) (x64_subw_mi_mem addr val))
 (rule 1 (x64_sub_mem $I32 addr (u32_from_iconst val)) (x64_subl_mi_mem addr val))
-(rule 1 (x64_sub_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i32_try_from_i64 val))
-      (x64_subq_mi_sxl_mem addr val2))
-(rule 2 (x64_sub_mem $I32 addr (i32_from_iconst (i8_try_from_i32 val)))
-      (x64_subl_mi_sxb_mem addr val))
-(rule 2 (x64_sub_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i8_try_from_i64 val))
-      (x64_subq_mi_sxb_mem addr val2))
+(rule 1 (x64_sub_mem $I64 addr (i32_from_iconst val)) (x64_subq_mi_sxl_mem addr val))
+(rule 2 (x64_sub_mem $I32 addr (i8_from_iconst val)) (x64_subl_mi_sxb_mem addr val))
+(rule 2 (x64_sub_mem $I64 addr (i8_from_iconst val)) (x64_subq_mi_sxb_mem addr val))
 
 (decl x64_and_mem (Type Amode Value) SideEffectNoResult)
 
@@ -4287,14 +3307,9 @@
 (rule 1 (x64_and_mem $I8 addr (u8_from_iconst val)) (x64_andb_mi_mem addr val))
 (rule 1 (x64_and_mem $I16 addr (u16_from_iconst val)) (x64_andw_mi_mem addr val))
 (rule 1 (x64_and_mem $I32 addr (u32_from_iconst val)) (x64_andl_mi_mem addr val))
-(rule 1 (x64_and_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i32_try_from_i64 val))
-      (x64_andq_mi_sxl_mem addr val2))
-(rule 2 (x64_and_mem $I32 addr (i32_from_iconst (i8_try_from_i32 val)))
-      (x64_andl_mi_sxb_mem addr val))
-(rule 2 (x64_and_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i8_try_from_i64 val))
-      (x64_andq_mi_sxb_mem addr val2))
+(rule 1 (x64_and_mem $I64 addr (i32_from_iconst val)) (x64_andq_mi_sxl_mem addr val))
+(rule 2 (x64_and_mem $I32 addr (i8_from_iconst val)) (x64_andl_mi_sxb_mem addr val))
+(rule 2 (x64_and_mem $I64 addr (i8_from_iconst val)) (x64_andq_mi_sxb_mem addr val))
 
 (decl x64_or_mem (Type Amode Value) SideEffectNoResult)
 
@@ -4310,14 +3325,9 @@
 (rule 1 (x64_or_mem $I8 addr (u8_from_iconst val)) (x64_orb_mi_mem addr val))
 (rule 1 (x64_or_mem $I16 addr (u16_from_iconst val)) (x64_orw_mi_mem addr val))
 (rule 1 (x64_or_mem $I32 addr (u32_from_iconst val)) (x64_orl_mi_mem addr val))
-(rule 1 (x64_or_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i32_try_from_i64 val))
-      (x64_orq_mi_sxl_mem addr val2))
-(rule 2 (x64_or_mem $I32 addr (i32_from_iconst (i8_try_from_i32 val)))
-      (x64_orl_mi_sxb_mem addr val))
-(rule 2 (x64_or_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i8_try_from_i64 val))
-      (x64_orq_mi_sxb_mem addr val2))
+(rule 1 (x64_or_mem $I64 addr (i32_from_iconst val)) (x64_orq_mi_sxl_mem addr val))
+(rule 2 (x64_or_mem $I32 addr (i8_from_iconst val)) (x64_orl_mi_sxb_mem addr val))
+(rule 2 (x64_or_mem $I64 addr (i8_from_iconst val)) (x64_orq_mi_sxb_mem addr val))
 
 (decl x64_xor_mem (Type Amode Value) SideEffectNoResult)
 
@@ -4333,14 +3343,9 @@
 (rule 1 (x64_xor_mem $I8 addr (u8_from_iconst val)) (x64_xorb_mi_mem addr val))
 (rule 1 (x64_xor_mem $I16 addr (u16_from_iconst val)) (x64_xorw_mi_mem addr val))
 (rule 1 (x64_xor_mem $I32 addr (u32_from_iconst val)) (x64_xorl_mi_mem addr val))
-(rule 1 (x64_xor_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i32_try_from_i64 val))
-      (x64_xorq_mi_sxl_mem addr val2))
-(rule 2 (x64_xor_mem $I32 addr (i32_from_iconst (i8_try_from_i32 val)))
-      (x64_xorl_mi_sxb_mem addr val))
-(rule 2 (x64_xor_mem $I64 addr (i64_from_iconst val))
-      (if-let val2 (i8_try_from_i64 val))
-      (x64_xorq_mi_sxb_mem addr val2))
+(rule 1 (x64_xor_mem $I64 addr (i32_from_iconst val)) (x64_xorq_mi_sxl_mem addr val))
+(rule 2 (x64_xor_mem $I32 addr (i8_from_iconst val)) (x64_xorl_mi_sxb_mem addr val))
+(rule 2 (x64_xor_mem $I64 addr (i8_from_iconst val)) (x64_xorq_mi_sxb_mem addr val))
 
 ;; Trap if the condition code supplied is set.
 (decl trap_if (CC TrapCode) ConsumesFlags)
@@ -4357,42 +3362,6 @@
 (rule (trap_if_or cc1 cc2 tc)
       (ConsumesFlags.ConsumesFlagsSideEffect (MInst.TrapIfOr cc1 cc2 tc)))
 
-(decl trap_if_icmp (IcmpCondResult TrapCode) SideEffectNoResult)
-(rule (trap_if_icmp (IcmpCondResult.Condition producer cc) tc)
-      (with_flags_side_effect producer (trap_if cc tc)))
-
-(decl trap_if_fcmp (FcmpCondResult TrapCode) SideEffectNoResult)
-(rule (trap_if_fcmp (FcmpCondResult.Condition producer cc) tc)
-      (with_flags_side_effect producer (trap_if cc tc)))
-(rule (trap_if_fcmp (FcmpCondResult.AndCondition producer cc1 cc2) tc)
-      (with_flags_side_effect producer (trap_if_and cc1 cc2 tc)))
-(rule (trap_if_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) tc)
-      (with_flags_side_effect producer (trap_if_or cc1 cc2 tc)))
-
-;; Trap if zero/not zero
-(type ZeroCond
-      (enum
-       Zero
-       NonZero))
-
-(decl zero_cond_to_cc (ZeroCond) CC)
-(rule (zero_cond_to_cc (ZeroCond.Zero)) (CC.Z))
-(rule (zero_cond_to_cc (ZeroCond.NonZero)) (CC.NZ))
-
-(decl trap_if_val (ZeroCond Value TrapCode) SideEffectNoResult)
-(rule (trap_if_val zero_cond a @ (value_type (fits_in_64 ty)) tc)
-  (let ((size OperandSize (raw_operand_size_of_type ty))
-        (a Gpr (put_in_reg a))
-        (producer ProducesFlags (x64_test size a a)))
-        (with_flags_side_effect producer (trap_if (zero_cond_to_cc zero_cond) tc))))
-
-(rule 1 (trap_if_val zero_cond a @ (value_type $I128) tc)
-  (let ((a_lo Gpr (value_regs_get_gpr a 0))
-        (a_hi Gpr (value_regs_get_gpr a 1))
-        (a_or Gpr (x64_or $I64 a_hi a_lo))
-        (producer ProducesFlags (x64_test (OperandSize.Size64) a_or a_or)))
-        (with_flags_side_effect producer (trap_if (zero_cond_to_cc zero_cond) tc))))
-
 ;; Helper for creating `movddup` instructions
 (decl x64_movddup (XmmMem) Xmm)
 (rule (x64_movddup src) (x64_movddup_a src))
@@ -4400,25 +3369,19 @@
         (if-let true (use_avx))
         (x64_vmovddup_a src))
 
-;; Helper for creating `vpbroadcastb` instructions
+;; Helpers for creating `vpbroadcast*` instructions.
 (decl x64_vpbroadcastb (XmmMem) Xmm)
-(rule (x64_vpbroadcastb src)
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpbroadcastb) src))
+(rule (x64_vpbroadcastb src) (x64_vpbroadcastb_a src))
 
-;; Helper for creating `vpbroadcastw` instructions
 (decl x64_vpbroadcastw (XmmMem) Xmm)
-(rule (x64_vpbroadcastw src)
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpbroadcastw) src))
+(rule (x64_vpbroadcastw src) (x64_vpbroadcastw_a src))
 
-;; Helper for creating `vpbroadcastd` instructions
 (decl x64_vpbroadcastd (XmmMem) Xmm)
-(rule (x64_vpbroadcastd src)
-      (xmm_unary_rm_r_vex (AvxOpcode.Vpbroadcastd) src))
+(rule (x64_vpbroadcastd src) (x64_vpbroadcastd_a src))
 
-;; Helper for creating `vbroadcastss` instructions
 (decl x64_vbroadcastss (XmmMem) Xmm)
-(rule (x64_vbroadcastss src)
-      (xmm_unary_rm_r_vex (AvxOpcode.Vbroadcastss) src))
+(rule 1 (x64_vbroadcastss (is_xmm src)) (x64_vbroadcastss_a_r src))
+(rule 0 (x64_vbroadcastss (is_mem src)) (x64_vbroadcastss_a_m src))
 
 ;;;; Jumps ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -4437,21 +3400,13 @@
 (rule (jmp_cond_or cc1 cc2 taken not_taken)
       (ConsumesFlags.ConsumesFlagsSideEffect (MInst.JmpCondOr cc1 cc2 taken not_taken)))
 
-;; Conditional jump based on the result of an icmp.
-(decl jmp_cond_icmp (IcmpCondResult MachLabel MachLabel) SideEffectNoResult)
-(rule (jmp_cond_icmp (IcmpCondResult.Condition producer cc) taken not_taken)
+;; Conditional jump based on a `CondResult`
+(decl jmp_cond_result (CondResult MachLabel MachLabel) SideEffectNoResult)
+(rule (jmp_cond_result (CondResult.CC producer cc) taken not_taken)
       (with_flags_side_effect producer (jmp_cond cc taken not_taken)))
-
-;; Conditional jump based on the result of an fcmp.
-(decl jmp_cond_fcmp (FcmpCondResult MachLabel MachLabel) SideEffectNoResult)
-(rule (jmp_cond_fcmp (FcmpCondResult.Condition producer cc) taken not_taken)
-      (with_flags_side_effect producer (jmp_cond cc taken not_taken)))
-(rule (jmp_cond_fcmp (FcmpCondResult.AndCondition producer cc1 cc2) taken not_taken)
-      (with_flags_side_effect producer
-                              ;; DeMorgan's rule: to get cc1 AND cc2, we do NOT (NOT cc1 OR NOT cc2).
-                              ;; The outer NOT comes from flipping `not_taken` and `taken`.
-                              (jmp_cond_or (cc_invert cc1) (cc_invert cc2) not_taken taken)))
-(rule (jmp_cond_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) taken not_taken)
+(rule (jmp_cond_result cond @ (CondResult.And _ _ _) taken not_taken)
+      (jmp_cond_result (cond_invert cond) not_taken taken))
+(rule (jmp_cond_result (CondResult.Or producer cc1 cc2) taken not_taken)
       (with_flags_side_effect producer
                               (jmp_cond_or cc1 cc2 taken not_taken)))
 
@@ -4486,58 +3441,141 @@
 
 ;;;; Comparisons ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(type IcmpCondResult (enum (Condition (producer ProducesFlags) (cc CC))))
+;; Representation of the result of a conditional instruction.
+;;
+;; Each variant here has what produces some condition flags in addition to
+;; what condition code is being tested as a result of whatever produced the
+;; flags.
+;;
+;; This type is intended to be a "narrow waist" for anything producing a
+;; conditional which `icmp` might flow into for example. The `is_nonzero_cmp`
+;; constructor is the main constructor of this type which takes any arbitrary
+;; value used in a conditional-like location. There are further refined
+;; constructors such as `emit_{cmp,fcmp}` which work specifically on the shapes
+;; of `icmp` and `fcmp` CLIF instructions. Everything produces this type, and
+;; then decisions about what instructions to emit flow from this type.
+(type CondResult
+      (enum
+        ;; The given condition code must be set.
+        (CC (producer ProducesFlags) (cc CC))
 
-(decl icmp_cond_result (ProducesFlags CC) IcmpCondResult)
-(rule (icmp_cond_result producer cc) (IcmpCondResult.Condition producer cc))
+        ;; Both condition codes must be set.
+        (And (producer ProducesFlags) (cc1 CC) (cc2 CC))
 
-(decl invert_icmp_cond_result (IcmpCondResult) IcmpCondResult)
-(rule (invert_icmp_cond_result (IcmpCondResult.Condition producer cc))
-      (icmp_cond_result producer (cc_invert cc)))
+        ;; Either of the conditions codes must be set.
+        (Or (producer ProducesFlags) (cc1 CC) (cc2 CC))))
 
-;; Lower an Icmp result into a boolean value in a register.
-(decl lower_icmp_bool (IcmpCondResult) ValueRegs)
-(rule (lower_icmp_bool (IcmpCondResult.Condition producer cc))
-      (with_flags producer (x64_setcc cc)))
+;; Inverts a `CondResult` to have the opposite meaning.
+(decl cond_invert (CondResult) CondResult)
+(rule (cond_invert (CondResult.CC flags cc)) (CondResult.CC flags (cc_invert cc)))
+(rule (cond_invert (CondResult.Or flags cc1 cc2)) (CondResult.And flags (cc_invert cc1) (cc_invert cc2)))
+(rule (cond_invert (CondResult.And flags cc1 cc2)) (CondResult.Or flags (cc_invert cc1) (cc_invert cc2)))
 
-;; Emit a conditional move based on the result of an icmp.
-(decl select_icmp (IcmpCondResult Value Value) ValueRegs)
+;; Converts a `Value` to a `CondResult` with the condition being tested if
+;; `Value` is nonzero.
+;;
+;; Note that this is used as the base entry case for instruction lowering such
+;; as `select` and `brif`. The `Value` here is expected to, via CLIF validation,
+;; have an integer type (and it can be I128)
+(decl is_nonzero_cmp (Value) CondResult)
 
-;; Ensure that we put the `x` argument into a register for single-register
-;; gpr-typed arguments, as we rely on this for the legalization of heap_addr and
-;; loading easily computed constants (like 0) from memory is too expensive.
-(rule 1 (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type (is_single_register_gpr_type ty)) y)
-      (with_flags producer (cmove ty cc (put_in_gpr x) y)))
+;; Base case: fits in one GPR, use `x64_test`
+(rule (is_nonzero_cmp val @ (value_type (is_single_register_gpr_type ty)))
+  (let ((gpr Gpr val)) (CondResult.CC (x64_test ty gpr gpr) (CC.NZ))))
 
-;; Otherwise, fall back on the behavior of `cmove_from_values`.
-(rule 0 (select_icmp (IcmpCondResult.Condition producer cc) x @ (value_type ty) y)
-      (with_flags producer (cmove_from_values ty cc x y)))
+;; Base case: i128
+(rule 1 (is_nonzero_cmp val @ (value_type $I128))
+      (let ((lo Gpr (value_regs_get_gpr val 0))
+            (hi Gpr (value_regs_get_gpr val 1)))
+          (CondResult.CC
+            (x64_produce_flags_side_effect (ProduceFlagsSideEffectOp.Or) $I64 lo hi)
+            (CC.NZ))))
 
-(decl emit_cmp (IntCC Value Value) IcmpCondResult)
+;; Special case some instructions where lowerings directly produce condition
+;; codes.
+(rule 2 (is_nonzero_cmp (fcmp cc a b)) (emit_fcmp cc a b))
+(rule 2 (is_nonzero_cmp (icmp cc a b)) (emit_cmp cc a b))
+(rule 2 (is_nonzero_cmp (vall_true vec)) (is_vall_true vec))
+(rule 2 (is_nonzero_cmp (vany_true vec)) (is_vany_true vec))
+(rule 2 (is_nonzero_cmp (uextend val)) (is_nonzero_cmp val))
+(rule 2 (is_nonzero_cmp (band a @ (value_type (ty_int (fits_in_64 ty))) b))
+  (is_nonzero_band ty a b))
 
-;; For GPR-held values we only need to emit `CMP + SETCC`. We rely here on
-;; Cranelift's verification that `a` and `b` are of the same type.
-(rule 0 (emit_cmp cc a @ (value_type ty) b)
-      (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (icmp_cond_result (x64_cmp size a b) cc)))
+(decl is_nonzero_band (Type Value Value) CondResult)
+(rule 0 (is_nonzero_band ty a b) (CondResult.CC (x64_test ty a b) (CC.NZ)))
+
+;; If a value is and'd with an immediate that has exactly one bit set then this
+;; can pattern-match to the native `bt` instruction. Note that to have the
+;; same semantics this requires that `a` is in a register which forces `bt` to
+;; use modulo semantics for the second operand `b`, thus `put_in_gpr` is
+;; manually used.
+(rule 1 (is_nonzero_band (ty_32_or_64 ty) a (ishl (u64_from_iconst 1) b))
+  (CondResult.CC (x64_bt ty (put_in_gpr a) b) (CC.B)))
+
+;; If a value is and'd one shifted by a variable value that matches `bt` as
+;; well.
+(rule 1 (is_nonzero_band $I64 a (u64_from_iconst (bt_imm n)))
+  (CondResult.CC (x64_bt_imm $I64 a n) (CC.B)))
+
+;; If what we're testing against is a 32-bit integer then this is a candidate
+;; for both the `test` and `bt` instructions (only `bt` if the integer as one
+;; bit set). According to [1] the `test` instruction has a higher throughput
+;; at least historically than the `bt` instruction so here `test` is explicitly
+;; favored over `bt`, even if `bt` were applicable. Note that LLVM also looks to
+;; favor `bt` as well.
+;;
+;; [1]: https://github.com/bytecodealliance/wasmtime/pull/11128#discussion_r2164888415
+(rule 2 (is_nonzero_band ty a b @ (i32_from_iconst _))
+  (CondResult.CC (x64_test ty a b) (CC.NZ)))
+
+;; Helper to test whether the `u64` input has a single bit set, and if so
+;; yields the bit position of where that bit is set. Used in the lowering of
+;; `x64_bt_imm` above.
+(decl bt_imm (u8) u64)
+(extern extractor bt_imm bt_imm)
+
+;; Lower a CondResult to a boolean value in a register.
+(decl lower_cond_bool (CondResult) Gpr)
+(rule (lower_cond_bool (CondResult.CC producer cc))
+  (value_regs_get_gpr (with_flags producer (x64_setcc cc)) 0))
+(rule (lower_cond_bool (CondResult.And producer cc1 cc2))
+      (let ((maybe ValueRegs (with_flags producer
+                                         (consumes_flags_concat
+                                           (x64_setcc cc1)
+                                           (x64_setcc cc2))))
+            (maybe0 Gpr (value_regs_get_gpr maybe 0))
+            (maybe1 Gpr (value_regs_get_gpr maybe 1)))
+        (x64_and $I8 maybe0 maybe1)))
+(rule (lower_cond_bool (CondResult.Or producer cc1 cc2))
+      (let ((maybe ValueRegs (with_flags producer
+                                         (consumes_flags_concat
+                                           (x64_setcc cc1)
+                                           (x64_setcc cc2))))
+            (maybe0 Gpr (value_regs_get_gpr maybe 0))
+            (maybe1 Gpr (value_regs_get_gpr maybe 1)))
+        (x64_or $I8 maybe0 maybe1)))
+
+;; Helper to transform an `icmp` node into a `CondResult`.
+;;
+;; Note that via CLIF validation the two values here should have the same type.
+(decl emit_cmp (IntCC Value Value) CondResult)
+
+;; For GPR-held values we only need to emit `CMP`.
+(rule 0 (emit_cmp cc a @ (value_type ty) b) (CondResult.CC (x64_cmp ty a b) cc))
 
 ;; As a special case, swap the arguments to the comparison when the LHS is a
 ;; constant. This ensures that we avoid moving the constant into a register when
 ;; performing the comparison.
 (rule 1 (emit_cmp cc (and (simm32_from_value a) (value_type ty)) b)
-      (let ((size OperandSize (raw_operand_size_of_type ty)))
-        (icmp_cond_result (x64_cmp size b a) (intcc_swap_args cc))))
+        (CondResult.CC (x64_cmp ty b a) (intcc_swap_args cc)))
 
 ;; Special case: use the test instruction for comparisons with 0.
 (rule 2 (emit_cmp cc a @ (value_type ty) (u64_from_iconst 0))
-      (let ((size OperandSize (raw_operand_size_of_type ty))
-            (a Gpr (put_in_reg a)))
-        (icmp_cond_result (x64_test size a a) cc)))
-
+      (let ((a Gpr (put_in_reg a)))
+        (CondResult.CC (x64_test ty a a) cc)))
 (rule 3 (emit_cmp cc (u64_from_iconst 0) b @ (value_type ty))
-      (let ((size OperandSize (raw_operand_size_of_type ty))
-            (b Gpr (put_in_reg b)))
-        (icmp_cond_result (x64_test size b b) (intcc_swap_args cc))))
+      (let ((b Gpr (put_in_reg b)))
+        (CondResult.CC (x64_test ty b b) (intcc_swap_args cc))))
 
 ;; For I128 values (held in two GPRs), the instruction sequences depend on what
 ;; kind of condition is tested.
@@ -4548,7 +3586,7 @@
             (b_hi Gpr (value_regs_get_gpr b 1)))
       (emit_cmp_i128 cc a_hi a_lo b_hi b_lo)))
 
-(decl emit_cmp_i128 (CC Gpr Gpr Gpr Gpr) IcmpCondResult)
+(decl emit_cmp_i128 (CC Gpr Gpr Gpr Gpr) CondResult)
 ;; Eliminate cases which compare something "or equal" by swapping arguments.
 (rule 2 (emit_cmp_i128 (CC.NLE) a_hi a_lo b_hi b_lo)
         (emit_cmp_i128 (CC.L)   b_hi b_lo a_hi a_lo))
@@ -4559,12 +3597,19 @@
 (rule 2 (emit_cmp_i128 (CC.BE)  a_hi a_lo b_hi b_lo)
         (emit_cmp_i128 (CC.NB)  b_hi b_lo a_hi a_lo))
 
+;; For direct equality comparisons to zero transform the other operand into a
+;; nonzero comparison and then invert the whole conditional to test for zero.
+(rule 5 (emit_cmp (IntCC.Equal) a (u64_from_iconst 0)) (cond_invert (is_nonzero_cmp a)))
+(rule 6 (emit_cmp (IntCC.Equal) (u64_from_iconst 0) a) (cond_invert (is_nonzero_cmp a)))
+(rule 5 (emit_cmp (IntCC.NotEqual) a (u64_from_iconst 0)) (is_nonzero_cmp a))
+(rule 6 (emit_cmp (IntCC.NotEqual) (u64_from_iconst 0) a) (is_nonzero_cmp a))
+
 ;; 128-bit strict equality/inequality can't be easily tested using subtraction
 ;; but we can quickly determine whether any bits are different instead.
 (rule 1 (emit_cmp_i128 (cc_nz_or_z cc) a_hi a_lo b_hi b_lo)
         (let ((same_lo Reg (x64_xor $I64 a_lo b_lo))
               (same_hi Reg (x64_xor $I64 a_hi b_hi)))
-          (icmp_cond_result
+          (CondResult.CC
             (x64_produce_flags_side_effect (ProduceFlagsSideEffectOp.Or) $I64 same_lo same_hi)
             cc)))
 
@@ -4572,105 +3617,68 @@
 ;; sequence. But since we don't care about anything but the flags we can
 ;; replace the sub with cmp, which avoids clobbering one of the registers.
 (rule 0 (emit_cmp_i128 cc a_hi a_lo b_hi b_lo)
-        (icmp_cond_result
+        (CondResult.CC
           (produces_flags_concat
-            (x64_cmp (OperandSize.Size64) a_lo b_lo)
+            (x64_cmpq_rm a_lo b_lo)
             (x64_produce_flags_side_effect (ProduceFlagsSideEffectOp.Sbb) $I64 a_hi b_hi))
           cc))
 
-(type FcmpCondResult
-      (enum
-        ;; The given condition code must be set.
-        (Condition (producer ProducesFlags) (cc CC))
-
-        ;; Both condition codes must be set.
-        (AndCondition (producer ProducesFlags) (cc1 CC) (cc2 CC))
-
-        ;; Either of the conditions codes must be set.
-        (OrCondition (producer ProducesFlags) (cc1 CC) (cc2 CC))))
-
-;; Lower a FcmpCondResult to a boolean value in a register.
-(decl lower_fcmp_bool (FcmpCondResult) ValueRegs)
-
-(rule (lower_fcmp_bool (FcmpCondResult.Condition producer cc))
-      (with_flags producer (x64_setcc cc)))
-
-(rule (lower_fcmp_bool (FcmpCondResult.AndCondition producer cc1 cc2))
-      (let ((maybe ValueRegs (with_flags producer
-                                         (consumes_flags_concat
-                                           (x64_setcc cc1)
-                                           (x64_setcc cc2))))
-            (maybe0 Gpr (value_regs_get_gpr maybe 0))
-            (maybe1 Gpr (value_regs_get_gpr maybe 1)))
-        (value_reg (x64_and $I8 maybe0 maybe1))))
-
-(rule (lower_fcmp_bool (FcmpCondResult.OrCondition producer cc1 cc2))
-      (let ((maybe ValueRegs (with_flags producer
-                                         (consumes_flags_concat
-                                           (x64_setcc cc1)
-                                           (x64_setcc cc2))))
-            (maybe0 Gpr (value_regs_get_gpr maybe 0))
-            (maybe1 Gpr (value_regs_get_gpr maybe 1)))
-        (value_reg (x64_or $I8 maybe0 maybe1))))
-
 ;; CLIF's `fcmp` instruction always operates on XMM registers--both scalar and
 ;; vector. For the scalar versions, we use the flag-setting behavior of the
-;; `UCOMIS*` instruction to `SETcc` a 0 or 1 in a GPR register. Note that CLIF's
-;; `select` uses the same kind of flag-setting behavior but chooses values other
-;; than 0 or 1.
+;; `UCOMIS*`.
 ;;
 ;; Checking the result of `UCOMIS*` is unfortunately difficult in some cases
-;; because we do not have `SETcc` instructions that explicitly check
-;; simultaneously for the condition (i.e., `eq`, `le`, `gt`, etc.) *and*
-;; orderedness. Instead, we must check the flags multiple times. The UCOMIS*
-;; documentation (see Intel's Software Developer's Manual, volume 2, chapter 4)
+;; because we do not have a single condition code to check for the condition
+;; (i.e., `eq`, `le`, `gt`, etc.) *and* orderedness. Instead, we must check
+;; the flags multiple times. The UCOMIS* documentation (see Intel's Software
+;; Developer's Manual, volume 2, chapter 4)
 ;; is helpful:
 ;;  - unordered assigns    Z = 1, P = 1, C = 1
 ;;  - greater than assigns Z = 0, P = 0, C = 0
 ;;  - less than assigns    Z = 0, P = 0, C = 1
 ;;  - equal assigns        Z = 1, P = 0, C = 0
-(decl emit_fcmp (FloatCC Value Value) FcmpCondResult)
+(decl emit_fcmp (FloatCC Value Value) CondResult)
 
 (rule (emit_fcmp (FloatCC.Equal) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.AndCondition (x64_ucomis ty a b) (CC.NP) (CC.Z)))
+      (CondResult.And (x64_ucomis ty a b) (CC.NP) (CC.Z)))
 
 (rule (emit_fcmp (FloatCC.NotEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.OrCondition (x64_ucomis ty a b) (CC.P) (CC.NZ)))
+      (CondResult.Or (x64_ucomis ty a b) (CC.P) (CC.NZ)))
 
 ;; Some scalar lowerings correspond to one condition code.
 
 (rule (emit_fcmp (FloatCC.Ordered) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NP)))
+      (CondResult.CC (x64_ucomis ty a b) (CC.NP)))
 (rule (emit_fcmp (FloatCC.Unordered) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.P)))
+      (CondResult.CC (x64_ucomis ty a b) (CC.P)))
 (rule (emit_fcmp (FloatCC.OrderedNotEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NZ)))
+      (CondResult.CC (x64_ucomis ty a b) (CC.NZ)))
 (rule (emit_fcmp (FloatCC.UnorderedOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.Z)))
+      (CondResult.CC (x64_ucomis ty a b) (CC.Z)))
 (rule (emit_fcmp (FloatCC.GreaterThan) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NBE)))
+      (CondResult.CC (x64_ucomis ty a b) (CC.NBE)))
 (rule (emit_fcmp (FloatCC.GreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.NB)))
+      (CondResult.CC (x64_ucomis ty a b) (CC.NB)))
 (rule (emit_fcmp (FloatCC.UnorderedOrLessThan) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.B)))
+      (CondResult.CC (x64_ucomis ty a b) (CC.B)))
 (rule (emit_fcmp (FloatCC.UnorderedOrLessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
-      (FcmpCondResult.Condition (x64_ucomis ty a b) (CC.BE)))
+      (CondResult.CC (x64_ucomis ty a b) (CC.BE)))
 
 ;; Other scalar lowerings are made possible by flipping the operands and
 ;; reversing the condition code.
 
 (rule (emit_fcmp (FloatCC.LessThan) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `GreaterThan`.
-      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.NBE)))
+      (CondResult.CC (x64_ucomis ty b a) (CC.NBE)))
 (rule (emit_fcmp (FloatCC.LessThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `GreaterThanOrEqual`.
-      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.NB)))
+      (CondResult.CC (x64_ucomis ty b a) (CC.NB)))
 (rule (emit_fcmp (FloatCC.UnorderedOrGreaterThan) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `UnorderedOrLessThan`.
-      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.B)))
+      (CondResult.CC (x64_ucomis ty b a) (CC.B)))
 (rule (emit_fcmp (FloatCC.UnorderedOrGreaterThanOrEqual) a @ (value_type (ty_scalar_float ty)) b)
       ;; Same flags as `UnorderedOrLessThanOrEqual`.
-      (FcmpCondResult.Condition (x64_ucomis ty b a) (CC.BE)))
+      (CondResult.CC (x64_ucomis ty b a) (CC.BE)))
 
 ;;;; Type Guards ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

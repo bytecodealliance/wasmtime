@@ -781,7 +781,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         val: ir::Value,
         index_type: IndexType,
         // When it is a memory and the memory is using single-byte pages,
-        // we need to handle the tuncation differently. See comments below.
+        // we need to handle the truncation differently. See comments below.
         //
         // When it is a table, this should be set to false.
         single_byte_pages: bool,

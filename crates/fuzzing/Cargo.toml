@@ -21,6 +21,7 @@ env_logger = { workspace = true }
 log = { workspace = true }
 mutatis = { workspace = true }
 rayon = "1.2.1"
+smallvec = { workspace = true }
 target-lexicon = { workspace = true }
 tempfile = "3.3.0"
 wasmparser = { workspace = true }

@@ -1,4 +1,4 @@
-test optimize
+test optimize precise-output
 set opt_level=speed
 target x86_64
 
@@ -8,8 +8,11 @@ block0:
     trapz v0, user42
     return
 }
-; check:  block0:
-; nextln:     return
+
+; function %remove_trapz() fast {
+; block0:
+;     return
+; }
 
 function %remove_trapnz() {
 block0:
@@ -17,8 +20,11 @@ block0:
     trapnz v0, user42
     return
 }
-; check:  block0:
-; nextln:     return
+
+; function %remove_trapnz() fast {
+; block0:
+;     return
+; }
 
 function %cprop_uadd_overflow_trap() -> i64 {
 block0:
@@ -27,8 +33,13 @@ block0:
     v2 = uadd_overflow_trap v0, v1, user42
     return v2
 }
-; check: v3 = iconst.i64 5
-; check: return v3
+
+; function %cprop_uadd_overflow_trap() -> i64 fast {
+; block0:
+;     v3 = iconst.i64 5
+;     v2 -> v3
+;     return v3  ; v3 = 5
+; }
 
 function %uadd_overflow_trap_of_uextends(i32, i32) -> i64 {
 block0(v0: i32, v1: i32):
@@ -37,8 +48,15 @@ block0(v0: i32, v1: i32):
     v4 = uadd_overflow_trap v2, v3, user42
     return v4
 }
-; check: v5 = iadd v2, v3
-; check: return v5
+
+; function %uadd_overflow_trap_of_uextends(i32, i32) -> i64 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = uextend.i64 v0
+;     v3 = uextend.i64 v1
+;     v5 = iadd v2, v3
+;     v4 -> v5
+;     return v5
+; }
 
 ;; Test that if we replace a side effectful instruction with a pure one, we then
 ;; do further rewrites and GVN and all that on the pure instruction.
@@ -52,7 +70,15 @@ block0(v0: i32, v1: i32):
     v7 = uadd_overflow_trap v5, v6, user42
     return v4, v7
 }
-; check: return v4, v4
+
+; function %gvn_after_uadd_overflow_trap_to_iadd(i32, i32) -> i64, i64 fast {
+; block0(v0: i32, v1: i32):
+;     v2 = uextend.i64 v0
+;     v3 = uextend.i64 v1
+;     v4 = iadd v2, v3
+;     v7 -> v4
+;     return v4, v4
+; }
 
 function %cprop_udiv() -> i32 {
 block0:
@@ -61,8 +87,13 @@ block0:
     v2 = udiv v0, v1
     return v2
 }
-; check: v3 = iconst.i32 1
-; check: return v3
+
+; function %cprop_udiv() -> i32 fast {
+; block0:
+;     v18 = iconst.i32 1
+;     v2 -> v18
+;     return v18  ; v18 = 1
+; }
 
 function %cprop_sdiv() -> i32 {
 block0:
@@ -71,8 +102,13 @@ block0:
     v2 = sdiv v0, v1
     return v2
 }
-; check: v3 = iconst.i32 -1
-; check: return v3
+
+; function %cprop_sdiv() -> i32 fast {
+; block0:
+;     v11 = iconst.i32 -1
+;     v2 -> v11
+;     return v11  ; v11 = -1
+; }
 
 function %udiv_by_one(i32) -> i32 {
 block0(v0: i32):
@@ -80,7 +116,12 @@ block0(v0: i32):
     v2 = udiv v0, v1
     return v2
 }
-; check: return v0
+
+; function %udiv_by_one(i32) -> i32 fast {
+; block0(v0: i32):
+;     v2 -> v0
+;     return v0
+; }
 
 function %sdiv_by_one(i32) -> i32 {
 block0(v0: i32):
@@ -88,7 +129,12 @@ block0(v0: i32):
     v2 = sdiv v0, v1
     return v2
 }
-; check: return v0
+
+; function %sdiv_by_one(i32) -> i32 fast {
+; block0(v0: i32):
+;     v2 -> v0
+;     return v0
+; }
 
 ;;;;;;;;;; Tests for `simplify_skeleton` TODOs ;;;;;;;;;;;;
 ;;
@@ -102,8 +148,14 @@ block0():
     v2 = sdiv v0, v1
     return v2
 }
-; check:  v2 = sdiv v0, v1
-; nextln: return v2
+
+; function %int_min_sdiv_neg_one() -> i32 fast {
+; block0:
+;     v0 = iconst.i32 -2147483648
+;     v1 = iconst.i32 -1
+;     v2 = sdiv v0, v1  ; v0 = -2147483648, v1 = -1
+;     return v2
+; }
 
 function %sdiv_zero(i32) -> i32 {
 block0(v0: i32):
@@ -111,8 +163,13 @@ block0(v0: i32):
     v2 = sdiv v0, v1
     return v2
 }
-; check:  v2 = sdiv v0, v1
-; nextln: return v2
+
+; function %sdiv_zero(i32) -> i32 fast {
+; block0(v0: i32):
+;     v1 = iconst.i32 0
+;     v2 = sdiv v0, v1  ; v1 = 0
+;     return v2
+; }
 
 function %udiv_zero(i32) -> i32 {
 block0(v0: i32):
@@ -120,8 +177,13 @@ block0(v0: i32):
     v2 = udiv v0, v1
     return v2
 }
-; check:  v2 = udiv v0, v1
-; nextln: return v2
+
+; function %udiv_zero(i32) -> i32 fast {
+; block0(v0: i32):
+;     v1 = iconst.i32 0
+;     v2 = udiv v0, v1  ; v1 = 0
+;     return v2
+; }
 
 function %always_trapping_trapz() -> i32 {
 block0:
@@ -129,7 +191,13 @@ block0:
     trapz v0, user42
     return v0
 }
-; check: trapz v0, user42
+
+; function %always_trapping_trapz() -> i32 fast {
+; block0:
+;     v0 = iconst.i32 0
+;     trapz v0, user42  ; v0 = 0
+;     return v0  ; v0 = 0
+; }
 
 function %always_trapping_trapnz() -> i32 {
 block0:
@@ -137,7 +205,13 @@ block0:
     trapnz v0, user42
     return v0
 }
-; check: trapnz v0, user42
+
+; function %always_trapping_trapnz() -> i32 fast {
+; block0:
+;     v0 = iconst.i32 1
+;     trapnz v0, user42  ; v0 = 1
+;     return v0  ; v0 = 1
+; }
 
 function %always_trapping_uadd_overflow_trap() -> i32 {
 block0:
@@ -146,5 +220,12 @@ block0:
     v2 = uadd_overflow_trap v0, v1, user42
     return v2
 }
-; check:  v2 = uadd_overflow_trap v0, v1, user42
-; nextln: return v2
+
+; function %always_trapping_uadd_overflow_trap() -> i32 fast {
+; block0:
+;     v0 = iconst.i32 -1
+;     v1 = iconst.i32 1
+;     v2 = uadd_overflow_trap v0, v1, user42  ; v0 = -1, v1 = 1
+;     return v2
+; }
+

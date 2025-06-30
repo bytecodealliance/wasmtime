@@ -81,6 +81,23 @@ impl VexPrefix {
         }
     }
 
+    /// Construct the [`VexPrefix`] for a binary instruction.
+    ///
+    /// This simply but conveniently reuses [`VexPrefix::three_op`] with a
+    /// `vvvv` value of `0`.
+    #[inline]
+    #[must_use]
+    pub fn two_op(
+        reg: u8,
+        (b, x): (Option<u8>, Option<u8>),
+        l: u8,
+        pp: u8,
+        mmmmm: u8,
+        w: bool,
+    ) -> Self {
+        Self::three_op(reg, 0, (b, x), l, pp, mmmmm, w)
+    }
+
     pub(crate) fn encode(&self, sink: &mut impl CodeSink) {
         match self {
             VexPrefix::TwoByte(last_byte) => {

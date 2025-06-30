@@ -778,7 +778,7 @@ jobs:
   test_wasi_nn:
     strategy:
       matrix:
-        feature: ["openvino"]
+        feature: ["openvino", "onnx-download"]
         os: ["ubuntu-24.04", "windows-2025"]
         include:
           - os: windows-2025
@@ -812,6 +812,23 @@ jobs:
     # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
 
+  # Test `wasmtime-wasi-tls-nativetls` in its own job. This is because it
+  # depends on OpenSSL, which is not easily available on all platforms.
+  test_wasi_tls_nativetls:
+    name: Test wasi-tls using native-tls provider
+    needs: determine
+    if: needs.determine.outputs.run-full
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - run: cargo test -p wasmtime-wasi-tls-nativetls
+
   # Test the `wasmtime-fuzzing` crate. Split out from the main tests because
   # `--all-features` brings in OCaml, which is a pain to get setup for all
   # targets.
@@ -835,7 +852,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-dwarf
     name: Test DWARF debugging
-    runs-on: ubuntu-22.04 # FIXME: fails on `ubuntu-24.04` right now
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -848,14 +865,14 @@ jobs:
         tar -xzf wasi-sdk-25.0-x86_64-linux.tar.gz
         mv wasi-sdk-25.0-x86_64-linux wasi-sdk
     - run: |
-        sudo apt-get update && sudo apt-get install -y gdb lldb-15 llvm
+        sudo apt-get update && sudo apt-get install -y gdb lldb-18 llvm
         # workaround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
         sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
         # Only testing release since it is more likely to expose issues with our low-level symbol handling.
         cargo test --release --test all -- --ignored --test-threads 1 debug::
       env:
-        LLDB: lldb-15 # override default version, 14
+        LLDB: lldb-18
         WASI_SDK_PATH: /tmp/wasi-sdk
 
   build-preview1-component-adapter:
@@ -1114,6 +1131,7 @@ jobs:
       - doc
       - micro_checks
       - special_tests
+      - test_wasi_tls_nativetls
       - clippy
       - monolith_checks
       - platform_checks
