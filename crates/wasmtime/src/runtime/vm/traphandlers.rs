@@ -576,10 +576,20 @@ mod call_thread_state {
             assert!(core::ptr::eq(head, self));
         }
 
+        /// Swaps the state in this `CallThreadState`'s `VMStoreContext` with
+        /// the state in `EntryStoreContext` that was saved when this
+        /// activation was created.
+        ///
+        /// This method is using during suspension of a fiber to restore the
+        /// store back to what it originally was and prepare it to be resumed
+        /// later on. This takes various fields of `VMStoreContext` and swaps
+        /// them with what was saved in `EntryStoreContext`. That restores
+        /// a store to just before this activation was called but saves off the
+        /// fields of this activation to get restored/resumed at a later time.
         #[cfg(feature = "async")]
-        pub(crate) unsafe fn swap(&self) {
-            unsafe fn swap<T: Clone>(a: &core::cell::UnsafeCell<T>, b: &mut T) {
-                *a.get() = core::mem::replace(b, (*a.get()).clone());
+        pub(super) unsafe fn swap(&self) {
+            unsafe fn swap<T>(a: &core::cell::UnsafeCell<T>, b: &mut T) {
+                core::mem::swap(&mut *a.get(), b)
             }
 
             let cx = self.vm_store_context.as_ref();
@@ -999,18 +1009,29 @@ pub(crate) mod tls {
         /// that this doesn't push stale data and the data is popped
         /// appropriately.
         pub unsafe fn push(self) -> PreviousAsyncWasmCallState {
+            // First save the state of TLS as-is so when this state is popped
+            // off later on we know where to stop.
+            let ret = PreviousAsyncWasmCallState { state: raw::get() };
+
+            // The oldest activation, if present, has various `VMStoreContext`
+            // fields saved within it. These fields were the state for the
+            // *youngest* activation when a suspension previously happened. By
+            // swapping them back into the store this is an O(1) way of
+            // restoring the state of a store's metadata fields at the time of
+            // the suspension.
+            //
+            // The store's previous values before this function will all get
+            // saved in the oldest activation's state on the stack. The store's
+            // current state then describes the youngest activation which is
+            // restored via the loop below.
+            if let Some(state) = self.state.as_ref() {
+                state.swap();
+            }
+
             // Our `state` pointer is a linked list of oldest-to-youngest so by
             // pushing in order of the list we restore the youngest-to-oldest
             // list as stored in the state of this current thread.
-            let ret = PreviousAsyncWasmCallState { state: raw::get() };
             let mut ptr = self.state;
-
-            if let Some(state) = ptr.as_ref() {
-                // Swap the current PC/FP/SP with those in the oldest activation
-                // so we can restore them later in
-                // `PreviousAsyncWasmCallState::restore`
-                state.swap();
-            }
             while let Some(state) = ptr.as_ref() {
                 ptr = state.prev.replace(core::ptr::null_mut());
                 state.push();
@@ -1069,12 +1090,25 @@ pub(crate) mod tls {
             loop {
                 // If the current TLS state is as we originally found it, then
                 // this loop is finished.
+                //
+                // Note, though, that before exiting, if the oldest
+                // `CallThreadState` is present, the current state of
+                // `VMStoreContext` is saved off within it. This will save the
+                // current state, before this function, of `VMStoreContext`
+                // into the `EntryStoreContext` stored with the oldest
+                // activation. This is a bit counter-intuitive where the state
+                // for the youngest activation is stored in the "old" state
+                // of the oldest activation.
+                //
+                // What this does is restores the state of the store to just
+                // before this async fiber was started. The fiber's state will
+                // be entirely self-contained in the fiber itself and the
+                // returned `AsyncWasmCallState`. Resumption above in
+                // `AsyncWasmCallState::push` will perform the swap back into
+                // the store to hook things up again.
                 let ptr = raw::get();
                 if ptr == thread_head {
                     if let Some(state) = ret.state.as_ref() {
-                        // Swap the current PC/FP/SP with those in the oldest
-                        // activation, which reverses what we did in
-                        // `AsyncWasmCallState::push`.
                         state.swap();
                     }
 
