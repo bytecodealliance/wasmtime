@@ -427,10 +427,10 @@ impl<T: 'static> LinkerInstance<'_, T> {
     #[cfg(feature = "async")]
     pub fn func_wrap_async<Params, Return, F>(&mut self, name: &str, f: F) -> Result<()>
     where
-        F: for<'a> Fn(
-                StoreContextMut<'a, T>,
+        F: Fn(
+                StoreContextMut<'_, T>,
                 Params,
-            ) -> Box<dyn Future<Output = Result<Return>> + Send + 'a>
+            ) -> Box<dyn Future<Output = Result<Return>> + Send + '_>
             + Send
             + Sync
             + 'static,
@@ -459,10 +459,10 @@ impl<T: 'static> LinkerInstance<'_, T> {
     pub fn func_wrap_concurrent<Params, Return, F>(&mut self, name: &str, f: F) -> Result<()>
     where
         T: 'static,
-        F: for<'a> Fn(
-                &'a mut Accessor<T>,
+        F: Fn(
+                &mut Accessor<T>,
                 Params,
-            ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send + 'a>>
+            ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send + '_>>
             + Send
             + Sync
             + 'static,
@@ -623,10 +623,10 @@ impl<T: 'static> LinkerInstance<'_, T> {
     pub fn func_new_concurrent<F>(&mut self, name: &str, f: F) -> Result<()>
     where
         T: 'static,
-        F: for<'a> Fn(
-                &'a mut Accessor<T>,
+        F: Fn(
+                &mut Accessor<T>,
                 Vec<Val>,
-            ) -> Pin<Box<dyn Future<Output = Result<Vec<Val>>> + Send + 'a>>
+            ) -> Pin<Box<dyn Future<Output = Result<Vec<Val>>> + Send + '_>>
             + Send
             + Sync
             + 'static,
@@ -689,10 +689,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
     #[cfg(feature = "async")]
     pub fn resource_async<F>(&mut self, name: &str, ty: ResourceType, dtor: F) -> Result<()>
     where
-        F: for<'a> Fn(
-                StoreContextMut<'a, T>,
-                u32,
-            ) -> Box<dyn Future<Output = Result<()>> + Send + 'a>
+        F: Fn(StoreContextMut<'_, T>, u32) -> Box<dyn Future<Output = Result<()>> + Send + '_>
             + Send
             + Sync
             + 'static,
