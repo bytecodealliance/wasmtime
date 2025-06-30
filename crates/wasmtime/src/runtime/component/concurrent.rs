@@ -261,7 +261,7 @@ impl Instance {
     /// Whether the future returns `Ready` immediately or later, the `lower`
     /// function will be used to lower the result, if any, into the guest caller's
     /// stack and linear memory unless the task has been cancelled.
-    pub(crate) fn first_poll<T: 'static, R: Send + Sync + 'static>(
+    pub(crate) fn first_poll<T: 'static, R: Send + 'static>(
         self,
         mut store: StoreContextMut<T>,
         future: impl Future<Output = Result<R>> + Send + 'static,

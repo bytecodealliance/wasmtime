@@ -47,7 +47,7 @@ impl HostFunc {
             + Send
             + Sync
             + 'static,
-        P: ComponentNamedList + Lift + Send + Sync + 'static,
+        P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + Send + Sync + 'static,
         T: 'static,
     {
@@ -62,7 +62,7 @@ impl HostFunc {
     pub(crate) fn from_closure<T: 'static, F, P, R>(func: F) -> Arc<HostFunc>
     where
         F: Fn(StoreContextMut<T>, P) -> Result<R> + Send + Sync + 'static,
-        P: ComponentNamedList + Lift + Send + Sync + 'static,
+        P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + Send + Sync + 'static,
     {
         Self::from_canonical::<T, _, _, _>(move |store, _, params| {
@@ -110,7 +110,7 @@ impl HostFunc {
             + Send
             + Sync
             + 'static,
-        P: ComponentNamedList + Lift + Send + Sync + 'static,
+        P: ComponentNamedList + Lift,
         R: ComponentNamedList + Lower + Send + Sync + 'static,
         T: 'static,
     {
@@ -257,7 +257,7 @@ where
         + Send
         + Sync
         + 'static,
-    Params: Lift + Send + Sync + 'static,
+    Params: Lift,
     Return: Lower + Send + Sync + 'static,
 {
     let options = Options::new(

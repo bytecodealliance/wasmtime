@@ -413,7 +413,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
     pub fn func_wrap<F, Params, Return>(&mut self, name: &str, func: F) -> Result<()>
     where
         F: Fn(StoreContextMut<T>, Params) -> Result<Return> + Send + Sync + 'static,
-        Params: ComponentNamedList + Lift + Send + Sync + 'static,
+        Params: ComponentNamedList + Lift + 'static,
         Return: ComponentNamedList + Lower + Send + Sync + 'static,
     {
         self.insert(name, Definition::Func(HostFunc::from_closure(func)))?;
