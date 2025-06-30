@@ -354,7 +354,7 @@ hashbrown = { version = "0.15", default-features = false }
 capstone = "0.13.0"
 smallvec = { version = "1.6.1", features = ["union"] }
 tracing = "0.1.26"
-bitflags = { version = "2.0", default-features = false }
+bitflags = "2.0"
 thiserror = "2.0.12"
 async-trait = "0.1.71"
 trait-variant = "0.1.2"
