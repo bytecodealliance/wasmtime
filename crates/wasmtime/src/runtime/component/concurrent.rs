@@ -19,8 +19,8 @@ use wasmtime_environ::component::{
 
 pub(crate) use futures_and_streams::ResourcePair;
 pub use futures_and_streams::{
-    ErrorContext, FutureReader, FutureWriter, HostFuture, HostStream, ReadBuffer, StreamReader,
-    StreamWriter, VecBuffer, Watch, WriteBuffer,
+    ErrorContext, FutureReader, FutureWriter, HostFuture, HostStream, StreamReader, StreamWriter,
+    Watch,
 };
 pub(crate) use futures_and_streams::{
     lower_error_context_to_index, lower_future_to_index, lower_stream_to_index,

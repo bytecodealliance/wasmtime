@@ -11,10 +11,6 @@ use wasmtime_environ::component::{
     TypeFutureTableIndex, TypeStreamTableIndex,
 };
 
-pub use buffers::{ReadBuffer, VecBuffer, WriteBuffer};
-
-mod buffers;
-
 /// Represents the readable end of a Component Model `future`.
 ///
 /// In order to actually read from or drop this `future`, first convert it to a
