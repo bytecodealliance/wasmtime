@@ -287,14 +287,6 @@ pub(crate) struct ResourcePair {
     pub(crate) read: u32,
 }
 
-/// Wrapper struct which may be converted to the inner value as needed.
-///
-/// This object is normally paired with a `Future` which represents a state
-/// change on the inner value, resolving when that state change happens _or_
-/// when the `Watch` is converted back into the inner value -- whichever happens
-/// first.
-pub struct Watch<T>(PhantomData<T>);
-
 impl ConcurrentState {
     pub(crate) fn future_new(&mut self, ty: TypeFutureTableIndex) -> Result<ResourcePair> {
         _ = ty;

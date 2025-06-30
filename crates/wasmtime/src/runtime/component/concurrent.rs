@@ -20,7 +20,6 @@ use wasmtime_environ::component::{
 pub(crate) use futures_and_streams::ResourcePair;
 pub use futures_and_streams::{
     ErrorContext, FutureReader, FutureWriter, HostFuture, HostStream, StreamReader, StreamWriter,
-    Watch,
 };
 pub(crate) use futures_and_streams::{
     lower_error_context_to_index, lower_future_to_index, lower_stream_to_index,
@@ -171,29 +170,6 @@ where
         let _ = get_data;
         todo!()
     }
-}
-
-/// Handle to a spawned task which will abort the task when dropped.
-pub struct AbortOnDropHandle;
-
-/// Represents a task which may be provided to `Accessor::spawn`,
-/// `Accessor::forward`, or `Instance::spawn`.
-// TODO: Replace this with `std::ops::AsyncFnOnce` when that becomes a viable
-// option.
-//
-// `AsyncFnOnce` is still nightly-only in latest stable Rust version as of this
-// writing (1.84.1), and even with 1.85.0-beta it's not possible to specify
-// e.g. `Send` and `Sync` bounds on the `Future` type returned by an
-// `AsyncFnOnce`.  Also, using `F: Future<Output = Result<()>> + Send + Sync,
-// FN: FnOnce(&mut Accessor<T>) -> F + Send + Sync + 'static` fails with a type
-// mismatch error when we try to pass it an async closure (e.g. `async move |_|
-// { ... }`).  So this seems to be the best we can do for the time being.
-pub trait AccessorTask<T, D, R>: Send + 'static
-where
-    D: HasData,
-{
-    /// Run the task.
-    fn run(self, accessor: &mut Accessor<T, D>) -> impl Future<Output = R> + Send;
 }
 
 impl Instance {

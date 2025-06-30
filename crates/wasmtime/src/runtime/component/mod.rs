@@ -117,8 +117,8 @@ mod values;
 pub use self::component::{Component, ComponentExportIndex};
 #[cfg(feature = "component-model-async")]
 pub use self::concurrent::{
-    AbortOnDropHandle, Access, Accessor, AccessorTask, ErrorContext, FutureReader, FutureWriter,
-    HostFuture, HostStream, StreamReader, StreamWriter, VMComponentAsyncStore, Watch,
+    Access, Accessor, ErrorContext, FutureReader, FutureWriter, HostFuture, HostStream,
+    StreamReader, StreamWriter, VMComponentAsyncStore,
 };
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
