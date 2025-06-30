@@ -48,7 +48,7 @@ impl HostFunc {
             + Sync
             + 'static,
         P: ComponentNamedList + Lift + 'static,
-        R: ComponentNamedList + Lower + Send + Sync + 'static,
+        R: ComponentNamedList + Lower + 'static,
         T: 'static,
     {
         let entrypoint = Self::entrypoint::<T, F, P, R>;
@@ -63,7 +63,7 @@ impl HostFunc {
     where
         F: Fn(StoreContextMut<T>, P) -> Result<R> + Send + Sync + 'static,
         P: ComponentNamedList + Lift + 'static,
-        R: ComponentNamedList + Lower + Send + Sync + 'static,
+        R: ComponentNamedList + Lower + 'static,
     {
         Self::from_canonical::<T, _, _, _>(move |store, _, params| {
             let result = func(store, params);
@@ -79,8 +79,8 @@ impl HostFunc {
             + Send
             + Sync
             + 'static,
-        P: ComponentNamedList + Lift + Send + Sync + 'static,
-        R: ComponentNamedList + Lower + Send + Sync + 'static,
+        P: ComponentNamedList + Lift + 'static,
+        R: ComponentNamedList + Lower + 'static,
     {
         let func = Arc::new(func);
         Self::from_canonical::<T, _, _, _>(move |store, instance, params| {
@@ -111,7 +111,7 @@ impl HostFunc {
             + Sync
             + 'static,
         P: ComponentNamedList + Lift,
-        R: ComponentNamedList + Lower + Send + Sync + 'static,
+        R: ComponentNamedList + Lower + 'static,
         T: 'static,
     {
         let data = SendSyncPtr::new(NonNull::new(data.as_ptr() as *mut F).unwrap());
@@ -258,7 +258,7 @@ where
         + Sync
         + 'static,
     Params: Lift,
-    Return: Lower + Send + Sync + 'static,
+    Return: Lower + 'static,
 {
     let options = Options::new(
         store.0.store_opaque().id(),

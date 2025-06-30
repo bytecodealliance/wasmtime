@@ -164,10 +164,7 @@ where
     /// Panics if this is called on a function in an asynchronous store. This
     /// only works with functions defined within a synchronous store. Also
     /// panics if `store` does not own this function.
-    pub fn call(&self, store: impl AsContextMut, params: Params) -> Result<Return>
-    where
-        Return: Send + Sync + 'static,
-    {
+    pub fn call(&self, store: impl AsContextMut, params: Params) -> Result<Return> {
         assert!(
             !store.as_context().async_support(),
             "must use `call_async` when async support is enabled on the config"
@@ -260,8 +257,7 @@ where
         drop_params: unsafe fn(*mut u8),
     ) -> Result<PreparedCall<Return>>
     where
-        Params: Send + Sync,
-        Return: Send + Sync + 'static,
+        Return: 'static,
     {
         let param_count = mem::size_of::<Params::Lower>() / mem::size_of::<ValRaw>();
         if self.func.abi_async(store.0) {
@@ -551,7 +547,7 @@ where
         results: &[ValRaw],
     ) -> Result<Box<dyn Any + Send + Sync>>
     where
-        Return: Send + Sync + 'static,
+        Return: 'static,
     {
         super::lift_results(store, instance, results, func, Self::lift_stack_result_raw)
     }
@@ -599,7 +595,7 @@ where
         results: &[ValRaw],
     ) -> Result<Box<dyn Any + Send + Sync>>
     where
-        Return: Send + Sync + 'static,
+        Return: 'static,
     {
         super::lift_results(store, instance, results, func, Self::lift_heap_result_raw)
     }

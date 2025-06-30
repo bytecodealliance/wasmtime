@@ -427,7 +427,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
     where
         F: Fn(StoreContextMut<T>, Params) -> Result<Return> + Send + Sync + 'static,
         Params: ComponentNamedList + Lift + 'static,
-        Return: ComponentNamedList + Lower + Send + Sync + 'static,
+        Return: ComponentNamedList + Lower + 'static,
     {
         self.insert(name, Definition::Func(HostFunc::from_closure(func)))?;
         Ok(())
@@ -479,7 +479,7 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Sync
             + 'static,
         Params: ComponentNamedList + Lift + 'static,
-        Return: ComponentNamedList + Lower + Send + Sync + 'static,
+        Return: ComponentNamedList + Lower + 'static,
     {
         assert!(
             self.engine.config().async_support,
@@ -555,8 +555,8 @@ impl<T: 'static> LinkerInstance<'_, T> {
             + Send
             + Sync
             + 'static,
-        Params: ComponentNamedList + Lift + Send + Sync + 'static,
-        Return: ComponentNamedList + Lower + Send + Sync + 'static,
+        Params: ComponentNamedList + Lift + 'static,
+        Return: ComponentNamedList + Lower + 'static,
     {
         assert!(
             self.engine.config().async_support,
