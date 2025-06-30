@@ -11,7 +11,9 @@ use wasmtime_environ::{PtrSize, TagIndex, TypeIndex, WasmResult, WasmValType, wa
 fn control_context_size(triple: &target_lexicon::Triple) -> WasmResult<u8> {
     match (triple.architecture, triple.operating_system) {
         (target_lexicon::Architecture::X86_64, target_lexicon::OperatingSystem::Linux) => Ok(24),
-        _ => Err(wasm_unsupported!("stack switching not support on {triple}")),
+        _ => Err(wasm_unsupported!(
+            "stack switching not supported on {triple}"
+        )),
     }
 }
 
