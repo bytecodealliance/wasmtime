@@ -144,8 +144,6 @@ pub use wasm_wave;
 // Wasmtime's API stability guarantees
 #[doc(hidden)]
 pub mod __internal {
-    #[cfg(feature = "component-model-async")]
-    pub use super::concurrent::{AbortHandle, AbortWrapper, Spawned};
     pub use super::func::{
         ComponentVariant, LiftContext, LowerContext, Options, bad_type_info, format_flags,
         lower_payload, typecheck_enum, typecheck_flags, typecheck_record, typecheck_variant,

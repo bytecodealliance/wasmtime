@@ -9,8 +9,8 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::pin::{Pin, pin};
+use std::sync::Arc;
 use std::sync::atomic::AtomicPtr;
-use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
 use wasmtime_environ::component::{
     RuntimeComponentInstanceIndex, TypeComponentLocalErrorContextTableIndex, TypeFutureTableIndex,
@@ -172,27 +172,6 @@ where
         todo!()
     }
 }
-
-type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
-
-/// Wraps a future to allow it to be synchronously cancelled.
-#[doc(hidden)]
-pub enum AbortWrapper<T> {
-    /// The future has not yet been polled
-    Unpolled(BoxFuture<T>),
-    /// The future has been polled at least once
-    Polled { future: BoxFuture<T>, waker: Waker },
-    /// The future has been cancelled
-    Aborted,
-}
-
-type AbortWrapped<T> = Arc<Mutex<AbortWrapper<T>>>;
-
-#[doc(hidden)]
-pub type Spawned = AbortWrapped<Result<()>>;
-
-/// Handle to a task which may be used to abort it.
-pub struct AbortHandle;
 
 /// Handle to a spawned task which will abort the task when dropped.
 pub struct AbortOnDropHandle;
