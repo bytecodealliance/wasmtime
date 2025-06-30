@@ -176,11 +176,7 @@ where
         &self,
         mut store: impl AsContextMut<Data: Send>,
         params: Params,
-    ) -> Result<Return>
-    where
-        Params: Send + Sync,
-        Return: Send + Sync + 'static,
-    {
+    ) -> Result<Return> {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
@@ -210,8 +206,8 @@ where
         params: Params,
     ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send + 'static>>
     where
-        Params: Send + Sync + 'static,
-        Return: Send + Sync + 'static,
+        Params: 'static,
+        Return: 'static,
     {
         let _ = (self, store, params);
         todo!()
