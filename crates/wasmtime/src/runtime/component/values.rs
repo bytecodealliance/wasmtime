@@ -1113,24 +1113,34 @@ fn unexpected<T>(ty: InterfaceType, val: &Val) -> Result<T> {
 
 /// Represents a component model `future`.
 ///
-/// TODO: This is prone to leaks and infinitely blocked writers given that
-/// there's no reference counting and thus no way to know when to close the
-/// handle.
+/// Note that this type is not usable at this time as its implementation has not
+/// been filled out. There are no operations on this and there's additionally no
+/// ability to "drop" or deallocate this index. This means that from the
+/// perspective of wasm it'll appear that this handle has "leaked" without ever
+/// being dropped or read from.
+//
+// FIXME(#11161) this needs to be filled out implementation-wise
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FutureAny(pub(crate) u32);
 
 /// Represents a component model `stream`.
 ///
-/// TODO: This is prone to leaks and infinitely blocked writers given that
-/// there's no reference counting and thus no way to know when to close the
-/// handle.
+/// Note that this type is not usable at this time as its implementation has not
+/// been filled out. There are no operations on this and there's additionally no
+/// ability to "drop" or deallocate this index. This means that from the
+/// perspective of wasm it'll appear that this handle has "leaked" without ever
+/// being dropped or read from.
+//
+// FIXME(#11161) this needs to be filled out implementation-wise
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StreamAny(pub(crate) u32);
 
 /// Represents a component model `error-context`.
 ///
-/// TODO: This is prone to leaks and infinitely blocked writers given that
-/// there's no reference counting and thus no way to know when to close the
-/// handle.
+/// Note that this type is not usable at this time as its implementation has not
+/// been filled out. There are no operations on this and there's additionally no
+/// ability to "drop" or deallocate this index.
+//
+// FIXME(#11161) this needs to be filled out implementation-wise
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ErrorContextAny(pub(crate) u32);
