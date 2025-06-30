@@ -2,7 +2,6 @@
 
 use super::{REALLOC_AND_FREE, TypedFuncExt};
 use anyhow::Result;
-use std::rc::Rc;
 use std::sync::Arc;
 use wasmtime::component::*;
 use wasmtime::{Engine, Store, StoreContextMut, Trap};
@@ -427,14 +426,11 @@ fn type_layers() -> Result<()> {
         .get_typed_func::<(&u32,), ()>(&mut store, "take-u32")?
         .call_and_post_return(&mut store, (&2,))?;
     instance
-        .get_typed_func::<(Rc<u32>,), ()>(&mut store, "take-u32")?
-        .call_and_post_return(&mut store, (Rc::new(2),))?;
-    instance
         .get_typed_func::<(Arc<u32>,), ()>(&mut store, "take-u32")?
         .call_and_post_return(&mut store, (Arc::new(2),))?;
     instance
-        .get_typed_func::<(&Box<Arc<Rc<u32>>>,), ()>(&mut store, "take-u32")?
-        .call_and_post_return(&mut store, (&Box::new(Arc::new(Rc::new(2))),))?;
+        .get_typed_func::<(&Box<Arc<Box<u32>>>,), ()>(&mut store, "take-u32")?
+        .call_and_post_return(&mut store, (&Box::new(Arc::new(Box::new(2))),))?;
 
     Ok(())
 }
