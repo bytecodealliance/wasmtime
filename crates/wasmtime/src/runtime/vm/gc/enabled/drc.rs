@@ -320,6 +320,7 @@ impl DrcHeap {
             .expect("should have inserted trace info for every GC type allocated in this heap")
         {
             TraceInfo::Struct { gc_ref_offsets } => {
+                stack.reserve(gc_ref_offsets.len());
                 let data = self.gc_object_data(gc_ref);
                 for offset in gc_ref_offsets {
                     let raw = data.read_u32(*offset);
@@ -335,6 +336,7 @@ impl DrcHeap {
 
                 let data = self.gc_object_data(gc_ref);
                 let len = self.array_len(gc_ref.as_arrayref_unchecked());
+                stack.reserve(usize::try_from(len).unwrap());
                 for i in 0..len {
                     let elem_offset = GC_REF_ARRAY_ELEMS_OFFSET
                         + i * u32::try_from(mem::size_of::<u32>()).unwrap();
