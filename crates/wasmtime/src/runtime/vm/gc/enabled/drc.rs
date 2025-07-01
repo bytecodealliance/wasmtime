@@ -554,6 +554,7 @@ fn externref_to_drc(externref: &VMExternRef) -> &TypedGcRef<VMDrcExternRef> {
 struct VMDrcHeader {
     header: VMGcHeader,
     ref_count: u64,
+    object_size: u32,
 }
 
 unsafe impl GcHeapObject for VMDrcHeader {
@@ -567,7 +568,7 @@ unsafe impl GcHeapObject for VMDrcHeader {
 impl VMDrcHeader {
     /// The size of this header's object.
     fn object_size(&self) -> usize {
-        usize::try_from(self.header.reserved_u27()).unwrap()
+        usize::try_from(self.object_size).unwrap()
     }
 }
 
@@ -718,11 +719,7 @@ unsafe impl GcHeap for DrcHeap {
         self.index(drc_ref(gc_ref)).object_size()
     }
 
-    fn alloc_raw(
-        &mut self,
-        mut header: VMGcHeader,
-        layout: Layout,
-    ) -> Result<Result<VMGcRef, u64>> {
+    fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Result<VMGcRef, u64>> {
         debug_assert!(layout.size() >= core::mem::size_of::<VMDrcHeader>());
         debug_assert!(layout.align() >= core::mem::align_of::<VMDrcHeader>());
         debug_assert_eq!(header.reserved_u27(), 0);
@@ -737,12 +734,7 @@ unsafe impl GcHeap for DrcHeap {
             debug_assert_eq!(header.kind(), VMGcKind::ExternRef);
         }
 
-        // The size must fit in the unused bits of the GC header.
-        let size = u32::try_from(layout.size()).unwrap();
-        if !VMGcKind::value_fits_in_unused_bits(size) {
-            return Err(crate::Trap::AllocationTooLarge.into());
-        }
-        header.set_reserved_u27(size);
+        let object_size = u32::try_from(layout.size()).unwrap();
 
         let gc_ref = match self.free_list.as_mut().unwrap().alloc(layout)? {
             None => return Ok(Err(u64::try_from(layout.size()).unwrap())),
@@ -752,6 +744,7 @@ unsafe impl GcHeap for DrcHeap {
         *self.index_mut(drc_ref(&gc_ref)) = VMDrcHeader {
             header,
             ref_count: 1,
+            object_size,
         };
         log::trace!("new object: increment {gc_ref:#p} ref count -> 1");
         Ok(Ok(gc_ref))

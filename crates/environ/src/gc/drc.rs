@@ -3,7 +3,7 @@
 use super::*;
 
 /// The size of the `VMDrcHeader` header for GC objects.
-pub const HEADER_SIZE: u32 = 16;
+pub const HEADER_SIZE: u32 = 24;
 
 /// The align of the `VMDrcHeader` header for GC objects.
 pub const HEADER_ALIGN: u32 = 8;
