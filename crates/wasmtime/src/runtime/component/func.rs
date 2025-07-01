@@ -18,8 +18,6 @@ use wasmtime_environ::component::{
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{self, PreparedCall};
 #[cfg(feature = "component-model-async")]
-use core::any::Any;
-#[cfg(feature = "component-model-async")]
 use core::future::{self, Future};
 #[cfg(feature = "component-model-async")]
 use core::pin::Pin;
@@ -360,12 +358,6 @@ impl Func {
     ) -> Result<PreparedCall<Vec<Val>>> {
         let store = store.as_context_mut();
 
-        let lift = if self.abi_async(store.0) {
-            Self::lift_results_async_fn::<T>
-        } else {
-            Self::lift_results_sync_fn::<T>
-        };
-
         concurrent::prepare_call(
             store,
             move |func, store, instance, params_out| {
@@ -378,7 +370,13 @@ impl Func {
                     Self::lower_args::<T>,
                 )
             },
-            lift,
+            move |func, store, instance, results| {
+                if func.abi_async(store.0) {
+                    lift_results(store, instance, results, func, Self::lift_results_async)
+                } else {
+                    lift_results(store, instance, results, func, Self::lift_results_sync)
+                }
+            },
             self,
             MAX_FLAT_PARAMS,
         )
@@ -795,18 +793,6 @@ impl Func {
         Self::lift_results(cx, results_ty, src, false)
     }
 
-    /// Equivalent to `lift_results_sync`, but with a monomorphic signature
-    /// suitable for use with `concurrent::prepare_call`.
-    #[cfg(feature = "component-model-async")]
-    fn lift_results_sync_fn<T>(
-        func: Func,
-        store: StoreContextMut<T>,
-        instance: Instance,
-        results: &[ValRaw],
-    ) -> Result<Box<dyn Any + Send + Sync>> {
-        lift_results(store, instance, results, func, Self::lift_results_sync)
-    }
-
     #[cfg(feature = "component-model-async")]
     fn lift_results_async(
         cx: &mut LiftContext<'_>,
@@ -814,18 +800,6 @@ impl Func {
         src: &[ValRaw],
     ) -> Result<Vec<Val>> {
         Self::lift_results(cx, results_ty, src, true)
-    }
-
-    /// Equivalent to `lift_results_async`, but with a monomorphic signature
-    /// suitable for use with `concurrent::prepare_call`.
-    #[cfg(feature = "component-model-async")]
-    fn lift_results_async_fn<T>(
-        func: Func,
-        store: StoreContextMut<T>,
-        instance: Instance,
-        results: &[ValRaw],
-    ) -> Result<Box<dyn Any + Send + Sync>> {
-        lift_results(store, instance, results, func, Self::lift_results_async)
     }
 
     fn lift_results(

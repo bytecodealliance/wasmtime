@@ -19,8 +19,6 @@ use wasmtime_environ::component::{
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{self, PreparedCall};
 #[cfg(feature = "component-model-async")]
-use core::any::Any;
-#[cfg(feature = "component-model-async")]
 use core::future::Future;
 #[cfg(feature = "component-model-async")]
 use core::pin::Pin;
@@ -272,11 +270,6 @@ where
         } else {
             MAX_FLAT_RESULTS
         };
-        let lift = if Return::flatten_count() <= max_results {
-            Self::lift_stack_result_fn
-        } else {
-            Self::lift_heap_result_fn
-        };
         concurrent::prepare_call(
             store,
             move |func, store, instance, params_out| {
@@ -300,7 +293,13 @@ where
                     )
                 }
             },
-            lift,
+            move |func, store, instance, results| {
+                if Return::flatten_count() <= max_results {
+                    super::lift_results(store, instance, results, func, Self::lift_stack_result_raw)
+                } else {
+                    super::lift_results(store, instance, results, func, Self::lift_heap_result_raw)
+                }
+            },
             self.func,
             param_count,
         )
@@ -450,21 +449,6 @@ where
         })
     }
 
-    /// Equivalent to `lift_stack_result`, but with a monomorphic signature
-    /// suitable for use with `concurrent::prepare_call`.
-    #[cfg(feature = "component-model-async")]
-    fn lift_stack_result_fn<T>(
-        func: Func,
-        store: StoreContextMut<T>,
-        instance: Instance,
-        results: &[ValRaw],
-    ) -> Result<Box<dyn Any + Send + Sync>>
-    where
-        Return: 'static,
-    {
-        super::lift_results(store, instance, results, func, Self::lift_stack_result_raw)
-    }
-
     /// Lift the result of a function where the result is stored indirectly on
     /// the heap.
     fn lift_heap_result(
@@ -496,21 +480,6 @@ where
         dst: &[ValRaw],
     ) -> Result<Return> {
         Self::lift_heap_result(cx, ty, &dst[0])
-    }
-
-    /// Equivalent to `lift_heap_result`, but with a monomorphic signature
-    /// suitable for use with `concurrent::prepare_call`.
-    #[cfg(feature = "component-model-async")]
-    fn lift_heap_result_fn<T>(
-        func: Func,
-        store: StoreContextMut<T>,
-        instance: Instance,
-        results: &[ValRaw],
-    ) -> Result<Box<dyn Any + Send + Sync>>
-    where
-        Return: 'static,
-    {
-        super::lift_results(store, instance, results, func, Self::lift_heap_result_raw)
     }
 
     /// See [`Func::post_return`]

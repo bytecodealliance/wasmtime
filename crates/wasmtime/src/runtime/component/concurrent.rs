@@ -26,10 +26,6 @@ pub(crate) use futures_and_streams::{
 
 mod futures_and_streams;
 
-/// Generic function pointer to lift the result for a guest task.
-pub type LiftFn<T> =
-    fn(Func, StoreContextMut<T>, Instance, &[ValRaw]) -> Result<Box<dyn Any + Send + Sync>>;
-
 #[allow(dead_code)]
 pub enum Status {
     Starting = 0,
@@ -1067,7 +1063,15 @@ pub(crate) fn prepare_call<T: Send + 'static, R>(
     + Send
     + Sync
     + 'static,
-    lift_result: LiftFn<T>,
+    lift_result: impl FnOnce(
+        Func,
+        StoreContextMut<T>,
+        Instance,
+        &[ValRaw],
+    ) -> Result<Box<dyn Any + Send + Sync>>
+    + Send
+    + Sync
+    + 'static,
     handle: Func,
     param_count: usize,
 ) -> Result<PreparedCall<R>> {
