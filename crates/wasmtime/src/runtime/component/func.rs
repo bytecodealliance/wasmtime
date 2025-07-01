@@ -23,8 +23,6 @@ use core::any::Any;
 use core::future::{self, Future};
 #[cfg(feature = "component-model-async")]
 use core::pin::Pin;
-#[cfg(feature = "component-model-async")]
-use core::sync::atomic::Ordering::Relaxed;
 
 mod host;
 mod options;
@@ -340,15 +338,7 @@ impl Func {
             // valid pointer prior to polling the event loop for this function's
             // instance and providing a `drop_params` parameter which will
             // correctly dispose of it after lowering.
-            let prepared = unsafe {
-                self.prepare_call_dynamic(
-                    store.as_context_mut(),
-                    concurrent::drop_params::<Vec<Val>>,
-                )
-            }?;
-            prepared
-                .params()
-                .store(Box::into_raw(Box::new(params)).cast(), Relaxed);
+            let prepared = self.prepare_call_dynamic(store.as_context_mut(), params)?;
             concurrent::queue_call(store, prepared)
         })();
 
@@ -363,21 +353,35 @@ impl Func {
     ///
     /// SAFETY: See `concurrent::prepare_call`.
     #[cfg(feature = "component-model-async")]
-    unsafe fn prepare_call_dynamic<'a, T: Send + 'static>(
+    fn prepare_call_dynamic<'a, T: Send + 'static>(
         self,
         mut store: StoreContextMut<'a, T>,
-        drop_params: unsafe fn(*mut u8),
+        params: Vec<Val>,
     ) -> Result<PreparedCall<Vec<Val>>> {
         let store = store.as_context_mut();
 
-        let lower = Self::lower_args_fn::<T>;
         let lift = if self.abi_async(store.0) {
             Self::lift_results_async_fn::<T>
         } else {
             Self::lift_results_sync_fn::<T>
         };
 
-        concurrent::prepare_call(store, lower, drop_params, lift, self, MAX_FLAT_PARAMS)
+        concurrent::prepare_call(
+            store,
+            move |func, store, instance, params_out| {
+                lower_params(
+                    store,
+                    instance,
+                    params_out,
+                    func,
+                    &params,
+                    Self::lower_args::<T>,
+                )
+            },
+            lift,
+            self,
+            MAX_FLAT_PARAMS,
+        )
     }
 
     fn call_impl(
@@ -762,31 +766,6 @@ impl Func {
         } else {
             Self::store_args(cx, &params_ty, params, dst)
         }
-    }
-
-    /// Equivalent to `lower_args`, but with a monomorphic signature
-    /// suitable for use with `concurrent::prepare_call`.
-    ///
-    /// SAFETY: `params_in` must be a valid pointer to a `MaybeUninit<[ValRaw;
-    /// MAX_FLAT_PARAMS]>`.
-    #[cfg(feature = "component-model-async")]
-    unsafe fn lower_args_fn<T>(
-        func: Func,
-        store: StoreContextMut<T>,
-        instance: Instance,
-        params_in: *mut u8,
-        params_out: &mut [MaybeUninit<ValRaw>],
-    ) -> Result<()> {
-        lower_params(
-            store,
-            instance,
-            params_out,
-            func,
-            // SAFETY: Per this function's precondition, `params_in` is a valid
-            // pointer to a `MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>`.
-            unsafe { &*params_in.cast() },
-            Self::lower_args::<T>,
-        )
     }
 
     fn store_args<T>(

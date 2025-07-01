@@ -22,8 +22,6 @@ use crate::component::concurrent::{self, PreparedCall};
 use core::any::Any;
 #[cfg(feature = "component-model-async")]
 use core::future::Future;
-#[cfg(feature = "component-model-async")]
-use core::sync::atomic::Ordering::Relaxed;
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -227,12 +225,7 @@ where
             // valid pointer prior to polling the event loop for this function's
             // instance and providing a `drop_params` parameter which will
             // correctly dispose of it after lowering.
-            let prepared = unsafe {
-                self.prepare_call(store.as_context_mut(), concurrent::drop_params::<Params>)
-            }?;
-            prepared
-                .params()
-                .store(Box::into_raw(Box::new(params)).cast(), Relaxed);
+            let prepared = self.prepare_call(store.as_context_mut(), params)?;
             concurrent::queue_call(store, prepared)
         })();
 
@@ -251,98 +244,58 @@ where
     ///
     /// SAFETY: See `concurrent::prepare_call`.
     #[cfg(feature = "component-model-async")]
-    unsafe fn prepare_call<'a, T: Send + 'static>(
+    fn prepare_call<'a, T: Send + 'static>(
         self,
         store: StoreContextMut<'a, T>,
-        drop_params: unsafe fn(*mut u8),
+        params: Params,
     ) -> Result<PreparedCall<Return>>
     where
+        Params: 'static,
         Return: 'static,
     {
         let param_count = mem::size_of::<Params::Lower>() / mem::size_of::<ValRaw>();
-        if self.func.abi_async(store.0) {
-            if Params::flatten_count() <= MAX_FLAT_PARAMS {
-                if Return::flatten_count() <= MAX_FLAT_PARAMS {
-                    concurrent::prepare_call(
-                        store,
-                        Self::lower_stack_args_fn,
-                        drop_params,
-                        Self::lift_stack_result_fn,
-                        self.func,
-                        param_count,
-                    )
-                } else {
-                    concurrent::prepare_call(
-                        store,
-                        Self::lower_stack_args_fn,
-                        drop_params,
-                        Self::lift_heap_result_fn,
-                        self.func,
-                        param_count,
-                    )
-                }
-            } else {
-                if Return::flatten_count() <= MAX_FLAT_PARAMS {
-                    concurrent::prepare_call(
-                        store,
-                        Self::lower_heap_args_fn,
-                        drop_params,
-                        Self::lift_stack_result_fn,
-                        self.func,
-                        1,
-                    )
-                } else {
-                    concurrent::prepare_call(
-                        store,
-                        Self::lower_heap_args_fn,
-                        drop_params,
-                        Self::lift_heap_result_fn,
-                        self.func,
-                        1,
-                    )
-                }
-            }
-        } else if Params::flatten_count() <= MAX_FLAT_PARAMS {
-            if Return::flatten_count() <= MAX_FLAT_RESULTS {
-                concurrent::prepare_call(
-                    store,
-                    Self::lower_stack_args_fn,
-                    drop_params,
-                    Self::lift_stack_result_fn,
-                    self.func,
-                    param_count,
-                )
-            } else {
-                concurrent::prepare_call(
-                    store,
-                    Self::lower_stack_args_fn,
-                    drop_params,
-                    Self::lift_heap_result_fn,
-                    self.func,
-                    param_count,
-                )
-            }
+        let param_count = if Params::flatten_count() <= MAX_FLAT_PARAMS {
+            param_count
         } else {
-            if Return::flatten_count() <= MAX_FLAT_RESULTS {
-                concurrent::prepare_call(
-                    store,
-                    Self::lower_heap_args_fn,
-                    drop_params,
-                    Self::lift_stack_result_fn,
-                    self.func,
-                    1,
-                )
-            } else {
-                concurrent::prepare_call(
-                    store,
-                    Self::lower_heap_args_fn,
-                    drop_params,
-                    Self::lift_heap_result_fn,
-                    self.func,
-                    1,
-                )
-            }
-        }
+            1
+        };
+        let max_results = if self.func.abi_async(store.0) {
+            MAX_FLAT_PARAMS
+        } else {
+            MAX_FLAT_RESULTS
+        };
+        let lift = if Return::flatten_count() <= max_results {
+            Self::lift_stack_result_fn
+        } else {
+            Self::lift_heap_result_fn
+        };
+        concurrent::prepare_call(
+            store,
+            move |func, store, instance, params_out| {
+                if Params::flatten_count() <= MAX_FLAT_PARAMS {
+                    super::lower_params(
+                        store,
+                        instance,
+                        params_out,
+                        func,
+                        &params,
+                        Self::lower_stack_args,
+                    )
+                } else {
+                    super::lower_params(
+                        store,
+                        instance,
+                        params_out,
+                        func,
+                        &params,
+                        Self::lower_heap_args,
+                    )
+                }
+            },
+            lift,
+            self.func,
+            param_count,
+        )
     }
 
     fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
@@ -414,30 +367,6 @@ where
         Ok(())
     }
 
-    /// Equivalent to `lower_stack_args`, but with a monomorphic signature
-    /// suitable for use with `concurrent::prepare_call`.
-    ///
-    /// SAFETY: `params_in` must be a valid pointer to a `Self::Params`.
-    #[cfg(feature = "component-model-async")]
-    unsafe fn lower_stack_args_fn<T>(
-        func: Func,
-        store: StoreContextMut<T>,
-        instance: Instance,
-        params_in: *mut u8,
-        params_out: &mut [MaybeUninit<ValRaw>],
-    ) -> Result<()> {
-        super::lower_params(
-            store,
-            instance,
-            params_out,
-            func,
-            // SAFETY: Per this function's precondition, `params_in` is a valid
-            // pointer to a `Self::Params`.
-            unsafe { &*params_in.cast() },
-            Self::lower_stack_args,
-        )
-    }
-
     /// Lower parameters onto a heap-allocated location.
     ///
     /// This is used when the stack space to be used for the arguments is above
@@ -473,30 +402,6 @@ where
         dst.write(ValRaw::i64(ptr as i64));
 
         Ok(())
-    }
-
-    /// Equivalent to `lower_heap_args`, but with a monomorphic signature
-    /// suitable for use with `concurrent::prepare_call`.
-    ///
-    /// SAFETY: `params_in` must be a valid pointer to a `Self::Params`.
-    #[cfg(feature = "component-model-async")]
-    unsafe fn lower_heap_args_fn<T>(
-        func: Func,
-        store: StoreContextMut<T>,
-        instance: Instance,
-        params_in: *mut u8,
-        params_out: &mut [MaybeUninit<ValRaw>],
-    ) -> Result<()> {
-        super::lower_params(
-            store,
-            instance,
-            params_out,
-            func,
-            // SAFETY: Per this function's precondition, `params_in` is a valid
-            // pointer to a `Self::Params`.
-            unsafe { &*params_in.cast() },
-            Self::lower_heap_args,
-        )
     }
 
     /// Lift the result of a function directly from the stack result.

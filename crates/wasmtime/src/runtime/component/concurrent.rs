@@ -10,7 +10,6 @@ use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::pin::{Pin, pin};
 use std::sync::Arc;
-use std::sync::atomic::AtomicPtr;
 use std::task::{Context, Poll, Waker};
 use wasmtime_environ::component::{
     RuntimeComponentInstanceIndex, TypeComponentLocalErrorContextTableIndex, TypeFutureTableIndex,
@@ -26,15 +25,6 @@ pub(crate) use futures_and_streams::{
 };
 
 mod futures_and_streams;
-
-/// Generic function pointer to lower the parameters for a guest task.
-pub type LowerFn<T> = unsafe fn(
-    Func,
-    StoreContextMut<T>,
-    Instance,
-    *mut u8,
-    &mut [MaybeUninit<ValRaw>],
-) -> Result<()>;
 
 /// Generic function pointer to lift the result for a guest task.
 pub type LiftFn<T> =
@@ -1042,25 +1032,8 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
     }
 }
 
-/// Drop the specified pointer as a `Box<T>`.
-///
-/// SAFETY: The specified pointer must be a valid `*mut T` which was originally
-/// allocated as a `Box<T>`.
-pub(crate) unsafe fn drop_params<T>(pointer: *mut u8) {
-    drop(unsafe { Box::from_raw(pointer as *mut T) })
-}
-
 pub(crate) struct PreparedCall<R> {
     _phantom: PhantomData<R>,
-}
-
-impl<R> PreparedCall<R> {
-    /// Retrieve the parameter pointer for this call.
-    ///
-    /// See `prepare_call` for details on how this is used.
-    pub(crate) fn params(&self) -> &Arc<AtomicPtr<u8>> {
-        todo!()
-    }
 }
 
 /// Prepare a call to the specified exported Wasm function, providing functions
@@ -1083,32 +1056,22 @@ impl<R> PreparedCall<R> {
 /// In the case where the parameters are passed using a type that _is_
 /// `'static`, they can be boxed and stored in `PreparedCall::params`
 /// indefinitely; `drop_params` will be called when they are no longer needed.
-///
-/// SAFETY: The `lower_params` and `drop_params` functions must accept (and
-/// either ignore or safely use) any non-null pointer stored in the `params`
-/// field of the returned `PreparedCall`, and that pointer must be valid for as
-/// long as it is stored in that field.  Also, the `lower_params` and
-/// `lift_result` functions must both use their other pointer arguments safely
-/// or not at all.
-///
-/// In addition, the pointers in the `FuncData` for `handle` must be valid for
-/// as long as the guest task we create here exists.
-pub(crate) unsafe fn prepare_call<T: Send + 'static, R>(
+pub(crate) fn prepare_call<T: Send + 'static, R>(
     mut store: StoreContextMut<T>,
-    lower_params: LowerFn<T>,
-    drop_params: unsafe fn(*mut u8),
+    lower_params: impl FnOnce(
+        Func,
+        StoreContextMut<T>,
+        Instance,
+        &mut [MaybeUninit<ValRaw>],
+    ) -> Result<()>
+    + Send
+    + Sync
+    + 'static,
     lift_result: LiftFn<T>,
     handle: Func,
     param_count: usize,
 ) -> Result<PreparedCall<R>> {
-    _ = (
-        &mut store,
-        lower_params,
-        drop_params,
-        lift_result,
-        handle,
-        param_count,
-    );
+    _ = (&mut store, lower_params, lift_result, handle, param_count);
     todo!()
 }
 
