@@ -1189,6 +1189,7 @@ mod tests {
         let extern_data = VMDrcHeader {
             header: VMGcHeader::externref(),
             ref_count: 0,
+            object_size: 0,
         };
 
         let extern_data_ptr = &extern_data as *const _;
