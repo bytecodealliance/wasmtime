@@ -307,6 +307,7 @@ threads = [
 
 stack-switching = [
   "runtime",
+  "std",
   "wasmtime-environ/stack-switching",
   "wasmtime-cranelift?/stack-switching",
   "wasmtime-winch?/stack-switching",
