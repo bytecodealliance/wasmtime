@@ -333,7 +333,6 @@ std = [
   'wasmtime-math/std',
   'addr2line?/std',
   "dep:rustix",
-  "rustix/mm",  
 ]
 
 # Enables support for the `Store::call_hook` API which enables injecting custom
