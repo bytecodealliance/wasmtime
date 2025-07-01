@@ -259,6 +259,8 @@ where
         Params: 'static,
         Return: 'static,
     {
+        use crate::component::storage::slice_to_storage_mut;
+
         let param_count = mem::size_of::<Params::Lower>() / mem::size_of::<ValRaw>();
         let param_count = if Params::flatten_count() <= MAX_FLAT_PARAMS {
             param_count
@@ -274,23 +276,19 @@ where
             store,
             move |func, store, instance, params_out| {
                 if Params::flatten_count() <= MAX_FLAT_PARAMS {
-                    super::lower_params(
-                        store,
-                        instance,
-                        params_out,
-                        func,
-                        &params,
-                        Self::lower_stack_args,
-                    )
+                    // SAFETY: the safety of `slice_to_storage_mut` relies on
+                    // `Params::Lower` being represented by a sequence of
+                    // `ValRaw`, and that's a guarantee upheld by the `Lower`
+                    // trait itself.
+                    let params_out: &mut MaybeUninit<Params::Lower> =
+                        unsafe { slice_to_storage_mut(params_out) };
+                    super::lower_params(store, instance, func, |cx, ty| {
+                        Self::lower_stack_args(cx, &params, ty, params_out)
+                    })
                 } else {
-                    super::lower_params(
-                        store,
-                        instance,
-                        params_out,
-                        func,
-                        &params,
-                        Self::lower_heap_args,
-                    )
+                    super::lower_params(store, instance, func, |cx, ty| {
+                        Self::lower_heap_args(cx, &params, ty, &mut params_out[0])
+                    })
                 }
             },
             move |func, store, instance, results| {

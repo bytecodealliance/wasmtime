@@ -361,14 +361,9 @@ impl Func {
         concurrent::prepare_call(
             store,
             move |func, store, instance, params_out| {
-                lower_params(
-                    store,
-                    instance,
-                    params_out,
-                    func,
-                    &params,
-                    Self::lower_args::<T>,
-                )
+                lower_params(store, instance, func, |cx, ty| {
+                    Self::lower_args(cx, &params, ty, params_out)
+                })
             },
             move |func, store, instance, results| {
                 if func.abi_async(store.0) {
@@ -418,7 +413,13 @@ impl Func {
         self.call_raw(
             store,
             &params.iter().cloned().collect::<Vec<_>>(),
-            Self::lower_args,
+            |cx, params, ty, dst: &mut MaybeUninit<[MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>| {
+                // SAFETY: it's safe to assume that
+                // `MaybeUninit<array-of-maybe-uninit>` is initialized because
+                // each individual element is still considered uninitialized.
+                let dst: &mut [MaybeUninit<ValRaw>] = unsafe { dst.assume_init_mut() };
+                Self::lower_args(cx, params, ty, dst)
+            },
             |cx, results_ty, src: &[ValRaw; MAX_FLAT_RESULTS]| {
                 for (result, slot) in Self::lift_results_sync(cx, results_ty, src)?
                     .into_iter()
@@ -745,17 +746,14 @@ impl Func {
         cx: &mut LowerContext<'_, T>,
         params: &Vec<Val>,
         params_ty: InterfaceType,
-        dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>,
+        dst: &mut [MaybeUninit<ValRaw>],
     ) -> Result<()> {
         let params_ty = match params_ty {
             InterfaceType::Tuple(i) => &cx.types[i],
             _ => unreachable!(),
         };
         if params_ty.abi.flat_count(MAX_FLAT_PARAMS).is_some() {
-            let dst = &mut unsafe {
-                mem::transmute::<_, &mut [MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>(dst)
-            }
-            .iter_mut();
+            let dst = &mut dst.iter_mut();
 
             params
                 .iter()
@@ -770,7 +768,7 @@ impl Func {
         cx: &mut LowerContext<'_, T>,
         params_ty: &TypeTuple,
         args: &[Val],
-        dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>,
+        dst: &mut [MaybeUninit<ValRaw>],
     ) -> Result<()> {
         let size = usize::try_from(params_ty.abi.size32).unwrap();
         let ptr = cx.realloc(0, 0, params_ty.abi.align32, size)?;
@@ -780,7 +778,7 @@ impl Func {
             arg.store(cx, *ty, abi.next_field32_size(&mut offset))?;
         }
 
-        map_maybe_uninit!(dst[0]).write(ValRaw::i64(ptr as i64));
+        dst[0].write(ValRaw::i64(ptr as i64));
 
         Ok(())
     }
@@ -861,28 +859,12 @@ impl Func {
 
 /// Lower parameters of the specified type using the specified function.
 #[cfg(feature = "component-model-async")]
-fn lower_params<
-    Params,
-    LowerParams,
-    T,
-    F: FnOnce(
-            &mut LowerContext<T>,
-            &Params,
-            InterfaceType,
-            &mut MaybeUninit<LowerParams>,
-        ) -> Result<()>
-        + Send
-        + Sync,
->(
+fn lower_params<T>(
     mut store: StoreContextMut<T>,
     instance: Instance,
-    lowered: &mut [MaybeUninit<ValRaw>],
     me: Func,
-    params: &Params,
-    lower: F,
+    lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
 ) -> Result<()> {
-    use crate::component::storage::slice_to_storage_mut;
-
     let reference = instance.id().get(store.0);
     let types = reference.component().types().clone();
     let (options, mut flags, ty, _) = me.abi_info(store.0);
@@ -893,12 +875,7 @@ fn lower_params<
 
     unsafe { flags.set_may_leave(false) };
     let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, instance);
-    let result = lower(
-        &mut cx,
-        params,
-        InterfaceType::Tuple(types[ty].params),
-        unsafe { slice_to_storage_mut(lowered) },
-    );
+    let result = lower(&mut cx, InterfaceType::Tuple(types[ty].params));
     unsafe { flags.set_may_leave(true) };
     result?;
 
