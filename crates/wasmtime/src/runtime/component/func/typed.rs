@@ -21,9 +21,7 @@ use crate::component::concurrent::{self, PreparedCall};
 #[cfg(feature = "component-model-async")]
 use core::any::Any;
 #[cfg(feature = "component-model-async")]
-use core::future::{self, Future};
-#[cfg(feature = "component-model-async")]
-use core::pin::Pin;
+use core::future::Future;
 #[cfg(feature = "component-model-async")]
 use core::sync::atomic::Ordering::Relaxed;
 
@@ -212,7 +210,7 @@ where
         self,
         mut store: impl AsContextMut<Data: Send>,
         params: Params,
-    ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send + 'static>>
+    ) -> impl Future<Output = Result<Return>> + Send + 'static
     where
         Params: 'static,
         Return: 'static,
@@ -238,9 +236,11 @@ where
             concurrent::queue_call(store, prepared)
         })();
 
-        match result {
-            Ok(future) => Box::pin(future),
-            Err(e) => Box::pin(future::ready(Err(e))),
+        async move {
+            match result {
+                Ok(future) => future.await,
+                Err(e) => Err(e),
+            }
         }
     }
 
