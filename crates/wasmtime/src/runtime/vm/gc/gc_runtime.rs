@@ -411,6 +411,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     fn vmmemory(&self) -> VMMemoryDefinition;
 
     /// Get a slice of the raw bytes of the GC heap.
+    #[inline]
     fn heap_slice(&self) -> &[u8] {
         let vmmemory = self.vmmemory();
         let ptr = vmmemory.base.as_ptr().cast_const();
@@ -419,6 +420,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     }
 
     /// Get a mutable slice of the raw bytes of the GC heap.
+    #[inline]
     fn heap_slice_mut(&mut self) -> &mut [u8] {
         let vmmemory = self.vmmemory();
         let ptr = vmmemory.base.as_ptr();

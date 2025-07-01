@@ -52,6 +52,7 @@ use crate::runtime::vm::{
 use crate::vm::{SendSyncPtr, VMMemoryDefinition};
 use crate::{Engine, EngineWeak, prelude::*};
 use core::ptr;
+use core::sync::atomic::AtomicUsize;
 use core::{
     alloc::Layout,
     any::Any,
@@ -131,6 +132,13 @@ struct DrcHeap {
     /// The storage for the GC heap itself.
     memory: Option<crate::vm::Memory>,
 
+    /// The cached `VMMemoryDefinition` for `self.memory` so that we don't have
+    /// to make indirect calls through a `dyn RuntimeLinearMemory` object.
+    ///
+    /// Must be updated and kept in sync with `self.memory`, cleared when the
+    /// memory is taken and updated when the memory is replaced.
+    vmmemory: Option<VMMemoryDefinition>,
+
     /// A free list describing which ranges of the heap are available for use.
     free_list: Option<FreeList>,
 
@@ -158,6 +166,7 @@ impl DrcHeap {
             no_gc_count: 0,
             activations_table: Box::new(VMGcRefActivationsTable::default()),
             memory: None,
+            vmmemory: None,
             free_list: None,
             dec_ref_stack: Some(vec![]),
         })
@@ -602,13 +611,16 @@ unsafe impl GcHeapObject for VMDrcExternRef {
 unsafe impl GcHeap for DrcHeap {
     fn is_attached(&self) -> bool {
         debug_assert_eq!(self.memory.is_some(), self.free_list.is_some());
+        debug_assert_eq!(self.memory.is_some(), self.vmmemory.is_some());
         self.memory.is_some()
     }
 
     fn attach(&mut self, memory: crate::vm::Memory) {
         assert!(!self.is_attached());
+        assert!(!memory.is_shared_memory());
         let len = memory.vmmemory().current_length();
         self.free_list = Some(FreeList::new(len));
+        self.vmmemory = Some(memory.vmmemory());
         self.memory = Some(memory);
     }
 
@@ -622,6 +634,7 @@ unsafe impl GcHeap for DrcHeap {
             free_list,
             dec_ref_stack,
             memory,
+            vmmemory,
 
             // NB: we will only ever be reused with the same engine, so no need
             // to clear out our tracing info just to fill it back in with the
@@ -632,6 +645,7 @@ unsafe impl GcHeap for DrcHeap {
         *no_gc_count = 0;
         activations_table.reset();
         *free_list = None;
+        *vmmemory = None;
         debug_assert!(dec_ref_stack.as_ref().is_some_and(|s| s.is_empty()));
 
         memory.take().unwrap()
@@ -828,11 +842,14 @@ unsafe impl GcHeap for DrcHeap {
 
     unsafe fn take_memory(&mut self) -> crate::vm::Memory {
         debug_assert!(self.is_attached());
+        self.vmmemory.take();
         self.memory.take().unwrap()
     }
 
     unsafe fn replace_memory(&mut self, memory: crate::vm::Memory, delta_bytes_grown: u64) {
         debug_assert!(self.memory.is_none());
+        debug_assert!(!memory.is_shared_memory());
+        self.vmmemory = Some(memory.vmmemory());
         self.memory = Some(memory);
 
         self.free_list
@@ -841,9 +858,15 @@ unsafe impl GcHeap for DrcHeap {
             .add_capacity(usize::try_from(delta_bytes_grown).unwrap())
     }
 
+    #[inline]
     fn vmmemory(&self) -> VMMemoryDefinition {
         debug_assert!(self.is_attached());
-        self.memory.as_ref().unwrap().vmmemory()
+        debug_assert!(!self.memory.as_ref().unwrap().is_shared_memory());
+        let vmmemory = self.vmmemory.as_ref().unwrap();
+        VMMemoryDefinition {
+            base: vmmemory.base,
+            current_length: AtomicUsize::new(vmmemory.current_length()),
+        }
     }
 }
 
