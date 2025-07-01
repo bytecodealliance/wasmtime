@@ -950,7 +950,7 @@ pub unsafe trait Lift: Sized + ComponentType {
         Self: Sized,
     {
         let mut dst = Vec::with_capacity(list.len);
-        Self::load_into(cx, list, &mut dst, list.len)?;
+        Self::linear_lift_into_from_memory(cx, list, &mut dst, list.len)?;
         Ok(dst)
     }
 
@@ -960,7 +960,7 @@ pub unsafe trait Lift: Sized + ComponentType {
     /// which can avoid some extra fluff and use a pattern that's more easily
     /// optimizable by LLVM.
     #[doc(hidden)]
-    fn load_into(
+    fn linear_lift_into_from_memory(
         cx: &mut LiftContext<'_>,
         list: &WasmList<Self>,
         dst: &mut impl Extend<Self>,
@@ -1178,7 +1178,7 @@ macro_rules! integers {
                 Ok($primitive::from_le_bytes(bytes.try_into().unwrap()))
             }
 
-            fn load_into(
+            fn linear_lift_into_from_memory(
                 cx: &mut LiftContext<'_>,
                 list: &WasmList<Self>,
                 dst: &mut impl Extend<Self>,
