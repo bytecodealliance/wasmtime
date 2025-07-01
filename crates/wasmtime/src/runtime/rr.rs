@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufWriter, Seek, Write};
+use wasmtime_environ::component::InterfaceType;
 use wasmtime_environ::{WasmFuncType, WasmValType};
 
 const VAL_RAW_SIZE: usize = mem::size_of::<ValRaw>();
@@ -54,15 +55,39 @@ impl fmt::Debug for ValRawSer {
     }
 }
 
-fn raw_to_func_argvals(args: &[MaybeUninit<ValRaw>]) -> RRFuncArgVals {
+/// Construct [`RRFuncArgVals`] from raw value buffer
+fn func_argvals_from_raw_slice(args: &[MaybeUninit<ValRaw>]) -> RRFuncArgVals {
     args.iter()
         .map(|x| unsafe { ValRawSer::from(x.assume_init()) })
         .collect::<Vec<_>>()
 }
 
-fn func_argvals_into_raw(rr_args: RRFuncArgVals, raw_args: &mut [MaybeUninit<ValRaw>]) {
+/// Encode [`RRFuncArgVals`] back into raw value buffer
+fn func_argvals_into_raw_slice(rr_args: RRFuncArgVals, raw_args: &mut [MaybeUninit<ValRaw>]) {
     for (src, dst) in rr_args.into_iter().zip(raw_args.iter_mut()) {
         *dst = MaybeUninit::new(src.into());
+    }
+}
+
+/// Typechecking validation for replay, if `src_types` exist
+///
+/// Returns [`ReplayError::FailedFuncValidation`] if typechecking fails
+fn replay_args_typecheck<T>(src_types: Option<&T>, expect_types: &T) -> Result<(), ReplayError>
+where
+    T: PartialEq,
+{
+    if let Some(types) = src_types {
+        if types == expect_types {
+            Ok(())
+        } else {
+            Err(ReplayError::FailedFuncValidation)
+        }
+    } else {
+        println!(
+            "Warning: Replay typechecking cannot be performed 
+                            since recorded trace is missing validation data"
+        );
+        Ok(())
     }
 }
 
@@ -125,80 +150,54 @@ pub trait Replayer {
     fn metadata(&self) -> &ReplayMetadata;
 }
 
-/// Arguments for function call/return events
+pub struct ComponentRRFuncArgs {
+    args: RRFuncArgVals,
+    types: Option<InterfaceType>,
+}
+
+/// A call event from a Core Wasm module into the host
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RRFuncArgs {
+pub struct CoreHostFuncEntryEvent {
     /// Raw values passed across the call/return boundary
     args: RRFuncArgVals,
     /// Optional param/return types (required to support replay validation)
     types: Option<RRFuncArgTypes>,
 }
 
-impl RRFuncArgs {
-    /// Typecheck the types field, if it exists
-    ///
-    /// Errors with a [`ReplayError::FailedFuncValidation`] if typechecking fails
-    pub fn typecheck(&self, expect_types: &WasmFuncType) -> Result<(), ReplayError> {
-        if let Some(types) = &self.types {
-            if types == expect_types {
-                Ok(())
-            } else {
-                Err(ReplayError::FailedFuncValidation)
-            }
-        } else {
-            println!(
-                "Warning: Replay typechecking cannot be performed 
-                            since recorded trace is missing validation data"
-            );
-            Ok(())
+impl CoreHostFuncEntryEvent {
+    // Record
+    pub fn new(args: &[MaybeUninit<ValRaw>], types: Option<WasmFuncType>) -> Self {
+        Self {
+            args: func_argvals_from_raw_slice(args),
+            types: types,
         }
+    }
+    // Replay
+    pub fn validate(&self, expect_types: &RRFuncArgTypes) -> Result<(), ReplayError> {
+        replay_args_typecheck(self.types.as_ref(), expect_types)
     }
 }
 
-/// A single, low-level recording/replay event
+/// A return event after a host call for a Core Wasm
 ///
-/// A high-level event (e.g. import calls consisting of lifts and lowers
-/// of parameter/return types) may consist of multiple of these lower-level
-/// [`RREvent`]s
+/// Matches 1:1 with [`CoreHostFuncEntryEvent`]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RREvent {
-    /// A function call from Wasm to Host
-    HostFuncEntry(RRFuncArgs),
-    /// A function return from Host to Wasm.
-    ///
-    /// Matches 1:1 with a prior [`RREvent::HostFuncEntry`] event
-    HostFuncReturn(RRFuncArgs),
+pub struct CoreHostFuncReturnEvent {
+    /// Raw values passed across the call/return boundary
+    args: RRFuncArgVals,
+    /// Optional param/return types (required to support replay validation)
+    types: Option<RRFuncArgTypes>,
 }
 
-impl RREvent {
-    /// Construct a [`RREvent::HostFuncEntry`] event from raw slice
-    pub fn host_func_entry(args: &[MaybeUninit<ValRaw>], types: Option<WasmFuncType>) -> Self {
-        Self::HostFuncEntry(RRFuncArgs {
-            args: raw_to_func_argvals(args),
+impl CoreHostFuncReturnEvent {
+    // Record
+    pub fn new(args: &[MaybeUninit<ValRaw>], types: Option<WasmFuncType>) -> Self {
+        Self {
+            args: func_argvals_from_raw_slice(args),
             types: types,
-        })
-    }
-    /// Construct a [`RREvent::HostFuncReturn`] event from raw slice
-    pub fn host_func_return(args: &[MaybeUninit<ValRaw>], types: Option<WasmFuncType>) -> Self {
-        Self::HostFuncReturn(RRFuncArgs {
-            args: raw_to_func_argvals(args),
-            types: types,
-        })
-    }
-
-    /// Typecheck the function signature for validation
-    ///
-    /// Errors with a [`ReplayError::IncorrectEventVariant`] if not
-    /// a func variant or a [`ReplayError::FailedFuncValidation`] if typechecking fails
-    pub fn func_typecheck(&self, expect_types: &WasmFuncType) -> Result<(), ReplayError> {
-        match self {
-            Self::HostFuncEntry(func_args) | Self::HostFuncReturn(func_args) => {
-                func_args.typecheck(expect_types)
-            }
-            _ => Err(ReplayError::IncorrectEventVariant),
         }
     }
-
+    // Replay
     /// Consume the caller event and encode it back into the slice with an optional
     /// typechecking validation of the event.
     pub fn move_into_slice(
@@ -206,15 +205,54 @@ impl RREvent {
         args: &mut [MaybeUninit<ValRaw>],
         expect_types: Option<&WasmFuncType>,
     ) -> Result<(), ReplayError> {
-        match self {
-            Self::HostFuncEntry(func_args) | Self::HostFuncReturn(func_args) => {
-                if let Some(e) = expect_types {
-                    func_args.typecheck(e)?;
-                }
-                func_argvals_into_raw(func_args.args, args);
-            }
-        };
+        if let Some(e) = expect_types {
+            replay_args_typecheck(self.types.as_ref(), e)?;
+        }
+        func_argvals_into_raw_slice(self.args, args);
         Ok(())
+    }
+}
+
+/// A single, unified, low-level recording/replay event
+///
+/// This type is the narrow waist for serialization/deserialization.
+/// Higher-level events (e.g. import calls consisting of lifts and lowers
+/// of parameter/return types) may drop down to one or more [`RREvent`]s
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RREvent {
+    CoreHostFuncEntry(CoreHostFuncEntryEvent),
+    CoreHostFuncReturn(CoreHostFuncReturnEvent),
+}
+
+impl From<CoreHostFuncEntryEvent> for RREvent {
+    fn from(value: CoreHostFuncEntryEvent) -> Self {
+        RREvent::CoreHostFuncEntry(value)
+    }
+}
+impl TryFrom<RREvent> for CoreHostFuncEntryEvent {
+    type Error = ReplayError;
+    fn try_from(value: RREvent) -> Result<Self, Self::Error> {
+        if let RREvent::CoreHostFuncEntry(x) = value {
+            Ok(x)
+        } else {
+            Err(ReplayError::IncorrectEventVariant)
+        }
+    }
+}
+
+impl From<CoreHostFuncReturnEvent> for RREvent {
+    fn from(value: CoreHostFuncReturnEvent) -> Self {
+        RREvent::CoreHostFuncReturn(value)
+    }
+}
+impl TryFrom<RREvent> for CoreHostFuncReturnEvent {
+    type Error = ReplayError;
+    fn try_from(value: RREvent) -> Result<Self, Self::Error> {
+        if let RREvent::CoreHostFuncReturn(x) = value {
+            Ok(x)
+        } else {
+            Err(ReplayError::IncorrectEventVariant)
+        }
     }
 }
 
@@ -340,14 +378,14 @@ mod tests {
             .map(|x| ValRawSer::from(x))
             .collect::<Vec<_>>();
 
-        let event = RREvent::HostFuncEntry(RRFuncArgs {
+        let event = CoreHostFuncEntryEvent {
             args: values,
             types: None,
-        });
+        };
 
         // Record values
         let mut recorder = RecordBuffer::new_recorder(record_cfg)?;
-        recorder.push_event(event.clone());
+        recorder.push_event(event.clone().into());
         recorder.flush_to_file()?;
 
         let tmp = tmp.into_temp_path();
@@ -361,7 +399,7 @@ mod tests {
             metadata: ReplayMetadata { validate: true },
         };
         let mut replayer = ReplayBuffer::new_replayer(replay_cfg)?;
-        let event_pop = replayer.pop_event()?;
+        let event_pop = CoreHostFuncEntryEvent::try_from(replayer.pop_event()?)?;
         // Replay matches record
         assert!(event == event_pop);
 

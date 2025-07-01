@@ -1,6 +1,6 @@
 use crate::prelude::*;
+use crate::rr::{CoreHostFuncEntryEvent, CoreHostFuncReturnEvent};
 use crate::runtime::Uninhabited;
-use crate::runtime::rr::RREvent;
 use crate::runtime::vm::{
     ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext,
     VMCommonStackInformation, VMContext, VMFuncRef, VMFunctionImport, VMOpaqueContext,
@@ -2356,15 +2356,15 @@ impl HostContext {
                 // lazily evaluated
                 store.replay_event(
                     |r| r.validate,
-                    |event, _| event.func_typecheck(wasm_func_type.unwrap()),
+                    |event: CoreHostFuncEntryEvent, _| event.validate(wasm_func_type.unwrap()),
                 )?;
                 store.record_event(
                     |r| r.add_validation,
                     |_| {
                         let wasm_func_type = wasm_func_type.unwrap();
                         let num_params = wasm_func_type.params().len();
-                        RREvent::host_func_entry(
-                            unsafe { &args.as_ref()[..num_params] },
+                        CoreHostFuncEntryEvent::new(
+                            &args.as_ref()[..num_params],
                             // Don't need to check validation here since it is
                             // covered by the push predicate in this case
                             Some(wasm_func_type.clone()),
@@ -2405,7 +2405,7 @@ impl HostContext {
             let ret = if store.replay_enabled() {
                 store.replay_event(
                     |_| true,
-                    |event, rmeta| {
+                    |event: CoreHostFuncReturnEvent, rmeta| {
                         event.move_into_slice(
                             args.as_mut(),
                             rmeta.validate.then_some(wasm_func_type.unwrap()),
@@ -2420,7 +2420,7 @@ impl HostContext {
                 |rmeta| {
                     let wasm_func_type = wasm_func_type.unwrap();
                     let num_results = wasm_func_type.params().len();
-                    RREvent::host_func_return(
+                    CoreHostFuncReturnEvent::new(
                         unsafe { &args.as_ref()[..num_results] },
                         rmeta.add_validation.then_some(wasm_func_type.clone()),
                     )
