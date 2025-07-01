@@ -1660,7 +1660,7 @@ pub struct WasmStr {
 }
 
 impl WasmStr {
-    pub(crate) fn new(ptr: usize, len: usize, cx: &mut LiftContext<'_>) -> Result<WasmStr> {
+    fn new(ptr: usize, len: usize, cx: &mut LiftContext<'_>) -> Result<WasmStr> {
         let byte_len = match cx.options.string_encoding() {
             StringEncoding::Utf8 => Some(len),
             StringEncoding::Utf16 => len.checked_mul(2),
@@ -1713,7 +1713,7 @@ impl WasmStr {
         self.to_str_from_memory(memory)
     }
 
-    pub(crate) fn to_str_from_memory<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
+    fn to_str_from_memory<'a>(&self, memory: &'a [u8]) -> Result<Cow<'a, str>> {
         match self.options.string_encoding() {
             StringEncoding::Utf8 => self.decode_utf8(memory),
             StringEncoding::Utf16 => self.decode_utf16(memory, self.len),
@@ -1919,7 +1919,7 @@ pub struct WasmList<T> {
 }
 
 impl<T: Lift> WasmList<T> {
-    pub(crate) fn new(
+    fn new(
         ptr: usize,
         len: usize,
         cx: &mut LiftContext<'_>,
