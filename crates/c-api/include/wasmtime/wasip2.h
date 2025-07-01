@@ -22,11 +22,29 @@ typedef struct wasmtime_wasip2_config_t wasmtime_wasip2_config_t;
 WASM_API_EXTERN wasmtime_wasip2_config_t *wasmtime_wasip2_config_new();
 
 /**
+ * \brief Configures this context's stdin stream to read the host process's
+ * stdin.
+ *
+ * Note that concurrent reads of stdin can produce surprising results so when
+ * using this it's typically best to have a single wasm instance in the process
+ * using this.
+ */
+WASM_API_EXTERN void
+wasmtime_wasip2_config_inherit_stdin(wasmtime_wasip2_config_t *config);
+
+/**
  * \brief Configures this context's stdout stream to write to the host process's
  * stdout.
  */
 WASM_API_EXTERN void
 wasmtime_wasip2_config_inherit_stdout(wasmtime_wasip2_config_t *config);
+
+/**
+ * \brief Configures this context's stderr stream to write to the host process's
+ * stderr.
+ */
+WASM_API_EXTERN void
+wasmtime_wasip2_config_inherit_stderr(wasmtime_wasip2_config_t *config);
 
 /**
  * \brief Delete a #wasmtime_wasip2_config_t
