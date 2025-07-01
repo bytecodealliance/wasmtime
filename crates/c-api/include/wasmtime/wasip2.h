@@ -47,6 +47,13 @@ WASM_API_EXTERN void
 wasmtime_wasip2_config_inherit_stderr(wasmtime_wasip2_config_t *config);
 
 /**
+ * \brief Appends a single argument to get passed to wasm.
+ */
+WASM_API_EXTERN void
+wasmtime_wasip2_config_arg(wasmtime_wasip2_config_t *config, const char *arg,
+                           size_t arg_len);
+
+/**
  * \brief Delete a #wasmtime_wasip2_config_t
  *
  * \note This is not needed if the config is passed to
