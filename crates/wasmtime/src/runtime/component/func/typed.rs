@@ -22,6 +22,8 @@ use crate::component::concurrent::{self, PreparedCall};
 use core::any::Any;
 #[cfg(feature = "component-model-async")]
 use core::future::Future;
+#[cfg(feature = "component-model-async")]
+use core::pin::Pin;
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
@@ -203,12 +205,18 @@ where
     /// function belongs to; use `Instance::run`, `Instance::run_with`, or
     /// `Instance::spawn` to poll it from within the event loop.  See
     /// [`Instance::run`] for examples.
+    //
+    // FIXME: this function should return `impl Future` but that forces
+    // capturing all type parameters in scope at this time. The future
+    // intentionally does not close over `store` but returning `impl Future`
+    // implicitly does so. In a future version of Rust maybe this limitation
+    // will be lifted? Maybe rust-lang/rust#130043. Unsure.
     #[cfg(feature = "component-model-async")]
     pub fn call_concurrent(
         self,
         mut store: impl AsContextMut<Data: Send>,
         params: Params,
-    ) -> impl Future<Output = Result<Return>> + Send + 'static
+    ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send>>
     where
         Params: 'static,
         Return: 'static,
@@ -229,12 +237,12 @@ where
             concurrent::queue_call(store, prepared)
         })();
 
-        async move {
+        Box::pin(async move {
             match result {
                 Ok(future) => future.await,
                 Err(e) => Err(e),
             }
-        }
+        })
     }
 
     /// Calls `concurrent::prepare_call` with monomorphized functions for
