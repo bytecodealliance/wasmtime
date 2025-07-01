@@ -1054,12 +1054,7 @@ pub(crate) struct PreparedCall<R> {
 /// indefinitely; `drop_params` will be called when they are no longer needed.
 pub(crate) fn prepare_call<T: Send + 'static, R>(
     mut store: StoreContextMut<T>,
-    lower_params: impl FnOnce(
-        Func,
-        StoreContextMut<T>,
-        Instance,
-        &mut [MaybeUninit<ValRaw>],
-    ) -> Result<()>
+    lower_params: impl FnOnce(Func, StoreContextMut<T>, &mut [MaybeUninit<ValRaw>]) -> Result<()>
     + Send
     + Sync
     + 'static,

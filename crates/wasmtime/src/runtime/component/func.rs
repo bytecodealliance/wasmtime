@@ -360,8 +360,8 @@ impl Func {
 
         concurrent::prepare_call(
             store,
-            move |func, store, instance, params_out| {
-                lower_params(store, instance, func, |cx, ty| {
+            move |func, store, params_out| {
+                func.lower_params(store, |cx, ty| {
                     Self::lower_args(cx, &params, ty, params_out)
                 })
             },
@@ -855,38 +855,36 @@ impl Func {
             })
             .collect()
     }
-}
 
-/// Lower parameters of the specified type using the specified function.
-#[cfg(feature = "component-model-async")]
-fn lower_params<T>(
-    mut store: StoreContextMut<T>,
-    instance: Instance,
-    me: Func,
-    lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
-) -> Result<()> {
-    let reference = instance.id().get(store.0);
-    let types = reference.component().types().clone();
-    let (options, mut flags, ty, _) = me.abi_info(store.0);
+    /// Lower parameters of the specified type using the specified function.
+    #[cfg(feature = "component-model-async")]
+    fn lower_params<T>(
+        self,
+        mut store: StoreContextMut<T>,
+        lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
+    ) -> Result<()> {
+        let types = self.instance.id().get(store.0).component().types().clone();
+        let (options, mut flags, ty, _) = self.abi_info(store.0);
 
-    if unsafe { !flags.may_enter() } {
-        bail!(crate::Trap::CannotEnterComponent);
-    }
-
-    unsafe { flags.set_may_leave(false) };
-    let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, instance);
-    let result = lower(&mut cx, InterfaceType::Tuple(types[ty].params));
-    unsafe { flags.set_may_leave(true) };
-    result?;
-
-    if !options.async_() {
-        unsafe {
-            flags.set_may_enter(false);
-            flags.set_needs_post_return(true);
+        if unsafe { !flags.may_enter() } {
+            bail!(crate::Trap::CannotEnterComponent);
         }
-    }
 
-    Ok(())
+        unsafe { flags.set_may_leave(false) };
+        let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, self.instance);
+        let result = lower(&mut cx, InterfaceType::Tuple(types[ty].params));
+        unsafe { flags.set_may_leave(true) };
+        result?;
+
+        if !options.async_() {
+            unsafe {
+                flags.set_may_enter(false);
+                flags.set_needs_post_return(true);
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// Lift results of the specified type using the specified function.

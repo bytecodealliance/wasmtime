@@ -274,19 +274,20 @@ where
         };
         concurrent::prepare_call(
             store,
-            move |func, store, instance, params_out| {
+            move |func, store, params_out| {
                 if Params::flatten_count() <= MAX_FLAT_PARAMS {
                     // SAFETY: the safety of `slice_to_storage_mut` relies on
                     // `Params::Lower` being represented by a sequence of
                     // `ValRaw`, and that's a guarantee upheld by the `Lower`
                     // trait itself.
+                    // SAFETY: TODO
                     let params_out: &mut MaybeUninit<Params::Lower> =
                         unsafe { slice_to_storage_mut(params_out) };
-                    super::lower_params(store, instance, func, |cx, ty| {
+                    func.lower_params(store, |cx, ty| {
                         Self::lower_stack_args(cx, &params, ty, params_out)
                     })
                 } else {
-                    super::lower_params(store, instance, func, |cx, ty| {
+                    func.lower_params(store, |cx, ty| {
                         Self::lower_heap_args(cx, &params, ty, &mut params_out[0])
                     })
                 }
