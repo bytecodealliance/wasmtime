@@ -95,7 +95,7 @@
 //!     // much quicker.
 //!     let mut linker = Linker::new(&engine);
 //!     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
-//!     wasmtime_wasi_http::add_to_linker_async(&mut linker)?;
+//!     wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)?;
 //!     let pre = ProxyPre::new(linker.instantiate_pre(&component)?)?;
 //!
 //!     // Prepare our server state and start listening for connections.
