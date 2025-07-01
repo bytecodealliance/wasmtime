@@ -27,8 +27,8 @@
 ;; @0020                               v5 = load.i64 notrap aligned readonly can_move v13+24
 ;; @0020                               v4 = uextend.i64 v2
 ;; @0020                               v6 = iadd v5, v4
-;; @0020                               v7 = iconst.i64 16
-;; @0020                               v8 = iadd v6, v7  ; v7 = 16
+;; @0020                               v7 = iconst.i64 24
+;; @0020                               v8 = iadd v6, v7  ; v7 = 24
 ;; @0020                               v11 = load.i32 notrap aligned little v8
 ;; @0020                               v9 = iconst.i32 -1
 ;; @0020                               v12 = call fn0(v0, v11, v9)  ; v9 = -1

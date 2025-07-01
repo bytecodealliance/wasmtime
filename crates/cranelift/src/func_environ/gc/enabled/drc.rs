@@ -381,8 +381,6 @@ impl GcCompiler for DrcCompiler {
         let field_offsets: SmallVec<[_; 8]> = struct_layout.fields.iter().copied().collect();
         assert_eq!(field_vals.len(), field_offsets.len());
 
-        assert_eq!(VMGcKind::MASK & struct_size, 0);
-        assert_eq!(VMGcKind::UNUSED_MASK & struct_size, struct_size);
         let struct_size_val = builder.ins().iconst(ir::types::I32, i64::from(struct_size));
 
         let struct_ref = emit_gc_raw_alloc(

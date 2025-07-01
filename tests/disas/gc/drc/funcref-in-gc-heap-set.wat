@@ -29,8 +29,8 @@
 ;; @0022                               v5 = load.i64 notrap aligned readonly can_move v12+24
 ;; @0022                               v4 = uextend.i64 v2
 ;; @0022                               v6 = iadd v5, v4
-;; @0022                               v7 = iconst.i64 16
-;; @0022                               v8 = iadd v6, v7  ; v7 = 16
+;; @0022                               v7 = iconst.i64 24
+;; @0022                               v8 = iadd v6, v7  ; v7 = 24
 ;; @0022                               store notrap aligned little v11, v8
 ;; @0026                               jump block1
 ;;
