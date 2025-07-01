@@ -220,17 +220,7 @@ pub fn run(attrs: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
-    let mut tests = if test_config.strategies == [Compiler::Winch] {
-        vec![quote! {
-            // This prevents dead code warning when the macro is invoked as:
-            //     #[wasmtime_test(strategies(only(Winch))]
-            // Given that Winch only fully supports x86_64 / aarch64.
-            #[allow(dead_code)]
-            #func
-        }]
-    } else {
-        vec![quote! { #func }]
-    };
+    let mut tests = vec![quote! { #func }];
     let attrs = &func.attrs;
 
     let test_attr = test_config
@@ -240,13 +230,6 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
 
     for strategy in &test_config.strategies {
         let strategy_name = format!("{strategy:?}");
-        // Winch currently only offers support for x64, and it requires
-        // signals-based-traps which MIRI disables so disable winch tests on MIRI
-        let target = if *strategy == Compiler::Winch {
-            quote! { #[cfg(all(any(target_arch = "x86_64", target_arch = "aarch64"), not(miri)))] }
-        } else {
-            quote! {}
-        };
         let (asyncness, await_) = if func.sig.asyncness.is_some() {
             (quote! { async }, quote! { .await })
         } else {
@@ -264,6 +247,13 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
             func_name.span(),
         );
 
+        // Ignore non-pulley tests in Miri as that's the only compiler which
+        // works in Miri.
+        let ignore_miri = match strategy {
+            Compiler::CraneliftPulley => quote!(),
+            _ => quote!(#[cfg_attr(miri, ignore)]),
+        };
+
         let test_config = format!("wasmtime_test_util::wast::{:?}", test_config.flags)
             .parse::<proc_macro2::TokenStream>()
             .unwrap();
@@ -271,8 +261,8 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
 
         let tok = quote! {
             #test_attr
-            #target
             #(#attrs)*
+            #ignore_miri
             #asyncness fn #test_name() {
                 let _ = env_logger::try_init();
                 let mut config = Config::new();
