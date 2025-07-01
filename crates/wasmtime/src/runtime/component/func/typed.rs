@@ -350,49 +350,49 @@ where
 
         if self.func.abi_async(store.0) {
             bail!("must enable the `component-model-async` feature to call async-lifted exports")
-        } else {
-            // Note that this is in theory simpler than it might read at this time.
-            // Here we're doing a runtime dispatch on the `flatten_count` for the
-            // params/results to see whether they're inbounds. This creates 4 cases
-            // to handle. In reality this is a highly optimizable branch where LLVM
-            // will easily figure out that only one branch here is taken.
-            //
-            // Otherwise this current construction is done to ensure that the stack
-            // space reserved for the params/results is always of the appropriate
-            // size (as the params/results needed differ depending on the "flatten"
-            // count)
-            if Params::flatten_count() <= MAX_FLAT_PARAMS {
-                if Return::flatten_count() <= MAX_FLAT_RESULTS {
-                    self.func.call_raw(
-                        store,
-                        &params,
-                        Self::lower_stack_args,
-                        Self::lift_stack_result,
-                    )
-                } else {
-                    self.func.call_raw(
-                        store,
-                        &params,
-                        Self::lower_stack_args,
-                        Self::lift_heap_result,
-                    )
-                }
+        }
+
+        // Note that this is in theory simpler than it might read at this time.
+        // Here we're doing a runtime dispatch on the `flatten_count` for the
+        // params/results to see whether they're inbounds. This creates 4 cases
+        // to handle. In reality this is a highly optimizable branch where LLVM
+        // will easily figure out that only one branch here is taken.
+        //
+        // Otherwise this current construction is done to ensure that the stack
+        // space reserved for the params/results is always of the appropriate
+        // size (as the params/results needed differ depending on the "flatten"
+        // count)
+        if Params::flatten_count() <= MAX_FLAT_PARAMS {
+            if Return::flatten_count() <= MAX_FLAT_RESULTS {
+                self.func.call_raw(
+                    store,
+                    &params,
+                    Self::lower_stack_args,
+                    Self::lift_stack_result,
+                )
             } else {
-                if Return::flatten_count() <= MAX_FLAT_RESULTS {
-                    self.func.call_raw(
-                        store,
-                        &params,
-                        Self::lower_heap_args,
-                        Self::lift_stack_result,
-                    )
-                } else {
-                    self.func.call_raw(
-                        store,
-                        &params,
-                        Self::lower_heap_args,
-                        Self::lift_heap_result,
-                    )
-                }
+                self.func.call_raw(
+                    store,
+                    &params,
+                    Self::lower_stack_args,
+                    Self::lift_heap_result,
+                )
+            }
+        } else {
+            if Return::flatten_count() <= MAX_FLAT_RESULTS {
+                self.func.call_raw(
+                    store,
+                    &params,
+                    Self::lower_heap_args,
+                    Self::lift_stack_result,
+                )
+            } else {
+                self.func.call_raw(
+                    store,
+                    &params,
+                    Self::lower_heap_args,
+                    Self::lift_heap_result,
+                )
             }
         }
     }
