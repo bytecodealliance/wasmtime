@@ -950,7 +950,7 @@ pub unsafe trait Lift: Sized + ComponentType {
         Self: Sized,
     {
         let mut dst = Vec::with_capacity(list.len);
-        Self::linear_lift_into_from_memory(cx, list, &mut dst, list.len)?;
+        Self::linear_lift_into_from_memory(cx, list, &mut dst)?;
         Ok(dst)
     }
 
@@ -964,16 +964,13 @@ pub unsafe trait Lift: Sized + ComponentType {
         cx: &mut LiftContext<'_>,
         list: &WasmList<Self>,
         dst: &mut impl Extend<Self>,
-        max_count: usize,
     ) -> Result<()>
     where
         Self: Sized,
     {
-        dst.extend(
-            (0..list.len.min(max_count))
-                .map(|index| list.get_from_store(cx, index).unwrap())
-                .collect::<Result<Vec<_>, _>>()?,
-        );
+        for i in 0..list.len {
+            dst.extend(Some(list.get_from_store(cx, i).unwrap()?));
+        }
         Ok(())
     }
 }
@@ -1182,14 +1179,13 @@ macro_rules! integers {
                 cx: &mut LiftContext<'_>,
                 list: &WasmList<Self>,
                 dst: &mut impl Extend<Self>,
-                max_count: usize
             ) -> Result<()>
             where
                 Self: Sized,
             {
                 dst.extend(list._as_le_slice(cx.memory())
                            .iter()
-                           .map(|i| Self::from_le(*i)).take(max_count));
+                           .map(|i| Self::from_le(*i)));
                 Ok(())
             }
         }
