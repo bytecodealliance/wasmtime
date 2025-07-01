@@ -247,6 +247,13 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
             func_name.span(),
         );
 
+        // Ignore non-pulley tests in Miri as that's the only compiler which
+        // works in Miri.
+        let ignore_miri = match strategy {
+            Compiler::CraneliftPulley => quote!(),
+            _ => quote!(#[cfg_attr(miri, ignore)]),
+        };
+
         let test_config = format!("wasmtime_test_util::wast::{:?}", test_config.flags)
             .parse::<proc_macro2::TokenStream>()
             .unwrap();
@@ -255,6 +262,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
         let tok = quote! {
             #test_attr
             #(#attrs)*
+            #ignore_miri
             #asyncness fn #test_name() {
                 let _ = env_logger::try_init();
                 let mut config = Config::new();
