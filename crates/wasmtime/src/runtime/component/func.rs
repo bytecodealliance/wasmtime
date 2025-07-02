@@ -364,9 +364,13 @@ impl Func {
                 })
             },
             move |func, store, results| {
-                let is_async = func.abi_async(store);
+                let max_flat = if func.abi_async(store) {
+                    MAX_FLAT_PARAMS
+                } else {
+                    MAX_FLAT_RESULTS
+                };
                 let results = func.with_lift_context(store, |cx, ty| {
-                    Self::lift_results(cx, ty, results, is_async)
+                    Self::lift_results(cx, ty, results, max_flat)
                 })?;
                 Ok(Box::new(results))
             },
@@ -419,7 +423,8 @@ impl Func {
                 Self::lower_args(cx, params, ty, dst)
             },
             |cx, results_ty, src: &[ValRaw; MAX_FLAT_RESULTS]| {
-                for (result, slot) in Self::lift_results_sync(cx, results_ty, src)?
+                let max_flat = MAX_FLAT_RESULTS;
+                for (result, slot) in Self::lift_results(cx, results_ty, src, max_flat)?
                     .into_iter()
                     .zip(results)
                 {
@@ -781,30 +786,17 @@ impl Func {
         Ok(())
     }
 
-    fn lift_results_sync(
-        cx: &mut LiftContext<'_>,
-        results_ty: InterfaceType,
-        src: &[ValRaw],
-    ) -> Result<Vec<Val>> {
-        Self::lift_results(cx, results_ty, src, false)
-    }
-
     fn lift_results(
         cx: &mut LiftContext<'_>,
         results_ty: InterfaceType,
         src: &[ValRaw],
-        async_: bool,
+        max_flat: usize,
     ) -> Result<Vec<Val>> {
         let results_ty = match results_ty {
             InterfaceType::Tuple(i) => &cx.types[i],
             _ => unreachable!(),
         };
-        let limit = if async_ {
-            MAX_FLAT_PARAMS
-        } else {
-            MAX_FLAT_RESULTS
-        };
-        if results_ty.abi.flat_count(limit).is_some() {
+        if results_ty.abi.flat_count(max_flat).is_some() {
             let mut flat = src.iter();
             results_ty
                 .types
