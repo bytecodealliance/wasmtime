@@ -254,9 +254,8 @@ where
     {
         use crate::component::storage::{slice_to_storage, slice_to_storage_mut};
 
-        let param_count = mem::size_of::<Params::Lower>() / mem::size_of::<ValRaw>();
         let param_count = if Params::flatten_count() <= MAX_FLAT_PARAMS {
-            param_count
+            Params::flatten_count()
         } else {
             1
         };
