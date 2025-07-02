@@ -363,12 +363,13 @@ impl Func {
                     Self::lower_args(cx, &params, ty, params_out)
                 })
             },
-            move |func, store, instance, results| {
-                if func.abi_async(store.0) {
-                    lift_results(store, instance, results, func, Self::lift_results_async)
+            move |func, store, results| {
+                let results = if func.abi_async(store) {
+                    lift_results(store, results, func, Self::lift_results_async)?
                 } else {
-                    lift_results(store, instance, results, func, Self::lift_results_sync)
-                }
+                    lift_results(store, results, func, Self::lift_results_sync)?
+                };
+                Ok(Box::new(results))
             },
             self,
             MAX_FLAT_PARAMS,
@@ -887,22 +888,17 @@ impl Func {
 
 /// Lift results of the specified type using the specified function.
 #[cfg(feature = "component-model-async")]
-fn lift_results<
-    Return: Send + Sync + 'static,
-    T,
-    F: FnOnce(&mut LiftContext, InterfaceType, &[ValRaw]) -> Result<Return> + Send + Sync,
->(
-    store: StoreContextMut<T>,
-    instance: Instance,
+fn lift_results<R>(
+    store: &mut StoreOpaque,
     lowered: &[ValRaw],
     me: Func,
-    lift: F,
-) -> Result<Box<dyn std::any::Any + Send + Sync>> {
-    let (options, _flags, ty, _) = me.abi_info(store.0);
-    let types = instance.id().get(store.0).component().types().clone();
-    Ok(Box::new(lift(
-        &mut LiftContext::new(store.0, &options, &types, instance),
+    lift: impl FnOnce(&mut LiftContext, InterfaceType, &[ValRaw]) -> Result<R>,
+) -> Result<R> {
+    let (options, _flags, ty, _) = me.abi_info(store);
+    let types = me.instance.id().get(store).component().types().clone();
+    lift(
+        &mut LiftContext::new(store, &options, &types, me.instance),
         InterfaceType::Tuple(types[ty].results),
         lowered,
-    )?) as Box<dyn std::any::Any + Send + Sync>)
+    )
 }

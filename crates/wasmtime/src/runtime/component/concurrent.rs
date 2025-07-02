@@ -1058,20 +1058,13 @@ pub(crate) fn prepare_call<T: Send + 'static, R>(
     + Send
     + Sync
     + 'static,
-    lift_result: impl FnOnce(
-        Func,
-        StoreContextMut<T>,
-        Instance,
-        &[ValRaw],
-    ) -> Result<Box<dyn Any + Send + Sync>>
+    lift_result: impl FnOnce(Func, &mut StoreOpaque, &[ValRaw]) -> Result<Box<dyn Any + Send + Sync>>
     + Send
     + Sync
     + 'static,
     handle: Func,
     param_count: usize,
 ) -> Result<PreparedCall<R>> {
-    _ = (&mut store, lower_params, lift_result, handle, param_count);
-    todo!()
 }
 
 /// Queue a call previously prepared using `prepare_call` to be run as part of

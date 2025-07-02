@@ -289,12 +289,13 @@ where
                     })
                 }
             },
-            move |func, store, instance, results| {
-                if Return::flatten_count() <= max_results {
-                    super::lift_results(store, instance, results, func, Self::lift_stack_result_raw)
+            move |func, store, results| {
+                let result = if Return::flatten_count() <= max_results {
+                    super::lift_results(store, results, func, Self::lift_stack_result_raw)?
                 } else {
-                    super::lift_results(store, instance, results, func, Self::lift_heap_result_raw)
-                }
+                    super::lift_results(store, results, func, Self::lift_heap_result_raw)?
+                };
+                Ok(Box::new(result))
             },
             self.func,
             param_count,
