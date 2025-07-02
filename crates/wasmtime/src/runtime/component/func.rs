@@ -29,12 +29,6 @@ pub use self::host::*;
 pub use self::options::*;
 pub use self::typed::*;
 
-#[repr(C)]
-union ParamsAndResults<Params: Copy, Return: Copy> {
-    params: Params,
-    ret: Return,
-}
-
 /// A WebAssembly component function which can be called.
 ///
 /// This type is the dual of [`wasmtime::Func`](crate::Func) for component
@@ -536,7 +530,13 @@ impl Func {
     {
         let export = self.lifted_core_func(store.0);
 
-        let space = &mut MaybeUninit::<ParamsAndResults<LowerParams, LowerReturn>>::uninit();
+        #[repr(C)]
+        union Union<Params: Copy, Return: Copy> {
+            params: Params,
+            ret: Return,
+        }
+
+        let space = &mut MaybeUninit::<Union<LowerParams, LowerReturn>>::uninit();
 
         // Double-check the size/alignment of `space`, just in case.
         //
