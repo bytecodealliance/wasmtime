@@ -34,3 +34,7 @@ libc = { workspace = true }
 # This feature enables such optimizations, but the resulting program will *only*
 # be safe to run on one-core systems.
 one-core = []
+
+# Allow using the standard library for this crate. Currently, only the Windows
+# implementation relies on the standard library.
+std = []

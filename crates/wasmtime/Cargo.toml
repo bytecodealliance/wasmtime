@@ -333,6 +333,7 @@ std = [
   'wasmtime-math/std',
   'addr2line?/std',
   "dep:rustix",
+  "wasmtime-jit-icache-coherence/std",
 ]
 
 # Enables support for the `Store::call_hook` API which enables injecting custom

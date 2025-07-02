@@ -79,7 +79,7 @@
 use core::ffi::c_void;
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "windows")] {
+    if #[cfg(all(target_os = "windows", feature = "std"))] {
         mod win;
         use win as imp;
     } else if #[cfg(miri)] {
