@@ -513,8 +513,6 @@ impl Func {
         LowerReturn: Copy,
     {
         let export = self.lifted_core_func(store.0);
-        let vminstance = self.instance.id().get(store.0);
-        let (options, mut flags, ty, _) = self.abi_info(store.0);
 
         let space = &mut MaybeUninit::<ParamsAndResults<LowerParams, LowerReturn>>::uninit();
 
@@ -533,34 +531,12 @@ impl Func {
         assert!(mem::align_of_val(map_maybe_uninit!(space.params)) == val_align);
         assert!(mem::align_of_val(map_maybe_uninit!(space.ret)) == val_align);
 
-        let types = vminstance.component().types().clone();
+        self.with_lower_context(store.as_context_mut(), |cx, ty| {
+            cx.enter_call();
+            lower(cx, params, ty, map_maybe_uninit!(space.params))
+        })?;
 
         unsafe {
-            // Test the "may enter" flag which is a "lock" on this instance.
-            // This is immediately set to `false` afterwards and note that
-            // there's no on-cleanup setting this flag back to true. That's an
-            // intentional design aspect where if anything goes wrong internally
-            // from this point on the instance is considered "poisoned" and can
-            // never be entered again. The only time this flag is set to `true`
-            // again is after post-return logic has completed successfully.
-            if !flags.may_enter() {
-                bail!(crate::Trap::CannotEnterComponent);
-            }
-            flags.set_may_enter(false);
-
-            debug_assert!(flags.may_leave());
-            flags.set_may_leave(false);
-            let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, self.instance);
-            cx.enter_call();
-            let result = lower(
-                &mut cx,
-                params,
-                InterfaceType::Tuple(types[ty].params),
-                map_maybe_uninit!(space.params),
-            );
-            flags.set_may_leave(true);
-            result?;
-
             // This is unsafe as we are providing the guarantee that all the
             // inputs are valid. The various pointers passed in for the function
             // are all valid since they're coming from our store, and the
@@ -591,7 +567,7 @@ impl Func {
             // is currently required to be 0 or 1 values according to the
             // canonical ABI, is saved within the `Store`'s `FuncData`. This'll
             // later get used in post-return.
-            flags.set_needs_post_return(true);
+            // flags.set_needs_post_return(true);
             let val = self.with_lift_context(store.0, |cx, ty| lift(cx, ty, ret))?;
             let ret_slice = storage_as_slice(ret);
             self.instance.id().get_mut(store.0).post_return_arg_set(
@@ -829,8 +805,12 @@ impl Func {
             .collect()
     }
 
-    /// Lower parameters of the specified type using the specified function.
-    #[cfg(feature = "component-model-async")]
+    /// Creates a `LowerContext` using the configuration values of this lifted
+    /// function.
+    ///
+    /// The `lower` closure provided should perform the actual lowering and
+    /// return the result of the lowering operation which is then returned from
+    /// this function as well.
     fn with_lower_context<T>(
         self,
         mut store: StoreContextMut<T>,
@@ -839,19 +819,39 @@ impl Func {
         let types = self.instance.id().get(store.0).component().types().clone();
         let (options, mut flags, ty, _) = self.abi_info(store.0);
 
-        if unsafe { !flags.may_enter() } {
-            bail!(crate::Trap::CannotEnterComponent);
+        // Test the "may enter" flag which is a "lock" on this instance.
+        // This is immediately set to `false` afterwards and note that
+        // there's no on-cleanup setting this flag back to true. That's an
+        // intentional design aspect where if anything goes wrong internally
+        // from this point on the instance is considered "poisoned" and can
+        // never be entered again. The only time this flag is set to `true`
+        // again is after post-return logic has completed successfully.
+        unsafe {
+            if !flags.may_enter() {
+                bail!(crate::Trap::CannotEnterComponent);
+            }
+            flags.set_may_enter(false);
         }
 
-        unsafe { flags.set_may_leave(false) };
+        // Perform the actual lowering, where while this is running the
+        // component is forbidden from calling imports.
+        unsafe {
+            debug_assert!(flags.may_leave());
+            flags.set_may_leave(false);
+        }
         let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, self.instance);
         let result = lower(&mut cx, InterfaceType::Tuple(types[ty].params));
         unsafe { flags.set_may_leave(true) };
         result?;
 
-        if !options.async_() {
-            unsafe {
-                flags.set_may_enter(false);
+        // If this is an async function then we're allowed to reenter the
+        // component at this point, and otherwise flag a post-return call being
+        // required as we're about to enter wasm and afterwards need a
+        // post-return.
+        unsafe {
+            if options.async_() {
+                flags.set_may_enter(true);
+            } else {
                 flags.set_needs_post_return(true);
             }
         }
@@ -859,7 +859,11 @@ impl Func {
         Ok(())
     }
 
-    /// Lift results of the specified type using the specified function.
+    /// Creates a `LiftContext` using the configuration values with this lifted
+    /// function.
+    ///
+    /// The closure `lift` provided should actually perform the lift itself and
+    /// the result of that closure is returned from this function call as well.
     fn with_lift_context<R>(
         self,
         store: &mut StoreOpaque,
