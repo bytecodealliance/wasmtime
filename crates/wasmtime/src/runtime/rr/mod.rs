@@ -16,40 +16,6 @@ use std::io::{BufWriter, Seek, Write};
 mod events;
 pub use events::*;
 
-pub trait Recorder {
-    /// Constructs a writer on new buffer
-    fn new_recorder(cfg: RecordConfig) -> Result<Self>
-    where
-        Self: Sized;
-
-    /// Push a newly record event [`RREvent`] to the buffer
-    fn push_event(&mut self, event: RREvent) -> ();
-
-    /// Flush memory contents to underlying persistent storage
-    ///
-    /// Buffer should be emptied during this process
-    fn flush_to_file(&mut self) -> Result<()>;
-
-    /// Get metadata associated with the recording process
-    fn metadata(&self) -> &RecordMetadata;
-}
-
-pub trait Replayer {
-    type ReplayError;
-
-    /// Constructs a reader on buffer
-    fn new_replayer(cfg: ReplayConfig) -> Result<Self>
-    where
-        Self: Sized;
-
-    /// Pop the next [`RREvent`] from the buffer
-    /// Events should be FIFO
-    fn pop_event(&mut self) -> Result<RREvent, ReplayError>;
-
-    /// Get metadata associated with the replay process
-    fn metadata(&self) -> &ReplayMetadata;
-}
-
 /// Macro template for [`RREvent`] and its conversion to/from specific
 /// event types
 macro_rules! rr_event {
@@ -86,7 +52,43 @@ macro_rules! rr_event {
 // Set of supported events
 rr_event! {
     CoreHostFuncEntry(CoreHostFuncEntryEvent),
-    CoreHostFuncReturn(CoreHostFuncReturnEvent)
+    CoreHostFuncReturn(CoreHostFuncReturnEvent),
+    ComponentHostFuncEntry(ComponentHostFuncEntryEvent),
+    ComponentHostFuncReturn(ComponentHostFuncReturnEvent)
+}
+
+pub trait Recorder {
+    /// Constructs a writer on new buffer
+    fn new_recorder(cfg: RecordConfig) -> Result<Self>
+    where
+        Self: Sized;
+
+    /// Push a newly record event [`RREvent`] to the buffer
+    fn push_event(&mut self, event: RREvent) -> ();
+
+    /// Flush memory contents to underlying persistent storage
+    ///
+    /// Buffer should be emptied during this process
+    fn flush_to_file(&mut self) -> Result<()>;
+
+    /// Get metadata associated with the recording process
+    fn metadata(&self) -> &RecordMetadata;
+}
+
+pub trait Replayer {
+    type ReplayError;
+
+    /// Constructs a reader on buffer
+    fn new_replayer(cfg: ReplayConfig) -> Result<Self>
+    where
+        Self: Sized;
+
+    /// Pop the next [`RREvent`] from the buffer
+    /// Events should be FIFO
+    fn pop_event(&mut self) -> Result<RREvent, ReplayError>;
+
+    /// Get metadata associated with the replay process
+    fn metadata(&self) -> &ReplayMetadata;
 }
 
 /// The underlying serialized/deserialized type

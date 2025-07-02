@@ -1,8 +1,9 @@
 use crate::component::func::{LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
-use crate::component::storage::slice_to_storage_mut;
+use crate::component::storage::{slice_to_storage_mut, storage_as_slice};
 use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Val};
 use crate::prelude::*;
+use crate::runtime::rr::{ComponentHostFuncEntryEvent, ComponentHostFuncReturnEvent};
 use crate::runtime::vm::component::{
     ComponentInstance, InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
 };
@@ -12,6 +13,7 @@ use alloc::sync::Arc;
 use core::any::Any;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
+use core::slice;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
     StringEncoding, TypeFuncIndex,
@@ -203,6 +205,18 @@ where
     let param_tys = InterfaceType::Tuple(ty.params);
     let result_tys = InterfaceType::Tuple(ty.results);
 
+    cx.0.record_event(
+        |r| r.add_validation,
+        |_| {
+            ComponentHostFuncEntryEvent::new(
+                storage,
+                // Don't need to check validation here since it is
+                // covered by the push predicate in this case
+                Some(param_tys),
+            )
+        },
+    );
+
     // There's a 2x2 matrix of whether parameters and results are stored on the
     // stack or on the heap. Each of the 4 branches here have a different
     // representation of the storage of arguments/returns.
@@ -227,6 +241,7 @@ where
     };
     let mut lift = LiftContext::new(cx.0, &options, types, instance);
     lift.enter_call();
+
     let params = storage.lift_params(&mut lift, param_tys)?;
 
     let ret = closure(cx.as_context_mut(), params)?;
@@ -272,19 +287,44 @@ where
             ty: InterfaceType,
             ret: R,
         ) -> Result<()> {
+            let direct_results_lower =
+                |cx: &mut LowerContext<'_, T>,
+                 dst: &mut MaybeUninit<<R as ComponentType>::Lower>| {
+                    let res = ret.lower(cx, ty, dst);
+                    cx.store.0.record_event(
+                        |_| true,
+                        |rmeta| {
+                            ComponentHostFuncReturnEvent::new(
+                                storage_as_slice(dst),
+                                rmeta.add_validation.then_some(ty),
+                            )
+                        },
+                    );
+                    res
+                };
+            let indirect_results_lower = |cx: &mut LowerContext<'_, T>, dst: &ValRaw| {
+                let ptr = validate_inbounds::<R>(cx.as_slice_mut(), dst)?;
+                let res = ret.store(cx, ty, ptr);
+                cx.store.0.record_event(
+                    |_| true,
+                    |rmeta| {
+                        ComponentHostFuncReturnEvent::new(
+                            slice::from_ref(dst),
+                            rmeta.add_validation.then_some(ty),
+                        )
+                    },
+                );
+                res
+            };
             match self {
-                Storage::Direct(storage) => ret.lower(cx, ty, map_maybe_uninit!(storage.ret)),
+                Storage::Direct(storage) => {
+                    direct_results_lower(cx, map_maybe_uninit!(storage.ret))
+                }
                 Storage::ParamsIndirect(storage) => {
-                    ret.lower(cx, ty, map_maybe_uninit!(storage.ret))
+                    direct_results_lower(cx, map_maybe_uninit!(storage.ret))
                 }
-                Storage::ResultsIndirect(storage) => {
-                    let ptr = validate_inbounds::<R>(cx.as_slice_mut(), &storage.retptr)?;
-                    ret.store(cx, ty, ptr)
-                }
-                Storage::Indirect(storage) => {
-                    let ptr = validate_inbounds::<R>(cx.as_slice_mut(), &storage.retptr)?;
-                    ret.store(cx, ty, ptr)
-                }
+                Storage::ResultsIndirect(storage) => indirect_results_lower(cx, &storage.retptr),
+                Storage::Indirect(storage) => indirect_results_lower(cx, &storage.retptr),
             }
         }
     }
