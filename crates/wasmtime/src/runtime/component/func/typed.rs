@@ -341,33 +341,42 @@ where
         // space reserved for the params/results is always of the appropriate
         // size (as the params/results needed differ depending on the "flatten"
         // count)
-        if Params::flatten_count() <= MAX_FLAT_PARAMS {
-            if Return::flatten_count() <= MAX_FLAT_RESULTS {
-                self.func.call_raw(
-                    store,
-                    |cx, ty, dst| Self::lower_stack_args(cx, &params, ty, dst),
-                    Self::lift_stack_result,
-                )
+        //
+        // SAFETY: the safety of these invocations of `call_raw` depends on the
+        // correctness of the ascription of the `LowerParams` and `LowerReturn`
+        // types on the `call_raw` function. That's upheld here through the
+        // safety requirements of `Lift` and `Lower` on `Params` and `Return` in
+        // combination with checking the various possible branches here and
+        // dispatching to appropriately typed functions.
+        unsafe {
+            if Params::flatten_count() <= MAX_FLAT_PARAMS {
+                if Return::flatten_count() <= MAX_FLAT_RESULTS {
+                    self.func.call_raw(
+                        store,
+                        |cx, ty, dst| Self::lower_stack_args(cx, &params, ty, dst),
+                        Self::lift_stack_result,
+                    )
+                } else {
+                    self.func.call_raw(
+                        store,
+                        |cx, ty, dst| Self::lower_stack_args(cx, &params, ty, dst),
+                        Self::lift_heap_result,
+                    )
+                }
             } else {
-                self.func.call_raw(
-                    store,
-                    |cx, ty, dst| Self::lower_stack_args(cx, &params, ty, dst),
-                    Self::lift_heap_result,
-                )
-            }
-        } else {
-            if Return::flatten_count() <= MAX_FLAT_RESULTS {
-                self.func.call_raw(
-                    store,
-                    |cx, ty, dst| Self::lower_heap_args(cx, &params, ty, dst),
-                    Self::lift_stack_result,
-                )
-            } else {
-                self.func.call_raw(
-                    store,
-                    |cx, ty, dst| Self::lower_heap_args(cx, &params, ty, dst),
-                    Self::lift_heap_result,
-                )
+                if Return::flatten_count() <= MAX_FLAT_RESULTS {
+                    self.func.call_raw(
+                        store,
+                        |cx, ty, dst| Self::lower_heap_args(cx, &params, ty, dst),
+                        Self::lift_stack_result,
+                    )
+                } else {
+                    self.func.call_raw(
+                        store,
+                        |cx, ty, dst| Self::lower_heap_args(cx, &params, ty, dst),
+                        Self::lift_heap_result,
+                    )
+                }
             }
         }
     }

@@ -412,26 +412,44 @@ impl Func {
             );
         }
 
-        self.call_raw(
-            store,
-            |cx, ty, dst: &mut MaybeUninit<[MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>| {
-                // SAFETY: it's safe to assume that
-                // `MaybeUninit<array-of-maybe-uninit>` is initialized because
-                // each individual element is still considered uninitialized.
-                let dst: &mut [MaybeUninit<ValRaw>] = unsafe { dst.assume_init_mut() };
-                Self::lower_args(cx, params, ty, dst)
-            },
-            |cx, results_ty, src: &[ValRaw; MAX_FLAT_RESULTS]| {
-                let max_flat = MAX_FLAT_RESULTS;
-                for (result, slot) in Self::lift_results(cx, results_ty, src, max_flat)?
-                    .into_iter()
-                    .zip(results)
-                {
-                    *slot = result;
-                }
-                Ok(())
-            },
-        )
+        // SAFETY: the chosen representations of type parameters to `call_raw`
+        // here should be generally safe to work with:
+        //
+        // * parameters use `MaybeUninit<[MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>`
+        //   which represents the maximal possible number of parameters that can
+        //   be passed to lifted component functions. This is modeled with
+        //   `MaybeUninit` to represent how it all starts as uninitialized and
+        //   thus can't be safely read during lowering.
+        //
+        // * results are modeled as `[ValRaw; MAX_FLAT_RESULTS]` which
+        //   represents the maximal size of values that can be returned. Note
+        //   that if the function doesn't actually have a return value then the
+        //   `ValRaw` inside the array will have undefined contents. That is
+        //   safe in Rust, however, due to `ValRaw` being a `union`. The
+        //   contents should dynamically not be read due to the type of the
+        //   function used here matching the actual lift.
+        unsafe {
+            self.call_raw(
+                store,
+                |cx, ty, dst: &mut MaybeUninit<[MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>| {
+                    // SAFETY: it's safe to assume that
+                    // `MaybeUninit<array-of-maybe-uninit>` is initialized because
+                    // each individual element is still considered uninitialized.
+                    let dst: &mut [MaybeUninit<ValRaw>] = dst.assume_init_mut();
+                    Self::lower_args(cx, params, ty, dst)
+                },
+                |cx, results_ty, src: &[ValRaw; MAX_FLAT_RESULTS]| {
+                    let max_flat = MAX_FLAT_RESULTS;
+                    for (result, slot) in Self::lift_results(cx, results_ty, src, max_flat)?
+                        .into_iter()
+                        .zip(results)
+                    {
+                        *slot = result;
+                    }
+                    Ok(())
+                },
+            )
+        }
     }
 
     pub(crate) fn lifted_core_func(&self, store: &mut StoreOpaque) -> NonNull<VMFuncRef> {
@@ -495,7 +513,14 @@ impl Func {
     /// are what will be allocated on the stack for this function call. They
     /// should be appropriately sized for the lowering/lifting operation
     /// happening.
-    fn call_raw<T, Return, LowerParams, LowerReturn>(
+    ///
+    /// # Safety
+    ///
+    /// The safety of this function relies on the correct definitions of the
+    /// `LowerParams` and `LowerReturn` type. They must match the type of `self`
+    /// for the params/results that are going to be produced. Additionally
+    /// these types must be representable with a sequence of `ValRaw` values.
+    unsafe fn call_raw<T, Return, LowerParams, LowerReturn>(
         &self,
         mut store: StoreContextMut<'_, T>,
         lower: impl FnOnce(
@@ -533,50 +558,53 @@ impl Func {
             lower(cx, ty, map_maybe_uninit!(space.params))
         })?;
 
+        // SAFETY: We are providing the guarantee that all the inputs are valid.
+        // The various pointers passed in for the function are all valid since
+        // they're coming from our store, and the `params_and_results` should
+        // have the correct layout for the core wasm function we're calling.
+        // Note that this latter point relies on the correctness of this module
+        // and `ComponentType` implementations, hence `ComponentType` being an
+        // `unsafe` trait.
         unsafe {
-            // This is unsafe as we are providing the guarantee that all the
-            // inputs are valid. The various pointers passed in for the function
-            // are all valid since they're coming from our store, and the
-            // `params_and_results` should have the correct layout for the core
-            // wasm function we're calling. Note that this latter point relies
-            // on the correctness of this module and `ComponentType`
-            // implementations, hence `ComponentType` being an `unsafe` trait.
             crate::Func::call_unchecked_raw(
                 &mut store,
                 export,
                 NonNull::from(storage_as_slice_mut(space)),
             )?;
-
-            // Note that `.assume_init_ref()` here is unsafe but we're relying
-            // on the correctness of the structure of `LowerReturn` and the
-            // type-checking performed to acquire the `TypedFunc` to make this
-            // safe. It should be the case that `LowerReturn` is the exact
-            // representation of the return value when interpreted as
-            // `[ValRaw]`, and additionally they should have the correct types
-            // for the function we just called (which filled in the return
-            // values).
-            let ret = map_maybe_uninit!(space.ret).assume_init_ref();
-
-            // Lift the result into the host while managing post-return state
-            // here as well.
-            //
-            // After a successful lift the return value of the function, which
-            // is currently required to be 0 or 1 values according to the
-            // canonical ABI, is saved within the `Store`'s `FuncData`. This'll
-            // later get used in post-return.
-            // flags.set_needs_post_return(true);
-            let val = self.with_lift_context(store.0, |cx, ty| lift(cx, ty, ret))?;
-            let ret_slice = storage_as_slice(ret);
-            self.instance.id().get_mut(store.0).post_return_arg_set(
-                self.index,
-                match ret_slice.len() {
-                    0 => ValRaw::i32(0),
-                    1 => ret_slice[0],
-                    _ => unreachable!(),
-                },
-            );
-            return Ok(val);
         }
+
+        // SAFETY: We're relying on the correctness of the structure of
+        // `LowerReturn` and the type-checking performed to acquire the
+        // `TypedFunc` to make this safe. It should be the case that
+        // `LowerReturn` is the exact representation of the return value when
+        // interpreted as `[ValRaw]`, and additionally they should have the
+        // correct types for the function we just called (which filled in the
+        // return values).
+        let ret: &LowerReturn = unsafe { map_maybe_uninit!(space.ret).assume_init_ref() };
+
+        // Lift the result into the host while managing post-return state
+        // here as well.
+        //
+        // After a successful lift the return value of the function, which
+        // is currently required to be 0 or 1 values according to the
+        // canonical ABI, is saved within the `Store`'s `FuncData`. This'll
+        // later get used in post-return.
+        // flags.set_needs_post_return(true);
+        let val = self.with_lift_context(store.0, |cx, ty| lift(cx, ty, ret))?;
+
+        // SAFETY: it's a contract of this function that `LowerReturn` is an
+        // appropriate representation of the result of this function.
+        let ret_slice = unsafe { storage_as_slice(ret) };
+
+        self.instance.id().get_mut(store.0).post_return_arg_set(
+            self.index,
+            match ret_slice.len() {
+                0 => ValRaw::i32(0),
+                1 => ret_slice[0],
+                _ => unreachable!(),
+            },
+        );
+        return Ok(val);
     }
 
     /// Invokes the `post-return` canonical ABI option, if specified, after a
