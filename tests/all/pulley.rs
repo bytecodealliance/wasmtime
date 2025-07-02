@@ -227,6 +227,7 @@ fn pulley_provenance_test_components() -> Result<()> {
 
         let mut store = Store::new(&engine, ());
         let mut linker = component::Linker::new(&engine);
+        linker.root().func_wrap("host-empty", |_, (): ()| Ok(()))?;
         linker
             .root()
             .func_wrap("host-u32", |_, (value,): (u32,)| Ok((value,)))?;
@@ -249,6 +250,7 @@ fn pulley_provenance_test_components() -> Result<()> {
             .func_wrap("host-list", |_, (value,): (Vec<String>,)| Ok((value,)))?;
         let instance = linker.instantiate(&mut store, &component)?;
 
+        let guest_empty = instance.get_typed_func::<(), ()>(&mut store, "guest-empty")?;
         let guest_u32 = instance.get_typed_func::<(u32,), (u32,)>(&mut store, "guest-u32")?;
         let guest_enum = instance.get_typed_func::<(E,), (E,)>(&mut store, "guest-enum")?;
         let guest_option =
@@ -261,6 +263,9 @@ fn pulley_provenance_test_components() -> Result<()> {
             instance.get_typed_func::<(&str,), (String,)>(&mut store, "guest-string")?;
         let guest_list =
             instance.get_typed_func::<(&[&str],), (Vec<String>,)>(&mut store, "guest-list")?;
+
+        guest_empty.call(&mut store, ())?;
+        guest_empty.post_return(&mut store)?;
 
         let (result,) = guest_u32.call(&mut store, (42,))?;
         assert_eq!(result, 42);
@@ -306,6 +311,9 @@ fn pulley_provenance_test_components() -> Result<()> {
         use wasmtime::component::Val;
         let mut store = Store::new(&engine, ());
         let mut linker = component::Linker::new(&engine);
+        linker
+            .root()
+            .func_new("host-empty", |_, _args, _results| Ok(()))?;
         linker.root().func_new("host-u32", |_, args, results| {
             results[0] = args[0].clone();
             Ok(())
@@ -332,12 +340,17 @@ fn pulley_provenance_test_components() -> Result<()> {
         })?;
         let instance = linker.instantiate(&mut store, &component)?;
 
+        let guest_empty = instance.get_func(&mut store, "guest-empty").unwrap();
         let guest_u32 = instance.get_func(&mut store, "guest-u32").unwrap();
         let guest_enum = instance.get_func(&mut store, "guest-enum").unwrap();
         let guest_option = instance.get_func(&mut store, "guest-option").unwrap();
         let guest_result = instance.get_func(&mut store, "guest-result").unwrap();
         let guest_string = instance.get_func(&mut store, "guest-string").unwrap();
         let guest_list = instance.get_func(&mut store, "guest-list").unwrap();
+
+        let mut results = [];
+        guest_empty.call(&mut store, &[], &mut results)?;
+        guest_empty.post_return(&mut store)?;
 
         let mut results = [Val::U32(0)];
         guest_u32.call(&mut store, &[Val::U32(42)], &mut results)?;
