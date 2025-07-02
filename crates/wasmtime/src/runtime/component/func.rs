@@ -348,8 +348,6 @@ impl Func {
 
     /// Calls `concurrent::prepare_call` with monomorphized functions for
     /// lowering the parameters and lifting the result.
-    ///
-    /// SAFETY: See `concurrent::prepare_call`.
     #[cfg(feature = "component-model-async")]
     fn prepare_call_dynamic<'a, T: Send + 'static>(
         self,

@@ -247,8 +247,6 @@ where
     /// lowering the parameters and lifting the result according to the number
     /// of core Wasm parameters and results in the signature of the function to
     /// be called.
-    ///
-    /// SAFETY: See `concurrent::prepare_call`.
     #[cfg(feature = "component-model-async")]
     fn prepare_call<'a, T: Send + 'static>(
         self,
@@ -280,7 +278,6 @@ where
                     // `Params::Lower` being represented by a sequence of
                     // `ValRaw`, and that's a guarantee upheld by the `Lower`
                     // trait itself.
-                    // SAFETY: TODO
                     let params_out: &mut MaybeUninit<Params::Lower> =
                         unsafe { slice_to_storage_mut(params_out) };
                     func.lower_params(store, |cx, ty| {
