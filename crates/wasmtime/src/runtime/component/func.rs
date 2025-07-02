@@ -289,11 +289,10 @@ impl Func {
             .await?
     }
 
-    #[cfg(feature = "component-model-async")]
     fn check_param_count<T>(&self, store: StoreContextMut<T>, count: usize) -> Result<()> {
         let param_tys = self.params(&store);
         if param_tys.len() != count {
-            bail!("expected {} argument(s), got {count}", param_tys.len(),);
+            bail!("expected {} argument(s), got {count}", param_tys.len());
         }
 
         Ok(())
@@ -376,18 +375,12 @@ impl Func {
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {
-        let store = store.as_context_mut();
+        let mut store = store.as_context_mut();
 
-        let param_tys = self.params(&store);
+        self.check_param_count(store.as_context_mut(), params.len())?;
+
         let result_tys = self.results(&store);
 
-        if param_tys.len() != params.len() {
-            bail!(
-                "expected {} argument(s), got {}",
-                param_tys.len(),
-                params.len()
-            );
-        }
         if result_tys.len() != results.len() {
             bail!(
                 "expected {} result(s), got {}",
