@@ -359,15 +359,15 @@ impl Func {
         concurrent::prepare_call(
             store,
             move |func, store, params_out| {
-                func.lower_params(store, |cx, ty| {
+                func.with_lower_context(store, |cx, ty| {
                     Self::lower_args(cx, &params, ty, params_out)
                 })
             },
             move |func, store, results| {
                 let results = if func.abi_async(store) {
-                    lift_results(store, results, func, Self::lift_results_async)?
+                    func.with_lift_context(store, results, Self::lift_results_async)?
                 } else {
-                    lift_results(store, results, func, Self::lift_results_sync)?
+                    func.with_lift_context(store, results, Self::lift_results_sync)?
                 };
                 Ok(Box::new(results))
             },
@@ -857,7 +857,7 @@ impl Func {
 
     /// Lower parameters of the specified type using the specified function.
     #[cfg(feature = "component-model-async")]
-    fn lower_params<T>(
+    fn with_lower_context<T>(
         self,
         mut store: StoreContextMut<T>,
         lower: impl FnOnce(&mut LowerContext<T>, InterfaceType) -> Result<()>,
@@ -884,21 +884,21 @@ impl Func {
 
         Ok(())
     }
-}
 
-/// Lift results of the specified type using the specified function.
-#[cfg(feature = "component-model-async")]
-fn lift_results<R>(
-    store: &mut StoreOpaque,
-    lowered: &[ValRaw],
-    me: Func,
-    lift: impl FnOnce(&mut LiftContext, InterfaceType, &[ValRaw]) -> Result<R>,
-) -> Result<R> {
-    let (options, _flags, ty, _) = me.abi_info(store);
-    let types = me.instance.id().get(store).component().types().clone();
-    lift(
-        &mut LiftContext::new(store, &options, &types, me.instance),
-        InterfaceType::Tuple(types[ty].results),
-        lowered,
-    )
+    /// Lift results of the specified type using the specified function.
+    #[cfg(feature = "component-model-async")]
+    fn with_lift_context<R>(
+        self,
+        store: &mut StoreOpaque,
+        lowered: &[ValRaw],
+        lift: impl FnOnce(&mut LiftContext, InterfaceType, &[ValRaw]) -> Result<R>,
+    ) -> Result<R> {
+        let (options, _flags, ty, _) = self.abi_info(store);
+        let types = self.instance.id().get(store).component().types().clone();
+        lift(
+            &mut LiftContext::new(store, &options, &types, self.instance),
+            InterfaceType::Tuple(types[ty].results),
+            lowered,
+        )
+    }
 }

@@ -280,20 +280,20 @@ where
                     // trait itself.
                     let params_out: &mut MaybeUninit<Params::Lower> =
                         unsafe { slice_to_storage_mut(params_out) };
-                    func.lower_params(store, |cx, ty| {
+                    func.with_lower_context(store, |cx, ty| {
                         Self::lower_stack_args(cx, &params, ty, params_out)
                     })
                 } else {
-                    func.lower_params(store, |cx, ty| {
+                    func.with_lower_context(store, |cx, ty| {
                         Self::lower_heap_args(cx, &params, ty, &mut params_out[0])
                     })
                 }
             },
             move |func, store, results| {
                 let result = if Return::flatten_count() <= max_results {
-                    super::lift_results(store, results, func, Self::lift_stack_result_raw)?
+                    func.with_lift_context(store, results, Self::lift_stack_result_raw)?
                 } else {
-                    super::lift_results(store, results, func, Self::lift_heap_result_raw)?
+                    func.with_lift_context(store, results, Self::lift_heap_result_raw)?
                 };
                 Ok(Box::new(result))
             },
