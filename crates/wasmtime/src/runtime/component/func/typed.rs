@@ -235,12 +235,7 @@ where
             concurrent::queue_call(store, prepared)
         })();
 
-        Box::pin(async move {
-            match result {
-                Ok(future) => future.await,
-                Err(e) => Err(e),
-            }
-        })
+        Box::pin(async move { result?.await })
     }
 
     /// Calls `concurrent::prepare_call` with monomorphized functions for
