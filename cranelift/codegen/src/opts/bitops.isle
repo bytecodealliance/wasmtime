@@ -35,6 +35,9 @@
 (rule (simplify (band (ty_int ty) x (bnot ty x))) (subsume (iconst_u ty 0)))
 (rule (simplify (band (ty_int ty) (bnot ty x) x)) (subsume (iconst_u ty 0)))
 
+;; (x & y) ^ (x ^ y) == x | y
+(rule (simplify (bxor ty (band ty X Y) (bxor ty X Y))) (bor ty X Y))
+
 ;; not(not(x)) == x.
 (rule (simplify (bnot ty (bnot ty x))) (subsume x))
 
