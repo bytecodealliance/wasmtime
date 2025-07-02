@@ -226,11 +226,6 @@ where
         );
 
         let result = (|| {
-            // SAFETY: We uphold the contract documented in
-            // `concurrent::prepare_call` by setting `PreparedCall::params` to a
-            // valid pointer prior to polling the event loop for this function's
-            // instance and providing a `drop_params` parameter which will
-            // correctly dispose of it after lowering.
             let prepared = self.prepare_call(store.as_context_mut(), params)?;
             concurrent::queue_call(store, prepared)
         })();
