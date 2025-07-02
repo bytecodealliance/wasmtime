@@ -25,12 +25,12 @@
 //! precise set. Finally, the over-approximation is reset to the precise set.
 //!
 //! An intrusive, singly-linked list in the object header implements the
-//! over-approximized set of `VMGcRef`s referenced by Wasm activations. Calling
+//! over-approximated set of `VMGcRef`s referenced by Wasm activations. Calling
 //! a Wasm function and passing it a `VMGcRef` inserts the `VMGcRef` into that
 //! list if it is not already present, and the compiled Wasm function logically
-//! "borrows" the `VMGcRef` from the table. Similarly, `global.get` and
-//! `table.get` operations logivally clone the gotten `VMGcRef` into that
-//! list and then "borrow" the reference out of the table.
+//! "borrows" the `VMGcRef` from the list. Similarly, `global.get` and
+//! `table.get` operations logically clone the gotten `VMGcRef` into that list
+//! and then "borrow" the reference out of the list.
 //!
 //! When a `VMGcRef` is returned to host code from a Wasm function, the host
 //! increments the reference count (because the reference is logically

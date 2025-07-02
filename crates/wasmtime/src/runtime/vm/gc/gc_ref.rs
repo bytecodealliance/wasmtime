@@ -101,7 +101,7 @@ impl VMGcHeader {
     ///
     /// The given `value` must only use the lower 27 bits; its upper 5 bits must
     /// be unset.
-    pub unsafe fn unchecked_set_reserved_u26(&mut self, value: u32) {
+    pub unsafe fn unchecked_set_reserved_u27(&mut self, value: u32) {
         debug_assert_eq!(value & VMGcKind::MASK, 0);
         self.kind &= VMGcKind::MASK;
         self.kind |= value;
