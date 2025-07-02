@@ -22,7 +22,7 @@ impl fmt::Display for ReplayError {
                 write!(f, "replay buffer is empty!")
             }
             Self::FailedFuncValidation => {
-                write!(f, "func replay event typecheck validation failed")
+                write!(f, "func replay event validation failed")
             }
             Self::IncorrectEventVariant => {
                 write!(f, "event methods invoked on incorrect variant")
@@ -36,7 +36,8 @@ impl std::error::Error for ReplayError {}
 /// Transmutable byte array used to serialize [`ValRaw`] union
 ///
 /// Maintaining the exact layout is crucial for zero-copy transmutations
-/// between [`ValRawSer`] and [`ValRaw`]
+/// between [`ValRawSer`] and [`ValRaw`] as currently assumed. However,
+/// in the future, this type could be represented with LEB128s
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize)]
 #[repr(C)]
 pub(super) struct ValRawSer([u8; VAL_RAW_SIZE]);
@@ -57,6 +58,12 @@ impl From<MaybeUninit<ValRaw>> for ValRawSer {
     /// Uninitialized data is assumed, and serialized
     fn from(value: MaybeUninit<ValRaw>) -> Self {
         unsafe { Self::from(value.assume_init()) }
+    }
+}
+
+impl From<ValRawSer> for MaybeUninit<ValRaw> {
+    fn from(value: ValRawSer) -> Self {
+        MaybeUninit::new(value.into())
     }
 }
 
@@ -86,9 +93,12 @@ where
 }
 
 /// Encode [`RRFuncArgVals`] back into raw value buffer
-fn func_argvals_into_raw_slice(rr_args: RRFuncArgVals, raw_args: &mut [MaybeUninit<ValRaw>]) {
+fn func_argvals_into_raw_slice<T>(rr_args: RRFuncArgVals, raw_args: &mut [T])
+where
+    ValRawSer: Into<T>,
+{
     for (src, dst) in rr_args.into_iter().zip(raw_args.iter_mut()) {
-        *dst = MaybeUninit::new(src.into());
+        *dst = src.into();
     }
 }
 
@@ -164,7 +174,7 @@ impl ComponentHostFuncReturnEvent {
     /// typechecking validation of the event.
     pub fn move_into_slice(
         self,
-        args: &mut [MaybeUninit<ValRaw>],
+        args: &mut [ValRaw],
         expect_types: Option<&InterfaceType>,
     ) -> Result<(), ReplayError> {
         if let Some(e) = expect_types {

@@ -1,6 +1,6 @@
 use crate::component::func::{LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
-use crate::component::storage::{slice_to_storage_mut, storage_as_slice};
+use crate::component::storage::{slice_to_storage_mut, storage_as_slice, storage_as_slice_mut};
 use crate::component::{ComponentNamedList, ComponentType, Lift, Lower, Val};
 use crate::prelude::*;
 use crate::runtime::rr::{ComponentHostFuncEntryEvent, ComponentHostFuncReturnEvent};
@@ -216,6 +216,10 @@ where
             )
         },
     );
+    cx.0.replay_event(
+        |r| r.validate,
+        |event: ComponentHostFuncEntryEvent, _| event.validate(&param_tys),
+    )?;
 
     // There's a 2x2 matrix of whether parameters and results are stored on the
     // stack or on the heap. Each of the 4 branches here have a different
@@ -239,18 +243,28 @@ where
             Storage::Indirect(slice_to_storage_mut(storage).assume_init_ref())
         }
     };
-    let mut lift = LiftContext::new(cx.0, &options, types, instance);
-    lift.enter_call();
 
-    let params = storage.lift_params(&mut lift, param_tys)?;
+    let replay_enabled = cx.0.replay_enabled();
+    let ret = if replay_enabled {
+        None
+    } else {
+        Some({
+            let mut lift = LiftContext::new(cx.0, &options, types, instance);
+            lift.enter_call();
 
-    let ret = closure(cx.as_context_mut(), params)?;
+            let params = storage.lift_params(&mut lift, param_tys)?;
+            closure(cx.as_context_mut(), params)?
+        })
+    };
+
     flags.set_may_leave(false);
     let mut lower = LowerContext::new(cx, &options, types, instance);
     storage.lower_results(&mut lower, result_tys, ret)?;
     flags.set_may_leave(true);
 
-    lower.exit_call()?;
+    if !replay_enabled {
+        lower.exit_call()?;
+    }
 
     return Ok(());
 
@@ -285,12 +299,25 @@ where
             &mut self,
             cx: &mut LowerContext<'_, T>,
             ty: InterfaceType,
-            ret: R,
+            ret: Option<R>,
         ) -> Result<()> {
             let direct_results_lower =
                 |cx: &mut LowerContext<'_, T>,
                  dst: &mut MaybeUninit<<R as ComponentType>::Lower>| {
-                    let res = ret.lower(cx, ty, dst);
+                    let res = if let Some(retval) = &ret {
+                        retval.lower(cx, ty, dst)
+                    } else {
+                        // `None` return value implies replay stubbing is required
+                        cx.store.0.replay_event(
+                            |_| true,
+                            |event: ComponentHostFuncReturnEvent, rmeta| {
+                                event.move_into_slice(
+                                    storage_as_slice_mut(dst),
+                                    rmeta.validate.then_some(&ty),
+                                )
+                            },
+                        )
+                    };
                     cx.store.0.record_event(
                         |_| true,
                         |rmeta| {
