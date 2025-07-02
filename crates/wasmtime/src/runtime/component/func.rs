@@ -860,7 +860,6 @@ impl Func {
     }
 
     /// Lift results of the specified type using the specified function.
-    #[cfg(feature = "component-model-async")]
     fn with_lift_context<R>(
         self,
         store: &mut StoreOpaque,
