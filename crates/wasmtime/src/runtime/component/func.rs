@@ -596,11 +596,7 @@ impl Func {
             // canonical ABI, is saved within the `Store`'s `FuncData`. This'll
             // later get used in post-return.
             flags.set_needs_post_return(true);
-            let val = lift(
-                &mut LiftContext::new(store.0, &options, &types, self.instance),
-                InterfaceType::Tuple(types[ty].results),
-                ret,
-            )?;
+            let val = self.with_lift_context(store.0, |cx, ty| lift(cx, ty, ret))?;
             let ret_slice = storage_as_slice(ret);
             self.instance.id().get_mut(store.0).post_return_arg_set(
                 self.index,
