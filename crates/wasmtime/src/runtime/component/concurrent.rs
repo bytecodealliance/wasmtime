@@ -1065,6 +1065,8 @@ pub(crate) fn prepare_call<T: Send + 'static, R>(
     handle: Func,
     param_count: usize,
 ) -> Result<PreparedCall<R>> {
+    let _ = (&mut store, lower_params, lift_result, handle, param_count);
+    todo!()
 }
 
 /// Queue a call previously prepared using `prepare_call` to be run as part of
