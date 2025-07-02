@@ -338,6 +338,23 @@ pub trait PtrSize {
         .unwrap()
     }
 
+    // Offsets within `VMContObj`
+
+    /// Return the offset of `VMContObj::contref`
+    fn vmcontobj_contref(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of `VMContObj::revision`
+    fn vmcontobj_revision(&self) -> u8 {
+        8
+    }
+
+    /// Return the size of `VMHostArray`.
+    fn size_of_vmcontobj(&self) -> u8 {
+        16
+    }
+
     // Offsets within `VMContRef`
 
     /// Return the offset of `VMContRef::common_stack_information`.
