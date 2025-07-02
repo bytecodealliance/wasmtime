@@ -364,15 +364,10 @@ impl Func {
                 })
             },
             move |func, store, results| {
-                let results = if func.abi_async(store) {
-                    func.with_lift_context(store, |cx, ty| {
-                        Self::lift_results(cx, ty, results, true)
-                    })?
-                } else {
-                    func.with_lift_context(store, |cx, ty| {
-                        Self::lift_results(cx, ty, results, false)
-                    })?
-                };
+                let is_async = func.abi_async(store);
+                let results = func.with_lift_context(store, |cx, ty| {
+                    Self::lift_results(cx, ty, results, is_async)
+                })?;
                 Ok(Box::new(results))
             },
             self,
