@@ -414,8 +414,7 @@ impl Func {
 
         self.call_raw(
             store,
-            &params.iter().cloned().collect::<Vec<_>>(),
-            |cx, params, ty, dst: &mut MaybeUninit<[MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>| {
+            |cx, ty, dst: &mut MaybeUninit<[MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>| {
                 // SAFETY: it's safe to assume that
                 // `MaybeUninit<array-of-maybe-uninit>` is initialized because
                 // each individual element is still considered uninitialized.
@@ -496,13 +495,11 @@ impl Func {
     /// are what will be allocated on the stack for this function call. They
     /// should be appropriately sized for the lowering/lifting operation
     /// happening.
-    fn call_raw<T, Params: ?Sized, Return, LowerParams, LowerReturn>(
+    fn call_raw<T, Return, LowerParams, LowerReturn>(
         &self,
         mut store: StoreContextMut<'_, T>,
-        params: &Params,
         lower: impl FnOnce(
             &mut LowerContext<'_, T>,
-            &Params,
             InterfaceType,
             &mut MaybeUninit<LowerParams>,
         ) -> Result<()>,
@@ -533,7 +530,7 @@ impl Func {
 
         self.with_lower_context(store.as_context_mut(), |cx, ty| {
             cx.enter_call();
-            lower(cx, params, ty, map_maybe_uninit!(space.params))
+            lower(cx, ty, map_maybe_uninit!(space.params))
         })?;
 
         unsafe {
@@ -715,7 +712,7 @@ impl Func {
 
     fn lower_args<T>(
         cx: &mut LowerContext<'_, T>,
-        params: &Vec<Val>,
+        params: &[Val],
         params_ty: InterfaceType,
         dst: &mut [MaybeUninit<ValRaw>],
     ) -> Result<()> {

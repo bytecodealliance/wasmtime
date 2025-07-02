@@ -345,15 +345,13 @@ where
             if Return::flatten_count() <= MAX_FLAT_RESULTS {
                 self.func.call_raw(
                     store,
-                    &params,
-                    Self::lower_stack_args,
+                    |cx, ty, dst| Self::lower_stack_args(cx, &params, ty, dst),
                     Self::lift_stack_result,
                 )
             } else {
                 self.func.call_raw(
                     store,
-                    &params,
-                    Self::lower_stack_args,
+                    |cx, ty, dst| Self::lower_stack_args(cx, &params, ty, dst),
                     Self::lift_heap_result,
                 )
             }
@@ -361,15 +359,13 @@ where
             if Return::flatten_count() <= MAX_FLAT_RESULTS {
                 self.func.call_raw(
                     store,
-                    &params,
-                    Self::lower_heap_args,
+                    |cx, ty, dst| Self::lower_heap_args(cx, &params, ty, dst),
                     Self::lift_stack_result,
                 )
             } else {
                 self.func.call_raw(
                     store,
-                    &params,
-                    Self::lower_heap_args,
+                    |cx, ty, dst| Self::lower_heap_args(cx, &params, ty, dst),
                     Self::lift_heap_result,
                 )
             }
