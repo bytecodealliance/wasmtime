@@ -18,7 +18,7 @@ use wasmtime_environ::component::{
 #[cfg(feature = "component-model-async")]
 use crate::component::concurrent::{self, PreparedCall};
 #[cfg(feature = "component-model-async")]
-use core::future::{self, Future};
+use core::future::Future;
 #[cfg(feature = "component-model-async")]
 use core::pin::Pin;
 
@@ -334,10 +334,7 @@ impl Func {
             concurrent::queue_call(store, prepared)
         })();
 
-        match result {
-            Ok(future) => Box::pin(future),
-            Err(e) => Box::pin(future::ready(Err(e))),
-        }
+        Box::pin(async move { result?.await })
     }
 
     /// Calls `concurrent::prepare_call` with monomorphized functions for
