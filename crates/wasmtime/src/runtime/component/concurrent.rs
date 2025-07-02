@@ -1052,7 +1052,7 @@ pub(crate) struct PreparedCall<R> {
 /// In the case where the parameters are passed using a type that _is_
 /// `'static`, they can be boxed and stored in `PreparedCall::params`
 /// indefinitely; `drop_params` will be called when they are no longer needed.
-pub(crate) fn prepare_call<T: Send + 'static, R>(
+pub(crate) fn prepare_call<T, R>(
     mut store: StoreContextMut<T>,
     lower_params: impl FnOnce(Func, StoreContextMut<T>, &mut [MaybeUninit<ValRaw>]) -> Result<()>
     + Send

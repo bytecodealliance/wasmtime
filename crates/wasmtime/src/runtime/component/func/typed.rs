@@ -243,9 +243,9 @@ where
     /// of core Wasm parameters and results in the signature of the function to
     /// be called.
     #[cfg(feature = "component-model-async")]
-    fn prepare_call<'a, T: Send + 'static>(
+    fn prepare_call<T>(
         self,
-        store: StoreContextMut<'a, T>,
+        store: StoreContextMut<'_, T>,
         params: Params,
     ) -> Result<PreparedCall<Return>>
     where
