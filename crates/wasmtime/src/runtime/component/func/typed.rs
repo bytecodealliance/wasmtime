@@ -180,12 +180,47 @@ where
         &self,
         mut store: impl AsContextMut<Data: Send>,
         params: Params,
-    ) -> Result<Return> {
+    ) -> Result<Return>
+    where
+        Return: 'static,
+    {
         let mut store = store.as_context_mut();
         assert!(
             store.0.async_support(),
             "cannot use `call_async` when async support is not enabled on the config"
         );
+
+        // FIXME: this'll get updated in #11127 but for now it's just showing
+        // that this can compile.
+        #[cfg(feature = "component-model-async")]
+        if false {
+            use crate::runtime::vm::SendSyncPtr;
+            use core::ptr::NonNull;
+
+            let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
+            let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
+                // SAFETY: the goal here is to get `Params`, a non-`'static`
+                // value, to live long enough to the lowering of the
+                // parameters. We're guaranteed that `Params` lives in the
+                // future of the oute function (we're in an `async fn`) so it'll
+                // stay alive as long as the future itself. That is distinct,
+                // for example, from the signature of `call_concurrent` below.
+                //
+                // Here a pointer to `Params` is smuggled to this location
+                // through a `SendSyncPtr<u8>` to thwart the `'static` check of
+                // rustc and the signature of `prepare_call`.
+                let params = unsafe { ptr.cast::<Params>().as_ref() };
+                Self::lower_args(cx, ty, dst, params)
+            })?;
+
+            // TODO: need to place a dtor on the stack referencing the store
+            // which resmoves `prepared.task` from the store to ensure that the
+            // future is for sure 100% gone when this stack frame goes away.
+
+            let result = concurrent::queue_call(store.as_context_mut(), prepared)?;
+            return self.func.instance.run(store, result).await?;
+        }
+
         store
             .on_fiber(|store| self.call_impl(store, params))
             .await?
@@ -226,11 +261,33 @@ where
         );
 
         let result = (|| {
-            let prepared = self.prepare_call(store.as_context_mut(), params)?;
+            let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
+                Self::lower_args(cx, ty, dst, &params)
+            })?;
             concurrent::queue_call(store, prepared)
         })();
 
         Box::pin(async move { result?.await })
+    }
+
+    fn lower_args<T>(
+        cx: &mut LowerContext<T>,
+        ty: InterfaceType,
+        dst: &mut [MaybeUninit<ValRaw>],
+        params: &Params,
+    ) -> Result<()> {
+        use crate::component::storage::slice_to_storage_mut;
+
+        if Params::flatten_count() <= MAX_FLAT_PARAMS {
+            // SAFETY: the safety of `slice_to_storage_mut` relies on
+            // `Params::Lower` being represented by a sequence of
+            // `ValRaw`, and that's a guarantee upheld by the `Lower`
+            // trait itself.
+            let dst: &mut MaybeUninit<Params::Lower> = unsafe { slice_to_storage_mut(dst) };
+            Self::lower_stack_args(cx, &params, ty, dst)
+        } else {
+            Self::lower_heap_args(cx, &params, ty, &mut dst[0])
+        }
     }
 
     /// Calls `concurrent::prepare_call` with monomorphized functions for
@@ -241,13 +298,19 @@ where
     fn prepare_call<T>(
         self,
         store: StoreContextMut<'_, T>,
-        params: Params,
+        lower: impl FnOnce(
+            &mut LowerContext<T>,
+            InterfaceType,
+            &mut [MaybeUninit<ValRaw>],
+        ) -> Result<()>
+        + Send
+        + Sync
+        + 'static,
     ) -> Result<PreparedCall<Return>>
     where
-        Params: 'static,
         Return: 'static,
     {
-        use crate::component::storage::{slice_to_storage, slice_to_storage_mut};
+        use crate::component::storage::slice_to_storage;
 
         let param_count = if Params::flatten_count() <= MAX_FLAT_PARAMS {
             Params::flatten_count()
@@ -262,21 +325,7 @@ where
         concurrent::prepare_call(
             store,
             move |func, store, params_out| {
-                if Params::flatten_count() <= MAX_FLAT_PARAMS {
-                    // SAFETY: the safety of `slice_to_storage_mut` relies on
-                    // `Params::Lower` being represented by a sequence of
-                    // `ValRaw`, and that's a guarantee upheld by the `Lower`
-                    // trait itself.
-                    let params_out: &mut MaybeUninit<Params::Lower> =
-                        unsafe { slice_to_storage_mut(params_out) };
-                    func.with_lower_context(store, |cx, ty| {
-                        Self::lower_stack_args(cx, &params, ty, params_out)
-                    })
-                } else {
-                    func.with_lower_context(store, |cx, ty| {
-                        Self::lower_heap_args(cx, &params, ty, &mut params_out[0])
-                    })
-                }
+                func.with_lower_context(store, |cx, ty| lower(cx, ty, params_out))
             },
             move |func, store, results| {
                 let result = if Return::flatten_count() <= max_results {
@@ -338,34 +387,36 @@ where
         // combination with checking the various possible branches here and
         // dispatching to appropriately typed functions.
         unsafe {
-            if Params::flatten_count() <= MAX_FLAT_PARAMS {
-                if Return::flatten_count() <= MAX_FLAT_RESULTS {
-                    self.func.call_raw(
-                        store,
-                        |cx, ty, dst| Self::lower_stack_args(cx, &params, ty, dst),
-                        Self::lift_stack_result,
-                    )
-                } else {
-                    self.func.call_raw(
-                        store,
-                        |cx, ty, dst| Self::lower_stack_args(cx, &params, ty, dst),
-                        Self::lift_heap_result,
-                    )
-                }
+            // This type is used as `LowerParams` for `call_raw` which is either
+            // `Params::Lower` or `ValRaw` representing it's either on the stack
+            // or it's on the heap. This allocates 1 extra `ValRaw` on the stack
+            // if `Params` is empty and `Return` is also empty, but that's a
+            // reasonable enough price to pay for now given the current code
+            // organization.
+            #[derive(Copy, Clone)]
+            union Union<T: Copy, U: Copy> {
+                _a: T,
+                _b: U,
+            }
+
+            if Return::flatten_count() <= MAX_FLAT_RESULTS {
+                self.func.call_raw(
+                    store,
+                    |cx, ty, dst: &mut MaybeUninit<Union<Params::Lower, ValRaw>>| {
+                        let dst = storage_as_slice_mut(dst);
+                        Self::lower_args(cx, ty, dst, &params)
+                    },
+                    Self::lift_stack_result,
+                )
             } else {
-                if Return::flatten_count() <= MAX_FLAT_RESULTS {
-                    self.func.call_raw(
-                        store,
-                        |cx, ty, dst| Self::lower_heap_args(cx, &params, ty, dst),
-                        Self::lift_stack_result,
-                    )
-                } else {
-                    self.func.call_raw(
-                        store,
-                        |cx, ty, dst| Self::lower_heap_args(cx, &params, ty, dst),
-                        Self::lift_heap_result,
-                    )
-                }
+                self.func.call_raw(
+                    store,
+                    |cx, ty, dst: &mut MaybeUninit<Union<Params::Lower, ValRaw>>| {
+                        let dst = storage_as_slice_mut(dst);
+                        Self::lower_args(cx, ty, dst, &params)
+                    },
+                    Self::lift_heap_result,
+                )
             }
         }
     }
@@ -2337,7 +2388,7 @@ pub unsafe fn lower_payload<P, T>(
     let typed_len = storage_as_slice(typed).len();
     let payload = storage_as_slice_mut(payload);
     for slot in payload[typed_len..].iter_mut() {
-        *slot = ValRaw::u64(0);
+        slot.write(ValRaw::u64(0));
     }
     Ok(())
 }

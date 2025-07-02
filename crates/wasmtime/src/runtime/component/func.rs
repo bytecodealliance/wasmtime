@@ -1,6 +1,6 @@
 use crate::component::instance::Instance;
 use crate::component::matching::InstanceType;
-use crate::component::storage::{storage_as_slice, storage_as_slice_mut};
+use crate::component::storage::storage_as_slice;
 use crate::component::types::Type;
 use crate::component::values::Val;
 use crate::prelude::*;
@@ -558,7 +558,11 @@ impl Func {
             crate::Func::call_unchecked_raw(
                 &mut store,
                 export,
-                NonNull::from(storage_as_slice_mut(space)),
+                NonNull::new(core::ptr::slice_from_raw_parts_mut(
+                    space.as_mut_ptr().cast(),
+                    mem::size_of_val(space) / mem::size_of::<ValRaw>(),
+                ))
+                .unwrap(),
             )?;
         }
 

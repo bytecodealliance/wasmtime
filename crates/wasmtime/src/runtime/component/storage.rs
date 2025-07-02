@@ -19,11 +19,11 @@ pub unsafe fn storage_as_slice<T>(storage: &T) -> &[ValRaw] {
 }
 
 /// Same as `storage_as_slice`, but mutable.
-pub unsafe fn storage_as_slice_mut<T>(storage: &mut T) -> &mut [ValRaw] {
+pub unsafe fn storage_as_slice_mut<T>(storage: &mut MaybeUninit<T>) -> &mut [MaybeUninit<ValRaw>] {
     assert_raw_slice_compat::<T>();
 
     slice::from_raw_parts_mut(
-        (storage as *mut T).cast(),
+        (storage as *mut MaybeUninit<T>).cast(),
         mem::size_of_val(storage) / mem::size_of::<ValRaw>(),
     )
 }
