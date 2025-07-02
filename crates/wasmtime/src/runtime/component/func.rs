@@ -364,7 +364,7 @@ impl Func {
                     MAX_FLAT_RESULTS
                 };
                 let results = func.with_lift_context(store, |cx, ty| {
-                    Self::lift_results(cx, ty, results, max_flat)
+                    Self::lift_results(cx, ty, results, max_flat)?.collect::<Result<Vec<_>>>()
                 })?;
                 Ok(Box::new(results))
             },
@@ -434,11 +434,10 @@ impl Func {
                 },
                 |cx, results_ty, src: &[ValRaw; MAX_FLAT_RESULTS]| {
                     let max_flat = MAX_FLAT_RESULTS;
-                    for (result, slot) in Self::lift_results(cx, results_ty, src, max_flat)?
-                        .into_iter()
-                        .zip(results)
+                    for (result, slot) in
+                        Self::lift_results(cx, results_ty, src, max_flat)?.zip(results)
                     {
-                        *slot = result;
+                        *slot = result?;
                     }
                     Ok(())
                 },
@@ -779,33 +778,35 @@ impl Func {
         Ok(())
     }
 
-    fn lift_results(
-        cx: &mut LiftContext<'_>,
+    fn lift_results<'a, 'b>(
+        cx: &'a mut LiftContext<'b>,
         results_ty: InterfaceType,
-        src: &[ValRaw],
+        src: &'a [ValRaw],
         max_flat: usize,
-    ) -> Result<Vec<Val>> {
+    ) -> Result<Box<dyn Iterator<Item = Result<Val>> + 'a>> {
         let results_ty = match results_ty {
             InterfaceType::Tuple(i) => &cx.types[i],
             _ => unreachable!(),
         };
         if results_ty.abi.flat_count(max_flat).is_some() {
             let mut flat = src.iter();
-            results_ty
-                .types
-                .iter()
-                .map(|ty| Val::lift(cx, *ty, &mut flat))
-                .collect()
+            Ok(Box::new(
+                results_ty
+                    .types
+                    .iter()
+                    .map(move |ty| Val::lift(cx, *ty, &mut flat)),
+            ))
         } else {
-            Self::load_results(cx, results_ty, &mut src.iter())
+            let iter = Self::load_results(cx, results_ty, &mut src.iter())?;
+            Ok(Box::new(iter))
         }
     }
 
-    fn load_results(
-        cx: &mut LiftContext<'_>,
-        results_ty: &TypeTuple,
+    fn load_results<'a, 'b>(
+        cx: &'a mut LiftContext<'b>,
+        results_ty: &'a TypeTuple,
         src: &mut core::slice::Iter<'_, ValRaw>,
-    ) -> Result<Vec<Val>> {
+    ) -> Result<impl Iterator<Item = Result<Val>> + use<'a, 'b>> {
         // FIXME(#4311): needs to read an i64 for memory64
         let ptr = usize::try_from(src.next().unwrap().get_u32())?;
         if ptr % usize::try_from(results_ty.abi.align32)? != 0 {
@@ -819,15 +820,11 @@ impl Func {
             .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
 
         let mut offset = 0;
-        results_ty
-            .types
-            .iter()
-            .map(|ty| {
-                let abi = cx.types.canonical_abi(ty);
-                let offset = abi.next_field32_size(&mut offset);
-                Val::load(cx, *ty, &bytes[offset..][..abi.size32 as usize])
-            })
-            .collect()
+        Ok(results_ty.types.iter().map(move |ty| {
+            let abi = cx.types.canonical_abi(ty);
+            let offset = abi.next_field32_size(&mut offset);
+            Val::load(cx, *ty, &bytes[offset..][..abi.size32 as usize])
+        }))
     }
 
     /// Creates a `LowerContext` using the configuration values of this lifted
