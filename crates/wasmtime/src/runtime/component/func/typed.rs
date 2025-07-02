@@ -257,7 +257,7 @@ where
         Params: 'static,
         Return: 'static,
     {
-        use crate::component::storage::slice_to_storage_mut;
+        use crate::component::storage::{slice_to_storage, slice_to_storage_mut};
 
         let param_count = mem::size_of::<Params::Lower>() / mem::size_of::<ValRaw>();
         let param_count = if Params::flatten_count() <= MAX_FLAT_PARAMS {
@@ -291,9 +291,31 @@ where
             },
             move |func, store, results| {
                 let result = if Return::flatten_count() <= max_results {
-                    func.with_lift_context(store, results, Self::lift_stack_result_raw)?
+                    func.with_lift_context(store, |cx, ty| {
+                        // SAFETY: Per the safety requiments documented for the
+                        // `ComponentType` trait, `Return::Lower` must be
+                        // compatible at the binary level with a `[ValRaw; N]`,
+                        // where `N` is `mem::size_of::<Return::Lower>() /
+                        // mem::size_of::<ValRaw>()`.  And since this function
+                        // is only used when `Return::flatten_count() <=
+                        // MAX_FLAT_RESULTS` and `MAX_FLAT_RESULTS == 1`, `N`
+                        // can only either be 0 or 1.
+                        //
+                        // See `ComponentInstance::exit_call` for where we use
+                        // the result count passed from
+                        // `wasmtime_environ::fact::trampoline`-generated code
+                        // to ensure the slice has the correct length, and also
+                        // `concurrent::start_call` for where we conservatively
+                        // use a slice length of 1 unconditionally.  Also note
+                        // that, as of this writing `slice_to_storage`
+                        // double-checks the slice length is sufficient.
+                        let results: &Return::Lower = unsafe { slice_to_storage(results) };
+                        Self::lift_stack_result(cx, ty, results)
+                    })?
                 } else {
-                    func.with_lift_context(store, results, Self::lift_heap_result_raw)?
+                    func.with_lift_context(store, |cx, ty| {
+                        Self::lift_heap_result(cx, ty, &results[0])
+                    })?
                 };
                 Ok(Box::new(result))
             },
@@ -420,32 +442,6 @@ where
         Return::linear_lift_from_flat(cx, ty, dst)
     }
 
-    /// Equivalent to `lift_stack_result`, but with a partially-monomorphic
-    /// signature suitable for use with `super::lift_results`.
-    #[cfg(feature = "component-model-async")]
-    fn lift_stack_result_raw(
-        cx: &mut LiftContext<'_>,
-        ty: InterfaceType,
-        dst: &[ValRaw],
-    ) -> Result<Return> {
-        // SAFETY: Per the safety requiments documented for the `ComponentType`
-        // trait, `Return::Lower` must be compatible at the binary level with a
-        // `[ValRaw; N]`, where `N` is `mem::size_of::<Return::Lower>() /
-        // mem::size_of::<ValRaw>()`.  And since this function is only used when
-        // `Return::flatten_count() <= MAX_FLAT_RESULTS` and `MAX_FLAT_RESULTS
-        // == 1`, `N` can only either be 0 or 1.
-        //
-        // See `ComponentInstance::exit_call` for where we use the result count
-        // passed from `wasmtime_environ::fact::trampoline`-generated code to
-        // ensure the slice has the correct length, and also
-        // `concurrent::start_call` for where we conservatively use a slice
-        // length of 1 unconditionally.  Also note that, as of this writing
-        // `slice_to_storage` double-checks the slice length is sufficient.
-        Self::lift_stack_result(cx, ty, unsafe {
-            crate::component::storage::slice_to_storage(dst)
-        })
-    }
-
     /// Lift the result of a function where the result is stored indirectly on
     /// the heap.
     fn lift_heap_result(
@@ -466,17 +462,6 @@ where
             .and_then(|b| b.get(..Return::SIZE32))
             .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
         Return::linear_lift_from_memory(cx, ty, bytes)
-    }
-
-    /// Equivalent to `lift_heap_result`, but with a partially-monomorphic
-    /// signature suitable for use with `super::lift_results`.
-    #[cfg(feature = "component-model-async")]
-    fn lift_heap_result_raw(
-        cx: &mut LiftContext<'_>,
-        ty: InterfaceType,
-        dst: &[ValRaw],
-    ) -> Result<Return> {
-        Self::lift_heap_result(cx, ty, &dst[0])
     }
 
     /// See [`Func::post_return`]

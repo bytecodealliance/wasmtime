@@ -365,9 +365,13 @@ impl Func {
             },
             move |func, store, results| {
                 let results = if func.abi_async(store) {
-                    func.with_lift_context(store, results, Self::lift_results_async)?
+                    func.with_lift_context(store, |cx, ty| {
+                        Self::lift_results(cx, ty, results, true)
+                    })?
                 } else {
-                    func.with_lift_context(store, results, Self::lift_results_sync)?
+                    func.with_lift_context(store, |cx, ty| {
+                        Self::lift_results(cx, ty, results, false)
+                    })?
                 };
                 Ok(Box::new(results))
             },
@@ -790,15 +794,6 @@ impl Func {
         Self::lift_results(cx, results_ty, src, false)
     }
 
-    #[cfg(feature = "component-model-async")]
-    fn lift_results_async(
-        cx: &mut LiftContext<'_>,
-        results_ty: InterfaceType,
-        src: &[ValRaw],
-    ) -> Result<Vec<Val>> {
-        Self::lift_results(cx, results_ty, src, true)
-    }
-
     fn lift_results(
         cx: &mut LiftContext<'_>,
         results_ty: InterfaceType,
@@ -890,15 +885,13 @@ impl Func {
     fn with_lift_context<R>(
         self,
         store: &mut StoreOpaque,
-        lowered: &[ValRaw],
-        lift: impl FnOnce(&mut LiftContext, InterfaceType, &[ValRaw]) -> Result<R>,
+        lift: impl FnOnce(&mut LiftContext, InterfaceType) -> Result<R>,
     ) -> Result<R> {
         let (options, _flags, ty, _) = self.abi_info(store);
         let types = self.instance.id().get(store).component().types().clone();
         lift(
             &mut LiftContext::new(store, &options, &types, self.instance),
             InterfaceType::Tuple(types[ty].results),
-            lowered,
         )
     }
 }
