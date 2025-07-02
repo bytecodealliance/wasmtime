@@ -11,7 +11,9 @@ pub const HEADER_ALIGN: u32 = 8;
 /// The offset of the length field in a `VMDrcArrayHeader`.
 pub const ARRAY_LENGTH_OFFSET: u32 = HEADER_SIZE;
 
-/// The bit within a `VMDrcHeader`'s reserved bits that is the mark bit.
+/// The bit within a `VMDrcHeader`'s reserved bits that is the mark
+/// bit. Collectively, this bit in all the heap's objects' headers implements
+/// the precise-stack-roots set.
 pub const HEADER_MARK_BIT: u32 = 1 << 0;
 
 /// The bit within a `VMDrcHeader`'s reserved bits that is the

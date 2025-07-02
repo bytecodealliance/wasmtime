@@ -507,7 +507,7 @@ impl DrcHeap {
             );
             next = header.next_over_approximated_stack_root();
             let prev_next = header.next_over_approximated_stack_root();
-            header.remove_from_over_approximated_stack_roots();
+            header.set_in_over_approximated_stack_roots_bit(false);
             match &prev {
                 None => *self.over_approximated_stack_roots = prev_next,
                 Some(prev) => self
@@ -577,28 +577,16 @@ impl VMDrcHeader {
         self.header.reserved_u27() & wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT != 0
     }
 
-    /// Is this object in the over-approximated stack roots list?
+    /// Set whether this object is in the over-approximated stack roots list.
     #[inline]
-    fn set_in_over_approximated_stack_roots(&mut self) {
-        debug_assert!(!self.is_in_over_approximated_stack_roots());
+    fn set_in_over_approximated_stack_roots_bit(&mut self, bit: bool) {
         let reserved = self.header.reserved_u27();
-        self.header
-            .set_reserved_u27(reserved | wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT);
-    }
-
-    /// Remove this object from the over-approximated-stack-roots list.
-    ///
-    /// This does *not* remove the link pointing to this object, if any. That is
-    /// the caller's responsibility.
-    #[inline]
-    fn remove_from_over_approximated_stack_roots(&mut self) {
-        debug_assert!(self.is_in_over_approximated_stack_roots());
-        let reserved = self.header.reserved_u27();
-        self.header
-            .set_reserved_u27(reserved & !wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT);
-        // NB: we don't need to set `self.next_over_approximated_stack_root` to
-        // `None` -- that field only has meaning when the bit is set. This lets
-        // us avoid some unnecessary stores.
+        let new_reserved = if bit {
+            reserved | wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT
+        } else {
+            reserved & !wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT
+        };
+        self.header.set_reserved_u27(new_reserved);
     }
 
     /// Get the next object after this one in the over-approximated-stack-roots
@@ -778,7 +766,7 @@ unsafe impl GcHeap for DrcHeap {
 
         // Push this object onto the head of the over-approximated-stack-roots
         // list.
-        header.set_in_over_approximated_stack_roots();
+        header.set_in_over_approximated_stack_roots_bit(true);
         let next = (*self.over_approximated_stack_roots)
             .as_ref()
             .map(|r| r.unchecked_copy());
