@@ -47,7 +47,6 @@
 ;;                                 block3:
 ;; @0034                               v17 = load.i64 notrap aligned readonly v0+32
 ;; @0034                               v18 = load.i32 notrap aligned v17
-;; @0034                               store.i32 notrap aligned v5, v17
 ;; @0034                               v22 = iconst.i64 16
 ;; @0034                               v23 = iadd.i64 v12, v22  ; v22 = 16
 ;; @0034                               store notrap aligned v18, v23
@@ -60,6 +59,7 @@
 ;;                                     v43 = iconst.i64 1
 ;; @0034                               v35 = iadd v34, v43  ; v43 = 1
 ;; @0034                               store notrap aligned v35, v33
+;; @0034                               store.i32 notrap aligned v5, v17
 ;; @0034                               jump block4
 ;;
 ;;                                 block4:

@@ -48,7 +48,6 @@
 ;;                                 block3:
 ;; @008f                               v20 = load.i64 notrap aligned readonly v0+32
 ;; @008f                               v21 = load.i32 notrap aligned v20
-;; @008f                               store.i32 notrap aligned v8, v20
 ;; @008f                               v22 = uextend.i64 v8
 ;; @008f                               v107 = load.i64 notrap aligned readonly can_move v0+8
 ;; @008f                               v23 = load.i64 notrap aligned readonly can_move v107+24
@@ -79,6 +78,7 @@
 ;; @008f                               v42 = iconst.i64 8
 ;; @008f                               v43 = iadd v41, v42  ; v42 = 8
 ;; @008f                               store notrap aligned v38, v43
+;; @008f                               store.i32 notrap aligned v8, v20
 ;; @008f                               jump block4
 ;;
 ;;                                 block4:
@@ -106,7 +106,6 @@
 ;;                                 block6:
 ;; @0091                               v58 = load.i64 notrap aligned readonly v0+32
 ;; @0091                               v59 = load.i32 notrap aligned v58
-;; @0091                               store.i32 notrap aligned v46, v58
 ;; @0091                               v60 = uextend.i64 v46
 ;; @0091                               v93 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0091                               v61 = load.i64 notrap aligned readonly can_move v93+24
@@ -137,6 +136,7 @@
 ;; @0091                               v80 = iconst.i64 8
 ;; @0091                               v81 = iadd v79, v80  ; v80 = 8
 ;; @0091                               store notrap aligned v76, v81
+;; @0091                               store.i32 notrap aligned v46, v58
 ;; @0091                               jump block7
 ;;
 ;;                                 block7:

@@ -104,21 +104,23 @@ impl DrcCompiler {
 
         let head = self.load_over_approximated_stack_roots_head(func_env, builder);
 
-        // Load the old first list element, which will be our new next list
+        // Load the current first list element, which will be our new next list
         // element.
         let next = builder
             .ins()
             .load(ir::types::I32, ir::MemFlags::trusted(), head, 0);
 
-        // Store this object as the new head of the list.
+        // Update our object's header to point to `next` and consider itself part of the list.
+        self.set_next_over_approximated_stack_root(func_env, builder, gc_ref, next);
+        self.set_in_over_approximated_stack_roots_bit(func_env, builder, gc_ref, reserved);
+
+        // Increment our ref count because the list is logically holding a strong reference.
+        self.mutate_ref_count(func_env, builder, gc_ref, 1);
+
+        // Commit this object as the new head of the list.
         builder
             .ins()
             .store(ir::MemFlags::trusted(), gc_ref, head, 0);
-
-        // Update the object header and ref-count accordingly.
-        self.set_next_over_approximated_stack_root(func_env, builder, gc_ref, next);
-        self.set_in_over_approximated_stack_roots_bit(func_env, builder, gc_ref, reserved);
-        self.mutate_ref_count(func_env, builder, gc_ref, 1);
     }
 
     /// Load a pointer to the first element of the DRC heap's
