@@ -202,7 +202,7 @@ where
                 // SAFETY: the goal here is to get `Params`, a non-`'static`
                 // value, to live long enough to the lowering of the
                 // parameters. We're guaranteed that `Params` lives in the
-                // future of the oute function (we're in an `async fn`) so it'll
+                // future of the outer function (we're in an `async fn`) so it'll
                 // stay alive as long as the future itself. That is distinct,
                 // for example, from the signature of `call_concurrent` below.
                 //
@@ -214,7 +214,7 @@ where
             })?;
 
             // TODO: need to place a dtor on the stack referencing the store
-            // which resmoves `prepared.task` from the store to ensure that the
+            // which removes `prepared.task` from the store to ensure that the
             // future is for sure 100% gone when this stack frame goes away.
 
             let result = concurrent::queue_call(store.as_context_mut(), prepared)?;
