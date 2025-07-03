@@ -331,16 +331,15 @@ where
                 };
             let indirect_results_lower = |cx: &mut LowerContext<'_, T>, dst: &ValRaw| {
                 let ptr = validate_inbounds::<R>(cx.as_slice_mut(), dst)?;
-                let res = ret.store(cx, ty, ptr);
-                cx.store.0.record_event(
-                    |_| true,
-                    |rmeta| {
-                        ComponentHostFuncReturnEvent::new(
-                            slice::from_ref(dst),
-                            rmeta.add_validation.then_some(ty),
-                        )
-                    },
-                );
+                let res = if let Some(retval) = &ret {
+                    retval.store(cx, ty, ptr)
+                } else {
+                    // `dst` is a Wasm i32 pointer to indirect results. This itself will remain
+                    // deterministic, and thus replay will not change this, but will have to
+                    // account for all of the `store` values.
+                    // Replay will however have to overwrite all of the stored values (deep copy)
+                    Ok(())
+                };
                 res
             };
             match self {
