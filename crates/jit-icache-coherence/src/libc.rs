@@ -1,7 +1,5 @@
-use core::ffi::c_void;
+use std::ffi::c_void;
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
-extern crate std;
 #[cfg(any(target_os = "linux", target_os = "android"))]
 pub use std::io::Result;
 
@@ -107,7 +105,7 @@ mod details {
 fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
     cfg_if::cfg_if! {
         if #[cfg(feature = "one-core")] {
-            use core::arch::asm;
+            use std::arch::asm;
             let _ = (start, end);
             unsafe {
                 asm!("fence.i");

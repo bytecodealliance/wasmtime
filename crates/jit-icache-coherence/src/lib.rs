@@ -74,12 +74,10 @@
 //!
 //! [ARM Community - Caches and Self-Modifying Code]: https://community.arm.com/arm-community-blogs/b/architectures-and-processors-blog/posts/caches-and-self-modifying-code
 
-#![no_std]
-
-use core::ffi::c_void;
+use std::ffi::c_void;
 
 cfg_if::cfg_if! {
-    if #[cfg(all(target_os = "windows", feature = "std"))] {
+    if #[cfg(target_os = "windows")] {
         mod win;
         use win as imp;
     } else if #[cfg(miri)] {
