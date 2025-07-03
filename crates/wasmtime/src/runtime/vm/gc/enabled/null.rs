@@ -15,11 +15,7 @@ use crate::{
     },
 };
 use core::ptr::NonNull;
-use core::{
-    alloc::Layout,
-    any::Any,
-    num::{NonZeroU32, NonZeroUsize},
-};
+use core::{alloc::Layout, any::Any, num::NonZeroU32};
 use wasmtime_environ::{
     GcArrayLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
     null::NullTypeLayouts,
@@ -253,11 +249,6 @@ unsafe impl GcHeap for NullHeap {
 
     fn expose_gc_ref_to_wasm(&mut self, _gc_ref: VMGcRef) {
         // Don't need to do anything special here.
-    }
-
-    fn need_gc_before_entering_wasm(&self, _num_gc_refs: NonZeroUsize) -> bool {
-        // Never need to GC before entering Wasm.
-        false
     }
 
     fn alloc_externref(

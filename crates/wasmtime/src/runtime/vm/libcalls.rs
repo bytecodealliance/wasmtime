@@ -539,43 +539,6 @@ unsafe fn grow_gc_heap(
     Ok(())
 }
 
-/// Do a GC, keeping `gc_ref` rooted and returning the updated `gc_ref`
-/// reference.
-#[cfg(feature = "gc-drc")]
-unsafe fn gc(store: &mut dyn VMStore, _instance: Pin<&mut Instance>, gc_ref: u32) -> Result<u32> {
-    let gc_ref = VMGcRef::from_raw_u32(gc_ref);
-    let gc_ref = gc_ref.map(|r| {
-        store
-            .store_opaque_mut()
-            .unwrap_gc_store_mut()
-            .clone_gc_ref(&r)
-    });
-
-    if let Some(gc_ref) = &gc_ref {
-        // It is possible that we are GC'ing because the DRC's activation
-        // table's bump region is full, and we failed to insert `gc_ref` into
-        // the bump region. But it is an invariant for DRC collection that all
-        // GC references on the stack are in the DRC's activations table at the
-        // time of a GC. So make sure to "expose" this GC reference to Wasm (aka
-        // insert it into the DRC's activation table) before we do the actual
-        // GC.
-        let gc_store = store.store_opaque_mut().unwrap_gc_store_mut();
-        let gc_ref = gc_store.clone_gc_ref(gc_ref);
-        let _ = gc_store.expose_gc_ref_to_wasm(gc_ref);
-    }
-
-    match store.maybe_async_grow_or_collect_gc_heap(gc_ref, None)? {
-        None => Ok(0),
-        Some(r) => {
-            let raw = store
-                .store_opaque_mut()
-                .unwrap_gc_store_mut()
-                .expose_gc_ref_to_wasm(r);
-            Ok(raw.get())
-        }
-    }
-}
-
 /// Allocate a raw, unininitialized GC object for Wasm code.
 ///
 /// The Wasm code is responsible for initializing the object.

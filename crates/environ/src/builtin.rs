@@ -80,12 +80,6 @@ macro_rules! foreach_builtin_function {
             #[cfg(feature = "gc-null")]
             grow_gc_heap(vmctx: vmctx, bytes_needed: u64) -> bool;
 
-            // Do a GC, treating the optional `root` as a GC root and returning
-            // the updated `root` (so that, in the case of moving collectors,
-            // callers have a valid version of `root` again).
-            #[cfg(feature = "gc-drc")]
-            gc(vmctx: vmctx, root: u32) -> u64;
-
             // Allocate a new, uninitialized GC object and return a reference to
             // it.
             #[cfg(feature = "gc-drc")]
