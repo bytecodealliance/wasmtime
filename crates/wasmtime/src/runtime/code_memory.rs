@@ -319,8 +319,15 @@ impl CodeMemory {
                     if !self.mmap.supports_virtual_memory() {
                         bail!("this target requires virtual memory to be enabled");
                     }
+                    if !cfg!(feature = "std") {
+                        bail!(
+                            "with the `std` feature disabled at compile time \
+                             there must be a custom implementation of publishing \
+                             code memory"
+                        );
+                    }
 
-                    #[cfg(has_virtual_memory)]
+                    #[cfg(all(has_virtual_memory, feature = "std"))]
                     {
                         let text = self.text();
 
