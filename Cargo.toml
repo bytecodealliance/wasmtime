@@ -92,7 +92,7 @@ rustix = { workspace = true, features = ["mm", "process"] }
 
 [dev-dependencies]
 # depend again on wasmtime to activate its default features for tests
-wasmtime = { workspace = true, features = ['default', 'winch', 'pulley', 'all-arch', 'call-hook', 'memory-protection-keys'] }
+wasmtime = { workspace = true, features = ['default', 'winch', 'pulley', 'all-arch', 'call-hook', 'memory-protection-keys', 'component-model-async'] }
 env_logger = { workspace = true }
 log = { workspace = true }
 filecheck = { workspace = true }
@@ -129,6 +129,7 @@ wasmtime-test-macros = { path = "crates/test-macros" }
 pulley-interpreter = { workspace = true, features = ["disas"] }
 wasm-encoder = { workspace = true }
 cranelift-native = { workspace = true }
+futures = { workspace = true }
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }
@@ -323,6 +324,7 @@ io-extras = "0.18.1"
 rustix = "1.0.3"
 # wit-bindgen:
 wit-bindgen = { version = "0.43.0", default-features = false }
+wit-bindgen-rt = { version = "0.43.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.43.0", default-features = false }
 
 # wasm-tools family:
@@ -336,6 +338,7 @@ wasm-mutate = "0.235.0"
 wit-parser = "0.235.0"
 wit-component = "0.235.0"
 wasm-wave = "0.235.0"
+wasm-compose = "0.235.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
@@ -379,7 +382,7 @@ tempfile = "3.1.0"
 filecheck = "0.5.0"
 libc = { version = "0.2.112", default-features = true }
 file-per-thread-logger = "0.2.0"
-tokio = { version = "1.30.0", features = [ "rt", "time" ] }
+tokio = { version = "1.43.0", features = [ "rt", "time" ] }
 hyper = "1.0.1"
 http = "1.0.0"
 http-body = "1.0.0"

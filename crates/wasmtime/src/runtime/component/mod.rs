@@ -117,8 +117,8 @@ mod values;
 pub use self::component::{Component, ComponentExportIndex};
 #[cfg(feature = "component-model-async")]
 pub use self::concurrent::{
-    Accessor, ErrorContext, FutureReader, Promise, PromisesUnordered, StreamReader,
-    VMComponentAsyncStore,
+    Access, Accessor, ErrorContext, FutureReader, FutureWriter, HostFuture, HostStream,
+    StreamReader, StreamWriter, VMComponentAsyncStore,
 };
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
@@ -159,8 +159,6 @@ pub mod __internal {
     pub use core::cell::RefCell;
     pub use core::future::Future;
     pub use core::mem::transmute;
-    #[cfg(feature = "component-model-async")]
-    pub use futures::future::FutureExt;
     #[cfg(feature = "async")]
     pub use trait_variant::make as trait_variant_make;
     pub use wasmtime_environ;
@@ -683,3 +681,9 @@ pub mod bindgen_examples;
 #[cfg(not(any(docsrs, test, doctest)))]
 #[doc(hidden)]
 pub mod bindgen_examples {}
+
+#[cfg(not(feature = "component-model-async"))]
+pub(crate) mod concurrent_disabled;
+
+#[cfg(not(feature = "component-model-async"))]
+pub(crate) use concurrent_disabled as concurrent;

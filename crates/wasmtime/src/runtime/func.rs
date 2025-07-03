@@ -1485,13 +1485,14 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         // restored upon exiting Wasm. Note that the `CallThreadState` that is
         // created by the `catch_traps` call below will store a pointer to this
         // stack-allocated `previous_runtime_state`.
-        let previous_runtime_state = EntryStoreContext::enter_wasm(store, &mut initial_stack_csi);
+        let mut previous_runtime_state =
+            EntryStoreContext::enter_wasm(store, &mut initial_stack_csi);
 
         if let Err(trap) = store.0.call_hook(CallHook::CallingWasm) {
             // `previous_runtime_state` implicitly dropped here
             return Err(trap);
         }
-        let result = crate::runtime::vm::catch_traps(store, &previous_runtime_state, closure);
+        let result = crate::runtime::vm::catch_traps(store, &mut previous_runtime_state, closure);
         core::mem::drop(previous_runtime_state);
         store.0.call_hook(CallHook::ReturningFromWasm)?;
         result.map_err(|t| crate::trap::from_runtime_box(store.0, t))
@@ -1629,7 +1630,7 @@ impl EntryStoreContext {
     /// This function restores the values stored in this struct. We invoke this
     /// function through this type's `Drop` implementation. This ensures that we
     /// even restore the values if we unwind the stack (e.g., because we are
-    /// panicing out of a Wasm execution).
+    /// panicking out of a Wasm execution).
     #[inline]
     fn exit_wasm(&mut self) {
         unsafe {
@@ -2316,6 +2317,7 @@ impl HostContext {
                 drop(store);
 
                 let r = func(caller.sub_caller(), params);
+
                 if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
                     break 'ret R::fallible_from_error(trap);
                 }

@@ -1,5 +1,6 @@
 use crate::ValRaw;
 use crate::component::ResourceAny;
+use crate::component::concurrent::{self, ErrorContext, HostFuture, HostStream};
 use crate::component::func::{Lift, LiftContext, Lower, LowerContext, desc};
 use crate::prelude::*;
 use core::mem::MaybeUninit;
@@ -86,6 +87,9 @@ pub enum Val {
     Result(Result<Option<Box<Val>>, Option<Box<Val>>>),
     Flags(Vec<String>),
     Resource(ResourceAny),
+    Future(FutureAny),
+    Stream(StreamAny),
+    ErrorContext(ErrorContextAny),
 }
 
 impl Val {
@@ -202,9 +206,15 @@ impl Val {
 
                 Val::Flags(flags)
             }
-            InterfaceType::Future(_)
-            | InterfaceType::Stream(_)
-            | InterfaceType::ErrorContext(_) => todo!(),
+            InterfaceType::Future(_) => {
+                HostFuture::<()>::linear_lift_from_flat(cx, ty, next(src))?.into_val()
+            }
+            InterfaceType::Stream(_) => {
+                HostStream::<()>::linear_lift_from_flat(cx, ty, next(src))?.into_val()
+            }
+            InterfaceType::ErrorContext(_) => {
+                ErrorContext::linear_lift_from_flat(cx, ty, next(src))?.into_val()
+            }
         })
     }
 
@@ -326,9 +336,15 @@ impl Val {
                 }
                 Val::Flags(flags)
             }
-            InterfaceType::Future(_)
-            | InterfaceType::Stream(_)
-            | InterfaceType::ErrorContext(_) => todo!(),
+            InterfaceType::Future(_) => {
+                HostFuture::<()>::linear_lift_from_memory(cx, ty, bytes)?.into_val()
+            }
+            InterfaceType::Stream(_) => {
+                HostStream::<()>::linear_lift_from_memory(cx, ty, bytes)?.into_val()
+            }
+            InterfaceType::ErrorContext(_) => {
+                ErrorContext::linear_lift_from_memory(cx, ty, bytes)?.into_val()
+            }
         })
     }
 
@@ -463,9 +479,30 @@ impl Val {
                 Ok(())
             }
             (InterfaceType::Flags(_), _) => unexpected(ty, self),
-            (InterfaceType::Future(_), _)
-            | (InterfaceType::Stream(_), _)
-            | (InterfaceType::ErrorContext(_), _) => todo!(),
+            (InterfaceType::Future(_), Val::Future(FutureAny(rep))) => {
+                concurrent::lower_future_to_index(*rep, cx, ty)?.linear_lower_to_flat(
+                    cx,
+                    InterfaceType::U32,
+                    next_mut(dst),
+                )
+            }
+            (InterfaceType::Future(_), _) => unexpected(ty, self),
+            (InterfaceType::Stream(_), Val::Stream(StreamAny(rep))) => {
+                concurrent::lower_stream_to_index(*rep, cx, ty)?.linear_lower_to_flat(
+                    cx,
+                    InterfaceType::U32,
+                    next_mut(dst),
+                )
+            }
+            (InterfaceType::Stream(_), _) => unexpected(ty, self),
+            (InterfaceType::ErrorContext(_), Val::ErrorContext(ErrorContextAny(rep))) => {
+                concurrent::lower_error_context_to_index(*rep, cx, ty)?.linear_lower_to_flat(
+                    cx,
+                    InterfaceType::U32,
+                    next_mut(dst),
+                )
+            }
+            (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
         }
     }
 
@@ -607,13 +644,34 @@ impl Val {
                 Ok(())
             }
             (InterfaceType::Flags(_), _) => unexpected(ty, self),
-            (InterfaceType::Future(_), _)
-            | (InterfaceType::Stream(_), _)
-            | (InterfaceType::ErrorContext(_), _) => todo!(),
+            (InterfaceType::Future(_), Val::Future(FutureAny(rep))) => {
+                concurrent::lower_future_to_index::<T>(*rep, cx, ty)?.linear_lower_to_memory(
+                    cx,
+                    InterfaceType::U32,
+                    offset,
+                )
+            }
+            (InterfaceType::Future(_), _) => unexpected(ty, self),
+            (InterfaceType::Stream(_), Val::Stream(StreamAny(rep))) => {
+                concurrent::lower_stream_to_index::<T>(*rep, cx, ty)?.linear_lower_to_memory(
+                    cx,
+                    InterfaceType::U32,
+                    offset,
+                )
+            }
+            (InterfaceType::Stream(_), _) => unexpected(ty, self),
+            (InterfaceType::ErrorContext(_), Val::ErrorContext(ErrorContextAny(rep))) => {
+                concurrent::lower_error_context_to_index(*rep, cx, ty)?.linear_lower_to_memory(
+                    cx,
+                    InterfaceType::U32,
+                    offset,
+                )
+            }
+            (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
         }
     }
 
-    fn desc(&self) -> &'static str {
+    pub(crate) fn desc(&self) -> &'static str {
         match self {
             Val::Bool(_) => "bool",
             Val::U8(_) => "u8",
@@ -637,6 +695,9 @@ impl Val {
             Val::Result(_) => "result",
             Val::Resource(_) => "resource",
             Val::Flags(_) => "flags",
+            Val::Future(_) => "future",
+            Val::Stream(_) => "stream",
+            Val::ErrorContext(_) => "error-context",
         }
     }
 
@@ -715,6 +776,12 @@ impl PartialEq for Val {
             (Self::Flags(_), _) => false,
             (Self::Resource(l), Self::Resource(r)) => l == r,
             (Self::Resource(_), _) => false,
+            (Self::Future(l), Self::Future(r)) => l == r,
+            (Self::Future(_), _) => false,
+            (Self::Stream(l), Self::Stream(r)) => l == r,
+            (Self::Stream(_), _) => false,
+            (Self::ErrorContext(l), Self::ErrorContext(r)) => l == r,
+            (Self::ErrorContext(_), _) => false,
         }
     }
 }
@@ -1043,3 +1110,37 @@ fn unexpected<T>(ty: InterfaceType, val: &Val) -> Result<T> {
         val.desc()
     )
 }
+
+/// Represents a component model `future`.
+///
+/// Note that this type is not usable at this time as its implementation has not
+/// been filled out. There are no operations on this and there's additionally no
+/// ability to "drop" or deallocate this index. This means that from the
+/// perspective of wasm it'll appear that this handle has "leaked" without ever
+/// being dropped or read from.
+//
+// FIXME(#11161) this needs to be filled out implementation-wise
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FutureAny(pub(crate) u32);
+
+/// Represents a component model `stream`.
+///
+/// Note that this type is not usable at this time as its implementation has not
+/// been filled out. There are no operations on this and there's additionally no
+/// ability to "drop" or deallocate this index. This means that from the
+/// perspective of wasm it'll appear that this handle has "leaked" without ever
+/// being dropped or read from.
+//
+// FIXME(#11161) this needs to be filled out implementation-wise
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamAny(pub(crate) u32);
+
+/// Represents a component model `error-context`.
+///
+/// Note that this type is not usable at this time as its implementation has not
+/// been filled out. There are no operations on this and there's additionally no
+/// ability to "drop" or deallocate this index.
+//
+// FIXME(#11161) this needs to be filled out implementation-wise
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErrorContextAny(pub(crate) u32);

@@ -1923,6 +1923,7 @@ at https://bytecodealliance.org/security.
         self.num_component_instances += 1;
     }
 
+    #[inline]
     #[cfg(feature = "component-model")]
     pub(crate) fn component_resource_state_with_instance(
         &mut self,

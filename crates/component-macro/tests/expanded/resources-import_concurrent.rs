@@ -371,10 +371,11 @@ const _: () = {
                     (wasmtime::component::Resource<WorldResource>,),
                 >::new_unchecked(self.some_world_func2)
             };
-            wasmtime::component::__internal::FutureExt::map(
-                callee.call_concurrent(store.as_context_mut(), ()),
-                |v| v.map(|(v,)| v),
-            )
+            let future = callee.call_concurrent(store.as_context_mut(), ());
+            async move {
+                let (ret0,) = future.await?;
+                Ok(ret0)
+            }
         }
         pub fn foo_foo_uses_resource_transitively(
             &self,
@@ -1167,7 +1168,7 @@ pub mod exports {
                                 .ok_or_else(|| {
                                     anyhow::anyhow!(
                                         "instance export `foo:foo/uses-resource-transitively` does \
-                        not have export `{name}`"
+                      not have export `{name}`"
                                     )
                                 })
                         };
