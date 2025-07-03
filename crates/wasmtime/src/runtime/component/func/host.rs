@@ -36,17 +36,15 @@ impl core::fmt::Debug for HostFunc {
     }
 }
 
+enum HostResult<T> {
+    Done(Result<T>),
+    Future(Pin<Box<dyn Future<Output = Result<T>> + Send>>),
+}
+
 impl HostFunc {
     fn from_canonical<T: 'static, F, P, R>(func: F) -> Arc<HostFunc>
     where
-        F: Fn(
-                StoreContextMut<'_, T>,
-                Instance,
-                P,
-            ) -> Pin<Box<dyn Future<Output = Result<R>> + Send + 'static>>
-            + Send
-            + Sync
-            + 'static,
+        F: Fn(StoreContextMut<'_, T>, Instance, P) -> HostResult<R> + Send + Sync + 'static,
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + 'static,
         T: 'static,
@@ -66,8 +64,7 @@ impl HostFunc {
         R: ComponentNamedList + Lower + 'static,
     {
         Self::from_canonical::<T, _, _, _>(move |store, _, params| {
-            let result = func(store, params);
-            Box::pin(async move { result })
+            HostResult::Done(func(store, params))
         })
     }
 
@@ -84,7 +81,7 @@ impl HostFunc {
     {
         let func = Arc::new(func);
         Self::from_canonical::<T, _, _, _>(move |store, instance, params| {
-            Box::pin(instance.wrap_call(store, func.clone(), params))
+            HostResult::Future(Box::pin(instance.wrap_call(store, func.clone(), params)))
         })
     }
 
@@ -102,14 +99,7 @@ impl HostFunc {
         storage_len: usize,
     ) -> bool
     where
-        F: Fn(
-                StoreContextMut<'_, T>,
-                Instance,
-                P,
-            ) -> Pin<Box<dyn Future<Output = Result<R>> + Send + 'static>>
-            + Send
-            + Sync
-            + 'static,
+        F: Fn(StoreContextMut<'_, T>, Instance, P) -> HostResult<R> + Send + Sync + 'static,
         P: ComponentNamedList + Lift,
         R: ComponentNamedList + Lower + 'static,
         T: 'static,
@@ -249,14 +239,7 @@ unsafe fn call_host<T, Params, Return, F>(
     closure: F,
 ) -> Result<()>
 where
-    F: Fn(
-            StoreContextMut<'_, T>,
-            Instance,
-            Params,
-        ) -> Pin<Box<dyn Future<Output = Result<Return>> + Send + 'static>>
-        + Send
-        + Sync
-        + 'static,
+    F: Fn(StoreContextMut<'_, T>, Instance, Params) -> HostResult<Return> + Send + Sync + 'static,
     Params: Lift,
     Return: Lower + 'static,
 {
@@ -310,8 +293,9 @@ where
                 }
             };
 
-            let future = closure(store.as_context_mut(), instance, params);
-            let task = instance.first_poll(store.as_context_mut(), future, caller_instance, {
+            let host_result = closure(store.as_context_mut(), instance, params);
+
+            let mut lower_result = {
                 let types = types.clone();
                 move |store: StoreContextMut<T>, instance: Instance, ret: Return| {
                     flags.set_may_leave(false);
@@ -321,7 +305,19 @@ where
                     lower.exit_call()?;
                     Ok(())
                 }
-            })?;
+            };
+            let task = match host_result {
+                HostResult::Done(result) => {
+                    lower_result(store.as_context_mut(), instance, result?)?;
+                    None
+                }
+                HostResult::Future(future) => instance.first_poll(
+                    store.as_context_mut(),
+                    future,
+                    caller_instance,
+                    lower_result,
+                )?,
+            };
 
             let status = if let Some(task) = task {
                 Status::Started.pack(Some(task))
@@ -345,9 +341,12 @@ where
         lift.enter_call();
         let params = storage.lift_params(&mut lift, param_tys)?;
 
-        let future = closure(store.as_context_mut(), instance, params);
-
-        let ret = instance.poll_and_block(store.0.traitobj_mut(), future, caller_instance)?;
+        let ret = match closure(store.as_context_mut(), instance, params) {
+            HostResult::Done(result) => result?,
+            HostResult::Future(future) => {
+                instance.poll_and_block(store.0.traitobj_mut(), future, caller_instance)?
+            }
+        };
 
         flags.set_may_leave(false);
         let mut lower = LowerContext::new(store, &options, &types, instance);
