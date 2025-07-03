@@ -37,6 +37,7 @@ impl core::fmt::Debug for HostFunc {
 
 enum HostResult<T> {
     Done(Result<T>),
+    #[cfg(feature = "component-model-async")]
     Future(Pin<Box<dyn Future<Output = Result<T>> + Send>>),
 }
 
@@ -322,6 +323,7 @@ where
                     lower_result(store.as_context_mut(), instance, result?)?;
                     None
                 }
+                #[cfg(feature = "component-model-async")]
                 HostResult::Future(future) => instance.first_poll(
                     store.as_context_mut(),
                     future,
@@ -341,6 +343,7 @@ where
         }
         #[cfg(not(feature = "component-model-async"))]
         {
+            let _ = caller_instance;
             unreachable!(
                 "async-lowered imports should have failed validation \
                  when `component-model-async` feature disabled"
@@ -354,6 +357,7 @@ where
 
         let ret = match closure(store.as_context_mut(), instance, params) {
             HostResult::Done(result) => result?,
+            #[cfg(feature = "component-model-async")]
             HostResult::Future(future) => {
                 instance.poll_and_block(store.0.traitobj_mut(), future, caller_instance)?
             }
