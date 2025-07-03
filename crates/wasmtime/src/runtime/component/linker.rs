@@ -713,10 +713,11 @@ impl<T: 'static> LinkerInstance<'_, T> {
     pub fn func_new_concurrent<F>(&mut self, name: &str, f: F) -> Result<()>
     where
         T: 'static,
-        F: Fn(
-                &mut Accessor<T>,
-                Vec<Val>,
-            ) -> Pin<Box<dyn Future<Output = Result<Vec<Val>>> + Send + '_>>
+        F: for<'a> Fn(
+                &'a mut Accessor<T>,
+                &'a [Val],
+                &'a mut [Val],
+            ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>
             + Send
             + Sync
             + 'static,

@@ -9,7 +9,6 @@ use std::future::Future;
 use std::marker::PhantomData;
 use std::mem::MaybeUninit;
 use std::pin::{Pin, pin};
-use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use wasmtime_environ::component::{
     RuntimeComponentInstanceIndex, TypeComponentLocalErrorContextTableIndex, TypeFutureTableIndex,
@@ -163,22 +162,20 @@ impl Instance {
     /// it an `&mut Accessor<T>`.
     ///
     /// See the `Accessor` documentation for details.
-    pub(crate) fn wrap_call<T: 'static, F, P, R>(
+    pub(crate) fn wrap_call<T: 'static, F, R>(
         self,
         store: StoreContextMut<T>,
-        closure: Arc<F>,
-        params: P,
+        closure: F,
     ) -> impl Future<Output = Result<R>> + 'static
     where
         T: 'static,
-        F: Fn(&mut Accessor<T>, P) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
+        F: FnOnce(&mut Accessor<T>) -> Pin<Box<dyn Future<Output = Result<R>> + Send + '_>>
             + Send
             + Sync
             + 'static,
-        P: Send + Sync + 'static,
         R: Send + Sync + 'static,
     {
-        _ = (store, closure, params);
+        _ = (store, closure);
         async { todo!() }
     }
 
