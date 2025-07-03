@@ -11,7 +11,6 @@ pub use anyhow::Result;
     any(target_os = "linux", target_os = "android")
 ))]
 mod details {
-    extern crate std;
 
     use super::*;
     use libc::{EINVAL, EPERM, syscall};
@@ -112,8 +111,6 @@ fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
             };
             Ok(())
         } else {
-            extern crate std;
-
             #[expect(non_upper_case_globals, reason = "matching C style")]
             match unsafe {
                 libc::syscall(
