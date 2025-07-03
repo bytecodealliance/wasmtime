@@ -191,10 +191,24 @@ where
         );
         #[cfg(feature = "component-model-async")]
         {
-            use crate::runtime::vm::SendSyncPtr;
-            use core::ptr::NonNull;
+            use std::ptr;
+            use std::sync::atomic::{AtomicPtr, Ordering::Relaxed};
 
-            let ptr = SendSyncPtr::from(NonNull::from(&params).cast::<u8>());
+            struct ClearOnDrop(Arc<AtomicPtr<u8>>);
+
+            impl Drop for ClearOnDrop {
+                fn drop(&mut self) {
+                    self.0.store(ptr::null_mut(), Relaxed);
+                }
+            }
+
+            // TODO: Can we make this more efficient while guaranteeing the
+            // closure we pass to `prepare_call` below never sees a stale
+            // pointer?
+            let mut params = params;
+            let ptr = Arc::new(AtomicPtr::new((&raw mut params).cast::<u8>()));
+            let _clear = ClearOnDrop(ptr.clone());
+
             let prepared = self.prepare_call(store.as_context_mut(), move |cx, ty, dst| {
                 // SAFETY: the goal here is to get `Params`, a non-`'static`
                 // value, to live long enough to the lowering of the
@@ -204,18 +218,11 @@ where
                 // for example, from the signature of `call_concurrent` below.
                 //
                 // Here a pointer to `Params` is smuggled to this location
-                // through a `SendSyncPtr<u8>` to thwart the `'static` check of
+                // through a `AtomicPtr<u8>` to thwart the `'static` check of
                 // rustc and the signature of `prepare_call`.
-                let params = unsafe { ptr.cast::<Params>().as_ref() };
+                let params = unsafe { ptr.load(Relaxed).cast::<Params>().as_ref().unwrap() };
                 Self::lower_args(cx, ty, dst, params)
             })?;
-
-            // TODO: need to place a dtor on the stack referencing the store
-            // which removes `prepared.task` from the store to ensure that the
-            // future is for sure 100% gone when this stack frame goes away.
-            if true {
-                todo!()
-            }
 
             let result = concurrent::queue_call(store.as_context_mut(), prepared)?;
             return self.func.instance.run(store, result).await?;
