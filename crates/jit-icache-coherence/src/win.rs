@@ -1,5 +1,3 @@
-extern crate std;
-
 use std::ffi::c_void;
 use std::io::Error;
 use windows_sys::Win32::System::Diagnostics::Debug::FlushInstructionCache;
