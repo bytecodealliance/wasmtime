@@ -261,3 +261,83 @@ crates to the repository and where to place/name them:
   at the root of the repository should rename it to `wasmtime-foo` in
   workspace-local usage, meaning that the "internal" part is only relevant on
   crates.io.
+
+### Use of `unsafe`
+
+Wasmtime is a project that contains `unsafe` Rust code. Wasmtime is also used in
+security-critical contexts which means that it's extra-important that this
+`unsafe` code is correct. The purpose of this section is to outline guidelines
+and guidance for how to use `unsafe` in Wasmtime.
+
+Ideally Wasmtime would have no `unsafe` code. For large components of Wasmtime
+this is already true, for these components have little to no `unsafe` code:
+
+* Cranelift - compiling WebAssembly modules.
+* Winch - compiling WebAssembly modules.
+* Wasmparser - validating WebAssembly.
+* `wasmtime-wasi` / `wasmtime-wasi-http` - implementation of WASI.
+
+Without `unsafe` the likelihood of a security bug is greatly reduced with the
+riskiest possibility being a DoS vector through a panic, generally considered a
+low-severity issue. Inevitably though due to the nature of Wasmtime it's
+effectively impossible to 100% remove `unsafe` code. The question then becomes
+what is the right balance and how to work with `unsafe`?
+
+Some `unsafe` blocks are effectively impossible to remove. For example somewhere
+in Wasmtime we're going to take the output of Cranelift and turn it into a
+function pointer to calling it. In doing so the correctness of the `unsafe`
+block relies on the correctness of Cranelift as well as the translation from
+WebAssembly to Cranelift. This is a fundamental property of the Wasmtime project
+and thus can't really be mitigated.
+
+Other `unsafe` blocks, however, ideally will be self-contained and isolated to a
+small portion of Wasmtime. For this code Wasmtime tries to follow these
+guidelines:
+
+1. Users of the public API of the `wasmtime` crate should never need `unsafe`.
+   The API of `wasmtime` should be sound and safe no matter how its combined
+   with other safe Rust code. While `unsafe` additions are allowed they should
+   be very clearly documented with a precise contract of what exactly is unsafe
+   and what must be upheld by the caller. For example `Module::deserialize`
+   clearly documents that it could allow arbitrary code execution and thus it's
+   not safe to pass in arbitrary bytes, but previously serialized bytes are
+   always safe to pass in.
+
+2. Declaring a function as `unsafe` should be accompanied with clear
+   documentation on the function declaration indicating why the function is
+   `unsafe`. This should clearly indicate all the contracts that need to be
+   upheld by callers for the invocation to be safe. There is no way to verify
+   that the documentation is correct but this is a useful flag to reviewers and
+   readers alike to be more vigilant around such functions.
+
+3. An `unsafe` block within a function should be accompanied with a preceding
+   comment explaining why it's safe to have this block. It should be possible to
+   verify this comment with local reasoning, for example considering little code
+   outside of the current function or module. This means that it should be
+   almost trivial to connect the contracts required on the callee function (why
+   the `unsafe` block is there in the first place) to the surrounding code. This
+   can include the current function being `unsafe` (effectively "forwarding" the
+   contract of the callee) or via local reasoning.
+
+4. Implementation of a feature within Wasmtime should not result in excessive
+   amounts of `unsafe` functions or usage of `unsafe` functions. The goal here
+   is that if two possible designs for a feature are being weighed it's not
+   required to favor one with zero unsafe vs one with just a little unsafe, but
+   one with a little unsafe should be favored over one that is entirely unsafe.
+   An example of this is Wasmtime's implementation of the GC proposal with a
+   sandboxed heap where the data on the heap is never trusted. This comes at a
+   minor theoretical performance loss on the host but has the benefit of all
+   functions within the implementation are all safe. These sorts of design
+   tradeoffs are not really possible to codify in stone, but the general
+   guideline is to try to favor safer implementations so long as the
+   hypothetical sacrifice in performance isn't too great.
+
+It should be noted that Wasmtime is a relatively large and old codebase and thus
+does not perfectly follow these guidelines for preexisting code. Code not
+following these guidelines is considered technical debt that must be paid down
+at one point. Wasmtime tries to [keep track of known issues][unsafe-code-tag] to
+burn down this list over time. New features to Wasmtime are allowed to add to
+this list, but it should be clear how to burn down the list in time for any new
+entries added.
+
+[unsafe-code-tag]: https://github.com/bytecodealliance/wasmtime/labels/wasmtime%3Aunsafe-code
