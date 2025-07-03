@@ -295,7 +295,7 @@
 #![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 #![expect(unsafe_op_in_unsafe_fn, reason = "crate isn't migrated yet")]
 
-#[cfg(any(feature = "std", unix, windows))]
+#[cfg(feature = "std")]
 #[macro_use]
 extern crate std;
 extern crate alloc;

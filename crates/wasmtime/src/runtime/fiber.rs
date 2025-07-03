@@ -343,9 +343,7 @@ impl<T> StoreContextMut<'_, T> {
         self,
         f: impl FnOnce(StoreContextMut<'_, T>) -> Pin<Box<dyn Future<Output = R> + Send + '_>>,
     ) -> Result<R> {
-        BlockingContext::with(self.0, |store, cx| {
-            cx.block_on(f(StoreContextMut(store)).as_mut())
-        })
+        self.with_blocking(|store, cx| cx.block_on(f(store).as_mut()))
     }
 
     /// Creates a `BlockingContext` suitable for blocking on futures or

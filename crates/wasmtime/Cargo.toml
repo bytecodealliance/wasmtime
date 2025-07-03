@@ -254,10 +254,7 @@ runtime = [
   "dep:wasmtime-slab",
   "dep:wasmtime-versioned-export-macros",
   "dep:windows-sys",
-  "dep:rustix",
-  "rustix/mm",
   "pulley-interpreter/interp",
-  "dep:wasmtime-jit-icache-coherence",
   "dep:wasmtime-unwinder",
 ]
 
@@ -309,6 +306,7 @@ threads = [
 
 stack-switching = [
   "runtime",
+  "std",
   "wasmtime-environ/stack-switching",
   "wasmtime-cranelift?/stack-switching",
   "wasmtime-winch?/stack-switching",
@@ -333,6 +331,8 @@ std = [
   'pulley-interpreter/std',
   'wasmtime-math/std',
   'addr2line?/std',
+  "dep:rustix",
+  "wasmtime-jit-icache-coherence",
 ]
 
 # Enables support for the `Store::call_hook` API which enables injecting custom
