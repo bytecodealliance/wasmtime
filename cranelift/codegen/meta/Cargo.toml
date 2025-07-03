@@ -20,6 +20,7 @@ cranelift-srcgen = { workspace = true }
 cranelift-assembler-x64-meta = { path = "../../assembler-x64/meta", version = "0.122.0" }
 cranelift-codegen-shared = { path = "../shared", version = "0.122.0" }
 pulley-interpreter = { workspace = true, optional = true }
+heck = "0.5.0"
 
 [features]
 pulley = ['dep:pulley-interpreter']
