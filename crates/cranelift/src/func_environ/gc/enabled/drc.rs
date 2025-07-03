@@ -622,7 +622,9 @@ impl GcCompiler for DrcCompiler {
                 access_size: u8::try_from(ir::types::I32.bytes()).unwrap(),
             },
         );
-        let reserved = builder.ins().load(ir::types::I32, flags, ptr, 0);
+        let reserved = builder
+            .ins()
+            .load(ir::types::I32, ir::MemFlags::trusted(), ptr, 0);
         let in_set_bit = builder.ins().iconst(
             ir::types::I32,
             i64::from(wasmtime_environ::drc::HEADER_IN_OVER_APPROX_LIST_BIT),
