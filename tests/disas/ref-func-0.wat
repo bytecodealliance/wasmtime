@@ -40,7 +40,7 @@
 ;; @008f                               v109 = load.i64 notrap aligned readonly can_move v0+8
 ;; @008f                               v14 = load.i64 notrap aligned readonly can_move v109+24
 ;; @008f                               v15 = iadd v14, v13
-;; @008f                               v16 = load.i32 notrap aligned readonly can_move v15
+;; @008f                               v16 = load.i32 notrap aligned v15
 ;; @008f                               v17 = iconst.i32 2
 ;; @008f                               v18 = band v16, v17  ; v17 = 2
 ;; @008f                               brif v18, block4, block3
@@ -98,7 +98,7 @@
 ;; @0091                               v95 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0091                               v52 = load.i64 notrap aligned readonly can_move v95+24
 ;; @0091                               v53 = iadd v52, v51
-;; @0091                               v54 = load.i32 notrap aligned readonly can_move v53
+;; @0091                               v54 = load.i32 notrap aligned v53
 ;; @0091                               v55 = iconst.i32 2
 ;; @0091                               v56 = band v54, v55  ; v55 = 2
 ;; @0091                               brif v56, block7, block6

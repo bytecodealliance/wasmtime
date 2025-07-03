@@ -130,7 +130,7 @@
 ;;                                 block2:
 ;; @004e                               v14 = uextend.i64 v9
 ;; @004e                               v16 = iadd.i64 v5, v14
-;; @004e                               v17 = load.i32 notrap aligned little v16
+;; @004e                               v17 = load.i32 notrap aligned v16
 ;; @004e                               v18 = iconst.i32 2
 ;; @004e                               v19 = band v17, v18  ; v18 = 2
 ;; @004e                               brif v19, block4, block3

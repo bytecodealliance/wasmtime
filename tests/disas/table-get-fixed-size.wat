@@ -51,7 +51,7 @@
 ;; @0054                               v57 = load.i64 notrap aligned readonly can_move v0+8
 ;; @0054                               v18 = load.i64 notrap aligned readonly can_move v57+24
 ;; @0054                               v19 = iadd v18, v17
-;; @0054                               v20 = load.i32 user5 aligned table v19
+;; @0054                               v20 = load.i32 notrap aligned v19
 ;; @0054                               v21 = iconst.i32 2
 ;; @0054                               v22 = band v20, v21  ; v21 = 2
 ;; @0054                               brif v22, block4, block3
@@ -134,7 +134,7 @@
 ;; @005b                               v57 = load.i64 notrap aligned readonly can_move v0+8
 ;; @005b                               v18 = load.i64 notrap aligned readonly can_move v57+24
 ;; @005b                               v19 = iadd v18, v17
-;; @005b                               v20 = load.i32 user5 aligned table v19
+;; @005b                               v20 = load.i32 notrap aligned v19
 ;; @005b                               v21 = iconst.i32 2
 ;; @005b                               v22 = band v20, v21  ; v21 = 2
 ;; @005b                               brif v22, block4, block3
