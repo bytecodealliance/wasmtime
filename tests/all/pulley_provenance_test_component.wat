@@ -1,5 +1,6 @@
 (component
   (type $e' (enum "A" "B" "C"))
+  (import "host-empty" (func $host-empty))
   (import "host-u32" (func $host-u32 (param "x" u32) (result u32)))
   (import "e" (type $e (eq $e')))
   (import "host-enum" (func $host-enum (param "x" $e) (result $e)))
@@ -73,6 +74,7 @@
   )
   (core instance $libc (instantiate $libc))
 
+  (core func $host-empty (canon lower (func $host-empty)))
   (core func $host-u32 (canon lower (func $host-u32)))
   (core func $host-enum (canon lower (func $host-enum)))
   (core func $host-option (canon lower (func $host-option) (memory $libc "memory")))
@@ -87,6 +89,7 @@
   (core func $drop-a (canon resource.drop $a))
 
   (core module $m
+    (import "" "host-empty" (func $host-empty))
     (import "" "host-u32" (func $host-u32 (param i32) (result i32)))
     (import "" "host-enum" (func $host-enum (param i32) (result i32)))
     (import "" "host-option" (func $host-option (param i32 i32 i32)))
@@ -96,6 +99,7 @@
     (import "" "new-a" (func $new-a (param i32) (result i32)))
     (import "" "drop-a" (func $drop-a (param i32)))
 
+    (func (export "guest-empty") call $host-empty)
     (func (export "guest-u32") (param i32) (result i32) local.get 0 call $host-u32)
     (func (export "guest-enum") (param i32) (result i32) local.get 0 call $host-enum)
     (func (export "guest-option") (param i32 i32) (result i32)
@@ -131,6 +135,7 @@
   (core instance $i (instantiate $m
     (with "libc" (instance $libc))
     (with "" (instance
+        (export "host-empty" (func $host-empty))
         (export "host-u32" (func $host-u32))
         (export "host-enum" (func $host-enum))
         (export "host-option" (func $host-option))
@@ -141,6 +146,7 @@
         (export "drop-a" (func $drop-a))
     ))
   ))
+  (func (export "guest-empty") (canon lift (core func $i "guest-empty")))
   (func (export "guest-u32") (param "x" u32) (result u32)
     (canon lift (core func $i "guest-u32")))
   (func (export "guest-enum") (param "x" $e) (result $e)

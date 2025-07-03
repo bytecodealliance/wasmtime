@@ -949,12 +949,7 @@ impl Func {
         );
         let mut store = store.as_context_mut();
 
-        let _need_gc = self.call_impl_check_args(&mut store, params, results)?;
-
-        #[cfg(feature = "gc")]
-        if _need_gc {
-            store.gc(None);
-        }
+        self.call_impl_check_args(&mut store, params, results)?;
 
         unsafe { self.call_impl_do_call(&mut store, params, results) }
     }
@@ -1086,12 +1081,8 @@ impl Func {
             "cannot use `call_async` without enabling async support in the config",
         );
 
-        let _need_gc = self.call_impl_check_args(&mut store, params, results)?;
+        self.call_impl_check_args(&mut store, params, results)?;
 
-        #[cfg(feature = "gc")]
-        if _need_gc {
-            store.gc_async(None).await?;
-        }
         let result = store
             .on_fiber(|store| unsafe { self.call_impl_do_call(store, params, results) })
             .await??;
@@ -1106,14 +1097,12 @@ impl Func {
     /// of arguments as well as making sure everything is from the same `Store`.
     ///
     /// This must be called just before `call_impl_do_call`.
-    ///
-    /// Returns whether we need to GC before calling `call_impl_do_call`.
     fn call_impl_check_args<T>(
         &self,
         store: &mut StoreContextMut<'_, T>,
         params: &[Val],
         results: &mut [Val],
-    ) -> Result<bool> {
+    ) -> Result<()> {
         let ty = self.load_ty(store.0);
         if ty.params().len() != params.len() {
             bail!(
@@ -1138,25 +1127,7 @@ impl Func {
             }
         }
 
-        #[cfg(feature = "gc")]
-        {
-            // Check whether we need to GC before calling into Wasm.
-            //
-            // For example, with the DRC collector, whenever we pass GC refs
-            // from host code to Wasm code, they go into the
-            // `VMGcRefActivationsTable`. But the table might be at capacity
-            // already. If it is at capacity (unlikely) then we need to do a GC
-            // to free up space.
-            let num_gc_refs = ty.as_wasm_func_type().non_i31_gc_ref_params_count();
-            if let Some(num_gc_refs) = core::num::NonZeroUsize::new(num_gc_refs) {
-                return Ok(store
-                    .0
-                    .optional_gc_store()
-                    .is_some_and(|s| s.gc_heap.need_gc_before_entering_wasm(num_gc_refs)));
-            }
-        }
-
-        Ok(false)
+        Ok(())
     }
 
     /// Do the actual call into Wasm.

@@ -1476,19 +1476,6 @@ impl StoreOpaque {
         }
     }
 
-    /// If this store is configured with a GC heap, return a shared reference to
-    /// it. Otherwise, return `None`.
-    #[inline]
-    #[cfg(feature = "gc")]
-    pub(crate) fn optional_gc_store(&self) -> Option<&GcStore> {
-        if cfg!(not(feature = "gc")) || !self.engine.features().gc_types() {
-            debug_assert!(self.gc_store.is_none());
-            None
-        } else {
-            self.gc_store.as_ref()
-        }
-    }
-
     #[inline]
     #[track_caller]
     #[cfg(feature = "gc")]

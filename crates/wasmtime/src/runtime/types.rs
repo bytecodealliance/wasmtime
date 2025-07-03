@@ -2525,12 +2525,6 @@ impl FuncType {
         self.registered_type.index()
     }
 
-    #[cfg(feature = "gc")]
-    #[inline]
-    pub(crate) fn as_wasm_func_type(&self) -> &WasmFuncType {
-        self.registered_type.unwrap_func()
-    }
-
     pub(crate) fn into_registered_type(self) -> RegisteredType {
         self.registered_type
     }
