@@ -62,6 +62,7 @@ smallvec = { workspace = true, optional = true }
 hashbrown = { workspace = true, features = ["default-hasher"] }
 bitflags = { workspace = true }
 futures = { workspace = true, features = ["alloc"], optional = true }
+bytes = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
@@ -391,4 +392,7 @@ component-model-async = [
   "component-model",
   "std",
   "wasmtime-component-macro?/component-model-async",
+  "dep:futures",
+  "futures/std",
+  "dep:bytes",
 ]

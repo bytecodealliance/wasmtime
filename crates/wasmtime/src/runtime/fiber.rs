@@ -395,7 +395,7 @@ impl StoreOpaque {
     /// # Panics
     ///
     /// Panics if this is invoked outside the context of a fiber.
-    #[expect(dead_code, reason = "will be used by async things soon")]
+    #[cfg(feature = "component-model-async")]
     pub(crate) fn with_blocking<R>(
         &mut self,
         f: impl FnOnce(&mut Self, &mut BlockingContext<'_, '_>) -> R,
@@ -420,7 +420,7 @@ pub(crate) enum StoreFiberYield {
     /// Indicates the fiber does _not_ need exclusive access across the
     /// suspend/resume interval, meaning the store may be used as needed until
     /// the fiber is resumed.
-    #[expect(dead_code, reason = "will be used by async thing soon")]
+    #[cfg_attr(not(feature = "component-model-async"), allow(dead_code))]
     ReleaseStore,
 }
 
@@ -882,7 +882,6 @@ pub(crate) async fn on_fiber<R: Send + Sync>(
 /// This will return `Some` if the fiber suspends with
 /// `StoreFiberYield::ReleaseStore` or else `None` if it resolves.
 #[cfg(feature = "component-model-async")]
-#[expect(dead_code, reason = "will be used by async thing soon")]
 pub(crate) async fn resolve_or_release<'a>(
     store: &mut StoreOpaque,
     fiber: StoreFiber<'a>,

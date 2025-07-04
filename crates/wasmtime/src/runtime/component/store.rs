@@ -1,5 +1,7 @@
 use crate::runtime::vm::component::{ComponentInstance, OwnedComponentInstance};
 use crate::store::{StoreData, StoreId, StoreOpaque};
+#[cfg(feature = "component-model-async")]
+use alloc::vec::Vec;
 use core::pin::Pin;
 use wasmtime_environ::PrimaryMap;
 
@@ -31,9 +33,21 @@ impl ComponentStoreData {
 
     #[cfg(feature = "component-model-async")]
     pub(crate) fn drop_fibers(store: &mut StoreOpaque) {
-        _ = store;
-        // This function will actually do something when runtime support for
-        // `component-model-async` is merged.
+        let mut fibers = Vec::new();
+        for (_, instance) in store.store_data_mut().components.instances.iter_mut() {
+            let Some(instance) = instance.as_mut() else {
+                continue;
+            };
+
+            instance
+                .get_mut()
+                .concurrent_state_mut()
+                .take_fibers(&mut fibers);
+        }
+
+        for mut fiber in fibers {
+            fiber.dispose(store);
+        }
     }
 }
 
