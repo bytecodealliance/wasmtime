@@ -13,7 +13,7 @@ use serde_derive::{Deserialize, Serialize};
 type Register = u16;
 
 /// Enumerate the errors possible in mapping Cranelift registers to their DWARF equivalent.
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing variants")]
 #[derive(Debug, PartialEq, Eq)]
 pub enum RegisterMappingError {
     MissingBank,

@@ -1,7 +1,6 @@
 //! Pulley settings.
 
-// The generated settings include some dead code.
-#![allow(dead_code)]
+#![expect(dead_code, reason = "The generated settings include some dead code")]
 
 use crate::{
     machinst::IsaFlags,

@@ -110,11 +110,10 @@ pub trait FuncWriter {
     }
 
     /// Default impl of `write_entity_definition`
-    #[allow(unused_variables)]
     fn super_entity_definition(
         &mut self,
         w: &mut dyn Write,
-        func: &Function,
+        _func: &Function,
         entity: AnyEntity,
         value: &dyn fmt::Display,
         maybe_fact: Option<&Fact>,

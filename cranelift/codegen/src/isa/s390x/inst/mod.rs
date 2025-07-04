@@ -82,7 +82,7 @@ impl WritableRegPair {
 }
 
 /// Supported instruction sets
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching native names")]
 #[derive(Debug)]
 pub(crate) enum InstructionSet {
     /// Baseline ISA for cranelift is z14.
@@ -3403,7 +3403,6 @@ impl Inst {
 /// Different forms of label references for different instruction formats.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LabelUse {
-    #[allow(dead_code)]
     /// RI-format branch.  16-bit signed offset.  PC-relative, offset is imm << 1.
     BranchRI,
     /// RIL-format branch.  32-bit signed offset.  PC-relative, offset is imm << 1.

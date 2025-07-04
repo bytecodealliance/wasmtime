@@ -21,7 +21,7 @@ pub enum Endianness {
 /// operation.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing variants")]
 #[rustfmt::skip]
 pub enum AliasRegion {
     // None = 0b00;

@@ -108,7 +108,7 @@ macro_rules! newtype_of_reg {
         /// Writable Gpr.
         pub type $newtype_writable_reg = Writable<$newtype_reg>;
 
-        #[allow(dead_code)] // Used by some newtypes and not others.
+        #[allow(dead_code, reason = "Used by some newtypes and not others")]
         /// Optional writable Gpr.
         pub type $newtype_option_writable_reg = Option<Writable<$newtype_reg>>;
 
@@ -193,7 +193,7 @@ macro_rules! newtype_of_reg {
                     self.0
                 }
 
-                #[allow(dead_code)] // Used by some newtypes and not others.
+                #[allow(dead_code, reason = "Used by some newtypes and not others")]
                 pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
                     self.0.get_operands(collector);
                 }
@@ -274,12 +274,12 @@ macro_rules! newtype_of_reg {
                 }
 
                 /// Convert this newtype into its underlying `RegMemImm`.
-                #[allow(dead_code)] // Used by some newtypes and not others.
+                #[allow(dead_code, reason = "Used by some newtypes and not others")]
                 pub fn to_reg_mem_imm(self) -> RegMemImm {
                     self.0
                 }
 
-                #[allow(dead_code)] // Used by some newtypes and not others.
+                #[allow(dead_code, reason = "Used by some newtypes and not others")]
                 pub(crate) fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
                     self.0.get_operands(collector);
                 }
@@ -754,7 +754,6 @@ pub(crate) enum InstructionSet {
     Popcnt,
     Lzcnt,
     BMI1,
-    #[allow(dead_code)] // never constructed (yet).
     BMI2,
     FMA,
     AVX,
@@ -767,7 +766,7 @@ pub(crate) enum InstructionSet {
 }
 
 #[derive(Copy, Clone, PartialEq)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing")]
 pub enum Avx512TupleType {
     Full,
     FullMem,
@@ -824,7 +823,6 @@ impl fmt::Display for Avx512Opcode {
 /// This defines the ways a value can be extended: either signed- or zero-extension, or none for
 /// types that are not extended. Contrast with [ExtMode], which defines the widths from and to which
 /// values can be extended.
-#[allow(dead_code)]
 #[derive(Clone, PartialEq)]
 pub enum ExtKind {
     /// No extension.

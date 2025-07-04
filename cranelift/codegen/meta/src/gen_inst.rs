@@ -63,7 +63,7 @@ fn gen_formats(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter) {
 fn gen_instruction_data(formats: &[Rc<InstructionFormat>], fmt: &mut Formatter) {
     fmt.line("#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]");
     fmt.line(r#"#[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]"#);
-    fmt.line("#[allow(missing_docs)]");
+    fmt.line("#[allow(missing_docs, reason = \"generated code\")]");
     fmt.add_block("pub enum InstructionData", |fmt| {
         for format in formats {
             fmt.add_block(&format!("{}", format.name), |fmt| {
@@ -914,7 +914,7 @@ fn gen_format_constructor(format: &InstructionFormat, fmt: &mut Formatter) {
         .any(|f| f.kind.rust_type == "ir::immediates::Imm64");
 
     fmt.doc_comment(format.to_string());
-    fmt.line("#[allow(non_snake_case)]");
+    fmt.line("#[allow(non_snake_case, reason = \"generated code\")]");
     fmt.add_block(&format!("fn {proto}"), |fmt| {
         // Generate the instruction data.
         fmt.add_block(&format!(
@@ -1048,7 +1048,7 @@ fn gen_inst_builder(inst: &Instruction, format: &InstructionFormat, fmt: &mut Fo
         }
     }
 
-    fmt.line("#[allow(non_snake_case)]");
+    fmt.line("#[allow(non_snake_case, reason = \"generated code\")]");
     fmt.add_block(&format!("fn {proto}"), |fmt| {
         // Convert all of the `Into<>` arguments.
         for arg in into_args {
