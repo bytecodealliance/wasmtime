@@ -39,15 +39,11 @@ pub use stack::*;
 /// For performance reasons, the VMContRef at the bottom of this chain
 /// (i.e., the one pointed to by the VMContObj) has a pointer to the
 /// other end of the chain (i.e., its last ancestor).
-// FIXME(frank-emrich) Does this actually need to be 16-byte aligned any
-// more? Now that we use I128 on the Cranelift side (see
-// [wasmtime_cranelift::stack_switching::fatpointer::pointer_type]), it
-// should be fine to use the natural alignment of the type.
 #[repr(C, align(16))]
 #[derive(Debug, Clone, Copy)]
 pub struct VMContObj {
-    pub revision: u64,
     pub contref: NonNull<VMContRef>,
+    pub revision: u64,
 }
 
 impl VMContObj {
@@ -647,6 +643,24 @@ mod tests {
             offset_of!(VMHostArray<()>, data),
             usize::from(offsets.ptr.vmhostarray_data())
         );
+    }
+
+    #[test]
+    fn check_vm_contobj_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(
+            offset_of!(VMContObj, contref),
+            usize::from(offsets.ptr.vmcontobj_contref())
+        );
+        assert_eq!(
+            offset_of!(VMContObj, revision),
+            usize::from(offsets.ptr.vmcontobj_revision())
+        );
+        assert_eq!(
+            size_of::<VMContObj>(),
+            usize::from(offsets.ptr.size_of_vmcontobj())
+        )
     }
 
     #[test]

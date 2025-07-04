@@ -213,11 +213,7 @@ fn reference_type(wasm_ht: WasmHeapType, pointer_type: ir::Type) -> ir::Type {
     match wasm_ht.top() {
         WasmHeapTopType::Func => pointer_type,
         WasmHeapTopType::Any | WasmHeapTopType::Extern => ir::types::I32,
-        WasmHeapTopType::Cont =>
-        // TODO(10248) This is added in a follow-up PR
-        {
-            unimplemented!("codegen for stack switching types not implemented, yet")
-        }
+        WasmHeapTopType::Cont => func_environ::stack_switching::fatpointer::POINTER_TYPE,
     }
 }
 
