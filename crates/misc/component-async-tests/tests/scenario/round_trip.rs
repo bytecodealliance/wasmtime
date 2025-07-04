@@ -381,15 +381,14 @@ pub async fn test_round_trip(
         linker
             .root()
             .instance("local:local/baz")?
-            .func_new_concurrent("[async]foo", |_, params| {
+            .func_new_concurrent("[async]foo", |_, params, results| {
                 Box::pin(async move {
                     sleep(Duration::from_millis(10)).await;
                     let Some(Val::String(s)) = params.into_iter().next() else {
                         unreachable!()
                     };
-                    Ok(vec![Val::String(format!(
-                        "{s} - entered host - exited host"
-                    ))])
+                    results[0] = Val::String(format!("{s} - entered host - exited host"));
+                    Ok(())
                 })
             })?;
 

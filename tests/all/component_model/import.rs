@@ -843,46 +843,66 @@ async fn test_stack_and_heap_args_and_rets(concurrent: bool) -> Result<()> {
 
     let mut linker = Linker::new(&engine);
     if concurrent {
-        linker.root().func_new_concurrent("f1", |_, args| {
-            if let Val::U32(x) = &args[0] {
-                assert_eq!(*x, 1);
-                Box::pin(async { Ok(vec![Val::U32(2)]) })
-            } else {
-                panic!()
-            }
-        })?;
-        linker.root().func_new_concurrent("f2", |_, args| {
-            if let Val::Tuple(tuple) = &args[0] {
-                if let Val::String(s) = &tuple[0] {
-                    assert_eq!(s.deref(), "abc");
-                    Box::pin(async { Ok(vec![Val::U32(3)]) })
+        linker
+            .root()
+            .func_new_concurrent("f1", |_, args, results| {
+                if let Val::U32(x) = &args[0] {
+                    assert_eq!(*x, 1);
+                    Box::pin(async {
+                        results[0] = Val::U32(2);
+                        Ok(())
+                    })
                 } else {
                     panic!()
                 }
-            } else {
-                panic!()
-            }
-        })?;
-        linker.root().func_new_concurrent("f3", |_, args| {
-            if let Val::U32(x) = &args[0] {
-                assert_eq!(*x, 8);
-                Box::pin(async { Ok(vec![Val::String("xyz".into())]) })
-            } else {
-                panic!();
-            }
-        })?;
-        linker.root().func_new_concurrent("f4", |_, args| {
-            if let Val::Tuple(tuple) = &args[0] {
-                if let Val::String(s) = &tuple[0] {
-                    assert_eq!(s.deref(), "abc");
-                    Box::pin(async { Ok(vec![Val::String("xyz".into())]) })
+            })?;
+        linker
+            .root()
+            .func_new_concurrent("f2", |_, args, results| {
+                if let Val::Tuple(tuple) = &args[0] {
+                    if let Val::String(s) = &tuple[0] {
+                        assert_eq!(s.deref(), "abc");
+                        Box::pin(async {
+                            results[0] = Val::U32(3);
+                            Ok(())
+                        })
+                    } else {
+                        panic!()
+                    }
                 } else {
                     panic!()
                 }
-            } else {
-                panic!()
-            }
-        })?;
+            })?;
+        linker
+            .root()
+            .func_new_concurrent("f3", |_, args, results| {
+                if let Val::U32(x) = &args[0] {
+                    assert_eq!(*x, 8);
+                    Box::pin(async {
+                        results[0] = Val::String("xyz".into());
+                        Ok(())
+                    })
+                } else {
+                    panic!();
+                }
+            })?;
+        linker
+            .root()
+            .func_new_concurrent("f4", |_, args, results| {
+                if let Val::Tuple(tuple) = &args[0] {
+                    if let Val::String(s) = &tuple[0] {
+                        assert_eq!(s.deref(), "abc");
+                        Box::pin(async {
+                            results[0] = Val::String("xyz".into());
+                            Ok(())
+                        })
+                    } else {
+                        panic!()
+                    }
+                } else {
+                    panic!()
+                }
+            })?;
     } else {
         linker.root().func_new("f1", |_, args, results| {
             if let Val::U32(x) = &args[0] {

@@ -333,18 +333,19 @@ async fn test_round_trip_many(
         linker
             .root()
             .instance("local:local/many")?
-            .func_new_concurrent("[async]foo", |_, params| {
+            .func_new_concurrent("[async]foo", |_, params, results| {
                 Box::pin(async move {
                     sleep(Duration::from_millis(10)).await;
                     let mut params = params.into_iter();
                     let Some(Val::String(s)) = params.next() else {
                         unreachable!()
                     };
-                    Ok(vec![Val::Tuple(
+                    results[0] = Val::Tuple(
                         iter::once(Val::String(format!("{s} - entered host - exited host")))
-                            .chain(params)
+                            .chain(params.cloned())
                             .collect(),
-                    )])
+                    );
+                    Ok(())
                 })
             })?;
 

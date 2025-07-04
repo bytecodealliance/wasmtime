@@ -81,17 +81,18 @@ async fn test_round_trip_direct(
         let mut linker = Linker::new(&engine);
 
         wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
-        linker.root().func_new_concurrent("foo", |_, params| {
-            Box::pin(async move {
-                sleep(Duration::from_millis(10)).await;
-                let Some(Val::String(s)) = params.into_iter().next() else {
-                    unreachable!()
-                };
-                Ok(vec![Val::String(format!(
-                    "{s} - entered host - exited host"
-                ))])
-            })
-        })?;
+        linker
+            .root()
+            .func_new_concurrent("foo", |_, params, results| {
+                Box::pin(async move {
+                    sleep(Duration::from_millis(10)).await;
+                    let Some(Val::String(s)) = params.into_iter().next() else {
+                        unreachable!()
+                    };
+                    results[0] = Val::String(format!("{s} - entered host - exited host"));
+                    Ok(())
+                })
+            })?;
 
         let mut store = make_store();
 
