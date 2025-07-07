@@ -87,6 +87,7 @@ use wasmtime_environ::component::{
 };
 use wasmtime_environ::{PrimaryMap, fact};
 
+pub use abort::AbortHandle;
 pub use futures_and_streams::{
     ErrorContext, FutureReader, FutureWriter, HostFuture, HostStream, ReadBuffer, StreamReader,
     StreamWriter, VecBuffer, Watch, WriteBuffer,
@@ -95,6 +96,7 @@ pub(crate) use futures_and_streams::{
     ResourcePair, lower_error_context_to_index, lower_future_to_index, lower_stream_to_index,
 };
 
+mod abort;
 mod error_contexts;
 mod futures_and_streams;
 mod states;
@@ -464,68 +466,6 @@ where
             get_data: self.get_data,
             instance: self.instance,
         }
-    }
-}
-
-type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send + 'static>>;
-
-/// Wraps a future to allow it to be synchronously cancelled.
-#[doc(hidden)]
-pub enum AbortWrapper<T> {
-    /// The future has not yet been polled
-    Unpolled(BoxFuture<T>),
-    /// The future has been polled at least once
-    Polled { future: BoxFuture<T>, waker: Waker },
-    /// The future has been cancelled
-    Aborted,
-}
-
-impl<T> AbortWrapper<T> {
-    /// Synchronously cancel the inner future by dropping it and notifying the
-    /// waker if present.
-    fn abort(&mut self) {
-        match mem::replace(self, Self::Aborted) {
-            Self::Unpolled(_) | Self::Aborted => {}
-            Self::Polled { waker, .. } => waker.wake(),
-        }
-    }
-}
-
-type AbortWrapped<T> = Arc<Mutex<AbortWrapper<T>>>;
-
-type AbortFunction = Arc<dyn Fn() + Send + Sync + 'static>;
-
-/// Handle to a task which may be used to abort it.
-pub struct AbortHandle(AbortFunction);
-
-impl AbortHandle {
-    fn new<T: 'static>(wrapped: AbortWrapped<T>) -> Self {
-        Self(Arc::new(move || wrapped.try_lock().unwrap().abort()))
-    }
-
-    /// Abort the task.
-    ///
-    /// This will panic if called from within the spawned task itself.
-    pub fn abort(&self) {
-        (self.0)();
-    }
-
-    /// Return an [`AbortOnDropHandle`] which, when dropped, will abort the
-    /// task.
-    ///
-    /// The returned instance will panic if dropped from within the spawned task
-    /// itself.
-    pub fn abort_on_drop_handle(&self) -> AbortOnDropHandle {
-        AbortOnDropHandle(self.0.clone())
-    }
-}
-
-/// Handle to a spawned task which will abort the task when dropped.
-pub struct AbortOnDropHandle(AbortFunction);
-
-impl Drop for AbortOnDropHandle {
-    fn drop(&mut self) {
-        (self.0)();
     }
 }
 
@@ -1438,40 +1378,18 @@ impl Instance {
     {
         let store = store.as_context_mut();
 
-        // Here a `future` is created with a connection to the `handle` being
-        // returned such that if the `handle` is dropped then the future will be
-        // dropped immediately.
-        //
-        // This `future` is then used to create a "host task" which is pushed
-        // directly into `ComponentInstance` once it's all prepared.
-        // Additionally `poll_fn` is used to hook all calls to `poll` and test
-        // if the returned `AbortHandle` has been dropped yet.
-        let future = Arc::new(Mutex::new(AbortWrapper::Unpolled(Box::pin(async move {
-            task.run(&mut accessor).await
-        }))));
-        let handle = AbortHandle::new(future.clone());
-        let spawned = future.clone();
-        let future = Box::pin(future::poll_fn({
-            move |cx| {
-                let mut spawned = spawned.try_lock().unwrap();
-                // Poll the inner future if present; otherwise it has been
-                // cancelled, in which case we return `Poll::Ready` immediately.
-                let inner = mem::replace(&mut *spawned, AbortWrapper::Aborted);
-                if let AbortWrapper::Unpolled(mut future)
-                | AbortWrapper::Polled { mut future, .. } = inner
-                {
-                    let result = self.poll_then_spawn(cx, future.as_mut());
-                    *spawned = AbortWrapper::Polled {
-                        future,
-                        waker: cx.waker().clone(),
-                    };
-                    result.map(HostTaskOutput::Result)
-                } else {
-                    Poll::Ready(HostTaskOutput::Result(Ok(())))
-                }
-            }
-        }));
-        self.concurrent_state_mut(store.0).push_future(future);
+        // Create an "abortable future" here where internally the future will
+        // hook calls to poll and possibly spawn more background tasks on each
+        // iteration.
+        let (handle, future) = AbortHandle::run(async move {
+            let mut future = pin!(task.run(&mut accessor));
+            let result = future::poll_fn(|cx| self.poll_then_spawn(cx, future.as_mut())).await;
+            HostTaskOutput::Result(result)
+        });
+        self.concurrent_state_mut(store.0)
+            .push_future(Box::pin(async move {
+                future.await.unwrap_or(HostTaskOutput::Result(Ok(())))
+            }));
 
         handle
     }
@@ -2576,75 +2494,52 @@ impl Instance {
         let token = StoreToken::new(store.as_context_mut());
         let state = self.concurrent_state_mut(store.0);
         let caller = state.guest_task().unwrap();
-        // Wrap the future in an `AbortWrapper` so the guest can cancel it if
-        // desired.
-        let wrapped = Arc::new(Mutex::new(AbortWrapper::Unpolled(Box::pin(future))));
-        // We create a new host task even though it might complete immediately
-        // (in which case we won't need to pass a waitable back to the guest).
-        // If it does complete immediately, we'll remove it before we return.
-        let task = state.push(HostTask::new(
-            caller_instance,
-            Some(AbortHandle::new(wrapped.clone())),
-        ))?;
 
-        // Now we wrap the `AbortWrapper` in a `poll_fn` which checks whether it
-        // has been cancelled, in which case we'll return `Poll::Ready`
-        // immediately.  Otherwise, we'll poll the inner future.
-        let future = future::poll_fn({
+        // Create an abortable future which hooks calls to poll and manages call
+        // context state for the future.
+        let (abort_handle, future) = AbortHandle::run(async move {
+            let mut future = pin!(future);
             let mut call_context = None;
-            move |cx| {
-                let mut wrapped = wrapped.try_lock().unwrap();
+            future::poll_fn(move |cx| {
+                // Push the call context for managing any resource borrows
+                // for the task.
+                tls::get(|store| {
+                    if let Some(call_context) = call_context.take() {
+                        token
+                            .as_context_mut(store)
+                            .0
+                            .component_resource_state()
+                            .0
+                            .push(call_context);
+                    }
+                });
 
-                let inner = mem::replace(&mut *wrapped, AbortWrapper::Aborted);
-                if let AbortWrapper::Unpolled(mut future)
-                | AbortWrapper::Polled { mut future, .. } = inner
-                {
-                    // Push the call context for managing any resource borrows
-                    // for the task.
+                let result = future.as_mut().poll(cx);
+
+                if result.is_pending() {
+                    // Pop the call context for managing any resource
+                    // borrows for the task.
                     tls::get(|store| {
-                        if let Some(call_context) = call_context.take() {
-                            log::trace!("push call context for {task:?}");
+                        call_context = Some(
                             token
                                 .as_context_mut(store)
                                 .0
                                 .component_resource_state()
                                 .0
-                                .push(call_context);
-                        }
+                                .pop()
+                                .unwrap(),
+                        );
                     });
-
-                    let result = future.as_mut().poll(cx);
-
-                    *wrapped = AbortWrapper::Polled {
-                        future,
-                        waker: cx.waker().clone(),
-                    };
-
-                    match result {
-                        Poll::Ready(output) => Poll::Ready(Some(output)),
-                        Poll::Pending => {
-                            // Pop the call context for managing any resource
-                            // borrows for the task.
-                            tls::get(|store| {
-                                log::trace!("pop call context for {task:?}");
-                                call_context = Some(
-                                    token
-                                        .as_context_mut(store)
-                                        .0
-                                        .component_resource_state()
-                                        .0
-                                        .pop()
-                                        .unwrap(),
-                                );
-                            });
-                            Poll::Pending
-                        }
-                    }
-                } else {
-                    Poll::Ready(None)
                 }
-            }
+                result
+            })
+            .await
         });
+
+        // We create a new host task even though it might complete immediately
+        // (in which case we won't need to pass a waitable back to the guest).
+        // If it does complete immediately, we'll remove it before we return.
+        let task = state.push(HostTask::new(caller_instance, Some(abort_handle)))?;
 
         log::trace!("new host task child of {caller:?}: {task:?}");
         let token = StoreToken::new(store.as_context_mut());
@@ -2652,27 +2547,27 @@ impl Instance {
         // Map the output of the future to a `HostTaskOutput` responsible for
         // lowering the result into the guest's stack and memory, as well as
         // notifying any waiters that the task returned.
-        let mut future = Box::pin(future.map(move |result| {
-            if let Some(result) = result {
-                HostTaskOutput::Function(Box::new(move |store, instance| {
-                    let mut store = token.as_context_mut(store);
-                    lower(store.as_context_mut(), instance, result?)?;
-                    let state = instance.concurrent_state_mut(store.0);
-                    state.get_mut(task)?.abort_handle.take();
-                    Waitable::Host(task).set_event(
-                        state,
-                        Some(Event::Subtask {
-                            status: Status::Returned,
-                        }),
-                    )?;
-
-                    Ok(())
-                }))
-            } else {
+        let mut future = Box::pin(async move {
+            let result = match future.await {
+                Some(result) => result,
                 // Task was cancelled; nothing left to do.
-                HostTaskOutput::Result(Ok(()))
-            }
-        })) as HostTaskFuture;
+                None => return HostTaskOutput::Result(Ok(())),
+            };
+            HostTaskOutput::Function(Box::new(move |store, instance| {
+                let mut store = token.as_context_mut(store);
+                lower(store.as_context_mut(), instance, result?)?;
+                let state = instance.concurrent_state_mut(store.0);
+                state.get_mut(task)?.abort_handle.take();
+                Waitable::Host(task).set_event(
+                    state,
+                    Some(Event::Subtask {
+                        status: Status::Returned,
+                    }),
+                )?;
+
+                Ok(())
+            }))
+        });
 
         // Finally, poll the future.  We can use a dummy `Waker` here because
         // we'll add the future to `ConcurrentState::futures` and poll it
