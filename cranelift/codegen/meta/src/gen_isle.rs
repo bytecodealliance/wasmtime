@@ -694,6 +694,16 @@ impl NumericOp<'_> {
                 body: r#"a.checked_div(b).unwrap_or_else(|| panic!("div failure: {a} / {b}"))"#,
                 ..binop.clone()
             },
+            NumericOp {
+                name: "checked_rem",
+                body: "a.checked_rem(b)",
+                ..partial_binop.clone()
+            },
+            NumericOp {
+                name: "rem",
+                body: r#"a.checked_rem(b).unwrap_or_else(|| panic!("rem failure: {a} % {b}"))"#,
+                ..binop.clone()
+            },
             // Bitwise operations.
             //
             // When applicable (e.g. shifts) we have checked, wrapping, and
